@@ -12,6 +12,8 @@ create table if not exists famille_core.family_admins (
   revoked_at timestamptz,
   check ((status='active' and revoked_at is null) or status<>'active')
 );
+create unique index if not exists uq_famille_single_active_central_admin
+  on famille_core.family_admins(status) where status='active';
 alter table famille_core.family_admins enable row level security;
 revoke all on famille_core.family_admins from public, anon, authenticated;
 
