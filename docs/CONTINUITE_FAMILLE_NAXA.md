@@ -196,3 +196,22 @@ Verdict : Prompt 0.4 historique retrouvé et lu. Il est exploitable comme base d
 
 ### Point de reprise
 Produire une version Famille NAXA actuelle du Prompt 0.4, en conservant les exigences fonctionnelles ci-dessus et en corrigeant les contradictions identifiées ; ensuite seulement, l'implémenter et la tester.
+
+
+## Prompt 0.4 — adaptation Famille NAXA créée (14 novembre 2026)
+
+Le prompt historique « Comptes créés par l'administration » a été retrouvé dans le dépôt NAXA : `7 famille naxa/02-prompts/00-socle-commun.md`, version Markdown de `Prompts_00_Socle_commun.txt`, version 1.0 du 31 octobre 2026. Il couvre création administrative, activation, verrouillage local/biométrie, récupération, appareils, limitation après échecs et création individuelle des employés.
+
+Une version adaptée au périmètre actuel a été créée : `docs/architecture-360/PROMPT_0_4_COMPTES_ADMIN.md`.
+
+Adaptations explicites : 10 applications actuelles ; Android natif Kotlin/Compose et Web responsive/PWA ; GitHub Actions autorisées ; backend Supabase NAXA unique ; réutilisation obligatoire de `auth.users`, profils, partenaires, organisations, lieux et affectations canoniques lorsqu'ils sont compatibles ; aucun compte/membership parallèle ; aucun `service_role` client ; fonctions privilégiées non déployées sans autorisation ; tests PostgreSQL 17 et tests négatifs inter-app/organisation/lieu.
+
+Le prompt adapte également les exigences historiques : identifiant téléphone à valider contre Auth et normalisation ; mot de passe soumis à la politique Auth actuelle plutôt qu'au minimum historique de 6 caractères ; code local quatre chiffres jamais stocké en clair ni envoyé au serveur ; plafond de deux appareils à confirmer par application et catégorie d'acteur au lieu d'une règle globale ; récupération WhatsApp humaine sans échange de PIN/OTP.
+
+Preuve de création : commit `cb7a7610bb2c632c72be5d78dc542f270e1ae119`.
+Lien : https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/architecture-360/PROMPT_0_4_COMPTES_ADMIN.md
+
+**État Prompt 0.4 adapté : PRÉPARATION DOCUMENTAIRE.** Le prompt est rédigé, mais aucun audit technique détaillé des flux de comptes/appareils, aucun code, aucun test d'implémentation et aucune migration n'ont été exécutés dans cette passe. Prompt 0.3 reste NON CLOS / PARTIEL ; cette adaptation ne le clôt pas et ne justifie aucune migration Production.
+
+### Reprise exacte
+Commencer par l'audit en lecture seule des ressources Auth, profils, partenaires, memberships, affectations, appareils, invitations, récupération et RPC existantes sur le backend NAXA. Produire la matrice réutiliser/adapter/créer/écarter et relever les écarts du prompt avant toute implémentation. Aucun changement Supabase réel sans diff validé et autorisation explicite.
