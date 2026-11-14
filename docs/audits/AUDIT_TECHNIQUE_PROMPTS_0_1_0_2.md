@@ -5,7 +5,7 @@
 **Périmètre : correction des incompatibilités et vérification des prérequis techniques.**  
 **Décision : VERT TECHNIQUE NON ACQUIS. Ne pas ouvrir le Prompt 0.3.**
 
-**Mise à jour groupée :** un workflow GitHub Actions commun a été ajouté pour tester le draft sous PostgreSQL 17 éphémère et contrôler la présence des 20 manifests applicatifs. Le workflow n'a pas encore fourni de run exploitable : l'API GitHub consultée ne retourne aucun workflow run. La présence du fichier YAML ne constitue pas une preuve d'exécution.
+**Mise à jour groupée :** un workflow GitHub Actions commun a été ajouté pour tester le draft sous PostgreSQL 17 éphémère et contrôler la présence des 20 manifests applicatifs. Le premier run GitHub Actions a été exécuté : [run #1](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/43541652922), commit testé `24792bb8dd2b0247f96ba45f09dde2208c91b9b5`. Job PostgreSQL 17 : **SUCCESS**. Job inventaire des 20 applications : **FAILURE**, avec exactement 20 manifests manquants (10 Android + 10 Web).
 
 ## 1. État initial vérifié
 
@@ -122,10 +122,10 @@ Fichiers ajoutés au commit `24792bb8dd2b0247f96ba45f09dde2208c91b9b5` :
 | Build Web/PWA réel | NON EXÉCUTÉ |
 | Dix applications natives et dix PWA | ABSENTES DU DÉPÔT |
 | Contraintes croisées SQL | DURCIES DANS LE DRAFT |
-| Validation PostgreSQL du draft | JOB CI AJOUTÉ, RUN NON OBSERVÉ |
+| Validation PostgreSQL 17 du draft | PASS — run #1 |
 | Policies/GRANT/RLS Famille | NON FINALISÉS |
-| Tests contraintes / refus inter-scope | SCRIPT SQL AJOUTÉ, RUN NON OBSERVÉ |\n| Tests RLS/isolation fonctionnels | NON EXÉCUTÉS ; policies absentes |
+| Tests contraintes / refus inter-scope | PASS — 3 refus testés |\n| Default-deny (aucun grant/policy) | PASS — vérification structurelle seulement |\n| Tests RLS/isolation fonctionnels | NON EXÉCUTÉS ; policies absentes |
 | Migration Supabase | AUCUNE |
 | Déploiement | AUCUN |
 
-**Conclusion :** les corrections SQL et le contrôle groupé sont préparés, mais aucun résultat de run n'est disponible et les vingt projets applicatifs sont absents. Le Prompt 0.2 ne peut pas être déclaré vert techniquement tant que les policies/grants et tests RLS fonctionnels ne sont pas conçus, exécutés et approuvés. Le Prompt 0.1 ne peut pas être déclaré vert tant que les vingt applications ne sont pas construites et compilées. Aucun faux VERT.
+**Conclusion :** les corrections SQL et le contrôle groupé sont préparés, mais le socle SQL passe les tests PostgreSQL 17 de syntaxe, de seed et de contraintes composites ; cependant, les policies/grants fonctionnels restent absents et les vingt projets applicatifs sont absents. Le run global reste en échec. Le Prompt 0.2 ne peut pas être déclaré vert techniquement tant que les policies/grants et tests RLS fonctionnels ne sont pas conçus, exécutés et approuvés. Le Prompt 0.1 ne peut pas être déclaré vert tant que les vingt applications ne sont pas construites et compilées. Aucun faux VERT.
