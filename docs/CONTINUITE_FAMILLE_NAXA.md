@@ -157,3 +157,12 @@ La règle historique « le plus ancien enregistrement serveur gagne » ne peut p
 3. Définir contrat partagé, clé d'idempotence, états, actions, canaux et préférences.
 4. Concevoir les migrations et la fonction d'envoi candidates ; tests PostgreSQL 17 éphémères uniquement.
 5. Implémenter le centre, FCM, santé Android et intégration dix apps avec preuves.
+
+
+## Mise à jour — validation technique Prompts 0.1 et 0.2 (14 novembre 2026)
+
+- Run groupé GitHub Actions : [43563686065](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/43563686065), commit testé `52d5b2b2b52d4eae59521091e85812ceda39e39c`.
+- Prompt 0.1 : 10 builds Web/PWA + 10 builds Android réussis ; persistance des 20 socles réussie.
+- Prompt 0.2 : draft SQL exécuté sous PostgreSQL 17 éphémère ; 22 tables, 10 apps, scénario positif et trois rejets inter-périmètres réussis ; RLS activé, aucun GRANT/policy (default-deny) confirmé.
+- **Verdict : Prompt 0.1 VERT BUILD DES 20 SOCLES ; Prompt 0.2 VERT TECHNIQUE POUR LE MODÈLE COMMUN ET LE DRAFT SQL ISOLÉ.**
+- Cette clôture n'autorise aucune migration, exposition Data API, modification Replay/Production, configuration Auth, déploiement ou publication. Les policies RLS fonctionnelles et GRANT applicatifs restent dans le périmètre sécurité distinct ; aucun faux certificat de sécurité n'est émis.
