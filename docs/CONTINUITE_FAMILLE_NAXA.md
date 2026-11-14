@@ -51,3 +51,26 @@ Le projet `Naxa` — `eouwtuusnsuxaejsxknf` — est le backend NAXA historique m
 4. Après audit et validation explicite, appliquer les migrations compatibles au backend commun, puis vérifier les advisors et les parcours.
 5. Créer les 20 manifests applicatifs natifs/Web-PWA et remplacer l'inventaire simple par de vrais builds.
 6. À chaque réponse qui modifie une décision, un état, une preuve ou un point de reprise, actualiser ce document de continuité et les documents techniques concernés avant de conclure. Ne pas ouvrir 0.4 avant clôture du Prompt 0.3.
+
+## Audit de compatibilité du backend commun — checkpoint 14 novembre 2026, 03:26 (lecture seule)
+
+Projet audité : Supabase `Naxa`, project ID `eouwtuusnsuxaejsxknf`, organisation `unuefguzgsohvietmvmq`, région `eu-west-1`, statut `ACTIVE_HEALTHY`, PostgreSQL `17.11.0.002`.
+
+Constats obtenus par requêtes SELECT et outils d'inventaire uniquement :
+- Le schéma `famille_core` n'existe pas actuellement dans ce projet.
+- Inventaire : 246 tables `public`, 7 `private`, 2 `cron`, 2 `net`, plus les schémas système Supabase ; 305 tables au total dans les schémas non système listés par PostgreSQL.
+- RLS activé sur 281/305 tables, forcé sur 19. Aucune table sans RLS détectée dans `public` et `bi` lors de la requête ciblée.
+- 367 policies recensées sur `public`, `cron` et `storage`.
+- 680 fonctions recensées hors schémas système, dont 428 SECURITY DEFINER ; 344 fonctions SECURITY DEFINER dans `public`. Ce volume impose une revue ciblée des droits EXECUTE, du search_path et des contrôles auth.uid() avant d'introduire de nouvelles fonctions.
+- 11 vues/vues matérialisées recensées. Leur mode d'exécution et les droits d'accès doivent être vérifiés individuellement, en particulier les vues BI et les façades publiques.
+- 541 entrées d'historique de migrations, de `20261004030744` à `20261114004001`. L'historique est très dense ; les migrations Famille 0001/0002 ne figurent pas dans ce constat et ne sont pas appliquées.
+- Extensions observées : http 1.6, pg_cron 1.6.4, pg_net 0.20.4, pg_stat_statements 1.11, pg_trgm 1.6, pgcrypto 1.3, plpgsql 1.0, supabase_vault 0.3.1, unaccent 1.1, uuid-ossp 1.1.
+- L'inventaire des advisors a signalé de nombreuses policies permissives multiples et au moins un index dupliqué sur `public.stocks_lots`. Ces constats doivent être triés et rapprochés des audits NAXA existants ; ils ne sont pas des défauts Famille introduits par cet audit.
+
+## Conclusion provisoire de compatibilité
+
+Le backend commun est techniquement identifiable et possède déjà un vaste modèle métier NAXA. L'absence de `famille_core` évite une collision immédiate de schéma, mais ne prouve pas encore que la migration candidate est compatible : ses dépendances, fonctions SECURITY DEFINER, rôles/GRANT, schémas exposés par Data API, conventions d'identité, memberships et scopes doivent être comparés à l'existant.
+
+Décision opérationnelle : aucune migration Famille à ce stade. Ne pas créer de backend séparé. Poursuivre la comparaison détaillée du modèle Famille aux tables et fonctions NAXA, puis concevoir une intégration additive au backend commun.
+
+Preuve : requêtes SQL de lecture seule exécutées via l'outil Supabase sur `eouwtuusnsuxaejsxknf`, le 14 novembre 2026. Aucun DDL, DML, changement de configuration ou déploiement n'a été effectué.
