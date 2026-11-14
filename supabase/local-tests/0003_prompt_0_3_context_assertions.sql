@@ -1,10 +1,12 @@
 \set ON_ERROR_STOP on
 begin;
 insert into auth.users(id,email) values
- ('91000000-0000-0000-0000-000000000001','multi-app@x.invalid')
+ ('91000000-0000-0000-0000-000000000001','kiosko-user@x.invalid'),
+ ('91000000-0000-0000-0000-000000000002','campus237-user@x.invalid')
 on conflict(id) do nothing;
 insert into famille_core.identities(user_id,display_name)
- values('91000000-0000-0000-0000-000000000001','Multi App')
+ values('91000000-0000-0000-0000-000000000001','Kiosko User'),
+       ('91000000-0000-0000-0000-000000000002','Campus237 User')
 on conflict(user_id) do nothing;
 
 insert into famille_core.organizations(id,legal_name,organization_type,created_by)
@@ -20,12 +22,19 @@ insert into famille_core.locations(id,organization_id,code,name)
  values('93000000-0000-0000-0000-000000000001','92000000-0000-0000-0000-000000000001','MAIN','Main location')
 on conflict(id) do nothing;
 
+insert into famille_core.client_app_access(user_id,app_id,status)
+ select x.uid,a.id,'granted' from (values
+  ('91000000-0000-0000-0000-000000000001'::uuid,'kiosko'::text),
+  ('91000000-0000-0000-0000-000000000002'::uuid,'campus237'::text)
+ ) x(uid,code) join famille_core.applications a on a.code=x.code
+on conflict(user_id,app_id) do nothing;
+
 insert into famille_core.memberships(id,user_id,organization_id,app_id,status,joined_at)
- select x.mid,'91000000-0000-0000-0000-000000000001','92000000-0000-0000-0000-000000000001',a.id,'active',now()
+ select x.mid,x.uid,'92000000-0000-0000-0000-000000000001',a.id,'active',now()
  from (values
-  ('94000000-0000-0000-0000-000000000001'::uuid,'kiosko'::text),
-  ('94000000-0000-0000-0000-000000000002'::uuid,'campus237'::text)
- ) x(mid,code) join famille_core.applications a on a.code=x.code
+  ('94000000-0000-0000-0000-000000000001'::uuid,'91000000-0000-0000-0000-000000000001'::uuid,'kiosko'::text),
+  ('94000000-0000-0000-0000-000000000002'::uuid,'91000000-0000-0000-0000-000000000002'::uuid,'campus237'::text)
+ ) x(mid,uid,code) join famille_core.applications a on a.code=x.code
 on conflict(user_id,organization_id,app_id) do nothing;
 
 insert into famille_core.role_assignments(id,membership_id,app_id,organization_id,role_code,status)
