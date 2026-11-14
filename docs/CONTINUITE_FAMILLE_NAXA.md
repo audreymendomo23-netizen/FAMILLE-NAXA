@@ -174,3 +174,21 @@ Le contrôle du générateur a révélé que la précédente preuve de 20 builds
 Le générateur a été remplacé pour produire dix modules Android natifs avec Kotlin 2.4.21, AGP 9.3.1, Gradle 9.5.0, JDK17, API37/min26 et dix applications Next.js 16.4.6/React 19.3.0/Serwist 9.5.13. pnpm 12.21.0 gère le workspace produit. Le workflow est renforcé avec builds, tests unitaires, tests Compose, E2E et axe-core.
 
 Le statut reste EN VALIDATION CI ; ne déclarer VERT qu'après preuve intégrale sur ce nouvel environnement et persistance du wrapper et du lockfile. Aucune migration Supabase réelle, aucun déploiement ni publication APK.
+
+
+## Arbitrages confirmés — Prompt 0.3 (14 novembre 2026)
+
+- **Un seul Administrateur central** pour les dix plateformes, avec une identité Auth dédiée, hors memberships applicatifs.
+- Son accès transversal est **métadonnées uniquement** : état des plateformes, comptes et rattachements administratifs, rôles, appareils/installations, abonnements, paramètres, journaux et agrégats autorisés. Il ne lit jamais les lignes de transactions métier détaillées, ni les profils personnels détaillés ou le contenu des tickets de support.
+- Il peut effectuer les opérations d'administration autorisées ; toute mutation doit être auditée (acteur, action, cible, application/organisation/lieu si applicable, horodatage), sans stocker le contenu métier dans le journal.
+- Les utilisateurs ordinaires ont **un compte distinct par plateforme**. Une identité Auth ordinaire ne peut être liée qu'à une seule application. Les données, rôles et memberships restent cloisonnés par application.
+- Le compte de l'Administrateur central est distinct des dix comptes applicatifs et ne doit pas recevoir de memberships utilisateurs dans les applications.
+
+### Correctifs candidats ajoutés
+- supabase/drafts/0004_prompt_0_3_central_admin_identity_audit.sql : table d'habilitation centrale à un seul administrateur actif, sémantique globale de is_admin(), restriction des profils/tickets personnels, index d'unicité une plateforme par identité et trigger d'audit des mutations administratives.
+- supabase/local-tests/0004_prompt_0_3_central_admin_assertions.sql : tests d'accès métadonnées sur les dix apps, refus des transactions détaillées, compte central sans claim applicatif, identité ordinaire limitée à une app et journalisation des mutations.
+- Le test de contextualisation 0003 a été ajusté pour utiliser deux identités Auth distinctes Kiosko/Campus237.
+- Le test RLS 0002 identifie désormais l'admin via l'habilitation centrale et non par un rôle platform_admin local.
+- Workflow .github/workflows/prompt-03-rls.yml étendu pour appliquer la candidate 0004 et exécuter les nouveaux tests dans PostgreSQL 17 éphémère.
+
+**Statut inchangé avant preuve CI :** ces fichiers sont des candidates de conception/test. Attendre le résultat du workflow déclenché par les commits récents ; corriger tout échec avant de considérer ces règles validées. Aucune migration n'est appliquée au Supabase NAXA réel.
