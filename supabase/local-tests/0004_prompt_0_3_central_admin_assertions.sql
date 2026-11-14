@@ -75,6 +75,10 @@ insert into famille_test.central_admin_transaction_scope(organization_id,app_id,
  select '98000000-0000-0000-0000-000000000001',id,'98000000-0000-0000-0000-000000000002',125000
  from famille_core.applications where code='kiosko';
 
+insert into famille_core.organizations(id,legal_name,organization_type,created_by)
+ values('98000000-0000-0000-0000-000000000001','Audit Probe','test','97000000-0000-0000-0000-000000000001')
+ on conflict(id) do nothing;
+
 create table if not exists famille_test.admin_mutation_audit_probe(
  id uuid primary key default gen_random_uuid(), app_id uuid, organization_id uuid, marker text
 );
