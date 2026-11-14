@@ -265,3 +265,13 @@ La suite est organisée en pistes simultanées : (A) RLS/identité/provisioning/
 Aucune opération Supabase réelle, aucun réglage Auth, aucune Edge Function, aucun site ou APK n'a été modifié/publié par cet audit. Les tests éphémères et builds locaux/CI sont autorisés. Le vert global exige les onze prompts verts avec tests reproductibles au commit.
 
 Point de reprise : figer les contrats communs et la matrice des dix apps, corriger le socle 0.3 en PostgreSQL 17 éphémère, puis lancer les fondations applicatives et les pistes transversales en parallèle.
+
+## Exécution simultanée des cinq pistes — Lot 1 (14 novembre 2026)
+
+Rapport d'exécution : [EXECUTION_LOT_1_PROMPTS_0_3_A_0_13.md](audits/EXECUTION_LOT_1_PROMPTS_0_3_A_0_13.md). Le générateur versionné `scripts/bootstrap-foundations.mjs` pose les dix squelettes Android Kotlin/Compose et les dix cibles Web/PWA, les contrats communs (sync/version/conflits, preuves paiement, états notifications), les premiers jetons design, la coquille Admin Web, un moteur de règles explicables supervisé et les règles de sécurité/distribution. Les cibles sont générées à l'exécution CI et ne sont pas encore matérialisées comme fichiers suivis dans Git.
+
+CI : les dix Web/PWA ont compilé dans le run `43550594076`; les contrôles PostgreSQL 17 du draft 0001 et des assertions 0002 ont réussi dans les runs `43550680382` et `43550728397`. L'action setup-android initiale échouait sur le paquet obsolète `tools`; elle a été remplacée par une installation SDK explicite. Le run `43550728397` et le run associé au commit `29e88e990d1258545058011fa3afaa6e8013cab2` doivent être vérifiés avant de conclure sur les builds Android.
+
+Statut des cinq pistes : A fondations de sécurité/paiement/admin créées mais pas raccordées au backend Auth/RLS ; B contrats sync/notification créés mais pas de Room/queue/FCM ; C 20 squelettes générables et Web compilé, Android encore à prouver ; D manifeste de distribution documenté, pas de signature/export/site ; E moteur de règles explicable créé, pas de modèle local/anonymisation. **Aucun prompt 0.3–0.13 n'est VERT.**
+
+Aucun changement Supabase réel, aucune migration, aucun DDL/DML, aucune modification Auth, aucun déploiement ni publication. Prochaine reprise : vérifier les runs CI, corriger et prouver les dix builds Android, matérialiser les sources générées dans Git, puis avancer en parallèle sur Room/sync, RLS contextuelle inter-app, provisioning/paiement, Admin MFA, distribution et tests de confidentialité IA.
