@@ -1,6 +1,6 @@
 # PROMPT 0.1 — Cadrage technique et structure du projet
 
-**État : PROPOSITION — NON VALIDÉE PAR LE PORTEUR DE PROJET**  
+**État : PRINCIPE D’ARCHITECTURE VALIDÉ PAR LE PORTEUR DE PROJET ; CHOIX DES OUTILS À CONFIRMER**  
 **Périmètre actuel : 10 applications autonomes, Android + Web/PWA**  
 **Référence NAXA consultée : branche `main`, commit `09d194b56b3c93624cff6ee83e4d2a581457d0bb`  
 **Règle : aucun code applicatif à cette étape.**
@@ -20,7 +20,7 @@ Le prompt source du 31 octobre 2026 décrit initialement sept applications Andro
 9. NAXA Security — sécurité des biens et des personnes
 10. GrillaD — gestion spécialisée des vendeurs de grillades
 
-Chaque application doit être autonome en identité, installation, parcours, permissions et données métier. Les cibles demandées sont Android (APK indépendante) et Web responsive/PWA installable séparément. La distribution Android se fera depuis le site NAXA, sans Play Store.
+Chaque application doit être autonome en identité, installation, parcours, permissions et données métier. Chaque produit dispose de deux réalisations distinctes : (1) une application Android entièrement native, installable sous forme d’APK indépendante ; (2) une version Web responsive, également installable comme PWA. La version Web/PWA n’est pas une WebView qui encapsule le site dans l’APK : les interfaces et cycles de vie Android et Web sont développés pour leurs plateformes respectives. Les deux versions partagent les contrats, règles métier, API, formats et tests compatibles, pas une interface Web embarquée. La distribution Android se fera depuis le site NAXA, sans Play Store.
 
 Les anciennes contraintes qui restent pertinentes sont conservées : fonctionnement hors connexion, synchronisation différée, sécurité, aucune lecture/stockage/transmission de PIN ou OTP, calculs financiers exacts, français/anglais, aucune dépense sans accord et aucune migration/diffusion/déploiement sans accord explicite.
 
@@ -73,7 +73,7 @@ Aucun schéma, code, rôle, permission ou migration NAXA ne doit être repris sa
 
 ### Arbitrage Android proposé
 
-**Choix recommandé : Android natif Kotlin + Jetpack Compose.**
+**Décision de principe VALIDÉE : Android entièrement natif pour les dix applications.**\n\nKotlin + Jetpack Compose est la recommandation technique à confirmer lors du choix des versions et de l’outillage. Il n’y aura ni application Android basée sur WebView, ni wrapper Capacitor, ni interface Flutter hybride pour remplacer l’interface native.
 
 Justification :
 1. Les cahiers prévoient un usage hors connexion et des traitements locaux continus.
@@ -88,7 +88,7 @@ Limite assumée : l'interface Android et l'interface Web ne partageront pas tous
 
 ## 4. Architecture Web et PWA proposée
 
-**Choix recommandé : Next.js + React + TypeScript + Serwist**, aligné sur le modèle Web existant NAXA, sous réserve de validation des versions et dépendances.
+**Principe VALIDÉ : une version Web responsive et PWA pour chacune des dix applications.**\n\nNext.js + React + TypeScript + Serwist reste une proposition d’outillage, à confirmer. Cette version Web est une application Web de première classe, optimisée desktop, tablette et mobile, et installable en PWA. Elle n’est pas un simple miroir non responsive de l’APK.
 
 - Dix expériences Web/PWA indépendantes, chacune avec son nom, son icône, son manifeste, son `start_url`, son `scope`, son thème et ses routes.
 - Packages TypeScript partagés pour les contrats, la validation, les formats, l'internationalisation et les règles métier réellement communes.
@@ -108,7 +108,7 @@ Limites : outillage plus exigeant, nécessité de contrôler les dépendances en
 
 ### Arbitrage proposé
 
-**Choix recommandé : monorepo GitHub `FAMILLE-NAXA`.**
+**Choix recommandé : monorepo GitHub `FAMILLE-NAXA`**, avec dix projets Android natifs indépendants et dix applications Web/PWA indépendantes. Le monorepo ne signifie pas une seule application fusionnée : chaque cible doit pouvoir être construite, testée, versionnée et livrée séparément.
 
 Structure cible indicative :
 
@@ -193,7 +193,7 @@ Cette structure est une cible proposée, pas une structure déjà construite. Ch
 5. Valider les identifiants Android proposés avant création des modules.
 6. Décider quelles applications et quels rôles ont réellement besoin de lecture SMS, Bluetooth, GPS, caméra et notifications en arrière-plan.
 
-## 9. Contrôles et état de cette étape
+## 9. Décision formelle du porteur de projet\n\nLe porteur de projet précise : « je veux des applications entièrement natives android pour les 10application, avec des version responsives en PWA et web ».\n\nConséquences obligatoires :\n- 10 applications Android natives, sans WebView-wrapper, sans dépendance à un site Web pour afficher les écrans métier.\n- 10 versions Web responsives, chacune adaptée aux écrans mobiles, tablettes et ordinateurs.\n- Les 10 versions Web doivent pouvoir être installées comme PWA lorsque la plateforme/navigateur le permet.\n- APK et Web/PWA ont des interfaces et mécanismes de cycle de vie propres à leur plateforme.\n- Mutualisation autorisée : règles métier, contrats API, schémas validés, modèles de validation, formats, traductions, jeux de tests et documentation.\n- Mutualisation interdite par défaut : encapsuler l’interface Web dans Android ou rendre une seule application monolithique qui mélange les dix métiers.\n\nLe principe multi-plateforme est donc validé. Les choix précis Kotlin/Compose, Next.js/React/Serwist, versions SDK, domaines et organisation des modules restent à confirmer dans le cadrage technique.\n\n## 10. Contrôles et état de cette étape
 
 - Comparaison Kotlin / Flutter / Capacitor : réalisée au niveau architectural.
 - Audit statique du dépôt NAXA : réalisé sur l'arborescence et les fichiers de configuration/fondation consultés ; ce n'est pas un audit exhaustif du code.
@@ -207,7 +207,7 @@ Cette structure est une cible proposée, pas une structure déjà construite. Ch
 - Déploiement ou publication APK : aucun.
 - **Statut : PARTIEL — proposition technique prête pour arbitrage, non validée.**
 
-## 10. Fichier de passation
+## 11. Fichier de passation
 
 **FICHIER DE PASSATION — Famille NAXA — Prompt 0.1 — 14 novembre 2026**
 
@@ -219,4 +219,4 @@ Cette structure est une cible proposée, pas une structure déjà construite. Ch
 6. Prochain prompt : 0.2 — Schéma de données commun, uniquement après validation du 0.1 et audit des ressources Supabase existantes.
 7. Accord explicite requis : toute migration appliquée, modification Production, déploiement, publication APK ou dépense.
 
-**Étape terminée. J'attends ton accord avant de passer à la suivante.**
+**Étape 0.1 : principe Android natif + Web/PWA responsive validé. Les détails d’outillage restent à arbitrer avant le Prompt 0.2.**

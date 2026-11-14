@@ -11,3 +11,4 @@
 | FAM-007 | Nom GrillaD retenu ; disponibilité de marque/domaine à vérifier | RETENU |
 | FAM-008 | GrillaD : porc braisé, poulet braisé, poisson braisé, brochettes, omelettes uniquement | VALIDÉ |
 | FAM-009 | GrillaD : Manager autonome, Manager + un vendeur, Manager + plusieurs vendeurs sur lieux précis | VALIDÉ |
+| FAM-010 | Dix applications Android entièrement natives, chacune avec sa version Web responsive installable en PWA ; aucune WebView-wrapper | VALIDÉ |
