@@ -129,3 +129,38 @@ L'ancien run CI reste une preuve historique valide de ses tests, mais il ne cons
 **Prompt 0.4 : non ouvert.** Aucun contenu ni périmètre officiel du Prompt 0.4 n'a été retrouvé dans les conversations consultables ni dans les documents présents sur main. Ne pas inventer son contenu. Rechercher le document source Prompts_00_Socle_commun.pdf / ZIP avant d'en fixer le périmètre.
 
 Point de reprise unique : corriger la conception additive du socle partagé et la migration candidate RLS, écrire des tests négatifs inter-app, inter-organisation et inter-lieu, exécuter la suite sur PostgreSQL 17 éphémère, puis actualiser ce document avec les preuves. Ne pas toucher au Supabase réel.
+
+## Reprise vérifiée — recherche Prompt 0.4 et correction 0.3 (14 novembre 2026, 23:xx UTC+1)
+
+### Recherche du Prompt 0.4 sur GitHub
+
+Vérifications effectuées en lecture seule :
+- Dépôt Famille audreymendomo23-netizen/FAMILLE-NAXA, branche par défaut main : recherches GitHub de « Prompt 0.4 », « PROMPT_0_4 », « Prompt 0.4 page 7 » et « Prompts_00_Socle_commun » : aucun résultat.
+- Dépôt NAXA historique audreymendomo23-netizen/NAXA : mêmes recherches sans résultat.
+- Tentatives de lecture des chemins probables Nouveau projet/Prompt/Prompts_00_Socle_commun.pdf, docs/Prompts_00_Socle_commun.pdf, Prompts_00_Socle_commun.pdf, docs/prompts/Prompts_00_Socle_commun.pdf et des chemins Markdown docs/architecture-360/PROMPT_0_4.md / PROMPT_0_4_FONCTIONNEL.md : fichiers absents (404).
+- La source de Prompt 0.3 est explicitement indiquée dans docs/architecture-360/PROMPT_0_3_SECURITE_RLS.md : Projet.zip → Nouveau projet/Prompt/Prompts_00_Socle_commun.pdf, page 6. Cela ne permet pas de déduire le texte de la page suivante.
+
+**Verdict Prompt 0.4 : non retrouvé dans aucun des deux dépôts GitHub consultés.** Le PDF/ZIP source n'est pas présent aux chemins recherchés. Ne pas fabriquer le Prompt 0.4 à partir de suppositions. Il faut récupérer l'archive source ou un chemin GitHub exact si elle a été déposée ailleurs.
+
+### Correction Prompt 0.3 — audit de la migration candidate 0002
+
+Relecture du contenu actuel de supabase/migrations/0002_famille_core_rls.sql et de ses tests :
+- Les helpers is_admin(), outlet_ids() et has_organization_access(uuid) sont encore sans paramètre applicatif.
+- Les policies appellent ces helpers sans contexte app_id, y compris sur les tables où ce contexte est disponible.
+- Le script termine par GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA famille_core TO authenticated, qui contredit le principe de liste blanche.
+- Le test 0002_prompt_0_3_rls_assertions.sql couvre actuellement plusieurs cas organisation/lieu, mais n'établit pas les refus inter-app ; il utilise un seul rôle applicatif (Kiosko) pour ses jeux de données.
+- Le runner local refuse explicitement toute connexion distante, ce qui est conservé.
+
+### Cause racine et décision de correction
+
+La correction ne peut pas se limiter à renommer trois fonctions : plusieurs policies utilisent un admin global sur des tables sans app_id, et le modèle 0001 crée aussi des organisations, memberships, lieux, appareils et identités parallèles aux entités déjà existantes du backend NAXA partagé. Une modification partielle risquerait de donner une fausse assurance sans régler la duplication ni la propagation des droits.
+
+**État de cette passe : audit statique approfondi réalisé ; correction SQL et test inter-app non encore appliqués ; Prompt 0.3 reste NON CLOS / PARTIEL.** Aucun commit de correction SQL, aucune migration Supabase réelle et aucun déploiement n'ont été effectués pendant cette passe. La preuve CI historique 43545105030 ne valide pas les défauts nouvellement identifiés.
+
+### Point de reprise technique obligatoire
+
+1. Reconcevoir 0001 comme couche additive au backend NAXA existant : réutiliser les identités et organisations/lieux/memberships existants lorsqu'ils sont sémantiquement compatibles ; documenter les correspondances et les écarts avant DDL.
+2. Définir une source fiable de contexte applicatif pour chaque appel RLS et RPC ; les helpers et policies doivent exiger ce contexte. Les lignes sans app_id ne doivent pas bénéficier d'un bypass admin implicite.
+3. Remplacer les grants globaux par des droits explicites, testés avec les rôles PostgreSQL réels ; tenir compte des fonctions appelées par les policies.
+4. Ajouter des tests positifs et négatifs inter-app, inter-organisation, inter-lieu, sans membership, ainsi que des tests de droits EXECUTE et des RPC SECURITY DEFINER.
+5. Exécuter toute la suite sur PostgreSQL 17 éphémère, vérifier le workflow GitHub Actions, puis mettre à jour le statut. Ne pas toucher au Supabase NAXA réel sans diff validé et autorisation explicite.
