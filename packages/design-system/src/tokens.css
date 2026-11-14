@@ -1,0 +1,1 @@
+:root{--naxa-brand:#174c3c;--naxa-accent:#e3a72f;--naxa-danger:#b42318;--naxa-surface:#fff;--naxa-text:#17211d;font-family:Inter,system-ui,sans-serif}[data-theme="dark"]{--naxa-surface:#151b18;--naxa-text:#f2f5f3}body{margin:0;background:var(--naxa-surface);color:var(--naxa-text)}

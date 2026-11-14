@@ -1,0 +1,3 @@
+export interface Signal { key:string; value:number; threshold:number; explanation:string }
+export interface Recommendation { status:"review"|"ok"; reasons:string[]; requiresHumanDecision:true }
+export function explainSignals(signals:Signal[]):Recommendation { const reasons=signals.filter(s=>s.value>s.threshold).map(s=>s.explanation); return {status:reasons.length?"review":"ok",reasons,requiresHumanDecision:true} }
