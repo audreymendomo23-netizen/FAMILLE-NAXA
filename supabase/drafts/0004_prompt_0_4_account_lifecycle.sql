@@ -79,6 +79,7 @@ create table if not exists famille_private.recovery_requests (
   id uuid primary key default gen_random_uuid(),
   user_id uuid references auth.users(id) on delete restrict,
   login_hash text not null,
+  app_code text not null check (app_code in ('kiosko','bootik','zipple','naxa_services','cotiz','loyable','naxa_hotel','campus237','naxa_security','grillad')),
   channel text not null check(channel in ('email','whatsapp')),
   status text not null default 'pending' check(status in ('pending','identity_check','approved','rejected','completed')),
   reviewed_by uuid references auth.users(id) on delete restrict,
@@ -117,7 +118,7 @@ create or replace function famille_private.register_device(
 ) returns jsonb language plpgsql security definer
 set search_path=pg_catalog,famille_private
 as $$
-declare v_device uuid; v_evicted uuid; v_device_status text; v_scope_filter text;
+declare v_device uuid; v_evicted uuid; v_device_status text; v_evicted_user uuid; v_app_id uuid; v_notify_user uuid;
 begin
   if p_user_id is null or p_installation_id is null or length(p_installation_id)<16
      or p_auth_session_id is null
@@ -153,8 +154,22 @@ begin
       order by created_at asc,id asc limit 1;
   end if;
   if v_evicted is not null then
-    update famille_private.account_devices set status='revoked',revoked_at=now()
-      where id=v_evicted;
+    select user_id into v_evicted_user from famille_private.account_devices where id=v_evicted;
+    update famille_private.account_devices set status='revoked',revoked_at=now() where id=v_evicted;
+  end if;
+  select id into v_app_id from famille_core.applications where code=p_app_code;
+  select case when account_kind='employee' then granted_by else p_user_id end into v_notify_user
+    from famille_private.account_app_access where user_id=p_user_id and app_code=p_app_code
+      and organization_id is not distinct from p_organization_id and location_id is not distinct from p_location_id
+      and status='active' order by created_at desc limit 1;
+  v_notify_user:=coalesce(v_notify_user,p_user_id);
+  insert into famille_core.notifications(user_id,app_id,event_code,title_key,body_key,payload)
+    values(v_notify_user,v_app_id,'security.device_registered','security.device_registered.title','security.device_registered.body',
+      jsonb_build_object('device_id',v_device,'platform',p_platform,'device_label',p_device_label,'revoked_device_id',v_evicted));
+  if v_evicted_user is not null and v_evicted_user<>v_notify_user then
+    insert into famille_core.notifications(user_id,app_id,event_code,title_key,body_key,payload)
+      values(v_evicted_user,v_app_id,'security.device_revoked','security.device_revoked.title','security.device_revoked.body',
+        jsonb_build_object('device_id',v_evicted,'reason','active_device_limit'));
   end if;
   return jsonb_build_object('device_id',v_device,'revoked_oldest_device_id',v_evicted,'active_limit',2);
 end $$;
