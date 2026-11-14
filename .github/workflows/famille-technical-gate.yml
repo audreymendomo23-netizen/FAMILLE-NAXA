@@ -1,5 +1,9 @@
 name: Famille NAXA — validation groupée 0.1/0.2
 
+concurrency:
+  group: famille-naxa-main-validation
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
