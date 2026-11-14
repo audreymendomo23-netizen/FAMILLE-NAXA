@@ -1,0 +1,65 @@
+name: Famille NAXA — Prompt 0.3 RLS PostgreSQL 17
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/drafts/0001_famille_core_proposed.sql"
+      - "supabase/drafts/0003_prompt_0_3_contextual_rls.sql"
+      - "supabase/migrations/0002_famille_core_rls.sql"
+      - "supabase/local-tests/0002_prompt_0_3_rls_assertions.sql"
+      - "supabase/local-tests/0003_prompt_0_3_context_assertions.sql"
+      - "supabase/local-tests/0002_bootstrap_local_auth.sql"
+      - ".github/workflows/prompt-03-rls.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: famille-naxa-prompt-03-rls
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  postgres-17-rls:
+    name: Prompt 0.3 — matrice RLS complète
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: famille_prompt_03
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d famille_prompt_03"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: famille_prompt_03
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer client PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Bootstrap Supabase Auth local isolé
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0002_bootstrap_local_auth.sql
+      - name: Appliquer le schéma commun éphémère
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0001_famille_core_proposed.sql
+      - name: Appliquer les policies de base
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/0002_famille_core_rls.sql
+      - name: Appliquer le contexte multi-application
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0003_prompt_0_3_contextual_rls.sql
+      - name: Tester les claims signés et le refus par défaut
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0003_prompt_0_3_context_assertions.sql
+      - name: Rejouer la matrice complète après durcissement
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0002_prompt_0_3_rls_assertions.sql
