@@ -6,6 +6,8 @@ on:
     paths:
       - "supabase/drafts/**"
       - "supabase/tests/**"
+      - "supabase/migrations/**"
+      - "supabase/local-tests/**"
       - ".github/workflows/famille-technical-gate.yml"
       - "apps/**"
       - "android/**"
@@ -83,3 +85,41 @@ jobs:
             exit 1
           fi
           echo "Les 20 manifests sont présents ; ajouter les jobs de compilation dédiés après verrouillage des toolchains."
+
+  prompt-03-rls:
+    name: Prompt 0.3 — policies RLS et scénarios d'isolation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: famille_prompt_03
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d famille_prompt_03"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: famille_prompt_03
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer client PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Bootstrap Supabase Auth local isolé
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0002_bootstrap_local_auth.sql
+      - name: Appliquer le schéma commun en base éphémère
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0001_famille_core_proposed.sql
+      - name: Appliquer la migration candidate RLS 0002
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/0002_famille_core_rls.sql
+      - name: Vérifier les scénarios d'isolation et de facturation
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0002_prompt_0_3_rls_assertions.sql
