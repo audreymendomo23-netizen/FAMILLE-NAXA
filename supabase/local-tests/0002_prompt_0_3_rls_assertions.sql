@@ -1,6 +1,7 @@
 \set ON_ERROR_STOP on
 begin;
 insert into auth.users(id,email) values ('10000000-0000-0000-0000-000000000001','owner-a@x.invalid'),('10000000-0000-0000-0000-000000000002','manager-a@x.invalid'),('10000000-0000-0000-0000-000000000003','owner-b@x.invalid'),('10000000-0000-0000-0000-000000000004','admin@x.invalid'),('10000000-0000-0000-0000-000000000005','commercial@x.invalid'),('10000000-0000-0000-0000-000000000006','partner@x.invalid') on conflict(id) do nothing;
+insert into famille_core.family_admins(user_id,status) values('10000000-0000-0000-0000-000000000004','active') on conflict(user_id) do update set status='active',revoked_at=null;
 insert into famille_core.identities(user_id,display_name) select id,email from auth.users where email like '%@x.invalid' on conflict(user_id) do nothing;
 insert into famille_core.organizations(id,legal_name,organization_type,created_by) values ('20000000-0000-0000-0000-000000000001','Owner A','retail','10000000-0000-0000-0000-000000000001'),('20000000-0000-0000-0000-000000000002','Owner B','retail','10000000-0000-0000-0000-000000000003') on conflict(id) do nothing;
 insert into famille_core.organization_apps(organization_id,app_id,status) select o.id,a.id,'active' from famille_core.organizations o cross join famille_core.applications a where a.code='kiosko' on conflict do nothing;
