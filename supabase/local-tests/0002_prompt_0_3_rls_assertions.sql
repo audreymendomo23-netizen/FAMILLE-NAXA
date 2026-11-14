@@ -40,7 +40,7 @@ reset role;
 -- During the explicit grace window, operational access remains available.
 update famille_core.subscriptions set status='past_due',ends_at=now()-interval '1 day',grace_until=now()+interval '1 day' where id='60000000-0000-0000-0000-000000000001';
 set role authenticated; select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000001',true);
-do $ declare n bigint; begin select count(*) into n from famille_test.transaction_rows; if n<>2 then raise exception 'grace period should preserve access'; end if; end $$;
+do $$ declare n bigint; begin select count(*) into n from famille_test.transaction_rows; if n<>2 then raise exception 'grace period should preserve access'; end if; end $$;
 reset role;
 update famille_core.subscriptions set status='past_due',ends_at=now()-interval '2 days',grace_until=now()-interval '1 second' where id='60000000-0000-0000-0000-000000000001';
 set role authenticated; select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000001',true);
