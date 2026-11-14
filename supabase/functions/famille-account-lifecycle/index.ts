@@ -56,9 +56,11 @@ async function handle(req:Request):Promise<Response>{
    const {data:userData,error:userError}=await admin.auth.admin.updateUserById(invite.user_id,{password,app_metadata:{must_change_password:false}});
    if(userError||!userData.user) return json({error:"activation_unavailable"},400);
    const {error:grantError}=await admin.schema("famille_private").from("account_app_access").update({status:"active",updated_at:new Date().toISOString()}).eq("user_id",invite.user_id).eq("app_code",invite.app_code).eq("status","pending");
-   if(grantError) return json({error:"activation_unavailable"},500);
+   if(grantError){await admin.schema("famille_private").from("account_invites").update({status:"pending"}).eq("id",invite.id);await admin.auth.admin.updateUserById(invite.user_id,{app_metadata:{must_change_password:true}});return json({error:"activation_unavailable"},500);}
    const {error:usedError}=await admin.schema("famille_private").from("account_invites").update({status:"accepted",accepted_at:new Date().toISOString(),accepted_by:invite.user_id}).eq("id",invite.id).eq("status","pending");
    if(usedError) return json({error:"activation_unavailable"},500);
+   const {error:finalizeError}=await admin.schema("famille_private").from("account_invites").update({status:"accepted",accepted_at:new Date().toISOString(),accepted_by:invite.user_id}).eq("id",invite.id).eq("status","processing");
+   if(finalizeError) return json({error:"activation_unavailable"},500);
    return json({ok:true,message:"account_activated"});
   }
   if(body.action==="login"){
@@ -89,6 +91,7 @@ async function handle(req:Request):Promise<Response>{
    const {user:actor,admin}=await actorFrom(req,url,anon,service);const platformAdmin=actor.app_metadata?.naxa_platform_admin===true||actor.app_metadata?.famille_platform_admin===true;
    const app=safeAppCode(String(body.app_code??""));const kind=body.action==="create_employee"?"employee":String(body.account_kind??"client");
    if(!["client","professional","employee"].includes(kind)) return json({error:"invalid_account_kind"},400);
+   if(body.phone_verified!==true) return json({error:"phone_verification_required"},400);
    const phone=normalizePhone(String(body.phone??""));const first=String(body.first_name??"").trim();const last=String(body.last_name??"").trim();const dob=String(body.date_of_birth??"");
    if(!first||!last||!isAdult(dob)) return json({error:"valid_adult_identity_required"},400);
    const org=body.organization_id?String(body.organization_id):null;const loc=body.location_id?String(body.location_id):null;const role=body.role_code?String(body.role_code):null;
@@ -110,7 +113,7 @@ async function handle(req:Request):Promise<Response>{
    await admin.auth.admin.updateUserById(user.id,{app_metadata:{...(user.app_metadata??{}),must_change_password:true}});
    await admin.schema("famille_private").from("account_audit_log").insert({actor_id:actor.id,subject_user_id:user.id,app_code:app,event_code:"account.invited",outcome:"success",metadata:{kind,request_id:requestId}});
    const base=Deno.env.get("FAMILLE_ACTIVATION_URL")??"";
-   return json({ok:true,user_id:user.id,invite_id:(invite.data as any)?.[0]?.id??null,activation_url:base?base.replace(/\/$/,"")+"/activate?token="+encodeURIComponent(token):null,activation_token:base?undefined:token,expires_at:expires,created_user:created});
+   return json({ok:true,user_id:user.id,invite_id:(invite.data as any)?.[0]?.id??null,activation_url:base?base.replace(/\/$/,"")+"/activate.html?token="+encodeURIComponent(token):null,activation_token:base?undefined:token,expires_at:expires,created_user:created});
   }
   if(body.action==="register_device"){
    const {user,admin,token}=await actorFrom(req,url,anon,service);const app=safeAppCode(String(body.app_code??""));
@@ -135,10 +138,47 @@ async function handle(req:Request):Promise<Response>{
    await admin.schema("famille_private").from("account_audit_log").insert({actor_id:user.id,subject_user_id:device.user_id,event_code:"device.revoked",outcome:"success",reason_code:"user_or_admin_request"});
    return json({ok:true,device_id:deviceId,revoked:true,session_invalidation:"immediate_rls_gate_via_session_and_device_registry"});
   }
+
+  if(body.action==="complete_password_change"){
+   const {user,admin}=await actorFrom(req,url,anon,service);
+   const {error}=await admin.auth.admin.updateUserById(user.id,{app_metadata:{...(user.app_metadata??{}),must_change_password:false}});
+   if(error) return json({error:"password_change_confirmation_failed"},400);
+   return json({ok:true});
+  }
+  if(body.action==="request_email_recovery"){
+   const email=String(body.email??"").trim().toLowerCase();
+   const app=safeAppCode(String(body.app_code??""));
+   if(email && email.includes("@")){
+    const publicClient=createClient(url,anon,{auth:{persistSession:false,autoRefreshToken:false}});
+    await publicClient.auth.resetPasswordForEmail(email,{redirectTo:Deno.env.get("FAMILLE_RECOVERY_URL")??undefined});
+   }
+   return json({ok:true,message:"recovery_request_received"});
+  }
+  if(body.action==="list_devices"||body.action==="list_recovery_requests"){
+   const {user,admin}=await actorFrom(req,url,anon,service);
+   if(!(user.app_metadata?.naxa_platform_admin===true||user.app_metadata?.famille_platform_admin===true)) return json({error:"scope_forbidden"},403);
+   if(body.action==="list_devices"){
+    const {data,error}=await admin.schema("famille_private").from("account_devices").select("id,user_id,app_code,organization_id,location_id,platform,device_label,status,created_at,last_seen_at,revoked_at").order("last_seen_at",{ascending:false}).limit(200);
+    if(error)return json({error:"device_list_failed"},500);return json({devices:data??[]});
+   }
+   const {data,error}=await admin.schema("famille_private").from("recovery_requests").select("id,user_id,app_code,channel,status,created_at,reviewed_at,completed_at").order("created_at",{ascending:false}).limit(200);
+   if(error)return json({error:"recovery_list_failed"},500);return json({requests:data??[]});
+  }
+  if(body.action==="review_recovery_request"){
+   const {user,admin}=await actorFrom(req,url,anon,service);
+   if(!(user.app_metadata?.naxa_platform_admin===true||user.app_metadata?.famille_platform_admin===true)) return json({error:"scope_forbidden"},403);
+   const id=String(body.request_id??"");const status=String(body.status??"");
+   if(!["identity_check","approved","rejected","completed"].includes(status)) return json({error:"invalid_recovery_status"},400);
+   const {error}=await admin.schema("famille_private").from("recovery_requests").update({status,reviewed_by:user.id,review_reason:String(body.reason??"").slice(0,500),reviewed_at:new Date().toISOString(),completed_at:status==="completed"?new Date().toISOString():null}).eq("id",id).eq("status","pending");
+   if(error)return json({error:"recovery_review_failed"},400);
+   await admin.schema("famille_private").from("account_audit_log").insert({actor_id:user.id,event_code:"account.recovery.reviewed",outcome:"success",reason_code:status,metadata:{request_id:id}});
+   return json({ok:true});
+  }
+
   if(body.action==="request_recovery"){
    const phone=normalizePhone(String(body.phone??""));const app=safeAppCode(String(body.app_code??""));const loginHash=await digest(phone);
    const admin=createClient(url,service,{auth:{persistSession:false,autoRefreshToken:false}});
-   await admin.schema("famille_private").from("recovery_requests").insert({login_hash:loginHash,channel:"whatsapp"});
+   await admin.schema("famille_private").from("recovery_requests").insert({login_hash:loginHash,app_code:app,channel:"whatsapp"});
    const wa="https://wa.me/237681972237?text="+encodeURIComponent("Bonjour NAXA, je demande une assistance pour récupérer mon accès. Application : "+app+". Je suis prêt à vérifier mon identité par la procédure officielle.");
    return json({ok:true,message:"recovery_request_received",whatsapp_url:wa});
   }
