@@ -228,6 +228,7 @@ as $$
   limit 1
 $$;
 revoke all on function famille_core.current_app_id() from public,anon,authenticated;
+grant usage on schema famille_core to service_role;
 grant execute on function famille_core.current_app_id() to service_role;
 
 revoke all on all functions in schema famille_private from public,anon,authenticated;
