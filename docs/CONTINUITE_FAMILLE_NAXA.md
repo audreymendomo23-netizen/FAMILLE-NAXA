@@ -1,12 +1,12 @@
 # CONTINUITÉ — FAMILLE NAXA
 
-**Dernière mise à jour : 14 novembre 2026 — 02:2x (heure Cameroun)**  
+**Dernière mise à jour : 14 novembre 2026 — reprise technique (heure Cameroun)**  
 **Référence de travail : branche `main` uniquement**  
 **Dépôt :** https://github.com/audreymendomo23-netizen/FAMILLE-NAXA
 
 ## 1. Point de reprise immédiat
 
-Le **Prompt 0.2 — Schéma de données commun** est clôturé comme livrable de cadrage et de conception. Ne pas le relancer ni élargir son périmètre. Le modèle commun des dix applications, les frontières de schémas et la décision de ne pas réutiliser aveuglément le modèle pharmacie NAXA sont documentés.
+Les Prompts **0.1 et 0.2 restent ouverts pour leur validation technique**, à la demande explicite de l'utilisateur. Le cadrage documentaire existe, mais aucun VERT technique n'est acquis. Ne pas ouvrir le Prompt 0.3 avant les preuves de build Android/Web et les tests PostgreSQL/RLS du socle commun.
 
 **Statut exact :**
 - Cadrage et conception du Prompt 0.2 : **CLOS**.
@@ -20,9 +20,9 @@ Le **Prompt 0.2 — Schéma de données commun** est clôturé comme livrable de
 
 - Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`
 - Branche : `main`
-- Dernier commit réalisé pendant cette reprise : `2634028153eb2e5fa70a0a0324f701ddd3fb8391`
-- Fichier mis à jour : [Prompt 0.2](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/architecture-360/PROMPT_0_2_SCHEMA_DONNEES_COMMUN.md)
-- SQL draft conservé sans modification : [0001_famille_core_proposed.sql](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/supabase/drafts/0001_famille_core_proposed.sql)
+- Dernier commit de continuité antérieur : `490c368fa656ba160a4c6c4d49532abc2c20ac35`\n- Corrections techniques de cette reprise : `0d34889b89099183d054770bd6a67b405db4975b` (compatibilité Android), `1217a9cbe055a3aa2ab850b697b888eea2d8f218` (contraintes SQL), `5f28c1422e1d80f51b49e40f5177acb4152fc102` (audit technique).
+- [Prompt 0.1 corrigé](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/architecture-360/PROMPT_0_1_CADRAGE_TECHNIQUE.md)\n- [Prompt 0.2](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/architecture-360/PROMPT_0_2_SCHEMA_DONNEES_COMMUN.md)\n- [Audit technique 0.1/0.2](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/audits/AUDIT_TECHNIQUE_PROMPTS_0_1_0_2.md)
+- [SQL draft durci mais toujours non exécutable/non approuvé](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/supabase/drafts/0001_famille_core_proposed.sql)
 - Prompt 0.1 : [Cadrage technique](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/architecture-360/PROMPT_0_1_CADRAGE_TECHNIQUE.md)
 
 ## 3. Résultats de la dernière reprise
@@ -78,6 +78,6 @@ Si le prochain prompt source n'est pas présent dans le dépôt, le retrouver da
 
 | Date | Changement | Preuve |
 |---|---|---|
-| 14/11/2026 | Prompt 0.2 clôturé comme livrable de cadrage ; ajout du comparatif Replay/Production, des constats de sécurité et des limites exactes | Commit `2634028153eb2e5fa70a0a0324f701ddd3fb8391` |
+| 14/11/2026 | Reprise de validation technique : incompatibilité Kotlin 2.2.21 / AGP 9.5 / Gradle 9.6 détectée et corrigée dans Prompt 0.1 ; contraintes composites app/organisation ajoutées au SQL draft ; audit technique et blocages documentés. VERT technique non acquis. | Commits `0d34889b89099183d054770bd6a67b405db4975b`, `1217a9cbe055a3aa2ab850b697b888eea2d8f218`, `5f28c1422e1d80f51b49e40f5177acb4152fc102` |
 | 14/11/2026 | Création de ce document de continuité | Commit `80e4664e24a9b233ec5c69b5ccabfbd7052908a2` |
 | 14/11/2026 | Ajout de la continuité Famille dans l'index documentaire | Commit `a4932604f23d0d985de8b72dce5551569d9802b4` |
