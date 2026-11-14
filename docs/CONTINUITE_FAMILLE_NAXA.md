@@ -279,3 +279,7 @@ Aucun changement Supabase réel, aucune migration, aucun DDL/DML, aucune modific
 
 ### Complément d'exécution — queues offline et CI Android
 Le générateur `scripts/bootstrap-foundations.mjs` inclut désormais une file Room persistante dans chaque module Android, un package IndexedDB de file Web, ainsi qu'un service worker PWA limité au shell statique (les chemins Auth et API sont exclus du cache). Le workflow teste les contrats communs et le moteur de règles explicables, compile les dix cibles Web/PWA et prépare le SDK Android préinstallé du runner. Le run `43550939743` a franchi les étapes Web et tests ; la compilation des dix modules Android était encore en cours au dernier contrôle. Le run suivant `43550999833` couvre la version avec Room/IndexedDB ; sa compilation Android doit aussi être confirmée. Ces fondations ne constituent pas encore une synchronisation serveur, des notifications FCM, une authentification/RLS intégrée ni une distribution signée. Aucun prompt n'est vert.
+
+
+### Correctif Android JVM — 14/11/2026
+Le premier build Android natif a atteint la compilation Kotlin puis a échoué sur l'incompatibilité de cible JVM : javac 1.8 contre Kotlin 17. Le générateur a été corrigé pour fixer `sourceCompatibility`, `targetCompatibility` et `kotlinOptions.jvmTarget` à Java 17 dans les dix modules. Commit correctif : `d5dbea85e3340c2ce0e002c7544bbdfbcc25a30e`. Le build Android des dix applications doit être relancé et vérifié après ce correctif ; aucun vert natif n'est encore revendiqué.
