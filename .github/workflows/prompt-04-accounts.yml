@@ -6,6 +6,7 @@ on:
       - "supabase/drafts/0004_prompt_0_4_account_lifecycle.sql"
       - "supabase/local-tests/0004_prompt_0_4_account_assertions.sql"
       - "supabase/functions/famille-account-lifecycle/**"
+      - "deno.json"
       - "apps/web/admin-console/**"
       - "packages/core-android/**"
       - ".github/workflows/prompt-04-accounts.yml"
@@ -21,8 +22,12 @@ jobs:
     services:
       postgres:
         image: postgres:17
-        env: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres, POSTGRES_DB: famille04 }
-        ports: ["5432:5432"]
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: famille04
+        ports:
+          - "5432:5432"
         options: >-
           --health-cmd "pg_isready -U postgres -d famille04"
           --health-interval 5s --health-timeout 5s --health-retries 20
@@ -43,7 +48,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v1
-        with: { deno-version: v2.x }
+        with:
+          deno-version: v2.x
       - run: deno test --allow-env supabase/functions/famille-account-lifecycle/index_test.ts
       - run: deno check supabase/functions/famille-account-lifecycle/index.ts
   web-build:
@@ -51,7 +57,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-        with: { node-version: 22 }
+        with:
+          node-version: 22
       - run: npm install
       - run: npm run build --workspace @famille/admin-console
   android-build:
@@ -59,7 +66,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: "17" }
-      - uses: android-actions/setup-android@v3\n        with:\n          packages: platform-tools,platforms;android-35,build-tools;35.0.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: |
+            platform-tools
+            platforms;android-35
+            build-tools;35.0.0
       - run: chmod +x gradlew
       - run: ./gradlew :core-android:assembleDebug

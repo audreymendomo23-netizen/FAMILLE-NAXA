@@ -16,6 +16,7 @@ end $$;
 -- First and second device stay active; the third atomically evicts the oldest.
 select famille_private.register_device('10000000-0000-0000-0000-000000000001','kiosko',null,null,'install-00000000000001',null,'android','Android 1');
 select famille_private.register_device('10000000-0000-0000-0000-000000000001','kiosko',null,null,'install-00000000000002',null,'android','Android 2');
+update famille_private.account_devices set created_at=case when installation_id='install-00000000000001' then now()-interval '2 hours' else now()-interval '1 hour' end where installation_id in ('install-00000000000001','install-00000000000002');
 select famille_private.register_device('10000000-0000-0000-0000-000000000001','kiosko',null,null,'install-00000000000003',null,'android','Android 3');
 do $$ begin
  if (select count(*) from famille_private.account_devices where user_id='10000000-0000-0000-0000-000000000001' and app_code='kiosko' and status='active')<>2 then raise exception 'device cap not enforced'; end if;
