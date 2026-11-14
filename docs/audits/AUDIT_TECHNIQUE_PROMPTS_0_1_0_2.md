@@ -5,6 +5,8 @@
 **Périmètre : correction des incompatibilités et vérification des prérequis techniques.**  
 **Décision : VERT TECHNIQUE NON ACQUIS. Ne pas ouvrir le Prompt 0.3.**
 
+**Mise à jour groupée :** un workflow GitHub Actions commun a été ajouté pour tester le draft sous PostgreSQL 17 éphémère et contrôler la présence des 20 manifests applicatifs. Le workflow n'a pas encore fourni de run exploitable : l'API GitHub consultée ne retourne aucun workflow run. La présence du fichier YAML ne constitue pas une preuve d'exécution.
+
 ## 1. État initial vérifié
 
 Au commit de départ `490c368fa656ba160a4c6c4d49532abc2c20ac35`, le dépôt contenait les documents de cadrage et le SQL draft, mais pas de bootstrap applicatif à sa racine.
@@ -78,7 +80,15 @@ Clés composites et index d'appui ajoutés dans `supabase/drafts/0001_famille_co
 
 Conséquence : aucun build Android, build Web/PWA, test d'intégration PostgreSQL ou test RLS n'a pu être exécuté ici.
 
-## 6. Critères impératifs avant VERT technique
+## 6. Contrôle groupé ajouté sur main
+
+Fichiers ajoutés au commit `24792bb8dd2b0247f96ba45f09dde2208c91b9b5` :
+- `.github/workflows/famille-technical-gate.yml` : deux jobs groupés. Le premier démarre PostgreSQL 17 éphémère, crée le minimum Auth isolé, exécute le draft et lance les tests SQL. Le second vérifie les dix manifests Android et les dix manifests Web/PWA et échoue si un seul manque.
+- `supabase/tests/0001_famille_core_smoke.sql` : tests du seed des dix applications, des 22 tables, du chemin valide des clés composites, de trois refus de liens inter-app/organisation, et de l'absence de grants/policies (default-deny uniquement).
+
+**État de preuve :** workflow présent sur `main`, mais aucun run GitHub Actions n'est visible à la consultation (`total_count=0`). Le job SQL n'est donc pas déclaré PASS. Le job applicatif est conçu pour signaler les manifests manquants ; l'inventaire Git montre qu'aucun fichier sous `apps/android/` ou `apps/web/` n'existe à ce stade.
+
+## 7. Critères impératifs avant VERT technique
 
 ### Prompt 0.1
 - [ ] Bootstrap monorepo réel, reproductible, sur main.
@@ -102,7 +112,7 @@ Conséquence : aucun build Android, build Web/PWA, test d'intégration PostgreSQ
 - [ ] Aucun secret serveur dans les clients.
 - [ ] Rapport de tests et revue indépendante avant toute décision de migration.
 
-## 7. Résultat
+## 8. Résultat
 
 | Contrôle | État |
 |---|---|
@@ -112,10 +122,10 @@ Conséquence : aucun build Android, build Web/PWA, test d'intégration PostgreSQ
 | Build Web/PWA réel | NON EXÉCUTÉ |
 | Dix applications natives et dix PWA | ABSENTES DU DÉPÔT |
 | Contraintes croisées SQL | DURCIES DANS LE DRAFT |
-| Validation PostgreSQL du draft | NON EXÉCUTÉE |
+| Validation PostgreSQL du draft | JOB CI AJOUTÉ, RUN NON OBSERVÉ |
 | Policies/GRANT/RLS Famille | NON FINALISÉS |
-| Tests RLS/isolation | NON EXÉCUTÉS |
+| Tests contraintes / refus inter-scope | SCRIPT SQL AJOUTÉ, RUN NON OBSERVÉ |\n| Tests RLS/isolation fonctionnels | NON EXÉCUTÉS ; policies absentes |
 | Migration Supabase | AUCUNE |
 | Déploiement | AUCUN |
 
-**Conclusion :** les erreurs documentaires détectées sont corrigées et des contraintes SQL ont été ajoutées, mais les Prompts 0.1 et 0.2 ne sont pas VERT TECHNIQUE. Le chantier doit rester sur ces prérequis jusqu'à production des preuves listées ci-dessus.
+**Conclusion :** les corrections SQL et le contrôle groupé sont préparés, mais aucun résultat de run n'est disponible et les vingt projets applicatifs sont absents. Le Prompt 0.2 ne peut pas être déclaré vert techniquement tant que les policies/grants et tests RLS fonctionnels ne sont pas conçus, exécutés et approuvés. Le Prompt 0.1 ne peut pas être déclaré vert tant que les vingt applications ne sont pas construites et compilées. Aucun faux VERT.
