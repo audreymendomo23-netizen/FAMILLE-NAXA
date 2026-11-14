@@ -215,3 +215,20 @@ Lien : https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/ar
 
 ### Reprise exacte
 Commencer par l'audit en lecture seule des ressources Auth, profils, partenaires, memberships, affectations, appareils, invitations, récupération et RPC existantes sur le backend NAXA. Produire la matrice réutiliser/adapter/créer/écarter et relever les écarts du prompt avant toute implémentation. Aucun changement Supabase réel sans diff validé et autorisation explicite.
+
+
+## Prompt 0.4 — audit structurel backend NAXA (14 novembre 2026)
+
+Audit en lecture seule du projet Supabase Naxa `eouwtuusnsuxaejsxknf`, PostgreSQL 17.11.0.002, statut ACTIVE_HEALTHY. Rapport : `docs/audits/AUDIT_PROMPT_0_4_COMPTES_APPAREILS.md`.
+
+Preuves principales : auth.users=10, profiles=10, partners=0, partner_members=0, pharmacies=4, promoteur_pharmacies=1, naxa_professional_assignments=0, appareils=0, naxa_livreur_invites=0, exam_staff_invites=0, suivi_user_devices=1. Ces comptages sont agrégés, aucune donnée personnelle n'a été extraite.
+
+Mapping : `auth.users` est l'identité canonique ; `profiles.id` est PK/FK auth.users ; `profiles` contient déjà téléphone/pays, état actif, majorité/consentement, parent et fonctions ; `partners`/`partner_members` sont adaptés aux relations partenaire mais actuellement vides ; `pharmacies`/`promoteur_pharmacies` structurent les points pharmacies ; `naxa_professional_assignments` et `naxa_roles` sont le registre d'affectation professionnelle ; `exam_staff_invites` et `naxa_livreur_invites` sont des flux spécialisés, non un service générique ; `appareils` est un registre professionnel pharmacie-spécifique ; `suivi_user_devices` est réservé aux appareils connectés Santé ; `auth.sessions` et les journaux NAXA sont la base des sessions/audits.
+
+Anomalie critique prouvée : `public.naxa_enforce_session_limit()` est un trigger SECURITY DEFINER dont le corps fait seulement `RETURN NEW`; `public.naxa_session_count(uuid)` retourne toujours `0`. Aucun plafond réel de sessions/appareils n'est donc démontré par ces fonctions. `appareils` a RLS activé mais aucune policy et aucun grant direct anon/authenticated dans les grants examinés ; les invitations ont également RLS sans policy et aucun grant direct client observé, avec RPC dédiées. `profiles` a des policies de lecture/écriture mais des grants directs très larges à anon/authenticated, notamment anon ; revue de moindre privilège prioritaire, sans révocation avant cartographie des dépendances.
+
+Le trigger `auth.users.on_auth_user_created` appelle `handle_new_user()` SECURITY DEFINER pour créer un profil avec les métadonnées fournies à l'inscription. Le réglage Auth autorisant ou bloquant l'inscription libre n'a pas été confirmé par SQL ; il reste à vérifier dans Dashboard/API. Le contenu de user_metadata ne doit pas être utilisé pour les autorisations.
+
+**État Prompt 0.4 : AUDIT STRUCTUREL PARTIEL — NON VERT.** Aucun DDL/DML, changement Auth, création de compte, révocation, migration, déploiement ou publication effectué. Prompt 0.3 reste PARTIEL/NON CLOS.
+
+Reprise : (1) inspecter la chaîne complète des triggers de sessions et résoudre les stubs dans PostgreSQL 17 éphémère ; (2) inspecter helpers privés d'invitation et consommateurs de `appareils` ; (3) confirmer réglages Auth allow-signups, politique mot de passe, leaked password protection, MFA, rate limits et templates ; (4) cartographier organisations/lieux et appareils par les dix apps ; (5) tests positifs/négatifs inter-app/org/lieu ; aucun changement Production sans diff validé et autorisation explicite.
