@@ -59,3 +59,7 @@ Les assertions 0.3 existantes passent, mais elles ne démontrent pas encore l'is
 6. Étendre simultanément provisioning, paiement, notifications, Admin MFA, distribution et règles IA avec tests spécifiques.
 
 **État global : fondations simultanées initialisées ; aucun prompt 0.3–0.13 déclaré VERT.**
+
+
+## Extension du lot 1 — offline local (commit e919bed3cb26768a95e7a665fbf4c8ad7e8bc3d4)
+Le générateur crée maintenant une file persistante Room par application Android, une file IndexedDB commune pour les cibles Web, et un service worker PWA limité au shell statique. Les routes Auth et API sont explicitement exclues du cache. Ces composants constituent un stockage local initial : ils ne prouvent pas encore la synchronisation serveur, le rejeu idempotent bout en bout, la résolution des conflits en ligne ou les notifications push. Les builds Web et tests de contrats/règles sont passés dans le run `43550999833`; le build Android de cette version est encore en cours au dernier contrôle.
