@@ -79,4 +79,4 @@ Si le prochain prompt source n'est pas présent dans le dépôt, le retrouver da
 | Date | Changement | Preuve |
 |---|---|---|
 | 14/11/2026 | Prompt 0.2 clôturé comme livrable de cadrage ; ajout du comparatif Replay/Production, des constats de sécurité et des limites exactes | Commit `2634028153eb2e5fa70a0a0324f701ddd3fb8391` |
-| 14/11/2026 | Création de ce document de continuité | À confirmer par le commit de création |
+| 14/11/2026 | Création de ce document de continuité | Commit `80e4664e24a9b233ec5c69b5ccabfbd7052908a2` |
