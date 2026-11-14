@@ -24,7 +24,7 @@ create table if not exists famille_private.account_app_access (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (ends_at is null or ends_at > starts_at),
-  unique (user_id, app_code, organization_id, location_id)
+  unique nulls not distinct (user_id, app_code, organization_id, location_id)
 );
 create index if not exists account_app_access_scope_idx on famille_private.account_app_access(user_id,app_code,status);
 create table if not exists famille_private.account_invites (
@@ -36,6 +36,7 @@ create table if not exists famille_private.account_invites (
   account_kind text not null check (account_kind in ('client','professional','employee')),
   organization_id uuid,
   location_id uuid,
+  role_code text,
   status text not null default 'pending' check (status in ('pending','accepted','revoked','expired')),
   created_by uuid not null references auth.users(id) on delete restrict,
   created_at timestamptz not null default now(),
@@ -63,7 +64,7 @@ create table if not exists famille_private.account_devices (
   revoked_at timestamptz,
   revoked_by uuid references auth.users(id) on delete restrict,
   unique(user_id,app_code,installation_id),
-  check ((status='active') = (revoked_at is null))
+  check ((status='active' and revoked_at is null) or (status in ('revoked','lost') and revoked_at is not null))
 );
 create index if not exists account_devices_scope_idx on famille_private.account_devices(user_id,app_code,organization_id,location_id,status,created_at);
 create table if not exists famille_private.login_guard (
@@ -136,11 +137,14 @@ begin
       values(p_user_id,p_app_code,p_organization_id,p_location_id,p_installation_id,p_auth_session_id,p_platform,p_device_label)
       returning id into v_device;
   end if;
-  select id into v_evicted from famille_private.account_devices
-    where user_id=p_user_id and app_code=p_app_code
-      and organization_id is not distinct from p_organization_id
-      and location_id is not distinct from p_location_id and status='active' and id<>v_device
-    order by created_at asc,id asc offset 1 limit 1;
+  if (select count(*) from famille_private.account_devices where user_id=p_user_id and app_code=p_app_code
+      and organization_id is not distinct from p_organization_id and location_id is not distinct from p_location_id and status='active') > 2 then
+    select id into v_evicted from famille_private.account_devices
+      where user_id=p_user_id and app_code=p_app_code
+        and organization_id is not distinct from p_organization_id
+        and location_id is not distinct from p_location_id and status='active'
+      order by created_at asc,id asc limit 1;
+  end if;
   if v_evicted is not null then
     update famille_private.account_devices set status='revoked',revoked_at=now()
       where id=v_evicted;

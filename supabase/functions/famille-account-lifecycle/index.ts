@@ -1,4 +1,4 @@
-import { createClient, type User } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type User } from "npm:@supabase/supabase-js@2";
 const APPS = new Set(["kiosko","bootik","zipple","naxa_services","cotiz","loyable","naxa_hotel","campus237","naxa_security","grillad"]);
 const cors = { "Access-Control-Allow-Origin":"*", "Access-Control-Allow-Headers":"authorization, apikey, content-type, x-client-info", "Access-Control-Allow-Methods":"POST, OPTIONS", "Content-Type":"application/json" };
 export function normalizePhone(value:string):string { const v=value.replace(/[\s().-]/g,""); if(!/^\+[1-9]\d{7,14}$/.test(v)) throw new Error("invalid_phone_e164"); return v; }
@@ -96,7 +96,7 @@ async function handle(req:Request):Promise<Response>{
    const expires=new Date(Date.now()+72*60*60*1000).toISOString();const token=randomSecret();const tokenHash=await digest(token);
    const access=await admin.schema("famille_private").from("account_app_access").upsert({user_id:user.id,app_code:app,account_kind:kind,organization_id:org,location_id:loc,role_code:role,plan_code:body.plan_code??null,duration_days:body.duration_days??null,discount_percent:body.discount_percent??0,trial_days:body.trial_days??0,status:"pending",granted_by:actor.id},{onConflict:"user_id,app_code,organization_id,location_id"});
    if(access.error){if(created) await admin.auth.admin.deleteUser(user.id);return json({error:"access_grant_failed"},500);}
-   const invite=await admin.schema("famille_private").from("account_invites").insert({request_id:requestId,user_id:user.id,token_hash:tokenHash,app_code:app,account_kind:kind,organization_id:org,location_id:loc,created_by:actor.id,expires_at:expires});
+   const invite=await admin.schema("famille_private").from("account_invites").insert({request_id:requestId,user_id:user.id,token_hash:tokenHash,app_code:app,account_kind:kind,organization_id:org,location_id:loc,created_by:actor.id,expires_at:expires,role_code:role});
    if(invite.error){if(created) await admin.auth.admin.deleteUser(user.id);return json({error:"invite_creation_failed"},500);}
    await admin.auth.admin.updateUserById(user.id,{app_metadata:{...(user.app_metadata??{}),must_change_password:true}});
    await admin.schema("famille_private").from("account_audit_log").insert({actor_id:actor.id,subject_user_id:user.id,app_code:app,event_code:"account.invited",outcome:"success",metadata:{kind,request_id:requestId}});

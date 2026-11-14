@@ -1,6 +1,5 @@
 \set ON_ERROR_STOP on
 begin;
-create role service_role nologin bypassrls;
 grant usage on schema auth to service_role;
 insert into auth.users(id) values
  ('10000000-0000-0000-0000-000000000001'),
