@@ -15,7 +15,9 @@ create table if not exists famille_test.transaction_rows(id uuid primary key def
 alter table famille_test.transaction_rows enable row level security;
 create policy tx_select on famille_test.transaction_rows for select to authenticated using(famille_core.can_read_transaction_details(organization_id,app_id,location_id));
 create policy tx_insert on famille_test.transaction_rows for insert to authenticated with check(famille_core.can_write_transactions(organization_id,app_id,location_id));
-grant usage on schema famille_test to authenticated; grant select,insert on famille_test.transaction_rows to authenticated;
+create policy tx_update on famille_test.transaction_rows for update to authenticated using(famille_core.can_write_transactions(organization_id,app_id,location_id)) with check(famille_core.can_write_transactions(organization_id,app_id,location_id));
+create policy tx_delete on famille_test.transaction_rows for delete to authenticated using(famille_core.can_write_transactions(organization_id,app_id,location_id));
+grant usage on schema famille_test to authenticated; grant select,insert,update,delete on famille_test.transaction_rows to authenticated;
 create or replace function famille_test.aggregate_org(p_org uuid,p_app uuid) returns table(n bigint,total numeric) language plpgsql security definer set search_path=pg_catalog,famille_test,famille_core,auth as $$ begin if not famille_core.can_read_financial_aggregates(p_org,p_app) then raise exception 'denied' using errcode='42501'; end if; return query select count(*)::bigint,coalesce(sum(amount_fcfa),0)::numeric from famille_test.transaction_rows where organization_id=p_org and app_id=p_app; end $$;
 grant execute on function famille_test.aggregate_org(uuid,uuid) to authenticated;
 insert into famille_test.transaction_rows(organization_id,app_id,location_id,amount_fcfa,description) select '20000000-0000-0000-0000-000000000001',id,'30000000-0000-0000-0000-000000000001',100,'A1' from famille_core.applications where code='kiosko';
@@ -35,9 +37,19 @@ do $$ declare n bigint; begin select count(*) into n from famille_test.transacti
 select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000006',true);
 do $$ declare n bigint; begin select count(*) into n from famille_test.transaction_rows; if n<>0 then raise exception 'partner access not denied'; end if; end $$;
 reset role;
+-- During the explicit grace window, operational access remains available.
+update famille_core.subscriptions set status='past_due',ends_at=now()-interval '1 day',grace_until=now()+interval '1 day' where id='60000000-0000-0000-0000-000000000001';
+set role authenticated; select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000001',true);
+do $ declare n bigint; begin select count(*) into n from famille_test.transaction_rows; if n<>2 then raise exception 'grace period should preserve access'; end if; end $;
+reset role;
 update famille_core.subscriptions set status='past_due',ends_at=now()-interval '2 days',grace_until=now()-interval '1 second' where id='60000000-0000-0000-0000-000000000001';
 set role authenticated; select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000001',true);
-do $$ declare n bigint; s text; begin select count(*) into n from famille_test.transaction_rows; if n<>0 then raise exception 'expired read not blocked'; end if; begin insert into famille_test.transaction_rows(organization_id,app_id,location_id,amount_fcfa,description) values('20000000-0000-0000-0000-000000000001',(select id from famille_core.applications where code='kiosko'),'30000000-0000-0000-0000-000000000001',10,'denied'); raise exception 'expired write succeeded'; exception when insufficient_privilege then null; end; select count(*) into n from famille_core.payment_intents; if n<>1 then raise exception 'payment screen unavailable'; end if; if not famille_core.submit_payment_intent('70000000-0000-0000-0000-000000000001') then raise exception 'I paid action failed'; end if; select status into s from famille_core.payment_intents where id='70000000-0000-0000-0000-000000000001'; if s<>'submitted' then raise exception 'payment not submitted'; end if; end $$;
+do $$ declare n bigint; s text; begin select count(*) into n from famille_test.transaction_rows; if n<>0 then raise exception 'expired read not blocked'; end if;
+update famille_test.transaction_rows set amount_fcfa=999 where location_id='30000000-0000-0000-0000-000000000001';
+get diagnostics n = row_count; if n<>0 then raise exception 'expired update not blocked'; end if;
+delete from famille_test.transaction_rows where location_id='30000000-0000-0000-0000-000000000001';
+get diagnostics n = row_count; if n<>0 then raise exception 'expired delete not blocked'; end if;
+begin insert into famille_test.transaction_rows(organization_id,app_id,location_id,amount_fcfa,description) values('20000000-0000-0000-0000-000000000001',(select id from famille_core.applications where code='kiosko'),'30000000-0000-0000-0000-000000000001',10,'denied'); raise exception 'expired write succeeded'; exception when insufficient_privilege then null; end; select count(*) into n from famille_core.payment_intents; if n<>1 then raise exception 'payment screen unavailable'; end if; if not famille_core.submit_payment_intent('70000000-0000-0000-0000-000000000001') then raise exception 'I paid action failed'; end if; select status into s from famille_core.payment_intents where id='70000000-0000-0000-0000-000000000001'; if s<>'submitted' then raise exception 'payment not submitted'; end if; end $$;
 reset role;
 do $$ begin if has_table_privilege('authenticated','famille_core.payment_matches','SELECT') then raise exception 'payment refs exposed'; end if; end $$;
 rollback;
