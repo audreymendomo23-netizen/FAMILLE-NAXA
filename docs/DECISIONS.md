@@ -18,3 +18,7 @@
 | FAM-014 | Identité Auth commune ; autorisations contextualisées par application/organisation/lieu ; séparation des tables métier NAXA | PROPOSÉ, AUDIT REQUIS |
 | FAM-015 | Aucun schéma Famille exposé au Data API sans grants minimaux et RLS/policies testés | VALIDÉ COMME EXIGENCE |
 | FAM-016 | AGP 9.3.1 : Kotlin intégré désactivé temporairement afin d'utiliser KGP 2.4.21 ; migration requise avant AGP 10 | TRANSITOIRE DOCUMENTÉ |
+| FAM-017 | Un seul Administrateur central Famille pour les dix plateformes ; accès transversal limité aux métadonnées d'administration, comptes, états, abonnements, paramètres et agrégats autorisés ; aucune lecture des transactions métier détaillées | VALIDÉ |
+| FAM-018 | Identités utilisateurs distinctes par plateforme : un compte Auth utilisateur ordinaire ne peut être rattaché qu'à une seule application ; l'Administrateur central dispose d'un compte dédié hors memberships applicatifs | VALIDÉ |
+| FAM-019 | L'Administrateur central peut effectuer les opérations d'administration autorisées ; toute mutation doit être journalisée de façon append-only avec acteur, application, organisation/lieu si applicable, action, cible et horodatage | VALIDÉ |
+
