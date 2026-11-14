@@ -1,6 +1,6 @@
 # PROMPT 0.2 — Schéma de données commun
 
-**État : MODÈLE ET PREMIER AUDIT APPROFONDI DOCUMENTÉS ; VALIDATION FINALE BLOQUÉE PAR DES CONTRÔLES DE SÉCURITÉ ET DE PÉRIMÈTRE NON CLOS.**
+**État : PROMPT 0.2 CLÔTURÉ POUR LE CADRAGE ET LA CONCEPTION ; AUCUNE MIGRATION AUTORISÉE.**
 **Projet consulté : naxa-ci-replay-2 (pwfftcsjyeibxxqhwysw) uniquement. Production non modifiée.**
 
 ## 1. Périmètre actualisé
@@ -224,3 +224,67 @@ FICHIER DE PASSATION — Famille NAXA — Prompt 0.2 — 14 novembre 2026
 7. Accord explicite requis pour exposition Data API, grants, migration appliquée, modification Replay/Production, déploiement ou dépense. L'audit courant n'a effectué que des lectures.
 
 **Prompt 0.2 : modèle et cadrage approfondis documentés ; PAS VERT. Le schéma SQL reste un draft non exécutable tant que les invariants, les policies, les grants, les tests et la matrice métier ne sont pas finalisés.**
+
+
+---
+
+## 12. Clôture du Prompt 0.2 — contrôle consolidé du 14/11/2026
+
+**Décision de clôture : le travail de cadrage et de conception demandé par le Prompt 0.2 est terminé et documenté. Le modèle Famille est retenu comme proposition d'architecture, mais il n'est ni migré ni déclaré prêt pour la production.** Cette clôture ne certifie pas la sécurité globale du backend NAXA.
+
+### 12.1 Inventaire comparatif Replay / Production
+
+Contrôles en lecture seule, effectués le 14/11/2026. Replay = `pwfftcsjyeibxxqhwysw`; Production = `eouwtuusnsuxaejsxknf`.
+
+| Indicateur | Replay | Production | Conclusion |
+|---|---:|---:|---|
+| Tables public | 249 | 246 | Schémas existants distincts |
+| Tables private | 2 | 7 | Ne pas supposer une parité |
+| Policies toutes catégories | 372 | 367 | Écart de 5 policies |
+| Fonctions SECURITY DEFINER (catalogue interrogé) | 446 | 427 | Écart de 19 ; métrique de catalogue, pas un score de risque |
+| Schémas Famille dédiés déjà présents | Aucun | Aucun | Aucun socle Famille n'a été créé |
+| Vues public/private identifiées | 6 vues public dans l'inventaire initial | 6 vues public | Les deux vues marketplace signalées ne sont pas en security_invoker |
+
+Les nombres de fonctions peuvent différer d'un relevé Advisor à un relevé SQL selon le périmètre et l'instant d'observation : Advisor avait signalé 447 fonctions SECURITY DEFINER sur Replay. Le relevé SQL consolidé du présent passage en compte 446 dans le périmètre interrogé. Ne pas fusionner ces chiffres en une fausse valeur unique.
+
+Les historiques de migrations Replay et Production ont été consultés : ils ne sont pas identiques. Aucune tentative de synchronisation, de rebase, de migration ou d'écriture n'a été faite. L'inventaire ne prouve pas que les deux bases sont interchangeables.
+
+### 12.2 Contrôles de sécurité Replay
+
+- 372 policies recensées : 347 dans `public`, 23 dans `storage`, 2 dans `cron`.
+- Supabase Advisor signale 66 tables avec RLS activé et sans policy. Ce signal n'est pas automatiquement une faille : certaines tables internes peuvent être volontairement inaccessibles aux clients. Il faut néanmoins vérifier les grants et l'usage attendu.
+- Le comptage SQL élargi a repéré 92 tables RLS sans policy sur l'ensemble des schémas interrogés, incluant des schémas système/techniques. Ce total n'est pas comparable au seul finding Advisor de 66 tables.
+- 446 fonctions SECURITY DEFINER dans le relevé SQL ; aucune sans `search_path` explicite dans ce contrôle.
+- Trois fonctions SECURITY DEFINER de `public` sont exécutables par `anon` : `marketplace_offre_stock_disponible`, `search_pharmacies`, `search_pharmacies_bulk`. Leurs définitions ont été lues. Elles exposent des fonctions de recherche et de disponibilité Marketplace, filtrent les pharmacies inactives, démo ou archivées, et imposent une fraîcheur de stock de 48 h pour la première. Ce comportement est cohérent avec une lecture publique du catalogue, mais les fonctions restent des points d'entrée privilégiés : tests de paramètres limites, volumétrie, fuite d'information et abus à effectuer avant certification.
+- Les vues `public.marketplace_assureurs` et `public.marketplace_assurance_conventions` ont l'option `security_barrier=true`, mais pas `security_invoker=true`. Elles sont donc à traiter comme vues à privilèges du propriétaire ; leur exposition doit être justifiée par l'examen des définitions et des grants. Aucune correction n'a été faite.
+- Le schéma `private` apparaît dans les schémas pour lesquels `anon` dispose de USAGE. C'est un constat de privilège de schéma, pas la preuve d'un accès effectif aux lignes ; les droits de tables, fonctions et vues doivent être minimisés séparément. Ne pas exposer `private` ni les schémas Famille.
+- Storage Replay : 9 buckets observés, dont des buckets publics et privés ; 23 policies sur `storage.objects`. Les règles sont fortement orientées pharmacie/partenaires/examens. Elles ne constituent pas une politique de fichiers Famille réutilisable.
+- 6 tâches pg_cron actives observées ; 9 extensions installées, dont `pg_cron`, `pgcrypto`, `pg_trgm`, `unaccent`, `http`, `uuid-ossp`, `supabase_vault` et `pg_stat_statements`.
+- Deux Edge Functions Replay recensées : `naxa-pharmacy-code` (JWT non requis) et `naxa-e2e-provision` (JWT requis). Ce sont des fonctions NAXA ; aucune fonction Famille n'a été déployée.
+- Advisor performance signale 215 clés étrangères sans index couvrant. Ce constat concerne la dette/performance du schéma existant ; aucune correction n'a été entreprise dans ce chantier.
+- Advisor sécurité signale la protection contre les mots de passe compromis désactivée. Ce paramètre Auth est à traiter séparément par le propriétaire du projet.
+
+### 12.3 Décision d'architecture arrêtée
+
+1. Les dix applications Famille utilisent une couche transverse dédiée `famille_core`, avec schémas métier séparés pour les dix applications.
+2. Aucune table métier Famille ne sera ajoutée à `public` par défaut.
+3. `auth.users` peut être le fournisseur d'identité commun ; l'identité de connexion ne confère aucun droit métier par elle-même.
+4. `public.profiles`, `partners`, `partner_members`, `universes`, `appareils`, `notifications` et les tables offline NAXA ne sont pas adoptés tels quels comme modèle Famille. Leur sémantique reste propre au produit NAXA.
+5. Les permissions sont contextuelles : application + organisation + lieu + rôle + état de l'affectation. Aucun rôle ni accès ne se propage automatiquement d'une application à l'autre.
+6. Les données de stock, caisse, tontine, loyer, réservation, séjour, paiement, comptabilité et sécurité physique restent dans leurs domaines métier dédiés ; aucune synchronisation LWW générique n'est autorisée pour ces agrégats.
+7. Les 24 entités du dictionnaire sont le modèle conceptuel. Le fichier SQL contient 22 tables de base : `promo_codes` et `referrals` restent au niveau conceptuel, car leurs règles métier et cycles de vie ne sont pas suffisamment définis pour figer leur DDL sans inventer des règles.
+8. Le SQL dans `supabase/drafts/0001_famille_core_proposed.sql` reste un brouillon de structure : il active RLS, mais ne contient ni GRANT ni policy. Il n'est pas exécutable en l'état et ne doit pas être appliqué.
+
+### 12.4 Limites exactes — ne pas transformer la clôture du prompt en faux « vert »
+
+Les opérations suivantes n'ont pas été faites : audit manuel exhaustif de chaque définition des 446/447 fonctions SECURITY DEFINER, analyse sémantique et tests d'intrusion des 372 policies, tests d'accès avec identités réelles, audit exhaustif des grants objet par objet, revue complète des définitions de toutes les vues, audit ligne par ligne des 194 triggers, revue de chaque migration, test de chaque bucket/fichier, test de toutes les Edge Functions, test de charge et validation des workflows des dix applications contre leurs cahiers complets. Ces travaux dépassent ce qui peut être prouvé par un inventaire catalogue en lecture seule.
+
+La comparaison Production/Replay a porté sur les inventaires et migrations consultés ; elle n'est pas un diff exhaustif de chaque objet et de chaque donnée.
+
+**Critère de clôture du Prompt 0.2 : ATTEINT pour le cadrage, le modèle conceptuel, les frontières de schémas, la comparaison d'inventaire et la décision de non-réutilisation aveugle. NON ATTEINT pour l'autorisation de migration, l'exposition Data API, la certification de sécurité et la mise en production.**
+
+Aucune action destructive ou mutante n'a été réalisée sur Replay ou Production. Aucun SQL Famille n'a été exécuté. Aucun déploiement, publication ou dépense.
+
+## 13. Conclusion du prompt
+
+Le socle commun proposé est suffisamment défini pour servir de référence aux prompts de conception métier suivants, sans démarrer prématurément les applications ni créer de tables. Le schéma SQL reste un artefact de conception à durcir avant toute migration. Le Prompt 0.2 est clos comme livrable de cadrage ; il ne doit pas être rouvert pour élargir le périmètre. Toute future action sur Supabase doit rester un chantier distinct, avec autorisation explicite et preuves propres.
