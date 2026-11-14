@@ -1,0 +1,85 @@
+name: Famille NAXA — validation groupée 0.1/0.2
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/drafts/**"
+      - "supabase/tests/**"
+      - ".github/workflows/famille-technical-gate.yml"
+      - "apps/**"
+      - "android/**"
+      - "web/**"
+      - "apps/android/**"
+      - "apps/web/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sql-postgres-17:
+    name: SQL draft + contraintes + isolation par défaut
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: famille_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d famille_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: famille_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Préparer le minimum Supabase Auth pour le test isolé
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.users (
+            id uuid PRIMARY KEY,
+            email text UNIQUE
+          );
+          SQL
+      - name: Exécuter le draft PostgreSQL 17 dans la base éphémère
+        run: psql -v ON_ERROR_STOP=1 -f supabase/drafts/0001_famille_core_proposed.sql
+      - name: Tester seed, clés composites et refus d'accès par défaut
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/0001_famille_core_smoke.sql
+
+  app-build-readiness:
+    name: Inventaire des 20 applications (preuve de build requise)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Vérifier les 10 projets Android et les 10 projets Web/PWA
+        shell: bash
+        run: |
+          set -euo pipefail
+          apps=(kiosko bootik zipple naxa-services cotiz loyable naxa-hotel campus237 naxa-security grillad)
+          missing=0
+          for app in "${apps[@]}"; do
+            android="apps/android/${app}/build.gradle.kts"
+            web="apps/web/${app}/package.json"
+            if [[ ! -f "$android" ]]; then echo "ABSENT Android: $android"; missing=$((missing+1)); fi
+            if [[ ! -f "$web" ]]; then echo "ABSENT Web/PWA: $web"; missing=$((missing+1)); fi
+          done
+          if [[ "$missing" -ne 0 ]]; then
+            echo "::error::$missing manifests applicatifs manquants : aucun build groupé des 20 applications ne peut être exécuté."
+            exit 1
+          fi
+          echo "Les 20 manifests sont présents ; ajouter les jobs de compilation dédiés après verrouillage des toolchains."
