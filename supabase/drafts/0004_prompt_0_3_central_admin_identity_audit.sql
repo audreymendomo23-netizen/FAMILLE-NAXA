@@ -76,6 +76,19 @@ $$;
 
 -- Append-only audit trail for authenticated central-admin mutations routed through
 -- approved server-side RPCs. Only table/operation/scope metadata is captured.
+create or replace function famille_core.reject_audit_event_mutation()
+returns trigger language plpgsql security definer
+set search_path = pg_catalog, famille_core
+as $
+begin
+  raise exception 'audit_events_are_append_only' using errcode='55000';
+end;
+$;
+create trigger famille_audit_events_append_only
+  before update or delete on famille_core.audit_events
+  for each row execute function famille_core.reject_audit_event_mutation();
+revoke all on function famille_core.reject_audit_event_mutation() from public,anon,authenticated;
+
 create or replace function famille_core.audit_central_admin_mutation()
 returns trigger language plpgsql security definer
 set search_path = pg_catalog, famille_core, auth
@@ -110,8 +123,8 @@ declare t text;
 begin
   foreach t in array array[
     'organizations','organization_apps','locations','memberships',
-    'role_assignments','client_app_access','devices','app_installations',
-    'subscriptions'
+    'role_catalog','role_assignments','client_app_access','devices','app_installations',
+    'subscriptions','plans','app_versions','payment_parser_rules'
   ] loop
     execute format('drop trigger if exists audit_central_admin_%I on famille_core.%I',t,t);
     execute format('create trigger audit_central_admin_%I after insert or update or delete on famille_core.%I for each row execute function famille_core.audit_central_admin_mutation()',t,t);
