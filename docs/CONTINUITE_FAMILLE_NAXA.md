@@ -121,3 +121,39 @@ La règle historique « le plus ancien enregistrement serveur gagne » ne peut p
 4. Cartographier les plans/tolérances des dix apps avant le verrouillage 7/14 jours.
 5. Auditer les chemins d'écriture des preuves SMS et concevoir append-only sur PostgreSQL 17 éphémère.
 6. Aucun changement Supabase réel sans autorisation explicite.
+
+
+## Ouverture Prompt 0.6 — Notifications (14 novembre 2026)
+
+### Source et cadrage
+- Prompt historique : `NAXA/7 famille naxa/02-prompts/00-socle-commun.md`, section « PROMPT 0.6 — Notifications ».
+- Adaptation Famille 10 applications : `docs/architecture-360/PROMPT_0_6_NOTIFICATIONS.md`.
+- Audit initial : `docs/audits/AUDIT_PROMPT_0_6_NOTIFICATIONS.md`.
+
+### Preuves de code lues
+- `packages/core-android/src/main/java/cm/naxa/core/notifications/NotificationChannels.kt` : cinq canaux Critique/Opérations/Abonnement/Information/Coaching IA ; API de publication locale ; contrôle runtime POST_NOTIFICATIONS Android 13+.
+- `BriefingScheduler.kt` et `BriefingWorker.kt` : planification et récurrence de briefings via WorkManager.
+- `packages/core-android/src/main/AndroidManifest.xml` : permission POST_NOTIFICATIONS déclarée au niveau bibliothèque.
+- `apps/android/kiosko/src/main/AndroidManifest.xml` : manifeste application lu ; permission non déclarée localement, fusion de manifestes et demande runtime à vérifier.
+- `packages/core-web/src/whatsapp/safeMessage.js` : préparation wa.me avec filtre PIN/OTP et séquences numériques.
+- Libellés Android codés en dur en français : à externaliser FR/EN.
+
+### Écarts non démontrés
+- FCM data, stockage/rotation/révocation des jetons et fonction serveur d'envoi.
+- Centre persistant lu/non lu, actions rejouables idempotentes et statuts distincts.
+- Anti-doublon métier, préférences, heures calmes et réarmement d'alertes.
+- Écran Santé de l'appli, assistant de configuration et tests ciblés.
+- Couverture Android/Web des dix applications.
+
+### État
+- Prompt 0.6 : AUDIT INITIAL PARTIEL / NON VERT.
+- Les canaux, notifications locales, briefings WorkManager et liens WhatsApp préparés existent partiellement ; ne pas les reconstruire.
+- Aucun DDL/DML, changement ACL, configuration FCM, migration Supabase, déploiement ou publication.
+- Prompt 0.5 reste PARTIEL / NON VERT ; Prompt 0.4 PARTIEL / NON VERT ; Prompt 0.3 PARTIEL / NON CLOS.
+
+### Reprise exacte
+1. Inventorier tout le dépôt pour FCM, jetons, notifications Web, centre, préférences et tests ; inspecter les manifestes fusionnés et le générateur.
+2. Cartographier en lecture seule les ressources notifications/appareils existantes du backend Supabase NAXA.
+3. Définir contrat partagé, clé d'idempotence, états, actions, canaux et préférences.
+4. Concevoir les migrations et la fonction d'envoi candidates ; tests PostgreSQL 17 éphémères uniquement.
+5. Implémenter le centre, FCM, santé Android et intégration dix apps avec preuves.
