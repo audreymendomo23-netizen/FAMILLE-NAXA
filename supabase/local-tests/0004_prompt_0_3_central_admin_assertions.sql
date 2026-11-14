@@ -110,7 +110,7 @@ begin
 end $$;
 
 reset role;
-do $ begin
+do $audit_test$ begin
   begin
     update famille_core.audit_events set action_code='tampered'
     where actor_id='97000000-0000-0000-0000-000000000001'
@@ -118,5 +118,5 @@ do $ begin
     raise exception 'audit event mutation unexpectedly succeeded';
   exception when sqlstate '55000' then null;
   end;
-end $;
+end $audit_test$;
 rollback;
