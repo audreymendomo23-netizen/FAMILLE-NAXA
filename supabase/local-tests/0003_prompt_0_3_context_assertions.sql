@@ -96,9 +96,23 @@ begin
 end $$;
 
 select set_config('request.jwt.claims','{"sub":"91000000-0000-0000-0000-000000000001","role":"authenticated","app_metadata":{}}',true);
-do $$ begin
+do $ begin
  if famille_core.current_app_id() is not null then raise exception 'Missing app claim must fail closed'; end if;
  if famille_core.is_admin() then raise exception 'Missing app claim cannot grant admin'; end if;
-end $$;
+ if exists(select 1 from famille_core.outlet_ids()) then raise exception 'Missing app claim exposed outlet ids'; end if;
+ if famille_core.has_organization_access('92000000-0000-0000-0000-000000000001') then raise exception 'Missing app claim exposed organization'; end if;
+ if famille_core.subscription_allows_workspace('92000000-0000-0000-0000-000000000001',(select id from famille_core.applications where code='kiosko')) then raise exception 'Missing app claim authorized subscription workspace'; end if;
+ if famille_core.can_access_outlet('92000000-0000-0000-0000-000000000001',(select id from famille_core.applications where code='kiosko'),'93000000-0000-0000-0000-000000000001') then raise exception 'Missing app claim authorized outlet'; end if;
+ if famille_core.can_read_transaction_details('92000000-0000-0000-0000-000000000001',(select id from famille_core.applications where code='kiosko'),'93000000-0000-0000-0000-000000000001') then raise exception 'Missing app claim authorized transaction read'; end if;
+ if famille_core.can_write_transactions('92000000-0000-0000-0000-000000000001',(select id from famille_core.applications where code='kiosko'),'93000000-0000-0000-0000-000000000001') then raise exception 'Missing app claim authorized transaction write'; end if;
+ if famille_core.can_read_financial_aggregates('92000000-0000-0000-0000-000000000001',(select id from famille_core.applications where code='kiosko')) then raise exception 'Missing app claim authorized aggregates'; end if;
+ if famille_core.can_manage_billing('92000000-0000-0000-0000-000000000001',(select id from famille_core.applications where code='kiosko')) then raise exception 'Missing app claim authorized billing'; end if;
+ if famille_core.can_manage_billing_for_intent('96000000-0000-0000-0000-000000000001') then raise exception 'Missing app claim authorized payment intent'; end if;
+end $;
+select set_config('request.jwt.claims','{"sub":"91000000-0000-0000-0000-000000000001","role":"authenticated","app_metadata":{"active_app_id":"not-a-uuid"}}',true);
+do $ begin
+ if famille_core.current_app_id() is not null then raise exception 'Malformed app claim must fail closed'; end if;
+ if famille_core.is_admin() then raise exception 'Malformed app claim cannot grant admin'; end if;
+end $;
 reset role;
 rollback;
