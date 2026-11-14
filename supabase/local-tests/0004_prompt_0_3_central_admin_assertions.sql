@@ -117,7 +117,7 @@ do $$
 begin
  if famille_core.is_admin() then raise exception 'ordinary Kiosko user became central admin'; end if;
  if famille_core.current_app_id() is distinct from (select id from famille_core.applications where code='kiosko') then raise exception 'Kiosko identity has wrong app context'; end if;
- if not famille_test.test_has_app_access((select id from famille_core.applications where code='kiosko')) then raise exception 'Kiosko assigned app access missing'; end if;
+ if not famille_test.test_has_app_access((select id from famille_core.applications where code='kiosko')) then raise exception 'Kiosko assigned app access missing: uid %, claim %, visible grants %',auth.uid(),famille_core.current_app_id(),(select count(*) from famille_core.client_app_access where user_id=auth.uid()); end if;
  if famille_test.test_has_app_access((select id from famille_core.applications where code='campus237')) then raise exception 'Kiosko identity crossed into Campus237'; end if;
 end $$;
 
