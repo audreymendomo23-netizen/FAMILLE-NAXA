@@ -39,11 +39,14 @@ as $$
   select distinct l.id from famille_core.locations l
   join famille_core.memberships m on m.organization_id=l.organization_id
     and m.user_id=auth.uid() and m.app_id=famille_core.current_app_id() and m.status='active'
+  join famille_core.organization_apps oa on oa.organization_id=m.organization_id
+    and oa.app_id=m.app_id and oa.status='active'
   join famille_core.role_assignments ra on ra.membership_id=m.id and ra.app_id=m.app_id
     and ra.organization_id=m.organization_id and ra.status='active'
     and ra.starts_at<=now() and (ra.expires_at is null or ra.expires_at>now())
   join famille_core.role_catalog rc on rc.app_id=ra.app_id and rc.role_code=ra.role_code
   where famille_core.current_app_id() is not null and l.status='active'
+    and famille_core.subscription_allows_workspace(l.organization_id,m.app_id)
     and ((rc.scope_type='organization' and ra.location_id is null)
       or (rc.scope_type='location' and ra.location_id=l.id));
 $$;
@@ -61,10 +64,10 @@ as $$
       and m.app_id=famille_core.current_app_id() and m.status='active'
       and ra.status='active' and ra.starts_at<=now()
       and (ra.expires_at is null or ra.expires_at>now())
-      and ((rc.scope_type='organization' and ra.location_id is null)
-        or (rc.scope_type='location' and ra.location_id is not null))
+      and rc.scope_type='organization' and ra.location_id is null
+      and famille_core.subscription_allows_workspace(p_org,m.app_id)
   );
-$$;
+$;
 
 create or replace function famille_core.subscription_allows_workspace(p_org uuid,p_app uuid)
 returns boolean language sql stable security definer
