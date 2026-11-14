@@ -91,6 +91,8 @@ jobs:
         run: npm install
       - name: Tester les contrats de synchronisation et conflits
         run: npm run test:contracts
+      - name: Tester le moteur de règles explicables
+        run: npm run test:assistant
       - name: Compiler les 10 applications Web/PWA
         run: npm run build:web
       - name: Installer Java et Gradle
