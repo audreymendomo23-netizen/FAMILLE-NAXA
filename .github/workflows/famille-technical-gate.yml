@@ -180,3 +180,5 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0003_prompt_0_3_contextual_rls.sql
       - name: Vérifier les claims app_id et le refus par défaut
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0003_prompt_0_3_context_assertions.sql
+      - name: Rejouer la matrice complète après contextualisation (PostgreSQL 17)
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0002_prompt_0_3_rls_assertions.sql
