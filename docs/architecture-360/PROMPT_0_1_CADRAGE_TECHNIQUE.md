@@ -1,222 +1,102 @@
 # PROMPT 0.1 — Cadrage technique et structure du projet
 
-**État : PRINCIPE D’ARCHITECTURE VALIDÉ PAR LE PORTEUR DE PROJET ; CHOIX DES OUTILS À CONFIRMER**  
-**Périmètre actuel : 10 applications autonomes, Android + Web/PWA**  
-**Référence NAXA consultée : branche `main`, commit `09d194b56b3c93624cff6ee83e4d2a581457d0bb`  
-**Règle : aucun code applicatif à cette étape.**
+**État : PRINCIPES ET STACK VALIDÉS POUR LE SOCLE ; BUILDS À PROUVER.**
 
-## 1. Rectification du prompt historique
+## 1. Architecture produit
 
-Le prompt source du 31 octobre 2026 décrit initialement sept applications Android (Kiosko à NAXA Hotel), un seul compte client et un backend Supabase. Le périmètre Famille NAXA actuellement retenu comprend dix applications :
+Chacun des dix produits possède deux réalisations indépendantes :
+- Android : application entièrement native, APK autonome.
+- Web : application responsive mobile/tablette/ordinateur et installable en PWA.
 
-1. Kiosko — Mobile Money
-2. Bootik — boutiques, commerces et dépôt de gaz
-3. Zipple — bars et restaurants
-4. NAXA Services — pressing et coiffure
-5. CotiZ — tontines
-6. Loyable — gestion locative
-7. NAXA Hotel — hôtellerie
-8. Campus237 — ERP scolaire
-9. NAXA Security — sécurité des biens et des personnes
-10. GrillaD — gestion spécialisée des vendeurs de grillades
+Produits : Kiosko, Bootik, Zipple, NAXA Services, CotiZ, Loyable, NAXA Hotel, Campus237, NAXA Security, GrillaD.
 
-Chaque application doit être autonome en identité, installation, parcours, permissions et données métier. Chaque produit dispose de deux réalisations distinctes : (1) une application Android entièrement native, installable sous forme d’APK indépendante ; (2) une version Web responsive, également installable comme PWA. La version Web/PWA n’est pas une WebView qui encapsule le site dans l’APK : les interfaces et cycles de vie Android et Web sont développés pour leurs plateformes respectives. Les deux versions partagent les contrats, règles métier, API, formats et tests compatibles, pas une interface Web embarquée. La distribution Android se fera depuis le site NAXA, sans Play Store.
+Aucune WebView-wrapper, aucun Capacitor, aucune UI Web embarquée dans Android. Les plateformes partagent contrats API, règles métier, validations, formats, traductions et tests, pas leurs interfaces.
 
-Les anciennes contraintes qui restent pertinentes sont conservées : fonctionnement hors connexion, synchronisation différée, sécurité, aucune lecture/stockage/transmission de PIN ou OTP, calculs financiers exacts, français/anglais, aucune dépense sans accord et aucune migration/diffusion/déploiement sans accord explicite.
+## 2. Stack Android arrêtée
 
-## 2. Audit statique du modèle NAXA existant
+| Couche | Choix de référence |
+|---|---|
+| Langage | Kotlin 2.2.21 |
+| UI | Jetpack Compose + Material 3 |
+| Build | AGP 9.5.0 ; Gradle 9.6.0 ; JDK 17 |
+| SDK | compileSdk 37 ; targetSdk 37 ; minSdk 26 |
+| Compose | BOM 2026.09.00 |
+| Base locale | Room / SQLite |
+| Préférences | DataStore |
+| Synchronisation | WorkManager |
+| Secrets locaux | Android Keystore |
+| HTTP | Ktor Client 3.0.3 |
+| Supabase | supabase-kt BOM 3.5.0 et modules nécessaires |
+| Caméra | CameraX |
+| OCR / codes-barres | ML Kit local lorsque pertinent |
+| Push | Firebase Cloud Messaging |
+| Tests | JUnit, tests instrumentés, Compose UI tests |
 
-### 2.1 Faits observés dans le dépôt
+Dix projets/modules Android indépendants, chacun avec applicationId, manifeste, permissions, icônes, version et APK propres. Les packages Kotlin communs sont limités à la sécurité, au réseau, à la synchronisation, au stockage, aux contrats et aux utilitaires. Pas de partage forcé des écrans métier.
 
-Dépôt examiné : `audreymendomo23-netizen/NAXA`, branche `main`, commit indiqué ci-dessus.
+Room porte les opérations métier locales ; WorkManager assure une synchronisation reprenable. Les mutations financières et sensibles restent validées côté serveur. Les clés de données sensibles sont protégées par Android Keystore. Les permissions sont demandées au moment du besoin.
 
-- Arborescence Git : 2 524 chemins recensés, dont environ 911 sous `src/`, 325 migrations Supabase, 327 fichiers de tests SQL et 80 chemins sous `android/`.
-- Web : Next.js App Router, React, TypeScript strict, Tailwind et Serwist pour le service worker/PWA.
-- Versions relevées dans `package.json` : Next.js 16.4.6, React 18.3.1, TypeScript 5.6.2, Supabase JS 2.45.4 et Serwist 9.5.13.
-- Android principal : Kotlin, Jetpack Compose, Gradle, Android Keystore, ML Kit OCR, FCM et accès natif aux API Android.
-- Versions relevées dans `android/build.gradle.kts` et `android/app/build.gradle.kts` : AGP 8.7.3, Kotlin 2.2.21, JDK 17, compileSdk 35 et minSdk 26.
-- Un compagnon Android de paiement distinct existe avec des variantes Standard, Professionnelle et Admin. Il utilise des services Android natifs (SMS_RECEIVED et NotificationListener) et des contrôles de consentement/rôle.
-- Le code web comporte une base locale IndexedDB, une file d'opérations, du chiffrement AES-GCM et des règles de synchronisation.
-- Le service worker Serwist ne précache pas toutes les pages personnalisées : les règles observées limitent le cache à des ressources publiques définies et à un écran hors ligne.
-- Le dépôt contient déjà des migrations et tests liés à l'idempotence, au mode hors ligne, aux appareils et à l'isolation des rôles.
+Le SDK Supabase Kotlin reste communautaire : il sera isolé derrière un adaptateur pour pouvoir le remplacer sans réécrire le domaine métier. Les versions sont une baseline au 14/11/2026 ; elles seront verrouillées dans les catalogues Gradle puis compilées sur un prototype avant développement massif.
 
-### 2.2 Limites et contradictions constatées
+## 3. Stack Web/PWA arrêtée
 
-- NAXA n'est pas une base prête à dupliquer telle quelle : ses écrans, ses rôles et ses règles métier sont propres à la pharmacie et à la marketplace santé.
-- Le README Android indique explicitement que plusieurs parcours métier et le mode hors ligne complet restent à implémenter. La présence d'un projet Android ne prouve donc pas que dix applications complètes existent.
-- Deux projets Android NAXA ont des configurations de compilation différentes (application principale et compagnon de paiement). Il faudra normaliser et tester la chaîne de build avant de la généraliser.
-- Le service worker web ne prouve pas un mode ERP complet hors connexion. Les workflows offline doivent être conçus et testés par domaine.
-- Les règles SMS ne doivent pas être activées globalement dans les dix applications. Le cahier historique indique Kiosko comme cas obligatoire et les autres applications comme cas facultatifs, sous permissions et règles propres. Les rôles et consentements doivent être vérifiés application par application.
-- Le modèle historique « sept applications Android » est dépassé. Campus237, NAXA Security et GrillaD doivent être intégrés au référentiel d'architecture sans forcer leurs besoins dans le modèle initial.
+| Couche | Choix |
+|---|---|
+| Framework | Next.js 16.4.6 stable |
+| UI | React 19.3.0 |
+| Langage | TypeScript strict |
+| PWA/service worker | Serwist 9.5.13 |
+| Style | CSS responsive + design tokens ; Tailwind si utile |
+| Workspace | pnpm workspaces + lockfile |
+| Tests | Vitest, Playwright, tests d'accessibilité |
 
-### 2.3 Ressources à réutiliser après audit, pas à recopier aveuglément
+Dix applications Web/PWA autonomes, chacune avec manifeste, icône, nom, thème, scope et cache propres. Les écrans privés et tokens ne sont jamais mis en cache automatiquement. La PWA ne prétend pas remplacer les services Android lorsque le navigateur est fermé.
 
-- Modèle de séparation des rôles, appareils, permissions et sessions.
-- Patterns Android natifs : Keystore, services de premier plan, récepteur SMS et NotificationListener lorsque le cas métier l'autorise.
-- Patterns web : Next.js, TypeScript, Supabase SSR, Serwist et IndexedDB.
-- Mécanismes de file hors ligne, idempotence, horodatage serveur, gestion des conflits et tests SQL.
-- Logique métier JavaScript du kit de construction et ses vecteurs de référence, après audit et comparaison avec les cahiers actuels.
+## 4. Monorepo et livraison
 
-Aucun schéma, code, rôle, permission ou migration NAXA ne doit être repris sans vérifier sa pertinence pour les dix métiers.
+Dépôt de référence : audreymendomo23-netizen/FAMILLE-NAXA, branche main.
 
-## 3. Comparaison des options Android
+- Dix projets Android construits et livrés séparément par Gradle.
+- Dix applications Next.js séparées dans un workspace pnpm.
+- Packages communs limités aux contrats, règles partagées, validations, internationalisation, design tokens et jeux de tests.
+- Aucune dépendance directe entre applications.
+- APK distribuées depuis le site NAXA, sans Play Store.
 
-| Critère | Kotlin natif | Flutter | Capacitor |
-|---|---|---|---|
-| Accès aux API Android SMS, notifications, BLE, alarmes et services | Direct, API officielle | Via plugins/bridges natifs | Via plugins/bridges natifs |
-| Travail fiable en arrière-plan | Meilleur contrôle des services Android et WorkManager | Dépend du plugin natif et de son maintien | Dépend du plugin natif ; limites du cycle WebView |
-| Offline local | Room, DataStore, WorkManager | Base locale et plugins | IndexedDB/SQLite via plugins |
-| UI Android | Jetpack Compose | Flutter | UI Web dans WebView |
-| Réutilisation UI Web | Faible | Faible à moyenne | Forte |
-| Risque pour les fonctions système sensibles | Le plus faible des trois | Moyen : pont natif obligatoire | Plus élevé : plugin natif obligatoire |
-| Maintenance de dix APK indépendantes | Modules Gradle et bibliothèques Kotlin communes | Flavors/packages Flutter | Builds et plugins natifs à maintenir |
+Structure cible :
+- apps/android/{kiosko,bootik,zipple,naxa-services,cotiz,loyable,naxa-hotel,campus237,naxa-security,grillad}
+- apps/web/{mêmes dix applications}
+- packages/{android-core,web-core,contracts,domain-rules,validation,localization,design-tokens,test-vectors}
+- supabase/{drafts,migrations,functions,tests}
+- docs/{architecture-360,apps,decisions,audits}
 
-### Arbitrage Android proposé
+## 5. Backend, identité et données
 
-**Décision de principe VALIDÉE : Android entièrement natif pour les dix applications.**\n\nKotlin + Jetpack Compose est la recommandation technique à confirmer lors du choix des versions et de l’outillage. Il n’y aura ni application Android basée sur WebView, ni wrapper Capacitor, ni interface Flutter hybride pour remplacer l’interface native.
+Supabase/PostgreSQL reste le backend partagé cible, sous réserve de l'audit. Identité Auth commune ; profils et droits contextualisés par application, organisation et lieu. Les rôles métier de la pharmacie NAXA ne sont pas des rôles universels Famille.
 
-Justification :
-1. Les cahiers prévoient un usage hors connexion et des traitements locaux continus.
-2. Kiosko doit lire des SMS de transaction ; d'autres applications peuvent avoir des besoins facultatifs de SMS, Bluetooth, géolocalisation, alarmes ou notifications.
-3. Les API Android natives donnent le contrôle direct sur les permissions, les services, WorkManager, Room et Android Keystore.
-4. NAXA possède déjà un début de socle Kotlin/Compose et un compagnon natif de paiement ; cela réduit la réinvention.
-5. Flutter ou Capacitor ne suppriment pas le besoin de code natif pour les fonctions sensibles : ils ajoutent une couche de plugin/bridge à auditer et maintenir.
-6. Kotlin permet de produire dix APK distinctes, avec applicationId, manifeste, icônes, permissions et versions propres, tout en mutualisant des bibliothèques communes.
-7. L'interface Web ne doit pas être embarquée dans une WebView pour remplacer une application Android métier native.
+Les données Famille sont isolées dans un schéma dédié et des schémas métier par application ; aucune nouvelle table Famille dans public par défaut. Chaque table exposée doit avoir des grants minimaux et RLS testée. Aucun service_role ou secret serveur dans une APK ou PWA. Aucune migration, modification Replay/Production ou fonction déployée sans accord explicite.
 
-Limite assumée : l'interface Android et l'interface Web ne partageront pas tous leurs composants visuels. Elles partageront les contrats métier, règles, formats, schémas, API, jeux de tests et conventions, plutôt que de chercher une fausse base UI universelle.
+## 6. Conventions
 
-## 4. Architecture Web et PWA proposée
+- Montants en FCFA, stockés en entiers ou NUMERIC exact, jamais FLOAT.
+- Horodatages timestamptz UTC ; fuseau d'affichage explicite, Africa/Douala par défaut.
+- Français/anglais ; aucune chaîne UI codée en dur.
+- Identifiants techniques anglais, libellés localisés.
+- Journalisation structurée sans secret, PIN, OTP ni SMS brut.
+- Suppression douce pour données opérationnelles lorsque permise ; journaux et écritures financières append-only.
+- Dépendances épinglées, lockfiles versionnés, inventaire SBOM/licences.
+- Aucun coût ou service payant sans accord.
 
-**Principe VALIDÉ : une version Web responsive et PWA pour chacune des dix applications.**\n\nNext.js + React + TypeScript + Serwist reste une proposition d’outillage, à confirmer. Cette version Web est une application Web de première classe, optimisée desktop, tablette et mobile, et installable en PWA. Elle n’est pas un simple miroir non responsive de l’APK.
+## 7. Sources techniques consultées
 
-- Dix expériences Web/PWA indépendantes, chacune avec son nom, son icône, son manifeste, son `start_url`, son `scope`, son thème et ses routes.
-- Packages TypeScript partagés pour les contrats, la validation, les formats, l'internationalisation et les règles métier réellement communes.
-- Le cache PWA ne doit jamais stocker automatiquement des pages privées ou des données sensibles.
-- Les workflows hors ligne doivent disposer de stockage local, file d'attente, chiffrement adapté, identifiants idempotents, reprise et résolution de conflits.
-- Une PWA ne remplace pas les fonctions Android qui nécessitent un service système, une permission spéciale ou un fonctionnement garanti lorsque le navigateur est fermé.
+- Supabase Kotlin quickstart : https://supabase.com/docs/guides/getting-started/quickstarts/kotlin
+- Statut communautaire supabase-kt : https://supabase.com/docs/reference/kotlin/introduction
+- Compose BOM : https://developer.android.com/develop/ui/compose/bom
+- AGP / Gradle : https://developer.android.com/build/releases/about-agp
+- Next.js support policy : https://nextjs.org/support-policy
+- React versions : https://react.dev/versions
 
-## 5. Monorepo ou dépôts séparés
+## 8. État
 
-### Option A — Dix dépôts distincts
-Avantages : cloisonnement et cycle de livraison indépendants.  
-Limites : duplication des règles, corrections répétées, versions divergentes, coût élevé de synchronisation du socle et des tests.
+Android natif dix apps : VALIDÉ. Web responsive + PWA dix apps : VALIDÉ. Stack de référence et monorepo : VALIDÉS. Backend partagé : SOUS CONDITION D'AUDIT. Code et dépendances : non créés. Build : non exécuté. Migration et déploiement : aucun.
 
-### Option B — Monorepo
-Avantages : un historique commun, contrats partagés, tests de compatibilité, correction mutualisée, gouvernance et documentation unifiées. Les dix applications restent compilables et distribuables séparément.  
-Limites : outillage plus exigeant, nécessité de contrôler les dépendances entre modules et de ne pas transformer le socle commun en dépendance obligatoire pour tout.
-
-### Arbitrage proposé
-
-**Choix recommandé : monorepo GitHub `FAMILLE-NAXA`**, avec dix projets Android natifs indépendants et dix applications Web/PWA indépendantes. Le monorepo ne signifie pas une seule application fusionnée : chaque cible doit pouvoir être construite, testée, versionnée et livrée séparément.
-
-Structure cible indicative :
-
-```text
-apps/
-  android/
-    kiosko/ bootik/ zipple/ naxa-services/ cotiz/
-    loyable/ naxa-hotel/ campus237/ naxa-security/ grillad/
-  web/
-    kiosko/ bootik/ zipple/ naxa-services/ cotiz/
-    loyable/ naxa-hotel/ campus237/ naxa-security/ grillad/
-packages/
-  android-core/
-  web-core/
-  domain-contracts/
-  business-rules/
-  localization/
-  test-vectors/
-  design-tokens/
-supabase/
-  migrations/
-  functions/
-  tests/
-docs/
-  architecture-360/
-  apps/
-  decisions/
-  audits/
-```
-
-Cette structure est une cible proposée, pas une structure déjà construite. Chaque application doit pouvoir être compilée, testée, versionnée et distribuée sans embarquer les neuf autres.
-
-## 6. Socle technique partagé proposé
-
-| Domaine | Android | Web/PWA | Licence / coût indicatif |
-|---|---|---|---|
-| UI | Jetpack Compose | React / Next.js | Apache 2.0 côté AndroidX ; licences React/Next à vérifier à l'épinglage |
-| Base locale | Room / SQLite | IndexedDB, éventuellement SQLite WASM selon besoin | AndroidX Apache 2.0 ; API navigateur |
-| Synchronisation différée | WorkManager | file locale + reprise contrôlée | AndroidX Apache 2.0 ; code projet |
-| Secrets locaux | Android Keystore | WebCrypto, clé liée à la session et au contexte local | API plateforme |
-| Codes-barres/QR | ZXing ou ML Kit Barcode | ZXing Browser | ZXing Apache 2.0 ; ML Kit gratuit sous conditions Google |
-| OCR | ML Kit embarqué sur l'appareil ou Tesseract | Tesseract.js | ML Kit sans frais d'usage annoncé mais SDK propriétaire ; Tesseract Apache 2.0 |
-| PDF | PdfRenderer / PdfDocument Android | PDF.js pour lecture, pdf-lib pour génération | API plateforme ; PDF.js Apache 2.0 ; pdf-lib MIT |
-| Voix | SpeechRecognizer système ; Vosk si vrai besoin hors ligne | Web Speech API si disponible | API plateforme ; Vosk Apache 2.0, modèles à vérifier séparément |
-| Graphiques | Vico pour Compose | Recharts | Apache 2.0 ; MIT |
-| Notifications | Notifications Android + FCM | Web Push + centre de notifications | FCM sans frais d'usage standard, sous conditions du service |
-| Backend | Supabase Auth/Postgres/Storage/Edge Functions selon audit | Même backend via accès serveur sécurisé | Réutilisation du projet Supabase existant, coûts à surveiller |
-
-**Précaution licences :** les bibliothèques ne seront pas ajoutées avant vérification de leur version, licence exacte, dépendances transitives, taille, compatibilité Android et fonctionnement hors connexion. Un SDK gratuit n'est pas nécessairement open source. Les modèles OCR/voix peuvent avoir une licence distincte de celle du moteur.
-
-## 7. Conventions proposées
-
-- Identifiants Android provisoires (à confirmer avant création des projets) :
-  - Kiosko : `cm.naxa.famille.kiosko`
-  - Bootik : `cm.naxa.famille.bootik`
-  - Zipple : `cm.naxa.famille.zipple`
-  - NAXA Services : `cm.naxa.famille.services`
-  - CotiZ : `cm.naxa.famille.cotiz`
-  - Loyable : `cm.naxa.famille.loyable`
-  - NAXA Hotel : `cm.naxa.famille.hotel`
-  - Campus237 : `cm.naxa.famille.campus237`
-  - NAXA Security : `cm.naxa.famille.security`
-  - GrillaD : `cm.naxa.famille.grillad`
-- Identifiants Web/PWA indépendants, avec manifeste et périmètre d'installation par application.
-- Nommage : identifiants techniques en anglais, libellés traduits, noms métier français conservés lorsque pertinents.
-- Internationalisation : fichiers FR/EN, aucune chaîne utilisateur codée en dur.
-- Design : jetons communs de base, thèmes et logos distincts par application.
-- Erreurs : codes stables, message utilisateur traduit, détail technique journalisé sans secret.
-- Journaux : horodatage serveur, identifiant de corrélation, acteur, application, appareil, résultat ; minimisation des données personnelles.
-- Versions : version propre à chaque APK/PWA ; table centrale de disponibilité/minimum uniquement après audit du schéma existant.
-- Argent : entiers en FCFA, calculs exacts au franc, aucune conversion flottante pour les montants.
-- Synchronisation : opérations idempotentes, séquences appareil, ancrage horaire serveur, règles de conflits explicites par domaine.
-- Permissions : minimales, demandées au moment du besoin, consentement explicite et contrôle serveur/RLS.
-- SMS : aucun PIN/OTP lu, conservé, transmis ou affiché ; tout SMS qui en contient est rejeté. Lecture en arrière-plan limitée aux applications, rôles et cas métier expressément autorisés ; partage manuel comme solution de secours.
-
-## 8. Questions restant ouvertes
-
-1. **Validation de l'architecture :** confirmer Kotlin natif pour les dix APK, Next.js/React/Serwist pour les dix PWA, monorepo unique et backend Supabase NAXA partagé sous réserve d'audit.
-2. Confirmer si les dix applications doivent partager un compte d'identité central tout en gardant des profils, permissions et données cloisonnés par application.
-3. Fixer la version Android minimale et la liste des téléphones de référence après étude des utilisateurs cibles.
-4. Confirmer si chaque application doit disposer d'un site/PWA et d'un domaine distincts ou si certains domaines peuvent partager une origine technique tout en gardant des PWA séparées.
-5. Valider les identifiants Android proposés avant création des modules.
-6. Décider quelles applications et quels rôles ont réellement besoin de lecture SMS, Bluetooth, GPS, caméra et notifications en arrière-plan.
-
-## 9. Décision formelle du porteur de projet\n\nLe porteur de projet précise : « je veux des applications entièrement natives android pour les 10application, avec des version responsives en PWA et web ».\n\nConséquences obligatoires :\n- 10 applications Android natives, sans WebView-wrapper, sans dépendance à un site Web pour afficher les écrans métier.\n- 10 versions Web responsives, chacune adaptée aux écrans mobiles, tablettes et ordinateurs.\n- Les 10 versions Web doivent pouvoir être installées comme PWA lorsque la plateforme/navigateur le permet.\n- APK et Web/PWA ont des interfaces et mécanismes de cycle de vie propres à leur plateforme.\n- Mutualisation autorisée : règles métier, contrats API, schémas validés, modèles de validation, formats, traductions, jeux de tests et documentation.\n- Mutualisation interdite par défaut : encapsuler l’interface Web dans Android ou rendre une seule application monolithique qui mélange les dix métiers.\n\nLe principe multi-plateforme est donc validé. Les choix précis Kotlin/Compose, Next.js/React/Serwist, versions SDK, domaines et organisation des modules restent à confirmer dans le cadrage technique.\n\n## 10. Contrôles et état de cette étape
-
-- Comparaison Kotlin / Flutter / Capacitor : réalisée au niveau architectural.
-- Audit statique du dépôt NAXA : réalisé sur l'arborescence et les fichiers de configuration/fondation consultés ; ce n'est pas un audit exhaustif du code.
-- Structure cible du monorepo : proposée, pas créée.
-- Bibliothèques : shortlist et licences indicatives ; vérification finale avant ajout.
-- Code applicatif : aucun.
-- Dépendances installées : aucune.
-- Migration SQL : aucune.
-- Supabase Production modifié : non.
-- Build/test/CI : non exécutés.
-- Déploiement ou publication APK : aucun.
-- **Statut : PARTIEL — proposition technique prête pour arbitrage, non validée.**
-
-## 11. Fichier de passation
-
-**FICHIER DE PASSATION — Famille NAXA — Prompt 0.1 — 14 novembre 2026**
-
-1. Fait : prompt source retrouvé ; périmètre actualisé de 7 à 10 applications ; audit statique NAXA ; comparaison des options ; architecture recommandée rédigée.
-2. Fichier créé : `docs/architecture-360/PROMPT_0_1_CADRAGE_TECHNIQUE.md`.
-3. Tables, fonctions et écrans créés : aucun.
-4. Décisions proposées : Kotlin natif + Jetpack Compose pour Android ; Next.js + React + TypeScript + Serwist pour Web/PWA ; monorepo unique ; Supabase partagé après audit.
-5. Points ouverts : compte d'identité central, minimum Android, séparation des domaines/PWA, identifiants d'application et matrice des permissions.
-6. Prochain prompt : 0.2 — Schéma de données commun, uniquement après validation du 0.1 et audit des ressources Supabase existantes.
-7. Accord explicite requis : toute migration appliquée, modification Production, déploiement, publication APK ou dépense.
-
-**Étape 0.1 : principe Android natif + Web/PWA responsive validé. Les détails d’outillage restent à arbitrer avant le Prompt 0.2.**
+**Prompt 0.1 terminé pour le cadrage et le choix de stack ; preuve de build à obtenir au bootstrap technique.**
