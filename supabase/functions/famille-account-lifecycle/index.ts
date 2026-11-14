@@ -93,6 +93,7 @@ async function handle(req:Request):Promise<Response>{
     const {data,error}=await admin.auth.admin.createUser({phone,phone_confirm:true,password:randomPassword,user_metadata:{username:phone,phone,phone_country:phone.startsWith("+237")?"CM":"",first_name:first,last_name:last,date_of_birth:dob,age_verified:true,consent_accepted_at:new Date().toISOString()}});
     if(error||!data.user) return json({error:"account_creation_failed"},400);user=data.user;created=true;
    }
+   if(!user) return json({error:"account_creation_failed"},400);
    const expires=new Date(Date.now()+72*60*60*1000).toISOString();const token=randomSecret();const tokenHash=await digest(token);
    const access=await admin.schema("famille_private").from("account_app_access").upsert({user_id:user.id,app_code:app,account_kind:kind,organization_id:org,location_id:loc,role_code:role,plan_code:body.plan_code??null,duration_days:body.duration_days??null,discount_percent:body.discount_percent??0,trial_days:body.trial_days??0,status:"pending",granted_by:actor.id},{onConflict:"user_id,app_code,organization_id,location_id"});
    if(access.error){if(created) await admin.auth.admin.deleteUser(user.id);return json({error:"access_grant_failed"},500);}
