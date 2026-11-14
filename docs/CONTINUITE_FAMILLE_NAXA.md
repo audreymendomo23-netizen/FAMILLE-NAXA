@@ -1,46 +1,43 @@
 # Continuité — Famille NAXA
-
-Dernière mise à jour : 14 novembre 2026  
-Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA` — `main`
+Dernière mise à jour : 14 novembre 2026
+Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA` — `main`.
 
 ## Décisions canoniques
 - Dix applications : Kiosko, Bootik, Zipple, NAXA Services, CotiZ, Loyable, NAXA Hotel, Campus237, NAXA Security, GrillaD.
-- Pour chacune : application Android native Kotlin/Compose et expérience Web responsive/PWA autonome.
-- Un seul backend Supabase NAXA existant ; identités et ressources canoniques réutilisées, isolation stricte par application/organisation/lieu.
-- Tests PostgreSQL 17 éphémères avant toute migration réelle.
-- Aucune migration Supabase réelle, publication APK ou déploiement sans autorisation explicite.
-- Travail sur `main`, sans branche ni PR.
+- Android natif Kotlin/Compose et Web responsive/PWA autonome pour chacune.
+- Un seul backend Supabase NAXA existant ; réutilisation des ressources canoniques ; isolation côté serveur par app/organisation/lieu.
+- Main uniquement, pas de branches/PR. Tests PostgreSQL 17 éphémères. Aucun déploiement, migration Supabase réelle ou publication APK sans autorisation explicite.
+- Distribution APK depuis le site officiel, jamais Play Store.
 
-## Dernier lot exécuté — cinq chantiers en parallèle
-Commit précédent : `d952eed3fc90161d918b51a3a585db166b5014e6`.
+## Preuves confirmées
+- Run 43551672204 SUCCESS.
+- Run 43557643046 SUCCESS : PostgreSQL 17, RLS 0.3, 10 builds Web/PWA, 10 builds Android natifs.
+- Les vingt socles sont persistés sur main au commit `4a8af10c82017485578ebb24af82c48aeeb31b2f`.
+- `scripts/bootstrap-foundations.mjs` est la source de vérité du générateur. Toute évolution du socle est codée dans ce script puis reconstruite et persistée.
 
-Fichiers ajoutés :
-- `supabase/drafts/0003_prompt_0_3_contextual_rls.sql`
-- `supabase/local-tests/0003_prompt_0_3_context_assertions.sql`
-- `packages/core-kotlin/src/main/kotlin/cm/naxa/core/offline/SyncContract.kt`
-- `packages/core-kotlin/src/main/kotlin/cm/naxa/core/notifications/NotificationContract.kt`
-- `packages/core-kotlin/src/main/kotlin/cm/naxa/core/ai/LocalInsights.kt`
-- `packages/core-web/package.json`
-- `packages/core-web/src/release/verifyManifest.js`
-- `packages/core-web/src/whatsapp/safeMessage.js`
-- `packages/core-web/test/core.test.js`
-- `docs/audits/EXECUTION_CINQ_CHANTIERS_2026-11-14.md`
+## Architecture présente
+- `apps/android/<app>/` : dix modules Kotlin/Compose, manifests et Room queue.
+- `apps/web/<app>/` : dix cibles Vite/React, manifests PWA, service workers.
+- `packages/contracts/`, `design-system/`, `assistant/`, `offline-web/`, `core-web/`.
+- `supabase/drafts/0001_famille_core_proposed.sql`, `supabase/migrations/0002_famille_core_rls.sql`, `supabase/drafts/0003_prompt_0_3_contextual_rls.sql`.
 
-Résultats :
-- Ajout d'un scope RLS dépendant d'un claim signé `app_metadata.active_app_id`, fail-closed sans claim.
-- Ajout de contrats Kotlin pour synchronisation offline, notifications et IA locale.
-- Ajout d'outils Web pour empreinte SHA-256, version minimale et garde WhatsApp.
-- Tests Node fournis mais non exécutés ; tests PostgreSQL/Kotlin non exécutés.
-- Les vingt projets Android/Web restent à construire.
-- Aucun changement Supabase réel ni déploiement.
+## Lot en cours
+- Correction RLS multi-app : tous les helpers sensibles vérifient le claim signé `active_app_id`; test multi-app Kiosko/Campus237.
+- Module Android `core-android` : canaux Critique/Opérations/Abonnement/Information/Coaching IA et briefings locaux WorkManager.
+- Calculs FCFA abonnement et tests unitaires.
+- Sept thèmes de marque et calcul WCAG AA ; les palettes des trois apps supplémentaires restent à valider.
 
-## Point de reprise exact
-1. Exécuter `node --test packages/core-web/test/core.test.js` sur Node 20+.
-2. Exécuter candidate SQL 0003 + assertions dans PostgreSQL 17 éphémère avec fixtures de deux apps, deux organisations et deux lieux ; ajouter les tests négatifs complets.
-3. Construire le mécanisme serveur/Auth du claim signé avant toute activation de ce modèle.
-4. Créer les dix projets Android Kotlin/Compose et les dix projets Web/PWA, puis compiler/tester.
-5. Compléter les modules natifs notification/briefing, stockage/sync, signature APK, exports et assistant IA local.
-6. Mettre à jour ce document et l'audit après chaque preuve réelle.
+## Restant avant vert
+1. Auth Hook serveur pour signer/rafraîchir le claim app actif.
+2. Tests RLS exhaustifs sur dix apps, plusieurs organisations, lieux et rôles.
+3. Création Admin, MFA, appareils/sessions, limitation tentatives, employés.
+4. Sync réseau réelle, idempotence serveur, corrections immuables et conflits par agrégat.
+5. FCM, jetons, centre de notifications, actions rejouables, santé Android.
+6. Abonnements intégrés au backend métier et à la vérification de paiement.
+7. Administration Web réelle, FR/EN, composants, thèmes, contrastes et parcours.
+8. Keystore hors dépôt, vérification certificat côté serveur, exports PDF/XLSX.
+9. IA locale connectée aux données métiers, anonymisation et voix.
+10. Page APK, guide par constructeur, vérification de version/signature.
 
-## Statut
-Les cinq chantiers ont reçu un premier lot de code. Aucun prompt 0.3–0.13 n'est VERT.
+## Garde-fous
+Aucune migration appliquée au Supabase réel ; aucun secret ou keystore dans le dépôt ; aucune publication ou déploiement.

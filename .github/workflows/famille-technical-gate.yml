@@ -95,6 +95,10 @@ jobs:
         run: npm install
       - name: Tester les contrats Web de sécurité et de distribution
         run: npm run test:core-web
+      - name: Tester les calculs d'abonnement FCFA
+        run: npm run test:billing
+      - name: Vérifier les contrastes WCAG AA des thèmes
+        run: node --test packages/design-system/test/contrast.test.js
       - name: Tester les contrats de synchronisation et conflits
         run: npm run test:contracts
       - name: Tester le moteur de règles explicables

@@ -7,12 +7,14 @@
     "packages/assistant",
     "packages/offline-web",
     "packages/core-web",
+    "packages/billing-core",
     "apps/web/*"
   ],
   "scripts": {
     "build:web": "npm run build --workspaces --if-present",
     "test:contracts": "npm test --workspace @famille/contracts",
     "test:assistant": "npm test --workspace @famille/assistant-rules",
-    "test:core-web": "npm test --workspace @naxa/core-web"
+    "test:core-web": "npm test --workspace @naxa/core-web",
+    "test:billing": "npm test --workspace @famille/billing-core"
   }
 }
