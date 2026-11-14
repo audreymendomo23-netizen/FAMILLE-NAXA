@@ -58,3 +58,27 @@ Aucune migration appliquée au Supabase réel ; aucun secret ou keystore dans le
 ### Dernier commit de code/test de cette passe
 - 6a68fdeaf3ec622fa61a152a8d229e38e209b621 — assertions test limitées aux helpers exposés.
 - Workflow dédié : .github/workflows/prompt-03-rls.yml ; il exécute les tests dans le conteneur PostgreSQL 17 sans installation locale du client.
+
+
+## Mise à jour — audit Prompt 0.4, invitations Examens et enrôlement appareils (14 novembre 2026)
+
+### Preuves de cette passe
+- Les cinq implémentations privées d'invitation Examens ont été lues : création, acceptation, récupération token, liste, révocation.
+- Acceptation verrouille l'invitation `FOR UPDATE`, vérifie le destinataire Auth/e-mail confirmé, le profil Client complet et majeur, le centre actif et l'absence d'affectation active en doublon ; affectation, acceptation et audit sont dans la même transaction.
+- Les fonctions privées sont SECURITY DEFINER avec search_path vide ; le rôle authenticated dispose cependant de USAGE sur `private` et EXECUTE sur les cinq fonctions. Anomalie d'exposition directe à traiter ; aucun ACL n'a été modifié.
+- Les consommateurs SQL de `public.appareils` identifiés sont `naxa_device_permissions_v1`, `naxa_apply_offline_operation_v1` et `naxa_apply_offline_sale_v1`, exécutables par service_role seulement.
+- Aucun chemin SQL de création/mise à jour d'`appareils` n'a été trouvé dans l'inventaire des fonctions ; enrôlement non prouvé, recherche Edge Functions/code serveur encore nécessaire.
+- Aucun outil Supabase connecté ne permet de lire les réglages Auth globaux. Allow signups, MFA, password policy, leaked-password protection, rate limits et templates restent NON VÉRIFIÉS.
+
+### État
+- Prompt 0.4 : AUDIT STRUCTUREL PARTIEL / NON VERT.
+- Prompt 0.3 : PARTIEL / NON CLOS.
+- Aucun DDL/DML, changement ACL, réglage Auth, migration ou déploiement sur Supabase réel.
+- Rapport détaillé : `docs/audits/AUDIT_PROMPT_0_4_COMPTES_APPAREILS.md`.
+
+### Reprise exacte
+1. Inventorier les Edge Functions et le code backend qui provisionnent `public.appareils`.
+2. Auditer les dépendances/exposition PostgREST du schéma `private`, puis proposer un diff ACL minimal pour retirer EXECUTE authenticated aux cinq implémentations privées si aucune dépendance légitime ne l'exige.
+3. Vérifier les réglages Auth via Dashboard/API autorisée, sans exposer de secrets.
+4. Construire la matrice des dix applications : identité, type d'organisation, membership, lieu, rôle, installation, appareil et session.
+5. Concevoir et tester les corrections sur PostgreSQL 17 éphémère ; aucune modification Supabase réelle sans autorisation explicite.
