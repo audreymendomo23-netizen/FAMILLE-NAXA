@@ -45,7 +45,7 @@ select famille_private.record_login_failure('sha256:sample','kiosko');
 do $$ begin
  if not famille_private.login_is_locked('sha256:sample','kiosko') then raise exception 'five failures did not lock'; end if;
 end $$;
-select famille_private.revoke_device((select id from famille_private.account_devices where installation_id='install-00000000000002'),'10000000-0000-0000-0000-000000000001');
+select famille_private.revoke_device((select id from famille_private.account_devices where installation_id='install-00000000000002'),'10000000-0000-0000-0000-000000000002');
 select famille_private.clear_login_failures('sha256:sample','kiosko');
 do $$ begin
  if famille_private.login_is_locked('sha256:sample','kiosko') then raise exception 'successful login did not clear lock'; end if;

@@ -128,9 +128,7 @@ begin
     p_app_code||':'||coalesce(p_organization_id::text,'-')||':'||coalesce(p_location_id::text,'-')||':'||case when p_organization_id is null and p_location_id is null then p_user_id::text else 'shared-point' end,0));
   select id,status into v_device,v_device_status from famille_private.account_devices
     where user_id=p_user_id and app_code=p_app_code and installation_id=p_installation_id;
-  if v_device is not null and v_device_status<>'active' then
-    raise exception 'device_revoked' using errcode='42501';
-  end if;
+  if v_device is not null and v_device_status<>'active' then raise exception 'device_revoked' using errcode='42501'; end if;
   if v_device is not null then
     update famille_private.account_devices set organization_id=p_organization_id,location_id=p_location_id,
       auth_session_id=p_auth_session_id,platform=p_platform,device_label=p_device_label,last_seen_at=now() where id=v_device;
@@ -139,13 +137,12 @@ begin
       values(p_user_id,p_app_code,p_organization_id,p_location_id,p_installation_id,p_auth_session_id,p_platform,p_device_label)
       returning id into v_device;
   end if;
-  if (select count(*) from famille_private.account_devices where app_code=p_app_code
-      and organization_id is not distinct from p_organization_id and location_id is not distinct from p_location_id
-      and status='active' and ((p_organization_id is not null or p_location_id is not null) or user_id=p_user_id)) > 2 then
+  if (select count(*) from famille_private.account_devices where user_id=p_user_id and app_code=p_app_code
+      and organization_id is not distinct from p_organization_id and location_id is not distinct from p_location_id and status='active') > 2 then
     select id into v_evicted from famille_private.account_devices
-      where app_code=p_app_code and organization_id is not distinct from p_organization_id
+      where user_id=p_user_id and app_code=p_app_code
+        and organization_id is not distinct from p_organization_id
         and location_id is not distinct from p_location_id and status='active'
-        and ((p_organization_id is not null or p_location_id is not null) or user_id=p_user_id)
       order by created_at asc,id asc limit 1;
   end if;
   if v_evicted is not null then
@@ -193,14 +190,14 @@ end $$;
 create or replace function famille_private.bind_auth_session(p_user_id uuid,p_session_id uuid,p_app_code text)
 returns boolean language plpgsql security definer
 set search_path=pg_catalog,auth,famille_private
-as $
+as $$
 begin
   if p_user_id is null or p_session_id is null or p_app_code not in ('kiosko','bootik','zipple','naxa_services','cotiz','loyable','naxa_hotel','campus237','naxa_security','grillad') then
     raise exception 'invalid_session_binding' using errcode='22023';
   end if;
   update auth.sessions set tag='famille:'||p_app_code where id=p_session_id and user_id=p_user_id;
   return found;
-end $;
+end $$;
 revoke all on function famille_private.bind_auth_session(uuid,uuid,text) from public,anon,authenticated;
 grant execute on function famille_private.bind_auth_session(uuid,uuid,text) to service_role;
 
@@ -209,19 +206,11 @@ grant execute on function famille_private.bind_auth_session(uuid,uuid,text) to s
 create or replace function famille_core.current_app_id()
 returns uuid language sql stable security definer
 set search_path=pg_catalog,famille_core,famille_private,auth
-as $
+as $$
   select a.id
   from auth.sessions s
   join famille_core.applications a on s.tag='famille:'||a.code
-  where s.id = case when coalesce(auth.jwt()->>'session_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
-grant execute on function famille_private.register_device(uuid,text,uuid,uuid,text,uuid,text,text) to service_role;
-grant execute on function famille_private.bind_auth_session(uuid,uuid,text) to service_role;
-grant execute on function famille_private.record_login_failure(text,text) to service_role;
-grant execute on function famille_private.login_is_locked(text,text) to service_role;
-grant execute on function famille_private.clear_login_failures(text,text) to service_role;
-grant execute on function famille_private.revoke_device(uuid,uuid) to service_role;
-commit;
-
+  where s.id = case when coalesce(auth.jwt()->>'session_id','') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
                     then (auth.jwt()->>'session_id')::uuid else null end
     and s.user_id=auth.uid()
     and exists (
@@ -230,8 +219,9 @@ commit;
         and d.app_code=a.code and d.status='active'
     )
   limit 1
-$;
+$$;
 revoke all on function famille_core.current_app_id() from public,anon,authenticated;
+grant execute on function famille_core.current_app_id() to service_role;
 
 revoke all on all functions in schema famille_private from public,anon,authenticated;
 grant execute on function famille_private.register_device(uuid,text,uuid,uuid,text,uuid,text,text) to service_role;
