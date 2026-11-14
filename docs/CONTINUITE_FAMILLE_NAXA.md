@@ -67,7 +67,7 @@ Aucune migration appliquée au Supabase réel ; aucun secret ou keystore dans le
 - Acceptation verrouille l'invitation `FOR UPDATE`, vérifie le destinataire Auth/e-mail confirmé, le profil Client complet et majeur, le centre actif et l'absence d'affectation active en doublon ; affectation, acceptation et audit sont dans la même transaction.
 - Les fonctions privées sont SECURITY DEFINER avec search_path vide ; le rôle authenticated dispose cependant de USAGE sur `private` et EXECUTE sur les cinq fonctions. Anomalie d'exposition directe à traiter ; aucun ACL n'a été modifié.
 - Les consommateurs SQL de `public.appareils` identifiés sont `naxa_device_permissions_v1`, `naxa_apply_offline_operation_v1` et `naxa_apply_offline_sale_v1`, exécutables par service_role seulement.
-- Aucun chemin SQL de création/mise à jour d'`appareils` n'a été trouvé dans l'inventaire des fonctions ; enrôlement non prouvé, recherche Edge Functions/code serveur encore nécessaire.
+- Aucun chemin SQL de création/mise à jour d'`appareils` n'a été trouvé. L'inventaire Edge Functions ne contient que `naxa-images-import-temp` (JWT requis), sans rapport apparent avec l'enrôlement ; le chemin reste à rechercher dans le backend applicatif.
 - Aucun outil Supabase connecté ne permet de lire les réglages Auth globaux. Allow signups, MFA, password policy, leaked-password protection, rate limits et templates restent NON VÉRIFIÉS.
 
 ### État
