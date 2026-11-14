@@ -1,6 +1,6 @@
 # PROMPT 0.1 — Cadrage technique et structure du projet
 
-**État : PRINCIPES ET STACK VALIDÉS POUR LE SOCLE ; BUILDS À PROUVER.**
+**État : STACK CORRIGÉE SUR MATRICE DE COMPATIBILITÉ ; BUILDS ET TESTS À PROUVER.**
 
 ## 1. Architecture produit
 
@@ -16,9 +16,9 @@ Aucune WebView-wrapper, aucun Capacitor, aucune UI Web embarquée dans Android. 
 
 | Couche | Choix de référence |
 |---|---|
-| Langage | Kotlin 2.2.21 |
+| Langage | Kotlin 2.4.21 |
 | UI | Jetpack Compose + Material 3 |
-| Build | AGP 9.5.0 ; Gradle 9.6.0 ; JDK 17 |
+| Build | AGP 9.3.1 ; Gradle 9.5.0 ; JDK 17 |
 | SDK | compileSdk 37 ; targetSdk 37 ; minSdk 26 |
 | Compose | BOM 2026.09.00 |
 | Base locale | Room / SQLite |
@@ -36,7 +36,7 @@ Dix projets/modules Android indépendants, chacun avec applicationId, manifeste,
 
 Room porte les opérations métier locales ; WorkManager assure une synchronisation reprenable. Les mutations financières et sensibles restent validées côté serveur. Les clés de données sensibles sont protégées par Android Keystore. Les permissions sont demandées au moment du besoin.
 
-Le SDK Supabase Kotlin reste communautaire : il sera isolé derrière un adaptateur pour pouvoir le remplacer sans réécrire le domaine métier. Les versions sont une baseline au 14/11/2026 ; elles seront verrouillées dans les catalogues Gradle puis compilées sur un prototype avant développement massif.
+Le SDK Supabase Kotlin reste communautaire : il sera isolé derrière un adaptateur pour pouvoir le remplacer sans réécrire le domaine métier. Les versions sont une baseline au 14/11/2026. La combinaison initiale Kotlin 2.2.21 + AGP 9.5.0 + Gradle 9.6.0 était incompatible selon la matrice officielle Kotlin : Kotlin 2.2.21 est pleinement supporté jusqu'à AGP 8.11.1 et Gradle 8.14. Elle est remplacée par Kotlin 2.4.21 + AGP 9.3.1 + Gradle 9.5.0 : la matrice Kotlin indique AGP jusqu'à 9.3.1 et Gradle jusqu'à 9.7.0 ; AGP 9.3 prend en charge API 37 et requiert Gradle 9.5.0. Cette correction de compatibilité documentaire ne vaut pas preuve de compilation. Les versions seront verrouillées dans les catalogues Gradle puis compilées sur un prototype avant développement massif.
 
 ## 3. Stack Web/PWA arrêtée
 
@@ -97,6 +97,6 @@ Les données Famille sont isolées dans un schéma dédié et des schémas méti
 
 ## 8. État
 
-Android natif dix apps : VALIDÉ. Web responsive + PWA dix apps : VALIDÉ. Stack de référence et monorepo : VALIDÉS. Backend partagé : SOUS CONDITION D'AUDIT. Code et dépendances : non créés. Build : non exécuté. Migration et déploiement : aucun.
+Android natif dix apps : EXIGENCE VALIDÉE, CODE ABSENT. Web responsive + PWA dix apps : EXIGENCE VALIDÉE, CODE ABSENT. Stack de référence : CORRIGÉE SUR MATRICE DOCUMENTAIRE, NON COMPILÉE. Monorepo : STRUCTURE CIBLE DOCUMENTÉE, PAS ENCORE BOOTSTRAPPÉE. Backend partagé : SOUS CONDITION D'AUDIT. Dépendances/lockfiles : absents. Build : non exécuté. Tests : non exécutés. Migration et déploiement : aucun.
 
-**Prompt 0.1 terminé pour le cadrage et le choix de stack ; preuve de build à obtenir au bootstrap technique.**
+**Prompt 0.1 : cadrage documentaire terminé ; VERT TECHNIQUE NON ACQUIS. Critères techniques restants : bootstrap reproductible, wrapper Gradle et toolchain Android, dix modules Android natifs, dix apps Web/PWA indépendantes, lockfiles, builds release/debug, tests unitaires/UI/e2e et preuve CI ou exécution locale reproductible.**
