@@ -170,8 +170,8 @@ Les deux vues signalées sont `public.marketplace_assureurs` et `public.marketpl
 
 Le DDL actuel est un squelette de modèle, pas une migration prête. Avant toute exécution, il faut au minimum :
 
-1. Ajouter des clés étrangères composites empêchant qu'un `role_assignment.app_id` diffère de celui du `membership`, ou qu'un `location_id` appartienne à une autre organisation que le membership.
-2. Garantir que `subscriptions.plan_id` correspond au même `app_id` que l'abonnement ; idem pour tout lien organisation/application.
+1. **Correction partielle déjà intégrée au draft** : clés étrangères composites imposant que `role_assignments.membership_id/app_id/organization_id` correspondent au membership et que `location_id` appartienne à la même organisation. Ces contraintes doivent encore être exécutées et testées en PostgreSQL isolé.
+2. **Correction partielle déjà intégrée au draft** : `subscriptions` référence une activation `organization_apps(organization_id,app_id)` et un `plans(id,app_id)` de la même application. L'exécution SQL et les tests négatifs restent à faire.
 3. Définir le cycle d'invitation, l'acceptation, la révocation, les changements de rôle et les sessions actives ; ne pas confondre membership, compte Auth et rôle.
 4. Formaliser les organisations multi-activités et les lieux partagés : une organisation peut exploiter plusieurs apps ; une affectation doit être bornée à l'app et au lieu ; les droits ne se propagent jamais automatiquement entre apps.
 5. Définir la politique de comptes personnels et de comptes professionnels, de liaison/déliaison Auth, de récupération, de fermeture et de suppression conformément aux dix cahiers des charges.
@@ -219,8 +219,8 @@ FICHIER DE PASSATION — Famille NAXA — Prompt 0.2 — 14 novembre 2026
 2. Fichiers : Prompt 0.1, Prompt 0.2 et draft SQL non appliqué.
 3. Tables Supabase créées : aucune. Entités conceptuelles proposées : 24 ; DDL draft : 22 tables.
 4. Décisions : identité Auth commune ; couche Famille isolée ; rôles contextualisés ; file offline locale.
-5. Points ouverts : analyse individuelle des 447 SECURITY DEFINER et 372 policies ; grants, 2 vues SECURITY DEFINER, 66 tables sans policy, Storage, triggers, extensions, Edge Functions ; comparaison Production ; matrice complète des dix cahiers ; contraintes croisées et tests RLS.
-6. Suite : audit détaillé des droits et finalisation des migrations SQL draft non appliquées.
+5. Points ouverts : analyse individuelle des 447 SECURITY DEFINER et 372 policies ; grants, 2 vues SECURITY DEFINER, 66 tables sans policy, Storage, triggers, extensions, Edge Functions ; comparaison Production ; matrice complète des dix cahiers ; tests PostgreSQL du draft durci, contraintes complémentaires, grants et tests RLS.
+6. Suite : bootstrap des builds Android/Web, validation PostgreSQL isolée du draft durci, puis audit détaillé des droits, GRANT et tests RLS. Aucun déploiement/migration Supabase.
 7. Accord explicite requis pour exposition Data API, grants, migration appliquée, modification Replay/Production, déploiement ou dépense. L'audit courant n'a effectué que des lectures.
 
 **Prompt 0.2 : modèle et cadrage approfondis documentés ; PAS VERT. Le schéma SQL reste un draft non exécutable tant que les invariants, les policies, les grants, les tests et la matrice métier ne sont pas finalisés.**
@@ -273,7 +273,7 @@ Les historiques de migrations Replay et Production ont été consultés : ils ne
 5. Les permissions sont contextuelles : application + organisation + lieu + rôle + état de l'affectation. Aucun rôle ni accès ne se propage automatiquement d'une application à l'autre.
 6. Les données de stock, caisse, tontine, loyer, réservation, séjour, paiement, comptabilité et sécurité physique restent dans leurs domaines métier dédiés ; aucune synchronisation LWW générique n'est autorisée pour ces agrégats.
 7. Les 24 entités du dictionnaire sont le modèle conceptuel. Le fichier SQL contient 22 tables de base : `promo_codes` et `referrals` restent au niveau conceptuel, car leurs règles métier et cycles de vie ne sont pas suffisamment définis pour figer leur DDL sans inventer des règles.
-8. Le SQL dans `supabase/drafts/0001_famille_core_proposed.sql` reste un brouillon de structure : il active RLS, mais ne contient ni GRANT ni policy. Il n'est pas exécutable en l'état et ne doit pas être appliqué.
+8. Le SQL dans `supabase/drafts/0001_famille_core_proposed.sql` reste un brouillon de structure : il active RLS, intègre désormais plusieurs contraintes composites app/organisation, mais ne contient ni GRANT ni policy. Il n'a pas été exécuté ni validé syntaxiquement par PostgreSQL ; il n'est pas approuvé pour migration et ne doit pas être appliqué.
 
 ### 12.4 Limites exactes — ne pas transformer la clôture du prompt en faux « vert »
 
