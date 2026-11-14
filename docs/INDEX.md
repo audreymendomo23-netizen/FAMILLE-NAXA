@@ -5,6 +5,7 @@
 - [Continuité Famille NAXA — point de reprise actif](CONTINUITE_FAMILLE_NAXA.md)
 - [Cadrage technique — Prompt 0.1](architecture-360/PROMPT_0_1_CADRAGE_TECHNIQUE.md)
 - [Schéma de données commun — Prompt 0.2](architecture-360/PROMPT_0_2_SCHEMA_DONNEES_COMMUN.md)
+- [Audit technique Prompts 0.1 et 0.2 — VERT non acquis](audits/AUDIT_TECHNIQUE_PROMPTS_0_1_0_2.md)
 - [Draft SQL commun — non appliqué](../supabase/drafts/0001_famille_core_proposed.sql)
 - [Cahier GrillaD](apps/grillad/CAHIER_DES_CHARGES.md)
 - [Prompts GrillaD](apps/grillad/PROMPTS.md)
