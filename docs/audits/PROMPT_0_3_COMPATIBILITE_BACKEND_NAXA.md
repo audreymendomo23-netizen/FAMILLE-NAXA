@@ -117,3 +117,12 @@ Cette preuve confirme la logique RLS du banc de test Famille. Elle ne change pas
 - Le test d'audit doit démontrer que l'événement est créé dans la même transaction que la mutation et qu'un échec d'audit fait échouer la mutation.
 
 **État : décisions de gouvernance intégrées dans les candidates ; validation technique en attente du run PostgreSQL 17. Prompt 0.3 reste PARTIEL / NON VERT jusqu'à la preuve CI, au raccordement Auth serveur, aux tables métier des dix applications et à l'audit de compatibilité additif avec Supabase NAXA.** Aucune écriture sur le projet Supabase réel.
+
+
+### Renforcement complémentaire — preuve d'affectation applicative
+
+La candidate 0004 ajoute le helper interne has_app_access(app_id). Les helpers de portée organisation, lieux, abonnement et facturation exigent désormais simultanément : claim signé active_app_id correspondant, entrée client_app_access active pour auth.uid(), membership/rôle approprié et abonnement autorisé lorsque le domaine le requiert. L'index unique sur client_app_access(user_id) empêche une identité ordinaire d'être affectée à deux plateformes. Le rôle historique platform_admin est neutralisé comme rôle applicatif ; l'unique administrateur central est identifié exclusivement par family_admins.
+
+La journalisation est étendue au catalogue d'applications, aux organisations, rattachements, lieux, memberships, rôles, accès, appareils, installations, abonnements, plans, versions et règles de parsing. Le journal audit_events reçoit un garde-fou SQL contre UPDATE/DELETE. Les actions métier sensibles restent à exposer par RPC serveur explicites ; aucune permission DML générique n'est accordée aux clients.
+
+Ces ajouts doivent encore passer le workflow PostgreSQL 17 après la dernière modification. Les comptes déjà existants doivent être inventoriés avant de créer l'index unique en intégration réelle : aucune consolidation ou migration automatique d'identités n'est autorisée.
