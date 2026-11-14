@@ -119,7 +119,7 @@ put("gradle/wrapper/gradle-wrapper.properties", lines([
   "zipStoreBase=GRADLE_USER_HOME",
   "zipStorePath=wrapper/dists",
 ]));
-put("pnpm-workspace.yaml", "packages:\n" + workspace.map((p) => "  - " + p).join("\n") + "\n\nonlyBuiltDependencies:\n  - esbuild\n");
+put("pnpm-workspace.yaml", "packages:\n" + workspace.map((p) => "  - " + p).join("\n") + "\n\nallowBuilds:\n  esbuild: true\n");
 put(".npmrc", "engine-strict=true\nstrict-peer-dependencies=false\nauto-install-peers=true\n");
 put(".gitignore", lines([
   "node_modules/", ".pnpm-store/", ".next/", "out/", "dist/", "coverage/",
