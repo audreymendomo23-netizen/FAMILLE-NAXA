@@ -93,6 +93,8 @@ jobs:
           node-version: 22
       - name: Installer les dépendances Web
         run: npm install
+      - name: Tester les contrats Web de sécurité et de distribution
+        run: npm run test:core-web
       - name: Tester les contrats de synchronisation et conflits
         run: npm run test:contracts
       - name: Tester le moteur de règles explicables
