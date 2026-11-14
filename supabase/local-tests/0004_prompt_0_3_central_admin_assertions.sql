@@ -51,7 +51,7 @@ create policy admin_metadata_scope_read on famille_test.admin_metadata_scope
  for select to authenticated using(famille_core.is_admin());
 create or replace function famille_test.test_has_app_access(p_app uuid)
 returns boolean language sql security definer set search_path=pg_catalog,famille_core
-as $ select famille_core.has_app_access(p_app) $;
+as $access_test$ select famille_core.has_app_access(p_app) $access_test$;
 grant execute on function famille_test.test_has_app_access(uuid) to authenticated;
 grant usage on schema famille_test to authenticated;
 grant select on famille_test.admin_metadata_scope to authenticated;
