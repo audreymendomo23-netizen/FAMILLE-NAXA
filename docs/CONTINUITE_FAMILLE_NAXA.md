@@ -232,3 +232,16 @@ Le trigger `auth.users.on_auth_user_created` appelle `handle_new_user()` SECURIT
 **État Prompt 0.4 : AUDIT STRUCTUREL PARTIEL — NON VERT.** Aucun DDL/DML, changement Auth, création de compte, révocation, migration, déploiement ou publication effectué. Prompt 0.3 reste PARTIEL/NON CLOS.
 
 Reprise : (1) inspecter la chaîne complète des triggers de sessions et résoudre les stubs dans PostgreSQL 17 éphémère ; (2) inspecter helpers privés d'invitation et consommateurs de `appareils` ; (3) confirmer réglages Auth allow-signups, politique mot de passe, leaked password protection, MFA, rate limits et templates ; (4) cartographier organisations/lieux et appareils par les dix apps ; (5) tests positifs/négatifs inter-app/org/lieu ; aucun changement Production sans diff validé et autorisation explicite.
+
+
+### Extension audit Prompt 0.4 — chaîne sessions et consommateurs appareils
+
+Le contrôle des triggers Auth confirme que `auth.sessions` ne porte que deux triggers de journalisation (insert/delete). Aucun trigger de limitation n'est attaché ; `naxa_enforce_session_limit()` est un stub non raccordé et `naxa_session_count(uuid)` retourne 0. Les sessions Supabase sont par défaut illimitées ; la fonction native « Single session per user » ne permet qu'une session et n'est pas équivalente à deux appareils par point (documentation : https://supabase.com/docs/guides/auth/sessions).
+
+Les fonctions `naxa_device_permissions_v1`, `naxa_apply_offline_operation_v1` et `naxa_apply_offline_sale_v1` consomment `public.appareils` pour vérifier état appareil, fraîcheur 7 jours, profil, rôle, pharmacie, privilèges, séquences hors ligne et ventes. Leurs ACL inspectées limitent EXECUTE à postgres/service_role ; il ne faut donc pas ouvrir la table aux clients par une policy générique. Les RPC livreur contrôlent le Promoteur/Pharmacie, l'e-mail confirmé, la majorité et l'exclusivité du rôle Livreur avant de créer l'affectation ; les invitations examens délèguent à des implémentations privées dont le code reste à auditer.
+
+Réglages Auth (allow signups, politique de mot de passe, leaked-password protection, MFA, rate limits, templates) toujours non vérifiés : get_project ne les expose pas. Pas de réglage modifié.
+
+Rapport d'audit enrichi : `docs/audits/AUDIT_PROMPT_0_4_COMPTES_APPAREILS.md`, commit `f0cbf7cd4e2076e58e16d5c808598fb3f96afc49`.
+
+**État inchangé : Prompt 0.4 audit partiel/non vert ; Prompt 0.3 partiel/non clos.** Aucun changement Production.
