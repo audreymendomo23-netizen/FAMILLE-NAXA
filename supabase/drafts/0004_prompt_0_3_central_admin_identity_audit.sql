@@ -29,6 +29,7 @@ as $access$
   );
 $access$;
 revoke all on function famille_core.has_app_access(uuid) from public,anon,authenticated;
+grant execute on function famille_core.has_app_access(uuid) to authenticated;
 
 create or replace function famille_core.outlet_ids()
 returns setof uuid language sql stable security definer
