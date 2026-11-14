@@ -157,7 +157,7 @@ FICHIER DE PASSATION — Famille NAXA — Prompt 0.2 — 14 novembre 2026
 
 1. Fait : inventaire Replay de premier niveau, modèle commun et dictionnaire.
 2. Fichiers : Prompt 0.1, Prompt 0.2 et draft SQL non appliqué.
-3. Tables Supabase créées : aucune. Entités proposées : 23.
+3. Tables Supabase créées : aucune. Entités conceptuelles proposées : 24 ; DDL draft : 22 tables.
 4. Décisions : identité Auth commune ; couche Famille isolée ; rôles contextualisés ; file offline locale.
 5. Points ouverts : revue SECURITY DEFINER, policies, vues, grants, Storage ; cartographie des dix cahiers ; validation des schémas exposés.
 6. Suite : audit détaillé des droits et finalisation des migrations SQL draft non appliquées.
