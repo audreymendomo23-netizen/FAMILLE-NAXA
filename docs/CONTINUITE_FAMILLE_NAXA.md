@@ -82,3 +82,42 @@ Aucune migration appliquée au Supabase réel ; aucun secret ou keystore dans le
 3. Vérifier les réglages Auth via Dashboard/API autorisée, sans exposer de secrets.
 4. Construire la matrice des dix applications : identité, type d'organisation, membership, lieu, rôle, installation, appareil et session.
 5. Concevoir et tester les corrections sur PostgreSQL 17 éphémère ; aucune modification Supabase réelle sans autorisation explicite.
+
+
+## Ouverture Prompt 0.5 — Hors connexion et synchronisation (14 novembre 2026)
+
+### Source et cadrage
+- Prompt historique identifié : `7 famille naxa/02-prompts/00-socle-commun.md`, section « PROMPT 0.5 — Hors connexion et synchronisation ».
+- Adaptation Famille 10 applications : `docs/architecture-360/PROMPT_0_5_HORS_CONNEXION_SYNCHRONISATION.md`.
+- Rapport d'audit initial : `docs/audits/AUDIT_PROMPT_0_5_HORS_CONNEXION_SYNCHRONISATION.md`.
+
+### Preuves du dépôt
+- Dix files Android Room `OfflineQueue.kt` existent, une par application, avec eventId, appId, aggregateType, payload, deviceSequence, createdAt et state. Elles n'ont pas de transport, batch, retry/backoff ni accusé serveur prouvé.
+- `scripts/bootstrap-foundations.mjs` génère ces dix files ; toute évolution doit modifier le générateur puis reconstruire les modules.
+- `packages/offline-web/src/index.ts` expose uniquement enqueue/listQueued/setQueueState via IndexedDB ; aucun transport/retry/conflit.
+- Les dix service workers Web ont le même SHA et cachent uniquement le shell/manifest/assets ; pas de sync de données métier.
+- `packages/contracts/src/index.ts` contient déjà `SyncEnvelope` et une politique de conflit : vente/paiement/abonnement = revue manuelle ; inventaire = compensation ; autres = revue manuelle.
+
+### Preuves du backend NAXA réel — lecture seule
+- Tables existantes : `public.offline_operations`, `public.naxa_offline_sales`, `private.naxa_offline_lww_config`, `public.appareils`, `public.stock_manager_movement_journal`.
+- RPC existantes : `naxa_apply_offline_operation_v1` (stock_set_quantity uniquement, LWW spécifique, appareil ≤ 7 jours), `naxa_apply_offline_sale_v1` (contrôles caisse/prix/stock, idempotence operation_id, séquence appareil, ≤ 7 jours) et `offline_stock_set_quantity`.
+- Ces flux sont pharmacie-spécifiques, ne forment pas un moteur générique pour les dix apps et ne doivent pas être détournés.
+- `public.abonnements` porte une formule et une échéance pharmacie ; aucune matrice globale 10 apps ↔ Essentiel/Pro/Réseau ↔ 7/14 jours n'a été démontrée.
+- Les tables de preuves SMS inspectées n'ont pas de trigger append-only observé ; `service_role` possède UPDATE/DELETE. Immutabilité DB non démontrée, aucune correction appliquée.
+
+### Contradiction structurante
+La règle historique « le plus ancien enregistrement serveur gagne » ne peut pas être appliquée uniformément : l'idempotence d'un même event est distincte du conflit entre deux événements métier. La politique existante `decideConflict` et les règles NAXA (revue financière, compensation inventaire, LWW stock pharmacie spécifique) priment ; aucun écrasement financier automatique.
+
+### État
+- Prompt 0.5 : AUDIT DE DÉPART PARTIEL / NON VERT ; aucune implémentation Prompt 0.5 ni migration Production réalisée.
+- Prompt 0.4 : PARTIEL / NON VERT.
+- Prompt 0.3 : PARTIEL / NON CLOS.
+- Aucun DDL/DML, ACL, migration, réglage ou déploiement Production.
+
+### Reprise exacte
+1. Concevoir et tester le contrat de file, transitions, idempotence, lots, retry et conflits par domaine dans `packages/contracts`.
+2. Implémenter le moteur IndexedDB commun et tests reload/partial ack.
+3. Implémenter le moteur Room/WorkManager commun dans `packages/core-android` et modifier le générateur `scripts/bootstrap-foundations.mjs`.
+4. Cartographier les plans/tolérances des dix apps avant le verrouillage 7/14 jours.
+5. Auditer les chemins d'écriture des preuves SMS et concevoir append-only sur PostgreSQL 17 éphémère.
+6. Aucun changement Supabase réel sans autorisation explicite.
