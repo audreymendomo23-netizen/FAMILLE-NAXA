@@ -63,3 +63,14 @@ La migration candidate 0002 présente actuellement un risque de portée inter-ap
 Le Prompt 0.3 reste **PARTIEL / NON VERT**. L'audit de compatibilité du backend partagé est clôturé, mais la migration candidate 0002 ne satisfait pas encore les exigences d'isolation : outlet_ids() et has_organization_access() doivent être contextualisés par app_id ; is_admin() doit avoir une sémantique de portée explicite ; les EXECUTE doivent être contrôlés par une liste blanche justifiée ; le modèle doit éviter la duplication d'identités/organisations/lieux du backend NAXA. Les tests PostgreSQL éphémères existants ne couvrent pas encore ces constats.
 
 Ne pas appliquer 0001/0002 au Supabase réel. Le Prompt 0.4 ne doit pas être ouvert tant que ces défauts ne sont pas corrigés et testés. Son contenu officiel n'est pas présent dans le dépôt consulté ; retrouver le PDF/ZIP source avant de définir son périmètre.
+
+
+## Revue consolidée — 14 novembre 2026, après contrôle du backend partagé
+
+La candidate Famille 0003 a été renforcée : `outlet_ids()` exige maintenant une application active, un lien organisation/app actif et un abonnement actif ou dans sa tolérance ; `has_organization_access()` ne confère plus une portée organisation à un rôle limité à un lieu et exige aussi un abonnement autorisé. Les tests ajoutés simulent le claim signé pour la matrice de droits après contextualisation.
+
+Le contrôle en lecture seule du projet Supabase NAXA Production confirme que les ressources canoniques à préserver sont `auth.users`, `public.profiles`, `partners`, `partner_members`, `pharmacies`, `promoteur_pharmacies`, `naxa_professional_assignments`, `abonnements`, `abonnement_paiements`, `ventes` et `stocks`. La correspondance et les contradictions détaillées sont documentées dans [PROMPT_0_3_COMPATIBILITE_BACKEND_NAXA.md](../audits/PROMPT_0_3_COMPATIBILITE_BACKEND_NAXA.md).
+
+**Blocage confirmé :** la policy existante `public.ventes_scope` permet `is_admin() OR can_access_pharmacy(pharmacie_id)`, donc l'Admin NAXA peut lire des ventes détaillées. Les helpers NAXA observés n'utilisent pas de contexte `active_app_id` Famille. Il faut arbitrer la séparation Admin NAXA / Admin Famille et raccorder les tables métier des dix domaines avant de déclarer le Prompt 0.3 vert. Les candidates `famille_core` restent un banc de test et ne doivent pas être appliquées au projet réel en l'état.
+
+Aucune écriture n'a été faite sur Supabase NAXA Production. Le statut global reste **PARTIEL / NON VERT** tant que les points de compatibilité ci-dessus ne sont pas levés et testés.
