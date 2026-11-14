@@ -67,7 +67,7 @@ as $$
       and rc.scope_type='organization' and ra.location_id is null
       and famille_core.subscription_allows_workspace(p_org,m.app_id)
   );
-$;
+$$;
 
 create or replace function famille_core.subscription_allows_workspace(p_org uuid,p_app uuid)
 returns boolean language sql stable security definer
