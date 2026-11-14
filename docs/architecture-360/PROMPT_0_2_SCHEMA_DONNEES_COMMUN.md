@@ -288,3 +288,21 @@ Aucune action destructive ou mutante n'a été réalisée sur Replay ou Producti
 ## 13. Conclusion du prompt
 
 Le socle commun proposé est suffisamment défini pour servir de référence aux prompts de conception métier suivants, sans démarrer prématurément les applications ni créer de tables. Le schéma SQL reste un artefact de conception à durcir avant toute migration. Le Prompt 0.2 est clos comme livrable de cadrage ; il ne doit pas être rouvert pour élargir le périmètre. Toute future action sur Supabase doit rester un chantier distinct, avec autorisation explicite et preuves propres.
+
+
+## 14. Preuve technique consolidée — 14 novembre 2026
+
+**État révisé : PROMPT 0.2 — VERT TECHNIQUE POUR LE MODÈLE COMMUN ET LE DRAFT SQL ISOLÉ.**
+
+Le workflow GitHub Actions [43563686065](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/43563686065), sur le commit `52d5b2b2b52d4eae59521091e85812ceda39e39c`, a exécuté avec succès sous PostgreSQL 17 éphémère :
+- création du schéma candidat et de ses 22 tables ;
+- insertion des 10 applications attendues ;
+- scénario positif de membership, rôle et lieu cohérents ;
+- rejet d'une affectation de rôle sur une autre application ;
+- rejet d'un lieu appartenant à une autre organisation ;
+- rejet d'un abonnement utilisant un plan d'une autre application ;
+- vérification de RLS activé et de l'absence de GRANT/policies dans le draft (default-deny).
+
+Cette preuve remplace les mentions antérieures « SQL non exécuté / non validé syntaxiquement » pour le draft exact testé. Elle ne vaut que pour le script et les assertions du test éphémère.
+
+**Limites maintenues sans ambiguïté :** le schéma n'est pas migré dans Supabase ; aucune policy RLS fonctionnelle ni aucun GRANT applicatif n'est livré ; l'exposition Data API, l'Auth lifecycle complet, les workflows métier détaillés et la certification sécurité restent hors de cette validation. Le draft demeure non autorisé à la migration et ne doit pas être appliqué à Replay ou Production sans chantier et autorisation distincts.
