@@ -115,3 +115,12 @@ Commencer immédiatement la correction coordonnée du socle 0.3–0.13 :
 6. mettre à jour ce rapport et `docs/CONTINUITE_FAMILLE_NAXA.md` après chaque lot vérifié.
 
 État au départ : **0.3–0.13 : 0 VERT / 11**.
+## 9. Mise à jour de preuve — 14 novembre 2026, 05:07 UTC
+
+Le statut de départ ci-dessus est historique et ne décrit plus les derniers tests. Le workflow dédié https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/43559938233 est SUCCESS : schéma 0001 + RLS 0002 + candidate contextualisée 0003 appliqués sur PostgreSQL 17 éphémère ; tests claims signés/refus par défaut et matrice complète après contextualisation réussis.
+
+| Prompt | État actualisé | Preuve / écart restant |
+|---|---|---|
+| 0.3 | PARTIEL / NON VERT — noyau RLS candidat testé avec succès | Run 43559938233. Restent l'Auth Hook réel, le raccordement aux tables métier des dix apps, la matrice des droits par domaine et la migration additive compatible au backend partagé. Aucun DDL réel appliqué. |
+
+Les prompts 0.4 à 0.13 conservent leur état précédent : aucun n'est déclaré vert par cette preuve RLS. Le compteur global reste 0 prompt entièrement vert / 11. Le rapport de compatibilité est dans PROMPT_0_3_COMPATIBILITE_BACKEND_NAXA.md.
