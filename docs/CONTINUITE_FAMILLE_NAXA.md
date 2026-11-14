@@ -20,7 +20,7 @@ Les Prompts **0.1 et 0.2 restent ouverts pour leur validation technique**, à la
 
 - Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`
 - Branche : `main`
-- Dernier commit de continuité antérieur : `490c368fa656ba160a4c6c4d49532abc2c20ac35`\n- Corrections techniques de cette reprise : `0d34889b89099183d054770bd6a67b405db4975b` (compatibilité Android), `1217a9cbe055a3aa2ab850b697b888eea2d8f218` (contraintes SQL), `5f28c1422e1d80f51b49e40f5177acb4152fc102` (audit technique), `6ec53f4d160dbcafbc41d906be162dcb381d4868` (index documentaire).
+- Dernier commit de continuité antérieur : `490c368fa656ba160a4c6c4d49532abc2c20ac35`\n- Corrections techniques de cette reprise : `0d34889b89099183d054770bd6a67b405db4975b` (compatibilité Android), `1217a9cbe055a3aa2ab850b697b888eea2d8f218` (contraintes SQL), `5f28c1422e1d80f51b49e40f5177acb4152fc102` (audit technique), `6ec53f4d160dbcafbc41d906be162dcb381d4868` (index documentaire), `f57bb82e965eca8fd0b96cb3b3d670422776e127` (Prompt 0.2 aligné sur les contraintes ajoutées).
 - [Prompt 0.1 corrigé](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/architecture-360/PROMPT_0_1_CADRAGE_TECHNIQUE.md)\n- [Prompt 0.2](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/architecture-360/PROMPT_0_2_SCHEMA_DONNEES_COMMUN.md)\n- [Audit technique 0.1/0.2](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/audits/AUDIT_TECHNIQUE_PROMPTS_0_1_0_2.md)
 - [SQL draft durci mais toujours non exécutable/non approuvé](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/supabase/drafts/0001_famille_core_proposed.sql)
 - Prompt 0.1 : [Cadrage technique](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/architecture-360/PROMPT_0_1_CADRAGE_TECHNIQUE.md)
@@ -78,6 +78,6 @@ Si le prochain prompt source n'est pas présent dans le dépôt, le retrouver da
 
 | Date | Changement | Preuve |
 |---|---|---|
-| 14/11/2026 | Reprise de validation technique : incompatibilité Kotlin 2.2.21 / AGP 9.5 / Gradle 9.6 détectée et corrigée dans Prompt 0.1 ; contraintes composites app/organisation ajoutées au SQL draft ; audit technique et blocages documentés ; audit ajouté à l'index. VERT technique non acquis. | Commits `0d34889b89099183d054770bd6a67b405db4975b`, `1217a9cbe055a3aa2ab850b697b888eea2d8f218`, `5f28c1422e1d80f51b49e40f5177acb4152fc102`, `6ec53f4d160dbcafbc41d906be162dcb381d4868` |
+| 14/11/2026 | Reprise de validation technique : incompatibilité Kotlin 2.2.21 / AGP 9.5 / Gradle 9.6 détectée et corrigée dans Prompt 0.1 ; contraintes composites app/organisation ajoutées au SQL draft ; audit technique et blocages documentés ; audit ajouté à l'index et Prompt 0.2 aligné sur les contraintes SQL partiellement ajoutées. VERT technique non acquis. | Commits `0d34889b89099183d054770bd6a67b405db4975b`, `1217a9cbe055a3aa2ab850b697b888eea2d8f218`, `5f28c1422e1d80f51b49e40f5177acb4152fc102`, `6ec53f4d160dbcafbc41d906be162dcb381d4868`, `f57bb82e965eca8fd0b96cb3b3d670422776e127` |
 | 14/11/2026 | Création de ce document de continuité | Commit `80e4664e24a9b233ec5c69b5ccabfbd7052908a2` |
 | 14/11/2026 | Ajout de la continuité Famille dans l'index documentaire | Commit `a4932604f23d0d985de8b72dce5551569d9802b4` |
