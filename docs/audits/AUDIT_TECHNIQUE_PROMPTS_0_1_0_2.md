@@ -129,3 +129,17 @@ Fichiers ajoutés au commit `24792bb8dd2b0247f96ba45f09dde2208c91b9b5` :
 | Déploiement | AUCUN |
 
 **Conclusion :** les corrections SQL et le contrôle groupé sont préparés, mais le socle SQL passe les tests PostgreSQL 17 de syntaxe, de seed et de contraintes composites ; cependant, les policies/grants fonctionnels restent absents et les vingt projets applicatifs sont absents. Le run global reste en échec. Le Prompt 0.2 ne peut pas être déclaré vert techniquement tant que les policies/grants et tests RLS fonctionnels ne sont pas conçus, exécutés et approuvés. Le Prompt 0.1 ne peut pas être déclaré vert tant que les vingt applications ne sont pas construites et compilées. Aucun faux VERT.
+
+
+## 9. Mise à jour de preuve — 14 novembre 2026
+
+Le constat historique des sections précédentes est conservé comme photographie du premier contrôle. Il est supersédé, pour le SQL draft 0.2 uniquement, par le run GitHub Actions **43563686065**, commit testé `52d5b2b2b52d4eae59521091e85812ceda39e39c` : https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/43563686065.
+
+Le job `SQL draft + contraintes + isolation par défaut` est **SUCCESS** sous PostgreSQL 17 éphémère. Il exécute le draft `supabase/drafts/0001_famille_core_proposed.sql`, puis `supabase/tests/0001_famille_core_smoke.sql`. Assertions réussies : 22 tables, exactement 10 applications seedées, insertion valide, rejet de trois liens inter-périmètres (application, organisation/lieu, plan/application), RLS activé et aucun GRANT ni policy Data API dans le draft.
+
+### Verdict révisé
+- **Prompt 0.2 — VERT TECHNIQUE (modèle commun et draft SQL isolé)** : syntaxe/exécution PostgreSQL 17, seed et contraintes testés avec succès.
+- **Prompt 0.1 — VERT BUILD DES 20 SOCLES** : les 10 Web/PWA et 10 Android ont compilé et leur persistance a réussi dans le job applicatif du même run.
+- **Sécurité RLS fonctionnelle / exposition Data API / autorisation de migration : HORS VERT.** Le draft n'a volontairement aucun GRANT ni policy ; les tests de ce job prouvent le refus par défaut, pas des parcours RLS autorisés. Ces sujets ne sont pas requalifiés en critères du Prompt 0.2 et restent soumis au chantier sécurité dédié.
+
+Aucune base Supabase Replay ou Production n'a été modifiée. Aucun DDL/DML n'a été exécuté hors du conteneur PostgreSQL éphémère. Aucun déploiement ni publication.
