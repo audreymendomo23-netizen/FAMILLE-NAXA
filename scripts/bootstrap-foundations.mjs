@@ -60,7 +60,7 @@ put("infra/RELEASE_MANIFEST.md", "# Distribution\nAPK hors Play Store. Avant pub
 
 put("packages/core-android/build.gradle.kts", `plugins { id("com.android.library"); id("org.jetbrains.kotlin.android") }
 android { namespace="cm.naxa.core"; compileSdk=35; defaultConfig { minSdk=26 }; compileOptions { sourceCompatibility=JavaVersion.VERSION_17; targetCompatibility=JavaVersion.VERSION_17 }; kotlinOptions { jvmTarget="17" } }
-dependencies { implementation("androidx.core:core-ktx:1.15.0"); implementation("androidx.work:work-runtime-ktx:2.9.1") }`);
+dependencies { implementation("androidx.core:core-ktx:1.15.0"); implementation("androidx.work:work-runtime-ktx:2.9.1"); implementation("androidx.biometric:biometric:1.1.0"); implementation("androidx.fragment:fragment-ktx:1.8.5"); implementation("androidx.security:security-crypto:1.1.0-alpha06") }`);
 put("packages/core-android/src/main/AndroidManifest.xml", `<manifest xmlns:android="http://schemas.android.com/apk/res/android"><uses-permission android:name="android.permission.POST_NOTIFICATIONS"/></manifest>`);
 put("packages/core-android/src/main/java/cm/naxa/core/notifications/NotificationChannels.kt", `package cm.naxa.core.notifications
 import android.Manifest
