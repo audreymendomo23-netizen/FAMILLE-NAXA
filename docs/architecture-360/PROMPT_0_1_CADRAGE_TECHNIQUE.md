@@ -1,102 +1,81 @@
 # PROMPT 0.1 — Cadrage technique et structure du projet
 
-**État : STACK CORRIGÉE SUR MATRICE DE COMPATIBILITÉ ; BUILDS ET TESTS À PROUVER.**
+**État : IMPLÉMENTATION CONFORME AU CADRAGE ; VALIDATION CI FINALE EN COURS.**
 
 ## 1. Architecture produit
 
-Chacun des dix produits possède deux réalisations indépendantes :
-- Android : application entièrement native, APK autonome.
-- Web : application responsive mobile/tablette/ordinateur et installable en PWA.
+Dix produits, chacun avec deux réalisations indépendantes : application Android 100 % native Kotlin/Jetpack Compose et application Web responsive Next.js installable comme PWA. Aucun WebView-wrapper ni Capacitor ; seuls les contrats, validations, règles partagées, traductions et tests sont mutualisés.
 
-Produits : Kiosko, Bootik, Zipple, NAXA Services, CotiZ, Loyable, NAXA Hotel, Campus237, NAXA Security, GrillaD.
+Produits : Kiosko, Bootik, Zipple, NAXA Services, CotiZ, Loyable, NAXA Hotel, Campus237, NAXA Security et GrillaD.
 
-Aucune WebView-wrapper, aucun Capacitor, aucune UI Web embarquée dans Android. Les plateformes partagent contrats API, règles métier, validations, formats, traductions et tests, pas leurs interfaces.
+## 2. Baseline Android verrouillée
 
-## 2. Stack Android arrêtée
-
-| Couche | Choix de référence |
+| Élément | Version / règle |
 |---|---|
-| Langage | Kotlin 2.4.21 |
-| UI | Jetpack Compose + Material 3 |
-| Build | AGP 9.3.1 ; Gradle 9.5.0 ; JDK 17 |
-| SDK | compileSdk 37 ; targetSdk 37 ; minSdk 26 |
-| Compose | BOM 2026.09.00 |
-| Base locale | Room / SQLite |
-| Préférences | DataStore |
-| Synchronisation | WorkManager |
-| Secrets locaux | Android Keystore |
-| HTTP | Ktor Client 3.0.3 |
-| Supabase | supabase-kt BOM 3.5.0 et modules nécessaires |
-| Caméra | CameraX |
-| OCR / codes-barres | ML Kit local lorsque pertinent |
-| Push | Firebase Cloud Messaging |
-| Tests | JUnit, tests instrumentés, Compose UI tests |
+| Kotlin / KGP | 2.4.21 |
+| Android Gradle Plugin | 9.3.1 |
+| Gradle Wrapper | 9.5.0 avec SHA-256 officiel |
+| JDK | 17 |
+| compileSdk / targetSdk / minSdk | 37 / 37 / 26 |
+| Compose | BOM 2026.09.00 + Material 3 |
+| Persistance | Room 2.8.5 ; DataStore |
+| Tâches différées | WorkManager 2.12.0 |
+| Sécurité | Android Keystore ; PIN local ; biométrie facultative |
+| Réseau / backend | Ktor Client 3.0.3 ; supabase-kt BOM 3.5.0 isolé derrière adaptateur |
+| Média / push | CameraX, ML Kit local, FCM selon besoin confirmé |
+| Tests | JUnit, Compose UI instrumentés, builds debug et release |
 
-Dix projets/modules Android indépendants, chacun avec applicationId, manifeste, permissions, icônes, version et APK propres. Les packages Kotlin communs sont limités à la sécurité, au réseau, à la synchronisation, au stockage, aux contrats et aux utilitaires. Pas de partage forcé des écrans métier.
+Le Kotlin intégré d'AGP 9.3.1 est temporairement désactivé dans gradle.properties pour utiliser explicitement KGP 2.4.21 (android.builtInKotlin=false, android.newDsl=false). Cette transition est documentée et devra être migrée avant AGP 10.
 
-Room porte les opérations métier locales ; WorkManager assure une synchronisation reprenable. Les mutations financières et sensibles restent validées côté serveur. Les clés de données sensibles sont protégées par Android Keystore. Les permissions sont demandées au moment du besoin.
+Chaque app a son applicationId, son manifeste, ses ressources, sa file Room et ses tests. Les écrans et données métier restent indépendants.
 
-Le SDK Supabase Kotlin reste communautaire : il sera isolé derrière un adaptateur pour pouvoir le remplacer sans réécrire le domaine métier. Les versions sont une baseline au 14/11/2026. La combinaison initiale Kotlin 2.2.21 + AGP 9.5.0 + Gradle 9.6.0 était incompatible selon la matrice officielle Kotlin : Kotlin 2.2.21 est pleinement supporté jusqu'à AGP 8.11.1 et Gradle 8.14. Elle est remplacée par Kotlin 2.4.21 + AGP 9.3.1 + Gradle 9.5.0 : la matrice Kotlin indique AGP jusqu'à 9.3.1 et Gradle jusqu'à 9.7.0 ; AGP 9.3 prend en charge API 37 et requiert Gradle 9.5.0. Cette correction de compatibilité documentaire ne vaut pas preuve de compilation. Les versions seront verrouillées dans les catalogues Gradle puis compilées sur un prototype avant développement massif.
+## 3. Baseline Web/PWA verrouillée
 
-## 3. Stack Web/PWA arrêtée
-
-| Couche | Choix |
+| Élément | Version / règle |
 |---|---|
-| Framework | Next.js 16.4.6 stable |
-| UI | React 19.3.0 |
+| Framework | Next.js 16.4.6 |
+| UI | React / React DOM 19.3.0 |
 | Langage | TypeScript strict |
-| PWA/service worker | Serwist 9.5.13 |
-| Style | CSS responsive + design tokens ; Tailwind si utile |
-| Workspace | pnpm workspaces + lockfile |
-| Tests | Vitest, Playwright, tests d'accessibilité |
+| PWA / service worker | Serwist 9.5.13 en configurator mode |
+| Workspace | pnpm 12.21.0 et lockfile unique |
+| Tests | Playwright 1.65.0 et axe-core/playwright 4.14.0 |
 
-Dix applications Web/PWA autonomes, chacune avec manifeste, icône, nom, thème, scope et cache propres. Les écrans privés et tokens ne sont jamais mis en cache automatiquement. La PWA ne prétend pas remplacer les services Android lorsque le navigateur est fermé.
+Dix PWA ont un nom, un manifeste, une icône, un scope et un service worker indépendants. Le pré-cache des pages pré-rendues est désactivé et le cache runtime est vide : aucune page privée, réponse métier ou donnée d'authentification n'est mise en cache par le socle.
 
-## 4. Monorepo et livraison
+La console d'administration historique Vite est conservée hors du workspace des dix produits ; elle n'est ni convertie ni comptée comme l'une des dix PWA.
 
-Dépôt de référence : audreymendomo23-netizen/FAMILLE-NAXA, branche main.
+## 4. Monorepo et automatisation
 
-- Dix projets Android construits et livrés séparément par Gradle.
-- Dix applications Next.js séparées dans un workspace pnpm.
-- Packages communs limités aux contrats, règles partagées, validations, internationalisation, design tokens et jeux de tests.
-- Aucune dépendance directe entre applications.
-- APK distribuées depuis le site NAXA, sans Play Store.
+- Dépôt de référence : audreymendomo23-netizen/FAMILLE-NAXA, branche main uniquement.
+- Dix projets Android Gradle indépendants et dix applications Next.js autonomes.
+- Catalogue Gradle centralisé ; pnpm workspace et lockfile unique ; Gradle Wrapper 9.5.0 et somme SHA-256 officielle.
+- Générateur unique : scripts/bootstrap-foundations.mjs.
+- CI : tests des contrats, builds des dix PWA, tests E2E/accessibilité, builds Android debug/release, tests unitaires, tests Compose instrumentés sur émulateur.
 
-Structure cible :
-- apps/android/{kiosko,bootik,zipple,naxa-services,cotiz,loyable,naxa-hotel,campus237,naxa-security,grillad}
-- apps/web/{mêmes dix applications}
-- packages/{android-core,web-core,contracts,domain-rules,validation,localization,design-tokens,test-vectors}
-- supabase/{drafts,migrations,functions,tests}
-- docs/{architecture-360,apps,decisions,audits}
+## 5. Backend, identité et sécurité
 
-## 5. Backend, identité et données
+Le backend Supabase NAXA reste partagé sous réserve de l'audit de compatibilité. Aucune identité, table, migration, rôle ou donnée pharmacie n'est dupliquée sans décision. Les autorisations Famille restent contextualisées par application, organisation et lieu.
 
-Supabase/PostgreSQL reste le backend partagé cible, sous réserve de l'audit. Identité Auth commune ; profils et droits contextualisés par application, organisation et lieu. Les rôles métier de la pharmacie NAXA ne sont pas des rôles universels Famille.
-
-Les données Famille sont isolées dans un schéma dédié et des schémas métier par application ; aucune nouvelle table Famille dans public par défaut. Chaque table exposée doit avoir des grants minimaux et RLS testée. Aucun service_role ou secret serveur dans une APK ou PWA. Aucune migration, modification Replay/Production ou fonction déployée sans accord explicite.
+Aucune clé service_role ou secret côté client. Ce prompt n'autorise aucune migration, modification Auth, déploiement ni publication APK. Aucun workflow de ce prompt n'effectue ces opérations.
 
 ## 6. Conventions
 
-- Montants en FCFA, stockés en entiers ou NUMERIC exact, jamais FLOAT.
-- Horodatages timestamptz UTC ; fuseau d'affichage explicite, Africa/Douala par défaut.
-- Français/anglais ; aucune chaîne UI codée en dur.
-- Identifiants techniques anglais, libellés localisés.
-- Journalisation structurée sans secret, PIN, OTP ni SMS brut.
-- Suppression douce pour données opérationnelles lorsque permise ; journaux et écritures financières append-only.
-- Dépendances épinglées, lockfiles versionnés, inventaire SBOM/licences.
-- Aucun coût ou service payant sans accord.
+- Montants FCFA stockés en entiers ou NUMERIC exact, jamais FLOAT.
+- Horodatages UTC (timestamptz) ; fuseau de présentation Africa/Douala par défaut.
+- Ressources UI FR/EN, aucune chaîne utilisateur codée en dur dans les shells natifs.
+- Identifiants techniques anglais ; journalisation sans PIN, OTP, secret ni SMS brut.
+- Dépendances versionnées ; lockfiles ; build output ignoré par Git.
 
-## 7. Sources techniques consultées
+## 7. Preuves et statut
 
-- Supabase Kotlin quickstart : https://supabase.com/docs/guides/getting-started/quickstarts/kotlin
-- Statut communautaire supabase-kt : https://supabase.com/docs/reference/kotlin/introduction
-- Compose BOM : https://developer.android.com/develop/ui/compose/bom
-- AGP / Gradle : https://developer.android.com/build/releases/about-agp
-- Next.js support policy : https://nextjs.org/support-policy
-- React versions : https://react.dev/versions
+La preuve antérieure run 43557643046 avait compilé des squelettes Vite/React 18 avec Gradle 8.7 et AGP 8.6.1 ; elle prouvait l'existence des vingt squelettes mais pas la conformité au stack Prompt 0.1. Elle n'est donc pas retenue comme preuve de conformité finale.
 
-## 8. État
+Le présent changement remplace le générateur et le workflow. Les critères de sortie restent conditionnés au passage de la CI sur les versions fixées :
 
-Android natif dix apps : EXIGENCE VALIDÉE, CODE ABSENT. Web responsive + PWA dix apps : EXIGENCE VALIDÉE, CODE ABSENT. Stack de référence : CORRIGÉE SUR MATRICE DOCUMENTAIRE, NON COMPILÉE. Monorepo : STRUCTURE CIBLE DOCUMENTÉE, PAS ENCORE BOOTSTRAPPÉE. Backend partagé : SOUS CONDITION D'AUDIT. Dépendances/lockfiles : absents. Build : non exécuté. Tests : non exécutés. Migration et déploiement : aucun.
+- dix builds Next.js + Serwist ;
+- tests TypeScript, contrats, E2E et accessibilité ;
+- dix builds Android debug et release ;
+- dix suites de tests unitaires et dix suites Compose instrumentées ;
+- wrapper Gradle, pnpm-lock.yaml et manifests persistés sur main.
 
-**Prompt 0.1 : cadrage documentaire terminé ; VERT TECHNIQUE NON ACQUIS. Critères techniques restants : bootstrap reproductible, wrapper Gradle et toolchain Android, dix modules Android natifs, dix apps Web/PWA indépendantes, lockfiles, builds release/debug, tests unitaires/UI/e2e et preuve CI ou exécution locale reproductible.**
+**Statut à la date de ce commit : implémentation et configuration prêtes ; VERT technique non déclaré avant preuve CI complète.**

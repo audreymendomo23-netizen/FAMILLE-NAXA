@@ -131,8 +131,8 @@ put("package.json", json({
   name: "famille-naxa", private: true, packageManager: "pnpm@12.21.0",
   engines: { node: ">=22.15.0" },
   scripts: {
-    "build:web": "pnpm --filter './apps/web/*' -r build",
-    "typecheck:web": "pnpm --filter './apps/web/*' -r typecheck",
+    "build:web": "pnpm --workspace-concurrency=2 --filter './apps/web/*' -r build",
+    "typecheck:web": "pnpm --workspace-concurrency=2 --filter './apps/web/*' -r typecheck",
     "test:contracts": "pnpm --filter @famille/contracts test",
     "test:assistant": "pnpm --filter @famille/assistant-rules test",
     "test:core-web": "pnpm --filter @naxa/core-web test",
@@ -583,7 +583,6 @@ for (const [id, label, acronym] of apps) {
 
 // Retire generated Gradle binaries previously committed into the repository.
 await rm("packages/core-android/build", { recursive: true, force: true });
-await rm("apps/android", { recursive: false, force: false }).catch(() => {});
 for (const [path, content] of files) {
   const target = join(process.cwd(), path);
   await mkdir(dirname(target), { recursive: true });

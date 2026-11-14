@@ -166,3 +166,11 @@ La règle historique « le plus ancien enregistrement serveur gagne » ne peut p
 - Prompt 0.2 : draft SQL exécuté sous PostgreSQL 17 éphémère ; 22 tables, 10 apps, scénario positif et trois rejets inter-périmètres réussis ; RLS activé, aucun GRANT/policy (default-deny) confirmé.
 - **Verdict : Prompt 0.1 VERT BUILD DES 20 SOCLES ; Prompt 0.2 VERT TECHNIQUE POUR LE MODÈLE COMMUN ET LE DRAFT SQL ISOLÉ.**
 - Cette clôture n'autorise aucune migration, exposition Data API, modification Replay/Production, configuration Auth, déploiement ou publication. Les policies RLS fonctionnelles et GRANT applicatifs restent dans le périmètre sécurité distinct ; aucun faux certificat de sécurité n'est émis.
+
+## Exécution corrective — Prompt 0.1 (14 novembre 2026)
+
+Le contrôle du générateur a révélé que la précédente preuve de 20 builds utilisait une pile différente de celle approuvée : AGP 8.6.1/Kotlin 2.0.20/compileSdk 35/Compose BOM 2024.10, Vite/React 18.3 et Gradle 8.7. Le run 43557643046 ne clôt donc pas la conformité du Prompt 0.1.
+
+Le générateur a été remplacé pour produire dix modules Android natifs avec Kotlin 2.4.21, AGP 9.3.1, Gradle 9.5.0, JDK17, API37/min26 et dix applications Next.js 16.4.6/React 19.3.0/Serwist 9.5.13. pnpm 12.21.0 gère le workspace produit. Le workflow est renforcé avec builds, tests unitaires, tests Compose, E2E et axe-core.
+
+Le statut reste EN VALIDATION CI ; ne déclarer VERT qu'après preuve intégrale sur ce nouvel environnement et persistance du wrapper et du lockfile. Aucune migration Supabase réelle, aucun déploiement ni publication APK.

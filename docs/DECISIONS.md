@@ -12,8 +12,9 @@
 | FAM-008 | GrillaD : porc braisé, poulet braisé, poisson braisé, brochettes, omelettes uniquement | VALIDÉ |
 | FAM-009 | GrillaD : Manager autonome, Manager + un vendeur, Manager + plusieurs vendeurs sur lieux précis | VALIDÉ |
 | FAM-010 | Dix applications Android entièrement natives, chacune avec sa version Web responsive installable en PWA ; aucune WebView-wrapper | VALIDÉ |
-| FAM-011 | Android : Kotlin 2.2.21, Compose BOM 2026.09.00, Room, WorkManager, DataStore, Keystore, Ktor 3.0.3, supabase-kt 3.5.0 ; AGP 9.5.0 / Gradle 9.6.0 / JDK 17 / SDK 37 / minSdk 26 | VALIDÉ POUR LE SOCLE, BUILD À PROUVER |
-| FAM-012 | Web : Next.js 16.4.6, React 19.3.0, TypeScript strict, Serwist 9.5.13 ; dix PWA autonomes responsives | VALIDÉ POUR LE SOCLE, BUILD À PROUVER |
+| FAM-011 | Android : Kotlin 2.4.21, AGP 9.3.1, Gradle 9.5.0, JDK17, API37/min26, Compose BOM 2026.09.00, Room 2.8.5, DataStore, WorkManager, Keystore, Ktor 3.0.3 et supabase-kt 3.5.0 | VALIDÉ POUR LE CADRAGE ; PREUVE CI REQUISE |
+| FAM-012 | Web : Next.js 16.4.6, React 19.3.0, TypeScript strict, Serwist 9.5.13 et pnpm 12.21.0 ; dix PWA autonomes | VALIDÉ POUR LE CADRAGE ; PREUVE CI REQUISE |
 | FAM-013 | Monorepo : dix modules Android indépendants + dix apps Web indépendantes + packages communs limités | VALIDÉ |
 | FAM-014 | Identité Auth commune ; autorisations contextualisées par application/organisation/lieu ; séparation des tables métier NAXA | PROPOSÉ, AUDIT REQUIS |
 | FAM-015 | Aucun schéma Famille exposé au Data API sans grants minimaux et RLS/policies testés | VALIDÉ COMME EXIGENCE |
+| FAM-016 | AGP 9.3.1 : Kotlin intégré désactivé temporairement afin d'utiliser KGP 2.4.21 ; migration requise avant AGP 10 | TRANSITOIRE DOCUMENTÉ |
