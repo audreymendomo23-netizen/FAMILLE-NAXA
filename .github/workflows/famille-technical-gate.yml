@@ -14,6 +14,8 @@ on:
       - "web/**"
       - "apps/android/**"
       - "apps/web/**"
+      - "scripts/**"
+      - "packages/**"
   workflow_dispatch:
 
 permissions:
@@ -68,23 +70,40 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Vérifier les 10 projets Android et les 10 projets Web/PWA
+      - name: Générer les 10 socles Android et les 10 socles Web/PWA
+        run: node scripts/bootstrap-foundations.mjs
+      - name: Vérifier les 20 manifests
         shell: bash
         run: |
           set -euo pipefail
           apps=(kiosko bootik zipple naxa-services cotiz loyable naxa-hotel campus237 naxa-security grillad)
-          missing=0
           for app in "${apps[@]}"; do
-            android="apps/android/${app}/build.gradle.kts"
-            web="apps/web/${app}/package.json"
-            if [[ ! -f "$android" ]]; then echo "ABSENT Android: $android"; missing=$((missing+1)); fi
-            if [[ ! -f "$web" ]]; then echo "ABSENT Web/PWA: $web"; missing=$((missing+1)); fi
+            test -f "apps/android/${app}/build.gradle.kts"
+            test -f "apps/web/${app}/package.json"
+            test -f "apps/android/${app}/src/main/AndroidManifest.xml"
+            test -f "apps/web/${app}/manifest.webmanifest"
           done
-          if [[ "$missing" -ne 0 ]]; then
-            echo "::error::$missing manifests applicatifs manquants : aucun build groupé des 20 applications ne peut être exécuté."
-            exit 1
-          fi
-          echo "Les 20 manifests sont présents ; ajouter les jobs de compilation dédiés après verrouillage des toolchains."
+      - name: Installer Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Installer les dépendances Web
+        run: npm install
+      - name: Compiler les 10 applications Web/PWA
+        run: npm run build:web
+      - name: Installer Java et Gradle
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Installer Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - name: Installer Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Compiler les 10 applications Android natives
+        run: gradle assembleDebug
 
   prompt-03-rls:
     name: Prompt 0.3 — policies RLS et scénarios d'isolation
