@@ -47,19 +47,15 @@ jobs:
       PGDATABASE: famille_prompt_03
     steps:
       - uses: actions/checkout@v4
-      - name: Installer client PostgreSQL
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
       - name: Bootstrap Supabase Auth local isolé
-        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0002_bootstrap_local_auth.sql
+        run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille_prompt_03 -X -v ON_ERROR_STOP=1 < supabase/local-tests/0002_bootstrap_local_auth.sql
       - name: Appliquer le schéma commun éphémère
-        run: psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0001_famille_core_proposed.sql
+        run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille_prompt_03 -X -v ON_ERROR_STOP=1 < supabase/drafts/0001_famille_core_proposed.sql
       - name: Appliquer les policies de base
-        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/0002_famille_core_rls.sql
+        run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille_prompt_03 -X -v ON_ERROR_STOP=1 < supabase/migrations/0002_famille_core_rls.sql
       - name: Appliquer le contexte multi-application
-        run: psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0003_prompt_0_3_contextual_rls.sql
+        run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille_prompt_03 -X -v ON_ERROR_STOP=1 < supabase/drafts/0003_prompt_0_3_contextual_rls.sql
       - name: Tester les claims signés et le refus par défaut
-        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0003_prompt_0_3_context_assertions.sql
+        run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille_prompt_03 -X -v ON_ERROR_STOP=1 < supabase/local-tests/0003_prompt_0_3_context_assertions.sql
       - name: Rejouer la matrice complète après durcissement
-        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0002_prompt_0_3_rls_assertions.sql
+        run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille_prompt_03 -X -v ON_ERROR_STOP=1 < supabase/local-tests/0002_prompt_0_3_rls_assertions.sql
