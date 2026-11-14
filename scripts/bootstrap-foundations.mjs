@@ -506,7 +506,7 @@ for (const [id, label, acronym] of apps) {
   put(webDir + "/next-env.d.ts", '/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n');
   put(webDir + "/serwist.config.js", lines([
     'import { serwist } from "@serwist/next/config";',
-    "export default serwist({ swSrc: \"app/sw.ts\", swDest: \"public/sw.js\", precachePrerendered: false, runtimeCaching: [] });",
+    "export default serwist({ swSrc: \"app/sw.ts\", swDest: \"public/sw.js\", precachePrerendered: false });",
   ]));
   put(webDir + "/app/sw.ts", lines([
     '/// <reference lib="esnext" />',
