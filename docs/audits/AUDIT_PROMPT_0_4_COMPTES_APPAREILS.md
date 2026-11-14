@@ -160,3 +160,44 @@ Aucune modification de base, migration, réglage Auth, création d'utilisateur, 
 3. Confirmer les réglages Auth dans le Dashboard/API ; définir le provisioning administratif et le mode sans inscription libre.
 4. Définir la matrice des organisations/lieux par application et les règles distinctes appareil/session.
 5. Produire les tests et le diff de correction ; demander autorisation avant toute modification Production.
+
+
+## 10. Extension d'audit — chaîne de session, RPC et appareils (14 novembre 2026)
+
+### 10.1 Déclencheurs réellement attachés
+
+L'inventaire des triggers non internes sur `auth.sessions` montre uniquement :
+- `trg_naxa_session_audit_insert` → `naxa_audit_session_insert()`
+- `trg_naxa_session_audit_delete` → `naxa_audit_session_delete()`
+
+Aucun trigger `naxa_enforce_session_limit` n'est attaché à `auth.sessions` dans le catalogue. La fonction de même nom existe mais n'est pas appelée par un trigger observé. Cela confirme que le mécanisme de limite n'est pas seulement incomplet : il est aussi non raccordé au cycle de création des sessions. Les deux triggers existants servent à journaliser la création et la révocation ; ils capturent les erreurs de journalisation sans faire échouer la création/révocation Auth.
+
+### 10.2 Consommateurs de `appareils`
+
+Les fonctions qui lisent explicitement `public.appareils` dans leur source incluent :
+- `naxa_device_permissions_v1(uuid)` : contrôle appareil actif, fraîcheur de synchronisation (7 jours), profil actif, rôle pharmacie, pharmacie active et privilèges stock.
+- `naxa_apply_offline_operation_v1(...)` : vérifie appareil, profil, rôle, périmètre pharmacie, privilèges de lecture/édition du stock, séquence d'appareil et cohérence d'opération.
+- `naxa_apply_offline_sale_v1(...)` : vérifie appareil, utilisateur, pharmacie, rôle caisse, session de caisse, séquence et cohérence de vente.
+Ces fonctions sont SECURITY DEFINER, non exécutables par authenticated/anon dans les ACL inspectées (postgres/service_role uniquement). Elles doivent être appelées par une couche serveur contrôlée. L'accès direct fermé de `appareils` est donc cohérent avec le modèle actuel des opérations hors ligne. Ne pas ajouter une policy client large.
+
+### 10.3 Flux d'invitation livreur
+
+Les RPC publiques observées délèguent les mutations métier à des fonctions dédiées ou implémentent les contrôles :
+- création : Promoteur valide avec relation active promoteur/pharmacie et privilège `ASSIGN_USER_TO_PHARMACY`, ou compte Pharmacie sur son propre établissement ;
+- acceptation : compte connecté, e-mail confirmé correspondant à l'invitation, profil client complet/majeur/actif, pharmacie active, invitant toujours autorisé, exclusivité du rôle Livreur, création de `naxa_professional_assignments`, sélection du rôle actif et notification ;
+- révocation : émetteur ou Admin, contrôle du statut de l'invitation.
+La façade d'acceptation est SECURITY DEFINER ; elle contrôle `auth.uid()` et le propriétaire du compte. Les RPC publiques ont ACL EXECUTE authenticated/service_role, pas anon dans l'ACL explicite observée. La fonction d'acceptation est donc un modèle métier réutilisable pour les invitations professionnelles, mais son parcours e-mail ne doit pas être copié tel quel pour les comptes sans e-mail.
+
+### 10.4 Flux d'invitation examens
+
+Les façades `exam_create_staff_invite`, `exam_accept_staff_invite`, `exam_revoke_staff_invite` sont SECURITY INVOKER et délèguent aux implémentations privées. Le code des fonctions privées doit encore être lu pour confirmer les contrôles d'autorisation et l'atomicité.
+
+### 10.5 Documentation Supabase actuelle
+
+La documentation officielle « User sessions » précise qu'une session Auth est créée à la connexion, représentée par un JWT et un refresh token, et qu'un utilisateur a par défaut un nombre illimité de sessions actives. Elle décrit les limites de durée/inactivité et l'option « Single session per user » (une seule session, pas un plafond de deux appareils). Cette option est indiquée comme disponible sur les plans Pro et supérieurs. Source : https://supabase.com/docs/guides/auth/sessions
+
+Conséquence : même si l'option native était activée, elle ne répondrait pas à la règle historique « deux appareils par point ». Il faut modéliser distinctement les installations/appareils, les sessions Auth, les applications et les points, puis choisir une règle métier testable.
+
+### 10.6 Configuration Auth — état
+
+`get_project` confirme l'identité et l'état du projet, mais ne renvoie pas les paramètres Auth (allow signups, MFA, politique de mot de passe, protection leaked-password, rate limits, templates). Ces paramètres restent non vérifiés ; aucune valeur n'est supposée.
