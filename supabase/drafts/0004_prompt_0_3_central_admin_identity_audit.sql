@@ -144,6 +144,14 @@ drop policy if exists identities_read_self on famille_core.identities;
 create policy identities_read_self on famille_core.identities
   for select to authenticated using (user_id=auth.uid());
 
+drop policy if exists app_installations_read_scope on famille_core.app_installations;
+create policy app_installations_read_scope on famille_core.app_installations
+  for select to authenticated
+  using (exists (
+    select 1 from famille_core.devices d
+    where d.id=device_id and d.user_id=auth.uid()
+  ));
+
 drop policy if exists support_tickets_read_self on famille_core.support_tickets;
 create policy support_tickets_read_self on famille_core.support_tickets
   for select to authenticated using (user_id=auth.uid());
