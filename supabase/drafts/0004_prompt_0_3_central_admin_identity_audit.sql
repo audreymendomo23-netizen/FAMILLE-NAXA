@@ -209,7 +209,8 @@ begin
     if TG_OP='DELETE' then return OLD; else return NEW; end if;
   end if;
   v_row := case when TG_OP='DELETE' then to_jsonb(OLD) else to_jsonb(NEW) end;
-  v_app := nullif(v_row->>'app_id','')::uuid;
+  v_app := coalesce(nullif(v_row->>'app_id','')::uuid,
+    case when TG_TABLE_NAME='applications' then nullif(v_row->>'id','')::uuid else null end);
   v_org := nullif(v_row->>'organization_id','')::uuid;
   v_loc := nullif(v_row->>'location_id','')::uuid;
   v_id := coalesce(v_row->>'id',v_row->>'user_id',v_row->>'code');
@@ -227,7 +228,7 @@ do $$
 declare t text;
 begin
   foreach t in array array[
-    'organizations','organization_apps','locations','memberships',
+    'applications','organizations','organization_apps','locations','memberships',
     'role_catalog','role_assignments','client_app_access','devices','app_installations',
     'subscriptions','plans','app_versions','payment_parser_rules'
   ] loop
