@@ -192,3 +192,10 @@ Le statut reste EN VALIDATION CI ; ne déclarer VERT qu'après preuve intégrale
 - Workflow .github/workflows/prompt-03-rls.yml étendu pour appliquer la candidate 0004 et exécuter les nouveaux tests dans PostgreSQL 17 éphémère.
 
 **Statut inchangé avant preuve CI :** ces fichiers sont des candidates de conception/test. Attendre le résultat du workflow déclenché par les commits récents ; corriger tout échec avant de considérer ces règles validées. Aucune migration n'est appliquée au Supabase NAXA réel.
+
+### Durcissement de l'affectation applicative et de l'audit
+- La candidate 0004 impose client_app_access.status='granted' et la concordance du claim signé dans les helpers de portée ; l'accès à une application ne repose donc plus sur le seul membership.
+- Un index unique interdit plusieurs affectations applicatives à une même identité Auth ordinaire.
+- Le rôle local platform_admin est neutralisé ; l'unique admin global vient de family_admins.
+- Le journal audit_events est protégé contre UPDATE/DELETE ; les mutations administratives ciblées génèrent des événements de métadonnées.
+- La CI PostgreSQL 17 doit encore confirmer ces derniers changements. L'index unique et les règles d'identité ne doivent pas être appliqués au backend réel avant inventaire des comptes existants et plan de correspondance.
