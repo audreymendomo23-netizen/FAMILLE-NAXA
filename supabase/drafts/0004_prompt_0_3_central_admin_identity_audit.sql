@@ -79,11 +79,11 @@ $$;
 create or replace function famille_core.reject_audit_event_mutation()
 returns trigger language plpgsql security definer
 set search_path = pg_catalog, famille_core
-as $
+as $audit$
 begin
   raise exception 'audit_events_are_append_only' using errcode='55000';
 end;
-$;
+$audit$;
 create trigger famille_audit_events_append_only
   before update or delete on famille_core.audit_events
   for each row execute function famille_core.reject_audit_event_mutation();
