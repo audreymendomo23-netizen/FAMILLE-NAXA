@@ -245,3 +245,23 @@ Réglages Auth (allow signups, politique de mot de passe, leaked-password protec
 Rapport d'audit enrichi : `docs/audits/AUDIT_PROMPT_0_4_COMPTES_APPAREILS.md`, commit `f0cbf7cd4e2076e58e16d5c808598fb3f96afc49`.
 
 **État inchangé : Prompt 0.4 audit partiel/non vert ; Prompt 0.3 partiel/non clos.** Aucun changement Production.
+
+
+## Audit transversal des prompts 0.3 à 0.13 — 14 novembre 2026
+
+Rapport de référence : [AUDIT_TRANSVERSAL_PROMPTS_0_3_A_0_13.md](audits/AUDIT_TRANSVERSAL_PROMPTS_0_3_A_0_13.md). Commit de création : `7bf59c51c4f44e9d5c244f2bbd04e707895a151a`.
+
+L'audit a retrouvé les onze sections normatives dans `7 famille naxa/02-prompts/00-socle-commun.md` et les adaptations 0.3/0.4 sous `docs/architecture-360/`. Il confirme que le chantier doit être traité comme un programme transversal, avec contrats communs et preuves séparées par prompt.
+
+**Statut initial au 14/11/2026 : 0 VERT / 11.**
+- 0.3 : PARTIEL / NON VERT — helpers RLS sans contexte app complet, duplication de ressources, matrice et tests d'isolation incomplets.
+- 0.4 : audit structurel PARTIEL / NON VERT — provisioning non implémenté, stubs de limite de session, réglages Auth non vérifiés, appareils/invitations à raccorder.
+- 0.5 à 0.13 : NON IMPLÉMENTÉS / NON VERTS — aucune implémentation compilable n'a été démontrée ; les 20 manifests Android/Web attendus par le workflow sont absents, packages communs non créés, pas de moteur offline, notifications/briefings, paiements applicatifs, design system, admin Web, signature/export, IA ou page de téléchargement prouvés.
+
+Contradictions à appliquer globalement : 10 applications et non 7 ; Android Kotlin/Compose natif + Web/PWA autonomes ; backend Supabase NAXA commun ; GitHub Actions autorisées ; aucune écriture Production, migration réelle, publication ou déploiement sans autorisation distincte. Les règles financières du prompt historique 0.8 doivent être conciliées avec les décisions NAXA actuelles avant codage. Les règles de conflit et de priorité FCM doivent être spécifiées par type d'événement, pas généralisées.
+
+La suite est organisée en pistes simultanées : (A) RLS/identité/provisioning/paiements/admin ; (B) stockage local/synchronisation/notifications/briefings ; (C) dix Android + dix Web/PWA/design/i18n ; (D) sécurité APK/exports/versions/distribution ; (E) moteur IA explicable et anonymisation. Les pistes utilisent des contrats communs et des tests d'intégration.
+
+Aucune opération Supabase réelle, aucun réglage Auth, aucune Edge Function, aucun site ou APK n'a été modifié/publié par cet audit. Les tests éphémères et builds locaux/CI sont autorisés. Le vert global exige les onze prompts verts avec tests reproductibles au commit.
+
+Point de reprise : figer les contrats communs et la matrice des dix apps, corriger le socle 0.3 en PostgreSQL 17 éphémère, puis lancer les fondations applicatives et les pistes transversales en parallèle.
