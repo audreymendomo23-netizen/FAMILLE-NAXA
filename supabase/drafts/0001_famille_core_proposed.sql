@@ -1,5 +1,12 @@
 -- DRAFT ONLY: Famille NAXA shared schema proposal.
--- NOT APPLIED. Do not execute before review of schema exposure, grants and RLS policies.
+-- NOT APPLIED. NOT EXECUTABLE / NOT APPROVED FOR MIGRATION.
+-- Do not execute before cross-tenant constraints, grants, RLS policies, tests,
+-- app-by-app domain mapping, Auth lifecycle, and security review are complete.
+-- This draft intentionally has no grants and no policies: RLS is enabled as default-deny.
+-- Missing invariants currently include membership/app consistency, role/location/org consistency,
+-- subscription/plan app consistency, session selection, invitation lifecycle and domain-specific sync.
+-- Supabase Replay security findings are documented in docs/architecture-360/PROMPT_0_2_SCHEMA_DONNEES_COMMUN.md.
+-- This file has never been applied to Replay or Production.
 -- PostgreSQL 17 / Supabase.
 
 begin;
@@ -196,7 +203,10 @@ create index if not exists idx_famille_audit_scope_time on famille_core.audit_ev
 create index if not exists idx_famille_notifications_user_app_time on famille_core.notifications(user_id,app_id,created_at desc);
 create index if not exists idx_famille_sync_receipts_device_time on famille_core.sync_receipts(device_id,received_at desc);
 
--- Default-deny: RLS enabled; no grants and no policies in this draft.
+-- DEFAULT-DENY ONLY: this is not a deployable security configuration.
+-- RLS enabled; no grants and no policies in this draft. Do not expose this schema via Data API.
+-- Before migration, add table-specific policies and explicit least-privilege grants,
+-- then test anon/authenticated/service actors and cross-app/org/location denial paths.
 do $$
 declare r record;
 begin
