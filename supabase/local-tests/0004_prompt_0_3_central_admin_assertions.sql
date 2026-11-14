@@ -57,6 +57,18 @@ create policy central_admin_transaction_scope_read on famille_test.central_admin
    famille_core.can_read_transaction_details(organization_id,app_id,location_id)
  );
 grant select on famille_test.central_admin_transaction_scope to authenticated;
+insert into famille_test.central_admin_transaction_scope(organization_id,app_id,location_id,amount_fcfa)
+ select '98000000-0000-0000-0000-000000000001',id,'98000000-0000-0000-0000-000000000002',125000
+ from famille_core.applications where code='kiosko';
+
+create table if not exists famille_test.admin_mutation_audit_probe(
+ id uuid primary key default gen_random_uuid(), app_id uuid, organization_id uuid, marker text
+);
+ drop trigger if exists admin_mutation_audit_probe_trigger on famille_test.admin_mutation_audit_probe;
+create trigger admin_mutation_audit_probe_trigger after insert or update or delete
+ on famille_test.admin_mutation_audit_probe for each row
+ execute function famille_core.audit_central_admin_mutation();
+grant insert on famille_test.admin_mutation_audit_probe to authenticated;
 
 set role authenticated;
 select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000001',true);
@@ -71,6 +83,12 @@ begin
  if n<>0 then raise exception 'central admin must not read transaction details'; end if;
  if exists(select 1 from famille_core.identities) then
    raise exception 'central admin must not read personal identity profile rows';
+ end if;
+ insert into famille_test.admin_mutation_audit_probe(app_id,organization_id,marker)
+ select id,'98000000-0000-0000-0000-000000000001','central-admin-write'
+ from famille_core.applications where code='kiosko';
+ if not exists(select 1 from famille_core.audit_events where actor_id='97000000-0000-0000-0000-000000000001' and entity_type='admin_mutation_audit_probe' and action_code='insert') then
+   raise exception 'central admin mutation was not audited';
  end if;
 end $$;
 
