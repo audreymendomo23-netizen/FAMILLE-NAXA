@@ -15,7 +15,7 @@
 | FAM-011 | Android : Kotlin 2.4.21, AGP 9.3.1, Gradle 9.5.0, JDK17, API37/min26, Compose BOM 2026.09.00, Room 2.8.5, DataStore, WorkManager, Keystore, Ktor 3.0.3 et supabase-kt 3.5.0 | VALIDÉ POUR LE CADRAGE ; PREUVE CI REQUISE |
 | FAM-012 | Web : Next.js 16.4.6, React 19.3.0, TypeScript strict, Serwist 9.5.13 et pnpm 12.21.0 ; dix PWA autonomes | VALIDÉ POUR LE CADRAGE ; PREUVE CI REQUISE |
 | FAM-013 | Monorepo : dix modules Android indépendants + dix apps Web indépendantes + packages communs limités | VALIDÉ |
-| FAM-014 | Identité Auth commune ; autorisations contextualisées par application/organisation/lieu ; séparation des tables métier NAXA | PROPOSÉ, AUDIT REQUIS |
+| FAM-014 | Backend Supabase unique partagé ; comptes Auth utilisateurs distincts par plateforme ; Administrateur central sur un compte dédié ; autorisations et données métier cloisonnées par app/organisation/lieu, sans duplication des ressources canoniques NAXA | VALIDÉ COMME CIBLE ; INTÉGRATION À PROUVER |
 | FAM-015 | Aucun schéma Famille exposé au Data API sans grants minimaux et RLS/policies testés | VALIDÉ COMME EXIGENCE |
 | FAM-016 | AGP 9.3.1 : Kotlin intégré désactivé temporairement afin d'utiliser KGP 2.4.21 ; migration requise avant AGP 10 | TRANSITOIRE DOCUMENTÉ |
 | FAM-017 | Un seul Administrateur central Famille pour les dix plateformes ; accès transversal limité aux métadonnées d'administration, comptes, états, abonnements, paramètres et agrégats autorisés ; aucune lecture des transactions métier détaillées | VALIDÉ |
