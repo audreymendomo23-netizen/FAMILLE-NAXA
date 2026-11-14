@@ -74,3 +74,40 @@ Le backend commun est techniquement identifiable et possède déjà un vaste mod
 Décision opérationnelle : aucune migration Famille à ce stade. Ne pas créer de backend séparé. Poursuivre la comparaison détaillée du modèle Famille aux tables et fonctions NAXA, puis concevoir une intégration additive au backend commun.
 
 Preuve : requêtes SQL de lecture seule exécutées via l'outil Supabase sur `eouwtuusnsuxaejsxknf`, le 14 novembre 2026. Aucun DDL, DML, changement de configuration ou déploiement n'a été effectué.
+
+
+## Clôture de l'audit de compatibilité Supabase — 14 novembre 2026, 03:28 UTC+1
+
+### Verdict
+
+L'audit de compatibilité architecturale du backend commun est terminé pour permettre la reprise des prompts. Le projet partagé reste Supabase NAXA eouwtuusnsuxaejsxknf. Aucun backend supplémentaire ne doit être créé. Les dix applications utilisent un seul projet Supabase et une isolation logique stricte par app, organisation, lieu, rôle et affectation.
+
+**Le backend NAXA est réutilisable comme socle commun, mais les migrations Famille 0001/0002 ne sont PAS compatibles en l'état.** Elles doivent être refondues avant toute exécution.
+
+### Résultats complémentaires vérifiés
+
+- Les 246 tables de public ont RLS activé.
+- Advisor signale 66 tables RLS sans policy : 59 public et 7 private. Les 59 tables publiques n'accordent aucun accès direct à anon/authenticated (seulement postgres/service_role) ; refus par défaut confirmé.
+- 428 fonctions SECURITY DEFINER dont 344 dans public ; toutes ont un search_path explicite au catalogue. Advisor signale 7 RPC accessibles à anon et 216 signalements de fonctions accessibles à authenticated.
+- Trois vues SECURITY DEFINER : public.medicaments_cima_photos_public, public.marketplace_assureurs et public.marketplace_assurance_conventions. Deux vues BI restent à vérifier pour leur mode d'invocation et leurs ACL.
+- Auth leaked-password protection désactivée.
+- Advisors performance : 245 FK sans index couvrant, 13 auth_rls_initplan, 267 index inutilisés, 83 groupes de policies permissives multiples, 1 index dupliqué.
+- 7 buckets Storage, dont 3 privés ; 17 policies Storage.
+- 14 tâches pg_cron actives ; une Edge Function active (naxa-images-import-temp, JWT requis).
+- Aucune migration Famille appliquée, aucun DDL/DML ni changement de configuration.
+
+### Contradictions de conception à corriger avant Prompt 0.3 VERT
+
+1. Le draft 0001 crée identities, organizations, locations, devices, notifications, subscriptions et payment_intents qui recouvrent partiellement des structures déjà existantes dans NAXA. Auth.users doit rester l'identité canonique ; toute correspondance avec profiles, partners, pharmacies, partner_members et naxa_professional_assignments doit être spécifiée avant duplication.
+2. La migration 0002 contient des helpers sans app_id (outlet_ids et has_organization_access), ce qui ne prouve pas l'isolation entre les dix applications.
+3. is_admin est global, sans contexte applicatif explicite.
+4. Les rôles owner/manager/platform_admin/commercial/partner sont génériques et ne couvrent pas les rôles métiers propres à chaque app.
+5. GRANT EXECUTE ON ALL FUNCTIONS à authenticated ouvre tous les helpers SECURITY DEFINER ; remplacer par une liste blanche de RPC publiques/authentifiées.
+6. Les workflows d'écriture d'organisations, memberships, rôles, appareils et installations ne sont pas encore complets.
+7. 0001 est un draft dans supabase/drafts ; 0002, placée dans supabase/migrations, en dépend. La séquence n'est pas autonome pour un déploiement CLI neuf.
+
+### Point de reprise actualisé
+
+Le Prompt 0.3 doit maintenant être révisé comme une phase de conception et de test de l'intégration additive au backend commun NAXA, pas comme l'application du schéma 0001/0002 tel quel. Il faut d'abord produire la matrice de correspondance Auth/identités/organisations/lieux/affectations, puis corriger les helpers RLS pour exiger app_id et tester les refus inter-apps, inter-organisations et inter-lieux. Les migrations réelles restent suspendues jusqu'à validation explicite du diff.
+
+Le rapport détaillé est docs/audits/AUDIT_COMPATIBILITE_BACKEND_COMMUN.md. Le présent document est la source de continuité prioritaire et doit être actualisé à chaque réponse qui fait évoluer les décisions, preuves ou états.
