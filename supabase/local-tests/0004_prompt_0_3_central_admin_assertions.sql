@@ -11,14 +11,14 @@ on conflict(id) do nothing;
 insert into famille_core.family_admins(user_id,status)
  values('97000000-0000-0000-0000-000000000001','active')
 on conflict(user_id) do update set status='active',revoked_at=null;
-do $ begin
+do $admin_uniqueness$ begin
   begin
     insert into famille_core.family_admins(user_id,status)
     values('97000000-0000-0000-0000-000000000005','active');
     raise exception 'a second active central administrator was accepted';
   exception when unique_violation then null;
   end;
-end $;
+end $admin_uniqueness$;
 
 insert into famille_core.client_app_access(user_id,app_id,status)
  select '97000000-0000-0000-0000-000000000002',id,'granted'
@@ -132,9 +132,9 @@ end $$;
 
 select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000004',true);
 select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000004','role','authenticated','app_metadata',jsonb_build_object('active_app_id',(select id::text from famille_core.applications where code='kiosko')))::text,true);
-do $ begin
+do $unassigned_access$ begin
  if famille_test.test_has_app_access((select id from famille_core.applications where code='kiosko')) then raise exception 'unassigned account received platform access'; end if;
-end $;
+end $unassigned_access$;
 
 reset role;
 do $audit_test$ begin
