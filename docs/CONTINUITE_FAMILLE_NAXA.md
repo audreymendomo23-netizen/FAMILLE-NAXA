@@ -111,3 +111,21 @@ L'audit de compatibilité architecturale du backend commun est terminé pour per
 Le Prompt 0.3 doit maintenant être révisé comme une phase de conception et de test de l'intégration additive au backend commun NAXA, pas comme l'application du schéma 0001/0002 tel quel. Il faut d'abord produire la matrice de correspondance Auth/identités/organisations/lieux/affectations, puis corriger les helpers RLS pour exiger app_id et tester les refus inter-apps, inter-organisations et inter-lieux. Les migrations réelles restent suspendues jusqu'à validation explicite du diff.
 
 Le rapport détaillé est docs/audits/AUDIT_COMPATIBILITE_BACKEND_COMMUN.md. Le présent document est la source de continuité prioritaire et doit être actualisé à chaque réponse qui fait évoluer les décisions, preuves ou états.
+
+## État faisant foi — tentative de clôture Prompt 0.3 (14 novembre 2026)
+
+Cette section prévaut sur les formulations antérieures plus optimistes du présent fichier.
+
+**Prompt 0.3 : NON CLOS / PARTIEL.** L'audit de compatibilité du backend commun est terminé, mais le contrôle statique de la migration candidate 0002 a identifié des défauts de sécurité qui empêchent une clôture honnête :
+- outlet_ids() et has_organization_access() ne prennent pas app_id ; le périmètre peut traverser les applications ;
+- is_admin() est global et ne distingue pas un administrateur global d'un administrateur applicatif ;
+- le GRANT EXECUTE global sur toutes les fonctions du schéma n'est pas une liste blanche de capacités ;
+- le modèle 0001 duplique potentiellement des concepts déjà présents dans le backend partagé ;
+- les tests CI 43545105030 prouvent uniquement les scénarios écrits dans la base éphémère et ne couvrent pas ces défauts révélés ensuite ;
+- aucune migration Famille réelle n'a été appliquée ; aucune table Famille métier n'est raccordée au backend partagé.
+
+L'ancien run CI reste une preuve historique valide de ses tests, mais il ne constitue pas une preuve de correction des nouveaux constats. Ne pas marquer 0.3 VERT.
+
+**Prompt 0.4 : non ouvert.** Aucun contenu ni périmètre officiel du Prompt 0.4 n'a été retrouvé dans les conversations consultables ni dans les documents présents sur main. Ne pas inventer son contenu. Rechercher le document source Prompts_00_Socle_commun.pdf / ZIP avant d'en fixer le périmètre.
+
+Point de reprise unique : corriger la conception additive du socle partagé et la migration candidate RLS, écrire des tests négatifs inter-app, inter-organisation et inter-lieu, exécuter la suite sur PostgreSQL 17 éphémère, puis actualiser ce document avec les preuves. Ne pas toucher au Supabase réel.
