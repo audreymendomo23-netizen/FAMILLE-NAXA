@@ -49,10 +49,6 @@ alter table famille_test.admin_metadata_scope enable row level security;
 drop policy if exists admin_metadata_scope_read on famille_test.admin_metadata_scope;
 create policy admin_metadata_scope_read on famille_test.admin_metadata_scope
  for select to authenticated using(famille_core.is_admin());
-create or replace function famille_test.test_has_app_access(p_app uuid)
-returns boolean language sql security definer set search_path=pg_catalog,famille_core
-as $access_test$ select famille_core.has_app_access(p_app) $access_test$;
-grant execute on function famille_test.test_has_app_access(uuid) to authenticated;
 grant usage on schema famille_test to authenticated;
 grant select on famille_test.admin_metadata_scope to authenticated;
 insert into famille_test.admin_metadata_scope(app_id,marker)
@@ -117,8 +113,8 @@ do $$
 begin
  if famille_core.is_admin() then raise exception 'ordinary Kiosko user became central admin'; end if;
  if famille_core.current_app_id() is distinct from (select id from famille_core.applications where code='kiosko') then raise exception 'Kiosko identity has wrong app context'; end if;
- if not famille_test.test_has_app_access((select id from famille_core.applications where code='kiosko')) then raise exception 'Kiosko assigned app access missing: uid %, claim %, visible grants %',auth.uid(),famille_core.current_app_id(),(select count(*) from famille_core.client_app_access where user_id=auth.uid()); end if;
- if famille_test.test_has_app_access((select id from famille_core.applications where code='campus237')) then raise exception 'Kiosko identity crossed into Campus237'; end if;
+ if not famille_core.has_app_access((select id from famille_core.applications where code='kiosko')) then raise exception 'Kiosko assigned app access missing: uid %, claim %, visible grants %',auth.uid(),famille_core.current_app_id(),(select count(*) from famille_core.client_app_access where user_id=auth.uid()); end if;
+ if famille_core.has_app_access((select id from famille_core.applications where code='campus237')) then raise exception 'Kiosko identity crossed into Campus237'; end if;
 end $$;
 
 select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000003',true);
@@ -127,13 +123,13 @@ do $$
 begin
  if famille_core.is_admin() then raise exception 'ordinary Campus237 user became central admin'; end if;
  if famille_core.current_app_id() is distinct from (select id from famille_core.applications where code='campus237') then raise exception 'Campus237 identity has wrong app context'; end if;
- if not famille_test.test_has_app_access((select id from famille_core.applications where code='campus237')) then raise exception 'Campus237 assigned app access missing'; end if;
+ if not famille_core.has_app_access((select id from famille_core.applications where code='campus237')) then raise exception 'Campus237 assigned app access missing'; end if;
 end $$;
 
 select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000004',true);
 select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000004','role','authenticated','app_metadata',jsonb_build_object('active_app_id',(select id::text from famille_core.applications where code='kiosko')))::text,true);
 do $unassigned_access$ begin
- if famille_test.test_has_app_access((select id from famille_core.applications where code='kiosko')) then raise exception 'unassigned account received platform access'; end if;
+ if famille_core.has_app_access((select id from famille_core.applications where code='kiosko')) then raise exception 'unassigned account received platform access'; end if;
 end $unassigned_access$;
 
 reset role;
