@@ -10,4 +10,4 @@
 body{margin:0;background:var(--naxa-surface);color:var(--naxa-text);font-family:Montserrat,Poppins,Nunito,system-ui,sans-serif}
 a{color:var(--naxa-link)}button{min-height:44px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
-/* Three later app palettes are not yet defined; no brand colors are invented. */
+/* Three later app palettes are pending validation; no colors are invented. */
