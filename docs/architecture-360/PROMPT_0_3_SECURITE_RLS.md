@@ -57,3 +57,9 @@ Avant tout DDL réel, le travail du Prompt 0.3 doit :
 9. générer une séquence de migrations additive autonome, sans dépendre d'un draft hors du répertoire migrations.
 
 La migration candidate 0002 présente actuellement un risque de portée inter-applications dans outlet_ids() et has_organization_access(), et is_admin() est global sans contexte app. Ces fonctions doivent être corrigées avant toute validation. Aucune migration Supabase réelle n'est autorisée par cet addendum ; la revue du diff et la validation explicite restent obligatoires.
+
+## État de clôture — mise à jour du 14 novembre 2026
+
+Le Prompt 0.3 reste **PARTIEL / NON VERT**. L'audit de compatibilité du backend partagé est clôturé, mais la migration candidate 0002 ne satisfait pas encore les exigences d'isolation : outlet_ids() et has_organization_access() doivent être contextualisés par app_id ; is_admin() doit avoir une sémantique de portée explicite ; les EXECUTE doivent être contrôlés par une liste blanche justifiée ; le modèle doit éviter la duplication d'identités/organisations/lieux du backend NAXA. Les tests PostgreSQL éphémères existants ne couvrent pas encore ces constats.
+
+Ne pas appliquer 0001/0002 au Supabase réel. Le Prompt 0.4 ne doit pas être ouvert tant que ces défauts ne sont pas corrigés et testés. Son contenu officiel n'est pas présent dans le dépôt consulté ; retrouver le PDF/ZIP source avant de définir son périmètre.
