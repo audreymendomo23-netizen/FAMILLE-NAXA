@@ -6,6 +6,8 @@ on:
     paths:
       - "supabase/drafts/0001_famille_core_proposed.sql"
       - "supabase/drafts/0003_prompt_0_3_contextual_rls.sql"
+      - "supabase/drafts/0004_prompt_0_3_central_admin_identity_audit.sql"
+      - "supabase/local-tests/0004_prompt_0_3_central_admin_assertions.sql"
       - "supabase/migrations/0002_famille_core_rls.sql"
       - "supabase/local-tests/0002_prompt_0_3_rls_assertions.sql"
       - "supabase/local-tests/0003_prompt_0_3_context_assertions.sql"
@@ -55,6 +57,10 @@ jobs:
         run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille_prompt_03 -X -v ON_ERROR_STOP=1 < supabase/migrations/0002_famille_core_rls.sql
       - name: Appliquer le contexte multi-application
         run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille_prompt_03 -X -v ON_ERROR_STOP=1 < supabase/drafts/0003_prompt_0_3_contextual_rls.sql
+      - name: Appliquer les décisions Admin central et identités séparées
+        run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille_prompt_03 -X -v ON_ERROR_STOP=1 < supabase/drafts/0004_prompt_0_3_central_admin_identity_audit.sql
+      - name: Tester Admin central, audit et identités séparées
+        run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille_prompt_03 -X -v ON_ERROR_STOP=1 < supabase/local-tests/0004_prompt_0_3_central_admin_assertions.sql
       - name: Tester les claims signés et le refus par défaut
         run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille_prompt_03 -X -v ON_ERROR_STOP=1 < supabase/local-tests/0003_prompt_0_3_context_assertions.sql
       - name: Rejouer la matrice complète après durcissement
