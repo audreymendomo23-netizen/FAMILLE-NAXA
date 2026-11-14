@@ -2,16 +2,40 @@
 
 14 novembre 2026 — dépôt `audreymendomo23-netizen/FAMILLE-NAXA`, branche `main`.
 
-- Prompt 0.1 : cadrage documenté ; VERT technique non acquis (20 apps non compilées).
-- Prompt 0.2 : schéma documenté ; draft 0001 exécuté dans PostgreSQL 17 éphémère au run #1 ; VERT technique complet non acquis.
-- Prompt 0.3 : migration candidate, helpers RLS, policies core, GRANT minimaux, tests locaux, FR/EN et passation préparés ; gérant exclu de la lecture de facturation ; tests écrits couvrent grâce active puis blocage SELECT/INSERT/UPDATE/DELETE après grâce ; VERT technique non acquis (runner local vérifié ; CI PostgreSQL 17 ajoutée ; première exécution a confirmé migration puis détecté un délimiteur DO invalide dans le test de grâce ; correction commise et revalidation `43545105030` en cours ; tables métier non raccordées).
+## État des prompts
 
-Source 0.3 : `Projet.zip` → `Nouveau projet/Prompt/Prompts_00_Socle_commun.pdf`, page 6. Passation formelle 0.2 absente ; reconstituée dans `docs/passations/PASSATION_FAMILLE_PROMPT_0_2.md`.
+- Prompt 0.1 : architecture cadrée ; VERT technique non acquis (20 applications non compilées).
+- Prompt 0.2 : schéma commun documenté ; draft 0001 exécuté dans PostgreSQL 17 éphémère ; VERT technique complet non acquis.
+- Prompt 0.3 : migration candidate 0002, helpers RLS, policies core, GRANT minimaux et assertions exécutés avec succès sur PostgreSQL 17 éphémère au run GitHub Actions `43545105030`. Job SQL 0.2 SUCCESS et job RLS 0.3 SUCCESS.
+- Échec restant du run : inventaire des 20 applications FAILURE ; les 10 manifests Android et 10 manifests Web/PWA sont absents. Aucun build applicatif n'a été exécuté.
+- Prompt 0.3 reste PARTIEL : les vraies tables métier, vues agrégées et fonctions des dix applications ne sont pas encore raccordées ni couvertes.
 
-Décisions : 10 apps, Android natif + Web responsive/PWA ; compte mère = rôle organisation ; gérant = lieux assignés ; admin = agrégats/abonnements sans détails ; commercial/partenaire sans transactions ; `grace_until` fixé par facturation, sans durée inventée. Main seulement, aucune CI, migration, Data API, déploiement, APK ou dépense.
+## Règle opérationnelle corrigée
 
-Fichiers 0.3 : Prompt 0.3, migration 0002, bootstrap/tests locaux, runner, FR/EN, audit et passation.
+Les GitHub Actions et les migrations Supabase sont autorisées et doivent être utilisées lorsqu'elles sont nécessaires au chantier. Les workflows CI conservent les permissions minimales. Toute migration est versionnée, testée en base éphémère, puis appliquée au projet Supabase de développement Famille après identification certaine du project ID et vérification de l'historique.
 
-Commits Prompt 0.3 : `884f44a63d8b5518009dbbe4d25ebbfe4431f1e4`, `62738cb4f8a762cc260c8dd58a9f3da465acc5b1`, `f6de74718827dac95e1be048be9d1926bb1d94d1`, `9a4fcde9fb823235c08ef431276281a8d4eac9df`, `9c6600bb98cf2a62b97ba3a82af1fe80c92a43b3`. Runner shell syntax : PASS (`bash -n`). PostgreSQL local : absent ; CI GitHub utilise PostgreSQL 17 éphémère ; dernier run `43545105030` en cours.
+Projets Supabase actuellement visibles dans le compte connecté :
+- `naxa-ci-replay` — `fnlyjlvflgiewrkmnisi` — INACTIVE.
+- `naxa-ci-replay-2` — `pwfftcsjyeibxxqhwysw` — ACTIVE_HEALTHY.
+- `Naxa` — `eouwtuusnsuxaejsxknf` — ACTIVE_HEALTHY.
 
-Point de reprise : installer PostgreSQL 17 local, exécuter `bash supabase/local-tests/run_prompt_0_3_local.sh`, corriger/relancer, raccorder les vraies tables et vues des dix apps, valider capacités et grace_until. Ne pas ouvrir 0.4 avant preuve et clôture.
+Aucun de ces projets n'est confirmé comme environnement dédié Famille NAXA. Aucun n'a été modifié. Ne pas appliquer de migration Famille sur Replay ou NAXA historique. L'application en Production nécessite une validation distincte de la cible et du diff.
+
+## Décisions d'architecture conservées
+
+10 applications ; chacune Android native Kotlin/Compose, Web responsive et PWA autonome ; pas de wrapper WebView/Capacitor ; APK distribuées depuis le site NAXA, pas Play Store ; backend Famille isolé ; droits métier isolés par application, organisation, lieu, rôle et affectation ; aucun `service_role` dans les clients.
+
+## Preuves et liens
+
+- [Run GitHub Actions 43545105030](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/43545105030)
+- [Workflow groupé](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/.github/workflows/famille-technical-gate.yml)
+- [Migration candidate RLS 0002](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/supabase/migrations/0002_famille_core_rls.sql)
+- [Tests RLS SQL](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/supabase/local-tests/0002_prompt_0_3_rls_assertions.sql)
+
+## Point de reprise
+
+1. Raccorder les tables métier et vues agrégées des dix applications à la politique RLS.
+2. Étendre les tests positifs/négatifs, GRANT, SECURITY DEFINER, absence de membership et isolation app/organisation/lieu.
+3. Créer ou identifier formellement le projet Supabase de développement Famille, puis appliquer les migrations versionnées et exécuter les advisors.
+4. Créer les 20 manifests applicatifs natifs/Web-PWA et remplacer l'inventaire simple par de vrais builds.
+5. Actualiser l'audit et cette continuité avec les preuves. Ne pas ouvrir 0.4 avant clôture du Prompt 0.3.
