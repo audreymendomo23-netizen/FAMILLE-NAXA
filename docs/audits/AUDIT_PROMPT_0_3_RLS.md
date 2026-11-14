@@ -46,3 +46,11 @@ Le Prompt 0.3 reste PARTIEL et doit être corrigé avant VERT :
 - les tests actuels ne couvrent pas encore ces risques sur les tables et fonctions réelles.
 
 Le rapport docs/audits/AUDIT_COMPATIBILITE_BACKEND_COMMUN.md consigne les mesures, advisors et limites. Verdict : backend partagé confirmé, intégration du DDL 0001/0002 refusée en l'état, refonte additive et tests éphémères requis. Aucun DDL/DML ni changement de configuration Supabase n'a été effectué.
+
+## Addendum — décision de clôture demandée (14 novembre 2026)
+
+**Résultat : Prompt 0.3 non clos, statut PARTIEL.** Le run 43545105030 prouve la réussite des assertions initialement écrites sur PostgreSQL 17 éphémère. Il ne prouve pas l'absence de fuite inter-applications. La revue statique ultérieure de 0002 révèle des helpers sans app_id, un is_admin global et un GRANT EXECUTE global. Le modèle candidat duplique aussi potentiellement des entités NAXA existantes. Ces constats invalident une déclaration VERT tant que les corrections et tests correspondants n'ont pas été exécutés.
+
+L'audit de compatibilité Supabase est terminé ; la correction de la migration et les tests RLS restent ouverts. Aucune migration Famille n'a été appliquée au projet Supabase partagé.
+
+Le contenu officiel du Prompt 0.4 n'a pas été retrouvé dans les conversations consultables ni dans le dépôt actuel. Ne pas le rédiger par supposition. Source originale à retrouver : Prompts_00_Socle_commun.pdf ou ZIP projet.
