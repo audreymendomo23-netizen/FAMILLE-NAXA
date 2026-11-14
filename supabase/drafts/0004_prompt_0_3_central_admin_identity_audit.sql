@@ -23,7 +23,7 @@ create or replace function famille_core.has_app_access(p_app uuid)
 returns boolean language sql stable security definer
 set search_path = pg_catalog, famille_core, auth
 as $access$
-  select famille_core.current_app_id()=p_app and exists (
+  select exists (
     select 1 from famille_core.client_app_access ca
     where ca.user_id=auth.uid() and ca.app_id=p_app and ca.status='granted'
   );
@@ -72,7 +72,7 @@ create or replace function famille_core.subscription_allows_workspace(p_org uuid
 returns boolean language sql stable security definer
 set search_path = pg_catalog, famille_core, auth
 as $scope$
-  select famille_core.has_app_access(p_app) and exists (
+  select famille_core.current_app_id()=p_app and famille_core.has_app_access(p_app) and exists (
     select 1 from famille_core.subscriptions s
     where s.organization_id=p_org and s.app_id=p_app
       and ((s.status='active' and (s.starts_at is null or s.starts_at<=now())
@@ -85,7 +85,7 @@ create or replace function famille_core.can_access_outlet(p_org uuid,p_app uuid,
 returns boolean language sql stable security definer
 set search_path = pg_catalog, famille_core, auth
 as $scope$
-  select famille_core.has_app_access(p_app) and exists (
+  select famille_core.current_app_id()=p_app and famille_core.has_app_access(p_app) and exists (
     select 1 from famille_core.locations l
     join famille_core.memberships m on m.organization_id=l.organization_id
       and m.app_id=p_app and m.user_id=auth.uid() and m.status='active'
@@ -114,7 +114,7 @@ create or replace function famille_core.can_manage_billing(p_org uuid,p_app uuid
 returns boolean language sql stable security definer
 set search_path = pg_catalog, famille_core, auth
 as $billing$
-  select famille_core.has_app_access(p_app) and exists (
+  select famille_core.current_app_id()=p_app and famille_core.has_app_access(p_app) and exists (
     select 1 from famille_core.memberships m
     join famille_core.role_assignments ra on ra.membership_id=m.id
       and ra.app_id=m.app_id and ra.organization_id=m.organization_id
