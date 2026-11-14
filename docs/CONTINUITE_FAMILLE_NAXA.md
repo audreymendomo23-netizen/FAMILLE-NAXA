@@ -41,3 +41,20 @@ Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA` — `main`.
 
 ## Garde-fous
 Aucune migration appliquée au Supabase réel ; aucun secret ou keystore dans le dépôt ; aucune publication ou déploiement.
+
+## Mise à jour — Prompt 0.3, 14 novembre 2026, 05:07 UTC
+
+### Preuve obtenue
+- Workflow dédié https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/43559938233 : SUCCESS.
+- PostgreSQL 17 éphémère : bootstrap Auth, schéma 0001, policies 0002, candidate contextualisée 0003, tests claims signés/refus par défaut et matrice complète après contextualisation : tous réussis.
+- Couverture testée : propriétaire/compte mère, gérant/lieu, autre propriétaire, Admin agrégats sans transactions détaillées, commercial, partenaire, abonnement expiré avec facturation encore accessible, isolation Kiosko/Campus237, claims absent et malformé.
+- supabase/drafts/0003_prompt_0_3_contextual_rls.sql reste une candidate de test ; aucune migration ou configuration Auth n'a été appliquée au Supabase NAXA réel.
+
+### État réel
+- Noyau RLS candidat : VERT EN TEST ÉPHÉMÈRE.
+- Prompt 0.3 global : PARTIEL / NON VERT. Il reste l'Auth Hook serveur qui émet le claim app_metadata.active_app_id, la correspondance et la couverture RLS des tables métier des dix applications, les droits par application/domaine, et une migration additive compatible avec le backend NAXA partagé. Le contrôle du backend est consigné dans docs/audits/PROMPT_0_3_COMPATIBILITE_BACKEND_NAXA.md.
+- Ne pas ouvrir le Prompt 0.4 avant clôture de ces critères, conformément au prompt 0.3.
+
+### Dernier commit de code/test de cette passe
+- 6a68fdeaf3ec622fa61a152a8d229e38e209b621 — assertions test limitées aux helpers exposés.
+- Workflow dédié : .github/workflows/prompt-03-rls.yml ; il exécute les tests dans le conteneur PostgreSQL 17 sans installation locale du client.
