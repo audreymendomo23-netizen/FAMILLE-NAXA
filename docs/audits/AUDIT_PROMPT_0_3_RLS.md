@@ -31,3 +31,18 @@ Aucune migration Famille 0001/0002 n'a été appliquée à un projet Supabase r�
 Le run prouve la validité des scénarios actuellement écrits, pas la sécurité exhaustive des dix applications. Les tables métier et vues agrégées réelles restent à raccorder ; la couverture des rôles, fonctions SECURITY DEFINER, GRANT et des scopes app/organisation/lieu doit être complétée.
 
 **État : PARTIEL — RLS CI validée sur PostgreSQL 17 éphémère ; Prompt 0.3 non VERT.** Ne pas déclarer le chantier vert ni ouvrir 0.4 avant raccordement métier, couverture complète et audit de compatibilité avec le backend Supabase NAXA partagé.
+
+
+## Addendum — impact de l'audit du backend commun (14 novembre 2026)
+
+Le projet cible partagé est Supabase NAXA eouwtuusnsuxaejsxknf (PostgreSQL 17.11). Le schéma famille_core n'y existe pas. Aucune migration Famille n'a été appliquée au projet réel.
+
+Le Prompt 0.3 reste PARTIEL et doit être corrigé avant VERT :
+- la migration 0002 n'est pas compatible en l'état : outlet_ids() et has_organization_access() ignorent app_id ; is_admin() est global ;
+- les helpers SECURITY DEFINER sont tous rendus exécutables à authenticated par un GRANT global, au lieu d'une liste blanche ;
+- le modèle générique risque de dupliquer auth.users/profiles, partners, pharmacies, memberships et affectations existantes ;
+- les rôles génériques doivent être remplacés/complétés par une matrice métier propre aux dix apps ;
+- 0001 reste un draft hors migrations, alors que 0002 en dépend : produire une séquence additive autonome ;
+- les tests actuels ne couvrent pas encore ces risques sur les tables et fonctions réelles.
+
+Le rapport docs/audits/AUDIT_COMPATIBILITE_BACKEND_COMMUN.md consigne les mesures, advisors et limites. Verdict : backend partagé confirmé, intégration du DDL 0001/0002 refusée en l'état, refonte additive et tests éphémères requis. Aucun DDL/DML ni changement de configuration Supabase n'a été effectué.
