@@ -14,14 +14,20 @@ Date : 14 novembre 2026. Dépôt `audreymendomo23-netizen/FAMILLE-NAXA`, branche
 
 Le job « Inventaire des 20 applications (preuve de build requise) » FAILURE. Logs : 20 manifests absents, soit les 10 fichiers `apps/android/<app>/build.gradle.kts` et les 10 fichiers `apps/web/<app>/package.json` pour Kiosko, Bootik, Zipple, NAXA Services, CotiZ, Loyable, NAXA Hotel, Campus237, NAXA Security et GrillaD. Aucun build des 20 applications n'a donc été exécuté.
 
-## Autorisation opérationnelle
+## Décision de backend à respecter
 
-Les GitHub Actions et migrations Supabase sont autorisées pour le chantier Famille NAXA. Les Actions CI peuvent être exécutées avec permissions minimales. Les migrations doivent être versionnées, testées en PostgreSQL éphémère puis appliquées au projet Supabase de développement Famille explicitement identifié, après contrôle de son project ID et de son historique.
+Les dix applications partagent un même backend. Le choix initial explicite retrouvé dans les échanges du 13 novembre 2026 est le partage direct du projet Supabase NAXA existant. Le dépôt Famille indépendant ne signifie pas que les applications doivent disposer de backends distincts ni qu'un projet Supabase dédié doit être créé automatiquement.
 
-Les projets visibles dans le compte connecté sont `naxa-ci-replay` (`fnlyjlvflgiewrkmnisi`, INACTIVE), `naxa-ci-replay-2` (`pwfftcsjyeibxxqhwysw`, ACTIVE_HEALTHY) et `Naxa` (`eouwtuusnsuxaejsxknf`, ACTIVE_HEALTHY). Aucun n'est identifié comme projet Supabase de développement dédié à Famille NAXA. Aucun SQL n'a été appliqué à ces projets. Ne pas utiliser Replay ni NAXA historique comme cible par défaut.
+Les données doivent être isolées logiquement par application, organisation/propriétaire, lieu, rôle et affectation. Le schéma `famille_core` et les migrations 0001/0002 restent des candidats à comparer et intégrer au backend commun ; ils ne sont pas encore appliqués à un projet Supabase réel.
+
+## État des projets Supabase et précautions
+
+Les projets visibles dans le compte connecté sont `naxa-ci-replay` (`fnlyjlvflgiewrkmnisi`, INACTIVE), `naxa-ci-replay-2` (`pwfftcsjyeibxxqhwysw`, ACTIVE_HEALTHY) et `Naxa` (`eouwtuusnsuxaejsxknf`, ACTIVE_HEALTHY). Le projet `Naxa` est le backend historique désigné par le choix initial de partage ; sa compatibilité doit être auditée en lecture seule avant toute proposition de migration. Les projets Replay ne deviennent pas la cible du backend commun par défaut.
+
+Aucune migration Famille 0001/0002 n'a été appliquée à un projet Supabase réel. Avant toute écriture, vérifier l'historique des migrations, les schémas, tables, fonctions, policies RLS, GRANT, extensions, dépendances, collisions et risques de régression ; préparer un diff additif, les tests et le plan de retour arrière ; obtenir une validation explicite.
 
 ## Limites et décision
 
 Le run prouve la validité des scénarios actuellement écrits, pas la sécurité exhaustive des dix applications. Les tables métier et vues agrégées réelles restent à raccorder ; la couverture des rôles, fonctions SECURITY DEFINER, GRANT et des scopes app/organisation/lieu doit être complétée.
 
-**État : PARTIEL — RLS CI validée sur PostgreSQL 17 éphémère ; Prompt 0.3 non VERT.** Ne pas déclarer le chantier vert ni ouvrir 0.4 avant raccordement métier, couverture complète et validation sur le projet Supabase Famille de développement.
+**État : PARTIEL — RLS CI validée sur PostgreSQL 17 éphémère ; Prompt 0.3 non VERT.** Ne pas déclarer le chantier vert ni ouvrir 0.4 avant raccordement métier, couverture complète et audit de compatibilité avec le backend Supabase NAXA partagé.
