@@ -74,3 +74,11 @@ Le contrôle en lecture seule du projet Supabase NAXA Production confirme que le
 **Blocage confirmé :** la policy existante `public.ventes_scope` permet `is_admin() OR can_access_pharmacy(pharmacie_id)`, donc l'Admin NAXA peut lire des ventes détaillées. Les helpers NAXA observés n'utilisent pas de contexte `active_app_id` Famille. Il faut arbitrer la séparation Admin NAXA / Admin Famille et raccorder les tables métier des dix domaines avant de déclarer le Prompt 0.3 vert. Les candidates `famille_core` restent un banc de test et ne doivent pas être appliquées au projet réel en l'état.
 
 Aucune écriture n'a été faite sur Supabase NAXA Production. Le statut global reste **PARTIEL / NON VERT** tant que les points de compatibilité ci-dessus ne sont pas levés et testés.
+
+## Résultat d'exécution — 14 novembre 2026, 05:07 UTC
+
+Local RLS gate: PASS. Le workflow dédié https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/43559938233 est SUCCESS sur PostgreSQL 17 éphémère. Il a appliqué 0001, 0002 puis la candidate contextualisée 0003, et exécuté avec succès les deux suites : claims signés/refus par défaut, puis matrice complète après durcissement.
+
+Scénarios confirmés par ce run : propriétaire/compte mère, gérant limité à son lieu, autre propriétaire, Admin agrégats sans détail, commercial, partenaire, abonnement expiré et accès de facturation conservé, isolation Kiosko/Campus237, claim absent et claim malformé. Les helpers internes non accordés aux clients restent non appelables directement ; les assertions testent les points d'entrée réellement accordés.
+
+Interprétation exacte : le noyau RLS Famille en environnement éphémère est validé. Le Prompt 0.3 global reste PARTIEL / NON VERT, car le run ne prouve ni l'émission réelle du claim par un Auth Hook, ni le raccordement aux tables métier des dix applications, ni la compatibilité additive avec le backend NAXA partagé. Les fichiers 0001/0002/0003 ne sont toujours pas appliqués à Supabase Production. Voir le rapport ../audits/PROMPT_0_3_COMPATIBILITE_BACKEND_NAXA.md.
