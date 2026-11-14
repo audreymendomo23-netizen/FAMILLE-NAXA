@@ -55,7 +55,8 @@ create table if not exists famille_core.locations (
  timezone text not null default 'Africa/Douala',
  status text not null default 'active' check(status in ('active','inactive','closed')),
  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), deleted_at timestamptz,
- unique(organization_id,code)
+ unique(organization_id,code),
+ unique(id,organization_id)
 );
 create table if not exists famille_core.memberships (
  id uuid primary key default gen_random_uuid(),
@@ -65,7 +66,8 @@ create table if not exists famille_core.memberships (
  status text not null default 'invited' check(status in ('invited','active','suspended','revoked')),
  invited_by uuid references auth.users(id) on delete restrict,
  joined_at timestamptz, created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
- unique(user_id,organization_id,app_id)
+ unique(user_id,organization_id,app_id),
+ unique(id,app_id,organization_id)
 );
 create table if not exists famille_core.role_catalog (
  app_id uuid not null references famille_core.applications(id) on delete restrict,
@@ -76,14 +78,17 @@ create table if not exists famille_core.role_catalog (
 );
 create table if not exists famille_core.role_assignments (
  id uuid primary key default gen_random_uuid(),
- membership_id uuid not null references famille_core.memberships(id) on delete restrict,
+ membership_id uuid not null,
  app_id uuid not null references famille_core.applications(id) on delete restrict,
- role_code text not null, location_id uuid references famille_core.locations(id) on delete restrict,
+ organization_id uuid not null,
+ role_code text not null, location_id uuid,
  status text not null default 'active' check(status in ('active','suspended','revoked','expired')),
  granted_by uuid references auth.users(id) on delete restrict, granted_at timestamptz not null default now(),
  starts_at timestamptz not null default now(), expires_at timestamptz,
  revoked_by uuid references auth.users(id) on delete restrict, revoked_at timestamptz,
- foreign key(app_id,role_code) references famille_core.role_catalog(app_id,role_code),
+ foreign key(membership_id,app_id,organization_id) references famille_core.memberships(id,app_id,organization_id) on delete restrict,
+ foreign key(app_id,role_code) references famille_core.role_catalog(app_id,role_code) on delete restrict,
+ foreign key(location_id,organization_id) references famille_core.locations(id,organization_id) on delete restrict,
  check(expires_at is null or expires_at > starts_at)
 );
 create table if not exists famille_core.client_app_access (
@@ -114,15 +119,17 @@ create table if not exists famille_core.plans (
  code text not null, name text not null, amount_fcfa bigint not null check(amount_fcfa>=0),
  billing_period text not null check(billing_period in ('monthly','quarterly','yearly','one_time')),
  status text not null default 'active' check(status in ('active','inactive')),
- created_at timestamptz not null default now(), unique(app_id,code)
+ created_at timestamptz not null default now(), unique(app_id,code), unique(id,app_id)
 );
 create table if not exists famille_core.subscriptions (
- id uuid primary key default gen_random_uuid(), organization_id uuid not null references famille_core.organizations(id) on delete restrict,
- app_id uuid not null references famille_core.applications(id) on delete restrict,
- plan_id uuid not null references famille_core.plans(id) on delete restrict,
+ id uuid primary key default gen_random_uuid(), organization_id uuid not null,
+ app_id uuid not null,
+ plan_id uuid not null,
  status text not null default 'pending' check(status in ('pending','active','past_due','suspended','cancelled','expired')),
  starts_at timestamptz, ends_at timestamptz,
- created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+ created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
+ foreign key(organization_id,app_id) references famille_core.organization_apps(organization_id,app_id) on delete restrict,
+ foreign key(plan_id,app_id) references famille_core.plans(id,app_id) on delete restrict
 );
 create table if not exists famille_core.payment_intents (
  id uuid primary key default gen_random_uuid(),
@@ -197,6 +204,8 @@ create index if not exists idx_famille_memberships_user_app on famille_core.memb
 create index if not exists idx_famille_memberships_org_app on famille_core.memberships(organization_id,app_id,status);
 create index if not exists idx_famille_locations_org on famille_core.locations(organization_id,status);
 create index if not exists idx_famille_roles_membership_status on famille_core.role_assignments(membership_id,status);
+create index if not exists idx_famille_roles_org_location on famille_core.role_assignments(organization_id,location_id);
+create index if not exists idx_famille_subscriptions_plan_app on famille_core.subscriptions(plan_id,app_id);
 create index if not exists idx_famille_installations_app_status on famille_core.app_installations(app_id,status);
 create index if not exists idx_famille_subscriptions_org_app on famille_core.subscriptions(organization_id,app_id,status);
 create index if not exists idx_famille_audit_scope_time on famille_core.audit_events(app_id,organization_id,occurred_at desc);
