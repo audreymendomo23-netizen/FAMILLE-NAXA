@@ -164,3 +164,35 @@ La correction ne peut pas se limiter à renommer trois fonctions : plusieurs pol
 3. Remplacer les grants globaux par des droits explicites, testés avec les rôles PostgreSQL réels ; tenir compte des fonctions appelées par les policies.
 4. Ajouter des tests positifs et négatifs inter-app, inter-organisation, inter-lieu, sans membership, ainsi que des tests de droits EXECUTE et des RPC SECURITY DEFINER.
 5. Exécuter toute la suite sur PostgreSQL 17 éphémère, vérifier le workflow GitHub Actions, puis mettre à jour le statut. Ne pas toucher au Supabase NAXA réel sans diff validé et autorisation explicite.
+
+## Rectification — Prompt 0.4 retrouvé dans le dépôt historique NAXA (14 novembre 2026)
+
+La recherche précédente est rectifiée : le Prompt 0.4 existe bien dans le dépôt historique audreymendomo23-netizen/NAXA, fichier source Markdown :
+
+7 famille naxa/02-prompts/00-socle-commun.md
+
+Lien : https://github.com/audreymendomo23-netizen/NAXA/blob/main/7%20famille%20naxa/02-prompts/00-socle-commun.md
+
+Le fichier précise qu'il s'agit de la version Markdown issue de Prompts_00_Socle_commun.txt, version 1.0 du 31 octobre 2026. Le Prompt 0.4 porte le titre « Comptes créés par l'administration ».
+
+### Périmètre exact retrouvé
+1. Création des fiches clients par l'administration : applications autorisées, palier, durée, remise/période d'essai éventuelle, identifiant basé sur le téléphone et lien de téléchargement.
+2. Première connexion : changement obligatoire du mot de passe (minimum 6 caractères), puis code local à 4 chiffres ou biométrie à l'ouverture.
+3. Mot de passe oublié : e-mail si disponible, sinon demande WhatsApp traitée par l'administration après contrôle d'identité.
+4. Limite de deux appareils actifs par point ; fermeture du plus ancien au-delà, notification au propriétaire, déconnexion à distance et blocage temporaire après cinq tentatives échouées ; pas de SMS payant.
+5. Création des comptes employés par le gérant ou propriétaire, accès individuel, changement d'utilisateur sans déconnexion et fonction serveur de création de compte non déployée.
+
+### Contradictions et adaptations obligatoires avant exécution dans Famille NAXA actuel
+- Le prompt source décrit 7 applications ; le périmètre actuel en compte 10.
+- Il répète des contraintes historiques « Android uniquement » et « aucun CI » ; le projet actuel exige Android natif Kotlin/Compose et Web responsive/PWA, et autorise les GitHub Actions nécessaires.
+- Son modèle « client / point / gérant / propriétaire » doit être aligné sur les entités canoniques déjà présentes dans le backend NAXA (auth.users, profiles, partners, partner_members, pharmacies, naxa_professional_assignments) sans créer de comptes ou memberships parallèles.
+- Le parcours de création de comptes doit utiliser les mécanismes serveur Supabase/Auth ; aucune clé privilégiée ne doit être embarquée dans les clients. La fonction de création reste non déployée tant que l'autorisation requise n'est pas donnée.
+- Le code local à 4 chiffres doit rester local, protégé par le stockage sécurisé Android et soumis à limitation de tentatives ; ne jamais le traiter comme un mot de passe serveur ou le stocker en clair.
+- Les règles exactes de rattachement et de plafond d'appareils doivent être définies par application et par entité métier (organisation/lieu), et non transposées aveuglément à « deux appareils par point ».
+- Le contrôle d'identité pour une réinitialisation WhatsApp doit être documenté sans exposer de PIN/OTP ni demander leur transmission.
+- Le texte source prévoit l'identifiant égal au téléphone ; ce choix doit être concilié avec les identifiants Auth canoniques et les règles de confidentialité/normalisation des numéros.
+
+Verdict : Prompt 0.4 historique retrouvé et lu. Il est exploitable comme base documentaire, mais PAS directement exécutable sans adaptation au périmètre actuel à 10 applications et au backend NAXA partagé. Aucun code, migration, modification Supabase, déploiement ou publication n'a été effectué pendant cette recherche.
+
+### Point de reprise
+Produire une version Famille NAXA actuelle du Prompt 0.4, en conservant les exigences fonctionnelles ci-dessus et en corrigeant les contradictions identifiées ; ensuite seulement, l'implémenter et la tester.
