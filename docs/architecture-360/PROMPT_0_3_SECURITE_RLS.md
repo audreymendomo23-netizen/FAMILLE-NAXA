@@ -39,3 +39,21 @@ Les GitHub Actions, les workflows CI, les migrations Supabase versionnées et le
 Le succès du job RLS valide les scénarios actuellement écrits, pas l'ensemble du système. Avant VERT : vérifier la couverture de toutes les tables et fonctions, les GRANT, les rôles et utilisateurs sans membership, les accès inter-organisation/app/lieu, les opérations SELECT/INSERT/UPDATE/DELETE, les chemins SECURITY DEFINER, les paiements et les agrégats ; raccorder les vraies tables métier des dix applications ; réaliser l'audit de compatibilité avec le backend commun et faire valider toute migration réelle avant exécution.
 
 Ne pas ouvrir le Prompt 0.4 avant clôture des critères du Prompt 0.3 et preuve de continuité.
+
+
+## Addendum obligatoire — intégration au backend Supabase commun NAXA
+
+L'audit de compatibilité du 14 novembre 2026 confirme que les dix applications partagent le projet Supabase NAXA existant (eouwtuusnsuxaejsxknf). Ne pas créer un backend dédié Famille et ne pas appliquer les migrations candidates 0001/0002 en l'état.
+
+Avant tout DDL réel, le travail du Prompt 0.3 doit :
+1. conserver auth.users comme identité canonique ;
+2. produire la matrice de correspondance entre le modèle Famille et profiles, partners, partner_members, pharmacies, promoteur_pharmacies et naxa_professional_assignments ;
+3. supprimer les duplications de source de vérité ou les convertir en références/mappings explicites ;
+4. rendre chaque helper RLS dépendant du contexte app_id, organisation et lieu pertinent ; aucun helper de scope ne doit retourner des droits inter-applications ;
+5. définir les rôles et capacités métier application par application, sans généraliser le rôle NAXA historique ;
+6. remplacer tout GRANT EXECUTE global par une liste blanche de RPC ; les helpers SECURITY DEFINER restent non appelables directement par les clients ;
+7. couvrir les opérations et workflows de création, invitation, affectation, suspension, révocation, appareils, abonnements et paiements ;
+8. tester les refus inter-utilisateur, inter-app, inter-organisation et inter-lieu sur PostgreSQL 17 éphémère ;
+9. générer une séquence de migrations additive autonome, sans dépendre d'un draft hors du répertoire migrations.
+
+La migration candidate 0002 présente actuellement un risque de portée inter-applications dans outlet_ids() et has_organization_access(), et is_admin() est global sans contexte app. Ces fonctions doivent être corrigées avant toute validation. Aucune migration Supabase réelle n'est autorisée par cet addendum ; la revue du diff et la validation explicite restent obligatoires.
