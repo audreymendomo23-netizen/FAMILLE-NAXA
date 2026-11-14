@@ -128,7 +128,6 @@ Conclusion : `appareils` est le candidat NAXA pour les appareils professionnels 
 | Autorisations Famille 10 apps | Pas de matrice universelle vérifiée dans cet audit | CONCEVOIR au-dessus des relations canoniques, sans duplication |
 
 ## 6. Contradictions et causes racines
-
 1. **Prompt 0.4 suppose une limite appareil/session opérationnelle ; la DB contient deux fonctions stubs.** Cause : la surface SQL et les noms des fonctions donnent une impression de capacité sans logique d'application.
 2. **Le prompt historique parle d'un plafond universel de deux appareils par point ; le modèle appareil actuel est pharmacie-spécifique et le modèle Auth est utilisateur/session.** Cause : confusion entre installation, appareil, session Auth et point de vente.
 3. **Le prompt demande une création admin générique ; le backend montre un trigger Auth de création de profil, plus des invitations spécifiques par métier.** Cause : absence de flux générique unique démontré, et paramètres Auth non inspectés.
@@ -201,3 +200,43 @@ Conséquence : même si l'option native était activée, elle ne répondrait pas
 ### 10.6 Configuration Auth — état
 
 `get_project` confirme l'identité et l'état du projet, mais ne renvoie pas les paramètres Auth (allow signups, MFA, politique de mot de passe, protection leaked-password, rate limits, templates). Ces paramètres restent non vérifiés ; aucune valeur n'est supposée.
+
+## 11. Extension d'audit — fonctions privées Examens, ACL et provisionnement appareils (14 novembre 2026)
+
+### 11.1 Implémentations privées des invitations Examens
+
+Les cinq implémentations ont été lues dans le catalogue PostgreSQL : `private.exam_create_staff_invite_impl`, `exam_accept_staff_invite_impl`, `exam_get_staff_invite_token_impl`, `exam_list_staff_invites_impl` et `exam_revoke_staff_invite_impl`.
+
+Contrôles confirmés :
+- **Création** : exige un utilisateur Auth, la capacité `staff_manage` sur le centre, un centre non suspendu, une adresse e-mail syntaxiquement valide et une liste blanche de neuf rôles ; révoque les invitations pendantes précédentes pour le même e-mail et centre, crée la nouvelle invitation et écrit un audit.
+- **Acceptation** : exige `auth.uid()`, e-mail Auth confirmé et identique à l'invitation ; verrouille l'invitation avec `FOR UPDATE) ; refuse token inconnu, expiré, révoqué, déjà accepté ou autre destinataire ; exige un profil Client actif, vérifié majeur, consentant et complet ; refuse centre suspendu ; refuse une affectation active en doublon ; crée l'affectation, marque l'invitation acceptée et écrit l'audit dans la même transaction SQL.
+- **Liste et récupération du token** : exigent `staff_manage` sur le centre ; filtrent les invitations en attente, non révoquées et non expirées. La liste est limitée à 100 lignes.
+- **Révocation** : exige `staff_manage` sur le centre ; ne révoque qu'une invitation en attente, non expirée et non acceptée ; écrit l'audit.
+
+Les cinq fonctions privées sont SECURITY DEFINER avec `search_path = ''`. Les façades publiques sont SECURITY INVOKER. Cependant, le contrôle ACL révèle un point à corriger/justifier : le rôle `authenticated` a USAGE sur le schéma `private` et EXECUTE explicite sur les cinq implémentations privées ; `anon` n'a pas EXECUTE. Les fonctions ne sont donc pas réellement réservées à un appel par les seules façades publiques au niveau des privilèges SQL. Les contrôles métier internes sont présents, mais l'exposition directe des fonctions privées doit être supprimée ou justifiée après inventaire de l'exposition PostgREST et des dépendances. Aucun changement ACL n'a été appliqué.
+
+### 11.2 Enregistrement des appareils professionnels
+
+Une recherche catalogue sur les fonctions SQL ordinaires et leurs définitions a retrouvé trois consommateurs de `public.appareils` :
+- `naxa_device_permissions_v1`
+- `naxa_apply_offline_operation_v1`
+- `naxa_apply_offline_sale_v1`
+
+Ils lisent l'appareil et contrôlent son statut, la fraîcheur de synchronisation, le profil, le rôle, le périmètre pharmacie et les privilèges métier. Ils sont SECURITY DEFINER et EXECUTE est accordé à `service_role`, pas à `authenticated` ni à `anon`.
+
+**Aucune fonction SQL de création ou de mise à jour du registre `appareils` n'a été retrouvée dans cet inventaire de fonctions.** Le mécanisme de provisionnement/enrôlement d'un appareil professionnel n'est donc pas prouvé par le catalogue. Cela ne prouve pas qu'aucun serveur applicatif externe ne le fait ; ce chemin doit être recherché dans les Edge Functions et le code applicatif avant de concevoir le provisioning Famille. Le registre reste vide dans les comptages précédents.
+
+### 11.3 Réglages Auth — limites des outils connectés
+
+L'inventaire des outils Supabase disponibles dans cette session expose les opérations projets, SQL, migrations, tables, fonctions Edge, logs et advisors, mais aucun lecteur de configuration Auth (providers, allow signups, password policy, leaked-password protection, MFA, rate limits, templates). Les requêtes SQL catalogue ne donnent pas ces réglages de service.
+
+Statut : **NON VÉRIFIÉ — accès Dashboard/Management API Auth requis**. Aucune hypothèse n'est faite sur l'inscription libre, la politique de mot de passe, MFA, protection des mots de passe compromis, les quotas ou les templates.
+
+### 11.4 Conséquences techniques
+
+1. Les invitations Examens ont des contrôles métier cohérents et une acceptation transactionnelle verrouillée ; le droit EXECUTE direct authenticated sur les implémentations privées constitue toutefois un point d'exposition à traiter.
+2. Le registre `appareils` a des consommateurs serveur pour les opérations hors ligne mais son flux de création/enrôlement n'est pas démontré.
+3. Les réglages Auth ne peuvent pas être déclarés conformes tant qu'ils n'ont pas été vérifiés dans le Dashboard/API.
+4. Le plafond de deux appareils par point reste non implémenté/non démontré ; ne pas le confondre avec le nombre de sessions Auth.
+
+**État après cette extension : Prompt 0.4 — AUDIT STRUCTUREL PARTIEL, NON VERT.** Aucune donnée métier n'a été modifiée ; uniquement des lectures de catalogue et de définitions de fonctions.
