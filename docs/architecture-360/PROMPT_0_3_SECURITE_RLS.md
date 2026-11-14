@@ -82,3 +82,6 @@ Local RLS gate: PASS. Le workflow dédié https://github.com/audreymendomo23-net
 Scénarios confirmés par ce run : propriétaire/compte mère, gérant limité à son lieu, autre propriétaire, Admin agrégats sans détail, commercial, partenaire, abonnement expiré et accès de facturation conservé, isolation Kiosko/Campus237, claim absent et claim malformé. Les helpers internes non accordés aux clients restent non appelables directement ; les assertions testent les points d'entrée réellement accordés.
 
 Interprétation exacte : le noyau RLS Famille en environnement éphémère est validé. Le Prompt 0.3 global reste PARTIEL / NON VERT, car le run ne prouve ni l'émission réelle du claim par un Auth Hook, ni le raccordement aux tables métier des dix applications, ni la compatibilité additive avec le backend NAXA partagé. Les fichiers 0001/0002/0003 ne sont toujours pas appliqués à Supabase Production. Voir le rapport ../audits/PROMPT_0_3_COMPATIBILITE_BACKEND_NAXA.md.
+
+
+Note de cohérence : cette mise à jour remplace les mentions antérieures selon lesquelles les scénarios contextualisés n'étaient pas encore testés. La migration 0002 seule reste insuffisante ; l'enchaînement 0001 + 0002 + candidate 0003 est désormais validé en test PostgreSQL 17 éphémère par le run 43559938233. Le statut global du prompt reste partiel pour les raisons d'intégration listées ci-dessus.
