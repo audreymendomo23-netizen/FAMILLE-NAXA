@@ -7,3 +7,12 @@
 5. Points ouverts : builds 20 apps ; exécution tests locaux ; tolérance à définir par facturation ; rôles par app ; raccordement tables transactionnelles/agrégats ; revue indépendante.
 6. Prochain prompt : 0.3 — Sécurité des données et règles RLS.
 7. Accord explicite : migration Supabase, Data API, déploiement, APK, dépenses, CI/workflows.
+
+
+## Mise à jour de clôture — 14/11/2026
+
+- Run de preuve : https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/43563686065 — SUCCESS.
+- Le draft `0001_famille_core_proposed.sql` a été exécuté sous PostgreSQL 17 éphémère ; les 22 tables, 10 applications, le scénario positif, les trois refus inter-périmètres et le default-deny sans GRANT/policies sont PASS.
+- Prompt 0.2 : **VERT TECHNIQUE pour le modèle commun et le draft SQL isolé**.
+- Aucune migration Replay/Production, aucun GRANT, aucune policy RLS fonctionnelle, aucune exposition Data API ni aucun déploiement. La validation ne certifie pas la sécurité globale NAXA.
+- Prompt 0.1 : les 20 builds (10 Android + 10 Web/PWA) et leur persistance sont PASS dans le même run.
