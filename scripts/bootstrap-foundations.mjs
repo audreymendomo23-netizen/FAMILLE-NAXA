@@ -119,7 +119,7 @@ put("gradle/wrapper/gradle-wrapper.properties", lines([
   "zipStoreBase=GRADLE_USER_HOME",
   "zipStorePath=wrapper/dists",
 ]));
-put("pnpm-workspace.yaml", "packages:\n" + workspace.map((p) => "  - " + p).join("\n") + "\n");
+put("pnpm-workspace.yaml", "packages:\n" + workspace.map((p) => "  - " + p).join("\n") + "\n\nonlyBuiltDependencies:\n  - esbuild\n");
 put(".npmrc", "engine-strict=true\nstrict-peer-dependencies=false\nauto-install-peers=true\n");
 put(".gitignore", lines([
   "node_modules/", ".pnpm-store/", ".next/", "out/", "dist/", "coverage/",
@@ -504,7 +504,7 @@ for (const [id, label, acronym] of apps) {
     exclude: ["node_modules"],
   }));
   put(webDir + "/next-env.d.ts", '/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n');
-  put(webDir + "/serwist.config.mjs", lines([
+  put(webDir + "/serwist.config.js", lines([
     'import { serwist } from "@serwist/next/config";',
     "export default serwist({ swSrc: \"app/sw.ts\", swDest: \"public/sw.js\", precachePrerendered: false, runtimeCaching: [] });",
   ]));
@@ -576,7 +576,8 @@ for (const [id, label, acronym] of apps) {
     "</svg>",
   ]));
 
-  for (const oldFile of ["index.html", "vite.config.ts", "public/sw.js"]) {
+  await rm(join(webDir, "src/main.tsx"), { force: true });
+  for (const oldFile of ["index.html", "vite.config.ts", "public/sw.js", "serwist.config.mjs"]) {
     await rm(join(webDir, oldFile), { force: true });
   }
 }
