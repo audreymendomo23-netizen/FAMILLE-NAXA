@@ -1,0 +1,95 @@
+\set ON_ERROR_STOP on
+begin;
+
+insert into auth.users(id,email) values
+ ('97000000-0000-0000-0000-000000000001','central-admin@x.invalid'),
+ ('97000000-0000-0000-0000-000000000002','kiosko-user@x.invalid'),
+ ('97000000-0000-0000-0000-000000000003','campus-user@x.invalid')
+on conflict(id) do nothing;
+insert into famille_core.family_admins(user_id,status)
+ values('97000000-0000-0000-0000-000000000001','active')
+on conflict(user_id) do update set status='active',revoked_at=null;
+
+insert into famille_core.client_app_access(user_id,app_id,status)
+ select '97000000-0000-0000-0000-000000000002',id,'granted'
+ from famille_core.applications where code='kiosko'
+on conflict(user_id,app_id) do nothing;
+insert into famille_core.client_app_access(user_id,app_id,status)
+ select '97000000-0000-0000-0000-000000000003',id,'granted'
+ from famille_core.applications where code='campus237'
+on conflict(user_id,app_id) do nothing;
+
+-- A duplicate platform assignment for one ordinary identity must be rejected.
+do $$
+begin
+  begin
+    insert into famille_core.client_app_access(user_id,app_id,status)
+    select '97000000-0000-0000-0000-000000000002',id,'granted'
+    from famille_core.applications where code='campus237';
+    raise exception 'one identity was allowed to access two platforms';
+  exception when unique_violation then null;
+  end;
+end $$;
+
+create table if not exists famille_test.admin_metadata_scope(
+  app_id uuid not null,
+  marker text not null
+);
+alter table famille_test.admin_metadata_scope enable row level security;
+drop policy if exists admin_metadata_scope_read on famille_test.admin_metadata_scope;
+create policy admin_metadata_scope_read on famille_test.admin_metadata_scope
+ for select to authenticated using(famille_core.is_admin());
+grant usage on schema famille_test to authenticated;
+grant select on famille_test.admin_metadata_scope to authenticated;
+insert into famille_test.admin_metadata_scope(app_id,marker)
+ select id,code from famille_core.applications;
+
+create table if not exists famille_test.central_admin_transaction_scope(
+  organization_id uuid not null,
+  app_id uuid not null,
+  location_id uuid not null,
+  amount_fcfa bigint not null
+);
+alter table famille_test.central_admin_transaction_scope enable row level security;
+drop policy if exists central_admin_transaction_scope_read on famille_test.central_admin_transaction_scope;
+create policy central_admin_transaction_scope_read on famille_test.central_admin_transaction_scope
+ for select to authenticated using(
+   famille_core.can_read_transaction_details(organization_id,app_id,location_id)
+ );
+grant select on famille_test.central_admin_transaction_scope to authenticated;
+
+set role authenticated;
+select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"sub":"97000000-0000-0000-0000-000000000001","role":"authenticated","app_metadata":{}}',true);
+do $$
+declare n bigint;
+begin
+ if not famille_core.is_admin() then raise exception 'central admin not recognized without app claim'; end if;
+ select count(*) into n from famille_test.admin_metadata_scope;
+ if n<>10 then raise exception 'central admin metadata scope expected 10 apps, got %',n; end if;
+ select count(*) into n from famille_test.central_admin_transaction_scope;
+ if n<>0 then raise exception 'central admin must not read transaction details'; end if;
+ if exists(select 1 from famille_core.identities) then
+   raise exception 'central admin must not read personal identity profile rows';
+ end if;
+end $$;
+
+-- Normal identities are independent and app-scoped.
+select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000002',true);
+select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000002','role','authenticated','app_metadata',jsonb_build_object('active_app_id',(select id::text from famille_core.applications where code='kiosko')))::text,true);
+do $$
+begin
+ if famille_core.is_admin() then raise exception 'ordinary Kiosko user became central admin'; end if;
+ if famille_core.current_app_id() is distinct from (select id from famille_core.applications where code='kiosko') then raise exception 'Kiosko identity has wrong app context'; end if;
+end $$;
+
+select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000003',true);
+select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000003','role','authenticated','app_metadata',jsonb_build_object('active_app_id',(select id::text from famille_core.applications where code='campus237')))::text,true);
+do $$
+begin
+ if famille_core.is_admin() then raise exception 'ordinary Campus237 user became central admin'; end if;
+ if famille_core.current_app_id() is distinct from (select id from famille_core.applications where code='campus237') then raise exception 'Campus237 identity has wrong app context'; end if;
+end $$;
+
+reset role;
+rollback;
