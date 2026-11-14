@@ -117,32 +117,39 @@ create or replace function famille_private.register_device(
 ) returns jsonb language plpgsql security definer
 set search_path=pg_catalog,famille_private
 as $$
-declare v_device uuid; v_evicted uuid; v_device_status text;
+declare v_device uuid; v_evicted uuid; v_device_status text; v_scope_filter text;
 begin
   if p_user_id is null or p_installation_id is null or length(p_installation_id)<16
+     or p_auth_session_id is null
      or p_app_code not in ('kiosko','bootik','zipple','naxa_services','cotiz','loyable','naxa_hotel','campus237','naxa_security','grillad')
      or p_platform not in ('android','web') then
     raise exception 'invalid_device_registration' using errcode='22023';
   end if;
   perform pg_advisory_xact_lock(hashtextextended(
-    p_app_code||':'||coalesce(p_organization_id::text,'-')||':'||coalesce(p_location_id::text,'-')||':'||case when p_organization_id is null and p_location_id is null then p_user_id::text else 'shared-point' end,0));
+    p_app_code||':'||coalesce(p_organization_id::text,'-')||':'||coalesce(p_location_id::text,'-')||':'||
+    case when p_organization_id is null and p_location_id is null then p_user_id::text else 'shared-point' end,0));
   select id,status into v_device,v_device_status from famille_private.account_devices
     where user_id=p_user_id and app_code=p_app_code and installation_id=p_installation_id;
-  if v_device is not null and v_device_status<>'active' then raise exception 'device_revoked' using errcode='42501'; end if;
+  if v_device is not null and v_device_status<>'active' then
+    raise exception 'device_revoked' using errcode='42501';
+  end if;
   if v_device is not null then
     update famille_private.account_devices set organization_id=p_organization_id,location_id=p_location_id,
-      auth_session_id=p_auth_session_id,platform=p_platform,device_label=p_device_label,last_seen_at=now() where id=v_device;
+      auth_session_id=p_auth_session_id,platform=p_platform,device_label=p_device_label,last_seen_at=now()
+      where id=v_device;
   else
     insert into famille_private.account_devices(user_id,app_code,organization_id,location_id,installation_id,auth_session_id,platform,device_label)
       values(p_user_id,p_app_code,p_organization_id,p_location_id,p_installation_id,p_auth_session_id,p_platform,p_device_label)
       returning id into v_device;
   end if;
-  if (select count(*) from famille_private.account_devices where user_id=p_user_id and app_code=p_app_code
-      and organization_id is not distinct from p_organization_id and location_id is not distinct from p_location_id and status='active') > 2 then
-    select id into v_evicted from famille_private.account_devices
-      where user_id=p_user_id and app_code=p_app_code
-        and organization_id is not distinct from p_organization_id
+  if (select count(*) from famille_private.account_devices
+      where app_code=p_app_code and organization_id is not distinct from p_organization_id
         and location_id is not distinct from p_location_id and status='active'
+        and ((p_organization_id is not null or p_location_id is not null) or user_id=p_user_id)) > 2 then
+    select id into v_evicted from famille_private.account_devices
+      where app_code=p_app_code and organization_id is not distinct from p_organization_id
+        and location_id is not distinct from p_location_id and status='active'
+        and ((p_organization_id is not null or p_location_id is not null) or user_id=p_user_id)
       order by created_at asc,id asc limit 1;
   end if;
   if v_evicted is not null then
