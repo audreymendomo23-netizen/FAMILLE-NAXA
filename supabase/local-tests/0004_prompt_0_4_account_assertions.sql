@@ -1,6 +1,7 @@
 \set ON_ERROR_STOP on
 begin;
 grant usage on schema auth to service_role;
+grant insert,update on auth.sessions to service_role;
 insert into auth.users(id) values
  ('10000000-0000-0000-0000-000000000001'),
  ('10000000-0000-0000-0000-000000000002')
