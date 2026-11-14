@@ -8,14 +8,21 @@ Sémantique : `locations.id` est le point ; `owner` = portée organisation sans 
 
 Livrables : migration candidate 0002, bootstrap/test PostgreSQL, runner local, textes FR/EN et passation.
 
-## Politique d'exécution — autorisation explicite du chantier
+## Décision structurante — backend commun
+
+Les dix applications partagent un même backend. Le choix initial explicite retrouvé dans les échanges du 13 novembre 2026 est le partage direct du projet Supabase NAXA existant. Le dépôt Famille est indépendant, mais le backend ne doit pas être dupliqué par application ni remplacé automatiquement par un nouveau projet. Les données et autorisations sont isolées logiquement par application, organisation/propriétaire, lieu, rôle et affectation.
+
+Le schéma `famille_core` et les migrations 0001/0002 sont des candidats d'intégration au backend commun, pas la preuve d'une décision de créer un projet Supabase séparé.
+
+## Politique d'exécution
 
 Les GitHub Actions, les workflows CI, les migrations Supabase versionnées et leur exécution font partie du travail normal de Famille NAXA. Ils ne sont pas interdits par défaut.
 
 - Exécuter les GitHub Actions nécessaires aux tests, builds, contrôles de sécurité et validations de migrations. Les permissions de jeton doivent rester minimales et limitées au besoin réel du workflow.
-- Exécuter d'abord les migrations sur PostgreSQL éphémère/local, puis sur le projet Supabase de développement explicitement identifié pour Famille NAXA, après vérification du project ID, de l'état et de l'historique des migrations.
-- Ne jamais appliquer une migration Famille NAXA à Replay, à NAXA historique ou à Production par simple proximité de nom ou disponibilité des identifiants.
-- Une migration Production exige une validation distincte de la cible, du diff, des risques et du plan de retour arrière. Aucun déploiement applicatif Production n'est implicite.
+- Exécuter d'abord les migrations sur PostgreSQL éphémère/local.
+- Avant toute exécution sur Supabase réel, auditer en lecture seule le projet NAXA partagé : project ID, historique des migrations, schémas, tables, fonctions, RLS, GRANT, extensions, dépendances, collisions et risques de régression pour NAXA historique.
+- Après cet audit, proposer un diff d'intégration additif, les risques, les tests et le plan de retour arrière ; demander validation explicite avant toute écriture réelle.
+- Ne jamais appliquer une migration Famille à un projet Replay, à un nouveau projet ou à Production par simple proximité de nom ou disponibilité des identifiants.
 - Ne pas prétendre qu'une migration réelle a été appliquée si seule la base éphémère CI a été utilisée.
 - Documenter chaque exécution : projet ciblé, nom/version de migration, résultat, contrôles post-migration et limites.
 
@@ -25,9 +32,10 @@ Les GitHub Actions, les workflows CI, les migrations Supabase versionnées et le
 - Le job d'inventaire échoue car les 20 manifests attendus sont absents : 10 `apps/android/<app>/build.gradle.kts` et 10 `apps/web/<app>/package.json`.
 - La migration 0002 est exécutée uniquement dans une base PostgreSQL éphémère CI ; aucune base Supabase réelle n'a été modifiée.
 - Les tables métier, transactions, vues agrégées et permissions propres aux dix applications restent à raccorder et à tester.
+- La compatibilité de `famille_core` avec le backend Supabase NAXA partagé reste à auditer.
 
 ## Critères de validation
 
-Le succès du job RLS valide les scénarios actuellement écrits, pas l'ensemble du système. Avant VERT : vérifier la couverture de toutes les tables et fonctions, les GRANT, les rôles et utilisateurs sans membership, les accès inter-organisation/app/lieu, les opérations SELECT/INSERT/UPDATE/DELETE, les chemins SECURITY DEFINER, les paiements et les agrégats ; raccorder les vraies tables métier des dix applications ; exécuter les migrations sur le projet Supabase Famille de développement identifié et contrôler les advisors.
+Le succès du job RLS valide les scénarios actuellement écrits, pas l'ensemble du système. Avant VERT : vérifier la couverture de toutes les tables et fonctions, les GRANT, les rôles et utilisateurs sans membership, les accès inter-organisation/app/lieu, les opérations SELECT/INSERT/UPDATE/DELETE, les chemins SECURITY DEFINER, les paiements et les agrégats ; raccorder les vraies tables métier des dix applications ; réaliser l'audit de compatibilité avec le backend commun et faire valider toute migration réelle avant exécution.
 
 Ne pas ouvrir le Prompt 0.4 avant clôture des critères du Prompt 0.3 et preuve de continuité.
