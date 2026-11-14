@@ -91,7 +91,8 @@ begin
  if n<>1 then raise exception 'Kiosko context expected one organization app, got %',n; end if;
 end $$;
 
-select set_config('request.jwt.claims',jsonb_build_object('sub','91000000-0000-0000-0000-000000000001','role','authenticated','app_metadata',jsonb_build_object('active_app_id',(select id::text from famille_core.applications where code='campus237')))::text,true);
+select set_config('request.jwt.claim.sub','91000000-0000-0000-0000-000000000002',true);
+select set_config('request.jwt.claims',jsonb_build_object('sub','91000000-0000-0000-0000-000000000002','role','authenticated','app_metadata',jsonb_build_object('active_app_id',(select id::text from famille_core.applications where code='campus237')))::text,true);
 do $$
 declare v_app uuid; n bigint;
 begin
