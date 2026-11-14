@@ -39,7 +39,12 @@ jobs:
           create role service_role nologin bypassrls;
           SQL
           docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille04 -v ON_ERROR_STOP=1 < supabase/local-tests/0002_bootstrap_local_auth.sql
-      - name: Apply isolated account lifecycle candidate
+      - name: Apply shared Famille schema and RLS candidates
+        run: |
+          docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille04 -v ON_ERROR_STOP=1 < supabase/drafts/0001_famille_core_proposed.sql
+          docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille04 -v ON_ERROR_STOP=1 < supabase/migrations/0002_famille_core_rls.sql
+          docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille04 -v ON_ERROR_STOP=1 < supabase/drafts/0003_prompt_0_3_contextual_rls.sql
+      - name: Apply account lifecycle candidate
         run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille04 -v ON_ERROR_STOP=1 < supabase/drafts/0004_prompt_0_4_account_lifecycle.sql
       - name: Verify access, device limit, lockout and private grants
         run: docker exec -i "${{ job.services.postgres.id }}" psql -U postgres -d famille04 -v ON_ERROR_STOP=1 < supabase/local-tests/0004_prompt_0_4_account_assertions.sql

@@ -73,9 +73,17 @@ async function handle(req:Request):Promise<Response>{
     return json({error:"invalid_credentials"},401);
    }
    await admin.schema("famille_private").rpc("clear_login_failures",{p_login_hash:loginHash,p_app_code:app});
-   const {data:grant}=await admin.schema("famille_private").from("account_app_access").select("id,status").eq("user_id",data.user.id).eq("app_code",app).eq("status","active").limit(1).maybeSingle();
+   const {data:grant}=await admin.schema("famille_private").from("account_app_access").select("id,status,organization_id,location_id").eq("user_id",data.user.id).eq("app_code",app).eq("status","active").limit(1).maybeSingle();
    if(!grant) return json({error:"app_access_denied"},403);
-   return json({session:data.session,user:{id:data.user.id,phone:data.user.phone,must_change_password:data.user.app_metadata?.must_change_password===true}});
+   const sessionId=typeof jwtPayload(data.session.access_token).session_id==="string"?String(jwtPayload(data.session.access_token).session_id):null;
+   const installationId=String(body.installation_id??"");
+   if(!sessionId||installationId.length<16) return json({error:"device_registration_required"},400);
+   const {data:bound,error:bindError}=await admin.schema("famille_private").rpc("bind_auth_session",{p_user_id:data.user.id,p_session_id:sessionId,p_app_code:app});
+   if(bindError||!bound) return json({error:"session_binding_failed"},500);
+   const {data:device,error:deviceError}=await admin.schema("famille_private").rpc("register_device",{p_user_id:data.user.id,p_app_code:app,p_organization_id:grant.organization_id,p_location_id:grant.location_id,p_installation_id:installationId,p_auth_session_id:sessionId,p_platform:String(body.platform??"android"),p_device_label:String(body.device_label??"")});
+   if(deviceError) return json({error:"device_registration_failed"},403);
+   await admin.schema("famille_private").from("account_audit_log").insert({actor_id:data.user.id,subject_user_id:data.user.id,app_code:app,event_code:"device.registered",outcome:"success",metadata:{installation_id:installationId,revoked_oldest_device_id:device?.revoked_oldest_device_id??null}});
+   return json({session:data.session,user:{id:data.user.id,phone:data.user.phone,must_change_password:data.user.app_metadata?.must_change_password===true},grant,device});
   }
   if(body.action==="create_invite"||body.action==="create_employee"){
    const {user:actor,admin}=await actorFrom(req,url,anon,service);const platformAdmin=actor.app_metadata?.naxa_platform_admin===true||actor.app_metadata?.famille_platform_admin===true;
@@ -109,6 +117,9 @@ async function handle(req:Request):Promise<Response>{
    const {data:grant,error}=await admin.schema("famille_private").from("account_app_access").select("id").eq("user_id",user.id).eq("app_code",app).eq("status","active").limit(1).maybeSingle();
    if(error||!grant) return json({error:"app_access_denied"},403);
    const payload=jwtPayload(token);const sessionId=typeof payload.session_id==="string"?payload.session_id:null;
+   if(!sessionId) return json({error:"invalid_auth_session"},401);
+   const {data:bound,error:bindError}=await admin.schema("famille_private").rpc("bind_auth_session",{p_user_id:user.id,p_session_id:sessionId,p_app_code:app});
+   if(bindError||!bound) return json({error:"session_binding_failed"},403);
    const {data,error:regError}=await admin.schema("famille_private").rpc("register_device",{p_user_id:user.id,p_app_code:app,p_organization_id:body.organization_id??null,p_location_id:body.location_id??null,p_installation_id:String(body.installation_id??""),p_auth_session_id:sessionId,p_platform:String(body.platform??"android"),p_device_label:String(body.device_label??"")});
    if(regError) return json({error:"device_registration_failed"},400);
    return json({ok:true,...data});
@@ -122,7 +133,7 @@ async function handle(req:Request):Promise<Response>{
    const {data:revoked,error:revokeError}=await admin.schema("famille_private").rpc("revoke_device",{p_device_id:deviceId,p_actor_id:user.id});
    if(revokeError||!revoked) return json({error:"device_revoke_failed"},400);
    await admin.schema("famille_private").from("account_audit_log").insert({actor_id:user.id,subject_user_id:device.user_id,event_code:"device.revoked",outcome:"success",reason_code:"user_or_admin_request"});
-   return json({ok:true,device_id:deviceId,revoked:true,session_invalidation:"requires_server_session_gate"});
+   return json({ok:true,device_id:deviceId,revoked:true,session_invalidation:"immediate_rls_gate_via_session_and_device_registry"});
   }
   if(body.action==="request_recovery"){
    const phone=normalizePhone(String(body.phone??""));const app=safeAppCode(String(body.app_code??""));const loginHash=await digest(phone);
