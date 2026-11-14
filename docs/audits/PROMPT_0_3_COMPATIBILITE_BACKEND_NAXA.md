@@ -91,3 +91,29 @@ Aucune table, policy, fonction, configuration Auth ou migration n'a été modifi
 Le workflow dédié https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/43559938233 est SUCCESS. PostgreSQL 17 éphémère a appliqué le schéma 0001, les policies 0002 et la candidate contextualisée 0003 ; les assertions de claims/refus par défaut et la matrice complète après durcissement ont toutes réussi.
 
 Cette preuve confirme la logique RLS du banc de test Famille. Elle ne change pas les constats de compatibilité des sections 3.1 à 3.4 : Auth Hook Famille absent, contexte app non raccordé au backend NAXA, tables métier des dix domaines non encore couvertes et sémantique Admin NAXA/Famille à formaliser. Le Prompt 0.3 global reste PARTIEL / NON VERT. Aucun changement Supabase réel n'a été réalisé.
+
+
+## Addendum — gouvernance Admin central et identités séparées (14 novembre 2026)
+
+### Décisions utilisateur intégrées
+- Un seul Administrateur central pour les dix plateformes.
+- Accès de cet administrateur limité aux métadonnées d'administration, comptes, états, abonnements, paramètres, journaux et agrégats autorisés ; aucune lecture des transactions métier détaillées.
+- Opérations d'administration autorisées, mais chaque mutation doit être auditée.
+- Identités utilisateurs distinctes par plateforme : un compte Auth ordinaire ne doit être rattaché qu'à une seule application. Le compte de l'Administrateur central est distinct et hors memberships applicatifs.
+
+### Implémentation candidate
+- family_admins porte l'habilitation centrale ; index unique partiel : un seul administrateur actif.
+- famille_core.is_admin() désigne désormais uniquement cet administrateur central, sans dépendre du claim active_app_id.
+- Les politiques de métadonnées utilisant is_admin() peuvent couvrir les dix applications. Les profils personnels et descriptions de tickets restent limités à leur propriétaire.
+- can_read_transaction_details() continue de refuser les transactions détaillées à l'Administrateur central. can_read_financial_aggregates() autorise les agrégats sans donner accès aux lignes sources.
+- Un index unique sur client_app_access(user_id) impose une seule plateforme par identité Auth ordinaire.
+- Un trigger candidat journalise les mutations administratives sur organisations, liens app, lieux, memberships, rôles, accès app, appareils, installations et abonnements. Le journal ne copie pas les valeurs métier.
+
+### Limites à vérifier par CI et avant toute intégration réelle
+- La candidate ne constitue pas encore le mécanisme de provisioning sécurisé du compte central : seule une opération de confiance/service role doit pouvoir ajouter ou révoquer son habilitation.
+- Les opérations d'administration des dix domaines doivent toutes passer par des RPC serveur autorisées et auditées ; les clients ne reçoivent pas de droits DML génériques.
+- Les tables métier réelles des dix plateformes et les politiques de leurs RPC ne sont pas encore raccordées. L'absence d'accès aux transactions est démontrée sur la table de test, pas sur toutes les tables métier de production.
+- La contrainte une identité/une plateforme doit être confrontée aux données réelles existantes avant une migration additive ; aucun compte ne doit être fusionné ou déplacé automatiquement.
+- Le test d'audit doit démontrer que l'événement est créé dans la même transaction que la mutation et qu'un échec d'audit fait échouer la mutation.
+
+**État : décisions de gouvernance intégrées dans les candidates ; validation technique en attente du run PostgreSQL 17. Prompt 0.3 reste PARTIEL / NON VERT jusqu'à la preuve CI, au raccordement Auth serveur, aux tables métier des dix applications et à l'audit de compatibilité additif avec Supabase NAXA.** Aucune écriture sur le projet Supabase réel.
