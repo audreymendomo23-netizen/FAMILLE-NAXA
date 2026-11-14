@@ -110,6 +110,22 @@ update famille_core.role_catalog set can_read_transaction_details=false,
   can_manage_billing=false,is_platform_admin=false
 where role_code='platform_admin';
 
+create or replace function famille_core.can_manage_billing(p_org uuid,p_app uuid)
+returns boolean language sql stable security definer
+set search_path = pg_catalog, famille_core, auth
+as $billing$
+  select famille_core.has_app_access(p_app) and exists (
+    select 1 from famille_core.memberships m
+    join famille_core.role_assignments ra on ra.membership_id=m.id
+      and ra.app_id=m.app_id and ra.organization_id=m.organization_id
+    join famille_core.role_catalog rc on rc.app_id=ra.app_id and rc.role_code=ra.role_code
+    where m.user_id=auth.uid() and m.organization_id=p_org and m.app_id=p_app
+      and m.status='active' and ra.status='active' and ra.starts_at<=now()
+      and (ra.expires_at is null or ra.expires_at>now())
+      and rc.can_manage_billing and rc.scope_type='organization' and ra.location_id is null
+  );
+$billing$;
+
 create or replace function famille_core.is_admin()
 returns boolean language sql stable security definer
 set search_path = pg_catalog, famille_core, auth
@@ -224,6 +240,8 @@ revoke all on function famille_core.is_admin() from public,anon,authenticated;
 grant execute on function famille_core.is_admin() to authenticated;
 revoke all on function famille_core.has_app_access(uuid) from public,anon,authenticated;
 revoke all on function famille_core.can_read_financial_aggregates(uuid,uuid) from public,anon,authenticated;
+revoke all on function famille_core.can_manage_billing(uuid,uuid) from public,anon,authenticated;
+grant execute on function famille_core.can_manage_billing(uuid,uuid) to authenticated;
 grant execute on function famille_core.can_read_financial_aggregates(uuid,uuid) to authenticated;
 
 comment on table famille_core.family_admins is
