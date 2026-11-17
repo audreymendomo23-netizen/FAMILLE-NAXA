@@ -2,7 +2,7 @@ name: Famille NAXA — Prompt 0.3 RLS PostgreSQL 17
 
 on:
   push:
-    branches: [main]
+    branches: [main, "fix/**"]
     paths:
       - "supabase/drafts/0001_famille_core_proposed.sql"
       - "supabase/drafts/0003_prompt_0_3_contextual_rls.sql"
@@ -16,8 +16,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: famille-naxa-prompt-03-rls
-  cancel-in-progress: true
+  group: famille-naxa-prompt-03-rls-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
