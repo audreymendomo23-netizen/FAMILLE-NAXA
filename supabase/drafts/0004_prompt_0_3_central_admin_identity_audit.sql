@@ -29,7 +29,18 @@ as $access$
   );
 $access$;
 revoke all on function famille_core.has_app_access(uuid) from public,anon,authenticated;
-grant execute on function famille_core.has_app_access(uuid) to authenticated;
+
+-- Expose only the caller's access to the signed active application.
+-- The parameterized helper stays private to SECURITY DEFINER authorization routines.
+create or replace function famille_core.has_current_app_access()
+returns boolean language sql stable security definer
+set search_path = pg_catalog, famille_core, auth
+as $current_access$
+  select famille_core.current_app_id() is not null
+    and famille_core.has_app_access(famille_core.current_app_id());
+$current_access$;
+revoke all on function famille_core.has_current_app_access() from public,anon,authenticated;
+grant execute on function famille_core.has_current_app_access() to authenticated;
 
 create or replace function famille_core.outlet_ids()
 returns setof uuid language sql stable security definer
