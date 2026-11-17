@@ -4,6 +4,8 @@ begin;
 -- Capture canonical app IDs as the database owner before switching to authenticated.
 select id::text as kiosko_app_id from famille_core.applications where code='kiosko' \gset
 select id::text as campus237_app_id from famille_core.applications where code='campus237' \gset
+select set_config('famille_test.kiosko_app_id', :'kiosko_app_id', false);
+select set_config('famille_test.campus237_app_id', :'campus237_app_id', false);
 
 insert into auth.users(id,email) values
  ('97000000-0000-0000-0000-000000000001','central-admin@x.invalid'),
@@ -118,10 +120,10 @@ begin
  if famille_core.is_admin() then raise exception 'ordinary Kiosko user became central admin'; end if;
  if famille_core.current_app_id() is distinct from (select id from famille_core.applications where code='kiosko') then raise exception 'Kiosko identity has wrong app context'; end if;
  if not famille_core.has_current_app_access() then raise exception 'Kiosko assigned app access missing: uid %, claim %',auth.uid(),famille_core.current_app_id(); end if;
- perform set_config('request.jwt.claims',jsonb_build_object('sub',auth.uid()::text,'role','authenticated','app_metadata',jsonb_build_object('active_app_id', :'campus237_app_id'))::text,true);
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',auth.uid()::text,'role','authenticated','app_metadata',jsonb_build_object('active_app_id', current_setting('famille_test.campus237_app_id')))::text,true);
  if famille_core.has_current_app_access() then raise exception 'Kiosko identity crossed into Campus237'; end if;
- perform set_config('request.jwt.claims',jsonb_build_object('sub',auth.uid()::text,'role','authenticated','app_metadata',jsonb_build_object('active_app_id', :'kiosko_app_id'))::text,true);
-end $$;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',auth.uid()::text,'role','authenticated','app_metadata',jsonb_build_object('active_app_id', current_setting('famille_test.kiosko_app_id')))::text,true);
+end $;
 
 select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000003',true);
 select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000003','role','authenticated','app_metadata',jsonb_build_object('active_app_id', :'campus237_app_id'))::text,true);
