@@ -118,19 +118,19 @@ select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0
 do $$
 begin
  if famille_core.is_admin() then raise exception 'ordinary Kiosko user became central admin'; end if;
- if famille_core.current_app_id() is distinct from (select id from famille_core.applications where code='kiosko') then raise exception 'Kiosko identity has wrong app context'; end if;
+ if famille_core.current_app_id() is distinct from current_setting('famille_test.kiosko_app_id')::uuid then raise exception 'Kiosko identity has wrong app context'; end if;
  if not famille_core.has_current_app_access() then raise exception 'Kiosko assigned app access missing: uid %, claim %',auth.uid(),famille_core.current_app_id(); end if;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',auth.uid()::text,'role','authenticated','app_metadata',jsonb_build_object('active_app_id', current_setting('famille_test.campus237_app_id')))::text,true);
  if famille_core.has_current_app_access() then raise exception 'Kiosko identity crossed into Campus237'; end if;
  perform set_config('request.jwt.claims',jsonb_build_object('sub',auth.uid()::text,'role','authenticated','app_metadata',jsonb_build_object('active_app_id', current_setting('famille_test.kiosko_app_id')))::text,true);
-end $;
+end $$;
 
 select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000003',true);
 select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000003','role','authenticated','app_metadata',jsonb_build_object('active_app_id', :'campus237_app_id'))::text,true);
 do $$
 begin
  if famille_core.is_admin() then raise exception 'ordinary Campus237 user became central admin'; end if;
- if famille_core.current_app_id() is distinct from (select id from famille_core.applications where code='campus237') then raise exception 'Campus237 identity has wrong app context'; end if;
+ if famille_core.current_app_id() is distinct from current_setting('famille_test.campus237_app_id')::uuid then raise exception 'Campus237 identity has wrong app context'; end if;
  if not famille_core.has_current_app_access() then raise exception 'Campus237 assigned app access missing'; end if;
 end $$;
 
