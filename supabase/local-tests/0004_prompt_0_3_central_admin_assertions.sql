@@ -90,6 +90,27 @@ create trigger admin_mutation_audit_probe_trigger after insert or update or dele
  execute function famille_core.audit_central_admin_mutation();
 grant insert on famille_test.admin_mutation_audit_probe to authenticated;
 
+-- Every central-admin-manageable metadata table must carry the audit trigger.
+do $audit_coverage$
+declare t text;
+begin
+  foreach t in array array[
+    'applications','organizations','organization_apps','locations','memberships',
+    'role_catalog','role_assignments','client_app_access','devices','app_installations',
+    'subscriptions','plans','app_versions','payment_parser_rules'
+  ] loop
+    if not exists (
+      select 1 from pg_trigger
+      where tgrelid=to_regclass('famille_core.' || t)
+        and tgname='audit_central_admin_' || t
+        and not tgisinternal
+    ) then
+      raise exception 'missing central-admin audit trigger on famille_core.%',t;
+    end if;
+  end loop;
+end
+$audit_coverage$;
+
 set role authenticated;
 select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000001',true);
 select set_config('request.jwt.claims','{"sub":"97000000-0000-0000-0000-000000000001","role":"authenticated","app_metadata":{}}',true);
@@ -111,27 +132,6 @@ begin
    raise exception 'central admin mutation was not audited';
  end if;
 end $$;
-
--- Every central-admin-manageable metadata table must carry the audit trigger.
-do $audit_coverage$
-declare t text;
-begin
-  foreach t in array array[
-    'applications','organizations','organization_apps','locations','memberships',
-    'role_catalog','role_assignments','client_app_access','devices','app_installations',
-    'subscriptions','plans','app_versions','payment_parser_rules'
-  ] loop
-    if not exists (
-      select 1 from pg_trigger
-      where tgrelid=to_regclass('famille_core.' || t)
-        and tgname='audit_central_admin_' || t
-        and not tgisinternal
-    ) then
-      raise exception 'missing central-admin audit trigger on famille_core.%',t;
-    end if;
-  end loop;
-end
-$audit_coverage$;
 
 -- Normal identities are independent and app-scoped.
 select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000002',true);
