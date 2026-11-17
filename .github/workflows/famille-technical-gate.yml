@@ -1,12 +1,12 @@
 name: Famille NAXA — validation groupée 0.1/0.2
 
 concurrency:
-  group: famille-naxa-main-validation
-  cancel-in-progress: true
+  group: famille-naxa-validation-${{ github.ref }}
+  cancel-in-progress: false
 
 on:
   push:
-    branches: [main]
+    branches: [main, "fix/**"]
     paths:
       - "supabase/drafts/**"
       - "supabase/tests/**"
@@ -168,7 +168,8 @@ jobs:
           target: google_apis
           disable-animations: true
           script: ./gradlew --no-daemon connectedDebugAndroidTest
-      - name: Persister les socles générés, le wrapper et le lockfile sur main
+      - name: Persister les socles générés, le wrapper et le lockfile sur la branche de travail
+        if: github.ref != 'refs/heads/main'
         shell: bash
         run: |
           set -euo pipefail
@@ -179,7 +180,7 @@ jobs:
             echo "Aucun fichier généré nouveau à persister."
           else
             git commit -m "chore: persister le socle Prompt 0.1 [skip ci]"
-            git push origin HEAD:main
+            git push origin "HEAD:${GITHUB_REF_NAME}"
           fi
   prompt-03-rls:
     name: Prompt 0.3 — policies RLS et scénarios d'isolation
@@ -218,6 +219,10 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/0002_famille_core_rls.sql
       - name: Appliquer la candidate contextualisée 0003 (PostgreSQL éphémère uniquement)
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0003_prompt_0_3_contextual_rls.sql
+      - name: Appliquer les décisions Admin central et identités séparées (candidate 0004)
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0004_prompt_0_3_central_admin_identity_audit.sql
+      - name: Tester Admin central, audit et identités séparées
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0004_prompt_0_3_central_admin_assertions.sql
       - name: Vérifier les claims app_id et le refus par défaut
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0003_prompt_0_3_context_assertions.sql
       - name: Rejouer la matrice complète après contextualisation (PostgreSQL 17)
