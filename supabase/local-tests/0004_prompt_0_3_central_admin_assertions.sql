@@ -1,6 +1,10 @@
 \set ON_ERROR_STOP on
 begin;
 
+-- Capture canonical app IDs as the database owner before switching to authenticated.
+select id::text as kiosko_app_id from famille_core.applications where code='kiosko' \gset
+select id::text as campus237_app_id from famille_core.applications where code='campus237' \gset
+
 insert into auth.users(id,email) values
  ('97000000-0000-0000-0000-000000000001','central-admin@x.invalid'),
  ('97000000-0000-0000-0000-000000000002','kiosko-user@x.invalid'),
@@ -108,28 +112,30 @@ end $$;
 
 -- Normal identities are independent and app-scoped.
 select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000002',true);
-select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000002','role','authenticated','app_metadata',jsonb_build_object('active_app_id',(select id::text from famille_core.applications where code='kiosko')))::text,true);
+select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000002','role','authenticated','app_metadata',jsonb_build_object('active_app_id', :'kiosko_app_id'))::text,true);
 do $$
 begin
  if famille_core.is_admin() then raise exception 'ordinary Kiosko user became central admin'; end if;
  if famille_core.current_app_id() is distinct from (select id from famille_core.applications where code='kiosko') then raise exception 'Kiosko identity has wrong app context'; end if;
- if not famille_core.has_app_access((select id from famille_core.applications where code='kiosko')) then raise exception 'Kiosko assigned app access missing: uid %, claim %, visible grants %',auth.uid(),famille_core.current_app_id(),(select count(*) from famille_core.client_app_access where user_id=auth.uid()); end if;
- if famille_core.has_app_access((select id from famille_core.applications where code='campus237')) then raise exception 'Kiosko identity crossed into Campus237'; end if;
+ if not famille_core.has_current_app_access() then raise exception 'Kiosko assigned app access missing: uid %, claim %',auth.uid(),famille_core.current_app_id(); end if;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',auth.uid()::text,'role','authenticated','app_metadata',jsonb_build_object('active_app_id', :'campus237_app_id'))::text,true);
+ if famille_core.has_current_app_access() then raise exception 'Kiosko identity crossed into Campus237'; end if;
+ perform set_config('request.jwt.claims',jsonb_build_object('sub',auth.uid()::text,'role','authenticated','app_metadata',jsonb_build_object('active_app_id', :'kiosko_app_id'))::text,true);
 end $$;
 
 select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000003',true);
-select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000003','role','authenticated','app_metadata',jsonb_build_object('active_app_id',(select id::text from famille_core.applications where code='campus237')))::text,true);
+select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000003','role','authenticated','app_metadata',jsonb_build_object('active_app_id', :'campus237_app_id'))::text,true);
 do $$
 begin
  if famille_core.is_admin() then raise exception 'ordinary Campus237 user became central admin'; end if;
  if famille_core.current_app_id() is distinct from (select id from famille_core.applications where code='campus237') then raise exception 'Campus237 identity has wrong app context'; end if;
- if not famille_core.has_app_access((select id from famille_core.applications where code='campus237')) then raise exception 'Campus237 assigned app access missing'; end if;
+ if not famille_core.has_current_app_access() then raise exception 'Campus237 assigned app access missing'; end if;
 end $$;
 
 select set_config('request.jwt.claim.sub','97000000-0000-0000-0000-000000000004',true);
-select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000004','role','authenticated','app_metadata',jsonb_build_object('active_app_id',(select id::text from famille_core.applications where code='kiosko')))::text,true);
+select set_config('request.jwt.claims',jsonb_build_object('sub','97000000-0000-0000-0000-000000000004','role','authenticated','app_metadata',jsonb_build_object('active_app_id', :'kiosko_app_id'))::text,true);
 do $unassigned_access$ begin
- if famille_core.has_app_access((select id from famille_core.applications where code='kiosko')) then raise exception 'unassigned account received platform access'; end if;
+ if famille_core.has_current_app_access() then raise exception 'unassigned account received platform access'; end if;
 end $unassigned_access$;
 
 reset role;
