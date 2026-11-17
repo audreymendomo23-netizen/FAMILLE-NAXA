@@ -158,7 +158,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # sdkmanager exits successfully before the yes process drains its pipe.
+          # Keep the pipeline's status tied to sdkmanager, not yes' expected SIGPIPE.
+          set +o pipefail
           yes | sdkmanager --licenses >/dev/null
+          set -o pipefail
           sdkmanager --install "platforms;android-37" "build-tools;36.0.0" "platform-tools"
       - name: Générer et vérifier le Gradle Wrapper 9.5.0
         shell: bash
