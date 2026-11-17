@@ -110,7 +110,7 @@ begin
  if not exists(select 1 from famille_core.audit_events where actor_id='97000000-0000-0000-0000-000000000001' and entity_type='admin_mutation_audit_probe' and action_code='insert') then
    raise exception 'central admin mutation was not audited';
  end if;
-end $;
+end $$;
 
 -- Every central-admin-manageable metadata table must carry the audit trigger.
 do $audit_coverage$
