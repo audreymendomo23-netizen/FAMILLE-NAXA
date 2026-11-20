@@ -136,7 +136,7 @@ private fun NaxaServicesRoot() {
         } else {
             scope.launch {
                 busy = true
-                runCatching { api.changePassword(active.accessToken, current, next) }
+                runCatching { api.changePassword(active, current, next) }
                     .onSuccess {
                         session = it
                         if (vault.loadRefreshToken() != null) vault.save(it)
@@ -210,7 +210,7 @@ private fun LoginScreen(
 ) {
     var identifier by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
-    var rememberMe by rememberSaveable { mutableStateOf(true) }
+    var rememberMe by rememberSaveable { mutableStateOf(false) }
     var showPassword by rememberSaveable { mutableStateOf(false) }
 
     Column(
