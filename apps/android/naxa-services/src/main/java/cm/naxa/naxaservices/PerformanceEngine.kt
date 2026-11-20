@@ -39,9 +39,10 @@ object NaxaPerformanceEngine {
         val revenue = confirmed.sumOf { it.totalXaf }
         val cogs = confirmed.sumOf { it.costOfGoodsXaf.coerceAtLeast(0L) }
         val gross = revenue - cogs
-        val margin = if (revenue > 0L) gross.toDouble() * 100.0 / revenue else null
         val opex = accountingEntries.filter { it.debitAccount.startsWith("OPERATING_EXPENSE") }.sumOf { it.amountXaf }
         val uncosted = confirmed.count { it.inventoryItemId != null && it.stockQuantity != null && it.costOfGoodsXaf == 0L }
+        // Legacy sales with an unknown acquisition cost must not produce a misleading gross margin.
+        val margin = if (revenue > 0L && uncosted == 0) gross.toDouble() * 100.0 / revenue else null
         val avg14 = avgDaily(byDay, today.minusDays(14), today.minusDays(1))
         val avg28 = avgDaily(byDay, today.minusDays(28), today.minusDays(1))
         val avg90 = avgDaily(byDay, today.minusDays(90), today.minusDays(1))
@@ -113,8 +114,16 @@ object NaxaPerformanceEngine {
         val priorMonthCosts = accountingEntries.filter {
             dateOf(it.occurredAtMillis, zone).let { d -> d.year == previousMonth.year && d.monthValue == previousMonth.monthValue } && it.debitAccount == "COST_OF_GOODS_SOLD"
         }.sumOf { it.amountXaf }
-        val currentRate = if (monthActual > 0) (monthActual - currentMonthCosts).toDouble() / monthActual else null
-        val priorRate = if (priorMonthRevenue > 0) (priorMonthRevenue - priorMonthCosts).toDouble() / priorMonthRevenue else null
+        val uncostedCurrentMonth = confirmed.count {
+            dateOf(it.createdAtMillis, zone).let { d -> d.year == today.year && d.monthValue == today.monthValue } &&
+                it.inventoryItemId != null && it.stockQuantity != null && it.costOfGoodsXaf == 0L
+        }
+        val uncostedPriorMonth = confirmed.count {
+            dateOf(it.createdAtMillis, zone).let { d -> d.year == previousMonth.year && d.monthValue == previousMonth.monthValue } &&
+                it.inventoryItemId != null && it.stockQuantity != null && it.costOfGoodsXaf == 0L
+        }
+        val currentRate = if (monthActual > 0 && uncostedCurrentMonth == 0) (monthActual - currentMonthCosts).toDouble() / monthActual else null
+        val priorRate = if (priorMonthRevenue > 0 && uncostedPriorMonth == 0) (priorMonthRevenue - priorMonthCosts).toDouble() / priorMonthRevenue else null
         if (currentRate != null && priorRate != null && currentRate < priorRate - 0.03) {
             actions += RecoveryAction("Protéger la marge commerciale",
                 "Le taux de marge brute recule par rapport au mois précédent. Réexaminer les coûts d'achat, les remises et les prix des articles les plus vendus avant de chercher uniquement du volume.", "high")
