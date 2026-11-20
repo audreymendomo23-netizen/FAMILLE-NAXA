@@ -104,13 +104,15 @@ private fun NaxaServicesRoot() {
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var pendingRefresh by remember { mutableStateOf<String?>(null) }
+    var rememberSession by rememberSaveable { mutableStateOf(false) }
     var lightTheme by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         pendingRefresh = vault.loadRefreshToken()
         if (!pendingRefresh.isNullOrBlank()) {
+            rememberSession = true
             busy = true
-            runCatching { api.refresh(pendingRefresh!!) }
+            runCatching { api.refresh(pendingRefresh!!, rememberDevice = true) }
                 .onSuccess {
                     session = it
                     vault.save(it)
@@ -118,6 +120,7 @@ private fun NaxaServicesRoot() {
                 }
                 .onFailure {
                     vault.clear()
+                    rememberSession = false
                     route = AppRoute.LOGIN.name
                 }
             busy = false
@@ -133,7 +136,7 @@ private fun NaxaServicesRoot() {
             var refreshed = false
             while (retry < 5 && !refreshed) {
                 val token = activeSession?.refreshToken ?: break
-                runCatching { api.refresh(token) }
+                runCatching { api.refresh(token, rememberDevice = rememberSession) }
                     .onSuccess { next ->
                         session = next
                         if (vault.loadRefreshToken() != null) vault.save(next)
@@ -144,6 +147,7 @@ private fun NaxaServicesRoot() {
                         val authError = error as? AuthApiException
                         if (authError?.statusCode == 401 || authError?.statusCode == 403) {
                             vault.clear()
+                            rememberSession = false
                             session = null
                             route = AppRoute.LOGIN.name
                             message = "Session expirée ou révoquée. Connecte-toi à nouveau."
@@ -168,6 +172,7 @@ private fun NaxaServicesRoot() {
             runCatching { api.login(identifier, password, rememberMe) }
                 .onSuccess {
                     session = it
+                    rememberSession = rememberMe
                     if (rememberMe) vault.save(it) else vault.clear()
                     route = if (it.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else AppRoute.DASHBOARD.name
                 }
@@ -233,6 +238,7 @@ private fun NaxaServicesRoot() {
                                 scope.launch {
                                     runCatching { api.logout(active.accessToken) }
                                     vault.clear()
+                                    rememberSession = false
                                     session = null
                                     route = AppRoute.LOGIN.name
                                 }
@@ -502,6 +508,7 @@ private fun PressingLocalContent(
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.pressing_local_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(stringResource(R.string.pressing_local_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorizedSitePicker(session.account.activeSiteIds, siteId) { siteId = it }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -613,6 +620,7 @@ private fun AgendaLocalContent(
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.agenda_local_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(stringResource(R.string.agenda_local_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorizedSitePicker(session.account.activeSiteIds, siteId) { siteId = it }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -681,7 +689,7 @@ private fun CashLocalContent(
     session: AuthSession
 ) {
     val scope = rememberCoroutineScope()
-    val siteId = session.account.activeSiteIds.firstOrNull().orEmpty()
+    var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
     val sessions by remember(siteId) { repository.dao.observeCashSessions(siteId) }.collectAsState(initial = emptyList())
     val sales by remember(siteId) { repository.dao.observeSales(siteId) }.collectAsState(initial = emptyList())
     val pendingOutbox by repository.dao.observePendingOutboxCount().collectAsState(initial = 0)
@@ -707,6 +715,7 @@ private fun CashLocalContent(
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.cash_local_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(stringResource(R.string.cash_local_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorizedSitePicker(session.account.activeSiteIds, siteId) { siteId = it }
             Text(stringResource(R.string.outbox_pending_count, pendingOutbox), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
         }
         if (openSession == null) {
