@@ -473,7 +473,7 @@ private fun ErpScreen(
         } else if (route == AppRoute.REPORTS) {
             ReportsContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.ORGANIZATION || route == AppRoute.NETWORK || route == AppRoute.SITES || route == AppRoute.WORKSTATIONS) {
-            OrganizationWorkspaceContent(Modifier.padding(padding), route, localRepository, activeSession)
+            OrganizationWorkspaceContent(Modifier.padding(padding), route, localRepository, authApi, activeSession)
         } else if (route == AppRoute.HELP) {
             SupportContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.SETTINGS) {
