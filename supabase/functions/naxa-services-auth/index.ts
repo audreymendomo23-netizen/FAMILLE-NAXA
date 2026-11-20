@@ -127,11 +127,12 @@ async function touchDevice(
   device: Record<string, unknown>,
   remember: boolean,
   allowReenroll: boolean,
-  refreshTokenHash: string,
+  previousRefreshTokenHash: string,
+  nextRefreshTokenHash: string,
   sessionId: string,
 ) {
   const installationId = String(device.installation_id ?? "");
-  if (!installationId || installationId.length > 160 || !refreshTokenHash || !sessionId) {
+  if (!installationId || installationId.length > 160 || !nextRefreshTokenHash || !sessionId) {
     throw new Error("DEVICE_SESSION_BINDING_REQUIRED");
   }
   const now = new Date().toISOString();
@@ -142,7 +143,7 @@ async function touchDevice(
   ) as Record<string, unknown>[];
   const existing = rows?.[0];
   if (existing?.revoked_at && !allowReenroll) throw new Error("DEVICE_REVOKED");
-  if (existing?.id && !allowReenroll && existing.refresh_token_hash !== refreshTokenHash) {
+  if (existing?.id && !allowReenroll && existing.refresh_token_hash !== previousRefreshTokenHash) {
     throw new Error("DEVICE_REFRESH_TOKEN_MISMATCH");
   }
   if (existing?.id) {
@@ -152,7 +153,7 @@ async function touchDevice(
       body: JSON.stringify({
         label: String(device.label ?? "").slice(0, 90),
         remember_device: remember,
-        refresh_token_hash: refreshTokenHash,
+        refresh_token_hash: nextRefreshTokenHash,
         session_id: sessionId,
         last_seen_at: now,
         ...(allowReenroll ? { revoked_at: null } : {}),
@@ -170,7 +171,7 @@ async function touchDevice(
       platform: device.platform === "web" ? "web" : "android",
       label: String(device.label ?? "").slice(0, 90),
       remember_device: remember,
-      refresh_token_hash: refreshTokenHash,
+      refresh_token_hash: nextRefreshTokenHash,
       session_id: sessionId,
       first_seen_at: now,
       last_seen_at: now,
@@ -212,6 +213,7 @@ async function login(body: Record<string, unknown>, request: Request) {
     (body.device as Record<string, unknown>) ?? {},
     body.remember_device === true,
     true,
+    "",
     await sha256(refreshToken),
     jwtClaim(accessToken, "session_id"),
   );
