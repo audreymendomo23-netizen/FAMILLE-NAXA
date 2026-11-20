@@ -45,7 +45,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @Composable
-private fun AuthorizedSitePicker(
+fun AuthorizedSitePicker(
     siteIds: List<String>,
     selectedSiteId: String,
     onSelect: (String) -> Unit
