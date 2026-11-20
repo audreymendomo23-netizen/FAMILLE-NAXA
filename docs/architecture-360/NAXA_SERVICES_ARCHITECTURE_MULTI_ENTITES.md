@@ -143,10 +143,10 @@ Les tarifs du cahier du 31 octobre sont [P] à tester, pas des prix approuvés. 
 ## 11. Réserves empêchant le vert complet
 
 1. Alias GoTrue non encore prouvé localement.
-2. Edge Function d'auth/provisioning/recovery à implémenter et tester.
-3. SQL ci-joint = draft non appliqué ; policies à vérifier avec rôles/sites de test.
+2. Edge Function source inclut login, refresh, demande de recovery, provisioning membre, reset Admin et révocation appareil ; elle n'est pas déployée et reste à tester.
+3. SQL ci-joint = draft non appliqué ; fonctions d'identité, liaison session/appareil et policies RLS sont écrites dans le draft, mais doivent être relues et testées en PostgreSQL isolé avec rôles/sites de test.
 4. Builds Android/Web, tests unitaires, scénarios négatifs et sync à exécuter localement.
-5. Commissions, conservation des vêtements, fidélité, sessions, offline, appareils et tarifs [P]/[O] à arbitrer.
+5. Commissions, conservation des vêtements, fidélité, durée des sessions, offline, nombre d'appareils et tarifs [P]/[O] restent à arbitrer.
 6. Logo binaire spécifique non récupéré de façon fiable par le connecteur pendant cette passe. Le SVG livré est reconstruit depuis la spécification écrite (N rouge, NAXA blanc, SERVICES sur noir) ; remplacer par l'original exact s'il se trouve dans l'archive graphique non lisible.
 7. Impression Bluetooth, WhatsApp, Mobile Money, Push et IA restent derrière adaptateurs non déclarés connectés à un fournisseur réel.
 
