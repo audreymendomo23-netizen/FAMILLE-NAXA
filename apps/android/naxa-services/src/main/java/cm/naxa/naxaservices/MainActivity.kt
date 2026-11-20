@@ -819,7 +819,7 @@ private fun ErpScreen(
         if (!canAccessConfiguredRoute(route, roleCode, activityProfile)) {
             AccessDeniedContent(Modifier.padding(padding)) { onNavigate(AppRoute.DASHBOARD) }
         } else if (route == AppRoute.DASHBOARD) {
-            DashboardContent(Modifier.padding(padding), accountName, roleCode, locale, activityProfile, onNavigate, onLogout, tourActive, tourStep, onTourNext, onTourSkip)
+            DashboardContent(Modifier.padding(padding), accountName, roleCode, locale, activityProfile, localRepository, current, onNavigate, onLogout, tourActive, tourStep, onTourNext, onTourSkip)
         } else if (route == AppRoute.MENU) {
             ModuleMenu(Modifier.padding(padding), roleCode, activityProfile, onNavigate, onLogout)
         } else if (route == AppRoute.PRESSING) {
@@ -1645,6 +1645,8 @@ private fun DashboardContent(
     role: String,
     locale: String,
     activityProfile: String?,
+    localRepository: NaxaServicesLocalRepository,
+    session: AuthSession,
     onNavigate: (AppRoute) -> Unit,
     onLogout: () -> Unit,
     tourActive: Boolean,
@@ -1653,11 +1655,48 @@ private fun DashboardContent(
     onTourSkip: () -> Unit
 ) {
     var hour by remember { mutableIntStateOf(Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) }
+    var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
-            hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+            val clock = Calendar.getInstance()
+            hour = clock.get(Calendar.HOUR_OF_DAY)
+            nowMillis = System.currentTimeMillis()
             delay(60_000L)
         }
+    }
+    val siteIds = session.account.activeSiteIds
+    var siteId by rememberSaveable(session.account.organizationId) {
+        mutableStateOf(siteIds.firstOrNull().orEmpty())
+    }
+    val dayStartMillis = remember(nowMillis) {
+        Calendar.getInstance().apply {
+            timeInMillis = nowMillis
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+    val salesToday by remember(siteId, dayStartMillis, nowMillis) {
+        localRepository.dao.observeSalesTotal(session.account.organizationId, siteId, dayStartMillis, nowMillis)
+    }.collectAsState(initial = 0L)
+    val expensesToday by remember(siteId, dayStartMillis, nowMillis) {
+        localRepository.dao.observeExpensesTotal(session.account.organizationId, siteId, dayStartMillis, nowMillis)
+    }.collectAsState(initial = 0L)
+    val appointmentsToday by remember(siteId, dayStartMillis, nowMillis) {
+        localRepository.dao.observeAppointmentCount(session.account.organizationId, siteId, dayStartMillis, nowMillis)
+    }.collectAsState(initial = 0)
+    val pressingTicketsToday by remember(siteId, dayStartMillis, nowMillis) {
+        localRepository.dao.observePressingCount(session.account.organizationId, siteId, dayStartMillis, nowMillis)
+    }.collectAsState(initial = 0)
+    val inventoryItems by remember(siteId) {
+        localRepository.dao.observeInventoryItems(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
+    val pendingOperations by localRepository.dao.observePendingOutboxCount(session.account.organizationId)
+        .collectAsState(initial = 0)
+    val lowStockCount = inventoryItems.count { it.quantity <= it.reorderLevel }
+    val siteLabels = session.account.activeSites.associate {
+        it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel)
     }
     val greeting = if (locale == "en") {
         if (hour >= 18 || hour < 6) "Good evening, $name" else "Good morning, $name"
@@ -1679,11 +1718,28 @@ private fun DashboardContent(
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp)) {
-                Column(Modifier.padding(18.dp)) {
-                    Text(stringResource(R.string.dashboard_today), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(8.dp))
-                    Text(stringResource(R.string.no_synced_data), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text(stringResource(R.string.backend_pending), color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (locale == "en") "Today's activity" else "Activité du jour", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    AuthorizedSitePicker(siteIds, siteId, siteLabels) { siteId = it }
+                    DashboardMetricRow(if (locale == "en") "Sales recorded locally" else "Ventes enregistrées localement", dashboardXaf(salesToday))
+                    DashboardMetricRow(if (locale == "en") "Expenses entered" else "Dépenses saisies", dashboardXaf(expensesToday))
+                    DashboardMetricRow(if (locale == "en") "Simplified cash flow" else "Flux simplifié", dashboardXaf(salesToday - expensesToday))
+                    if (activityProfile in setOf("coiffure", "beaute")) {
+                        DashboardMetricRow(if (locale == "en") "Appointments today" else "Rendez-vous du jour", appointmentsToday.toString())
+                    }
+                    if (activityProfile == "pressing") {
+                        DashboardMetricRow(if (locale == "en") "Laundry tickets today" else "Tickets pressing du jour", pressingTicketsToday.toString())
+                    }
+                    DashboardMetricRow(if (locale == "en") "Low-stock items" else "Articles sous seuil", lowStockCount.toString() + " / " + inventoryItems.size.toString())
+                    DashboardMetricRow(if (locale == "en") "Pending local operations" else "Opérations locales en attente", pendingOperations.toString())
+                    Text(
+                        if (locale == "en")
+                            "On-device figures for this location. They may include unsynchronized entries and are not a network-wide or server-confirmed report."
+                        else
+                            "Chiffres locaux de ce point de vente. Ils peuvent inclure des écritures non synchronisées et ne constituent pas un rapport réseau consolidé ni une confirmation serveur.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }
@@ -1722,6 +1778,21 @@ private fun DashboardContent(
     if (tourActive) {
         FirstUseTourContent(locale, tourStep, onTourNext, onTourSkip)
     }
+    }
+}
+
+private fun dashboardXaf(amount: Long): String =
+    "%,d FCFA".format(amount).replace(',', ' ')
+
+@Composable
+private fun DashboardMetricRow(label: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(label, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
