@@ -1115,3 +1115,23 @@ Ce choix est limité à la fonction Referral : les actions Promoteur valident el
 - Commit de configuration : `34682dd53f45f42db7ca815df0af6c74291bc80d`.
 - Workflow sur ce HEAD : `44792804538`. Les tests tarifaires, Auth et parrainage sont réussis ; le job Android était en cours au moment de cette mise à jour.
 - La présence du fichier de configuration ne signifie pas que la fonction est déployée ni que les secrets sont configurés.
+
+
+### 38.9 Validation finale du code et de la configuration Referral
+
+Le commit `34682dd53f45f42db7ca815df0af6c74291bc80d` inclut la configuration de vérification JWT de la fonction. Son workflow `44792804538` est terminé avec **SUCCESS — 4/4 jobs** :
+- compilation et APK Android debug ;
+- type-check/tests API Referral ;
+- tests scope Auth ;
+- tests catalogue de tarification.
+
+Artefact issu de ce workflow :
+- ID : `14657621377`, nom `naxa-services-debug-apk` ;
+- taille : 11 560 547 octets ;
+- SHA-256 : `3dc0e3f3dae2921afe71384257e22b41be06f2365794a9e48b62920be66f27e1` ;
+- expiration : `2026-11-27T18:28:39Z`.
+
+### 38.10 Déclenchement des contrôles sur les changements de configuration
+
+Le commit `c87bf03b436c03cf5a84dcc9e01885e369e6cbaf` étend les filtres CI pour déclencher les tests aussi sur les changements de `supabase/config.toml`, du service Referral, de sa migration candidate et des contrats tarifaires dans les événements push et pull request. Le workflow `44793189090` a été déclenché ; au dernier contrôle, ses trois jobs de contrats/tarifs étaient réussis et le job Android était encore en compilation. Ce commit ne modifie pas le code métier Android ni le service Referral ; le build et l'artefact du commit précédent restent la preuve complète terminée pour ces sources.
+
