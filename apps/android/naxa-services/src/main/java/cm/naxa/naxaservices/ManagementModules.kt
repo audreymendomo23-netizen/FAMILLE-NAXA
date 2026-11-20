@@ -738,9 +738,11 @@ internal fun ProfileContent(
             Text("Préférences et sécurité", fontWeight = FontWeight.Bold)
             OutlinedButton(onClick = { onNavigate(AppRoute.APPEARANCE) }, modifier = Modifier.fillMaxWidth()) { Text("Langue, thème et mode nuit") }
             OutlinedButton(onClick = { onNavigate(AppRoute.SECURITY) }, modifier = Modifier.fillMaxWidth()) { Text("Comptes, appareils et accès") }
-            OutlinedButton(onClick = { showReferralScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Parrainage et suivi de mes gains") }
-            OutlinedButton(onClick = { showLoyaltyScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Programme de fidélité") }
-            OutlinedButton(onClick = { onNavigate(AppRoute.CHARGES) }, modifier = Modifier.fillMaxWidth()) { Text("Charges et échéances de paiement") }
+            if (session.account.roleCode == "promoter") {
+                OutlinedButton(onClick = { showReferralScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Parrainage et suivi de mes gains") }
+                OutlinedButton(onClick = { showLoyaltyScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Programme de fidélité") }
+                OutlinedButton(onClick = { onNavigate(AppRoute.CHARGES) }, modifier = Modifier.fillMaxWidth()) { Text("Charges et échéances de paiement") }
+            }
             OutlinedButton(onClick = { onNavigate(AppRoute.HELP) }, modifier = Modifier.fillMaxWidth()) { Text("FAQ et assistance") }
             OutlinedButton(onClick = { onNavigate(AppRoute.SUBSCRIPTIONS) }, modifier = Modifier.fillMaxWidth()) { Text("Abonnement et paiement") }
         }
