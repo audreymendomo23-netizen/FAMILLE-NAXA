@@ -337,7 +337,7 @@ fun StockContent(
                                     busy = false
                                 }
                             },
-                            enabled = !busy && (quantity.replace(",", ".").toDoubleOrNull() ?: 0.0) > 0.0 && reason.trim().length >= 3,
+                            enabled = !busy && (quantity.replace(",", ".").toDoubleOrNull()?.let { it != 0.0 && (movementType == "adjustment" || it > 0.0) } == true) && reason.trim().length >= 3,
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Valider le mouvement") }
                     }
