@@ -97,7 +97,7 @@ class MainActivity : ComponentActivity() {
 
 internal enum class AppRoute {
     LOGIN, RECOVERY, CHANGE_PASSWORD, ACTIVITY_SETUP, LEGAL_ACCEPTANCE, DISCOVERY,
-    DASHBOARD, AGENDA, PRESSING, CASH, SERVICES, CUSTOMERS, TEAM, STOCK, REPORTS,
+    DASHBOARD, AGENDA, PRESSING, WORK_ORDERS, CASH, SERVICES, CUSTOMERS, TEAM, STOCK, REPORTS,
     ORGANIZATION, NETWORK, SITES, WORKSTATIONS, SECURITY, SETTINGS, HELP, MENU,
     PROFILE, APPEARANCE, BILLING, SUBSCRIPTIONS, PURCHASES, TAXES, OBJECTIVES,
     AI_INSIGHTS, LIVECHAT
@@ -133,8 +133,9 @@ private fun NaxaServicesRoot() {
     var torchTarget by remember { mutableStateOf<Offset?>(null) }
 
     fun routeAfterAuthentication(auth: AuthSession): String {
-        locale = auth.account.defaultLocale
+        locale = preferences.memberLocale(auth.account.memberId) ?: auth.account.defaultLocale
         preferences.saveLocale(locale)
+        preferences.saveMemberLocale(auth.account.memberId, locale)
         val activity = auth.account.activityProfile
         if (activity.isNullOrBlank()) {
             tourActive = false
@@ -417,6 +418,21 @@ private fun NaxaServicesRoot() {
                                     message = message,
                                     onDismissMessage = { message = null },
                                     preferences = preferences,
+                                    locale = locale,
+                                    onLocale = { selectedLocale ->
+                                        scope.launch {
+                                            busy = true
+                                            runCatching { api.setMemberPreferredLocale(current.accessToken, selectedLocale) }
+                                                .onSuccess {
+                                                    preferences.saveLocale(selectedLocale)
+                                                    preferences.saveMemberLocale(current.account.memberId, selectedLocale)
+                                                    locale = selectedLocale
+                                                    session = current.copy(account = current.account.copy(defaultLocale = selectedLocale))
+                                                }
+                                                .onFailure { message = it.message ?: "La langue n’a pas pu être enregistrée." }
+                                            busy = false
+                                        }
+                                    },
                                     activityProfile = current.account.activityProfile,
                                     tourActive = tourActive,
                                     tourStep = tourStep,
@@ -628,7 +644,7 @@ private val modules = listOf(
 
 private val commonRoutes = setOf(
     AppRoute.DASHBOARD, AppRoute.MENU, AppRoute.PROFILE, AppRoute.APPEARANCE,
-    AppRoute.LIVECHAT, AppRoute.HELP, AppRoute.SETTINGS, AppRoute.SECURITY
+    AppRoute.LIVECHAT, AppRoute.HELP, AppRoute.SETTINGS
 )
 
 private fun activityVisibleRoutes(activity: String?): Set<AppRoute> {
@@ -698,13 +714,14 @@ private fun ErpScreen(
     message: String?,
     onDismissMessage: () -> Unit,
     preferences: NaxaServicesPreferences,
+    locale: String,
+    onLocale: (String) -> Unit,
     activityProfile: String?,
     tourActive: Boolean,
     tourStep: Int,
     onTourNext: () -> Unit,
     onTourSkip: () -> Unit
 ) {
-    val locale = activeSession.account.defaultLocale
     val currentSpec = modules.firstOrNull { it.route == route }
     Scaffold(
         topBar = {
@@ -771,7 +788,7 @@ private fun ErpScreen(
         } else if (route == AppRoute.PROFILE) {
             ProfileContent(Modifier.padding(padding), activeSession, activityProfile, localRepository, preferences, onNavigate, onLogout)
         } else if (route == AppRoute.APPEARANCE) {
-            AppearanceSettingsContent(locale, preferences) { lightTheme = it }
+            AppearanceSettingsContent(locale, preferences, onChanged = { lightTheme = it }, onLocale = onLocale)
         } else if (route == AppRoute.BILLING) {
             BillingContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.SUBSCRIPTIONS) {

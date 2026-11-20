@@ -157,6 +157,17 @@ class AuthApi(private val context: Context) {
         )
     }
 
+    suspend fun setMemberPreferredLocale(accessToken: String, locale: String) {
+        require(locale in setOf("fr", "en")) { "Langue non prise en charge." }
+        request(
+            JSONObject()
+                .put("action", "set_member_locale")
+                .put("app_code", "naxa-services")
+                .put("locale", locale),
+            accessToken
+        )
+    }
+
     suspend fun completeOnboardingStep(accessToken: String, step: String) {
         require(step in setOf("discovery", "tour")) { "Étape d’intégration invalide." }
         request(

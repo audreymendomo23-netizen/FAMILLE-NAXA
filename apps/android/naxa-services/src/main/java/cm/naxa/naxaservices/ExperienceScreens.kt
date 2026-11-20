@@ -247,7 +247,7 @@ fun DashboardHeroCarousel(locale:String,activityProfile:String?,onOpen:()->Unit)
 }
 
 @Composable
-fun AppearanceSettingsContent(locale:String,preferences:NaxaServicesPreferences,onChanged:(Boolean)->Unit) {
+fun AppearanceSettingsContent(locale:String,preferences:NaxaServicesPreferences,onChanged:(Boolean)->Unit,onLocale:(String)->Unit) {
  val fr=locale!="en"
  var mode by rememberSaveable { mutableStateOf(preferences.themeMode()) }
  var start by rememberSaveable { mutableStateOf(formatMinute(preferences.nightStart())) }
@@ -262,6 +262,11 @@ fun AppearanceSettingsContent(locale:String,preferences:NaxaServicesPreferences,
   item{
    Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)){
     Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+     Text(if(fr)"Langue de l’application" else "Application language",fontWeight=FontWeight.Bold)
+     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+      OutlinedButton(onClick={onLocale("fr")},enabled=!fr){Text("Français")}
+      OutlinedButton(onClick={onLocale("en")},enabled=fr){Text("English")}
+     }
      Text(if(fr)"Mode d’affichage" else "Display mode",fontWeight=FontWeight.Bold)
      listOf("dark","light","scheduled").forEach{value->
       Row(verticalAlignment=Alignment.CenterVertically){

@@ -25,8 +25,14 @@ alter table public.ns_organizations add constraint ns_organizations_activity_pro
   foreign key (activity_profile_selected_by) references public.ns_members(id) on delete restrict;
 
 alter table public.ns_members
+  add column if not exists preferred_locale text,
   add column if not exists discovery_completed_at timestamptz,
   add column if not exists tour_completed_at timestamptz;
+alter table public.ns_members
+  drop constraint if exists ns_members_preferred_locale_check;
+alter table public.ns_members
+  add constraint ns_members_preferred_locale_check
+  check (preferred_locale is null or preferred_locale in ('fr','en'));
 
 create table if not exists public.ns_legal_acceptances (
   id uuid primary key default gen_random_uuid(),

@@ -20,6 +20,10 @@ export function isNaxaActivityProfile(value: string): value is NaxaActivityProfi
   return NAXA_ACTIVITY_PROFILES.includes(value as NaxaActivityProfile);
 }
 
+export function isNaxaLocale(value: string): value is "fr" | "en" {
+  return value === "fr" || value === "en";
+}
+
 export function isLegalDocumentVersion(type: string, version: string): boolean {
   const versions: Record<string, string> = {
     terms: "2026-11-v1",

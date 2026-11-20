@@ -27,6 +27,8 @@ class NaxaServicesPreferences(context:Context) {
  fun cachedActivity(orgId:String):String?=prefs.getString("activity:"+orgId,null)
  fun locale():String=prefs.getString("locale","fr")?.takeIf { it in setOf("fr","en") } ?: "fr"
  fun saveLocale(value:String){if(value in setOf("fr","en")) prefs.edit().putString("locale",value).apply()}
+ fun memberLocale(memberId:String):String?=prefs.getString("locale:"+memberId,null)?.takeIf { it in setOf("fr","en") }
+ fun saveMemberLocale(memberId:String,value:String){if(memberId.isNotBlank()&&value in setOf("fr","en"))prefs.edit().putString("locale:"+memberId,value).apply()}
  fun profilePhoto(memberId:String):String?=prefs.getString("profile_photo:"+memberId,null)
  fun saveProfilePhoto(memberId:String,uri:String){if(memberId.isNotBlank())prefs.edit().putString("profile_photo:"+memberId,uri).apply()}
  fun saveTheme(mode:String,startMinute:Int,endMinute:Int,flashlight:Boolean){ prefs.edit().putString("theme_mode",mode).putInt("night_start",startMinute.coerceIn(0,1439)).putInt("night_end",endMinute.coerceIn(0,1439)).putBoolean("flashlight_enabled",flashlight).apply() }

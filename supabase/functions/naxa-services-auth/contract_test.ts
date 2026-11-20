@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, nativeSiteIdsForScopes } from "./scope_contract.ts";
+import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, nativeSiteIdsForScopes } from "./scope_contract.ts";
 
 // Pure contract checks. Integration tests require an ephemeral Supabase project
 // with a proven internal Auth alias format and seeded NAXA Services identities.
@@ -63,4 +63,11 @@ Deno.test("legal acceptance only accepts the published draft versions", () => {
   assertEquals(isLegalDocumentVersion("terms", "2026-10-v1"), false);
   assertEquals(isLegalDocumentVersion("terms", "2026-11-v2"), false);
   assertEquals(isLegalDocumentVersion("unknown", "2026-11-v1"), false);
+});
+
+Deno.test("NAXA Services locale contract accepts French and English only", () => {
+  assertEquals(isNaxaLocale("fr"), true);
+  assertEquals(isNaxaLocale("en"), true);
+  assertEquals(isNaxaLocale("fr-FR"), false);
+  assertEquals(isNaxaLocale(""), false);
 });

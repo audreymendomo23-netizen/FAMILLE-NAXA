@@ -62,7 +62,7 @@ async function accountByAuthUser(authUserId: string) {
   return rows?.[0] ?? null;
 }
 async function activeMember(accountId: string) {
-  const q = "ns_members?select=id,org_id,display_name,role_code,status,discovery_completed_at,tour_completed_at&account_id=eq." + encodeURIComponent(accountId) + "&status=eq.active&limit=2";
+  const q = "ns_members?select=id,org_id,display_name,role_code,status,preferred_locale,discovery_completed_at,tour_completed_at&account_id=eq." + encodeURIComponent(accountId) + "&status=eq.active&limit=2";
   const rows = await rest(q, { headers: serviceHeaders() }) as Record<string, unknown>[];
   if (!rows || rows.length !== 1) return null;
   return rows[0];
@@ -127,7 +127,7 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
       organization_id: member.org_id,
       organization_name: organization.display_name ?? "",
       business_mode: organization.business_mode ?? "solo",
-      default_locale: organization.default_locale ?? "fr",
+      default_locale: member.preferred_locale ?? organization.default_locale ?? "fr",
       activity_profile: organization.activity_profile ?? null,
       accepted_legal_documents: acceptedLegalDocuments,
       discovery_completed: Boolean(member.discovery_completed_at),
@@ -602,6 +602,27 @@ async function acceptLegalDocument(body: Record<string, unknown>, token: string)
   return { status: 200, body: { saved: true, document_type: documentType, document_version: documentVersion } };
 }
 
+async function setMemberPreferredLocale(body: Record<string, unknown>, token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  const locale = String(body.locale ?? "");
+  if (!isNaxaLocale(locale)) return { status: 400, body: { message: "Langue non prise en charge." } };
+  await rest(
+    "ns_members?id=eq." + encodeURIComponent(String(actor.member.id)),
+    {
+      method: "PATCH",
+      headers: serviceHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ preferred_locale: locale }),
+    },
+  );
+  await auditAction(
+    String(actor.member.org_id), actor.authUserId, String(actor.member.id),
+    "member.preferred_locale_changed", "member", String(actor.member.id),
+    "Langue utilisateur : " + locale,
+  );
+  return { status: 200, body: { saved: true, locale } };
+}
+
 async function completeOnboardingStep(body: Record<string, unknown>, token: string) {
   const actor = await actorContext(token);
   if (!actor) return { status: 401, body: { message: "Session expirée." } };
@@ -899,6 +920,7 @@ Deno.serve(async (request: Request) => {
     else if (action === "provision_member") result = await provisionMember(body, bearer);
     else if (action === "update_organization_profile") result = await updateOrganizationProfile(body, bearer);
     else if (action === "set_activity_profile") result = await setOrganizationActivityProfile(body, bearer);
+    else if (action === "set_member_locale") result = await setMemberPreferredLocale(body, bearer);
     else if (action === "accept_legal_document") result = await acceptLegalDocument(body, bearer);
     else if (action === "complete_onboarding_step") result = await completeOnboardingStep(body, bearer);
     else if (action === "complete_recovery") result = await completeRecovery(body, bearer);

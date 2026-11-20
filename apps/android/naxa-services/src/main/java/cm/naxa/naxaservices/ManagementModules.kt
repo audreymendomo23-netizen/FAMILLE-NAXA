@@ -417,7 +417,7 @@ fun ProfileContent(
     }
     val profileBitmap: Bitmap? = remember(photoUri) {
         photoUri?.let { value ->
-            runCatching { context.contentResolver.openInputStream(Uri.parse(value))?.use(BitmapFactory::decodeStream) }.getOrNull()
+            runCatching { context.contentResolver.openInputStream(Uri.parse(value))?.use { stream -> BitmapFactory.decodeStream(stream) } }.getOrNull()
         }
     }
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
