@@ -92,7 +92,7 @@ fun ServicesCatalogContent(
     val scope = rememberCoroutineScope()
     val siteIds = session.account.activeSiteIds
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
-    val services by remember(siteId) { repository.dao.observeServices(siteId) }.collectAsState(initial = emptyList())
+    val services by remember(siteId) { repository.dao.observeServices(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     var activity by rememberSaveable { mutableStateOf("pressing") }
     var name by rememberSaveable { mutableStateOf("") }
     var duration by rememberSaveable { mutableStateOf("30") }
@@ -174,7 +174,7 @@ fun CustomersContent(
     val scope = rememberCoroutineScope()
     val siteIds = session.account.activeSiteIds
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
-    val customers by remember(siteId) { repository.dao.observeCustomers(siteId) }.collectAsState(initial = emptyList())
+    val customers by remember(siteId) { repository.dao.observeCustomers(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     var name by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     var notes by rememberSaveable { mutableStateOf("") }
@@ -246,7 +246,7 @@ fun StockContent(
     val scope = rememberCoroutineScope()
     val siteIds = session.account.activeSiteIds
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
-    val stock by remember(siteId) { repository.dao.observeInventoryItems(siteId) }.collectAsState(initial = emptyList())
+    val stock by remember(siteId) { repository.dao.observeInventoryItems(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     var selectedItemId by rememberSaveable { mutableStateOf("") }
     val selected = stock.firstOrNull { it.id == selectedItemId }
     var itemName by rememberSaveable { mutableStateOf("") }
@@ -380,10 +380,10 @@ fun ReportsContent(
                 session.account.activeSiteIds.map { siteId ->
                     SiteDailyReport(
                         siteId = siteId,
-                        salesXaf = repository.dao.observeSalesTotal(siteId, start, end).first(),
-                        expensesXaf = repository.dao.observeExpensesTotal(siteId, start, end).first(),
-                        appointments = repository.dao.observeAppointmentCount(siteId, start, end).first(),
-                        pressingTickets = repository.dao.observePressingCount(siteId, start, end).first()
+                        salesXaf = repository.dao.observeSalesTotal(session.account.organizationId, siteId, start, end).first(),
+                        expensesXaf = repository.dao.observeExpensesTotal(session.account.organizationId, siteId, start, end).first(),
+                        appointments = repository.dao.observeAppointmentCount(session.account.organizationId, siteId, start, end).first(),
+                        pressingTickets = repository.dao.observePressingCount(session.account.organizationId, siteId, start, end).first()
                     )
                 }
             }.onSuccess {
@@ -476,7 +476,7 @@ internal fun OrganizationWorkspaceContent(
         }
     }
 
-    val workstations by remember(selectedSite) { repository.dao.observeWorkstations(selectedSite) }.collectAsState(initial = emptyList())
+    val workstations by remember(selectedSite) { repository.dao.observeWorkstations(orgId, selectedSite) }.collectAsState(initial = emptyList())
     val canManageNetwork = session.roleCanManageNetwork()
     val canManageWorkstations = session.roleCanManageWorkstations()
     val title = when (route) {
@@ -716,7 +716,7 @@ fun SettingsContent(
     lightTheme: Boolean,
     onTheme: () -> Unit
 ) {
-    val pending by repository.dao.observePendingOutboxCount().collectAsState(initial = 0)
+    val pending by repository.dao.observePendingOutboxCount(session.account.organizationId).collectAsState(initial = 0)
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
