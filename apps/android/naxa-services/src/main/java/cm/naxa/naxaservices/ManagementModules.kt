@@ -3,9 +3,12 @@ package cm.naxa.naxaservices
 import android.content.Context
 import android.content.Intent
 import android.graphics.Paint
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -36,6 +39,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -52,7 +57,8 @@ private fun xaf(v: Long): String = "%,d F".format(v).replace(',', ' ')
 fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val siteId = session.account.activeSiteIds.firstOrNull().orEmpty()
+    val siteIds = session.account.activeSiteIds
+    var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
     val records by remember(siteId) { repository.dao.observeManagementRecords(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     var type by rememberSaveable { mutableStateOf("invoice") }
     var customer by rememberSaveable { mutableStateOf("") }
@@ -78,6 +84,8 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
             Spacer(Modifier.height(12.dp))
             Text("Facturation, crédits et remboursements", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Devis, factures, encaissements, avoirs et sommes que la PME doit rembourser au client. Les écritures restent rattachées au site.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
+            LocalOnlyNotice("Documents locaux en attente de synchronisation et validation serveur.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
@@ -150,8 +158,8 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
 @Composable
 fun SubscriptionsContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val scope = rememberCoroutineScope()
-    val siteId = session.account.activeSiteIds.firstOrNull().orEmpty()
-    val records by remember(siteId) { repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "subscription_request") }.collectAsState(initial = emptyList())
+    val siteId = "ORG_SCOPE"
+    val records by remember(session.account.organizationId) { repository.dao.observeOrganizationManagementRecordsByType(session.account.organizationId, "subscription_request") }.collectAsState(initial = emptyList())
     var reference by rememberSaveable { mutableStateOf("") }
     var plan by rememberSaveable { mutableStateOf("Pro") }
     var message by remember { mutableStateOf<String?>(null) }
@@ -160,6 +168,7 @@ fun SubscriptionsContent(modifier: Modifier, repository: NaxaServicesLocalReposi
             Spacer(Modifier.height(12.dp))
             Text("Abonnement et droits de l’organisation", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Le Promoteur de l’organisation mère porte l’abonnement. Les sites et postes héritent des droits et quotas autorisés par le contrat.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LocalOnlyNotice("Aucune transaction ni entitlement n’est activé par cet écran tant que la passerelle de paiement et la vérification serveur ne sont pas raccordées.")
         }
         item {
             listOf("Essentiel" to "Démarrage d’une PME et fonctions essentielles", "Pro" to "Équipe, agenda, pilotage et rapports enrichis", "Réseau" to "Plusieurs points de vente autonomes et consolidation").forEach { row ->
@@ -204,7 +213,8 @@ fun SubscriptionsContent(modifier: Modifier, repository: NaxaServicesLocalReposi
 @Composable
 fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val scope = rememberCoroutineScope()
-    val siteId = session.account.activeSiteIds.firstOrNull().orEmpty()
+    val siteIds = session.account.activeSiteIds
+    var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
     val records by remember(siteId) { repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "purchase") }.collectAsState(initial = emptyList())
     var supplier by rememberSaveable { mutableStateOf("") }
     var details by rememberSaveable { mutableStateOf("") }
@@ -215,6 +225,8 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
             Spacer(Modifier.height(12.dp))
             Text("Achats et fournisseurs", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Préparez les commandes, suivez les coûts d’approvisionnement et rattachez les pièces à leur site d’origine.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
+            LocalOnlyNotice()
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -247,7 +259,8 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
 @Composable
 fun TaxesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val scope = rememberCoroutineScope()
-    val siteId = session.account.activeSiteIds.firstOrNull().orEmpty()
+    val siteIds = session.account.activeSiteIds
+    var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
     val records by remember(siteId) { repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "tax_estimate") }.collectAsState(initial = emptyList())
     var base by rememberSaveable { mutableStateOf("") }
     var rate by rememberSaveable { mutableStateOf("") }
@@ -261,6 +274,8 @@ fun TaxesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, se
             Spacer(Modifier.height(12.dp))
             Text("Taxes et impôts", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Espace de préparation et de suivi. Les taux, régimes, échéances et obligations doivent être validés par votre comptable selon la réglementation applicable.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
+            LocalOnlyNotice("Aucune déclaration fiscale n’est transmise par cet écran.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -290,7 +305,8 @@ fun TaxesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, se
 @Composable
 fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val scope = rememberCoroutineScope()
-    val siteId = session.account.activeSiteIds.firstOrNull().orEmpty()
+    val siteIds = session.account.activeSiteIds
+    var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
     val records by remember(siteId) { repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "business_goal") }.collectAsState(initial = emptyList())
     val calendar = remember { Calendar.getInstance() }
     val start = remember { (calendar.clone() as Calendar).apply { set(Calendar.HOUR_OF_DAY,0); set(Calendar.MINUTE,0); set(Calendar.SECOND,0); set(Calendar.MILLISECOND,0) }.timeInMillis }
@@ -305,6 +321,8 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
             Spacer(Modifier.height(12.dp))
             Text("Pilotage et objectifs", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Objectifs datés, réalisé, écart et historique des décisions. La cible enregistrée n’est pas réécrite rétroactivement.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
+            LocalOnlyNotice("Les objectifs et réalisés visibles ici sont issus du stockage local de ce site.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -380,24 +398,51 @@ fun ProfileContent(
     session: AuthSession,
     activityProfile: String?,
     repository: NaxaServicesLocalRepository,
+    preferences: NaxaServicesPreferences,
     onNavigate: (AppRoute) -> Unit,
     onLogout: () -> Unit
 ) {
-    val siteId = session.account.activeSiteIds.firstOrNull().orEmpty()
+    val context = LocalContext.current
+    val siteIds = session.account.activeSiteIds
+    var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
     val history by remember(siteId) { repository.dao.observeManagementRecords(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     val activity = NaxaActivityCatalog.find(activityProfile)
+    var photoUri by rememberSaveable(session.account.memberId) { mutableStateOf(preferences.profilePhoto(session.account.memberId)) }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            photoUri = uri.toString()
+            preferences.saveProfilePhoto(session.account.memberId, uri.toString())
+        }
+    }
+    val profileBitmap: Bitmap? = remember(photoUri) {
+        photoUri?.let { value ->
+            runCatching { context.contentResolver.openInputStream(Uri.parse(value))?.use(BitmapFactory::decodeStream) }.getOrNull()
+        }
+    }
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
             Text("Profil", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(session.account.displayName.take(1).uppercase(), style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black)
+                    if (profileBitmap != null) {
+                        Image(profileBitmap.asImageBitmap(), contentDescription = "Photo de profil", modifier = Modifier.size(88.dp), contentScale = ContentScale.Crop)
+                    } else {
+                        Text(session.account.displayName.take(1).uppercase(), style = MaterialTheme.typography.displayMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Black)
+                    }
+                    OutlinedButton(onClick = { photoPicker.launch(arrayOf("image/*")) }) { Text("Choisir une photo de profil") }
                     Text(session.account.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(session.account.roleCode + " · " + session.account.organizationName)
                     Text("Identifiant membre : " + session.account.memberId, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text("Activité : " + (activity?.titleFr ?: "Non définie"))
-                    Text("Modèle : " + session.account.businessMode)
+                    Text("Langue : " + session.account.defaultLocale.uppercase())
+                    Text("Modèle : " + when(session.account.businessMode) {
+                        "solo" -> "PME autonome"
+                        "single_site_multi_workstation" -> "Plusieurs emplacements dans un établissement"
+                        "multi_site_network" -> "Promoteur multi-sites"
+                        else -> session.account.businessMode
+                    })
                     Text(session.account.activeSites.size.toString() + " point(s) de vente accessible(s)")
                 }
             }
@@ -409,7 +454,11 @@ fun ProfileContent(
             OutlinedButton(onClick = { onNavigate(AppRoute.HELP) }, modifier = Modifier.fillMaxWidth()) { Text("FAQ et assistance") }
             OutlinedButton(onClick = { onNavigate(AppRoute.SUBSCRIPTIONS) }, modifier = Modifier.fillMaxWidth()) { Text("Abonnement et paiement") }
         }
-        item { Text("Historique local", fontWeight = FontWeight.Bold) }
+        item {
+            Text("Historique local", fontWeight = FontWeight.Bold)
+            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
+            LocalOnlyNotice("Historique des registres locaux ; l’historique serveur complet dépend de la synchronisation.")
+        }
         items(history.take(30)) { item ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(12.dp)) {
@@ -475,10 +524,16 @@ fun LivechatContent(modifier: Modifier, repository: NaxaServicesLocalRepository,
 
 private fun labelRecord(type: String) = when(type) {
     "quote" -> "Devis"
+    "work_order" -> "Ordre de travail"
+    "repair_order" -> "Ordre de réparation"
+    "service_order" -> "Ordre de service"
     "invoice" -> "Facture"
     "credit_note" -> "Avoir"
     "refund_due" -> "Remboursement dû au client"
     "purchase" -> "Achat"
+    "subscription_request" -> "Demande d’abonnement"
+    "tax_estimate" -> "Estimation fiscale"
+    "business_goal" -> "Objectif"
     else -> type
 }
 private fun statusRecord(status: String) = when(status) {
