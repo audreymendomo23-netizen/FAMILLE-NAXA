@@ -703,6 +703,8 @@ fun StockContent(
     var sku by rememberSaveable { mutableStateOf("") }
     var unit by rememberSaveable { mutableStateOf("unité") }
     var reorder by rememberSaveable { mutableStateOf("0") }
+    var newSupplierWhatsApp by rememberSaveable { mutableStateOf("") }
+    var supplierWhatsApp by rememberSaveable { mutableStateOf("") }
     var movementType by rememberSaveable { mutableStateOf("in") }
     var quantity by rememberSaveable { mutableStateOf("") }
     var reason by rememberSaveable { mutableStateOf("") }
@@ -727,6 +729,7 @@ fun StockContent(
                     if (includeReorderField) add("reorder_level")
                     if (includePurchasePriceField) add("purchase_price_xaf")
                     if (includeSellingPriceField) add("selling_price_xaf")
+                    add("supplier_whatsapp")
                 }
                 context.contentResolver.openOutputStream(uri)?.use { output ->
                     OutputStreamWriter(output, Charsets.UTF_8).use { writer ->
@@ -1070,12 +1073,13 @@ fun StockContent(
                     OutlinedTextField(sku, { sku = it }, Modifier.fillMaxWidth(), label = { Text("Référence / SKU") }, singleLine = true)
                     OutlinedTextField(unit, { unit = it }, Modifier.fillMaxWidth(), label = { Text("Unité (pièce, litre, kg…)") }, singleLine = true)
                     OutlinedTextField(reorder, { reorder = it }, Modifier.fillMaxWidth(), label = { Text("Seuil d’alerte") }, singleLine = true)
+                    OutlinedTextField(newSupplierWhatsApp, { newSupplierWhatsApp = it }, Modifier.fillMaxWidth(), label = { Text("WhatsApp fournisseur (indicatif pays + numéro)") }, singleLine = true)
                     Button(
                         onClick = {
                             scope.launch {
                                 busy = true; error = null
-                                runCatching { repository.createInventoryItem(session.account.organizationId, siteId, sku, itemName, unit, reorder.replace(",", ".").toDouble()) }
-                                    .onSuccess { itemName = ""; sku = ""; reorder = "0"; notice = "Article créé avec un stock initial nul." }
+                                runCatching { repository.createInventoryItem(session.account.organizationId, siteId, sku, itemName, unit, reorder.replace(",", ".").toDouble(), newSupplierWhatsApp) }
+                                    .onSuccess { itemName = ""; sku = ""; reorder = "0"; newSupplierWhatsApp = ""; notice = "Article créé avec un stock initial nul." }
                                     .onFailure { error = it.message ?: "Création impossible." }
                                 busy = false
                             }
@@ -1090,20 +1094,46 @@ fun StockContent(
         if (stock.isEmpty()) item { Text("Aucun article configuré.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(stock) { item ->
             Card(
-                onClick = { selectedItemId = item.id },
+                onClick = { selectedItemId = item.id; supplierWhatsApp = item.supplierWhatsApp },
                 colors = CardDefaults.cardColors(containerColor = if (selectedItemId == item.id) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface)
             ) {
-                Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(item.name, fontWeight = FontWeight.Bold)
-                        Text(item.sku.ifBlank { "Sans référence" } + " · " + item.unit, style = MaterialTheme.typography.bodySmall)
-                        val value = valuations.firstOrNull { it.inventoryItemId == item.id }
-                        Text("Coût unitaire : " + (value?.unitCostXaf?.toString() ?: "—") + " F", style = MaterialTheme.typography.bodySmall)
-                        Text("Prix de vente : " + (value?.sellingPriceXaf?.toString() ?: "—") + " F", style = MaterialTheme.typography.bodySmall)
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(item.name, fontWeight = FontWeight.Bold)
+                            Text(item.sku.ifBlank { "Sans référence" } + " · " + item.unit, style = MaterialTheme.typography.bodySmall)
+                            val value = valuations.firstOrNull { it.inventoryItemId == item.id }
+                            Text("Coût unitaire : " + (value?.unitCostXaf?.toString() ?: "—") + " F", style = MaterialTheme.typography.bodySmall)
+                            Text("Prix de vente : " + (value?.sellingPriceXaf?.toString() ?: "—") + " F", style = MaterialTheme.typography.bodySmall)
+                            Text("WhatsApp fournisseur : " + (item.supplierWhatsApp.ifBlank { "Non renseigné" }), style = MaterialTheme.typography.bodySmall)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(item.quantity.toString() + " " + item.unit, fontWeight = FontWeight.Bold)
+                            Text(if (item.quantity <= item.reorderLevel) "Seuil atteint" else "Stock disponible", color = if (item.quantity <= item.reorderLevel) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
+                        }
                     }
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(item.quantity.toString() + " " + item.unit, fontWeight = FontWeight.Bold)
-                        Text(if (item.quantity <= item.reorderLevel) "Seuil atteint" else "Stock disponible", color = if (item.quantity <= item.reorderLevel) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
+                    if (item.quantity <= item.reorderLevel) {
+                        val suggestedQty = (item.reorderLevel * 2.0 - item.quantity).coerceAtLeast(1.0)
+                        OutlinedButton(
+                            onClick = {
+                                val phone = item.supplierWhatsApp.filter(Char::isDigit)
+                                if (phone.length < 9) {
+                                    selectedItemId = item.id
+                                    supplierWhatsApp = item.supplierWhatsApp
+                                    error = "Ajoute d'abord le numéro WhatsApp du fournisseur dans la fiche de l'article."
+                                } else {
+                                    val orderText = "Bonjour, je souhaite commander " + suggestedQty + " " + item.unit +
+                                        " de " + item.name + " (SKU " + item.sku + "). Stock actuel : " + item.quantity +
+                                        " " + item.unit + " ; seuil d'alerte : " + item.reorderLevel +
+                                        " " + item.unit + ". Merci de confirmer disponibilité, prix et délai."
+                                    val url = "https://wa.me/" + phone + "?text=" + android.net.Uri.encode(orderText)
+                                    runCatching {
+                                        context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                                    }.onFailure { error = "WhatsApp ou navigateur indisponible sur cet appareil." }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Préparer la commande sur WhatsApp · " + suggestedQty + " " + item.unit) }
                     }
                 }
             }
@@ -1113,6 +1143,18 @@ fun StockContent(
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Mouvement : " + selected.name, fontWeight = FontWeight.Bold)
+                        if (supplierWhatsApp.isBlank()) supplierWhatsApp = selected.supplierWhatsApp
+                        OutlinedTextField(supplierWhatsApp, { supplierWhatsApp = it }, Modifier.fillMaxWidth(), label = { Text("WhatsApp fournisseur (indicatif pays + numéro)") }, singleLine = true)
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching { repository.saveSupplierWhatsApp(session.account.organizationId, siteId, selected.id, supplierWhatsApp) }
+                                        .onSuccess { supplierWhatsApp = it.supplierWhatsApp; notice = "Contact WhatsApp fournisseur enregistré." }
+                                        .onFailure { error = it.message ?: "Enregistrement du contact impossible." }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Enregistrer le contact fournisseur") }
                         val savedValue = valuations.firstOrNull { it.inventoryItemId == selected.id }
                         if (unitCostXaf.isBlank()) unitCostXaf = savedValue?.unitCostXaf?.toString() ?: ""
                         if (sellingPriceXaf.isBlank()) sellingPriceXaf = savedValue?.sellingPriceXaf?.toString() ?: ""
@@ -1221,6 +1263,7 @@ private fun parseStockImportCsv(raw: String): List<LocalInventoryImportRow> {
     val reorderIndex = findColumn("reorder_level", "seuil", "seuil_alerte", "stock_minimum")
     val purchaseIndex = findColumn("purchase_price_xaf", "purchase_price", "prix_achat", "cout_achat", "unit_cost")
     val sellingIndex = findColumn("selling_price_xaf", "selling_price", "prix_vente", "prix_public", "sale_price")
+    val supplierIndex = findColumn("supplier_whatsapp", "whatsapp_supplier", "contact_whatsapp", "whatsapp_fournisseur")
     require(skuIndex != null && nameIndex != null && unitIndex != null && quantityIndex != null) {
         "Colonnes obligatoires manquantes : sku, name, unit, quantity. Utilise le template NAXA SERVICES."
     }
@@ -1263,7 +1306,8 @@ private fun parseStockImportCsv(raw: String): List<LocalInventoryImportRow> {
                 quantity = decimal(cell(cells, quantityIndex), "quantité", rowNumber),
                 reorderLevel = decimal(cell(cells, reorderIndex), "seuil d'alerte", rowNumber),
                 unitCostXaf = amount(cell(cells, purchaseIndex), "coût d'achat", rowNumber),
-                sellingPriceXaf = amount(cell(cells, sellingIndex), "prix de vente", rowNumber)
+                sellingPriceXaf = amount(cell(cells, sellingIndex), "prix de vente", rowNumber),
+                supplierWhatsApp = cell(cells, supplierIndex).filter(Char::isDigit)
             )
         )
     }
