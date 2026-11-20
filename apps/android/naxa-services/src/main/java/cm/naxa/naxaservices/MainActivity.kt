@@ -502,7 +502,7 @@ private fun PressingLocalContent(
     var deposit by rememberSaveable { mutableStateOf("0") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val orders by remember(siteId) { repository.dao.observePressingOrders(siteId) }.collectAsState(initial = emptyList())
+    val orders by remember(siteId) { repository.dao.observePressingOrders(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
@@ -614,7 +614,7 @@ private fun AgendaLocalContent(
     var deposit by rememberSaveable { mutableStateOf("0") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    val appointments by remember(siteId) { repository.dao.observeAppointments(siteId) }.collectAsState(initial = emptyList())
+    val appointments by remember(siteId) { repository.dao.observeAppointments(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
@@ -692,9 +692,9 @@ private fun CashLocalContent(
 ) {
     val scope = rememberCoroutineScope()
     var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
-    val sessions by remember(siteId) { repository.dao.observeCashSessions(siteId) }.collectAsState(initial = emptyList())
-    val sales by remember(siteId) { repository.dao.observeSales(siteId) }.collectAsState(initial = emptyList())
-    val pendingOutbox by repository.dao.observePendingOutboxCount().collectAsState(initial = 0)
+    val sessions by remember(siteId) { repository.dao.observeCashSessions(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    val sales by remember(siteId) { repository.dao.observeSales(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    val pendingOutbox by repository.dao.observePendingOutboxCount(session.account.organizationId).collectAsState(initial = 0)
     val openSession = sessions.firstOrNull { it.status == "open" }
 
     var registerId by rememberSaveable { mutableStateOf("") }
@@ -761,7 +761,7 @@ private fun CashLocalContent(
                                     busy = true
                                     error = null
                                     runCatching {
-                                        repository.recordSale(siteId, openSession.id, saleDescription, saleTotal.toLong(), paymentMethod, session.account.memberId)
+                                        repository.recordSale(session.account.organizationId, siteId, openSession.id, saleDescription, saleTotal.toLong(), paymentMethod, session.account.memberId)
                                     }.onSuccess { pair ->
                                         saleDescription = ""
                                         saleTotal = ""
@@ -784,7 +784,7 @@ private fun CashLocalContent(
                                     busy = true
                                     error = null
                                     runCatching {
-                                        repository.addExpense(siteId, openSession.id, expenseCategory, expenseDescription, expenseAmount.toLong(), session.account.memberId)
+                                        repository.addExpense(session.account.organizationId, siteId, openSession.id, expenseCategory, expenseDescription, expenseAmount.toLong(), session.account.memberId)
                                     }.onSuccess { expenseCategory = ""; expenseDescription = ""; expenseAmount = ""; notice = "Dépense ajoutée à la file locale." }
                                         .onFailure { error = it.message ?: "Dépense impossible." }
                                     busy = false
@@ -803,7 +803,7 @@ private fun CashLocalContent(
                                     busy = true
                                     error = null
                                     runCatching {
-                                        repository.closeCashSession(openSession.id, countedClose.toLong(), varianceReason, session.account.memberId)
+                                        repository.closeCashSession(session.account.organizationId, siteId, openSession.id, countedClose.toLong(), varianceReason, session.account.memberId)
                                     }.onSuccess { notice = "Clôture locale terminée. Écart : " + (it.varianceXaf ?: 0L) + " FCFA." }
                                         .onFailure { error = it.message ?: "Clôture impossible." }
                                     busy = false
