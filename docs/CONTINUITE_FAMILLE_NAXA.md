@@ -199,3 +199,13 @@ Le statut reste EN VALIDATION CI ; ne déclarer VERT qu'après preuve intégrale
 - Le rôle local platform_admin est neutralisé ; l'unique admin global vient de family_admins.
 - Le journal audit_events est protégé contre UPDATE/DELETE ; les mutations administratives ciblées génèrent des événements de métadonnées.
 - La CI PostgreSQL 17 doit encore confirmer ces derniers changements. L'index unique et les règles d'identité ne doivent pas être appliqués au backend réel avant inventaire des comptes existants et plan de correspondance.
+
+
+## Mise à jour — audit global des sources et priorité de construction (20 novembre 2026)
+
+- Le dépôt source historique `audreymendomo23-netizen/NAXA` a été réintégré dans la cartographie des actifs réutilisables. Il contient le système NAXA Security (passerelle locale, ONVIF, événements, accès vidéo, enregistrement local, horodatage et politiques de haute surveillance), mais plusieurs lots restent partiels/bloqués par matériel, Android natif et pilote physique.
+- Les capacités NAXA existantes (identité, rôles, caisse, paiements/SMS, notifications, messagerie, comptabilité, BI/IA, prestations) sont des sources à auditer et adapter ; leurs tables et permissions liées à l'ancienne Pharmacie/aux partenaires ne doivent pas être copiées directement dans les applications Famille.
+- Première application recommandée : **NAXA SERVICES**, avec J0 fondation puis J1 cœur opérationnel, J2 agenda/équipe, J3 pilotage/IA. Le cahier de charge et les prompts 4.1–4.7 sont disponibles dans le dépôt.
+- JOBLY Partner, parrainage, KYC partenaire, attribution, commissions de referral et payout demeurent exclus.
+- Rapport détaillé : `docs/audits/AUDIT_GLOBAL_SOURCES_NAXA_FAMILLE_ET_PRIORISATION_2026-11-20.md`.
+- Aucune application métier, migration Supabase, configuration Production, publication APK ou déploiement n'a été modifié.
