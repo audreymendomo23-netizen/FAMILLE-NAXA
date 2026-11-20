@@ -7,6 +7,7 @@ import androidx.room.Room
 import androidx.compose.runtime.collectAsState
 import cm.naxa.naxaservices.data.NsServicesDatabase
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_1_2
 import cm.naxa.naxaservices.data.LocalPressingOrder
 import cm.naxa.naxaservices.data.LocalAppointment
 import cm.naxa.naxaservices.data.LocalCashSession
@@ -445,6 +446,7 @@ private fun NaxaServicesRoot() {
                                     onDismissMessage = { message = null },
                                     preferences = preferences,
                                     locale = locale,
+                                    onAppearanceChanged = { selected -> lightTheme = selected },
                                     onLocale = { selectedLocale ->
                                         scope.launch {
                                             busy = true
@@ -742,6 +744,7 @@ private fun ErpScreen(
     onDismissMessage: () -> Unit,
     preferences: NaxaServicesPreferences,
     locale: String,
+    onAppearanceChanged: (Boolean) -> Unit,
     onLocale: (String) -> Unit,
     activityProfile: String?,
     tourActive: Boolean,
@@ -785,7 +788,7 @@ private fun ErpScreen(
         if (!canAccessRoute(route, roleCode)) {
             AccessDeniedContent(Modifier.padding(padding)) { onNavigate(AppRoute.DASHBOARD) }
         } else if (route == AppRoute.DASHBOARD) {
-            DashboardContent(Modifier.padding(padding), accountName, roleCode, locale, activityProfile, onNavigate, tourActive, tourStep, onTourNext, onTourSkip)
+            DashboardContent(Modifier.padding(padding), accountName, roleCode, locale, activityProfile, onNavigate, onLogout, tourActive, tourStep, onTourNext, onTourSkip)
         } else if (route == AppRoute.MENU) {
             ModuleMenu(Modifier.padding(padding), roleCode, activityProfile, onNavigate, onLogout)
         } else if (route == AppRoute.PRESSING) {
@@ -815,7 +818,7 @@ private fun ErpScreen(
         } else if (route == AppRoute.PROFILE) {
             ProfileContent(Modifier.padding(padding), activeSession, activityProfile, localRepository, preferences, onNavigate, onLogout)
         } else if (route == AppRoute.APPEARANCE) {
-            AppearanceSettingsContent(locale, preferences, onChanged = { lightTheme = it }, onLocale = onLocale)
+            AppearanceSettingsContent(locale, preferences, onChanged = onAppearanceChanged, onLocale = onLocale)
         } else if (route == AppRoute.BILLING) {
             BillingContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.SUBSCRIPTIONS) {
@@ -1606,6 +1609,7 @@ private fun DashboardContent(
     locale: String,
     activityProfile: String?,
     onNavigate: (AppRoute) -> Unit,
+    onLogout: () -> Unit,
     tourActive: Boolean,
     tourStep: Int,
     onTourNext: () -> Unit,

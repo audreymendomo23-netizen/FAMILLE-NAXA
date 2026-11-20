@@ -80,7 +80,7 @@ fun AuthorizedSitePicker(
 }
 
 @Composable
-private fun ModulePageTitle(title: String, description: String) {
+fun ModulePageTitle(title: String, description: String) {
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text(description, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodyMedium)
@@ -88,7 +88,7 @@ private fun ModulePageTitle(title: String, description: String) {
 }
 
 @Composable
-private fun LocalOnlyNotice(text: String = "Brouillon local : aucune synchronisation serveur ni validation distante n’est déclarée.") {
+fun LocalOnlyNotice(text: String = "Brouillon local : aucune synchronisation serveur ni validation distante n’est déclarée.") {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
 }
 

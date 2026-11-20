@@ -6,6 +6,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -131,7 +132,7 @@ fun LegalAcceptanceScreen(
      "AI, support and security" to "AI supports decisions and does not confirm payments. Calls and screen sharing require explicit consent. Users must protect their devices and accounts.",
      "Liability and applicable law" to "Final availability, liability, termination, intellectual property, governing law and official contact clauses must be completed and approved by counsel before commercial use."
     )
-    items(sections){(title,body)->item{Column(verticalArrangement=Arrangement.spacedBy(3.dp)){Text(title,fontWeight=FontWeight.Bold);Text(body,color=MaterialTheme.colorScheme.onSurfaceVariant)}}}
+    items(sections){ section -> Column(verticalArrangement=Arrangement.spacedBy(3.dp)){Text(section.first,fontWeight=FontWeight.Bold);Text(section.second,color=MaterialTheme.colorScheme.onSurfaceVariant)} }
     item { Text(if(fr)"Projet soumis à validation juridique avant toute utilisation commerciale." else "Draft subject to legal review before commercial use.",color=MaterialTheme.colorScheme.error) }
     item { Button(onClick={showTerms=false},modifier=Modifier.fillMaxWidth()){Text(if(fr)"Fermer" else "Close")} }
    }
@@ -160,7 +161,7 @@ fun LegalAcceptanceScreen(
      "Security and rights" to "Safeguards include access control, encryption, logging and secure backups. Access, correction, objection, deletion and portability procedures must be completed.",
      "Offline and backups" to "Some data may remain locally on the device. Drive backups are optional, encrypted and exclude session tokens."
     )
-    items(sections){(title,body)->item{Column(verticalArrangement=Arrangement.spacedBy(3.dp)){Text(title,fontWeight=FontWeight.Bold);Text(body,color=MaterialTheme.colorScheme.onSurfaceVariant)}}}
+    items(sections){ section -> Column(verticalArrangement=Arrangement.spacedBy(3.dp)){Text(section.first,fontWeight=FontWeight.Bold);Text(section.second,color=MaterialTheme.colorScheme.onSurfaceVariant)} }
     item { Text(if(fr)"Projet soumis à validation juridique et conformité avant toute utilisation commerciale." else "Draft subject to legal and compliance review before commercial use.",color=MaterialTheme.colorScheme.error) }
     item { Button(onClick={showPrivacy=false},modifier=Modifier.fillMaxWidth()){Text(if(fr)"Fermer" else "Close")} }
    }

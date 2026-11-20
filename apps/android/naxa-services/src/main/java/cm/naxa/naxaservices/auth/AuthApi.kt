@@ -3,6 +3,7 @@ package cm.naxa.naxaservices.auth
 import android.os.Build
 import android.content.Context
 import cm.naxa.naxaservices.BuildConfig
+import cm.naxa.naxaservices.NaxaActivityCatalog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
