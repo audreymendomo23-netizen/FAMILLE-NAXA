@@ -610,7 +610,6 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         require(orgId.isNotBlank() && siteId.isNotBlank() && code.isNotBlank() && name.isNotBlank()) { "Point de vente, code et nom obligatoires." }
         require(kind in setOf("hair_chair", "pressing_counter", "pressing_workshop", "reception", "cashier", "other")) { "Type d'emplacement invalide." }
         require(capacity in 1..100) { "Capacité comprise entre 1 et 100." }
-        require(dao.findSite(siteId, orgId) != null) { "Point de vente inconnu." }
         val workstation = LocalWorkstation(UUID.randomUUID().toString(), orgId, siteId, code.trim().uppercase(), name.trim(), kind, capacity, createdAtMillis = System.currentTimeMillis())
         dao.insertWorkstation(workstation)
         enqueue("workstation", workstation.id, "workstation.created", siteId)
