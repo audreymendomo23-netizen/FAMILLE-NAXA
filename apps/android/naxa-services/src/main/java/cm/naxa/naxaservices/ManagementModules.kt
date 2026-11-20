@@ -1255,10 +1255,51 @@ fun TeamPerformanceContent(
         }
         item { Text("Commissions, avances et primes", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(payroll.take(40)) { row ->
+            var approvalReason by rememberSaveable(row.id) { mutableStateOf("") }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.padding(12.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(row.counterparty + " · " + labelRecord(row.recordType), fontWeight = FontWeight.SemiBold)
                     Text(row.title + " · " + xaf(row.amountXaf) + " · " + row.status, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (row.status == "pending_review") {
+                        OutlinedTextField(
+                            approvalReason,
+                            { approvalReason = it },
+                            Modifier.fillMaxWidth(),
+                            label = { Text("Motif de validation ou de rejet obligatoire") }
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching {
+                                            repository.transitionManagementRecord(
+                                                session.account.organizationId, siteId, row.id,
+                                                "approved", approvalReason, session.account.memberId
+                                            )
+                                        }.onSuccess { message = "Mouvement approuvé et historisé."; error = null }
+                                            .onFailure { error = it.message ?: "Validation impossible." }
+                                    }
+                                },
+                                enabled = approvalReason.trim().length >= 3,
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Approuver") }
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching {
+                                            repository.transitionManagementRecord(
+                                                session.account.organizationId, siteId, row.id,
+                                                "rejected", approvalReason, session.account.memberId
+                                            )
+                                        }.onSuccess { message = "Mouvement rejeté et historisé."; error = null }
+                                            .onFailure { error = it.message ?: "Rejet impossible." }
+                                    }
+                                },
+                                enabled = approvalReason.trim().length >= 3,
+                                modifier = Modifier.weight(1f)
+                            ) { Text("Rejeter") }
+                        }
+                    }
                 }
             }
         }
