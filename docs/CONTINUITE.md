@@ -1017,3 +1017,41 @@ Les intégrations centrales documentées restent des lots distincts : pilotage c
 
 Aucun déploiement Supabase ni migration réelle Supabase n'a été exécuté dans cette passe. Le projet NAXA autonome n'a pas été modifié. La branche de travail n'a pas été fusionnée automatiquement dans `main`. Le rapport technique exhaustif demeure dans `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`, section 37.
 
+
+
+### 6.17.20 Lot de parrainage PME et reprise globale — 20 novembre 2026
+
+Ce point complète la section 6.17.19 sans invalider les preuves Android/CI du commit précédent. Le code de ce lot reste sur la branche de travail ; seule cette mise à jour de continuité est écrite sur `main`.
+
+#### Référence de reprise
+
+- Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`.
+- Branche de travail : `work/naxa-services-completion-20261120`.
+- Commit de code : `c76b6680c84635368ae7abd6430018aa13876e40` — ajout du parcours de parrainage PME.
+- Rapport détaillé : `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`, section 38.
+- Workflow déclenché sur ce commit : `44791819448`. Les tests du contrat de parrainage, les contrôles Auth et les tests du catalogue tarifaire ont réussi ; le job de compilation Android était encore en cours au moment de la présente mise à jour. Relever son résultat final avant toute annonce de build vert sur ce SHA.
+
+#### Parrainage — règles et interface ajoutées
+
+- Entrée depuis Profil → « Parrainage et suivi de mes gains ».
+- Le Promoteur peut générer et copier le code unique de son organisation.
+- Le Promoteur d'une PME filleule peut associer le code reçu une seule fois ; auto-parrainage et transfert de parrain sont refusés.
+- L'écran présente les PME rattachées, dates de rattachement et d'activation, activations payées, progression par vagues de cinq, et les récompenses acquises.
+- La qualification se fait au premier abonnement réellement payé confirmé côté serveur, et non au simple enregistrement, essai, renouvellement ou statut pending.
+- Chaque groupe complet de cinq déclenche une récompense : cadence mensuelle de la PME marraine → un cycle mensuel gratuit ; cadence annuelle → un mois additionnel à appliquer à l'expiration annuelle.
+- Les récompenses ont un état distinct `pending_entitlement` / `applied` / `failed`. Aucune récompense n'est annoncée comme consommée avant confirmation du service d'entitlements.
+
+#### Limites de mise en service du parrainage
+
+L'interface et les contrats source sont ajoutés, mais le service n'est pas encore en production : la migration SQL reste dans `supabase/drafts/naxa_services_referrals_v1.sql`, la fonction Edge reste à déployer, le secret `NS_REFERRAL_WEBHOOK_SECRET` reste à configurer, et aucun webhook de fournisseur de paiement ni adaptateur d'entitlements n'a encore été raccordé. L'événement signé doit provenir du système de facturation après capture du premier paiement et doit transmettre la cadence active réelle du parrain au moment du seuil. Les gains resteront `pending_entitlement` tant que l'avantage n'aura pas été appliqué et vérifié côté serveur.
+
+#### Chantiers globaux — statut non vert production
+
+La réussite du build Android debug et des tests de contrat ne doit pas être assimilée à une qualification globale. Les points suivants demeurent à fermer avec preuves propres : API ERP distante, synchronisation offline complète, idempotence et conflits inter-appareils ; RLS réellement testée par organisation/site/poste/rôle ; paiement récurrent, webhooks, entitlements et prélèvements ; notifications FCM, SMS/WhatsApp et planificateur CRM ; SYSCOHADA, fiscalité et paie validées par les professionnels compétents ; appareils physiques, tests instrumentés, charge et restauration ; Release Android signée ; Web/PWA séparée ; Fulfulde complet traduit et relu ; pilotage central des dix applications, mutualisation effective des CSO, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
+
+#### Protection du périmètre et consigne de reprise
+
+- Aucune migration ou fonction Supabase n'a été déployée dans cette étape.
+- Le projet NAXA autonome n'a pas été modifié.
+- Aucun commit de code n'a été fusionné dans `main`.
+- Reprendre depuis le HEAD courant de `work/naxa-services-completion-20261120`, conserver les écrans existants et poursuivre les intégrations restantes en lots verticaux avec tests et preuves distincts.
