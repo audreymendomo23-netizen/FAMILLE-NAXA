@@ -268,7 +268,8 @@ data class LocalInventoryItem(
     val quantity: Double,
     val reorderLevel: Double,
     val active: Boolean = true,
-    val createdAtMillis: Long
+    val createdAtMillis: Long,
+    val supplierWhatsApp: String = ""
 )
 
 @Entity(tableName = "local_inventory_movements", indices = [Index(value = ["siteId"]), Index(value = ["itemId"]), Index(value = ["createdAtMillis"])])
@@ -363,7 +364,85 @@ data class LocalInventoryImportRow(
     val quantity: Double,
     val reorderLevel: Double,
     val unitCostXaf: Long?,
-    val sellingPriceXaf: Long?
+    val sellingPriceXaf: Long?,
+    val supplierWhatsApp: String = ""
+)
+
+@Entity(tableName = "local_recurring_charges", indices = [
+    Index(value = ["orgId", "siteId", "nextDueAtMillis"]),
+    Index(value = ["orgId", "siteId", "active"])
+])
+data class LocalRecurringCharge(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val name: String,
+    val category: String,
+    val amountXaf: Long,
+    val recurrence: String,
+    val nextDueAtMillis: Long,
+    val reminderDays: Int,
+    val active: Boolean,
+    val createdByMemberId: String,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long,
+    val lastReminderAtMillis: Long? = null
+)
+
+@Entity(tableName = "local_charge_payments", indices = [
+    Index(value = ["orgId", "siteId", "paidAtMillis"]),
+    Index(value = ["chargeId", "referenceDueAtMillis"])
+])
+data class LocalChargePayment(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val chargeId: String,
+    val referenceDueAtMillis: Long,
+    val paidAtMillis: Long,
+    val amountXaf: Long,
+    val actorMemberId: String
+)
+
+@Entity(tableName = "local_loyalty_programs", indices = [
+    Index(value = ["orgId", "activityProfile", "programCode"], unique = true)
+])
+data class LocalLoyaltyProgram(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val activityProfile: String,
+    val programCode: String,
+    val name: String,
+    val description: String,
+    val metricCode: String,
+    val unitAmountXaf: Long,
+    val targetValue: Long,
+    val rewardDescription: String,
+    val windowDays: Int,
+    val active: Boolean,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long
+)
+
+@Entity(tableName = "local_loyalty_events", indices = [
+    Index(value = ["orgId", "siteId", "programId", "customerId", "createdAtMillis"]),
+    Index(value = ["relatedEventId"])
+])
+data class LocalLoyaltyEvent(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val programId: String,
+    val customerId: String,
+    val eventType: String,
+    val amountXaf: Long,
+    val metricDelta: Long,
+    val waveNumber: Int?,
+    val relatedEventId: String?,
+    val rewardStatus: String?,
+    val description: String,
+    val actorMemberId: String,
+    val createdAtMillis: Long
 )
 
 @Dao
@@ -613,6 +692,51 @@ interface NaxaServicesDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertInventoryValuation(valuation: LocalInventoryValuation)
+
+    @Query("SELECT * FROM local_recurring_charges WHERE orgId = :orgId AND siteId = :siteId ORDER BY nextDueAtMillis ASC")
+    fun observeRecurringCharges(orgId: String, siteId: String): Flow<List<LocalRecurringCharge>>
+
+    @Query("SELECT * FROM local_recurring_charges WHERE active = 1")
+    suspend fun findAllActiveRecurringCharges(): List<LocalRecurringCharge>
+
+    @Query("SELECT * FROM local_recurring_charges WHERE id = :id AND orgId = :orgId AND siteId = :siteId LIMIT 1")
+    suspend fun findRecurringCharge(id: String, orgId: String, siteId: String): LocalRecurringCharge?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertRecurringCharge(charge: LocalRecurringCharge)
+
+    @Update
+    suspend fun updateRecurringCharge(charge: LocalRecurringCharge)
+
+    @Query("SELECT * FROM local_charge_payments WHERE orgId = :orgId AND siteId = :siteId ORDER BY paidAtMillis DESC LIMIT 200")
+    fun observeChargePayments(orgId: String, siteId: String): Flow<List<LocalChargePayment>>
+
+    @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_charge_payments WHERE chargeId = :chargeId AND referenceDueAtMillis = :referenceDueAtMillis")
+    suspend fun sumChargePaymentsForCycle(chargeId: String, referenceDueAtMillis: Long): Long
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertChargePayment(payment: LocalChargePayment)
+
+    @Query("SELECT * FROM local_loyalty_programs WHERE orgId = :orgId AND activityProfile = :activityProfile ORDER BY programCode ASC")
+    fun observeLoyaltyPrograms(orgId: String, activityProfile: String): Flow<List<LocalLoyaltyProgram>>
+
+    @Query("SELECT * FROM local_loyalty_programs WHERE orgId = :orgId AND activityProfile = :activityProfile AND programCode = :programCode LIMIT 1")
+    suspend fun findLoyaltyProgram(orgId: String, activityProfile: String, programCode: String): LocalLoyaltyProgram?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertLoyaltyProgram(program: LocalLoyaltyProgram)
+
+    @Query("SELECT * FROM local_loyalty_events WHERE orgId = :orgId AND siteId = :siteId AND programId = :programId ORDER BY createdAtMillis DESC LIMIT 300")
+    fun observeLoyaltyEvents(orgId: String, siteId: String, programId: String): Flow<List<LocalLoyaltyEvent>>
+
+    @Query("SELECT COALESCE(SUM(metricDelta), 0) FROM local_loyalty_events WHERE orgId = :orgId AND programId = :programId AND customerId = :customerId AND eventType = 'activity' AND createdAtMillis >= :sinceMillis")
+    suspend fun sumLoyaltyMetric(orgId: String, programId: String, customerId: String, sinceMillis: Long): Long
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertLoyaltyEvent(event: LocalLoyaltyEvent)
+
+    @Query("UPDATE local_loyalty_events SET rewardStatus = 'redeemed' WHERE id = :eventId AND orgId = :orgId AND siteId = :siteId AND eventType = 'reward_earned' AND rewardStatus = 'available'")
+    suspend fun redeemLoyaltyReward(eventId: String, orgId: String, siteId: String): Int
 }
 
 @Database(
@@ -636,9 +760,13 @@ interface NaxaServicesDao {
         LocalSupportRequest::class,
         LocalManagementRecord::class,
         LocalWorkflowEvent::class,
-        LocalInventoryValuation::class
+        LocalInventoryValuation::class,
+        LocalRecurringCharge::class,
+        LocalChargePayment::class,
+        LocalLoyaltyProgram::class,
+        LocalLoyaltyEvent::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -735,6 +863,184 @@ val NS_SERVICES_MIGRATION_6_7: Migration = object : Migration(6, 7) {
         database.execSQL("CREATE INDEX IF NOT EXISTS index_local_sales_orgId_siteId_inventoryItemId_status ON local_sales(orgId, siteId, inventoryItemId, status)")
     }
 }
+
+val NS_SERVICES_MIGRATION_7_8: Migration = object : Migration(7, 8) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE local_inventory_items ADD COLUMN supplierWhatsApp TEXT NOT NULL DEFAULT ''")
+        database.execSQL("CREATE TABLE IF NOT EXISTS local_recurring_charges (id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, name TEXT NOT NULL, category TEXT NOT NULL, amountXaf INTEGER NOT NULL, recurrence TEXT NOT NULL, nextDueAtMillis INTEGER NOT NULL, reminderDays INTEGER NOT NULL, active INTEGER NOT NULL, createdByMemberId TEXT NOT NULL, createdAtMillis INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL, lastReminderAtMillis INTEGER)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_recurring_charges_orgId_siteId_nextDueAtMillis ON local_recurring_charges(orgId, siteId, nextDueAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_recurring_charges_orgId_siteId_active ON local_recurring_charges(orgId, siteId, active)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS local_charge_payments (id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, chargeId TEXT NOT NULL, referenceDueAtMillis INTEGER NOT NULL, paidAtMillis INTEGER NOT NULL, amountXaf INTEGER NOT NULL, actorMemberId TEXT NOT NULL)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_charge_payments_orgId_siteId_paidAtMillis ON local_charge_payments(orgId, siteId, paidAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_charge_payments_chargeId_referenceDueAtMillis ON local_charge_payments(chargeId, referenceDueAtMillis)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS local_loyalty_programs (id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, activityProfile TEXT NOT NULL, programCode TEXT NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL, metricCode TEXT NOT NULL, unitAmountXaf INTEGER NOT NULL, targetValue INTEGER NOT NULL, rewardDescription TEXT NOT NULL, windowDays INTEGER NOT NULL, active INTEGER NOT NULL, createdAtMillis INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL)")
+        database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_local_loyalty_programs_orgId_activityProfile_programCode ON local_loyalty_programs(orgId, activityProfile, programCode)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS local_loyalty_events (id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, programId TEXT NOT NULL, customerId TEXT NOT NULL, eventType TEXT NOT NULL, amountXaf INTEGER NOT NULL, metricDelta INTEGER NOT NULL, waveNumber INTEGER, relatedEventId TEXT, rewardStatus TEXT, description TEXT NOT NULL, actorMemberId TEXT NOT NULL, createdAtMillis INTEGER NOT NULL)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_loyalty_events_orgId_siteId_programId_customerId_createdAtMillis ON local_loyalty_events(orgId, siteId, programId, customerId, createdAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_loyalty_events_relatedEventId ON local_loyalty_events(relatedEventId)")
+    }
+}
+
+    suspend fun saveSupplierWhatsApp(orgId: String, siteId: String, itemId: String, value: String): LocalInventoryItem = database.withTransaction {
+        val phone = value.filter(Char::isDigit)
+        require(phone.isBlank() || phone.length in 9..15) { "Saisis le numéro avec son indicatif pays." }
+        val current = dao.findInventoryItem(itemId, orgId, siteId) ?: throw IllegalArgumentException("Article introuvable sur ce site.")
+        current.copy(supplierWhatsApp = phone).also {
+            dao.updateInventoryItem(it)
+            enqueue(orgId, "inventory_item", itemId, "inventory_item.supplier_whatsapp_updated", siteId)
+        }
+    }
+
+    suspend fun saveRecurringCharge(orgId: String, siteId: String, id: String?, name: String, category: String, amountXaf: Long, recurrence: String, nextDueAtMillis: Long, reminderDays: Int, actorMemberId: String): LocalRecurringCharge = database.withTransaction {
+        require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank())
+        require(name.isNotBlank() && name.length <= 120 && category.isNotBlank())
+        require(amountXaf > 0L && recurrence in setOf("monthly", "quarterly", "annual", "one_time"))
+        require(reminderDays in 0..30 && nextDueAtMillis > 0L)
+        val now = System.currentTimeMillis()
+        val old = id?.let { dao.findRecurringCharge(it, orgId, siteId) }
+        val charge = if (old == null) {
+            LocalRecurringCharge(UUID.randomUUID().toString(), orgId, siteId, name.trim(), category.trim(), amountXaf,
+                recurrence, nextDueAtMillis, reminderDays, true, actorMemberId, now, now)
+                .also { dao.insertRecurringCharge(it) }
+        } else {
+            old.copy(name = name.trim(), category = category.trim(), amountXaf = amountXaf, recurrence = recurrence,
+                nextDueAtMillis = nextDueAtMillis, reminderDays = reminderDays, active = true,
+                updatedAtMillis = now, lastReminderAtMillis = null).also { dao.updateRecurringCharge(it) }
+        }
+        enqueue(orgId, "recurring_charge", charge.id, "recurring_charge.saved", siteId)
+        charge
+    }
+
+    suspend fun recordRecurringChargePayment(orgId: String, siteId: String, chargeId: String, amountXaf: Long, actorMemberId: String): LocalChargePayment = database.withTransaction {
+        require(amountXaf > 0L && actorMemberId.isNotBlank())
+        val charge = dao.findRecurringCharge(chargeId, orgId, siteId) ?: throw IllegalArgumentException("Charge introuvable.")
+        require(charge.active) { "Cette charge est désactivée." }
+        val cycleDue = charge.nextDueAtMillis
+        val alreadyPaid = dao.sumChargePaymentsForCycle(charge.id, cycleDue)
+        require(amountXaf <= charge.amountXaf - alreadyPaid) { "Le règlement dépasse le solde de cette échéance." }
+        val now = System.currentTimeMillis()
+        val payment = LocalChargePayment(UUID.randomUUID().toString(), orgId, siteId, charge.id, cycleDue, now, amountXaf, actorMemberId)
+        dao.insertChargePayment(payment)
+        if (alreadyPaid + amountXaf >= charge.amountXaf) {
+            if (charge.recurrence == "one_time") {
+                dao.updateRecurringCharge(charge.copy(active = false, updatedAtMillis = now, lastReminderAtMillis = null))
+            } else {
+                val calendar = Calendar.getInstance().apply { timeInMillis = cycleDue }
+                var nextDue = cycleDue
+                do {
+                    when (charge.recurrence) {
+                        "monthly" -> calendar.add(Calendar.MONTH, 1)
+                        "quarterly" -> calendar.add(Calendar.MONTH, 3)
+                        "annual" -> calendar.add(Calendar.YEAR, 1)
+                    }
+                    nextDue = calendar.timeInMillis
+                } while (nextDue <= now)
+                dao.updateRecurringCharge(charge.copy(nextDueAtMillis = nextDue, updatedAtMillis = now, lastReminderAtMillis = null))
+            }
+        }
+        enqueue(orgId, "recurring_charge", charge.id, "recurring_charge.payment_recorded", siteId)
+        payment
+    }
+
+    suspend fun markChargeReminderSent(charge: LocalRecurringCharge, atMillis: Long) {
+        dao.updateRecurringCharge(charge.copy(lastReminderAtMillis = atMillis, updatedAtMillis = atMillis))
+    }
+
+    suspend fun ensureDefaultLoyaltyPrograms(orgId: String, activityProfile: String) = database.withTransaction {
+        require(orgId.isNotBlank() && activityProfile.isNotBlank())
+        val activity = activityProfile.replace('_', ' ').replaceFirstChar { it.uppercase() }
+        val noun = when (activityProfile) {
+            "pressing" -> "ticket"
+            "coiffure", "beaute" -> "prestation"
+            "couture", "menuiserie" -> "commande"
+            "garage", "reparation" -> "intervention"
+            "parfumerie" -> "achat"
+            "nettoyage", "domicile" -> "mission"
+            "impression" -> "commande imprimée"
+            "photo_evenementiel" -> "événement"
+            else -> "achat"
+        }
+        val now = System.currentTimeMillis()
+        val defaults = listOf(
+            Triple("points", "Club " + activity, "1 point par tranche de 1 000 FCFA ; récompense par cycle de 100 points."),
+            Triple("visits", "Carte " + noun, "Un tampon par " + noun + " payé ; récompense après 6 passages."),
+            Triple("spend", "Cercle privilège", "Une récompense par tranche cumulée de 100 000 FCFA."),
+            Triple("frequency", "Rendez-vous fidèle", "Récompense après 4 visites sur 45 jours glissants.")
+        )
+        defaults.forEach { entry ->
+            val code = entry.first
+            if (dao.findLoyaltyProgram(orgId, activityProfile, code) == null) {
+                val metric = when (code) { "points" -> "points"; "visits", "frequency" -> "visits"; else -> "spend" }
+                val target = when (code) { "points" -> 100L; "visits" -> 6L; "spend" -> 100_000L; else -> 4L }
+                val reward = when (code) {
+                    "points" -> "Bon d'achat ou remise de 5 000 FCFA"
+                    "visits" -> "Une remise ou " + noun + " offert, défini par le Promoteur"
+                    "spend" -> "Remise de 5 000 FCFA ou avantage équivalent"
+                    else -> "Remise de 10 % sur le prochain " + noun
+                }
+                dao.upsertLoyaltyProgram(LocalLoyaltyProgram(
+                    UUID.randomUUID().toString(), orgId, activityProfile, code, entry.second, entry.third, metric,
+                    if (code == "points") 1_000L else 1L, target, reward, if (code == "frequency") 45 else 0,
+                    true, now, now
+                ))
+            }
+        }
+    }
+
+    suspend fun saveLoyaltyProgram(program: LocalLoyaltyProgram, actorMemberId: String): LocalLoyaltyProgram = database.withTransaction {
+        require(actorMemberId.isNotBlank() && program.name.isNotBlank() && program.name.length <= 80)
+        require(program.metricCode in setOf("points", "visits", "spend"))
+        require(program.unitAmountXaf > 0L && program.targetValue > 0L && program.windowDays in 0..365)
+        require(program.rewardDescription.isNotBlank() && program.rewardDescription.length <= 240)
+        program.copy(updatedAtMillis = System.currentTimeMillis()).also {
+            dao.upsertLoyaltyProgram(it)
+            enqueue(program.orgId, "loyalty_program", program.id, "loyalty_program.updated", null)
+        }
+    }
+
+    suspend fun recordLoyaltyActivity(program: LocalLoyaltyProgram, siteId: String, customerId: String, amountXaf: Long, actorMemberId: String): List<LocalLoyaltyEvent> = database.withTransaction {
+        require(program.active && amountXaf >= 0L && actorMemberId.isNotBlank())
+        val customer = dao.findCustomer(customerId, program.orgId, siteId) ?: throw IllegalArgumentException("Client introuvable sur ce point de vente.")
+        val now = System.currentTimeMillis()
+        val delta = when (program.metricCode) {
+            "points" -> if (amountXaf == 0L) 0L else amountXaf / program.unitAmountXaf
+            "visits" -> 1L
+            "spend" -> amountXaf
+            else -> throw IllegalArgumentException("Indicateur de fidélité non pris en charge.")
+        }
+        require(delta > 0L) { "Le montant doit produire au moins un point, une visite ou une valeur d'achat." }
+        val since = if (program.windowDays > 0) now - program.windowDays * 86_400_000L else 0L
+        val previous = dao.sumLoyaltyMetric(program.orgId, program.id, customer.id, since)
+        val activityEvent = LocalLoyaltyEvent(
+            UUID.randomUUID().toString(), program.orgId, siteId, program.id, customer.id,
+            "activity", amountXaf, delta, null, null, null,
+            if (program.metricCode == "visits") "Visite validée" else "Achat validé", actorMemberId, now
+        )
+        dao.insertLoyaltyEvent(activityEvent)
+        val oldWaves = previous / program.targetValue
+        val newWaves = (previous + delta) / program.targetValue
+        val result = mutableListOf(activityEvent)
+        if (newWaves > oldWaves) {
+            for (wave in (oldWaves + 1)..newWaves) {
+                val reward = LocalLoyaltyEvent(
+                    UUID.randomUUID().toString(), program.orgId, siteId, program.id, customer.id,
+                    "reward_earned", 0L, 0L, wave.toInt(), activityEvent.id, "available",
+                    program.rewardDescription, actorMemberId, now
+                )
+                dao.insertLoyaltyEvent(reward)
+                result.add(reward)
+            }
+        }
+        enqueue(program.orgId, "loyalty_activity", activityEvent.id, "loyalty_activity.recorded", siteId)
+        result
+    }
+
+    suspend fun redeemLoyaltyReward(event: LocalLoyaltyEvent, actorMemberId: String): Boolean = database.withTransaction {
+        require(actorMemberId.isNotBlank())
+        val changed = dao.redeemLoyaltyReward(event.id, event.orgId, event.siteId)
+        if (changed > 0) enqueue(event.orgId, "loyalty_reward", event.id, "loyalty_reward.redeemed", event.siteId)
+        changed > 0
+    }
 
 class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
     val dao: NaxaServicesDao = database.naxaServicesDao()
@@ -1398,10 +1704,12 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         updated
     }
 
-    suspend fun createInventoryItem(orgId: String, siteId: String, sku: String, name: String, unit: String, reorderLevel: Double): LocalInventoryItem = database.withTransaction {
+    suspend fun createInventoryItem(orgId: String, siteId: String, sku: String, name: String, unit: String, reorderLevel: Double, supplierWhatsApp: String = ""): LocalInventoryItem = database.withTransaction {
         require(orgId.isNotBlank() && siteId.isNotBlank() && name.isNotBlank() && unit.isNotBlank()) { "Article, unité et point de vente obligatoires." }
         require(reorderLevel >= 0.0) { "Seuil d'alerte invalide." }
-        val item = LocalInventoryItem(UUID.randomUUID().toString(), orgId, siteId, sku.trim(), name.trim(), unit.trim(), 0.0, reorderLevel, createdAtMillis = System.currentTimeMillis())
+        val phone = supplierWhatsApp.filter(Char::isDigit)
+        require(phone.isBlank() || phone.length in 9..15) { "Le contact WhatsApp doit comporter l'indicatif pays." }
+        val item = LocalInventoryItem(UUID.randomUUID().toString(), orgId, siteId, sku.trim(), name.trim(), unit.trim(), 0.0, reorderLevel, createdAtMillis = System.currentTimeMillis(), supplierWhatsApp = phone)
         dao.insertInventoryItem(item)
         enqueue(orgId, "inventory_item", item.id, "inventory_item.created", siteId)
         item
@@ -1464,7 +1772,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                     dao.insertInventoryMovement(movement)
                     enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.import_adjustment", siteId)
                 }
-                dao.updateInventoryItem(changed.copy(quantity = row.quantity))
+                dao.updateInventoryItem(changed.copy(quantity = row.quantity, supplierWhatsApp = row.supplierWhatsApp.filter(Char::isDigit)))
                 if (row.unitCostXaf != null || row.sellingPriceXaf != null) {
                     val oldValue = dao.findInventoryValuation(orgId, siteId, existing.id)
                     dao.upsertInventoryValuation(
@@ -1492,7 +1800,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                     unit = row.unit.trim(),
                     quantity = 0.0,
                     reorderLevel = row.reorderLevel,
-                    createdAtMillis = now
+                    createdAtMillis = now,
+                    supplierWhatsApp = row.supplierWhatsApp.filter(Char::isDigit)
                 )
                 dao.insertInventoryItem(item)
                 enqueue(orgId, "inventory_item", item.id, "inventory_item.imported", siteId)
