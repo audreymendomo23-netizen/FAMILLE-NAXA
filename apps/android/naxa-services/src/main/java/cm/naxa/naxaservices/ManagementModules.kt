@@ -943,7 +943,7 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
     val orgId = session.account.organizationId
     val siteIds = session.account.activeSiteIds
     val zone = remember { ZoneId.of("Africa/Douala") }
-    val fromMillis = remember { LocalDate.now(zone).minusYears(5).atStartOfDay(zone).toInstant().toEpochMilli() }
+    val fromMillis = remember { LocalDate.now(zone).minusYears(6).atStartOfDay(zone).toInstant().toEpochMilli() }
     val sales by remember(orgId, siteIds, fromMillis) {
         repository.dao.observeSalesForSites(orgId, siteIds, fromMillis)
     }.collectAsState(initial = emptyList())
