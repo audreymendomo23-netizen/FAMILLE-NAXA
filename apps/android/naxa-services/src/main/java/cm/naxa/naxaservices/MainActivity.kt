@@ -990,7 +990,6 @@ private fun TeamManagementContent(
     var role by rememberSaveable { mutableStateOf(assignableRoles.firstOrNull() ?: "cashier") }
     var roleMenuExpanded by remember { mutableStateOf(false) }
     var selectedSiteIds by rememberSaveable { mutableStateOf(session.account.activeSiteIds.take(1)) }
-    var workstationId by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var provisioned by remember { mutableStateOf<ProvisionedAccess?>(null) }
