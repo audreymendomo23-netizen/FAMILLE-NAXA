@@ -14,7 +14,7 @@ import androidx.room.withTransaction
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 
-@Entity(tableName = "local_pressing_orders", indices = [Index("siteId"), Index(value = ["ticketNumber"], unique = true)])
+@Entity(tableName = "local_pressing_orders", indices = [Index(value = ["siteId"]), Index(value = ["ticketNumber"], unique = true)])
 data class LocalPressingOrder(
     @PrimaryKey val id: String,
     val orgId: String,
@@ -33,7 +33,7 @@ data class LocalPressingOrder(
     val updatedAtMillis: Long
 )
 
-@Entity(tableName = "local_pressing_status_events", indices = [Index("orderId"), Index("createdAtMillis")])
+@Entity(tableName = "local_pressing_status_events", indices = [Index(value = ["orderId"]), Index(value = ["createdAtMillis"])])
 data class LocalPressingStatusEvent(
     @PrimaryKey val id: String,
     val orderId: String,
@@ -45,7 +45,7 @@ data class LocalPressingStatusEvent(
     val createdAtMillis: Long
 )
 
-@Entity(tableName = "local_appointments", indices = [Index("siteId"), Index("startsAtMillis")])
+@Entity(tableName = "local_appointments", indices = [Index(value = ["siteId"]), Index(value = ["startsAtMillis"])])
 data class LocalAppointment(
     @PrimaryKey val id: String,
     val orgId: String,
@@ -80,7 +80,7 @@ data class LocalCashSession(
     val varianceReason: String? = null
 )
 
-@Entity(tableName = "local_sales", indices = [Index("siteId"), Index("cashSessionId"), Index("createdAtMillis")])
+@Entity(tableName = "local_sales", indices = [Index(value = ["siteId"]), Index(value = ["cashSessionId"]), Index(value = ["createdAtMillis"])])
 data class LocalSale(
     @PrimaryKey val id: String,
     val orgId: String,
@@ -95,7 +95,7 @@ data class LocalSale(
     val createdAtMillis: Long
 )
 
-@Entity(tableName = "local_expenses", indices = [Index("siteId"), Index("cashSessionId"), Index("createdAtMillis")])
+@Entity(tableName = "local_expenses", indices = [Index(value = ["siteId"]), Index(value = ["cashSessionId"]), Index(value = ["createdAtMillis"])])
 data class LocalExpense(
     @PrimaryKey val id: String,
     val orgId: String,
@@ -171,7 +171,7 @@ data class LocalService(
     val createdAtMillis: Long
 )
 
-@Entity(tableName = "local_customers", indices = [Index("siteId"), Index("phoneContact")])
+@Entity(tableName = "local_customers", indices = [Index(value = ["siteId"]), Index(value = ["phoneContact"])])
 data class LocalCustomer(
     @PrimaryKey val id: String,
     val orgId: String,
@@ -183,7 +183,7 @@ data class LocalCustomer(
     val createdAtMillis: Long
 )
 
-@Entity(tableName = "local_inventory_items", indices = [Index("siteId"), Index("name")])
+@Entity(tableName = "local_inventory_items", indices = [Index(value = ["siteId"]), Index(value = ["name"])])
 data class LocalInventoryItem(
     @PrimaryKey val id: String,
     val orgId: String,
@@ -197,7 +197,7 @@ data class LocalInventoryItem(
     val createdAtMillis: Long
 )
 
-@Entity(tableName = "local_inventory_movements", indices = [Index("siteId"), Index("itemId"), Index("createdAtMillis")])
+@Entity(tableName = "local_inventory_movements", indices = [Index(value = ["siteId"]), Index(value = ["itemId"]), Index(value = ["createdAtMillis"])])
 data class LocalInventoryMovement(
     @PrimaryKey val id: String,
     val orgId: String,
@@ -210,7 +210,7 @@ data class LocalInventoryMovement(
     val createdAtMillis: Long
 )
 
-@Entity(tableName = "local_support_requests", indices = [Index("orgId"), Index("createdAtMillis")])
+@Entity(tableName = "local_support_requests", indices = [Index(value = ["orgId"]), Index(value = ["createdAtMillis"])])
 data class LocalSupportRequest(
     @PrimaryKey val id: String,
     val orgId: String,
