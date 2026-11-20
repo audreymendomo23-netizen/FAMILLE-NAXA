@@ -1329,3 +1329,55 @@ Le workflow `44835057217` a terminé en succès (5/5) pour le moteur de prévisi
 Les écrans Achats et Pilotage restent explicitement en mode local Room. L'outbox existe, mais il ne constitue pas un moteur de synchronisation ERP multi-appareils de bout en bout. Le SQL v4 et la fonction Edge comptable sont candidats/non déployés ; aucun client Android ne démontre encore la synchronisation complète de ces commandes, réceptions, paiements, journaux et vues de performance avec un environnement Supabase isolé.
 
 En conséquence, cet addendum confirme des développements et contrats dans la branche de travail, mais ne lève pas le backlog du §39.9 : RLS/recette serveur, synchronisation offline et résolution de conflits, abonnements et paiements réels, validation SYSCOHADA/fiscale, tests instrumentés et restauration, Release signée, Web/PWA, Fulfulde complet et console centrale. Aucun de ces éléments ne doit être réputé livré par la seule compilation Android.
+
+
+# Addendum 5 — Validation de la comptabilité fournisseurs et du cockpit financier (21 novembre 2026)
+
+**Code Android validé :** `edb75ba714ba1a2ffb24cb0f8e23019553970fe4`  
+**Workflow :** [44836031127 — SUCCESS, 5/5 jobs](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44836031127)  
+**APK technique :** `naxa-services-debug-apk`, artifact ID `14678138586`, taille `11 834 979` octets. Il s'agit d'un APK **debug**, non signé pour la distribution publique.  
+**Branche de travail :** `work/naxa-services-completion-20261120`. Aucun merge dans `main`.
+
+## 41.1 Cycle fournisseurs : règles comptables appliquées côté Android local
+
+Le lot comprend désormais la continuité du cycle suivant : fournisseur → commande multi-lignes → réception partielle/complète → entrée de stock ou charge/immobilisation → dette fournisseur → règlement → journal → rapport/pilotage.
+
+- Une commande seule constitue un engagement, pas une réception : aucune variation du stock, du CA ni du résultat n'est comptabilisée à ce stade.
+- La réception d'un article de stock augmente la quantité disponible et la valeur du stock, avec coût moyen pondéré incluant les coûts imputables non récupérables répartis sur les réceptions.
+- Les achats consommables/services sont débités en charges d'exploitation à la réception ; les immobilisations sont reconnues à part ; les taxes récupérables sont isolées.
+- Le règlement solde la dette fournisseur contre la trésorerie. Il reste une sortie de caisse si payé en espèces, mais n'est jamais re-déduit comme charge.
+- Le CA est composé uniquement des ventes confirmées. Le coût des marchandises vendues est reconnu à la sortie du stock au moment de la vente ; un coût direct absent ou non fiable rend la marge et le résultat non calculables au lieu d'être estimés arbitrairement.
+- Room v11 conserve une clé d'idempotence unique des réceptions via la migration non destructive 10→11. Les clés stables côté écran protègent les reprises/double-clics de réception et de paiement.
+
+Les écritures restent un journal de gestion à comptes symboliques, non un grand livre SYSCOHADA certifié.
+
+## 41.2 Rapport quotidien, tableau d'accueil et assistant de pilotage
+
+- Les rapports quotidiens par site lisent désormais les charges d'exploitation depuis le journal comptable, et non depuis les sorties brutes de caisse.
+- Les paiements fournisseur sont présentés séparément comme règlements de dette. Ils restent comptés dans le rapprochement de caisse espèces, mais ne sont pas déduits une deuxième fois du résultat.
+- Les rapports exposent le CA confirmé, le coût des ventes connu, les charges d'exploitation, le calcul de marge brute si tous les coûts directs sont disponibles, le résultat opérationnel indicatif uniquement dans ce cas, et les règlements fournisseurs.
+- Le DAO `observeExpensesTotal` conserve un alias de compatibilité pour l'ancien tableau d'accueil, mais lit désormais le journal `OPERATING_EXPENSE*`; le nom historique ne signifie donc plus que les paiements de fournisseurs sont confondus avec les charges.
+- Les calculs quotidiens de l'accueil et des rapports utilisent `Africa/Douala`.
+- L'assistant de pilotage suit le jour, le mois et l'année, et fournit les séries comparatives détaillées 14 jours / 12 mois / 5 exercices. Les projections sont statistiques et explicables (moyennes glissantes de 14/28/90 jours) et non une IA générative distante.
+- Les actions de redressement s'appuient sur les écarts prévisionnels aux objectifs et le ticket moyen récent ; les recommandations de marge, de rupture et de dettes fournisseurs sont distinctes.
+
+## 41.3 Résultat du contrôle technique
+
+Le run `44836031127` a terminé **SUCCESS — 5/5 jobs** :
+1. tests Auth/périmètres ;
+2. tests du catalogue tarifaire Famille NAXA ;
+3. contrats Referral ;
+4. contrats comptabilité fournisseurs et prévisions ;
+5. tests unitaires Android, compilation et assemblage du debug APK.
+
+Le run démontre que le code du commit `edb75ba` compile et que les tests présents passent. Il ne démontre pas les tests instrumentés sur appareils, le comportement multi-appareils, la synchronisation ERP réelle, le RLS appliqué sur une base isolée ni une Release signée.
+
+Un échec plus ancien `44835968285` concernait la résolution réseau de `kotlinx-coroutines-android:1.8.1` avant compilation ; le workflow ci-dessus a depuis achevé avec succès sur le code final concerné. Les échecs de compilation antérieurs sur le double `@Composable` et l'ancien nom DAO ont également été corrigés puis couverts par le dernier build.
+
+## 41.4 Portée non activée et réserves de qualification
+
+Les écrans Achats, Rapports et Pilotage utilisent encore la base Room locale. Le draft SQL v4 et sa passerelle Edge comptable restent non déployés ; aucune API Android de synchronisation ERP complète ni résolution des conflits multi-appareils n'a été validée. Le schéma/les fonctions SQL candidats ne sont donc pas une base de production.
+
+Les autres réserves des §39.9 et §40.5 restent ouvertes : application et tests RLS, synchronisation offline complète, paiements récurrents/webhooks/entitlements, fournisseurs FCM/SMS/WhatsApp Business, validation comptable/fiscale/paie SYSCOHADA, inventaires/retours/transferts complets, essais instrumentés/performance/restauration, Release signée, Web/PWA, Fulfulde complet relu, console centrale des dix applications, mutualisation opérationnelle des CSO et intégration fonctionnelle NAXA SECURITY.
+
+**Décision :** le lot financier et le code Android du commit `edb75ba` sont validés par le CI debug. Ce résultat ne qualifie pas NAXA SERVICES « VERT GLOBAL » et n'autorise ni migration Supabase, ni déploiement Edge, ni distribution publique, ni fusion dans `main`.
