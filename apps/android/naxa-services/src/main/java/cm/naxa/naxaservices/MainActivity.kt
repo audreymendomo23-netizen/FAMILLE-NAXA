@@ -1585,14 +1585,51 @@ private fun CashLocalContent(
         item { Text(stringResource(R.string.local_sales), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         if (sales.isEmpty()) item { Text(stringResource(R.string.no_local_sales), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         else items(sales) { sale ->
+            var cancellationReason by rememberSaveable(sale.id) { mutableStateOf("") }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
-                Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(sale.description, fontWeight = FontWeight.Bold)
-                        Text(sale.saleNumber + " · " + sale.status, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                        TextButton(onClick = { receiptSale = sale }) { Text("Reçu") }
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(sale.description, fontWeight = FontWeight.Bold)
+                            Text(sale.saleNumber + " · " + sale.status, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            if (sale.inventoryItemId != null && sale.stockQuantity != null) {
+                                Text("Stock lié : " + sale.stockQuantity + " unité(s)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            TextButton(onClick = { receiptSale = sale }) { Text("Reçu") }
+                        }
+                        Text(sale.totalXaf.toString() + " F")
                     }
-                    Text(sale.totalXaf.toString() + " F")
+                    if (sale.paymentMethod == "mobile_money" && sale.status == "pending") {
+                        Text("Réservation locale en attente de confirmation serveur. Le stock n'est pas encore sorti.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                        OutlinedTextField(
+                            cancellationReason,
+                            { cancellationReason = it },
+                            Modifier.fillMaxWidth(),
+                            label = { Text("Motif obligatoire pour annuler la vente en attente") },
+                            minLines = 1
+                        )
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching {
+                                        repository.cancelPendingMobileMoneySale(
+                                            session.account.organizationId,
+                                            siteId,
+                                            sale.id,
+                                            cancellationReason,
+                                            session.account.memberId
+                                        )
+                                    }.onSuccess {
+                                        cancellationReason = ""
+                                        notice = "Vente annulée ; la réservation locale de stock est libérée."
+                                        error = null
+                                    }.onFailure { error = it.message ?: "Annulation impossible." }
+                                }
+                            },
+                            enabled = cancellationReason.trim().length >= 3,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Annuler la vente Mobile Money en attente") }
+                    }
                 }
             }
         }
