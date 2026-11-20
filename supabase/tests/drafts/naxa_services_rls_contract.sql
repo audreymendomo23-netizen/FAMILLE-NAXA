@@ -24,3 +24,16 @@
 -- 19. Reset includes identity-check audit, session revocation and forced password change.
 -- 20. No email, SMS, OTP or magic-link provider is called by login/recovery.
 select 'NOT_EXECUTED: requires reviewed migration, isolated fixtures and RLS execution' as status;
+
+-- Additional device/session binding tests:
+-- 21. A refresh token hash must match the enrolled device row before the new token is returned.
+-- 22. A revoked device must fail refresh even if a client supplies a different installation id.
+-- 23. A new password login may re-enroll the same device and replaces its previous session_id.
+-- 24. RLS ns_current_account_id() requires an active ns_accounts row and a non-revoked ns_devices row
+--     whose session_id equals auth.jwt()->>'session_id'.
+-- 25. A newly issued JWT from an old session_id is denied after device/session rotation.
+-- 26. A site manager cannot provision network_manager/promoter or another site outside delegated scope.
+-- 27. A failed provisioning step removes partial ns_accounts/ns_members/ns_member_scopes and Auth identity.
+-- 28. Recovery from a different tenant or unmanaged site is rejected.
+-- 29. Recovery temporary password is returned only to the authorized actor once.
+-- 30. Pending Mobile Money payments may be created by cashier; confirmed state cannot be set by the client.
