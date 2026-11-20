@@ -386,8 +386,8 @@ private fun NaxaServicesRoot() {
                                             busy = true
                                             message = null
                                             runCatching {
-                                                if (terms && !hasTerms) api.acceptLegalDocument(current.accessToken, "terms", TERMS_VERSION, current.account.defaultLocale)
-                                                if (privacy && !hasPrivacy) api.acceptLegalDocument(current.accessToken, "privacy", PRIVACY_VERSION, current.account.defaultLocale)
+                                                if (terms && !hasTerms) api.acceptLegalDocument(current.accessToken, "terms", TERMS_VERSION, if (current.account.defaultLocale == "en") "en" else "fr")
+                                                if (privacy && !hasPrivacy) api.acceptLegalDocument(current.accessToken, "privacy", PRIVACY_VERSION, if (current.account.defaultLocale == "en") "en" else "fr")
                                             }.onSuccess {
                                                 val accepted = current.account.acceptedLegalDocs +
                                                     (if (terms) setOf("terms:$TERMS_VERSION") else emptySet()) +
@@ -557,6 +557,7 @@ private fun LoginScreen(
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
             TextButton(onClick={onLocale("fr")},enabled=locale!="fr"){Text("FR")}
             TextButton(onClick={onLocale("en")},enabled=locale!="en"){Text("EN")}
+            TextButton(onClick={onLocale("ff-CM")},enabled=locale!="ff-CM"){Text("FF")}
         }
         Spacer(Modifier.height(26.dp))
         Text(stringResource(R.string.login_title), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
