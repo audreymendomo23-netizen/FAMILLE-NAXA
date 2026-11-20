@@ -23,7 +23,7 @@ Ce périmètre correspond aux neuf applications initialement retenues hors JOBLY
 - Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`.
 - Branche de travail : `main`, conformément aux instructions du dépôt.
 - Le dépôt est public : aucun secret, jeton, mot de passe, OTP, export de données personnelles ou donnée client réelle ne doit y être ajouté.
-- Aucun déploiement, aucune migration Supabase Production et aucune publication APK sans autorisation explicite distincte.
+- Les migrations Supabase nécessaires au périmètre FAMILLE-NAXA sont autorisées par décision explicite du propriétaire du projet, sans demande d'autorisation répétée à chaque migration. Elles restent soumises à la procédure de contrôle définie en section 6.17. Une modification du projet NAXA indépendant, de son IA ou de ses données métier hors périmètre FAMILLE-NAXA n'est pas autorisée par cette décision.
 - Les opérations suivent la séquence : **audit → contradictions → cause racine → correction → tests/preuves → documentation → état**.
 - Toute décision doit être classée : validée [V], proposition [P], ouverte [O], constatée [C] ou bloquée [B].
 - Ne jamais déclarer un composant opérationnel sur la seule base d'un document, d'un écran ou d'un build. Il faut des tests et des preuves.
@@ -33,7 +33,7 @@ Ce périmètre correspond aux neuf applications initialement retenues hors JOBLY
 - Le dépôt contient les documents de cadrage initiaux ; le code applicatif complet des dix produits n'est pas établi par les contrôles réalisés.
 - Le README et `docs/ARCHITECTURE_CIBLE.md` définissent dix APK Android autonomes, une expérience Web responsive/PWA lorsque pertinente, et une réutilisation conditionnelle du backend Supabase historique.
 - Les packages envisagés (`auth`, `ui`, `domain`, `supabase`, `offline`, `observability`, `i18n`) sont des intentions d'architecture, pas des composants dont l'existence est démontrée.
-- État de preuve : code métier des dix applications NON ÉTABLI ; recette métier globale NON EXÉCUTÉE ; audit complet RLS inter-applications NON ACHEVÉ ; migration Production NON AUTORISÉE ; déploiement NON AUTORISÉ.
+- État de preuve au dernier audit documenté : code métier complet des dix applications NON ÉTABLI ; recette métier globale NON EXÉCUTÉE ; audit complet RLS inter-applications NON ACHEVÉ. L'autorisation générale d'exécuter les migrations Supabase du périmètre FAMILLE-NAXA est désormais accordée (section 6.17), mais aucune migration n'est déclarée exécutée par le seul fait de cette autorisation. Déploiements et publications restent soumis à leurs règles propres.
 
 ## 4. Sources documentaires des applications
 
@@ -236,7 +236,7 @@ Les fonctions de facturation peuvent partager un contrat technique et des réfé
 - Distinguer Production `eouwtuusnsuxaejsxknf` et Replay `pwfftcsjyeibxxqhwysw`.
 - Avant toute migration : inventorier tables, colonnes, contraintes, index, fonctions/RPC, triggers, vues, extensions, RLS, GRANT, SECURITY DEFINER, search_path, Storage et dépendances.
 - Comparer Replay et Production ; classer chaque ressource : réutiliser, adapter, créer ou écarter.
-- Préparer et tester des migrations additives sur Replay ; ne rien appliquer en Production sans autorisation.
+- Préparer et tester les migrations sur l'environnement Replay/recette, comparer les schémas et dépendances, puis appliquer les migrations FAMILLE-NAXA nécessaires aux environnements concernés sans redemander une autorisation par migration, conformément à la décision utilisateur de la section 6.17. Les migrations ne doivent pas altérer les tables, fonctions, politiques, données, configurations ou services IA propres au projet NAXA indépendant.
 - RLS et contrôles serveur obligatoires ; aucune clé `service_role` côté client.
 - Un backend partagé ne crée aucun droit d'accès transversal implicite.
 
@@ -350,7 +350,7 @@ Ces dimensions sont des unités de mesure candidates, pas des tarifs ni des arbi
 - **Réutilisable après refonte :** concepts Billing/Entitlements, suivi de consommation, moteur IA abstrait, attribution partenaire, journal d'audit et préférences.
 - **À reconstruire ou corriger avant intégration :** schéma et cycle Billing, adaptateurs de paiement, remboursements, idempotence concurrente, QR/liens sécurisés, quotas IA avec compensation.
 - **Non démontré dans ce snapshot :** validation build/runtime complète. Le ZIP ne contient ni `node_modules` ni fichier lockfile ; les rapports embarqués signalent encore des parcours E2E à exécuter et une traduction FR/EN non certifiée. Cet audit est statique ; aucun build, test contre un fournisseur réel ou test de base de données n'a été exécuté ici.
-- **Règles de reprise :** ne pas copier les prix JOBLY ; ne pas migrer la base JOBLY dans Supabase FAMILLE-NAXA ; ne pas fusionner les identités ; ne pas donner au central admin accès aux données opérationnelles ; ne pas modifier production, déployer ou publier d'APK sans autorisation explicite.
+- **Règles de reprise :** ne pas copier les prix JOBLY ; ne pas migrer la base JOBLY dans Supabase FAMILLE-NAXA ; ne pas fusionner les identités ; ne pas donner au central admin accès aux données opérationnelles ; appliquer les migrations Supabase du périmètre FAMILLE-NAXA selon l'autorisation et les contrôles de la section 6.17 ; ne pas altérer le projet NAXA indépendant ou son IA ; les déploiements applicatifs et publications APK restent soumis à une autorisation distincte.
 
 
 ## 6.13 Directive de non-collision et registre d'intégration NAXA / JOBLY
@@ -481,3 +481,128 @@ Fichiers principaux :
 - docs/architecture-360/NAXA_SERVICES_AUTH_API_CONTRACT.md
 - supabase/functions/naxa-services-auth/ (source non déployée)
 - supabase/drafts/naxa_services_v1.sql et supabase/tests/drafts/naxa_services_rls_contract.sql
+
+## 6.17 Décisions complémentaires validées — formules, services mutualisés et autorisation Supabase (20/11/2026)
+
+Cette section consigne les décisions explicites du propriétaire du projet. En cas de contradiction avec une formulation antérieure de ce document, la présente section prévaut pour le périmètre qu'elle couvre. Elle complète les cahiers des charges propres aux dix applications sans remplacer leurs règles métier.
+
+### 6.17.1 Référentiel des formules et héritage strict des fonctionnalités
+
+Les noms commerciaux **ACCÈS**, **PREMIUM** et **PRO** sont utilisés lorsqu'une application commercialise effectivement trois formules.
+
+La règle d'héritage est impérative et cumulative :
+
+- **ACCÈS** contient l'ensemble des fonctionnalités incluses dans le premier niveau commercial de l'application.
+- **PREMIUM** contient obligatoirement toutes les fonctionnalités d'ACCÈS, sans retrait ni dégradation, auxquelles s'ajoutent les fonctionnalités Premium.
+- **PRO** contient obligatoirement toutes les fonctionnalités de PREMIUM et donc toutes celles d'ACCÈS, auxquelles s'ajoutent les fonctionnalités Pro.
+
+En notation d'entitlements :
+- `ENTITLEMENTS(ACCÈS) ⊆ ENTITLEMENTS(PREMIUM)` ;
+- `ENTITLEMENTS(PREMIUM) ⊆ ENTITLEMENTS(PRO)`.
+
+Ces inclusions doivent être garanties par le catalogue, le contrôle d'accès serveur et des tests automatisés. Une formule supérieure ne peut jamais retirer un droit accordé par la formule inférieure.
+
+**Ne pas créer artificiellement trois formules dans toutes les applications.** Lorsqu'une application ne possède qu'une ou deux offres, conserver son nombre d'offres, ses unités de facturation, ses montants et sa logique, sans ajouter un palier ni lui attribuer de nouveaux noms commerciaux non décidés. Une tarification à l'acte, par membre, par cotisation, par local, par chambre ou par parent ne devient pas automatiquement un abonnement à trois niveaux.
+
+Les fonctionnalités obligatoires de sécurité, confidentialité, authentification, protection des données, journalisation de sécurité et export/récupération des données du client ne doivent pas être transformées en avantages payants. Les différences de formules portent sur les capacités commerciales, le niveau d'automatisation, les volumes, les fonctions avancées et les services complémentaires.
+
+### 6.17.2 Catalogue tarifaire de référence
+
+Les montants ci-dessous sont les montants communiqués par le propriétaire du projet, en FCFA. Pour les quatre applications à trois offres, l'ordre est ACCÈS / PREMIUM / PRO.
+
+| Application | Catalogue à conserver |
+|---|---|
+| KIOSKO | ACCÈS : 2 000 ; PREMIUM : 4 000 ; PRO : 5 000 |
+| BOOTIK | ACCÈS : 4 000 ; PREMIUM : 10 000 ; PRO : 13 000 |
+| ZIPPLE | ACCÈS : 5 000 ; PREMIUM : 15 000 ; PRO : 18 000 |
+| NAXA SERVICES | ACCÈS : 3 000 ; PREMIUM : 7 000 ; PRO : 10 000 |
+| COTIZ | 500 par membre et par cotisation ; compte Président gratuit jusqu'à 100 membres. Conserver cette tarification sans créer de formules supplémentaires. |
+| LOYABLE | 1 000 par local ; option à 4 000 avec caméra de surveillance et mode multisite. Conserver les deux offres sans en ajouter une troisième. |
+| NAXA HOTEL | 2 000 par chambre ; option à 5 000 par chambre avec caméra de surveillance et mode multisite. Conserver les deux offres sans en ajouter une troisième. |
+| NAXA SECURITY | Deux offres : 5 000 et 15 000. Ne pas créer de troisième formule sans décision ultérieure. Conserver les capacités et extensions déjà arbitrées. |
+| GRILLAD | Deux offres : 1 500 et 3 000. Ne pas créer de troisième formule. |
+| CAMPUS237 | Établissement gratuit ; deux offres côté parent : 1 000 et 3 000. Ne pas créer de troisième formule côté établissement ou parent. |
+
+Les périodicités et unités qui ne sont pas explicitement établies ci-dessus restent à vérifier dans les cahiers et décisions métier avant paramétrage définitif. Ne pas supposer qu'une tarification par cotisation ou par membre est mensuelle.
+
+### 6.17.3 Règles d'abonnement déjà communiquées
+
+- À l'installation/activation initiale, toutes les fonctionnalités sont disponibles pendant **72 heures**. Cette période est contrôlée côté serveur, attribuée une seule fois à l'unité facturable définie par l'application et ne doit pas être réinitialisable par réinstallation ou changement d'appareil.
+- Pour une formule mensuelle éligible, le prix annuel est égal à dix mensualités : deux mois sont offerts. La réduction annuelle ne s'applique pas automatiquement aux tarifications à l'acte ou à la cotisation ; celles-ci nécessitent une règle commerciale explicite.
+- La période d'essai, le statut de paiement, les dates d'effet et les droits sont établis par le serveur. Une déclaration locale ou une référence de paiement saisie par l'utilisateur ne suffit pas à activer des entitlements.
+- Conserver les données et les fonctions nécessaires à la consultation du compte, au renouvellement et à la récupération des données en cas d'expiration. Le verrouillage concerne les opérations payantes selon les règles contractuelles validées.
+- Les prix et règles propres à une application restent sous le contrôle de son catalogue versionné. Une modification tarifaire ne change pas rétroactivement un abonnement déjà payé.
+
+### 6.17.4 Modèle de droits et administration des catalogues
+
+Conserver le modèle de référence **Plan → Subscription → Payment → Entitlements** et l'adapter aux contrats NAXA déjà présents. Il ne faut ni créer un second moteur de paiement ni remplacer le RBAC/RLS existant.
+
+- Les droits de formule sont des entitlements explicites et versionnés, pas des tests dispersés sur le nom commercial du plan.
+- Les permissions déterminent ce qu'un utilisateur peut faire ; les entitlements déterminent ce que l'organisation a souscrit. Les deux contrôles doivent être satisfaits.
+- Les limites de sites, chambres, membres, appareils, utilisateurs, stockage, opérations et consommation IA sont paramétrées uniquement lorsqu'elles correspondent au modèle métier de l'application.
+- Les prix, périodicités, capacités, dates d'effet et historiques sont administrables dans le back-office central avec traçabilité.
+- Les tests doivent prouver les droits inclusifs ACCÈS → PREMIUM → PRO ainsi que les cas d'une et deux offres, l'essai de 72 heures, paiement en attente/échoué/confirmé, remboursement, échéance et renouvellement.
+
+### 6.17.5 Pilotage central NAXA FAMILY
+
+Le tableau de bord de l'administrateur central doit présenter une entrée **« Gérer NAXA FAMILY »**. Au clic, les dix applications sont présentées en cartes ; l'administrateur sélectionne une application puis accède à son pilotage dédié. Il peut revenir au tableau central et changer d'application.
+
+Le pilotage global présente uniquement les métadonnées et agrégats autorisés : état technique, versions, disponibilité, volumes agrégés, catalogue, abonnements, paiements de souscription, support, quotas, consommation IA et indicateurs de service. Il ne confère pas un accès général aux transactions, dossiers clients ou données personnelles des organisations.
+
+Chaque espace applicatif conserve ses règles métier, son identité, son périmètre de données et son autorité d'accès. Les actions administratives privilégiées sont limitées, justifiées et auditées.
+
+### 6.17.6 Support central et Customer Services Officers
+
+Réutiliser le service Support NAXA existant après audit de ses contrats et de ses permissions. Ne pas construire un helpdesk concurrent si le service canonique peut être adapté.
+
+Les comptes Customer Services Officer doivent pouvoir traiter, depuis une file centrale, les tickets des dix applications. Chaque ticket est étiqueté par application, organisation, catégorie, priorité, canal, statut et SLA. L'accès à une donnée métier sous-jacente n'est jamais automatique : il doit être limité au dossier, autorisé, traçable et révocable. Le support central ne fusionne pas les identités des clients ni leurs comptes applicatifs.
+
+### 6.17.7 Réutilisation des services IA NAXA sans régression
+
+NAXA reste propriétaire de son moteur IA, de ses modèles, prompts système, fournisseurs, configurations, mémoires et règles d'exploitation. FAMILLE-NAXA doit consommer les capacités autorisées par une passerelle/adaptateur contrôlé, avec identification de l'application et de l'organisation, permissions, quotas, limites de dépense, minimisation des données, journalisation des coûts et mécanisme de coupure.
+
+La connexion des dix applications ne doit pas modifier les modèles, prompts, fournisseurs, paramètres, mémoires, données ou tests E2E de l'IA du projet NAXA indépendant. Les contextes et historiques IA de chaque application sont séparés. En cas d'indisponibilité IA, les opérations métier essentielles doivent continuer selon un mode de repli déterministe ; l'IA ne valide pas seule les actes financiers, sanctions ou actions sensibles de sécurité.
+
+### 6.17.8 CRM, relances, géolocalisation et imports de stock
+
+**CRM et relances :** chaque application concernée doit pouvoir planifier les suivis selon une routine hebdomadaire, mensuelle ou personnalisée, ou selon un événement métier (prestation réalisée, rendez-vous manqué, échéance, inactivité). La fiche conserve la prochaine relance, l'historique, le résultat, les préférences et le consentement du client. Les tâches sont dédupliquées, journalisées et respectent les heures de silence et les canaux autorisés. Le service de planification/notification NAXA est réutilisé après audit ; les données clients restent cloisonnées par application.
+
+**Prestations ou livraisons à domicile :** pour les applications concernées, le formulaire d'enrôlement client permet, avec information et autorisation, de capturer les coordonnées GPS ou de placer manuellement un repère, et d'enregistrer adresse, quartier, point de repère et consignes d'accès. Les coordonnées sont utilisées pour la prestation ou la livraison demandée, pas pour suivre continuellement le client. Prévoir correction, mise à jour, révocation du consentement et durée de conservation définie.
+
+**Stock :** à côté de « Importer le fichier de stock », ajouter « Télécharger le template ». Chaque application dotée d'un stock possède un modèle propre à son vocabulaire et à ses unités. Le modèle permet la configuration/m correspondance des colonnes. L'import comprend validation, détection des doublons, contrôle des unités et quantités, prévisualisation, rapport d'erreurs, confirmation explicite et journal d'import. Une importation ne doit pas modifier silencieusement les quantités existantes ; les stocks initiaux créent des mouvements d'inventaire traçables.
+
+### 6.17.9 Langue Fulfulde
+
+Ajouter le Fulfulde au socle de localisation, en complément du français et de l'anglais, avec le code de locale cible `ff-CM` à confirmer avec les outils de traduction retenus. Le sélecteur de langue, les chaînes, les notifications et les aides doivent gérer cette locale. Les traductions, en particulier les textes juridiques, sont soumises à une validation humaine. Ne pas déclarer la traduction complète avant inventaire des chaînes et recette dans chaque application.
+
+### 6.17.10 Autorisation d'exécuter les migrations Supabase
+
+**Décision explicite du propriétaire : les migrations Supabase nécessaires à la construction et à l'évolution de FAMILLE-NAXA peuvent être exécutées librement, sans solliciter une nouvelle autorisation pour chaque migration.** Cette autorisation couvre les migrations de schéma, fonctions, policies/RLS, index, triggers et autres éléments de base nécessaires au périmètre Famille, dans les environnements Supabase concernés.
+
+Cette liberté d'exécution ne supprime pas les contrôles d'ingénierie obligatoires :
+
+1. Identifier précisément le projet, l'environnement, le schéma et le propriétaire de chaque ressource visée.
+2. Examiner les dépendances et comparer l'état réel des environnements avant modification.
+3. Privilégier les migrations additives, versionnées, reproductibles et compatibles avec les versions applicatives en circulation.
+4. Tester d'abord sur Replay/recette avec données non sensibles, y compris les tests positifs et négatifs RLS, les rôles, les limites inter-applications et les fonctions dépendantes.
+5. Vérifier sauvegarde/restauration ou stratégie de retour arrière, verrouillage, durée, impact et possibilité de reprise avant une migration risquée.
+6. Exécuter la migration, contrôler le résultat réel, rejouer les tests d'intégration et non-régression, puis documenter le numéro, le hash, l'environnement, l'heure, le résultat et les écarts.
+7. Ne jamais embarquer une clé `service_role` dans Android, Web ou PWA ; les mutations privilégiées restent côté serveur.
+
+**Limite de périmètre essentielle :** cette autorisation concerne les migrations requises par FAMILLE-NAXA. Elle n'autorise pas à modifier le moteur IA ou le fonctionnement autonome du projet NAXA, ses prompts, modèles, fournisseurs, configurations, mémoires, données ou parcours E2E. Si un backend ou schéma est partagé, toute migration Famille doit être isolée par un espace/namespace et des objets explicitement propriétaires de FAMILLE-NAXA, additive et testée pour démontrer l'absence de régression NAXA. Toute migration qui exige de modifier un objet propriétaire de NAXA ou un service IA indépendant sort de ce périmètre et doit être traitée comme un changement distinct.
+
+L'autorisation de migration ne vaut pas autorisation automatique de déployer une Edge Function, de modifier des secrets/projets externes, de publier une APK ou de déployer une application. Ces opérations restent soumises à leurs contrôles et autorisations propres.
+
+**État de cette mise à jour :** seule la présente règle documentaire est enregistrée par cette modification. Aucune migration Supabase n'est exécutée par le seul fait de l'actualisation du document.
+
+### 6.17.11 Priorité de réemploi
+
+Pour construire les fonctions manquantes, appliquer l'ordre suivant :
+
+1. Cahiers des charges et arbitrages validés de l'application FAMILLE-NAXA concernée.
+2. Patrimoine NAXA existant : tables, API, fonctions, services de paiement, notifications, support, IA, BI, géolocalisation et outils d'import, après audit de propriété, compatibilité, sécurité et dépendances.
+3. Fondations et contrats déjà construits dans le monorepo FAMILLE-NAXA.
+4. JOBLY comme référence de conception pour les patterns utiles — catalogue, souscription, entitlements, quotas, UX et cycle de paiement — sans copie aveugle de code, de schéma ou de règles métier.
+
+Pour chaque fonction, désigner un propriétaire canonique, réutiliser ou adapter l'actif existant lorsqu'il est valide, et construire uniquement le manque démontré. Ne jamais créer deux moteurs concurrents de paiement, notification, IA, support, audit ou synchronisation.
+
