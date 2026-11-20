@@ -38,10 +38,10 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Format Auth contract sources
-        run: deno fmt --check supabase/functions/naxa-services-auth/index.ts supabase/functions/naxa-services-auth/scope_contract.ts supabase/functions/naxa-services-auth/contract_test.ts
+      - name: Type-check Auth gateway and contracts
+        run: deno check supabase/functions/naxa-services-auth/index.ts supabase/functions/naxa-services-auth/scope_contract.ts supabase/functions/naxa-services-auth/contract_test.ts
       - name: Run pure Auth contract tests
-        run: deno test --no-check supabase/functions/naxa-services-auth/contract_test.ts
+        run: deno test supabase/functions/naxa-services-auth/contract_test.ts
 
   android-debug:
     name: Assemble NAXA SERVICES Android debug APK
