@@ -644,18 +644,18 @@ fun StockContent(
                     Text("Format pris en charge : CSV UTF-8. Les lignes et colonnes sont validées avant toute écriture.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (importPreview.isNotEmpty()) {
                         Text("Aperçu : $importFileName", fontWeight = FontWeight.SemiBold)
-                        Text("\${importPreview.size} ligne(s) valide(s) · $importDuplicateCount SKU déjà présent(s)")
+                        Text("${importPreview.size} ligne(s) valide(s) · $importDuplicateCount SKU déjà présent(s)")
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(checked = updateExistingItems, onCheckedChange = { updateExistingItems = it })
                             Text("Mettre à jour les articles existants (confirmation explicite)")
                         }
                         importPreview.take(8).forEach { row ->
                             Text(
-                                "\${row.sku} · \${row.name} · \${row.quantity} \${row.unit} · seuil \${row.reorderLevel}",
+                                "${row.sku} · ${row.name} · ${row.quantity} ${row.unit} · seuil ${row.reorderLevel}",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        if (importPreview.size > 8) Text("… et \${importPreview.size - 8} autre(s) ligne(s)", style = MaterialTheme.typography.bodySmall)
+                        if (importPreview.size > 8) Text("… et ${importPreview.size - 8} autre(s) ligne(s)", style = MaterialTheme.typography.bodySmall)
                         Button(
                             onClick = {
                                 scope.launch {
@@ -670,7 +670,7 @@ fun StockContent(
                                             session.account.memberId
                                         )
                                     }.onSuccess { result ->
-                                        notice = "Import terminé : \${result.first} article(s) créé(s), \${result.second} mis à jour."
+                                        notice = "Import terminé : ${result.first} article(s) créé(s), ${result.second} mis à jour."
                                         importPreview = emptyList()
                                         importFileName = ""
                                         updateExistingItems = false
