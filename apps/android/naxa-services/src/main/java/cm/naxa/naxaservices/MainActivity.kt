@@ -1003,19 +1003,19 @@ private fun TeamManagementContent(
                     if (session.account.activeSiteIds.isEmpty()) {
                         Text(stringResource(R.string.no_active_sites), color = MaterialTheme.colorScheme.error)
                     } else {
-                        session.account.activeSiteIds.forEachIndexed { index, id ->
+                        session.account.activeSites.forEachIndexed { index, site ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Checkbox(
-                                    checked = id in selectedSiteIds,
+                                    checked = site.id in selectedSiteIds,
                                     onCheckedChange = { checked ->
-                                        val updated = if (checked) (selectedSiteIds + id).distinct() else selectedSiteIds - id
+                                        val updated = if (checked) (selectedSiteIds + site.id).distinct() else selectedSiteIds - site.id
                                         selectedSiteIds = updated
                                         if (updated.size != 1) workstationId = ""
                                     }
                                 )
                                 Column {
-                                    Text(stringResource(R.string.site_reference, index + 1))
-                                    Text(id, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(site.name.ifBlank { stringResource(R.string.site_reference, index + 1) })
+                                    Text(listOf(site.code, site.addressLabel).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
