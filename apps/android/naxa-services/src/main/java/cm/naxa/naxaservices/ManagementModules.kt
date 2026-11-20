@@ -348,6 +348,7 @@ fun SubscriptionsContent(modifier: Modifier, repository: NaxaServicesLocalReposi
 @Composable
 fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val fr = session.account.defaultLocale != "en"
     val orgId = session.account.organizationId
     val siteIds = session.account.activeSiteIds
@@ -572,6 +573,24 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text(purchase.reference + " · " + purchase.supplierNameSnapshot, fontWeight = FontWeight.Bold)
                     Text("Statut : " + purchase.status + " · " + (purchase.supplierInvoiceNumber.ifBlank { if (fr) "Facture non renseignée" else "Invoice not entered" }))
+                    val purchaseSupplier = suppliers.firstOrNull { it.id == purchase.supplierId }
+                    if (!purchaseSupplier?.whatsapp.isNullOrBlank()) {
+                        OutlinedButton(
+                            onClick = {
+                                val linesText = lines.joinToString("\n") { it.description + " : " + it.quantityOrdered + " " + it.unit + " × " + it.unitCostXaf + " FCFA" }
+                                val body = "Bonjour " + purchase.supplierNameSnapshot + ", voici notre bon de commande " +
+                                    purchase.reference + " :\n" + linesText + "\nTotal de commande : " +
+                                    (purchase.subtotalXaf + purchase.recoverableTaxXaf + purchase.nonRecoverableTaxXaf + purchase.shippingXaf + purchase.otherFeesXaf) +
+                                    " FCFA. Merci de confirmer disponibilité, délai et modalités de livraison."
+                                val url = "https://wa.me/" + purchaseSupplier!!.whatsapp.filter(Char::isDigit) +
+                                    "?text=" + android.net.Uri.encode(body)
+                                runCatching {
+                                    context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+                                }.onFailure { error = "WhatsApp ou navigateur indisponible sur cet appareil." }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (fr) "Envoyer le bon de commande par WhatsApp" else "Send purchase order via WhatsApp") }
+                    }
                     Text("Total commandé : " + xaf(purchase.subtotalXaf + purchase.recoverableTaxXaf + purchase.nonRecoverableTaxXaf + purchase.shippingXaf + purchase.otherFeesXaf))
                     Text("Réceptionné : " + xaf(purchase.receivedTotalXaf) + " · réglé : " + xaf(purchase.paidTotalXaf))
                     Text((if (fr) "Dette fournisseur : " else "Supplier payable: ") + xaf(due.coerceAtLeast(0L)), color = if (due > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
