@@ -521,7 +521,7 @@ as $naxa$
       and s.can_read
       and (
         s.scope_type = 'organization'
-        or s.site_id = p_site_id
+        or (s.scope_type = 'site' and s.site_id = p_site_id)
       )
   );
 $naxa$;
@@ -541,7 +541,7 @@ as $naxa$
       and m.org_id = p_org_id
       and m.status = 'active'
       and (s.can_operate or s.can_manage)
-      and (s.scope_type = 'organization' or s.site_id = p_site_id)
+      and (s.scope_type = 'organization' or (s.scope_type = 'site' and s.site_id = p_site_id))
   );
 $naxa$;
 
@@ -559,7 +559,7 @@ as $naxa$
     where m.account_id = public.ns_current_account_id()
       and m.org_id = p_org_id
       and m.status = 'active'
-      and m.role_code in ('promoter','network_manager','site_manager','workstation_manager')
+      and m.role_code in ('promoter','network_manager','site_manager')
       and s.can_manage
       and (s.scope_type = 'organization' or s.site_id = p_site_id)
   );
@@ -608,6 +608,30 @@ as $naxa$
   );
 $naxa$;
 
+
+create or replace function public.ns_can_operate_workstation(p_org_id uuid, p_site_id uuid, p_workstation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $naxa$
+  select exists (
+    select 1
+    from public.ns_member_scopes s
+    join public.ns_members m on m.id = s.member_id and m.org_id = s.org_id
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+      and (s.can_operate or s.can_manage)
+      and (
+        s.scope_type = 'organization'
+        or (s.scope_type = 'site' and s.site_id = p_site_id)
+        or (s.scope_type = 'workstation' and s.site_id = p_site_id and s.workstation_id = p_workstation_id)
+      )
+  );
+$naxa$;
+
 create or replace function public.ns_can_manage_member(p_target_member_id uuid)
 returns boolean
 language sql
@@ -645,6 +669,7 @@ revoke all on function public.ns_can_operate_site(uuid, uuid) from public, anon;
 revoke all on function public.ns_can_manage_site(uuid, uuid) from public, anon;
 revoke all on function public.ns_can_manage_org(uuid) from public, anon;
 revoke all on function public.ns_can_access_workstation(uuid, uuid, uuid) from public, anon;
+revoke all on function public.ns_can_operate_workstation(uuid, uuid, uuid) from public, anon;
 revoke all on function public.ns_can_manage_member(uuid) from public, anon;
 grant execute on function public.ns_current_account_id() to authenticated, service_role;
 grant execute on function public.ns_is_org_member(uuid) to authenticated, service_role;
@@ -653,6 +678,7 @@ grant execute on function public.ns_can_operate_site(uuid, uuid) to authenticate
 grant execute on function public.ns_can_manage_site(uuid, uuid) to authenticated, service_role;
 grant execute on function public.ns_can_manage_org(uuid) to authenticated, service_role;
 grant execute on function public.ns_can_access_workstation(uuid, uuid, uuid) to authenticated, service_role;
+grant execute on function public.ns_can_operate_workstation(uuid, uuid, uuid) to authenticated, service_role;
 grant execute on function public.ns_can_manage_member(uuid) to authenticated, service_role;
 
 -- Replace any policy with the same name, then create scoped policies.
@@ -706,20 +732,26 @@ create policy ns_customers_insert on public.ns_customers
   for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
 drop policy if exists ns_customers_update on public.ns_customers;
 create policy ns_customers_update on public.ns_customers
-  for update to authenticated using (public.ns_can_operate_site(org_id, site_id))
-  with check (public.ns_can_operate_site(org_id, site_id));
+  for update to authenticated using (
+    (workstation_id is null and public.ns_can_operate_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_operate_workstation(org_id, site_id, workstation_id))
+  )
+  with check (
+    (workstation_id is null and public.ns_can_operate_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_operate_workstation(org_id, site_id, workstation_id))
+  );
 
 drop policy if exists ns_appointments_select on public.ns_appointments;
 create policy ns_appointments_select on public.ns_appointments
   for select to authenticated using (
-    public.ns_can_access_site(org_id, site_id)
-    and (workstation_id is null or public.ns_can_access_workstation(org_id, site_id, workstation_id))
+    (workstation_id is null and public.ns_can_access_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_access_workstation(org_id, site_id, workstation_id))
   );
 drop policy if exists ns_appointments_insert on public.ns_appointments;
 create policy ns_appointments_insert on public.ns_appointments
   for insert to authenticated with check (
-    public.ns_can_operate_site(org_id, site_id)
-    and (workstation_id is null or public.ns_can_access_workstation(org_id, site_id, workstation_id))
+    (workstation_id is null and public.ns_can_operate_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_operate_workstation(org_id, site_id, workstation_id))
   );
 drop policy if exists ns_appointments_update on public.ns_appointments;
 create policy ns_appointments_update on public.ns_appointments
@@ -728,14 +760,26 @@ create policy ns_appointments_update on public.ns_appointments
 
 drop policy if exists ns_pressing_orders_select on public.ns_pressing_orders;
 create policy ns_pressing_orders_select on public.ns_pressing_orders
-  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+  for select to authenticated using (
+    (workstation_id is null and public.ns_can_access_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_access_workstation(org_id, site_id, workstation_id))
+  );
 drop policy if exists ns_pressing_orders_insert on public.ns_pressing_orders;
 create policy ns_pressing_orders_insert on public.ns_pressing_orders
-  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+  for insert to authenticated with check (
+    (workstation_id is null and public.ns_can_operate_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_operate_workstation(org_id, site_id, workstation_id))
+  );
 drop policy if exists ns_pressing_orders_update on public.ns_pressing_orders;
 create policy ns_pressing_orders_update on public.ns_pressing_orders
-  for update to authenticated using (public.ns_can_operate_site(org_id, site_id))
-  with check (public.ns_can_operate_site(org_id, site_id));
+  for update to authenticated using (
+    (workstation_id is null and public.ns_can_operate_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_operate_workstation(org_id, site_id, workstation_id))
+  )
+  with check (
+    (workstation_id is null and public.ns_can_operate_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_operate_workstation(org_id, site_id, workstation_id))
+  );
 
 drop policy if exists ns_pressing_items_select on public.ns_pressing_items;
 create policy ns_pressing_items_select on public.ns_pressing_items
@@ -753,12 +797,21 @@ create policy ns_pressing_events_insert on public.ns_pressing_status_events
 
 drop policy if exists ns_cash_registers_select on public.ns_cash_registers;
 create policy ns_cash_registers_select on public.ns_cash_registers
-  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+  for select to authenticated using (
+    (workstation_id is null and public.ns_can_access_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_access_workstation(org_id, site_id, workstation_id))
+  );
 drop policy if exists ns_cash_registers_manage on public.ns_cash_registers;
 create policy ns_cash_registers_manage on public.ns_cash_registers
   for all to authenticated
-  using (public.ns_can_manage_site(org_id, site_id))
-  with check (public.ns_can_manage_site(org_id, site_id));
+  using (
+    (workstation_id is null and public.ns_can_manage_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_access_workstation(org_id, site_id, workstation_id))
+  )
+  with check (
+    (workstation_id is null and public.ns_can_manage_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_access_workstation(org_id, site_id, workstation_id))
+  );
 
 drop policy if exists ns_cash_sessions_select on public.ns_cash_sessions;
 create policy ns_cash_sessions_select on public.ns_cash_sessions
@@ -769,10 +822,16 @@ create policy ns_cash_sessions_insert on public.ns_cash_sessions
 
 drop policy if exists ns_sales_select on public.ns_sales;
 create policy ns_sales_select on public.ns_sales
-  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+  for select to authenticated using (
+    (workstation_id is null and public.ns_can_access_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_access_workstation(org_id, site_id, workstation_id))
+  );
 drop policy if exists ns_sales_insert on public.ns_sales;
 create policy ns_sales_insert on public.ns_sales
-  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+  for insert to authenticated with check (
+    (workstation_id is null and public.ns_can_operate_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_operate_workstation(org_id, site_id, workstation_id))
+  );
 
 drop policy if exists ns_payments_select on public.ns_payments;
 create policy ns_payments_select on public.ns_payments
