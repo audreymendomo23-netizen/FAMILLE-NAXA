@@ -176,3 +176,327 @@ La clé `SUPABASE_SERVICE_ROLE_KEY` ne doit jamais être embarquée dans Android
 Cette branche franchit désormais la porte de compilation Android debug et de tests Auth de contrat, mais elle ne doit pas être qualifiée de « verte production » avant les tests instrumentés, la recette Auth/RLS sur Supabase isolé et les tests métier/synchronisation.
 
 Ne pas fusionner, migrer ou déployer sans autorisation distincte et sans validation des éléments ci-dessus.
+
+
+---
+
+# Addendum — extension du périmètre fonctionnel et audit de continuité
+**Mise à jour : 20 novembre 2026 — après génération de l'APK debug**
+
+> Cet addendum complète le constat de construction ci-dessus. Il ne transforme pas les demandes ci-dessous en fonctions déjà livrées. Les nouvelles fonctions sont des exigences de produit et un backlog de réalisation. Les tarifs, durées et mécanismes hérités marqués [P] ou [O] restent à arbitrer.
+
+## 7. État de référence Git et preuve de construction
+
+- Branche examinée : \`work/naxa-services-completion-20261120\`.
+- HEAD vérifié : \`a78e9debd39731f1d79c63cff9a9bc5f6944f6ea\`.
+- Base de la branche : \`439fa4186b602c45e9958cc264c42b0c9ee6fbb4\`, qui reste la référence de \`main\`.
+- Comparaison GitHub : branche en avance de 70 commits, en retard de 0 commit par rapport à cette base.
+- Le run GitHub Actions \`44730761819\` reste en succès sur le commit compilé \`283e6cc902d4d0c05effda85f2a82c5ecdc53cf7\`.
+- L'artifact \`naxa-services-debug-apk\`, ID \`14626501380\`, est présent et non expiré au moment du contrôle.
+- Aucun merge, aucune migration réelle, aucun déploiement et aucune publication de Release n'ont été réalisés dans cette mise à jour documentaire.
+
+## 8. Audit du code Android réellement présent
+
+### 8.1 Éléments déjà construits — ne pas recommencer
+
+Inspection effectuée sur \`MainActivity.kt\`, \`ErpModules.kt\` et \`data/LocalErpStore.kt\`.
+
+- Authentification interne, récupération administrée, changement de mot de passe temporaire, option « Rester connecté », coffre de session et révocation/déconnexion.
+- Modèle d'organisation avec trois modes distincts : \`solo\`, \`single_site_multi_workstation\`, \`multi_site_network\`.
+- Séparation locale par organisation et point de vente.
+- Écrans et opérations locales déjà présents : pressing, agenda, caisse, catalogue de prestations, clients, équipe, stocks/consommables, rapports indicatifs, organisation, réseau, sites, postes, gestion des accès, assistance et paramètres.
+- Les opérations pressing ont des statuts et un historique local ; les rendez-vous contrôlent localement les conflits de site/poste/prestataire ; la caisse gère ouverture, ventes, dépenses et clôture avec écart ; le stock interdit une quantité négative.
+- Les rapports consultent localement les ventes, dépenses, rendez-vous et tickets pressing des sites autorisés reçus par la session.
+- Le modèle Room examiné déclare 15 entités. La file locale d'événements est une outbox : elle ne constitue toujours pas un moteur de synchronisation serveur.
+
+Ces éléments doivent être conservés et étendus par changements additifs. Toute refonte doit préserver les parcours existants et ajouter des tests de non-régression.
+
+### 8.2 Écarts observés dans les écrans actuels
+
+- Après authentification réussie, l'application arrive directement au tableau de bord (ou à l'écran de changement de mot de passe). Aucun choix initial d'activité, parcours de quatre cartes ou tutoriel guidé première connexion n'est présent.
+- Aucun écran d'acceptation versionnée des Conditions générales et de la Politique de confidentialité n'a été trouvé dans le parcours d'authentification inspecté.
+- Le choix de langue n'est pas un sélecteur opérationnel sur l'accueil : les paramètres indiquent que le français et l'anglais sont disponibles, mais ne permettent pas encore un vrai changement de langue persistant et immédiatement appliqué.
+- Il n'existe pas encore de centre « Profil » unifié avec photo, informations personnelles, langue, historique, préférences, sessions et déconnexion.
+- Le tableau de bord est une vue de base : salutation, carte « données non synchronisées », raccourcis et liens de navigation. Aucun carrousel d'images/KPI automatique à cinq secondes n'a été trouvé.
+- L'écran « Sécurité » est actuellement raccordé à la gestion des accès. Il ne constitue pas encore un centre complet de sécurité des comptes, appareils, sessions, audits, sauvegardes et alertes.
+- L'assistance actuelle permet de créer et consulter des demandes conservées localement. Elle n'est pas un Livechat connecté ; ni appel audio/vidéo ni partage d'écran n'est démontré.
+- Les écrans qui n'ont pas de workflow métier raccordé affichent encore des actions génériques de préparation. Leur présence dans le menu ne signifie pas que leur fonction est livrée.
+- Les écrans locaux ne démontrent pas encore la facturation, les factures, les avoirs, les crédits clients, les remboursements dus, la comptabilité complète, la paie, les abonnements transactionnels, les taxes, les sauvegardes Drive ou une livraison réelle de notifications push.
+
+### 8.3 Écart de modèle de données
+
+Le magasin Room actuel contient notamment tickets pressing, rendez-vous, ventes, dépenses, sessions de caisse, file locale, organisations, sites, postes, prestations, clients, articles/mouvements de stock et demandes d'assistance.
+
+Les entités et workflows métier suivants restent à concevoir, relier à l'outbox et exposer dans des API sécurisées : factures et lignes, devis, avoirs, remboursements, crédits/avoirs client et échéanciers, paiements et rapprochements, fournisseurs et achats, valorisation des stocks, comptabilité/journaux, taxes, objectifs, pointage et horaires, commissions/avances/primes consolidées, abonnements/entitlements, parrainage PME, pièces jointes et reçus, préférences de notification, historique/profil utilisateur et sauvegardes/restaurations.
+
+## 9. Référentiel fonctionnel à préserver du cahier NAXA SERVICES
+
+Le cahier \`7 famille naxa/01-cahiers-des-charges/04-naxa-services.md\` et les prompts \`7 famille naxa/02-prompts/04-naxa-services.md\` restent les bases métier initiales. Les blocs suivants ne doivent pas être oubliés dans la refonte :
+
+1. **Catalogue et tarification :** catégories, prestations, prix, durée, prestataire habilité, forfaits, formules et produits vendus au comptoir.
+2. **Agenda :** créneaux, durée, ressources, prestataires, acomptes, annulations, absences, liste d'attente et rappels préparés.
+3. **Pressing :** dépôt, ticket, pièces, tarifs, acompte, date promise, étiquette, statuts reçu/en cours/prêt/retiré, relances et vêtements non retirés.
+4. **Équipe :** prestataires, affectations, commissions datées, avances, primes, pointage, présences, classements et défis.
+5. **CRM/fidélité :** fiche et historique client, préférences, fidélité, QR, anniversaires, offres, parrainage client et relance d'inactivité.
+6. **Caisse :** ouverture/clôture, recettes par moyen de paiement, dépenses, écarts par employé, justificatifs et journal d'audit.
+7. **Stock léger :** produits de coiffure, lessive, consommables, seuils, mouvements, inventaire et alertes.
+8. **Pilotage et comptabilité :** ventes, marges, prestations rentables, fréquentation, heures de pointe, taux de remplissage, objectifs, journal, trésorerie, compte de résultat simple, SYSCOHADA et TVA datée/paramétrable.
+9. **IA et briefings :** prévisions, anomalies, coach du jour, santé de l'activité, relances et briefings matin/soir.
+10. **Socle commun :** français/anglais, notifications, WhatsApp préparé et non automatique, hors connexion, audit, droits, exports PDF/Excel, sécurité des APK et distribution officielle.
+
+Le cahier initial précède l'architecture actuelle à dix applications. Ses principes métier NAXA SERVICES sont conservés, mais les décisions globales doivent suivre les contrats et décisions Famille plus récents. Les anciens prix Essentiel 1 000 F, Pro 3 000 F et Réseau 6 000 F par mois, les forfaits, la tolérance offline 7/14 jours et les autres éléments [P] ne sont pas des tarifs ni des règles définitivement approuvés.
+
+## 10. Parcours de première connexion — cible fonctionnelle
+
+Ordre recommandé, à construire sans modifier le mécanisme d'identité déjà livré :
+
+1. **Accueil / connexion :** sélection de la langue FR/EN disponible avant la saisie des identifiants ; la préférence est mémorisée localement puis synchronisée avec le profil autorisé.
+2. **Première authentification réussie :** si changement de mot de passe temporaire requis, le terminer avant l'initialisation de l'organisation.
+3. **Conditions légales :** présenter Conditions générales d'utilisation et Politique de confidentialité dans la langue choisie. Enregistrer version, date serveur, langue et compte ayant accepté ; demander séparément tout consentement facultatif. Ne pas ouvrir les fonctions opérationnelles avant l'acceptation requise.
+4. **Choisir votre activité :** afficher une liste déroulante de profils métier, enregistrer l'activité primaire et la version du modèle dans l'organisation. Ne plus redemander à chaque connexion ; autoriser une modification ultérieure réservée au Promoteur, avec confirmation et conservation des données. Ce choix d'activité est indépendant du mode d'organisation solo/multi-emplacements/multi-sites.
+5. **Découverte en quatre cartes :** quatre pages illustrées, texte court et bénéfice concret ; défilement horizontal manuel ou automatique toutes les cinq secondes ; boutons Suivant/Précédent/Passer, indicateur de progression ; arrêter l'automatisme dès que l'utilisateur interagit.
+6. **Premier accès au tableau de bord :** afficher une visite guidée par surbrillance et assombrissement du reste de l'écran. Cinq étapes maximum ; l'utilisateur touche la zone expliquée pour poursuivre ; bouton Passer toujours visible. Mémoriser l'état terminé pour ne pas réafficher automatiquement ; proposer « Revoir le guide » depuis l'aide.
+
+**Cinq points d'apprentissage recommandés :**
+- Tableau de bord et indicateurs essentiels.
+- Première opération (selon l'activité : ticket, rendez-vous, ordre de travail ou vente/caisse).
+- Stocks, coûts et suivi de la marge.
+- Abonnements, sécurité des accès et appareils.
+- Assistance Livechat et escalade vers un agent.
+
+Le tutoriel doit s'adapter au rôle : une personne à la caisse ne doit pas recevoir une visite de fonctions réservées au Promoteur. Les animations doivent rester accessibles, interruptibles, traduites et utilisables sur téléphone d'entrée de gamme.
+
+## 11. Profils d'activité compatibles — catalogue à proposer
+
+Le pressing et le salon de coiffure restent les profils initiaux prioritaires. Pour élargir NAXA SERVICES sans transformer l'application en ERP universel incohérent, adopter des **modèles d'activité configurables** qui activent les bons modules et écrans.
+
+### Profils candidats
+
+| Famille | Activités compatibles | Particularités à prévoir |
+|---|---|---|
+| Entretien textile | Pressing, blanchisserie, lavage/repassage, tapis et ameublement textile | Tickets, pièces, poids, délais, étapes atelier, livraison |
+| Beauté et soins non médicaux | Salon de coiffure, barber shop, esthétique, onglerie, spa | Agenda, cabines/fauteuils, prestataires, durée, forfaits, commissions |
+| Couture et textile | Couture, retouche, atelier de confection, broderie | Mensurations avec consentement, devis, matières, essayages, étapes de fabrication |
+| Réparation | Téléphones, informatique, électronique, électroménager, horlogerie, cordonnerie | Diagnostic, numéro de série, pièces, devis, garantie, ordre de réparation |
+| Ateliers et fabrication | Menuiserie, ébénisterie, soudure, métallerie, aluminium/vitrerie | Devis, matières premières, fabrication, étapes, livraison et coûts de chantier |
+| Automobile et mobilité | Garage, mécanique moto/auto, lavage et detailing | Véhicule, diagnostic, pièces, temps d'intervention et ordre de service |
+| Entretien de locaux | Nettoyage, désinfection, entretien d'immeubles et espaces | Contrats récurrents, équipes, sites clients, interventions et fournitures |
+| Services à domicile | Plomberie, électricité, climatisation, jardinage, dépannage | Demande, rendez-vous, déplacement, devis, technicien et preuve d'intervention |
+| Impression et création | Imprimerie, photocopie, sérigraphie, graphisme | Fichiers, devis, quantités, validation BAT, consommables et livraison |
+| Services événementiels | Photographie, décoration, location de matériel, organisation | Réservation, calendrier des actifs, acompte, contrat, restitution et caution |
+| Autre service | Profil générique configurable par le Promoteur | Catalogue, devis, ordre de travail, planning, caisse et clients |
+
+**Recommandation de V1 :** Pressing, Coiffure/Barber, Couture/Retouche, Beauté/Esthétique, Réparation (téléphone/électronique/électroménager), Menuiserie/Atelier, Garage/Lavage auto, Nettoyage, Services à domicile, Impression/Photocopie, puis « Autre activité ». Le choix final de toutes les activités ouvertes au public reste à valider.
+
+Ne pas afficher comme simples variantes d'écran les métiers qui nécessitent un workflow absent. La couture, la menuiserie et la réparation nécessitent notamment devis, ordres de travail, matières/pièces, étapes, coûts et livraison. Les activités médicales, pharmaceutiques ou réglementées ne doivent pas être ajoutées sans cahier spécialisé et validation juridique.
+
+## 12. Tableau de bord, image et expérience visuelle
+
+- Construire un carrousel horizontal de cartes illustrées, changement automatique toutes les cinq secondes, transition fluide et arrêt/pause après interaction.
+- Les cartes combinent image d'activité en arrière-plan légèrement floutée, voile contrasté et informations lisibles : chiffre clé, tendance, objectif, alerte ou action à effectuer. Les images ne doivent jamais remplacer les chiffres ni rendre les indicateurs illisibles.
+- Adapter les cartes à l'activité choisie : commandes/tickets et délais pour pressing ; réservations, prestations et commissions pour coiffure ; devis, travaux et matières pour les ateliers ; stocks et interventions pour les réparateurs.
+- Prévoir les états chargement, absence de données, données locales non synchronisées, données serveur actualisées et erreur de synchronisation. Indiquer l'heure/source des chiffres.
+- L'inventaire des ressources du dépôt de la branche a trouvé des visuels génériques de famille/Services sous \`7 famille naxa/Logo\` et \`7 famille naxa/Les logos\`. Le dossier drawable Android de NAXA SERVICES ne contient pour le moment que le monogramme vectoriel. Aucun ensemble de photographies dédiées pressing/coiffure n'a été identifié dans les ressources Android inspectées. Les visuels génériques ne doivent pas être utilisés comme photos de fond sans inspection de leur contenu, résolution et droits ; rechercher/valider une vraie bibliothèque d'images métier avant intégration.
+
+## 13. Profil, paramètres, historique et assistance
+
+Créer un onglet **Profil** distinct du profil de l'organisation, avec au minimum :
+- photo/avatar, nom, identifiant d'accès, rôle, organisation et établissement actif ;
+- langue, thème, préférences de notifications et paramètres d'accessibilité ;
+- sécurité : mot de passe, appareils et sessions, révocation, connexions récentes, récupération, droits visibles et journal des actions accessibles ;
+- historique filtrable des opérations permises : ventes, reçus, factures, tickets, rendez-vous, mouvements, connexions et modifications ; ne jamais révéler les opérations d'un site hors périmètre ;
+- abonnements et paiements de l'organisation, factures NAXA, renouvellement et état des droits ;
+- FAQ, aide, assistance, Livechat et déconnexion avec confirmation.
+
+### Livechat, appel et partage d'écran
+
+Le futur centre d'assistance doit couvrir FAQ/recherche, assistant IA d'aide, création de ticket, transfert vers agent humain, historique, priorité et statut. Les appels audio/vidéo et le partage d'écran sont des fonctions de session assistée :
+- démarrage exclusivement à l'initiative de l'utilisateur ou sur invitation acceptée ;
+- consentement explicite, indicateur permanent de partage et arrêt immédiat accessible ;
+- jetons temporaires, durée/portée limitées, agent autorisé et journal d'accès ;
+- partage Android via mécanisme système avec confirmation à chaque session ; aucune capture silencieuse ni contrôle à distance par défaut ;
+- enregistrement désactivé par défaut ; toute éventuelle conservation doit être annoncée, justifiée et consentie ;
+- choix technique du fournisseur et coûts à arbitrer avant intégration.
+
+## 14. Sécurité — distinguer deux périmètres
+
+Le module **Sécurité de NAXA SERVICES** est le centre de contrôle de l'accès à l'ERP : membres, rôles, permissions, appareils, sessions, révocation, récupération, traces d'accès, alertes, sauvegarde et restauration.
+
+Il ne doit pas être confondu avec **NAXA SECURITY**, application autonome de sécurité vidéo/audio, passerelles et gestion d'équipements. NAXA SERVICES peut ultérieurement afficher un lien vers cette application, mais ne doit pas importer ses workflows de surveillance comme une simple fonctionnalité de profil.
+
+Toute permission métier est vérifiée côté serveur et RLS, pas seulement par masquage des menus Android. Les actions sensibles (annulation, remise, remboursement, changement de prix, clôture, export, restauration, gestion des comptes) exigent une capacité explicite, un motif lorsque pertinent et une trace d'audit.
+
+## 15. Facturation, caisse, crédits et remboursements
+
+Construire un cycle cohérent et auditable, distinct de la simple ligne de vente actuelle :
+
+- Devis → validation du devis → ordre de service → facture/vente → paiement(s) → reçu ; gérer acompte, paiement partiel, paiement mixte, solde restant, échéance et annulation par écriture corrective.
+- Documents séparés selon leur nature : devis, proforma si nécessaire, facture, reçu d'encaissement, avoir/annulation et justificatif de remboursement. Numérotation contrôlée par organisation/site et règles comptables validées.
+- Moyens de paiement paramétrables : espèces, Orange Money, MTN MoMo et autres moyens activés ; distinguer déclaré, en attente, confirmé, échoué, annulé et remboursé. Un SMS partagé ou une déclaration client ne vaut jamais confirmation automatique.
+- Reçus téléchargeables en PDF, partageables via la feuille de partage Android/WhatsApp et imprimables avec imprimante compatible du client. Prévoir QR de vérification opaque, numéro unique, date, site, lignes, taxes, moyen et statut du paiement.
+- Compte client : crédit commercial accordé, dette client, acompte, trop-perçu, avoir et remboursement que la PME doit au client doivent être des notions séparées et visibles. Gérer remboursement total/partiel, échéance, approbation, moyen et preuve. Ne jamais confondre un solde créditeur de la PME envers le client avec une somme que le client doit à la PME.
+- Une opération validée n'est pas supprimée ou réécrite silencieusement : annulation et correction produisent des écritures liées à l'original, avec auteur, motif et horodatage serveur.
+- À la caisse : ouverture avec fonds initial, opérations horodatées, paiements, dépenses, transferts autorisés, clôture, attendu/réel/écart, justification et validation éventuelle du responsable.
+
+Le rapprochement Mobile Money, les règles de confirmation et tout connecteur marchand doivent être prouvés dans un environnement isolé. L'IA ne valide jamais un paiement, un remboursement ou un solde.
+
+## 16. Pilotage, service, équipe et rapports day by day
+
+Le module Pilotage doit dépasser le rapport journalier actuellement indicatif.
+
+- Définir des objectifs par période (jour/semaine/mois), établissement, équipe, collaborateur, activité, prestation et chiffre d'affaires/marge lorsque les données le permettent.
+- Afficher réalisé, objectif, écart, pourcentage d'atteinte, rythme nécessaire, jours écoulés et jours restants. Comparer aujourd'hui à hier, même jour semaine précédente, semaine/mois précédent et baseline approuvée.
+- Conserver l'historique des objectifs : une modification produit un nouvel état daté, auteur et motif ; ne pas modifier rétroactivement la cible approuvée sans avenant.
+- Suivre les horaires d'ouverture, prise de service, pauses, fin de service, retards et temps productif selon les règles et permissions. Une présence doit être corrigible uniquement par une écriture auditée.
+- Rapports automatiques matin/soir : tâches, rendez-vous, commandes à livrer, caisse, dépenses, ventes, marges, commissions, stock bas, impayés, remboursements à effectuer, anomalies et échéances.
+- Rapports PDF/Excel filtrables par période, activité, site et rôle ; agrégats réseau en lecture et détails limités aux sites autorisés.
+- Ne pas appeler « bénéfice » le simple résultat ventes moins dépenses : calculer séparément chiffre d'affaires net, TVA/taxes collectées, coûts directs/consommations, commissions, charges, marge et résultat selon une comptabilité documentée.
+
+## 17. Stocks, achats, comptabilité et fiscalité
+
+Étendre le stock actuel (quantité, seuil, mouvement local) à une vision de gestion complète, par niveau de plan :
+- fournisseurs, catalogue d'achats, commandes, réceptions, retours, prix d'achat, lots/dates si utiles, unités de mesure et conversions ;
+- consommation de matière/produit par prestation ou ordre de travail, pertes, casse, inventaire et écarts ;
+- valorisation du stock, coût unitaire, coût de revient, stock disponible/réservé et transferts autorisés entre sites ;
+- seuils, réapprovisionnement, prévision de rupture et historique des coûts.
+
+Le gestionnaire doit pouvoir répondre, à une date et sur un site précis : quantité détenue, quantité réservée, coût d'acquisition/valorisation retenu, valeur consommée, ventes associées, marge calculée et taxes correspondantes.
+
+Le module financier/comptable doit couvrir progressivement plan comptable SYSCOHADA adapté, journaux, écritures équilibrées, grand livre, balance, résultat, trésorerie, clients/fournisseurs, dettes, créances, rapprochement caisse/mobile money, exports et clôture de période. Les écritures validées restent traçables ; les corrections sont compensatoires.
+
+Prévoir une rubrique **Taxes & Impôts** : paramètres par type d'opération, taux et périodes d'effet, base imposable, taxe collectée/déductible selon le cas, échéances, obligations, déclarations préparatoires, justificatifs et historique des paiements. Les taux, régimes, obligations et déclarations applicables au Cameroun doivent être validés par un comptable/fiscaliste sur la réglementation à jour ; aucun taux n'est présumé ici. L'IA n'est pas un conseil fiscal et ne soumet pas de déclaration sans validation humaine.
+
+## 18. Abonnements, paiement et parrainage PME
+
+### 18.1 Contrat d'abonnement
+
+S'inspirer du modèle fonctionnel JOBLY **Plan → Subscription → Payment → Entitlements**, déjà recommandé dans l'audit Famille, mais l'adapter à l'organisation NAXA SERVICES :
+- le Promoteur de l'organisation mère est le payeur contractuel du réseau ;
+- les établissements enfants et postes sont couverts par les droits de l'organisation selon le plan et les quotas souscrits ;
+- les ajouts de sites, utilisateurs, volumes ou capacités sont des extensions tarifaires explicites, pas des abonnements indépendants cachés ;
+- les capacités sont vérifiées côté serveur : sites, collaborateurs, postes, fonctions, exports, IA, stockage, sauvegarde et tolérance hors connexion ;
+- les plans, prix, promotions et dates d'effet sont versionnés ; l'état de paiement ne donne pas à lui seul les permissions métier.
+
+### 18.2 Échéance et accès limité
+
+La règle cible à détailler et tester :
+- tant que l'abonnement est valide, droits selon les entitlements ;
+- hors connexion, continuer les opérations locales dans la durée de tolérance du plan, avec avertissements et synchronisation idempotente ; les durées historiques 7 jours Essentiel/Pro et 14 jours Réseau sont [P], à valider ;
+- à la reconnexion, le serveur fait autorité. Si la souscription est échue, présenter l'écran Abonnement/Renouvellement et bloquer l'usage métier en ligne ;
+- conserver les données locales et les événements en attente ; ne jamais effacer une opération offline non acquittée. Prévoir un processus contrôlé de synchronisation finale/export et accès au paiement, même lorsque l'accès métier est suspendu ;
+- continuer les notifications indispensables (rappels déjà planifiés, sécurité et échéance) selon consentements et permissions du téléphone ; leur réception ne réactive jamais l'accès.
+
+Cette proposition concilie le verrouillage demandé avec l'exigence historique de ne perdre aucune donnée après l'échéance. La règle exacte de synchronisation finale après expiration doit être verrouillée avant développement.
+
+### 18.3 Paiement
+
+Prévoir une couche d'adaptation de paiement (Orange Money, MTN MoMo et, si retenu, agrégateur) avec référence unique, montant/devise, organisation, période, statut vérifié, preuve, webhook signé ou validation administrée, idempotence, rapprochement, remboursements et journal. Les états \`initiated\`, \`pending\`, \`success\`, \`failed\`, \`refunded\` sont une base possible, pas une confirmation fournisseur déjà intégrée. Une saisie « J'ai payé » ouvre une demande de rapprochement ; elle ne donne jamais directement un entitlement.
+
+### 18.4 Programme de recommandation de PME
+
+Proposition spécifique à NAXA SERVICES [P], distincte du système de parrainage Partner/KYC/commission de JOBLY :
+- chaque organisation reçoit un code ou lien opaque de recommandation ;
+- une recommandation n'est attribuée qu'à une nouvelle organisation distincte, avant son premier paiement ;
+- le Promoteur gagne un crédit équivalent à un mois de sa formule mensuelle courante lorsque cinq PME recommandées, distinctes et éligibles, ont chacune payé leur première souscription puis effectué une première reconduction payée ;
+- le crédit est appliqué à la facture NAXA SERVICES suivante ; il n'est ni encaissable ni transférable en espèces ;
+- contrôles anti-auto-parrainage, comptes dupliqués, mêmes moyens de paiement/appareils abusifs, annulations, remboursements et fausses souscriptions ; journal des PME référées et du statut de chaque reconduction.
+
+Restent [O] : récompense unique ou répétable par groupe de cinq, définition exacte de « réabonnée », plan mensuel retenu si le Promoteur change de formule avant attribution, traitement d'un remboursement et durée de validité du crédit. Ne pas coder le calcul définitif avant verrouillage.
+
+## 19. IA NAXA SERVICES — finance, comptabilité et gestion 360°
+
+Ne pas prétendre « entraîner » un modèle financier sur des données non vérifiées. Construire un assistant métier avec outils de calcul déterministes, données autorisées et moteur d'analyse explicable. L'IA peut aider à :
+
+- expliquer ventes, marge, trésorerie, dépenses, créances, dettes et performance par activité/site/prestataire ;
+- prévoir ventes, fréquentation, charge de travail, rendez-vous, approvisionnement et ruptures, avec période, hypothèses et niveau de confiance ;
+- comparer objectifs/réalisé, détecter anomalies (vente non encaissée, remise atypique, remboursement inhabituel, écart de caisse, consommation anormale) ;
+- calculer des scénarios de prix, coûts, capacité, horaires, staffing, trésorerie et seuil de rentabilité ;
+- proposer relances clients, achats, objectifs et actions de gestion ; générer briefs matin/soir et réponses vocales/texte FR/EN ;
+- expliquer les écritures ou taxes préparatoires et signaler les données manquantes.
+
+Garde-fous obligatoires : cloisonnement par organisation/site/rôle ; source et période affichées ; montants recalculables par le moteur métier ; incertitude explicite ; aucune statistique inventée ; pas d'apprentissage sur les données d'une PME au bénéfice d'une autre ; consentement/minimisation des données ; pas de validation de paiement, écriture comptable définitive, remboursement, transfert, déclaration fiscale ou mutation de stock par l'IA seule. Hors ligne, une aide locale simplifiée peut expliquer des données déjà présentes, sans promettre des prédictions cloud complètes.
+
+## 20. Notifications et sauvegardes
+
+### Notifications
+
+Prévoir notification native et centre interne : opérations, rendez-vous, prêts/retraits, sécurité, appareils, abonnement/échéance, stock, clôture, objectifs, assistance et coaching. Maintenir anti-doublon, préférences, heures calmes, permissions Android 13+, état lu/non lu et actions sécurisées. FCM et la réception effective par appareil ne sont pas encore validés pour NAXA SERVICES ; ne pas promettre une livraison garantie.
+
+### Sessions et sauvegardes
+
+Distinguer deux sujets :
+- **Session :** continuer la politique déjà construite « Rester connecté » avec jeton de renouvellement protégé par Android Keystore, révocation et durée maîtrisée. Ne jamais exporter les jetons d'accès/refresh dans une sauvegarde Google, un e-mail ou un fichier lisible.
+- **Données métier :** sauvegarder/restaurer base locale, pièces jointes et documents, avec chiffrement, version, intégrité, date, périmètre et journal. Prévoir sauvegarde déclenchée après opérations/synchronisations et calendrier réglable, plus restauration explicitement autorisée et testée.
+
+La demande de sauvegarder « via Gmail » doit être traduite techniquement en connexion Google et stockage Google Drive via autorisation OAuth limitée ; Gmail est une boîte de courrier et ne doit pas servir de coffre de sauvegarde ni recevoir une archive sensible en pièce jointe. Le mode, le compte, la fréquence, la rétention, le chiffrement et le coût éventuel restent à arbitrer. Ne pas inclure de secrets ni de clés de chiffrement dans le dépôt public.
+
+## 21. Réutilisation NAXA / JOBLY — limites à respecter
+
+### Patrimoine NAXA historique à auditer et adapter
+
+- caisse/POS, ouverture/clôture, dépenses, reçus et contrôle de sessions ;
+- registres de stock, mouvements, inventaires, achats et coûts ;
+- comptabilité SYSCOHADA, journaux, mappings, trésorerie et exports ;
+- rapports BI, agrégats par rôle et assistance IA encadrée ;
+- notifications Push/centre, messagerie, tickets/support et modèles WhatsApp préparés ;
+- profils, périmètres, appareils, sessions, récupération et journal d'audit ;
+- fonctions de catalogue, rendez-vous, disponibilité, confirmations et rappels.
+
+Ces actifs doivent être comparés aux règles NAXA SERVICES avant portage. Les schémas et autorisations spécifiques à la pharmacie (\`pharmacies\`, profils pharmacie, partenaires pharmacie, réservations pharmacie, caisse pharmacie, etc.) ne sont pas des tables génériques. Extraire les règles et composants compatibles ; ne pas importer les identités ou transactions pharmacie dans NAXA SERVICES.
+
+Le chantier NAXA SECURITY historique reste un produit distinct, dépendant d'une validation de passerelle, caméra et matériel réels. Le menu sécurité de NAXA SERVICES décrit au §14 est la protection de l'ERP, pas le contrôle vidéo d'un établissement.
+
+### Patterns JOBLY à utiliser après audit
+
+- parcours d'accueil et de découverte visuel, animation des cartes et tutoriel progressif ;
+- passerelle IA, contexte/mémoire isolés, recherche documentaire, quotas et mesure d'usage/coût ;
+- séparation Plan/Subscription/Payment/Entitlements, états de paiement idempotents et contrôle des droits ;
+- assistance FAQ/IA avec transfert humain ;
+- notifications catégorisées et préférences.
+
+Ne pas copier les domaines Talent/Recruiter/Partner de JOBLY. Le programme de cinq PME référées au §18.4 est une règle commerciale autonome NAXA SERVICES ; il ne doit pas réutiliser le programme Partner, ses KYC, commissions ou payout.
+
+## 22. Compléments 360° à ne pas oublier
+
+À prévoir dans le backlog métier selon la priorité et le modèle d'activité :
+- devis, approbations et ordres de travail pour couture, réparation, menuiserie et services terrain ;
+- achats, fournisseurs, comptes fournisseurs et réapprovisionnement ;
+- retours, garanties et réclamations clients ;
+- suivi des avances, primes, commissions, heures, absences et charges de personnel ;
+- gestion de caisse par poste et site, rapprochements Mobile Money et dépôts ;
+- gestion de documents, pièces jointes, consentements, QR et liens de partage expirables ;
+- fidélité, campagnes, clients inactifs et historique relationnel ;
+- inventaire d'équipements/actifs, maintenance et amortissement si le profil d'activité le justifie ;
+- contrôle interne : séparation des rôles, double validation des actions sensibles, journal d'audit, alertes antifraude ;
+- centre d'exports, restauration, santé de l'application, état réseau/synchronisation et contrôle de version APK ;
+- accessibilité, faible consommation de données, mode clair/sombre, FR/EN et aide contextuelle.
+
+## 23. Ordre de réalisation recommandé après cette mise à jour
+
+1. **Jalon A — UX, profil et onboarding :** choix langue, acceptation légale versionnée, activité primaire, quatre cartes, tutoriel cinq étapes, profil, FAQ et dashboard illustré.
+2. **Jalon B — fondations serveur :** modèle métier versionné, facturation/abonnements/entitlements, rôles RLS, factures, paiements, crédits, remboursements et journal append-only.
+3. **Jalon C — exploitation :** achats/fournisseurs, stock valorisé, caisse/reçus imprimables, facturation, pointage, commissions, rapports et objectifs jour par jour.
+4. **Jalon D — fiscalité et pilotage avancé :** comptabilité SYSCOHADA, taxes/impôts validés, indicateurs financiers, prévisions et assistant IA explicable.
+5. **Jalon E — expérience assistée et continuité :** Livechat, appel/partage d'écran, push, sauvegardes Drive, restauration, synchronisation hors connexion et règles d'expiration.
+6. **Jalon F — profils de métiers étendus :** ajouter Couture, Menuiserie, Réparation, Garage, Nettoyage, Services à domicile et Impression après validation de leurs workflows spécifiques.
+
+Ne pas démarrer une implémentation massive en une seule passe. Pour chaque jalon : audit des composants existants → écarts → contrat de données → implémentation additive → tests Android/Room → tests Deno/API → tests PostgreSQL 17/RLS → preuve CI → mise à jour de continuité.
+
+## 24. Décisions encore ouvertes avant de qualifier le périmètre complet
+
+- Liste exacte des activités ouvertes au lancement et possibilité de plusieurs activités par organisation.
+- Tarifs des formules, quotas, extensions de sites/utilisateurs et tolérance offline ; les anciens prix du cahier restent des propositions.
+- Fournisseur(s) et circuit de confirmation des paiements Mobile Money ; aucun accès de production ni secret à intégrer sans validation.
+- Politique précise de verrouillage après échéance et de synchronisation finale des événements créés hors ligne.
+- Mécanique définitive du parrainage de cinq PME et répétabilité des récompenses.
+- Taux, régimes, obligations fiscales, modèles de facture et conformité comptable à faire valider.
+- Fournisseur de Livechat/voix/partage d'écran et coûts associés.
+- Google Drive : consentement, chiffrement, sauvegardes temps réel/programmées, rétention et restauration.
+- Domaine, DNS, hébergement du site officiel et URL de téléchargement NAXA SERVICES. **Aucun lien public définitif de l'application n'est confirmé dans le dépôt à ce stade.** Ne pas inventer une URL ; la page officielle de distribution APK devra être publiée seulement après choix du domaine, signature Release et procédure de vérification.
+- Ressources photo spécifiques pressing/coiffure : confirmer les images, leurs droits et leur qualité avant intégration.
+
+## 25. Statut après audit élargi
+
+**Statut global : PARTIEL.** La compilation Android debug et les tests de contrat Auth sont prouvés. Les modules locaux existants sont à préserver. L'extension fonctionnelle décrite dans cet addendum est une cible de construction, pas une implémentation réalisée. Les recettes instrumentées, métier, synchronisation, RLS et paiements restent ouvertes. La production reste inchangée.
+
+Aucun merge, aucune migration Supabase réelle, aucun déploiement, aucune publication Release et aucun transfert de données n'est autorisé par ce document.
