@@ -326,6 +326,7 @@ fun SubscriptionsContent(modifier: Modifier, repository: NaxaServicesLocalReposi
 }
 
 
+@Composable
 fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val scope = rememberCoroutineScope()
     val fr = session.account.defaultLocale != "en"
