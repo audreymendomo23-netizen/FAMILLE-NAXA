@@ -704,3 +704,233 @@ Après validation du présent référentiel commercial, reprendre la branche de 
 État connu au dernier audit : APK Android debug compilé et tests Auth de contrat réussis ; recette instrumentée Android, tests sur appareils, validation Supabase isolée/RLS, API métier serveur et moteur de synchronisation restent ouverts. La prochaine passe de finalisation doit commencer par la reprise exacte de la branche et la vérification du HEAD/CI, puis traiter les parcours métier prioritaires sans régression. Ne pas déclarer NAXA SERVICES prêt pour production sur la seule base d'une compilation verte.
 
 Les nouvelles règles d'abonnement Promoteur, de quantités LOYABLE/NAXA HOTEL et de paliers GRILLAD doivent être implémentées dans le catalogue central partagé, mais ne doivent pas provoquer de modification du projet NAXA autonome ni de déploiement sur ses environnements. Les tests E2E NAXA SERVICES doivent utiliser des données et environnements isolés.
+
+---
+
+## 6.17.14 Arbitrages tarifaires validés — catalogue NAXA FAMILY (20 novembre 2026)
+
+**Statut : VALIDÉ PAR LE PROPRIÉTAIRE.** Le présent addendum remplace, pour les tarifs et règles qu'il couvre, les montants antérieurs figurant dans la section 6.17.2 et dans les anciennes grilles de travail. Il devient la baseline commerciale de référence pour les dix applications NAXA FAMILY. Tous les montants sont en FCFA et les prix indiqués dans les colonnes mensuelles sont des prix par mois.
+
+### Principes communs
+
+1. Positionnement hybride : prix d'entrée accessibles aux petites structures, puis progression selon l'architecture multiniveau, le volume et les capacités réellement consommées.
+2. Les tarifs de lancement sont les montants à afficher à l'ouverture commerciale. Les tarifs « à maturité » sont approuvés comme cibles, mais ne deviennent pas actifs automatiquement : leur activation exige un jalon fonctionnel et économique vérifié, une date d'effet, une version du catalogue et une communication préalable aux clients concernés.
+3. Pour les abonnements mensuels récurrents éligibles, l'annuel est égal à **10 mensualités pour 12 mois de service** : deux mois sont offerts (remise de 16,67 %). Cette règle s'applique aussi aux tarifs calculés par quantité lorsque la souscription est bien un engagement annuel. Elle ne s'applique pas aux frais ponctuels, transactions isolées ou actes unitaires sans abonnement récurrent.
+4. Les prix déjà payés ne changent pas rétroactivement. Toute évolution de tarif est versionnée et datée ; le client est informé avant l'application du nouveau prix.
+5. Les prix restent exprimés en FCFA. Le traitement HT/TTC, la fiscalité et les mentions de facture doivent être validés par le conseil comptable/fiscal ; aucune hypothèse fiscale n'est créée par le présent addendum.
+6.. Une souscription Promoteur unique couvre tout son réseau pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES, NAXA SECURITY et GRILLAD. Ne pas facturer automatiquement un second abonnement pour chaque site, point de vente, utilisateur, salarié ou appareil.
+7. Le modèle d'entitlements reste **Plan → Subscription → Payment → Entitlements**, avec catalogue versionné par application. Le paiement doit être confirmé côté serveur avant d'activer les droits. Les fonctions de sécurité, confidentialité et protection des données ne deviennent jamais des options tarifaires.
+8. Les fonctions IA sont incluses dans les abonnements et ne sont jamais facturées à l'appel, au token, au crédit ou à l'usage. La mesure des coûts reste interne.
+
+### Catalogue mensuel et tarifs cibles
+
+| Application | Tarif de lancement mensuel | Tarif cible à maturité | Unité / règle |
+|---|---:|---:|---|
+| KIOSKO | ACCÈS 2 000 ; PREMIUM 5 000 | ACCÈS 2 000 ; PREMIUM 7 500 | Une souscription Promoteur pour tout le réseau |
+| BOOTIK | ACCÈS 4 000 ; PREMIUM 10 000 | ACCÈS 6 000 ; PREMIUM 15 000 | Une souscription Promoteur pour tout le réseau |
+| ZIPPLE | ACCÈS 5 000 ; PREMIUM 15 000 | ACCÈS 6 000 ; PREMIUM 18 000 | Une souscription Promoteur pour tout le réseau |
+| NAXA SERVICES | ACCÈS 3 000 ; PREMIUM 10 000 | ACCÈS 5 000 ; PREMIUM 15 000 | Une souscription Promoteur pour tout le réseau |
+| COTIZ | 150 / 120 / 90 / 75 par membre | Identique | Prix unitaire mensuel par membre et par cotisation, dégressif selon effectif |
+| LOYABLE | Voir tranches ci-dessous | Identique | Une souscription Promoteur ; calcul progressif par chambre/unité active en gestion |
+| NAXA HOTEL | 2 000 par chambre active | Identique | Une souscription Promoteur ; quantité de chambres actives |
+| NAXA SECURITY | ACCÈS 5 000 ; PREMIUM 15 000 | ACCÈS 7 500 ; PREMIUM 20 000 | Une souscription Promoteur ; capacité incluse et extensions contrôlées |
+| GRILLAD | Voir paliers ci-dessous | Identique | Une souscription Promoteur au niveau du réseau ; montant global, pas par point |
+| CAMPUS237 | Voir tarifs établissement et parents ci-dessous | Identique | Établissement + abonnement parent facultatif et indépendant |
+
+#### COTIZ — prix unitaire mensuel dégressif
+
+Le prix unitaire dépend du nombre de membres actifs de la cotisation concernée. Le même prix unitaire de tranche est appliqué à tous les membres payants de cette cotisation pour la période de facturation :
+
+| Membres actifs dans la cotisation | Prix mensuel par membre |
+|---:|---:|
+| 1 à 30 | 150 F |
+| 31 à 100 | 120 F |
+| 101 à 300 | 90 F |
+| Plus de 300 | 75 F |
+
+Exemples : 30 membres = 4 500 F/mois ; 100 membres = 12 000 F/mois ; 300 membres = 27 000 F/mois. Le compte Président reste gratuit dans la limite de 100 membres, selon les règles de compte déjà définies.
+
+L'unité facturable est l'accès mensuel d'un membre à une cotisation donnée. Un membre n'est pas facturé plusieurs fois au cours du même cycle mensuel parce qu'il effectue plusieurs versements ou participe à plusieurs échéances de contribution au sein de cette même cotisation. Chaque cotisation distincte à laquelle le membre adhère constitue toutefois une relation d'abonnement distincte. L'annuel ne peut être proposé que pour un cycle d'accès de douze mois clairement défini ; il coûte alors dix mensualités, sans appliquer la remise à des paiements isolés ou à une cotisation de durée plus courte.
+
+COTIZ reste un outil de registre et de gestion : la SAS ne détient pas les fonds des membres et ne fournit pas un service de paiement réglementé par simple effet de cet abonnement.
+
+#### LOYABLE — abonnement unique et progressif par chambre
+
+Une seule souscription Promoteur couvre toutes les unités locatives actives/en gestion de son portefeuille. Le calcul est progressif par tranche (les taux ne sont pas rétroactifs sur les premières chambres) :
+
+| Tranche | Prix marginal mensuel |
+|---|---:|
+| Chambres 1 à 20 | 1 000 F par chambre |
+| Chambres 21 à 80 | 650 F par chambre supplémentaire |
+| À partir de la chambre 81 | 500 F par chambre supplémentaire |
+
+Exemples : 5 chambres = 5 000 F ; 20 chambres = 20 000 F ; 80 chambres = 59 000 F ; 100 chambres = 69 000 F. Les chambres brouillon, archivées ou désactivées ne sont pas comptabilisées comme actives/en gestion. Le relevé doit indiquer quantité par tranche, prix marginal et total.
+
+#### NAXA HOTEL — abonnement unique par chambre active
+
+Le montant mensuel est égal au nombre de chambres actives rattachées au Promoteur multiplié par 2 000 F. Exemple : 10 chambres = 20 000 F ; 20 chambres = 40 000 F. Les fonctions métier et capacités multisites incluses restent couvertes par cette souscription unique ; aucun supplément de pack ACCÈS/PREMIUM n'est ajouté.
+
+#### GRILLAD — paliers globaux par réseau Promoteur
+
+| Points de vente actifs du réseau | Formule | Montant mensuel global |
+|---:|---|---:|
+| 1 | ACCÈS | 1 500 F |
+| 2 à 5 | PREMIUM | 3 000 F |
+| 6 à 10 | PRO | 5 000 F |
+| 11 à 25 | PRO | 10 000 F |
+| 26 à 50 | PRO | 15 000 F |
+| 51 à 100 | PRO | 25 000 F |
+| Plus de 100 | Sur devis | Sur devis |
+
+Le palier PRO à 5 000 F n'est plus illimité : il est limité à 10 points de vente actifs. La grille remplace l'ancienne règle « 6 et plus = 5 000 F illimité ». Le prix est un montant global par Promoteur, jamais multiplié par point de vente. Les points brouillon, archivés ou désactivés ne sont pas comptés. Le système met à jour quantité et palier sur la souscription existante et journalise les changements.
+
+La date d'effet d'un changement de palier en cours de période (immédiat/prorata ou prochaine échéance) doit être définie dans le catalogue avant l'automatisation de la facturation. Aucun prorata ni remboursement rétroactif n'est inventé. En attendant, un changement de montant en cours de période nécessite une règle d'effet explicite et visible.
+
+#### NAXA SECURITY — capacité et extensions
+
+Les tarifs ACCÈS/PREMIUM de lancement restent 5 000 F et 15 000 F ; les prix cibles à maturité deviennent 7 500 F et 20 000 F après validation des capacités fonctionnelles et coûts d'exploitation. Les extensions de capacité déjà arbitrées à +20 % par extension sont conservées. Le catalogue doit spécifier avant vente les unités de capacité concernées (par exemple flux, appareils, stockage ou autre limite effectivement supportée) et la base du calcul des +20 %. Les abonnements ne comprennent pas la fourniture de matériel ni une prestation humaine de télésurveillance.
+
+### CAMPUS237 — double marché établissement et parent
+
+CAMPUS237 adopte un modèle **B2B établissement + B2C parent facultatif**. L'ancienne gratuité générale des établissements et l'ancienne grille parent Individuel 1 000 F / Famille 3 000 F sont remplacées par les règles ci-dessous.
+
+**Abonnement établissement (mensuel)** — l'effectif facturable est le nombre d'élèves inscrits et actifs :
+
+| Effectif | Mensuel | Annuel (10 mensualités) |
+|---:|---:|---:|
+| 1 à 200 élèves | 3 000 F | 30 000 F |
+| 201 à 500 élèves | 5 000 F | 50 000 F |
+| 501 à 1 000 élèves | 10 000 F | 100 000 F |
+| 1 001 à 1 500 élèves | 15 000 F | 150 000 F |
+| Plus de 1 500 | Sur devis | Sur devis |
+
+L'abonnement couvre le logiciel de gestion de l'établissement, les comptes du personnel nécessaires, les comptes parents de base, les communications scolaires et les fonctions institutionnelles prévues. Aucun supplément n'est facturé simplement par enseignant ou par compte parent. L'onboarding standard, le paramétrage courant et la formation initiale à distance sont inclus ; les migrations complexes, formations sur site et intégrations spécifiques peuvent faire l'objet d'un devis distinct communiqué à l'avance.
+
+**Abonnement parent (facultatif)** :
+
+| Pack | Droits | Mensuel | Annuel |
+|---|---|---:|---:|
+| Parent Essentiel | Accès gratuit aux informations scolaires essentielles d'un enfant dans son espace parent | Gratuit | Gratuit |
+| Parent Individuel+ | Services familiaux avancés pour un enfant suivi dans une école | 500 F | 5 000 F |
+| Parent Famille | Jusqu'à 5 enfants, dans une ou plusieurs écoles, tableau de bord familial consolidé | 1 500 F | 15 000 F |
+
+Le Parent Essentiel conserve notamment l'accès aux notes, bulletins, absences/retards, horaires, annonces et communications scolaires que l'établissement a décidé de communiquer. Un établissement ne doit pas pouvoir imposer le pack payant aux parents. L'absence de paiement parental ne peut pas bloquer l'accès aux informations scolaires essentielles.
+
+La distinction de valeur est obligatoire : l'établissement paie pour administrer et faire fonctionner son établissement ; le parent paie facultativement pour les fonctions personnelles et familiales avancées. Aucune fonctionnalité essentielle ne doit être facturée deux fois au parent et à l'école. Les comptes, factures, paiements, renouvellements et historiques de l'établissement et du parent sont distincts. Le parent garde un compte indépendant même si plusieurs de ses enfants fréquentent des établissements différents. Deux parents d'un même enfant conservent leurs abonnements et comptes indépendants.
+
+**Essai spécifique :** l'établissement CAMPUS237 bénéficie d'un essai institutionnel de 30 jours, qui remplace pour cette unité facturable l'essai générique de 72 heures (il ne s'y ajoute pas). Le Parent Essentiel est gratuit sans limite d'essai ; les packs parent payants suivent l'essai de 72 heures lorsqu'il est applicable. Aucun établissement ou parent ne doit obtenir un deuxième essai par réinstallation, changement d'appareil ou création d'un compte doublon.
+
+### Mise en œuvre et contrôle des tarifs
+
+- Conserver les états de paiement serveur, l'unicité de souscription, les périodes d'essai, les renouvellements, périodes de grâce, reçus, historique et entitlements.
+- Pour les changements de quantité des souscriptions LOYABLE, NAXA HOTEL et GRILLAD, la date d'effet, le prorata éventuel et les éventuels remboursements restent des paramètres contractuels à fixer avant facturation automatique. Ne pas calculer de prorata arbitraire.
+- Les tarifs cibles à maturité de KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES et NAXA SECURITY ne deviennent actifs qu'après jalon d'activation, décision datée et nouvelle version du catalogue.
+- Toute grille est testée sur les limites de tranche, les quantités zéro, la désactivation/réactivation, les changements en cours de période, les changements de formule, les doublons et les paiements échoués/confirmés.
+- Les comptes et souscriptions des établissements et parents CAMPUS237 sont deux unités de facturation distinctes ; un même parent peut être associé à plusieurs écoles sans payer plusieurs fois son pack parent.
+
+## 6.17.15 Périmètre d'intégration central NAXA FAMILY — administration, support, abonnements et IA
+
+### Administration centrale depuis le tableau de bord Administrateur NAXA
+
+Ajouter au tableau de bord de l'Administrateur central un bouton visible **« Gérer NAXA FAMILY »**. À son activation, afficher les dix applications sous forme de cartes, puis ouvrir le tableau de pilotage de l'application sélectionnée. L'administrateur peut revenir au portefeuille et changer d'application.
+
+Applications couvertes : KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES, COTIZ, LOYABLE, NAXA HOTEL, NAXA SECURITY, GRILLAD et CAMPUS237.
+
+Le tableau central peut agréger, dans les limites autorisées, état de disponibilité, versions, santé technique, nombre d'organisations, abonnements, paiements de souscription, support, indicateurs d'activité, quotas, consommation IA interne et alertes. L'ouverture du tableau dédié n'accorde pas un accès universel aux transactions, documents, conversations ou données personnelles des organisations. Les permissions sont séparées par application, organisation et action, avec MFA pour les rôles sensibles, journal d'audit, justification des accès exceptionnels et révocation.
+
+### Support central — Customer Service Officers
+
+Auditer et réutiliser le support existant de NAXA et les comptes Customer Service Officer lorsqu'ils sont compatibles. Construire une file globale où les tickets des dix applications sont triés par application, organisation, catégorie, priorité, SLA, statut et canal. Les CSO peuvent traiter un ticket selon une matrice d'habilitation centrale et des périmètres explicites.
+
+Cette mutualisation ne fusionne pas les identités, organisations, Auth, rôles ou données métier des applications. Un CSO peut consulter les informations strictement nécessaires à la résolution d'un ticket ; l'accès à un dossier ou à une donnée métier sous-jacente exige un droit distinct, limité dans le temps, justifié et journalisé. Les conversations et pièces jointes restent cloisonnées par application et organisation.
+
+### Abonnements — expérience JOBLY, moteur canonique NAXA
+
+Reprendre de JOBLY les principes de parcours, présentation des offres, comparaison des packs, checkout, états d'abonnement et expérience utilisateur. Réutiliser le service de paiement/abonnement NAXA existant après audit de compatibilité, sans créer un second moteur concurrent. Le contrat commun reste Plan → Subscription → Payment → Entitlements, avec catalogue versionné par application, paiement serveur confirmé, états pending/success/failed/refunded, idempotence, reçus, renouvellement, période de grâce et contrôle des droits. Les règles tarifaires et les unités facturables propres à chaque application du §6.17.14 prévalent.
+
+L'essai générique de 72 heures reste en vigueur, sauf exception institutionnelle CAMPUS237 à 30 jours décrite au §6.17.14. Pour une formule annuelle éligible, deux mois sont offerts (10 mensualités pour 12 mois). Ne jamais activer un entitlement à partir d'une simple déclaration locale de paiement ou d'un justificatif non vérifié.
+
+### Réutilisation des services IA NAXA — cloisonnement et absence de régression
+
+La réutilisation des services IA NAXA est autorisée comme objectif d'architecture, sous réserve d'une passerelle/API versionnée, d'une authentification de service à service et d'un contexte obligatoire application + organisation + utilisateur + permissions. Les dix applications ne doivent pas accéder directement aux bases, mémoires, prompts privés ou configurations d'une autre application.
+
+Garde-fous impératifs :
+- NAXA autonome conserve ses modèles, fournisseurs, prompts, mémoires, paramètres, données, secrets, workflows et tests E2E inchangés.
+- FAMILLE-NAXA consomme uniquement des capacités explicitement exposées par un adaptateur documenté et versionné ; aucun couplage direct aux tables ou composants internes non contractuels.
+- Chaque requête IA est autorisée, minimisée, cloisonnée par organisation et journalisée sans conserver inutilement les données personnelles.
+- Les historiques et contextes IA des dix applications sont séparés. Aucune donnée d'une PME/école/client ne sert à produire une réponse pour une autre organisation.
+- Prévoir limites techniques, anti-abus, contrôle de capacité, mesure interne du coût, interrupteur d'urgence et mode de repli déterministe ; aucune facturation IA à l'utilisateur.
+- Les tests de non-régression NAXA autonome sont exécutés sans modification de ses jeux de données, prompts, paramètres ou scénarios E2E. Les recettes FAMILLE-NAXA utilisent des identités, données et espaces de test isolés.
+- Toute évolution qui exige de modifier un objet ou un service propriétaire de NAXA autonome constitue un changement distinct, avec analyse d'impact et autorisation spécifique ; elle ne doit pas être introduite indirectement par une migration Famille.
+
+## 6.17.16 Exigences de finalisation NAXA SERVICES — backlog enrichi et reprise sans régression
+
+Le périmètre ci-dessous complète les constats du rapport docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md. Les écrans, modèles Room, parcours Auth, ressources légales, navigation par rôle, reçus PDF et opérations locales déjà construits sont des acquis à préserver. Une présence dans un menu ou un écran local ne signifie pas qu'un workflow serveur/production est terminé.
+
+### CRM, suivi client et relances
+
+Créer un module CRM utilisable par toutes les activités de NAXA SERVICES, sans mélanger les données des organisations ou des sites. La fiche client contient coordonnées, statut, activité, consentements et préférences de contact, historique des prestations/commandes, rendez-vous, incidents, paiements autorisés, fidélité, parrainage client, dernière interaction, prochaine action et responsable interne.
+
+Le client ou un collaborateur autorisé peut configurer une routine de relance : hebdomadaire, mensuelle, fréquence personnalisée, date fixe, échéance métier ou événement (prestation terminée, rendez-vous manqué, livraison à effectuer, vêtement non retiré, renouvellement, inactivité). Chaque tâche conserve date prévue, canal, modèle, responsable, statut, résultat, prochaine occurrence et historique. Le système évite les doublons, respecte consentements, préférences, heures silencieuses et désabonnement, et journalise les envois/échecs. Prévoir campagnes manuelles, listes filtrées, clients inactifs, anniversaires si consentis, fidélité et programme de parrainage client, distinct du parrainage de cinq PME.
+
+### Prestations et livraisons à domicile — géolocalisation client
+
+À l'enrôlement ou à la modification d'un client, proposer une capture GPS facultative et consentie, ainsi qu'un placement manuel du repère sur carte. Enregistrer latitude/longitude, précision et date de capture, adresse, quartier, point de repère, consignes d'accès et statut de vérification. Le client peut corriger ou retirer l'autorisation. N'utiliser les coordonnées que pour la prestation ou la livraison demandée ; aucune géolocalisation continue ou surveillance du client. Accès limité aux personnels chargés de l'intervention/livraison et journalisé. Prévoir affichage itinéraire, ouverture dans une application cartographique et contrôle d'accès par organisation/site/rôle. Un refus GPS ne doit pas empêcher l'enrôlement : l'adresse manuelle reste possible.
+
+### Langue Fulfulde
+
+Ajouter le Fulfulde au sélecteur de langue, aux ressources de l'application, aux notifications, aux aides et aux écrans accessibles. Code de locale cible : ff-CM, à confirmer avec les outils et locuteurs retenus. Ne pas déclarer la traduction achevée avant inventaire de toutes les chaînes, traduction humaine et recette complète ; les CGU, politique de confidentialité et textes sensibles nécessitent une validation humaine/juridique. Conserver français et anglais et ne pas casser les préférences existantes.
+
+### Import de stock et template configurable
+
+À côté de « Importer le fichier des stocks », afficher « Télécharger le template ». Produire un modèle téléchargeable propre au profil d'activité et à l'organisation, avec colonnes et champs documentés (SKU/code-barres, désignation, catégorie, variante, unité, quantité, coût d'achat, prix de vente, seuil, emplacement, lot/date si pertinent). L'administrateur peut choisir/configurer les colonnes nécessaires et leur ordre, les unités et les champs obligatoires ; le moteur d'import utilise le schéma versionné et le mapping correspondant.
+
+Le parcours comprend sélection du fichier, détection du format/version, correspondance des colonnes, aperçu avant import, validations de types et unités, détection des doublons, erreurs ligne par ligne, choix explicite entre création et mise à jour, confirmation, transaction contrôlée, rapport téléchargeable et journal d'import. Ne jamais écraser silencieusement un stock existant ; les quantités initiales créent des mouvements d'inventaire traçables. Un import incomplet ou invalide ne doit pas laisser une partie incohérente des données.
+
+### Autres domaines métier et ERP à terminer
+
+- Backend métier/API et persistance serveur réelle pour clients, catalogue, prestations, rendez-vous, pressing, ventes, caisses, factures, paiements, dépenses, achats, fournisseurs, stocks, mouvements, transferts et rapports.
+- Catalogue : prestations, tarifs, durées, forfaits, ressources, qualifications des prestataires, variantes et règles par activité.
+- Agenda : acomptes, annulations, absences/no-show, listes d'attente, rappels, disponibilité des postes et prestataires.
+- Pressing : étiquettes/QR par vêtement ou lot, reçu, suivi étape par étape, notifications, vêtements non retirés, relances et réclamations.
+- Autres activités : workflows réellement adaptés aux profils (coiffure, beauté, couture, réparation, menuiserie, garage, nettoyage, impression, photo/événementiel, parfumerie, domicile et autres profils approuvés).
+- Achats/fournisseurs : demandes, commandes, réceptions, retours, factures fournisseurs, échéances et rapprochement.
+- Équipe/RH : horaires, pointage, pauses, retards, absences, commissions, avances, primes, objectifs, classements, challenges et validation RH/paie.
+- Ordres de travail : création, affectation, étapes, pièces/consommables, échéance, preuve, contrôle qualité, clôture et historique.
+- Fiscalité camerounaise : régimes, taux, obligations, déclarations préparatoires et justificatifs uniquement après validation par un professionnel sur la réglementation en vigueur.
+- Comptabilité SYSCOHADA : journaux, plan comptable, écritures équilibrées, grand livre, balance, rapprochements, immobilisations, amortissements, clôtures et états financiers ; validation expert-comptable.
+- Reporting : résultats par site/activité/prestataire/période, objectifs vs réalisé, indicateurs, marges calculées et consolidation réseau serveur.
+- Multi-sites/postes : affectations et autorisations transactionnelles par site/poste, transferts inter-sites, gestion des réservations, consolidation réseau.
+- Historique global : journal d'activité serveur, recherche/filtrage selon rôle, auteur, date, site, objet et action ; corrections tracées, jamais de suppression silencieuse.
+- Profil utilisateur : photo/avatar synchronisé, langue, préférences, sessions/appareils, historique autorisé, récupération et révocation.
+- Notifications : centre serveur persistant, FCM, préférences, heures silencieuses, lecture/non-lecture, actions sécurisées et anti-doublon.
+- Sauvegardes : Google Drive via OAuth et autorisation explicite, chiffrement, intégrité, version, rétention, restauration et tests ; Gmail n'est pas un espace de sauvegarde.
+- Appels et partage d'écran : fournisseur média, consentement explicite, signalisation sécurisée, jetons temporaires et journal de session.
+- Parrainage PME : appliquer la règle approuvée de cinq PME distinctes payantes et réabonnées, avec anti-fraude ; ne pas confondre avec parrainage client ou parrainage JOBLY.
+- IA prédictive : assistant explicable sur données autorisées, analyses sourcées, prévisions et anomalies testées ; l'IA ne valide jamais seule paiements, écritures, remboursements, transferts, mouvements sensibles ni déclarations fiscales.
+- Images métier : ajouter de vraies images autorisées par activité ; ne pas utiliser des images factices comme preuves de fonctionnalités.
+- Tutoriel : véritables spotlight successifs sur les contrôles UI concernés, avec étapes skippables et état mémorisé.
+
+### Deux chantiers de sécurité à traiter séparément
+
+1. **Sécurité applicative NAXA SERVICES** : Auth, MFA selon risque, gestion des appareils/sessions, révocation, secrets, RLS, cloisonnement organisation/site/poste, permissions serveur, audit append-only, anti-rejeu, chiffrement local/transport/stockage, sauvegardes, tests négatifs et réponse aux incidents.
+2. **Intégration fonctionnelle NAXA SECURITY** : connecter, après validation des contrats et équipements, les flux vidéo/audio, alertes à distance, règles d'événement, assistance IA, multi-sites/multi-comptes et vues de supervision autorisées. Ce produit ne doit pas être confondu avec la protection de l'ERP. NAXA SECURITY ne fournit pas automatiquement le matériel ni une prestation humaine de surveillance.
+
+### Recettes, qualité et livrables techniques
+
+- Tests instrumentés Android sur émulateur et appareils physiques, navigation, rotation, reprise, permissions, perte de réseau et restauration de session.
+- Base Supabase de recette dédiée ; appliquer les migrations draft uniquement après identification du projet et preuve d'isolation ; tests RLS positifs/négatifs par rôle, application, organisation, site et poste.
+- Synchronisation offline complète : outbox, version de schéma, identifiants idempotents, ordre, reprises, accusés de réception durables, conflits, anti-rejeu et rejeu testé.
+- Tests de non-régression Room, migrations locales, mise à jour APK, performances, volumes de données, longues périodes offline et sauvegarde/restauration.
+- Release Android signée, signature contrôlée, génération reproductible, distribution et procédure de mise à jour ; ne pas confondre APK debug et Release.
+- Web/PWA à développer séparément avec backend, contrats API et règles métier partagés ; l'application Android Kotlin/Compose n'est pas convertie automatiquement en Web/PWA.
+- Modernisation contrôlée de la stack selon le Prompt 0.1, sans mise à niveau massive risquant de casser les dix applications.
+- Tests E2E NAXA autonome : garder son projet, ses données, sa configuration IA, ses prompts et ses scénarios séparés. Aucun déploiement NAXA autonome par effet de bord.
+
+### Ordre de reprise
+
+Reprendre la branche work/naxa-services-completion-20261120 à son HEAD vérifié, auditer les écarts entre cette branche et main, puis intégrer prudemment les neuf commits documentaires de main qui la précèdent. Ne pas fusionner automatiquement et ne pas écraser les fichiers de rapport de cette branche. Une fois la divergence documentaire réconciliée, avancer par lots verticaux : modèle/API → RLS → persistance → synchronisation → écrans → tests → preuve CI. Préserver les écrans et fonctions déjà construits ; toute évolution doit être additive ou accompagnée de tests de non-régression.
+
+**Point de reprise vérifié le 20 novembre 2026 :** HEAD de la branche de travail 58fba9e9f19d809436b114b31434c4a3b2f174fd (commit documentaire) ; parent applicatif 5acd99136a72ba310052532e74e6049992175347. Le workflow 44745166818 est terminé avec succès sur le commit applicatif 5acd99136a72ba310052532e74e6049992175347 : assemblage APK Android debug et tests de contrat Auth réussis. La branche est en avance de 107 commits et en retard de 9 commits par rapport à main au moment du contrôle ; les neuf commits de retard sont documentaires et doivent être intégrés de manière contrôlée. L'APK debug n'est pas une Release. Aucune migration réelle, aucun déploiement de fonction Edge, aucune Release signée et aucune mise en production ne sont réputés accomplis.
+
+**Règle de sécurité opérationnelle :** ne pas toucher au projet NAXA autonome, à son moteur IA, à ses secrets, à ses données ou à ses workflows E2E. Les migrations autorisées pour FAMILLE-NAXA restent limitées à des ressources explicitement propriétaires de Famille et à un environnement isolé ; l'autorisation de migration ne vaut pas autorisation de déploiement ni de publication.
