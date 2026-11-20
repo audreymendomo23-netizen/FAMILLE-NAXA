@@ -43,8 +43,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: naxa-services-technical-gate-${{ github.ref }}
-  cancel-in-progress: true
+  group: naxa-services-technical-gate-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   auth-contract:
