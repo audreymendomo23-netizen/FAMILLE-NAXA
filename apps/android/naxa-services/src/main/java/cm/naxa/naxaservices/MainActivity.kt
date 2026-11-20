@@ -13,6 +13,7 @@ import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_2_3
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_3_4
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_4_5
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_5_6
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_6_7
 import cm.naxa.naxaservices.data.LocalPressingOrder
 import cm.naxa.naxaservices.data.LocalPressingStatusEvent
 import cm.naxa.naxaservices.data.LocalAppointment
@@ -124,7 +125,7 @@ private fun NaxaServicesRoot() {
     val preferences = remember { NaxaServicesPreferences(context) }
     val localDatabase = remember {
         Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db")
-            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6)
+            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7)
             .build()
     }
     val localRepository = remember { NaxaServicesLocalRepository(localDatabase) }
@@ -1365,8 +1366,18 @@ private fun CashLocalContent(
     var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
     val sessions by remember(siteId) { repository.dao.observeCashSessions(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     val sales by remember(siteId) { repository.dao.observeSales(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    val stockItems by remember(siteId) { repository.dao.observeInventoryItems(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    val stockValuations by remember(siteId) { repository.dao.observeInventoryValuations(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     val pendingOutbox by repository.dao.observePendingOutboxCount(session.account.organizationId).collectAsState(initial = 0)
     val openSession = sessions.firstOrNull { it.status == "open" }
+
+    var selectedStockItemId by rememberSaveable { mutableStateOf("") }
+    var saleStockQuantity by rememberSaveable { mutableStateOf("1") }
+    val selectedStockItem = stockItems.firstOrNull { it.id == selectedStockItemId }
+    val selectedStockValuation = selectedStockItem?.let { item -> stockValuations.firstOrNull { it.inventoryItemId == item.id } }
+    val stockSaleQuantity = saleStockQuantity.replace(",", ".").toDoubleOrNull() ?: 0.0
+    val linkedStockPrice = selectedStockValuation?.sellingPriceXaf ?: 0L
+    val linkedStockTotal = (stockSaleQuantity * linkedStockPrice.toDouble()).takeIf { it.isFinite() && it <= Long.MAX_VALUE.toDouble() }?.toLong() ?: 0L
 
     var registerId by rememberSaveable { mutableStateOf("") }
     var registerName by rememberSaveable { mutableStateOf("Caisse principale") }
@@ -1424,8 +1435,59 @@ private fun CashLocalContent(
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(stringResource(R.string.cash_session_open, openSession.registerName), fontWeight = FontWeight.Bold)
                         Text(stringResource(R.string.cash_opening_amount_xaf, openSession.openingFloatXaf))
+                        Text("Vente libre ou article lié au stock", fontWeight = FontWeight.SemiBold)
+                        OutlinedButton(
+                            onClick = {
+                                selectedStockItemId = ""
+                                saleStockQuantity = "1"
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (selectedStockItemId.isBlank()) "✓ Vente libre / prestation" else "Passer en vente libre / prestation") }
+                        stockItems.forEach { item ->
+                            OutlinedButton(
+                                onClick = {
+                                    selectedStockItemId = item.id
+                                    saleDescription = item.name
+                                    val valuation = stockValuations.firstOrNull { it.inventoryItemId == item.id }
+                                    saleTotal = ((saleStockQuantity.replace(",", ".").toDoubleOrNull() ?: 1.0) * (valuation?.sellingPriceXaf ?: 0L)).toLong().takeIf { it > 0 }?.toString() ?: ""
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text((if (selectedStockItemId == item.id) "✓ " else "") + item.name + " · " + item.quantity + " " + item.unit)
+                            }
+                        }
+                        if (selectedStockItem != null) {
+                            OutlinedTextField(
+                                saleStockQuantity,
+                                {
+                                    saleStockQuantity = it
+                                    val q = it.replace(",", ".").toDoubleOrNull() ?: 0.0
+                                    val amount = (q * linkedStockPrice.toDouble()).toLong()
+                                    saleTotal = if (amount > 0L) amount.toString() else ""
+                                },
+                                Modifier.fillMaxWidth(),
+                                label = { Text("Quantité vendue (" + selectedStockItem.unit + ")") },
+                                singleLine = true
+                            )
+                            Text(
+                                "Prix unitaire : " + linkedStockPrice + " F · Total calculé : " + linkedStockTotal + " F · Stock disponible : " + selectedStockItem.quantity,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            if (selectedStockValuation == null || linkedStockPrice <= 0L) {
+                                Text("Aucun prix de vente configuré pour cet article. Enregistre sa valorisation dans le module Stock.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text("Les ventes espèces sortent immédiatement le stock. Les ventes Mobile Money le réservent jusqu'à confirmation vérifiée côté serveur.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         OutlinedTextField(saleDescription, { saleDescription = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.sale_description)) }, singleLine = true)
-                        OutlinedTextField(saleTotal, { saleTotal = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.sale_total_xaf)) }, singleLine = true)
+                        OutlinedTextField(
+                            saleTotal,
+                            { saleTotal = it.filter(Char::isDigit) },
+                            Modifier.fillMaxWidth(),
+                            label = { Text(stringResource(R.string.sale_total_xaf)) },
+                            singleLine = true,
+                            enabled = selectedStockItem == null
+                        )
                         OutlinedTextField(paymentMethod, { paymentMethod = it.trim().lowercase() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.payment_method_cash_or_momo)) }, singleLine = true)
                         Button(
                             onClick = {
@@ -1433,17 +1495,46 @@ private fun CashLocalContent(
                                     busy = true
                                     error = null
                                     runCatching {
-                                        repository.recordSale(session.account.organizationId, siteId, openSession.id, saleDescription, saleTotal.toLong(), paymentMethod, session.account.memberId)
+                                        repository.recordSale(
+                                            session.account.organizationId,
+                                            siteId,
+                                            openSession.id,
+                                            saleDescription,
+                                            saleTotal.toLong(),
+                                            paymentMethod,
+                                            session.account.memberId,
+                                            inventoryItemId = selectedStockItem?.id,
+                                            stockQuantity = selectedStockItem?.let { stockSaleQuantity }
+                                                ?.let { raw -> raw.replace(",", ".").toDoubleOrNull() }
+                                        )
                                     }.onSuccess { pair ->
                                         saleDescription = ""
                                         saleTotal = ""
+                                        selectedStockItemId = ""
+                                        saleStockQuantity = "1"
                                         receiptSale = pair.first
-                                        notice = if (pair.first.status == "pending") "Paiement Mobile Money en attente de confirmation serveur. Le reçu portera cette mention." else "Encaissement espèces enregistré localement. Le reçu est prêt."
+                                        notice = if (pair.first.status == "pending") {
+                                            "Paiement Mobile Money en attente de confirmation serveur. La quantité liée est réservée, pas encore déduite."
+                                        } else {
+                                            if (pair.first.inventoryItemId != null) {
+                                                "Encaissement enregistré ; sortie de stock et mouvement d'inventaire créés dans la même transaction."
+                                            } else {
+                                                "Encaissement espèces enregistré localement. Le reçu est prêt."
+                                            }
+                                        }
                                     }.onFailure { error = it.message ?: "Vente impossible." }
                                     busy = false
                                 }
                             },
-                            enabled = !busy && saleDescription.isNotBlank() && (saleTotal.toLongOrNull() ?: 0L) > 0 && paymentMethod in setOf("cash", "mobile_money"),
+                            enabled = !busy &&
+                                saleDescription.isNotBlank() &&
+                                (saleTotal.toLongOrNull() ?: 0L) > 0 &&
+                                paymentMethod in setOf("cash", "mobile_money") &&
+                                (selectedStockItem == null || (
+                                    linkedStockPrice > 0L &&
+                                    stockSaleQuantity.isNotBlank() &&
+                                    stockSaleQuantity.replace(",", ".").toDoubleOrNull()?.let { it > 0.0 && it <= selectedStockItem.quantity } == true
+                                )),
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(stringResource(R.string.record_sale_local)) }
                         Divider()
