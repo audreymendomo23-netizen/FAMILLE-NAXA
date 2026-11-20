@@ -863,7 +863,7 @@ Le parcours d'import :
 ### 35.7 Point de reprise technique courant
 
 - Branche : `work/naxa-services-completion-20261120`.
-- Commit de code Android validé : `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee`.
+- Dernier commit de code Android validé : `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee`.
 - Workflow `44770034786` : terminé avec succès ; jobs Android debug et Auth Deno verts ; artefact `14647006494`.
-- Après ce build, seul le rapport de continuité a été mis à jour. Le HEAD de branche est maintenant `873ff85e952c453da0c65b58eb8ca9010dc819d8` (commit documentaire) ; le code Android testé reste `2dc2a85`.
+- Des commits documentaires ont ensuite synchronisé le rapport et `docs/CONTINUITE.md` sur la branche. Pour reprendre, lire le HEAD actuel de cette branche ; le dernier code Android vérifié demeure `2dc2a85`.
 - Préserver les acquis et continuer par lots testés ; ne pas fusionner automatiquement la branche et ne pas toucher au projet NAXA autonome.
