@@ -4,7 +4,8 @@ import {
   packagePrice, upgradeProrata, giftMonthsAllowed, provisionalAccessUntil,
   MATURITY_EFFECTIVE_DATE, NAXA_FAMILY_CATALOG, catalogVersionAt,
   resolveNaxaFamilySubscriptionPrice, resolveRenewalPrice,
-  localCalendarDateInZone, resolveRenewalPriceAtInstant, trialDurationForNaxaFamily
+  localCalendarDateInZone, resolveRenewalPriceAtInstant, trialDurationForNaxaFamily,
+  NAXA_FAMILY_MATURITY_SCHEDULE, getNaxaFamilyMaturitySchedule
 } from "../src/index.js";
 
 test("3-month offer discounted 10%, rounded down to 100 FCFA",()=>assert.equal(packagePrice(1150,3),3100));
@@ -103,4 +104,21 @@ test("Campus237 school trial is 30 days, parent essential remains free, other tr
   assert.equal(trialDurationForNaxaFamily({appId:"CAMPUS237",planCode:"PARENT_ESSENTIAL"}).trialApplicable,false);
   assert.equal(trialDurationForNaxaFamily({appId:"CAMPUS237",planCode:"PARENT_FAMILY"}).trialHours,72);
   assert.equal(trialDurationForNaxaFamily({appId:"NAXA_SERVICES",planCode:"PREMIUM"}).trialHours,72);
+});
+
+test("all ten application subscriptions have an explicit 1 May 2027 maturity schedule", () => {
+  const expected = [
+    "BOOTIK","CAMPUS237","COTIZ","GRILLAD","KIOSKO","LOYABLE",
+    "NAXA_HOTEL","NAXA_SECURITY","NAXA_SERVICES","ZIPPLE"
+  ];
+  assert.deepEqual(Object.keys(NAXA_FAMILY_MATURITY_SCHEDULE).sort(), expected);
+  for (const appId of expected) {
+    const schedule = getNaxaFamilyMaturitySchedule(appId);
+    assert.equal(schedule.launchCatalog, "launch");
+    assert.equal(schedule.matureCatalog, "mature");
+    assert.equal(schedule.effectiveDate, "2027-05-01");
+    assert.equal(schedule.timeZone, "Africa/Douala");
+    assert.equal(schedule.applyWhen, "new_subscription_or_renewal_period_starts_on_or_after");
+  }
+  assert.throws(() => getNaxaFamilyMaturitySchedule("UNKNOWN"));
 });
