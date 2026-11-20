@@ -951,9 +951,10 @@ Cette section actualise le point de reprise antérieur du §6.17.16. En cas de d
 **Limites :** CRM, routines, clients, stocks et mouvements de ce lot sont encore locaux/Room et alimentent l'outbox préparatoire. Le planificateur serveur, l'envoi automatique SMS/WhatsApp, FCM, l'API CRM/GPS, les politiques RLS et la synchronisation distante restent ouverts. L'import ne prend pas encore XLS/XLSX, mapping manuel de colonnes arbitraires ni rapport d'erreurs téléchargeable. Les services ne doivent pas être décrits comme entièrement opérationnels en production.
 
 **Preuves de build :**
-- Le commit `96bb9b294e967b258add1884c5b72e228f4f69e2` a passé le workflow `44769339200` : build Android debug et contrat Auth réussis ; artefact `naxa-services-debug-apk` ID `14646801027`.
-- Le dernier HEAD au moment de la présente actualisation est `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee`. Le workflow `44770034786` a réussi le job Auth ; le job Android est encore en cours de validation. Ne pas attribuer le succès du workflow précédent à ce dernier HEAD avant sa conclusion.
-- L'APK vérifié sur `96bb9b2` est une build **debug**, pas une Release signée.
+- Le commit de code `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee` a passé le workflow `44770034786` : les jobs Android debug et Auth Deno sont tous deux terminés avec succès.
+- Artefact correspondant au commit `2dc2a85` : `naxa-services-debug-apk`, ID `14647006494`, SHA-256 `5347fa2e7f58c7501c1d2e25747917487e28734645e74ba77e449def7cd285dd`.
+- Le build précédent `44769339200` / commit `96bb9b2` avait également réussi avec l'artefact `14646801027`.
+- L'artefact reste une build **debug**, pas une Release signée.
 
 **Périmètre non livré par ce lot :** administration centrale des dix applications depuis NAXA, mutualisation réelle des comptes Customer Service Officer, paiement/abonnement réel et entitlements, passerelle IA vers NAXA, intégration fonctionnelle NAXA SECURITY, backend ERP/RLS, comptabilité SYSCOHADA, fiscalité, notifications serveur, sauvegarde Drive, appels/partage écran, Web/PWA, tests physiques et Release signée. Ces sujets restent au backlog du §6.17.15–6.17.16.
 
