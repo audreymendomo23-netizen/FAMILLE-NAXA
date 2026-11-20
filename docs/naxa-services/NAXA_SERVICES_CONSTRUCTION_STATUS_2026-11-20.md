@@ -1073,11 +1073,12 @@ La fonction SQL de qualification est idempotente dans le ledger, mais cela ne re
 
 ### 38.5 CI du commit de parrainage
 
-- Workflow : `44791819448`, commit testé `c76b6680c84635368ae7abd6430018aa13876e40`.
-- Contrat de parrainage : type-check Deno et tests terminés avec succès.
-- Contrats Auth et tests de tarification : terminés avec succès.
-- Compilation Android : encore en cours au moment de la rédaction de cette section. Ne pas annoncer un gate global vert avant le résultat final du job Android.
-
+- Premier workflow : `44791819448`, commit `c76b6680c84635368ae7abd6430018aa13876e40`, conclusion `failure` sur la compilation Android.
+- Cause exacte : import Kotlin explicite de `androidx.compose.foundation.layout.weight`, extension de portée interne. Le contrat de parrainage, Auth et tarification avaient réussi.
+- Correctif : suppression de cet import inutile, commit `f9cb368dec3ac2e00ad7088b054cb30ec1e5badb`.
+- Nouveau workflow : `44792194242`, commit testé `f9cb368dec3ac2e00ad7088b054cb30ec1e5badb`, déclenché et en attente/d'exécution au moment de cette mise à jour. Relever son résultat final avant annonce de build vert.
+- Aucun APK du nouveau SHA n'est considéré comme validé tant que le job Android n'a pas fini avec succès.
+  
 ### 38.6 Point de reprise et backlog global inchangé
 
 Le lot de parrainage est ajouté sans réécrire les écrans et modules métiers précédents. Les réserves antérieures de la section 37 restent ouvertes : API ERP distante et synchronisation offline complète, idempotence et résolution de conflits réseau, RLS vérifiée par tests d'isolation, paiement récurrent réel et webhooks, entitlements, FCM/SMS/WhatsApp et planificateur CRM, SYSCOHADA/fiscalité/paie validés par professionnels, essais physiques/performance/restauration, Release Android signée, Web/PWA séparée, Fulfulde complet relu, pilotage central des dix applications/CSO, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
