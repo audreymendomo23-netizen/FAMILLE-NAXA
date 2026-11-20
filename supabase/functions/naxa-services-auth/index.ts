@@ -102,6 +102,12 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
     }));
   // Return only active site records; never expose inactive or workstation-only scopes.
   const sites = activeSites.map((site) => site.id);
+  const organizationRows = await rest(
+    "ns_organizations?select=display_name,business_mode,default_locale&id=eq." +
+      encodeURIComponent(String(member.org_id)) + "&status=eq.active&limit=1",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  const organization = organizationRows?.[0] ?? {};
   return {
     access_token: authData.access_token,
     refresh_token: authData.refresh_token,
@@ -113,6 +119,9 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
       display_name: member.display_name,
       role_code: member.role_code,
       organization_id: member.org_id,
+      organization_name: organization.display_name ?? "",
+      business_mode: organization.business_mode ?? "solo",
+      default_locale: organization.default_locale ?? "fr",
       active_site_ids: sites,
       active_sites: activeSites,
     },
@@ -461,6 +470,42 @@ async function auditAction(orgId: string, actorUserId: string, actorMemberId: st
   });
 }
 
+async function updateOrganizationProfile(body: Record<string, unknown>, token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  const canManageOrg = actor.member.role_code === "promoter" &&
+    actor.scopes.some((scope) => scope.scope_type === "organization" && scope.can_manage === true);
+  if (!canManageOrg) {
+    return { status: 403, body: { message: "Seul le Promoteur disposant du périmètre Organisation peut modifier ce profil." } };
+  }
+  const displayName = String(body.display_name ?? "").trim().slice(0, 120);
+  const businessMode = String(body.business_mode ?? "");
+  const defaultLocale = String(body.default_locale ?? "fr");
+  if (!displayName || !["solo", "single_site_multi_workstation", "multi_site_network"].includes(businessMode) ||
+      !["fr", "en"].includes(defaultLocale)) {
+    return { status: 400, body: { message: "Profil d'organisation invalide." } };
+  }
+  await rest("ns_organizations?id=eq." + encodeURIComponent(String(actor.member.org_id)), {
+    method: "PATCH",
+    headers: serviceHeaders({ Prefer: "return=representation" }),
+    body: JSON.stringify({
+      display_name: displayName,
+      business_mode: businessMode,
+      default_locale: defaultLocale,
+    }),
+  });
+  await auditAction(
+    String(actor.member.org_id),
+    actor.authUserId,
+    String(actor.member.id),
+    "organization.profile_updated",
+    "organization",
+    String(actor.member.org_id),
+    "Mise à jour du modèle d'exploitation et de la langue",
+  );
+  return { status: 200, body: { saved: true, business_mode: businessMode, default_locale: defaultLocale } };
+}
+
 async function provisionMember(body: Record<string, unknown>, token: string) {
   const actor = await actorContext(token);
   if (!actor) return { status: 401, body: { message: "Session expirée." } };
@@ -719,6 +764,7 @@ Deno.serve(async (request: Request) => {
     else if (action === "change_password") result = await changePassword(body, bearer);
     else if (action === "logout") result = await logout(body, bearer);
     else if (action === "provision_member") result = await provisionMember(body, bearer);
+    else if (action === "update_organization_profile") result = await updateOrganizationProfile(body, bearer);
     else if (action === "complete_recovery") result = await completeRecovery(body, bearer);
     else if (action === "revoke_device") result = await revokeDevice(body, bearer);
     else result = { status: 400, body: { message: "Action non reconnue." } };
