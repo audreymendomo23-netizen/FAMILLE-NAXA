@@ -144,7 +144,10 @@ class PerformanceEngineTest {
         assertEquals(50_000L, result.day.targetXaf)
         assertNotNull(result.month.targetGapXaf)
         assertTrue(result.month.projectedXaf >= result.month.actualXaf)
-        assertTrue(result.recoveryActions.any { it.title.contains("objectif mensuel") })
+        assertTrue(
+            "The monthly recovery action must refer to the active month label.",
+            result.recoveryActions.any { it.title.contains("objectif " + result.month.label) }
+        )
     }
 
     @Test
