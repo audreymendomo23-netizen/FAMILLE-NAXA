@@ -224,9 +224,12 @@ create policy ns_suppliers_manage on public.ns_suppliers
 
 create policy ns_purchase_documents_select on public.ns_purchase_documents
   for select to authenticated using (public.ns_can_access_site(org_id, site_id));
-create policy ns_purchase_documents_manage on public.ns_purchase_documents
-  for all to authenticated using (public.ns_can_manage_site(org_id, site_id))
-  with check (public.ns_can_manage_site(org_id, site_id));
+create policy ns_purchase_documents_insert on public.ns_purchase_documents
+  for insert to authenticated with check (
+    created_by = public.ns_current_member_id(org_id)
+    and updated_by = public.ns_current_member_id(org_id)
+    and public.ns_can_manage_site(org_id, site_id)
+  );
 
 create policy ns_purchase_lines_select on public.ns_purchase_lines
   for select to authenticated using (public.ns_can_access_site(org_id, site_id));
@@ -253,14 +256,15 @@ grant all on public.ns_suppliers, public.ns_purchase_documents, public.ns_purcha
 
 
 drop policy if exists ns_purchase_lines_manage on public.ns_purchase_lines;
-create policy ns_purchase_lines_manage on public.ns_purchase_lines
-  for all to authenticated
-  using (public.ns_can_manage_site(org_id, site_id))
-  with check (
+create policy ns_purchase_lines_insert on public.ns_purchase_lines
+  for insert to authenticated with check (
     public.ns_can_manage_site(org_id, site_id)
     and exists (
       select 1 from public.ns_purchase_documents d
-      where d.id = purchase_id and d.org_id = org_id and d.site_id = site_id
+      where d.id = purchase_id
+        and d.org_id = ns_purchase_lines.org_id
+        and d.site_id = ns_purchase_lines.site_id
+        and d.status = 'ordered'
     )
   );
 
@@ -282,7 +286,8 @@ revoke all on public.ns_suppliers, public.ns_purchase_documents, public.ns_purch
 grant select on public.ns_suppliers, public.ns_purchase_documents, public.ns_purchase_lines,
   public.ns_purchase_receipts, public.ns_supplier_payments, public.ns_sale_lines,
   public.ns_accounting_entries, public.ns_performance_objectives to authenticated;
-grant insert, update on public.ns_suppliers, public.ns_purchase_documents, public.ns_purchase_lines to authenticated;
+grant insert, update on public.ns_suppliers to authenticated;
+grant insert on public.ns_purchase_documents, public.ns_purchase_lines to authenticated;
 grant insert on public.ns_sale_lines to authenticated;
 grant all on public.ns_suppliers, public.ns_purchase_documents, public.ns_purchase_lines,
   public.ns_purchase_receipts, public.ns_supplier_payments, public.ns_sale_lines,
@@ -701,7 +706,7 @@ create or replace view public.ns_performance_daily
 with (security_invoker = true)
 as
 with settled_sales as (
-  select s.id, s.org_id, s.site_id, s.created_at, s.total_xaf, s.cost_of_goods_xaf
+  select s.id, s.org_id, s.site_id, s.created_at, s.total_xaf, s.cost_of_goods_xaf, s.cost_snapshot_complete
   from public.ns_sales s
   join lateral (
     select coalesce(sum(p.amount_xaf),0)::bigint as confirmed_amount
@@ -716,7 +721,9 @@ select
   (s.created_at at time zone 'Africa/Douala')::date as performance_day,
   sum(s.total_xaf)::bigint as revenue_xaf,
   sum(coalesce(s.cost_of_goods_xaf,0))::bigint as cost_of_goods_xaf,
-  sum(s.total_xaf - coalesce(s.cost_of_goods_xaf,0))::bigint as gross_profit_xaf,
+  case when bool_and(s.cost_snapshot_complete)
+    then sum(s.total_xaf - coalesce(s.cost_of_goods_xaf,0))::bigint else null end as gross_profit_xaf,
+  count(*) filter (where not s.cost_snapshot_complete)::integer as uncosted_sales_count,
   count(*)::integer as confirmed_sales_count
 from settled_sales s
 group by s.org_id, s.site_id, (s.created_at at time zone 'Africa/Douala')::date;
