@@ -1570,7 +1570,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 "L'emplacement associé au dossier n'existe pas sur ce point de vente."
             }
         }
-        require(status in setOf("draft", "received", "open", "diagnostic", "quote_pending", "waiting_customer", "awaiting_approval", "approved", "waiting_parts", "ordered", "partially_received", "in_progress", "quality_check", "ready", "delivered", "invoice_review", "closed", "partial", "paid", "cancelled", "pending_review", "rejected")) { "Statut non autorisé." }
+        require(status in setOf("draft", "received", "open", "diagnostic", "quote_pending", "waiting_customer", "awaiting_approval", "contacted", "approved", "waiting_parts", "ordered", "partially_received", "in_progress", "quality_check", "ready", "delivered", "invoice_review", "closed", "partial", "paid", "cancelled", "pending_review", "rejected")) { "Statut non autorisé." }
         val now = System.currentTimeMillis()
         val item = LocalManagementRecord(
             id = UUID.randomUUID().toString(), orgId = orgId, siteId = siteId,
