@@ -71,6 +71,7 @@ import cm.naxa.naxaservices.auth.AuthApi
 import cm.naxa.naxaservices.auth.AuthApiException
 import cm.naxa.naxaservices.auth.AuthSession
 import cm.naxa.naxaservices.auth.ProvisionedAccess
+import cm.naxa.naxaservices.auth.ProvisionScope
 import cm.naxa.naxaservices.auth.RecoveryRequestItem
 import cm.naxa.naxaservices.auth.RecoveryReset
 import cm.naxa.naxaservices.auth.SessionVault
@@ -976,7 +977,7 @@ private fun TeamManagementContent(
     var name by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     var role by rememberSaveable { mutableStateOf("cashier") }
-    var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
+    var selectedSiteIds by rememberSaveable { mutableStateOf(session.account.activeSiteIds.take(1)) }
     var workstationId by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -994,9 +995,39 @@ private fun TeamManagementContent(
                     OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_display_name)) }, singleLine = true)
                     OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_phone_optional)) }, singleLine = true)
                     OutlinedTextField(role, { role = it.trim().lowercase() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_role_code)) }, singleLine = true)
-                    OutlinedTextField(siteId, { siteId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_site_id)) }, singleLine = true)
-                    OutlinedTextField(workstationId, { workstationId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_workstation_id_optional)) }, singleLine = true)
-                    Text(stringResource(R.string.provision_scope_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Affectation aux points de vente autorisés", fontWeight = FontWeight.SemiBold)
+                    if (session.account.activeSiteIds.isEmpty()) {
+                        Text(stringResource(R.string.no_active_sites), color = MaterialTheme.colorScheme.error)
+                    } else {
+                        session.account.activeSiteIds.forEachIndexed { index, id ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Checkbox(
+                                    checked = id in selectedSiteIds,
+                                    onCheckedChange = { checked ->
+                                        selectedSiteIds = if (checked) (selectedSiteIds + id).distinct() else selectedSiteIds - id
+                                    }
+                                )
+                                Column {
+                                    Text(stringResource(R.string.site_reference, index + 1))
+                                    Text(id, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                    OutlinedTextField(
+                        workstationId,
+                        { workstationId = it.trim() },
+                        Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.member_workstation_id_optional)) },
+                        singleLine = true,
+                        enabled = selectedSiteIds.size == 1
+                    )
+                    Text(
+                        if (selectedSiteIds.size > 1) "Un accès multi-sites est défini au niveau de chaque point de vente, sans poste unique partagé."
+                        else stringResource(R.string.provision_scope_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     Button(
                         onClick = {
@@ -1009,8 +1040,7 @@ private fun TeamManagementContent(
                                         accessToken = session.accessToken,
                                         displayName = name,
                                         roleCode = role,
-                                        siteId = siteId,
-                                        workstationId = workstationId.ifBlank { null },
+                                        scopes = selectedSiteIds.map { ProvisionScope(it, workstationId.ifBlank { null }) },
                                         contactPhone = phone
                                     )
                                 }.onSuccess {
@@ -1024,7 +1054,7 @@ private fun TeamManagementContent(
                                 busy = false
                             }
                         },
-                        enabled = !busy && name.isNotBlank() && siteId.isNotBlank() && role.isNotBlank(),
+                        enabled = !busy && name.isNotBlank() && selectedSiteIds.isNotEmpty() && role.isNotBlank() && (workstationId.isBlank() || selectedSiteIds.size == 1),
                         modifier = Modifier.fillMaxWidth().height(52.dp)
                     ) {
                         if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
