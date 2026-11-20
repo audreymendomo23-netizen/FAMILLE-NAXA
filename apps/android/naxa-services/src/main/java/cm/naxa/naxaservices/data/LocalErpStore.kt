@@ -287,7 +287,11 @@ data class LocalSupportRequest(
 
 @Entity(
     tableName = "local_management_records",
-    indices = [Index(value = ["orgId", "siteId", "recordType", "createdAtMillis"]), Index(value = ["orgId", "siteId", "reference"])]
+    indices = [
+        Index(value = ["orgId", "siteId", "recordType", "createdAtMillis"]),
+        Index(value = ["orgId", "siteId", "reference"]),
+        Index(value = ["orgId", "siteId", "workstationId", "createdAtMillis"])
+    ]
 )
 data class LocalManagementRecord(
     @PrimaryKey val id: String,
@@ -303,7 +307,8 @@ data class LocalManagementRecord(
     val status: String,
     val metadataJson: String,
     val actorMemberId: String,
-    val createdAtMillis: Long
+    val createdAtMillis: Long,
+    val workstationId: String? = null
 )
 
 @Entity(
@@ -607,7 +612,7 @@ interface NaxaServicesDao {
         LocalWorkflowEvent::class,
         LocalInventoryValuation::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -681,6 +686,13 @@ val NS_SERVICES_MIGRATION_3_4: Migration = object : Migration(3, 4) {
         database.execSQL("ALTER TABLE local_services ADD COLUMN providerMemberIdsJson TEXT NOT NULL DEFAULT '[]'")
         database.execSQL("ALTER TABLE local_services ADD COLUMN requiredWorkstationKindsJson TEXT NOT NULL DEFAULT '[]'")
         database.execSQL("ALTER TABLE local_services ADD COLUMN packageSessions INTEGER")
+    }
+}
+
+val NS_SERVICES_MIGRATION_4_5: Migration = object : Migration(4, 5) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE local_management_records ADD COLUMN workstationId TEXT")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_management_records_orgId_siteId_workstationId_createdAtMillis ON local_management_records(orgId, siteId, workstationId, createdAtMillis)")
     }
 }
 
@@ -1480,12 +1492,19 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         dueAtMillis: Long?,
         status: String,
         metadataJson: String,
-        actorMemberId: String
+        actorMemberId: String,
+        workstationId: String? = null
     ): LocalManagementRecord = database.withTransaction {
         val allowedTypes = setOf("quote", "invoice", "credit_note", "refund_due", "customer_receivable", "purchase", "supplier", "tax_estimate", "business_goal", "subscription_request", "support_chat", "work_order", "repair_order", "service_order", "appointment_waitlist", "staff_clock_in", "staff_clock_out", "staff_break_start", "staff_break_end", "staff_commission", "staff_advance", "staff_bonus")
         require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) { "Organisation, site et opérateur obligatoires." }
         require(recordType in allowedTypes) { "Type de registre non autorisé." }
         require(title.isNotBlank() && amountXaf >= 0L && paidXaf >= 0L && paidXaf <= amountXaf) { "Montants ou libellé incohérents." }
+        val normalizedWorkstationId = workstationId?.takeIf { it.isNotBlank() }
+        if (normalizedWorkstationId != null) {
+            require(dao.findWorkstation(normalizedWorkstationId, orgId, siteId) != null) {
+                "L'emplacement associé au dossier n'existe pas sur ce point de vente."
+            }
+        }
         require(status in setOf("draft", "received", "open", "diagnostic", "quote_pending", "waiting_customer", "awaiting_approval", "approved", "waiting_parts", "ordered", "partially_received", "in_progress", "quality_check", "ready", "delivered", "invoice_review", "closed", "partial", "paid", "cancelled", "pending_review", "rejected")) { "Statut non autorisé." }
         val now = System.currentTimeMillis()
         val item = LocalManagementRecord(
@@ -1493,7 +1512,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             recordType = recordType, reference = reference.trim(), title = title.trim(),
             counterparty = counterparty.trim(), amountXaf = amountXaf, paidXaf = paidXaf,
             dueAtMillis = dueAtMillis, status = status, metadataJson = metadataJson.take(4000),
-            actorMemberId = actorMemberId, createdAtMillis = now
+            actorMemberId = actorMemberId, createdAtMillis = now,
+            workstationId = normalizedWorkstationId
         )
         dao.insertManagementRecord(item)
         enqueue(orgId, recordType, item.id, recordType + ".created", siteId)
