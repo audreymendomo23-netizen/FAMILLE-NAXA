@@ -20,6 +20,23 @@ export function isNaxaActivityProfile(value: string): value is NaxaActivityProfi
   return NAXA_ACTIVITY_PROFILES.includes(value as NaxaActivityProfile);
 }
 
+export const NAXA_WORKSTATION_KINDS = [
+  "hair_chair", "pressing_counter", "pressing_workshop", "reception", "cashier", "other",
+] as const;
+export type NaxaWorkstationKind = typeof NAXA_WORKSTATION_KINDS[number];
+
+export function isNaxaWorkstationKind(value: string): value is NaxaWorkstationKind {
+  return NAXA_WORKSTATION_KINDS.includes(value as NaxaWorkstationKind);
+}
+
+export function isNaxaSiteCode(value: string): boolean {
+  return /^[A-Z0-9][A-Z0-9_-]{1,19}$/.test(value.trim().toUpperCase());
+}
+
+export function isNaxaWorkstationCode(value: string): boolean {
+  return /^[A-Z0-9][A-Z0-9_-]{1,19}$/.test(value.trim().toUpperCase());
+}
+
 export function isNaxaLocale(value: string): value is "fr" | "en" {
   return value === "fr" || value === "en";
 }

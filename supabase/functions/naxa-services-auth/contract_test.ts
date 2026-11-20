@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, nativeSiteIdsForScopes } from "./scope_contract.ts";
+import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, isNaxaSiteCode, isNaxaWorkstationCode, isNaxaWorkstationKind, nativeSiteIdsForScopes } from "./scope_contract.ts";
 
 // Pure contract checks. Integration tests require an ephemeral Supabase project
 // with a proven internal Auth alias format and seeded NAXA Services identities.
@@ -70,4 +70,20 @@ Deno.test("NAXA Services locale contract accepts French and English only", () =>
   assertEquals(isNaxaLocale("en"), true);
   assertEquals(isNaxaLocale("fr-FR"), false);
   assertEquals(isNaxaLocale(""), false);
+});
+
+Deno.test("NAXA site and workstation codes are constrained before database insertion", () => {
+  assertEquals(isNaxaSiteCode("DOUALA-01"), true);
+  assertEquals(isNaxaSiteCode("A"), false);
+  assertEquals(isNaxaSiteCode("CODE WITH SPACE"), false);
+  assertEquals(isNaxaSiteCode("SITE/01"), false);
+  assertEquals(isNaxaWorkstationCode("CAISSE_1"), true);
+  assertEquals(isNaxaWorkstationCode(""), false);
+});
+
+Deno.test("NAXA workstation kinds match the database enum", () => {
+  for (const kind of ["hair_chair","pressing_counter","pressing_workshop","reception","cashier","other"]) {
+    assertEquals(isNaxaWorkstationKind(kind), true);
+  }
+  assertEquals(isNaxaWorkstationKind("warehouse"), false);
 });

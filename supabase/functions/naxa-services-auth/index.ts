@@ -1,4 +1,4 @@
-import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, nativeSiteIdsForScopes } from "./scope_contract.ts";
+import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, isNaxaSiteCode, isNaxaWorkstationCode, isNaxaWorkstationKind, nativeSiteIdsForScopes } from "./scope_contract.ts";
 // NAXA SERVICES authentication gateway — source only, NOT deployed.
 // Required server-side secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
 // Never set SUPABASE_SERVICE_ROLE_KEY in Android/Web build variables.
@@ -453,13 +453,177 @@ async function actorContext(token: string) {
   return { authUserId: String(auth.data.id), account, member, scopes: scopes ?? [] };
 }
 function actorCanManageSite(actor: NonNullable<Awaited<ReturnType<typeof actorContext>>>, siteId: string) {
-  if (actor.member.role_code === "promoter") return true;
+  // A workstation grant is never sufficient to manage an entire site.
   return actor.scopes.some((s) =>
     s.can_manage === true &&
-    ((s.scope_type === "organization") ||
+    (s.scope_type === "organization" ||
+      (s.scope_type === "site" && String(s.site_id) === siteId))
+  );
+}
+function actorCanReadSite(actor: NonNullable<Awaited<ReturnType<typeof actorContext>>>, siteId: string) {
+  return actor.scopes.some((s) =>
+    s.can_read === true &&
+    (s.scope_type === "organization" ||
       ((s.scope_type === "site" || s.scope_type === "workstation") && String(s.site_id) === siteId))
   );
 }
+
+async function createSite(body: Record<string, unknown>, token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  const canManageOrganization = actor.member.role_code === "promoter" &&
+    actor.scopes.some((scope) => scope.scope_type === "organization" && scope.can_manage === true);
+  if (!canManageOrganization) {
+    return { status: 403, body: { message: "Seul le Promoteur avec périmètre Organisation peut créer un point de vente." } };
+  }
+  const code = String(body.code ?? "").trim().toUpperCase();
+  const name = String(body.name ?? "").trim();
+  const addressLabel = String(body.address_label ?? "").trim();
+  const phoneContact = String(body.phone_contact ?? "").trim();
+  if (!isNaxaSiteCode(code) || !name || name.length > 120 || addressLabel.length > 200 || phoneContact.length > 32) {
+    return { status: 400, body: { message: "Code, nom ou coordonnées du point de vente invalides." } };
+  }
+  const organizations = await rest(
+    "ns_organizations?select=id,business_mode,status&id=eq." + encodeURIComponent(String(actor.member.org_id)) + "&limit=1",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  const organization = organizations?.[0];
+  if (!organization || organization.status !== "active") {
+    return { status: 404, body: { message: "Organisation introuvable ou inactive." } };
+  }
+  if (organization.business_mode !== "multi_site_network") {
+    return { status: 409, body: { message: "Le modèle multi-sites doit être activé avant de créer plusieurs points de vente." } };
+  }
+  const existing = await rest(
+    "ns_sites?select=id&org_id=eq." + encodeURIComponent(String(actor.member.org_id)) + "&code=eq." + encodeURIComponent(code) + "&limit=1",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  if (existing?.length) return { status: 409, body: { message: "Ce code de point de vente existe déjà dans l’organisation." } };
+
+  const rows = await rest("ns_sites", {
+    method: "POST",
+    headers: serviceHeaders({ Prefer: "return=representation" }),
+    body: JSON.stringify({
+      org_id: actor.member.org_id,
+      code,
+      name,
+      address_label: addressLabel || null,
+      phone_contact: phoneContact || null,
+      status: "active",
+      settings: {},
+    }),
+  }) as Record<string, unknown>[];
+  const site = rows?.[0];
+  if (!site?.id) throw new Error("SITE_INSERT_FAILED");
+  await auditAction(
+    String(actor.member.org_id), actor.authUserId, String(actor.member.id),
+    "site.created", "site", String(site.id), "Création du point de vente " + code,
+  );
+  return {
+    status: 201,
+    body: {
+      saved: true,
+      site: {
+        id: String(site.id), code: String(site.code), name: String(site.name),
+        address_label: String(site.address_label ?? ""), phone_contact: String(site.phone_contact ?? ""),
+      },
+    },
+  };
+}
+
+async function createWorkstation(body: Record<string, unknown>, token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  if (!["promoter", "network_manager", "site_manager"].includes(String(actor.member.role_code))) {
+    return { status: 403, body: { message: "Ce rôle ne peut pas créer un emplacement de travail." } };
+  }
+  const siteId = String(body.site_id ?? "");
+  if (!siteId || !actorCanManageSite(actor, siteId)) {
+    return { status: 403, body: { message: "Périmètre du point de vente insuffisant pour créer cet emplacement." } };
+  }
+  const code = String(body.code ?? "").trim().toUpperCase();
+  const name = String(body.name ?? "").trim();
+  const kind = String(body.kind ?? "");
+  const capacity = Number(body.capacity);
+  if (!isNaxaWorkstationCode(code) || !name || name.length > 120 ||
+      !isNaxaWorkstationKind(kind) || !Number.isInteger(capacity) || capacity < 1 || capacity > 100) {
+    return { status: 400, body: { message: "Code, nom, type ou capacité de l’emplacement invalide." } };
+  }
+  const sites = await rest(
+    "ns_sites?select=id&org_id=eq." + encodeURIComponent(String(actor.member.org_id)) +
+      "&id=eq." + encodeURIComponent(siteId) + "&status=eq.active&limit=1",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  if (!sites?.length) return { status: 404, body: { message: "Point de vente absent ou inactif." } };
+  const existing = await rest(
+    "ns_workstations?select=id&org_id=eq." + encodeURIComponent(String(actor.member.org_id)) +
+      "&site_id=eq." + encodeURIComponent(siteId) + "&code=eq." + encodeURIComponent(code) + "&limit=1",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  if (existing?.length) return { status: 409, body: { message: "Ce code d’emplacement existe déjà dans ce point de vente." } };
+
+  const rows = await rest("ns_workstations", {
+    method: "POST",
+    headers: serviceHeaders({ Prefer: "return=representation" }),
+    body: JSON.stringify({
+      org_id: actor.member.org_id, site_id: siteId, code, name, kind,
+      capacity, status: "active",
+    }),
+  }) as Record<string, unknown>[];
+  const workstation = rows?.[0];
+  if (!workstation?.id) throw new Error("WORKSTATION_INSERT_FAILED");
+  await auditAction(
+    String(actor.member.org_id), actor.authUserId, String(actor.member.id),
+    "workstation.created", "workstation", String(workstation.id),
+    "Création de l’emplacement " + code + " sur le point de vente " + siteId,
+  );
+  return {
+    status: 201,
+    body: {
+      saved: true,
+      workstation: {
+        id: String(workstation.id), site_id: String(workstation.site_id),
+        code: String(workstation.code), name: String(workstation.name),
+        kind: String(workstation.kind), capacity: Number(workstation.capacity),
+        status: String(workstation.status),
+      },
+    },
+  };
+}
+
+async function listWorkstations(body: Record<string, unknown>, token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  const siteId = String(body.site_id ?? "");
+  if (!siteId || !actorCanReadSite(actor, siteId)) {
+    return { status: 403, body: { message: "Ce compte ne dispose pas d’un accès à ce point de vente." } };
+  }
+  const rows = await rest(
+    "ns_workstations?select=id,site_id,code,name,kind,capacity,status&org_id=eq." +
+      encodeURIComponent(String(actor.member.org_id)) + "&site_id=eq." + encodeURIComponent(siteId) + "&status=eq.active&order=created_at.asc",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  const hasSiteWideRead = actor.scopes.some((scope) =>
+    scope.can_read === true &&
+    (scope.scope_type === "organization" ||
+      (scope.scope_type === "site" && String(scope.site_id) === siteId))
+  );
+  const allowedWorkstationIds = new Set(actor.scopes
+    .filter((scope) => scope.scope_type === "workstation" && scope.can_read === true && String(scope.site_id) === siteId)
+    .map((scope) => String(scope.workstation_id ?? scope.scope_id)));
+  const visible = hasSiteWideRead ? (rows ?? []) : (rows ?? []).filter((row) => allowedWorkstationIds.has(String(row.id)));
+  return {
+    status: 200,
+    body: {
+      workstations: visible.map((row) => ({
+        id: String(row.id), site_id: String(row.site_id), code: String(row.code),
+        name: String(row.name), kind: String(row.kind), capacity: Number(row.capacity),
+        status: String(row.status),
+      })),
+    },
+  };
+}
+
 async function adminCreateAuthUser(alias: string, password: string) {
   const res = await fetch(SUPABASE_URL + "/auth/v1/admin/users", {
     method: "POST",
@@ -945,6 +1109,9 @@ Deno.serve(async (request: Request) => {
     else if (action === "change_password") result = await changePassword(body, bearer);
     else if (action === "logout") result = await logout(body, bearer);
     else if (action === "provision_member") result = await provisionMember(body, bearer);
+    else if (action === "create_site") result = await createSite(body, bearer);
+    else if (action === "create_workstation") result = await createWorkstation(body, bearer);
+    else if (action === "list_workstations") result = await listWorkstations(body, bearer);
     else if (action === "update_organization_profile") result = await updateOrganizationProfile(body, bearer);
     else if (action === "set_activity_profile") result = await setOrganizationActivityProfile(body, bearer);
     else if (action === "set_member_locale") result = await setMemberPreferredLocale(body, bearer);
