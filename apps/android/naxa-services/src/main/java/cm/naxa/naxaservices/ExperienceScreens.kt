@@ -7,7 +7,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -22,7 +24,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
 @Composable
-fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boolean,busy:Boolean,error:String?,onSelect:(String)->Unit) {
+fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boolean,busy:Boolean,error:String?,onLogout:()->Unit,onSelect:(String)->Unit) {
  var expanded by remember { mutableStateOf(false) }
  var selected by rememberSaveable { mutableStateOf(initialSelection ?: "pressing") }
  val profile=NaxaActivityCatalog.find(selected); val fr=locale!="en"
@@ -33,13 +35,24 @@ fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boo
   Text(if(fr) "Ce choix configure les écrans, le catalogue, les stocks et les workflows de votre ERP. Il sera mémorisé pour toute l’organisation."
    else "This choice configures ERP screens, catalogue, inventory and workflows. It is saved for the whole organization.",color=MaterialTheme.colorScheme.onSurfaceVariant)
   Spacer(Modifier.height(20.dp))
-  Box {
-   OutlinedButton(onClick={expanded=true},modifier=Modifier.fillMaxWidth().height(58.dp)) {
-    Text((profile?.icon ?: "🧰")+"  "+(if(fr) profile?.titleFr else profile?.titleEn))
+  if(canChoose) {
+   Box {
+    OutlinedButton(onClick={expanded=true},modifier=Modifier.fillMaxWidth().height(58.dp)) {
+     Text((profile?.icon ?: "🧰")+"  "+(if(fr) profile?.titleFr else profile?.titleEn))
+    }
+    DropdownMenu(expanded=expanded,onDismissRequest={expanded=false}) {
+     NaxaActivityCatalog.profiles.forEach { item ->
+      DropdownMenuItem(text={Text(item.icon+"  "+(if(fr) item.titleFr else item.titleEn))},onClick={selected=item.key;expanded=false})
+     }
+    }
    }
-   DropdownMenu(expanded=expanded,onDismissRequest={expanded=false}) {
-    NaxaActivityCatalog.profiles.forEach { item ->
-     DropdownMenuItem(text={Text(item.icon+"  "+(if(fr) item.titleFr else item.titleEn))},onClick={selected=item.key;expanded=false})
+  } else {
+   Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),border=BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant),shape=RoundedCornerShape(20.dp)) {
+    Column(Modifier.fillMaxWidth().padding(18.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+     Text("🔒",style=MaterialTheme.typography.displaySmall)
+     Text(if(fr)"En attente du Promoteur" else "Waiting for the organization owner",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+     Text(if(fr)"Le profil métier n’a pas encore été défini. Le Promoteur de votre organisation doit terminer cette configuration. Vous ne pouvez pas choisir une activité à sa place."
+      else "The business profile has not been set yet. Your organization owner must finish setup. You cannot select an activity on their behalf.",color=MaterialTheme.colorScheme.onSurfaceVariant)
     }
    }
   }
@@ -54,8 +67,14 @@ fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boo
   if(!error.isNullOrBlank()) Text(error,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(top=12.dp))
   Spacer(Modifier.height(18.dp))
   if(!canChoose) Text(if(fr) "Seul le Promoteur peut choisir l’activité principale de l’organisation." else "Only the organization promoter can select the main activity.",color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(top=10.dp))
-  Button(onClick={onSelect(selected)},enabled=canChoose && !busy && profile!=null,modifier=Modifier.fillMaxWidth().height(54.dp)) {
-   Text(if(busy) (if(fr) "Enregistrement…" else "Saving…") else if(fr) "Confirmer mon activité" else "Confirm activity")
+  if(canChoose) {
+   Button(onClick={onSelect(selected)},enabled=!busy && profile!=null,modifier=Modifier.fillMaxWidth().height(54.dp)) {
+    Text(if(busy) (if(fr) "Enregistrement…" else "Saving…") else if(fr) "Confirmer mon activité" else "Confirm activity")
+   }
+  } else {
+   OutlinedButton(onClick=onLogout,modifier=Modifier.fillMaxWidth().height(52.dp)) {
+    Text(if(fr)"Se déconnecter" else "Sign out")
+   }
   }
   Text(if(fr) "Le choix est enregistré au niveau de l’organisation. Les collaborateurs ne peuvent pas le remplacer depuis leur profil."
    else "The choice is stored at organization level. Employees cannot replace it from their profile.",color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall,modifier=Modifier.padding(top=12.dp))
@@ -71,25 +90,40 @@ fun LegalAcceptanceScreen(
  busy:Boolean,
  error:String?
 ) {
+ val context=LocalContext.current
  val fr=locale!="en"
  var terms by rememberSaveable { mutableStateOf(initialTermsAccepted) }
  var privacy by rememberSaveable { mutableStateOf(initialPrivacyAccepted) }
+ var termsViewed by rememberSaveable { mutableStateOf(initialTermsAccepted) }
+ var privacyViewed by rememberSaveable { mutableStateOf(initialPrivacyAccepted) }
  var showTerms by rememberSaveable { mutableStateOf(false) }
  var showPrivacy by rememberSaveable { mutableStateOf(false) }
+ val termsAsset=if(fr)"legal/TERMS_OF_USE_2026-11-v1.md" else "legal/TERMS_OF_USE_2026-11-v1_EN.md"
+ val privacyAsset=if(fr)"legal/PRIVACY_POLICY_2026-11-v1.md" else "legal/PRIVACY_POLICY_2026-11-v1_EN.md"
+ val termsText=remember(termsAsset) {
+  runCatching { context.assets.open(termsAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }
+   .getOrElse { if(fr)"Conditions générales indisponibles. Contactez l’assistance." else "Terms are unavailable. Contact support." }
+ }
+ val privacyText=remember(privacyAsset) {
+  runCatching { context.assets.open(privacyAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }
+   .getOrElse { if(fr)"Politique de confidentialité indisponible. Contactez l’assistance." else "Privacy policy is unavailable. Contact support." }
+ }
  LazyColumn(Modifier.fillMaxSize().padding(22.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
   item {
    Text(if(fr)"Avant de commencer" else "Before you start",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-   Text(if(fr)"Lisez les deux documents. Chaque acceptation est enregistrée séparément avec sa version et votre compte."
-    else "Read both documents. Each acceptance is recorded separately with its version and your account.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Text(if(fr)"Lisez les deux documents complets. Vous devez les ouvrir avant de confirmer séparément chaque acceptation."
+    else "Read both complete documents. You must open them before separately confirming each acceptance.",color=MaterialTheme.colorScheme.onSurfaceVariant)
   }
   item {
    Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
     Column(Modifier.padding(16.dp)) {
      Text(if(fr)"Conditions générales d’utilisation" else "Terms of use",fontWeight=FontWeight.Bold)
-     Text(if(fr)"Objet, responsabilité de l’organisation, comptes, opérations, abonnements, usage hors connexion, documents, fiscalité, IA, support et sécurité."
-      else "Purpose, organization responsibility, accounts, operations, subscriptions, offline use, documents, tax, AI, support and security.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+     Text(if(termsViewed)(if(fr)"Document consulté" else "Document viewed") else (if(fr)"Lecture obligatoire" else "Reading required"),color=MaterialTheme.colorScheme.onSurfaceVariant)
      TextButton(onClick={showTerms=true}){Text(if(fr)"Lire les conditions complètes" else "Read full terms")}
-     Row(verticalAlignment=Alignment.CenterVertically){Checkbox(terms,{terms=it});Text(if(fr)"J’accepte les Conditions générales" else "I accept the Terms of use")}
+     Row(verticalAlignment=Alignment.CenterVertically) {
+      Checkbox(checked=terms,onCheckedChange={terms=it},enabled=termsViewed)
+      Text(if(fr)"J’accepte les Conditions générales" else "I accept the Terms of use")
+     }
     }
    }
   }
@@ -97,77 +131,51 @@ fun LegalAcceptanceScreen(
    Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
     Column(Modifier.padding(16.dp)) {
      Text(if(fr)"Politique de confidentialité" else "Privacy policy",fontWeight=FontWeight.Bold)
-     Text(if(fr)"Données traitées, finalités, accès, IA, prestataires, conservation, sécurité, sauvegardes et droits des personnes."
-      else "Processed data, purposes, access, AI, service providers, retention, security, backups and individual rights.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+     Text(if(privacyViewed)(if(fr)"Document consulté" else "Document viewed") else (if(fr)"Lecture obligatoire" else "Reading required"),color=MaterialTheme.colorScheme.onSurfaceVariant)
      TextButton(onClick={showPrivacy=true}){Text(if(fr)"Lire la politique complète" else "Read full privacy policy")}
-     Row(verticalAlignment=Alignment.CenterVertically){Checkbox(privacy,{privacy=it});Text(if(fr)"J’accepte la Politique de confidentialité" else "I accept the Privacy policy")}
+     Row(verticalAlignment=Alignment.CenterVertically) {
+      Checkbox(checked=privacy,onCheckedChange={privacy=it},enabled=privacyViewed)
+      Text(if(fr)"J’accepte la Politique de confidentialité" else "I accept the Privacy policy")
+     }
     }
    }
   }
   if(!error.isNullOrBlank()) item { Text(error,color=MaterialTheme.colorScheme.error) }
-  item { Button(onClick={onAccept(terms,privacy)},enabled=terms && privacy && !busy,modifier=Modifier.fillMaxWidth().height(52.dp)){Text(if(busy) (if(fr)"Enregistrement…" else "Saving…") else if(fr)"Continuer" else "Continue")} }
- }
- if(showTerms) androidx.compose.ui.window.Dialog(onDismissRequest={showTerms=false}) {
-  Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(22.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
-   LazyColumn(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-    item { Text(if(fr)"Conditions générales d’utilisation — version 2026-11-v1" else "Terms of use — version 2026-11-v1",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold) }
-    val sections=if(fr) listOf(
-     "Objet et acceptation" to "NAXA SERVICES est un outil logiciel de gestion. L’accès est réservé aux personnes ayant reçu un identifiant créé par un responsable. L’acceptation des conditions et de la politique de confidentialité est enregistrée séparément.",
-     "Compte et responsabilités" to "Chaque utilisateur protège son identifiant et son mot de passe. Le Promoteur gère les comptes, les rôles, les sites et les révocations. Le partage d’identifiants est interdit.",
-     "Organisation et activité" to "Le Promoteur choisit le profil métier principal lors de la première mise en service. Ce choix configure le modèle ERP de l’organisation. Le modèle solo, multi-emplacements ou multi-sites est indépendant du profil métier.",
-     "Données et opérations" to "L’entreprise garantit l’exactitude des données. Les écritures validées ne sont pas effacées silencieusement. Les corrections, annulations et remboursements doivent être motivés et journalisés.",
-     "Paiements et abonnements" to "Une déclaration de paiement n’est pas une preuve. Les abonnements sont activés après rapprochement fiable ou validation autorisée. L’échéance peut limiter les droits sans effacer les données.",
-     "Hors connexion" to "Les données locales sont conservées jusqu’à synchronisation durable ou résolution du conflit. Une opération financière ne doit pas être rejouée comme nouvelle après un timeout.",
-     "Documents et fiscalité" to "Les documents doivent être vérifiés avant remise externe. Les taux et obligations fiscales sont validés par un professionnel. Les estimations ne sont ni une déclaration ni un conseil fiscal.",
-     "IA, assistance et sécurité" to "L’IA aide à la décision et ne confirme pas de paiements. Les appels et partages d’écran nécessitent un consentement explicite. Les utilisateurs protègent leurs appareils et leurs accès.",
-     "Responsabilité et droit applicable" to "Les clauses finales de disponibilité, de responsabilité, de résiliation, de propriété intellectuelle, de droit applicable et les coordonnées officielles doivent être complétées et approuvées par conseil juridique avant usage commercial."
-    ) else listOf(
-     "Purpose and acceptance" to "NAXA SERVICES is business management software. Access is restricted to users given an account by an authorized manager. Terms and Privacy acceptance are recorded separately.",
-     "Accounts and responsibilities" to "Each user protects their credentials. The owner manages accounts, roles, sites and revocation. Credential sharing is prohibited.",
-     "Organization and activity" to "The owner selects the primary business profile during setup. This configures the organization's ERP model. Solo, multi-workstation and multi-site structures are separate from the business activity.",
-     "Data and operations" to "The business is responsible for data accuracy. Approved entries are not silently erased. Corrections, cancellations and refunds require a reason and an audit trail.",
-     "Payments and subscriptions" to "A payment declaration is not proof. Subscriptions activate after reliable reconciliation or authorized validation. Expiry can restrict rights without deleting data.",
-     "Offline use" to "Local data remains until durable synchronization or conflict resolution. A financial event must not be replayed as a new event after a timeout.",
-     "Documents and tax" to "Documents must be checked before external delivery. Tax rates and duties must be validated by a professional. Estimates are not filings or tax advice.",
-     "AI, support and security" to "AI supports decisions and does not confirm payments. Calls and screen sharing require explicit consent. Users must protect their devices and accounts.",
-     "Liability and applicable law" to "Final availability, liability, termination, intellectual property, governing law and official contact clauses must be completed and approved by counsel before commercial use."
-    )
-    items(sections){ section -> Column(verticalArrangement=Arrangement.spacedBy(3.dp)){Text(section.first,fontWeight=FontWeight.Bold);Text(section.second,color=MaterialTheme.colorScheme.onSurfaceVariant)} }
-    item { Text(if(fr)"Projet soumis à validation juridique avant toute utilisation commerciale." else "Draft subject to legal review before commercial use.",color=MaterialTheme.colorScheme.error) }
-    item { Button(onClick={showTerms=false},modifier=Modifier.fillMaxWidth()){Text(if(fr)"Fermer" else "Close")} }
+  item {
+   Button(onClick={onAccept(terms,privacy)},enabled=terms && privacy && termsViewed && privacyViewed && !busy,modifier=Modifier.fillMaxWidth().height(52.dp)) {
+    Text(if(busy)(if(fr)"Enregistrement…" else "Saving…") else if(fr)"Continuer" else "Continue")
    }
   }
  }
- if(showPrivacy) androidx.compose.ui.window.Dialog(onDismissRequest={showPrivacy=false}) {
-  Card(modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(22.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
-   LazyColumn(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-    item { Text(if(fr)"Politique de confidentialité — version 2026-11-v1" else "Privacy policy — version 2026-11-v1",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold) }
-    val sections=if(fr) listOf(
-     "Responsable et contact" to "L’identité légale, l’adresse et le contact de confidentialité de l’éditeur doivent être complétés avant publication.",
-     "Données" to "Selon les modules activés : comptes, rôles, organisations, clients, fournisseurs, prestations, rendez-vous, tickets, ventes, paiements, factures, stocks, dépenses, rapports, appareils et journaux de sécurité.",
-     "Finalités et accès" to "Les données servent à fournir l’ERP, sécuriser les comptes, gérer les opérations, synchroniser, facturer, assister et produire des indicateurs. Chaque organisation et chaque site restent isolés selon les droits.",
-     "Consentements" to "Les photos, communications marketing, accès à certaines données de l’appareil, appels, partage d’écran et sauvegarde Google nécessitent des consentements distincts lorsque la loi l’exige.",
-     "IA" to "Les analyses IA sont limitées aux données autorisées. Les informations d’une PME ne doivent jamais apparaître dans les réponses d’une autre. Les PIN, OTP et SMS bruts ne sont pas transmis à un modèle externe.",
-     "Hébergement et conservation" to "Les prestataires réellement utilisés et leurs pays doivent être déclarés. Les durées de conservation sont définies par catégories et obligations applicables.",
-     "Sécurité et droits" to "Les mesures visent contrôle d’accès, chiffrement, journalisation et sauvegarde sécurisée. Les procédures d’accès, rectification, opposition, effacement et portabilité doivent être complétées.",
-     "Hors connexion et sauvegarde" to "Une partie des données peut rester localement sur le téléphone. Les sauvegardes Drive sont facultatives, chiffrées et ne contiennent pas les jetons de session."
-    ) else listOf(
-     "Controller and contact" to "The publisher's legal identity, address and privacy contact must be completed before release.",
-     "Data" to "Depending on enabled modules: accounts, roles, organizations, customers, suppliers, services, appointments, tickets, sales, payments, invoices, inventory, expenses, reports, devices and security logs.",
-     "Purposes and access" to "Data is used to provide the ERP, secure accounts, manage operations, synchronize, bill, support and produce indicators. Organizations and sites remain isolated according to permissions.",
-     "Consent" to "Photos, marketing communications, device permissions, calls, screen sharing and Google backups require separate consent where legally required.",
-     "AI" to "AI analysis is limited to authorized data. One SME's information must never appear in another SME's answers. PINs, OTPs and raw SMS are not sent to an external model.",
-     "Hosting and retention" to "Actual providers and processing countries must be disclosed. Retention periods are defined by data category and applicable obligations.",
-     "Security and rights" to "Safeguards include access control, encryption, logging and secure backups. Access, correction, objection, deletion and portability procedures must be completed.",
-     "Offline and backups" to "Some data may remain locally on the device. Drive backups are optional, encrypted and exclude session tokens."
-    )
-    items(sections){ section -> Column(verticalArrangement=Arrangement.spacedBy(3.dp)){Text(section.first,fontWeight=FontWeight.Bold);Text(section.second,color=MaterialTheme.colorScheme.onSurfaceVariant)} }
-    item { Text(if(fr)"Projet soumis à validation juridique et conformité avant toute utilisation commerciale." else "Draft subject to legal and compliance review before commercial use.",color=MaterialTheme.colorScheme.error) }
-    item { Button(onClick={showPrivacy=false},modifier=Modifier.fillMaxWidth()){Text(if(fr)"Fermer" else "Close")} }
-   }
-  }
- }
+ if(showTerms) androidx.compose.material3.AlertDialog(
+  onDismissRequest={showTerms=false},
+  title={Text(if(fr)"Conditions générales — version 2026-11-v1" else "Terms of use — version 2026-11-v1")},
+  text={
+   Text(legalPlainText(termsText),modifier=Modifier.heightIn(max=480.dp).verticalScroll(rememberScrollState()),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+  },
+  confirmButton={TextButton(onClick={termsViewed=true;showTerms=false}){Text(if(fr)"J’ai lu les conditions" else "I have read the terms")}},
+  dismissButton={TextButton(onClick={showTerms=false}){Text(if(fr)"Fermer" else "Close")}}
+ )
+ if(showPrivacy) androidx.compose.material3.AlertDialog(
+  onDismissRequest={showPrivacy=false},
+  title={Text(if(fr)"Politique de confidentialité — version 2026-11-v1" else "Privacy policy — version 2026-11-v1")},
+  text={
+   Text(legalPlainText(privacyText),modifier=Modifier.heightIn(max=480.dp).verticalScroll(rememberScrollState()),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+  },
+  confirmButton={TextButton(onClick={privacyViewed=true;showPrivacy=false}){Text(if(fr)"J’ai lu la politique" else "I have read the policy")}},
+  dismissButton={TextButton(onClick={showPrivacy=false}){Text(if(fr)"Fermer" else "Close")}}
+ )
 }
+
+private fun legalPlainText(raw:String):String = raw
+ .lineSequence()
+ .map { line ->
+  var clean=line.trim()
+  while(clean.startsWith("#")) clean=clean.drop(1)
+  clean.trim().replace("**","").replace(96.toChar().toString(),"")
+ }
+ .filterNot { it.startsWith("> ") || it.startsWith("---") }
+ .joinToString("\n")
 
 private data class DiscoveryCard(val icon:String,val titleFr:String,val titleEn:String,val bodyFr:String,val bodyEn:String)
 @Composable
