@@ -1027,10 +1027,11 @@ Ce point complète la section 6.17.19 sans invalider les preuves Android/CI du c
 
 - Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`.
 - Branche de travail : `work/naxa-services-completion-20261120`.
-- Commit de code initial : `c76b6680c84635368ae7abd6430018aa13876e40` ; son job de compilation Android a échoué à cause d'un import Kotlin de `Modifier.weight` non nécessaire.
-- Correctif : `f9cb368dec3ac2e00ad7088b054cb30ec1e5badb`, suppression de cet import.
-- Workflow de validation du correctif : `44792194242`. Il a été déclenché sur le SHA corrigé et doit être vérifié jusqu'à conclusion finale avant toute annonce de build vert.
-- Rapport détaillé : `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`, section 38.
+- Commit de code final testé : `f9cb368dec3ac2e00ad7088b054cb30ec1e5badb`.
+- Workflow : `44792194242`, résultat final **SUCCESS — 4/4 jobs** (Android debug, Auth contracts, referral API contract, billing catalog).
+- Artefact Android debug : ID `14656354059`, 11 560 550 octets, SHA-256 `f26dd357c47d677fe5c456b936af28ad2fda89c092525ff31385fdfafd11ef42`, valable jusqu'au 27 novembre 2026 à 18:25:06 UTC.
+- Rapport détaillé : `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`, sections 38.5 à 38.7.
+- Le statut CI vert vaut pour ce périmètre de compilation/tests automatisés ; il n'est pas un vert Production global.
 
 #### Parrainage — règles et interface ajoutées
 
