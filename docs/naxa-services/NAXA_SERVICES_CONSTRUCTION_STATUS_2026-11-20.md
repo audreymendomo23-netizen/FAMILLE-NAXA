@@ -1099,3 +1099,19 @@ Un contrôle read-only a été réalisé sur le seul projet Supabase accessible 
 - Advisors performance : 35 clés étrangères non indexées, 28 cas auth/RLS initplan, 36 index inutilisés et 33 groupes de policies permissives multiples.
 
 Ces alertes concernent le projet Supabase NAXA actuellement connecté et ses applications/schémas existants. Elles ne constituent pas un audit de NAXA SERVICES. **Aucune correction de sécurité ni migration n'a été exécutée** : modifier globalement ce projet sans cartographier les applications qui l'utilisent pourrait affecter la plateforme existante. Le projet actuellement connecté ne constitue pas une base de recette isolée identifiable de NAXA SERVICES ; le draft de parrainage reste donc non appliqué et sa fonction Edge non déployée.
+
+
+### 38.8 Contrôle de la frontière d'authentification au déploiement
+
+Le dépôt ne contenait pas encore de `supabase/config.toml`. Le lot ajoute désormais :
+
+```toml
+[functions.naxa-services-referrals]
+verify_jwt = false
+```
+
+Ce choix est limité à la fonction Referral : les actions Promoteur valident elles-mêmes le bearer auprès de Supabase Auth puis vérifient le compte, l'organisation et le rôle ; le webhook fournisseur exige le HMAC-SHA256 du corps brut. Sans cette exception, le contrôle JWT automatique à la passerelle pourrait rejeter le webhook du fournisseur avant l'exécution du contrôle HMAC. Le README précise les deux chemins et interdit de réutiliser ce réglage sans contrôles applicatifs équivalents.
+
+- Commit de configuration : `34682dd53f45f42db7ca815df0af6c74291bc80d`.
+- Workflow sur ce HEAD : `44792804538`. Les tests tarifaires, Auth et parrainage sont réussis ; le job Android était en cours au moment de cette mise à jour.
+- La présence du fichier de configuration ne signifie pas que la fonction est déployée ni que les secrets sont configurés.
