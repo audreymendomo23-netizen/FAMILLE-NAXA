@@ -455,8 +455,20 @@ private fun ErpScreen(
             TeamManagementContent(Modifier.padding(padding), authApi, activeSession)
         } else if (route == AppRoute.SECURITY) {
             AccessManagementContent(Modifier.padding(padding), authApi, activeSession)
+        } else if (route == AppRoute.SERVICES) {
+            ServicesCatalogContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.CUSTOMERS) {
+            CustomersContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.STOCK) {
+            StockContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.REPORTS) {
+            ReportsContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.ORGANIZATION || route == AppRoute.NETWORK || route == AppRoute.SITES || route == AppRoute.WORKSTATIONS) {
-            OrganizationModeContent(Modifier.padding(padding), route, activeSession)
+            OrganizationWorkspaceContent(Modifier.padding(padding), route, localRepository, activeSession)
+        } else if (route == AppRoute.HELP) {
+            SupportContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.SETTINGS) {
+            SettingsContent(Modifier.padding(padding), localRepository, activeSession, lightTheme, onTheme)
         } else if (currentSpec != null) {
             ModuleContent(Modifier.padding(padding), currentSpec, onNavigate)
         } else {
