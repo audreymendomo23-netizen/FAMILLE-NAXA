@@ -90,6 +90,7 @@ La création de nouveaux sites et postes depuis Android reste un brouillon local
 - Les données locales sont cloisonnées par `orgId` et `siteId`.
 - Le Promoteur peut préparer un collaborateur avec plusieurs périmètres de sites autorisés.
 - Les rôles proposés dans le formulaire sont restreints selon le rôle du responsable.
+- Le menu, la navigation basse, le tableau de bord et les routes ERP appliquent un filtrage prudent par rôle : caisse, réception, opérateur pressing, stock et comptabilité ne voient que les modules prévus pour leurs fonctions ; les responsables conservent les espaces d'administration correspondant à leur niveau.
 - Les portées « poste de travail uniquement » ne sont pas élargies en accès site complet. Le filtrage de données poste-par-poste n'étant pas encore implémenté dans tous les écrans, le formulaire de création de collaborateur n'expose pas cette affectation pour le moment.
 - Le contrat pur de portée est séparé dans `scope_contract.ts` et des tests Deno couvrent les trois modèles, les périmètres de sites et l'interdiction d'élargir une portée poste en portée site.
 
@@ -139,8 +140,8 @@ Il faut ensuite construire le moteur de synchronisation : identifiants idempoten
 
 ### Autres limites fonctionnelles et sécurité
 
-- l'accès poste-par-poste n'est pas activé dans le client natif : il faut filtrer chaque consultation et chaque mutation par poste avant d'exposer ces comptes ;
-- les droits métier doivent être contrôlés à la fois dans les écrans Android et sur chaque API/RLS ; l'interface locale seule ne constitue pas une barrière de sécurité ;
+- l'accès poste-par-poste n'est pas activé dans le client natif : il faut filtrer chaque consultation et chaque mutation par poste avant d'exposer ces comptes ; le rôle `workstation_manager` n'est donc pas proposé dans la création de collaborateurs et reste limité à l'accueil, l'assistance et aux paramètres ;
+- les droits métier doivent être contrôlés à la fois dans les écrans Android et sur chaque API/RLS ; le filtrage Android par rôle est une protection d'interface, pas une barrière de sécurité ; les opérations locales doivent encore être alignées sur les mêmes capacités que les droits `can_read`, `can_operate` et `can_manage` du serveur ;
 - la base Room locale n'est pas encore chiffrée au repos ; les règles de sauvegarde Android, d'effacement à la déconnexion et de conservation des données personnelles doivent être validées ;
 - les mouvements Mobile Money sont enregistrés en attente, mais aucun agrégateur ou rapprochement de paiement n'est raccordé ;
 - présence/pointage, commissions, paie, transferts inter-sites, exports comptables et abonnements ne sont pas encore livrés comme workflows transactionnels complets ;
