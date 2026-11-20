@@ -9,7 +9,10 @@ alter table public.ns_inventory_items
 
 alter table public.ns_sales
   add column if not exists cost_of_goods_xaf bigint not null default 0 check (cost_of_goods_xaf >= 0),
-  add column if not exists cost_snapshot_complete boolean not null default false;
+  add column if not exists cost_snapshot_complete boolean not null default false,
+  add column if not exists inventory_posting_key uuid;
+create unique index if not exists ns_sales_inventory_posting_key_idx
+  on public.ns_sales(org_id, inventory_posting_key) where inventory_posting_key is not null;
 
 create table if not exists public.ns_suppliers (
   id uuid primary key default gen_random_uuid(),
@@ -259,6 +262,7 @@ as $naxa$
 declare
   v_member uuid;
   v_id uuid;
+  v_existing public.ns_accounting_entries%rowtype;
 begin
   v_member := public.ns_current_member_id(p_org_id);
   if v_member is null or not public.ns_can_operate_site(p_org_id, p_site_id) then
@@ -268,19 +272,27 @@ begin
      or length(trim(p_source_type)) = 0 or length(trim(p_event_code)) = 0 then
     raise exception 'NAXA_ACCOUNTING_ENTRY_INVALID';
   end if;
+  select * into v_existing from public.ns_accounting_entries
+    where org_id = p_org_id and source_type = p_source_type and source_id = p_source_id and event_code = p_event_code
+    for update;
+  if found then
+    if v_existing.site_id = p_site_id and v_existing.debit_account = p_debit_account
+       and v_existing.credit_account = p_credit_account and v_existing.amount_xaf = p_amount_xaf
+       and v_existing.description = trim(p_description) then
+      return v_existing.id;
+    end if;
+    raise exception 'NAXA_ACCOUNTING_IDEMPOTENCY_CONFLICT';
+  end if;
+  v_id := gen_random_uuid();
   insert into public.ns_accounting_entries(
-    org_id, site_id, journal_batch_id, source_type, source_id, event_code,
+    id, org_id, site_id, journal_batch_id, source_type, source_id, event_code,
     debit_account, credit_account, amount_xaf, description, actor_member_id
   ) values (
-    p_org_id, p_site_id, gen_random_uuid(), p_source_type, p_source_id, p_event_code,
+    v_id, p_org_id, p_site_id,
+    md5(p_org_id::text || ':' || p_source_type || ':' || p_source_id::text)::uuid,
+    p_source_type, p_source_id, p_event_code,
     p_debit_account, p_credit_account, p_amount_xaf, trim(p_description), v_member
-  )
-  on conflict (org_id, source_type, source_id, event_code) do nothing
-  returning id into v_id;
-  if v_id is null then
-    select id into v_id from public.ns_accounting_entries
-    where org_id = p_org_id and source_type = p_source_type and source_id = p_source_id and event_code = p_event_code;
-  end if;
+  );
   return v_id;
 end;
 $naxa$;
@@ -427,6 +439,7 @@ declare
   v_member uuid;
   v_purchase public.ns_purchase_documents%rowtype;
   v_payment public.ns_supplier_payments%rowtype;
+  v_cash_session public.ns_cash_sessions%rowtype;
   v_payment_id uuid;
   v_balance bigint;
   v_treasury text;
@@ -461,10 +474,13 @@ begin
   if p_amount_xaf > v_balance then raise exception 'NAXA_SUPPLIER_PAYMENT_EXCEEDS_BALANCE'; end if;
 
   if p_payment_method = 'cash' then
-    if p_cash_session_id is null or not exists (
-      select 1 from public.ns_cash_sessions c
-      where c.id = p_cash_session_id and c.org_id = p_org_id and c.site_id = p_site_id and c.status = 'open'
-    ) then raise exception 'NAXA_SUPPLIER_PAYMENT_CASH_SESSION_REQUIRED'; end if;
+    if p_cash_session_id is null then raise exception 'NAXA_SUPPLIER_PAYMENT_CASH_SESSION_REQUIRED'; end if;
+    select * into v_cash_session from public.ns_cash_sessions c
+      where c.id = p_cash_session_id and c.org_id = p_org_id and c.site_id = p_site_id
+      and c.status = 'open' for update;
+    if not found or not public.ns_can_access_cash_register(p_org_id, p_site_id, v_cash_session.register_id, true) then
+      raise exception 'NAXA_SUPPLIER_PAYMENT_CASH_SESSION_FORBIDDEN';
+    end if;
   elsif p_cash_session_id is not null then
     raise exception 'NAXA_SUPPLIER_PAYMENT_CASH_SESSION_NOT_ALLOWED';
   end if;
@@ -477,6 +493,12 @@ begin
     p_payment_method, coalesce(trim(p_payment_reference), ''), p_idempotency_key, p_payload_sha256, v_member
   ) returning id into v_payment_id;
 
+  if p_payment_method = 'cash' then
+    insert into public.ns_expenses(org_id, site_id, cash_session_id, category, description, amount_xaf, reason, created_by)
+    values (p_org_id, p_site_id, p_cash_session_id, 'supplier_payment',
+      'Règlement fournisseur ' || v_purchase.reference, p_amount_xaf,
+      'Paiement enregistré dans le journal fournisseur', v_member);
+  end if;
   v_treasury := case p_payment_method
     when 'cash' then 'CASH_REGISTER'
     when 'bank' then 'BANK'
@@ -538,21 +560,26 @@ $naxa$;
 create or replace view public.ns_performance_daily
 with (security_invoker = true)
 as
+with settled_sales as (
+  select s.id, s.org_id, s.site_id, s.created_at, s.total_xaf, s.cost_of_goods_xaf
+  from public.ns_sales s
+  join lateral (
+    select coalesce(sum(p.amount_xaf),0)::bigint as confirmed_amount
+    from public.ns_payments p
+    where p.sale_id = s.id and p.org_id = s.org_id and p.site_id = s.site_id and p.status = 'confirmed'
+  ) paid on paid.confirmed_amount >= s.total_xaf
+  where s.status = 'posted'
+)
 select
   s.org_id,
   s.site_id,
-  (s.created_at at time zone 'UTC')::date as performance_day,
+  (s.created_at at time zone 'Africa/Douala')::date as performance_day,
   sum(s.total_xaf)::bigint as revenue_xaf,
   sum(coalesce(s.cost_of_goods_xaf,0))::bigint as cost_of_goods_xaf,
   sum(s.total_xaf - coalesce(s.cost_of_goods_xaf,0))::bigint as gross_profit_xaf,
   count(*)::integer as confirmed_sales_count
-from public.ns_sales s
-where s.status = 'posted'
-  and exists (
-    select 1 from public.ns_payments p
-    where p.sale_id = s.id and p.org_id = s.org_id and p.site_id = s.site_id and p.status = 'confirmed'
-  )
-group by s.org_id, s.site_id, (s.created_at at time zone 'UTC')::date;
+from settled_sales s
+group by s.org_id, s.site_id, (s.created_at at time zone 'Africa/Douala')::date;
 
 create or replace view public.ns_performance_monthly
 with (security_invoker = true)
