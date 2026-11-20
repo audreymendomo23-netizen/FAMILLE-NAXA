@@ -881,6 +881,9 @@ val NS_SERVICES_MIGRATION_7_8: Migration = object : Migration(7, 8) {
     }
 }
 
+class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
+    val dao: NaxaServicesDao = database.naxaServicesDao()
+
     suspend fun saveSupplierWhatsApp(orgId: String, siteId: String, itemId: String, value: String): LocalInventoryItem = database.withTransaction {
         val phone = value.filter(Char::isDigit)
         require(phone.isBlank() || phone.length in 9..15) { "Saisis le numéro avec son indicatif pays." }
@@ -1041,9 +1044,6 @@ val NS_SERVICES_MIGRATION_7_8: Migration = object : Migration(7, 8) {
         if (changed > 0) enqueue(event.orgId, "loyalty_reward", event.id, "loyalty_reward.redeemed", event.siteId)
         changed > 0
     }
-
-class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
-    val dao: NaxaServicesDao = database.naxaServicesDao()
 
     suspend fun createPressingOrder(
         orgId: String,
