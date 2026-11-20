@@ -799,10 +799,10 @@ interface NaxaServicesDao {
     @Query("SELECT COALESCE(SUM(totalXaf), 0) FROM local_sales WHERE orgId = :orgId AND siteId = :siteId AND status = 'confirmed' AND createdAtMillis BETWEEN :fromMillis AND :toMillis")
     fun observeSalesTotal(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Long>
 
-    // Supplier debt settlement is a cash outflow, not a second operating expense.
-    // Keep it in sessionExpensesTotal() for cash reconciliation, but exclude it from P&L-style reports.
-    @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_expenses WHERE orgId = :orgId AND siteId = :siteId AND category <> 'supplier_payment' AND createdAtMillis BETWEEN :fromMillis AND :toMillis")
-    fun observeExpensesTotal(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Long>
+    // Read operating expenses from the journal, not the cash-outflow table.
+    // Supplier settlements affect treasury and payable balances, never a second time the P&L.
+    @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_accounting_entries WHERE orgId = :orgId AND siteId = :siteId AND debitAccount LIKE 'OPERATING_EXPENSE%' AND occurredAtMillis BETWEEN :fromMillis AND :toMillis")
+    fun observeOperatingExpensesTotal(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Long>
 
     @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_supplier_payments WHERE orgId = :orgId AND siteId = :siteId AND paidAtMillis BETWEEN :fromMillis AND :toMillis")
     fun observeSupplierPaymentsTotal(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Long>

@@ -1359,7 +1359,7 @@ fun ReportsContent(
                     SiteDailyReport(
                         siteId = siteId,
                         salesXaf = repository.dao.observeSalesTotal(session.account.organizationId, siteId, start, end).first(),
-                        expensesXaf = repository.dao.observeExpensesTotal(session.account.organizationId, siteId, start, end).first(),
+                        expensesXaf = repository.dao.observeOperatingExpensesTotal(session.account.organizationId, siteId, start, end).first(),
                         supplierPaymentsXaf = repository.dao.observeSupplierPaymentsTotal(session.account.organizationId, siteId, start, end).first(),
                         costOfGoodsXaf = repository.dao.observeCostOfGoodsTotal(session.account.organizationId, siteId, start, end).first(),
                         confirmedSalesCount = repository.dao.observeConfirmedSalesCount(session.account.organizationId, siteId, start, end).first(),
