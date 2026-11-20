@@ -1064,3 +1064,8 @@ Ces observations concernent l'environnement NAXA connecté, pas un environnement
 - Le projet NAXA autonome n'a pas été modifié.
 - Aucun commit de code n'a été fusionné dans `main`.
 - Reprendre depuis le HEAD courant de `work/naxa-services-completion-20261120`, conserver les écrans existants et poursuivre les intégrations restantes en lots verticaux avec tests et preuves distincts.
+
+
+#### Dernière configuration du service de parrainage
+
+La configuration Supabase du dépôt contient désormais `[functions.naxa-services-referrals] verify_jwt = false`, uniquement pour laisser la fonction vérifier les actions Promoteur par Supabase Auth et le webhook fournisseur par HMAC. Le README encadre explicitement ces contrôles. Commit de configuration : `34682dd53f45f42db7ca815df0af6c74291bc80d`. Workflow `44792804538` : contrôles contrats/tarifs réussis ; job Android encore en cours lors de cette note. La fonction n'est toujours pas déployée.
