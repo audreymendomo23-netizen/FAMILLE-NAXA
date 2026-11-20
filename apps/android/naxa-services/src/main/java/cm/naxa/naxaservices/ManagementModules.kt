@@ -605,7 +605,13 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                                 OutlinedButton(onClick = {
                                     val q = (receiptQuantities[line.id] ?: remaining.toString()).replace(",", ".").toDoubleOrNull() ?: 0.0
                                     scope.launch {
-                                        runCatching { repository.receiveSupplierPurchaseLine(orgId, siteId, purchase.id, line.id, q, session.account.memberId) }
+                                        runCatching { repository.receiveSupplierPurchaseLine(
+                                            orgId, siteId, purchase.id, line.id, q,
+                                            java.util.UUID.nameUUIDFromBytes(
+                                                "$orgId|$siteId|${purchase.id}|${line.id}|${line.quantityReceived}|$q".toByteArray(Charsets.UTF_8)
+                                            ).toString(),
+                                            session.account.memberId
+                                        ) }
                                             .onSuccess { receiptQuantities.remove(line.id); notice = if (fr) "Réception enregistrée : stock, dette et journal mis à jour." else "Receipt posted to inventory, payable and journal." }
                                             .onFailure { error = it.message ?: "Receiving failed." }
                                     }

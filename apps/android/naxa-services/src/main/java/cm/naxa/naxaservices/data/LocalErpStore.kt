@@ -527,7 +527,11 @@ data class LocalPurchaseLine(
 
 @Entity(
     tableName = "local_purchase_receipts",
-    indices = [Index(value = ["purchaseId", "receivedAtMillis"]), Index(value = ["orgId", "siteId", "receivedAtMillis"])]
+    indices = [
+        Index(value = ["purchaseId", "receivedAtMillis"]),
+        Index(value = ["orgId", "siteId", "receivedAtMillis"]),
+        Index(value = ["orgId", "idempotencyKey"], unique = true)
+    ]
 )
 data class LocalPurchaseReceipt(
     @PrimaryKey val id: String,
@@ -540,7 +544,8 @@ data class LocalPurchaseReceipt(
     val nonRecoverableCostXaf: Long,
     val recoverableTaxXaf: Long,
     val actorMemberId: String,
-    val receivedAtMillis: Long
+    val receivedAtMillis: Long,
+    @ColumnInfo(defaultValue = "''") val idempotencyKey: String = ""
 )
 
 @Entity(
@@ -910,6 +915,9 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_purchase_receipts WHERE purchaseId = :purchaseId AND orgId = :orgId AND siteId = :siteId ORDER BY receivedAtMillis DESC")
     fun observePurchaseReceipts(orgId: String, siteId: String, purchaseId: String): Flow<List<LocalPurchaseReceipt>>
 
+    @Query("SELECT * FROM local_purchase_receipts WHERE orgId = :orgId AND idempotencyKey = :idempotencyKey LIMIT 1")
+    suspend fun findPurchaseReceiptByKey(orgId: String, idempotencyKey: String): LocalPurchaseReceipt?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertPurchaseReceipt(receipt: LocalPurchaseReceipt)
 
@@ -1022,7 +1030,7 @@ interface NaxaServicesDao {
         LocalSupplierPayment::class,
         LocalAccountingEntry::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -1186,6 +1194,14 @@ val NS_SERVICES_MIGRATION_9_10: Migration = object : Migration(9, 10) {
     }
 }
 
+val NS_SERVICES_MIGRATION_10_11: Migration = object : Migration(10, 11) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE local_purchase_receipts ADD COLUMN idempotencyKey TEXT NOT NULL DEFAULT ''")
+        database.execSQL("UPDATE local_purchase_receipts SET idempotencyKey = 'legacy:' || id WHERE idempotencyKey = ''")
+        database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_local_purchase_receipts_orgId_idempotencyKey ON local_purchase_receipts(orgId, idempotencyKey)")
+    }
+}
+
 class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
     val dao: NaxaServicesDao = database.naxaServicesDao()
 
@@ -1271,9 +1287,17 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
 
     suspend fun receiveSupplierPurchaseLine(
         orgId: String, siteId: String, purchaseId: String, lineId: String,
-        quantityToReceive: Double, actorMemberId: String
+        quantityToReceive: Double, idempotencyKey: String, actorMemberId: String
     ): LocalPurchaseReceipt = database.withTransaction {
-        require(quantityToReceive.isFinite() && quantityToReceive > 0.0 && actorMemberId.isNotBlank())
+        require(quantityToReceive.isFinite() && quantityToReceive > 0.0 && actorMemberId.isNotBlank() && idempotencyKey.isNotBlank())
+        dao.findPurchaseReceiptByKey(orgId, idempotencyKey)?.let { existing ->
+            require(existing.siteId == siteId && existing.purchaseId == purchaseId &&
+                existing.purchaseLineId == lineId &&
+                kotlin.math.abs(existing.quantityReceived - quantityToReceive) <= 0.000001) {
+                "Clé d'idempotence déjà utilisée pour une réception différente."
+            }
+            return@withTransaction existing
+        }
         val purchase = dao.findPurchaseDocument(purchaseId, orgId, siteId) ?: throw IllegalArgumentException("Commande fournisseur introuvable.")
         require(purchase.status !in setOf("cancelled", "closed")) { "Cette commande est clôturée ou annulée." }
         val line = dao.findPurchaseLine(orgId, siteId, purchaseId, lineId) ?: throw IllegalArgumentException("Ligne d'achat introuvable.")
@@ -1294,7 +1318,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         val receiptId = UUID.randomUUID().toString()
         val receipt = LocalPurchaseReceipt(
             receiptId, orgId, siteId, purchaseId, line.id, quantityToReceive, base,
-            nonRecoverableDelta, recoverableDelta, actorMemberId, now
+            nonRecoverableDelta, recoverableDelta, actorMemberId, now, idempotencyKey
         )
         dao.insertPurchaseReceipt(receipt)
         val expenseBase = base + nonRecoverableDelta
