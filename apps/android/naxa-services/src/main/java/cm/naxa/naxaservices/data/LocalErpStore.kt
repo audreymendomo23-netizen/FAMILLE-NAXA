@@ -172,7 +172,12 @@ data class LocalService(
     val durationMinutes: Int?,
     val priceXaf: Long,
     val active: Boolean = true,
-    val createdAtMillis: Long
+    val createdAtMillis: Long,
+    val category: String = "general",
+    val description: String = "",
+    val providerMemberIdsJson: String = "[]",
+    val requiredWorkstationKindsJson: String = "[]",
+    val packageSessions: Int? = null
 )
 
 @Entity(tableName = "local_customers", indices = [Index(value = ["siteId"]), Index(value = ["phoneContact"])])
@@ -383,8 +388,17 @@ interface NaxaServicesDao {
         endsAtMillis: Long
     ): Int
 
+    @Query("SELECT * FROM local_appointments WHERE id = :appointmentId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
+    suspend fun findAppointment(orgId: String, siteId: String, appointmentId: String): LocalAppointment?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertAppointment(appointment: LocalAppointment)
+
+    @Update
+    suspend fun updateAppointment(appointment: LocalAppointment)
+
+    @Query("SELECT COUNT(*) FROM local_appointments WHERE orgId = :orgId AND siteId = :siteId AND id <> :excludedAppointmentId AND status NOT IN ('cancelled','completed') AND startsAtMillis < :endsAtMillis AND endsAtMillis > :startsAtMillis AND ((:workstationId IS NOT NULL AND workstationId = :workstationId) OR assignedMemberId = :assignedMemberId)")
+    suspend fun countAppointmentConflictsExcludingId(orgId: String, siteId: String, excludedAppointmentId: String, workstationId: String?, assignedMemberId: String, startsAtMillis: Long, endsAtMillis: Long): Int
 
     @Query("SELECT * FROM local_cash_sessions WHERE orgId = :orgId AND siteId = :siteId ORDER BY openedAtMillis DESC")
     fun observeCashSessions(orgId: String, siteId: String): Flow<List<LocalCashSession>>
@@ -454,6 +468,9 @@ interface NaxaServicesDao {
 
     @Query("SELECT * FROM local_services WHERE orgId = :orgId AND siteId = :siteId ORDER BY name COLLATE NOCASE ASC")
     fun observeServices(orgId: String, siteId: String): Flow<List<LocalService>>
+
+    @Query("SELECT * FROM local_services WHERE id = :serviceId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
+    suspend fun findService(orgId: String, siteId: String, serviceId: String): LocalService?
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertService(service: LocalService)
@@ -659,6 +676,11 @@ val NS_SERVICES_MIGRATION_3_4: Migration = object : Migration(3, 4) {
         )
         database.execSQL("CREATE INDEX IF NOT EXISTS index_local_workflow_events_orgId_siteId_aggregateType_aggregateId_createdAtMillis ON local_workflow_events(orgId, siteId, aggregateType, aggregateId, createdAtMillis)")
         database.execSQL("CREATE INDEX IF NOT EXISTS index_local_workflow_events_actorMemberId_createdAtMillis ON local_workflow_events(actorMemberId, createdAtMillis)")
+        database.execSQL("ALTER TABLE local_services ADD COLUMN category TEXT NOT NULL DEFAULT 'general'")
+        database.execSQL("ALTER TABLE local_services ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+        database.execSQL("ALTER TABLE local_services ADD COLUMN providerMemberIdsJson TEXT NOT NULL DEFAULT '[]'")
+        database.execSQL("ALTER TABLE local_services ADD COLUMN requiredWorkstationKindsJson TEXT NOT NULL DEFAULT '[]'")
+        database.execSQL("ALTER TABLE local_services ADD COLUMN packageSessions INTEGER")
     }
 }
 
@@ -1274,6 +1296,106 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         dao.insertSupportRequest(item)
         enqueue(orgId, "support_request", item.id, "support_request.created", siteId)
         item
+    }
+
+    suspend fun transitionAppointmentStatus(
+        orgId: String,
+        siteId: String,
+        appointmentId: String,
+        nextStatus: String,
+        reason: String,
+        actorMemberId: String
+    ): LocalAppointment = database.withTransaction {
+        require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) {
+            "Organisation, site et opérateur obligatoires."
+        }
+        require(reason.trim().length >= 3 && reason.length <= 500) { "Un motif de trois caractères minimum est obligatoire." }
+        val current = dao.findAppointment(orgId, siteId, appointmentId)
+            ?: throw IllegalArgumentException("Rendez-vous introuvable sur ce point de vente.")
+        val allowed = when (current.status) {
+            "booked" -> setOf("confirmed", "cancelled", "no_show")
+            "confirmed" -> setOf("cancelled", "no_show", "completed")
+            else -> emptySet()
+        }
+        require(nextStatus in allowed) { "Transition rendez-vous interdite : ${current.status} → $nextStatus." }
+        val updated = current.copy(status = nextStatus)
+        dao.updateAppointment(updated)
+        dao.insertWorkflowEvent(
+            LocalWorkflowEvent(
+                id = UUID.randomUUID().toString(), orgId = orgId, siteId = siteId,
+                aggregateType = "appointment", aggregateId = current.id,
+                fromStatus = current.status, toStatus = nextStatus, reason = reason.trim(),
+                actorMemberId = actorMemberId, createdAtMillis = System.currentTimeMillis()
+            )
+        )
+        enqueue(orgId, "appointment", current.id, "appointment.status_changed", siteId)
+        updated
+    }
+
+    suspend fun rescheduleAppointment(
+        orgId: String,
+        siteId: String,
+        appointmentId: String,
+        newStartAtMillis: Long,
+        newEndAtMillis: Long,
+        reason: String,
+        actorMemberId: String
+    ): LocalAppointment = database.withTransaction {
+        require(newStartAtMillis > 0L && newEndAtMillis > newStartAtMillis) { "Nouveau créneau invalide." }
+        require(reason.trim().length >= 3 && actorMemberId.isNotBlank()) { "Motif et opérateur obligatoires." }
+        val current = dao.findAppointment(orgId, siteId, appointmentId)
+            ?: throw IllegalArgumentException("Rendez-vous introuvable.")
+        require(current.status in setOf("booked", "confirmed")) { "Ce rendez-vous ne peut plus être déplacé." }
+        val conflicts = dao.countAppointmentConflictsExcludingId(
+            orgId, siteId, appointmentId, current.workstationId, current.assignedMemberId,
+            newStartAtMillis, newEndAtMillis
+        )
+        require(conflicts == 0) { "Conflit de planning avec un autre rendez-vous pour ce poste ou ce prestataire." }
+        val updated = current.copy(startsAtMillis = newStartAtMillis, endsAtMillis = newEndAtMillis)
+        dao.updateAppointment(updated)
+        dao.insertWorkflowEvent(
+            LocalWorkflowEvent(
+                id = UUID.randomUUID().toString(), orgId = orgId, siteId = siteId,
+                aggregateType = "appointment", aggregateId = current.id,
+                fromStatus = current.status, toStatus = "rescheduled",
+                reason = reason.trim(), actorMemberId = actorMemberId,
+                createdAtMillis = System.currentTimeMillis()
+            )
+        )
+        enqueue(orgId, "appointment", current.id, "appointment.rescheduled", siteId)
+        updated
+    }
+
+    suspend fun saveServiceConfiguration(
+        orgId: String,
+        siteId: String,
+        serviceId: String,
+        category: String,
+        description: String,
+        providerMemberIdsJson: String,
+        requiredWorkstationKindsJson: String,
+        packageSessions: Int?,
+        actorMemberId: String
+    ): LocalService = database.withTransaction {
+        require(category in setOf("pressing", "hair", "beauty", "tailoring", "repair", "manufacturing", "vehicle", "cleaning", "home", "printing", "event", "retail", "general")) {
+            "Catégorie de prestation invalide."
+        }
+        require(description.length <= 1000 && providerMemberIdsJson.length <= 2000 && requiredWorkstationKindsJson.length <= 1000) {
+            "Configuration trop longue."
+        }
+        require(packageSessions == null || packageSessions in 1..100) { "Nombre de séances du forfait invalide." }
+        require(actorMemberId.isNotBlank()) { "Opérateur obligatoire." }
+        val service = dao.findService(orgId, siteId, serviceId) ?: throw IllegalArgumentException("Prestation introuvable.")
+        val updated = service.copy(
+            category = category,
+            description = description.trim(),
+            providerMemberIdsJson = providerMemberIdsJson,
+            requiredWorkstationKindsJson = requiredWorkstationKindsJson,
+            packageSessions = packageSessions
+        )
+        dao.updateService(updated)
+        enqueue(orgId, "service", serviceId, "service.configuration_updated", siteId)
+        updated
     }
 
     suspend fun createManagementRecord(
