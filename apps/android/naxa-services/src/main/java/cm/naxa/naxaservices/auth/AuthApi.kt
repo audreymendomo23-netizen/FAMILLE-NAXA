@@ -82,9 +82,95 @@ data class RecoveryReset(
     val temporaryPassword: String
 )
 
+data class ReferralEntry(
+    val organizationName: String,
+    val status: String,
+    val referredAt: String,
+    val activatedAt: String?,
+    val referrerPlanCadence: String?
+)
+data class ReferralReward(
+    val waveNumber: Int,
+    val rewardKind: String,
+    val subscriptionCadence: String,
+    val status: String,
+    val createdAt: String,
+    val appliedAt: String?
+)
+data class ReferralDashboard(
+    val code: String?,
+    val referredCount: Int,
+    val activatedCount: Int,
+    val progressInCurrentWave: Int,
+    val nextWaveNumber: Int,
+    val referrals: List<ReferralEntry>,
+    val rewards: List<ReferralReward>
+)
+
 class AuthApi(private val context: Context) {
     private val endpoint: String get() = BuildConfig.AUTH_FUNCTION_URL.trim()
     private val anonKey: String get() = BuildConfig.SUPABASE_ANON_KEY.trim()
+    private val referralEndpoint: String get() = BuildConfig.REFERRALS_FUNCTION_URL.trim().ifBlank {
+        endpoint.replace(Regex("/naxa-services-auth/?$"), "/naxa-services-referrals")
+    }
+
+    suspend fun referralDashboard(accessToken: String): ReferralDashboard {
+        val json = request(JSONObject().put("action", "dashboard").put("app_code", "naxa-services"), accessToken, referralEndpoint)
+        val counts = json.optJSONObject("counts") ?: JSONObject()
+        val referralsJson = json.optJSONArray("referrals") ?: JSONArray()
+        val rewardsJson = json.optJSONArray("rewards") ?: JSONArray()
+        val referrals = buildList {
+            for (index in 0 until referralsJson.length()) {
+                val row = referralsJson.optJSONObject(index) ?: continue
+                add(ReferralEntry(
+                    row.optString("organization_name").ifBlank { "PME parrainée" },
+                    row.optString("status"),
+                    row.optString("created_at"),
+                    row.optString("first_subscription_paid_at").takeIf { it.isNotBlank() && it != "null" },
+                    row.optString("referrer_plan_cadence").takeIf { it.isNotBlank() && it != "null" }
+                ))
+            }
+        }
+        val rewards = buildList {
+            for (index in 0 until rewardsJson.length()) {
+                val row = rewardsJson.optJSONObject(index) ?: continue
+                add(ReferralReward(
+                    row.optInt("wave_number"),
+                    row.optString("reward_kind"),
+                    row.optString("subscription_cadence"),
+                    row.optString("status"),
+                    row.optString("created_at"),
+                    row.optString("applied_at").takeIf { it.isNotBlank() && it != "null" }
+                ))
+            }
+        }
+        val codeValue = json.optString("code")
+        return ReferralDashboard(
+            codeValue.takeIf { it.isNotBlank() && it != "null" },
+            counts.optInt("referred_count"),
+            counts.optInt("activated_count"),
+            counts.optInt("progress_in_current_wave"),
+            counts.optInt("next_wave_number", 1),
+            referrals,
+            rewards
+        )
+    }
+
+    suspend fun generateReferralCode(accessToken: String): String {
+        val json = request(JSONObject().put("action", "create_code").put("app_code", "naxa-services"), accessToken, referralEndpoint)
+        return json.optString("code").takeIf { it.matches(Regex("^NS-[A-Z0-9]{7}$")) }
+            ?: throw AuthApiException("Le serveur n'a pas renvoyé un code de parrainage valide.")
+    }
+
+    suspend fun applyReferralCode(accessToken: String, rawCode: String) {
+        val normalized = rawCode.trim().uppercase()
+        require(normalized.matches(Regex("^NS-[A-Z0-9]{7}$"))) { "Le code doit respecter le format NS-XXXXXXX." }
+        request(
+            JSONObject().put("action", "apply_code").put("app_code", "naxa-services").put("referral_code", normalized),
+            accessToken,
+            referralEndpoint
+        )
+    }
 
     suspend fun login(identifier: String, password: String, rememberDevice: Boolean): AuthSession =
         requestSession(
@@ -473,13 +559,13 @@ class AuthApi(private val context: Context) {
         }
     }
 
-    private suspend fun request(body: JSONObject, bearer: String? = null): JSONObject = withContext(Dispatchers.IO) {
-        if (endpoint.isBlank() || anonKey.isBlank()) {
+    private suspend fun request(body: JSONObject, bearer: String? = null, targetEndpoint: String = endpoint): JSONObject = withContext(Dispatchers.IO) {
+        if (targetEndpoint.isBlank() || anonKey.isBlank()) {
             throw AuthApiException("Le service d'authentification NAXA Services n'est pas encore configuré.")
         }
         var connection: HttpURLConnection? = null
         try {
-            connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+            connection = (URL(targetEndpoint).openConnection() as HttpURLConnection).apply {
                 requestMethod = "POST"
                 connectTimeout = 12000
                 readTimeout = 15000

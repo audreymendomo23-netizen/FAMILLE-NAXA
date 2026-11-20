@@ -855,7 +855,7 @@ private fun ErpScreen(
         } else if (route == AppRoute.LIVECHAT) {
             LivechatContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.PROFILE) {
-            ProfileContent(Modifier.padding(padding), activeSession, activityProfile, localRepository, preferences, onNavigate, onLogout)
+            ProfileContent(Modifier.padding(padding), activeSession, authApi, activityProfile, localRepository, preferences, onNavigate, onLogout)
         } else if (route == AppRoute.APPEARANCE) {
             AppearanceSettingsContent(locale, preferences, onChanged = onAppearanceChanged, onLocale = onLocale)
         } else if (route == AppRoute.BILLING) {

@@ -9,6 +9,8 @@ on:
       - "packages/core-android/**"
       - "packages/billing-core/**"
       - "supabase/functions/naxa-services-auth/**"
+      - "supabase/functions/naxa-services-referrals/**"
+      - "supabase/drafts/naxa_services_referrals_v1.sql"
       - "settings.gradle.kts"
       - "build.gradle.kts"
       - ".github/workflows/naxa-services-technical-gate.yml"
@@ -55,6 +57,20 @@ jobs:
           node-version: "22"
       - name: Test effective-dated family tariff catalogue
         run: node --test packages/billing-core/test/*.test.js
+
+  referrals-contract:
+    name: NAXA SERVICES referral API contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check referral service and contracts
+        run: deno check supabase/functions/naxa-services-referrals/index.ts supabase/functions/naxa-services-referrals/referral_contract.ts supabase/functions/naxa-services-referrals/contract_test.ts
+      - name: Run referral contract tests
+        run: deno test supabase/functions/naxa-services-referrals/contract_test.ts
 
   android-debug:
     name: Assemble NAXA SERVICES Android debug APK

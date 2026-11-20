@@ -19,7 +19,10 @@ android {
             .replace("\\", "\\\\").replace("\"", "\\\"")
         val anonKey = (project.findProperty("NS_SUPABASE_ANON_KEY") as? String ?: "")
             .replace("\\", "\\\\").replace("\"", "\\\"")
+        val referralsUrl = (project.findProperty("NS_REFERRALS_FUNCTION_URL") as? String ?: "")
+            .replace("\\", "\\\\").replace("\"", "\\\"")
         buildConfigField("String", "AUTH_FUNCTION_URL", "\"" + authUrl + "\"")
+        buildConfigField("String", "REFERRALS_FUNCTION_URL", "\"" + referralsUrl + "\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"" + anonKey + "\"")
     }
 

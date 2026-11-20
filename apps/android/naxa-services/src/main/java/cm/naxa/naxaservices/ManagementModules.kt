@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import cm.naxa.naxaservices.auth.AuthApi
 import cm.naxa.naxaservices.auth.AuthSession
 import cm.naxa.naxaservices.data.LocalManagementRecord
 import cm.naxa.naxaservices.data.LocalSale
@@ -659,12 +660,18 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
 internal fun ProfileContent(
     modifier: Modifier,
     session: AuthSession,
+    authApi: AuthApi,
     activityProfile: String?,
     repository: NaxaServicesLocalRepository,
     preferences: NaxaServicesPreferences,
     onNavigate: (AppRoute) -> Unit,
     onLogout: () -> Unit
 ) {
+    var showReferralScreen by rememberSaveable(session.account.memberId) { mutableStateOf(false) }
+    if (showReferralScreen) {
+        ReferralScreen(Modifier.fillMaxSize(), session, authApi, onBack = { showReferralScreen = false })
+        return
+    }
     val context = LocalContext.current
     val siteIds = session.account.activeSiteIds
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
@@ -714,6 +721,7 @@ internal fun ProfileContent(
             Text("Préférences et sécurité", fontWeight = FontWeight.Bold)
             OutlinedButton(onClick = { onNavigate(AppRoute.APPEARANCE) }, modifier = Modifier.fillMaxWidth()) { Text("Langue, thème et mode nuit") }
             OutlinedButton(onClick = { onNavigate(AppRoute.SECURITY) }, modifier = Modifier.fillMaxWidth()) { Text("Comptes, appareils et accès") }
+            OutlinedButton(onClick = { showReferralScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Parrainage et suivi de mes gains") }
             OutlinedButton(onClick = { onNavigate(AppRoute.HELP) }, modifier = Modifier.fillMaxWidth()) { Text("FAQ et assistance") }
             OutlinedButton(onClick = { onNavigate(AppRoute.SUBSCRIPTIONS) }, modifier = Modifier.fillMaxWidth()) { Text("Abonnement et paiement") }
         }
