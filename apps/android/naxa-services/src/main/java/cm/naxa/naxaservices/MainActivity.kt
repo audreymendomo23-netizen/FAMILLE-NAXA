@@ -43,6 +43,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -66,7 +67,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.Image
 import cm.naxa.naxaservices.auth.AuthApi
@@ -537,6 +537,7 @@ private fun PressingLocalContent(
 ) {
     val scope = rememberCoroutineScope()
     var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
+    var workstationId by rememberSaveable { mutableStateOf("") }
     var customer by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     var garments by rememberSaveable { mutableStateOf("") }
@@ -560,8 +561,13 @@ private fun PressingLocalContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(siteId, { siteId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_site_id)) }, singleLine = true)
-                    OutlinedTextField(workstationId, { workstationId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_workstation_id_optional)) }, singleLine = true)
+                    OutlinedTextField(
+                        workstationId,
+                        { workstationId = it.trim() },
+                        Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.member_workstation_id_optional)) },
+                        singleLine = true
+                    )
                     OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.customer_name)) }, singleLine = true)
                     OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.customer_phone)) }, singleLine = true)
                     OutlinedTextField(garments, { garments = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.pressing_items_summary)) }, minLines = 2)
@@ -577,7 +583,7 @@ private fun PressingLocalContent(
                                     repository.createPressingOrder(
                                         orgId = session.account.organizationId,
                                         siteId = siteId,
-                                        workstationId = workstationId.ifBlank { null },
+                                        workstationId = workstationId.takeIf { it.isNotBlank() },
                                         customerName = customer,
                                         customerPhone = phone,
                                         itemsSummary = garments,
@@ -672,8 +678,13 @@ private fun AgendaLocalContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(siteId, { siteId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_site_id)) }, singleLine = true)
-                    OutlinedTextField(workstationId, { workstationId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_workstation_id_optional)) }, singleLine = true)
+                    OutlinedTextField(
+                        workstationId,
+                        { workstationId = it.trim() },
+                        Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.member_workstation_id_optional)) },
+                        singleLine = true
+                    )
                     OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.customer_name)) }, singleLine = true)
                     OutlinedTextField(service, { service = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.service_name)) }, singleLine = true)
                     OutlinedTextField(start, { start = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.appointment_start_local)) }, singleLine = true)
@@ -694,7 +705,7 @@ private fun AgendaLocalContent(
                                     repository.createAppointment(
                                         orgId = session.account.organizationId,
                                         siteId = siteId,
-                                        workstationId = workstationId.ifBlank { null },
+                                        workstationId = workstationId.takeIf { it.isNotBlank() },
                                         customerName = customer,
                                         serviceName = service,
                                         assignedMemberId = session.account.memberId,
@@ -811,7 +822,7 @@ private fun CashLocalContent(
                                     }.onSuccess { pair ->
                                         saleDescription = ""
                                         saleTotal = ""
-                                        notice = if (pair.second.status == "pending") "Paiement Mobile Money en attente de confirmation serveur." else "Encaissement espèces enregistré localement."
+                                        notice = if (pair.second.state == "pending") "Paiement Mobile Money en attente de confirmation serveur." else "Encaissement espèces enregistré localement."
                                     }.onFailure { error = it.message ?: "Vente impossible." }
                                     busy = false
                                 }
@@ -1272,6 +1283,7 @@ private fun AccessManagementContent(
     }
 }
 
+@Composable
 private fun DashboardContent(
     modifier: Modifier,
     name: String,
