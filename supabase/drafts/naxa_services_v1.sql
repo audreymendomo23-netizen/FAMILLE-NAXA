@@ -377,6 +377,8 @@ create table if not exists public.ns_devices (
   platform text not null check (platform in ('android','web')),
   label text,
   remember_device boolean not null default false,
+  refresh_token_hash text,
+  session_id text,
   first_seen_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
   revoked_at timestamptz,
@@ -466,6 +468,402 @@ revoke all on function public.ns_auth_record_attempt(text, text, boolean) from p
 grant execute on function public.ns_auth_is_limited(text, text) to service_role;
 grant execute on function public.ns_auth_record_attempt(text, text, boolean) to service_role;
 
--- Do not create policies yet. First reconcile the existing cross-app RLS contract
--- and prove helper ownership, grants and tenant boundary tests.
+
+-- Session and tenant helpers. These functions deliberately return only scope
+-- decisions; they never expose account aliases, refresh hashes or user data.
+create or replace function public.ns_current_account_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select a.id
+  from public.ns_accounts a
+  join public.ns_devices d on d.account_id = a.id
+  where a.auth_user_id = auth.uid()
+    and a.status = 'active'
+    and d.session_id = auth.jwt() ->> 'session_id'
+    and d.revoked_at is null
+  limit 1;
+$;
+
+create or replace function public.ns_is_org_member(p_org_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1
+    from public.ns_members m
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+  );
+$;
+
+create or replace function public.ns_can_access_site(p_org_id uuid, p_site_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1
+    from public.ns_member_scopes s
+    join public.ns_members m on m.id = s.member_id and m.org_id = s.org_id
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+      and s.can_read
+      and (
+        s.scope_type = 'organization'
+        or s.site_id = p_site_id
+      )
+  );
+$;
+
+create or replace function public.ns_can_operate_site(p_org_id uuid, p_site_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1
+    from public.ns_member_scopes s
+    join public.ns_members m on m.id = s.member_id and m.org_id = s.org_id
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+      and (s.can_operate or s.can_manage)
+      and (s.scope_type = 'organization' or s.site_id = p_site_id)
+  );
+$;
+
+create or replace function public.ns_can_manage_site(p_org_id uuid, p_site_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1
+    from public.ns_member_scopes s
+    join public.ns_members m on m.id = s.member_id and m.org_id = s.org_id
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+      and m.role_code in ('promoter','network_manager','site_manager','workstation_manager')
+      and s.can_manage
+      and (s.scope_type = 'organization' or s.site_id = p_site_id)
+  );
+$;
+
+create or replace function public.ns_can_manage_org(p_org_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1
+    from public.ns_members m
+    join public.ns_member_scopes s on s.member_id = m.id and s.org_id = m.org_id
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+      and m.role_code = 'promoter'
+      and s.scope_type = 'organization'
+      and s.can_manage
+  );
+$;
+
+create or replace function public.ns_can_access_workstation(p_org_id uuid, p_site_id uuid, p_workstation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1
+    from public.ns_member_scopes s
+    join public.ns_members m on m.id = s.member_id and m.org_id = s.org_id
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+      and s.can_read
+      and (
+        s.scope_type = 'organization'
+        or (s.scope_type = 'site' and s.site_id = p_site_id)
+        or (s.scope_type = 'workstation' and s.site_id = p_site_id and s.workstation_id = p_workstation_id)
+      )
+  );
+$;
+
+create or replace function public.ns_can_manage_member(p_target_member_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select exists (
+    select 1
+    from public.ns_members target
+    where target.id = p_target_member_id
+      and target.org_id in (
+        select current_member.org_id
+        from public.ns_members current_member
+        where current_member.account_id = public.ns_current_account_id()
+          and current_member.status = 'active'
+      )
+      and (
+        public.ns_can_manage_org(target.org_id)
+        or exists (
+          select 1
+          from public.ns_member_scopes target_scope
+          where target_scope.member_id = target.id
+            and target_scope.site_id is not null
+            and public.ns_can_manage_site(target.org_id, target_scope.site_id)
+        )
+      )
+  );
+$;
+
+revoke all on function public.ns_current_account_id() from public, anon;
+revoke all on function public.ns_is_org_member(uuid) from public, anon;
+revoke all on function public.ns_can_access_site(uuid, uuid) from public, anon;
+revoke all on function public.ns_can_operate_site(uuid, uuid) from public, anon;
+revoke all on function public.ns_can_manage_site(uuid, uuid) from public, anon;
+revoke all on function public.ns_can_manage_org(uuid) from public, anon;
+revoke all on function public.ns_can_access_workstation(uuid, uuid, uuid) from public, anon;
+revoke all on function public.ns_can_manage_member(uuid) from public, anon;
+grant execute on function public.ns_current_account_id() to authenticated, service_role;
+grant execute on function public.ns_is_org_member(uuid) to authenticated, service_role;
+grant execute on function public.ns_can_access_site(uuid, uuid) to authenticated, service_role;
+grant execute on function public.ns_can_operate_site(uuid, uuid) to authenticated, service_role;
+grant execute on function public.ns_can_manage_site(uuid, uuid) to authenticated, service_role;
+grant execute on function public.ns_can_manage_org(uuid) to authenticated, service_role;
+grant execute on function public.ns_can_access_workstation(uuid, uuid, uuid) to authenticated, service_role;
+grant execute on function public.ns_can_manage_member(uuid) to authenticated, service_role;
+
+-- Replace any policy with the same name, then create scoped policies.
+drop policy if exists ns_orgs_select on public.ns_organizations;
+create policy ns_orgs_select on public.ns_organizations
+  for select to authenticated using (public.ns_is_org_member(id));
+
+drop policy if exists ns_sites_select on public.ns_sites;
+create policy ns_sites_select on public.ns_sites
+  for select to authenticated using (public.ns_can_access_site(org_id, id));
+drop policy if exists ns_sites_insert on public.ns_sites;
+create policy ns_sites_insert on public.ns_sites
+  for insert to authenticated with check (public.ns_can_manage_org(org_id));
+drop policy if exists ns_sites_update on public.ns_sites;
+create policy ns_sites_update on public.ns_sites
+  for update to authenticated using (public.ns_can_manage_site(org_id, id))
+  with check (public.ns_can_manage_site(org_id, id));
+
+drop policy if exists ns_workstations_select on public.ns_workstations;
+create policy ns_workstations_select on public.ns_workstations
+  for select to authenticated using (public.ns_can_access_workstation(org_id, site_id, id));
+drop policy if exists ns_workstations_write on public.ns_workstations;
+create policy ns_workstations_write on public.ns_workstations
+  for all to authenticated
+  using (public.ns_can_manage_site(org_id, site_id))
+  with check (public.ns_can_manage_site(org_id, site_id));
+
+drop policy if exists ns_services_select on public.ns_services;
+create policy ns_services_select on public.ns_services
+  for select to authenticated using (
+    public.ns_is_org_member(org_id)
+    and (site_id is null or public.ns_can_access_site(org_id, site_id))
+  );
+drop policy if exists ns_services_write on public.ns_services;
+create policy ns_services_write on public.ns_services
+  for all to authenticated
+  using (
+    case when site_id is null then public.ns_can_manage_org(org_id)
+    else public.ns_can_manage_site(org_id, site_id) end
+  )
+  with check (
+    case when site_id is null then public.ns_can_manage_org(org_id)
+    else public.ns_can_manage_site(org_id, site_id) end
+  );
+
+drop policy if exists ns_customers_select on public.ns_customers;
+create policy ns_customers_select on public.ns_customers
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_customers_insert on public.ns_customers;
+create policy ns_customers_insert on public.ns_customers
+  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+drop policy if exists ns_customers_update on public.ns_customers;
+create policy ns_customers_update on public.ns_customers
+  for update to authenticated using (public.ns_can_operate_site(org_id, site_id))
+  with check (public.ns_can_operate_site(org_id, site_id));
+
+drop policy if exists ns_appointments_select on public.ns_appointments;
+create policy ns_appointments_select on public.ns_appointments
+  for select to authenticated using (
+    public.ns_can_access_site(org_id, site_id)
+    and (workstation_id is null or public.ns_can_access_workstation(org_id, site_id, workstation_id))
+  );
+drop policy if exists ns_appointments_insert on public.ns_appointments;
+create policy ns_appointments_insert on public.ns_appointments
+  for insert to authenticated with check (
+    public.ns_can_operate_site(org_id, site_id)
+    and (workstation_id is null or public.ns_can_access_workstation(org_id, site_id, workstation_id))
+  );
+drop policy if exists ns_appointments_update on public.ns_appointments;
+create policy ns_appointments_update on public.ns_appointments
+  for update to authenticated using (public.ns_can_operate_site(org_id, site_id))
+  with check (public.ns_can_operate_site(org_id, site_id));
+
+drop policy if exists ns_pressing_orders_select on public.ns_pressing_orders;
+create policy ns_pressing_orders_select on public.ns_pressing_orders
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_pressing_orders_insert on public.ns_pressing_orders;
+create policy ns_pressing_orders_insert on public.ns_pressing_orders
+  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+drop policy if exists ns_pressing_orders_update on public.ns_pressing_orders;
+create policy ns_pressing_orders_update on public.ns_pressing_orders
+  for update to authenticated using (public.ns_can_operate_site(org_id, site_id))
+  with check (public.ns_can_operate_site(org_id, site_id));
+
+drop policy if exists ns_pressing_items_select on public.ns_pressing_items;
+create policy ns_pressing_items_select on public.ns_pressing_items
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_pressing_items_insert on public.ns_pressing_items;
+create policy ns_pressing_items_insert on public.ns_pressing_items
+  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+
+drop policy if exists ns_pressing_events_select on public.ns_pressing_status_events;
+create policy ns_pressing_events_select on public.ns_pressing_status_events
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_pressing_events_insert on public.ns_pressing_status_events;
+create policy ns_pressing_events_insert on public.ns_pressing_status_events
+  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+
+drop policy if exists ns_cash_registers_select on public.ns_cash_registers;
+create policy ns_cash_registers_select on public.ns_cash_registers
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_cash_registers_manage on public.ns_cash_registers;
+create policy ns_cash_registers_manage on public.ns_cash_registers
+  for all to authenticated
+  using (public.ns_can_manage_site(org_id, site_id))
+  with check (public.ns_can_manage_site(org_id, site_id));
+
+drop policy if exists ns_cash_sessions_select on public.ns_cash_sessions;
+create policy ns_cash_sessions_select on public.ns_cash_sessions
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_cash_sessions_insert on public.ns_cash_sessions;
+create policy ns_cash_sessions_insert on public.ns_cash_sessions
+  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+
+drop policy if exists ns_sales_select on public.ns_sales;
+create policy ns_sales_select on public.ns_sales
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_sales_insert on public.ns_sales;
+create policy ns_sales_insert on public.ns_sales
+  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+
+drop policy if exists ns_payments_select on public.ns_payments;
+create policy ns_payments_select on public.ns_payments
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_payments_insert_pending on public.ns_payments;
+create policy ns_payments_insert_pending on public.ns_payments
+  for insert to authenticated with check (
+    status = 'pending' and confirmed_at is null and confirmed_by is null
+    and public.ns_can_operate_site(org_id, site_id)
+  );
+
+drop policy if exists ns_expenses_select on public.ns_expenses;
+create policy ns_expenses_select on public.ns_expenses
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_expenses_insert on public.ns_expenses;
+create policy ns_expenses_insert on public.ns_expenses
+  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+
+drop policy if exists ns_commission_rules_select on public.ns_commission_rules;
+create policy ns_commission_rules_select on public.ns_commission_rules
+  for select to authenticated using (site_id is null and public.ns_is_org_member(org_id) or public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_commission_rules_manage on public.ns_commission_rules;
+create policy ns_commission_rules_manage on public.ns_commission_rules
+  for all to authenticated
+  using (case when site_id is null then public.ns_can_manage_org(org_id) else public.ns_can_manage_site(org_id, site_id) end)
+  with check (case when site_id is null then public.ns_can_manage_org(org_id) else public.ns_can_manage_site(org_id, site_id) end);
+
+drop policy if exists ns_commission_entries_select on public.ns_commission_entries;
+create policy ns_commission_entries_select on public.ns_commission_entries
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+
+drop policy if exists ns_inventory_items_select on public.ns_inventory_items;
+create policy ns_inventory_items_select on public.ns_inventory_items
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_inventory_items_manage on public.ns_inventory_items;
+create policy ns_inventory_items_manage on public.ns_inventory_items
+  for all to authenticated
+  using (public.ns_can_manage_site(org_id, site_id))
+  with check (public.ns_can_manage_site(org_id, site_id));
+
+drop policy if exists ns_inventory_movements_select on public.ns_inventory_movements;
+create policy ns_inventory_movements_select on public.ns_inventory_movements
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_inventory_movements_insert on public.ns_inventory_movements;
+create policy ns_inventory_movements_insert on public.ns_inventory_movements
+  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+
+drop policy if exists ns_members_select on public.ns_members;
+create policy ns_members_select on public.ns_members
+  for select to authenticated using (
+    account_id = public.ns_current_account_id()
+    or public.ns_can_manage_member(id)
+  );
+drop policy if exists ns_member_scopes_select on public.ns_member_scopes;
+create policy ns_member_scopes_select on public.ns_member_scopes
+  for select to authenticated using (
+    member_id in (
+      select m.id from public.ns_members m where m.account_id = public.ns_current_account_id()
+    )
+    or public.ns_can_manage_member(member_id)
+  );
+
+drop policy if exists ns_audit_events_select on public.ns_audit_events;
+create policy ns_audit_events_select on public.ns_audit_events
+  for select to authenticated using (
+    (site_id is null and public.ns_can_manage_org(org_id))
+    or (site_id is not null and public.ns_can_manage_site(org_id, site_id))
+  );
+
+-- Internal Auth account aliases, login hashes, device hashes, recovery notes and
+-- audit writes are managed only by the server-side Edge Function/service_role.
+revoke all on public.ns_accounts from anon, authenticated;
+revoke all on public.ns_auth_attempts from anon, authenticated;
+revoke all on public.ns_auth_recovery_requests from anon, authenticated;
+revoke all on public.ns_devices from anon, authenticated;
+revoke all on public.ns_audit_events from anon, authenticated;
+revoke all on function public.ns_auth_is_limited(text, text) from public, anon, authenticated;
+revoke all on function public.ns_auth_record_attempt(text, text, boolean) from public, anon, authenticated;
+grant execute on function public.ns_auth_is_limited(text, text) to service_role;
+grant execute on function public.ns_auth_record_attempt(text, text, boolean) to service_role;
+
+grant select on public.ns_organizations, public.ns_sites, public.ns_workstations, public.ns_services,
+  public.ns_customers, public.ns_appointments, public.ns_pressing_orders, public.ns_pressing_items,
+  public.ns_pressing_status_events, public.ns_cash_registers, public.ns_cash_sessions,
+  public.ns_sales, public.ns_payments, public.ns_expenses, public.ns_commission_rules,
+  public.ns_commission_entries, public.ns_inventory_items, public.ns_inventory_movements,
+  public.ns_members, public.ns_member_scopes to authenticated;
+grant insert, update on public.ns_sites, public.ns_workstations, public.ns_services, public.ns_customers,
+  public.ns_appointments, public.ns_pressing_orders, public.ns_pressing_items, public.ns_pressing_status_events,
+  public.ns_cash_registers, public.ns_cash_sessions, public.ns_sales, public.ns_expenses,
+  public.ns_commission_rules, public.ns_inventory_items, public.ns_inventory_movements to authenticated;
+grant insert on public.ns_payments to authenticated;
+
 rollback;
