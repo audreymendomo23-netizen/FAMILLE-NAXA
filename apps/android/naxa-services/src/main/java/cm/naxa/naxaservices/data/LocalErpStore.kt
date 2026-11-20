@@ -315,6 +315,16 @@ data class LocalInventoryValuation(
     val updatedAtMillis: Long
 )
 
+data class LocalInventoryImportRow(
+    val sku: String,
+    val name: String,
+    val unit: String,
+    val quantity: Double,
+    val reorderLevel: Double,
+    val unitCostXaf: Long?,
+    val sellingPriceXaf: Long?
+)
+
 @Dao
 interface NaxaServicesDao {
     @Query("SELECT * FROM local_pressing_orders WHERE orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis DESC")
@@ -466,6 +476,9 @@ interface NaxaServicesDao {
 
     @Query("SELECT * FROM local_inventory_items WHERE id = :itemId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
     suspend fun findInventoryItem(itemId: String, orgId: String, siteId: String): LocalInventoryItem?
+
+    @Query("SELECT * FROM local_inventory_items WHERE orgId = :orgId AND siteId = :siteId AND sku = :sku")
+    suspend fun findInventoryItemsBySku(orgId: String, siteId: String, sku: String): List<LocalInventoryItem>
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertInventoryItem(item: LocalInventoryItem)
@@ -1054,6 +1067,131 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         dao.insertInventoryItem(item)
         enqueue(orgId, "inventory_item", item.id, "inventory_item.created", siteId)
         item
+    }
+
+    suspend fun importInventoryBatch(
+        orgId: String,
+        siteId: String,
+        rows: List<LocalInventoryImportRow>,
+        updateExisting: Boolean,
+        actorMemberId: String
+    ): Pair<Int, Int> = database.withTransaction {
+        require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) {
+            "Organisation, point de vente et opérateur obligatoires."
+        }
+        require(rows.isNotEmpty() && rows.size <= 5000) { "Le fichier doit contenir entre 1 et 5 000 lignes d'articles." }
+        val normalizedSkus = rows.map { it.sku.trim().uppercase() }
+        require(normalizedSkus.all { it.isNotBlank() }) { "Chaque article doit avoir une référence/SKU." }
+        require(normalizedSkus.distinct().size == normalizedSkus.size) { "Le fichier contient des SKU en double." }
+        rows.forEach {
+            require(it.name.isNotBlank() && it.unit.isNotBlank()) { "Nom et unité obligatoires pour chaque article." }
+            require(it.quantity.isFinite() && it.quantity >= 0.0 && it.reorderLevel.isFinite() && it.reorderLevel >= 0.0) {
+                "Quantité ou seuil invalide dans le fichier."
+            }
+            require((it.unitCostXaf == null || it.unitCostXaf >= 0L) && (it.sellingPriceXaf == null || it.sellingPriceXaf >= 0L)) {
+                "Coût d'achat ou prix de vente invalide dans le fichier."
+            }
+        }
+
+        var created = 0
+        var updated = 0
+        val now = System.currentTimeMillis()
+        rows.forEach { row ->
+            val sku = row.sku.trim().uppercase()
+            val matches = dao.findInventoryItemsBySku(orgId, siteId, sku)
+            require(matches.size <= 1) { "Le stock contient déjà plusieurs articles avec le SKU $sku. Corrige les doublons avant l'import." }
+            val existing = matches.firstOrNull()
+            if (existing != null) {
+                require(updateExisting) {
+                    "Le SKU $sku existe déjà. Active explicitement « Mettre à jour les articles existants » après vérification de l'aperçu."
+                }
+                val changed = existing.copy(
+                    name = row.name.trim(),
+                    unit = row.unit.trim(),
+                    reorderLevel = row.reorderLevel
+                )
+                if (row.quantity != existing.quantity) {
+                    val delta = row.quantity - existing.quantity
+                    val movement = LocalInventoryMovement(
+                        id = UUID.randomUUID().toString(),
+                        orgId = orgId,
+                        siteId = siteId,
+                        itemId = existing.id,
+                        movementType = "adjustment",
+                        quantityDelta = delta,
+                        reason = "Import CSV contrôlé — ajustement de quantité",
+                        actorMemberId = actorMemberId,
+                        createdAtMillis = now
+                    )
+                    dao.insertInventoryMovement(movement)
+                    enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.import_adjustment", siteId)
+                }
+                dao.updateInventoryItem(changed.copy(quantity = row.quantity))
+                if (row.unitCostXaf != null || row.sellingPriceXaf != null) {
+                    val oldValue = dao.findInventoryValuation(orgId, siteId, existing.id)
+                    dao.upsertInventoryValuation(
+                        LocalInventoryValuation(
+                            id = oldValue?.id ?: UUID.randomUUID().toString(),
+                            orgId = orgId,
+                            siteId = siteId,
+                            inventoryItemId = existing.id,
+                            unitCostXaf = row.unitCostXaf ?: oldValue?.unitCostXaf ?: 0L,
+                            sellingPriceXaf = row.sellingPriceXaf ?: oldValue?.sellingPriceXaf ?: 0L,
+                            updatedAtMillis = now
+                        )
+                    )
+                    enqueue(orgId, "inventory_valuation", existing.id, "inventory_valuation.import_updated", siteId)
+                }
+                enqueue(orgId, "inventory_item", existing.id, "inventory_item.import_updated", siteId)
+                updated += 1
+            } else {
+                val item = LocalInventoryItem(
+                    id = UUID.randomUUID().toString(),
+                    orgId = orgId,
+                    siteId = siteId,
+                    sku = sku,
+                    name = row.name.trim(),
+                    unit = row.unit.trim(),
+                    quantity = 0.0,
+                    reorderLevel = row.reorderLevel,
+                    createdAtMillis = now
+                )
+                dao.insertInventoryItem(item)
+                enqueue(orgId, "inventory_item", item.id, "inventory_item.imported", siteId)
+                if (row.quantity > 0.0) {
+                    val movement = LocalInventoryMovement(
+                        id = UUID.randomUUID().toString(),
+                        orgId = orgId,
+                        siteId = siteId,
+                        itemId = item.id,
+                        movementType = "in",
+                        quantityDelta = row.quantity,
+                        reason = "Stock initial issu de l'import CSV",
+                        actorMemberId = actorMemberId,
+                        createdAtMillis = now
+                    )
+                    dao.insertInventoryMovement(movement)
+                    dao.updateInventoryItem(item.copy(quantity = row.quantity))
+                    enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.import_initial", siteId)
+                }
+                if (row.unitCostXaf != null || row.sellingPriceXaf != null) {
+                    dao.upsertInventoryValuation(
+                        LocalInventoryValuation(
+                            id = UUID.randomUUID().toString(),
+                            orgId = orgId,
+                            siteId = siteId,
+                            inventoryItemId = item.id,
+                            unitCostXaf = row.unitCostXaf ?: 0L,
+                            sellingPriceXaf = row.sellingPriceXaf ?: 0L,
+                            updatedAtMillis = now
+                        )
+                    )
+                    enqueue(orgId, "inventory_valuation", item.id, "inventory_valuation.imported", siteId)
+                }
+                created += 1
+            }
+        }
+        created to updated
     }
 
     suspend fun recordInventoryMovement(orgId: String, siteId: String, itemId: String, movementType: String, quantity: Double, reason: String, actorMemberId: String): LocalInventoryItem = database.withTransaction {
