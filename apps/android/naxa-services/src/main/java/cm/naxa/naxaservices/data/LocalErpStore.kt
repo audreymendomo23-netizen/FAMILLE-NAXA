@@ -1369,7 +1369,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         require(paymentMethod in setOf("cash", "bank", "mobile_money", "other"))
         dao.findSupplierPaymentByKey(orgId, idempotencyKey)?.let { existing ->
             require(existing.siteId == siteId && existing.purchaseId == purchaseId && existing.amountXaf == amountXaf &&
-                existing.paymentMethod == paymentMethod && existing.paymentReference == paymentReference &&
+                existing.paymentMethod == paymentMethod && existing.paymentReference == paymentReference.trim() &&
                 existing.cashSessionId == cashSessionId) {
                 "Clé d'idempotence déjà utilisée pour un paiement différent."
             }
@@ -1493,6 +1493,12 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         val now = System.currentTimeMillis()
         val payment = LocalChargePayment(UUID.randomUUID().toString(), orgId, siteId, charge.id, cycleDue, now, amountXaf, actorMemberId)
         dao.insertChargePayment(payment)
+        postAccountingEntry(
+            orgId, siteId, "recurring_charge_payment", payment.id, "recurring_charge_paid",
+            "OPERATING_EXPENSE_RECURRING:" + charge.category.trim().uppercase(java.util.Locale.ROOT),
+            "TREASURY_UNSPECIFIED", amountXaf,
+            "Règlement de charge récurrente · " + charge.name, actorMemberId, now
+        )
         if (alreadyPaid + amountXaf >= charge.amountXaf) {
             if (charge.recurrence == "one_time") {
                 dao.updateRecurringCharge(charge.copy(active = false, updatedAtMillis = now, lastReminderAtMillis = null))
