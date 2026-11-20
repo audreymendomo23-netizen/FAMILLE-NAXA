@@ -40,7 +40,7 @@ class PerformanceEngineTest {
         stockQuantity = if (stockId == null) null else 1.0,
         unitCostAtSaleXaf = if (stockId == null) 0L else cogs,
         costOfGoodsXaf = if (stockId == null) 0L else cogs,
-        costSnapshotComplete = stockId == null || cogs > 0L
+        costSnapshotComplete = stockId != null && cogs > 0L
     )
 
     private fun expense(amount: Long, date: LocalDate = today) = LocalAccountingEntry(
