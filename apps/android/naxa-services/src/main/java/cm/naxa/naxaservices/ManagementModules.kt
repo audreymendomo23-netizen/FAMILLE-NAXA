@@ -871,6 +871,42 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
 }
 
 @Composable
+@Composable
+private fun FinancialTrendRow(point: FinancialTrendPoint, comparisonLabel: String) {
+    fun change(value: Long): String =
+        (if (value > 0L) "+" else if (value < 0L) "−" else "") +
+            xaf(kotlin.math.abs(value))
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(14.dp)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(point.label, fontWeight = FontWeight.SemiBold)
+            Text("CA confirmé : " + xaf(point.revenueXaf) + " · " + comparisonLabel + " : " + change(point.revenueDeltaXaf))
+            Text("Coût des ventes connu : " + xaf(point.costOfGoodsXaf) + " · " + comparisonLabel + " : " + change(point.costOfGoodsDeltaXaf))
+            Text("Charges d'exploitation : " + xaf(point.operatingExpensesXaf) + " · " + comparisonLabel + " : " + change(point.operatingExpensesDeltaXaf))
+            Text("Marge brute : " + (point.grossProfitXaf?.let {
+                xaf(it) + " · " + comparisonLabel + " : " + (point.grossProfitDeltaXaf?.let(::change) ?: "—")
+            } ?: "non calculable : coût direct incomplet"), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Résultat opérationnel indicatif : " + (point.operatingResultXaf?.let {
+                xaf(it) + " · " + comparisonLabel + " : " + (point.operatingResultDeltaXaf?.let(::change) ?: "—")
+            } ?: "non déterminable tant que le coût direct de toutes les ventes n'est pas documenté"), fontWeight = FontWeight.Medium)
+            Text(
+                "Fournisseurs : stock capitalisé " + xaf(point.supplierStockPurchasesXaf) +
+                    " · achats/consommables " + xaf(point.supplierOperatingPurchasesXaf) +
+                    " · immobilisations " + xaf(point.supplierFixedAssetsXaf) +
+                    " · paiements " + xaf(point.supplierPaymentsXaf),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (point.uncostedSalesCount > 0) {
+                Text(point.uncostedSalesCount.toString() +
+                    " vente(s) avec coût direct manquant : la marge et le résultat sont volontairement masqués.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+            }
+        }
+    }
+}
+
 private fun PerformanceProjectionCard(title: String, period: PeriodProjection) {
     val delta = period.projectedXaf - period.comparablePreviousXaf
     val comparison = if (period.comparablePreviousXaf > 0L) {
@@ -991,6 +1027,10 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
             Text(row.label + " · " + xaf(row.actualXaf) + " · écart vs veille : " + delta + rate,
                 style = MaterialTheme.typography.bodySmall)
         }
+        item { Text("Rentabilité et flux fournisseurs · détail jour par jour", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        items(dashboard.dailyFinancialTrend, key = { "finance-day-" + it.label }) { point ->
+            FinancialTrendRow(point, "vs veille")
+        }
         item { Text("Performance mois par mois · 12 derniers mois", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.monthlyTrend) { row ->
             val delta = (if (row.deltaXaf >= 0L) "+" else "−") + xaf(if (row.deltaXaf >= 0L) row.deltaXaf else -row.deltaXaf)
@@ -998,12 +1038,20 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
             Text(row.label + " · " + xaf(row.actualXaf) + " · écart vs mois précédent : " + delta + rate,
                 style = MaterialTheme.typography.bodySmall)
         }
+        item { Text("Rentabilité et flux fournisseurs · détail mois par mois", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        items(dashboard.monthlyFinancialTrend, key = { "finance-month-" + it.label }) { point ->
+            FinancialTrendRow(point, "vs période comparable du mois précédent")
+        }
         item { Text("Performance année par année · 5 derniers exercices", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.yearlyTrend) { row ->
             val delta = (if (row.deltaXaf >= 0L) "+" else "−") + xaf(if (row.deltaXaf >= 0L) row.deltaXaf else -row.deltaXaf)
             val rate = row.deltaPercent?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %)" } ?: ""
             Text(row.label + " · " + xaf(row.actualXaf) + " · écart vs exercice précédent : " + delta + rate,
                 style = MaterialTheme.typography.bodySmall)
+        }
+        item { Text("Rentabilité et flux fournisseurs · détail année par année", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        items(dashboard.yearlyFinancialTrend, key = { "finance-year-" + it.label }) { point ->
+            FinancialTrendRow(point, "vs même période de l'exercice précédent")
         }
         item { Text("Stratégies de redressement et de progression", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.recoveryActions) { action ->
