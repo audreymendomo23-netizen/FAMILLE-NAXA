@@ -461,9 +461,9 @@ Le cahier NAXA Services indique actuellement téléphone + mot de passe et récu
 ### Réserves — ne pas déclarer VERT complet
 - Build Android/Gradle et build Web non exécutés localement : le clone Git a échoué sur la résolution réseau. Aucun workflow CI lancé.
 - URL de la fonction Auth et clé anon à configurer localement via propriétés Gradle non versionnées ; variables Vite équivalentes absentes.
-- Alias Supabase/GoTrue non prouvé. Edge Function = source non déployée ; draft SQL non appliqué.
-- Provisioning des comptes, reset Admin effectif, file support avec vérification d'identité et révocation d'appareil perdu restent à achever et tester.
-- Les policies RLS détaillées ne sont pas encore écrites ; le draft active RLS deny-by-default, mais aucun test PostgreSQL n'a été exécuté.
+- Alias Supabase/GoTrue non prouvé. Edge Function = source non déployée ; domaine d'alias non configuré. Draft SQL (tables + helpers + policies RLS) non appliqué.
+- La source Edge Function inclut désormais provisioning des membres, reset avec contrôle d'identité et révocation d'appareil ; ces opérations n'ont pas été déployées ni exécutées et l'interface Admin/Support dédiée reste à construire et tester.
+- Les helpers et policies RLS de tenant/site/poste sont maintenant écrits dans le draft SQL, avec liaison session/appareil ; le draft reste non appliqué et aucun test PostgreSQL n'a été exécuté.
 - Modules ERP = pages et parcours UI de construction ; opérations à connecter aux repositories, transactions atomiques, synchronisation offline, adaptateurs et recettes.
 - Le SVG est une reconstruction de la spécification écrite ; l'original binaire spécifique n'a pas été récupéré de façon fiable par le connecteur pendant cette passe.
 
