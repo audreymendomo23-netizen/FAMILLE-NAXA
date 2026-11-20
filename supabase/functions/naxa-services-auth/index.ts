@@ -251,24 +251,29 @@ async function refreshSession(body: Record<string, unknown>, device: Record<stri
   return { status: 200, body: await sessionPayload(auth.data, account) };
 }
 
-async function requestRecovery(body: Record<string, unknown>) {
+async function requestRecovery(body: Record<string, unknown>, request: Request) {
   const identifier = String(body.identifier ?? "").trim().toUpperCase();
-  if (/^NS-[A-Z0-9]{4,12}$/.test(identifier)) {
-    const account = await accountByLoginId(identifier);
-    const loginHash = await sha256("naxa-services-recovery:" + identifier);
-    if (account) {
-      await rest("ns_auth_recovery_requests", {
-        method: "POST",
-        headers: serviceHeaders({ Prefer: "return=minimal" }),
-        body: JSON.stringify({
-          account_id: account.id,
-          login_hint_hash: loginHash,
-          request_note: String(body.request_note ?? "").slice(0, 500),
-          status: "pending",
-        }),
-      });
-    }
+  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const loginHash = await sha256("naxa-services-recovery:" + identifier);
+  const ipHash = await sha256("naxa-services-recovery-ip:" + ip);
+  if (await isLimited(loginHash, ipHash)) {
+    return { status: 429, body: { accepted: true, message: "Demande reçue. Réessaie plus tard ou contacte le responsable." } };
   }
+  const account = /^NS-[A-Z0-9]{4,12}$/.test(identifier) ? await accountByLoginId(identifier) : null;
+  if (account) {
+    await rest("ns_auth_recovery_requests", {
+      method: "POST",
+      headers: serviceHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({
+        account_id: account.id,
+        login_hint_hash: loginHash,
+        request_note: String(body.request_note ?? "").slice(0, 500),
+        status: "pending",
+      }),
+    });
+  }
+  // Record both existing and unknown identifiers identically to prevent enumeration.
+  await recordAttempt(loginHash, ipHash, false);
   return { status: 200, body: { accepted: true, message: "Demande reçue si le compte peut être retrouvé. Le responsable effectuera le contrôle d'identité." } };
 }
 
@@ -322,7 +327,7 @@ async function accountSummary(account: Record<string, unknown>) {
 }
 
 async function logout(token: string) {
-  const result = await authCall("logout?scope=global", { method: "POST" }, token);
+  const result = await authCall("logout?scope=local", { method: "POST" }, token);
   if (!result.ok) return { status: 401, body: { message: "La session n'a pas pu être révoquée." } };
   return { status: 200, body: { signed_out: true } };
 }
@@ -536,6 +541,50 @@ async function provisionMember(body: Record<string, unknown>, token: string) {
   }
 }
 
+async function listRecoveryRequests(token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  if (!["promoter", "network_manager", "site_manager"].includes(String(actor.member.role_code))) {
+    return { status: 403, body: { message: "Consultation non autorisée." } };
+  }
+  const rows = await rest(
+    "ns_auth_recovery_requests?select=id,account_id,request_note,status,requested_at&status=eq.pending&order=requested_at.asc&limit=50",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  const requests: Record<string, unknown>[] = [];
+  for (const item of rows ?? []) {
+    if (!item.account_id) continue;
+    const memberRows = await rest(
+      "ns_members?select=id,org_id,display_name,role_code&account_id=eq." +
+        encodeURIComponent(String(item.account_id)) + "&org_id=eq." +
+        encodeURIComponent(String(actor.member.org_id)) + "&status=eq.active&limit=1",
+      { headers: serviceHeaders() },
+    ) as Record<string, unknown>[];
+    const member = memberRows?.[0];
+    if (!member) continue;
+    const scopes = await rest(
+      "ns_member_scopes?select=site_id&member_id=eq." + encodeURIComponent(String(member.id)),
+      { headers: serviceHeaders() },
+    ) as Record<string, unknown>[];
+    const inScope = actor.member.role_code === "promoter" ||
+      (scopes ?? []).some((scope) => scope.site_id && actorCanManageSite(actor, String(scope.site_id)));
+    if (!inScope) continue;
+    const account = await rest(
+      "ns_accounts?select=login_id&id=eq." + encodeURIComponent(String(item.account_id)) + "&limit=1",
+      { headers: serviceHeaders() },
+    ) as Record<string, unknown>[];
+    requests.push({
+      id: item.id,
+      requested_at: item.requested_at,
+      request_note: item.request_note,
+      display_name: member.display_name,
+      role_code: member.role_code,
+      login_id: account?.[0]?.login_id ?? "NS-••••••",
+    });
+  }
+  return { status: 200, body: { requests } };
+}
+
 async function completeRecovery(body: Record<string, unknown>, token: string) {
   const actor = await actorContext(token);
   if (!actor) return { status: 401, body: { message: "Session expirée." } };
@@ -621,7 +670,8 @@ Deno.serve(async (request: Request) => {
 
     if (action === "login") result = await login(body, request);
     else if (action === "refresh") result = await refreshSession(body, (body.device as Record<string, unknown>) ?? {});
-    else if (action === "request_recovery") result = await requestRecovery(body);
+    else if (action === "request_recovery") result = await requestRecovery(body, request);
+    else if (action === "list_recovery_requests") result = await listRecoveryRequests(bearer);
     else if (action === "change_password") result = await changePassword(body, bearer);
     else if (action === "logout") result = await logout(bearer);
     else if (action === "provision_member") result = await provisionMember(body, bearer);
