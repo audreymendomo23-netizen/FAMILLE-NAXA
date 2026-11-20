@@ -15,3 +15,11 @@ subscription_first_paid est une entrée serveur à serveur. Elle exige x-naxa-re
 
 ## Mise en service non effectuée
 Le fichier supabase/drafts/naxa_services_referrals_v1.sql est un candidat de migration non appliqué. Pour rendre le service actif, il faut d'abord vérifier la base de recette, appliquer cette migration dans un environnement isolé, configurer NS_REFERRAL_WEBHOOK_SECRET, déployer la fonction naxa-services-referrals, fournir NS_REFERRALS_FUNCTION_URL aux builds, puis raccorder le webhook de paiement et le service d'entitlements. Tant que cette dernière intégration n'a pas appliqué les récompenses, elles restent affichées pending_entitlement et ne doivent pas être présentées comme des mois gratuits déjà consommés.
+
+## Vérification JWT à la passerelle Supabase
+
+`supabase/config.toml` fixe `verify_jwt = false` uniquement pour cette fonction, car elle expose deux chemins d'authentification distincts :
+- actions de Promoteur : la fonction vérifie elle-même le bearer via Supabase Auth puis vérifie le compte, l'organisation et le rôle actifs ;
+- webhook fournisseur : la fonction vérifie le HMAC-SHA256 du corps brut avant d'appeler le RPC.
+
+Ce réglage est volontairement compensé par ces contrôles applicatifs obligatoires. Ne jamais supprimer la vérification Auth des actions Promoteur ni la vérification HMAC du webhook. Ne pas réutiliser ce réglage pour une autre fonction sans une authentification applicative équivalente.
