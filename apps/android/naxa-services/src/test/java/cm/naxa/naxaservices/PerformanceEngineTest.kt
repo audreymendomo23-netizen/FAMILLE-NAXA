@@ -251,4 +251,73 @@ class PerformanceEngineTest {
         assertEquals("2026-11-21", result.dailyTrend.last().label)
     }
 
+    @Test
+    fun financialProfitabilityTrendsCompareRevenueCostsAndSupplierFlows() {
+        val previousMonthDay = today.minusMonths(1).withDayOfMonth(10)
+        val previousYearDay = today.minusYears(1)
+        val sales = listOf(
+            sale("finance-today", today, 100_000L, 60_000L),
+            sale("finance-yesterday", today.minusDays(1), 80_000L, 50_000L),
+            sale("finance-prior-month", previousMonthDay, 50_000L, 30_000L),
+            sale("finance-prior-year", previousYearDay, 60_000L, 35_000L)
+        )
+        fun journal(
+            id: String, date: LocalDate, sourceType: String, eventCode: String,
+            debit: String, credit: String, amount: Long
+        ) = expense(amount, date).copy(
+            id = id,
+            sourceType = sourceType,
+            sourceId = id,
+            eventCode = eventCode,
+            debitAccount = debit,
+            creditAccount = credit
+        )
+        val entries = listOf(
+            journal("rent-today", today, "expense", "recorded", "OPERATING_EXPENSE:RENT", "CASH_REGISTER", 10_000L),
+            journal("rent-yesterday", today.minusDays(1), "expense", "recorded", "OPERATING_EXPENSE:RENT", "CASH_REGISTER", 8_000L),
+            journal("rent-prior-month", previousMonthDay, "expense", "recorded", "OPERATING_EXPENSE:RENT", "CASH_REGISTER", 5_000L),
+            journal("rent-prior-year", previousYearDay, "expense", "recorded", "OPERATING_EXPENSE:RENT", "CASH_REGISTER", 6_000L),
+            journal("stock-receipt-today", today, "purchase_receipt", "goods_received", "INVENTORY_ASSET", "SUPPLIER_PAYABLE", 25_000L),
+            journal("consumable-receipt-today", today, "purchase_receipt", "expense_received", "OPERATING_EXPENSE_PURCHASE", "SUPPLIER_PAYABLE", 2_000L),
+            journal("supplier-payment-today", today, "supplier_payment", "payable_settlement", "SUPPLIER_PAYABLE", "BANK", 7_000L)
+        )
+        val result = NaxaPerformanceEngine.analyze(
+            sales = sales,
+            accountingEntries = entries,
+            objectives = emptyList(),
+            supplierPayablesXaf = 123_000L,
+            lowStockCount = 0,
+            nowMillis = now,
+            zone = zone
+        )
+        val daily = result.dailyFinancialTrend.last()
+        assertEquals(14, result.dailyFinancialTrend.size)
+        assertEquals(100_000L, daily.revenueXaf)
+        assertEquals(80_000L, daily.comparableRevenueXaf)
+        assertEquals(40_000L, daily.grossProfitXaf)
+        assertEquals(30_000L, daily.comparableGrossProfitXaf)
+        assertEquals(12_000L, daily.operatingExpensesXaf)
+        assertEquals(8_000L, daily.comparableOperatingExpensesXaf)
+        assertEquals(28_000L, daily.operatingResultXaf)
+        assertEquals(25_000L, daily.supplierStockPurchasesXaf)
+        assertEquals(2_000L, daily.supplierOperatingPurchasesXaf)
+        assertEquals(7_000L, daily.supplierPaymentsXaf)
+
+        val monthly = result.monthlyFinancialTrend.last()
+        assertEquals(12, result.monthlyFinancialTrend.size)
+        assertEquals(180_000L, monthly.revenueXaf)
+        assertEquals(50_000L, monthly.comparableRevenueXaf)
+        assertEquals(70_000L, monthly.grossProfitXaf)
+        assertEquals(20_000L, monthly.operatingExpensesXaf)
+        assertEquals(50_000L, monthly.operatingResultXaf)
+
+        val annual = result.yearlyFinancialTrend.last()
+        assertEquals(5, result.yearlyFinancialTrend.size)
+        assertEquals(230_000L, annual.revenueXaf)
+        assertEquals(60_000L, annual.comparableRevenueXaf)
+        assertEquals(90_000L, annual.grossProfitXaf)
+        assertEquals(25_000L, annual.operatingExpensesXaf)
+        assertEquals(65_000L, annual.operatingResultXaf)
+    }
+
 }
