@@ -222,7 +222,7 @@ export function resolveNaxaFamilySubscriptionPrice({
       if (!Number.isSafeInteger(count) || count < 0) throw new RangeError("invalid_active_student_count");
       quantity = count;
       const tier = schedule.SCHOOL.find((x) => count >= x.min && (x.max === null || count <= x.max));
-      monthlyAmount = tier?.monthly ?? 0;
+      monthlyAmount = tier ? tier.monthly : 0;
       if (monthlyAmount === null) {
         return { appId: id, catalogVersion: version, effectiveFrom: version === "mature" ? MATURITY_EFFECTIVE_DATE : null, planCode: pack, quantity, unit: catalog.unit, monthlyAmount: null, amountDue: null, billingPeriod, quoteRequired: true, detail: { quoteRequiredFromStudents: 1501 } };
       }
