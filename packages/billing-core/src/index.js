@@ -279,7 +279,7 @@ export function resolveNaxaFamilySubscriptionPrice({
       if (monthlyAmount === null) {
         return { appId: id, catalogVersion: version, effectiveFrom: version === "mature" ? MATURITY_EFFECTIVE_DATE : null, planCode: pack, quantity, unit: catalog.unit, monthlyAmount: null, amountDue: null, billingPeriod, quoteRequired: true, detail: { quoteRequiredFromStudents: 1501 } };
       }
-      detail = { tierMin: tier.min, tierMax: tier.max };
+      detail = { tierMin: tier?.min ?? 0, tierMax: tier?.max ?? 0 };
     } else {
       monthlyAmount = schedule[pack];
       if (monthlyAmount === undefined) throw new RangeError("unknown_campus_parent_pack");
