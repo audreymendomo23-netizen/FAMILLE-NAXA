@@ -6,7 +6,8 @@
 - Base de reprise : `439fa4186b602c45e9958cc264c42b0c9ee6fbb4` — dernier état de `main) constaté avant cette passe.
 - Branche de travail : `work/naxa-services-completion-20261120`.
 - `main` n'a pas été modifiée par cette passe.
-- Aucune migration n'a été exécutée sur une base réelle, aucune fonction Edge n'a été déployée et aucun APK n'a été distribué.
+- Aucune migration n'a été exécutée sur une base réelle, aucune fonction Edge n'a été déployée et aucun APK de production n'a été distribué.
+- Un APK **debug** a été généré et archivé par GitHub Actions pour recette technique, sans distribution aux utilisateurs.
 
 L'objectif a été de poursuivre le code déjà présent, sans reprendre les audits documentaires, la charte, les choix d'authentification et les premiers workflows déjà réalisés.
 
@@ -39,7 +40,7 @@ Il contient 15 entités Room, toutes enregistrées dans `NsServicesDatabase`, ai
 Les workflows locaux couverts sont :
 
 - tickets pressing, progression des statuts et historique des transitions ;
-- rendez-vous, avec contrôle des chevauchements par site, poste et prestataire ;
+- rendez-vous, avec contrôle des chevauchements par site, poste et prestataire ; les identifiants de poste sont vérifiés contre un poste actif de la même organisation et du même site ;
 - ouverture, opérations et clôture de caisse, avec calcul de l'écart et justification obligatoire ;
 - ventes espèces confirmées et paiements Mobile Money laissés en attente ;
 - dépenses de caisse ;
@@ -96,7 +97,7 @@ La création de nouveaux sites et postes depuis Android reste un brouillon local
 
 ## 3. Résultat des contrôles statiques effectués
 
-Les contrôles statiques faits à partir des fichiers de la branche ont donné les résultats suivants :
+Les contrôles statiques et la première validation CI ciblée ont donné les résultats suivants :
 
 - 15 entités Room déclarées et 15 enregistrées dans la base ;
 - aucun appel DAO ou dépôt local repéré sans méthode correspondante ;
@@ -104,21 +105,25 @@ Les contrôles statiques faits à partir des fichiers de la branche ont donné l
 - toutes les insertions outbox repérées fournissent un identifiant d'organisation ;
 - aucune référence de chaîne Android actuellement utilisée par `MainActivity.kt` ne manque dans les ressources françaises ou anglaises ;
 - aucune clé de chaîne FR/EN dupliquée ;
-- présence des écrans ERP Android dédiés et de leur branchement dans la navigation ;
-- présence du contrat serveur d'organisation, du retour des métadonnées de sites et des tests de contrat de périmètre.
+- écrans ERP Android dédiés et navigation par rôle compilés ;
+- génération Room/KAPT et compilation Kotlin/Compose réussies ;
+- `deno check` et les tests de contrat Auth/périmètres réussis ;
+- `:naxa-services:assembleDebug` exécuté avec succès sur GitHub Actions.
 
-Ces vérifications sont des contrôles de cohérence du code source ; elles ne constituent pas une preuve de compilation ni une recette fonctionnelle.
+**Preuve CI :** run [44730761819](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44730761819), commit `283e6cc902d4d0c05effda85f2a82c5ecdc53cf7`, résultat global `success`. L'artifact `naxa-services-debug-apk` (ID `14626501380`) contient l'APK debug généré.
+
+La compilation et les tests de contrat ne remplacent pas les tests instrumentés, les essais sur appareils physiques, ni la recette fonctionnelle Auth/ERP sur un Supabase isolé.
 
 ## 4. Éléments encore ouverts — ne pas déclarer la version globalement verte
 
-### Construction technique à exécuter
+### Construction technique et recettes encore ouvertes
 
-- compilation Gradle de l'application Android et de ses modules dépendants ;
-- génération Room/KAPT et résolution réelle des requêtes SQL Room ;
-- exécution des tests Deno de `naxa-services-auth` ;
+- compilation **Release** et signature avec un certificat de livraison contrôlé ; seul l'APK debug est actuellement construit ;
 - tests instrumentés Android sur émulateur et appareils physiques ;
 - vérification des rotations, reprises d'activité, perte réseau, restauration de session et déconnexion ;
-- tests de non-régression de la base locale et du comportement après mise à jour.
+- tests de non-régression de la base locale et du comportement après mise à jour ;
+- test d'installation/mise à niveau, permissions, sauvegarde et effacement local ;
+- tests de performance sur listes volumineuses et utilisation hors connexion prolongée.
 
 ### Recette Supabase isolée
 
@@ -166,8 +171,8 @@ La clé `SUPABASE_SERVICE_ROLE_KEY` ne doit jamais être embarquée dans Android
 
 ## 6. Décision de statut
 
-**Statut : construction Android avancée, cohérence statique contrôlée, recette technique et serveur encore ouverte.**
+**Statut : APK Android debug compilé avec succès et tests Auth de contrat verts ; recette fonctionnelle Android et recette Supabase/RLS encore ouvertes.**
 
-Cette branche constitue une base de construction bien plus complète que l'état de reprise, mais elle ne doit pas être qualifiée de « verte production » avant compilation Android, tests Deno, tests RLS, recette Auth et tests métier/synchronisation.
+Cette branche franchit désormais la porte de compilation Android debug et de tests Auth de contrat, mais elle ne doit pas être qualifiée de « verte production » avant les tests instrumentés, la recette Auth/RLS sur Supabase isolé et les tests métier/synchronisation.
 
 Ne pas fusionner, migrer ou déployer sans autorisation distincte et sans validation des éléments ci-dessus.
