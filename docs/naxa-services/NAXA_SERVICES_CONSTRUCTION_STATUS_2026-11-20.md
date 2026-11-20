@@ -867,3 +867,84 @@ Le parcours d'import :
 - Workflow `44770034786` : terminé avec succès ; jobs Android debug et Auth Deno verts ; artefact `14647006494`.
 - Des commits documentaires ont ensuite synchronisé le rapport et `docs/CONTINUITE.md` sur la branche. Pour reprendre, lire le HEAD actuel de cette branche ; le dernier code Android vérifié demeure `2dc2a85`.
 - Préserver les acquis et continuer par lots testés ; ne pas fusionner automatiquement la branche et ne pas toucher au projet NAXA autonome.
+
+---
+
+## 36. Finalisation fonctionnelle avancée — NAXA SERVICES (20 novembre 2026)
+
+Cette section complète le lot 35. Elle atteste les changements réellement présents dans le code Android natif Kotlin/Jetpack Compose et dans le moteur commun de tarification. Elle ne vaut ni recette métier exhaustive sur appareils, ni mise en production.
+
+### 36.1 Bascule des tarifs des dix applications — date et règles exécutables
+
+- Date d'effet de maturité programmée : **1er mai 2027 à 00:00, heure du Cameroun** (`Africa/Douala`). Le délai de cinq mois à compter du 1er décembre 2026 est donc matérialisé par la date locale du 1er mai 2027.
+- `packages/billing-core` expose désormais un manifeste explicite `NAXA_FAMILY_MATURITY_SCHEDULE` pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES, COTIZ, LOYABLE, NAXA HOTEL, NAXA SECURITY, GRILLAD et CAMPUS237.
+- La résolution de prix utilise le début de chaque nouvelle période de service / renouvellement. Une période déjà payée n'est pas repricée rétroactivement. Une nouvelle souscription ou un renouvellement dont la période commence le 1er mai 2027 ou après utilise le catalogue maturité.
+- Le calcul de date passe par `Africa/Douala`, et les tests vérifient la frontière à 23:00 UTC le 30 avril (minuit à Douala le 1er mai).
+- NAXA SECURITY prend en compte +20 % par extension de capacité, avec validation du nombre d'extensions.
+- CAMPUS237 dispose des durées de trial distinctes : 30 jours école, parent essentiel gratuit sans trial, autres packs parent payants 72 heures ; les autres applications gardent 72 heures.
+- Les règles tarifaires existantes restent inchangées : 10 mensualités payées pour 12 mois de service lorsque l'annuel est applicable.
+
+**Limite importante :** le moteur détermine le catalogue et calcule le montant attendu ; il ne prélève pas automatiquement un paiement réel. Les récurrences, webhooks prestataires, anti-doublon serveur et activation d'entitlements doivent encore être intégrés au service de cycle de vie serveur avant prélèvement. Aucun paiement automatique n'est déclenché par le seul passage de la date.
+
+### 36.2 Stock, caisse et ventes liées au catalogue
+
+- Une vente peut être libre (prestation) ou reliée à un article du stock.
+- Pour un article lié, le formulaire récupère le prix de vente configuré, saisit la quantité et calcule le total.
+- Vente espèces : confirmation locale, décrémentation de stock et mouvement de sortie dans la même transaction.
+- Mobile Money : la quantité est réservée dans les ventes en attente ; aucun décrément réel avant confirmation serveur.
+- Annulation d'une vente Mobile Money encore en attente : motif obligatoire, statut annulé, historique et libération de la réservation.
+- Confirmation Mobile Money : méthode dédiée réservée à l'adaptateur serveur après vérification du webhook ; la vente déjà non pending ne peut pas être confirmée une seconde fois. La référence prestataire est conservée dans l'événement d'audit.
+- Room version actuelle : **7** ; chaîne de migrations enregistrée dans le builder : `NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7`.
+
+**Limite :** l'adaptateur réel de paiement Mobile Money, ses webhooks et le synchroniseur hors connexion ne sont pas encore branchés. Le code prépare le contrat et les règles locales ; il ne prétend pas qu'une confirmation de paiement fournisseur fonctionne déjà en production.
+
+### 36.3 Transferts inter-sites audités
+
+- Le Promoteur peut créer une demande entre deux points de vente actifs de sa propre organisation.
+- La demande vérifie l'existence des deux sites, de l'article source et de la quantité disponible.
+- Demande `open` puis approbation `approved` ne changent aucun stock.
+- Réception `received` : dans une transaction unique, contrôle à nouveau la quantité source et l'unicité du SKU destination ; décrémente le stock source, crée ou incrémente l'article destination et enregistre deux mouvements liés (`transfer_out` / `transfer_in`).
+- Une réception avec stock source insuffisant ou SKU ambigu au site destination est refusée sans mouvement partiel.
+- Les transitions sont historisées avec auteur et motif ; l'interface native présente le site source, destination, article, quantité, statut et historique.
+
+**Limite :** le transfert actuel est dans Room/outbox locale. Le contrôle concurrent entre appareils et le commit serveur transactionnel devront être validés via API/RLS avant de le traiter comme opération réseau multi-appareils.
+
+### 36.4 Pointage, équipes et rémunération variable
+
+- Le pointage suit une machine d'état par collaborateur et site : prise de service → pause → reprise → sortie.
+- Double prise de service, fin de pause sans pause ouverte et sortie sans service actif sont refusées.
+- Chaque événement horodaté est inscrit dans le journal local, l'outbox et l'historique de workflow ; il peut être lié à un poste.
+- L'écran Android permet prise de service, début/fin de pause et sortie, puis consultation des événements récents.
+- Commissions, avances et primes restent des mouvements distincts en attente de validation, avec approbation ou rejet accompagné d'un motif obligatoire.
+
+**Limite :** l'identité RH doit encore être raccordée à un identifiant de membre serveur stable ; le nom/identifiant saisi localement ne remplace pas l'authentification RH. Les horaires, contrats, paie et cotisations sociales ne sont pas un moteur de paie réglementaire complet.
+
+### 36.5 CRM — modification et retrait du consentement GPS
+
+- Les fiches clients peuvent être modifiées sans créer de doublon.
+- Adresse, quartier, repère, téléphone, notes privées et consentement de contact sont éditables.
+- Si le consentement de localisation est retiré, latitude, longitude, précision, date de capture et date de consentement sont effacées localement.
+- Si la position reste autorisée et inchangée, les métadonnées de capture existantes sont conservées ; une nouvelle position enregistre une nouvelle date.
+- Les routines hebdomadaires et mensuelles conservent prochaine échéance et historique.
+
+### 36.6 Modèle de déploiement fonctionnel et limites restantes
+
+L'application Android demeure native Kotlin/Jetpack Compose. Les données métier ajoutées dans cette étape sont persistées dans Room et alimentent l'outbox. La finalité 360 exige encore :
+- API métier serveur, synchroniseur outbox, idempotence, reprises, conflits, accusés de réception et tests de rejeu.
+- RLS et isolation réelle par application, organisation, site, poste et rôle.
+- Notifications FCM, SMS/WhatsApp, planificateur serveur pour les relances CRM et le linge prêt.
+- Paiements serveur, webhooks, abonnements et entitlements réels.
+- Recette instrumentée et appareils physiques, performance, non-régression et restauration.
+- SYSCOHADA complet validé par expert-comptable et fiscalité camerounaise validée par professionnel.
+- Release Android signée et distribution.
+- Intégrations centrales documentées mais non codées : dashboard « Gérer NAXA FAMILY » dans NAXA, CSO réellement mutualisés, passerelle IA versionnée vers NAXA et fonctionnalités NAXA SECURITY vidéo/audio/alertes.
+- Web/PWA distincte à réaliser sur contrats API et règles métier partagés.
+
+### 36.7 Preuve de validation à la date de la présente mise à jour
+
+- Dernier workflow constaté : `44780431451`, commit testé `fb4a464f4595d90b2d7523b50eb95b927a407273`, statut `completed` / conclusion `failure`.
+- Jobs : NAXA FAMILY launch and maturity tariff tests=completed/success; Assemble NAXA SERVICES Android debug APK=completed/failure; Auth scope and business-mode contract tests=completed/success.
+- Artefacts : aucun artefact publié pour ce workflow.
+
+**État du gate : EN ATTENTE / NON VERT** pour ce dernier état. Ne pas transférer un succès d'un ancien SHA au code courant.
+
