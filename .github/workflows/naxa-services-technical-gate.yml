@@ -14,6 +14,8 @@ on:
       - "supabase/drafts/naxa_services_v2_activity_onboarding_management.sql"
       - "supabase/drafts/naxa_services_referrals_v1.sql"
       - "supabase/drafts/naxa_services_v3_operations_rewards_sync.sql"
+      - "supabase/drafts/naxa_services_v4_supplier_accounting_forecast.sql"
+      - "supabase/functions/naxa-services-accounting/**"
       - "supabase/config.toml"
       - "settings.gradle.kts"
       - "build.gradle.kts"
@@ -24,7 +26,12 @@ on:
       - "packages/core-android/**"
       - "supabase/functions/naxa-services-auth/**"
       - "supabase/functions/naxa-services-referrals/**"
+      - "supabase/drafts/naxa_services_v1.sql"
+      - "supabase/drafts/naxa_services_v2_activity_onboarding_management.sql"
       - "supabase/drafts/naxa_services_referrals_v1.sql"
+      - "supabase/drafts/naxa_services_v3_operations_rewards_sync.sql"
+      - "supabase/drafts/naxa_services_v4_supplier_accounting_forecast.sql"
+      - "supabase/functions/naxa-services-accounting/**"
       - "supabase/config.toml"
       - "packages/billing-core/**"
       - "settings.gradle.kts"
@@ -79,6 +86,20 @@ jobs:
         run: deno check supabase/functions/naxa-services-referrals/index.ts supabase/functions/naxa-services-referrals/referral_contract.ts supabase/functions/naxa-services-referrals/contract_test.ts
       - name: Run referral contract tests
         run: deno test supabase/functions/naxa-services-referrals/contract_test.ts
+
+  accounting-contract:
+    name: NAXA SERVICES supplier accounting and forecast contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check accounting contract
+        run: deno check supabase/functions/naxa-services-accounting/accounting_contract.ts supabase/functions/naxa-services-accounting/contract_test.ts
+      - name: Run supplier accounting and forecast contracts
+        run: deno test supabase/functions/naxa-services-accounting/contract_test.ts
 
   android-debug:
     name: Assemble NAXA SERVICES Android debug APK
