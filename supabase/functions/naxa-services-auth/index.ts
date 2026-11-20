@@ -80,6 +80,22 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
   const member = await activeMember(String(account.id));
   if (!member) throw new Error("MEMBER_SCOPE_INVALID");
   const sites = await activeSiteIds(String(member.id), String(member.org_id));
+  const siteRows = sites.length
+    ? await rest(
+      "ns_sites?select=id,code,name,address_label,phone_contact&org_id=eq." +
+        encodeURIComponent(String(member.org_id)) + "&status=eq.active",
+      { headers: serviceHeaders() },
+    ) as Record<string, unknown>[]
+    : [];
+  const activeSites = (siteRows ?? [])
+    .filter((site) => sites.includes(String(site.id)))
+    .map((site) => ({
+      id: String(site.id),
+      code: String(site.code ?? ""),
+      name: String(site.name ?? ""),
+      address_label: String(site.address_label ?? ""),
+      phone_contact: String(site.phone_contact ?? ""),
+    }));
   return {
     access_token: authData.access_token,
     refresh_token: authData.refresh_token,
@@ -92,6 +108,7 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
       role_code: member.role_code,
       organization_id: member.org_id,
       active_site_ids: sites,
+      active_sites: activeSites,
     },
   };
 }
