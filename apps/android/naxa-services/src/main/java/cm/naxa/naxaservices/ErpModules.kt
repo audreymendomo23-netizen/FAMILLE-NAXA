@@ -471,16 +471,17 @@ internal fun OrganizationWorkspaceContent(
     var notice by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
-    LaunchedEffect(profile?.orgId) {
-        if (profile != null) {
-            displayName = profile!!.displayName
-            mode = profile!!.businessMode
-            locale = profile!!.defaultLocale
-        } else {
-            displayName = session.account.organizationName
-            mode = session.account.businessMode
-            locale = session.account.defaultLocale
-        }
+    // The authenticated organization profile is authoritative. A local draft
+    // may be resumed explicitly, but must never silently overwrite server state.
+    LaunchedEffect(
+        session.account.organizationId,
+        session.account.organizationName,
+        session.account.businessMode,
+        session.account.defaultLocale
+    ) {
+        displayName = session.account.organizationName
+        mode = session.account.businessMode
+        locale = session.account.defaultLocale
     }
 
     val workstations by remember(selectedSite) { repository.dao.observeWorkstations(orgId, selectedSite) }.collectAsState(initial = emptyList())
@@ -503,6 +504,29 @@ internal fun OrganizationWorkspaceContent(
             }
         }
         if (route == AppRoute.ORGANIZATION) {
+            if (profile != null && (
+                profile!!.displayName != session.account.organizationName ||
+                profile!!.businessMode != session.account.businessMode ||
+                profile!!.defaultLocale != session.account.defaultLocale
+            )) {
+                item {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text("Brouillon local non confirmé", fontWeight = FontWeight.Bold)
+                            Text(profile!!.displayName + " · " + profile!!.businessMode)
+                            Text("Cette version n'a pas été validée par le serveur. Le profil serveur reste la référence.")
+                            OutlinedButton(
+                                onClick = {
+                                    displayName = profile!!.displayName
+                                    mode = profile!!.businessMode
+                                    locale = profile!!.defaultLocale
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("Reprendre ce brouillon local") }
+                        }
+                    }
+                }
+            }
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
