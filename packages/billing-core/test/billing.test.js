@@ -4,7 +4,7 @@ import {
   packagePrice, upgradeProrata, giftMonthsAllowed, provisionalAccessUntil,
   MATURITY_EFFECTIVE_DATE, NAXA_FAMILY_CATALOG, catalogVersionAt,
   resolveNaxaFamilySubscriptionPrice, resolveRenewalPrice,
-  localCalendarDateInZone, resolveRenewalPriceAtInstant
+  localCalendarDateInZone, resolveRenewalPriceAtInstant, trialDurationForNaxaFamily
 } from "../src/index.js";
 
 test("3-month offer discounted 10%, rounded down to 100 FCFA",()=>assert.equal(packagePrice(1150,3),3100));
@@ -82,4 +82,25 @@ test("maturity boundary follows Africa/Douala midnight, not UTC midnight", () =>
   const sub={appId:"NAXA_SERVICES",planCode:"PREMIUM",billingPeriod:"monthly"};
   assert.equal(resolveRenewalPriceAtInstant(sub,"2027-04-30T22:59:59.000Z").amountDue,10000);
   assert.equal(resolveRenewalPriceAtInstant(sub,"2027-04-30T23:00:00.000Z").amountDue,15000);
+});
+
+test("NAXA SECURITY applies +20% per capacity extension in launch and maturity catalogs", () => {
+  const launch=resolveNaxaFamilySubscriptionPrice({
+    appId:"NAXA_SECURITY",planCode:"PREMIUM",periodStartDate:"2027-04-30",capacityExtensionCount:3
+  });
+  const mature=resolveNaxaFamilySubscriptionPrice({
+    appId:"NAXA_SECURITY",planCode:"PREMIUM",periodStartDate:"2027-05-01",capacityExtensionCount:3
+  });
+  assert.equal(launch.monthlyAmount,24000);
+  assert.equal(mature.monthlyAmount,32000);
+  assert.equal(mature.detail.extensionAmount,12000);
+  assert.throws(() => resolveNaxaFamilySubscriptionPrice({
+    appId:"NAXA_SECURITY",planCode:"ACCESS",periodStartDate:"2027-05-01",capacityExtensionCount:-1
+  }));
+});
+test("Campus237 school trial is 30 days, parent essential remains free, other trials are 72 hours", () => {
+  assert.equal(trialDurationForNaxaFamily({appId:"CAMPUS237",planCode:"SCHOOL"}).trialHours,720);
+  assert.equal(trialDurationForNaxaFamily({appId:"CAMPUS237",planCode:"PARENT_ESSENTIAL"}).trialApplicable,false);
+  assert.equal(trialDurationForNaxaFamily({appId:"CAMPUS237",planCode:"PARENT_FAMILY"}).trialHours,72);
+  assert.equal(trialDurationForNaxaFamily({appId:"NAXA_SERVICES",planCode:"PREMIUM"}).trialHours,72);
 });
