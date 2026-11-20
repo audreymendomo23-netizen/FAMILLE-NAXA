@@ -45,3 +45,7 @@ Refresh lié à l'appareil ; logout révoque la session et efface le coffre loca
 3. Tester limitation, anti-énumération, rotation et révocation.
 4. Tester remember-me, perte d'appareil et déconnexion distante.
 5. Tester les parcours sur appareil Android réel.
+
+
+## Complément — changement de mot de passe et persistance
+L'action change_password transporte le refresh token courant dans le corps protégé par HTTPS afin de retourner la session complète après modification. Les jetons ne sont jamais persistés en clair. L'Android Keystore chiffre les jetons uniquement si la personne active « Rester connecté ». Cette option est décochée par défaut.
