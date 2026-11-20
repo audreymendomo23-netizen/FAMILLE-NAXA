@@ -321,6 +321,9 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_workstations WHERE orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis ASC")
     fun observeWorkstations(orgId: String, siteId: String): Flow<List<LocalWorkstation>>
 
+    @Query("SELECT * FROM local_workstations WHERE id = :workstationId AND orgId = :orgId AND siteId = :siteId AND status = 'active' LIMIT 1")
+    suspend fun findWorkstation(workstationId: String, orgId: String, siteId: String): LocalWorkstation?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertWorkstation(workstation: LocalWorkstation)
 
@@ -420,11 +423,17 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) { "Organisation, point de vente ou opérateur manquant." }
         require(customerName.isNotBlank() && itemsSummary.isNotBlank()) { "Client et articles obligatoires." }
         require(totalXaf > 0 && depositXaf >= 0 && depositXaf <= totalXaf) { "Le total et l'acompte sont incohérents." }
+        val normalizedWorkstationId = workstationId?.takeIf(String::isNotBlank)
+        if (normalizedWorkstationId != null) {
+            require(dao.findWorkstation(normalizedWorkstationId, orgId, siteId) != null) {
+                "L'emplacement sélectionné n'existe pas dans ce point de vente."
+            }
+        }
         val order = LocalPressingOrder(
             id = UUID.randomUUID().toString(),
             orgId = orgId,
             siteId = siteId,
-            workstationId = workstationId?.takeIf(String::isNotBlank),
+            workstationId = normalizedWorkstationId,
             ticketNumber = "PRS-" + now.toString() + "-" + UUID.randomUUID().toString().take(6).uppercase(),
             customerName = customerName.trim(),
             customerPhone = customerPhone.trim(),
@@ -485,6 +494,11 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         require(startsAtMillis > 0 && endsAtMillis > startsAtMillis) { "Créneau invalide." }
         require(depositXaf >= 0) { "Acompte invalide." }
         val normalizedWorkstation = workstationId?.takeIf(String::isNotBlank)
+        if (normalizedWorkstation != null) {
+            require(dao.findWorkstation(normalizedWorkstation, orgId, siteId) != null) {
+                "L'emplacement sélectionné n'existe pas dans ce point de vente."
+            }
+        }
         val conflicts = dao.countAppointmentConflicts(orgId, siteId, normalizedWorkstation, assignedMemberId, startsAtMillis, endsAtMillis)
         require(conflicts == 0) { "Conflit de planning : ce poste ou ce prestataire est déjà réservé sur ce créneau." }
         val appointment = LocalAppointment(
