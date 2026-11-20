@@ -948,3 +948,78 @@ L'application Android demeure native Kotlin/Jetpack Compose. Les données métie
 
 **État du gate : EN ATTENTE / NON VERT** pour ce dernier état. Ne pas transférer un succès d'un ancien SHA au code courant.
 
+---
+
+## 37. Clôture vérifiée après transferts inter-sites et audit tarifaire — 20 novembre 2026
+
+Cette section remplace le statut « en attente / non vert » de la section 36.7 pour le dernier état de la branche. Elle conserve l'historique des échecs précédents ; elle ne signifie pas que les recettes externes ou la production sont terminées.
+
+### 37.1 Référence Git et preuve CI finale
+
+- Branche : `work/naxa-services-completion-20261120`.
+- HEAD documentaire après clôture : `f90c82886d5ae33ce97e1966e73ac40bf8cfaca3`.
+- Code Android testé dans ce workflow, incluant le transfert inter-sites : commit `7a0729c7ea8d9a852385652a688f2abe27eca586` (le workflow final a reconstruit l'ensemble du module au HEAD suivant, sans changement Android entre ces deux commits).
+- Correctif tarifaire additionnel testé : `fcc091a5d85acea517e48745393b0ddd0219b5a4`, test correspondant au commit final `f90c82886d5ae33ce97e1966e73ac40bf8cfaca3`.
+- Workflow GitHub Actions : `44784781041`, conclusion `success`.
+- Trois jobs terminés avec succès :
+  - `Assemble NAXA SERVICES Android debug APK`
+  - `Auth scope and business-mode contract tests`
+  - `NAXA FAMILY launch and maturity tariff tests`
+- Artefact : `naxa-services-debug-apk`, ID `14653536762`, taille `11 527 424` octets, empreinte SHA-256 `5b390da34b8202f78780c00bb73bf0bd58905767508994229187bf63e030b474`. Conservation par GitHub jusqu'au 27 novembre 2026.
+- Résultat : compilation Kotlin, génération Room/KAPT, assemblage APK et archivage verts pour ce workflow ; les contrats Auth et les tests de tarifs sont verts.
+
+### 37.2 Transferts inter-sites Promoteur — réalisation Android/Room
+
+Le parcours est maintenant réellement raccordé à la couche de données, et pas seulement affiché :
+
+1. Le Promoteur crée une demande depuis le site source vers un autre site actif de la même organisation.
+2. La demande vérifie l'organisation, l'appartenance et l'état actif des deux sites, l'existence de l'article source, le stock disponible, le SKU destination et la compatibilité d'unité.
+3. La création et l'approbation ne modifient aucune quantité.
+4. La demande apparaît depuis les deux sites concernés ; l'approbation est proposée au site source, la réception physique au site destination.
+5. À la réception, une transaction Room unique revalide la quantité source et le SKU destination, décrémente le stock source, crée ou incrémente l'article destination, écrit les mouvements `transfer_out` et `transfer_in`, met à jour le dossier et inscrit les événements d'audit source/destination.
+6. Un SKU ambigu, une unité incompatible, un site inactif ou un stock devenu insuffisant fait échouer la réception sans mouvement partiel.
+7. Les transitions exigent un motif et sont rattachées à l'auteur ; les événements alimentent l'outbox.
+
+**Frontière restante :** la transaction est atomique dans la base locale Room d'un appareil. L'arbitrage concurrent entre appareils, la transaction côté serveur, l'idempotence de l'API et les politiques RLS doivent encore être testés avant usage multi-appareils en production.
+
+### 37.3 Catalogue tarifaire — correctif de robustesse final
+
+- Les dix applications continuent d'utiliser le manifeste effectif-daté et la date du 1er mai 2027 à 00:00, fuseau `Africa/Douala`.
+- Le calcul CAMPUS237 « SCHOOL » accepte désormais explicitement zéro élève actif avec un montant nul et un détail de tranche neutre ; un test dédié empêche la régression.
+- Aucun prix, palier ou remise n'a été modifié par ce correctif.
+
+### 37.4 Langues — état exact du Fulfulde
+
+- La préférence `ff-CM` est acceptée et mémorisée par les préférences Android.
+- **Le pack de ressources Fulfulde n'est pas encore complet** : le projet contient actuellement les ressources françaises (`values`) et anglaises (`values-en`), mais pas de dossier `values-ff-rCM`.
+- En sélectionnant Fulfulde, une partie des libellés et des textes Compose retombe donc sur le français. Ne pas présenter l'application comme intégralement traduite en Fulfulde.
+- Le pack doit être traduit et relu dans la variante camerounaise par un locuteur qualifié, notamment pour les CGU, la confidentialité, les paiements, la fiscalité et les parcours métier.
+
+### 37.5 Statut de construction et réserves externes
+
+<badge>VERT — construction Android et gates CI</badge>
+
+La construction Android native Kotlin/Jetpack Compose du périmètre présent est verte sur le workflow final cité ci-dessus. Les écrans ERP et profils d'activité sont présents, les derniers parcours métier ajoutés compilent, le catalogue des dix abonnements passe ses tests et les contrats Auth passent leurs contrôles.
+
+Cette validation ne transforme pas les réserves ci-dessous en fonctionnalités de production :
+
+- API ERP distante, outbox serveur, synchronisation offline complète, idempotence, reprise, conflits, rejeu et accusés de réception.
+- RLS et tests d'isolation réels entre applications, organisations, sites, postes, membres et rôles.
+- Paiement automatique réel, récurrences, webhooks fournisseurs et activation d'entitlements. Le moteur choisit le bon catalogue de prix et la bonne période ; aucun débit n'est déclenché automatiquement par la seule date.
+- FCM, WhatsApp/SMS, relances CRM planifiées côté serveur, alerte pressing « linge prêt » et centre de notifications distant.
+- Recettes instrumentées Android, scénarios complets sur émulateur/appareils physiques, performance, restauration et non-régression sur données réalistes.
+- SYSCOHADA complet, paie réglementaire et fiscalité camerounaise validés par les professionnels compétents.
+- Appels/partage d'écran, sauvegarde Google Drive et publication Android Release signée.
+- Ressources Fulfulde complètes et validées.
+- Dashboard administrateur central NAXA FAMILY, mutualisation réelle CSO, passerelle IA versionnée vers NAXA et intégration NAXA SECURITY vidéo/audio/alertes.
+- Application Web/PWA séparée sur contrats API et règles métier partagés.
+
+### 37.6 Protection du périmètre
+
+- Aucun déploiement Supabase ni migration de schéma Supabase n'a été exécuté dans cette passe.
+- Le projet NAXA autonome n'a pas été modifié.
+- La branche de travail n'a pas été fusionnée automatiquement dans `main`.
+- Les intégrations NAXA, NAXA SECURITY, paiements et services externes restent isolées jusqu'à leurs contrats, secrets, contrôles et recettes dédiés.
+
+**Point de reprise :** lire le HEAD de `work/naxa-services-completion-20261120`. Ne pas recommencer les écrans ou les parcours listés dans les sections 30 à 37 ; poursuivre uniquement les réserves identifiées, en lots isolés avec gate CI associé.
+
