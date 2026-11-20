@@ -1084,3 +1084,17 @@ La fonction SQL de qualification est idempotente dans le ledger, mais cela ne re
 Le lot de parrainage est ajouté sans réécrire les écrans et modules métiers précédents. Les réserves antérieures de la section 37 restent ouvertes : API ERP distante et synchronisation offline complète, idempotence et résolution de conflits réseau, RLS vérifiée par tests d'isolation, paiement récurrent réel et webhooks, entitlements, FCM/SMS/WhatsApp et planificateur CRM, SYSCOHADA/fiscalité/paie validés par professionnels, essais physiques/performance/restauration, Release Android signée, Web/PWA séparée, Fulfulde complet relu, pilotage central des dix applications/CSO, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
 
 **Règle de périmètre :** aucun déploiement Supabase, aucune migration réelle, aucune Release signée et aucune publication n'ont été effectués dans ce lot. Le projet NAXA autonome n'a pas été modifié. La branche de travail n'est pas fusionnée dans `main`.
+
+
+### 38.7 Vérification du projet Supabase connecté — lecture seule
+
+Un contrôle read-only a été réalisé sur le seul projet Supabase accessible dans la connexion :
+
+- Projet affiché : `NAXA`, région `eu-west-3`, état `ACTIVE_HEALTHY`.
+- 41 migrations enregistrées, dont les dernières concernent le schéma NAXA/pharmacies, le marketplace, les partenaires et le durcissement RPC.
+- 37 tables dans `public`; aucune table `ns_*` ni table NAXA SERVICES n'a été relevée.
+- 0 Edge Function déployée dans ce projet.
+- Advisors sécurité du projet : RLS activée sans policy sur 2 tables, search_path mutable sur 2 fonctions, extensions dans public (2), fonctions SECURITY DEFINER exécutables par anon (22) et par authenticated (37).
+- Advisors performance : 35 clés étrangères non indexées, 28 cas auth/RLS initplan, 36 index inutilisés et 33 groupes de policies permissives multiples.
+
+Ces alertes concernent le projet Supabase NAXA actuellement connecté et ses applications/schémas existants. Elles ne constituent pas un audit de NAXA SERVICES. **Aucune correction de sécurité ni migration n'a été exécutée** : modifier globalement ce projet sans cartographier les applications qui l'utilisent pourrait affecter la plateforme existante. Le projet actuellement connecté ne constitue pas une base de recette isolée identifiable de NAXA SERVICES ; le draft de parrainage reste donc non appliqué et sa fonction Edge non déployée.
