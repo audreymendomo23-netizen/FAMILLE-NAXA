@@ -1,6 +1,18 @@
 package cm.naxa.naxaservices
 
 import android.os.Bundle
+
+import androidx.room.Room
+import androidx.compose.runtime.collectAsState
+import cm.naxa.naxaservices.data.NsServicesDatabase
+import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
+import cm.naxa.naxaservices.data.LocalPressingOrder
+import cm.naxa.naxaservices.data.LocalAppointment
+import cm.naxa.naxaservices.data.LocalCashSession
+import cm.naxa.naxaservices.data.LocalSale
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
@@ -79,6 +91,8 @@ private fun NaxaServicesRoot() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val api = remember { AuthApi(context) }
     val vault = remember { SessionVault(context) }
+    val localDatabase = remember { Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db").build() }
+    val localRepository = remember { NaxaServicesLocalRepository(localDatabase) }
     val scope = rememberCoroutineScope()
 
     var route by rememberSaveable { mutableStateOf(AppRoute.LOGIN.name) }
@@ -205,6 +219,7 @@ private fun NaxaServicesRoot() {
                             route = AppRoute.valueOf(route),
                             authApi = api,
                             activeSession = active,
+                            localRepository = localRepository,
                             accountName = active.account.displayName,
                             roleCode = active.account.roleCode,
                             lightTheme = lightTheme,
@@ -389,6 +404,7 @@ private fun ErpScreen(
     route: AppRoute,
     authApi: AuthApi,
     activeSession: AuthSession,
+    localRepository: NaxaServicesLocalRepository,
     accountName: String,
     roleCode: String,
     lightTheme: Boolean,
@@ -426,6 +442,12 @@ private fun ErpScreen(
             DashboardContent(Modifier.padding(padding), accountName, roleCode, onNavigate, onLogout)
         } else if (route == AppRoute.MENU) {
             ModuleMenu(Modifier.padding(padding), onNavigate, onLogout)
+        } else if (route == AppRoute.PRESSING) {
+            PressingLocalContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.AGENDA) {
+            AgendaLocalContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.CASH) {
+            CashLocalContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.TEAM) {
             TeamManagementContent(Modifier.padding(padding), authApi, activeSession)
         } else if (route == AppRoute.SECURITY) {
@@ -440,6 +462,349 @@ private fun ErpScreen(
     }
 }
 
+
+
+@Composable
+private fun PressingLocalContent(
+    modifier: Modifier,
+    repository: NaxaServicesLocalRepository,
+    session: AuthSession
+) {
+    val scope = rememberCoroutineScope()
+    var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
+    var workstationId by rememberSaveable { mutableStateOf("") }
+    var customer by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
+    var garments by rememberSaveable { mutableStateOf("") }
+    var total by rememberSaveable { mutableStateOf("") }
+    var deposit by rememberSaveable { mutableStateOf("0") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val orders by remember(siteId) { repository.dao.observePressingOrders(siteId) }.collectAsState(initial = emptyList())
+
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.pressing_local_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.pressing_local_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(siteId, { siteId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_site_id)) }, singleLine = true)
+                    OutlinedTextField(workstationId, { workstationId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_workstation_id_optional)) }, singleLine = true)
+                    OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.customer_name)) }, singleLine = true)
+                    OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.customer_phone)) }, singleLine = true)
+                    OutlinedTextField(garments, { garments = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.pressing_items_summary)) }, minLines = 2)
+                    OutlinedTextField(total, { total = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.total_amount_xaf)) }, singleLine = true)
+                    OutlinedTextField(deposit, { deposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.deposit_amount_xaf)) }, singleLine = true)
+                    if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                busy = true
+                                error = null
+                                runCatching {
+                                    repository.createPressingOrder(
+                                        siteId = siteId,
+                                        workstationId = workstationId.ifBlank { null },
+                                        customerName = customer,
+                                        customerPhone = phone,
+                                        itemsSummary = garments,
+                                        totalXaf = total.toLong(),
+                                        depositXaf = deposit.toLongOrNull() ?: 0L,
+                                        promisedAtMillis = System.currentTimeMillis() + 24L * 60L * 60L * 1000L,
+                                        actorMemberId = session.account.memberId
+                                    )
+                                }.onSuccess {
+                                    customer = ""
+                                    phone = ""
+                                    garments = ""
+                                    total = ""
+                                    deposit = "0"
+                                }.onFailure { error = it.message ?: "Création du ticket impossible." }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy && siteId.isNotBlank() && customer.isNotBlank() && garments.isNotBlank() && (total.toLongOrNull() ?: 0L) > 0,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary) else Text(stringResource(R.string.create_pressing_ticket)) }
+                    Text(stringResource(R.string.local_outbox_notice), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        item { Text(stringResource(R.string.local_pressing_tickets), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (orders.isEmpty()) {
+            item { Text(stringResource(R.string.no_local_pressing_tickets), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        } else {
+            items(orders) { order ->
+                PressingOrderCard(order = order, onAdvance = {
+                    scope.launch {
+                        runCatching { repository.advancePressingOrder(order, session.account.memberId) }
+                            .onFailure { error = it.message }
+                    }
+                })
+            }
+        }
+    }
+}
+
+@Composable
+private fun PressingOrderCard(order: LocalPressingOrder, onAdvance: () -> Unit) {
+    val status = when (order.status) {
+        "received" -> stringResource(R.string.pressing_status_received)
+        "in_progress" -> stringResource(R.string.pressing_status_in_progress)
+        "ready" -> stringResource(R.string.pressing_status_ready)
+        "picked_up" -> stringResource(R.string.pressing_status_picked_up)
+        else -> order.status
+    }
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(order.ticketNumber, fontWeight = FontWeight.Bold)
+                Text(status, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelMedium)
+            }
+            Text(order.customerName, style = MaterialTheme.typography.titleMedium)
+            Text(order.itemsSummary, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text(stringResource(R.string.pressing_total_and_deposit, order.totalXaf, order.depositXaf), style = MaterialTheme.typography.bodySmall)
+            if (order.status != "picked_up") {
+                Button(onClick = onAdvance, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.advance_pressing_status)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AgendaLocalContent(
+    modifier: Modifier,
+    repository: NaxaServicesLocalRepository,
+    session: AuthSession
+) {
+    val scope = rememberCoroutineScope()
+    var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
+    var workstationId by rememberSaveable { mutableStateOf("") }
+    var customer by rememberSaveable { mutableStateOf("") }
+    var service by rememberSaveable { mutableStateOf("") }
+    var duration by rememberSaveable { mutableStateOf("30") }
+    var start by rememberSaveable { mutableStateOf(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(System.currentTimeMillis() + 60L * 60L * 1000L))) }
+    var deposit by rememberSaveable { mutableStateOf("0") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val appointments by remember(siteId) { repository.dao.observeAppointments(siteId) }.collectAsState(initial = emptyList())
+
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.agenda_local_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.agenda_local_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(siteId, { siteId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_site_id)) }, singleLine = true)
+                    OutlinedTextField(workstationId, { workstationId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_workstation_id_optional)) }, singleLine = true)
+                    OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.customer_name)) }, singleLine = true)
+                    OutlinedTextField(service, { service = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.service_name)) }, singleLine = true)
+                    OutlinedTextField(start, { start = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.appointment_start_local)) }, singleLine = true)
+                    OutlinedTextField(duration, { duration = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.appointment_duration_minutes)) }, singleLine = true)
+                    OutlinedTextField(deposit, { deposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.deposit_amount_xaf)) }, singleLine = true)
+                    if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                busy = true
+                                error = null
+                                runCatching {
+                                    val startAt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).parse(start)?.time
+                                        ?: throw IllegalArgumentException("Date/heure invalide. Format attendu : AAAA-MM-JJ HH:MM.")
+                                    val durationMinutes = duration.toLongOrNull() ?: throw IllegalArgumentException("Durée invalide.")
+                                    require(durationMinutes in 5..600) { "La durée doit être comprise entre 5 et 600 minutes." }
+                                    repository.createAppointment(
+                                        siteId = siteId,
+                                        workstationId = workstationId.ifBlank { null },
+                                        customerName = customer,
+                                        serviceName = service,
+                                        assignedMemberId = session.account.memberId,
+                                        startsAtMillis = startAt,
+                                        endsAtMillis = startAt + durationMinutes * 60_000L,
+                                        depositXaf = deposit.toLongOrNull() ?: 0L,
+                                        actorMemberId = session.account.memberId
+                                    )
+                                }.onSuccess { customer = ""; service = ""; deposit = "0" }
+                                    .onFailure { error = it.message ?: "Rendez-vous impossible." }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy && siteId.isNotBlank() && customer.isNotBlank() && service.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary) else Text(stringResource(R.string.create_appointment)) }
+                    Text(stringResource(R.string.appointment_conflict_local_only), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        item { Text(stringResource(R.string.appointments_local_list), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (appointments.isEmpty()) item { Text(stringResource(R.string.no_local_appointments), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        else items(appointments) { appointment ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(appointment.customerName, fontWeight = FontWeight.Bold)
+                    Text(appointment.serviceName)
+                    Text(SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(appointment.startsAtMillis)), color = MaterialTheme.colorScheme.secondary)
+                    Text(stringResource(R.string.appointment_local_status, appointment.status), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CashLocalContent(
+    modifier: Modifier,
+    repository: NaxaServicesLocalRepository,
+    session: AuthSession
+) {
+    val scope = rememberCoroutineScope()
+    val siteId = session.account.activeSiteIds.firstOrNull().orEmpty()
+    val sessions by remember(siteId) { repository.dao.observeCashSessions(siteId) }.collectAsState(initial = emptyList())
+    val sales by remember(siteId) { repository.dao.observeSales(siteId) }.collectAsState(initial = emptyList())
+    val pendingOutbox by repository.dao.observePendingOutboxCount().collectAsState(initial = 0)
+    val openSession = sessions.firstOrNull { it.status == "open" }
+
+    var registerId by rememberSaveable { mutableStateOf("") }
+    var registerName by rememberSaveable { mutableStateOf("Caisse principale") }
+    var openingFloat by rememberSaveable { mutableStateOf("0") }
+    var saleDescription by rememberSaveable { mutableStateOf("") }
+    var saleTotal by rememberSaveable { mutableStateOf("") }
+    var paymentMethod by rememberSaveable { mutableStateOf("cash") }
+    var expenseCategory by rememberSaveable { mutableStateOf("") }
+    var expenseDescription by rememberSaveable { mutableStateOf("") }
+    var expenseAmount by rememberSaveable { mutableStateOf("") }
+    var countedClose by rememberSaveable { mutableStateOf("") }
+    var varianceReason by rememberSaveable { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.cash_local_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.cash_local_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(stringResource(R.string.outbox_pending_count, pendingOutbox), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
+        }
+        if (openSession == null) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(stringResource(R.string.cash_open_session_title), fontWeight = FontWeight.Bold)
+                        OutlinedTextField(registerId, { registerId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.cash_register_id)) }, singleLine = true)
+                        OutlinedTextField(registerName, { registerName = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.cash_register_name)) }, singleLine = true)
+                        OutlinedTextField(openingFloat, { openingFloat = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.cash_opening_float)) }, singleLine = true)
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    error = null
+                                    runCatching {
+                                        repository.openCashSession(siteId, registerId, registerName, openingFloat.toLongOrNull() ?: 0L, session.account.memberId)
+                                    }.onSuccess { notice = "Caisse ouverte localement : " + it.id }
+                                        .onFailure { error = it.message ?: "Ouverture de caisse impossible." }
+                                    busy = false
+                                }
+                            },
+                            enabled = !busy && siteId.isNotBlank() && registerId.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(stringResource(R.string.open_cash_session)) }
+                    }
+                }
+            }
+        } else {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(stringResource(R.string.cash_session_open, openSession.registerName), fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.cash_opening_amount_xaf, openSession.openingFloatXaf))
+                        OutlinedTextField(saleDescription, { saleDescription = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.sale_description)) }, singleLine = true)
+                        OutlinedTextField(saleTotal, { saleTotal = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.sale_total_xaf)) }, singleLine = true)
+                        OutlinedTextField(paymentMethod, { paymentMethod = it.trim().lowercase() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.payment_method_cash_or_momo)) }, singleLine = true)
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    error = null
+                                    runCatching {
+                                        repository.recordSale(siteId, openSession.id, saleDescription, saleTotal.toLong(), paymentMethod, session.account.memberId)
+                                    }.onSuccess { pair ->
+                                        saleDescription = ""
+                                        saleTotal = ""
+                                        notice = if (pair.second.status == "pending") "Paiement Mobile Money en attente de confirmation serveur." else "Encaissement espèces enregistré localement."
+                                    }.onFailure { error = it.message ?: "Vente impossible." }
+                                    busy = false
+                                }
+                            },
+                            enabled = !busy && saleDescription.isNotBlank() && (saleTotal.toLongOrNull() ?: 0L) > 0 && paymentMethod in setOf("cash", "mobile_money"),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(stringResource(R.string.record_sale_local)) }
+                        Divider()
+                        Text(stringResource(R.string.cash_expense_title), fontWeight = FontWeight.Bold)
+                        OutlinedTextField(expenseCategory, { expenseCategory = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.expense_category)) }, singleLine = true)
+                        OutlinedTextField(expenseDescription, { expenseDescription = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.expense_description)) }, singleLine = true)
+                        OutlinedTextField(expenseAmount, { expenseAmount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.expense_amount_xaf)) }, singleLine = true)
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    error = null
+                                    runCatching {
+                                        repository.addExpense(siteId, openSession.id, expenseCategory, expenseDescription, expenseAmount.toLong(), session.account.memberId)
+                                    }.onSuccess { expenseCategory = ""; expenseDescription = ""; expenseAmount = ""; notice = "Dépense ajoutée à la file locale." }
+                                        .onFailure { error = it.message ?: "Dépense impossible." }
+                                    busy = false
+                                }
+                            },
+                            enabled = !busy && expenseCategory.isNotBlank() && expenseDescription.isNotBlank() && (expenseAmount.toLongOrNull() ?: 0L) > 0,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(stringResource(R.string.record_expense_local)) }
+                        Divider()
+                        Text(stringResource(R.string.cash_close_title), fontWeight = FontWeight.Bold)
+                        OutlinedTextField(countedClose, { countedClose = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.cash_counted_amount)) }, singleLine = true)
+                        OutlinedTextField(varianceReason, { varianceReason = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.cash_variance_reason)) }, minLines = 2)
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    error = null
+                                    runCatching {
+                                        repository.closeCashSession(openSession.id, countedClose.toLong(), varianceReason, session.account.memberId)
+                                    }.onSuccess { notice = "Clôture locale terminée. Écart : " + (it.varianceXaf ?: 0L) + " FCFA." }
+                                        .onFailure { error = it.message ?: "Clôture impossible." }
+                                    busy = false
+                                }
+                            },
+                            enabled = !busy && (countedClose.toLongOrNull() ?: -1L) >= 0,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(stringResource(R.string.close_cash_session)) }
+                    }
+                }
+            }
+        }
+        if (!error.isNullOrBlank()) item { Text(error!!, color = MaterialTheme.colorScheme.error) }
+        if (!notice.isNullOrBlank()) item { Text(notice!!, color = MaterialTheme.colorScheme.secondary) }
+        item { Text(stringResource(R.string.local_sales), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (sales.isEmpty()) item { Text(stringResource(R.string.no_local_sales), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        else items(sales) { sale ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(sale.description, fontWeight = FontWeight.Bold)
+                        Text(sale.saleNumber + " · " + sale.status, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text(sale.totalXaf.toString() + " F")
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun OrganizationModeContent(
