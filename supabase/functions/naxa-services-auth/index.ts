@@ -252,6 +252,261 @@ async function logout(token: string) {
   return { status: 200, body: { signed_out: true } };
 }
 
+
+function secureRandom(length: number) {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+}
+function temporaryPassword() {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%";
+  const bytes = crypto.getRandomValues(new Uint8Array(20));
+  const chars = Array.from(bytes, (b) => alphabet[b % alphabet.length]);
+  chars[0] = "N";
+  chars[1] = "a";
+  chars[2] = "7";
+  chars[3] = "!";
+  return chars.join("");
+}
+async function actorContext(token: string) {
+  const auth = await authCall("user", { method: "GET" }, token);
+  if (!auth.ok || !auth.data.id) return null;
+  const account = await accountByAuthUser(String(auth.data.id));
+  if (!account || account.status !== "active") return null;
+  const member = await activeMember(String(account.id));
+  if (!member) return null;
+  const scopes = await rest(
+    "ns_member_scopes?select=scope_type,scope_id,site_id,workstation_id,can_read,can_operate,can_manage&member_id=eq." +
+      encodeURIComponent(String(member.id)) + "&org_id=eq." + encodeURIComponent(String(member.org_id)),
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  return { authUserId: String(auth.data.id), account, member, scopes: scopes ?? [] };
+}
+function actorCanManageSite(actor: NonNullable<Awaited<ReturnType<typeof actorContext>>>, siteId: string) {
+  if (actor.member.role_code === "promoter") return true;
+  return actor.scopes.some((s) =>
+    s.can_manage === true &&
+    ((s.scope_type === "organization") ||
+      ((s.scope_type === "site" || s.scope_type === "workstation") && String(s.site_id) === siteId))
+  );
+}
+async function adminCreateAuthUser(alias: string, password: string) {
+  const res = await fetch(SUPABASE_URL + "/auth/v1/admin/users", {
+    method: "POST",
+    headers: serviceHeaders(),
+    body: JSON.stringify({
+      email: alias,
+      password,
+      email_confirm: true,
+      app_metadata: { app_code: "naxa-services" },
+      user_metadata: { app_code: "naxa-services", password_change_required: true },
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.id) throw new Error("AUTH_PROVISION_FAILED");
+  return String(data.id);
+}
+async function adminDeleteAuthUser(userId: string) {
+  await fetch(SUPABASE_URL + "/auth/v1/admin/users/" + encodeURIComponent(userId), {
+    method: "DELETE",
+    headers: serviceHeaders(),
+  });
+}
+async function adminSetPassword(userId: string, password: string) {
+  const res = await fetch(SUPABASE_URL + "/auth/v1/admin/users/" + encodeURIComponent(userId), {
+    method: "PUT",
+    headers: serviceHeaders(),
+    body: JSON.stringify({ password, user_metadata: { app_code: "naxa-services", password_change_required: true } }),
+  });
+  if (!res.ok) throw new Error("AUTH_RESET_FAILED");
+}
+async function auditAction(orgId: string, actorUserId: string, actorMemberId: string, action: string, objectType: string, objectId: string, reason: string) {
+  await rest("ns_audit_events", {
+    method: "POST",
+    headers: serviceHeaders({ Prefer: "return=minimal" }),
+    body: JSON.stringify({
+      org_id: orgId,
+      actor_auth_user_id: actorUserId,
+      actor_member_id: actorMemberId,
+      action_code: action,
+      object_type: objectType,
+      object_id: objectId,
+      reason,
+      metadata_redacted: { app_code: "naxa-services" },
+    }),
+  });
+}
+
+async function provisionMember(body: Record<string, unknown>, token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  const aliasDomain = (Deno.env.get("NS_AUTH_ALIAS_DOMAIN") ?? "").trim().toLowerCase();
+  if (!aliasDomain || aliasDomain.includes("@") || aliasDomain.includes("/") || aliasDomain.includes(" ")) {
+    return { status: 503, body: { message: "Le domaine d'alias Auth attend sa preuve technique locale." } };
+  }
+
+  const role = String(body.role_code ?? "");
+  const siteScopes = Array.isArray(body.scopes) ? body.scopes as Record<string, unknown>[] : [];
+  const name = String(body.display_name ?? "").trim().slice(0, 120);
+  const contactPhone = String(body.contact_phone ?? "").trim().slice(0, 32);
+  if (!name || !siteScopes.length || siteScopes.length > 20) {
+    return { status: 400, body: { message: "Nom et périmètre d'affectation requis." } };
+  }
+
+  const promoterRoles = ["network_manager", "site_manager", "workstation_manager", "cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant"];
+  const networkRoles = ["site_manager", "workstation_manager", "cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant"];
+  const siteRoles = ["workstation_manager", "cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant"];
+  const allowed = actor.member.role_code === "promoter" ? promoterRoles
+    : actor.member.role_code === "network_manager" ? networkRoles
+    : actor.member.role_code === "site_manager" ? siteRoles : [];
+  if (!allowed.includes(role)) return { status: 403, body: { message: "Tu n'as pas le droit de créer ce rôle." } };
+
+  const normalizedScopes: Record<string, unknown>[] = [];
+  for (const scope of siteScopes) {
+    const scopeType = String(scope.scope_type ?? "");
+    const siteId = String(scope.site_id ?? "");
+    if (!siteId || !actorCanManageSite(actor, siteId)) return { status: 403, body: { message: "Périmètre d'affectation non autorisé." } };
+    const siteRows = await rest("ns_sites?select=id&org_id=eq." + encodeURIComponent(String(actor.member.org_id)) + "&id=eq." + encodeURIComponent(siteId) + "&limit=1", { headers: serviceHeaders() }) as Record<string, unknown>[];
+    if (!siteRows?.length) return { status: 400, body: { message: "Point de vente invalide." } };
+    if (scopeType === "workstation") {
+      const workstationId = String(scope.workstation_id ?? "");
+      const workstationRows = await rest("ns_workstations?select=id&org_id=eq." + encodeURIComponent(String(actor.member.org_id)) + "&site_id=eq." + encodeURIComponent(siteId) + "&id=eq." + encodeURIComponent(workstationId) + "&limit=1", { headers: serviceHeaders() }) as Record<string, unknown>[];
+      if (!workstationRows?.length) return { status: 400, body: { message: "Emplacement invalide." } };
+      normalizedScopes.push({ org_id: actor.member.org_id, scope_type: "workstation", scope_id: workstationId, site_id: siteId, workstation_id: workstationId, can_read: true, can_operate: true, can_manage: role === "workstation_manager" });
+    } else if (scopeType === "site") {
+      normalizedScopes.push({ org_id: actor.member.org_id, scope_type: "site", scope_id: siteId, site_id: siteId, can_read: true, can_operate: true, can_manage: ["network_manager", "site_manager"].includes(role) });
+    } else {
+      return { status: 400, body: { message: "Type de périmètre non valide." } };
+    }
+  }
+
+  let loginId = "";
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const number = Array.from(crypto.getRandomValues(new Uint8Array(4))).reduce((n, b) => (n * 256 + b) % 1000000, 0);
+    loginId = "NS-" + String(number).padStart(6, "0");
+    const exists = await accountByLoginId(loginId);
+    if (!exists) break;
+    loginId = "";
+  }
+  if (!loginId) return { status: 503, body: { message: "Impossible de générer un identifiant disponible." } };
+
+  const password = temporaryPassword();
+  const authAlias = "ns-" + secureRandom(28).toLowerCase() + "@" + aliasDomain;
+  let authUserId = "";
+  try {
+    authUserId = await adminCreateAuthUser(authAlias, password);
+    const accounts = await rest("ns_accounts", {
+      method: "POST",
+      headers: serviceHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify({
+        auth_user_id: authUserId,
+        login_id: loginId,
+        auth_alias: authAlias,
+        status: "active",
+        password_change_required: true,
+      }),
+    }) as Record<string, unknown>[];
+    const account = accounts?.[0];
+    if (!account?.id) throw new Error("ACCOUNT_INSERT_FAILED");
+    const members = await rest("ns_members", {
+      method: "POST",
+      headers: serviceHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify({
+        org_id: actor.member.org_id,
+        account_id: account.id,
+        display_name: name,
+        contact_phone: contactPhone || null,
+        role_code: role,
+        status: "active",
+      }),
+    }) as Record<string, unknown>[];
+    const member = members?.[0];
+    if (!member?.id) throw new Error("MEMBER_INSERT_FAILED");
+    await rest("ns_member_scopes", {
+      method: "POST",
+      headers: serviceHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify(normalizedScopes.map((s) => ({ ...s, member_id: member.id }))),
+    });
+    await auditAction(String(actor.member.org_id), actor.authUserId, String(actor.member.id), "member.provisioned", "member", String(member.id), "Création d'un compte et remise initiale de l'identifiant");
+    return {
+      status: 200,
+      body: {
+        account_created: true,
+        login_id: loginId,
+        temporary_password: password,
+        display_name: name,
+        role_code: role,
+        password_change_required: true,
+        one_time_secret_notice: "Afficher puis remettre en main propre. Ne pas copier dans un canal public. Le serveur ne renverra plus ce mot de passe.",
+      },
+    };
+  } catch (_error) {
+    if (authUserId) await adminDeleteAuthUser(authUserId);
+    return { status: 503, body: { message: "La création du compte n'a pas abouti. Aucune activation n'est confirmée." } };
+  }
+}
+
+async function completeRecovery(body: Record<string, unknown>, token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  if (!["promoter", "network_manager", "site_manager"].includes(String(actor.member.role_code))) {
+    return { status: 403, body: { message: "Réinitialisation non autorisée pour ce rôle." } };
+  }
+  const requestId = String(body.recovery_request_id ?? "");
+  const method = String(body.identity_check_method ?? "").trim().slice(0, 80);
+  const note = String(body.identity_check_note ?? "").trim().slice(0, 500);
+  if (!requestId || !method || note.length < 12) return { status: 400, body: { message: "Méthode et note de vérification d'identité obligatoires." } };
+  const requests = await rest("ns_auth_recovery_requests?select=id,account_id,status&status=eq.pending&id=eq." + encodeURIComponent(requestId) + "&limit=1", { headers: serviceHeaders() }) as Record<string, unknown>[];
+  const recovery = requests?.[0];
+  if (!recovery?.account_id) return { status: 404, body: { message: "Demande introuvable ou déjà traitée." } };
+  const target = await rest("ns_accounts?select=id,auth_user_id,login_id,status& id=eq.".replace(" ", "") + encodeURIComponent(String(recovery.account_id)) + "&limit=1", { headers: serviceHeaders() }) as Record<string, unknown>[];
+  const account = target?.[0];
+  if (!account || account.status !== "active") return { status: 403, body: { message: "Le compte cible n'est pas actif." } };
+  const targetMember = await activeMember(String(account.id));
+  if (!targetMember || targetMember.org_id !== actor.member.org_id) return { status: 403, body: { message: "Périmètre de récupération non autorisé." } };
+  const targetScopes = await rest("ns_member_scopes?select=site_id&member_id=eq." + encodeURIComponent(String(targetMember.id)), { headers: serviceHeaders() }) as Record<string, unknown>[];
+  const canManageTarget = actor.member.role_code === "promoter" || (targetScopes ?? []).some((s) => s.site_id && actorCanManageSite(actor, String(s.site_id)));
+  if (!canManageTarget) return { status: 403, body: { message: "Tu ne peux pas réinitialiser ce compte." } };
+
+  const tempPassword = temporaryPassword();
+  await adminSetPassword(String(account.auth_user_id), tempPassword);
+  await rest("ns_accounts?id=eq." + encodeURIComponent(String(account.id)), {
+    method: "PATCH",
+    headers: serviceHeaders({ Prefer: "return=minimal" }),
+    body: JSON.stringify({ password_change_required: true }),
+  });
+  await rest("ns_devices?account_id=eq." + encodeURIComponent(String(account.id)), {
+    method: "PATCH",
+    headers: serviceHeaders({ Prefer: "return=minimal" }),
+    body: JSON.stringify({ revoked_at: new Date().toISOString(), remember_device: false }),
+  });
+  await rest("ns_auth_recovery_requests?id=eq." + encodeURIComponent(requestId), {
+    method: "PATCH",
+    headers: serviceHeaders({ Prefer: "return=minimal" }),
+    body: JSON.stringify({ status: "completed", identity_check_method: method, identity_check_note: note, assigned_to: actor.authUserId, resolved_at: new Date().toISOString() }),
+  });
+  await auditAction(String(actor.member.org_id), actor.authUserId, String(actor.member.id), "account.password_reset", "account", String(account.id), "Contrôle d'identité hors bande : " + method);
+  return { status: 200, body: { login_id: account.login_id, temporary_password: tempPassword, password_change_required: true, revoked_devices: true } };
+}
+
+async function revokeDevice(body: Record<string, unknown>, token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  const targetAccountId = String(body.account_id ?? actor.account.id);
+  const installationId = String(body.installation_id ?? "");
+  if (!installationId) return { status: 400, body: { message: "Appareil non précisé." } };
+  if (targetAccountId !== String(actor.account.id) && !["promoter", "network_manager", "site_manager"].includes(String(actor.member.role_code))) {
+    return { status: 403, body: { message: "Révocation non autorisée." } };
+  }
+  await rest("ns_devices?account_id=eq." + encodeURIComponent(targetAccountId) + "&installation_id=eq." + encodeURIComponent(installationId), {
+    method: "PATCH",
+    headers: serviceHeaders({ Prefer: "return=minimal" }),
+    body: JSON.stringify({ revoked_at: new Date().toISOString(), remember_device: false }),
+  });
+  await auditAction(String(actor.member.org_id), actor.authUserId, String(actor.member.id), "device.revoked", "device", targetAccountId, "Révocation d'un appareil");
+  return { status: 200, body: { revoked: true } };
+}
+
 Deno.serve(async (request: Request) => {
   const origin = request.headers.get("origin");
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": origin && (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes("*")) ? origin : "null", "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Vary": "Origin" } });
@@ -270,6 +525,9 @@ Deno.serve(async (request: Request) => {
     else if (action === "request_recovery") result = await requestRecovery(body);
     else if (action === "change_password") result = await changePassword(body, bearer);
     else if (action === "logout") result = await logout(bearer);
+    else if (action === "provision_member") result = await provisionMember(body, bearer);
+    else if (action === "complete_recovery") result = await completeRecovery(body, bearer);
+    else if (action === "revoke_device") result = await revokeDevice(body, bearer);
     else result = { status: 400, body: { message: "Action non reconnue." } };
 
     return response(result.status, result.body, origin);
