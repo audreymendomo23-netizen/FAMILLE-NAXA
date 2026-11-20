@@ -508,26 +508,42 @@ Les fonctionnalités de sécurité, confidentialité, authentification, protecti
 
 Le vocabulaire, l'architecture et la matrice de droits doivent être validés par application à partir de son cahier des charges et de son modèle réel avant de configurer le catalogue serveur.
 
-### 6.17.2 Catalogue tarifaire de référence — ACCÈS / PREMIUM / ABONNEMENT
+### 6.17.2 Catalogue tarifaire de référence — ACCÈS / PREMIUM / ABONNEMENT et offres spéciales
 
-Les tarifs ci-dessous conservent les montants communiqués par le propriétaire du projet, en FCFA. Pour les applications qui avaient trois prix, le troisième prix — ancien niveau PRO — est supprimé. Les deux premiers montants sont conservés pour ACCÈS et PREMIUM.
+Les montants sont exprimés en FCFA. Les prix ACCÈS et PREMIUM des applications à deux niveaux sont conservés comme précédemment décidés. Les tarifs supprimés ne doivent pas subsister dans les catalogues actifs, les interfaces, les API ou les migrations de données commerciales.
 
 | Application | Formule / tarif à conserver |
 |---|---|
-| KIOSKO | ACCÈS : 2 000 ; PREMIUM : 4 000. Ancien niveau PRO supprimé. |
-| BOOTIK | ACCÈS : 4 000 ; PREMIUM : 10 000. Ancien niveau PRO supprimé. |
-| ZIPPLE | ACCÈS : 5 000 ; PREMIUM : 15 000. Ancien niveau PRO supprimé. |
-| NAXA SERVICES | ACCÈS : 3 000 ; PREMIUM : 7 000. Ancien niveau PRO supprimé. |
-| COTIZ | Intitulé générique **Abonnement** : 500 par membre et par cotisation ; compte Président gratuit jusqu'à 100 membres. Ne créer ni ACCÈS ni PREMIUM. |
-| LOYABLE | ACCÈS : 1 000 par local ; PREMIUM : 4 000 avec caméra de surveillance et mode multisite. Conserver les deux montants et le contenu commercial déjà annoncé. |
-| NAXA HOTEL | ACCÈS : 2 000 par chambre ; PREMIUM : 5 000 par chambre avec caméra de surveillance et mode multisite. Conserver les deux montants et le contenu commercial déjà annoncé. |
+| KIOSKO | ACCÈS : 2 000 ; PREMIUM : 4 000. |
+| BOOTIK | ACCÈS : 4 000 ; PREMIUM : 10 000. |
+| ZIPPLE | ACCÈS : 5 000 ; PREMIUM : 15 000. |
+| NAXA SERVICES | ACCÈS : 3 000 ; PREMIUM : 7 000. |
+| COTIZ | **Abonnement individuel par membre** : chaque membre d'une même cotisation souscrit et règle individuellement 500 par membre et par cotisation. Ce n'est pas un abonnement unique payé au nom du groupe. Le compte Président reste gratuit jusqu'à 100 membres, conformément à la règle déjà décidée. Ne créer ni ACCÈS ni PREMIUM. |
+| LOYABLE | **Abonnement unique : 1 000 par chambre, accès complet.** Aucun pack PREMIUM séparé, aucun tarif à 4 000 et aucun supplément de formule pour la caméra ou le multisite. |
+| NAXA HOTEL | **Abonnement unique : 2 000 par chambre, accès complet.** Aucun pack PREMIUM séparé, aucun tarif à 5 000 et aucun supplément de formule pour la caméra ou le multisite. |
 | NAXA SECURITY | ACCÈS : 5 000 ; PREMIUM : 15 000. Conserver les deux niveaux et les règles d'extensions de capacité déjà arbitrées (+20 % par extension selon la décision existante). |
 | GRILLAD | ACCÈS : 1 500 ; PREMIUM : 3 000. Conserver les deux montants et mapper les architectures d'exploitation réelles sur les capacités de compte unique ou multiniveau. |
-| CAMPUS237 | Établissement gratuit. Côté parent : conserver les deux montants de 1 000 et 3 000 ; les libellés ACCÈS/PREMIUM ne sont appliqués qu'en cohérence avec les deux architectures parentales réellement définies. Ne pas créer de troisième formule ni facturer l'établissement. |
+| CAMPUS237 | Établissement gratuit. Abonnements facturés individuellement à chaque parent : **Pack Individuel : 1 000 par parent pour suivre 1 élève d'une école ; Pack Famille : 3 000 par parent pour suivre jusqu'à 5 élèves**, inscrits dans la même école ou dans plusieurs écoles différentes. Ne pas créer de troisième pack et ne pas facturer les établissements. |
 
-Pour toute autre application ou tout autre modèle qui ne possède qu'un seul prix, afficher **« Abonnement »** sans créer de formule supplémentaire. Les prix unitaires, par membre, par cotisation, par local, par chambre ou par parent ne doivent pas être transformés artificiellement en forfaits à plusieurs paliers.
+#### Règles spécifiques COTIZ
 
-Les tarifs LOYABLE, NAXA HOTEL, NAXA SECURITY, GRILLAD et CAMPUS237 doivent être rattachés à leur architecture réelle et à leurs unités facturables documentées. Aucun changement de montant n'est autorisé par cette mise à jour. Les périodicités qui ne sont pas confirmées restent à vérifier avant activation commerciale ; ne pas supposer qu'une tarification par cotisation ou par unité est mensuelle.
+L'unité facturable est le membre, et non le groupe de tontine ou l'ensemble de la cotisation. Chaque membre rattaché à une même cotisation possède son propre abonnement individuel à 500 FCFA par cotisation. Le statut gratuit du compte Président jusqu'à 100 membres est conservé. La gestion des cotisations par COTIZ ne signifie pas que COTIZ détient ou transfère les fonds des membres.
+
+#### Règles spécifiques LOYABLE et NAXA HOTEL
+
+Chaque application possède un seul abonnement à accès complet, exprimé par chambre au tarif indiqué. Il n'existe pas de distinction commerciale ACCÈS/PREMIUM pour ces deux produits dans le catalogue actuel. La suppression des anciens tarifs renforcés ne doit pas désactiver les fonctions métier, la sécurité ou les capacités multisites incluses dans le périmètre complet de chaque application. Les coûts éventuels d'équipements physiques, d'installation ou de services externes ne sont pas assimilés à un supplément de formule logiciel et nécessitent un traitement distinct s'ils existent.
+
+#### Règles spécifiques CAMPUS237
+
+- Le **Pack Individuel** est attaché à un compte parent et autorise le suivi d'un élève dans une école.
+- Le **Pack Famille** est attaché à un compte parent et autorise le suivi d'un maximum de cinq élèves ; ces élèves peuvent être inscrits dans la même école ou dans plusieurs écoles différentes.
+- La souscription est individuelle par parent. Le fait que deux parents suivent le même élève ne fusionne pas leurs comptes ou abonnements.
+- L'établissement scolaire ne paie aucun abonnement CAMPUS237.
+- Les deux packs parentaux sont les seules offres prévues à ce stade. Aucun pack PRO ou troisième niveau ne doit être ajouté.
+
+Pour toute autre application ou tout autre modèle qui ne possède qu'un seul prix, afficher **« Abonnement »** sans créer de formule supplémentaire. Les prix unitaires, par membre, par cotisation, par chambre ou par parent ne doivent pas être transformés artificiellement en forfaits à plusieurs paliers.
+
+Les périodicités qui ne sont pas explicitement confirmées restent à vérifier avant activation commerciale ; ne pas supposer qu'une tarification par cotisation ou par unité est mensuelle.
 
 ### 6.17.3 Règles d'abonnement déjà communiquées
 
