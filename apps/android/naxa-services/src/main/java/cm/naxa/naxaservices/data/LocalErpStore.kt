@@ -799,8 +799,22 @@ interface NaxaServicesDao {
     @Query("SELECT COALESCE(SUM(totalXaf), 0) FROM local_sales WHERE orgId = :orgId AND siteId = :siteId AND status = 'confirmed' AND createdAtMillis BETWEEN :fromMillis AND :toMillis")
     fun observeSalesTotal(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Long>
 
-    @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_expenses WHERE orgId = :orgId AND siteId = :siteId AND createdAtMillis BETWEEN :fromMillis AND :toMillis")
+    // Supplier debt settlement is a cash outflow, not a second operating expense.
+    // Keep it in sessionExpensesTotal() for cash reconciliation, but exclude it from P&L-style reports.
+    @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_expenses WHERE orgId = :orgId AND siteId = :siteId AND category <> 'supplier_payment' AND createdAtMillis BETWEEN :fromMillis AND :toMillis")
     fun observeExpensesTotal(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Long>
+
+    @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_supplier_payments WHERE orgId = :orgId AND siteId = :siteId AND paidAtMillis BETWEEN :fromMillis AND :toMillis")
+    fun observeSupplierPaymentsTotal(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Long>
+
+    @Query("SELECT COUNT(*) FROM local_sales WHERE orgId = :orgId AND siteId = :siteId AND status = 'confirmed' AND createdAtMillis BETWEEN :fromMillis AND :toMillis")
+    fun observeConfirmedSalesCount(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Int>
+
+    @Query("SELECT COALESCE(SUM(costOfGoodsXaf), 0) FROM local_sales WHERE orgId = :orgId AND siteId = :siteId AND status = 'confirmed' AND costSnapshotComplete = 1 AND createdAtMillis BETWEEN :fromMillis AND :toMillis")
+    fun observeCostOfGoodsTotal(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Long>
+
+    @Query("SELECT COUNT(*) FROM local_sales WHERE orgId = :orgId AND siteId = :siteId AND status = 'confirmed' AND costSnapshotComplete = 0 AND createdAtMillis BETWEEN :fromMillis AND :toMillis")
+    fun observeUncostedSalesCount(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Int>
 
     @Query("SELECT COUNT(*) FROM local_appointments WHERE orgId = :orgId AND siteId = :siteId AND startsAtMillis BETWEEN :fromMillis AND :toMillis AND status <> 'cancelled'")
     fun observeAppointmentCount(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Int>

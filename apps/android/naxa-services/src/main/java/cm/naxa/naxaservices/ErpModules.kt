@@ -1322,9 +1322,18 @@ private data class SiteDailyReport(
     val siteId: String,
     val salesXaf: Long,
     val expensesXaf: Long,
+    val supplierPaymentsXaf: Long,
+    val costOfGoodsXaf: Long,
+    val confirmedSalesCount: Int,
+    val uncostedSalesCount: Int,
     val appointments: Int,
     val pressingTickets: Int
-)
+) {
+    val grossProfitXaf: Long?
+        get() = if (confirmedSalesCount > 0 && uncostedSalesCount == 0) salesXaf - costOfGoodsXaf else null
+    val operatingResultXaf: Long?
+        get() = grossProfitXaf?.minus(expensesXaf)
+}
 
 @Composable
 fun ReportsContent(
@@ -1342,7 +1351,7 @@ fun ReportsContent(
         scope.launch {
             busy = true; error = null
             runCatching {
-                val start = Calendar.getInstance().apply {
+                val start = Calendar.getInstance(java.util.TimeZone.getTimeZone("Africa/Douala")).apply {
                     set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
                 }.timeInMillis
                 val end = start + 24L * 60L * 60L * 1000L - 1L
@@ -1351,6 +1360,10 @@ fun ReportsContent(
                         siteId = siteId,
                         salesXaf = repository.dao.observeSalesTotal(session.account.organizationId, siteId, start, end).first(),
                         expensesXaf = repository.dao.observeExpensesTotal(session.account.organizationId, siteId, start, end).first(),
+                        supplierPaymentsXaf = repository.dao.observeSupplierPaymentsTotal(session.account.organizationId, siteId, start, end).first(),
+                        costOfGoodsXaf = repository.dao.observeCostOfGoodsTotal(session.account.organizationId, siteId, start, end).first(),
+                        confirmedSalesCount = repository.dao.observeConfirmedSalesCount(session.account.organizationId, siteId, start, end).first(),
+                        uncostedSalesCount = repository.dao.observeUncostedSalesCount(session.account.organizationId, siteId, start, end).first(),
                         appointments = repository.dao.observeAppointmentCount(session.account.organizationId, siteId, start, end).first(),
                         pressingTickets = repository.dao.observePressingCount(session.account.organizationId, siteId, start, end).first()
                     )
@@ -1366,6 +1379,12 @@ fun ReportsContent(
     LaunchedEffect(session.account.memberId) { refresh() }
     val totalSales = rows.sumOf { it.salesXaf }
     val totalExpenses = rows.sumOf { it.expensesXaf }
+    val totalSupplierPayments = rows.sumOf { it.supplierPaymentsXaf }
+    val totalCostOfGoods = rows.sumOf { it.costOfGoodsXaf }
+    val totalConfirmedSales = rows.sumOf { it.confirmedSalesCount }
+    val totalUncostedSales = rows.sumOf { it.uncostedSalesCount }
+    val grossProfit = if (totalConfirmedSales > 0 && totalUncostedSales == 0) totalSales - totalCostOfGoods else null
+    val operatingResult = grossProfit?.minus(totalExpenses)
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
@@ -1381,10 +1400,13 @@ fun ReportsContent(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text("Consolidation indicative des points autorisés", fontWeight = FontWeight.Bold)
-                    Text("Recettes confirmées : " + totalSales + " FCFA")
-                    Text("Dépenses : " + totalExpenses + " FCFA")
-                    Text("Solde indicatif : " + (totalSales - totalExpenses) + " FCFA", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    Text("Les caisses, stocks et équipes restent séparés dans les détails ci-dessous.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Chiffre d'affaires confirmé : " + totalSales + " FCFA")
+                    Text("Coût des ventes connu : " + totalCostOfGoods + " FCFA")
+                    Text("Charges d'exploitation enregistrées : " + totalExpenses + " FCFA")
+                    Text("Marge brute : " + (grossProfit?.let { "$it FCFA" } ?: "non calculable : au moins une vente n'a pas de coût direct documenté"))
+                    Text("Résultat opérationnel indicatif : " + (operatingResult?.let { "$it FCFA" } ?: "non déterminable avec les coûts directs manquants"))
+                    Text("Règlements fournisseurs : " + totalSupplierPayments + " FCFA · sortie de dette, pas une charge supplémentaire")
+                    Text("Les règlements fournisseurs restent inclus dans la clôture de caisse lorsqu'ils sont en espèces, mais séparés du résultat. Les caisses, stocks et équipes restent détaillés ci-dessous.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -1392,8 +1414,12 @@ fun ReportsContent(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(row.siteId, fontWeight = FontWeight.Bold)
-                    Text("Recettes confirmées : " + row.salesXaf + " FCFA")
-                    Text("Dépenses : " + row.expensesXaf + " FCFA")
+                    Text("CA confirmé : " + row.salesXaf + " FCFA")
+                    Text("Coût des ventes connu : " + row.costOfGoodsXaf + " FCFA")
+                    Text("Charges d'exploitation : " + row.expensesXaf + " FCFA")
+                    Text("Marge brute : " + (row.grossProfitXaf?.let { "$it FCFA" } ?: "non calculable : coût direct incomplet"))
+                    Text("Résultat opérationnel indicatif : " + (row.operatingResultXaf?.let { "$it FCFA" } ?: "non déterminable"))
+                    Text("Règlements fournisseurs : " + row.supplierPaymentsXaf + " FCFA · hors charges d'exploitation")
                     Text("Rendez-vous : " + row.appointments + " · Tickets pressing : " + row.pressingTickets)
                 }
             }
