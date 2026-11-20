@@ -1,5 +1,12 @@
 package cm.naxa.naxaservices
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -822,6 +829,9 @@ fun SettingsContent(
     lightTheme: Boolean,
     onTheme: () -> Unit
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var permissionGranted by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> permissionGranted = granted }
     val pending by repository.dao.observePendingOutboxCount(session.account.organizationId).collectAsState(initial = 0)
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -835,6 +845,20 @@ fun SettingsContent(
                     Text(if (lightTheme) "Thème clair actif" else "Thème sombre actif")
                     OutlinedButton(onClick = onTheme, modifier = Modifier.fillMaxWidth()) { Text("Basculer le thème") }
                     Text("Langue : Français / English — les ressources de l’application sont disponibles dans les deux langues.")
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Notifications du téléphone", fontWeight = FontWeight.Bold)
+                    Text(if (permissionGranted) "Notifications autorisées sur cet appareil." else "Les rappels locaux sont programmés, mais Android n’autorise pas encore leur affichage.")
+                    if (Build.VERSION.SDK_INT >= 33 && !permissionGranted) {
+                        Button(onClick = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Autoriser les notifications")
+                        }
+                    }
+                    Text("Briefings locaux programmés : 07:00 et 19:00. Les notifications push distantes nécessitent le raccord FCM serveur.")
                 }
             }
         }

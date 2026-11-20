@@ -88,6 +88,8 @@ import cm.naxa.naxaservices.auth.SessionVault
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import java.util.Calendar
+import cm.naxa.core.notifications.NotificationChannels
+import cm.naxa.core.notifications.BriefingScheduler
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -179,6 +181,23 @@ private fun NaxaServicesRoot() {
     }
 
     LaunchedEffect(Unit) {
+        NotificationChannels.create(context)
+        val notificationIcon = R.drawable.naxa_services_monogram
+        BriefingScheduler.schedule(
+            context, 7, 0,
+            "NAXA SERVICES — Briefing du matin",
+            "Ouvre ton tableau de bord pour consulter les opérations, rendez-vous, stocks et objectifs.",
+            notificationIcon, NotificationChannels.OPERATIONS
+        )
+        BriefingScheduler.schedule(
+            context, 19, 0,
+            "NAXA SERVICES — Briefing du soir",
+            "Vérifie les ventes, la caisse, les dossiers à livrer et les tâches du lendemain.",
+            notificationIcon, NotificationChannels.OPERATIONS
+        )
+    }
+
+    LaunchedEffect(Unit) {
         while (true) {
             lightTheme = preferences.isLightNow()
             delay(60_000L)
@@ -235,11 +254,17 @@ private fun NaxaServicesRoot() {
             busy = true
             message = null
             runCatching { api.login(identifier, password, rememberMe) }
-                .onSuccess {
-                    session = it
+                .onSuccess { authenticated ->
+                    val selectedLocale = preferences.memberLocale(authenticated.account.memberId) ?: locale
+                    val withLocale = authenticated.copy(account = authenticated.account.copy(defaultLocale = selectedLocale))
+                    if (preferences.memberLocale(authenticated.account.memberId) == null) {
+                        runCatching { api.setMemberPreferredLocale(authenticated.accessToken, selectedLocale) }
+                            .onSuccess { preferences.saveMemberLocale(authenticated.account.memberId, selectedLocale) }
+                    }
+                    session = withLocale
                     rememberSession = rememberMe
-                    if (rememberMe) vault.save(it) else vault.clear()
-                    route = if (it.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else routeAfterAuthentication(it)
+                    if (rememberMe) vault.save(withLocale) else vault.clear()
+                    route = if (withLocale.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else routeAfterAuthentication(withLocale)
                 }
                 .onFailure { message = it.message ?: "Connexion impossible." }
             busy = false
