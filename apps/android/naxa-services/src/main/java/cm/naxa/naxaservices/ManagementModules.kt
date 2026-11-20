@@ -346,7 +346,6 @@ fun SubscriptionsContent(modifier: Modifier, repository: NaxaServicesLocalReposi
 
 
 @Composable
-@Composable
 fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val scope = rememberCoroutineScope()
     val fr = session.account.defaultLocale != "en"
@@ -847,7 +846,6 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
 }
 
 @Composable
-@Composable
 private fun PerformanceProjectionCard(title: String, period: PeriodProjection) {
     val delta = period.projectedXaf - period.comparablePreviousXaf
     val comparison = if (period.comparablePreviousXaf > 0L) {
@@ -879,6 +877,7 @@ private fun PerformanceProjectionCard(title: String, period: PeriodProjection) {
     }
 }
 
+@Composable
 fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val orgId = session.account.organizationId
     val siteIds = session.account.activeSiteIds
