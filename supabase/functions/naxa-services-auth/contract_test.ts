@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { isNaxaBusinessMode, nativeSiteIdsForScopes } from "./scope_contract.ts";
+import { isNaxaActivityProfile, isNaxaBusinessMode, nativeSiteIdsForScopes } from "./scope_contract.ts";
 
 // Pure contract checks. Integration tests require an ephemeral Supabase project
 // with a proven internal Auth alias format and seeded NAXA Services identities.
@@ -47,4 +47,12 @@ Deno.test("a workstation-only assignment is not widened to whole-site access", (
     nativeSiteIdsForScopes([{ scope_type: "workstation", site_id: "site-a", workstation_id: "chair-1" }]),
     [],
   );
+});
+
+Deno.test("NAXA Services activity profiles accept the supported catalog and reject unknown profiles", () => {
+  for (const profile of ["pressing","coiffure","couture","beaute","parfumerie","reparation","menuiserie","garage","nettoyage","domicile","impression","photo_evenementiel","autre"]) {
+    assertEquals(isNaxaActivityProfile(profile), true);
+  }
+  assertEquals(isNaxaActivityProfile("pharmacy"), false);
+  assertEquals(isNaxaActivityProfile(""), false);
 });

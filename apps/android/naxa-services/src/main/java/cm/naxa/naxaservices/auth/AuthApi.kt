@@ -30,7 +30,11 @@ data class AuthAccount(
     val businessMode: String,
     val defaultLocale: String,
     val activeSiteIds: List<String>,
-    val activeSites: List<AuthSite>
+    val activeSites: List<AuthSite>,
+    val activityProfile: String? = null,
+    val acceptedLegalDocs: Set<String> = emptySet(),
+    val discoveryCompleted: Boolean = false,
+    val tourCompleted: Boolean = false
 )
 
 data class AuthSession(
@@ -122,6 +126,44 @@ class AuthApi(private val context: Context) {
                 .put("display_name", displayName.trim())
                 .put("business_mode", businessMode)
                 .put("default_locale", defaultLocale),
+            accessToken
+        )
+    }
+
+    suspend fun setOrganizationActivityProfile(accessToken: String, activityProfile: String): String {
+        require(NaxaActivityCatalog.find(activityProfile) != null) { "Profil d’activité non reconnu." }
+        val result = request(
+            JSONObject()
+                .put("action", "set_activity_profile")
+                .put("app_code", "naxa-services")
+                .put("activity_profile", activityProfile),
+            accessToken
+        )
+        return result.optString("activity_profile").takeIf { it.isNotBlank() } ?: activityProfile
+    }
+
+    suspend fun acceptLegalDocument(accessToken: String, documentType: String, version: String, locale: String) {
+        require(documentType in setOf("terms", "privacy") && version.matches(Regex("^\\d{4}-\\d{2}-v\\d+$")) && locale in setOf("fr", "en")) {
+            "Référence de document légal invalide."
+        }
+        request(
+            JSONObject()
+                .put("action", "accept_legal_document")
+                .put("app_code", "naxa-services")
+                .put("document_type", documentType)
+                .put("document_version", version)
+                .put("locale", locale),
+            accessToken
+        )
+    }
+
+    suspend fun completeOnboardingStep(accessToken: String, step: String) {
+        require(step in setOf("discovery", "tour")) { "Étape d’intégration invalide." }
+        request(
+            JSONObject()
+                .put("action", "complete_onboarding_step")
+                .put("app_code", "naxa-services")
+                .put("step", step),
             accessToken
         )
     }
@@ -292,7 +334,14 @@ class AuthApi(private val context: Context) {
                 businessMode = account.optString("business_mode").takeIf { it in setOf("solo", "single_site_multi_workstation", "multi_site_network") } ?: "solo",
                 defaultLocale = account.optString("default_locale").takeIf { it in setOf("fr", "en") } ?: "fr",
                 activeSiteIds = siteIds,
-                activeSites = activeSites
+                activeSites = activeSites,
+                activityProfile = account.optString("activity_profile").takeIf { it.isNotBlank() },
+                acceptedLegalDocs = buildSet {
+                    val legal = account.optJSONArray("accepted_legal_documents") ?: JSONArray()
+                    for (i in 0 until legal.length()) add(legal.optString(i))
+                },
+                discoveryCompleted = account.optBoolean("discovery_completed", false),
+                tourCompleted = account.optBoolean("tour_completed", false)
             )
         ).also {
             if (it.accessToken.isBlank() || it.refreshToken.isBlank()) {

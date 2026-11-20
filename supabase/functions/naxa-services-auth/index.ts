@@ -1,4 +1,4 @@
-import { isNaxaBusinessMode, nativeSiteIdsForScopes } from "./scope_contract.ts";
+import { isNaxaActivityProfile, isNaxaBusinessMode, nativeSiteIdsForScopes } from "./scope_contract.ts";
 // NAXA SERVICES authentication gateway — source only, NOT deployed.
 // Required server-side secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
 // Never set SUPABASE_SERVICE_ROLE_KEY in Android/Web build variables.
@@ -62,7 +62,7 @@ async function accountByAuthUser(authUserId: string) {
   return rows?.[0] ?? null;
 }
 async function activeMember(accountId: string) {
-  const q = "ns_members?select=id,org_id,display_name,role_code,status&account_id=eq." + encodeURIComponent(accountId) + "&status=eq.active&limit=2";
+  const q = "ns_members?select=id,org_id,display_name,role_code,status,discovery_completed_at,tour_completed_at&account_id=eq." + encodeURIComponent(accountId) + "&status=eq.active&limit=2";
   const rows = await rest(q, { headers: serviceHeaders() }) as Record<string, unknown>[];
   if (!rows || rows.length !== 1) return null;
   return rows[0];
@@ -101,11 +101,19 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
   // Return only active site records; never expose inactive or workstation-only scopes.
   const sites = activeSites.map((site) => site.id);
   const organizationRows = await rest(
-    "ns_organizations?select=display_name,business_mode,default_locale&id=eq." +
+    "ns_organizations?select=display_name,business_mode,default_locale,activity_profile&id=eq." +
       encodeURIComponent(String(member.org_id)) + "&status=eq.active&limit=1",
     { headers: serviceHeaders() },
   ) as Record<string, unknown>[];
   const organization = organizationRows?.[0] ?? {};
+  const legalRows = await rest(
+    "ns_legal_acceptances?select=document_type,document_version&member_id=eq." +
+      encodeURIComponent(String(member.id)),
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  const acceptedLegalDocuments = (legalRows ?? []).map((item) =>
+    String(item.document_type) + ":" + String(item.document_version)
+  );
   return {
     access_token: authData.access_token,
     refresh_token: authData.refresh_token,
@@ -120,6 +128,10 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
       organization_name: organization.display_name ?? "",
       business_mode: organization.business_mode ?? "solo",
       default_locale: organization.default_locale ?? "fr",
+      activity_profile: organization.activity_profile ?? null,
+      accepted_legal_documents: acceptedLegalDocuments,
+      discovery_completed: Boolean(member.discovery_completed_at),
+      tour_completed: Boolean(member.tour_completed_at),
       active_site_ids: sites,
       active_sites: activeSites,
     },
@@ -511,6 +523,96 @@ async function updateOrganizationProfile(body: Record<string, unknown>, token: s
   return { status: 200, body: { saved: true, business_mode: businessMode, default_locale: defaultLocale } };
 }
 
+async function setOrganizationActivityProfile(body: Record<string, unknown>, token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  const allowed = actor.member.role_code === "promoter" &&
+    actor.scopes.some((scope) => scope.scope_type === "organization" && scope.can_manage === true);
+  if (!allowed) return { status: 403, body: { message: "Le Promoteur doit choisir l’activité principale de l’organisation." } };
+  const activityProfile = String(body.activity_profile ?? "");
+  if (!isNaxaActivityProfile(activityProfile)) return { status: 400, body: { message: "Profil d’activité non reconnu." } };
+  const rows = await rest(
+    "ns_organizations?select=id,activity_profile&id=eq." + encodeURIComponent(String(actor.member.org_id)) + "&status=eq.active&limit=1",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  const organization = rows?.[0];
+  if (!organization) return { status: 404, body: { message: "Organisation introuvable." } };
+  const current = organization.activity_profile;
+  if (current) {
+    if (current === activityProfile) return { status: 200, body: { saved: true, activity_profile: current, already_selected: true } };
+    return { status: 409, body: { message: "L’activité de cette organisation a déjà été choisie. Une modification exige une procédure administrée." } };
+  }
+  await rest(
+    "ns_organizations?id=eq." + encodeURIComponent(String(actor.member.org_id)) + "&activity_profile=is.null",
+    {
+      method: "PATCH",
+      headers: serviceHeaders({ Prefer: "return=representation" }),
+      body: JSON.stringify({
+        activity_profile: activityProfile,
+        activity_profile_selected_at: new Date().toISOString(),
+        activity_profile_selected_by: actor.member.id,
+      }),
+    },
+  );
+  await auditAction(
+    String(actor.member.org_id), actor.authUserId, String(actor.member.id),
+    "organization.activity_profile_selected", "organization", String(actor.member.org_id),
+    "Premier choix du profil d’activité : " + activityProfile,
+  );
+  return { status: 200, body: { saved: true, activity_profile: activityProfile, already_selected: false } };
+}
+
+async function acceptLegalDocument(body: Record<string, unknown>, token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  const documentType = String(body.document_type ?? "");
+  const documentVersion = String(body.document_version ?? "");
+  const locale = String(body.locale ?? "fr");
+  if (!["terms", "privacy"].includes(documentType) || !/^\\d{4}-\\d{2}-v\\d+$/.test(documentVersion) || !["fr", "en"].includes(locale)) {
+    return { status: 400, body: { message: "Acceptation légale invalide." } };
+  }
+  await rest("ns_legal_acceptances?on_conflict=member_id,document_type,document_version", {
+    method: "POST",
+    headers: serviceHeaders({ Prefer: "resolution=ignore-duplicates,return=minimal" }),
+    body: JSON.stringify({
+      org_id: actor.member.org_id,
+      member_id: actor.member.id,
+      document_type: documentType,
+      document_version: documentVersion,
+      locale,
+      accepted_at: new Date().toISOString(),
+    }),
+  });
+  await auditAction(
+    String(actor.member.org_id), actor.authUserId, String(actor.member.id),
+    "legal.document_accepted", "legal_document", documentType + ":" + documentVersion,
+    "Acceptation du document légal " + documentType + " (" + locale + ")",
+  );
+  return { status: 200, body: { saved: true, document_type: documentType, document_version: documentVersion } };
+}
+
+async function completeOnboardingStep(body: Record<string, unknown>, token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  const step = String(body.step ?? "");
+  if (!["discovery", "tour"].includes(step)) return { status: 400, body: { message: "Étape d’intégration invalide." } };
+  const column = step === "discovery" ? "discovery_completed_at" : "tour_completed_at";
+  await rest(
+    "ns_members?id=eq." + encodeURIComponent(String(actor.member.id)) + "&" + column + "=is.null",
+    {
+      method: "PATCH",
+      headers: serviceHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({ [column]: new Date().toISOString() }),
+    },
+  );
+  await auditAction(
+    String(actor.member.org_id), actor.authUserId, String(actor.member.id),
+    "member.onboarding_completed", "member", String(actor.member.id),
+    "Étape de découverte terminée : " + step,
+  );
+  return { status: 200, body: { saved: true, step } };
+}
+
 async function provisionMember(body: Record<string, unknown>, token: string) {
   const actor = await actorContext(token);
   if (!actor) return { status: 401, body: { message: "Session expirée." } };
@@ -770,6 +872,9 @@ Deno.serve(async (request: Request) => {
     else if (action === "logout") result = await logout(body, bearer);
     else if (action === "provision_member") result = await provisionMember(body, bearer);
     else if (action === "update_organization_profile") result = await updateOrganizationProfile(body, bearer);
+    else if (action === "set_activity_profile") result = await setOrganizationActivityProfile(body, bearer);
+    else if (action === "accept_legal_document") result = await acceptLegalDocument(body, bearer);
+    else if (action === "complete_onboarding_step") result = await completeOnboardingStep(body, bearer);
     else if (action === "complete_recovery") result = await completeRecovery(body, bearer);
     else if (action === "revoke_device") result = await revokeDevice(body, bearer);
     else result = { status: 400, body: { message: "Action non reconnue." } };

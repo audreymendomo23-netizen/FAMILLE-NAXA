@@ -9,6 +9,17 @@ const BUSINESS_MODES: readonly NaxaBusinessMode[] = [
   "multi_site_network",
 ];
 
+export const NAXA_ACTIVITY_PROFILES = [
+  "pressing", "coiffure", "couture", "beaute", "parfumerie", "reparation",
+  "menuiserie", "garage", "nettoyage", "domicile", "impression",
+  "photo_evenementiel", "autre",
+] as const;
+export type NaxaActivityProfile = typeof NAXA_ACTIVITY_PROFILES[number];
+
+export function isNaxaActivityProfile(value: string): value is NaxaActivityProfile {
+  return NAXA_ACTIVITY_PROFILES.includes(value as NaxaActivityProfile);
+}
+
 export function isNaxaBusinessMode(value: string): value is NaxaBusinessMode {
   return BUSINESS_MODES.includes(value as NaxaBusinessMode);
 }
