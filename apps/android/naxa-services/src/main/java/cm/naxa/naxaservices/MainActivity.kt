@@ -2,6 +2,7 @@ package cm.naxa.naxaservices
 
 import android.os.Bundle
 import android.content.res.Configuration
+import org.json.JSONObject
 
 import androidx.room.Room
 import androidx.compose.runtime.collectAsState
@@ -1009,6 +1010,7 @@ private fun AgendaLocalContent(
     session: AuthSession
 ) {
     val scope = rememberCoroutineScope()
+    val fr = session.account.defaultLocale != "en"
     var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
     var workstationId by rememberSaveable { mutableStateOf("") }
     var customer by rememberSaveable { mutableStateOf("") }
@@ -1016,29 +1018,51 @@ private fun AgendaLocalContent(
     var duration by rememberSaveable { mutableStateOf("30") }
     var start by rememberSaveable { mutableStateOf(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(System.currentTimeMillis() + 60L * 60L * 1000L))) }
     var deposit by rememberSaveable { mutableStateOf("0") }
+    var waitlistCustomer by rememberSaveable { mutableStateOf("") }
+    var waitlistService by rememberSaveable { mutableStateOf("") }
+    var waitlistPreference by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     val appointments by remember(siteId) { repository.dao.observeAppointments(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    val workstations by remember(siteId) { repository.dao.observeWorkstations(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    val services by remember(siteId) { repository.dao.observeServices(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    val waitlist by remember(siteId) { repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "appointment_waitlist") }.collectAsState(initial = emptyList())
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text(stringResource(R.string.agenda_local_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text(stringResource(R.string.agenda_local_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            AuthorizedSitePicker(session.account.activeSiteIds, siteId, session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }) { siteId = it }
+            ModulePageTitle(
+                if (fr) "Agenda et rendez-vous" else "Calendar and appointments",
+                if (fr) "Créneaux par point de vente, emplacement et prestataire ; rendez-vous, acomptes, annulations et liste d'attente." else "Slots by site, workstation and provider; appointments, deposits, cancellations and waitlist."
+            )
+            AuthorizedSitePicker(session.account.activeSiteIds, siteId, session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }) {
+                siteId = it
+                workstationId = ""
+            }
+            LocalOnlyNotice(if (fr) "Les conflits sont contrôlés sur ce site et cet appareil. Les rappels externes et la synchronisation serveur restent à raccorder." else "Conflicts are checked locally for this site. External reminders and server synchronization remain to be connected.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        workstationId,
-                        { workstationId = it.trim() },
-                        Modifier.fillMaxWidth(),
-                        label = { Text(stringResource(R.string.member_workstation_id_optional)) },
-                        singleLine = true
-                    )
+                    Text(if (fr) "Nouvelle réservation" else "New booking", fontWeight = FontWeight.Bold)
+                    Text(if (fr) "Emplacement / poste de travail" else "Workstation / service location", fontWeight = FontWeight.SemiBold)
+                    OutlinedButton(onClick = { workstationId = "" }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (workstationId.isBlank()) (if (fr) "✓ Aucun emplacement imposé" else "✓ No workstation required") else if (fr) "Aucun emplacement imposé" else "No workstation required")
+                    }
+                    workstations.filter { it.status == "active" }.forEach { workstation ->
+                        OutlinedButton(onClick = { workstationId = workstation.id }, modifier = Modifier.fillMaxWidth()) {
+                            Text((if (workstationId == workstation.id) "✓ " else "") + workstation.name + " · " + workstation.kind)
+                        }
+                    }
                     OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.customer_name)) }, singleLine = true)
                     OutlinedTextField(service, { service = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.service_name)) }, singleLine = true)
+                    services.filter { it.active }.take(20).forEach { item ->
+                        OutlinedButton(
+                            onClick = { service = item.name; duration = (item.durationMinutes ?: 30).toString() },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text((if (service == item.name) "✓ " else "") + item.name + " · " + item.durationMinutes + " min · " + item.priceXaf + " F") }
+                    }
                     OutlinedTextField(start, { start = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.appointment_start_local)) }, singleLine = true)
                     OutlinedTextField(duration, { duration = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.appointment_duration_minutes)) }, singleLine = true)
                     OutlinedTextField(deposit, { deposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.deposit_amount_xaf)) }, singleLine = true)
@@ -1051,9 +1075,9 @@ private fun AgendaLocalContent(
                                 runCatching {
                                     val dateParser = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).apply { isLenient = false }
                                     val startAt = dateParser.parse(start)?.time
-                                        ?: throw IllegalArgumentException("Date/heure invalide. Format attendu : AAAA-MM-JJ HH:MM.")
-                                    val durationMinutes = duration.toLongOrNull() ?: throw IllegalArgumentException("Durée invalide.")
-                                    require(durationMinutes in 5..600) { "La durée doit être comprise entre 5 et 600 minutes." }
+                                        ?: throw IllegalArgumentException(if (fr) "Date/heure invalide. Format attendu : AAAA-MM-JJ HH:MM." else "Invalid date/time. Expected YYYY-MM-DD HH:MM.")
+                                    val durationMinutes = duration.toLongOrNull() ?: throw IllegalArgumentException(if (fr) "Durée invalide." else "Invalid duration.")
+                                    require(durationMinutes in 5..600) { if (fr) "La durée doit être comprise entre 5 et 600 minutes." else "Duration must be between 5 and 600 minutes." }
                                     repository.createAppointment(
                                         orgId = session.account.organizationId,
                                         siteId = siteId,
@@ -1066,30 +1090,136 @@ private fun AgendaLocalContent(
                                         depositXaf = deposit.toLongOrNull() ?: 0L,
                                         actorMemberId = session.account.memberId
                                     )
-                                }.onSuccess { customer = ""; service = ""; deposit = "0" }
-                                    .onFailure { error = it.message ?: "Rendez-vous impossible." }
+                                }.onSuccess {
+                                    customer = ""; service = ""; deposit = "0"
+                                    message = if (fr) "Rendez-vous enregistré — en attente de synchronisation." else "Appointment saved — awaiting synchronization."
+                                }.onFailure { error = it.message ?: if (fr) "Rendez-vous impossible." else "Booking failed." }
                                 busy = false
                             }
                         },
                         enabled = !busy && siteId.isNotBlank() && customer.isNotBlank() && service.isNotBlank(),
                         modifier = Modifier.fillMaxWidth()
                     ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary) else Text(stringResource(R.string.create_appointment)) }
-                    Text(stringResource(R.string.appointment_conflict_local_only), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    if (!message.isNullOrBlank()) Text(message!!, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (fr) "Liste d'attente" else "Waitlist", fontWeight = FontWeight.Bold)
+                    OutlinedTextField(waitlistCustomer, { waitlistCustomer = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Nom du client" else "Customer name") }, singleLine = true)
+                    OutlinedTextField(waitlistService, { waitlistService = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Prestation souhaitée" else "Requested service") }, singleLine = true)
+                    OutlinedTextField(waitlistPreference, { waitlistPreference = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Préférence de date / heure" else "Preferred date / time") }, singleLine = true)
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                runCatching {
+                                    repository.createManagementRecord(
+                                        session.account.organizationId, siteId, "appointment_waitlist",
+                                        "ATT-" + System.currentTimeMillis(), waitlistService, waitlistCustomer,
+                                        0, 0, null, "open",
+                                        JSONObject().put("preferredTime", waitlistPreference.trim()).toString(),
+                                        session.account.memberId
+                                    )
+                                }.onSuccess {
+                                    waitlistCustomer = ""; waitlistService = ""; waitlistPreference = ""
+                                    message = if (fr) "Client ajouté à la liste d'attente." else "Customer added to waitlist."
+                                }.onFailure { error = it.message ?: "Waitlist update failed." }
+                            }
+                        },
+                        enabled = siteId.isNotBlank() && waitlistCustomer.isNotBlank() && waitlistService.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (fr) "Ajouter à la liste d'attente" else "Add to waitlist") }
                 }
             }
         }
         item { Text(stringResource(R.string.appointments_local_list), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         if (appointments.isEmpty()) item { Text(stringResource(R.string.no_local_appointments), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        else items(appointments) { appointment ->
+        items(appointments) { appointment ->
+            val events by remember(appointment.id, siteId) {
+                repository.dao.observeWorkflowEvents(session.account.organizationId, siteId, "appointment", appointment.id)
+            }.collectAsState(initial = emptyList())
+            var reason by rememberSaveable(appointment.id) { mutableStateOf("") }
+            var proposedStart by rememberSaveable(appointment.id) {
+                mutableStateOf(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(appointment.startsAtMillis)))
+            }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
-                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(appointment.customerName, fontWeight = FontWeight.Bold)
                     Text(appointment.serviceName)
                     Text(SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(appointment.startsAtMillis)), color = MaterialTheme.colorScheme.secondary)
                     Text(stringResource(R.string.appointment_local_status, appointment.status), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (appointment.status in setOf("booked", "confirmed")) {
+                        OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Motif de modification obligatoire" else "Reason for change is required") })
+                        val statuses = if (appointment.status == "booked") listOf("confirmed" to (if (fr) "Confirmer" else "Confirm"), "cancelled" to (if (fr) "Annuler" else "Cancel"), "no_show" to (if (fr) "Absent" else "No-show")) else listOf("completed" to (if (fr) "Terminer" else "Complete"), "cancelled" to (if (fr) "Annuler" else "Cancel"), "no_show" to (if (fr) "Absent" else "No-show"))
+                        statuses.forEach { (nextStatus, label) ->
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching {
+                                            repository.transitionAppointmentStatus(session.account.organizationId, siteId, appointment.id, nextStatus, reason, session.account.memberId)
+                                        }.onSuccess { reason = ""; message = if (fr) "Rendez-vous mis à jour et historisé." else "Appointment updated and audited." }
+                                            .onFailure { error = it.message ?: "Appointment update failed." }
+                                    }
+                                },
+                                enabled = reason.trim().length >= 3,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(label) }
+                        }
+                        OutlinedTextField(proposedStart, { proposedStart = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Nouvelle date/heure (AAAA-MM-JJ HH:MM)" else "New date/time (YYYY-MM-DD HH:MM)") }, singleLine = true)
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching {
+                                        val parsed = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).apply { isLenient = false }.parse(proposedStart)?.time
+                                            ?: throw IllegalArgumentException("Invalid date/time")
+                                        repository.rescheduleAppointment(
+                                            session.account.organizationId, siteId, appointment.id,
+                                            parsed, parsed + (appointment.endsAtMillis - appointment.startsAtMillis),
+                                            reason, session.account.memberId
+                                        )
+                                    }.onSuccess { reason = ""; message = if (fr) "Créneau déplacé ; contrôle de conflit effectué." else "Appointment rescheduled after conflict check." }
+                                        .onFailure { error = it.message ?: "Reschedule failed." }
+                                }
+                            },
+                            enabled = reason.trim().length >= 3 && proposedStart.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (fr) "Reprogrammer" else "Reschedule") }
+                    }
+                    events.take(5).forEach { event ->
+                        Text(event.fromStatus + " → " + event.toStatus + " · " + event.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
+        item { Text(if (fr) "Clients en attente" else "Waiting customers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        items(waitlist) { row ->
+            var waitReason by rememberSaveable(row.id) { mutableStateOf("") }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(row.counterparty, fontWeight = FontWeight.Bold)
+                    Text(row.title + " · " + row.status)
+                    OutlinedTextField(waitReason, { waitReason = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Motif de mise à jour" else "Update reason") })
+                    listOf("contacted" to (if (fr) "Client contacté" else "Customer contacted"), "booked" to (if (fr) "Convertir en rendez-vous" else "Convert to booking"), "cancelled" to (if (fr) "Retirer de la liste" else "Remove from waitlist")).forEach { (status, label) ->
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching {
+                                        repository.transitionManagementRecord(session.account.organizationId, siteId, row.id, status, waitReason, session.account.memberId)
+                                    }.onSuccess { waitReason = ""; message = if (fr) "Liste d'attente mise à jour." else "Waitlist updated." }
+                                        .onFailure { error = it.message ?: "Waitlist transition failed." }
+                                }
+                            },
+                            enabled = waitReason.trim().length >= 3,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(label) }
+                    }
+                }
+            }
+        }
+        if (!error.isNullOrBlank()) item { Text(error!!, color = MaterialTheme.colorScheme.error) }
+        if (!message.isNullOrBlank()) item { Text(message!!, color = MaterialTheme.colorScheme.primary) }
     }
 }
 
