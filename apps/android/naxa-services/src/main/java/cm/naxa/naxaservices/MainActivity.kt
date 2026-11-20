@@ -32,6 +32,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -980,7 +982,14 @@ private fun TeamManagementContent(
     val scope = rememberCoroutineScope()
     var name by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
-    var role by rememberSaveable { mutableStateOf("cashier") }
+    val assignableRoles = when (session.account.roleCode) {
+        "promoter" -> listOf("network_manager", "site_manager", "workstation_manager", "cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant")
+        "network_manager" -> listOf("site_manager", "workstation_manager", "cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant")
+        "site_manager" -> listOf("workstation_manager", "cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant")
+        else -> emptyList()
+    }
+    var role by rememberSaveable { mutableStateOf(assignableRoles.firstOrNull() ?: "cashier") }
+    var roleMenuExpanded by remember { mutableStateOf(false) }
     var selectedSiteIds by rememberSaveable { mutableStateOf(session.account.activeSiteIds.take(1)) }
     var workstationId by rememberSaveable { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
@@ -998,7 +1007,29 @@ private fun TeamManagementContent(
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_display_name)) }, singleLine = true)
                     OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_phone_optional)) }, singleLine = true)
-                    OutlinedTextField(role, { role = it.trim().lowercase() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_role_code)) }, singleLine = true)
+                    Box(Modifier.fillMaxWidth()) {
+                        OutlinedButton(
+                            onClick = { roleMenuExpanded = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = assignableRoles.isNotEmpty()
+                        ) {
+                            Text("Rôle à attribuer : " + role.replace('_', ' '))
+                        }
+                        DropdownMenu(
+                            expanded = roleMenuExpanded,
+                            onDismissRequest = { roleMenuExpanded = false }
+                        ) {
+                            assignableRoles.forEach { value ->
+                                DropdownMenuItem(
+                                    text = { Text(value.replace('_', ' ')) },
+                                    onClick = { role = value; roleMenuExpanded = false }
+                                )
+                            }
+                        }
+                    }
+                    if (assignableRoles.isEmpty()) {
+                        Text("Ton rôle ne permet pas de créer des comptes collaborateurs.", color = MaterialTheme.colorScheme.error)
+                    }
                     Text("Affectation aux points de vente autorisés", fontWeight = FontWeight.SemiBold)
                     if (session.account.activeSiteIds.isEmpty()) {
                         Text(stringResource(R.string.no_active_sites), color = MaterialTheme.colorScheme.error)
@@ -1060,7 +1091,7 @@ private fun TeamManagementContent(
                                 busy = false
                             }
                         },
-                        enabled = !busy && name.isNotBlank() && selectedSiteIds.isNotEmpty() && role.isNotBlank() && (workstationId.isBlank() || selectedSiteIds.size == 1),
+                        enabled = !busy && assignableRoles.isNotEmpty() && name.isNotBlank() && selectedSiteIds.isNotEmpty() && role in assignableRoles && (workstationId.isBlank() || selectedSiteIds.size == 1),
                         modifier = Modifier.fillMaxWidth().height(52.dp)
                     ) {
                         if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
