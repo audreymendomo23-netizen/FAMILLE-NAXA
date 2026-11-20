@@ -478,6 +478,10 @@ private fun NaxaServicesRoot() {
                                         }
                                     },
                                     activityProfile = current.account.activityProfile,
+                                    onSessionUpdated = { updated ->
+                                        session = updated
+                                        if (rememberSession) vault.save(updated)
+                                    },
                                     tourActive = tourActive,
                                     tourStep = tourStep,
                                     onTourNext = {
@@ -773,6 +777,7 @@ private fun ErpScreen(
     onAppearanceChanged: (Boolean) -> Unit,
     onLocale: (String) -> Unit,
     activityProfile: String?,
+    onSessionUpdated: (AuthSession) -> Unit,
     tourActive: Boolean,
     tourStep: Int,
     onTourNext: () -> Unit,
@@ -836,7 +841,7 @@ private fun ErpScreen(
         } else if (route == AppRoute.REPORTS) {
             ReportsContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.ORGANIZATION || route == AppRoute.NETWORK || route == AppRoute.SITES || route == AppRoute.WORKSTATIONS) {
-            OrganizationWorkspaceContent(Modifier.padding(padding), route, localRepository, authApi, activeSession)
+            OrganizationWorkspaceContent(Modifier.padding(padding), route, localRepository, authApi, activeSession, onSessionUpdated)
         } else if (route == AppRoute.HELP) {
             SupportContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.LIVECHAT) {

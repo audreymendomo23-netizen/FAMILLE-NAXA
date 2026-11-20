@@ -490,7 +490,8 @@ internal fun OrganizationWorkspaceContent(
     route: AppRoute,
     repository: NaxaServicesLocalRepository,
     api: AuthApi,
-    session: AuthSession
+    session: AuthSession,
+    onSessionUpdated: (AuthSession) -> Unit
 ) {
     val scope = rememberCoroutineScope()
     val orgId = session.account.organizationId
@@ -527,6 +528,22 @@ internal fun OrganizationWorkspaceContent(
     }
 
     val workstations by remember(selectedSite) { repository.dao.observeWorkstations(orgId, selectedSite) }.collectAsState(initial = emptyList())
+    LaunchedEffect(route, selectedSite, session.accessToken, session.account.memberId) {
+        if (route == AppRoute.WORKSTATIONS && selectedSite in session.account.activeSiteIds) {
+            runCatching { api.listWorkstations(session.accessToken, selectedSite) }
+                .onSuccess { serverRows ->
+                    serverRows.forEach { row ->
+                        runCatching {
+                            repository.cacheServerWorkstation(
+                                row.id, orgId, row.siteId, row.code, row.name,
+                                row.kind, row.capacity, row.status
+                            )
+                        }
+                    }
+                }
+                .onFailure { error = it.message ?: "Chargement des emplacements serveur impossible." }
+        }
+    }
     val canManageNetwork = session.roleCanManageNetwork()
     val canManageWorkstations = session.roleCanManageWorkstations()
     val title = when (route) {
@@ -647,8 +664,8 @@ internal fun OrganizationWorkspaceContent(
                 }
             }
             item {
-                Text("Points de vente ajoutés sur cet appareil", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                localSites.forEach { site ->
+                Text("Brouillons locaux non activés", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                localSites.filter { it.syncStatus != "server_confirmed" }.forEach { site ->
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.fillMaxWidth().padding(13.dp)) {
                             Text(site.name, fontWeight = FontWeight.Bold)
@@ -662,7 +679,8 @@ internal fun OrganizationWorkspaceContent(
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Préparer un nouveau point de vente", fontWeight = FontWeight.Bold)
+                            Text("Créer un point de vente", fontWeight = FontWeight.Bold)
+                            Text("Le site devient actif uniquement après confirmation du serveur.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             OutlinedTextField(siteCode, { siteCode = it }, Modifier.fillMaxWidth(), label = { Text("Code interne") }, singleLine = true)
                             OutlinedTextField(siteName, { siteName = it }, Modifier.fillMaxWidth(), label = { Text("Nom du point de vente") }, singleLine = true)
                             OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("Adresse") }, singleLine = true)
@@ -671,13 +689,21 @@ internal fun OrganizationWorkspaceContent(
                                 onClick = {
                                     scope.launch {
                                         busy = true; error = null
-                                        runCatching { repository.createLocalSite(orgId, siteCode, siteName, address, phone) }
-                                            .onSuccess { siteCode = ""; siteName = ""; address = ""; phone = ""; notice = "Point de vente préparé localement ; il n’est pas encore actif." }
-                                            .onFailure { error = it.message ?: "Création locale impossible." }
+                                        runCatching { api.createSite(session.accessToken, siteCode, siteName, address, phone) }
+                                            .onSuccess { site ->
+                                                val updatedSites = (session.account.activeSites + site).distinctBy { it.id }
+                                                onSessionUpdated(session.copy(account = session.account.copy(
+                                                    activeSiteIds = (session.account.activeSiteIds + site.id).distinct(),
+                                                    activeSites = updatedSites
+                                                )))
+                                                siteCode = ""; siteName = ""; address = ""; phone = ""
+                                                notice = "Point de vente créé, activé et confirmé par le serveur."
+                                            }
+                                            .onFailure { error = it.message ?: "Création du point de vente impossible." }
                                         busy = false
                                     }
                                 },
-                                enabled = !busy && canManageNetwork && mode == "multi_site_network" && siteCode.isNotBlank() && siteName.isNotBlank(),
+                                enabled = !busy && canManageNetwork && mode == "multi_site_network" && siteCode.isNotBlank() && siteCode.trim().length >= 2 && siteName.isNotBlank(),
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text("Créer le brouillon du point de vente") }
                             if (!canManageNetwork) Text("La création des points de vente est réservée au rôle promoteur.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -691,18 +717,19 @@ internal fun OrganizationWorkspaceContent(
         if (route == AppRoute.WORKSTATIONS) {
             item {
                 Text("Emplacement dans un établissement", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                val selectable = (session.account.activeSiteIds + localSites.map { it.id }).distinct()
                 AuthorizedSitePicker(
-                    selectable,
+                    session.account.activeSiteIds,
                     selectedSite,
-                    session.account.activeSites.associate { it.id to it.name } + localSites.associate { it.id to it.name }
+                    session.account.activeSites.associate { it.id to it.name }
                 ) { selectedSite = it }
+                Text("Seuls les points de vente autorisés par le serveur peuvent recevoir des emplacements actifs.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Exemples : fauteuil de coiffure, comptoir pressing, atelier, réception ou caisse.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Créer un emplacement local", fontWeight = FontWeight.Bold)
+                        Text("Créer un emplacement dans ce point de vente", fontWeight = FontWeight.Bold)
+                        Text("La création et l’activation sont confirmées par le serveur.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         OutlinedTextField(workstationCode, { workstationCode = it }, Modifier.fillMaxWidth(), label = { Text("Code de l’emplacement") }, singleLine = true)
                         OutlinedTextField(workstationName, { workstationName = it }, Modifier.fillMaxWidth(), label = { Text("Nom de l’emplacement") }, singleLine = true)
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -715,17 +742,23 @@ internal fun OrganizationWorkspaceContent(
                             onClick = {
                                 scope.launch {
                                     busy = true; error = null
-                                    runCatching { repository.createLocalWorkstation(
-                                            orgId,
+                                    runCatching {
+                                        api.createWorkstation(
+                                            session.accessToken,
                                             selectedSite,
                                             workstationCode,
                                             workstationName,
                                             workstationType,
-                                            capacity.toInt(),
-                                            isServerAuthorizedSite = selectedSite in session.account.activeSiteIds
-                                        ) }
-                                        .onSuccess { workstationCode = ""; workstationName = ""; capacity = "1"; notice = "Emplacement préparé localement ; il n’est pas encore actif." }
-                                        .onFailure { error = it.message ?: "Création impossible." }
+                                            capacity.toInt()
+                                        )
+                                    }.onSuccess { serverRow ->
+                                        repository.cacheServerWorkstation(
+                                            serverRow.id, orgId, serverRow.siteId, serverRow.code,
+                                            serverRow.name, serverRow.kind, serverRow.capacity, serverRow.status
+                                        )
+                                        workstationCode = ""; workstationName = ""; capacity = "1"
+                                        notice = "Emplacement créé, activé et confirmé par le serveur."
+                                    }.onFailure { error = it.message ?: "Création de l’emplacement impossible." }
                                     busy = false
                                 }
                             },
@@ -737,13 +770,17 @@ internal fun OrganizationWorkspaceContent(
                 }
             }
             item { Text("Emplacements locaux du point de vente", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            if (workstations.isEmpty()) item { Text("Aucun emplacement local configuré.") }
+            if (workstations.isEmpty()) item { Text("Aucun emplacement configuré pour ce point de vente.") }
             items(workstations) { item ->
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.fillMaxWidth().padding(13.dp)) {
                         Text(item.name, fontWeight = FontWeight.Bold)
                         Text(item.code + " · " + item.kind + " · capacité " + item.capacity)
-                        LocalOnlyNotice("En attente de création côté serveur")
+                        if (item.syncStatus == "server_confirmed") {
+                            Text("Actif côté serveur", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
+                        } else {
+                            LocalOnlyNotice("Brouillon local · non activé")
+                        }
                     }
                 }
             }

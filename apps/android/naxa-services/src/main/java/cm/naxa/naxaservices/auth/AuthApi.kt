@@ -22,6 +22,16 @@ data class AuthSite(
     val phoneContact: String
 )
 
+data class AuthWorkstation(
+    val id: String,
+    val siteId: String,
+    val code: String,
+    val name: String,
+    val kind: String,
+    val capacity: Int,
+    val status: String
+)
+
 data class AuthAccount(
     val memberId: String,
     val displayName: String,
@@ -108,6 +118,107 @@ class AuthApi(private val context: Context) {
         )
     }
 
+
+    suspend fun createSite(
+        accessToken: String,
+        code: String,
+        name: String,
+        addressLabel: String,
+        phoneContact: String
+    ): AuthSite {
+        val normalizedCode = code.trim().uppercase()
+        require(Regex("^[A-Z0-9][A-Z0-9_-]{1,19}$").matches(normalizedCode)) {
+            "Le code du point de vente doit contenir 2 à 20 caractères alphanumériques, tirets ou soulignements."
+        }
+        require(name.trim().isNotBlank() && name.trim().length <= 120) { "Le nom du point de vente est obligatoire." }
+        require(addressLabel.length <= 200 && phoneContact.length <= 32) { "Adresse ou téléphone trop long." }
+        val result = request(
+            JSONObject()
+                .put("action", "create_site")
+                .put("app_code", "naxa-services")
+                .put("code", normalizedCode)
+                .put("name", name.trim())
+                .put("address_label", addressLabel.trim())
+                .put("phone_contact", phoneContact.trim()),
+            accessToken
+        )
+        val row = result.optJSONObject("site") ?: throw AuthApiException("Réponse de création du point de vente incomplète.")
+        return AuthSite(
+            id = row.optString("id"),
+            code = row.optString("code"),
+            name = row.optString("name"),
+            addressLabel = row.optString("address_label"),
+            phoneContact = row.optString("phone_contact")
+        ).also { if (it.id.isBlank()) throw AuthApiException("Identifiant du point de vente absent.") }
+    }
+
+    suspend fun createWorkstation(
+        accessToken: String,
+        siteId: String,
+        code: String,
+        name: String,
+        kind: String,
+        capacity: Int
+    ): AuthWorkstation {
+        val normalizedCode = code.trim().uppercase()
+        require(siteId.isNotBlank()) { "Choisis un point de vente actif." }
+        require(Regex("^[A-Z0-9][A-Z0-9_-]{1,19}$").matches(normalizedCode)) {
+            "Le code de l’emplacement doit contenir 2 à 20 caractères alphanumériques, tirets ou soulignements."
+        }
+        require(name.trim().isNotBlank() && name.trim().length <= 120) { "Le nom de l’emplacement est obligatoire." }
+        require(kind in setOf("hair_chair", "pressing_counter", "pressing_workshop", "reception", "cashier", "other")) {
+            "Type d’emplacement non autorisé."
+        }
+        require(capacity in 1..100) { "La capacité doit être comprise entre 1 et 100." }
+        val result = request(
+            JSONObject()
+                .put("action", "create_workstation")
+                .put("app_code", "naxa-services")
+                .put("site_id", siteId)
+                .put("code", normalizedCode)
+                .put("name", name.trim())
+                .put("kind", kind)
+                .put("capacity", capacity),
+            accessToken
+        )
+        val row = result.optJSONObject("workstation") ?: throw AuthApiException("Réponse de création de l’emplacement incomplète.")
+        return AuthWorkstation(
+            id = row.optString("id"),
+            siteId = row.optString("site_id"),
+            code = row.optString("code"),
+            name = row.optString("name"),
+            kind = row.optString("kind"),
+            capacity = row.optInt("capacity", 1),
+            status = row.optString("status")
+        ).also { if (it.id.isBlank() || it.siteId != siteId) throw AuthApiException("Périmètre du poste de travail invalide.") }
+    }
+
+    suspend fun listWorkstations(accessToken: String, siteId: String): List<AuthWorkstation> {
+        require(siteId.isNotBlank()) { "Point de vente manquant." }
+        val result = request(
+            JSONObject()
+                .put("action", "list_workstations")
+                .put("app_code", "naxa-services")
+                .put("site_id", siteId),
+            accessToken
+        )
+        val rows = result.optJSONArray("workstations") ?: JSONArray()
+        return buildList {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val item = AuthWorkstation(
+                    id = row.optString("id"),
+                    siteId = row.optString("site_id"),
+                    code = row.optString("code"),
+                    name = row.optString("name"),
+                    kind = row.optString("kind"),
+                    capacity = row.optInt("capacity", 1),
+                    status = row.optString("status")
+                )
+                if (item.id.isNotBlank() && item.siteId == siteId && item.status == "active") add(item)
+            }
+        }
+    }
 
     suspend fun updateOrganizationProfile(
         accessToken: String,

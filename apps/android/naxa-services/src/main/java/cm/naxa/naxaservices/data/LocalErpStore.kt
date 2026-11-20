@@ -364,6 +364,9 @@ interface NaxaServicesDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertWorkstation(workstation: LocalWorkstation)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertWorkstation(workstation: LocalWorkstation)
+
     @Query("SELECT * FROM local_services WHERE orgId = :orgId AND siteId = :siteId ORDER BY name COLLATE NOCASE ASC")
     fun observeServices(orgId: String, siteId: String): Flow<List<LocalService>>
 
@@ -733,6 +736,39 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         dao.insertSite(site)
         enqueue(orgId, "site", site.id, "site.created", site.id)
         site
+    }
+
+    suspend fun cacheServerWorkstation(
+        workstationId: String,
+        orgId: String,
+        siteId: String,
+        code: String,
+        name: String,
+        kind: String,
+        capacity: Int,
+        status: String
+    ): LocalWorkstation = database.withTransaction {
+        require(workstationId.isNotBlank() && orgId.isNotBlank() && siteId.isNotBlank()) {
+            "Identifiants serveur, organisation et site obligatoires."
+        }
+        require(kind in setOf("hair_chair", "pressing_counter", "pressing_workshop", "reception", "cashier", "other")) {
+            "Type d’emplacement non autorisé."
+        }
+        require(capacity in 1..100 && status == "active") { "Emplacement serveur inactif ou capacité invalide." }
+        val workstation = LocalWorkstation(
+            id = workstationId,
+            orgId = orgId,
+            siteId = siteId,
+            code = code.trim().uppercase(),
+            name = name.trim(),
+            kind = kind,
+            capacity = capacity,
+            status = "active",
+            syncStatus = "server_confirmed",
+            createdAtMillis = System.currentTimeMillis()
+        )
+        dao.upsertWorkstation(workstation)
+        workstation
     }
 
     suspend fun createLocalWorkstation(
