@@ -270,7 +270,7 @@ class AuthApi(private val context: Context) {
     }
 
     suspend fun setMemberPreferredLocale(accessToken: String, locale: String) {
-        require(locale in setOf("fr", "en")) { "Langue non prise en charge." }
+        require(locale in setOf("fr", "en", "ff-CM")) { "Langue non prise en charge." }
         request(
             JSONObject()
                 .put("action", "set_member_locale")
