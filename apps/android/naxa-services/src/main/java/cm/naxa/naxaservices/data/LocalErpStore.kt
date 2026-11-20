@@ -1803,7 +1803,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         }
         val valuationSnapshot = linkedStockItem?.let { dao.findInventoryValuation(orgId, siteId, it.id) }
         val unitCostSnapshot = valuationSnapshot?.unitCostXaf ?: 0L
-        val hasReliableCostSnapshot = linkedStockItem == null || valuationSnapshot != null
+        val hasReliableCostSnapshot = linkedStockItem != null && valuationSnapshot != null
         val costSnapshot = if (stockQuantity != null && valuationSnapshot != null) {
             (stockQuantity * unitCostSnapshot.toDouble()).takeIf { it.isFinite() && it <= Long.MAX_VALUE.toDouble() }?.let { kotlin.math.round(it).toLong() }
                 ?: throw IllegalArgumentException("Coût de revient de la vente invalide.")
