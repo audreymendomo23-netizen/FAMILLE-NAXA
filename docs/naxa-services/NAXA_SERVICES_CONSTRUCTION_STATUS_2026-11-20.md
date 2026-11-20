@@ -1024,3 +1024,62 @@ Cette validation ne transforme pas les réserves ci-dessous en fonctionnalités 
 
 **Point de reprise :** lire le HEAD de `work/naxa-services-completion-20261120`. Ne pas recommencer les écrans ou les parcours listés dans les sections 30 à 37 ; poursuivre uniquement les réserves identifiées, en lots isolés avec gate CI associé.
 
+
+
+---
+
+## 38. Parrainage PME — première implémentation raccordée au Profil (20 novembre 2026)
+
+### 38.1 Référence et contenu du lot
+
+- Commit : `c76b6680c84635368ae7abd6430018aa13876e40` — `feat(naxa-services): add SME referral program workflow`.
+- Branche : `work/naxa-services-completion-20261120`. Aucun changement du code n'a été effectué sur `main`.
+- Écran ajouté : `apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/ReferralScreen.kt`.
+- Point d'entrée : Profil → « Parrainage et suivi de mes gains ».
+- API source : `supabase/functions/naxa-services-referrals/index.ts`.
+- Contrats/tests : `referral_contract.ts`, `contract_test.ts`.
+- Migration candidate : `supabase/drafts/naxa_services_referrals_v1.sql` (draft, non appliquée).
+
+### 38.2 Règle métier implémentée dans les contrats
+
+1. Une organisation PME possède au maximum un code actif unique, généré à la demande depuis le profil du Promoteur.
+2. Le Promoteur d'une PME filleule peut enregistrer un code une seule fois. L'auto-parrainage et le changement ultérieur de parrain sont refusés.
+3. Une PME filleule n'est qualifiée qu'à la confirmation serveur de son premier abonnement réellement payé. Une inscription, une période d'essai, un paiement pending ou un renouvellement ne doivent pas être comptés.
+4. Les récompenses sont attribuées par vagues distinctes de cinq activations : 5, 10, 15, etc. Les identifiants d'événements fournisseur et d'abonnements sont uniques dans le registre ; la fonction SQL verrouille l'organisation marraine afin d'éviter deux récompenses lors d'activations concurrentes.
+5. Au moment où le seuil est atteint, la cadence réelle de la PME marraine détermine l'avantage : formule mensuelle → un cycle mensuel gratuit ; formule annuelle → un mois d'accès supplémentaire placé à l'expiration de la période annuelle.
+6. Les états de récompense distinguent `pending_entitlement`, `applied` et `failed`. Une récompense créée n'est pas réputée consommée tant que le service d'entitlements n'a pas confirmé son application.
+
+### 38.3 Interface et suivi
+
+- Le code est affiché et peut être copié ; un bouton permet de le générer si aucun code actif n'existe.
+- Le Promoteur d'une PME filleule peut saisir et associer un code reçu.
+- Le tableau de suivi expose les PME rattachées, leur date de rattachement, leur statut et la date de premier paiement qualifiant.
+- Un indicateur présente le nombre d'inscriptions, le nombre d'activations payées et la progression de la vague en cours.
+- Les récompenses par vague, leur cadence et leur état d'application sont listés.
+- L'accès à la gestion est réservé au rôle `promoter`.
+
+### 38.4 Limites d'activation — ne pas qualifier la fonctionnalité de production
+
+Le code Android appelle une fonction Edge distincte ; le code ne devient actif qu'après configuration de l'URL `NS_REFERRALS_FUNCTION_URL` (ou de l'URL dérivée depuis l'endpoint Auth). La fonction Edge nécessite les variables serveur Supabase et `NS_REFERRAL_WEBHOOK_SECRET`. Son action `subscription_first_paid` exige une signature HMAC-SHA256 du corps brut et un indicateur `is_first_paid_subscription=true`.
+
+**Non livré par ce commit :**
+- Le draft SQL n'a pas été appliqué à une base Supabase de recette ou de production.
+- La fonction Edge de parrainage n'a pas été déployée.
+- Le webhook d'un opérateur de paiement n'est pas encore raccordé pour émettre l'événement après capture vérifiée. Il doit aussi lire la cadence effectivement active de l'organisation marraine au moment du franchissement du seuil.
+- Le moteur d'entitlements ne planifie pas encore le cycle mensuel gratuit ni le mois annuel supplémentaire. Tant que cette intégration n'est pas exécutée et vérifiée, l'état reste `pending_entitlement`.
+- Aucun code de parrainage de production n'est généré ni aucun gain attribué sur des comptes clients réels.
+
+La fonction SQL de qualification est idempotente dans le ledger, mais cela ne remplace pas encore les tests d'intégration transactionnels sur une base isolée, ni les tests webhook du fournisseur de paiement.
+
+### 38.5 CI du commit de parrainage
+
+- Workflow : `44791819448`, commit testé `c76b6680c84635368ae7abd6430018aa13876e40`.
+- Contrat de parrainage : type-check Deno et tests terminés avec succès.
+- Contrats Auth et tests de tarification : terminés avec succès.
+- Compilation Android : encore en cours au moment de la rédaction de cette section. Ne pas annoncer un gate global vert avant le résultat final du job Android.
+
+### 38.6 Point de reprise et backlog global inchangé
+
+Le lot de parrainage est ajouté sans réécrire les écrans et modules métiers précédents. Les réserves antérieures de la section 37 restent ouvertes : API ERP distante et synchronisation offline complète, idempotence et résolution de conflits réseau, RLS vérifiée par tests d'isolation, paiement récurrent réel et webhooks, entitlements, FCM/SMS/WhatsApp et planificateur CRM, SYSCOHADA/fiscalité/paie validés par professionnels, essais physiques/performance/restauration, Release Android signée, Web/PWA séparée, Fulfulde complet relu, pilotage central des dix applications/CSO, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
+
+**Règle de périmètre :** aucun déploiement Supabase, aucune migration réelle, aucune Release signée et aucune publication n'ont été effectués dans ce lot. Le projet NAXA autonome n'a pas été modifié. La branche de travail n'est pas fusionnée dans `main`.
