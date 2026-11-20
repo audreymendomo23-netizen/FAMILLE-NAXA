@@ -26,6 +26,9 @@ data class AuthAccount(
     val displayName: String,
     val roleCode: String,
     val organizationId: String,
+    val organizationName: String,
+    val businessMode: String,
+    val defaultLocale: String,
     val activeSiteIds: List<String>,
     val activeSites: List<AuthSite>
 )
@@ -100,6 +103,28 @@ class AuthApi(private val context: Context) {
         )
     }
 
+
+    suspend fun updateOrganizationProfile(
+        accessToken: String,
+        displayName: String,
+        businessMode: String,
+        defaultLocale: String
+    ) {
+        require(displayName.trim().isNotEmpty()) { "Le nom de l’organisation est obligatoire." }
+        require(businessMode in setOf("solo", "single_site_multi_workstation", "multi_site_network")) {
+            "Modèle d’exploitation invalide."
+        }
+        require(defaultLocale in setOf("fr", "en")) { "Langue non prise en charge." }
+        request(
+            JSONObject()
+                .put("action", "update_organization_profile")
+                .put("app_code", "naxa-services")
+                .put("display_name", displayName.trim())
+                .put("business_mode", businessMode)
+                .put("default_locale", defaultLocale),
+            accessToken
+        )
+    }
 
     suspend fun provisionMember(
         accessToken: String,
@@ -263,6 +288,9 @@ class AuthApi(private val context: Context) {
                 displayName = account.optString("display_name"),
                 roleCode = account.optString("role_code"),
                 organizationId = account.optString("organization_id"),
+                organizationName = account.optString("organization_name").ifBlank { account.optString("display_name") },
+                businessMode = account.optString("business_mode").takeIf { it in setOf("solo", "single_site_multi_workstation", "multi_site_network") } ?: "solo",
+                defaultLocale = account.optString("default_locale").takeIf { it in setOf("fr", "en") } ?: "fr",
                 activeSiteIds = siteIds,
                 activeSites = activeSites
             )
