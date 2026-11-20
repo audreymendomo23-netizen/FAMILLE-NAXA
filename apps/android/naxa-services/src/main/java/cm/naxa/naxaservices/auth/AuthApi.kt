@@ -157,11 +157,14 @@ class AuthApi(private val context: Context) {
         val androidId = runCatching {
             Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
         }.getOrNull().orEmpty()
+        val devicePrefs = context.getSharedPreferences("naxa_services_device", Context.MODE_PRIVATE)
+        val installationId = devicePrefs.getString("installation_id", null) ?: UUID.randomUUID().toString().also {
+            devicePrefs.edit().putString("installation_id", it).apply()
+        }
         return JSONObject()
-            .put("installation_id", androidId.ifBlank { UUID.randomUUID().toString() })
+            .put("installation_id", installationId)
             .put("label", Build.MODEL.orEmpty().take(80))
             .put("platform", "android")
-            .put("remember_device", true)
     }
 }
 

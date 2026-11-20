@@ -264,7 +264,7 @@ create table if not exists public.ns_payments (
   unique (org_id, idempotency_key),
   foreign key (site_id, org_id) references public.ns_sites(id, org_id) on delete restrict,
   check ((status = 'confirmed' and confirmed_at is not null) or status <> 'confirmed'),
-  check ((sale_id is not null)::integer + (pressing_order_id is not null)::integer = 1)
+  check ((sale_id is not null) <> (pressing_order_id is not null))
 );
 
 create table if not exists public.ns_expenses (

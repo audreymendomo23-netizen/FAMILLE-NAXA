@@ -49,6 +49,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.weight
 import cm.naxa.naxaservices.auth.AuthApi
 import cm.naxa.naxaservices.auth.AuthApiException
 import cm.naxa.naxaservices.auth.AuthSession
@@ -192,9 +194,9 @@ private fun NaxaServicesWordmark() {
         ) {
             Text("N", color = Color.White, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineLarge)
         }
-        Column(verticalArrangement = Arrangement.spacedBy((-4).dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
             Text("NAXA", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineMedium)
-            Text("SERVICES", color = Color(0xFFDD3A33), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, letterSpacing = androidx.compose.ui.unit.sp(3))
+            Text("SERVICES", color = Color(0xFFDD3A33), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, letterSpacing = 3.sp)
         }
     }
 }
@@ -365,7 +367,7 @@ private fun ErpScreen(
                 NavigationBarItem(selected = route == AppRoute.AGENDA, onClick = { onNavigate(AppRoute.AGENDA) }, icon = { Text("◷") }, label = { Text(stringResource(R.string.nav_agenda)) })
                 NavigationBarItem(selected = route == AppRoute.PRESSING, onClick = { onNavigate(AppRoute.PRESSING) }, icon = { Text("▤") }, label = { Text(stringResource(R.string.nav_pressing)) })
                 NavigationBarItem(selected = route == AppRoute.CASH, onClick = { onNavigate(AppRoute.CASH) }, icon = { Text("₣") }, label = { Text(stringResource(R.string.nav_cash)) })
-                NavigationBarItem(selected = route != AppRoute.DASHBOARD && route != AppRoute.AGENDA && route != AppRoute.PRESSING && route != AppRoute.CASH, onClick = { onNavigate(AppRoute.SETTINGS) }, icon = { Text("•••") }, label = { Text(stringResource(R.string.nav_more)) })
+                NavigationBarItem(selected = route == AppRoute.MENU, onClick = { onNavigate(AppRoute.MENU) }, icon = { Text("•••") }, label = { Text(stringResource(R.string.nav_more)) })
             }
         },
         snackbarHost = {
@@ -377,6 +379,8 @@ private fun ErpScreen(
     ) { padding ->
         if (route == AppRoute.DASHBOARD) {
             DashboardContent(Modifier.padding(padding), accountName, roleCode, onNavigate, onLogout)
+        } else if (route == AppRoute.MENU) {
+            ModuleMenu(Modifier.padding(padding), onNavigate, onLogout)
         } else if (currentSpec != null) {
             ModuleContent(Modifier.padding(padding), currentSpec, onNavigate)
         } else {
@@ -428,6 +432,7 @@ private fun DashboardContent(
             }
         }
         item {
+            TextButton(onClick = { onNavigate(AppRoute.MENU) }) { Text(stringResource(R.string.nav_more)) }
             TextButton(onClick = { onNavigate(AppRoute.NETWORK) }) { Text(stringResource(R.string.network_overview)) }
             TextButton(onClick = { onNavigate(AppRoute.SECURITY) }) { Text(stringResource(R.string.security_devices)) }
             TextButton(onClick = onLogout) { Text(stringResource(R.string.sign_out)) }
