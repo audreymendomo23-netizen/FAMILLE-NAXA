@@ -509,7 +509,11 @@ private fun PressingLocalContent(
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.pressing_local_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(stringResource(R.string.pressing_local_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            AuthorizedSitePicker(session.account.activeSiteIds, siteId) { siteId = it }
+            AuthorizedSitePicker(
+                session.account.activeSiteIds,
+                siteId,
+                session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
+            ) { siteId = it }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
