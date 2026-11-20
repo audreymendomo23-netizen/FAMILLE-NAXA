@@ -927,11 +927,14 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Rentabilité et engagements fournisseurs", fontWeight = FontWeight.Bold)
                     Text("Chiffre d'affaires confirmé (période couverte) : " + xaf(dashboard.revenueXaf))
-                    Text("Coût des marchandises vendues : " + xaf(dashboard.costOfGoodsXaf))
-                    Text("Marge brute calculée : " + xaf(dashboard.grossProfitXaf) +
-                        (dashboard.grossMarginPercent?.let { " · " + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %" } ?: ""))
+                    Text("CA des ventes au coût fiable : " + xaf(dashboard.costedRevenueXaf))
+                    Text("Coût des marchandises vendues valorisées : " + xaf(dashboard.costOfGoodsXaf))
+                    Text("Marge brute sur ventes au coût connu : " + xaf(dashboard.grossProfitXaf) +
+                        (dashboard.grossMarginPercent?.let { " · " + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %" } ?: " · non calculable"))
                     Text("Charges d'exploitation journalisées : " + xaf(dashboard.operatingExpensesXaf))
-                    Text("Solde de gestion indicatif : " + xaf(dashboard.operatingProfitProxyXaf), fontWeight = FontWeight.Bold)
+                    Text("Solde de gestion indicatif : " +
+                        (dashboard.operatingProfitProxyXaf?.let { xaf(it) } ?: "non déterminable : COGS historique incomplet"),
+                        fontWeight = FontWeight.Bold)
                     Text("Dette fournisseurs non réglée : " + xaf(dashboard.supplierPayablesXaf))
                     if (dashboard.uncostedStockSalesCount > 0) {
                         Text(
