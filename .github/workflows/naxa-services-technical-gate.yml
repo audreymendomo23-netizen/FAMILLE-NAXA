@@ -97,7 +97,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Type-check accounting contract
-        run: deno check supabase/functions/naxa-services-accounting/accounting_contract.ts supabase/functions/naxa-services-accounting/contract_test.ts
+        run: deno check supabase/functions/naxa-services-accounting/index.ts supabase/functions/naxa-services-accounting/accounting_contract.ts supabase/functions/naxa-services-accounting/contract_test.ts
       - name: Run supplier accounting and forecast contracts
         run: deno test supabase/functions/naxa-services-accounting/contract_test.ts
 
