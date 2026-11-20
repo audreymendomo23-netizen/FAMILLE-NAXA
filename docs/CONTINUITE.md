@@ -1027,9 +1027,10 @@ Ce point complète la section 6.17.19 sans invalider les preuves Android/CI du c
 
 - Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`.
 - Branche de travail : `work/naxa-services-completion-20261120`.
-- Commit de code : `c76b6680c84635368ae7abd6430018aa13876e40` — ajout du parcours de parrainage PME.
+- Commit de code initial : `c76b6680c84635368ae7abd6430018aa13876e40` ; son job de compilation Android a échoué à cause d'un import Kotlin de `Modifier.weight` non nécessaire.
+- Correctif : `f9cb368dec3ac2e00ad7088b054cb30ec1e5badb`, suppression de cet import.
+- Workflow de validation du correctif : `44792194242`. Il a été déclenché sur le SHA corrigé et doit être vérifié jusqu'à conclusion finale avant toute annonce de build vert.
 - Rapport détaillé : `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`, section 38.
-- Workflow déclenché sur ce commit : `44791819448`. Les tests du contrat de parrainage, les contrôles Auth et les tests du catalogue tarifaire ont réussi ; le job de compilation Android était encore en cours au moment de la présente mise à jour. Relever son résultat final avant toute annonce de build vert sur ce SHA.
 
 #### Parrainage — règles et interface ajoutées
 
