@@ -11,7 +11,7 @@ import {
 
 Deno.test("supplier receipt updates weighted average landed cost", () => {
   const unitCost = weightedAverageUnitCost(10, 1000, 5, 7500);
-  if (unitCost !== 1100) throw new Error("Expected 1,100 XAF weighted average, got " + unitCost);
+  if (unitCost !== 1167) throw new Error("Expected 1,167 XAF weighted average, got " + unitCost);
 });
 
 Deno.test("recoverable tax is not silently included in inventory landed cost", () => {
