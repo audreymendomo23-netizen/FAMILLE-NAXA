@@ -48,6 +48,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify activity photo folders and legal assets
+        run: |
+          for profile in pressing coiffure couture beaute parfumerie reparation menuiserie garage nettoyage domicile impression photo_evenementiel autre; do
+            test -s "assets/naxa-services/activities/$profile/README.md"
+          done
+          for document in TERMS_OF_USE_2026-11-v1.md PRIVACY_POLICY_2026-11-v1.md TERMS_OF_USE_2026-11-v1_EN.md PRIVACY_POLICY_2026-11-v1_EN.md; do
+            test -s "assets/naxa-services/legal/$document"
+          done
       - name: Set up Java 17
         uses: actions/setup-java@v4
         with:
