@@ -335,6 +335,7 @@ begin
     raise exception 'NAXA_PURCHASE_CREATE_INVALID';
   end if;
 
+  perform pg_advisory_xact_lock(hashtextextended(p_org_id::text || ':supplier-purchase:' || p_idempotency_key::text, 0));
   select * into v_existing from public.ns_purchase_documents
     where org_id = p_org_id and idempotency_key = p_idempotency_key;
   if found then
@@ -407,9 +408,9 @@ begin
     received_total_xaf, paid_total_xaf, due_at, notes, created_by, updated_by
   ) values (
     p_org_id, p_site_id, p_supplier_id, v_supplier.name, trim(p_reference),
-    coalesce(trim(p_supplier_invoice_number),''), 'ordered', p_idempotency_key, p_payload_sha256, v_subtotal,
+    coalesce(trim(p_supplier_invoice_number),''), 'ordered', v_subtotal,
     coalesce(p_recoverable_tax_xaf,0), coalesce(p_non_recoverable_tax_xaf,0),
-    coalesce(p_shipping_xaf,0), coalesce(p_other_fees_xaf,0),
+    coalesce(p_shipping_xaf,0), coalesce(p_other_fees_xaf,0), p_idempotency_key, p_payload_sha256,
     0, 0, 0, 0, 0, p_due_at, coalesce(trim(p_notes),''), v_member, v_member
   ) returning id into v_purchase_id;
 
