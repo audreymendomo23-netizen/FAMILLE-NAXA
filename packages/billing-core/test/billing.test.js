@@ -66,6 +66,9 @@ test("CAMPUS237 protects essential parent access and institution thresholds", ()
   assert.equal(resolveNaxaFamilySubscriptionPrice({appId:"CAMPUS237",planCode:"PARENT_ESSENTIAL",periodStartDate:"2027-05-01"}).amountDue,0);
   assert.equal(resolveNaxaFamilySubscriptionPrice({appId:"CAMPUS237",planCode:"PARENT_FAMILY",periodStartDate:"2027-05-01",billingPeriod:"annual"}).amountDue,15000);
   assert.equal(resolveNaxaFamilySubscriptionPrice({appId:"CAMPUS237",planCode:"SCHOOL",periodStartDate:"2027-05-01",activeStudentCount:500}).amountDue,5000);
+  const emptySchool=resolveNaxaFamilySubscriptionPrice({appId:"CAMPUS237",planCode:"SCHOOL",periodStartDate:"2027-05-01",activeStudentCount:0});
+  assert.equal(emptySchool.amountDue,0);
+  assert.deepEqual(emptySchool.detail,{tierMin:0,tierMax:0});
   assert.equal(resolveNaxaFamilySubscriptionPrice({appId:"CAMPUS237",planCode:"SCHOOL",periodStartDate:"2027-05-01",activeStudentCount:1600}).quoteRequired,true);
 });
 test("existing paid period is not repriced; new renewal after maturity uses mature price", () => {
