@@ -1116,6 +1116,7 @@ private fun CashLocalContent(
     var varianceReason by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
+    var receiptSale by remember { mutableStateOf<LocalSale?>(null) }
     var busy by remember { mutableStateOf(false) }
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -1171,7 +1172,8 @@ private fun CashLocalContent(
                                     }.onSuccess { pair ->
                                         saleDescription = ""
                                         saleTotal = ""
-                                        notice = if (pair.second.state == "pending") "Paiement Mobile Money en attente de confirmation serveur." else "Encaissement espèces enregistré localement."
+                                        receiptSale = pair.first
+                                        notice = if (pair.first.status == "pending") "Paiement Mobile Money en attente de confirmation serveur. Le reçu portera cette mention." else "Encaissement espèces enregistré localement. Le reçu est prêt."
                                     }.onFailure { error = it.message ?: "Vente impossible." }
                                     busy = false
                                 }
@@ -1232,11 +1234,15 @@ private fun CashLocalContent(
                     Column(Modifier.weight(1f)) {
                         Text(sale.description, fontWeight = FontWeight.Bold)
                         Text(sale.saleNumber + " · " + sale.status, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { receiptSale = sale }) { Text("Reçu") }
                     }
                     Text(sale.totalXaf.toString() + " F")
                 }
             }
         }
+    }
+    receiptSale?.let { sale ->
+        CashReceiptActions(sale, session) { receiptSale = null }
     }
 }
 

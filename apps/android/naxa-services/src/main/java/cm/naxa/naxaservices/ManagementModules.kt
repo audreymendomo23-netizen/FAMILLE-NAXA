@@ -8,6 +8,16 @@ import android.graphics.BitmapFactory
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
+import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
+import android.print.PrintManager
+import android.content.ClipData
+import androidx.core.content.FileProvider
 import androidx.compose.foundation.Image
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cm.naxa.naxaservices.auth.AuthSession
 import cm.naxa.naxaservices.data.LocalManagementRecord
+import cm.naxa.naxaservices.data.LocalSale
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -143,7 +154,7 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
             }
         }
         item { Text("Historique des pièces", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        items(records.filter { it.recordType in setOf("quote", "invoice", "credit_note", "refund_due") }) { item ->
+        items(records.filter { it.recordType in setOf("quote", "invoice", "credit_note", "customer_receivable", "refund_due") }) { item ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(labelRecord(item.recordType) + " · " + item.reference, fontWeight = FontWeight.Bold)
@@ -157,7 +168,7 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
                 }
             }
         }
-        if (records.none { it.recordType in setOf("quote", "invoice", "credit_note", "refund_due") }) {
+        if (records.none { it.recordType in setOf("quote", "invoice", "credit_note", "customer_receivable", "refund_due") }) {
             item { Text("Aucune pièce commerciale enregistrée.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
@@ -536,6 +547,7 @@ private fun labelRecord(type: String) = when(type) {
     "repair_order" -> "Ordre de réparation"
     "service_order" -> "Ordre de service"
     "invoice" -> "Facture"
+    "cash_receipt" -> "Reçu de caisse"
     "credit_note" -> "Avoir"
     "customer_receivable" -> "Créance client (à recevoir par la PME)"
     "refund_due" -> "Remboursement dû au client (à payer par la PME)"
@@ -565,32 +577,179 @@ private fun shareRecord(context: Context, item: LocalManagementRecord) {
     context.startActivity(Intent.createChooser(intent, "Partager le reçu"))
 }
 private fun writeReceiptPdf(context: Context, uri: Uri, item: LocalManagementRecord, organization: String) {
-    val document = PdfDocument()
-    val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
-    val page = document.startPage(pageInfo)
-    val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 18f; typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD); color = android.graphics.Color.BLACK }
-    val normal = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = 13f; color = android.graphics.Color.DKGRAY }
-    page.canvas.drawText("NAXA SERVICES", 42f, 56f, paint)
-    paint.textSize = 16f
-    page.canvas.drawText(labelRecord(item.recordType), 42f, 102f, paint)
-    normal.textSize = 13f
-    val lines = listOf(
-        "Organisation : " + organization,
-        "Référence : " + item.reference,
-        "Libellé : " + item.title,
-        "Client : " + item.counterparty,
-        "Total : " + xaf(item.amountXaf),
-        "Réglé : " + xaf(item.paidXaf),
-        "Solde : " + xaf(item.amountXaf - item.paidXaf),
-        "Statut : " + statusRecord(item.status),
-        "Document généré localement — à synchroniser et valider."
-    )
-    lines.forEachIndexed { index, line -> page.canvas.drawText(line.take(85), 42f, 150f + index * 30f, normal) }
-    page.canvas.drawText("Établi avec NAXA SERVICES", 42f, 790f, normal)
-    document.finishPage(page)
-    context.contentResolver.openOutputStream(uri)?.use { document.writeTo(it) } ?: error("Destination inaccessible.")
-    document.close()
+    context.contentResolver.openOutputStream(uri)?.use { output ->
+        output.write(receiptPdfBytes(item, organization))
+    } ?: error("Destination inaccessible.")
 }
+
+
+
+@Composable
+fun CashReceiptActions(sale: LocalSale, session: AuthSession, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val record = remember(sale.id) {
+        LocalManagementRecord(
+            id = sale.id,
+            orgId = sale.orgId,
+            siteId = sale.siteId,
+            recordType = "cash_receipt",
+            reference = sale.saleNumber,
+            title = sale.description,
+            counterparty = "Client au comptoir",
+            amountXaf = sale.totalXaf,
+            paidXaf = if (sale.status == "confirmed") sale.totalXaf else 0L,
+            dueAtMillis = null,
+            status = if (sale.status == "confirmed") "paid" else "open",
+            metadataJson = "{\"payment_method\":\"" + sale.paymentMethod + "\",\"sale_status\":\"" + sale.status + "\"}",
+            actorMemberId = sale.actorMemberId,
+            createdAtMillis = sale.createdAtMillis
+        )
+    }
+    var error by remember { mutableStateOf<String?>(null) }
+    val saveLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
+        if (uri != null) {
+            runCatching { writeReceiptPdf(context, uri, record, session.account.organizationName) }
+                .onFailure { error = it.message ?: "Enregistrement PDF impossible." }
+        }
+    }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Reçu de caisse", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(record.reference + " · " + xaf(record.amountXaf))
+                Text(if (sale.status == "pending") "Paiement Mobile Money en attente : ce reçu n'atteste pas encore du règlement." else "Paiement espèces enregistré localement.")
+                Text("Choisis une action pour remettre le justificatif au client.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Button(onClick = { saveLauncher.launch("NAXA-" + sale.saleNumber + ".pdf") }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Télécharger / enregistrer le PDF")
+                }
+                OutlinedButton(
+                    onClick = {
+                        runCatching {
+                            val file = writeReceiptToCache(context, record, session.account.organizationName)
+                            val uri = FileProvider.getUriForFile(context, context.packageName + ".fileprovider", file)
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/pdf"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                clipData = ClipData.newUri(context.contentResolver, "Reçu NAXA SERVICES", uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Partager le reçu PDF"))
+                        }.onFailure { error = it.message ?: "Partage PDF impossible." }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Partager le PDF (WhatsApp ou autre)") }
+                OutlinedButton(
+                    onClick = {
+                        runCatching { printReceipt(context, record, session.account.organizationName) }
+                            .onFailure { error = it.message ?: "Impression impossible." }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Imprimer le reçu") }
+                if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Fermer") }
+            }
+        }
+    }
+}
+
+private fun writeReceiptToCache(context: Context, item: LocalManagementRecord, organization: String): java.io.File {
+    val folder = java.io.File(context.cacheDir, "receipts")
+    if (!folder.exists() && !folder.mkdirs()) error("Répertoire de reçu inaccessible.")
+    val safeName = item.reference.replace(Regex("[^A-Za-z0-9_-]"), "_") + ".pdf"
+    val file = java.io.File(folder, safeName)
+    file.outputStream().use { it.write(receiptPdfBytes(item, organization)) }
+    return file
+}
+
+private fun printReceipt(context: Context, item: LocalManagementRecord, organization: String) {
+    val manager = context.getSystemService(Context.PRINT_SERVICE) as? PrintManager ?: error("Service d’impression non disponible.")
+    val bytes = receiptPdfBytes(item, organization)
+    val adapter = object : PrintDocumentAdapter() {
+        override fun onLayout(
+            oldAttributes: PrintAttributes?,
+            newAttributes: PrintAttributes,
+            cancellationSignal: CancellationSignal,
+            callback: LayoutResultCallback,
+            extras: Bundle?
+        ) {
+            if (cancellationSignal.isCanceled) {
+                callback.onLayoutCancelled()
+                return
+            }
+            val info = PrintDocumentInfo.Builder(item.reference + ".pdf")
+                .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                .setPageCount(1)
+                .build()
+            callback.onLayoutFinished(info, true)
+        }
+
+        override fun onWrite(
+            pages: Array<out PageRange>,
+            destination: ParcelFileDescriptor,
+            cancellationSignal: CancellationSignal,
+            callback: WriteResultCallback
+        ) {
+            if (cancellationSignal.isCanceled) {
+                callback.onWriteCancelled()
+                return
+            }
+            runCatching {
+                java.io.FileOutputStream(destination.fileDescriptor).use { it.write(bytes) }
+            }.onSuccess {
+                callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+            }.onFailure {
+                callback.onWriteFailed(it.message ?: "Écriture du PDF impossible.")
+            }
+        }
+    }
+    val attributes = PrintAttributes.Builder()
+        .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+        .setResolution(PrintAttributes.Resolution("naxa-services", "NAXA SERVICES", 300, 300))
+        .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+        .build()
+    manager.print("NAXA-" + item.reference, adapter, attributes)
+}
+
+private fun receiptPdfBytes(item: LocalManagementRecord, organization: String): ByteArray {
+    val document = PdfDocument()
+    try {
+        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
+        val page = document.startPage(pageInfo)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = 18f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            color = android.graphics.Color.BLACK
+        }
+        val normal = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            textSize = 13f
+            color = android.graphics.Color.DKGRAY
+        }
+        page.canvas.drawText("NAXA SERVICES", 42f, 56f, paint)
+        paint.textSize = 16f
+        page.canvas.drawText(labelRecord(item.recordType), 42f, 102f, paint)
+        val lines = listOf(
+            "Organisation : " + organization,
+            "Référence : " + item.reference,
+            "Libellé : " + item.title,
+            "Client : " + item.counterparty,
+            "Date : " + java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(item.createdAtMillis)),
+            "Total : " + xaf(item.amountXaf),
+            "Réglé : " + xaf(item.paidXaf),
+            "Solde : " + xaf(item.amountXaf - item.paidXaf),
+            "Statut : " + statusRecord(item.status),
+            "Document établi localement — à synchroniser et valider."
+        )
+        lines.forEachIndexed { index, line -> page.canvas.drawText(line.take(85), 42f, 150f + index * 30f, normal) }
+        page.canvas.drawText("Établi avec NAXA SERVICES", 42f, 790f, normal)
+        document.finishPage(page)
+        val output = java.io.ByteArrayOutputStream()
+        document.writeTo(output)
+        return output.toByteArray()
+    } finally {
+        document.close()
+    }
+}
+
 
 @Composable
 fun WorkOrdersContent(
