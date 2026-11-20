@@ -37,8 +37,8 @@ export function isNaxaWorkstationCode(value: string): boolean {
   return /^[A-Z0-9][A-Z0-9_-]{1,19}$/.test(value.trim().toUpperCase());
 }
 
-export function isNaxaLocale(value: string): value is "fr" | "en" {
-  return value === "fr" || value === "en";
+export function isNaxaLocale(value: string): value is "fr" | "en" | "ff-CM" {
+  return value === "fr" || value === "en" || value === "ff-CM";
 }
 
 export function isLegalDocumentVersion(type: string, version: string): boolean {
