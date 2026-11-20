@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import {
   packagePrice, upgradeProrata, giftMonthsAllowed, provisionalAccessUntil,
   MATURITY_EFFECTIVE_DATE, NAXA_FAMILY_CATALOG, catalogVersionAt,
-  resolveNaxaFamilySubscriptionPrice, resolveRenewalPrice
+  resolveNaxaFamilySubscriptionPrice, resolveRenewalPrice,
+  localCalendarDateInZone, resolveRenewalPriceAtInstant
 } from "../src/index.js";
 
 test("3-month offer discounted 10%, rounded down to 100 FCFA",()=>assert.equal(packagePrice(1150,3),3100));
@@ -73,4 +74,12 @@ test("existing paid period is not repriced; new renewal after maturity uses matu
   assert.equal(old.amountDue,10000);
   assert.equal(next.amountDue,15000);
   assert.equal(next.previousPeriodUnchanged,true);
+});
+
+test("maturity boundary follows Africa/Douala midnight, not UTC midnight", () => {
+  assert.equal(localCalendarDateInZone("2027-04-30T22:59:59.000Z"), "2027-04-30");
+  assert.equal(localCalendarDateInZone("2027-04-30T23:00:00.000Z"), "2027-05-01");
+  const sub={appId:"NAXA_SERVICES",planCode:"PREMIUM",billingPeriod:"monthly"};
+  assert.equal(resolveRenewalPriceAtInstant(sub,"2027-04-30T22:59:59.000Z").amountDue,10000);
+  assert.equal(resolveRenewalPriceAtInstant(sub,"2027-04-30T23:00:00.000Z").amountDue,15000);
 });
