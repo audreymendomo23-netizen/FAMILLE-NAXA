@@ -732,8 +732,11 @@ create or replace view public.ns_performance_monthly
 with (security_invoker = true)
 as
 select org_id, site_id, date_trunc('month', performance_day)::date as performance_month,
-       sum(revenue_xaf)::bigint as revenue_xaf, sum(cost_of_goods_xaf)::bigint as cost_of_goods_xaf,
-       sum(gross_profit_xaf)::bigint as gross_profit_xaf, sum(confirmed_sales_count)::integer as confirmed_sales_count
+       sum(revenue_xaf)::bigint as revenue_xaf,
+       sum(cost_of_goods_xaf)::bigint as known_cost_of_goods_xaf,
+       case when sum(uncosted_sales_count) = 0 then sum(gross_profit_xaf)::bigint else null end as gross_profit_xaf,
+       sum(uncosted_sales_count)::integer as uncosted_sales_count,
+       sum(confirmed_sales_count)::integer as confirmed_sales_count
 from public.ns_performance_daily
 group by org_id, site_id, date_trunc('month', performance_day)::date;
 
@@ -741,8 +744,11 @@ create or replace view public.ns_performance_annual
 with (security_invoker = true)
 as
 select org_id, site_id, date_trunc('year', performance_day)::date as performance_year,
-       sum(revenue_xaf)::bigint as revenue_xaf, sum(cost_of_goods_xaf)::bigint as cost_of_goods_xaf,
-       sum(gross_profit_xaf)::bigint as gross_profit_xaf, sum(confirmed_sales_count)::integer as confirmed_sales_count
+       sum(revenue_xaf)::bigint as revenue_xaf,
+       sum(cost_of_goods_xaf)::bigint as known_cost_of_goods_xaf,
+       case when sum(uncosted_sales_count) = 0 then sum(gross_profit_xaf)::bigint else null end as gross_profit_xaf,
+       sum(uncosted_sales_count)::integer as uncosted_sales_count,
+       sum(confirmed_sales_count)::integer as confirmed_sales_count
 from public.ns_performance_daily
 group by org_id, site_id, date_trunc('year', performance_day)::date;
 
@@ -750,8 +756,6 @@ revoke all on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) from p
 grant execute on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) to authenticated, service_role;
 revoke all on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) from public, anon, authenticated;
 grant execute on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) to service_role;
-
-grant execute on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) to authenticated, service_role;
 revoke all on function public.ns_receive_supplier_purchase_line(uuid,uuid,uuid,uuid,numeric,uuid,text) from public, anon;
 grant execute on function public.ns_receive_supplier_purchase_line(uuid,uuid,uuid,uuid,numeric,uuid,text) to authenticated, service_role;
 revoke all on function public.ns_record_supplier_payment(uuid,uuid,uuid,bigint,text,uuid,text,uuid,text) from public, anon;
