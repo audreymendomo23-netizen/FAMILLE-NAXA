@@ -1792,9 +1792,9 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         val latest = dao.findLatestStaffTimeEvent(orgId, siteId, staff)
         val allowed = when (eventType) {
             "staff_clock_in" -> latest == null || latest.recordType == "staff_clock_out"
-            "staff_break_start" -> latest?.recordType in setOf("staff_clock_in", "staff_break_end")
+            "staff_break_start" -> latest != null && latest.recordType in setOf("staff_clock_in", "staff_break_end")
             "staff_break_end" -> latest?.recordType == "staff_break_start"
-            "staff_clock_out" -> latest?.recordType in setOf("staff_clock_in", "staff_break_end")
+            "staff_clock_out" -> latest != null && latest.recordType in setOf("staff_clock_in", "staff_break_end")
             else -> false
         }
         require(allowed) {
