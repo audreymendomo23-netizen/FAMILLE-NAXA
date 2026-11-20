@@ -764,9 +764,13 @@ fun StockContent(
     val importDuplicateCount = importPreview.count { row ->
         stock.any { it.sku.trim().equals(row.sku.trim(), ignoreCase = true) }
     }
-    val transfers by remember(siteId) {
-        repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "inventory_transfer")
+    val allTransfers by remember(session.account.organizationId) {
+        repository.dao.observeOrganizationManagementRecordsByType(session.account.organizationId, "inventory_transfer")
     }.collectAsState(initial = emptyList())
+    val transfers = allTransfers.filter { transfer ->
+        val metadata = runCatching { org.json.JSONObject(transfer.metadataJson) }.getOrNull()
+        metadata?.optString("sourceSiteId") == siteId || metadata?.optString("destinationSiteId") == siteId
+    }
     val transferDestinations = session.account.activeSites.filter { it.id != siteId }
     var transferDestinationSiteId by rememberSaveable { mutableStateOf("") }
     var transferItemId by rememberSaveable { mutableStateOf("") }
@@ -917,35 +921,40 @@ fun StockContent(
                         }
                         Button(
                             onClick = {
-                                val quantityToTransfer = transferQuantity.replace(",", ".").toDoubleOrNull() ?: 0.0
-                                scope.launch {
-                                    transferBusy = true
-                                    transferError = null
-                                    runCatching {
-                                        require(transferDestinationSiteId.isNotBlank() && transferDestinationSiteId != siteId) {
-                                            "Choisis un point de vente destination différent du site source."
-                                        }
-                                        require(transferItem != null && quantityToTransfer > 0.0 && quantityToTransfer <= transferItem.quantity) {
-                                            "Choisis un article et une quantité disponible strictement positive."
-                                        }
-                                        repository.createInventoryTransfer(
-                                            session.account.organizationId,
-                                            siteId,
-                                            transferDestinationSiteId,
-                                            transferItem.id,
-                                            quantityToTransfer,
-                                            session.account.memberId
-                                        )
-                                    }.onSuccess { record ->
-                                        transferItemId = ""
-                                        transferQuantity = "1"
-                                        transferMessage = "Demande " + record.reference + " créée. Le stock n'est pas encore modifié."
+                                val quantityToTransfer: Double = transferQuantity.replace(",", ".").toDoubleOrNull() ?: 0.0
+                                val selectedItemForTransfer = transferItem
+                                if (selectedItemForTransfer == null || !quantityToTransfer.isFinite() ||
+                                    quantityToTransfer <= 0.0 || quantityToTransfer > selectedItemForTransfer.quantity
+                                ) {
+                                    transferError = "Choisis un article et une quantité disponible strictement positive."
+                                } else if (transferDestinationSiteId.isBlank() || transferDestinationSiteId == siteId) {
+                                    transferError = "Choisis un point de vente destination différent du site source."
+                                } else {
+                                    scope.launch {
+                                        transferBusy = true
                                         transferError = null
-                                    }.onFailure { transferError = it.message ?: "Création du transfert impossible." }
-                                    transferBusy = false
+                                        runCatching {
+                                            repository.createInventoryTransfer(
+                                                session.account.organizationId,
+                                                siteId,
+                                                transferDestinationSiteId,
+                                                selectedItemForTransfer.id,
+                                                quantityToTransfer,
+                                                session.account.memberId,
+                                                session.account.roleCode
+                                            )
+                                        }.onSuccess { record ->
+                                            transferItemId = ""
+                                            transferQuantity = "1"
+                                            transferMessage = "Demande " + record.reference + " créée. Le stock ne changera qu'à la réception."
+                                            transferError = null
+                                        }.onFailure { transferError = it.message ?: "Création du transfert impossible." }
+                                        transferBusy = false
+                                    }
                                 }
                             },
-                            enabled = !transferBusy && session.account.activeSites.size > 1 && transferDestinationSiteId.isNotBlank() && transferItem != null,
+                            enabled = !transferBusy && session.account.roleCode == "promoter" &&
+                                session.account.activeSites.size > 1 && transferDestinationSiteId.isNotBlank() && transferItem != null,
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (transferBusy) "Création…" else "Créer une demande de transfert") }
                     } else {
@@ -956,31 +965,52 @@ fun StockContent(
                 }
             }
         }
-        item { Text("Demandes de transfert du site source", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text("Demandes de transfert du réseau", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         if (transfers.isEmpty()) {
-            item { Text("Aucune demande de transfert sur ce point de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text("Aucune demande de transfert pour ce point de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         items(transfers) { transfer ->
             var transitionReason by rememberSaveable(transfer.id) { mutableStateOf("") }
-            val events by remember(transfer.id, siteId) {
-                repository.dao.observeWorkflowEvents(session.account.organizationId, siteId, "inventory_transfer", transfer.id)
+            val metadata = remember(transfer.metadataJson) {
+                runCatching { org.json.JSONObject(transfer.metadataJson) }.getOrNull()
+            }
+            val sourceTransferSiteId = metadata?.optString("sourceSiteId")?.takeIf { it.isNotBlank() } ?: transfer.siteId
+            val destinationTransferSiteId = metadata?.optString("destinationSiteId").orEmpty()
+            val sourceTransferSiteName = metadata?.optString("sourceSiteName").orEmpty()
+            val destinationTransferSiteName = metadata?.optString("destinationSiteName").orEmpty()
+            val isSourceSite = siteId == sourceTransferSiteId
+            val isDestinationSite = siteId == destinationTransferSiteId
+            val events by remember(transfer.id, sourceTransferSiteId) {
+                repository.dao.observeWorkflowEvents(session.account.organizationId, sourceTransferSiteId, "inventory_transfer", transfer.id)
             }.collectAsState(initial = emptyList())
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(transfer.reference + " · " + transfer.title, fontWeight = FontWeight.SemiBold)
-                    Text("Destination : " + transfer.counterparty + " · Statut : " + transfer.status)
-                    val metadata = runCatching { org.json.JSONObject(transfer.metadataJson) }.getOrNull()
-                    Text("Quantité : " + (metadata?.optDouble("quantity") ?: 0.0) + " · SKU : " + (metadata?.optString("sku") ?: "—"))
-                    if (session.account.roleCode == "promoter" && transfer.status in setOf("open", "approved")) {
+                    Text(
+                        (if (isSourceSite) "Sortie demandée depuis : " else "Réception prévue à : ") +
+                            (if (isSourceSite) sourceTransferSiteName else destinationTransferSiteName) +
+                            " · Statut : " + transfer.status
+                    )
+                    Text(
+                        "Trajet : " + sourceTransferSiteName + " → " + destinationTransferSiteName +
+                            " · Quantité : " + (metadata?.optDouble("quantity") ?: 0.0) +
+                            " · SKU : " + (metadata?.optString("sku") ?: "—")
+                    )
+                    val canApprove = session.account.roleCode == "promoter" && isSourceSite && transfer.status == "open"
+                    val canReceive = session.account.roleCode == "promoter" && isDestinationSite && transfer.status == "approved"
+                    val canReject = session.account.roleCode == "promoter" &&
+                        transfer.status in setOf("open", "approved") && (isSourceSite || isDestinationSite)
+                    if (canApprove || canReceive || canReject) {
                         OutlinedTextField(
                             transitionReason,
                             { transitionReason = it },
                             Modifier.fillMaxWidth(),
                             label = { Text("Motif obligatoire pour cette étape") }
                         )
-                        val actions = when (transfer.status) {
-                            "open" -> listOf("approved" to "Approuver la demande", "rejected" to "Rejeter")
-                            else -> listOf("received" to "Confirmer la réception", "rejected" to "Rejeter")
+                        val actions = buildList {
+                            if (canApprove) add("approved" to "Approuver la demande")
+                            if (canReceive) add("received" to "Confirmer la réception physique")
+                            if (canReject) add("rejected" to "Rejeter la demande")
                         }
                         actions.forEach { (nextStatus, label) ->
                             OutlinedButton(
@@ -988,14 +1018,14 @@ fun StockContent(
                                     scope.launch {
                                         runCatching {
                                             repository.transitionManagementRecord(
-                                                session.account.organizationId, siteId, transfer.id,
+                                                session.account.organizationId, sourceTransferSiteId, transfer.id,
                                                 nextStatus, transitionReason, session.account.memberId
                                             )
                                         }.onSuccess {
                                             transitionReason = ""
                                             transferMessage = when (nextStatus) {
-                                                "approved" -> "Transfert approuvé ; aucun stock n'a encore été modifié."
-                                                "received" -> "Réception confirmée ; sortie source et entrée destination enregistrées."
+                                                "approved" -> "Transfert approuvé ; stocks inchangés."
+                                                "received" -> "Réception confirmée ; mouvements source et destination journalisés."
                                                 else -> "Transfert rejeté ; stocks inchangés."
                                             }
                                             transferError = null
@@ -1006,9 +1036,15 @@ fun StockContent(
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(label) }
                         }
+                    } else if (transfer.status == "approved" && isSourceSite) {
+                        Text("En attente de confirmation physique sur le site destination.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     events.take(5).forEach { event ->
-                        Text(event.fromStatus + " → " + event.toStatus + " · " + event.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            event.fromStatus + " → " + event.toStatus + " · " + event.reason,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
