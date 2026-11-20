@@ -1029,6 +1029,20 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         }
         val confirmed = sale.copy(status = "confirmed")
         dao.updateSale(confirmed)
+        dao.insertWorkflowEvent(
+            LocalWorkflowEvent(
+                id = UUID.randomUUID().toString(),
+                orgId = orgId,
+                siteId = siteId,
+                aggregateType = "sale",
+                aggregateId = sale.id,
+                fromStatus = "pending",
+                toStatus = "confirmed",
+                reason = "Confirmation serveur du prestataire : " + providerPaymentReference,
+                actorMemberId = sale.actorMemberId,
+                createdAtMillis = now
+            )
+        )
         enqueue(orgId, "sale", sale.id, "sale.payment_confirmed_server", siteId)
         confirmed
     }
