@@ -1135,3 +1135,131 @@ Artefact issu de ce workflow :
 
 Le commit `c87bf03b436c03cf5a84dcc9e01885e369e6cbaf` étend les filtres CI pour déclencher les tests aussi sur les changements de `supabase/config.toml`, du service Referral, de sa migration candidate et des contrats tarifaires dans les événements push et pull request. Le workflow `44793189090` a été déclenché ; au dernier contrôle, ses trois jobs de contrats/tarifs étaient réussis et le job Android était encore en compilation. Ce commit ne modifie pas le code métier Android ni le service Referral ; le build et l'artefact du commit précédent restent la preuve complète terminée pour ces sources.
 
+
+
+## 39. NAXA SERVICES — fournisseurs WhatsApp, charges, fidélité et validation finale (20 novembre 2026)
+
+**Branche :** work/naxa-services-completion-20261120  
+**HEAD validé :** 1117dac353d1cd3e0ef93b96430614e422d8d329  
+**Workflow final :** [44802531739 — SUCCESS, 4/4 jobs](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44802531739)
+
+### 39.1 Stock et réapprovisionnement fournisseur par WhatsApp
+
+- Ajout du champ de contact WhatsApp par article, avec indicatif international et normalisation en chiffres.
+- Le contact est visible sur la fiche de stock, modifiable depuis la fiche et pris en charge dans le modèle d'import CSV sous la colonne supplier_whatsapp.
+- Lorsque le stock atteint ou passe sous le seuil configuré, l'article affiche une proposition de commande.
+- La quantité suggérée vise deux fois le seuil (au minimum une unité), déduction faite du stock disponible.
+- L'action ouvre WhatsApp avec le fournisseur et un texte préparé indiquant l'article, la référence, la quantité, le stock actuel et le seuil. Le Promoteur ou l'utilisateur autorisé confirme lui-même l'envoi ; aucun message n'est envoyé sans action humaine.
+
+Cette fonction est actuellement locale à l'application et à l'article/site. Le contact et les opérations ne sont pas encore synchronisés par une API ERP distante entre appareils.
+
+### 39.2 Charges récurrentes et échéancier de gestion
+
+Une entrée « Charges et échéances de paiement » est disponible depuis le Profil du rôle promoter. La page permet de :
+
+- créer et modifier une charge avec libellé/catégorie libre, montant FCFA, périodicité mensuelle, trimestrielle, annuelle ou unique ;
+- fixer la prochaine échéance en nombre de jours et le délai de rappel de 0 à 30 jours ;
+- consulter les échéances proches, en retard et les autres échéances actives ;
+- enregistrer des règlements partiels ou complets, avec validation du solde restant ;
+- désactiver une charge sans supprimer son historique ;
+- consulter les règlements antérieurs.
+
+Le calendrier local avance d'un seul cycle après règlement complet : il ne masque donc pas silencieusement les échéances antérieures impayées. Le même contrôle de périmètre organisation/site est appliqué dans les opérations locales.
+
+### 39.3 Rappels Android et chiffres de gestion
+
+- Ajout d'un RecurringChargeReminderWorker Android WorkManager, planifié à fréquence quotidienne et limité à l'organisation de la session.
+- Le Worker relit la base Room existante naxa-services-local.db, tient compte du délai de rappel et évite les répétitions multiples le même jour.
+- Sur Android 13+, la page demande l'autorisation runtime des notifications. En cas de refus, aucune notification système ne peut être garantie.
+- Le tableau financier mensuel consolide sur les sites actifs autorisés le CA des ventes confirmées et les règlements de charges récurrentes. La somme des règlements utilise une agrégation SQL sans limite arbitraire de 200 lignes.
+
+Définition comptable de l'indicateur : le CA reste le total des ventes confirmées ; le solde affiché soustrait uniquement les paiements de charges récurrentes enregistrés dans ce module. Ce solde est indicatif, pas un résultat net SYSCOHADA, un résultat fiscal ni une clôture comptable. Les autres dépenses, charges à payer et obligations fiscales doivent être rapprochées dans le futur moteur comptable.
+
+Les rappels de cette passe sont locaux à l'appareil. Aucun planificateur serveur, FCM, SMS ou WhatsApp Business API n'a été déployé.
+
+### 39.4 Quatre programmes de fidélité indépendants par activité
+
+Une page « Programme de fidélité » est accessible au rôle promoter. À la première ouverture, quatre programmes sont initialisés indépendamment pour le profil d'activité choisi :
+
+1. Club points — accumulation par tranches d'achat ; les reliquats sont conservés entre opérations (par exemple deux achats de 500 FCFA alimentent un point si le barème est 1 000 FCFA).
+2. Carte de passages — un passage par visite/prestation validée, récompense au seuil.
+3. Cercle privilège — récompense en fonction du montant d'achat cumulé.
+4. Rendez-vous fidèle — fréquence de visite sur une fenêtre glissante (45 jours par défaut).
+
+Le Promoteur peut modifier le nom, la présentation, l'indicateur, l'unité, le seuil, la récompense, la fenêtre glissante et l'état actif/inactif. Une activité client est enregistrable depuis la page ; l'historique conserve les événements, les vagues de récompenses et leur état disponible/utilisé.
+
+Limite actuelle : l'enregistrement d'une activité fidélité est manuel depuis cette page. Il n'est pas encore déclenché automatiquement à chaque vente de caisse et ne se synchronise pas encore entre appareils. Cette connexion dépend du contrat API ERP, de l'identifiant client sur la vente et de la synchronisation idempotente.
+
+### 39.5 Migration Room et compatibilité
+
+- La base locale passe de la version 7 à la version 8.
+- La migration NS_SERVICES_MIGRATION_7_8 ajoute le contact fournisseur et les tables charges, paiements, programmes et événements de fidélité avec leurs index.
+- Le champ fournisseur déclare le même défaut SQL que celui ajouté par la migration, afin de conserver la validation de schéma Room.
+- Le Worker et le démarrage principal utilisent la même base locale et la même chaîne de migrations.
+
+Le gate CI compile et assemble le module Android ; il ne remplace pas une recette instrumentée de migration sur une copie de base de données d'un appareil existant.
+
+### 39.6 Parrainage PME : règles durcies, activation réelle encore dépendante du serveur
+
+Le parcours ajouté à la section 38 reste accessible au Promoteur : génération du code, rattachement des PME, suivi des dates de première activation payée, récompenses successives par vagues de cinq, et affichage du statut des gains.
+
+Les contrats SQL Referral ont été durcis :
+- rejet d'une cadence de souscription marraine nulle ;
+- vérification que le même identifiant d'événement webhook correspond au même abonnement et à la même PME filleule ;
+- refus d'un identifiant d'idempotence réutilisé avec un contenu différent ;
+- une PME déjà qualifiée par un autre abonnement ne peut pas être recomptée.
+
+La récompense attendue reste bien : un cycle mensuel gratuit pour une marraine au plan mensuel, ou un mois d'accès ajouté à la fin du plan annuel. L'application réelle de cette récompense demeure pending_entitlement tant que le moteur serveur d'entitlements et le fournisseur de paiement ne confirment pas l'opération. Le code de parrainage et l'écran ne prouvent pas qu'un abonnement réel a déjà été prolongé.
+
+### 39.7 Schéma serveur candidat v3 — non appliqué
+
+Le nouveau fichier supabase/drafts/naxa_services_v3_operations_rewards_sync.sql ajoute le modèle candidat pour :
+- les charges récurrentes et leurs paiements idempotents ;
+- les programmes et événements de fidélité ;
+- les reçus de synchronisation, conflits et file d'attente de notifications ;
+- les politiques RLS et fonctions transactionnelles associées ;
+- le contact WhatsApp fournisseur.
+
+Les contrats de paiement et de fidélité comparent le contenu rejoué à la clé d'idempotence ; un contenu différent avec la même clé est rejeté. Le barème de points conserve les achats sous seuil. Le script se termine par rollback; et reste un draft de revue : il n'a pas été exécuté ni validé sur un PostgreSQL isolé. Les filtres CI ont été étendus aux drafts v1, v2, Referral et v3.
+
+### 39.8 Preuve CI finale
+
+Le workflow 44802531739 sur le HEAD 1117dac353d1cd3e0ef93b96430614e422d8d329 est terminé SUCCESS — 4/4 jobs :
+
+- assemblage Android debug ;
+- contrats Referral ;
+- Auth scope et business-mode ;
+- tests du catalogue de maturité tarifaire.
+
+Artefact produit :
+- nom : naxa-services-debug-apk ;
+- ID : 14661607933 ;
+- taille : 11 682 565 octets ;
+- SHA-256 : 233c24881277cac33e813b3352674d7392340fd4962308d9feeab8e70a7e44c9 ;
+- expiration : 2026-11-27T19:31:23Z.
+
+Cette preuve certifie la compilation et les contrôles CI ci-dessus. Elle ne certifie pas la migration exécutée sur un appareil, une API distante, un RLS de production, un fournisseur de paiement, ni les notifications externes.
+
+### 39.9 Backlog obligatoire avant « VERT GLOBAL »
+
+| Chantier | État après cette passe |
+|---|---|
+| ERP distant et synchronisation offline de bout en bout | Non livré ; schéma/structure candidats uniquement, pas d'API de synchronisation complète |
+| Idempotence et résolution des conflits multi-appareils | Contrats SQL candidats ; aucun moteur de fusion et aucune recette réseau réelle |
+| RLS org/site/poste/rôle | Policies candidates présentes dans les drafts ; non appliquées et non testées sur une base isolée |
+| Paiements récurrents, webhooks et entitlements | Non activés ; aucun prélèvement réel, la récompense Referral reste en attente d'entitlement |
+| FCM, CRM serveur, SMS et WhatsApp Business API | Non déployés ; seul le rappel Android local est ajouté |
+| Comptabilité SYSCOHADA, impôts, taxes et paie | Non validés par expert-comptable/fiscaliste et non qualifiés réglementairement |
+| Recettes instrumentées, appareils, performance et restauration | Non exécutées sur appareils physiques ni environnement de charge |
+| Release Android signée | APK debug uniquement ; clé de signature et release non fournies |
+| Web/PWA séparée | À finaliser et à tester indépendamment du natif Android |
+| Fulfulde complet | Ressources complètes et relecture native encore nécessaires |
+| Console centralisée des dix apps, CSO partagé, passerelle IA versionnée et NAXA SECURITY | Non livrés dans cette passe |
+
+### 39.10 Environnement, coûts et règle de livraison
+
+Le seul projet Supabase connecté est le projet existant NAXA, sans schéma ns_* ni Edge Functions NAXA SERVICES déployées. La création d'une branche Supabase de développement a demandé une confirmation de coût ; aucune dépense n'a été engagée. Aucune migration ou fonction n'a donc été déployée dans le mauvais projet.
+
+Aucun secret de fournisseur de paiement, WhatsApp Business, SMS ou FCM, aucune clé de signature Android, aucun appareil physique de recette et aucune validation professionnelle comptable/fiscale n'étaient disponibles dans l'environnement. Ils restent des dépendances réelles, pas des tâches que la compilation debug peut simuler.
+
+Conclusion honnête : le périmètre Android ajouté dans cette passe est vert au build CI (4/4) et le code reste sur la branche de travail. NAXA SERVICES n'est pas encore « VERT GLOBAL ». Aucune fusion dans main, aucun déploiement production, aucune migration Supabase réelle, aucune Release Android signée et aucune publication n'ont été effectués.
