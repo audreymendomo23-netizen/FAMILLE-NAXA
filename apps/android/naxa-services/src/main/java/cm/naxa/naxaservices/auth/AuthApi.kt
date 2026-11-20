@@ -65,15 +65,16 @@ class AuthApi(private val context: Context) {
         )
     }
 
-    suspend fun changePassword(accessToken: String, currentPassword: String, newPassword: String): AuthSession =
+    suspend fun changePassword(session: AuthSession, currentPassword: String, newPassword: String): AuthSession =
         requestSession(
             JSONObject()
                 .put("action", "change_password")
                 .put("app_code", "naxa-services")
                 .put("current_password", currentPassword)
                 .put("new_password", newPassword)
+                .put("refresh_token", session.refreshToken)
                 .put("device", devicePayload()),
-            accessToken
+            session.accessToken
         )
 
     suspend fun logout(accessToken: String) {
