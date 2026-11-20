@@ -470,6 +470,7 @@ internal fun OrganizationWorkspaceContent(
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var profileConfirmedHere by remember { mutableStateOf(false) }
 
     // The authenticated organization profile is authoritative. A local draft
     // may be resumed explicitly, but must never silently overwrite server state.
@@ -504,7 +505,7 @@ internal fun OrganizationWorkspaceContent(
             }
         }
         if (route == AppRoute.ORGANIZATION) {
-            if (profile != null && (
+            if (!profileConfirmedHere && profile != null && (
                 profile!!.displayName != session.account.organizationName ||
                 profile!!.businessMode != session.account.businessMode ||
                 profile!!.defaultLocale != session.account.defaultLocale
@@ -558,8 +559,10 @@ internal fun OrganizationWorkspaceContent(
                                         api.updateOrganizationProfile(session.accessToken, displayName, mode, locale)
                                     }.onSuccess {
                                         runCatching { repository.saveOrganizationProfile(orgId, displayName, mode, locale) }
+                                        profileConfirmedHere = true
                                         notice = "Profil et modèle d’exploitation confirmés par le serveur."
                                     }.onFailure { remoteError ->
+                                        profileConfirmedHere = false
                                         runCatching { repository.saveOrganizationProfile(orgId, displayName, mode, locale) }
                                             .onSuccess {
                                                 notice = "Brouillon local uniquement : le serveur n’a pas confirmé la modification."
