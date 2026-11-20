@@ -6,7 +6,6 @@ import android.graphics.Paint
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -48,22 +47,6 @@ import java.util.Calendar
 import kotlin.math.roundToLong
 
 private fun xaf(v: Long): String = "%,d F".format(v).replace(',', ' ')
-
-@Composable
-private fun SiteSelector(session: AuthSession, selected: String, onChange: (String) -> Unit) {
-    if (session.account.activeSites.size > 1) {
-        androidx.compose.material3.ExposedDropdownMenuBox(
-            expanded = false,
-            onExpandedChange = {}
-        ) {
-            OutlinedButton(onClick = {}, modifier = Modifier.fillMaxWidth()) {
-                Text(session.account.activeSites.firstOrNull { it.id == selected }?.name ?: "Point de vente")
-            }
-        }
-    } else {
-        Text(session.account.activeSites.firstOrNull()?.name ?: "Aucun site affecté", color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
 
 @Composable
 fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
@@ -334,7 +317,7 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
                     }
                     val goal = target.toLongOrNull() ?: 0L
                     val ratio = if (goal > 0) (sales.toDouble() / goal.toDouble()).coerceIn(0.0,1.0).toFloat() else 0f
-                    androidx.compose.material3.LinearProgressIndicator(progress = { ratio }, modifier = Modifier.fillMaxWidth())
+                    androidx.compose.material3.LinearProgressIndicator(progress = ratio, modifier = Modifier.fillMaxWidth())
                     Text(if (goal > 0) "Atteinte : " + (ratio * 100).toInt() + " % · Écart : " + xaf(goal - sales) else "Saisis une cible pour suivre l’atteinte.")
                     Button(onClick = {
                         if (goal <= 0 || title.isBlank()) notice = "Un objectif et une cible positive sont requis."
