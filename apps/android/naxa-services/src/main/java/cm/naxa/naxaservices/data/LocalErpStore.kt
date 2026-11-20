@@ -1255,6 +1255,57 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         customer
     }
 
+    suspend fun updateLocalCustomer(
+        orgId: String,
+        siteId: String,
+        customerId: String,
+        name: String,
+        phone: String,
+        privateNotes: String,
+        contactConsent: Boolean,
+        addressLine: String,
+        neighborhood: String,
+        landmark: String,
+        latitude: Double?,
+        longitude: Double?,
+        locationAccuracyMeters: Float?,
+        locationConsent: Boolean
+    ): LocalCustomer = database.withTransaction {
+        require(orgId.isNotBlank() && siteId.isNotBlank() && customerId.isNotBlank() && name.isNotBlank()) {
+            "Organisation, point de vente et nom du client obligatoires."
+        }
+        require(phone.length <= 32 && privateNotes.length <= 1000) { "Coordonnées ou note trop longues." }
+        require(addressLine.length <= 240 && neighborhood.length <= 100 && landmark.length <= 160) { "Adresse ou repère trop long." }
+        require((latitude == null) == (longitude == null)) { "Les coordonnées GPS doivent être renseignées ensemble." }
+        require(latitude == null || latitude in -90.0..90.0) { "Latitude invalide." }
+        require(longitude == null || longitude in -180.0..180.0) { "Longitude invalide." }
+        require(locationAccuracyMeters == null || locationAccuracyMeters >= 0f) { "Précision GPS invalide." }
+        require(locationConsent || (latitude == null && longitude == null && locationAccuracyMeters == null)) {
+            "Le consentement du client est nécessaire pour conserver ses coordonnées GPS."
+        }
+        val current = dao.findCustomer(customerId, orgId, siteId)
+            ?: throw IllegalArgumentException("Fiche client introuvable sur ce point de vente.")
+        val sameCoordinates = current.latitude == latitude && current.longitude == longitude
+        val now = System.currentTimeMillis()
+        val updated = current.copy(
+            displayName = name.trim(),
+            phoneContact = phone.trim(),
+            notesPrivate = privateNotes.trim(),
+            contactConsent = contactConsent,
+            addressLine = addressLine.trim(),
+            neighborhood = neighborhood.trim(),
+            landmark = landmark.trim(),
+            latitude = if (locationConsent) latitude else null,
+            longitude = if (locationConsent) longitude else null,
+            locationAccuracyMeters = if (locationConsent) locationAccuracyMeters else null,
+            locationCapturedAtMillis = if (!locationConsent || latitude == null) null else if (sameCoordinates) current.locationCapturedAtMillis else now,
+            locationConsentAtMillis = if (locationConsent) current.locationConsentAtMillis ?: now else null
+        )
+        dao.updateCustomer(updated)
+        enqueue(orgId, "customer", customerId, "customer.updated", siteId)
+        updated
+    }
+
     suspend fun createCustomerFollowUp(
         orgId: String,
         siteId: String,
