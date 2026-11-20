@@ -698,11 +698,11 @@ Les dossiers sont préparés dans 'assets/naxa-services/activities/' avec un REA
 - La photo de profil est conservée comme URI locale ; aucun service serveur d'avatar n'est encore branché.
 - Les photos métier ne sont pas encore dans le repo ; les dossiers sont prêts.
 - Les tests sur émulateur/appareils physiques, la migration Room depuis une version installée, la recette multi-sites/RLS et la recette Supabase restent à faire.
-- Le contrôle CI le plus récent est le run [44742072881](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44742072881), résultat global `success`, sur le commit `789048c9e212ead46697f72ef62125de53959bb3`. Auth/Deno et compilation Kotlin/Compose/Room/KAPT sont réussis ; le workflow a également vérifié les 13 dossiers photos d'activité et les 4 documents légaux embarqués. Artifact `naxa-services-debug-apk`, ID `14630957608`. APK extrait : 12 052 148 octets, SHA-256 `c230f15227604169a48774220ff804ae951dc59590f67519e57370edc8fc71a4`. Le HEAD courant de branche inclut ce commit et les correctifs fonctionnels décrits ci-dessous.
+- Le contrôle CI le plus récent est le run [44745166818](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44745166818), résultat global `success`, sur le commit `5acd99136a72ba310052532e74e6049992175347`. Auth/Deno, vérification des 13 dossiers photos et des quatre documents légaux, compilation Kotlin/Compose/Room/KAPT et assemblage APK debug ont réussi. Artifact `naxa-services-debug-apk`, ID `14632951831`. APK extrait : 12 101 973 octets, SHA-256 `e2303edfb2801f7bd818ff152d4753efc95f7a9894ea5432870685851da1365e`. Le ZIP de l'artifact a été testé sans erreur ; le binaire reste un APK debug, non signé Release.
 
 ## 32. Décision de statut
 
-**Porte de compilation Android debug : VERT** sur le commit `789048c9e212ead46697f72ef62125de53959bb3` (run 44742072881). **Statut fonctionnel global : PARTIEL / EN RECETTE.** La version ne sera pas « verte production » avant la migration et la recette RLS isolée, le transport de synchronisation idempotent, la validation des flux de paiement/abonnement, les essais sur appareil et la recette métier des trois modèles organisationnels.
+**Porte de compilation Android debug : VERT** sur le commit `5acd99136a72ba310052532e74e6049992175347` (run 44745166818). **Statut fonctionnel global : PARTIEL / EN RECETTE.** La version ne sera pas « verte production » avant la migration et la recette RLS isolée, le transport de synchronisation idempotent, la validation des flux de paiement/abonnement, les essais sur appareil et la recette métier des trois modèles organisationnels.
 
 Aucun merge, aucune migration Supabase réelle, aucun déploiement Edge Function, aucune publication Release et aucune mise en production ne sont couverts par cette passe documentaire.
 
@@ -716,3 +716,66 @@ Aucun merge, aucune migration Supabase réelle, aucun déploiement Edge Function
 - L'artifact CI 14630957608 a été téléchargé et inspecté : l'archive contient le fichier naxa-services-debug.apk (12 052 148 octets). Son SHA-256 calculé après extraction est c230f15227604169a48774220ff804ae951dc59590f67519e57370edc8fc71a4.
 
 Ces vérifications ne remplacent pas l'installation sur un téléphone, l'essai des parcours par rôle, la migration sur Supabase isolé, les tests RLS et les essais de restauration/synchronisation hors connexion.
+
+## 34. Clôture de la passe de construction et audit de cohérence — 20 novembre 2026
+
+### 34.1 Dernier état Git et preuve CI
+
+- Branche de travail : `work/naxa-services-completion-20261120`.
+- Commit applicatif testé : `5acd99136a72ba310052532e74e6049992175347`.
+- Run CI : [44745166818](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44745166818), conclusion `success`.
+- Job Auth/Deno : réussi (type-check + tests contractuels).
+- Job Android : réussi (contrôle des assets, SDK, Gradle, Kotlin/Compose, Room/KAPT, assembleDebug, upload artifact).
+- Artifact : `naxa-services-debug-apk`, ID `14632951831`.
+- APK extrait : `naxa-services-debug.apk`, 12 101 973 octets.
+- SHA-256 : `e2303edfb2801f7bd818ff152d4753efc95f7a9894ea5432870685851da1365e`.
+- Archive ZIP testée : aucune erreur d'intégrité.
+- `main` est restée au commit de référence `439fa4186b602c45e9958cc264c42b0c9ee6fbb4`. Aucun merge.
+- Aucune migration Supabase réelle, aucun déploiement Edge Function, aucune Release signée et aucune mise en production.
+
+### 34.2 Fonctionnalités Android confirmées dans le dernier build
+
+- Tableau de bord : sélecteur parmi les sites autorisés ; ventes locales du jour, dépenses saisies, flux simplifié, rendez-vous ou tickets pressing selon l'activité, articles sous seuil et opérations locales en attente. Les chiffres portent une mention explicite locale/non synchronisée et ne prétendent pas être une consolidation réseau.
+- Stock : coût total estimatif, valeur de vente théorique, marge brute potentielle et nombre d'articles non valorisés, calculés par site sur les coûts/prix saisis. L'estimation exclut notamment taxes, pertes, frais indirects et opérations non synchronisées.
+- Assistance : les demandes affichées dans Livechat sont maintenant filtrées par organisation **et par site sélectionné** ; un utilisateur sans site autorisé ne peut pas créer une demande.
+- Caisse : après encaissement, ouverture du reçu PDF avec enregistrement, partage de fichier PDF via le sélecteur Android (WhatsApp inclus si installé) et impression Android. Les paiements Mobile Money en attente sont indiqués comme non confirmés.
+- Facturation : créances clients distinctes des remboursements dus par la PME.
+- Notifications locales : briefings matin/soir avec identifiants de travail et de notification distincts, évitant le remplacement mutuel des deux horaires.
+- Dossiers et assets légaux : le workflow CI vérifie les 13 dossiers d'activité et les quatre documents légaux FR/EN embarqués.
+
+### 34.3 Audit de cohérence avec les Prompts 0.1 à 0.6
+
+| Référence | État réel de NAXA SERVICES après cette passe | Réserve de sortie |
+|---|---|---|
+| Prompt 0.1 — cadrage/stack | Projet Android natif compilé avec AGP 8.6.1, KGP 2.0.20, Gradle 8.7, compile/target SDK 35, Compose BOM 2024.10.01, Room 2.6.1. | Le document de référence Prompt 0.1 décrit une baseline plus récente (AGP 9.3.1, Gradle 9.5.0, KGP 2.4.21, SDK 37, Compose BOM 2026.09.00, Room 2.8.5, WorkManager 2.12.0). Écart confirmé ; aucune mise à niveau transversale n'a été tentée, afin de ne pas créer une régression sur les dix applications. Un chantier de modernisation contrôlé est requis. |
+| Prompt 0.2 — schéma commun | Modèle métier NAXA Services et migration v2 préparatoire présents. | Le Prompt 0.2 clôt le cadrage, pas une autorisation de migration. La migration Services reste un draft dédié ; aucun DDL n'a été exécuté sur Replay ou Production. |
+| Prompt 0.3 — RLS | Auth renvoie les sites actifs et l'interface filtre rôle + activité ; le rôle limité au poste reste fermé pour les opérations. | Les nouveaux modules métier n'ont pas encore de transport serveur/RPC et de policies RLS testés. L'isolation ne peut pas être certifiée par le seul filtrage Compose. Recette PostgreSQL/Supabase isolée nécessaire. |
+| Prompt 0.4 — comptes administrés | Écran Auth, mot de passe temporaire, récupération administrée, provisioning/scopes et révocation sont présents dans les contrats/Edge Function source. | Alias GoTrue interne non prouvé avec le projet réel ; provisioning, récupération, rotation/révocation d'appareil et comportements de sessions doivent être testés sur environnement isolé. Edge Function non déployée. |
+| Prompt 0.5 — offline/synchronisation | Room, registres locaux et outbox persistante sont en place ; les écrans continuent à créer des opérations locales. | Le moteur complet reste NON LIVRÉ : enveloppe d'événement encore incomplète (acteur/appareil/version de schéma/hash/attempts/ack), pas de worker de synchronisation métier idempotent prouvé, pas d'accusé durable par événement, pas de résolution de conflits par domaine. Les durées offline par entitlement ne sont pas appliquées. |
+| Prompt 0.6 — notifications | Cinq canaux Android définis, permission POST_NOTIFICATIONS, briefings locaux matin/soir indépendants. | FCM, gestion des jetons, centre de notification persistant serveur, états livré/lu, actions idempotentes, préférences/heures calmes et tests Android réels ne sont pas terminés. |
+
+### 34.4 Réserves fonctionnelles 360° restantes
+
+1. **Abonnement et paiement** : les plans sont affichés et la demande de souscription est locale. Aucun agrément Mobile Money, webhook signé, rapprochement automatique, entitlements serveur, période de grâce ni blocage de l'application à l'échéance n'est encore prouvé. La règle demandée (« rappels autorisés, mais accès métier verrouillé après expiration ») reste à implémenter au niveau serveur et client.
+2. **Parrainage de PME** : la récompense d'une formule mensuelle après cinq PME réellement abonnées et renouvelées n'est pas implémentée. Elle doit être calculée côté serveur sur des abonnements payés et non annulés, avec anti-auto-parrainage, unicité et audit.
+3. **Comptabilité** : les registres de gestion, les flux de caisse, les dépenses, les créances et les estimations ne constituent pas un grand livre SYSCOHADA complet. Journaux, comptes, grand livre, balance, rapprochements, immobilisations, amortissements, clôture et états doivent être construits et validés par un expert-comptable.
+4. **Fiscalité** : le module n'intègre pas de régime camerounais ni de taux officiels préchargés et validés. Il permet de préparer des estimations saisies par l'utilisateur ; aucune déclaration officielle n'est transmise.
+5. **IA** : l'assistant est une synthèse déterministe sur les données locales disponibles. Il n'est ni entraîné sur une base comptable certifiée, ni connecté à un moteur prédictif de ventes validé. Les prévisions, scénarios, anomalies et explications de marges restent un chantier distinct avec provenance et validation humaine.
+6. **Livechat média** : la FAQ et les demandes locales existent ; conversation temps réel, audio/vidéo, partage d'écran, consentement de session, signalisation et support agent restent à construire.
+7. **Sauvegardes** : le Keystore conserve un jeton de session si « rester connecté » est choisi. Cela ne constitue pas une sauvegarde métier. Sauvegarde chiffrée, compte Google/Drive facultatif, planification, restauration contrôlée et vérification d'intégrité restent à faire.
+8. **Images de métier** : les 13 dossiers sont prêts, mais le dépôt ne contient pas encore de photos pressing/coiffure/parfumerie/atelier exploitables comme fonds. L'inventaire de l'arbre Git trouvé pendant l'audit ne contenait que des logos de marques. Les cartes gardent un fallback sans images ; les 6 à 10 photos par activité restent à ajouter.
+9. **Tutoriel spotlight** : le tutoriel de cinq étapes est skippable et mémorisé, mais il utilise encore un panneau assombri explicatif ; il ne découpe pas réellement l'écran autour de cinq contrôles UI successifs.
+10. **Profil** : la photo est actuellement conservée comme URI locale sur l'appareil ; aucun stockage serveur/avatar synchronisé n'est branché.
+11. **Réconciliation multi-sites** : chaque site conserve ses registres locaux. La sélection d'un site et les KPI locaux sont présents ; la consolidation réseau complète en lecture seule, les comparaisons temporelles et les transferts inter-sites explicites attendent le backend/RLS.
+12. **Release et distribution** : l'APK archivé est une build debug, pas une Release signée. Aucun lien public d'application ou domaine Web NAXA Services n'est provisionné par cette passe. L'application Android a un identifiant de paquet ; un domaine public ne doit pas être inventé ou présenté comme actif.
+
+### 34.5 Décision finale de la passe
+
+- **Construction Android debug : VERT**, preuve CI 44745166818 et artifact 14632951831.
+- **Auth/Deno contractuel : VERT**, pour les tests de contrat actuellement présents, pas pour l'intégration réelle à Supabase.
+- **Parcours et modules locaux : CONSTRUITS À UN NIVEAU DE RECETTE**, avec les réserves listées en 34.4.
+- **Backend/RLS/synchronisation/paiement/entitlements : NON VALIDÉS**.
+- **Recette sur appareils réels et Release signée : NON EXÉCUTÉES**.
+- **Production : inchangée**.
+
+La suite logique est la recette fonctionnelle Android sur émulateur/appareils, puis l'application de la migration draft et les tests Auth/RLS sur un projet Supabase isolé. Les tests de synchronisation offline et de paiements doivent être validés avant de qualifier l'ERP de complet.
