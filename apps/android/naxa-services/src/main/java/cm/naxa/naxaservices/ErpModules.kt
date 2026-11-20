@@ -445,7 +445,15 @@ fun OrganizationWorkspaceContent(
     val profile by remember(orgId) { repository.dao.observeOrganizationProfile(orgId) }.collectAsState(initial = null)
     val localSites by remember(orgId) { repository.dao.observeSites(orgId) }.collectAsState(initial = emptyList())
     var displayName by rememberSaveable { mutableStateOf(session.account.displayName) }
-    var mode by rememberSaveable { mutableStateOf("solo") }
+    var mode by rememberSaveable {
+        mutableStateOf(
+            when (session.account.roleCode) {
+                "promoter", "network_manager" -> "multi_site_network"
+                "site_manager", "workstation_manager" -> "single_site_multi_workstation"
+                else -> "solo"
+            }
+        )
+    }
     var locale by rememberSaveable { mutableStateOf("fr") }
     var siteCode by rememberSaveable { mutableStateOf("") }
     var siteName by rememberSaveable { mutableStateOf("") }
