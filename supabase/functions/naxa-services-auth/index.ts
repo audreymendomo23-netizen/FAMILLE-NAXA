@@ -69,7 +69,11 @@ async function activeMember(accountId: string) {
 async function activeSiteIds(memberId: string, orgId: string) {
   const q = "ns_member_scopes?select=scope_type,site_id,scope_id&member_id=eq." + encodeURIComponent(memberId) + "&org_id=eq." + encodeURIComponent(orgId) + "&can_read=eq.true";
   const rows = await rest(q, { headers: serviceHeaders() }) as Record<string, unknown>[];
-  const explicitSites = (rows ?? []).flatMap((row) => row.site_id ? [String(row.site_id)] : []);
+  // The current native ERP operates at site scope. Workstation-only assignments
+  // must not be widened to the whole site until workstation-level filters exist.
+  const explicitSites = (rows ?? []).flatMap((row) =>
+    row.scope_type === "site" && row.site_id ? [String(row.site_id)] : []
+  );
   const hasOrganizationScope = (rows ?? []).some((row) => row.scope_type === "organization");
   if (!hasOrganizationScope) return [...new Set(explicitSites)];
   const sites = await rest("ns_sites?select=id&org_id=eq." + encodeURIComponent(orgId) + "&status=eq.active", { headers: serviceHeaders() }) as Record<string, unknown>[];
@@ -79,8 +83,8 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
   if (account.status !== "active") throw new Error("ACCOUNT_NOT_ACTIVE");
   const member = await activeMember(String(account.id));
   if (!member) throw new Error("MEMBER_SCOPE_INVALID");
-  const sites = await activeSiteIds(String(member.id), String(member.org_id));
-  const siteRows = sites.length
+  const scopedSiteIds = await activeSiteIds(String(member.id), String(member.org_id));
+  const siteRows = scopedSiteIds.length
     ? await rest(
       "ns_sites?select=id,code,name,address_label,phone_contact&org_id=eq." +
         encodeURIComponent(String(member.org_id)) + "&status=eq.active",
@@ -88,7 +92,7 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
     ) as Record<string, unknown>[]
     : [];
   const activeSites = (siteRows ?? [])
-    .filter((site) => sites.includes(String(site.id)))
+    .filter((site) => scopedSiteIds.includes(String(site.id)))
     .map((site) => ({
       id: String(site.id),
       code: String(site.code ?? ""),
@@ -96,6 +100,8 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
       address_label: String(site.address_label ?? ""),
       phone_contact: String(site.phone_contact ?? ""),
     }));
+  // Return only active site records; never expose inactive or workstation-only scopes.
+  const sites = activeSites.map((site) => site.id);
   return {
     access_token: authData.access_token,
     refresh_token: authData.refresh_token,
