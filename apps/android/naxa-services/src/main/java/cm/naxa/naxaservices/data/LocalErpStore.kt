@@ -421,6 +421,9 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_management_records WHERE orgId = :orgId AND siteId = :siteId AND recordType = :recordType ORDER BY createdAtMillis DESC")
     fun observeManagementRecordsByType(orgId: String, siteId: String, recordType: String): Flow<List<LocalManagementRecord>>
 
+    @Query("SELECT * FROM local_management_records WHERE orgId = :orgId AND recordType = :recordType ORDER BY createdAtMillis DESC")
+    fun observeOrganizationManagementRecordsByType(orgId: String, recordType: String): Flow<List<LocalManagementRecord>>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertManagementRecord(record: LocalManagementRecord)
 
@@ -833,7 +836,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         metadataJson: String,
         actorMemberId: String
     ): LocalManagementRecord = database.withTransaction {
-        val allowedTypes = setOf("quote", "invoice", "credit_note", "refund_due", "purchase", "tax_estimate", "business_goal", "subscription_request", "support_chat")
+        val allowedTypes = setOf("quote", "invoice", "credit_note", "refund_due", "purchase", "tax_estimate", "business_goal", "subscription_request", "support_chat", "work_order", "repair_order", "service_order")
         require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) { "Organisation, site et opérateur obligatoires." }
         require(recordType in allowedTypes) { "Type de registre non autorisé." }
         require(title.isNotBlank() && amountXaf >= 0L && paidXaf >= 0L && paidXaf <= amountXaf) { "Montants ou libellé incohérents." }

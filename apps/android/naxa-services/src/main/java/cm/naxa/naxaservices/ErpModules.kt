@@ -95,7 +95,15 @@ fun ServicesCatalogContent(
     val siteIds = session.account.activeSiteIds
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
     val services by remember(siteId) { repository.dao.observeServices(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
-    var activity by rememberSaveable { mutableStateOf("pressing") }
+    val activityOptions = when (session.account.activityProfile) {
+        "pressing" -> listOf("pressing", "retail")
+        "coiffure" -> listOf("hair", "retail")
+        "beaute" -> listOf("beauty", "retail")
+        "parfumerie" -> listOf("retail")
+        "couture", "menuiserie", "reparation", "garage", "nettoyage", "domicile", "impression", "photo_evenementiel" -> listOf("service", "material")
+        else -> listOf("service", "retail")
+    }
+    var activity by rememberSaveable(session.account.activityProfile) { mutableStateOf(activityOptions.first()) }
     var name by rememberSaveable { mutableStateOf("") }
     var duration by rememberSaveable { mutableStateOf("30") }
     var price by rememberSaveable { mutableStateOf("") }
@@ -115,7 +123,7 @@ fun ServicesCatalogContent(
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("Nouvelle prestation", fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("pressing", "hair", "retail").forEach { value ->
+                        activityOptions.forEach { value ->
                             OutlinedButton(onClick = { activity = value }) {
                                 Text(if (activity == value) "✓ " + value.uppercase() else value.uppercase())
                             }
@@ -253,7 +261,10 @@ fun StockContent(
     val siteIds = session.account.activeSiteIds
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
     val stock by remember(siteId) { repository.dao.observeInventoryItems(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    val valuations by remember(siteId) { repository.dao.observeInventoryValuations(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     var selectedItemId by rememberSaveable { mutableStateOf("") }
+    var unitCostXaf by rememberSaveable { mutableStateOf("") }
+    var sellingPriceXaf by rememberSaveable { mutableStateOf("") }
     val selected = stock.firstOrNull { it.id == selectedItemId }
     var itemName by rememberSaveable { mutableStateOf("") }
     var sku by rememberSaveable { mutableStateOf("") }
@@ -274,7 +285,7 @@ fun StockContent(
                 siteIds,
                 siteId,
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
-            ) { siteId = it; selectedItemId = "" }
+            ) { siteId = it; selectedItemId = ""; unitCostXaf = ""; sellingPriceXaf = "" }
             LocalOnlyNotice("Chaque mouvement est journalisé localement ; le stock ne peut pas devenir négatif.")
         }
         item {
@@ -312,6 +323,9 @@ fun StockContent(
                     Column(Modifier.weight(1f)) {
                         Text(item.name, fontWeight = FontWeight.Bold)
                         Text(item.sku.ifBlank { "Sans référence" } + " · " + item.unit, style = MaterialTheme.typography.bodySmall)
+                        val value = valuations.firstOrNull { it.inventoryItemId == item.id }
+                        Text("Coût unitaire : " + (value?.unitCostXaf?.toString() ?: "—") + " F", style = MaterialTheme.typography.bodySmall)
+                        Text("Prix de vente : " + (value?.sellingPriceXaf?.toString() ?: "—") + " F", style = MaterialTheme.typography.bodySmall)
                     }
                     Column(horizontalAlignment = Alignment.End) {
                         Text(item.quantity.toString() + " " + item.unit, fontWeight = FontWeight.Bold)
@@ -325,6 +339,26 @@ fun StockContent(
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Mouvement : " + selected.name, fontWeight = FontWeight.Bold)
+                        val savedValue = valuations.firstOrNull { it.inventoryItemId == selected.id }
+                        if (unitCostXaf.isBlank()) unitCostXaf = savedValue?.unitCostXaf?.toString() ?: ""
+                        if (sellingPriceXaf.isBlank()) sellingPriceXaf = savedValue?.sellingPriceXaf?.toString() ?: ""
+                        OutlinedTextField(unitCostXaf, { unitCostXaf = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Coût d’achat unitaire (FCFA)") }, singleLine = true)
+                        OutlinedTextField(sellingPriceXaf, { sellingPriceXaf = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Prix de vente unitaire (FCFA)") }, singleLine = true)
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    runCatching {
+                                        repository.saveInventoryValuation(
+                                            session.account.organizationId, siteId, selected.id,
+                                            unitCostXaf.toLong(), sellingPriceXaf.toLong()
+                                        )
+                                    }.onSuccess { notice = "Coût et prix de vente enregistrés." }
+                                        .onFailure { error = it.message ?: "Enregistrement des coûts impossible." }
+                                }
+                            },
+                            enabled = unitCostXaf.toLongOrNull() != null && sellingPriceXaf.toLongOrNull() != null,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Enregistrer les coûts et la marge brute unitaire") }
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             listOf("in", "consumption", "loss", "adjustment").forEach { type ->
                                 OutlinedButton(onClick = { movementType = type }) { Text(if (movementType == type) "✓ " + type else type) }

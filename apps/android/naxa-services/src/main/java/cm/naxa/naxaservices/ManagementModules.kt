@@ -527,3 +527,90 @@ private fun writeReceiptPdf(context: Context, uri: Uri, item: LocalManagementRec
     context.contentResolver.openOutputStream(uri)?.use { document.writeTo(it) } ?: error("Destination inaccessible.")
     document.close()
 }
+
+@Composable
+fun WorkOrdersContent(
+    modifier: Modifier,
+    repository: NaxaServicesLocalRepository,
+    session: AuthSession,
+    activityProfile: String?
+) {
+    val scope = rememberCoroutineScope()
+    val sites = session.account.activeSiteIds
+    var siteId by rememberSaveable { mutableStateOf(sites.firstOrNull().orEmpty()) }
+    val records by remember(siteId) {
+        repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "work_order")
+    }.collectAsState(initial = emptyList())
+    var customer by rememberSaveable { mutableStateOf("") }
+    var title by rememberSaveable { mutableStateOf("") }
+    var materials by rememberSaveable { mutableStateOf("") }
+    var estimate by rememberSaveable { mutableStateOf("") }
+    var dueDays by rememberSaveable { mutableStateOf("3") }
+    var message by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val business = NaxaActivityCatalog.find(activityProfile)
+    val businessName = business?.titleFr ?: "Atelier / services"
+
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            ModulePageTitle("Ordres de travail", "Devis, dossiers clients, matières ou pièces, délai et suivi des étapes pour $businessName.")
+            AuthorizedSitePicker(
+                sites, siteId,
+                session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
+            ) { siteId = it }
+            LocalOnlyNotice("Dossier préparé sur cet appareil. Le serveur et la synchronisation métier restent à valider.")
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Nouveau dossier de travail", fontWeight = FontWeight.Bold)
+                    OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text("Client") }, singleLine = true)
+                    OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Prestation / réparation / fabrication") }, singleLine = true)
+                    OutlinedTextField(materials, { materials = it }, Modifier.fillMaxWidth(), label = { Text("Matières, pièces ou éléments nécessaires") }, minLines = 2)
+                    OutlinedTextField(estimate, { estimate = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Devis estimatif (FCFA)") }, singleLine = true)
+                    OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("Délai estimé (jours)") }, singleLine = true)
+                    Button(onClick = {
+                        val amount = estimate.toLongOrNull() ?: 0L
+                        if (customer.isBlank() || title.isBlank() || amount <= 0) {
+                            error = "Le client, la description et un devis positif sont requis."
+                        } else scope.launch {
+                            runCatching {
+                                repository.createManagementRecord(
+                                    session.account.organizationId, siteId, "work_order",
+                                    "WO-" + System.currentTimeMillis(), title, customer,
+                                    amount, 0,
+                                    System.currentTimeMillis() + (dueDays.toLongOrNull() ?: 0L) * 86_400_000L,
+                                    "open",
+                                    "{\"activity\":\"" + (activityProfile ?: "autre") + "\",\"materials\":\"" + materials.replace("\"", "'").take(500) + "\",\"stage\":\"received\"}",
+                                    session.account.memberId
+                                )
+                            }.onSuccess {
+                                customer = ""; title = ""; materials = ""; estimate = ""; error = null
+                                message = "Ordre de travail créé localement."
+                            }.onFailure { error = it.message ?: "Création impossible." }
+                        }
+                    }, enabled = siteId.isNotBlank() && customer.isNotBlank() && title.isNotBlank() && (estimate.toLongOrNull() ?: 0L) > 0, modifier = Modifier.fillMaxWidth()) {
+                        Text("Créer le dossier")
+                    }
+                    if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
+                    if (message != null) Text(message!!, color = MaterialTheme.colorScheme.secondary)
+                }
+            }
+        }
+        item { Text("Dossiers du point de vente", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        items(records) { item ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(item.reference + " · " + item.title, fontWeight = FontWeight.Bold)
+                    Text(item.counterparty)
+                    Text("Devis : " + item.amountXaf + " FCFA · " + item.status)
+                    Text("Délai : " + (item.dueAtMillis?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) } ?: "Non défini"),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        if (records.isEmpty()) item { Text("Aucun dossier enregistré sur ce point de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
+}
+
