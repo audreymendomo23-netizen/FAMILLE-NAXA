@@ -237,7 +237,7 @@ async function refreshSession(body: Record<string, unknown>, device: Record<stri
     await touchDevice(
       String(account.id),
       device,
-      true,
+      body.remember_device === true,
       false,
       await sha256(refreshToken),
       await sha256(String(auth.data.refresh_token ?? "")),
