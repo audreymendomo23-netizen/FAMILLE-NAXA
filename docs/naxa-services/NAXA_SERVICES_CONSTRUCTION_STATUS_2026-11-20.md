@@ -698,10 +698,10 @@ Les dossiers sont préparés dans 'assets/naxa-services/activities/' avec un REA
 - La photo de profil est conservée comme URI locale ; aucun service serveur d'avatar n'est encore branché.
 - Les photos métier ne sont pas encore dans le repo ; les dossiers sont prêts.
 - Les tests sur émulateur/appareils physiques, la migration Room depuis une version installée, la recette multi-sites/RLS et la recette Supabase restent à faire.
-- Seul un APK debug était préalablement prouvé. Le nouveau build doit être confirmé par une nouvelle exécution CI sur le dernier commit.
+- Le nouveau contrôle CI 44740489677 est entièrement terminé avec le résultat SUCCESS sur le commit de code `df9d3889d2825cfdba7a05dbefe067d6e658bac4` : contrat Auth/Deno réussi, compilation Kotlin/Compose/Room/KAPT et assemblage APK debug réussis ; artifact `naxa-services-debug-apk` ID `14630094134`, 11 207 951 octets. Le HEAD courant `63c57b083653938b8f85a0fd29fd4b8fcc1b76a8` ajoute uniquement de la documentation après ce commit de code ; aucun fichier applicatif n'a changé depuis la compilation.
 
 ## 32. Décision de statut
 
-La cible fonctionnelle Android est largement étendue, mais le statut reste **CONSTRUCTION ANDROID EN RECETTE** jusqu'à la preuve d'une compilation complète sur le HEAD courant. Même après un build vert, la version ne sera pas « verte production » avant la migration et la recette RLS isolée, le transport de synchronisation idempotent, la validation des flux de paiement/abonnement, les essais sur appareil et la recette métier des trois modèles organisationnels.
+**Porte de compilation Android debug : VERT** sur le commit de code `df9d3889d2825cfdba7a05dbefe067d6e658bac4` (run 44740489677). **Statut fonctionnel global : PARTIEL / EN RECETTE.** La version ne sera pas « verte production » avant la migration et la recette RLS isolée, le transport de synchronisation idempotent, la validation des flux de paiement/abonnement, les essais sur appareil et la recette métier des trois modèles organisationnels.
 
 Aucun merge, aucune migration Supabase réelle, aucun déploiement Edge Function, aucune publication Release et aucune mise en production ne sont couverts par cette passe documentaire.
