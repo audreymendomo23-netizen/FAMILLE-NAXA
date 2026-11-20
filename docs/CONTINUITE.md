@@ -257,7 +257,7 @@ Les fonctions de facturation peuvent partager un contrat technique et des réfé
 - CAMPUS237 : périmètre complet, prompts et règles fonctionnelles à relire.
 - NAXA SECURITY : cahier complet, prompts, limites matérielles et lots réellement opérationnels à confirmer.
 - Billing : entité facturée, unités, durée, prorata, essai, échéance, grâce, suspension, remboursement et réactivation à définir application par application.
-- Tarification : aucun tarif JOBLY ne doit être copié dans les neuf autres produits ; conserver les arbitrages propres à chaque produit.
+- Tarification : aucun tarif JOBLY ne doit être copié dans l'une quelconque des dix applications Famille NAXA ; conserver les arbitrages propres à chaque produit.
 - Engagement : décider pour chaque produit quels contenus, campagnes, publicités, chat et QR ont une utilité réelle.
 - Support : comparer l'existant documenté NAXA avec le besoin de chaque application avant de développer.
 - Partenaires : règles de commission, KYC, validation et paiement à définir par canal et par produit.
@@ -268,3 +268,41 @@ Les fonctions de facturation peuvent partager un contrat technique et des réfé
 **État actuel : audit documentaire enrichi, architecture non verrouillée, construction métier non établie.**
 
 À la reprise, commencer par récupérer le ZIP Jobly, établir les preuves du code correspondant aux apports documentés, puis mettre à jour la matrice comparative et le module Billing & Entitlements. Ne pas lancer de migration Production, déploiement ou publication APK dans le cadre de cette reprise.
+
+
+### 6.11 Matrice d'application des inspirations JOBLY aux dix produits
+
+Cette matrice est une **proposition de portabilité fonctionnelle**, pas un engagement de construire toutes les fonctions dans chaque application. Chaque activation doit être confrontée au cahier métier, au modèle économique et aux contraintes légales du produit.
+
+| Capacité inspirée de JOBLY | Applications candidates | Décision d'orientation |
+|---|---|---|
+| Billing & Entitlements | Les 10 applications | Socle commun prioritaire ; règles, unités facturables, tarifs, quotas et droits propres à chaque application |
+| Feature flags / configuration à distance | Les 10 applications | Socle commun ; configuration auditable, sans remplacer RBAC/RLS ni les contrôles serveur |
+| Centre de notifications et préférences | Les 10 applications | Socle commun ; catégories propres au produit, préférences marketing séparées des alertes opérationnelles |
+| Bannières / annonces administrables | Les 10 applications, selon pertinence | Module optionnel ; informations, campagnes, CTA, dates et ciblage par application |
+| Publicité sponsorisée | Seulement produits dont le modèle commercial le justifie | Option commerciale distincte, jamais imposée ni présentée comme déjà validée |
+| Chat / FAQ / IA / handoff humain | Les 10 applications, selon charge de support | Parcours d'assistance réutilisable ; auditer le service Support NAXA déjà documenté avant tout développement |
+| QR ou lien de partage temporaire | KIOSKO, BOOTIK, ZIPPLE, COTIZ, LOYABLE, NAXA SERVICES, NAXA HOTEL, CAMPUS237, NAXA SECURITY, GRILLAD | Bibliothèque de partage sécurisé optionnelle ; portée minimale, expiration, révocation et audit |
+| Quotas et mesure du coût IA | Toutes les applications qui utilisent l'IA ou OCR | Socle d'observabilité ; quotas par entitlement, mesure par fonction et alertes de budget |
+| Referral / partenaires / attribution | KIOSKO d'abord ; autres produits B2B selon leurs canaux | Moteur d'attribution réutilisable ; commissions, KYC et paiements activés uniquement après validation métier et juridique |
+
+#### Exemples d'adaptation métier
+
+- **KIOSKO :** droits liés aux fonctions de caisse/float, nombre de points, appareils ou options activés ; annonces de service et alertes ; QR/lien de reçu à accès limité si utile. La surveillance des paiements d'abonnement doit rester distincte des transactions Mobile Money des clients.
+- **BOOTIK :** droits par boutique, utilisateurs, volume d'articles ou fonctions avancées ; campagnes promotionnelles de produits ; partage temporaire de factures ou reçus. Les limites doivent tenir compte des profils commerce et dépôt de gaz.
+- **ZIPPLE :** droits par établissement ou capacité convenue ; annonces de menus, événements et offres ; QR de commande, ticket ou partage de facture selon le parcours choisi.
+- **NAXA SERVICES :** droits par salon/pressing, prestataires ou fonctionnalités ; rappels et campagnes de fidélité ; lien limité pour ticket de dépôt, reçu ou statut de linge.
+- **COTIZ :** droits par groupe ou membre selon la tarification validée ; notifications de séance et échéances ; reçus ou relevés partageables sous contrôle. Aucune publicité intrusive dans les échanges d'un groupe et aucune commission de parrainage ne doit être supposée.
+- **LOYABLE :** droits par portefeuille, bien ou unité convenue ; annonces et rappels de loyers ; liens temporaires pour quittances ou états des lieux avec consentement et journalisation.
+- **NAXA HOTEL :** droits par établissement, chambre ou capacité contractuelle ; campagnes et annonces hôtelières ; QR/lien de réservation ou de facture avec durée et portée contrôlées. Les règles de réservation et de chambre restent dans le PMS.
+- **CAMPUS237 :** droits selon le modèle par parent, établissement ou autre unité validée ; annonces ciblées par établissement/classe/parent ; QR temporaires pour documents ou opérations scolaires, avec protection renforcée des données des mineurs.
+- **NAXA SECURITY :** droits par organisation, site, équipement ou capacité convenue ; notifications et alertes de service ; liens d'accès à des preuves/événements soumis à permissions renforcées, expiration et audit. Aucune publicité ne doit perturber une alerte de sécurité.
+- **GRILLAD :** droits selon organisation, Manager, vendeurs, lieux ou capacité convenue ; annonces d'exploitation et informations d'activité ; QR/lien temporaire pour reçu ou rapport. Les trois modes Manager et les cloisonnements par lieu restent inchangés.
+
+#### Comparatif préliminaire avec les capacités historiques de NAXA
+
+- **Déjà documenté dans l'écosystème NAXA :** authentification et permissions, audit, offline/synchronisation, notifications, abonnements/paiements, tableaux de bord/BI et une plateforme d'assistance avec tickets, agents, files et fonctions de communication.
+- **À approfondir avec l'apport JOBLY :** séparation formelle Plan/Subscription/Payment/Entitlement, webhooks idempotents et réconciliation, droits de fonction/quotas indépendants du nom du plan, préférences de notification, gestion de campagnes/contenus depuis un back-office, mesure détaillée des coûts IA par fonction, et partage QR à jeton opaque avec expiration/révocation.
+- **À prouver avant de classer comme réutilisable :** état de code, couverture des tests, compatibilité des schémas, sécurité RLS, séparation des applications et intégration réelle de chaque capacité.
+- **À ne pas reconstruire sans audit :** le support client NAXA, les notifications, les paiements, le BI et les fonctions QR/barcode déjà existantes dans certains domaines. Leur présence dans un cahier ou une architecture ne prouve toutefois pas qu'elles sont complètes ni prêtes à être mutualisées.
+
