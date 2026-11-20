@@ -1050,6 +1050,13 @@ L'interface et les contrats source sont ajoutés, mais le service n'est pas enco
 
 La réussite du build Android debug et des tests de contrat ne doit pas être assimilée à une qualification globale. Les points suivants demeurent à fermer avec preuves propres : API ERP distante, synchronisation offline complète, idempotence et conflits inter-appareils ; RLS réellement testée par organisation/site/poste/rôle ; paiement récurrent, webhooks, entitlements et prélèvements ; notifications FCM, SMS/WhatsApp et planificateur CRM ; SYSCOHADA, fiscalité et paie validées par les professionnels compétents ; appareils physiques, tests instrumentés, charge et restauration ; Release Android signée ; Web/PWA séparée ; Fulfulde complet traduit et relu ; pilotage central des dix applications, mutualisation effective des CSO, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
 
+
+
+#### Audit Supabase connecté — lecture seule
+
+Le seul projet Supabase exposé par la connexion est le projet `NAXA` (région `eu-west-3`, état `ACTIVE_HEALTHY`). Son état courant comporte 41 migrations, 37 tables `public`, aucune table `ns_*`/NAXA SERVICES identifiée et aucune Edge Function déployée. Les advisors signalent notamment 2 tables RLS sans policy, 2 fonctions à search_path mutable, 22 fonctions SECURITY DEFINER exécutables par `anon`, 37 accessibles à `authenticated`, ainsi que plusieurs alertes de performance.
+
+Ces observations concernent l'environnement NAXA connecté, pas un environnement NAXA SERVICES isolé. Aucune migration ni correction n'a été exécutée sur ce projet. Ne pas le modifier pour y installer NAXA SERVICES avant création/identification d'un environnement de recette dédié et cartographie de ses consommateurs existants.
 #### Protection du périmètre et consigne de reprise
 
 - Aucune migration ou fonction Supabase n'a été déployée dans cette étape.
