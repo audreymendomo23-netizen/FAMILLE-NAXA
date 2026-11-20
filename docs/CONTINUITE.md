@@ -107,7 +107,7 @@ Les spécifications JOBLY consultées mentionnent :
 - réconciliation périodique des paiements ;
 - tarifs et devises configurables ;
 - différenciation entre offre gratuite limitée et offre payante avec droits supplémentaires ;
-- quotas IA attachés à un plan.
+- mesure interne de la consommation IA, protections de débit et mécanismes anti-abus, sans facturation supplémentaire au client.
 
 **Orientation proposée pour Famille NAXA : créer un module Billing & Entitlements nettement défini et réutilisable**, puis l'adapter aux unités facturables propres à chaque application.
 
@@ -348,7 +348,7 @@ Ces dimensions sont des unités de mesure candidates, pas des tarifs ni des arbi
 ### Niveau de confiance et prochaines étapes
 
 - **Réutilisable après refonte :** concepts Billing/Entitlements, suivi de consommation, moteur IA abstrait, attribution partenaire, journal d'audit et préférences.
-- **À reconstruire ou corriger avant intégration :** schéma et cycle Billing, adaptateurs de paiement, remboursements, idempotence concurrente, QR/liens sécurisés, quotas IA avec compensation.
+- **À reconstruire ou corriger avant intégration :** schéma et cycle Billing, adaptateurs de paiement, remboursements, idempotence concurrente, QR/liens sécurisés, mécanismes internes de mesure et de compensation des appels IA échoués, sans facturation d'usage au client.
 - **Non démontré dans ce snapshot :** validation build/runtime complète. Le ZIP ne contient ni `node_modules` ni fichier lockfile ; les rapports embarqués signalent encore des parcours E2E à exécuter et une traduction FR/EN non certifiée. Cet audit est statique ; aucun build, test contre un fournisseur réel ou test de base de données n'a été exécuté ici.
 - **Règles de reprise :** ne pas copier les prix JOBLY ; ne pas migrer la base JOBLY dans Supabase FAMILLE-NAXA ; ne pas fusionner les identités ; ne pas donner au central admin accès aux données opérationnelles ; appliquer les migrations Supabase du périmètre FAMILLE-NAXA selon l'autorisation et les contrôles de la section 6.17 ; ne pas altérer le projet NAXA indépendant ou son IA ; les déploiements applicatifs et publications APK restent soumis à une autorisation distincte.
 
