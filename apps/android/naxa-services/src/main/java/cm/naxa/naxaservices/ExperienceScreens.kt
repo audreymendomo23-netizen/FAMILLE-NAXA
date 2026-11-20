@@ -303,9 +303,11 @@ fun AppearanceSettingsContent(locale:String,preferences:NaxaServicesPreferences,
     Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
      Text(if(fr)"Langue de l’application" else "Application language",fontWeight=FontWeight.Bold)
      Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-      OutlinedButton(onClick={onLocale("fr")},enabled=!fr){Text("Français")}
-      OutlinedButton(onClick={onLocale("en")},enabled=fr){Text("English")}
+      OutlinedButton(onClick={onLocale("fr")},enabled=locale!="fr"){Text("Français")}
+      OutlinedButton(onClick={onLocale("en")},enabled=locale!="en"){Text("English")}
+      OutlinedButton(onClick={onLocale("ff-CM")},enabled=locale!="ff-CM"){Text("Fulfulde")}
      }
+     if(locale=="ff-CM") Text("Les traductions Fulfulde sont en cours de validation ; les écrans non traduits restent affichés en français.", color=MaterialTheme.colorScheme.onSurfaceVariant, style=MaterialTheme.typography.bodySmall)
      Text(if(fr)"Mode d’affichage" else "Display mode",fontWeight=FontWeight.Bold)
      listOf("dark","light","scheduled").forEach{value->
       Row(verticalAlignment=Alignment.CenterVertically){
