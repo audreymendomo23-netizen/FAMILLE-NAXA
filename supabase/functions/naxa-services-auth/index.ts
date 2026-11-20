@@ -110,17 +110,41 @@ async function isLimited(loginHash: string, ipHash: string) {
   });
   return data === true;
 }
-async function touchDevice(accountId: string, device: Record<string, unknown>, remember: boolean, allowReenroll: boolean) {
+function jwtClaim(token: string, claim: string): string {
+  try {
+    const encoded = token.split(".")[1];
+    if (!encoded) return "";
+    const normalized = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized + "=".repeat((4 - normalized.length % 4) % 4);
+    const payload = JSON.parse(atob(padded)) as Record<string, unknown>;
+    return String(payload[claim] ?? "");
+  } catch {
+    return "";
+  }
+}
+async function touchDevice(
+  accountId: string,
+  device: Record<string, unknown>,
+  remember: boolean,
+  allowReenroll: boolean,
+  refreshTokenHash: string,
+  sessionId: string,
+) {
   const installationId = String(device.installation_id ?? "");
-  if (!installationId || installationId.length > 160) throw new Error("DEVICE_ID_REQUIRED");
+  if (!installationId || installationId.length > 160 || !refreshTokenHash || !sessionId) {
+    throw new Error("DEVICE_SESSION_BINDING_REQUIRED");
+  }
   const now = new Date().toISOString();
   const rows = await rest(
-    "ns_devices?select=id,revoked_at&account_id=eq." + encodeURIComponent(accountId) +
+    "ns_devices?select=id,revoked_at,refresh_token_hash&account_id=eq." + encodeURIComponent(accountId) +
       "&installation_id=eq." + encodeURIComponent(installationId) + "&limit=1",
     { headers: serviceHeaders() },
   ) as Record<string, unknown>[];
   const existing = rows?.[0];
   if (existing?.revoked_at && !allowReenroll) throw new Error("DEVICE_REVOKED");
+  if (existing?.id && !allowReenroll && existing.refresh_token_hash !== refreshTokenHash) {
+    throw new Error("DEVICE_REFRESH_TOKEN_MISMATCH");
+  }
   if (existing?.id) {
     await rest("ns_devices?id=eq." + encodeURIComponent(String(existing.id)), {
       method: "PATCH",
@@ -128,12 +152,15 @@ async function touchDevice(accountId: string, device: Record<string, unknown>, r
       body: JSON.stringify({
         label: String(device.label ?? "").slice(0, 90),
         remember_device: remember,
+        refresh_token_hash: refreshTokenHash,
+        session_id: sessionId,
         last_seen_at: now,
         ...(allowReenroll ? { revoked_at: null } : {}),
       }),
     });
     return;
   }
+  if (!allowReenroll) throw new Error("DEVICE_NOT_ENROLLED");
   await rest("ns_devices", {
     method: "POST",
     headers: serviceHeaders({ Prefer: "return=minimal" }),
@@ -143,6 +170,8 @@ async function touchDevice(accountId: string, device: Record<string, unknown>, r
       platform: device.platform === "web" ? "web" : "android",
       label: String(device.label ?? "").slice(0, 90),
       remember_device: remember,
+      refresh_token_hash: refreshTokenHash,
+      session_id: sessionId,
       first_seen_at: now,
       last_seen_at: now,
     }),
@@ -176,6 +205,16 @@ async function login(body: Record<string, unknown>, request: Request) {
     return { status: 401, body: { message: "Identifiant ou mot de passe incorrect." } };
   }
   await recordAttempt(loginHash, ipHash, true);
+  const refreshToken = String(auth.data.refresh_token ?? "");
+  const accessToken = String(auth.data.access_token ?? "");
+  await touchDevice(
+    String(account.id),
+    (body.device as Record<string, unknown>) ?? {},
+    body.remember_device === true,
+    true,
+    await sha256(refreshToken),
+    jwtClaim(accessToken, "session_id"),
+  );
   await rest("ns_accounts?id=eq." + encodeURIComponent(String(account.id)), {
     method: "PATCH",
     headers: serviceHeaders({ Prefer: "return=minimal" }),
