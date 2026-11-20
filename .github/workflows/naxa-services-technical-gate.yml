@@ -108,6 +108,8 @@ jobs:
           packages: platform-tools
       - name: Install Android 35 platform and build tools
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Run NAXA SERVICES accounting and performance unit tests
+        run: gradle --no-daemon :naxa-services:testDebugUnitTest
       - name: Compile and package NAXA SERVICES
         run: gradle --no-daemon :naxa-services:assembleDebug
       - name: Upload debug APK for technical review
