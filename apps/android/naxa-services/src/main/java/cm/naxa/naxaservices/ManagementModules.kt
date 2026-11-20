@@ -655,7 +655,10 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                                     runCatching {
                                         repository.recordSupplierPayment(orgId, siteId, purchase.id, amount, paymentMethod,
                                             cashSessionId.takeIf { paymentMethod == "cash" }, paymentReference,
-                                            java.util.UUID.randomUUID().toString(), session.account.memberId)
+                                            java.util.UUID.nameUUIDFromBytes(
+                                                "$orgId|$siteId|${purchase.id}|${purchase.paidTotalXaf}|$amount|$paymentMethod|$cashSessionId|${paymentReference.trim()}"
+                                                    .toByteArray(Charsets.UTF_8)
+                                            ).toString(), session.account.memberId)
                                     }.onSuccess { notice = if (fr) "Règlement fournisseur imputé à la dette et au journal." else "Supplier payment applied to payable and journal." }
                                         .onFailure { error = it.message ?: "Supplier payment failed." }
                                 }
