@@ -1263,3 +1263,69 @@ Le seul projet Supabase connecté est le projet existant NAXA, sans schéma ns_*
 Aucun secret de fournisseur de paiement, WhatsApp Business, SMS ou FCM, aucune clé de signature Android, aucun appareil physique de recette et aucune validation professionnelle comptable/fiscale n'étaient disponibles dans l'environnement. Ils restent des dépendances réelles, pas des tâches que la compilation debug peut simuler.
 
 Conclusion honnête : le périmètre Android ajouté dans cette passe est vert au build CI (4/4) et le code reste sur la branche de travail. NAXA SERVICES n'est pas encore « VERT GLOBAL ». Aucune fusion dans main, aucun déploiement production, aucune migration Supabase réelle, aucune Release Android signée et aucune publication n'ont été effectués.
+
+
+# Addendum 4 — Cycle comptable fournisseurs et pilotage financier comparatif (20 novembre 2026)
+
+**Branche de travail :** `work/naxa-services-completion-20261120`  
+**HEAD code au moment de cet addendum :** `5aac7763a8ef075a1e12d99b7160713a6cb7cf8b`  
+**HEAD de `main) contrôlé avant cet addendum :** `65dfbcf29a5e9add1be79ef77ac930b3350eba9d`  
+**Protection :** aucune fusion dans `main`, aucune migration réelle et aucun déploiement n'ont été exécutés.
+
+## 40.1 Cycle achats fournisseurs déjà présent et consolidé
+
+Le parcours Android local comprend les fiches fournisseurs, les commandes multi-lignes, les types de lignes Stock / Charge d'exploitation / Immobilisation, les réceptions partielles et complètes, l'historique des réceptions, la dette fournisseur, les paiements partiels ou complets et le journal de gestion débit/crédit.
+
+Règles de comptabilisation retenues :
+
+- Une commande seule n'augmente ni le chiffre d'affaires, ni le stock, ni les charges : l'engagement n'est pas une réception.
+- À la réception d'une ligne de stock : débit de l'actif stock / crédit de la dette fournisseur. Les coûts d'acquisition imputables (part de frais de livraison et coûts non récupérables) entrent dans la valorisation moyenne pondérée.
+- À la réception d'un consommable ou service d'exploitation : débit d'une charge d'exploitation / crédit de la dette fournisseur.
+- À la réception d'une immobilisation : débit immobilisation / crédit dette fournisseur.
+- La taxe récupérable est isolée dans un compte de créance fiscale préparatoire.
+- Le règlement fournisseur : débit dette fournisseur / crédit caisse, banque, Mobile Money ou autre trésorerie. Il éteint la dette ; il ne crée pas une seconde charge.
+- Le chiffre d'affaires n'est constitué que par les ventes confirmées. Un achat fournisseur n'est jamais ajouté au CA.
+- Le coût des marchandises vendues est rattaché à la vente au moment de la sortie du stock, à partir du coût documenté. Les ventes dont le coût direct n'est pas fiable sont signalées et exclues du calcul de marge certifiable.
+
+Le SQL candidat v4 ajoute le modèle serveur fournisseurs, documents d'achat, lignes, réceptions, paiements, écritures comptables, objectifs versionnés, lectures de performance journalières/mensuelles/annuelles et fonctions transactionnelles protégées. Ce fichier reste un draft avec rollback final : sa présence ne prouve pas son application sur une base.
+
+## 40.2 Idempotence et rapprochement de caisse
+
+- La base Room passe à la version 11 avec la migration non destructive `10 → 11`.
+- Chaque réception locale possède une clé d'idempotence unique au niveau organisation ; une reprise identique ne doit pas créer une seconde entrée de stock, dette ou écriture.
+- L'écran de règlement fournisseur produit une clé stable à partir de la pièce, du solde antérieur, du montant et des paramètres du paiement afin de rendre les double-clics / reprises identiques idempotents.
+- Un paiement fournisseur en espèces demeure une sortie de trésorerie pour le calcul de clôture de la caisse.
+- Dans les rapports de gestion, les paiements fournisseur sont séparés des charges d'exploitation. Les dépenses opérationnelles sont lues depuis le journal comptable (`OPERATING_EXPENSE*`) et les règlements fournisseurs sont affichés comme extinction de dette, sans double déduction.
+
+## 40.3 Assistant de pilotage et séries comparatives
+
+Le moteur présent est un moteur statistique local déterministe et explicable ; ce n'est pas une connexion à un modèle génératif distant. Il utilise les ventes confirmées et les objectifs enregistrés pour :
+
+- projeter le jour à partir du rythme réalisé et d'une référence glissante de 14 jours ;
+- projeter la clôture du mois sur une moyenne glissante de 28 jours ;
+- projeter la clôture annuelle sur une moyenne glissante de 90 jours ;
+- comparer réalisé, projection, objectifs, écart prévisionnel, taux d'atteinte et effort quotidien restant ;
+- générer des actions de redressement explicables : ventes additionnelles estimées au ticket moyen récent, relance commerciale, protection de marge, prévention de rupture et maîtrise des dettes fournisseurs ;
+- suivre 14 jours, 12 mois et 5 exercices, avec comparaison au jour / mois comparable / même période de l'exercice précédent ;
+- présenter pour ces séries le CA, le coût des ventes connu, les charges d'exploitation, la marge brute, le résultat opérationnel indicatif et les flux fournisseurs (stock capitalisé, achats consommables, immobilisations et paiements).
+
+La marge et le résultat opérationnel restent volontairement non calculables lorsqu'au moins une vente de la période n'a pas de coût direct documenté. Le chargement de six années d'historique permet d'avoir une base annuelle antérieure complète pour les cinq exercices affichés.
+
+Le rapport quotidien par site utilise le fuseau `Africa/Douala`, distingue CA confirmé, coût des ventes connu, charges journalisées, règlements fournisseurs et ventes sans coût fiable. Il ne transforme pas un indicateur de gestion en résultat SYSCOHADA certifié.
+
+## 40.4 Tests ajoutés et état des contrôles
+
+Les tests unitaires Android ajoutés couvrent :
+- l'absence d'augmentation du CA lors d'une réception ou d'un règlement fournisseur ;
+- la séparation entre stock capitalisé, achat consommable, immobilisation et règlement de dette ;
+- l'absence de double déduction d'un règlement fournisseur dans les charges d'exploitation ;
+- les comparaisons financières quotidiennes, mensuelles et annuelles ;
+- le changement de date locale `Africa/Douala` autour de minuit UTC.
+
+Le workflow `44835057217` a terminé en succès (5/5) pour le moteur de prévision avant l'ajout de l'écran comparatif. Les runs ultérieurs ont mis en évidence puis permis de corriger une erreur de double annotation Compose dans l'écran financier. Le run `44835604400` sur le commit `419583adac3268c22d3035ba46ab8aac695014f1` avait ses quatre contrats serveur / tarifs / parrainage / Auth en succès ; son job Android exécutait encore les tests unitaires au moment du constat. Le commit `5aac7763a8ef075a1e12d99b7160713a6cb7cf8b` ajoute ensuite la lecture des charges directement depuis le journal ; son résultat de CI doit être vérifié séparément.
+
+## 40.5 Limite d'activation à ne pas masquer
+
+Les écrans Achats et Pilotage restent explicitement en mode local Room. L'outbox existe, mais il ne constitue pas un moteur de synchronisation ERP multi-appareils de bout en bout. Le SQL v4 et la fonction Edge comptable sont candidats/non déployés ; aucun client Android ne démontre encore la synchronisation complète de ces commandes, réceptions, paiements, journaux et vues de performance avec un environnement Supabase isolé.
+
+En conséquence, cet addendum confirme des développements et contrats dans la branche de travail, mais ne lève pas le backlog du §39.9 : RLS/recette serveur, synchronisation offline et résolution de conflits, abonnements et paiements réels, validation SYSCOHADA/fiscale, tests instrumentés et restauration, Release signée, Web/PWA, Fulfulde complet et console centrale. Aucun de ces éléments ne doit être réputé livré par la seule compilation Android.
