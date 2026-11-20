@@ -957,7 +957,8 @@ Cette section remplace le statut « en attente / non vert » de la section 36.7 
 ### 37.1 Référence Git et preuve CI finale
 
 - Branche : `work/naxa-services-completion-20261120`.
-- HEAD documentaire après clôture : `f90c82886d5ae33ce97e1966e73ac40bf8cfaca3`.
+- HEAD de code testé : `f90c82886d5ae33ce97e1966e73ac40bf8cfaca3`.
+- Dernier commit documentaire de la branche après mise à jour du présent rapport : `96290c50a151977a1c8e1ebb9d4af5505580cf08` (aucune modification de code après le SHA testé).
 - Code Android testé dans ce workflow, incluant le transfert inter-sites : commit `7a0729c7ea8d9a852385652a688f2abe27eca586` (le workflow final a reconstruit l'ensemble du module au HEAD suivant, sans changement Android entre ces deux commits).
 - Correctif tarifaire additionnel testé : `fcc091a5d85acea517e48745393b0ddd0219b5a4`, test correspondant au commit final `f90c82886d5ae33ce97e1966e73ac40bf8cfaca3`.
 - Workflow GitHub Actions : `44784781041`, conclusion `success`.
@@ -997,7 +998,7 @@ Le parcours est maintenant réellement raccordé à la couche de données, et pa
 
 ### 37.5 Statut de construction et réserves externes
 
-<badge>VERT — construction Android et gates CI</badge>
+**Statut : VERT — construction Android et gates CI.**
 
 La construction Android native Kotlin/Jetpack Compose du périmètre présent est verte sur le workflow final cité ci-dessus. Les écrans ERP et profils d'activité sont présents, les derniers parcours métier ajoutés compilent, le catalogue des dix abonnements passe ses tests et les contrats Auth passent leurs contrôles.
 
