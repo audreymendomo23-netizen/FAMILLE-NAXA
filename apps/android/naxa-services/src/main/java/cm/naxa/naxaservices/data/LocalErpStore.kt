@@ -989,13 +989,43 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         workstation
     }
 
-    suspend fun createLocalService(orgId: String, siteId: String, activity: String, name: String, durationMinutes: Int?, priceXaf: Long): LocalService = database.withTransaction {
+    suspend fun createLocalService(
+        orgId: String,
+        siteId: String,
+        activity: String,
+        name: String,
+        durationMinutes: Int?,
+        priceXaf: Long,
+        category: String = "general",
+        description: String = "",
+        providerMemberIdsJson: String = "[]",
+        requiredWorkstationKindsJson: String = "[]",
+        packageSessions: Int? = null
+    ): LocalService = database.withTransaction {
         require(orgId.isNotBlank() && siteId.isNotBlank() && name.isNotBlank()) { "Point de vente et prestation obligatoires." }
-        require(activity in setOf("pressing", "hair", "retail")) { "Activité invalide." }
+        require(activity in setOf("pressing", "hair", "beauty", "treatment", "tailoring", "perfume", "repair", "part", "manufacturing", "vehicle", "cleaning", "contract", "home", "printing", "event", "package", "material", "service", "retail", "general")) { "Activité de prestation invalide." }
+        require(category in setOf("pressing", "hair", "beauty", "tailoring", "repair", "manufacturing", "vehicle", "cleaning", "home", "printing", "event", "retail", "general")) { "Catégorie de prestation invalide." }
         require(durationMinutes == null || durationMinutes in 1..1440) { "Durée invalide." }
-        require(priceXaf >= 0) { "Tarif invalide." }
+        require(priceXaf >= 0L && description.length <= 1000) { "Tarif ou description invalide." }
+        require(providerMemberIdsJson.length <= 2000 && requiredWorkstationKindsJson.length <= 1000) { "Configuration de prestataires ou d'emplacements trop longue." }
+        require(packageSessions == null || packageSessions in 1..100) { "Nombre de séances du forfait invalide." }
         val now = System.currentTimeMillis()
-        val service = LocalService(UUID.randomUUID().toString(), orgId, siteId, "SRV-" + now.toString() + "-" + UUID.randomUUID().toString().take(6).uppercase(), activity, name.trim(), durationMinutes, priceXaf, createdAtMillis = now)
+        val service = LocalService(
+            id = UUID.randomUUID().toString(),
+            orgId = orgId,
+            siteId = siteId,
+            code = "SRV-" + now.toString() + "-" + UUID.randomUUID().toString().take(6).uppercase(),
+            activity = activity,
+            name = name.trim(),
+            durationMinutes = durationMinutes,
+            priceXaf = priceXaf,
+            createdAtMillis = now,
+            category = category,
+            description = description.trim(),
+            providerMemberIdsJson = providerMemberIdsJson,
+            requiredWorkstationKindsJson = requiredWorkstationKindsJson,
+            packageSessions = packageSessions
+        )
         dao.insertService(service)
         enqueue(orgId, "service", service.id, "service.created", siteId)
         service
