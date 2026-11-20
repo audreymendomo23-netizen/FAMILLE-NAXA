@@ -360,6 +360,8 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
     val cashSessions by remember(siteId) { repository.dao.observeCashSessions(orgId, siteId) }.collectAsState(initial = emptyList())
     val accounting by remember(siteId) { repository.dao.observeAllAccountingEntries(orgId, siteId) }.collectAsState(initial = emptyList())
     val payables by remember(siteId) { repository.dao.observeSupplierPayables(orgId, siteId) }.collectAsState(initial = 0L)
+    val legacySuppliers by remember(siteId) { repository.dao.observeManagementRecordsByType(orgId, siteId, "supplier") }.collectAsState(initial = emptyList())
+    val legacyPurchases by remember(siteId) { repository.dao.observeManagementRecordsByType(orgId, siteId, "purchase") }.collectAsState(initial = emptyList())
 
     var supplierName by rememberSaveable { mutableStateOf("") }
     var supplierPhone by rememberSaveable { mutableStateOf("") }
@@ -649,6 +651,27 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
         item {
             LocalOnlyNotice(if (fr) "Le journal utilise des comptes de gestion symboliques (stock, dette fournisseur, trésorerie, ventes, coût des ventes). Il est équilibré débit/crédit mais n'est pas encore un plan de comptes SYSCOHADA certifié ni une déclaration fiscale." else "The balanced double-entry journal uses management account labels; it is not yet a certified SYSCOHADA chart of accounts or a tax filing.")
         }
+
+        if (legacySuppliers.isNotEmpty() || legacyPurchases.isNotEmpty()) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(if (fr) "Archives des anciens registres" else "Legacy register archive", fontWeight = FontWeight.Bold)
+                        Text(
+                            if (fr) "Les fournisseurs et commandes saisis dans l'ancien module générique sont conservés ci-dessous. Ils ne sont pas convertis automatiquement pour éviter les doublons de stock ou de dette." 
+                            else "Suppliers and orders from the former generic register remain visible below. They are not auto-converted, to avoid duplicate stock or payables."
+                        )
+                        legacySuppliers.take(20).forEach { record ->
+                            Text("Fournisseur historique · " + record.title + " · " + record.counterparty, style = MaterialTheme.typography.bodySmall)
+                        }
+                        legacyPurchases.take(50).forEach { record ->
+                            Text(record.reference + " · " + record.title + " · " + record.counterparty +
+                                " · " + xaf(record.amountXaf) + " · " + record.status, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+        }
         item { Spacer(Modifier.height(24.dp)) }
     }
 }
@@ -824,6 +847,38 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
 }
 
 @Composable
+@Composable
+private fun PerformanceProjectionCard(title: String, period: PeriodProjection) {
+    val delta = period.projectedXaf - period.comparablePreviousXaf
+    val comparison = if (period.comparablePreviousXaf > 0L) {
+        (if (delta >= 0L) "+" else "") + xaf(delta) + " (" +
+            String.format(java.util.Locale.FRANCE, "%.1f", delta.toDouble() * 100.0 / period.comparablePreviousXaf) + " %)"
+    } else "Comparaison antérieure non disponible"
+    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Text(title, fontWeight = FontWeight.Bold)
+            Text("Réalisé confirmé : " + xaf(period.actualXaf))
+            Text("Projection de clôture : " + xaf(period.projectedXaf), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text("Période comparable : " + xaf(period.comparablePreviousXaf) + " · " + comparison)
+            period.targetXaf?.let { target ->
+                Text("Objectif approuvé : " + xaf(target))
+                Text(
+                    if ((period.targetGapXaf ?: 0L) > 0L) "Écart prévisionnel : " + xaf(period.targetGapXaf ?: 0L)
+                    else "Objectif projeté atteint ou dépassé",
+                    color = if ((period.targetGapXaf ?: 0L) > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                )
+                period.achievementPercent?.let { ratio ->
+                    androidx.compose.material3.LinearProgressIndicator(
+                        progress = (ratio / 100.0).toFloat().coerceIn(0f, 1f),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text("Atteinte projetée : " + String.format(java.util.Locale.FRANCE, "%.1f", ratio) + " %")
+                }
+            } ?: Text("Aucun objectif approuvé enregistré pour cette période.")
+        }
+    }
+}
+
 fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val orgId = session.account.organizationId
     val siteIds = session.account.activeSiteIds
@@ -850,38 +905,6 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
             System.currentTimeMillis(), zone
         )
     }
-    fun showComparison(value: PeriodProjection): String {
-        val delta = value.projectedXaf - value.comparablePreviousXaf
-        val pct = if (value.comparablePreviousXaf > 0L) delta.toDouble() * 100.0 / value.comparablePreviousXaf else null
-        return if (pct == null) "Comparaison antérieure non disponible"
-        else (if (delta >= 0L) "+" else "") + xaf(delta) + " (" + String.format(java.util.Locale.FRANCE, "%.1f", pct) + " %)"
-    }
-    fun projectionCard(title: String, period: PeriodProjection) {
-        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                Text(title, fontWeight = FontWeight.Bold)
-                Text("Réalisé confirmé : " + xaf(period.actualXaf))
-                Text("Projection de clôture : " + xaf(period.projectedXaf), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("Période comparable : " + xaf(period.comparablePreviousXaf) + " · " + showComparison(period))
-                period.targetXaf?.let {
-                    Text("Objectif approuvé : " + xaf(it))
-                    Text(
-                        if ((period.targetGapXaf ?: 0L) > 0L) "Écart prévisionnel : " + xaf(period.targetGapXaf ?: 0L)
-                        else "Objectif projeté atteint ou dépassé",
-                        color = if ((period.targetGapXaf ?: 0L) > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                    )
-                    period.achievementPercent?.let { ratio ->
-                        androidx.compose.material3.LinearProgressIndicator(
-                            progress = (ratio / 100.0).toFloat().coerceIn(0f, 1f),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Text("Atteinte projetée : " + String.format(java.util.Locale.FRANCE, "%.1f", ratio) + " %")
-                    }
-                } ?: Text("Aucun objectif approuvé enregistré pour cette période.")
-            }
-        }
-    }
-
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
@@ -896,9 +919,9 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
             Text("Périmètre : " + siteIds.size + " site(s) accessibles et consolidés.", style = MaterialTheme.typography.labelSmall)
             Text("Couverture des ventes : " + dashboard.dataCoverageDays + " jour(s).", style = MaterialTheme.typography.labelSmall)
         }
-        item { projectionCard("Aujourd'hui · jour par jour", dashboard.day) }
-        item { projectionCard("Mois en cours · mois par mois", dashboard.month) }
-        item { projectionCard("Année en cours · année par année", dashboard.year) }
+        item { PerformanceProjectionCard("Aujourd'hui · jour par jour", dashboard.day) }
+        item { PerformanceProjectionCard("Mois en cours · mois par mois", dashboard.month) }
+        item { PerformanceProjectionCard("Année en cours · année par année", dashboard.year) }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
