@@ -18,9 +18,36 @@ data class PeriodProjection(
     val comparablePreviousXaf: Long, val targetGapXaf: Long?, val achievementPercent: Double?, val remainingDays: Int
 )
 data class RecoveryAction(val title: String, val detail: String, val priority: String)
+data class FinancialTrendPoint(
+    val label: String,
+    val revenueXaf: Long,
+    val comparableRevenueXaf: Long,
+    val costOfGoodsXaf: Long,
+    val comparableCostOfGoodsXaf: Long,
+    val operatingExpensesXaf: Long,
+    val comparableOperatingExpensesXaf: Long,
+    val grossProfitXaf: Long?,
+    val comparableGrossProfitXaf: Long?,
+    val operatingResultXaf: Long?,
+    val comparableOperatingResultXaf: Long?,
+    val supplierStockPurchasesXaf: Long,
+    val supplierOperatingPurchasesXaf: Long,
+    val supplierFixedAssetsXaf: Long,
+    val supplierPaymentsXaf: Long,
+    val uncostedSalesCount: Int
+) {
+    val revenueDeltaXaf: Long get() = revenueXaf - comparableRevenueXaf
+    val costOfGoodsDeltaXaf: Long get() = costOfGoodsXaf - comparableCostOfGoodsXaf
+    val operatingExpensesDeltaXaf: Long get() = operatingExpensesXaf - comparableOperatingExpensesXaf
+    val grossProfitDeltaXaf: Long? get() = if (grossProfitXaf != null && comparableGrossProfitXaf != null) grossProfitXaf - comparableGrossProfitXaf else null
+    val operatingResultDeltaXaf: Long? get() = if (operatingResultXaf != null && comparableOperatingResultXaf != null) operatingResultXaf - comparableOperatingResultXaf else null
+}
+
 data class PerformanceDashboard(
     val day: PeriodProjection, val month: PeriodProjection, val year: PeriodProjection,
     val dailyTrend: List<PerformancePoint>, val monthlyTrend: List<PerformancePoint>, val yearlyTrend: List<PerformancePoint>,
+    val dailyFinancialTrend: List<FinancialTrendPoint>, val monthlyFinancialTrend: List<FinancialTrendPoint>,
+    val yearlyFinancialTrend: List<FinancialTrendPoint>,
     val revenueXaf: Long, val costedRevenueXaf: Long, val costOfGoodsXaf: Long,
     val grossProfitXaf: Long, val grossMarginPercent: Double?,
     val operatingExpensesXaf: Long, val operatingProfitProxyXaf: Long?, val supplierPayablesXaf: Long,
@@ -118,6 +145,37 @@ object NaxaPerformanceEngine {
                 else sum(byDay, LocalDate.of(y - 1, 1, 1), LocalDate.of(y - 1, 12, 31)))
         }
 
+        // Finance trends use the exact same period windows as turnover. Supplier settlements are
+        // disclosed as treasury flows only; they never become a second expense.
+        val dailyFinancial = (13L downTo 0L).map { n ->
+            val d = today.minusDays(n)
+            financialPoint(d.toString(), confirmed, accountingEntries, zone, d, d, d.minusDays(1), d.minusDays(1))
+        }
+        val monthlyFinancial = (11L downTo 0L).map { n ->
+            val p = monthKey.minusMonths(n)
+            val currentEnd = if (p == monthKey) today else p.atEndOfMonth()
+            val comparableMonth = p.minusMonths(1)
+            val comparableEnd = if (p == monthKey) {
+                comparableMonth.atDay(today.dayOfMonth.coerceAtMost(comparableMonth.lengthOfMonth()))
+            } else comparableMonth.atEndOfMonth()
+            financialPoint(
+                p.toString(), confirmed, accountingEntries, zone,
+                p.atDay(1), currentEnd, comparableMonth.atDay(1), comparableEnd
+            )
+        }
+        val yearlyFinancial = (4 downTo 0).map { n ->
+            val y = today.year - n
+            val currentStart = LocalDate.of(y, 1, 1)
+            val currentEnd = if (y == today.year) today else LocalDate.of(y, 12, 31)
+            val previousYear = y - 1
+            val previousStart = LocalDate.of(previousYear, 1, 1)
+            val previousEnd = if (y == today.year) today.minusYears(1) else LocalDate.of(previousYear, 12, 31)
+            financialPoint(
+                y.toString(), confirmed, accountingEntries, zone,
+                currentStart, currentEnd, previousStart, previousEnd
+            )
+        }
+
         val recent = confirmed.filter { !dateOf(it.createdAtMillis, zone).isBefore(today.minusDays(30)) }
         val averageTicket = if (recent.isEmpty()) 0.0 else recent.sumOf { it.totalXaf }.toDouble() / recent.size
         val actions = mutableListOf<RecoveryAction>()
@@ -173,10 +231,71 @@ object NaxaPerformanceEngine {
             "Aucun écart prioritaire n'est détecté dans les données locales disponibles. Continuer le suivi des ventes confirmées, des marges, des objectifs et des échéances fournisseurs.", "low")
         val firstDate = confirmed.minOfOrNull { dateOf(it.createdAtMillis, zone) }
         val coverage = firstDate?.let { ChronoUnit.DAYS.between(it, today).toInt() + 1 } ?: 0
-        return PerformanceDashboard(day, month, year, daily, monthly, yearly, revenue, costedRevenue, cogs, gross, margin, opex,
+        return PerformanceDashboard(day, month, year, daily, monthly, yearly, dailyFinancial, monthlyFinancial, yearlyFinancial,
+            revenue, costedRevenue, cogs, gross, margin, opex,
             operatingProfit, supplierPayablesXaf, supplierStockPurchases, supplierOperatingPurchases,
             supplierFixedAssets, supplierPayments, uncosted, lowStockCount, actions.take(8), coverage)
     }
+
+    private fun financialPoint(
+        label: String,
+        sales: List<LocalSale>,
+        entries: List<LocalAccountingEntry>,
+        zone: ZoneId,
+        from: LocalDate,
+        to: LocalDate,
+        comparableFrom: LocalDate,
+        comparableTo: LocalDate
+    ): FinancialTrendPoint {
+        fun inRange(millis: Long, start: LocalDate, end: LocalDate): Boolean {
+            val date = dateOf(millis, zone)
+            return !date.isBefore(start) && !date.isAfter(end)
+        }
+        fun snapshot(start: LocalDate, end: LocalDate): FinancialSnapshot {
+            val periodSales = sales.filter { inRange(it.createdAtMillis, start, end) }
+            val revenue = periodSales.sumOf { it.totalXaf }
+            val knownCost = periodSales.filter { it.costSnapshotComplete }.sumOf { it.costOfGoodsXaf.coerceAtLeast(0L) }
+            val allDirectCostsKnown = periodSales.isNotEmpty() && periodSales.all { it.costSnapshotComplete }
+            val grossProfit = if (allDirectCostsKnown) revenue - knownCost else null
+            val periodEntries = entries.filter { inRange(it.occurredAtMillis, start, end) }
+            val operatingExpenses = periodEntries.filter { it.debitAccount.startsWith("OPERATING_EXPENSE") }.sumOf { it.amountXaf }
+            val stockPurchases = periodEntries.filter {
+                it.sourceType == "purchase_receipt" && it.debitAccount == "INVENTORY_ASSET"
+            }.sumOf { it.amountXaf }
+            val operatingPurchases = periodEntries.filter {
+                it.sourceType == "purchase_receipt" && it.debitAccount.startsWith("OPERATING_EXPENSE")
+            }.sumOf { it.amountXaf }
+            val fixedAssets = periodEntries.filter {
+                it.sourceType == "purchase_receipt" && it.debitAccount == "FIXED_ASSET"
+            }.sumOf { it.amountXaf }
+            val supplierPayments = periodEntries.filter {
+                it.sourceType == "supplier_payment" && it.eventCode == "payable_settlement" &&
+                    it.debitAccount == "SUPPLIER_PAYABLE"
+            }.sumOf { it.amountXaf }
+            return FinancialSnapshot(
+                revenue, knownCost, operatingExpenses,
+                grossProfit, grossProfit?.minus(operatingExpenses),
+                stockPurchases, operatingPurchases, fixedAssets, supplierPayments,
+                periodSales.count { !it.costSnapshotComplete }
+            )
+        }
+        val actual = snapshot(from, to)
+        val previous = snapshot(comparableFrom, comparableTo)
+        return FinancialTrendPoint(
+            label, actual.revenue, previous.revenue, actual.costOfGoods, previous.costOfGoods,
+            actual.operatingExpenses, previous.operatingExpenses, actual.grossProfit, previous.grossProfit,
+            actual.operatingResult, previous.operatingResult, actual.supplierStockPurchases,
+            actual.supplierOperatingPurchases, actual.supplierFixedAssets, actual.supplierPayments,
+            actual.uncostedSales
+        )
+    }
+
+    private data class FinancialSnapshot(
+        val revenue: Long, val costOfGoods: Long, val operatingExpenses: Long,
+        val grossProfit: Long?, val operatingResult: Long?, val supplierStockPurchases: Long,
+        val supplierOperatingPurchases: Long, val supplierFixedAssets: Long,
+        val supplierPayments: Long, val uncostedSales: Int
+    )
 
     private fun projection(label: String, actual: Long, forecast: Long, target: Long?, previous: Long, remaining: Int) =
         PeriodProjection(label, actual, forecast, target, previous, target?.minus(forecast),
