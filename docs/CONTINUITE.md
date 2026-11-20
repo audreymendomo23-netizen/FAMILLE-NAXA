@@ -445,3 +445,39 @@ Le cahier NAXA Services indique actuellement téléphone + mot de passe et récu
 **Prochaine étape J0 :** preuve locale de l'Option A, puis finalisation de l'architecture identité/appareil/session/récupération et des tests négatifs. Aucun changement des paramètres Auth d'un projet Supabase réel, aucune migration réelle, aucune modification de code métier ni aucun déploiement n'ont été effectués.
 
 **Document détaillé :** `docs/architecture-360/DECISION_AUTHENTIFICATION_INTERNE_SANS_OTP_EMAIL.md`.
+
+
+## 6.16 Première passe de construction NAXA SERVICES — 20/11/2026
+
+### Réalisé et versionné
+- Architecture multi-entités : PME autonome ; responsable avec plusieurs emplacements dans un même point de vente ; Promoteur avec plusieurs points de vente autonomes.
+- Auth Android : identifiant interne + mot de passe, récupération administrée, changement initial obligatoire, option « rester connecté » (décochée par défaut) et jetons chiffrés via Android Keystore.
+- Navigation Android Kotlin/Compose : accueil, agenda, pressing, caisse, catalogue, clients, équipe/commissions, consommables, rapports, organisation, réseau, sites, emplacements, sécurité/appareils, paramètres et assistance.
+- Web/PWA : 16 espaces ERP, pages responsive, structure PME/multi-emplacements/réseau et formulaires d'aperçu en mémoire de session ; aucune vente ou opération métier réelle n'est créée par l'aperçu.
+- Charte : sombre par défaut, noir #111111, rouge #DD3A33 et déclinaison claire ; SVG de marque reconstruit depuis la spécification écrite.
+- Contrat API Auth, source Edge Function préparatoire, draft SQL et contrat de tests RLS présents.
+- Le draft SQL comprend organisations, sites, postes, comptes/scopes, services, clients, rendez-vous, tickets pressing, caisse, ventes, paiements, dépenses, commissions, consommables, recovery, audit, appareils et rate limit. Transaction terminée par ROLLBACK ; aucune base n'est modifiée.
+
+### Réserves — ne pas déclarer VERT complet
+- Build Android/Gradle et build Web non exécutés localement : le clone Git a échoué sur la résolution réseau. Aucun workflow CI lancé.
+- URL de la fonction Auth et clé anon à configurer localement via propriétés Gradle non versionnées ; variables Vite équivalentes absentes.
+- Alias Supabase/GoTrue non prouvé. Edge Function = source non déployée ; draft SQL non appliqué.
+- Provisioning des comptes, reset Admin effectif, file support avec vérification d'identité et révocation d'appareil perdu restent à achever et tester.
+- Les policies RLS détaillées ne sont pas encore écrites ; le draft active RLS deny-by-default, mais aucun test PostgreSQL n'a été exécuté.
+- Modules ERP = pages et parcours UI de construction ; opérations à connecter aux repositories, transactions atomiques, synchronisation offline, adaptateurs et recettes.
+- Le SVG est une reconstruction de la spécification écrite ; l'original binaire spécifique n'a pas été récupéré de façon fiable par le connecteur pendant cette passe.
+
+### État officiel
+**UI / navigation : CONSTRUITE EN SOURCE, build non prouvé. Architecture : DOCUMENTÉE. Auth serveur : PARTIELLE / non déployée. SQL/RLS : DRAFT. Opérations métier : À CONNECTER. Recettes : NON EXÉCUTÉES. Production : INCHANGÉE. APK : NON PUBLIÉE.**
+
+Fichiers principaux :
+- apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/MainActivity.kt
+- apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/auth/AuthApi.kt
+- apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/auth/SessionVault.kt
+- apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/NaxaServicesTheme.kt
+- apps/web/naxa-services/src/main.tsx et src/naxa-services.css
+- apps/web/naxa-services/public/naxa-services-logo.svg
+- docs/architecture-360/NAXA_SERVICES_ARCHITECTURE_MULTI_ENTITES.md
+- docs/architecture-360/NAXA_SERVICES_AUTH_API_CONTRACT.md
+- supabase/functions/naxa-services-auth/ (source non déployée)
+- supabase/drafts/naxa_services_v1.sql et supabase/tests/drafts/naxa_services_rls_contract.sql
