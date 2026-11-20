@@ -569,7 +569,7 @@ La connexion des dix applications ne doit pas modifier les modèles, prompts, fo
 
 **Prestations ou livraisons à domicile :** pour les applications concernées, le formulaire d'enrôlement client permet, avec information et autorisation, de capturer les coordonnées GPS ou de placer manuellement un repère, et d'enregistrer adresse, quartier, point de repère et consignes d'accès. Les coordonnées sont utilisées pour la prestation ou la livraison demandée, pas pour suivre continuellement le client. Prévoir correction, mise à jour, révocation du consentement et durée de conservation définie.
 
-**Stock :** à côté de « Importer le fichier de stock », ajouter « Télécharger le template ». Chaque application dotée d'un stock possède un modèle propre à son vocabulaire et à ses unités. Le modèle permet la configuration/m correspondance des colonnes. L'import comprend validation, détection des doublons, contrôle des unités et quantités, prévisualisation, rapport d'erreurs, confirmation explicite et journal d'import. Une importation ne doit pas modifier silencieusement les quantités existantes ; les stocks initiaux créent des mouvements d'inventaire traçables.
+**Stock :** à côté de « Importer le fichier de stock », ajouter « Télécharger le template ». Chaque application dotée d'un stock possède un modèle propre à son vocabulaire et à ses unités. Le modèle permet la configuration et correspondance des colonnes. L'import comprend validation, détection des doublons, contrôle des unités et quantités, prévisualisation, rapport d'erreurs, confirmation explicite et journal d'import. Une importation ne doit pas modifier silencieusement les quantités existantes ; les stocks initiaux créent des mouvements d'inventaire traçables.
 
 ### 6.17.9 Langue Fulfulde
 
