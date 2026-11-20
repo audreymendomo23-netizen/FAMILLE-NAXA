@@ -514,10 +514,10 @@ Les tarifs ci-dessous conservent les montants communiqués par le propriétaire 
 
 | Application | Formule / tarif à conserver |
 |---|---|
-| KIOSKO | ACCÈS : 2 000 ; PREMIUM : 4 000. Supprimer l'ancien prix PRO de 5 000. |
-| BOOTIK | ACCÈS : 4 000 ; PREMIUM : 10 000. Supprimer l'ancien prix PRO de 13 000. |
-| ZIPPLE | ACCÈS : 5 000 ; PREMIUM : 15 000. Supprimer l'ancien prix PRO de 18 000. |
-| NAXA SERVICES | ACCÈS : 3 000 ; PREMIUM : 7 000. Supprimer l'ancien prix PRO de 10 000. |
+| KIOSKO | ACCÈS : 2 000 ; PREMIUM : 4 000. Ancien niveau PRO supprimé. |
+| BOOTIK | ACCÈS : 4 000 ; PREMIUM : 10 000. Ancien niveau PRO supprimé. |
+| ZIPPLE | ACCÈS : 5 000 ; PREMIUM : 15 000. Ancien niveau PRO supprimé. |
+| NAXA SERVICES | ACCÈS : 3 000 ; PREMIUM : 7 000. Ancien niveau PRO supprimé. |
 | COTIZ | Intitulé générique **Abonnement** : 500 par membre et par cotisation ; compte Président gratuit jusqu'à 100 membres. Ne créer ni ACCÈS ni PREMIUM. |
 | LOYABLE | ACCÈS : 1 000 par local ; PREMIUM : 4 000 avec caméra de surveillance et mode multisite. Conserver les deux montants et le contenu commercial déjà annoncé. |
 | NAXA HOTEL | ACCÈS : 2 000 par chambre ; PREMIUM : 5 000 par chambre avec caméra de surveillance et mode multisite. Conserver les deux montants et le contenu commercial déjà annoncé. |
