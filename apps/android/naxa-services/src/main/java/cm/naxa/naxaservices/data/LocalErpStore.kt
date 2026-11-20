@@ -941,6 +941,47 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         sale to event
     }
 
+    suspend fun cancelPendingMobileMoneySale(
+        orgId: String,
+        siteId: String,
+        saleId: String,
+        reason: String,
+        actorMemberId: String
+    ): LocalSale = database.withTransaction {
+        require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) {
+            "Organisation, point de vente et opérateur obligatoires."
+        }
+        require(reason.trim().length >= 3 && reason.length <= 500) {
+            "Un motif d'annulation de trois caractères minimum est obligatoire."
+        }
+        val current = dao.findSale(orgId, siteId, saleId)
+            ?: throw IllegalArgumentException("Vente introuvable sur ce point de vente.")
+        require(current.paymentMethod == "mobile_money" && current.status == "pending") {
+            "Seule une vente Mobile Money en attente peut être annulée."
+        }
+        val now = System.currentTimeMillis()
+        val cancelled = current.copy(status = "cancelled")
+        dao.updateSale(cancelled)
+        dao.insertWorkflowEvent(
+            LocalWorkflowEvent(
+                id = UUID.randomUUID().toString(),
+                orgId = orgId,
+                siteId = siteId,
+                aggregateType = "sale",
+                aggregateId = current.id,
+                fromStatus = current.status,
+                toStatus = "cancelled",
+                reason = reason.trim(),
+                actorMemberId = actorMemberId,
+                createdAtMillis = now
+            )
+        )
+        // The pendingInventoryReservations query ignores cancelled rows, so
+        // this operation releases the local stock reservation atomically.
+        enqueue(orgId, "sale", current.id, "sale.mobile_money_cancelled", siteId)
+        cancelled
+    }
+
     /**
      * This method must only be invoked by the trusted server-sync adapter after
      * a verified provider webhook confirms payment. A user-entered reference is
