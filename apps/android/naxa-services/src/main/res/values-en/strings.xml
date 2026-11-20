@@ -132,7 +132,7 @@
     <string name="member_role_code">Role code (e.g. cashier, hair_stylist)</string>
     <string name="member_site_id">Point-of-sale ID</string>
     <string name="member_workstation_id_optional">Workstation ID (optional)</string>
-    <string name="provision_scope_hint">Leave workstation blank for site-level access. Enter a workstation to restrict access to that location. The server validates the actor's role and permissions.</string>
+    <string name="provision_scope_hint">Leave workstation blank for site-level access. Enter a workstation to restrict access to that location. The server validates the actor\'s role and permissions.</string>
     <string name="provision_member">Create access</string>
     <string name="provisioned_credentials_title">Credentials created — one-time display</string>
     <string name="provisioned_login_id">Login ID</string>
