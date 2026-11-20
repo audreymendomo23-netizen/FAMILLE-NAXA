@@ -1,9 +1,517 @@
 package cm.naxa.naxaservices
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.material3.*
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-class MainActivity:ComponentActivity(){override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);setContent{MaterialTheme{Column(Modifier.fillMaxSize().padding(24.dp)){Text("NAXA Services",style=MaterialTheme.typography.headlineMedium);Text("Socle natif Famille NAXA — parcours métier à intégrer.")}}}}}
+import cm.naxa.naxaservices.auth.AuthApi
+import cm.naxa.naxaservices.auth.AuthApiException
+import cm.naxa.naxaservices.auth.AuthSession
+import cm.naxa.naxaservices.auth.SessionVault
+import kotlinx.coroutines.launch
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent { NaxaServicesTheme { NaxaServicesRoot() } }
+    }
+}
+
+private enum class AppRoute {
+    LOGIN, RECOVERY, CHANGE_PASSWORD, DASHBOARD, AGENDA, PRESSING, CASH,
+    SERVICES, CUSTOMERS, TEAM, STOCK, REPORTS, ORGANIZATION, NETWORK,
+    SITES, WORKSTATIONS, SECURITY, SETTINGS, HELP
+}
+
+@Composable
+private fun NaxaServicesRoot() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val api = remember { AuthApi(context) }
+    val vault = remember { SessionVault(context) }
+    val scope = rememberCoroutineScope()
+
+    var route by rememberSaveable { mutableStateOf(AppRoute.LOGIN.name) }
+    var session by remember { mutableStateOf<AuthSession?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var pendingRefresh by remember { mutableStateOf<String?>(null) }
+    var lightTheme by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        pendingRefresh = vault.loadRefreshToken()
+        if (!pendingRefresh.isNullOrBlank()) {
+            busy = true
+            runCatching { api.refresh(pendingRefresh!!) }
+                .onSuccess {
+                    session = it
+                    vault.save(it)
+                    route = if (it.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else AppRoute.DASHBOARD.name
+                }
+                .onFailure {
+                    vault.clear()
+                    route = AppRoute.LOGIN.name
+                }
+            busy = false
+        }
+    }
+
+    val onLogin: (String, String, Boolean) -> Unit = { identifier, password, rememberMe ->
+        scope.launch {
+            busy = true
+            message = null
+            runCatching { api.login(identifier, password, rememberMe) }
+                .onSuccess {
+                    session = it
+                    if (rememberMe) vault.save(it) else vault.clear()
+                    route = if (it.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else AppRoute.DASHBOARD.name
+                }
+                .onFailure { message = it.message ?: "Connexion impossible." }
+            busy = false
+        }
+    }
+
+    val onRecovery: (String, String) -> Unit = { identifier, note ->
+        scope.launch {
+            busy = true
+            message = null
+            runCatching { api.requestRecovery(identifier, note) }
+                .onSuccess { message = "Demande transmise si le compte peut être retrouvé. Le responsable effectuera le contrôle d'identité." }
+                .onFailure { message = it.message ?: "Demande impossible pour le moment." }
+            busy = false
+        }
+    }
+
+    val onChangePassword: (String, String) -> Unit = { current, next ->
+        val active = session
+        if (active == null) {
+            route = AppRoute.LOGIN.name
+            message = "Session expirée. Connecte-toi à nouveau."
+        } else {
+            scope.launch {
+                busy = true
+                runCatching { api.changePassword(active.accessToken, current, next) }
+                    .onSuccess {
+                        session = it
+                        if (vault.loadRefreshToken() != null) vault.save(it)
+                        route = AppRoute.DASHBOARD.name
+                        message = "Mot de passe mis à jour."
+                    }
+                    .onFailure { message = it.message ?: "Modification impossible." }
+                busy = false
+            }
+        }
+    }
+
+    NaxaServicesTheme(light = lightTheme) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            when (AppRoute.valueOf(route)) {
+                AppRoute.LOGIN -> LoginScreen(busy, message, onLogin, { route = AppRoute.RECOVERY.name })
+                AppRoute.RECOVERY -> RecoveryScreen(busy, message, onRecovery, { route = AppRoute.LOGIN.name })
+                AppRoute.CHANGE_PASSWORD -> ChangePasswordScreen(busy, message, onChangePassword)
+                else -> {
+                    val active = session
+                    if (active == null) {
+                        route = AppRoute.LOGIN.name
+                    } else {
+                        ErpScreen(
+                            route = AppRoute.valueOf(route),
+                            accountName = active.account.displayName,
+                            roleCode = active.account.roleCode,
+                            lightTheme = lightTheme,
+                            onTheme = { lightTheme = !lightTheme },
+                            onNavigate = { route = it.name },
+                            onLogout = {
+                                scope.launch {
+                                    runCatching { api.logout(active.accessToken) }
+                                    vault.clear()
+                                    session = null
+                                    route = AppRoute.LOGIN.name
+                                }
+                            },
+                            message = message,
+                            onDismissMessage = { message = null }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun NaxaServicesWordmark() {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Box(
+            Modifier.size(48.dp).background(Color(0xFFDD3A33), RoundedCornerShape(14.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("N", color = Color.White, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineLarge)
+        }
+        Column(verticalArrangement = Arrangement.spacedBy((-4).dp)) {
+            Text("NAXA", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineMedium)
+            Text("SERVICES", color = Color(0xFFDD3A33), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, letterSpacing = androidx.compose.ui.unit.sp(3))
+        }
+    }
+}
+
+@Composable
+private fun LoginScreen(
+    busy: Boolean,
+    message: String?,
+    onLogin: (String, String, Boolean) -> Unit,
+    onForgot: () -> Unit
+) {
+    var identifier by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var rememberMe by rememberSaveable { mutableStateOf(true) }
+    var showPassword by rememberSaveable { mutableStateOf(false) }
+
+    Column(
+        Modifier.fillMaxSize().padding(horizontal = 26.dp, vertical = 30.dp),
+        verticalArrangement = Arrangement.Center
+    ) {
+        NaxaServicesWordmark()
+        Spacer(Modifier.height(36.dp))
+        Text(stringResource(R.string.login_title), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(stringResource(R.string.login_subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(26.dp))
+        OutlinedTextField(
+            value = identifier, onValueChange = { identifier = it.uppercase() },
+            modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.login_identifier)) },
+            placeholder = { Text("NS-000000") }, singleLine = true
+        )
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(
+            value = password, onValueChange = { password = it },
+            modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.password)) },
+            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) stringResource(R.string.hide) else stringResource(R.string.show)) } },
+            singleLine = true
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(checked = rememberMe, onCheckedChange = { rememberMe = it })
+            Text(stringResource(R.string.remember_me), style = MaterialTheme.typography.bodyMedium)
+        }
+        if (!message.isNullOrBlank()) {
+            Text(message, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(vertical = 8.dp))
+        }
+        Button(
+            onClick = { onLogin(identifier, password, rememberMe) },
+            enabled = !busy && identifier.isNotBlank() && password.isNotBlank(),
+            modifier = Modifier.fillMaxWidth().height(54.dp)
+        ) {
+            if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+            else Text(stringResource(R.string.sign_in))
+        }
+        TextButton(onClick = onForgot, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+            Text(stringResource(R.string.forgot_password))
+        }
+        Text(stringResource(R.string.no_public_signup), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun RecoveryScreen(
+    busy: Boolean,
+    message: String?,
+    onSubmit: (String, String) -> Unit,
+    onBack: () -> Unit
+) {
+    var identifier by rememberSaveable { mutableStateOf("") }
+    var note by rememberSaveable { mutableStateOf("") }
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+        NaxaServicesWordmark()
+        Spacer(Modifier.height(30.dp))
+        Text(stringResource(R.string.recovery_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text(stringResource(R.string.recovery_explainer), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(22.dp))
+        OutlinedTextField(identifier, { identifier = it.uppercase() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.login_identifier)) }, singleLine = true)
+        Spacer(Modifier.height(12.dp))
+        OutlinedTextField(note, { note = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.recovery_note)) }, minLines = 3)
+        if (!message.isNullOrBlank()) Text(message, color = MaterialTheme.colorScheme.secondary, modifier = Modifier.padding(vertical = 10.dp))
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = { onSubmit(identifier, note) }, enabled = !busy && identifier.isNotBlank(), modifier = Modifier.fillMaxWidth().height(52.dp)) {
+            if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+            else Text(stringResource(R.string.send_recovery))
+        }
+        TextButton(onClick = onBack, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text(stringResource(R.string.back_to_login)) }
+    }
+}
+
+@Composable
+private fun ChangePasswordScreen(
+    busy: Boolean,
+    message: String?,
+    onSubmit: (String, String) -> Unit
+) {
+    var current by rememberSaveable { mutableStateOf("") }
+    var next by rememberSaveable { mutableStateOf("") }
+    var confirm by rememberSaveable { mutableStateOf("") }
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+        NaxaServicesWordmark()
+        Spacer(Modifier.height(30.dp))
+        Text(stringResource(R.string.change_password_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.change_password_explainer), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(18.dp))
+        OutlinedTextField(current, { current = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.current_password)) }, visualTransformation = PasswordVisualTransformation(), singleLine = true)
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(next, { next = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.new_password)) }, visualTransformation = PasswordVisualTransformation(), singleLine = true)
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(confirm, { confirm = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.confirm_password)) }, visualTransformation = PasswordVisualTransformation(), singleLine = true)
+        if (!message.isNullOrBlank()) Text(message, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(vertical = 8.dp))
+        Spacer(Modifier.height(14.dp))
+        Button(
+            onClick = { onSubmit(current, next) },
+            enabled = !busy && current.isNotBlank() && next.length >= 10 && next == confirm,
+            modifier = Modifier.fillMaxWidth().height(52.dp)
+        ) {
+            if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+            else Text(stringResource(R.string.save_password))
+        }
+    }
+}
+
+private data class ModuleSpec(val route: AppRoute, val title: Int, val description: Int, val actions: List<Int>)
+
+private val modules = listOf(
+    ModuleSpec(AppRoute.AGENDA, R.string.module_agenda, R.string.agenda_desc, listOf(R.string.action_new_appointment, R.string.action_waitlist, R.string.action_absences)),
+    ModuleSpec(AppRoute.PRESSING, R.string.module_pressing, R.string.pressing_desc, listOf(R.string.action_new_ticket, R.string.action_status, R.string.action_ready_pickup)),
+    ModuleSpec(AppRoute.CASH, R.string.module_cash, R.string.cash_desc, listOf(R.string.action_new_sale, R.string.action_open_cash, R.string.action_close_cash, R.string.action_expense)),
+    ModuleSpec(AppRoute.SERVICES, R.string.module_services, R.string.services_desc, listOf(R.string.action_add_service, R.string.action_price_lists, R.string.action_packages)),
+    ModuleSpec(AppRoute.CUSTOMERS, R.string.module_customers, R.string.customers_desc, listOf(R.string.action_new_customer, R.string.action_history, R.string.action_loyalty)),
+    ModuleSpec(AppRoute.TEAM, R.string.module_team, R.string.team_desc, listOf(R.string.action_add_member, R.string.action_assign, R.string.action_commissions, R.string.action_attendance)),
+    ModuleSpec(AppRoute.STOCK, R.string.module_stock, R.string.stock_desc, listOf(R.string.action_inventory, R.string.action_consumption, R.string.action_low_stock)),
+    ModuleSpec(AppRoute.REPORTS, R.string.module_reports, R.string.reports_desc, listOf(R.string.action_daily_report, R.string.action_cash_report, R.string.action_export)),
+    ModuleSpec(AppRoute.ORGANIZATION, R.string.module_organization, R.string.organization_desc, listOf(R.string.action_business_profile, R.string.action_subscription, R.string.action_permissions)),
+    ModuleSpec(AppRoute.NETWORK, R.string.module_network, R.string.network_desc, listOf(R.string.action_site_overview, R.string.action_consolidation, R.string.action_transfer)),
+    ModuleSpec(AppRoute.SITES, R.string.module_sites, R.string.sites_desc, listOf(R.string.action_add_site, R.string.action_site_settings, R.string.action_site_team)),
+    ModuleSpec(AppRoute.WORKSTATIONS, R.string.module_workstations, R.string.workstations_desc, listOf(R.string.action_add_workstation, R.string.action_assign_staff, R.string.action_workstation_schedule)),
+    ModuleSpec(AppRoute.SECURITY, R.string.module_security, R.string.security_desc, listOf(R.string.action_devices, R.string.action_recovery_queue, R.string.action_access_log)),
+    ModuleSpec(AppRoute.SETTINGS, R.string.module_settings, R.string.settings_desc, listOf(R.string.action_language, R.string.action_theme, R.string.action_offline)),
+    ModuleSpec(AppRoute.HELP, R.string.module_help, R.string.help_desc, listOf(R.string.action_faq, R.string.action_contact_support, R.string.action_briefings))
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ErpScreen(
+    route: AppRoute,
+    accountName: String,
+    roleCode: String,
+    lightTheme: Boolean,
+    onTheme: () -> Unit,
+    onNavigate: (AppRoute) -> Unit,
+    onLogout: () -> Unit,
+    message: String?,
+    onDismissMessage: () -> Unit
+) {
+    val currentSpec = modules.firstOrNull { it.route == route }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Column { Text("NAXA SERVICES", fontWeight = FontWeight.Black); Text(accountName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
+                actions = { TextButton(onClick = onTheme) { Text(if (lightTheme) stringResource(R.string.dark_mode) else stringResource(R.string.light_mode)) } }
+            )
+        },
+        bottomBar = {
+            NavigationBar {
+                NavigationBarItem(selected = route == AppRoute.DASHBOARD, onClick = { onNavigate(AppRoute.DASHBOARD) }, icon = { Text("⌂") }, label = { Text(stringResource(R.string.nav_home)) })
+                NavigationBarItem(selected = route == AppRoute.AGENDA, onClick = { onNavigate(AppRoute.AGENDA) }, icon = { Text("◷") }, label = { Text(stringResource(R.string.nav_agenda)) })
+                NavigationBarItem(selected = route == AppRoute.PRESSING, onClick = { onNavigate(AppRoute.PRESSING) }, icon = { Text("▤") }, label = { Text(stringResource(R.string.nav_pressing)) })
+                NavigationBarItem(selected = route == AppRoute.CASH, onClick = { onNavigate(AppRoute.CASH) }, icon = { Text("₣") }, label = { Text(stringResource(R.string.nav_cash)) })
+                NavigationBarItem(selected = route != AppRoute.DASHBOARD && route != AppRoute.AGENDA && route != AppRoute.PRESSING && route != AppRoute.CASH, onClick = { onNavigate(AppRoute.SETTINGS) }, icon = { Text("•••") }, label = { Text(stringResource(R.string.nav_more)) })
+            }
+        },
+        snackbarHost = {
+            if (!message.isNullOrBlank()) {
+                TextButton(onClick = onDismissMessage, modifier = Modifier.fillMaxWidth()) { Text(message, color = MaterialTheme.colorScheme.secondary) }
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { padding ->
+        if (route == AppRoute.DASHBOARD) {
+            DashboardContent(Modifier.padding(padding), accountName, roleCode, onNavigate, onLogout)
+        } else if (currentSpec != null) {
+            ModuleContent(Modifier.padding(padding), currentSpec, onNavigate)
+        } else {
+            ModuleMenu(Modifier.padding(padding), onNavigate, onLogout)
+        }
+    }
+}
+
+@Composable
+private fun DashboardContent(
+    modifier: Modifier,
+    name: String,
+    role: String,
+    onNavigate: (AppRoute) -> Unit,
+    onLogout: () -> Unit
+) {
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.dashboard_greeting, name), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(role.replace('_', ' ').uppercase(), color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelMedium)
+            Spacer(Modifier.height(6.dp))
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp)) {
+                Column(Modifier.padding(18.dp)) {
+                    Text(stringResource(R.string.dashboard_today), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(8.dp))
+                    Text(stringResource(R.string.no_synced_data), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.backend_pending), color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+        item {
+            Text(stringResource(R.string.quick_actions), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        }
+        items(listOf(AppRoute.CASH, AppRoute.PRESSING, AppRoute.AGENDA, AppRoute.SERVICES, AppRoute.CUSTOMERS, AppRoute.TEAM)) { target ->
+            val spec = modules.firstOrNull { it.route == target }
+            if (spec != null) {
+                Card(onClick = { onNavigate(target) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(stringResource(spec.title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text(stringResource(spec.description), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Text("›", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineMedium)
+                    }
+                }
+            }
+        }
+        item {
+            TextButton(onClick = { onNavigate(AppRoute.NETWORK) }) { Text(stringResource(R.string.network_overview)) }
+            TextButton(onClick = { onNavigate(AppRoute.SECURITY) }) { Text(stringResource(R.string.security_devices)) }
+            TextButton(onClick = onLogout) { Text(stringResource(R.string.sign_out)) }
+            Spacer(Modifier.height(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun ModuleContent(modifier: Modifier, spec: ModuleSpec, onNavigate: (AppRoute) -> Unit) {
+    var formOpen by remember(spec.route) { mutableStateOf(false) }
+    var entry by remember(spec.route) { mutableStateOf("") }
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(spec.title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(spec.description), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(18.dp)) {
+                    Text(stringResource(R.string.module_status_title), fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(stringResource(R.string.module_status_pending), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.no_synced_data), color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
+        item { Text(stringResource(R.string.available_workflows), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+        items(spec.actions) { action ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(stringResource(action), modifier = Modifier.weight(1f))
+                    Text("›", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.headlineSmall)
+                }
+            }
+        }
+        item {
+            Button(onClick = { formOpen = true }, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                Text(stringResource(spec.actions.firstOrNull() ?: R.string.action_create))
+            }
+            TextButton(onClick = { onNavigate(AppRoute.DASHBOARD) }) { Text(stringResource(R.string.back_dashboard)) }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+    if (formOpen) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { formOpen = false },
+            title = { Text(stringResource(R.string.form_prepare_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.form_prepare_explainer), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(entry, { entry = it }, label = { Text(stringResource(R.string.form_reference)) }, singleLine = true)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { formOpen = false; entry = "" }) { Text(stringResource(R.string.close)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { formOpen = false }) { Text(stringResource(R.string.cancel)) }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ModuleMenu(modifier: Modifier, onNavigate: (AppRoute) -> Unit, onLogout: () -> Unit) {
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.all_modules), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        }
+        items(modules) { spec ->
+            Card(onClick = { onNavigate(spec.route) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(stringResource(spec.title), fontWeight = FontWeight.Bold)
+                    Text(stringResource(spec.description), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        item {
+            TextButton(onClick = onLogout) { Text(stringResource(R.string.sign_out)) }
+            Spacer(Modifier.height(16.dp))
+        }
+    }
+}
