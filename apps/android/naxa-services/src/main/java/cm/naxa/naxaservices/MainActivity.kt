@@ -601,38 +601,71 @@ private data class ModuleSpec(val route: AppRoute, val title: Int, val descripti
 private val modules = listOf(
     ModuleSpec(AppRoute.AGENDA, R.string.module_agenda, R.string.agenda_desc, listOf(R.string.action_new_appointment, R.string.action_waitlist, R.string.action_absences)),
     ModuleSpec(AppRoute.PRESSING, R.string.module_pressing, R.string.pressing_desc, listOf(R.string.action_new_ticket, R.string.action_status, R.string.action_ready_pickup)),
+    ModuleSpec(AppRoute.WORK_ORDERS, R.string.module_work_orders, R.string.work_orders_desc, listOf(R.string.action_create_work_order, R.string.action_quote, R.string.action_track_work)),
     ModuleSpec(AppRoute.CASH, R.string.module_cash, R.string.cash_desc, listOf(R.string.action_new_sale, R.string.action_open_cash, R.string.action_close_cash, R.string.action_expense)),
     ModuleSpec(AppRoute.SERVICES, R.string.module_services, R.string.services_desc, listOf(R.string.action_add_service, R.string.action_price_lists, R.string.action_packages)),
     ModuleSpec(AppRoute.CUSTOMERS, R.string.module_customers, R.string.customers_desc, listOf(R.string.action_new_customer, R.string.action_history, R.string.action_loyalty)),
     ModuleSpec(AppRoute.TEAM, R.string.module_team, R.string.team_desc, listOf(R.string.action_add_member, R.string.action_assign, R.string.action_commissions, R.string.action_attendance)),
     ModuleSpec(AppRoute.STOCK, R.string.module_stock, R.string.stock_desc, listOf(R.string.action_inventory, R.string.action_consumption, R.string.action_low_stock)),
+    ModuleSpec(AppRoute.PURCHASES, R.string.module_purchases, R.string.purchases_desc, listOf(R.string.action_add_supplier, R.string.action_purchase_order, R.string.action_receiving)),
+    ModuleSpec(AppRoute.BILLING, R.string.module_billing, R.string.billing_desc, listOf(R.string.action_quote, R.string.action_invoice, R.string.action_credit_note, R.string.action_refund)),
+    ModuleSpec(AppRoute.SUBSCRIPTIONS, R.string.module_subscriptions, R.string.subscriptions_desc, listOf(R.string.action_choose_plan, R.string.action_payment, R.string.action_entitlements)),
+    ModuleSpec(AppRoute.OBJECTIVES, R.string.module_objectives, R.string.objectives_desc, listOf(R.string.action_daily_objective, R.string.action_team_target, R.string.action_compare)),
+    ModuleSpec(AppRoute.TAXES, R.string.module_taxes, R.string.taxes_desc, listOf(R.string.action_tax_settings, R.string.action_tax_estimate, R.string.action_tax_deadlines)),
+    ModuleSpec(AppRoute.AI_INSIGHTS, R.string.module_ai_insights, R.string.ai_insights_desc, listOf(R.string.action_sales_analysis, R.string.action_margin_analysis, R.string.action_forecast)),
     ModuleSpec(AppRoute.REPORTS, R.string.module_reports, R.string.reports_desc, listOf(R.string.action_daily_report, R.string.action_cash_report, R.string.action_export)),
     ModuleSpec(AppRoute.ORGANIZATION, R.string.module_organization, R.string.organization_desc, listOf(R.string.action_business_profile, R.string.action_subscription, R.string.action_permissions)),
     ModuleSpec(AppRoute.NETWORK, R.string.module_network, R.string.network_desc, listOf(R.string.action_site_overview, R.string.action_consolidation, R.string.action_transfer)),
     ModuleSpec(AppRoute.SITES, R.string.module_sites, R.string.sites_desc, listOf(R.string.action_add_site, R.string.action_site_settings, R.string.action_site_team)),
     ModuleSpec(AppRoute.WORKSTATIONS, R.string.module_workstations, R.string.workstations_desc, listOf(R.string.action_add_workstation, R.string.action_assign_staff, R.string.action_workstation_schedule)),
     ModuleSpec(AppRoute.SECURITY, R.string.module_security, R.string.security_desc, listOf(R.string.action_devices, R.string.action_recovery_queue, R.string.action_access_log)),
+    ModuleSpec(AppRoute.LIVECHAT, R.string.module_livechat, R.string.livechat_desc, listOf(R.string.action_faq, R.string.action_contact_support, R.string.action_call_support)),
+    ModuleSpec(AppRoute.APPEARANCE, R.string.module_appearance, R.string.appearance_desc, listOf(R.string.action_language, R.string.action_theme, R.string.action_night_schedule)),
+    ModuleSpec(AppRoute.PROFILE, R.string.module_profile, R.string.profile_desc, listOf(R.string.action_personal_information, R.string.action_history, R.string.action_sign_out)),
     ModuleSpec(AppRoute.SETTINGS, R.string.module_settings, R.string.settings_desc, listOf(R.string.action_language, R.string.action_theme, R.string.action_offline)),
     ModuleSpec(AppRoute.HELP, R.string.module_help, R.string.help_desc, listOf(R.string.action_faq, R.string.action_contact_support, R.string.action_briefings))
 )
 
+private val commonRoutes = setOf(
+    AppRoute.DASHBOARD, AppRoute.MENU, AppRoute.PROFILE, AppRoute.APPEARANCE,
+    AppRoute.LIVECHAT, AppRoute.HELP, AppRoute.SETTINGS, AppRoute.SECURITY
+)
+
+private fun activityVisibleRoutes(activity: String?): Set<AppRoute> {
+    val shared = commonRoutes + setOf(
+        AppRoute.CASH, AppRoute.CUSTOMERS, AppRoute.STOCK, AppRoute.PURCHASES,
+        AppRoute.BILLING, AppRoute.SUBSCRIPTIONS, AppRoute.OBJECTIVES,
+        AppRoute.TAXES, AppRoute.AI_INSIGHTS, AppRoute.REPORTS, AppRoute.TEAM,
+        AppRoute.ORGANIZATION, AppRoute.NETWORK, AppRoute.SITES, AppRoute.WORKSTATIONS
+    )
+    return when (activity) {
+        "pressing" -> shared + setOf(AppRoute.PRESSING, AppRoute.AGENDA, AppRoute.SERVICES)
+        "coiffure", "beaute" -> shared + setOf(AppRoute.AGENDA, AppRoute.SERVICES)
+        "parfumerie" -> shared + setOf(AppRoute.SERVICES)
+        "couture", "reparation", "menuiserie", "garage", "nettoyage", "domicile", "impression", "photo_evenementiel" ->
+            shared + setOf(AppRoute.WORK_ORDERS, AppRoute.AGENDA, AppRoute.SERVICES)
+        else -> shared + setOf(AppRoute.PRESSING, AppRoute.AGENDA, AppRoute.SERVICES, AppRoute.WORK_ORDERS)
+    }
+}
+
 private fun canAccessRoute(route: AppRoute, roleCode: String): Boolean {
-    val common = setOf(AppRoute.DASHBOARD, AppRoute.MENU, AppRoute.HELP, AppRoute.SETTINGS)
+    val common = commonRoutes + setOf(AppRoute.DASHBOARD, AppRoute.MENU)
     val allowed = when (roleCode) {
         "promoter", "network_manager", "site_manager" -> AppRoute.values().toSet()
-        "cashier" -> common + setOf(AppRoute.CASH, AppRoute.CUSTOMERS, AppRoute.REPORTS)
-        "receptionist" -> common + setOf(AppRoute.AGENDA, AppRoute.CUSTOMERS)
-        "hair_stylist" -> common + setOf(AppRoute.AGENDA, AppRoute.CUSTOMERS)
+        "cashier" -> common + setOf(AppRoute.CASH, AppRoute.CUSTOMERS, AppRoute.BILLING, AppRoute.REPORTS)
+        "receptionist" -> common + setOf(AppRoute.AGENDA, AppRoute.CUSTOMERS, AppRoute.PRESSING, AppRoute.WORK_ORDERS)
+        "hair_stylist" -> common + setOf(AppRoute.AGENDA, AppRoute.SERVICES, AppRoute.CUSTOMERS)
         "pressing_operator" -> common + setOf(AppRoute.PRESSING, AppRoute.CUSTOMERS)
-        "stock_manager" -> common + setOf(AppRoute.STOCK)
-        "accountant" -> common + setOf(AppRoute.REPORTS)
-        // Workstation-only authorization is intentionally unavailable until all
-        // local and remote reads/writes are filtered at workstation level.
+        "stock_manager" -> common + setOf(AppRoute.STOCK, AppRoute.PURCHASES)
+        "accountant" -> common + setOf(AppRoute.REPORTS, AppRoute.BILLING, AppRoute.TAXES, AppRoute.OBJECTIVES, AppRoute.AI_INSIGHTS)
         "workstation_manager" -> common
         else -> common
     }
     return route in allowed
 }
+
+private fun visibleModuleSpecs(roleCode: String, activityProfile: String?): List<ModuleSpec> =
+    modules.filter { it.route in activityVisibleRoutes(activityProfile) && canAccessRoute(it.route, roleCode) }
 
 @Composable
 private fun AccessDeniedContent(modifier: Modifier, onBack: () -> Unit) {
@@ -663,14 +696,24 @@ private fun ErpScreen(
     onNavigate: (AppRoute) -> Unit,
     onLogout: () -> Unit,
     message: String?,
-    onDismissMessage: () -> Unit
+    onDismissMessage: () -> Unit,
+    preferences: NaxaServicesPreferences,
+    activityProfile: String?,
+    tourActive: Boolean,
+    tourStep: Int,
+    onTourNext: () -> Unit,
+    onTourSkip: () -> Unit
 ) {
+    val locale = activeSession.account.defaultLocale
     val currentSpec = modules.firstOrNull { it.route == route }
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Column { Text("NAXA SERVICES", fontWeight = FontWeight.Black); Text(accountName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
-                actions = { TextButton(onClick = onTheme) { Text(if (lightTheme) stringResource(R.string.dark_mode) else stringResource(R.string.light_mode)) } }
+                actions = {
+                    TextButton(onClick = { onNavigate(AppRoute.PROFILE) }) { Text("Profil") }
+                    TextButton(onClick = onTheme) { Text(if (lightTheme) stringResource(R.string.dark_mode) else stringResource(R.string.light_mode)) }
+                }
             )
         },
         bottomBar = {
@@ -698,9 +741,9 @@ private fun ErpScreen(
         if (!canAccessRoute(route, roleCode)) {
             AccessDeniedContent(Modifier.padding(padding)) { onNavigate(AppRoute.DASHBOARD) }
         } else if (route == AppRoute.DASHBOARD) {
-            DashboardContent(Modifier.padding(padding), accountName, roleCode, onNavigate, onLogout)
+            DashboardContent(Modifier.padding(padding), accountName, roleCode, locale, activityProfile, onNavigate, tourActive, tourStep, onTourNext, onTourSkip)
         } else if (route == AppRoute.MENU) {
-            ModuleMenu(Modifier.padding(padding), roleCode, onNavigate, onLogout)
+            ModuleMenu(Modifier.padding(padding), roleCode, activityProfile, onNavigate, onLogout)
         } else if (route == AppRoute.PRESSING) {
             PressingLocalContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.AGENDA) {
@@ -723,12 +766,32 @@ private fun ErpScreen(
             OrganizationWorkspaceContent(Modifier.padding(padding), route, localRepository, authApi, activeSession)
         } else if (route == AppRoute.HELP) {
             SupportContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.LIVECHAT) {
+            LivechatContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.PROFILE) {
+            ProfileContent(Modifier.padding(padding), activeSession, activityProfile, localRepository, preferences, onNavigate, onLogout)
+        } else if (route == AppRoute.APPEARANCE) {
+            AppearanceSettingsContent(locale, preferences) { lightTheme = it }
+        } else if (route == AppRoute.BILLING) {
+            BillingContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.SUBSCRIPTIONS) {
+            SubscriptionsContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.PURCHASES) {
+            PurchasesContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.TAXES) {
+            TaxesContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.OBJECTIVES) {
+            ObjectivesContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.AI_INSIGHTS) {
+            AiInsightsContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.WORK_ORDERS) {
+            WorkOrdersContent(Modifier.padding(padding), localRepository, activeSession, activityProfile)
         } else if (route == AppRoute.SETTINGS) {
             SettingsContent(Modifier.padding(padding), localRepository, activeSession, lightTheme, onTheme)
         } else if (currentSpec != null) {
             ModuleContent(Modifier.padding(padding), currentSpec, onNavigate)
         } else {
-            ModuleMenu(Modifier.padding(padding), roleCode, onNavigate, onLogout)
+            ModuleMenu(Modifier.padding(padding), roleCode, activityProfile, onNavigate, onLogout)
         }
     }
 }
@@ -1494,15 +1557,38 @@ private fun DashboardContent(
     modifier: Modifier,
     name: String,
     role: String,
+    locale: String,
+    activityProfile: String?,
     onNavigate: (AppRoute) -> Unit,
-    onLogout: () -> Unit
+    tourActive: Boolean,
+    tourStep: Int,
+    onTourNext: () -> Unit,
+    onTourSkip: () -> Unit
 ) {
-    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    var hour by remember { mutableIntStateOf(Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            hour = Calendar.getInstance().get(Calendar.HOUR_OF_DAY)
+            delay(60_000L)
+        }
+    }
+    val greeting = if (locale == "en") {
+        if (hour >= 18 || hour < 6) "Good evening, $name" else "Good morning, $name"
+    } else {
+        if (hour >= 18 || hour < 6) "Bonsoir, $name" else "Bonjour, $name"
+    }
+    Box(modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text(stringResource(R.string.dashboard_greeting, name), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(greeting, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(role.replace('_', ' ').uppercase(), color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.height(6.dp))
+        }
+        item {
+            DashboardHeroCarousel(locale, activityProfile) {
+                onNavigate(if (activityProfile in setOf("couture","reparation","menuiserie","garage","nettoyage","domicile","impression","photo_evenementiel")) AppRoute.WORK_ORDERS else AppRoute.REPORTS)
+            }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp)) {
@@ -1517,7 +1603,9 @@ private fun DashboardContent(
         item {
             Text(stringResource(R.string.quick_actions), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
-        items(listOf(AppRoute.CASH, AppRoute.PRESSING, AppRoute.AGENDA, AppRoute.SERVICES, AppRoute.CUSTOMERS, AppRoute.TEAM).filter { canAccessRoute(it, role) }) { target ->
+        items(visibleModuleSpecs(role, activityProfile).map { it.route }
+            .filter { it !in setOf(AppRoute.NETWORK, AppRoute.SITES, AppRoute.WORKSTATIONS, AppRoute.ORGANIZATION, AppRoute.SECURITY, AppRoute.SETTINGS, AppRoute.HELP, AppRoute.PROFILE, AppRoute.APPEARANCE, AppRoute.LIVECHAT, AppRoute.SUBSCRIPTIONS, AppRoute.TAXES, AppRoute.AI_INSIGHTS) }
+            .distinct().take(8)) { target ->
             val spec = modules.firstOrNull { it.route == target }
             if (spec != null) {
                 Card(onClick = { onNavigate(target) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -1533,6 +1621,7 @@ private fun DashboardContent(
         }
         item {
             TextButton(onClick = { onNavigate(AppRoute.MENU) }) { Text(stringResource(R.string.nav_more)) }
+            TextButton(onClick = { onNavigate(AppRoute.PROFILE) }) { Text("Mon profil") }
             if (canAccessRoute(AppRoute.NETWORK, role)) {
                 TextButton(onClick = { onNavigate(AppRoute.NETWORK) }) { Text(stringResource(R.string.network_overview)) }
             }
@@ -1542,6 +1631,10 @@ private fun DashboardContent(
             TextButton(onClick = onLogout) { Text(stringResource(R.string.sign_out)) }
             Spacer(Modifier.height(18.dp))
         }
+    }
+    if (tourActive) {
+        FirstUseTourContent(locale, tourStep, onTourNext, onTourSkip)
+    }
     }
 }
 
@@ -1604,8 +1697,8 @@ private fun ModuleContent(modifier: Modifier, spec: ModuleSpec, onNavigate: (App
 }
 
 @Composable
-private fun ModuleMenu(modifier: Modifier, roleCode: String, onNavigate: (AppRoute) -> Unit, onLogout: () -> Unit) {
-    val visibleModules = modules.filter { canAccessRoute(it.route, roleCode) }
+private fun ModuleMenu(modifier: Modifier, roleCode: String, activityProfile: String?, onNavigate: (AppRoute) -> Unit, onLogout: () -> Unit) {
+    val visibleModules = visibleModuleSpecs(roleCode, activityProfile)
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
