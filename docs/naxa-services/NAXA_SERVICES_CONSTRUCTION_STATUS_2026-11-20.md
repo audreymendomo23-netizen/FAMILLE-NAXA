@@ -779,3 +779,91 @@ Ces vérifications ne remplacent pas l'installation sur un téléphone, l'essai 
 - **Production : inchangée**.
 
 La suite logique est la recette fonctionnelle Android sur émulateur/appareils, puis l'application de la migration draft et les tests Auth/RLS sur un projet Supabase isolé. Les tests de synchronisation offline et de paiements doivent être validés avant de qualifier l'ERP de complet.
+
+---
+
+## 35. Mise à jour de continuité — 20 novembre 2026 (CRM, géolocalisation, Fulfulde et import stock)
+
+Cette section complète les constats de la section 34. Elle décrit les changements effectivement ajoutés à la branche de travail après le point de reprise initial. Elle ne remplace pas les réserves de production de la section 34.
+
+### 35.1 Baseline documentaire et commerciale
+
+Le référentiel `docs/CONTINUITE.md` a été complété avec les sections 6.17.14 à 6.17.16 :
+- tarifs mensuels de lancement et cibles à maturité des dix applications ;
+- tarifs COTIZ dégressifs, LOYABLE progressif, nouveaux paliers GRILLAD ;
+- nouveau modèle CAMPUS237 établissement payant + Parent Essentiel gratuit + Individuel+ 500 F + Famille 1 500 F ;
+- règle annuelle de dix mensualités payées pour douze mois de service ;
+- périmètre de pilotage central NAXA FAMILY, CSO, moteur d'abonnement et passerelle IA isolée ;
+- périmètre de finalisation NAXA SERVICES.
+
+Ces arbitrages sont des décisions commerciales documentées. Leur enregistrement ne signifie pas que le moteur de facturation ou les intégrations de toutes les applications sont déjà opérationnels.
+
+### 35.2 Fulfulde — préférence de langue
+
+La locale `ff-CM` est désormais acceptée dans les préférences locales et exposée dans les sélecteurs de langue de l'application, de la connexion et des paramètres d'organisation. Le contrat Auth Deno accepte désormais `fr`, `en` et `ff-CM`, et le handler de mise à jour du profil organisation utilise ce contrat.
+
+La migration SQL draft autorise `ff-CM` dans `ns_members.preferred_locale`, mais **aucune migration Supabase n'a été exécutée**. Les textes juridiques restent acceptés en français ou anglais tant que leurs traductions Fulfulde n'ont pas été traduites et validées humainement. Les écrans non traduits utilisent provisoirement le français. Il ne faut donc pas déclarer l'application intégralement traduite en Fulfulde.
+
+### 35.3 CRM client, routines de relance et localisation domicile
+
+Room est passé de la version 2 à la version 3 avec une migration additive 2→3 enregistrée dans le builder Android. Les anciennes fiches clients sont conservées ; les champs suivants sont ajoutés : adresse, quartier, repère, latitude, longitude, précision, date de capture et date de consentement de géolocalisation.
+
+L'écran Clients expose :
+- création d'une fiche avec adresse de service/livraison, quartier et repère ;
+- consentement de contact séparé du consentement de localisation ;
+- demande de permissions Android de localisation au moment de l'action ;
+- proposition d'une dernière position connue, uniquement si elle date de moins de quinze minutes, avec vérification par l'opérateur avant enregistrement ;
+- saisie manuelle d'adresse lorsque le client refuse le GPS ou qu'aucune position récente n'est disponible ;
+- sélection d'un client puis création d'une routine hebdomadaire ou mensuelle ;
+- choix du canal (sur place, téléphone, WhatsApp), sous réserve du consentement pour les contacts à distance ;
+- date de prochaine échéance, clôture d'une relance, recalcul de la prochaine occurrence et journal d'événements.
+
+**Limite actuelle :** le CRM et les routines sont persistés dans Room et produisent des événements dans l'outbox locale. Il n'y a pas encore de planificateur serveur, de notifications FCM, d'envoi SMS/WhatsApp automatique, ni de synchronisation serveur/RLS vérifiée. La géolocalisation est une capture ponctuelle facultative ; aucun suivi continu n'est implémenté. L'édition d'une fiche existante et la révocation serveur du consentement devront être couvertes par les prochaines passes.
+
+### 35.4 Import de stocks — template et import CSV
+
+L'écran Stocks possède désormais les actions « Télécharger le template » et « Importer le fichier des stocks ». Le template CSV UTF-8 est configurable pour inclure ou non le seuil d'alerte, le coût d'achat et le prix de vente ; SKU, désignation, unité et quantité initiale restent obligatoires.
+
+Le parcours d'import :
+- reconnaît les en-têtes canoniques et plusieurs alias français/anglais ;
+- accepte les champs entre guillemets, le BOM UTF-8 et, dans le dernier commit, la détection du séparateur virgule ou point-virgule ;
+- limite le fichier à 20 Mo et le lot à 5 000 lignes ;
+- valide les champs, les quantités et les montants ; bloque les SKU répétés dans un même fichier ;
+- présente un aperçu et compte les SKU déjà présents ;
+- bloque la confirmation d'un doublon tant que l'opérateur n'a pas activé explicitement « Mettre à jour les articles existants » ;
+- applique le lot dans une transaction Room ; une erreur annule l'ensemble du lot ;
+- crée des mouvements de stock initiaux ou des mouvements d'ajustement traçables et met à jour la valorisation lorsque les coûts/prix sont fournis.
+
+**Limites actuelles :** seul le format CSV est pris en charge ; XLS/XLSX, correspondance manuelle de colonnes arbitraires, export d'un rapport détaillé d'erreurs, API d'import serveur, RLS et synchronisation distante restent à développer/tester. L'import actuel agit sur le stockage local de l'application et son outbox, pas sur une base serveur validée.
+
+### 35.5 Preuves CI — distinguer la version validée de la dernière modification
+
+**Dernier build entièrement vérifié :**
+- Workflow `44769339200` — terminé avec succès sur `96bb9b294e967b258add1884c5b72e228f4f69e2`.
+- Job Android : compilation et assemblage debug réussis ; artefact `naxa-services-debug-apk` archivé sous l'ID `14646801027` (SHA-256 `5108d757c79cfab6d463bc9838225251d04bc78c64fe9ebf4b48670f8dbedb63)).
+- Job Auth scope/business mode : succès.
+
+**Dernier commit de la branche au moment de cette mise à jour :**
+- `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee`, ajout de la détection CSV virgule/point-virgule et de la limite de taille.
+- Workflow `44770034786` : job Auth Deno terminé avec succès ; job Android encore en cours à l'heure de rédaction. Ne pas attribuer le succès du workflow `44769339200` au commit `2dc2a85`.
+- L'APK de l'artefact `14646801027` correspond au commit `96bb9b2`, pas au commit `2dc2a85`.
+
+**Aucune recette sur appareil physique, validation Supabase/RLS, synchronisation serveur, Release Android signée, déploiement ou mise en production n'est déclarée réalisée par ces builds.**
+
+### 35.6 Chantiers restant à traiter ou non intégrés
+
+1. CRM serveur : API, persistance distante, règles RLS, synchronisation offline, planificateur de relance, notifications, historique consolidé, préférences et désabonnement.
+2. Géolocalisation : édition et révocation de la localisation d'un client, synchronisation sécurisée, affichage carte/itinéraire dans le parcours d'intervention, contrôles RLS et recette réelle des permissions.
+3. Stocks : mapping manuel, XLS/XLSX éventuel, rapport d'erreurs téléchargeable, synchronisation serveur, contrôles d'idempotence et tests de volumes.
+4. Paiement/abonnement : le catalogue commercial est documenté, mais les paiements réels, webhooks, entitlements et droits côté serveur ne sont pas validés.
+5. Pilotage central NAXA FAMILY, comptes Customer Service Officer mutualisés et passerelle de services IA : architecture spécifiée dans CONTINUITE, mais intégration avec NAXA autonome non exécutée.
+6. Sécurité applicative NAXA SERVICES et intégration fonctionnelle NAXA SECURITY : restent deux chantiers distincts ; les capacités vidéo/audio/alertes/IA de NAXA SECURITY ne sont pas intégrées par le lot présent.
+7. API métier ERP, RLS, outbox/synchronisation, SYSCOHADA, fiscalité camerounaise, RH/paie, multi-sites consolidés, notifications FCM, sauvegarde Drive, appels/partage écran, tests instrumentés et appareils physiques, Release Android et Web/PWA restent ouverts selon la section 34.
+
+### 35.7 Point de reprise technique courant
+
+- Branche : `work/naxa-services-completion-20261120`.
+- Dernier HEAD connu à cette rédaction : `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee`.
+- Le dernier build entièrement vert reste `96bb9b294e967b258add1884c5b72e228f4f69e2` / workflow `44769339200`.
+- Le workflow du HEAD courant `44770034786` a les contrats Auth verts ; le job Android est encore en cours.
+- Préserver les acquis et continuer uniquement après lecture du résultat de ce workflow ; ne pas fusionner automatiquement la branche et ne pas toucher au projet NAXA autonome.
