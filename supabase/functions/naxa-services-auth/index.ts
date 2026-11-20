@@ -69,7 +69,11 @@ async function activeMember(accountId: string) {
 async function activeSiteIds(memberId: string, orgId: string) {
   const q = "ns_member_scopes?select=scope_type,site_id,scope_id&member_id=eq." + encodeURIComponent(memberId) + "&org_id=eq." + encodeURIComponent(orgId) + "&can_read=eq.true";
   const rows = await rest(q, { headers: serviceHeaders() }) as Record<string, unknown>[];
-  return [...new Set((rows ?? []).flatMap((row) => row.site_id ? [String(row.site_id)] : []))];
+  const explicitSites = (rows ?? []).flatMap((row) => row.site_id ? [String(row.site_id)] : []);
+  const hasOrganizationScope = (rows ?? []).some((row) => row.scope_type === "organization");
+  if (!hasOrganizationScope) return [...new Set(explicitSites)];
+  const sites = await rest("ns_sites?select=id&org_id=eq." + encodeURIComponent(orgId) + "&status=eq.active", { headers: serviceHeaders() }) as Record<string, unknown>[];
+  return [...new Set([...explicitSites, ...(sites ?? []).map((site) => String(site.id))])];
 }
 async function sessionPayload(authData: Record<string, unknown>, account: Record<string, unknown>) {
   if (account.status !== "active") throw new Error("ACCOUNT_NOT_ACTIVE");
@@ -250,7 +254,7 @@ async function logout(token: string) {
 
 Deno.serve(async (request: Request) => {
   const origin = request.headers.get("origin");
-  if (request.method === "OPTIONS") return response(204, {}, origin);
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": origin && (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes("*")) ? origin : "null", "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Vary": "Origin" } });
   if (request.method !== "POST") return response(405, { message: "Méthode non autorisée." }, origin);
   if (!SUPABASE_URL || !ANON_KEY || !SERVICE_ROLE_KEY) return response(503, { message: "Service Auth non configuré côté serveur." }, origin);
 
