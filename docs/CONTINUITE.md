@@ -959,3 +959,219 @@ Cette section actualise le point de reprise antérieur du §6.17.16. En cas de d
 **Périmètre non livré par ce lot :** administration centrale des dix applications depuis NAXA, mutualisation réelle des comptes Customer Service Officer, paiement/abonnement réel et entitlements, passerelle IA vers NAXA, intégration fonctionnelle NAXA SECURITY, backend ERP/RLS, comptabilité SYSCOHADA, fiscalité, notifications serveur, sauvegarde Drive, appels/partage écran, Web/PWA, tests physiques et Release signée. Ces sujets restent au backlog du §6.17.15–6.17.16.
 
 Le rapport détaillé, ses commits et les réserves de recette sont maintenus dans `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`. Aucune migration Supabase réelle, aucun déploiement Edge, aucune publication APK Release et aucun changement du projet NAXA autonome n'ont été réalisés par ce lot.
+
+### 6.17.18 Mise à jour de finalisation fonctionnelle — NAXA SERVICES (20 novembre 2026)
+
+Le rapport de construction comporte désormais la section 36. Le code Android natif a été étendu sur les axes suivants :
+- Catalogue tarifaire exécutable et manifeste de maturité pour les dix apps, effet au 1er mai 2027 à minuit heure de Douala ; application au début des nouvelles périodes et renouvellements, sans repricer les périodes déjà payées.
+- Trial par unité CAMPUS237 (école 30 jours, Parent Essentiel gratuit, autres packs parent payants 72h), +20 % par extension de capacité NAXA SECURITY.
+- Vente caisse reliée optionnellement au stock, sortie espèces atomique, réservation Mobile Money pending, annulation auditée, méthode de confirmation réservée à un webhook serveur vérifié.
+- Transfert inter-sites Promoteur, demande/approbation sans effet stock et réception transactionnelle avec deux mouvements liés.
+- Pointage par séquence, poste facultatif, mouvements variables RH soumis à approbation avec motif.
+- Modification de fiche client et effacement des coordonnées GPS lors du retrait du consentement.
+- Pressing avec date de retrait promise et historique de transitions avec motif.
+
+- Dernier workflow constaté : `44780431451`, commit testé `fb4a464f4595d90b2d7523b50eb95b927a407273`, statut `completed` / conclusion `failure`.
+- Jobs : NAXA FAMILY launch and maturity tariff tests=completed/success; Assemble NAXA SERVICES Android debug APK=completed/failure; Auth scope and business-mode contract tests=completed/success.
+- Artefacts : aucun artefact publié pour ce workflow.
+
+La CI du dernier état n'est pas entièrement verte/terminée. Le succès d'un SHA précédent ne doit pas être réutilisé comme preuve du HEAD courant.
+
+Ces fonctionnalités sont encore fondées sur Room/outbox locale lorsque précisé dans le rapport. Aucune mise en production, aucune migration Supabase, aucun déploiement Edge et aucun changement du projet NAXA autonome n'est déclaré. La passerelle paiement/webhook, le backend/RLS/synchroniseur, FCM/SMS/WhatsApp, la Release signée, les tests sur appareils physiques, l'admin 10 apps/CSO, l'IA mutualisée et l'intégration NAXA SECURITY restent ouverts.
+
+## 6.17.19 Reprise confirmée — construction NAXA SERVICES et CI verte (20 novembre 2026)
+
+Cette section actualise le statut des sections 6.17.17–6.17.18. Les décisions tarifaires, la date de maturité et les règles métier précédentes restent inchangées.
+
+### Référence de code et preuve de construction
+
+- Branche de travail : `work/naxa-services-completion-20261120`.
+- Dernier commit de code Android soumis aux trois gates : `7a0729c7ea8d9a852385652a688f2abe27eca586`.
+- Dernier commit de tarification et tests : `f90c82886d5ae33ce97e1966e73ac40bf8cfaca3`.
+- Workflow final : `44784781041`, commit testé `f90c82886d5ae33ce97e1966e73ac40bf8cfaca3`, conclusion `success`.
+- Trois jobs réussis : APK Android debug, contrats Auth scope/business-mode et tests du catalogue de maturité des dix applications.
+- Artefact : `naxa-services-debug-apk`, ID `14653536762`, SHA-256 `5b390da34b8202f78780c00bb73bf0bd58905767508994229187bf63e030b474`. Il s'agit d'un APK **debug**, pas d'une Release signée.
+- Dernier commit documentaire de la branche après mise à jour du rapport : `4f1e2d7256829a897ffb2adfb7558a7b2dff5dd4`. Aucun changement de code n'a été apporté après le commit testé.
+
+### Fonctions natives ajoutées ou consolidées dans le lot
+
+- Moteur tarifaire effectif-daté pour les dix applications, avec bascule le **1er mai 2027 à 00:00, heure de Douala**. Les nouveaux cycles ou renouvellements commencent sur le catalogue maturité à cette date ; les périodes déjà payées ne sont pas repricées.
+- Règles NAXA SECURITY : +20 % par extension de capacité ; essais CAMPUS237 spécifiques (30 jours école, accès Parent Essentiel gratuit, 72 heures pour les autres packs parent payants).
+- Caisse liée au stock : vente espèces avec mouvement de sortie atomique ; réservation locale pour Mobile Money pending, annulation auditée et libération de la réservation. La confirmation réelle demeure réservée à un webhook serveur vérifié.
+- Transfert inter-sites Promoteur : demande et approbation sans mouvement ; réception depuis le site destination avec revalidation du stock, incrément/décrément dans une transaction Room, mouvements source/destination et historique d'audit.
+- Pointage d'équipe séquentiel, affectation facultative à un poste, commissions/avances/primes sous validation motivée.
+- Work orders différenciés par profil métier, catalogue de prestations modifiable, pressing avec retrait promis et historique, agenda avec reprogrammation et liste d'attente convertible.
+- CRM local avec modification des fiches et retrait du consentement GPS ; suppression des coordonnées et métadonnées de capture lors de la révocation.
+
+### Langue Fulfulde — distinction importante
+
+Le code de préférence `ff-CM` est accepté et mémorisé. Toutefois, le dépôt Android contient encore les ressources françaises (`values`) et anglaises (`values-en`) uniquement : aucun pack complet `values-ff-rCM` n'est livré. Les écrans peuvent donc retomber sur le français lorsque Fulfulde est choisi. Ne pas qualifier la traduction Fulfulde de terminée avant création et relecture du pack complet par un locuteur camerounais compétent.
+
+### Réserves techniques et fonctionnelles
+
+Le build vert confirme la compilation Android, les contrats Auth et le calcul tarifaire. Il ne vaut pas recette de production. Restent à intégrer et tester : API ERP distante, synchroniseur/outbox/idempotence, RLS réelle, paiements et webhooks, entitlements, FCM/WhatsApp/SMS, planificateur serveur de relances CRM, validation distante des transferts multi-appareils, SYSCOHADA, fiscalité/paie avec experts, appels/partage écran, sauvegarde Drive, tests instrumentés et appareils physiques, Release signée et Web/PWA séparée.
+
+Les intégrations centrales documentées restent des lots distincts : pilotage central des dix applications depuis NAXA, comptes Customer Service Officer réellement mutualisés, passerelle IA versionnée et intégration vidéo/audio/alertes NAXA SECURITY. La sécurité applicative NAXA SERVICES reste également un chantier distinct de NAXA SECURITY.
+
+### Protection du périmètre
+
+Aucun déploiement Supabase ni migration réelle Supabase n'a été exécuté dans cette passe. Le projet NAXA autonome n'a pas été modifié. La branche de travail n'a pas été fusionnée automatiquement dans `main`. Le rapport technique exhaustif demeure dans `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`, section 37.
+
+
+
+### 6.17.20 Lot de parrainage PME et reprise globale — 20 novembre 2026
+
+Ce point complète la section 6.17.19 sans invalider les preuves Android/CI du commit précédent. Le code de ce lot reste sur la branche de travail ; seule cette mise à jour de continuité est écrite sur `main`.
+
+#### Référence de reprise
+
+- Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`.
+- Branche de travail : `work/naxa-services-completion-20261120`.
+- Commit de code final testé : `f9cb368dec3ac2e00ad7088b054cb30ec1e5badb`.
+- Workflow : `44792194242`, résultat final **SUCCESS — 4/4 jobs** (Android debug, Auth contracts, referral API contract, billing catalog).
+- Artefact Android debug : ID `14656354059`, 11 560 550 octets, SHA-256 `f26dd357c47d677fe5c456b936af28ad2fda89c092525ff31385fdfafd11ef42`, valable jusqu'au 27 novembre 2026 à 18:25:06 UTC.
+- Rapport détaillé : `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`, sections 38.5 à 38.7.
+- Le statut CI vert vaut pour ce périmètre de compilation/tests automatisés ; il n'est pas un vert Production global.
+
+#### Parrainage — règles et interface ajoutées
+
+- Entrée depuis Profil → « Parrainage et suivi de mes gains ».
+- Le Promoteur peut générer et copier le code unique de son organisation.
+- Le Promoteur d'une PME filleule peut associer le code reçu une seule fois ; auto-parrainage et transfert de parrain sont refusés.
+- L'écran présente les PME rattachées, dates de rattachement et d'activation, activations payées, progression par vagues de cinq, et les récompenses acquises.
+- La qualification se fait au premier abonnement réellement payé confirmé côté serveur, et non au simple enregistrement, essai, renouvellement ou statut pending.
+- Chaque groupe complet de cinq déclenche une récompense : cadence mensuelle de la PME marraine → un cycle mensuel gratuit ; cadence annuelle → un mois additionnel à appliquer à l'expiration annuelle.
+- Les récompenses ont un état distinct `pending_entitlement` / `applied` / `failed`. Aucune récompense n'est annoncée comme consommée avant confirmation du service d'entitlements.
+
+#### Limites de mise en service du parrainage
+
+L'interface et les contrats source sont ajoutés, mais le service n'est pas encore en production : la migration SQL reste dans `supabase/drafts/naxa_services_referrals_v1.sql`, la fonction Edge reste à déployer, le secret `NS_REFERRAL_WEBHOOK_SECRET` reste à configurer, et aucun webhook de fournisseur de paiement ni adaptateur d'entitlements n'a encore été raccordé. L'événement signé doit provenir du système de facturation après capture du premier paiement et doit transmettre la cadence active réelle du parrain au moment du seuil. Les gains resteront `pending_entitlement` tant que l'avantage n'aura pas été appliqué et vérifié côté serveur.
+
+#### Chantiers globaux — statut non vert production
+
+La réussite du build Android debug et des tests de contrat ne doit pas être assimilée à une qualification globale. Les points suivants demeurent à fermer avec preuves propres : API ERP distante, synchronisation offline complète, idempotence et conflits inter-appareils ; RLS réellement testée par organisation/site/poste/rôle ; paiement récurrent, webhooks, entitlements et prélèvements ; notifications FCM, SMS/WhatsApp et planificateur CRM ; SYSCOHADA, fiscalité et paie validées par les professionnels compétents ; appareils physiques, tests instrumentés, charge et restauration ; Release Android signée ; Web/PWA séparée ; Fulfulde complet traduit et relu ; pilotage central des dix applications, mutualisation effective des CSO, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
+
+
+
+#### Audit Supabase connecté — lecture seule
+
+Le seul projet Supabase exposé par la connexion est le projet `NAXA` (région `eu-west-3`, état `ACTIVE_HEALTHY`). Son état courant comporte 41 migrations, 37 tables `public`, aucune table `ns_*`/NAXA SERVICES identifiée et aucune Edge Function déployée. Les advisors signalent notamment 2 tables RLS sans policy, 2 fonctions à search_path mutable, 22 fonctions SECURITY DEFINER exécutables par `anon`, 37 accessibles à `authenticated`, ainsi que plusieurs alertes de performance.
+
+Ces observations concernent l'environnement NAXA connecté, pas un environnement NAXA SERVICES isolé. Aucune migration ni correction n'a été exécutée sur ce projet. Ne pas le modifier pour y installer NAXA SERVICES avant création/identification d'un environnement de recette dédié et cartographie de ses consommateurs existants.
+#### Protection du périmètre et consigne de reprise
+
+- Aucune migration ou fonction Supabase n'a été déployée dans cette étape.
+- Le projet NAXA autonome n'a pas été modifié.
+- Aucun commit de code n'a été fusionné dans `main`.
+- Reprendre depuis le HEAD courant de `work/naxa-services-completion-20261120`, conserver les écrans existants et poursuivre les intégrations restantes en lots verticaux avec tests et preuves distincts.
+
+
+#### Dernière configuration du service de parrainage
+
+La configuration Supabase du dépôt contient désormais `[functions.naxa-services-referrals] verify_jwt = false`, uniquement pour laisser la fonction vérifier les actions Promoteur par Supabase Auth et le webhook fournisseur par HMAC. Le README encadre explicitement ces contrôles. Commit de configuration : `34682dd53f45f42db7ca815df0af6c74291bc80d`. Workflow `44792804538` : contrôles contrats/tarifs réussis ; job Android encore en cours lors de cette note. La fonction n'est toujours pas déployée.
+
+
+#### Preuve finale Android/CI du service Referral
+
+Le commit de code/configuration `34682dd53f45f42db7ca815df0af6c74291bc80d` a son workflow `44792804538` en **SUCCESS 4/4**. L'APK debug associé est l'artefact `14657621377`, 11 560 547 octets, SHA-256 `3dc0e3f3dae2921afe71384257e22b41be06f2365794a9e48b62920be66f27e1`, expiration le 27 novembre 2026 à 18:28:39 UTC.
+
+Le commit `c87bf03b436c03cf5a84dcc9e01885e369e6cbaf` ne change que les filtres de déclenchement du workflow afin de surveiller les changements de fonction Referral, migration candidate, configuration Supabase et catalogue. Le workflow `44793189090` est un contrôle supplémentaire : trois jobs non Android ont réussi ; le job Android était encore en compilation au dernier relevé. La preuve fonctionnelle/Android terminée reste le workflow `44792804538`.
+
+
+
+## 6.17.21 — NAXA SERVICES : stocks fournisseurs, charges récurrentes et fidélité (20 novembre 2026)
+
+Poursuite sur la branche `work/naxa-services-completion-20261120`, sans fusion du code vers `main`.
+
+### Parcours ajoutés au code Android
+
+- **Stock et fournisseurs :** contact WhatsApp international enregistré par article, repris dans le modèle CSV, consultable et modifiable dans la fiche de stock. Quand le stock atteint le seuil de réapprovisionnement, l'application propose une quantité cible et ouvre WhatsApp avec un message de commande prérempli. L'utilisateur doit confirmer l'envoi ; l'application n'envoie rien automatiquement.
+- **Charges et échéances :** nouvelle page accessible depuis Profil, avec libellé/catégorie libre, montant, périodicité (mensuelle, trimestrielle, annuelle ou unique), prochaine échéance, délai de rappel, paiements partiels ou complets et historique des règlements. Un Worker Android quotidien prépare des notifications locales, limitées à l'organisation connectée.
+- **Pilotage financier :** l'écran affiche le chiffre d'affaires issu des ventes confirmées, les règlements des charges récurrentes et un solde indicatif. Ce solde ne représente pas le résultat SYSCOHADA, ne calcule pas les impôts et ne remplace pas une validation comptable.
+- **Fidélité :** nouvelle entrée Profil et quatre modèles par profil d'activité : points, passages/visites, dépenses cumulées et fréquence de visite. Les règles, seuils, fenêtres, avantages, activation et historique sont configurables. Les activités et récompenses sont persistées localement ; leur alimentation automatique depuis les ventes et le CRM attend l'API ERP synchronisée.
+- **Migration locale :** Room passe de la version 7 à 8 ; la migration ajoute les données fournisseur, charges, règlements, programmes et événements de fidélité, sans supprimer les données existantes.
+
+### Parrainage PME
+
+Le parcours de parrainage déjà ajouté au Profil conserve le code organisation, le suivi des PME inscrites et de la première activation payée, avec récompenses par blocs successifs de cinq. La migration candidate distingue le cycle mensuel gratuit de l'extension annuelle d'un mois. La correction du 20 novembre renforce l'idempotence des webhooks et rejette une cadence nulle ou un identifiant d'événement réutilisé pour un autre abonnement.
+
+**Limite à ne pas masquer :** l'attribution du gain est encore au statut d'avantage à appliquer. L'abonnement gratuit / le mois additionnel ne sera réel qu'après connexion au moteur d'entitlements et au fournisseur de paiement, avec webhooks signés et secrets configurés.
+
+### Contrats serveur candidats et limites d'environnement
+
+Le fichier `supabase/drafts/naxa_services_v3_operations_rewards_sync.sql` ajoute des candidats de tables pour les charges, paiements, programmes et événements de fidélité, reçus de synchronisation idempotents, conflits et file de notifications, avec contrôles de portée organisation/site. Le fichier reste explicitement en transaction de retour arrière (`rollback`) : il n'a pas été appliqué.
+
+Le seul projet Supabase connecté est le projet existant **NAXA** ; il ne contient ni tables `ns_*` NAXA SERVICES ni Edge Function NAXA SERVICES déployée. La création d'une branche de base dédiée demande une validation de coût ; aucune dépense n'a été engagée. Aucune migration, aucun secret, webhook, prélèvement, livraison FCM/SMS/WhatsApp côté serveur ni déploiement n'a été exécuté.
+
+### État des validations
+
+- Les tests de contrat Auth, Referral et tarifs ont réussi sur la tentative GitHub Actions `44800815315`.
+- Le job Android était encore en cours lors de cette mise à jour ; ne pas considérer la nouvelle version APK comme validée tant que ce job n'a pas fini avec succès.
+- La compilation Android antérieure du parrainage et du noyau NAXA SERVICES reste validée sur le workflow `44792804538`, mais ne couvre pas ces nouveaux modules.
+
+### Qualification globale non acquise
+
+Les points suivants restent à fermer avant de déclarer NAXA SERVICES « VERT GLOBAL » : API ERP distante et synchronisation offline de bout en bout ; application et tests réels du RLS ; intégration de paiement récurrent, webhooks et entitlements ; synchronisation serveur des rappels/CRM et fournisseurs push/SMS/WhatsApp ; interconnexion réelle fidélité-caisse ; rapprochement complet SYSCOHADA/fiscalité/paie validé par des professionnels ; essais instrumentés sur appareils, charge et restauration ; release Android signée ; Web/PWA séparée ; traduction Fulfulde complète et relue ; console centrale des dix applications, mutualisation effective des Customer Service Officers, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
+
+Ces travaux exigent notamment un projet Supabase isolé autorisé, secrets de prestataires, règles opérationnelles validées, clés de signature, appareils de recette et validations professionnelles. Le code reste sur la branche de travail ; le présent ajout de continuité ne vaut ni fusion, ni mise en production.
+
+
+## 6.17.22 — Clôture de la passe NAXA SERVICES : CI Android verte, global non qualifié (20 novembre 2026)
+
+La branche de travail NAXA SERVICES a reçu les parcours réapprovisionnement fournisseur WhatsApp, charges/échéances, rappels Android locaux, pilotage CA indicatif, quatre programmes de fidélité par profil d'activité et le durcissement idempotent du parrainage. Les entrées Profil de gestion (parrainage, fidélité et charges) sont réservées au rôle promoter.
+
+### Preuve finale de construction
+
+- Branche : work/naxa-services-completion-20261120
+- HEAD : 1117dac353d1cd3e0ef93b96430614e422d8d329
+- GitHub Actions : 44802531739 — SUCCESS, 4/4 jobs (Android debug, Auth, Referral, catalogue tarifs).
+- APK debug : artefact 14661607933, 11 682 565 octets, SHA-256 233c24881277cac33e813b3352674d7392340fd4962308d9feeab8e70a7e44c9, expiration 27 novembre 2026 à 19:31:23 UTC.
+- Rapport technique section 39 : docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md sur la branche de travail.
+
+### Fonctions locales ajoutées
+
+- Stock : contact WhatsApp par article, CSV fournisseur et message de commande prérempli au seuil ; validation de l'envoi laissée à l'utilisateur.
+- Charges : échéances récurrentes, paiements partiels/complets, historique, désactivation, notification WorkManager quotidienne et permission runtime Android 13+.
+- Gestion : CA des ventes confirmées consolidé sur les sites actifs et paiements de charges récurrentes ; solde explicitement indicatif, non SYSCOHADA.
+- Fidélité : quatre programmes configurables (points, passages, dépenses, fréquence), seuils/vagues, reliquats de points, événements et historique local.
+- Parrainage : génération/suivi et contrats de gains par vagues de cinq ; contrôles d'idempotence du webhook améliorés.
+
+### Limites bloquantes au vert global
+
+Ces parcours ne sont pas encore intégrés à une API ERP distante ni synchronisés de bout en bout entre appareils. Les activités de fidélité restent enregistrées manuellement et ne sont pas encore déclenchées automatiquement par la caisse. Les notifications de charges sont locales, pas FCM/SMS/WhatsApp serveur. Le gain de parrainage est enregistré en attente d'entitlement : aucun abonnement n'est offert/prolongé tant que le fournisseur de paiement et le moteur d'entitlements ne sont pas connectés.
+
+Les scripts Supabase v1/v2/Referral/v3 sont des drafts ; le v3 reste rollback-only. Le projet Supabase connecté est le projet existant NAXA, sans schéma ns_* ni Edge Functions NAXA SERVICES. Aucune migration, aucun secret, aucun paiement ni aucune fonction serveur n'a été déployé. La création d'une branche de base dédiée a nécessité une validation de coût qui n'a pas été donnée ; aucune dépense n'a été engagée.
+
+Restent également : RLS réel appliqué et testé, API/synchronisation/idempotence/conflits complets, paiements récurrents réels et webhooks, services FCM/SMS/WhatsApp Business, certification comptable/fiscale/paie, recette instrumentée et restauration, release Android signée, Web/PWA séparée, Fulfulde relu, centralisation des dix apps, Customer Service Officers partagés, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
+
+**Statut à conserver :** le code Android de cette passe et les 4 jobs CI sont verts sur la branche. NAXA SERVICES n'est pas qualifié « VERT GLOBAL ». Le code n'a pas été fusionné dans main et aucun déploiement production n'a été effectué.
+
+
+## 6.17.23 — Reprise comptable fournisseurs et cockpit financier NAXA SERVICES (20 novembre 2026)
+
+Cette mise à jour est portée uniquement sur la branche de travail `work/naxa-services-completion-20261120`. Le contrôle de divergence a établi que les 23 commits d'avance de `main` depuis la base commune `439fa4186b602c45e9958cc264c42b0c9ee6fbb4` ne modifient que ce fichier documentaire ; cette version documentaire de `main` est recopiée dans la branche de travail pour préserver les décisions les plus récentes. Aucun code de `main` n'est fusionné ici.
+
+### Développements ajoutés à la branche de travail
+
+- **Cycle fournisseur** : commandes multi-lignes, lignes stock / charge d'exploitation / immobilisation, réception partielle et complète, valorisation moyenne pondérée, dette fournisseur, taxe récupérable isolée et paiements partiels/complets.
+- **Écritures** : les réceptions de stock capitalisent la valeur en stock ; les consommables/services sont portés en charges ; les immobilisations en actifs ; les règlements soldent la dette et la trésorerie. La commande seule n'affecte ni CA, ni stock, ni résultat.
+- **CA et coût de revient** : seules les ventes confirmées constituent le CA. Le coût direct est rattaché à la sortie du stock au moment de la vente ; les marges et résultats sont masqués lorsqu'un coût direct manque.
+- **Idempotence** : Room v11 ajoute une clé unique de réception via migration non destructive 10→11 ; le client réutilise des clés stables pour les reprises de réception et de règlement fournisseur.
+- **Rapports** : les charges d'exploitation sont calculées depuis le journal comptable. Le règlement fournisseur reste un mouvement de trésorerie / extinction de dette et ne doit pas être redéduit comme une charge ; il reste en revanche pris en compte dans le rapprochement de caisse espèces.
+- **Assistant de pilotage** : projections statistiquement explicables sur jour (référence 14 jours), mois (28 jours) et année (90 jours), comparaisons détaillées des coûts, charges, marge, résultat indicatif et flux fournisseurs sur 14 jours, 12 mois et 5 exercices. Les comparaisons annuelles disposent de six années d'historique. Les objectifs, écarts, atteintes et actions de redressement sont calculés à partir des ventes confirmées et des baselines enregistrées.
+- **Calendrier** : dates quotidiennes du pilotage et des rapports calées sur `Africa/Douala`.
+
+Le moteur présent est statistique/local/déterministe et explicable ; il ne doit pas être présenté comme une connexion à un LLM distant. Les écrans Achats et Pilotage restent fondés sur Room local. Le draft SQL v4 et la fonction Edge comptable restent non déployés ; aucune synchronisation ERP complète Android↔Supabase n'est démontrée.
+
+### Preuves de validation et corrections CI
+
+- Le run `44835452809` sur le commit `0304d91d72ea21baa0ec7d4de3aef71aa72f0410` est terminé **SUCCESS — 5/5 jobs** : tests unitaires Android, assemblage APK debug, Auth, Referral, catalogue tarifaire. Artefact `naxa-services-debug-apk` : ID `14679170240`, taille 11 829 972 octets.
+- Le run `44835604400` sur `419583adac3268c22d3035ba46ab8aac695014f1` est également terminé avec succès.
+- Le run `44835968285` sur `9f196fbfd476dbc35ffd895ae023fdacfee88303` a échoué pendant la résolution Maven de `kotlinx-coroutines-android:1.8.1`, avant la compilation Kotlin. La dépendance existe ; cet incident est une résolution réseau/dépôt, non un défaut de code.
+- Le run `44836031127` sur `edb75ba714ba1a2ffb24cb0f8e23019553970fe4` était en cours lors de la présente mise à jour ; son résultat doit être vérifié avant de qualifier ce HEAD compilé.
+
+### Protection et qualification
+
+HEAD de `main` contrôlé : `65dfbcf29a5e9add1be79ef77ac930b3350eba9d`. Le code de la branche de travail n'a pas été fusionné dans `main`. Aucun SQL n'a été appliqué, aucune fonction Edge n'a été déployée, aucune dépense Supabase n'a été engagée et aucune Release Android signée n'a été publiée.
+
+Les réserves du §6.17.22 restent applicables : API ERP distante et synchronisation offline complète, RLS réel testé, paiements/entitlements, notifications serveur, validation SYSCOHADA/fiscalité/paie, tests instrumentés/restauration, Release signée, Web/PWA et les autres chantiers centraux. NAXA SERVICES ne doit donc pas être déclaré « VERT GLOBAL » sur la seule base d'un build debug et de contrats locaux.
