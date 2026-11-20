@@ -1480,6 +1480,71 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         updated
     }
 
+    suspend fun convertWaitlistToAppointment(
+        orgId: String,
+        siteId: String,
+        waitlistRecordId: String,
+        workstationId: String?,
+        startsAtMillis: Long,
+        durationMinutes: Int,
+        depositXaf: Long,
+        reason: String,
+        actorMemberId: String
+    ): LocalAppointment = database.withTransaction {
+        require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) {
+            "Organisation, site et opérateur obligatoires."
+        }
+        require(startsAtMillis > System.currentTimeMillis() - 60_000L && durationMinutes in 5..600 && depositXaf >= 0L) {
+            "Créneau, durée ou acompte invalide."
+        }
+        require(reason.trim().length >= 3 && reason.length <= 500) { "Un motif de conversion est obligatoire." }
+        val waitlist = dao.findManagementRecord(orgId, siteId, waitlistRecordId)
+            ?: throw IllegalArgumentException("Entrée de liste d'attente introuvable.")
+        require(waitlist.recordType == "appointment_waitlist" && waitlist.status in setOf("open", "contacted")) {
+            "Cette entrée de liste d'attente n'est plus convertible."
+        }
+        val normalizedWorkstation = workstationId?.takeIf { it.isNotBlank() }
+        if (normalizedWorkstation != null) {
+            require(dao.findWorkstation(normalizedWorkstation, orgId, siteId) != null) {
+                "L'emplacement sélectionné n'existe pas dans ce point de vente."
+            }
+        }
+        val endsAtMillis = startsAtMillis + durationMinutes * 60_000L
+        val conflicts = dao.countAppointmentConflicts(
+            orgId, siteId, normalizedWorkstation, actorMemberId, startsAtMillis, endsAtMillis
+        )
+        require(conflicts == 0) { "Conflit de planning pour le poste ou le prestataire sélectionné." }
+        val now = System.currentTimeMillis()
+        val appointment = LocalAppointment(
+            id = UUID.randomUUID().toString(),
+            orgId = orgId,
+            siteId = siteId,
+            workstationId = normalizedWorkstation,
+            customerName = waitlist.counterparty,
+            serviceName = waitlist.title,
+            assignedMemberId = actorMemberId,
+            startsAtMillis = startsAtMillis,
+            endsAtMillis = endsAtMillis,
+            depositXaf = depositXaf,
+            status = "booked",
+            actorMemberId = actorMemberId,
+            createdAtMillis = now
+        )
+        dao.insertAppointment(appointment)
+        dao.updateManagementRecord(waitlist.copy(status = "booked"))
+        dao.insertWorkflowEvent(
+            LocalWorkflowEvent(
+                id = UUID.randomUUID().toString(), orgId = orgId, siteId = siteId,
+                aggregateType = "appointment_waitlist", aggregateId = waitlist.id,
+                fromStatus = waitlist.status, toStatus = "booked",
+                reason = reason.trim(), actorMemberId = actorMemberId, createdAtMillis = now
+            )
+        )
+        enqueue(orgId, "appointment", appointment.id, "appointment.created_from_waitlist", siteId)
+        enqueue(orgId, "appointment_waitlist", waitlist.id, "appointment_waitlist.converted", siteId)
+        appointment
+    }
+
     suspend fun createManagementRecord(
         orgId: String,
         siteId: String,
