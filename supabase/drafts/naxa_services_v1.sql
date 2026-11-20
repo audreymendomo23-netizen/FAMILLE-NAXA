@@ -401,7 +401,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $naxa$
   select
     (select count(*) from public.ns_auth_attempts
       where login_hash = p_login_hash
@@ -412,7 +412,7 @@ as $
       where ip_hash = p_ip_hash
         and attempted_at > now() - interval '15 minutes'
         and succeeded = false) >= 20;
-$;
+$naxa$;
 
 create or replace function public.ns_auth_record_attempt(
   p_login_hash text,
@@ -423,14 +423,14 @@ returns void
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $naxa$
 begin
   insert into public.ns_auth_attempts(login_hash, ip_hash, succeeded)
   values (p_login_hash, p_ip_hash, p_succeeded);
   delete from public.ns_auth_attempts
     where attempted_at < now() - interval '2 days';
 end;
-$;
+$naxa$;
 
 alter table public.ns_organizations enable row level security;
 alter table public.ns_sites enable row level security;
@@ -477,7 +477,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $naxa$
   select a.id
   from public.ns_accounts a
   join public.ns_devices d on d.account_id = a.id
@@ -486,7 +486,7 @@ as $
     and d.session_id = auth.jwt() ->> 'session_id'
     and d.revoked_at is null
   limit 1;
-$;
+$naxa$;
 
 create or replace function public.ns_is_org_member(p_org_id uuid)
 returns boolean
@@ -494,7 +494,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $naxa$
   select exists (
     select 1
     from public.ns_members m
@@ -502,7 +502,7 @@ as $
       and m.org_id = p_org_id
       and m.status = 'active'
   );
-$;
+$naxa$;
 
 create or replace function public.ns_can_access_site(p_org_id uuid, p_site_id uuid)
 returns boolean
@@ -510,7 +510,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $naxa$
   select exists (
     select 1
     from public.ns_member_scopes s
@@ -524,7 +524,7 @@ as $
         or s.site_id = p_site_id
       )
   );
-$;
+$naxa$;
 
 create or replace function public.ns_can_operate_site(p_org_id uuid, p_site_id uuid)
 returns boolean
@@ -532,7 +532,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $naxa$
   select exists (
     select 1
     from public.ns_member_scopes s
@@ -543,7 +543,7 @@ as $
       and (s.can_operate or s.can_manage)
       and (s.scope_type = 'organization' or s.site_id = p_site_id)
   );
-$;
+$naxa$;
 
 create or replace function public.ns_can_manage_site(p_org_id uuid, p_site_id uuid)
 returns boolean
@@ -551,7 +551,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $naxa$
   select exists (
     select 1
     from public.ns_member_scopes s
@@ -563,7 +563,7 @@ as $
       and s.can_manage
       and (s.scope_type = 'organization' or s.site_id = p_site_id)
   );
-$;
+$naxa$;
 
 create or replace function public.ns_can_manage_org(p_org_id uuid)
 returns boolean
@@ -571,7 +571,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $naxa$
   select exists (
     select 1
     from public.ns_members m
@@ -583,7 +583,7 @@ as $
       and s.scope_type = 'organization'
       and s.can_manage
   );
-$;
+$naxa$;
 
 create or replace function public.ns_can_access_workstation(p_org_id uuid, p_site_id uuid, p_workstation_id uuid)
 returns boolean
@@ -591,7 +591,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $naxa$
   select exists (
     select 1
     from public.ns_member_scopes s
@@ -606,7 +606,7 @@ as $
         or (s.scope_type = 'workstation' and s.site_id = p_site_id and s.workstation_id = p_workstation_id)
       )
   );
-$;
+$naxa$;
 
 create or replace function public.ns_can_manage_member(p_target_member_id uuid)
 returns boolean
@@ -614,7 +614,7 @@ language sql
 stable
 security definer
 set search_path = ''
-as $
+as $naxa$
   select exists (
     select 1
     from public.ns_members target
@@ -636,7 +636,7 @@ as $
         )
       )
   );
-$;
+$naxa$;
 
 revoke all on function public.ns_current_account_id() from public, anon;
 revoke all on function public.ns_is_org_member(uuid) from public, anon;
