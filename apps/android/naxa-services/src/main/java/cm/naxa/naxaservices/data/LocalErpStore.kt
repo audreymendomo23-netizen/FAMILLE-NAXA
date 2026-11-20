@@ -109,7 +109,8 @@ data class LocalSale(
     val inventoryItemId: String? = null,
     val stockQuantity: Double? = null,
     @ColumnInfo(defaultValue = "0") val unitCostAtSaleXaf: Long = 0L,
-    @ColumnInfo(defaultValue = "0") val costOfGoodsXaf: Long = 0L
+    @ColumnInfo(defaultValue = "0") val costOfGoodsXaf: Long = 0L,
+    @ColumnInfo(defaultValue = "0") val costSnapshotComplete: Boolean = false
 )
 
 @Entity(tableName = "local_expenses", indices = [Index(value = ["siteId"]), Index(value = ["cashSessionId"]), Index(value = ["createdAtMillis"])])
@@ -1021,7 +1022,7 @@ interface NaxaServicesDao {
         LocalSupplierPayment::class,
         LocalAccountingEntry::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -1175,6 +1176,13 @@ val NS_SERVICES_MIGRATION_8_9: Migration = object : Migration(8, 9) {
             "'OPERATING_EXPENSE_RECURRING', 'TREASURY_UNSPECIFIED', amountXaf, 'Ancien règlement de charge récurrente', actorMemberId, paidAtMillis " +
             "FROM local_charge_payments"
         )
+    }
+}
+
+
+val NS_SERVICES_MIGRATION_9_10: Migration = object : Migration(9, 10) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE local_sales ADD COLUMN costSnapshotComplete INTEGER NOT NULL DEFAULT 0")
     }
 }
 
@@ -1793,10 +1801,10 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         val linkedStockItem = inventoryItemId?.let {
             dao.findInventoryItem(it, orgId, siteId) ?: throw IllegalArgumentException("Article introuvable sur ce point de vente.")
         }
-        val unitCostSnapshot = if (linkedStockItem != null) {
-            dao.findInventoryValuation(orgId, siteId, linkedStockItem.id)?.unitCostXaf ?: 0L
-        } else 0L
-        val costSnapshot = if (stockQuantity != null && unitCostSnapshot > 0L) {
+        val valuationSnapshot = linkedStockItem?.let { dao.findInventoryValuation(orgId, siteId, it.id) }
+        val unitCostSnapshot = valuationSnapshot?.unitCostXaf ?: 0L
+        val hasReliableCostSnapshot = linkedStockItem == null || valuationSnapshot != null
+        val costSnapshot = if (stockQuantity != null && valuationSnapshot != null) {
             (stockQuantity * unitCostSnapshot.toDouble()).takeIf { it.isFinite() && it <= Long.MAX_VALUE.toDouble() }?.let { kotlin.math.round(it).toLong() }
                 ?: throw IllegalArgumentException("Coût de revient de la vente invalide.")
         } else 0L
@@ -1823,7 +1831,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             inventoryItemId = linkedStockItem?.id,
             stockQuantity = stockQuantity,
             unitCostAtSaleXaf = unitCostSnapshot,
-            costOfGoodsXaf = costSnapshot
+            costOfGoodsXaf = costSnapshot,
+            costSnapshotComplete = hasReliableCostSnapshot
         )
         dao.insertSale(sale)
         if (linkedStockItem != null && paymentMethod == "cash") {
