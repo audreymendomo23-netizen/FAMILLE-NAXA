@@ -447,23 +447,16 @@ internal fun OrganizationWorkspaceContent(
     modifier: Modifier,
     route: AppRoute,
     repository: NaxaServicesLocalRepository,
+    api: AuthApi,
     session: AuthSession
 ) {
     val scope = rememberCoroutineScope()
     val orgId = session.account.organizationId
     val profile by remember(orgId) { repository.dao.observeOrganizationProfile(orgId) }.collectAsState(initial = null)
     val localSites by remember(orgId) { repository.dao.observeSites(orgId) }.collectAsState(initial = emptyList())
-    var displayName by rememberSaveable { mutableStateOf(session.account.displayName) }
-    var mode by rememberSaveable {
-        mutableStateOf(
-            when (session.account.roleCode) {
-                "promoter", "network_manager" -> "multi_site_network"
-                "site_manager", "workstation_manager" -> "single_site_multi_workstation"
-                else -> "solo"
-            }
-        )
-    }
-    var locale by rememberSaveable { mutableStateOf("fr") }
+    var displayName by rememberSaveable { mutableStateOf(session.account.organizationName) }
+    var mode by rememberSaveable { mutableStateOf(session.account.businessMode) }
+    var locale by rememberSaveable { mutableStateOf(session.account.defaultLocale) }
     var siteCode by rememberSaveable { mutableStateOf("") }
     var siteName by rememberSaveable { mutableStateOf("") }
     var address by rememberSaveable { mutableStateOf("") }
@@ -478,10 +471,14 @@ internal fun OrganizationWorkspaceContent(
     var busy by remember { mutableStateOf(false) }
 
     LaunchedEffect(profile?.orgId) {
-        profile?.let {
-            displayName = it.displayName
-            mode = it.businessMode
-            locale = it.defaultLocale
+        if (profile != null) {
+            displayName = profile!!.displayName
+            mode = profile!!.businessMode
+            locale = profile!!.defaultLocale
+        } else {
+            displayName = session.account.organizationName
+            mode = session.account.businessMode
+            locale = session.account.defaultLocale
         }
     }
 
@@ -528,15 +525,27 @@ internal fun OrganizationWorkspaceContent(
                             onClick = {
                                 scope.launch {
                                     busy = true; error = null; notice = null
-                                    runCatching { repository.saveOrganizationProfile(orgId, displayName, mode, locale) }
-                                        .onSuccess { notice = "Modèle enregistré comme brouillon local." }
-                                        .onFailure { error = it.message ?: "Enregistrement impossible." }
+                                    runCatching {
+                                        api.updateOrganizationProfile(session.accessToken, displayName, mode, locale)
+                                    }.onSuccess {
+                                        runCatching { repository.saveOrganizationProfile(orgId, displayName, mode, locale) }
+                                        notice = "Profil et modèle d’exploitation confirmés par le serveur."
+                                    }.onFailure { remoteError ->
+                                        runCatching { repository.saveOrganizationProfile(orgId, displayName, mode, locale) }
+                                            .onSuccess {
+                                                notice = "Brouillon local uniquement : le serveur n’a pas confirmé la modification."
+                                                error = remoteError.message ?: "Service distant indisponible."
+                                            }
+                                            .onFailure { localError ->
+                                                error = localError.message ?: remoteError.message ?: "Enregistrement impossible."
+                                            }
+                                    }
                                     busy = false
                                 }
                             },
                             enabled = !busy && canManageNetwork && orgId.isNotBlank() && displayName.isNotBlank(),
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Enregistrer la configuration locale") }
+                        ) { Text("Enregistrer le profil et le modèle") }
                     }
                 }
                 if (!canManageNetwork) {
