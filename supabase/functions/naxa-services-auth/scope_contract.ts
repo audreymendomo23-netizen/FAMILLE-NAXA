@@ -20,6 +20,14 @@ export function isNaxaActivityProfile(value: string): value is NaxaActivityProfi
   return NAXA_ACTIVITY_PROFILES.includes(value as NaxaActivityProfile);
 }
 
+export function isLegalDocumentVersion(type: string, version: string): boolean {
+  const versions: Record<string, string> = {
+    terms: "2026-11-v1",
+    privacy: "2026-11-v1",
+  };
+  return versions[type] === version;
+}
+
 export function isNaxaBusinessMode(value: string): value is NaxaBusinessMode {
   return BUSINESS_MODES.includes(value as NaxaBusinessMode);
 }

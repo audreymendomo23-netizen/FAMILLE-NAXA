@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { isNaxaActivityProfile, isNaxaBusinessMode, nativeSiteIdsForScopes } from "./scope_contract.ts";
+import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, nativeSiteIdsForScopes } from "./scope_contract.ts";
 
 // Pure contract checks. Integration tests require an ephemeral Supabase project
 // with a proven internal Auth alias format and seeded NAXA Services identities.
@@ -55,4 +55,12 @@ Deno.test("NAXA Services activity profiles accept the supported catalog and reje
   }
   assertEquals(isNaxaActivityProfile("pharmacy"), false);
   assertEquals(isNaxaActivityProfile(""), false);
+});
+
+Deno.test("legal acceptance only accepts the published draft versions", () => {
+  assertEquals(isLegalDocumentVersion("terms", "2026-11-v1"), true);
+  assertEquals(isLegalDocumentVersion("privacy", "2026-11-v1"), true);
+  assertEquals(isLegalDocumentVersion("terms", "2026-10-v1"), false);
+  assertEquals(isLegalDocumentVersion("terms", "2026-11-v2"), false);
+  assertEquals(isLegalDocumentVersion("unknown", "2026-11-v1"), false);
 });

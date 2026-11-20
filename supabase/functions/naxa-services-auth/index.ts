@@ -1,4 +1,4 @@
-import { isNaxaActivityProfile, isNaxaBusinessMode, nativeSiteIdsForScopes } from "./scope_contract.ts";
+import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, nativeSiteIdsForScopes } from "./scope_contract.ts";
 // NAXA SERVICES authentication gateway — source only, NOT deployed.
 // Required server-side secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
 // Never set SUPABASE_SERVICE_ROLE_KEY in Android/Web build variables.
@@ -542,7 +542,7 @@ async function setOrganizationActivityProfile(body: Record<string, unknown>, tok
     if (current === activityProfile) return { status: 200, body: { saved: true, activity_profile: current, already_selected: true } };
     return { status: 409, body: { message: "L’activité de cette organisation a déjà été choisie. Une modification exige une procédure administrée." } };
   }
-  await rest(
+  const updatedRows = await rest(
     "ns_organizations?id=eq." + encodeURIComponent(String(actor.member.org_id)) + "&activity_profile=is.null",
     {
       method: "PATCH",
@@ -553,7 +553,18 @@ async function setOrganizationActivityProfile(body: Record<string, unknown>, tok
         activity_profile_selected_by: actor.member.id,
       }),
     },
-  );
+  ) as Record<string, unknown>[];
+  if (!updatedRows?.length) {
+    const latestRows = await rest(
+      "ns_organizations?select=activity_profile&id=eq." + encodeURIComponent(String(actor.member.org_id)) + "&limit=1",
+      { headers: serviceHeaders() },
+    ) as Record<string, unknown>[];
+    const latest = latestRows?.[0]?.activity_profile;
+    if (latest === activityProfile) {
+      return { status: 200, body: { saved: true, activity_profile: activityProfile, already_selected: true } };
+    }
+    return { status: 409, body: { message: "Un autre choix d’activité vient d’être enregistré. Recharge l’application." } };
+  }
   await auditAction(
     String(actor.member.org_id), actor.authUserId, String(actor.member.id),
     "organization.activity_profile_selected", "organization", String(actor.member.org_id),
@@ -568,7 +579,7 @@ async function acceptLegalDocument(body: Record<string, unknown>, token: string)
   const documentType = String(body.document_type ?? "");
   const documentVersion = String(body.document_version ?? "");
   const locale = String(body.locale ?? "fr");
-  if (!["terms", "privacy"].includes(documentType) || !/^\\d{4}-\\d{2}-v\\d+$/.test(documentVersion) || !["fr", "en"].includes(locale)) {
+  if (!["terms", "privacy"].includes(documentType) || !isLegalDocumentVersion(documentType, documentVersion) || !["fr", "en"].includes(locale)) {
     return { status: 400, body: { message: "Acceptation légale invalide." } };
   }
   await rest("ns_legal_acceptances?on_conflict=member_id,document_type,document_version", {
@@ -596,6 +607,21 @@ async function completeOnboardingStep(body: Record<string, unknown>, token: stri
   if (!actor) return { status: 401, body: { message: "Session expirée." } };
   const step = String(body.step ?? "");
   if (!["discovery", "tour"].includes(step)) return { status: 400, body: { message: "Étape d’intégration invalide." } };
+  const organizationRows = await rest(
+    "ns_organizations?select=activity_profile&id=eq." + encodeURIComponent(String(actor.member.org_id)) + "&limit=1",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  if (!organizationRows?.[0]?.activity_profile) {
+    return { status: 409, body: { message: "L’activité de l’organisation doit être définie avant de terminer l’intégration." } };
+  }
+  const legalRows = await rest(
+    "ns_legal_acceptances?select=document_type,document_version&member_id=eq." + encodeURIComponent(String(actor.member.id)),
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  const accepted = new Set((legalRows ?? []).map((row) => String(row.document_type) + ":" + String(row.document_version)));
+  if (!accepted.has("terms:2026-11-v1") || !accepted.has("privacy:2026-11-v1")) {
+    return { status: 409, body: { message: "Les conditions et la politique de confidentialité doivent être acceptées." } };
+  }
   const column = step === "discovery" ? "discovery_completed_at" : "tour_completed_at";
   await rest(
     "ns_members?id=eq." + encodeURIComponent(String(actor.member.id)) + "&" + column + "=is.null",
