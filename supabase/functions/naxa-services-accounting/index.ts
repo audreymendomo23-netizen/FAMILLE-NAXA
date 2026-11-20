@@ -87,7 +87,10 @@ async function readView(
   siteIds: string[],
   fromDate: string,
 ): Promise<unknown> {
-  if (siteIds.length < 1 || siteIds.length > 50 || !/^\d{4}-\d{2}-\d{2}$/.test(fromDate)) {
+  if (siteIds.length < 1 || siteIds.length > 50 ||
+      !siteIds.every((id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) ||
+      !/^\d{4}-\d{2}-\d{2}$/.test(fromDate) ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orgId)) {
     throw new Error("INVALID_PERFORMANCE_FILTER");
   }
   const query = new URLSearchParams();
@@ -143,6 +146,15 @@ export async function handleAccountingRequest(
           p_supplier_id: requiredString(body.supplier_id, "supplier_id"),
           p_reference: requiredString(body.reference, "reference"),
           p_supplier_invoice_number: typeof body.supplier_invoice_number === "string" ? body.supplier_invoice_number : "",
+          p_idempotency_key: requiredString(body.idempotency_key, "idempotency_key"),
+          p_payload_sha256: await sha256({
+            org_id: body.org_id, site_id: body.site_id, supplier_id: body.supplier_id,
+            reference: body.reference, supplier_invoice_number: body.supplier_invoice_number ?? "",
+            lines, recoverable_tax_xaf: body.recoverable_tax_xaf ?? 0,
+            non_recoverable_tax_xaf: body.non_recoverable_tax_xaf ?? 0,
+            shipping_xaf: body.shipping_xaf ?? 0, other_fees_xaf: body.other_fees_xaf ?? 0,
+            due_at: body.due_at ?? null, notes: body.notes ?? "",
+          }),
           p_lines: lines,
           p_recoverable_tax_xaf: requiredNumber(body.recoverable_tax_xaf ?? 0, "recoverable_tax_xaf"),
           p_non_recoverable_tax_xaf: requiredNumber(body.non_recoverable_tax_xaf ?? 0, "non_recoverable_tax_xaf"),
