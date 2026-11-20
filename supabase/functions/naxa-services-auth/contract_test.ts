@@ -65,10 +65,12 @@ Deno.test("legal acceptance only accepts the published draft versions", () => {
   assertEquals(isLegalDocumentVersion("unknown", "2026-11-v1"), false);
 });
 
-Deno.test("NAXA Services locale contract accepts French and English only", () => {
+Deno.test("NAXA Services locale contract accepts French, English and Fulfulde Cameroon", () => {
   assertEquals(isNaxaLocale("fr"), true);
   assertEquals(isNaxaLocale("en"), true);
+  assertEquals(isNaxaLocale("ff-CM"), true);
   assertEquals(isNaxaLocale("fr-FR"), false);
+  assertEquals(isNaxaLocale("ff"), false);
   assertEquals(isNaxaLocale(""), false);
 });
 
