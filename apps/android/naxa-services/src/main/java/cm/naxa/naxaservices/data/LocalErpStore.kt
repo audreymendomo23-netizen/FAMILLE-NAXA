@@ -804,6 +804,10 @@ interface NaxaServicesDao {
     @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_accounting_entries WHERE orgId = :orgId AND siteId = :siteId AND debitAccount LIKE 'OPERATING_EXPENSE%' AND occurredAtMillis BETWEEN :fromMillis AND :toMillis")
     fun observeOperatingExpensesTotal(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Long>
 
+    // Backwards-compatible name used by the existing home dashboard; it now reads the journal too.
+    @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_accounting_entries WHERE orgId = :orgId AND siteId = :siteId AND debitAccount LIKE 'OPERATING_EXPENSE%' AND occurredAtMillis BETWEEN :fromMillis AND :toMillis")
+    fun observeExpensesTotal(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Long>
+
     @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_supplier_payments WHERE orgId = :orgId AND siteId = :siteId AND paidAtMillis BETWEEN :fromMillis AND :toMillis")
     fun observeSupplierPaymentsTotal(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<Long>
 
