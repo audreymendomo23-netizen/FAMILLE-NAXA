@@ -848,6 +848,22 @@ interface NaxaServicesDao {
     suspend fun upsertInventoryValuation(valuation: LocalInventoryValuation)
 
 
+
+    @Query("SELECT * FROM local_sales WHERE orgId = :orgId AND siteId IN (:siteIds) AND createdAtMillis >= :fromMillis ORDER BY createdAtMillis DESC LIMIT 50000")
+    fun observeSalesForSites(orgId: String, siteIds: List<String>, fromMillis: Long): Flow<List<LocalSale>>
+
+    @Query("SELECT * FROM local_accounting_entries WHERE orgId = :orgId AND siteId IN (:siteIds) AND occurredAtMillis >= :fromMillis ORDER BY occurredAtMillis DESC LIMIT 100000")
+    fun observeAccountingEntriesForSites(orgId: String, siteIds: List<String>, fromMillis: Long): Flow<List<LocalAccountingEntry>>
+
+    @Query("SELECT * FROM local_management_records WHERE orgId = :orgId AND siteId IN (:siteIds) AND recordType = :recordType ORDER BY createdAtMillis DESC")
+    fun observeManagementRecordsForSites(orgId: String, siteIds: List<String>, recordType: String): Flow<List<LocalManagementRecord>>
+
+    @Query("SELECT COALESCE(SUM(receivedTotalXaf - paidTotalXaf), 0) FROM local_purchase_documents WHERE orgId = :orgId AND siteId IN (:siteIds) AND status <> 'cancelled'")
+    fun observeSupplierPayablesForSites(orgId: String, siteIds: List<String>): Flow<Long>
+
+    @Query("SELECT COUNT(*) FROM local_inventory_items WHERE orgId = :orgId AND siteId IN (:siteIds) AND active = 1 AND quantity <= reorderLevel")
+    fun observeLowStockCountForSites(orgId: String, siteIds: List<String>): Flow<Int>
+
     @Query("SELECT * FROM local_suppliers WHERE orgId = :orgId AND siteId = :siteId AND active = 1 ORDER BY name COLLATE NOCASE ASC")
     fun observeSuppliers(orgId: String, siteId: String): Flow<List<LocalSupplier>>
 
