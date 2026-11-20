@@ -682,7 +682,7 @@ async function updateOrganizationProfile(body: Record<string, unknown>, token: s
   const displayName = String(body.display_name ?? "").trim().slice(0, 120);
   const businessMode = String(body.business_mode ?? "");
   const defaultLocale = String(body.default_locale ?? "fr");
-  if (!displayName || !isNaxaBusinessMode(businessMode) || !["fr", "en"].includes(defaultLocale)) {
+  if (!displayName || !isNaxaBusinessMode(businessMode) || !isNaxaLocale(defaultLocale)) {
     return { status: 400, body: { message: "Profil d'organisation invalide." } };
   }
   const organizationRows = await rest(
