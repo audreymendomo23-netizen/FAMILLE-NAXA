@@ -1069,3 +1069,11 @@ Ces observations concernent l'environnement NAXA connecté, pas un environnement
 #### Dernière configuration du service de parrainage
 
 La configuration Supabase du dépôt contient désormais `[functions.naxa-services-referrals] verify_jwt = false`, uniquement pour laisser la fonction vérifier les actions Promoteur par Supabase Auth et le webhook fournisseur par HMAC. Le README encadre explicitement ces contrôles. Commit de configuration : `34682dd53f45f42db7ca815df0af6c74291bc80d`. Workflow `44792804538` : contrôles contrats/tarifs réussis ; job Android encore en cours lors de cette note. La fonction n'est toujours pas déployée.
+
+
+#### Preuve finale Android/CI du service Referral
+
+Le commit de code/configuration `34682dd53f45f42db7ca815df0af6c74291bc80d` a son workflow `44792804538` en **SUCCESS 4/4**. L'APK debug associé est l'artefact `14657621377`, 11 560 547 octets, SHA-256 `3dc0e3f3dae2921afe71384257e22b41be06f2365794a9e48b62920be66f27e1`, expiration le 27 novembre 2026 à 18:28:39 UTC.
+
+Le commit `c87bf03b436c03cf5a84dcc9e01885e369e6cbaf` ne change que les filtres de déclenchement du workflow afin de surveiller les changements de fonction Referral, migration candidate, configuration Supabase et catalogue. Le workflow `44793189090` est un contrôle supplémentaire : trois jobs non Android ont réussi ; le job Android était encore en compilation au dernier relevé. La preuve fonctionnelle/Android terminée reste le workflow `44792804538`.
+
