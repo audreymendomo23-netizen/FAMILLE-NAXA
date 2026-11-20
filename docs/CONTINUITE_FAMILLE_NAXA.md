@@ -223,3 +223,14 @@ Le statut reste EN VALIDATION CI ; ne déclarer VERT qu'après preuve intégrale
 - Le cahier NAXA Services et Prompt 0.4 mentionnent encore récupération e-mail/WhatsApp et téléphone comme identifiant. Ils ne sont pas réécrits avant le test et la validation du schéma cible.
 - Design détaillé : `docs/architecture-360/DECISION_AUTHENTIFICATION_INTERNE_SANS_OTP_EMAIL.md`.
 - Aucun code applicatif, configuration Auth réelle, migration, session de production, déploiement ou APK n'a été modifié.
+
+
+## Mise à jour — première construction NAXA SERVICES (20 novembre 2026)
+- Architecture documentée pour PME autonome, responsable multi-emplacements dans un site et Promoteur multi-sites autonomes.
+- Source Android Kotlin/Compose : connexion interne, récupération administrée, changement initial, « rester connecté » avec coffre Android Keystore et navigation ERP.
+- Source Web/PWA : tableau de bord, 16 modules ERP, pages structure/réseau et formulaires d'aperçu en mémoire de session.
+- Source Edge Function Auth, contrat API, draft SQL et contrat RLS préparés sans déploiement ni application de migration.
+- « Rester connecté » est décoché par défaut ; les jetons sont chiffrés uniquement si l'utilisateur l'active. Le mot de passe n'est jamais sauvegardé.
+- Statut non vert complet : builds locaux non exécutés (résolution réseau indisponible), alias GoTrue non prouvé, fonction non déployée, provisioning/reset Admin incomplets, policies RLS détaillées et recettes métier non exécutées. Les opérations ERP restent à connecter aux repositories et à la synchronisation.
+- Logo : SVG reconstruit depuis la spécification écrite ; original binaire spécifique non vérifié dans cette passe.
+- Aucun changement de Supabase Replay/Production, aucun déploiement ni APK publiée.
