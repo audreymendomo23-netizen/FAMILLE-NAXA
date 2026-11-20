@@ -60,6 +60,10 @@ import cm.naxa.naxaservices.auth.AuthApi
 import cm.naxa.naxaservices.auth.AuthSession
 import cm.naxa.naxaservices.data.LocalManagementRecord
 import cm.naxa.naxaservices.data.LocalSale
+import cm.naxa.naxaservices.data.LocalRecurringCharge
+import cm.naxa.naxaservices.data.LocalChargePayment
+import cm.naxa.naxaservices.data.LocalLoyaltyProgram
+import cm.naxa.naxaservices.data.LocalLoyaltyEvent
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -668,8 +672,17 @@ internal fun ProfileContent(
     onLogout: () -> Unit
 ) {
     var showReferralScreen by rememberSaveable(session.account.memberId) { mutableStateOf(false) }
+    var showLoyaltyScreen by rememberSaveable(session.account.memberId) { mutableStateOf(false) }
     if (showReferralScreen) {
         ReferralScreen(Modifier.fillMaxSize(), session, authApi, onBack = { showReferralScreen = false })
+        return
+    }
+    if (showLoyaltyScreen) {
+        LoyaltyProgramsContent(
+            Modifier.fillMaxSize(), repository, session,
+            activityProfile ?: session.account.activityProfile ?: "autre",
+            onBack = { showLoyaltyScreen = false }
+        )
         return
     }
     val context = LocalContext.current
@@ -722,6 +735,8 @@ internal fun ProfileContent(
             OutlinedButton(onClick = { onNavigate(AppRoute.APPEARANCE) }, modifier = Modifier.fillMaxWidth()) { Text("Langue, thème et mode nuit") }
             OutlinedButton(onClick = { onNavigate(AppRoute.SECURITY) }, modifier = Modifier.fillMaxWidth()) { Text("Comptes, appareils et accès") }
             OutlinedButton(onClick = { showReferralScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Parrainage et suivi de mes gains") }
+            OutlinedButton(onClick = { showLoyaltyScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Programme de fidélité") }
+            OutlinedButton(onClick = { onNavigate(AppRoute.CHARGES) }, modifier = Modifier.fillMaxWidth()) { Text("Charges et échéances de paiement") }
             OutlinedButton(onClick = { onNavigate(AppRoute.HELP) }, modifier = Modifier.fillMaxWidth()) { Text("FAQ et assistance") }
             OutlinedButton(onClick = { onNavigate(AppRoute.SUBSCRIPTIONS) }, modifier = Modifier.fillMaxWidth()) { Text("Abonnement et paiement") }
         }
@@ -1565,5 +1580,331 @@ fun TeamPerformanceContent(
                 }
             }
         }
+    }
+}
+
+
+@Composable
+fun RecurringChargesContent(
+    modifier: Modifier,
+    repository: NaxaServicesLocalRepository,
+    session: AuthSession
+) {
+    val scope = rememberCoroutineScope()
+    val siteIds = session.account.activeSiteIds
+    var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
+    val orgId = session.account.organizationId
+    val charges by remember(siteId) { repository.dao.observeRecurringCharges(orgId, siteId) }.collectAsState(initial = emptyList())
+    val payments by remember(siteId) { repository.dao.observeChargePayments(orgId, siteId) }.collectAsState(initial = emptyList())
+    var editingId by rememberSaveable { mutableStateOf<String?>(null) }
+    var name by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("Loyer") }
+    var amount by rememberSaveable { mutableStateOf("") }
+    var recurrence by rememberSaveable { mutableStateOf("monthly") }
+    var dueInDays by rememberSaveable { mutableStateOf("7") }
+    var reminderDays by rememberSaveable { mutableStateOf("3") }
+    var paymentAmount by rememberSaveable { mutableStateOf("") }
+    var message by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val now = System.currentTimeMillis()
+    val monthStart = Calendar.getInstance().apply {
+        set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+    }.timeInMillis
+    val monthEnd = Calendar.getInstance().apply {
+        set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH)); set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
+    }.timeInMillis
+    var monthSales by remember { mutableStateOf(0L) }
+    LaunchedEffect(orgId, siteIds, monthStart) {
+        monthSales = siteIds.sumOf { id ->
+            repository.dao.observeSalesTotal(orgId, id, monthStart, monthEnd).first()
+        }
+    }
+    val monthFixedCharges = payments.filter { it.paidAtMillis in monthStart..monthEnd }.sumOf { it.amountXaf }
+    val due = charges.filter { it.active && it.nextDueAtMillis <= now + it.reminderDays * 86_400_000L }
+    val fmt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            ModulePageTitle("Charges, échéances et trésorerie", "Configure les dépenses récurrentes, suis les règlements et anticipe les dates de paiement.")
+            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
+            LocalOnlyNotice("Les rappels sont calculés à partir des échéances enregistrées sur cet appareil. La synchronisation multi-appareils et les notifications serveur restent dépendantes du backend.")
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Pilotage du mois en cours", fontWeight = FontWeight.Bold)
+                    Text("Chiffre d'affaires brut encaissé et confirmé : " + xaf(monthSales), style = MaterialTheme.typography.titleMedium)
+                    Text("Charges fixes réglées : " + xaf(monthFixedCharges))
+                    Text("Solde de gestion indicatif après ces charges : " + xaf(monthSales - monthFixedCharges), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text("Le CA reste le total des ventes confirmées. Le solde indicatif retranche uniquement les charges fixes enregistrées et payées ici ; il ne constitue ni un résultat comptable SYSCOHADA ni un résultat fiscal.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (editingId == null) "Nouvelle charge" else "Modifier la charge", fontWeight = FontWeight.Bold)
+                    OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Libellé : loyer, électricité, impôts, taxes…") }, singleLine = true)
+                    OutlinedTextField(category, { category = it }, Modifier.fillMaxWidth(), label = { Text("Catégorie") }, singleLine = true)
+                    OutlinedTextField(amount, { amount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Montant attendu (FCFA)") }, singleLine = true)
+                    Text("Périodicité")
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                        listOf("monthly" to "Mensuelle", "quarterly" to "Trimestrielle", "annual" to "Annuelle", "one_time" to "Unique").forEach { option ->
+                            OutlinedButton(onClick = { recurrence = option.first }) {
+                                Text((if (recurrence == option.first) "✓ " else "") + option.second)
+                            }
+                        }
+                    }
+                    OutlinedTextField(dueInDays, { dueInDays = it.filter(Char::isDigit).take(4) }, Modifier.fillMaxWidth(), label = { Text("Prochaine échéance dans (jours)") }, singleLine = true)
+                    OutlinedTextField(reminderDays, { reminderDays = it.filter(Char::isDigit).take(2) }, Modifier.fillMaxWidth(), label = { Text("Rappel avant échéance (jours)") }, singleLine = true)
+                    Button(
+                        onClick = {
+                            val value = amount.toLongOrNull() ?: 0L
+                            val lead = reminderDays.toIntOrNull() ?: -1
+                            val offset = dueInDays.toLongOrNull() ?: -1L
+                            if (name.isBlank() || category.isBlank() || value <= 0L || lead !in 0..30 || offset !in 0..3650) {
+                                error = "Vérifie le libellé, le montant et les délais."
+                            } else scope.launch {
+                                busy = true; error = null
+                                runCatching {
+                                    repository.saveRecurringCharge(
+                                        orgId, siteId, editingId, name, category, value, recurrence,
+                                        System.currentTimeMillis() + offset * 86_400_000L, lead, session.account.memberId
+                                    )
+                                }.onSuccess {
+                                    editingId = null; name = ""; amount = ""; category = "Loyer"; dueInDays = "30"; reminderDays = "3"
+                                    message = "Charge enregistrée et échéance programmée."
+                                }.onFailure { error = it.message ?: "Enregistrement impossible." }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy && siteId.isNotBlank() && name.isNotBlank() && amount.toLongOrNull() != null && (reminderDays.toIntOrNull() ?: -1) in 0..30,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (busy) "Enregistrement…" else if (editingId == null) "Enregistrer la charge" else "Mettre à jour la charge") }
+                    if (editingId != null) TextButton(onClick = { editingId = null; name = ""; amount = ""; category = "Loyer" }) { Text("Annuler la modification") }
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+                }
+            }
+        }
+        item { Text("Rappels à surveiller", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (due.isEmpty()) item { Text("Aucune échéance dans la fenêtre de rappel configurée.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        items(due) { charge ->
+            val paid = payments.filter { it.chargeId == charge.id && it.referenceDueAtMillis == charge.nextDueAtMillis }.sumOf { it.amountXaf }
+            val balance = (charge.amountXaf - paid).coerceAtLeast(0L)
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(charge.name + " · " + charge.category, fontWeight = FontWeight.Bold)
+                    Text("Échéance : " + fmt.format(java.util.Date(charge.nextDueAtMillis)) + " · " + charge.recurrence)
+                    Text("Montant : " + xaf(charge.amountXaf) + " · déjà réglé : " + xaf(paid))
+                    Text(if (balance == 0L) "Échéance réglée" else if (charge.nextDueAtMillis < now) "En retard : " + xaf(balance) else "À provisionner : " + xaf(balance), color = if (charge.nextDueAtMillis < now && balance > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
+                    if (balance > 0L) {
+                        OutlinedTextField(paymentAmount, { paymentAmount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Règlement partiel ou total (FCFA)") }, singleLine = true)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching { repository.recordRecurringChargePayment(orgId, siteId, charge.id, balance, session.account.memberId) }
+                                            .onSuccess { paymentAmount = ""; message = "Échéance réglée. La prochaine échéance a été avancée." }
+                                            .onFailure { error = it.message ?: "Paiement impossible." }
+                                    }
+                                }, modifier = Modifier.weight(1f)
+                            ) { Text("Régler le solde") }
+                            OutlinedButton(
+                                onClick = {
+                                    val value = paymentAmount.toLongOrNull() ?: 0L
+                                    if (value <= 0L || value >= balance) error = "Le paiement partiel doit être positif et inférieur au solde."
+                                    else scope.launch {
+                                        runCatching { repository.recordRecurringChargePayment(orgId, siteId, charge.id, value, session.account.memberId) }
+                                            .onSuccess { paymentAmount = ""; message = "Paiement partiel ajouté à l'historique." }
+                                            .onFailure { error = it.message ?: "Paiement partiel impossible." }
+                                    }
+                                }, modifier = Modifier.weight(1f)
+                            ) { Text("Paiement partiel") }
+                        }
+                    }
+                    TextButton(onClick = {
+                        editingId = charge.id; name = charge.name; category = charge.category; amount = charge.amountXaf.toString()
+                        recurrence = charge.recurrence
+                        dueInDays = (((charge.nextDueAtMillis - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0L)).toString()
+                        reminderDays = charge.reminderDays.toString()
+                    }) { Text("Modifier cette charge") }
+                }
+            }
+        }
+        item { Text("Historique des règlements", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (payments.isEmpty()) item { Text("Aucun règlement enregistré.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        items(payments) { payment ->
+            val chargeName = charges.firstOrNull { it.id == payment.chargeId }?.name ?: "Charge archivée"
+            Text(chargeName + " · " + xaf(payment.amountXaf) + " · " + fmt.format(java.util.Date(payment.paidAtMillis)), style = MaterialTheme.typography.bodySmall)
+        }
+        item { Spacer(Modifier.height(24.dp)) }
+    }
+}
+
+@Composable
+fun LoyaltyProgramsContent(
+    modifier: Modifier,
+    repository: NaxaServicesLocalRepository,
+    session: AuthSession,
+    activityProfile: String,
+    onBack: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+    val orgId = session.account.organizationId
+    val siteIds = session.account.activeSiteIds
+    var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
+    val customers by remember(siteId) { repository.dao.observeCustomers(orgId, siteId) }.collectAsState(initial = emptyList())
+    val programs by remember(activityProfile) { repository.dao.observeLoyaltyPrograms(orgId, activityProfile) }.collectAsState(initial = emptyList())
+    var selectedCode by rememberSaveable { mutableStateOf("points") }
+    var selectedCustomerId by rememberSaveable { mutableStateOf("") }
+    var amount by rememberSaveable { mutableStateOf("10000") }
+    var notice by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val selected = programs.firstOrNull { it.programCode == selectedCode }
+    val events by remember(selected?.id, siteId) {
+        repository.dao.observeLoyaltyEvents(orgId, siteId, selected?.id.orEmpty())
+    }.collectAsState(initial = emptyList())
+    LaunchedEffect(orgId, activityProfile) { repository.ensureDefaultLoyaltyPrograms(orgId, activityProfile) }
+
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Programmes de fidélité", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                TextButton(onClick = onBack) { Text("Retour") }
+            }
+            Text("Quatre programmes autonomes adaptés au profil d'activité : points, passages, dépenses cumulées et fréquence de visite.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it; selectedCustomerId = "" }
+            LocalOnlyNotice("Les gains et historiques sont enregistrés localement et rattachés à l'organisation et au site. L'interconnexion automatique à la caisse sera activée avec l'API ERP synchronisée.")
+        }
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                listOf("points" to "Club points", "visits" to "Carte de passages", "spend" to "Cercle privilège", "frequency" to "Fréquence").forEach { pair ->
+                    OutlinedButton(onClick = { selectedCode = pair.first }, modifier = Modifier.fillMaxWidth()) {
+                        Text((if (selectedCode == pair.first) "✓ " else "") + pair.second)
+                    }
+                }
+            }
+        }
+        if (selected != null) {
+            item {
+                val current = selected
+                var name by rememberSaveable(current.id) { mutableStateOf(current.name) }
+                var description by rememberSaveable(current.id) { mutableStateOf(current.description) }
+                var metric by rememberSaveable(current.id) { mutableStateOf(current.metricCode) }
+                var unitAmount by rememberSaveable(current.id) { mutableStateOf(current.unitAmountXaf.toString()) }
+                var target by rememberSaveable(current.id) { mutableStateOf(current.targetValue.toString()) }
+                var reward by rememberSaveable(current.id) { mutableStateOf(current.rewardDescription) }
+                var window by rememberSaveable(current.id) { mutableStateOf(current.windowDays.toString()) }
+                var active by rememberSaveable(current.id) { mutableStateOf(current.active) }
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(current.name, fontWeight = FontWeight.Bold)
+                        OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Nom du programme") }, singleLine = true)
+                        OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text("Présentation et règles") }, minLines = 2)
+                        Text("Indicateur suivi")
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                            listOf("points" to "Points", "visits" to "Visites", "spend" to "Montant dépensé").forEach { option ->
+                                OutlinedButton(onClick = { metric = option.first }) { Text((if (metric == option.first) "✓ " else "") + option.second) }
+                            }
+                        }
+                        OutlinedTextField(unitAmount, { unitAmount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("FCFA par unité gagnée (ex. 1 000 pour les points)") }, singleLine = true)
+                        OutlinedTextField(target, { target = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Seuil de récompense") }, singleLine = true)
+                        OutlinedTextField(reward, { reward = it }, Modifier.fillMaxWidth(), label = { Text("Récompense à offrir") }, minLines = 2)
+                        OutlinedTextField(window, { window = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("Fenêtre glissante en jours (0 = illimitée)") }, singleLine = true)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.Checkbox(checked = active, onCheckedChange = { active = it })
+                            Text("Programme actif")
+                        }
+                        Button(
+                            onClick = {
+                                val unitValue = unitAmount.toLongOrNull() ?: 0L
+                                val targetValue = target.toLongOrNull() ?: 0L
+                                val days = window.toIntOrNull() ?: -1
+                                if (unitValue <= 0L || targetValue <= 0L || reward.isBlank() || name.isBlank() || days !in 0..365) {
+                                    error = "Vérifie le seuil, l'unité, la récompense et la fenêtre."
+                                } else scope.launch {
+                                    runCatching {
+                                        repository.saveLoyaltyProgram(current.copy(
+                                            name = name.trim(), description = description.trim(), metricCode = metric,
+                                            unitAmountXaf = unitValue, targetValue = targetValue, rewardDescription = reward.trim(),
+                                            windowDays = days, active = active
+                                        ), session.account.memberId)
+                                    }.onSuccess { notice = "Programme enregistré."; error = null }
+                                        .onFailure { error = it.message ?: "Enregistrement du programme impossible." }
+                                }
+                            }, modifier = Modifier.fillMaxWidth()
+                        ) { Text("Enregistrer la configuration") }
+                    }
+                }
+            }
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Enregistrer une visite ou un achat client", fontWeight = FontWeight.Bold)
+                        if (customers.isEmpty()) Text("Crée d'abord la fiche du client dans le CRM.")
+                        customers.forEach { customer ->
+                            OutlinedButton(onClick = { selectedCustomerId = customer.id }, modifier = Modifier.fillMaxWidth()) {
+                                Text((if (selectedCustomerId == customer.id) "✓ " else "") + customer.displayName)
+                            }
+                        }
+                        OutlinedTextField(amount, { amount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Montant de l'achat (FCFA) ; 0 pour un passage") }, singleLine = true)
+                        Button(
+                            onClick = {
+                                val clientId = selectedCustomerId
+                                val value = amount.toLongOrNull() ?: -1L
+                                if (selectedCustomerId.isBlank() || value < 0L || !current.active) error = "Choisis un client, un montant valide et un programme actif."
+                                else scope.launch {
+                                    busy = true
+                                    runCatching { repository.recordLoyaltyActivity(current, siteId, clientId, value, session.account.memberId) }
+                                        .onSuccess { result ->
+                                            val rewardCount = result.count { it.eventType == "reward_earned" }
+                                            notice = if (rewardCount > 0) "Opération enregistrée : " + rewardCount + " récompense(s) gagnée(s)." else "Activité fidélité enregistrée."
+                                            error = null
+                                        }.onFailure { error = it.message ?: "Enregistrement fidélité impossible." }
+                                    busy = false
+                                }
+                            },
+                            enabled = !busy && selectedCustomerId.isNotBlank() && current.active,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (busy) "Enregistrement…" else "Valider l'activité") }
+                    }
+                }
+            }
+            item { Text("Historique et récompenses", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+            if (events.isEmpty()) item { Text("Aucune activité ou récompense enregistrée pour ce programme.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            items(events) { event ->
+                val client = customers.firstOrNull { it.id == event.customerId }?.displayName ?: "Client"
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(client + " · " + event.description, fontWeight = FontWeight.SemiBold)
+                        Text((if (event.eventType == "reward_earned") "Récompense" else "Activité") +
+                            (event.waveNumber?.let { " · vague " + it } ?: "") + " · " +
+                            java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(event.createdAtMillis)),
+                            style = MaterialTheme.typography.bodySmall)
+                        if (event.eventType == "reward_earned") {
+                            Text(event.rewardStatus ?: "—")
+                            if (event.rewardStatus == "available") {
+                                OutlinedButton(onClick = {
+                                    scope.launch {
+                                        val success = repository.redeemLoyaltyReward(event, session.account.memberId)
+                                        if (success) notice = "Récompense marquée comme utilisée."
+                                    }
+                                }) { Text("Marquer comme utilisée") }
+                            }
+                        } else Text("Valeur : " + event.metricDelta + " · achat : " + xaf(event.amountXaf), style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        } else {
+            item { Text("Initialisation des quatre programmes en cours…", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
+        notice?.let { item { Text(it, color = MaterialTheme.colorScheme.primary) } }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }
