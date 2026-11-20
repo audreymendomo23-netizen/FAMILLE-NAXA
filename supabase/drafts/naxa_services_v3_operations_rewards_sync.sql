@@ -354,7 +354,7 @@ begin
   end;
   if v_delta is null or v_delta <= 0 then raise exception 'NAXA_LOYALTY_ACTIVITY_BELOW_MINIMUM'; end if;
   v_since := case when v_program.window_days > 0
-    then v_now() - make_interval(days => v_program.window_days)
+    then now() - make_interval(days => v_program.window_days)
     else '-infinity'::timestamptz end;
 
   insert into public.ns_loyalty_events(
@@ -420,5 +420,4 @@ grant execute on function public.ns_record_loyalty_activity(uuid,uuid,uuid,uuid,
 revoke all on function public.ns_redeem_loyalty_reward(uuid,uuid,uuid) from public, anon;
 grant execute on function public.ns_redeem_loyalty_reward(uuid,uuid,uuid) to authenticated, service_role;
 
-commit;
 rollback;
