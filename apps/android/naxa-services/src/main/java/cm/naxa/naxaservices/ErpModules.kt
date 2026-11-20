@@ -507,18 +507,21 @@ internal fun OrganizationWorkspaceContent(
                         Text("Profil de l’organisation", fontWeight = FontWeight.Bold)
                         OutlinedTextField(displayName, { displayName = it }, Modifier.fillMaxWidth(), label = { Text("Nom commercial") }, singleLine = true)
                         Text("Choisir le modèle d’exploitation", fontWeight = FontWeight.SemiBold)
+                        if (!canManageNetwork) {
+                            Text("Le modèle d’exploitation est administré par le Promoteur de l’organisation.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                         listOf(
                             "solo" to "PME autonome · un point de vente",
                             "single_site_multi_workstation" to "Responsable · plusieurs emplacements dans un même lieu",
                             "multi_site_network" to "Promoteur · plusieurs points de vente autonomes"
                         ).forEach { (key, label) ->
-                            OutlinedButton(onClick = { mode = key }, modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(onClick = { mode = key }, modifier = Modifier.fillMaxWidth(), enabled = canManageNetwork) {
                                 Text((if (mode == key) "✓ " else "") + label)
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { locale = "fr" }) { Text(if (locale == "fr") "✓ Français" else "Français") }
-                            OutlinedButton(onClick = { locale = "en" }) { Text(if (locale == "en") "✓ English" else "English") }
+                            OutlinedButton(onClick = { locale = "fr" }, enabled = canManageNetwork) { Text(if (locale == "fr") "✓ Français" else "Français") }
+                            OutlinedButton(onClick = { locale = "en" }, enabled = canManageNetwork) { Text(if (locale == "en") "✓ English" else "English") }
                         }
                         if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
                         Button(
@@ -531,10 +534,13 @@ internal fun OrganizationWorkspaceContent(
                                     busy = false
                                 }
                             },
-                            enabled = !busy && orgId.isNotBlank() && displayName.isNotBlank(),
+                            enabled = !busy && canManageNetwork && orgId.isNotBlank() && displayName.isNotBlank(),
                             modifier = Modifier.fillMaxWidth()
                         ) { Text("Enregistrer la configuration locale") }
                     }
+                }
+                if (!canManageNetwork) {
+                    Text("Lecture seule pour ce rôle : le Promoteur conserve l’arbitrage du modèle d’organisation.")
                 }
             }
             item {
