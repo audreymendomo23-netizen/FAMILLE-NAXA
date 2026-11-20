@@ -764,6 +764,17 @@ fun StockContent(
     val importDuplicateCount = importPreview.count { row ->
         stock.any { it.sku.trim().equals(row.sku.trim(), ignoreCase = true) }
     }
+    val transfers by remember(siteId) {
+        repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "inventory_transfer")
+    }.collectAsState(initial = emptyList())
+    val transferDestinations = session.account.activeSites.filter { it.id != siteId }
+    var transferDestinationSiteId by rememberSaveable { mutableStateOf("") }
+    var transferItemId by rememberSaveable { mutableStateOf("") }
+    var transferQuantity by rememberSaveable { mutableStateOf("1") }
+    var transferMessage by remember { mutableStateOf<String?>(null) }
+    var transferError by remember { mutableStateOf<String?>(null) }
+    var transferBusy by remember { mutableStateOf(false) }
+    val transferItem = stock.firstOrNull { it.id == transferItemId }
     val unvaluedItems = stock.count { item -> valuations.none { it.inventoryItemId == item.id } }
     val stockCostValue = stock.sumOf { item ->
         (item.quantity * (valuations.firstOrNull { it.inventoryItemId == item.id }?.unitCostXaf ?: 0L).toDouble()).roundToLong()
@@ -781,7 +792,11 @@ fun StockContent(
                 siteIds,
                 siteId,
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
-            ) { siteId = it; selectedItemId = ""; unitCostXaf = ""; sellingPriceXaf = "" }
+            ) {
+                siteId = it
+                selectedItemId = ""; unitCostXaf = ""; sellingPriceXaf = ""
+                transferDestinationSiteId = ""; transferItemId = ""
+            }
             LocalOnlyNotice("Chaque mouvement est journalisé localement ; le stock ne peut pas devenir négatif.")
         }
         item {
@@ -855,6 +870,146 @@ fun StockContent(
                         Text("L'import est transactionnel : si une ligne échoue, aucune ligne du lot n'est appliquée. Les quantités initiales et ajustements sont journalisés comme mouvements.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if (!importMessage.isNullOrBlank()) Text(importMessage!!, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Transferts inter-sites", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Les transferts relient deux points de vente autonomes. La demande et l'approbation ne modifient pas les stocks ; seule la réception confirmée effectue les deux mouvements.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    if (session.account.roleCode == "promoter") {
+                        Text("Site source : " + (session.account.activeSites.firstOrNull { it.id == siteId }?.name ?: siteId), fontWeight = FontWeight.SemiBold)
+                        if (transferDestinations.isEmpty()) {
+                            Text("Aucun autre point de vente actif n'est disponible dans ce réseau.")
+                        } else {
+                            transferDestinations.forEach { destination ->
+                                OutlinedButton(
+                                    onClick = { transferDestinationSiteId = destination.id },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text((if (transferDestinationSiteId == destination.id) "✓ " else "") + destination.name)
+                                }
+                            }
+                        }
+                        Text("Article à transférer", fontWeight = FontWeight.SemiBold)
+                        stock.forEach { item ->
+                            OutlinedButton(
+                                onClick = { transferItemId = item.id },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text((if (transferItemId == item.id) "✓ " else "") + item.name + " · " + item.quantity + " " + item.unit)
+                            }
+                        }
+                        OutlinedTextField(
+                            transferQuantity,
+                            { transferQuantity = it },
+                            Modifier.fillMaxWidth(),
+                            label = { Text("Quantité à transférer") },
+                            singleLine = true
+                        )
+                        if (transferItem != null) {
+                            Text("SKU " + transferItem.sku + " · disponible maintenant : " + transferItem.quantity + " " + transferItem.unit, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Button(
+                            onClick = {
+                                val quantityToTransfer = transferQuantity.replace(",", ".").toDoubleOrNull() ?: 0.0
+                                scope.launch {
+                                    transferBusy = true
+                                    transferError = null
+                                    runCatching {
+                                        require(transferDestinationSiteId.isNotBlank() && transferDestinationSiteId != siteId) {
+                                            "Choisis un point de vente destination différent du site source."
+                                        }
+                                        require(transferItem != null && quantityToTransfer > 0.0 && quantityToTransfer <= transferItem.quantity) {
+                                            "Choisis un article et une quantité disponible strictement positive."
+                                        }
+                                        repository.createInventoryTransfer(
+                                            session.account.organizationId,
+                                            siteId,
+                                            transferDestinationSiteId,
+                                            transferItem.id,
+                                            quantityToTransfer,
+                                            session.account.memberId
+                                        )
+                                    }.onSuccess { record ->
+                                        transferItemId = ""
+                                        transferQuantity = "1"
+                                        transferMessage = "Demande " + record.reference + " créée. Le stock n'est pas encore modifié."
+                                        transferError = null
+                                    }.onFailure { transferError = it.message ?: "Création du transfert impossible." }
+                                    transferBusy = false
+                                }
+                            },
+                            enabled = !transferBusy && session.account.activeSites.size > 1 && transferDestinationSiteId.isNotBlank() && transferItem != null,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (transferBusy) "Création…" else "Créer une demande de transfert") }
+                    } else {
+                        Text("Les demandes et réceptions inter-sites sont réservées au Promoteur du réseau.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (!transferError.isNullOrBlank()) Text(transferError!!, color = MaterialTheme.colorScheme.error)
+                    if (!transferMessage.isNullOrBlank()) Text(transferMessage!!, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+        item { Text("Demandes de transfert du site source", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (transfers.isEmpty()) {
+            item { Text("Aucune demande de transfert sur ce point de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+        items(transfers) { transfer ->
+            var transitionReason by rememberSaveable(transfer.id) { mutableStateOf("") }
+            val events by remember(transfer.id, siteId) {
+                repository.dao.observeWorkflowEvents(session.account.organizationId, siteId, "inventory_transfer", transfer.id)
+            }.collectAsState(initial = emptyList())
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(transfer.reference + " · " + transfer.title, fontWeight = FontWeight.SemiBold)
+                    Text("Destination : " + transfer.counterparty + " · Statut : " + transfer.status)
+                    val metadata = runCatching { org.json.JSONObject(transfer.metadataJson) }.getOrNull()
+                    Text("Quantité : " + (metadata?.optDouble("quantity") ?: 0.0) + " · SKU : " + (metadata?.optString("sku") ?: "—"))
+                    if (session.account.roleCode == "promoter" && transfer.status in setOf("open", "approved")) {
+                        OutlinedTextField(
+                            transitionReason,
+                            { transitionReason = it },
+                            Modifier.fillMaxWidth(),
+                            label = { Text("Motif obligatoire pour cette étape") }
+                        )
+                        val actions = when (transfer.status) {
+                            "open" -> listOf("approved" to "Approuver la demande", "rejected" to "Rejeter")
+                            else -> listOf("received" to "Confirmer la réception", "rejected" to "Rejeter")
+                        }
+                        actions.forEach { (nextStatus, label) ->
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching {
+                                            repository.transitionManagementRecord(
+                                                session.account.organizationId, siteId, transfer.id,
+                                                nextStatus, transitionReason, session.account.memberId
+                                            )
+                                        }.onSuccess {
+                                            transitionReason = ""
+                                            transferMessage = when (nextStatus) {
+                                                "approved" -> "Transfert approuvé ; aucun stock n'a encore été modifié."
+                                                "received" -> "Réception confirmée ; sortie source et entrée destination enregistrées."
+                                                else -> "Transfert rejeté ; stocks inchangés."
+                                            }
+                                            transferError = null
+                                        }.onFailure { transferError = it.message ?: "Transition du transfert impossible." }
+                                    }
+                                },
+                                enabled = transitionReason.trim().length >= 3,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(label) }
+                        }
+                    }
+                    events.take(5).forEach { event ->
+                        Text(event.fromStatus + " → " + event.toStatus + " · " + event.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }
