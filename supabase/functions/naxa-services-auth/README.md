@@ -9,3 +9,7 @@ Secrets requis côté Edge Function uniquement : SUPABASE_URL, SUPABASE_ANON_KEY
 
 Actions codées : login, refresh, request_recovery, change_password, logout.
 La création initiale des comptes, l'approbation de récupération, le reset Admin et la révocation par appareil perdu nécessitent encore un workflow support/Admin dédié et audité. Les alias Auth existants doivent être fournis par provisioning serveur ; leur génération n'est pas verrouillée dans ce code.
+
+Actions actuellement présentes dans la source : login, refresh, request_recovery, change_password, logout, provision_member, complete_recovery, revoke_device.  
+Les créations de comptes et resets retournent un mot de passe temporaire une seule fois à l'acteur autorisé ; il doit être remis par un processus interne contrôlé.  
+Le domaine NS_AUTH_ALIAS_DOMAIN demeure non défini tant que la compatibilité du format d'alias n'a pas été prouvée dans une instance locale GoTrue.
