@@ -233,48 +233,195 @@ fun SubscriptionsContent(modifier: Modifier, repository: NaxaServicesLocalReposi
 @Composable
 fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val scope = rememberCoroutineScope()
+    val fr = session.account.defaultLocale != "en"
     val siteIds = session.account.activeSiteIds
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
-    val records by remember(siteId) { repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "purchase") }.collectAsState(initial = emptyList())
+    val purchases by remember(siteId) {
+        repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "purchase")
+    }.collectAsState(initial = emptyList())
+    val suppliers by remember(siteId) {
+        repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "supplier")
+    }.collectAsState(initial = emptyList())
+    val inventory by remember(siteId) {
+        repository.dao.observeInventoryItems(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
+
     var supplier by rememberSaveable { mutableStateOf("") }
-    var details by rememberSaveable { mutableStateOf("") }
-    var amount by rememberSaveable { mutableStateOf("") }
-    var notice by remember { mutableStateOf<String?>(null) }
+    var supplierPhone by rememberSaveable { mutableStateOf("") }
+    var supplierDetails by rememberSaveable { mutableStateOf("") }
+    var itemId by rememberSaveable { mutableStateOf("") }
+    var quantity by rememberSaveable { mutableStateOf("1") }
+    var unitCost by rememberSaveable { mutableStateOf("") }
+    var deliveryDays by rememberSaveable { mutableStateOf("7") }
+    var message by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    val selectedItem = inventory.firstOrNull { it.id == itemId }
+    val qty = quantity.replace(",", ".").toDoubleOrNull() ?: 0.0
+    val cost = unitCost.toLongOrNull() ?: 0L
+    val total = (qty * cost).takeIf { it.isFinite() && it <= Long.MAX_VALUE.toDouble() }?.toLong() ?: 0L
+
+    fun nextPurchaseActions(status: String): List<Pair<String, String>> = when (status) {
+        "open" -> listOf("ordered" to if (fr) "Valider la commande fournisseur" else "Place supplier order")
+        "ordered" -> listOf("received" to if (fr) "Confirmer la réception complète" else "Confirm full receipt")
+        "received" -> listOf("invoice_review" to if (fr) "Contrôler la facture fournisseur" else "Review supplier invoice")
+        "invoice_review" -> listOf("closed" to if (fr) "Clôturer l'achat" else "Close purchase")
+        else -> emptyList()
+    }
+
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text("Achats et fournisseurs", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Préparez les commandes, suivez les coûts d’approvisionnement et rattachez les pièces à leur site d’origine.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
-            LocalOnlyNotice()
+            ModulePageTitle(
+                if (fr) "Achats, fournisseurs et réceptions" else "Purchases, suppliers and receiving",
+                if (fr) "Un achat est rattaché à un site. La réception d'une ligne liée à un article augmente automatiquement son stock et crée un mouvement traçable." else "Each purchase belongs to a site. Receiving a line linked to an inventory item increases its stock and records an auditable movement."
+            )
+            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it; itemId = "" }
+            LocalOnlyNotice(if (fr) "Registres et réceptions locaux. Les commandes fournisseurs ne sont pas envoyées et les factures ne sont pas rapprochées automatiquement du serveur." else "Local purchase and receiving records. Orders are not sent to suppliers and invoices are not automatically reconciled with the server.")
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(supplier, { supplier = it }, Modifier.fillMaxWidth(), label = { Text("Fournisseur") })
-                    OutlinedTextField(details, { details = it }, Modifier.fillMaxWidth(), label = { Text("Articles / détail de la commande") })
-                    OutlinedTextField(amount, { amount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Coût estimé (FCFA)") })
-                    Button(onClick = {
-                        val value = amount.toLongOrNull() ?: 0L
-                        if (supplier.isBlank() || details.isBlank() || value <= 0) { notice = "Fournisseur, détail et montant requis." }
-                        else scope.launch {
-                            runCatching { repository.createManagementRecord(session.account.organizationId, siteId, "purchase", "ACH-" + System.currentTimeMillis(), details, supplier, value, 0, null, "open", "{\"kind\":\"local_purchase_order\"}", session.account.memberId) }
-                                .onSuccess { supplier = ""; details = ""; amount = ""; notice = "Commande d’achat enregistrée localement." }
-                                .onFailure { notice = it.message ?: "Échec de l’enregistrement." }
-                        }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Enregistrer l’achat") }
-                    if (notice != null) Text(notice!!, color = MaterialTheme.colorScheme.secondary)
+                    Text(if (fr) "Fournisseurs du point de vente" else "Site suppliers", fontWeight = FontWeight.Bold)
+                    if (suppliers.isEmpty()) Text(if (fr) "Aucun fournisseur enregistré." else "No suppliers registered.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    suppliers.take(12).forEach { row ->
+                        Text(row.title + if (row.counterparty.isBlank()) "" else " · " + row.counterparty, style = MaterialTheme.typography.bodySmall)
+                    }
+                    OutlinedTextField(supplier, { supplier = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Nom du fournisseur" else "Supplier name") }, singleLine = true)
+                    OutlinedTextField(supplierPhone, { supplierPhone = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Téléphone / contact" else "Phone / contact") }, singleLine = true)
+                    OutlinedTextField(supplierDetails, { supplierDetails = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Adresse, activité ou conditions" else "Address, activity or terms") }, minLines = 2)
+                    OutlinedButton(
+                        onClick = {
+                            if (supplier.isBlank()) error = if (fr) "Le nom du fournisseur est obligatoire." else "Supplier name is required."
+                            else scope.launch {
+                                busy = true
+                                runCatching {
+                                    repository.createManagementRecord(
+                                        session.account.organizationId, siteId, "supplier",
+                                        "SUP-" + System.currentTimeMillis(), supplier.trim(), supplierPhone.trim(),
+                                        0, 0, null, "open",
+                                        JSONObject().put("details", supplierDetails.trim()).toString(),
+                                        session.account.memberId
+                                    )
+                                }.onSuccess {
+                                    supplier = ""; supplierPhone = ""; supplierDetails = ""
+                                    message = if (fr) "Fournisseur enregistré localement." else "Supplier saved locally."
+                                    error = null
+                                }.onFailure { error = it.message ?: "Supplier save failed." }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy && siteId.isNotBlank() && supplier.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (fr) "Ajouter le fournisseur" else "Add supplier") }
                 }
             }
         }
-        item { Text("Commandes et achats", fontWeight = FontWeight.Bold) }
-        items(records) { item ->
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.padding(14.dp)) { Text(item.title, fontWeight = FontWeight.Bold); Text(item.counterparty); Text(xaf(item.amountXaf) + " · " + item.status) }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (fr) "Nouvelle commande d'achat (une ligne d'article)" else "New purchase order (one stock item per order)", fontWeight = FontWeight.Bold)
+                    OutlinedTextField(supplier, { supplier = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Fournisseur" else "Supplier") }, singleLine = true)
+                    suppliers.take(20).forEach { row ->
+                        OutlinedButton(onClick = { supplier = row.title }, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (supplier == row.title) "✓ " + row.title else row.title)
+                        }
+                    }
+                    Text(if (fr) "Article lié au stock" else "Link to stock item", fontWeight = FontWeight.SemiBold)
+                    if (inventory.isEmpty()) {
+                        Text(if (fr) "Crée d'abord un article dans le module Stock. Une réception sans article lié ne modifie pas le stock." else "Create an item in Stock first. An unlinked receipt will not change stock.")
+                    } else {
+                        inventory.forEach { stockItem ->
+                            OutlinedButton(onClick = { itemId = stockItem.id }, modifier = Modifier.fillMaxWidth()) {
+                                Text(if (itemId == stockItem.id) "✓ " + stockItem.name + " · " + stockItem.quantity + " " + stockItem.unit else stockItem.name + " · " + stockItem.quantity + " " + stockItem.unit)
+                            }
+                        }
+                    }
+                    OutlinedTextField(quantity, { quantity = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Quantité commandée" else "Quantity ordered") }, singleLine = true)
+                    OutlinedTextField(unitCost, { unitCost = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Coût d'achat unitaire (FCFA)" else "Unit purchase cost (XAF)") }, singleLine = true)
+                    OutlinedTextField(deliveryDays, { deliveryDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Livraison prévue dans (jours)" else "Expected delivery in days") }, singleLine = true)
+                    Text((if (fr) "Total estimé : " else "Estimated total: ") + xaf(total), fontWeight = FontWeight.Bold)
+                    Button(
+                        onClick = {
+                            if (supplier.isBlank() || selectedItem == null || !qty.isFinite() || qty <= 0 || cost <= 0 || total <= 0) {
+                                error = if (fr) "Fournisseur, article, quantité et coût unitaire positifs requis." else "Supplier, stock item, quantity and positive unit cost are required."
+                            } else scope.launch {
+                                busy = true
+                                runCatching {
+                                    val metadata = JSONObject()
+                                        .put("inventoryItemId", selectedItem.id)
+                                        .put("inventorySku", selectedItem.sku)
+                                        .put("quantity", qty)
+                                        .put("unitCostXaf", cost)
+                                        .put("supplier", supplier.trim())
+                                        .put("receiptApplied", false)
+                                        .toString()
+                                    repository.createManagementRecord(
+                                        session.account.organizationId, siteId, "purchase",
+                                        "ACH-" + System.currentTimeMillis(), selectedItem.name, supplier.trim(),
+                                        total, 0,
+                                        System.currentTimeMillis() + (deliveryDays.toLongOrNull() ?: 7L).coerceIn(1L, 365L) * 86_400_000L,
+                                        "open", metadata, session.account.memberId
+                                    )
+                                }.onSuccess {
+                                    itemId = ""; quantity = "1"; unitCost = ""; deliveryDays = "7"
+                                    message = if (fr) "Commande créée. La quantité ne sera ajoutée au stock qu'après réception confirmée." else "Order created. Quantity will be added to inventory only after receipt is confirmed."
+                                    error = null
+                                }.onFailure { error = it.message ?: "Purchase order failed." }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy && siteId.isNotBlank() && supplier.isNotBlank() && selectedItem != null && qty > 0 && cost > 0,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (busy) if (fr) "Enregistrement…" else "Saving…" else if (fr) "Créer la commande" else "Create purchase order") }
+                    if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
+                    if (message != null) Text(message!!, color = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
+        item { Text(if (fr) "Commandes et réceptions" else "Orders and receipts", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (purchases.isEmpty()) item { Text(if (fr) "Aucune commande." else "No purchase orders.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        items(purchases) { item ->
+            val events by remember(item.id, siteId) {
+                repository.dao.observeWorkflowEvents(session.account.organizationId, siteId, "purchase", item.id)
+            }.collectAsState(initial = emptyList())
+            var reason by rememberSaveable(item.id) { mutableStateOf("") }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(item.reference + " · " + item.title, fontWeight = FontWeight.Bold)
+                    Text(item.counterparty)
+                    Text(xaf(item.amountXaf) + " · " + item.status)
+                    Text((if (fr) "Réception prévue : " else "Expected delivery: ") + (item.dueAtMillis?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) } ?: "—"))
+                    if (item.status !in setOf("closed", "cancelled")) {
+                        OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Motif / référence de réception" else "Reason / receipt reference") })
+                        nextPurchaseActions(item.status).forEach { (nextStatus, label) ->
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching {
+                                            repository.transitionManagementRecord(session.account.organizationId, siteId, item.id, nextStatus, reason, session.account.memberId)
+                                        }.onSuccess {
+                                            reason = ""
+                                            message = if (nextStatus == "received") {
+                                                if (fr) "Réception confirmée : le stock du site a été augmenté et le mouvement journalisé." else "Receipt confirmed: site inventory was increased and the movement recorded."
+                                            } else if (fr) "Étape d'achat mise à jour." else "Purchase stage updated."
+                                        }.onFailure { error = it.message ?: "Purchase transition failed." }
+                                    }
+                                },
+                                enabled = reason.trim().length >= 3,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(label) }
+                        }
+                    }
+                    events.take(4).forEach { event ->
+                        Text(event.fromStatus + " → " + event.toStatus + " · " + event.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
             }
         }
     }
 }
+
 
 @Composable
 fun TaxesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
