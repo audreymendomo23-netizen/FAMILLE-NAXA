@@ -53,6 +53,7 @@ import cm.naxa.naxaservices.auth.AuthApi
 import cm.naxa.naxaservices.auth.AuthSession
 import cm.naxa.naxaservices.data.LocalInventoryImportRow
 import cm.naxa.naxaservices.data.LocalInventoryItem
+import cm.naxa.naxaservices.data.LocalService
 import cm.naxa.naxaservices.data.LocalSite
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import java.io.InputStreamReader
