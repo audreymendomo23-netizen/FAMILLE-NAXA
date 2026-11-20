@@ -59,6 +59,7 @@ import cm.naxa.naxaservices.auth.RecoveryRequestItem
 import cm.naxa.naxaservices.auth.RecoveryReset
 import cm.naxa.naxaservices.auth.SessionVault
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -102,6 +103,43 @@ private fun NaxaServicesRoot() {
                     route = AppRoute.LOGIN.name
                 }
             busy = false
+        }
+    }
+
+    LaunchedEffect(session?.refreshToken) {
+        var activeSession = session
+        while (activeSession != null) {
+            val waitSeconds = (activeSession.expiresIn - 60L).coerceAtLeast(30L)
+            delay(waitSeconds * 1000L)
+            var retry = 0
+            var refreshed = false
+            while (retry < 5 && !refreshed) {
+                val token = activeSession?.refreshToken ?: break
+                runCatching { api.refresh(token) }
+                    .onSuccess { next ->
+                        session = next
+                        if (vault.loadRefreshToken() != null) vault.save(next)
+                        activeSession = next
+                        refreshed = true
+                    }
+                    .onFailure { error ->
+                        val authError = error as? AuthApiException
+                        if (authError?.statusCode == 401 || authError?.statusCode == 403) {
+                            vault.clear()
+                            session = null
+                            route = AppRoute.LOGIN.name
+                            message = "Session expirée ou révoquée. Connecte-toi à nouveau."
+                            activeSession = null
+                        } else {
+                            retry += 1
+                            delay(30_000L)
+                        }
+                    }
+            }
+            if (!refreshed && activeSession != null) {
+                message = "La session n'a pas pu être renouvelée. Vérifie le réseau avant de continuer."
+                activeSession = null
+            }
         }
     }
 
