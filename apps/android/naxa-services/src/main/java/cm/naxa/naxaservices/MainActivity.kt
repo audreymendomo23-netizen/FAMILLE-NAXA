@@ -344,7 +344,17 @@ private fun NaxaServicesRoot() {
                                 initialSelection = preferences.cachedActivity(current.account.organizationId),
                                 canChoose = current.account.roleCode == "promoter",
                                 busy = busy,
-                                error = message
+                                error = message,
+                                onLogout = {
+                                    scope.launch {
+                                        runCatching { api.logout(current.accessToken) }
+                                        vault.clear()
+                                        rememberSession = false
+                                        session = null
+                                        tourActive = false
+                                        route = AppRoute.LOGIN.name
+                                    }
+                                }
                             ) { selected ->
                                 scope.launch {
                                     busy = true
@@ -709,8 +719,11 @@ private fun canAccessRoute(route: AppRoute, roleCode: String): Boolean {
     return route in allowed
 }
 
+private fun canAccessConfiguredRoute(route: AppRoute, roleCode: String, activityProfile: String?): Boolean =
+    route in activityVisibleRoutes(activityProfile) && canAccessRoute(route, roleCode)
+
 private fun visibleModuleSpecs(roleCode: String, activityProfile: String?): List<ModuleSpec> =
-    modules.filter { it.route in activityVisibleRoutes(activityProfile) && canAccessRoute(it.route, roleCode) }
+    modules.filter { canAccessConfiguredRoute(it.route, roleCode, activityProfile) }
 
 @Composable
 private fun AccessDeniedContent(modifier: Modifier, onBack: () -> Unit) {
@@ -766,10 +779,10 @@ private fun ErpScreen(
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(selected = route == AppRoute.DASHBOARD, onClick = { onNavigate(AppRoute.DASHBOARD) }, icon = { Text("⌂") }, label = { Text(stringResource(R.string.nav_home)) })
-                if (canAccessRoute(AppRoute.AGENDA, roleCode)) {
+                if (canAccessConfiguredRoute(AppRoute.AGENDA, roleCode, activityProfile)) {
                     NavigationBarItem(selected = route == AppRoute.AGENDA, onClick = { onNavigate(AppRoute.AGENDA) }, icon = { Text("◷") }, label = { Text(stringResource(R.string.nav_agenda)) })
                 }
-                if (canAccessRoute(AppRoute.PRESSING, roleCode)) {
+                if (canAccessConfiguredRoute(AppRoute.PRESSING, roleCode, activityProfile)) {
                     NavigationBarItem(selected = route == AppRoute.PRESSING, onClick = { onNavigate(AppRoute.PRESSING) }, icon = { Text("▤") }, label = { Text(stringResource(R.string.nav_pressing)) })
                 }
                 if (canAccessRoute(AppRoute.CASH, roleCode)) {
@@ -785,7 +798,7 @@ private fun ErpScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        if (!canAccessRoute(route, roleCode)) {
+        if (!canAccessConfiguredRoute(route, roleCode, activityProfile)) {
             AccessDeniedContent(Modifier.padding(padding)) { onNavigate(AppRoute.DASHBOARD) }
         } else if (route == AppRoute.DASHBOARD) {
             DashboardContent(Modifier.padding(padding), accountName, roleCode, locale, activityProfile, onNavigate, onLogout, tourActive, tourStep, onTourNext, onTourSkip)

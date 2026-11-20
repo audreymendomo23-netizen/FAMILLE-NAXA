@@ -62,8 +62,20 @@ async function accountByAuthUser(authUserId: string) {
   return rows?.[0] ?? null;
 }
 async function activeMember(accountId: string) {
-  const q = "ns_members?select=id,org_id,display_name,role_code,status,preferred_locale,discovery_completed_at,tour_completed_at&account_id=eq." + encodeURIComponent(accountId) + "&status=eq.active&limit=2";
-  const rows = await rest(q, { headers: serviceHeaders() }) as Record<string, unknown>[];
+  const encodedId = encodeURIComponent(accountId);
+  let rows: Record<string, unknown>[];
+  try {
+    rows = await rest(
+      "ns_members?select=id,org_id,display_name,role_code,status,preferred_locale,discovery_completed_at,tour_completed_at&account_id=eq." + encodedId + "&status=eq.active&limit=2",
+      { headers: serviceHeaders() },
+    ) as Record<string, unknown>[];
+  } catch {
+    // Keep authentication usable until the additive v2 migration is applied.
+    rows = await rest(
+      "ns_members?select=id,org_id,display_name,role_code,status&account_id=eq." + encodedId + "&status=eq.active&limit=2",
+      { headers: serviceHeaders() },
+    ) as Record<string, unknown>[];
+  }
   if (!rows || rows.length !== 1) return null;
   return rows[0];
 }
@@ -100,17 +112,32 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
     }));
   // Return only active site records; never expose inactive or workstation-only scopes.
   const sites = activeSites.map((site) => site.id);
-  const organizationRows = await rest(
-    "ns_organizations?select=display_name,business_mode,default_locale,activity_profile&id=eq." +
-      encodeURIComponent(String(member.org_id)) + "&status=eq.active&limit=1",
-    { headers: serviceHeaders() },
-  ) as Record<string, unknown>[];
+  let organizationRows: Record<string, unknown>[];
+  try {
+    organizationRows = await rest(
+      "ns_organizations?select=display_name,business_mode,default_locale,activity_profile&id=eq." +
+        encodeURIComponent(String(member.org_id)) + "&status=eq.active&limit=1",
+      { headers: serviceHeaders() },
+    ) as Record<string, unknown>[];
+  } catch {
+    // Backward-compatible session response before the v2 activity migration is installed.
+    organizationRows = await rest(
+      "ns_organizations?select=display_name,business_mode,default_locale&id=eq." +
+        encodeURIComponent(String(member.org_id)) + "&status=eq.active&limit=1",
+      { headers: serviceHeaders() },
+    ) as Record<string, unknown>[];
+  }
   const organization = organizationRows?.[0] ?? {};
-  const legalRows = await rest(
-    "ns_legal_acceptances?select=document_type,document_version&member_id=eq." +
-      encodeURIComponent(String(member.id)),
-    { headers: serviceHeaders() },
-  ) as Record<string, unknown>[];
+  let legalRows: Record<string, unknown>[] = [];
+  try {
+    legalRows = await rest(
+      "ns_legal_acceptances?select=document_type,document_version&member_id=eq." +
+        encodeURIComponent(String(member.id)),
+      { headers: serviceHeaders() },
+    ) as Record<string, unknown>[];
+  } catch {
+    // Missing v2 acceptance table means the client must show the legal acceptance flow.
+  }
   const acceptedLegalDocuments = (legalRows ?? []).map((item) =>
     String(item.document_type) + ":" + String(item.document_version)
   );
