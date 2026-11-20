@@ -500,3 +500,117 @@ Ne pas démarrer une implémentation massive en une seule passe. Pour chaque jal
 **Statut global : PARTIEL.** La compilation Android debug et les tests de contrat Auth sont prouvés. Les modules locaux existants sont à préserver. L'extension fonctionnelle décrite dans cet addendum est une cible de construction, pas une implémentation réalisée. Les recettes instrumentées, métier, synchronisation, RLS et paiements restent ouvertes. La production reste inchangée.
 
 Aucun merge, aucune migration Supabase réelle, aucun déploiement, aucune publication Release et aucun transfert de données n'est autorisé par ce document.
+
+---
+
+# Addendum 2 — Parfumerie, accueil contextuel et mode nuit animé
+**Mise à jour : 20 novembre 2026**
+
+## 26. Nouveau profil d'activité : Parfumerie
+
+Ajouter **Parfumerie** à la liste des activités proposées lors du premier paramétrage de l'organisation, au même niveau que les autres profils métier.
+
+Le profil Parfumerie doit activer un modèle adapté à la vente de parfums et produits associés :
+- catalogue de produits avec marque, gamme, référence/SKU, contenance/format, famille olfactive ou catégorie, prix d'achat et prix de vente ;
+- gestion des variantes (contenance, format, coffret, recharge, produit individuel) sans dupliquer artificiellement les références ;
+- stock par produit/variante, unité, emplacement et point de vente, avec entrées, sorties, inventaires, seuils et alertes ;
+- achats et fournisseurs, coûts d'acquisition, remises, retours, pertes et traçabilité des mouvements ;
+- ventes au comptoir, panier, facture/reçu, remises autorisées, paiements, avoirs et fidélité ;
+- suivi des marges par produit, marque, famille et période ;
+- gestion des lots et dates de péremption lorsque le type de produit le nécessite ; traçabilité renforcée pour les produits réglementés ou soumis à des obligations particulières ;
+- alertes de stock faible, écarts d'inventaire, produits dormants et risques de rupture.
+
+Ne pas présumer que toutes les parfumeries ont le même assortiment : permettre de désactiver les champs inutiles et de configurer les catégories. Les règles relatives à l'authenticité, à l'importation, à l'étiquetage et aux produits réglementés restent à vérifier selon la gamme vendue.
+
+## 27. Accueil personnalisé selon l'heure
+
+Le tableau de bord doit afficher un message d'accueil contextualisé, suivi du nom d'affichage de l'utilisateur :
+
+- « Bonjour, [nom] » pendant la plage diurne ;
+- « Bonsoir, [nom] » pendant la plage du soir et de la nuit.
+
+Règles :
+- utiliser l'heure locale du téléphone, avec le fuseau IANA du profil utilisateur/organisation lorsqu'il est défini ; pour le lancement au Cameroun, le fuseau par défaut est Africa/Douala ;
+- prévoir une plage configurable et des seuils clairement définis, afin d'éviter les changements incohérents autour de minuit ;
+- prendre le nom d'affichage de la session/profil, jamais l'identifiant technique ni le rôle ;
+- si le nom est absent, afficher une salutation neutre sans espace réservé ;
+- actualiser le message lorsque l'application revient au premier plan et au changement de plage horaire, sans recharger tout le tableau de bord ;
+- traduire les salutations en français et en anglais.
+
+La salutation reste un élément d'accueil : elle ne doit pas être annoncée comme une notification système ni déclencher de vibration ou de son.
+
+## 28. Véritable mode nuit global et programmation
+
+Construire un **mode nuit complet à l'échelle de toute l'application**, et non un simple changement de quelques couleurs ou d'un seul écran.
+
+### 28.1 Contrôle utilisateur
+
+Dans Profil / Paramètres / Apparence :
+- bouton ou interrupteur immédiatement visible pour activer/désactiver le mode nuit ;
+- choix entre mode clair, mode nuit manuel et mode automatique programmé ;
+- heure de début d'activation automatique ;
+- heure de fin et de désactivation automatique ;
+- affichage de la prochaine transition programmée ;
+- possibilité de désactiver temporairement le programme et de revenir au réglage manuel ;
+- persistance locale immédiate, puis synchronisation de la préférence avec le profil lorsque le réseau et les droits le permettent.
+
+Le comportement doit rester prévisible après fermeture de l'application, redémarrage du téléphone, changement de fuseau horaire et modification des heures. Si l'utilisateur choisit le mode automatique, l'application doit recalculer l'état attendu à chaque reprise et ne pas dépendre uniquement d'un minuteur exécuté en arrière-plan.
+
+### 28.2 Couverture visuelle globale
+
+Le mode nuit doit couvrir de façon cohérente :
+- accueil, connexion lorsque le choix est pertinent, onboarding et cartes de découverte ;
+- tableau de bord, navigation, menus, listes, formulaires, champs de saisie, claviers intégrés, boîtes de dialogue et menus déroulants ;
+- agenda, pressing, coiffure, parfumerie, catalogue, clients, caisse, facturation, stocks, achats, équipe et pilotage ;
+- sécurité, abonnements, paiements, taxes, rapports et exports ;
+- profil, historique, FAQ, assistance, Livechat, écrans de partage et états vides/erreurs/chargement.
+
+Toutes les surfaces, cartes, arrière-plans, bordures, icônes, graphiques, tableaux, menus, états de sélection, textes et composants doivent utiliser les mêmes tokens de thème. Aucun écran ne doit conserver par erreur un fond clair, un texte sombre illisible ou une couleur d'état non contrastée.
+
+Préserver les couleurs de marque NAXA SERVICES (noir, rouge, blanc et nuances de surfaces) tout en respectant les contrastes. Les couleurs de succès, d'alerte et d'avertissement conservent leur sens et restent accompagnées d'une icône et d'un libellé. Le mode nuit ne doit pas simplement inverser les couleurs.
+
+### 28.3 Animation originale : mini-lampe torche NAXA SERVICES
+
+Créer une animation de **petite lampe torche graphique**, et non reprendre la luciole utilisée dans NAXA.
+
+Direction artistique :
+- mini-lampe torche reconnaissable, avec tête lumineuse, lentille et faisceau doux ;
+- manche dans une couleur de la charte NAXA SERVICES, principalement le rouge de marque #DD3A33 avec finitions compatibles avec l'interface ;
+- dessin élégant, discret et léger, cohérent avec le thème sombre ;
+- faisceau lumineux doux, diffus et progressif, qui éclaire une petite zone autour de l'action en cours sans blanchir l'écran.
+
+Comportement interactif :
+1. La lampe est un élément visuel de l'interface, pas la lampe physique du téléphone : aucune permission caméra/flash n'est requise et le flash LED du téléphone ne doit jamais être activé.
+2. Lorsqu'une personne touche un bouton, sélectionne un champ, valide une action ou interagit avec une zone, la torche se déplace visuellement vers cette zone et oriente son faisceau vers elle.
+3. Le faisceau révèle légèrement le composant actif et les textes proches, avec un dégradé doux et un bord diffus ; il ne masque ni le contenu ni les contrôles.
+4. Après l'interaction, la lampe peut effectuer un petit mouvement de stabilisation sur place, sans quitter la zone ciblée.
+5. Si aucune nouvelle interaction n'a lieu pendant le délai d'inactivité défini, le faisceau s'atténue puis s'éteint ; la lampe reste discrète ou se met en veille.
+6. À la prochaine interaction, elle se réactive et accompagne le nouvel emplacement de l'utilisateur.
+7. Les animations ne doivent jamais déplacer les composants, modifier les zones cliquables, retarder un paiement, empêcher la saisie ou prendre le focus à la place de l'utilisateur.
+
+### 28.4 Accessibilité, confort et performance
+
+- Prévoir un réglage « Effet lampe torche » activé/désactivé indépendamment du thème nuit.
+- Respecter la préférence système « Réduire les animations » et offrir une version statique sans mouvement.
+- Limiter les déplacements continus, scintillements et variations rapides de luminosité ; ne produire aucun clignotement.
+- Garder le faisceau suffisamment doux pour ne pas provoquer d'éblouissement, de fatigue visuelle ou de perte de contraste.
+- Assurer un contraste lisible sur la zone éclairée comme sur les zones non éclairées.
+- Ne pas assombrir les informations critiques, les erreurs, les confirmations, les reçus ou les formulaires de paiement au point de les rendre difficiles à lire.
+- L'animation doit être optimisée pour les appareils Android d'entrée de gamme : pas de boucle coûteuse lorsque l'écran est immobile, pas de rendu vidéo, consommation GPU/batterie contrôlée et arrêt lorsque l'application passe en arrière-plan.
+- Les captures d'écran de partage, les documents PDF et les reçus ne doivent pas intégrer le faisceau animé ; ils utilisent un thème statique lisible.
+
+## 29. Critères de recette additionnels
+
+1. Le profil Parfumerie apparaît dans le sélecteur d'activité et persiste après fermeture, reconnexion et synchronisation.
+2. Les écrans Parfumerie permettent de gérer produit, variante, achat, stock, vente, reçu et marge sans affecter les données des autres activités.
+3. Le tableau de bord affiche Bonjour/Bonsoir avec le bon nom selon l'heure et le fuseau configuré, en FR et EN.
+4. Le bouton Mode nuit agit sur l'ensemble des écrans et composants recensés ; aucune page ne garde un thème incohérent.
+5. La programmation active et désactive le mode nuit aux heures choisies, y compris après fermeture forcée et redémarrage du téléphone.
+6. Les changements manuels, le mode automatique et le changement de fuseau ont un comportement défini et testé.
+7. La mini-lampe utilise le manche rouge NAXA SERVICES, éclaire uniquement autour de la zone d'interaction et s'éteint après inactivité.
+8. L'animation n'active jamais le flash matériel et ne demande aucune permission caméra/flash.
+9. Les boutons restent immédiatement cliquables ; saisie, navigation, défilement, dialogue, paiement et accessibilité fonctionnent avec la lampe activée ou désactivée.
+10. Les appareils configurés pour réduire les animations ou économiser la batterie reçoivent un rendu statique ou allégé.
+11. Le mode nuit et la lampe sont vérifiés sur les écrans de connexion, onboarding, dashboard, caisse, facturation, stock, profil, assistance et paramètres, en petit écran et sur émulateur/appareil physique.
+
+**Statut de ces exigences : [P] cible à construire.** Aucun changement Android, aucune animation ni aucun test instrumenté n'est prétendu réalisé par le présent addendum.
