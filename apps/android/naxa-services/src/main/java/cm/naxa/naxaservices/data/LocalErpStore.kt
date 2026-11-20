@@ -84,7 +84,15 @@ data class LocalCashSession(
     val varianceReason: String? = null
 )
 
-@Entity(tableName = "local_sales", indices = [Index(value = ["siteId"]), Index(value = ["cashSessionId"]), Index(value = ["createdAtMillis"])])
+@Entity(
+    tableName = "local_sales",
+    indices = [
+        Index(value = ["siteId"]),
+        Index(value = ["cashSessionId"]),
+        Index(value = ["createdAtMillis"]),
+        Index(value = ["orgId", "siteId", "inventoryItemId", "status"])
+    ]
+)
 data class LocalSale(
     @PrimaryKey val id: String,
     val orgId: String,
@@ -96,7 +104,9 @@ data class LocalSale(
     val paymentMethod: String,
     val status: String,
     val actorMemberId: String,
-    val createdAtMillis: Long
+    val createdAtMillis: Long,
+    val inventoryItemId: String? = null,
+    val stockQuantity: Double? = null
 )
 
 @Entity(tableName = "local_expenses", indices = [Index(value = ["siteId"]), Index(value = ["cashSessionId"]), Index(value = ["createdAtMillis"])])
@@ -433,8 +443,17 @@ interface NaxaServicesDao {
     @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_expenses WHERE orgId = :orgId AND siteId = :siteId AND cashSessionId = :sessionId")
     suspend fun sessionExpensesTotal(orgId: String, siteId: String, sessionId: String): Long
 
+    @Query("SELECT COALESCE(SUM(stockQuantity), 0) FROM local_sales WHERE orgId = :orgId AND siteId = :siteId AND inventoryItemId = :itemId AND status = 'pending'")
+    suspend fun pendingInventoryReservations(orgId: String, siteId: String, itemId: String): Double
+
+    @Query("SELECT * FROM local_sales WHERE id = :saleId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
+    suspend fun findSale(orgId: String, siteId: String, saleId: String): LocalSale?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertSale(sale: LocalSale)
+
+    @Update
+    suspend fun updateSale(sale: LocalSale)
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertExpense(expense: LocalExpense)
@@ -616,7 +635,7 @@ interface NaxaServicesDao {
         LocalWorkflowEvent::class,
         LocalInventoryValuation::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -703,6 +722,14 @@ val NS_SERVICES_MIGRATION_4_5: Migration = object : Migration(4, 5) {
 val NS_SERVICES_MIGRATION_5_6: Migration = object : Migration(5, 6) {
     override fun migrate(database: SupportSQLiteDatabase) {
         database.execSQL("ALTER TABLE local_pressing_status_events ADD COLUMN reason TEXT NOT NULL DEFAULT ''")
+    }
+}
+
+val NS_SERVICES_MIGRATION_6_7: Migration = object : Migration(6, 7) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE local_sales ADD COLUMN inventoryItemId TEXT")
+        database.execSQL("ALTER TABLE local_sales ADD COLUMN stockQuantity REAL")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_sales_orgId_siteId_inventoryItemId_status ON local_sales(orgId, siteId, inventoryItemId, status)")
     }
 }
 
@@ -857,12 +884,25 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         description: String,
         totalXaf: Long,
         paymentMethod: String,
-        actorMemberId: String
+        actorMemberId: String,
+        inventoryItemId: String? = null,
+        stockQuantity: Double? = null
     ): Pair<LocalSale, LocalOutboxEvent> = database.withTransaction {
         val cashSession = dao.findCashSession(cashSessionId, orgId, siteId) ?: throw IllegalStateException("Session de caisse introuvable.")
         require(cashSession.siteId == siteId && cashSession.status == "open") { "La caisse n'est pas ouverte sur ce point de vente." }
         require(description.isNotBlank() && totalXaf > 0 && actorMemberId.isNotBlank()) { "Description, montant et opérateur obligatoires." }
         require(paymentMethod in setOf("cash", "mobile_money")) { "Mode de paiement non pris en charge." }
+        require((inventoryItemId == null) == (stockQuantity == null)) { "Article et quantité de stock doivent être fournis ensemble." }
+        val linkedStockItem = inventoryItemId?.let {
+            dao.findInventoryItem(it, orgId, siteId) ?: throw IllegalArgumentException("Article introuvable sur ce point de vente.")
+        }
+        if (linkedStockItem != null) {
+            require(stockQuantity != null && stockQuantity.isFinite() && stockQuantity > 0.0) { "Quantité d'article invalide." }
+            val reservations = dao.pendingInventoryReservations(orgId, siteId, linkedStockItem.id)
+            require(linkedStockItem.quantity - reservations >= stockQuantity) {
+                "Stock insuffisant après prise en compte des ventes Mobile Money en attente."
+            }
+        }
         val now = System.currentTimeMillis()
         val sale = LocalSale(
             id = UUID.randomUUID().toString(),
@@ -875,11 +915,78 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             paymentMethod = paymentMethod,
             status = if (paymentMethod == "cash") "confirmed" else "pending",
             actorMemberId = actorMemberId,
-            createdAtMillis = now
+            createdAtMillis = now,
+            inventoryItemId = linkedStockItem?.id,
+            stockQuantity = stockQuantity
         )
         dao.insertSale(sale)
+        if (linkedStockItem != null && paymentMethod == "cash") {
+            val updatedItem = linkedStockItem.copy(quantity = linkedStockItem.quantity - (stockQuantity ?: 0.0))
+            dao.updateInventoryItem(updatedItem)
+            val movement = LocalInventoryMovement(
+                id = UUID.randomUUID().toString(),
+                orgId = orgId,
+                siteId = siteId,
+                itemId = linkedStockItem.id,
+                movementType = "out",
+                quantityDelta = -(stockQuantity ?: 0.0),
+                reason = "Vente espèces " + sale.saleNumber,
+                actorMemberId = actorMemberId,
+                createdAtMillis = now
+            )
+            dao.insertInventoryMovement(movement)
+            enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.sale_out", siteId)
+        }
         val event = enqueue(cashSession.orgId, "sale", sale.id, "sale.created", siteId)
         sale to event
+    }
+
+    /**
+     * This method must only be invoked by the trusted server-sync adapter after
+     * a verified provider webhook confirms payment. A user-entered reference is
+     * not sufficient to call it.
+     */
+    suspend fun applyServerConfirmedMobileMoneySale(
+        orgId: String,
+        siteId: String,
+        saleId: String,
+        providerPaymentReference: String
+    ): LocalSale = database.withTransaction {
+        require(providerPaymentReference.isNotBlank() && providerPaymentReference.length <= 160) {
+            "Référence serveur de paiement invalide."
+        }
+        val sale = dao.findSale(orgId, siteId, saleId) ?: throw IllegalArgumentException("Vente introuvable.")
+        require(sale.paymentMethod == "mobile_money" && sale.status == "pending") {
+            "Seule une vente Mobile Money en attente peut être confirmée par le serveur."
+        }
+        val now = System.currentTimeMillis()
+        val itemId = sale.inventoryItemId
+        val quantity = sale.stockQuantity
+        if (itemId != null && quantity != null) {
+            val item = dao.findInventoryItem(itemId, orgId, siteId)
+                ?: throw IllegalStateException("L'article lié à cette vente n'existe plus.")
+            require(item.quantity >= quantity) {
+                "Stock réel insuffisant au moment de la confirmation Mobile Money."
+            }
+            dao.updateInventoryItem(item.copy(quantity = item.quantity - quantity))
+            val movement = LocalInventoryMovement(
+                id = UUID.randomUUID().toString(),
+                orgId = orgId,
+                siteId = siteId,
+                itemId = itemId,
+                movementType = "out",
+                quantityDelta = -quantity,
+                reason = "Vente Mobile Money confirmée par le serveur " + sale.saleNumber,
+                actorMemberId = sale.actorMemberId,
+                createdAtMillis = now
+            )
+            dao.insertInventoryMovement(movement)
+            enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.mobile_money_sale_out", siteId)
+        }
+        val confirmed = sale.copy(status = "confirmed")
+        dao.updateSale(confirmed)
+        enqueue(orgId, "sale", sale.id, "sale.payment_confirmed_server", siteId)
+        confirmed
     }
 
     suspend fun addExpense(
