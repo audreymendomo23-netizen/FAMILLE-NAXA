@@ -383,7 +383,11 @@ begin
     when 'visits' then 1
     when 'spend' then p_amount_xaf
   end;
-  if v_delta is null or v_delta <= 0 then raise exception 'NAXA_LOYALTY_ACTIVITY_BELOW_MINIMUM'; end if;
+  if v_delta is null
+     or (v_program.metric_code in ('points','spend') and p_amount_xaf <= 0)
+     or (v_program.metric_code = 'visits' and v_delta <= 0) then
+    raise exception 'NAXA_LOYALTY_ACTIVITY_BELOW_MINIMUM';
+  end if;
 
   insert into public.ns_loyalty_events(
     org_id, site_id, program_id, customer_id, event_type, amount_xaf, metric_delta,
