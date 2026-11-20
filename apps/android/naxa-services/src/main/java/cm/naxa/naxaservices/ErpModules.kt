@@ -48,6 +48,7 @@ import kotlinx.coroutines.launch
 fun AuthorizedSitePicker(
     siteIds: List<String>,
     selectedSiteId: String,
+    siteLabels: Map<String, String> = emptyMap(),
     onSelect: (String) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -190,7 +191,11 @@ fun CustomersContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle("Clients et fidélisation", "Fiches client privées, historique local et consentement de contact explicite.")
-            AuthorizedSitePicker(siteIds, siteId) { siteId = it }
+            AuthorizedSitePicker(
+                siteIds,
+                siteId,
+                session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
+            ) { siteId = it }
             LocalOnlyNotice("Les fiches clients ne sont pas partagées entre points de vente dans ce stockage local.")
         }
         item {
@@ -538,12 +543,12 @@ internal fun OrganizationWorkspaceContent(
         if (route == AppRoute.NETWORK || route == AppRoute.SITES) {
             item {
                 Text("Points de vente affectés par le serveur", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                if (session.account.activeSiteIds.isEmpty()) Text("Aucun point de vente affecté.")
-                else session.account.activeSiteIds.forEachIndexed { index, id ->
+                if (session.account.activeSites.isEmpty()) Text("Aucun point de vente affecté.")
+                else session.account.activeSites.forEachIndexed { index, site ->
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.fillMaxWidth().padding(13.dp)) {
-                            Text("Point " + (index + 1).toString(), fontWeight = FontWeight.Bold)
-                            Text(id, style = MaterialTheme.typography.bodySmall)
+                            Text(site.name.ifBlank { "Point " + (index + 1).toString() }, fontWeight = FontWeight.Bold)
+                            Text(listOf(site.code, site.addressLabel, site.phoneContact).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
                             Text("Données et opérations isolées · lecture selon les droits serveur", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
                         }
                     }
