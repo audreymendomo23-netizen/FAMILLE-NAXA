@@ -1631,9 +1631,7 @@ fun RecurringChargesContent(
             repository.dao.observeSalesTotal(orgId, id, monthStart, monthEnd).first()
         }
         monthFixedCharges = siteIds.sumOf { id ->
-            repository.dao.observeChargePayments(orgId, id).first()
-                .filter { it.paidAtMillis in monthStart..monthEnd }
-                .sumOf { it.amountXaf }
+            repository.dao.sumChargePaymentsForPeriod(orgId, id, monthStart, monthEnd)
         }
     }
     val due = charges.filter { it.active && it.nextDueAtMillis <= now + it.reminderDays * 86_400_000L }
