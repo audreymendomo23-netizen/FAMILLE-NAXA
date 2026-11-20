@@ -16,7 +16,7 @@ create table if not exists public.ns_recurring_charges (
   org_id uuid not null,
   site_id uuid not null,
   name text not null,
-  category text not null check (category in ('rent','electricity','water','internet','tax','insurance','payroll','maintenance','other')),
+  category text not null check (length(trim(category)) between 1 and 80),
   description text not null default '',
   amount_xaf bigint not null check (amount_xaf > 0),
   recurrence text not null check (recurrence in ('monthly','quarterly','annual','one_time')),
@@ -239,6 +239,7 @@ set search_path = ''
 as $naxa$
 declare
   v_charge public.ns_recurring_charges%rowtype;
+  v_existing public.ns_charge_payments%rowtype;
   v_payment_id uuid;
   v_paid_before bigint;
   v_paid_after bigint;
@@ -247,6 +248,7 @@ declare
 begin
   if p_org_id is null or p_site_id is null or p_charge_id is null or p_idempotency_key is null
      or p_amount_xaf is null or p_amount_xaf <= 0
+     or p_payment_method is null
      or p_payment_method not in ('manual','bank','cash','mobile_money','other') then
     raise exception 'NAXA_CHARGE_PAYMENT_INVALID';
   end if;
@@ -254,17 +256,25 @@ begin
      or not public.ns_can_operate_site(p_org_id, p_site_id) then
     raise exception 'NAXA_CHARGE_PAYMENT_FORBIDDEN';
   end if;
+
+  select * into v_existing from public.ns_charge_payments
+    where org_id = p_org_id and idempotency_key = p_idempotency_key;
+  if found then
+    if v_existing.site_id = p_site_id
+       and v_existing.charge_id = p_charge_id
+       and v_existing.amount_xaf = p_amount_xaf
+       and v_existing.payment_method = p_payment_method
+       and v_existing.payment_reference is not distinct from nullif(trim(p_payment_reference), '') then
+      return jsonb_build_object('idempotent', true, 'payment_id', v_existing.id);
+    end if;
+    raise exception 'NAXA_CHARGE_PAYMENT_IDEMPOTENCY_KEY_REUSED';
+  end if;
+
   select * into v_charge
   from public.ns_recurring_charges
   where id = p_charge_id and org_id = p_org_id and site_id = p_site_id and active
   for update;
   if not found then raise exception 'NAXA_CHARGE_NOT_FOUND'; end if;
-
-  select id into v_payment_id from public.ns_charge_payments
-    where org_id = p_org_id and idempotency_key = p_idempotency_key;
-  if found then
-    return jsonb_build_object('idempotent', true, 'payment_id', v_payment_id);
-  end if;
 
   select coalesce(sum(amount_xaf), 0)::bigint into v_paid_before
   from public.ns_charge_payments
@@ -314,9 +324,10 @@ as $naxa$
 declare
   v_program public.ns_loyalty_programs%rowtype;
   v_activity_id uuid;
-  v_existing_id uuid;
+  v_existing public.ns_loyalty_events%rowtype;
   v_delta bigint;
   v_previous bigint;
+  v_previous_amount bigint;
   v_total bigint;
   v_old_wave bigint;
   v_new_wave bigint;
@@ -333,9 +344,19 @@ begin
   if v_member is null or not public.ns_can_operate_site(p_org_id, p_site_id) then
     raise exception 'NAXA_LOYALTY_ACTIVITY_FORBIDDEN';
   end if;
-  select id into v_existing_id from public.ns_loyalty_events
+  select * into v_existing from public.ns_loyalty_events
     where org_id = p_org_id and idempotency_key = p_idempotency_key;
-  if found then return jsonb_build_object('idempotent', true, 'activity_id', v_existing_id); end if;
+  if found then
+    if v_existing.site_id = p_site_id
+       and v_existing.program_id = p_program_id
+       and v_existing.customer_id = p_customer_id
+       and v_existing.amount_xaf = p_amount_xaf
+       and v_existing.actor_member_id = v_member
+       and v_existing.event_type = 'activity' then
+      return jsonb_build_object('idempotent', true, 'activity_id', v_existing.id);
+    end if;
+    raise exception 'NAXA_LOYALTY_IDEMPOTENCY_KEY_REUSED';
+  end if;
 
   select * into v_program
   from public.ns_loyalty_programs
@@ -347,15 +368,22 @@ begin
     where id = p_customer_id and org_id = p_org_id and site_id = p_site_id
   ) then raise exception 'NAXA_LOYALTY_CUSTOMER_OUT_OF_SCOPE'; end if;
 
+  v_since := case when v_program.window_days > 0
+    then now() - make_interval(days => v_program.window_days)
+    else '-infinity'::timestamptz end;
+  select coalesce(sum(amount_xaf), 0)::bigint into v_previous_amount
+  from public.ns_loyalty_events
+  where org_id = p_org_id and program_id = p_program_id and customer_id = p_customer_id
+    and event_type = 'activity' and created_at >= v_since;
+
   v_delta := case v_program.metric_code
-    when 'points' then floor(p_amount_xaf::numeric / v_program.unit_amount_xaf)::bigint
+    when 'points' then
+      floor((v_previous_amount + p_amount_xaf)::numeric / v_program.unit_amount_xaf)::bigint
+        - floor(v_previous_amount::numeric / v_program.unit_amount_xaf)::bigint
     when 'visits' then 1
     when 'spend' then p_amount_xaf
   end;
   if v_delta is null or v_delta <= 0 then raise exception 'NAXA_LOYALTY_ACTIVITY_BELOW_MINIMUM'; end if;
-  v_since := case when v_program.window_days > 0
-    then now() - make_interval(days => v_program.window_days)
-    else '-infinity'::timestamptz end;
 
   insert into public.ns_loyalty_events(
     org_id, site_id, program_id, customer_id, event_type, amount_xaf, metric_delta,
