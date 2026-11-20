@@ -9,6 +9,7 @@ import cm.naxa.naxaservices.data.NsServicesDatabase
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_1_2
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_2_3
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_3_4
 import cm.naxa.naxaservices.data.LocalPressingOrder
 import cm.naxa.naxaservices.data.LocalAppointment
 import cm.naxa.naxaservices.data.LocalCashSession
@@ -119,7 +120,7 @@ private fun NaxaServicesRoot() {
     val preferences = remember { NaxaServicesPreferences(context) }
     val localDatabase = remember {
         Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db")
-            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3)
+            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4)
             .build()
     }
     val localRepository = remember { NaxaServicesLocalRepository(localDatabase) }
