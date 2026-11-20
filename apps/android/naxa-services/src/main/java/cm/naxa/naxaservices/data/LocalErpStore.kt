@@ -677,7 +677,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
 
     suspend fun recordInventoryMovement(orgId: String, siteId: String, itemId: String, movementType: String, quantity: Double, reason: String, actorMemberId: String): LocalInventoryItem = database.withTransaction {
         require(movementType in setOf("in", "consumption", "loss", "adjustment")) { "Type de mouvement invalide." }
-        require(quantity > 0.0 && reason.trim().length >= 3 && actorMemberId.isNotBlank()) { "Quantité, motif et opérateur obligatoires." }
+        require(quantity != 0.0 && reason.trim().length >= 3 && actorMemberId.isNotBlank()) { "Quantité non nulle, motif et opérateur obligatoires." }
+        require(movementType == "adjustment" || quantity > 0.0) { "Les entrées, consommations et pertes utilisent une quantité positive." }
         val current = dao.findInventoryItem(itemId, siteId) ?: throw IllegalArgumentException("Article introuvable sur ce point de vente.")
         require(current.orgId == orgId) { "Organisation de l'article invalide." }
         val delta = if (movementType == "in" || movementType == "adjustment") quantity else -quantity
