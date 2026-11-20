@@ -12,7 +12,9 @@ import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_1_2
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_2_3
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_3_4
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_4_5
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_5_6
 import cm.naxa.naxaservices.data.LocalPressingOrder
+import cm.naxa.naxaservices.data.LocalPressingStatusEvent
 import cm.naxa.naxaservices.data.LocalAppointment
 import cm.naxa.naxaservices.data.LocalCashSession
 import cm.naxa.naxaservices.data.LocalSale
@@ -122,7 +124,7 @@ private fun NaxaServicesRoot() {
     val preferences = remember { NaxaServicesPreferences(context) }
     val localDatabase = remember {
         Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db")
-            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5)
+            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6)
             .build()
     }
     val localRepository = remember { NaxaServicesLocalRepository(localDatabase) }
@@ -890,6 +892,7 @@ private fun PressingLocalContent(
     session: AuthSession
 ) {
     val scope = rememberCoroutineScope()
+    val fr = session.account.defaultLocale != "en"
     var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
     var workstationId by rememberSaveable { mutableStateOf("") }
     var customer by rememberSaveable { mutableStateOf("") }
@@ -897,36 +900,59 @@ private fun PressingLocalContent(
     var garments by rememberSaveable { mutableStateOf("") }
     var total by rememberSaveable { mutableStateOf("") }
     var deposit by rememberSaveable { mutableStateOf("0") }
+    var promisedPickup by rememberSaveable {
+        mutableStateOf(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L)))
+    }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
-    val orders by remember(siteId) { repository.dao.observePressingOrders(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    var notice by remember { mutableStateOf<String?>(null) }
+    var advanceReasons by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+    val orders by remember(siteId) {
+        repository.dao.observePressingOrders(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
+    val workstations by remember(siteId) {
+        repository.dao.observeWorkstations(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text(stringResource(R.string.pressing_local_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text(stringResource(R.string.pressing_local_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ModulePageTitle(
+                if (fr) "Pressing — tickets et retrait" else "Laundry — tickets and pickup",
+                if (fr) "Chaque ticket possède une référence unique, un emplacement d'origine, une date promise et un historique des étapes." else "Each ticket has a unique reference, source workstation, promised pickup and workflow history."
+            )
             AuthorizedSitePicker(
                 session.account.activeSiteIds,
                 siteId,
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
-            ) { siteId = it }
+            ) { siteId = it; workstationId = "" }
+            LocalOnlyNotice(if (fr) "Tickets et historique locaux, en attente de synchronisation. L'alerte automatique WhatsApp/FCM « linge prêt » attend la passerelle serveur." else "Local tickets and history await synchronization. Automatic WhatsApp/FCM ready-for-pickup alerts require the server gateway.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    OutlinedTextField(
-                        workstationId,
-                        { workstationId = it.trim() },
-                        Modifier.fillMaxWidth(),
-                        label = { Text(stringResource(R.string.member_workstation_id_optional)) },
-                        singleLine = true
-                    )
+                    Text(if (fr) "Nouveau ticket pressing" else "New laundry ticket", fontWeight = FontWeight.Bold)
+                    Text(if (fr) "Comptoir / atelier" else "Counter / workshop", fontWeight = FontWeight.SemiBold)
+                    OutlinedButton(onClick = { workstationId = "" }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (workstationId.isBlank()) (if (fr) "✓ Point de vente (sans poste dédié)" else "✓ Site-wide (no dedicated workstation)") else if (fr) "Aucun poste dédié" else "No dedicated workstation")
+                    }
+                    workstations.filter { it.status == "active" }.forEach { workstation ->
+                        OutlinedButton(onClick = { workstationId = workstation.id }, modifier = Modifier.fillMaxWidth()) {
+                            Text((if (workstationId == workstation.id) "✓ " else "") + workstation.name + " · " + workstation.kind)
+                        }
+                    }
                     OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.customer_name)) }, singleLine = true)
                     OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.customer_phone)) }, singleLine = true)
-                    OutlinedTextField(garments, { garments = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.pressing_items_summary)) }, minLines = 2)
+                    OutlinedTextField(garments, { garments = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Pièces (type, couleur, marque, état/taches et traitement demandé)" else "Garments (type, color, brand, condition/stains and requested treatment)") }, minLines = 3)
                     OutlinedTextField(total, { total = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.total_amount_xaf)) }, singleLine = true)
                     OutlinedTextField(deposit, { deposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.deposit_amount_xaf)) }, singleLine = true)
+                    OutlinedTextField(
+                        promisedPickup,
+                        { promisedPickup = it },
+                        Modifier.fillMaxWidth(),
+                        label = { Text(if (fr) "Retrait promis (AAAA-MM-JJ HH:MM)" else "Promised pickup (YYYY-MM-DD HH:MM)") },
+                        singleLine = true
+                    )
                     if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     Button(
                         onClick = {
@@ -934,6 +960,13 @@ private fun PressingLocalContent(
                                 busy = true
                                 error = null
                                 runCatching {
+                                    val promisedAt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+                                        .apply { isLenient = false }
+                                        .parse(promisedPickup)?.time
+                                        ?: throw IllegalArgumentException(if (fr) "Date de retrait invalide." else "Invalid promised pickup date.")
+                                    require(promisedAt > System.currentTimeMillis()) {
+                                        if (fr) "Le retrait promis doit être dans le futur." else "Promised pickup must be in the future."
+                                    }
                                     repository.createPressingOrder(
                                         orgId = session.account.organizationId,
                                         siteId = siteId,
@@ -943,50 +976,78 @@ private fun PressingLocalContent(
                                         itemsSummary = garments,
                                         totalXaf = total.toLong(),
                                         depositXaf = deposit.toLongOrNull() ?: 0L,
-                                        promisedAtMillis = System.currentTimeMillis() + 24L * 60L * 60L * 1000L,
+                                        promisedAtMillis = promisedAt,
                                         actorMemberId = session.account.memberId
                                     )
                                 }.onSuccess {
-                                    customer = ""
-                                    phone = ""
-                                    garments = ""
-                                    total = ""
-                                    deposit = "0"
-                                }.onFailure { error = it.message ?: "Création du ticket impossible." }
+                                    customer = ""; phone = ""; garments = ""; total = ""; deposit = "0"
+                                    notice = if (fr) "Ticket créé. Étiquette de référence : PRS-… ; statut reçu." else "Ticket created. Reference label: PRS-…; status received."
+                                    error = null
+                                }.onFailure { error = it.message ?: if (fr) "Création du ticket impossible." else "Unable to create ticket." }
                                 busy = false
                             }
                         },
                         enabled = !busy && siteId.isNotBlank() && customer.isNotBlank() && garments.isNotBlank() && (total.toLongOrNull() ?: 0L) > 0,
                         modifier = Modifier.fillMaxWidth()
                     ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary) else Text(stringResource(R.string.create_pressing_ticket)) }
-                    Text(stringResource(R.string.local_outbox_notice), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    if (!notice.isNullOrBlank()) Text(notice!!, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
-        item { Text(stringResource(R.string.local_pressing_tickets), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(if (fr) "Tickets et retraits" else "Tickets and pickups", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         if (orders.isEmpty()) {
             item { Text(stringResource(R.string.no_local_pressing_tickets), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
             items(orders) { order ->
-                PressingOrderCard(order = order, onAdvance = {
-                    scope.launch {
-                        runCatching { repository.advancePressingOrder(order, session.account.memberId) }
-                            .onFailure { error = it.message }
+                val events by remember(order.id, siteId) {
+                    repository.dao.observePressingStatusEvents(order.id, session.account.organizationId, siteId)
+                }.collectAsState(initial = emptyList())
+                PressingOrderCard(
+                    order = order,
+                    events = events,
+                    reason = advanceReasons[order.id].orEmpty(),
+                    onReasonChange = { value -> advanceReasons = advanceReasons + (order.id to value) },
+                    onAdvance = {
+                        scope.launch {
+                            runCatching {
+                                repository.advancePressingOrder(order, session.account.memberId, advanceReasons[order.id].orEmpty())
+                            }.onSuccess {
+                                advanceReasons = advanceReasons + (order.id to "")
+                                notice = if (fr) "Étape pressing mise à jour et historisée." else "Laundry stage updated and recorded."
+                                error = null
+                            }.onFailure { error = it.message ?: "Status update failed." }
+                        }
                     }
-                })
+                )
             }
         }
+        if (!error.isNullOrBlank()) item { Text(error!!, color = MaterialTheme.colorScheme.error) }
     }
 }
 
+
 @Composable
-private fun PressingOrderCard(order: LocalPressingOrder, onAdvance: () -> Unit) {
+private fun PressingOrderCard(
+    order: LocalPressingOrder,
+    events: List<LocalPressingStatusEvent>,
+    reason: String,
+    onReasonChange: (String) -> Unit,
+    onAdvance: () -> Unit
+) {
+    val fr = true
     val status = when (order.status) {
         "received" -> stringResource(R.string.pressing_status_received)
         "in_progress" -> stringResource(R.string.pressing_status_in_progress)
         "ready" -> stringResource(R.string.pressing_status_ready)
         "picked_up" -> stringResource(R.string.pressing_status_picked_up)
         else -> order.status
+    }
+    val promised = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(order.promisedAtMillis))
+    val nextLabel = when (order.status) {
+        "received" -> if (fr) "Lancer le traitement" else "Start processing"
+        "in_progress" -> if (fr) "Marquer le linge prêt" else "Mark laundry ready"
+        "ready" -> if (fr) "Confirmer le retrait" else "Confirm pickup"
+        else -> ""
     }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
         Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -995,14 +1056,37 @@ private fun PressingOrderCard(order: LocalPressingOrder, onAdvance: () -> Unit) 
                 Text(status, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelMedium)
             }
             Text(order.customerName, style = MaterialTheme.typography.titleMedium)
+            if (order.customerPhone.isNotBlank()) Text(order.customerPhone, style = MaterialTheme.typography.bodySmall)
             Text(order.itemsSummary, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Text("Retrait promis : $promised", style = MaterialTheme.typography.bodySmall)
+            order.workstationId?.let { Text("Poste : $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
             Text(stringResource(R.string.pressing_total_and_deposit, order.totalXaf, order.depositXaf), style = MaterialTheme.typography.bodySmall)
             if (order.status != "picked_up") {
-                Button(onClick = onAdvance, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.advance_pressing_status)) }
+                OutlinedTextField(
+                    reason,
+                    onReasonChange,
+                    Modifier.fillMaxWidth(),
+                    label = { Text("Motif obligatoire pour l'étape suivante") },
+                    minLines = 1
+                )
+                Button(onClick = onAdvance, enabled = reason.trim().length >= 3, modifier = Modifier.fillMaxWidth()) {
+                    Text(nextLabel)
+                }
+            }
+            if (events.isNotEmpty()) {
+                Text("Historique du ticket", fontWeight = FontWeight.SemiBold)
+                events.take(6).forEach { event ->
+                    Text(
+                        event.fromStatus + " → " + event.toStatus + " · " + (event.reason.ifBlank { "Étape initiale" }),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
             }
         }
     }
 }
+
 
 @Composable
 private fun AgendaLocalContent(
