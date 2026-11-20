@@ -1175,3 +1175,19 @@ Le moteur présent est statistique/local/déterministe et explicable ; il ne doi
 HEAD de `main` contrôlé : `65dfbcf29a5e9add1be79ef77ac930b3350eba9d`. Le code de la branche de travail n'a pas été fusionné dans `main`. Aucun SQL n'a été appliqué, aucune fonction Edge n'a été déployée, aucune dépense Supabase n'a été engagée et aucune Release Android signée n'a été publiée.
 
 Les réserves du §6.17.22 restent applicables : API ERP distante et synchronisation offline complète, RLS réel testé, paiements/entitlements, notifications serveur, validation SYSCOHADA/fiscalité/paie, tests instrumentés/restauration, Release signée, Web/PWA et les autres chantiers centraux. NAXA SERVICES ne doit donc pas être déclaré « VERT GLOBAL » sur la seule base d'un build debug et de contrats locaux.
+
+
+## 6.17.24 — Contrôle final du lot financier NAXA SERVICES (21 novembre 2026)
+
+Le contrôle en attente du §6.17.23 est désormais clos : le run GitHub Actions **44836031127** a terminé **SUCCESS — 5/5 jobs** sur le commit applicatif `edb75ba714ba1a2ffb24cb0f8e23019553970fe4`.
+
+- Tests unitaires Android NAXA SERVICES : succès.
+- Compilation Kotlin/Compose et assemblage de l'APK debug : succès.
+- Contrats Auth / périmètres, Referral, tarifs Famille NAXA et comptabilité/prévisions : succès.
+- Artefact `naxa-services-debug-apk` : ID `14678138586`, taille `11 834 979` octets.
+
+Le dernier ensemble code apporte le cycle achats fournisseurs et ses écritures de réception/règlement, la protection idempotente Room v11, le calcul des charges d'exploitation depuis le journal (et non les sorties de caisse), la séparation des paiements fournisseurs de la rentabilité, les séries financières détaillées et les calendriers `Africa/Douala`. Le rapport technique récapitulatif est à jour dans `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`, section 41.
+
+**HEAD de code testé :** `edb75ba714ba1a2ffb24cb0f8e23019553970fe4`. Des commits suivants ne changent que les documents de continuité/statut. Aucun changement du code applicatif ne figure après ce commit dans la présente branche au moment de ce relevé.
+
+Cette preuve confirme les tests de contrat et le build Android debug, pas une qualification production. Les fonctions Achats/Pilotage restent locales Room tant que la passerelle comptable v4 et la synchronisation ERP complète ne sont pas installées et validées dans un projet Supabase Famille isolé. Aucun déploiement réel, migration, paiement, webhook, release signée ou fusion vers `main` n'a été effectué. Le statut demeure **non qualifié VERT GLOBAL** jusqu'à la recette serveur/synchronisation, sécurité RLS, validations comptables/fiscales et autres chantiers listés au §6.17.22–6.17.23.
