@@ -630,8 +630,10 @@ internal fun OrganizationWorkspaceContent(
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = { locale = "fr" }, enabled = canManageNetwork) { Text(if (locale == "fr") "✓ Français" else "Français") }
-                            OutlinedButton(onClick = { locale = "en" }, enabled = canManageNetwork) { Text(if (locale == "en") "✓ English" else "English") }
+                            OutlinedButton(onClick = { locale = "fr" }, enabled = canManageNetwork && locale != "fr") { Text(if (locale == "fr") "✓ Français" else "Français") }
+                            OutlinedButton(onClick = { locale = "en" }, enabled = canManageNetwork && locale != "en") { Text(if (locale == "en") "✓ English" else "English") }
+                            OutlinedButton(onClick = { locale = "ff-CM" }, enabled = canManageNetwork && locale != "ff-CM") { Text(if (locale == "ff-CM") "✓ Fulfulde" else "Fulfulde") }
+                            if (locale == "ff-CM") Text("Traductions Fulfulde en cours de validation ; les contenus non traduits restent en français.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         }
                         if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
                         Button(
