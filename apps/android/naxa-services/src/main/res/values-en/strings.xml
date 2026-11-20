@@ -249,6 +249,8 @@
     <string name="module_appearance">Appearance</string>
     <string name="appearance_desc">Language, night theme and scheduling</string>
     <string name="module_profile">Profile</string>
+    <string name="module_team_performance">Attendance and commissions</string>
+    <string name="team_performance_desc">Clock in/out, hours, commissions, advances and bonuses</string>
     <string name="profile_desc">Personal information, history and preferences</string>
     <string name="action_create_work_order">Create a work order</string>
     <string name="action_quote">Create a quote</string>

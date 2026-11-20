@@ -249,6 +249,8 @@
     <string name="module_appearance">Apparence</string>
     <string name="appearance_desc">Langue, thème nuit et programmation</string>
     <string name="module_profile">Profil</string>
+    <string name="module_team_performance">Présences et commissions</string>
+    <string name="team_performance_desc">Pointage, horaires, commissions, avances et primes</string>
     <string name="profile_desc">Informations personnelles, historique et préférences</string>
     <string name="action_create_work_order">Créer un ordre de travail</string>
     <string name="action_quote">Créer un devis</string>

@@ -102,7 +102,7 @@ internal enum class AppRoute {
     LOGIN, RECOVERY, CHANGE_PASSWORD, ACTIVITY_SETUP, LEGAL_ACCEPTANCE, DISCOVERY,
     DASHBOARD, AGENDA, PRESSING, WORK_ORDERS, CASH, SERVICES, CUSTOMERS, TEAM, STOCK, REPORTS,
     ORGANIZATION, NETWORK, SITES, WORKSTATIONS, SECURITY, SETTINGS, HELP, MENU,
-    PROFILE, APPEARANCE, BILLING, SUBSCRIPTIONS, PURCHASES, TAXES, OBJECTIVES,
+    PROFILE, APPEARANCE, BILLING, SUBSCRIPTIONS, PURCHASES, TAXES, OBJECTIVES, TEAM_PERFORMANCE,
     AI_INSIGHTS, LIVECHAT
 }
 
@@ -647,7 +647,8 @@ private val modules = listOf(
     ModuleSpec(AppRoute.CASH, R.string.module_cash, R.string.cash_desc, listOf(R.string.action_new_sale, R.string.action_open_cash, R.string.action_close_cash, R.string.action_expense)),
     ModuleSpec(AppRoute.SERVICES, R.string.module_services, R.string.services_desc, listOf(R.string.action_add_service, R.string.action_price_lists, R.string.action_packages)),
     ModuleSpec(AppRoute.CUSTOMERS, R.string.module_customers, R.string.customers_desc, listOf(R.string.action_new_customer, R.string.action_history, R.string.action_loyalty)),
-    ModuleSpec(AppRoute.TEAM, R.string.module_team, R.string.team_desc, listOf(R.string.action_add_member, R.string.action_assign, R.string.action_commissions, R.string.action_attendance)),
+    ModuleSpec(AppRoute.TEAM, R.string.module_team, R.string.team_desc, listOf(R.string.action_add_member, R.string.action_assign)),
+    ModuleSpec(AppRoute.TEAM_PERFORMANCE, R.string.module_team_performance, R.string.team_performance_desc, listOf(R.string.action_clock_in, R.string.action_clock_out, R.string.action_commissions, R.string.action_advances)),
     ModuleSpec(AppRoute.STOCK, R.string.module_stock, R.string.stock_desc, listOf(R.string.action_inventory, R.string.action_consumption, R.string.action_low_stock)),
     ModuleSpec(AppRoute.PURCHASES, R.string.module_purchases, R.string.purchases_desc, listOf(R.string.action_add_supplier, R.string.action_purchase_order, R.string.action_receiving)),
     ModuleSpec(AppRoute.BILLING, R.string.module_billing, R.string.billing_desc, listOf(R.string.action_quote, R.string.action_invoice, R.string.action_credit_note, R.string.action_refund)),
@@ -677,7 +678,7 @@ private fun activityVisibleRoutes(activity: String?): Set<AppRoute> {
     val shared = commonRoutes + setOf(
         AppRoute.CASH, AppRoute.CUSTOMERS, AppRoute.STOCK, AppRoute.PURCHASES,
         AppRoute.BILLING, AppRoute.SUBSCRIPTIONS, AppRoute.OBJECTIVES,
-        AppRoute.TAXES, AppRoute.AI_INSIGHTS, AppRoute.REPORTS, AppRoute.TEAM,
+        AppRoute.TAXES, AppRoute.AI_INSIGHTS, AppRoute.REPORTS, AppRoute.TEAM, AppRoute.TEAM_PERFORMANCE,
         AppRoute.ORGANIZATION, AppRoute.NETWORK, AppRoute.SITES, AppRoute.WORKSTATIONS
     )
     return when (activity) {
@@ -699,7 +700,7 @@ private fun canAccessRoute(route: AppRoute, roleCode: String): Boolean {
         "hair_stylist" -> common + setOf(AppRoute.AGENDA, AppRoute.SERVICES, AppRoute.CUSTOMERS)
         "pressing_operator" -> common + setOf(AppRoute.PRESSING, AppRoute.CUSTOMERS)
         "stock_manager" -> common + setOf(AppRoute.STOCK, AppRoute.PURCHASES)
-        "accountant" -> common + setOf(AppRoute.REPORTS, AppRoute.BILLING, AppRoute.TAXES, AppRoute.OBJECTIVES, AppRoute.AI_INSIGHTS)
+        "accountant" -> common + setOf(AppRoute.REPORTS, AppRoute.BILLING, AppRoute.TAXES, AppRoute.OBJECTIVES, AppRoute.AI_INSIGHTS, AppRoute.TEAM_PERFORMANCE)
         "workstation_manager" -> common
         else -> common
     }
@@ -825,6 +826,8 @@ private fun ErpScreen(
             TaxesContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.OBJECTIVES) {
             ObjectivesContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.TEAM_PERFORMANCE) {
+            TeamPerformanceContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.AI_INSIGHTS) {
             AiInsightsContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.WORK_ORDERS) {

@@ -836,7 +836,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         metadataJson: String,
         actorMemberId: String
     ): LocalManagementRecord = database.withTransaction {
-        val allowedTypes = setOf("quote", "invoice", "credit_note", "refund_due", "purchase", "tax_estimate", "business_goal", "subscription_request", "support_chat", "work_order", "repair_order", "service_order")
+        val allowedTypes = setOf("quote", "invoice", "credit_note", "refund_due", "customer_receivable", "purchase", "tax_estimate", "business_goal", "subscription_request", "support_chat", "work_order", "repair_order", "service_order", "staff_clock_in", "staff_clock_out", "staff_break_start", "staff_break_end", "staff_commission", "staff_advance", "staff_bonus")
         require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) { "Organisation, site et opérateur obligatoires." }
         require(recordType in allowedTypes) { "Type de registre non autorisé." }
         require(title.isNotBlank() && amountXaf >= 0L && paidXaf >= 0L && paidXaf <= amountXaf) { "Montants ou libellé incohérents." }
