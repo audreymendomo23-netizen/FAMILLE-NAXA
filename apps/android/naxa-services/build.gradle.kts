@@ -21,8 +21,11 @@ android {
             .replace("\\", "\\\\").replace("\"", "\\\"")
         val referralsUrl = (project.findProperty("NS_REFERRALS_FUNCTION_URL") as? String ?: "")
             .replace("\\", "\\\\").replace("\"", "\\\"")
+        val accountingUrl = (project.findProperty("NS_ACCOUNTING_FUNCTION_URL") as? String ?: "")
+            .replace("\\", "\\\\").replace("\"", "\\\"")
         buildConfigField("String", "AUTH_FUNCTION_URL", "\"" + authUrl + "\"")
         buildConfigField("String", "REFERRALS_FUNCTION_URL", "\"" + referralsUrl + "\"")
+        buildConfigField("String", "ACCOUNTING_FUNCTION_URL", "\"" + accountingUrl + "\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"" + anonKey + "\"")
     }
 
