@@ -9,6 +9,7 @@ import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
 import android.net.Uri
 import android.os.Bundle
+import org.json.JSONObject
 import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.print.PageRange
@@ -770,83 +771,242 @@ fun WorkOrdersContent(
 ) {
     val scope = rememberCoroutineScope()
     val sites = session.account.activeSiteIds
+    val fr = session.account.defaultLocale != "en"
     var siteId by rememberSaveable { mutableStateOf(sites.firstOrNull().orEmpty()) }
-    val records by remember(siteId) {
-        repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "work_order")
+    val profile = activityProfile ?: "autre"
+    val recordType = when (profile) {
+        "reparation", "garage" -> "repair_order"
+        "domicile", "nettoyage", "photo_evenementiel" -> "service_order"
+        else -> "work_order"
+    }
+    val records by remember(siteId, recordType) {
+        repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, recordType)
     }.collectAsState(initial = emptyList())
+
+    val labels = when (profile) {
+        "couture" -> listOf(
+            if (fr) "Vêtement / retouche / commande" else "Garment / alteration / order",
+            if (fr) "Mensurations, tissu et essayage" else "Measurements, fabric and fitting",
+            if (fr) "Tissu, fournitures et accessoires" else "Fabric, supplies and accessories",
+            if (fr) "Date d'essayage ou de livraison" else "Fitting or delivery date"
+        )
+        "beaute" -> listOf(
+            if (fr) "Soin / formule / cabine" else "Treatment / package / room",
+            if (fr) "Produits, protocole et consignes" else "Products, procedure and instructions",
+            if (fr) "Produits et consommables" else "Products and consumables",
+            if (fr) "Date de prestation" else "Service date"
+        )
+        "coiffure" -> listOf(
+            if (fr) "Style / prestation / fauteuil" else "Style / service / chair",
+            if (fr) "Technique, longueur et consignes" else "Technique, length and instructions",
+            if (fr) "Produits et accessoires" else "Products and accessories",
+            if (fr) "Date de prestation" else "Service date"
+        )
+        "parfumerie" -> listOf(
+            if (fr) "Produit / format / coffret" else "Product / size / gift set",
+            if (fr) "Référence fournisseur, lot ou conditionnement" else "Supplier reference, batch or packaging",
+            if (fr) "Approvisionnement ou présentation" else "Supply or display details",
+            if (fr) "Date attendue" else "Expected date"
+        )
+        "reparation" -> listOf(
+            if (fr) "Appareil / marque / modèle / série" else "Device / make / model / serial",
+            if (fr) "Panne constatée et diagnostic" else "Reported fault and diagnosis",
+            if (fr) "Pièces et composants nécessaires" else "Required parts and components",
+            if (fr) "Date de restitution" else "Return date"
+        )
+        "menuiserie" -> listOf(
+            if (fr) "Meuble / ouvrage / chantier" else "Furniture / workpiece / project",
+            if (fr) "Dimensions, plan et finition" else "Dimensions, plan and finish",
+            if (fr) "Bois, panneaux et quincaillerie" else "Timber, panels and hardware",
+            if (fr) "Date de pose ou livraison" else "Installation or delivery date"
+        )
+        "garage" -> listOf(
+            if (fr) "Véhicule / marque / modèle / immatriculation" else "Vehicle / make / model / registration",
+            if (fr) "Intervention, panne ou travaux" else "Repair, fault or work requested",
+            if (fr) "Pièces et consommables" else "Parts and consumables",
+            if (fr) "Date de restitution" else "Return date"
+        )
+        "nettoyage" -> listOf(
+            if (fr) "Site du contrat / zone à nettoyer" else "Contract site / cleaning zone",
+            if (fr) "Tâches, fréquence et niveau de service" else "Tasks, frequency and service level",
+            if (fr) "Produits, matériel et équipe" else "Products, equipment and team",
+            if (fr) "Date ou prochaine intervention" else "Date or next intervention"
+        )
+        "domicile" -> listOf(
+            if (fr) "Adresse d'intervention / quartier" else "Service address / neighborhood",
+            if (fr) "Prestation, accès et consignes" else "Service, access and instructions",
+            if (fr) "Matériel et technicien demandé" else "Equipment and requested technician",
+            if (fr) "Date de visite" else "Visit date"
+        )
+        "impression" -> listOf(
+            if (fr) "Format / support / quantité" else "Format / media / quantity",
+            if (fr) "Couleurs, finition et épreuve" else "Colors, finishing and proof",
+            if (fr) "Papier, encre et consommables" else "Paper, ink and consumables",
+            if (fr) "Date de retrait" else "Pickup date"
+        )
+        "photo_evenementiel" -> listOf(
+            if (fr) "Événement / lieu / organisateur" else "Event / venue / organizer",
+            if (fr) "Forfait, livrables et durée" else "Package, deliverables and duration",
+            if (fr) "Matériel et équipe" else "Equipment and crew",
+            if (fr) "Date de l'événement" else "Event date"
+        )
+        "pressing" -> listOf(
+            if (fr) "Lot textile / type de vêtement" else "Laundry batch / garment type",
+            if (fr) "Détail des pièces, traitement et précautions" else "Items, treatment and care instructions",
+            if (fr) "Lessive, détachant et consommables" else "Detergent, stain remover and consumables",
+            if (fr) "Date promise de retrait" else "Promised pickup date"
+        )
+        else -> listOf(
+            if (fr) "Prestation / commande / référence" else "Service / order / reference",
+            if (fr) "Description et spécifications" else "Description and specifications",
+            if (fr) "Matériel ou consommables nécessaires" else "Required equipment or consumables",
+            if (fr) "Date d'échéance" else "Due date"
+        )
+    }
+
     var customer by rememberSaveable { mutableStateOf("") }
     var title by rememberSaveable { mutableStateOf("") }
+    var specificPrimary by rememberSaveable { mutableStateOf("") }
+    var specifications by rememberSaveable { mutableStateOf("") }
     var materials by rememberSaveable { mutableStateOf("") }
+    var assignedStaff by rememberSaveable { mutableStateOf("") }
     var estimate by rememberSaveable { mutableStateOf("") }
+    var deposit by rememberSaveable { mutableStateOf("0") }
     var dueDays by rememberSaveable { mutableStateOf("3") }
+    var transitionReason by rememberSaveable { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    val business = NaxaActivityCatalog.find(activityProfile)
-    val businessName = business?.titleFr ?: "Atelier / services"
+    var busy by remember { mutableStateOf(false) }
+
+    fun transitions(status: String): List<Pair<String, String>> = when (status) {
+        "received", "open" -> listOf("diagnostic" to (if (fr) "Diagnostiquer" else "Diagnose"), "quote_pending" to (if (fr) "Envoyer le devis" else "Send quote"), "in_progress" to (if (fr) "Démarrer" else "Start"), "cancelled" to (if (fr) "Annuler" else "Cancel"))
+        "diagnostic" -> listOf("quote_pending" to (if (fr) "Proposer un devis" else "Send quote"), "awaiting_approval" to (if (fr) "Attendre accord client" else "Await approval"), "in_progress" to (if (fr) "Démarrer" else "Start"), "cancelled" to (if (fr) "Annuler" else "Cancel"))
+        "quote_pending" -> listOf("waiting_customer" to (if (fr) "Attendre le client" else "Await customer"), "approved" to (if (fr) "Devis accepté" else "Quote approved"), "cancelled" to (if (fr) "Annuler" else "Cancel"))
+        "waiting_customer", "awaiting_approval" -> listOf("approved" to (if (fr) "Accord reçu" else "Approval received"), "cancelled" to (if (fr) "Annuler" else "Cancel"))
+        "approved" -> listOf("waiting_parts" to (if (fr) "Attendre les pièces" else "Await parts"), "in_progress" to (if (fr) "Démarrer" else "Start"))
+        "waiting_parts" -> listOf("in_progress" to (if (fr) "Pièces reçues — démarrer" else "Parts received — start"))
+        "in_progress" -> listOf("quality_check" to (if (fr) "Contrôle qualité" else "Quality check"), "ready" to (if (fr) "Prêt" else "Ready"))
+        "quality_check" -> listOf("in_progress" to (if (fr) "Reprendre" else "Resume"), "ready" to (if (fr) "Valider prêt" else "Approve ready"))
+        "ready" -> listOf("delivered" to (if (fr) "Remis au client" else "Delivered"))
+        "delivered" -> listOf("closed" to (if (fr) "Clôturer" else "Close"))
+        else -> emptyList()
+    }
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            ModulePageTitle("Ordres de travail", "Devis, dossiers clients, matières ou pièces, délai et suivi des étapes pour $businessName.")
+            ModulePageTitle(
+                if (fr) "Ordres de travail — \${NaxaActivityCatalog.find(profile)?.titleFr ?: "Services"}" else "Work orders — \${NaxaActivityCatalog.find(profile)?.titleEn ?: "Services"}",
+                if (fr) "Dossiers métier, devis, affectations, étapes de production et remise client. Chaque dossier reste rattaché à son site d'origine." else "Activity-specific jobs, quotes, assignments, production stages and handover. Each job remains bound to its source site."
+            )
             AuthorizedSitePicker(
                 sites, siteId,
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
             ) { siteId = it }
-            LocalOnlyNotice("Dossier préparé sur cet appareil. Le serveur et la synchronisation métier restent à valider.")
+            LocalOnlyNotice(if (fr) "Dossiers locaux en attente de synchronisation. Les encaissements et décisions fiscales ne sont jamais validés par cette fiche." else "Local records pending synchronization. Cash receipts and tax decisions are never approved by this form.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Nouveau dossier de travail", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text("Client") }, singleLine = true)
-                    OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Prestation / réparation / fabrication") }, singleLine = true)
-                    OutlinedTextField(materials, { materials = it }, Modifier.fillMaxWidth(), label = { Text("Matières, pièces ou éléments nécessaires") }, minLines = 2)
-                    OutlinedTextField(estimate, { estimate = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Devis estimatif (FCFA)") }, singleLine = true)
-                    OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("Délai estimé (jours)") }, singleLine = true)
-                    Button(onClick = {
-                        val amount = estimate.toLongOrNull() ?: 0L
-                        if (customer.isBlank() || title.isBlank() || amount <= 0) {
-                            error = "Le client, la description et un devis positif sont requis."
-                        } else scope.launch {
-                            runCatching {
-                                repository.createManagementRecord(
-                                    session.account.organizationId, siteId, "work_order",
-                                    "WO-" + System.currentTimeMillis(), title, customer,
-                                    amount, 0,
-                                    System.currentTimeMillis() + (dueDays.toLongOrNull() ?: 0L) * 86_400_000L,
-                                    "open",
-                                    "{\"activity\":\"" + (activityProfile ?: "autre") + "\",\"materials\":\"" + materials.replace("\"", "'").take(500) + "\",\"stage\":\"received\"}",
-                                    session.account.memberId
-                                )
-                            }.onSuccess {
-                                customer = ""; title = ""; materials = ""; estimate = ""; error = null
-                                message = "Ordre de travail créé localement."
-                            }.onFailure { error = it.message ?: "Création impossible." }
-                        }
-                    }, enabled = siteId.isNotBlank() && customer.isNotBlank() && title.isNotBlank() && (estimate.toLongOrNull() ?: 0L) > 0, modifier = Modifier.fillMaxWidth()) {
-                        Text("Créer le dossier")
-                    }
+                    Text(if (fr) "Nouveau dossier" else "New work order", fontWeight = FontWeight.Bold)
+                    OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Client" else "Customer") }, singleLine = true)
+                    OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Titre du dossier" else "Work order title") }, singleLine = true)
+                    OutlinedTextField(specificPrimary, { specificPrimary = it }, Modifier.fillMaxWidth(), label = { Text(labels[0]) }, singleLine = true)
+                    OutlinedTextField(specifications, { specifications = it }, Modifier.fillMaxWidth(), label = { Text(labels[1]) }, minLines = 2)
+                    OutlinedTextField(materials, { materials = it }, Modifier.fillMaxWidth(), label = { Text(labels[2]) }, minLines = 2)
+                    OutlinedTextField(assignedStaff, { assignedStaff = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Collaborateur / prestataire affecté" else "Assigned staff / provider") }, singleLine = true)
+                    OutlinedTextField(estimate, { estimate = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Devis estimatif (FCFA)" else "Estimated quote (XAF)") }, singleLine = true)
+                    OutlinedTextField(deposit, { deposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Acompte demandé (FCFA)" else "Deposit requested (XAF)") }, singleLine = true)
+                    OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Délai estimé en jours" else "Estimated days") }, singleLine = true)
+                    Button(
+                        onClick = {
+                            val amount = estimate.toLongOrNull() ?: 0L
+                            val paid = deposit.toLongOrNull() ?: 0L
+                            if (customer.isBlank() || title.isBlank() || amount <= 0 || paid > amount) {
+                                error = if (fr) "Client, titre et devis positif requis. L'acompte ne peut pas dépasser le devis." else "Customer, title and positive quote are required. Deposit cannot exceed quote."
+                            } else scope.launch {
+                                busy = true
+                                runCatching {
+                                    val metadata = JSONObject()
+                                        .put("activity", profile)
+                                        .put("primaryDetail", specificPrimary.trim())
+                                        .put("specifications", specifications.trim())
+                                        .put("materials", materials.trim())
+                                        .put("assignedStaffLabel", assignedStaff.trim())
+                                        .put("depositXaf", paid)
+                                        .put("workflowVersion", 1)
+                                        .toString()
+                                    repository.createManagementRecord(
+                                        session.account.organizationId, siteId, recordType,
+                                        (if (recordType == "repair_order") "REP-" else if (recordType == "service_order") "SRV-" else "WO-") + System.currentTimeMillis(),
+                                        title.trim(), customer.trim(), amount, paid,
+                                        System.currentTimeMillis() + (dueDays.toLongOrNull() ?: 3L).coerceIn(1L, 365L) * 86_400_000L,
+                                        "received", metadata, session.account.memberId
+                                    )
+                                }.onSuccess {
+                                    customer = ""; title = ""; specificPrimary = ""; specifications = ""
+                                    materials = ""; assignedStaff = ""; estimate = ""; deposit = "0"
+                                    error = null
+                                    message = if (fr) "Dossier enregistré. Statut initial : reçu." else "Work order saved. Initial status: received."
+                                }.onFailure { error = it.message ?: if (fr) "Création impossible." else "Unable to create work order." }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy && siteId.isNotBlank() && customer.isNotBlank() && title.isNotBlank() && (estimate.toLongOrNull() ?: 0L) > 0,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (busy) if (fr) "Enregistrement…" else "Saving…" else if (fr) "Créer le dossier" else "Create work order") }
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
-                    if (message != null) Text(message!!, color = MaterialTheme.colorScheme.secondary)
+                    if (message != null) Text(message!!, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
-        item { Text("Dossiers du point de vente", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(if (fr) "Dossiers du point de vente" else "Site work orders", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (records.isEmpty()) item { Text(if (fr) "Aucun dossier enregistré." else "No work orders yet.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(records) { item ->
+            val events by remember(item.id, siteId) {
+                repository.dao.observeWorkflowEvents(session.account.organizationId, siteId, item.recordType, item.id)
+            }.collectAsState(initial = emptyList())
+            var reason by rememberSaveable(item.id) { mutableStateOf("") }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
-                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(item.reference + " · " + item.title, fontWeight = FontWeight.Bold)
                     Text(item.counterparty)
-                    Text("Devis : " + item.amountXaf + " FCFA · " + item.status)
-                    Text("Délai : " + (item.dueAtMillis?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) } ?: "Non défini"),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(labels[0] + " : " + (runCatching { JSONObject(item.metadataJson).optString("primaryDetail") }.getOrDefault("")))
+                    Text((if (fr) "Devis" else "Quote") + " : " + xaf(item.amountXaf) + " · " + (if (fr) "Acompte" else "Deposit") + " : " + xaf(item.paidXaf))
+                    Text((if (fr) "Statut" else "Status") + " : " + item.status, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    Text((if (fr) "Échéance" else "Due") + " : " + (item.dueAtMillis?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) } ?: "—"))
+                    if (item.status !in setOf("closed", "cancelled")) {
+                        OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Motif obligatoire pour changer l'étape" else "Reason required for status change") }, minLines = 1)
+                        transitions(item.status).forEach { (status, label) ->
+                            OutlinedButton(
+                                onClick = {
+                                    scope.launch {
+                                        runCatching {
+                                            repository.transitionManagementRecord(session.account.organizationId, siteId, item.id, status, reason, session.account.memberId)
+                                        }.onSuccess { reason = ""; message = if (fr) "Étape mise à jour et journalisée." else "Workflow stage updated and audited." }
+                                            .onFailure { error = it.message ?: if (fr) "Transition impossible." else "Transition failed." }
+                                    }
+                                },
+                                enabled = reason.trim().length >= 3,
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(label) }
+                        }
+                    }
+                    if (events.isNotEmpty()) {
+                        Text(if (fr) "Historique des étapes" else "Workflow history", fontWeight = FontWeight.SemiBold)
+                        events.take(5).forEach { event ->
+                            Text(
+                                event.fromStatus + " → " + event.toStatus + " · " + event.reason,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
                 }
             }
         }
-        if (records.isEmpty()) item { Text("Aucun dossier enregistré sur ce point de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
-
 
 @Composable
 fun TeamPerformanceContent(
