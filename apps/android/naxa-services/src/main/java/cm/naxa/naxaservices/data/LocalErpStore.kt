@@ -878,6 +878,9 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_purchase_lines WHERE purchaseId = :purchaseId AND orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis ASC")
     fun observePurchaseLines(orgId: String, siteId: String, purchaseId: String): Flow<List<LocalPurchaseLine>>
 
+    @Query("SELECT * FROM local_purchase_lines WHERE purchaseId = :purchaseId AND orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis ASC")
+    suspend fun getPurchaseLines(orgId: String, siteId: String, purchaseId: String): List<LocalPurchaseLine>
+
     @Query("SELECT * FROM local_purchase_lines WHERE id = :lineId AND purchaseId = :purchaseId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
     suspend fun findPurchaseLine(orgId: String, siteId: String, purchaseId: String, lineId: String): LocalPurchaseLine?
 
@@ -1302,12 +1305,17 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         }
         val updatedLine = line.copy(quantityReceived = line.quantityReceived + quantityToReceive)
         dao.updatePurchaseLine(updatedLine)
-        val nextLines = listOf(updatedLine) // Status is refreshed from the persisted purchase detail below.
-        val receivedComplete = nextLines.all { it.quantityReceived + 0.000001 >= it.quantityOrdered } &&
-            (purchase.receivedBaseXaf + base >= purchase.subtotalXaf - 1L)
+        val allLines = dao.getPurchaseLines(orgId, siteId, purchaseId)
+        val receivedComplete = allLines.all { it.quantityReceived + 0.000001 >= it.quantityOrdered } &&
+            nextReceivedBase >= purchase.subtotalXaf - 1L
         val nextReceivedTotal = purchase.receivedTotalXaf + expenseBase + recoverableDelta
+        val nextStatus = when {
+            receivedComplete && purchase.paidTotalXaf >= nextReceivedTotal -> "closed"
+            receivedComplete -> "received"
+            else -> "partially_received"
+        }
         val updatedPurchase = purchase.copy(
-            status = if (receivedComplete) "received" else "partially_received",
+            status = nextStatus,
             receivedBaseXaf = nextReceivedBase,
             recognizedNonRecoverableXaf = newNonRecoverable,
             recognizedRecoverableTaxXaf = newRecoverable,
@@ -1376,6 +1384,26 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         dao.updatePurchaseDocument(updated)
         enqueue(orgId, "supplier_payment", payment.id, "supplier.payment.recorded", siteId)
         payment
+    }
+
+    private suspend fun postSaleAccounting(sale: LocalSale) {
+        val settlementAccount = when (sale.paymentMethod) {
+            "cash" -> "CASH_REGISTER"
+            "mobile_money" -> "MOBILE_MONEY_CLEARING"
+            else -> "OTHER_TREASURY"
+        }
+        postAccountingEntry(
+            sale.orgId, sale.siteId, "sale", sale.id, "sale_revenue",
+            settlementAccount, "SALES_REVENUE", sale.totalXaf,
+            "Vente confirmée " + sale.saleNumber, sale.actorMemberId, sale.createdAtMillis
+        )
+        if (sale.costOfGoodsXaf > 0L) {
+            postAccountingEntry(
+                sale.orgId, sale.siteId, "sale", sale.id, "sale_cost_of_goods",
+                "COST_OF_GOODS_SOLD", "INVENTORY_ASSET", sale.costOfGoodsXaf,
+                "Sortie du stock vendu " + sale.saleNumber, sale.actorMemberId, sale.createdAtMillis
+            )
+        }
     }
 
     private suspend fun postAccountingEntry(
@@ -1729,6 +1757,13 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         val linkedStockItem = inventoryItemId?.let {
             dao.findInventoryItem(it, orgId, siteId) ?: throw IllegalArgumentException("Article introuvable sur ce point de vente.")
         }
+        val unitCostSnapshot = if (linkedStockItem != null) {
+            dao.findInventoryValuation(orgId, siteId, linkedStockItem.id)?.unitCostXaf ?: 0L
+        } else 0L
+        val costSnapshot = if (stockQuantity != null && unitCostSnapshot > 0L) {
+            (stockQuantity * unitCostSnapshot.toDouble()).takeIf { it.isFinite() && it <= Long.MAX_VALUE.toDouble() }?.let { kotlin.math.round(it).toLong() }
+                ?: throw IllegalArgumentException("Coût de revient de la vente invalide.")
+        } else 0L
         if (linkedStockItem != null) {
             require(stockQuantity != null && stockQuantity.isFinite() && stockQuantity > 0.0) { "Quantité d'article invalide." }
             val reservations = dao.pendingInventoryReservations(orgId, siteId, linkedStockItem.id)
@@ -1750,7 +1785,9 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             actorMemberId = actorMemberId,
             createdAtMillis = now,
             inventoryItemId = linkedStockItem?.id,
-            stockQuantity = stockQuantity
+            stockQuantity = stockQuantity,
+            unitCostAtSaleXaf = unitCostSnapshot,
+            costOfGoodsXaf = costSnapshot
         )
         dao.insertSale(sale)
         if (linkedStockItem != null && paymentMethod == "cash") {
@@ -1770,6 +1807,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             dao.insertInventoryMovement(movement)
             enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.sale_out", siteId)
         }
+        if (sale.status == "confirmed") postSaleAccounting(sale)
         val event = enqueue(cashSession.orgId, "sale", sale.id, "sale.created", siteId)
         sale to event
     }
@@ -1859,6 +1897,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         }
         val confirmed = sale.copy(status = "confirmed")
         dao.updateSale(confirmed)
+        postSaleAccounting(confirmed)
         dao.insertWorkflowEvent(
             LocalWorkflowEvent(
                 id = UUID.randomUUID().toString(),
@@ -1901,6 +1940,11 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             createdAtMillis = System.currentTimeMillis()
         )
         dao.insertExpense(expense)
+        postAccountingEntry(
+            orgId, siteId, "expense", expense.id, "expense.recorded",
+            "OPERATING_EXPENSE:" + category.trim().uppercase(java.util.Locale.ROOT),
+            "CASH_REGISTER", amountXaf, description.trim(), actorMemberId, expense.createdAtMillis
+        )
         enqueue(session.orgId, "expense", expense.id, "expense.created", siteId)
         expense
     }
