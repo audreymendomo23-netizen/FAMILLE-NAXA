@@ -317,6 +317,7 @@ fun CustomersContent(
         repository.dao.observeCustomerContactEvents(session.account.organizationId, siteId)
     }.collectAsState(initial = emptyList())
 
+    var editingCustomerId by rememberSaveable { mutableStateOf("") }
     var name by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     var notes by rememberSaveable { mutableStateOf("") }
@@ -406,13 +407,17 @@ fun CustomersContent(
             ) {
                 siteId = it
                 selectedCustomerId = ""
+                editingCustomerId = ""
+                name = ""; phone = ""; notes = ""; addressLine = ""; neighborhood = ""; landmark = ""
+                latitude = ""; longitude = ""; locationAccuracy = ""
+                contactConsent = false; locationConsent = false
             }
             LocalOnlyNotice("CRM local pour ce point de vente. Les relances ne sont pas encore envoyées automatiquement : elles restent enregistrées dans l'agenda local jusqu'au raccordement du planificateur serveur et des notifications.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("Créer une fiche client", fontWeight = FontWeight.Bold)
+                    Text(if (editingCustomerId.isBlank()) "Créer une fiche client" else "Modifier la fiche client", fontWeight = FontWeight.Bold)
                     OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Nom complet") }, singleLine = true)
                     OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text("Téléphone (facultatif)") }, singleLine = true)
                     OutlinedTextField(notes, { notes = it }, Modifier.fillMaxWidth(), label = { Text("Notes privées (facultatif)") }, minLines = 2)
@@ -465,26 +470,49 @@ fun CustomersContent(
                                 busy = true
                                 error = null
                                 runCatching {
-                                    repository.createLocalCustomer(
-                                        session.account.organizationId,
-                                        siteId,
-                                        name,
-                                        phone,
-                                        notes,
-                                        contactConsent,
-                                        addressLine,
-                                        neighborhood,
-                                        landmark,
-                                        latitude.toDoubleOrNull(),
-                                        longitude.toDoubleOrNull(),
-                                        locationAccuracy.toFloatOrNull(),
-                                        locationConsent
-                                    )
+                                    val lat = latitude.toDoubleOrNull()
+                                    val lon = longitude.toDoubleOrNull()
+                                    val accuracy = locationAccuracy.toFloatOrNull()
+                                    if (editingCustomerId.isBlank()) {
+                                        repository.createLocalCustomer(
+                                            session.account.organizationId,
+                                            siteId,
+                                            name,
+                                            phone,
+                                            notes,
+                                            contactConsent,
+                                            addressLine,
+                                            neighborhood,
+                                            landmark,
+                                            lat,
+                                            lon,
+                                            accuracy,
+                                            locationConsent
+                                        )
+                                    } else {
+                                        repository.updateLocalCustomer(
+                                            session.account.organizationId,
+                                            siteId,
+                                            editingCustomerId,
+                                            name,
+                                            phone,
+                                            notes,
+                                            contactConsent,
+                                            addressLine,
+                                            neighborhood,
+                                            landmark,
+                                            lat,
+                                            lon,
+                                            accuracy,
+                                            locationConsent
+                                        )
+                                    }
                                 }.onSuccess {
                                     name = ""; phone = ""; notes = ""; contactConsent = false
                                     addressLine = ""; neighborhood = ""; landmark = ""
                                     locationConsent = false; latitude = ""; longitude = ""; locationAccuracy = ""
                                     locationMessage = null
+                                    editingCustomerId = ""
                                     notice = "Fiche client enregistrée localement."
                                 }.onFailure { error = it.message ?: "Création impossible." }
                                 busy = false
@@ -494,7 +522,16 @@ fun CustomersContent(
                             ((latitude.isBlank() && longitude.isBlank()) ||
                                 (locationConsent && latitude.toDoubleOrNull() != null && longitude.toDoubleOrNull() != null)),
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (busy) "Enregistrement…" else "Enregistrer le client") }
+                    ) { Text(if (busy) "Enregistrement…" else if (editingCustomerId.isBlank()) "Enregistrer le client" else "Enregistrer les modifications") }
+                    if (editingCustomerId.isNotBlank()) {
+                        OutlinedButton(onClick = {
+                            editingCustomerId = ""
+                            name = ""; phone = ""; notes = ""; contactConsent = false
+                            addressLine = ""; neighborhood = ""; landmark = ""
+                            locationConsent = false; latitude = ""; longitude = ""; locationAccuracy = ""
+                            locationMessage = null
+                        }, modifier = Modifier.fillMaxWidth()) { Text("Annuler la modification") }
+                    }
                     if (!notice.isNullOrBlank()) Text(notice!!, color = MaterialTheme.colorScheme.primary)
                 }
             }
@@ -565,7 +602,33 @@ fun CustomersContent(
                     if (customer.latitude != null && customer.longitude != null) Text("GPS enregistré avec consentement")
                     if (customer.notesPrivate.isNotBlank()) Text(customer.notesPrivate, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(if (customer.contactConsent) "Consentement de contact enregistré" else "Aucun consentement de contact", style = MaterialTheme.typography.labelSmall)
-                    Text(if (selectedCustomerId == customer.id) "Sélectionné pour le suivi" else "Toucher pour sélectionner", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    Text(if (customer.locationConsentAtMillis != null) "GPS autorisé pour le service demandé" else "Aucune coordonnée GPS conservée", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { selectedCustomerId = customer.id },
+                            modifier = Modifier.weight(1f)
+                        ) { Text(if (selectedCustomerId == customer.id) "✓ Suivi sélectionné" else "Sélectionner pour suivi") }
+                        OutlinedButton(
+                            onClick = {
+                                editingCustomerId = customer.id
+                                selectedCustomerId = customer.id
+                                name = customer.displayName
+                                phone = customer.phoneContact
+                                notes = customer.notesPrivate
+                                contactConsent = customer.contactConsent
+                                addressLine = customer.addressLine
+                                neighborhood = customer.neighborhood
+                                landmark = customer.landmark
+                                latitude = customer.latitude?.toString().orEmpty()
+                                longitude = customer.longitude?.toString().orEmpty()
+                                locationAccuracy = customer.locationAccuracyMeters?.toString().orEmpty()
+                                locationConsent = customer.locationConsentAtMillis != null
+                                locationMessage = null
+                                notice = "Modification de la fiche " + customer.displayName
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { Text(if (editingCustomerId == customer.id) "✓ Modifier" else "Modifier") }
+                    }
                 }
             }
         }
