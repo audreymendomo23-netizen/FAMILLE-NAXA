@@ -959,3 +959,22 @@ Cette section actualise le point de reprise antérieur du §6.17.16. En cas de d
 **Périmètre non livré par ce lot :** administration centrale des dix applications depuis NAXA, mutualisation réelle des comptes Customer Service Officer, paiement/abonnement réel et entitlements, passerelle IA vers NAXA, intégration fonctionnelle NAXA SECURITY, backend ERP/RLS, comptabilité SYSCOHADA, fiscalité, notifications serveur, sauvegarde Drive, appels/partage écran, Web/PWA, tests physiques et Release signée. Ces sujets restent au backlog du §6.17.15–6.17.16.
 
 Le rapport détaillé, ses commits et les réserves de recette sont maintenus dans `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`. Aucune migration Supabase réelle, aucun déploiement Edge, aucune publication APK Release et aucun changement du projet NAXA autonome n'ont été réalisés par ce lot.
+
+### 6.17.18 Mise à jour de finalisation fonctionnelle — NAXA SERVICES (20 novembre 2026)
+
+Le rapport de construction comporte désormais la section 36. Le code Android natif a été étendu sur les axes suivants :
+- Catalogue tarifaire exécutable et manifeste de maturité pour les dix apps, effet au 1er mai 2027 à minuit heure de Douala ; application au début des nouvelles périodes et renouvellements, sans repricer les périodes déjà payées.
+- Trial par unité CAMPUS237 (école 30 jours, Parent Essentiel gratuit, autres packs parent payants 72h), +20 % par extension de capacité NAXA SECURITY.
+- Vente caisse reliée optionnellement au stock, sortie espèces atomique, réservation Mobile Money pending, annulation auditée, méthode de confirmation réservée à un webhook serveur vérifié.
+- Transfert inter-sites Promoteur, demande/approbation sans effet stock et réception transactionnelle avec deux mouvements liés.
+- Pointage par séquence, poste facultatif, mouvements variables RH soumis à approbation avec motif.
+- Modification de fiche client et effacement des coordonnées GPS lors du retrait du consentement.
+- Pressing avec date de retrait promise et historique de transitions avec motif.
+
+- Dernier workflow constaté : `44780431451`, commit testé `fb4a464f4595d90b2d7523b50eb95b927a407273`, statut `completed` / conclusion `failure`.
+- Jobs : NAXA FAMILY launch and maturity tariff tests=completed/success; Assemble NAXA SERVICES Android debug APK=completed/failure; Auth scope and business-mode contract tests=completed/success.
+- Artefacts : aucun artefact publié pour ce workflow.
+
+La CI du dernier état n'est pas entièrement verte/terminée. Le succès d'un SHA précédent ne doit pas être réutilisé comme preuve du HEAD courant.
+
+Ces fonctionnalités sont encore fondées sur Room/outbox locale lorsque précisé dans le rapport. Aucune mise en production, aucune migration Supabase, aucun déploiement Edge et aucun changement du projet NAXA autonome n'est déclaré. La passerelle paiement/webhook, le backend/RLS/synchroniseur, FCM/SMS/WhatsApp, la Release signée, les tests sur appareils physiques, l'admin 10 apps/CSO, l'IA mutualisée et l'intégration NAXA SECURITY restent ouverts.
