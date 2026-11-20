@@ -1,2 +1,5 @@
 [functions.naxa-services-referrals]
 verify_jwt = false
+
+[functions.naxa-services-accounting]
+verify_jwt = false
