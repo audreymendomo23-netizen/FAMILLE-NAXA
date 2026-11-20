@@ -38,12 +38,8 @@ object NaxaPerformanceEngine {
         val confirmed = sales.filter { it.status == "confirmed" && it.totalXaf > 0L }
         val byDay = confirmed.groupBy { dateOf(it.createdAtMillis, zone) }.mapValues { it.value.sumOf(LocalSale::totalXaf) }
         val revenue = confirmed.sumOf { it.totalXaf }
-        val uncosted = confirmed.count {
-            it.inventoryItemId != null && it.stockQuantity != null && !it.costSnapshotComplete
-        }
-        val costedSales = confirmed.filter {
-            it.inventoryItemId == null || it.stockQuantity == null || it.costSnapshotComplete
-        }
+        val uncosted = confirmed.count { !it.costSnapshotComplete }
+        val costedSales = confirmed.filter { it.costSnapshotComplete }
         val costedRevenue = costedSales.sumOf { it.totalXaf }
         val cogs = costedSales.sumOf { it.costOfGoodsXaf.coerceAtLeast(0L) }
         val gross = costedRevenue - cogs
