@@ -151,6 +151,7 @@ export function resolveNaxaFamilySubscriptionPrice({
   billingPeriod = "monthly",
   activeMemberCount,
   presidentFree = false,
+  capacityExtensionCount = 0,
   activeRentalUnitCount,
   activeRoomCount,
   activeOutletCount,
@@ -170,8 +171,19 @@ export function resolveNaxaFamilySubscriptionPrice({
   let detail = {};
 
   if (["KIOSKO", "BOOTIK", "ZIPPLE", "NAXA_SERVICES", "NAXA_SECURITY"].includes(id)) {
-    monthlyAmount = schedule[effectivePlan];
-    if (monthlyAmount === undefined) throw new RangeError("unknown_plan_for_app");
+    const baseMonthlyAmount = schedule[effectivePlan];
+    if (baseMonthlyAmount === undefined) throw new RangeError("unknown_plan_for_app");
+    if (id === "NAXA_SECURITY") {
+      if (!Number.isSafeInteger(capacityExtensionCount) || capacityExtensionCount < 0) {
+        throw new RangeError("invalid_capacity_extension_count");
+      }
+      const perExtensionAmount = baseMonthlyAmount * 0.20;
+      const extensionAmount = perExtensionAmount * capacityExtensionCount;
+      monthlyAmount = baseMonthlyAmount + extensionAmount;
+      detail = { baseMonthlyAmount, extensionCount: capacityExtensionCount, perExtensionAmount, extensionAmount };
+    } else {
+      monthlyAmount = baseMonthlyAmount;
+    }
   } else if (id === "COTIZ") {
     const count = activeMemberCount;
     if (!Number.isSafeInteger(count) || count < 0) throw new RangeError("invalid_active_member_count");
@@ -282,6 +294,7 @@ export function resolveRenewalPrice(subscription, renewalLocalDate) {
     billingPeriod: subscription.billingPeriod ?? "monthly",
     activeMemberCount: subscription.activeMemberCount,
     presidentFree: subscription.presidentFree,
+    capacityExtensionCount: subscription.capacityExtensionCount ?? 0,
     activeRentalUnitCount: subscription.activeRentalUnitCount,
     activeRoomCount: subscription.activeRoomCount,
     activeOutletCount: subscription.activeOutletCount,
@@ -313,4 +326,21 @@ export function localCalendarDateInZone(instant, timeZone = MATURITY_TIME_ZONE) 
 export function resolveRenewalPriceAtInstant(subscription, renewalInstant = new Date()) {
   const localDate = localCalendarDateInZone(renewalInstant, MATURITY_TIME_ZONE);
   return resolveRenewalPrice(subscription, localDate);
+}
+
+/**
+ * Trial durations in app-specific billing units. The lifecycle service must
+ * enforce one trial per billable organization/application.
+ */
+export function trialDurationForNaxaFamily({ appId, planCode }) {
+  const id = String(appId ?? "").toUpperCase();
+  if (!NAXA_FAMILY_CATALOG[id]) throw new RangeError("unknown_family_app");
+  const plan = String(planCode ?? "").toUpperCase();
+  if (id === "CAMPUS237" && plan === "PARENT_ESSENTIAL") {
+    return { trialApplicable: false, trialHours: 0, trialDays: 0, reason: "free_essential_parent_access" };
+  }
+  if (id === "CAMPUS237" && plan === "SCHOOL") {
+    return { trialApplicable: true, trialHours: 720, trialDays: 30, reason: "campus_institutional_trial" };
+  }
+  return { trialApplicable: true, trialHours: 72, trialDays: 3, reason: "standard_family_trial" };
 }
