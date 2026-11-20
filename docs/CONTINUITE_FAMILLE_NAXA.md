@@ -209,3 +209,17 @@ Le statut reste EN VALIDATION CI ; ne déclarer VERT qu'après preuve intégrale
 - JOBLY Partner, parrainage, KYC partenaire, attribution, commissions de referral et payout demeurent exclus.
 - Rapport détaillé : `docs/audits/AUDIT_GLOBAL_SOURCES_NAXA_FAMILLE_ET_PRIORISATION_2026-11-20.md`.
 - Aucune application métier, migration Supabase, configuration Production, publication APK ou déploiement n'a été modifié.
+
+
+## Mise à jour — démarrage NAXA SERVICES et authentification sans OTP/e-mail (20 novembre 2026)
+
+- Le premier produit à construire reste **NAXA SERVICES**. Le premier sous-chantier J0 est le parcours de création, activation, connexion, appareil, session, révocation et récupération.
+- Objectif demandé : aucun OTP, SMS d'authentification, e-mail, boîte mail, magic link ou inscription libre.
+- Option recommandée à tester : identifiant d'accès généré propre à NAXA Services + mot de passe ; alias Auth technique opaque et créé/confirmé par le backend Admin ; Supabase Auth conserve la vérification de mot de passe et les sessions/JWT.
+- Le téléphone reste une coordonnée de contact, pas la clé Auth primaire, afin de maintenir des identités d'accès séparées par application et d'éviter la contrainte de recyclage des numéros.
+- Récupération sans e-mail/OTP : procédure interne contrôlée par administration, preuve d'identité hors bande, reset côté serveur, révocation des sessions à risque et audit. La récupération autonome sans canal de confiance n'est pas promise.
+- À prouver localement : création Admin/confirmation sans message, compatibilité de l'alias avec GoTrue, login par mot de passe, prévention d'énumération/force brute, séparation par application et révocation des sessions/appareils.
+- Contradiction repérée : Prompt 0.2 indique une identité Auth partagée ; l'arbitrage ultérieur demande des identités séparées. Harmonisation documentaire à réaliser après preuve locale ; pas de SSO transversal par défaut.
+- Le cahier NAXA Services et Prompt 0.4 mentionnent encore récupération e-mail/WhatsApp et téléphone comme identifiant. Ils ne sont pas réécrits avant le test et la validation du schéma cible.
+- Design détaillé : `docs/architecture-360/DECISION_AUTHENTIFICATION_INTERNE_SANS_OTP_EMAIL.md`.
+- Aucun code applicatif, configuration Auth réelle, migration, session de production, déploiement ou APK n'a été modifié.
