@@ -277,4 +277,7 @@
     <string name="action_night_schedule">Programmer le mode nuit</string>
     <string name="action_personal_information">Informations personnelles</string>
     <string name="action_sign_out">Déconnexion</string>
+    <string name="action_clock_in">Prise de service</string>
+    <string name="action_clock_out">Fin de service</string>
+    <string name="action_advances">Avances et primes</string>
 </resources>

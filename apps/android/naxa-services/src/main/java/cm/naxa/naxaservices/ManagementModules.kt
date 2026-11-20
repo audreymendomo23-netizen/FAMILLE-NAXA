@@ -84,7 +84,7 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
         item {
             Spacer(Modifier.height(12.dp))
             Text("Facturation, crédits et remboursements", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Devis, factures, encaissements, avoirs et sommes que la PME doit rembourser au client. Les écritures restent rattachées au site.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Devis, factures, créances à recevoir du client et remboursements que la PME doit au client : deux soldes distincts. Les écritures restent rattachées au site.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
             LocalOnlyNotice("Documents locaux en attente de synchronisation et validation serveur.")
         }
@@ -92,15 +92,22 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text("Nouvelle pièce commerciale", fontWeight = FontWeight.Bold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("quote", "invoice", "credit_note", "refund_due").forEach { item ->
-                            OutlinedButton(onClick = { type = item }) { Text(if (type == item) "✓ " + labelRecord(item) else labelRecord(item)) }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("quote", "invoice", "credit_note").forEach { item ->
+                                OutlinedButton(onClick = { type = item }) { Text(if (type == item) "✓ " + labelRecord(item) else labelRecord(item)) }
+                            }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            listOf("customer_receivable", "refund_due").forEach { item ->
+                                OutlinedButton(onClick = { type = item }) { Text(if (type == item) "✓ " + labelRecord(item) else labelRecord(item)) }
+                            }
                         }
                     }
                     OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text("Client / tiers") }, singleLine = true)
                     OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Détail de la prestation ou du remboursement") }, singleLine = true)
                     OutlinedTextField(total, { total = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Montant total (FCFA)") }, singleLine = true)
-                    OutlinedTextField(paid, { paid = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Déjà encaissé / déjà remboursé (FCFA)") }, singleLine = true)
+                    OutlinedTextField(paid, { paid = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (type == "customer_receivable") "Déjà encaissé par la PME (FCFA)" else if (type == "refund_due") "Déjà remboursé au client (FCFA)" else "Déjà réglé / encaissé (FCFA)") }, singleLine = true)
                     OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("Échéance dans (jours)") }, singleLine = true)
                     Button(
                         onClick = {
@@ -530,7 +537,8 @@ private fun labelRecord(type: String) = when(type) {
     "service_order" -> "Ordre de service"
     "invoice" -> "Facture"
     "credit_note" -> "Avoir"
-    "refund_due" -> "Remboursement dû au client"
+    "customer_receivable" -> "Créance client (à recevoir par la PME)"
+    "refund_due" -> "Remboursement dû au client (à payer par la PME)"
     "purchase" -> "Achat"
     "subscription_request" -> "Demande d’abonnement"
     "tax_estimate" -> "Estimation fiscale"

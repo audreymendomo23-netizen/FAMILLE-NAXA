@@ -277,4 +277,7 @@
     <string name="action_night_schedule">Schedule night mode</string>
     <string name="action_personal_information">Personal information</string>
     <string name="action_sign_out">Sign out</string>
+    <string name="action_clock_in">Clock in</string>
+    <string name="action_clock_out">Clock out</string>
+    <string name="action_advances">Advances and bonuses</string>
 </resources>
