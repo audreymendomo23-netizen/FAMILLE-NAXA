@@ -614,3 +614,94 @@ Comportement interactif :
 11. Le mode nuit et la lampe sont vérifiés sur les écrans de connexion, onboarding, dashboard, caisse, facturation, stock, profil, assistance et paramètres, en petit écran et sur émulateur/appareil physique.
 
 **Statut de ces exigences : [P] cible à construire.** Aucun changement Android, aucune animation ni aucun test instrumenté n'est prétendu réalisé par le présent addendum.
+
+---
+
+# Addendum 3 — Passe de construction Android et backlog de clôture
+**Mise à jour : 20 novembre 2026**
+
+## 30. Modules Android ajoutés ou raccordés dans cette passe
+
+Les fichiers natifs Kotlin/Jetpack Compose suivants ont été ajoutés ou étendus dans la branche de travail :
+- 'NaxaServicesPreferences.kt' : catalogue de 13 activités, cache organisation, préférences de thème, horaires nocturnes, lampe, langue et URI photo utilisateur.
+- 'ExperienceScreens.kt' : sélecteur d’activité, acceptation distincte des documents légaux, découverte en quatre cartes, guide de première utilisation et carrousel du tableau de bord.
+- 'MiniTorchOverlay.kt' : lampe graphique d’interface avec manche rouge et faisceau radial doux ; aucune permission caméra/flash et aucun accès au flash matériel.
+- 'ManagementModules.kt' : facturation locale (devis, factures, avoirs, créances client, remboursements dus au client), PDF, partage de texte, abonnements en demande locale, achats/fournisseurs, brouillons fiscaux, objectifs, analyse locale, ordres de travail, profil/photo, FAQ et demandes de support.
+- 'LocalErpStore.kt' : migration Room additive 1→2, registres locaux de gestion et valorisation du stock par coût unitaire/prix de vente, enregistrement des événements dans l'outbox.
+- 'MainActivity.kt' : routes d'onboarding, activité par organisation, salutation Bonjour/Bonsoir, navigation adaptée au profil, mode nuit programmé, lampe qui suit les interactions, carrousel et tutoriel de première connexion.
+- 'ErpModules.kt' : sélection du profil catalogue en fonction de l'activité, coûts/valorisation des articles, paramètres de notifications et états locaux.
+- Les ressources FR/EN ont été étendues et dédoublonnées.
+
+### 30.1 Profils métiers
+
+Le sélecteur comprend : Pressing/Blanchisserie, Coiffure/Barber, Couture/Retouche, Beauté/Esthétique/Onglerie, Parfumerie, Réparation/Électronique, Menuiserie/Atelier, Garage/Lavage auto, Nettoyage/Entretien, Services à domicile, Imprimerie/Photocopie, Photographie/Événementiel et Autre activité.
+
+Le profil choisi est porté par l'organisation. L'Edge Function prévue :
+- accepte le choix uniquement du Promoteur disposant du droit de gestion de l'organisation ;
+- n'accepte que les identifiants de la liste ;
+- ne modifie pas un profil déjà renseigné ;
+- journalise le premier choix ;
+- renvoie le profil dans la session Auth.
+
+Le mode 'solo', 'single_site_multi_workstation' ou 'multi_site_network' reste indépendant du métier choisi. Les écrans opérationnels restent attachés au site ; la vue Promoteur peut consolider selon les droits. Le rôle limité au poste demeure fermé tant que tous les accès transactionnels ne sont pas filtrés au niveau poste.
+
+**Condition technique impérative :** la migration 'supabase/drafts/naxa_services_v2_activity_onboarding_management.sql' ajoute le champ et les contraintes nécessaires, mais reste un draft. L'API qui l'utilise ne sera pleinement fonctionnelle qu'après validation et application de cette migration sur un projet Supabase de recette isolé. Aucune migration n'a été appliquée.
+
+### 30.2 Parcours et apparence
+
+- Langue FR/EN proposée sur l'écran de connexion et préférence individualisée.
+- Acceptation séparée des CGU et de la politique, par version, compte et horodatage côté serveur.
+- Quatre cartes de découverte avec rotation de cinq secondes, navigation et passage.
+- Guide première connexion en cinq étapes, skippable et mémorisé côté serveur.
+- Salutation contextuelle selon l'heure et le nom d'affichage.
+- Mode sombre par défaut, thème clair optionnel et mode programmé avec deux heures réglables.
+- Mini-lampe d'interface rouge NAXA avec halo doux, extinction après inactivité et option de désactivation.
+- Carrousel de tableau de bord qui charge les images du profil actif depuis 'assets/naxa-services/activities/<activité>/'.
+
+Le guide actuel est un tutoriel visuel guidé en panneau assombri ; il ne réalise pas encore un cut-out/spotlight individualisé ancré sur cinq boutons réels. Cette amélioration reste à faire si l'on maintient le niveau d'exigence d'animation initial.
+
+### 30.3 Images de chaque activité
+
+Les dossiers sont préparés dans 'assets/naxa-services/activities/' avec un README par profil. Chaque dossier peut recevoir 6 à 10 images autorisées. Le Gradle Android embarque ce répertoire comme source d'assets, et le carrousel recherche automatiquement les fichiers WebP/JPG/JPEG/PNG dans le dossier de l'activité sélectionnée. Tant que les photos ne sont pas ajoutées, il utilise le rendu de repli avec icône et surface.
+
+### 30.4 Finance, stock et équipe
+
+- Facturation locale : devis, factures, avoirs, créances à recevoir du client et remboursements que la PME doit au client sont des types différents.
+- Un document PDF peut être enregistré via le sélecteur Android ; le partage actuel transmet un récapitulatif texte. Le PDF n'est pas encore joint au message WhatsApp.
+- Achats/fournisseurs, ordres de travail, brouillons de fiscalité et objectifs sont ajoutés comme registres locaux.
+- Les stocks existants sont complétés par un coût unitaire et un prix de vente ; la marge brute unitaire est calculable.
+- Les registres d'équipe prévoient prise/fin de service, pauses, commissions, avances et primes ; ils restent locaux et doivent encore recevoir le workflow de validation RH/paie complet.
+- Les abonnements affichent les trois offres candidates, stockent une demande locale et précisent qu'aucun droit n'est activé par une saisie de référence.
+
+### 30.5 Notifications et assistance
+
+- Android déclare POST_NOTIFICATIONS et l'interface Paramètres peut demander la permission Android 13+.
+- Des briefings locaux sont programmés à 07:00 et 19:00 par les composants WorkManager de la fondation NAXA.
+- Les notifications FCM distantes, le centre serveur persistant et la gestion complète des jetons/appareils restent à raccorder et tester.
+- Le Livechat livré est encore un espace FAQ + demande de support locale. Il n'y a pas encore de service conversationnel temps réel, d'appel audio/vidéo ni de partage d'écran. Ces fonctions exigent un fournisseur/session média, une signalisation, un consentement explicite et des jetons de courte durée.
+
+## 31. Résultats et limites à ne pas confondre
+
+### Construit dans le client Android
+- Parcours d'accueil, sélection du profil, langues, thème programmé, lampe, tutoriel, carrousel photo.
+- Écrans de gestion locale : facturation préparatoire, achats, fiscalité préparatoire, objectifs, ordres de travail, stock valorisé, équipe et profil.
+- Reçus PDF exportables et partage récapitulatif texte.
+
+### Non encore démontré / non livré côté serveur ou environnement réel
+- La migration SQL v2 n'est pas appliquée ; les contrats légaux, profil activité et journal de consentement doivent être testés en Supabase isolé.
+- Les nouveaux registres d'activité sont insérés dans Room et l'outbox, mais aucun transport générique de synchronisation vers les tables serveur, accusé durable, reprise idempotente et résolution de conflits n'est encore prouvé.
+- Le paiement Mobile Money, les webhooks vérifiés, le rapprochement, les remboursements réels, les entitlements et le verrouillage à l'échéance ne sont pas encore intégrés.
+- Les données locales de ventes/achats/taxes/objectifs ne constituent pas encore une comptabilité SYSCOHADA complète : journaux, grand livre, balance, états financiers, rapprochements et clôture restent à construire et tester.
+- Les taux d'impôts et règles camerounaises ne sont pas préchargés comme obligations officielles. Le module actuel ne fait que préparer des estimations saisies par l'utilisateur ; un comptable doit valider le régime et les taux.
+- L'analyse IA actuelle est une synthèse déterministe sur les données locales, pas un modèle entraîné ni un moteur de prédiction de vente validé.
+- Les sauvegardes automatiques chiffrées Google Drive/restaurations ne sont pas encore implémentées. La protection de session Keystore reste distincte des archives métier.
+- La photo de profil est conservée comme URI locale ; aucun service serveur d'avatar n'est encore branché.
+- Les photos métier ne sont pas encore dans le repo ; les dossiers sont prêts.
+- Les tests sur émulateur/appareils physiques, la migration Room depuis une version installée, la recette multi-sites/RLS et la recette Supabase restent à faire.
+- Seul un APK debug était préalablement prouvé. Le nouveau build doit être confirmé par une nouvelle exécution CI sur le dernier commit.
+
+## 32. Décision de statut
+
+La cible fonctionnelle Android est largement étendue, mais le statut reste **CONSTRUCTION ANDROID EN RECETTE** jusqu'à la preuve d'une compilation complète sur le HEAD courant. Même après un build vert, la version ne sera pas « verte production » avant la migration et la recette RLS isolée, le transport de synchronisation idempotent, la validation des flux de paiement/abonnement, les essais sur appareil et la recette métier des trois modèles organisationnels.
+
+Aucun merge, aucune migration Supabase réelle, aucun déploiement Edge Function, aucune publication Release et aucune mise en production ne sont couverts par cette passe documentaire.
