@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class AppRoute {
+internal enum class AppRoute {
     LOGIN, RECOVERY, CHANGE_PASSWORD, DASHBOARD, AGENDA, PRESSING, CASH,
     SERVICES, CUSTOMERS, TEAM, STOCK, REPORTS, ORGANIZATION, NETWORK,
     SITES, WORKSTATIONS, SECURITY, SETTINGS, HELP, MENU
@@ -639,7 +639,8 @@ private fun AgendaLocalContent(
                                 busy = true
                                 error = null
                                 runCatching {
-                                    val startAt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).parse(start)?.time
+                                    val dateParser = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).apply { isLenient = false }
+                                    val startAt = dateParser.parse(start)?.time
                                         ?: throw IllegalArgumentException("Date/heure invalide. Format attendu : AAAA-MM-JJ HH:MM.")
                                     val durationMinutes = duration.toLongOrNull() ?: throw IllegalArgumentException("Durée invalide.")
                                     require(durationMinutes in 5..600) { "La durée doit être comprise entre 5 et 600 minutes." }
