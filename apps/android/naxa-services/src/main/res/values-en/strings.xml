@@ -225,4 +225,9 @@
     <string name="close_cash_session">Close session</string>
     <string name="local_sales">Local sales</string>
     <string name="no_local_sales">No sale recorded.</string>
+    <string name="pressing_total_and_deposit">Total: %1$d XAF · Deposit: %2$d XAF</string>
+    <string name="appointment_local_status">Status: %1$s</string>
+    <string name="outbox_pending_count">%1$d event(s) waiting for synchronization</string>
+    <string name="cash_session_open">Open session · %1$s</string>
+    <string name="cash_opening_amount_xaf">Opening float: %1$d XAF</string>
 </resources>
