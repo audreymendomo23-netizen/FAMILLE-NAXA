@@ -32,6 +32,7 @@ android {
         compose = true
         buildConfig = true
     }
+    sourceSets["main"].assets.srcDir(file("../../../assets/naxa-services"))
 }
 
 dependencies {

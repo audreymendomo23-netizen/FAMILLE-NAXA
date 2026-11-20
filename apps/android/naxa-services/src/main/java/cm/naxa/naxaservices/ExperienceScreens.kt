@@ -1,5 +1,8 @@
 package cm.naxa.naxaservices
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +13,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -224,6 +230,7 @@ fun FirstUseTourContent(locale:String,step:Int,onNext:()->Unit,onSkip:()->Unit) 
 
 @Composable
 fun DashboardHeroCarousel(locale:String,activityProfile:String?,onOpen:()->Unit) {
+ val context=LocalContext.current
  val fr=locale!="en"; val activity=NaxaActivityCatalog.find(activityProfile)
  val cards=listOf(
   Triple("📈",if(fr)"Performance du jour" else "Today's performance",if(fr)"Ventes, objectifs et tendances de votre activité." else "Sales, targets and business trends."),
@@ -231,16 +238,34 @@ fun DashboardHeroCarousel(locale:String,activityProfile:String?,onOpen:()->Unit)
   Triple("📦",if(fr)"Stock et approvisionnement" else "Inventory and supply",if(fr)"Coûts, seuils de sécurité et réapprovisionnement." else "Costs, safety thresholds and replenishment."),
   Triple("🛡️",if(fr)"Vue de management" else "Management overview",if(fr)"Les données restent séparées par site et consolidées selon vos droits." else "Data stays separate by site and is consolidated according to your access.")
  )
+ val folder=activityProfile?.takeIf { NaxaActivityCatalog.find(it)!=null } ?: "autre"
+ val photoNames=remember(folder) {
+  runCatching {
+   context.assets.list("activities/$folder").orEmpty()
+    .filter { it.lowercase().endsWith(".webp") || it.lowercase().endsWith(".jpg") || it.lowercase().endsWith(".jpeg") || it.lowercase().endsWith(".png") }
+    .sorted()
+  }.getOrDefault(emptyList())
+ }
  var index by rememberSaveable { mutableIntStateOf(0) }
+ var photoIndex by rememberSaveable(folder) { mutableIntStateOf(0) }
  LaunchedEffect(Unit){while(true){delay(5000);index=(index+1)%cards.size}}
+ LaunchedEffect(photoNames.size) { if(photoNames.isNotEmpty()){while(true){delay(5000);photoIndex=(photoIndex+1)%photoNames.size}} }
+ val photoName=photoNames.getOrNull(photoIndex)
+ val bitmap:Bitmap?=remember(folder,photoName) {
+  photoName?.let { name -> runCatching { context.assets.open("activities/$folder/$name").use { stream -> BitmapFactory.decodeStream(stream) } }.getOrNull() }
+ }
  val card=cards[index]
  Card(onClick=onOpen,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(24.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceVariant),border=BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant)){
-  Row(Modifier.padding(18.dp),horizontalArrangement=Arrangement.spacedBy(14.dp),verticalAlignment=Alignment.CenterVertically){
-   Text(card.first,style=MaterialTheme.typography.displayMedium)
-   Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)){
-    Text(card.second,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
-    Text(card.third,color=MaterialTheme.colorScheme.onSurfaceVariant)
-    Text((index+1).toString()+" / "+cards.size+"  •  "+(if(fr)"Explorer" else "Explore"),color=MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelMedium)
+  Box(Modifier.fillMaxWidth().height(164.dp)) {
+   if(bitmap!=null) Image(bitmap.asImageBitmap(),contentDescription=null,modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop)
+   Box(Modifier.fillMaxSize().background(if(bitmap!=null) Color(0xCC101010) else MaterialTheme.colorScheme.surfaceVariant))
+   Row(Modifier.fillMaxSize().padding(18.dp),horizontalArrangement=Arrangement.spacedBy(14.dp),verticalAlignment=Alignment.CenterVertically){
+    Text(if(bitmap==null)card.first else " ",style=MaterialTheme.typography.displayMedium)
+    Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)){
+     Text(card.second,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=if(bitmap!=null)Color.White else MaterialTheme.colorScheme.onSurface)
+     Text(card.third,color=if(bitmap!=null)Color.White.copy(alpha=.9f) else MaterialTheme.colorScheme.onSurfaceVariant)
+     Text((index+1).toString()+" / "+cards.size+"  •  "+(if(fr)"Explorer" else "Explore"),color=if(bitmap!=null)Color(0xFFFF8A80) else MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelMedium)
+    }
    }
   }
  }
