@@ -2,6 +2,7 @@ package cm.naxa.naxaservices.data
 
 import androidx.room.Dao
 import androidx.room.Database
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.Insert
@@ -269,7 +270,7 @@ data class LocalInventoryItem(
     val reorderLevel: Double,
     val active: Boolean = true,
     val createdAtMillis: Long,
-    val supplierWhatsApp: String = ""
+    @ColumnInfo(defaultValue = "''") val supplierWhatsApp: String = ""
 )
 
 @Entity(tableName = "local_inventory_movements", indices = [Index(value = ["siteId"]), Index(value = ["itemId"]), Index(value = ["createdAtMillis"])])
@@ -947,6 +948,16 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
 
     suspend fun markChargeReminderSent(charge: LocalRecurringCharge, atMillis: Long) {
         dao.updateRecurringCharge(charge.copy(lastReminderAtMillis = atMillis, updatedAtMillis = atMillis))
+    }
+
+    suspend fun deactivateRecurringCharge(orgId: String, siteId: String, chargeId: String, actorMemberId: String): Boolean = database.withTransaction {
+        require(actorMemberId.isNotBlank())
+        val charge = dao.findRecurringCharge(chargeId, orgId, siteId) ?: return@withTransaction false
+        if (!charge.active) return@withTransaction false
+        val now = System.currentTimeMillis()
+        dao.updateRecurringCharge(charge.copy(active = false, updatedAtMillis = now, lastReminderAtMillis = null))
+        enqueue(orgId, "recurring_charge", charge.id, "recurring_charge.deactivated", siteId)
+        true
     }
 
     suspend fun ensureDefaultLoyaltyPrograms(orgId: String, activityProfile: String) = database.withTransaction {
