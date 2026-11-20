@@ -452,6 +452,9 @@ private fun NaxaServicesRoot() {
                                     onNavigate = { route = it.name },
                                     onLogout = {
                                         scope.launch {
+                                            androidx.work.WorkManager.getInstance(context).cancelUniqueWork(
+                                                "naxa-services-charge-reminders-" + current.account.organizationId
+                                            )
                                             runCatching { api.logout(current.accessToken) }
                                             vault.clear()
                                             rememberSession = false
@@ -792,6 +795,21 @@ private fun ErpScreen(
     onTourNext: () -> Unit,
     onTourSkip: () -> Unit
 ) {
+    val reminderContext = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(activeSession.account.organizationId) {
+        val request = androidx.work.PeriodicWorkRequestBuilder<RecurringChargeReminderWorker>(
+            24, java.util.concurrent.TimeUnit.HOURS
+        ).setInputData(
+            androidx.work.workDataOf(
+                RecurringChargeReminderWorker.KEY_ORGANIZATION_ID to activeSession.account.organizationId
+            )
+        ).build()
+        androidx.work.WorkManager.getInstance(reminderContext).enqueueUniquePeriodicWork(
+            "naxa-services-charge-reminders-" + activeSession.account.organizationId,
+            androidx.work.ExistingPeriodicWorkPolicy.UPDATE,
+            request
+        )
+    }
     val currentSpec = modules.firstOrNull { it.route == route }
     Scaffold(
         topBar = {
