@@ -269,7 +269,11 @@ fun StockContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle("Stocks et consommables", "Suivi par point de vente : lessive, produits coiffure et consommables.")
-            AuthorizedSitePicker(siteIds, siteId) { siteId = it; selectedItemId = "" }
+            AuthorizedSitePicker(
+                siteIds,
+                siteId,
+                session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
+            ) { siteId = it; selectedItemId = "" }
             LocalOnlyNotice("Chaque mouvement est journalisé localement ; le stock ne peut pas devenir négatif.")
         }
         item {
