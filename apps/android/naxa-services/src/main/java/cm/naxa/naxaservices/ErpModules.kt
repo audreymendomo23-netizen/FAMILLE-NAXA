@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.location.LocationManager
+import org.json.JSONArray
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -108,36 +109,105 @@ fun ServicesCatalogContent(
     session: AuthSession
 ) {
     val scope = rememberCoroutineScope()
+    val fr = session.account.defaultLocale != "en"
     val siteIds = session.account.activeSiteIds
+    val profile = session.account.activityProfile ?: "autre"
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
     val services by remember(siteId) { repository.dao.observeServices(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
-    val activityOptions = when (session.account.activityProfile) {
+
+    val activityOptions = when (profile) {
+        "pressing" -> listOf("pressing", "material", "retail")
+        "coiffure" -> listOf("hair", "treatment", "retail")
+        "beaute" -> listOf("beauty", "treatment", "retail")
+        "parfumerie" -> listOf("perfume", "retail")
+        "couture" -> listOf("tailoring", "material", "service")
+        "reparation" -> listOf("repair", "part", "service")
+        "menuiserie" -> listOf("manufacturing", "material", "service")
+        "garage" -> listOf("vehicle", "part", "service")
+        "nettoyage" -> listOf("cleaning", "contract", "material")
+        "domicile" -> listOf("home", "service", "material")
+        "impression" -> listOf("printing", "material", "service")
+        "photo_evenementiel" -> listOf("event", "package", "retail")
+        else -> listOf("service", "material", "retail")
+    }
+    val categoryOptions = when (profile) {
         "pressing" -> listOf("pressing", "retail")
         "coiffure" -> listOf("hair", "retail")
         "beaute" -> listOf("beauty", "retail")
         "parfumerie" -> listOf("retail")
-        "couture", "menuiserie", "reparation", "garage", "nettoyage", "domicile", "impression", "photo_evenementiel" -> listOf("service", "material")
-        else -> listOf("service", "retail")
+        "couture" -> listOf("tailoring", "retail")
+        "reparation" -> listOf("repair", "retail")
+        "menuiserie" -> listOf("manufacturing", "retail")
+        "garage" -> listOf("vehicle", "retail")
+        "nettoyage" -> listOf("cleaning", "retail")
+        "domicile" -> listOf("home", "retail")
+        "impression" -> listOf("printing", "retail")
+        "photo_evenementiel" -> listOf("event", "retail")
+        else -> listOf("general", "retail")
     }
+    val defaultCategory = categoryOptions.first()
     var activity by rememberSaveable(session.account.activityProfile) { mutableStateOf(activityOptions.first()) }
+    var category by rememberSaveable(session.account.activityProfile) { mutableStateOf(defaultCategory) }
+    var selectedServiceId by rememberSaveable { mutableStateOf("") }
     var name by rememberSaveable { mutableStateOf("") }
     var duration by rememberSaveable { mutableStateOf("30") }
     var price by rememberSaveable { mutableStateOf("") }
+    var description by rememberSaveable { mutableStateOf("") }
+    var providerIds by rememberSaveable { mutableStateOf("") }
+    var workstationKinds by rememberSaveable { mutableStateOf("") }
+    var packageSessions by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
+    fun csvJson(value: String): String = JSONArray().apply {
+        value.split(",").map { it.trim() }.filter { it.isNotBlank() }.distinct().forEach { put(it) }
+    }.toString()
+
+    fun jsonCsv(value: String): String = runCatching {
+        val array = JSONArray(value)
+        (0 until array.length()).map { array.optString(it) }.joinToString(", ")
+    }.getOrDefault("")
+
+    fun loadService(service: LocalService) {
+        selectedServiceId = service.id
+        name = service.name
+        duration = service.durationMinutes?.toString() ?: ""
+        price = service.priceXaf.toString()
+        activity = service.activity
+        category = service.category
+        description = service.description
+        providerIds = jsonCsv(service.providerMemberIdsJson)
+        workstationKinds = jsonCsv(service.requiredWorkstationKindsJson)
+        packageSessions = service.packageSessions?.toString() ?: ""
+        error = null
+    }
+
+    fun resetForm() {
+        selectedServiceId = ""
+        name = ""; duration = "30"; price = ""; description = ""
+        providerIds = ""; workstationKinds = ""; packageSessions = ""
+        activity = activityOptions.first(); category = defaultCategory
+    }
+
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            ModulePageTitle("Catalogue des prestations", "Configure les services et tarifs séparément pour chaque point de vente.")
-            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }) { siteId = it }
-            LocalOnlyNotice()
+            ModulePageTitle(
+                if (fr) "Catalogue métier des prestations" else "Activity service catalogue",
+                if (fr) "Tarifs, durées, qualifications, forfaits et postes requis pour chaque point de vente." else "Prices, durations, qualifications, packages and required workstations for each site."
+            )
+            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }) {
+                siteId = it
+                resetForm()
+            }
+            LocalOnlyNotice(if (fr) "Le catalogue est local par site. Les prix ne sont pas synchronisés au serveur dans cette passe." else "The catalogue is local per site. Prices are not synchronized to the server in this pass.")
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Nouvelle prestation", fontWeight = FontWeight.Bold)
+                    Text(if (selectedServiceId.isBlank()) if (fr) "Nouvelle prestation" else "New service" else if (fr) "Modifier la prestation" else "Edit service", fontWeight = FontWeight.Bold)
+                    Text(if (fr) "Type d'activité" else "Service type", fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         activityOptions.forEach { value ->
                             OutlinedButton(onClick = { activity = value }) {
@@ -145,46 +215,81 @@ fun ServicesCatalogContent(
                             }
                         }
                     }
-                    OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Nom de la prestation") }, singleLine = true)
-                    OutlinedTextField(duration, { duration = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Durée en minutes") }, singleLine = true)
-                    OutlinedTextField(price, { price = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Prix en FCFA") }, singleLine = true)
+                    Text(if (fr) "Catégorie de gestion" else "Management category", fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        categoryOptions.forEach { value ->
+                            OutlinedButton(onClick = { category = value }) {
+                                Text(if (category == value) "✓ " + value.uppercase() else value.uppercase())
+                            }
+                        }
+                    }
+                    OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Nom de la prestation / produit" else "Service / product name") }, singleLine = true)
+                    OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Description, règles et conditions" else "Description, rules and terms") }, minLines = 2)
+                    OutlinedTextField(duration, { duration = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Durée en minutes (laisser vide si sans durée)" else "Duration in minutes (blank if not applicable)") }, singleLine = true)
+                    OutlinedTextField(price, { price = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Prix unitaire (FCFA)" else "Unit price (XAF)") }, singleLine = true)
+                    OutlinedTextField(providerIds, { providerIds = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "IDs des prestataires habilités (séparés par virgule)" else "Qualified provider IDs (comma separated)") }, minLines = 1)
+                    OutlinedTextField(workstationKinds, { workstationKinds = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Types de postes requis (séparés par virgule)" else "Required workstation kinds (comma separated)") }, minLines = 1)
+                    OutlinedTextField(packageSessions, { packageSessions = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Nombre de séances du forfait (facultatif)" else "Package session count (optional)") }, singleLine = true)
                     if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
-                    if (!notice.isNullOrBlank()) Text(notice!!, color = MaterialTheme.colorScheme.secondary)
+                    if (!notice.isNullOrBlank()) Text(notice!!, color = MaterialTheme.colorScheme.primary)
                     Button(
                         onClick = {
+                            val parsedPrice = price.toLongOrNull() ?: -1L
+                            val parsedDuration = duration.toIntOrNull()
+                            val parsedSessions = packageSessions.toIntOrNull()
+                            if (name.isBlank() || parsedPrice < 0L || (duration.isNotBlank() && (parsedDuration == null || parsedDuration !in 1..1440)) || (packageSessions.isNotBlank() && parsedSessions == null)) {
+                                error = if (fr) "Vérifie le nom, le tarif, la durée et le forfait." else "Check service name, price, duration and package."
+                                return@Button
+                            }
                             scope.launch {
-                                busy = true; error = null; notice = null
+                                busy = true
+                                error = null
                                 runCatching {
-                                    repository.createLocalService(
-                                        session.account.organizationId,
-                                        siteId,
-                                        activity,
-                                        name,
-                                        duration.toIntOrNull(),
-                                        price.toLong()
-                                    )
+                                    if (selectedServiceId.isBlank()) {
+                                        repository.createLocalService(
+                                            session.account.organizationId, siteId, activity, name,
+                                            parsedDuration, parsedPrice, category, description,
+                                            csvJson(providerIds), csvJson(workstationKinds), parsedSessions
+                                        )
+                                    } else {
+                                        repository.updateServiceCatalogItem(
+                                            session.account.organizationId, siteId, selectedServiceId,
+                                            name, parsedDuration, parsedPrice, category, description,
+                                            csvJson(providerIds), csvJson(workstationKinds), parsedSessions,
+                                            session.account.memberId
+                                        )
+                                    }
                                 }.onSuccess {
-                                    name = ""; duration = "30"; price = ""
-                                    notice = "Prestation enregistrée sur cet appareil."
-                                }.onFailure { error = it.message ?: "Enregistrement impossible." }
+                                    resetForm()
+                                    notice = if (fr) "Prestation enregistrée sur ce point de vente." else "Service saved for this site."
+                                }.onFailure { error = it.message ?: if (fr) "Enregistrement impossible." else "Save failed." }
                                 busy = false
                             }
                         },
                         enabled = !busy && siteId.isNotBlank() && name.isNotBlank() && (price.toLongOrNull() ?: -1L) >= 0L,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (busy) "Enregistrement…" else "Ajouter au catalogue") }
+                    ) { Text(if (busy) if (fr) "Enregistrement…" else "Saving…" else if (selectedServiceId.isBlank()) if (fr) "Ajouter au catalogue" else "Add to catalogue" else if (fr) "Enregistrer les modifications" else "Save changes") }
+                    if (selectedServiceId.isNotBlank()) {
+                        TextButton(onClick = { resetForm() }) { Text(if (fr) "Annuler la modification" else "Cancel editing") }
+                    }
                 }
             }
         }
-        item { Text("Prestations configurées", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (services.isEmpty()) item { Text("Aucune prestation locale pour ce point de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text(if (fr) "Prestations et produits configurés" else "Configured services and products", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (services.isEmpty()) item { Text(if (fr) "Aucune prestation sur ce point de vente." else "No services on this site.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(services) { service ->
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(
+                onClick = { loadService(service) },
+                colors = CardDefaults.cardColors(containerColor = if (selectedServiceId == service.id) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(16.dp)
+            ) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(service.name, fontWeight = FontWeight.Bold)
-                    Text(service.activity.uppercase() + " · " + (service.durationMinutes?.toString() ?: "—") + " min")
+                    Text(service.activity.uppercase() + " · " + service.category.uppercase() + " · " + (service.durationMinutes?.toString() ?: "—") + " min")
                     Text(service.priceXaf.toString() + " FCFA", color = MaterialTheme.colorScheme.primary)
-                    LocalOnlyNotice("Tarif local · " + service.code)
+                    if (service.description.isNotBlank()) Text(service.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (service.packageSessions != null) Text((if (fr) "Forfait : " else "Package: ") + service.packageSessions + (if (fr) " séances" else " sessions"))
+                    Text(if (fr) "Toucher pour modifier" else "Tap to edit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
