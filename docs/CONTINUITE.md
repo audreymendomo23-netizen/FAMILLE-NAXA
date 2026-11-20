@@ -1114,3 +1114,34 @@ Le seul projet Supabase connecté est le projet existant **NAXA** ; il ne contie
 Les points suivants restent à fermer avant de déclarer NAXA SERVICES « VERT GLOBAL » : API ERP distante et synchronisation offline de bout en bout ; application et tests réels du RLS ; intégration de paiement récurrent, webhooks et entitlements ; synchronisation serveur des rappels/CRM et fournisseurs push/SMS/WhatsApp ; interconnexion réelle fidélité-caisse ; rapprochement complet SYSCOHADA/fiscalité/paie validé par des professionnels ; essais instrumentés sur appareils, charge et restauration ; release Android signée ; Web/PWA séparée ; traduction Fulfulde complète et relue ; console centrale des dix applications, mutualisation effective des Customer Service Officers, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
 
 Ces travaux exigent notamment un projet Supabase isolé autorisé, secrets de prestataires, règles opérationnelles validées, clés de signature, appareils de recette et validations professionnelles. Le code reste sur la branche de travail ; le présent ajout de continuité ne vaut ni fusion, ni mise en production.
+
+
+## 6.17.22 — Clôture de la passe NAXA SERVICES : CI Android verte, global non qualifié (20 novembre 2026)
+
+La branche de travail NAXA SERVICES a reçu les parcours réapprovisionnement fournisseur WhatsApp, charges/échéances, rappels Android locaux, pilotage CA indicatif, quatre programmes de fidélité par profil d'activité et le durcissement idempotent du parrainage. Les entrées Profil de gestion (parrainage, fidélité et charges) sont réservées au rôle promoter.
+
+### Preuve finale de construction
+
+- Branche : work/naxa-services-completion-20261120
+- HEAD : 1117dac353d1cd3e0ef93b96430614e422d8d329
+- GitHub Actions : 44802531739 — SUCCESS, 4/4 jobs (Android debug, Auth, Referral, catalogue tarifs).
+- APK debug : artefact 14661607933, 11 682 565 octets, SHA-256 233c24881277cac33e813b3352674d7392340fd4962308d9feeab8e70a7e44c9, expiration 27 novembre 2026 à 19:31:23 UTC.
+- Rapport technique section 39 : docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md sur la branche de travail.
+
+### Fonctions locales ajoutées
+
+- Stock : contact WhatsApp par article, CSV fournisseur et message de commande prérempli au seuil ; validation de l'envoi laissée à l'utilisateur.
+- Charges : échéances récurrentes, paiements partiels/complets, historique, désactivation, notification WorkManager quotidienne et permission runtime Android 13+.
+- Gestion : CA des ventes confirmées consolidé sur les sites actifs et paiements de charges récurrentes ; solde explicitement indicatif, non SYSCOHADA.
+- Fidélité : quatre programmes configurables (points, passages, dépenses, fréquence), seuils/vagues, reliquats de points, événements et historique local.
+- Parrainage : génération/suivi et contrats de gains par vagues de cinq ; contrôles d'idempotence du webhook améliorés.
+
+### Limites bloquantes au vert global
+
+Ces parcours ne sont pas encore intégrés à une API ERP distante ni synchronisés de bout en bout entre appareils. Les activités de fidélité restent enregistrées manuellement et ne sont pas encore déclenchées automatiquement par la caisse. Les notifications de charges sont locales, pas FCM/SMS/WhatsApp serveur. Le gain de parrainage est enregistré en attente d'entitlement : aucun abonnement n'est offert/prolongé tant que le fournisseur de paiement et le moteur d'entitlements ne sont pas connectés.
+
+Les scripts Supabase v1/v2/Referral/v3 sont des drafts ; le v3 reste rollback-only. Le projet Supabase connecté est le projet existant NAXA, sans schéma ns_* ni Edge Functions NAXA SERVICES. Aucune migration, aucun secret, aucun paiement ni aucune fonction serveur n'a été déployé. La création d'une branche de base dédiée a nécessité une validation de coût qui n'a pas été donnée ; aucune dépense n'a été engagée.
+
+Restent également : RLS réel appliqué et testé, API/synchronisation/idempotence/conflits complets, paiements récurrents réels et webhooks, services FCM/SMS/WhatsApp Business, certification comptable/fiscale/paie, recette instrumentée et restauration, release Android signée, Web/PWA séparée, Fulfulde relu, centralisation des dix apps, Customer Service Officers partagés, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
+
+**Statut à conserver :** le code Android de cette passe et les 4 jobs CI sont verts sur la branche. NAXA SERVICES n'est pas qualifié « VERT GLOBAL ». Le code n'a pas été fusionné dans main et aucun déploiement production n'a été effectué.
