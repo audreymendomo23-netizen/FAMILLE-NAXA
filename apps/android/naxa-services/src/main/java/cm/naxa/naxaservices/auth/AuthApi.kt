@@ -114,6 +114,17 @@ class AuthApi(private val context: Context) {
         endpoint.replace(Regex("/naxa-services-auth/?$"), "/naxa-services-referrals")
     }
 
+    private val accountingEndpoint: String get() = BuildConfig.ACCOUNTING_FUNCTION_URL.trim().ifBlank {
+        endpoint.replace(Regex("/naxa-services-auth/?$"), "/naxa-services-accounting")
+    }
+
+    suspend fun accountingRequest(accessToken: String, body: JSONObject): JSONObject {
+        if (accountingEndpoint.isBlank()) {
+            throw AuthApiException("La passerelle comptable NAXA Services n'est pas configurée.")
+        }
+        return request(JSONObject(body.toString()), accessToken, accountingEndpoint)
+    }
+
     suspend fun referralDashboard(accessToken: String): ReferralDashboard {
         val json = request(JSONObject().put("action", "dashboard").put("app_code", "naxa-services"), accessToken, referralEndpoint)
         val counts = json.optJSONObject("counts") ?: JSONObject()
