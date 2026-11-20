@@ -59,10 +59,10 @@ class PerformanceEngineTest {
         occurredAtMillis = millis(date)
     )
 
-    private fun goal(period: String, target: Long, created: LocalDate = today) = LocalManagementRecord(
-        id = "goal-" + period,
+    private fun goal(period: String, target: Long, created: LocalDate = today, siteId: String = "site-1") = LocalManagementRecord(
+        id = "goal-" + period + "-" + siteId,
         orgId = "org-1",
-        siteId = "site-1",
+        siteId = siteId,
         recordType = "business_goal",
         reference = "OBJ-" + period,
         title = "Objectif " + period,
@@ -155,4 +155,30 @@ class PerformanceEngineTest {
         assertEquals(0L, result.revenueXaf)
         assertEquals(0, result.dataCoverageDays)
     }
+
+    @Test
+    fun networkObjectivesSumLatestApprovedBaselinePerSiteAndRecoverAllPeriods() {
+        val sales = listOf(
+            sale("site-1", today, 10_000L, 5_000L).copy(siteId = "site-1"),
+            sale("site-2", today, 20_000L, 10_000L).copy(siteId = "site-2")
+        )
+        val objectives = listOf(
+            goal("daily", 50_000L, today, "site-1"),
+            goal("daily", 70_000L, today, "site-2"),
+            goal("monthly", 500_000L, today.withDayOfMonth(1), "site-1"),
+            goal("monthly", 300_000L, today.withDayOfMonth(1), "site-2"),
+            goal("annual", 20_000_000L, today.withDayOfYear(1), "site-1"),
+            goal("annual", 15_000_000L, today.withDayOfYear(1), "site-2")
+        )
+        val result = NaxaPerformanceEngine.analyze(
+            sales, emptyList(), objectives, 0L, 0, now, zone
+        )
+        assertEquals(120_000L, result.day.targetXaf)
+        assertEquals(800_000L, result.month.targetXaf)
+        assertEquals(35_000_000L, result.year.targetXaf)
+        assertTrue(result.recoveryActions.any { it.title.contains("objectif " + result.day.label) })
+        assertTrue(result.recoveryActions.any { it.title.contains("objectif " + result.month.label) })
+        assertTrue(result.recoveryActions.any { it.title.contains("objectif " + result.year.label) })
+    }
+
 }
