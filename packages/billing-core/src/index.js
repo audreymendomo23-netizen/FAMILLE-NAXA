@@ -214,6 +214,21 @@ export function resolveNaxaFamilySubscriptionPrice({
       effectivePlan = tier.plan;
       monthlyAmount = tier.amount;
       detail = { tierMin: tier.min, tierMax: tier.max };
+      if (monthlyAmount === null) {
+        return {
+          appId: id,
+          catalogVersion: version,
+          effectiveFrom: version === "mature" ? MATURITY_EFFECTIVE_DATE : null,
+          planCode: effectivePlan,
+          quantity,
+          unit: catalog.unit,
+          monthlyAmount: null,
+          amountDue: null,
+          billingPeriod,
+          quoteRequired: true,
+          detail: { ...detail, quoteRequiredFromOutlets: 101 },
+        };
+      }
     }
   } else if (id === "CAMPUS237") {
     const pack = effectivePlan;
