@@ -302,6 +302,26 @@ data class LocalManagementRecord(
 )
 
 @Entity(
+    tableName = "local_workflow_events",
+    indices = [
+        Index(value = ["orgId", "siteId", "aggregateType", "aggregateId", "createdAtMillis"]),
+        Index(value = ["actorMemberId", "createdAtMillis"])
+    ]
+)
+data class LocalWorkflowEvent(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val aggregateType: String,
+    val aggregateId: String,
+    val fromStatus: String,
+    val toStatus: String,
+    val reason: String,
+    val actorMemberId: String,
+    val createdAtMillis: Long
+)
+
+@Entity(
     tableName = "local_inventory_valuations",
     indices = [Index(value = ["orgId", "siteId", "inventoryItemId"], unique = true)]
 )
@@ -525,6 +545,18 @@ interface NaxaServicesDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertManagementRecord(record: LocalManagementRecord)
 
+    @Query("SELECT * FROM local_management_records WHERE id = :recordId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
+    suspend fun findManagementRecord(orgId: String, siteId: String, recordId: String): LocalManagementRecord?
+
+    @Update
+    suspend fun updateManagementRecord(record: LocalManagementRecord)
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertWorkflowEvent(event: LocalWorkflowEvent)
+
+    @Query("SELECT * FROM local_workflow_events WHERE orgId = :orgId AND siteId = :siteId AND aggregateType = :aggregateType AND aggregateId = :aggregateId ORDER BY createdAtMillis DESC")
+    fun observeWorkflowEvents(orgId: String, siteId: String, aggregateType: String, aggregateId: String): Flow<List<LocalWorkflowEvent>>
+
     @Query("SELECT * FROM local_inventory_valuations WHERE orgId = :orgId AND siteId = :siteId ORDER BY updatedAtMillis DESC")
     fun observeInventoryValuations(orgId: String, siteId: String): Flow<List<LocalInventoryValuation>>
 
@@ -555,9 +587,10 @@ interface NaxaServicesDao {
         LocalInventoryMovement::class,
         LocalSupportRequest::class,
         LocalManagementRecord::class,
+        LocalWorkflowEvent::class,
         LocalInventoryValuation::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -613,6 +646,19 @@ val NS_SERVICES_MIGRATION_2_3: Migration = object : Migration(2, 3) {
         database.execSQL("CREATE INDEX IF NOT EXISTS index_local_customer_contact_events_orgId_siteId_happenedAtMillis ON local_customer_contact_events(orgId, siteId, happenedAtMillis)")
         database.execSQL("CREATE INDEX IF NOT EXISTS index_local_customer_contact_events_customerId_happenedAtMillis ON local_customer_contact_events(customerId, happenedAtMillis)")
         database.execSQL("CREATE INDEX IF NOT EXISTS index_local_customer_contact_events_followUpId ON local_customer_contact_events(followUpId)")
+    }
+}
+
+val NS_SERVICES_MIGRATION_3_4: Migration = object : Migration(3, 4) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS local_workflow_events (" +
+                "id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, " +
+                "aggregateType TEXT NOT NULL, aggregateId TEXT NOT NULL, fromStatus TEXT NOT NULL, " +
+                "toStatus TEXT NOT NULL, reason TEXT NOT NULL, actorMemberId TEXT NOT NULL, createdAtMillis INTEGER NOT NULL)"
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_workflow_events_orgId_siteId_aggregateType_aggregateId_createdAtMillis ON local_workflow_events(orgId, siteId, aggregateType, aggregateId, createdAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_workflow_events_actorMemberId_createdAtMillis ON local_workflow_events(actorMemberId, createdAtMillis)")
     }
 }
 
@@ -1244,11 +1290,11 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         metadataJson: String,
         actorMemberId: String
     ): LocalManagementRecord = database.withTransaction {
-        val allowedTypes = setOf("quote", "invoice", "credit_note", "refund_due", "customer_receivable", "purchase", "tax_estimate", "business_goal", "subscription_request", "support_chat", "work_order", "repair_order", "service_order", "staff_clock_in", "staff_clock_out", "staff_break_start", "staff_break_end", "staff_commission", "staff_advance", "staff_bonus")
+        val allowedTypes = setOf("quote", "invoice", "credit_note", "refund_due", "customer_receivable", "purchase", "supplier", "tax_estimate", "business_goal", "subscription_request", "support_chat", "work_order", "repair_order", "service_order", "appointment_waitlist", "staff_clock_in", "staff_clock_out", "staff_break_start", "staff_break_end", "staff_commission", "staff_advance", "staff_bonus")
         require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) { "Organisation, site et opérateur obligatoires." }
         require(recordType in allowedTypes) { "Type de registre non autorisé." }
         require(title.isNotBlank() && amountXaf >= 0L && paidXaf >= 0L && paidXaf <= amountXaf) { "Montants ou libellé incohérents." }
-        require(status in setOf("draft", "open", "partial", "paid", "cancelled", "pending_review")) { "Statut non autorisé." }
+        require(status in setOf("draft", "received", "open", "diagnostic", "quote_pending", "waiting_customer", "awaiting_approval", "approved", "waiting_parts", "ordered", "partially_received", "in_progress", "quality_check", "ready", "delivered", "invoice_review", "closed", "partial", "paid", "cancelled", "pending_review", "rejected")) { "Statut non autorisé." }
         val now = System.currentTimeMillis()
         val item = LocalManagementRecord(
             id = UUID.randomUUID().toString(), orgId = orgId, siteId = siteId,
@@ -1260,6 +1306,85 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         dao.insertManagementRecord(item)
         enqueue(orgId, recordType, item.id, recordType + ".created", siteId)
         item
+    }
+
+    suspend fun transitionManagementRecord(
+        orgId: String,
+        siteId: String,
+        recordId: String,
+        nextStatus: String,
+        reason: String,
+        actorMemberId: String
+    ): LocalManagementRecord = database.withTransaction {
+        require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) {
+            "Organisation, site et opérateur obligatoires."
+        }
+        require(reason.trim().length >= 3 && reason.length <= 500) { "Un motif de trois caractères minimum est obligatoire." }
+        val current = dao.findManagementRecord(orgId, siteId, recordId)
+            ?: throw IllegalArgumentException("Dossier introuvable sur ce point de vente.")
+        val allowed = when (current.recordType) {
+            "work_order", "repair_order", "service_order" -> when (current.status) {
+                "received", "open" -> setOf("diagnostic", "quote_pending", "in_progress", "cancelled")
+                "diagnostic" -> setOf("quote_pending", "awaiting_approval", "in_progress", "cancelled")
+                "quote_pending" -> setOf("waiting_customer", "approved", "cancelled")
+                "waiting_customer", "awaiting_approval" -> setOf("approved", "cancelled")
+                "approved" -> setOf("waiting_parts", "in_progress")
+                "waiting_parts" -> setOf("in_progress")
+                "in_progress" -> setOf("quality_check", "ready")
+                "quality_check" -> setOf("in_progress", "ready")
+                "ready" -> setOf("delivered")
+                "delivered" -> setOf("closed")
+                else -> emptySet()
+            }
+            "purchase" -> when (current.status) {
+                "draft", "open" -> setOf("ordered", "cancelled")
+                "ordered" -> setOf("partially_received", "received", "cancelled")
+                "partially_received" -> setOf("received")
+                "received" -> setOf("invoice_review")
+                "invoice_review" -> setOf("closed")
+                else -> emptySet()
+            }
+            "staff_commission", "staff_advance", "staff_bonus" -> when (current.status) {
+                "pending_review" -> setOf("approved", "rejected")
+                else -> emptySet()
+            }
+            "invoice", "customer_receivable" -> when (current.status) {
+                "open", "partial" -> setOf("partial", "paid", "cancelled")
+                else -> emptySet()
+            }
+            "quote" -> when (current.status) {
+                "draft", "open" -> setOf("approved", "rejected", "cancelled")
+                else -> emptySet()
+            }
+            "appointment_waitlist" -> when (current.status) {
+                "open" -> setOf("contacted", "booked", "cancelled")
+                "contacted" -> setOf("booked", "cancelled")
+                else -> emptySet()
+            }
+            else -> emptySet()
+        }
+        require(nextStatus in allowed) {
+            "Transition interdite : ${current.status} → $nextStatus pour ${current.recordType}."
+        }
+        val now = System.currentTimeMillis()
+        val updated = current.copy(status = nextStatus)
+        dao.updateManagementRecord(updated)
+        dao.insertWorkflowEvent(
+            LocalWorkflowEvent(
+                id = UUID.randomUUID().toString(),
+                orgId = orgId,
+                siteId = siteId,
+                aggregateType = current.recordType,
+                aggregateId = current.id,
+                fromStatus = current.status,
+                toStatus = nextStatus,
+                reason = reason.trim(),
+                actorMemberId = actorMemberId,
+                createdAtMillis = now
+            )
+        )
+        enqueue(orgId, current.recordType, current.id, current.recordType + ".status_changed", siteId)
+        updated
     }
 
     suspend fun saveInventoryValuation(
