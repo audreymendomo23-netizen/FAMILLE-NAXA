@@ -434,7 +434,7 @@ fun ReportsContent(
 }
 
 @Composable
-fun OrganizationWorkspaceContent(
+internal fun OrganizationWorkspaceContent(
     modifier: Modifier,
     route: AppRoute,
     repository: NaxaServicesLocalRepository,
