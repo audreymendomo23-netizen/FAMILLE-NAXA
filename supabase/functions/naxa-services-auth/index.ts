@@ -110,20 +110,41 @@ async function isLimited(loginHash: string, ipHash: string) {
   });
   return data === true;
 }
-async function touchDevice(accountId: string, device: Record<string, unknown>, remember: boolean) {
+async function touchDevice(accountId: string, device: Record<string, unknown>, remember: boolean, allowReenroll: boolean) {
   const installationId = String(device.installation_id ?? "");
-  if (!installationId || installationId.length > 160) return;
-  await rest("ns_devices?on_conflict=account_id,installation_id", {
+  if (!installationId || installationId.length > 160) throw new Error("DEVICE_ID_REQUIRED");
+  const now = new Date().toISOString();
+  const rows = await rest(
+    "ns_devices?select=id,revoked_at&account_id=eq." + encodeURIComponent(accountId) +
+      "&installation_id=eq." + encodeURIComponent(installationId) + "&limit=1",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  const existing = rows?.[0];
+  if (existing?.revoked_at && !allowReenroll) throw new Error("DEVICE_REVOKED");
+  if (existing?.id) {
+    await rest("ns_devices?id=eq." + encodeURIComponent(String(existing.id)), {
+      method: "PATCH",
+      headers: serviceHeaders({ Prefer: "return=minimal" }),
+      body: JSON.stringify({
+        label: String(device.label ?? "").slice(0, 90),
+        remember_device: remember,
+        last_seen_at: now,
+        ...(allowReenroll ? { revoked_at: null } : {}),
+      }),
+    });
+    return;
+  }
+  await rest("ns_devices", {
     method: "POST",
-    headers: serviceHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+    headers: serviceHeaders({ Prefer: "return=minimal" }),
     body: JSON.stringify({
       account_id: accountId,
       installation_id: installationId,
       platform: device.platform === "web" ? "web" : "android",
       label: String(device.label ?? "").slice(0, 90),
       remember_device: remember,
-      last_seen_at: new Date().toISOString(),
-      revoked_at: null,
+      first_seen_at: now,
+      last_seen_at: now,
     }),
   });
 }
@@ -160,7 +181,7 @@ async function login(body: Record<string, unknown>, request: Request) {
     headers: serviceHeaders({ Prefer: "return=minimal" }),
     body: JSON.stringify({ last_login_at: new Date().toISOString() }),
   });
-  await touchDevice(String(account.id), (body.device as Record<string, unknown>) ?? {}, body.remember_device === true);
+  await touchDevice(String(account.id), (body.device as Record<string, unknown>) ?? {}, body.remember_device === true, true);
   return { status: 200, body: await sessionPayload(auth.data, account) };
 }
 
@@ -172,7 +193,7 @@ async function refreshSession(body: Record<string, unknown>, device: Record<stri
   const userId = String((auth.data.user as Record<string, unknown> | undefined)?.id ?? "");
   const account = await accountByAuthUser(userId);
   if (!account || account.status !== "active") return { status: 403, body: { message: "Accès suspendu." } };
-  await touchDevice(String(account.id), device, true);
+  try { await touchDevice(String(account.id), device, true, false); } catch (_error) { return { status: 401, body: { message: "Cet appareil a été révoqué. Connecte-toi avec ton identifiant et ton mot de passe." } }; }
   return { status: 200, body: await sessionPayload(auth.data, account) };
 }
 
@@ -393,6 +414,8 @@ async function provisionMember(body: Record<string, unknown>, token: string) {
   const password = temporaryPassword();
   const authAlias = "ns-" + secureRandom(28).toLowerCase() + "@" + aliasDomain;
   let authUserId = "";
+  let createdAccountId = "";
+  let createdMemberId = "";
   try {
     authUserId = await adminCreateAuthUser(authAlias, password);
     const accounts = await rest("ns_accounts", {
@@ -408,6 +431,7 @@ async function provisionMember(body: Record<string, unknown>, token: string) {
     }) as Record<string, unknown>[];
     const account = accounts?.[0];
     if (!account?.id) throw new Error("ACCOUNT_INSERT_FAILED");
+    createdAccountId = String(account.id);
     const members = await rest("ns_members", {
       method: "POST",
       headers: serviceHeaders({ Prefer: "return=representation" }),
@@ -422,6 +446,7 @@ async function provisionMember(body: Record<string, unknown>, token: string) {
     }) as Record<string, unknown>[];
     const member = members?.[0];
     if (!member?.id) throw new Error("MEMBER_INSERT_FAILED");
+    createdMemberId = String(member.id);
     await rest("ns_member_scopes", {
       method: "POST",
       headers: serviceHeaders({ Prefer: "return=minimal" }),
@@ -441,6 +466,17 @@ async function provisionMember(body: Record<string, unknown>, token: string) {
       },
     };
   } catch (_error) {
+    // Best-effort compensation: remove any partially written membership rows
+    // before deleting the Auth identity. No partial account is reported as active.
+    if (createdMemberId) await rest("ns_member_scopes?member_id=eq." + encodeURIComponent(createdMemberId), {
+      method: "DELETE", headers: serviceHeaders({ Prefer: "return=minimal" }),
+    }).catch(() => null);
+    if (createdMemberId) await rest("ns_members?id=eq." + encodeURIComponent(createdMemberId), {
+      method: "DELETE", headers: serviceHeaders({ Prefer: "return=minimal" }),
+    }).catch(() => null);
+    if (createdAccountId) await rest("ns_accounts?id=eq." + encodeURIComponent(createdAccountId), {
+      method: "DELETE", headers: serviceHeaders({ Prefer: "return=minimal" }),
+    }).catch(() => null);
     if (authUserId) await adminDeleteAuthUser(authUserId);
     return { status: 503, body: { message: "La création du compte n'a pas abouti. Aucune activation n'est confirmée." } };
   }
@@ -459,7 +495,7 @@ async function completeRecovery(body: Record<string, unknown>, token: string) {
   const requests = await rest("ns_auth_recovery_requests?select=id,account_id,status&status=eq.pending&id=eq." + encodeURIComponent(requestId) + "&limit=1", { headers: serviceHeaders() }) as Record<string, unknown>[];
   const recovery = requests?.[0];
   if (!recovery?.account_id) return { status: 404, body: { message: "Demande introuvable ou déjà traitée." } };
-  const target = await rest("ns_accounts?select=id,auth_user_id,login_id,status& id=eq.".replace(" ", "") + encodeURIComponent(String(recovery.account_id)) + "&limit=1", { headers: serviceHeaders() }) as Record<string, unknown>[];
+  const target = await rest("ns_accounts?select=id,auth_user_id,login_id,status&id=eq." + encodeURIComponent(String(recovery.account_id)) + "&limit=1", { headers: serviceHeaders() }) as Record<string, unknown>[];
   const account = target?.[0];
   if (!account || account.status !== "active") return { status: 403, body: { message: "Le compte cible n'est pas actif." } };
   const targetMember = await activeMember(String(account.id));
@@ -495,8 +531,17 @@ async function revokeDevice(body: Record<string, unknown>, token: string) {
   const targetAccountId = String(body.account_id ?? actor.account.id);
   const installationId = String(body.installation_id ?? "");
   if (!installationId) return { status: 400, body: { message: "Appareil non précisé." } };
-  if (targetAccountId !== String(actor.account.id) && !["promoter", "network_manager", "site_manager"].includes(String(actor.member.role_code))) {
-    return { status: 403, body: { message: "Révocation non autorisée." } };
+  if (targetAccountId !== String(actor.account.id)) {
+    if (!["promoter", "network_manager", "site_manager"].includes(String(actor.member.role_code))) {
+      return { status: 403, body: { message: "Révocation non autorisée." } };
+    }
+    const targetMembers = await rest("ns_members?select=id,org_id&account_id=eq." + encodeURIComponent(targetAccountId) + "&org_id=eq." + encodeURIComponent(String(actor.member.org_id)) + "&status=eq.active&limit=1", { headers: serviceHeaders() }) as Record<string, unknown>[];
+    if (!targetMembers?.[0]) return { status: 403, body: { message: "Périmètre de révocation non autorisé." } };
+    if (actor.member.role_code !== "promoter") {
+      const targetScopes = await rest("ns_member_scopes?select=site_id&member_id=eq." + encodeURIComponent(String(targetMembers[0].id)), { headers: serviceHeaders() }) as Record<string, unknown>[];
+      const allowed = (targetScopes ?? []).some((scope) => scope.site_id && actorCanManageSite(actor, String(scope.site_id)));
+      if (!allowed) return { status: 403, body: { message: "Périmètre de révocation non autorisé." } };
+    }
   }
   await rest("ns_devices?account_id=eq." + encodeURIComponent(targetAccountId) + "&installation_id=eq." + encodeURIComponent(installationId), {
     method: "PATCH",
