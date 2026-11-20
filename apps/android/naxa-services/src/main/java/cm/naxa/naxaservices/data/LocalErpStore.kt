@@ -715,6 +715,9 @@ interface NaxaServicesDao {
     @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_charge_payments WHERE chargeId = :chargeId AND referenceDueAtMillis = :referenceDueAtMillis")
     suspend fun sumChargePaymentsForCycle(chargeId: String, referenceDueAtMillis: Long): Long
 
+    @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_charge_payments WHERE orgId = :orgId AND siteId = :siteId AND paidAtMillis BETWEEN :fromMillis AND :toMillis")
+    suspend fun sumChargePaymentsForPeriod(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Long
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertChargePayment(payment: LocalChargePayment)
 
@@ -1024,7 +1027,13 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             "spend" -> amountXaf
             else -> throw IllegalArgumentException("Indicateur de fidélité non pris en charge.")
         }
-        require(delta > 0L) { "Le montant doit produire au moins un point, une visite ou une valeur d'achat." }
+        require(
+            when (program.metricCode) {
+                "visits" -> delta > 0L
+                "points", "spend" -> amountXaf > 0L
+                else -> false
+            }
+        ) { "Le montant doit être positif ; les visites comptent un passage." }
         val activityEvent = LocalLoyaltyEvent(
             UUID.randomUUID().toString(), program.orgId, siteId, program.id, customer.id,
             "activity", amountXaf, delta, null, null, null,
