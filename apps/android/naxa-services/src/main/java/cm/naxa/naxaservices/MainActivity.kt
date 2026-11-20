@@ -1004,7 +1004,9 @@ private fun TeamManagementContent(
                                 Checkbox(
                                     checked = id in selectedSiteIds,
                                     onCheckedChange = { checked ->
-                                        selectedSiteIds = if (checked) (selectedSiteIds + id).distinct() else selectedSiteIds - id
+                                        val updated = if (checked) (selectedSiteIds + id).distinct() else selectedSiteIds - id
+                                        selectedSiteIds = updated
+                                        if (updated.size != 1) workstationId = ""
                                     }
                                 )
                                 Column {
