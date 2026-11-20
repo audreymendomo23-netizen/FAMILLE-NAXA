@@ -696,8 +696,8 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_recurring_charges WHERE orgId = :orgId AND siteId = :siteId ORDER BY nextDueAtMillis ASC")
     fun observeRecurringCharges(orgId: String, siteId: String): Flow<List<LocalRecurringCharge>>
 
-    @Query("SELECT * FROM local_recurring_charges WHERE active = 1")
-    suspend fun findAllActiveRecurringCharges(): List<LocalRecurringCharge>
+    @Query("SELECT * FROM local_recurring_charges WHERE orgId = :orgId AND active = 1")
+    suspend fun findActiveRecurringCharges(orgId: String): List<LocalRecurringCharge>
 
     @Query("SELECT * FROM local_recurring_charges WHERE id = :id AND orgId = :orgId AND siteId = :siteId LIMIT 1")
     suspend fun findRecurringCharge(id: String, orgId: String, siteId: String): LocalRecurringCharge?
