@@ -467,7 +467,13 @@ private fun NaxaServicesRoot() {
                                                     locale = selectedLocale
                                                     session = current.copy(account = current.account.copy(defaultLocale = selectedLocale))
                                                 }
-                                                .onFailure { message = it.message ?: "La langue n’a pas pu être enregistrée." }
+                                                .onFailure {
+                                                    preferences.saveLocale(selectedLocale)
+                                                    preferences.saveMemberLocale(current.account.memberId, selectedLocale)
+                                                    locale = selectedLocale
+                                                    session = current.copy(account = current.account.copy(defaultLocale = selectedLocale))
+                                                    message = "Langue enregistrée sur cet appareil. La synchronisation du profil sera réessayée à la prochaine connexion."
+                                                }
                                             busy = false
                                         }
                                     },
@@ -688,7 +694,7 @@ private val commonRoutes = setOf(
 
 private fun activityVisibleRoutes(activity: String?): Set<AppRoute> {
     val shared = commonRoutes + setOf(
-        AppRoute.CASH, AppRoute.CUSTOMERS, AppRoute.STOCK, AppRoute.PURCHASES,
+        AppRoute.SECURITY, AppRoute.CASH, AppRoute.CUSTOMERS, AppRoute.STOCK, AppRoute.PURCHASES,
         AppRoute.BILLING, AppRoute.SUBSCRIPTIONS, AppRoute.OBJECTIVES,
         AppRoute.TAXES, AppRoute.AI_INSIGHTS, AppRoute.REPORTS, AppRoute.TEAM, AppRoute.TEAM_PERFORMANCE,
         AppRoute.ORGANIZATION, AppRoute.NETWORK, AppRoute.SITES, AppRoute.WORKSTATIONS
@@ -706,7 +712,14 @@ private fun activityVisibleRoutes(activity: String?): Set<AppRoute> {
 private fun canAccessRoute(route: AppRoute, roleCode: String): Boolean {
     val common = commonRoutes + setOf(AppRoute.DASHBOARD, AppRoute.MENU)
     val allowed = when (roleCode) {
-        "promoter", "network_manager", "site_manager" -> AppRoute.values().toSet()
+        "promoter", "network_manager" -> AppRoute.values().toSet()
+        "site_manager" -> common + setOf(
+            AppRoute.SECURITY, AppRoute.AGENDA, AppRoute.PRESSING, AppRoute.WORK_ORDERS,
+            AppRoute.CASH, AppRoute.SERVICES, AppRoute.CUSTOMERS, AppRoute.TEAM,
+            AppRoute.TEAM_PERFORMANCE, AppRoute.STOCK, AppRoute.PURCHASES,
+            AppRoute.BILLING, AppRoute.OBJECTIVES, AppRoute.TAXES, AppRoute.AI_INSIGHTS,
+            AppRoute.REPORTS, AppRoute.WORKSTATIONS
+        )
         "cashier" -> common + setOf(AppRoute.CASH, AppRoute.CUSTOMERS, AppRoute.BILLING, AppRoute.REPORTS)
         "receptionist" -> common + setOf(AppRoute.AGENDA, AppRoute.CUSTOMERS, AppRoute.PRESSING, AppRoute.WORK_ORDERS)
         "hair_stylist" -> common + setOf(AppRoute.AGENDA, AppRoute.SERVICES, AppRoute.CUSTOMERS)

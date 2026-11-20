@@ -31,9 +31,11 @@ fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boo
  Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(22.dp),verticalArrangement=Arrangement.Center) {
   Text("NAXA SERVICES",style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Black)
   Spacer(Modifier.height(16.dp))
-  Text(if(fr) "Choisir votre activité" else "Choose your business activity",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-  Text(if(fr) "Ce choix configure les écrans, le catalogue, les stocks et les workflows de votre ERP. Il sera mémorisé pour toute l’organisation."
-   else "This choice configures ERP screens, catalogue, inventory and workflows. It is saved for the whole organization.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+  Text(if(canChoose) { if(fr)"Choisir votre activité" else "Choose your business activity" } else { if(fr)"Configuration de votre organisation" else "Organization setup" },style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
+  Text(if(canChoose) { if(fr)"Ce choix configure les écrans, le catalogue, les stocks et les workflows de votre ERP. Il sera mémorisé pour toute l’organisation."
+   else "This choice configures ERP screens, catalogue, inventory and workflows. It is saved for the whole organization." }
+   else { if(fr)"L’activité principale n’a pas encore été définie par le Promoteur. Déconnectez-vous et demandez-lui de terminer la configuration."
+   else "The organization owner has not selected the main activity yet. Sign out and ask them to finish setup." },color=MaterialTheme.colorScheme.onSurfaceVariant)
   Spacer(Modifier.height(20.dp))
   if(canChoose) {
    Box {
@@ -57,6 +59,7 @@ fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boo
    }
   }
   Spacer(Modifier.height(12.dp))
+  if(canChoose) {
   Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),border=BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant),shape=RoundedCornerShape(20.dp)) {
    Column(Modifier.fillMaxWidth().padding(18.dp)) {
     Text(profile?.icon ?: "🧰",style=MaterialTheme.typography.displaySmall)
@@ -64,9 +67,9 @@ fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boo
     Text(if(fr) profile?.descriptionFr ?: "" else profile?.descriptionEn ?: "",color=MaterialTheme.colorScheme.onSurfaceVariant)
    }
   }
+  }
   if(!error.isNullOrBlank()) Text(error,color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(top=12.dp))
   Spacer(Modifier.height(18.dp))
-  if(!canChoose) Text(if(fr) "Seul le Promoteur peut choisir l’activité principale de l’organisation." else "Only the organization promoter can select the main activity.",color=MaterialTheme.colorScheme.error,modifier=Modifier.padding(top=10.dp))
   if(canChoose) {
    Button(onClick={onSelect(selected)},enabled=!busy && profile!=null,modifier=Modifier.fillMaxWidth().height(54.dp)) {
     Text(if(busy) (if(fr) "Enregistrement…" else "Saving…") else if(fr) "Confirmer mon activité" else "Confirm activity")
@@ -76,8 +79,10 @@ fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boo
     Text(if(fr)"Se déconnecter" else "Sign out")
    }
   }
-  Text(if(fr) "Le choix est enregistré au niveau de l’organisation. Les collaborateurs ne peuvent pas le remplacer depuis leur profil."
-   else "The choice is stored at organization level. Employees cannot replace it from their profile.",color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall,modifier=Modifier.padding(top=12.dp))
+  Text(if(canChoose) { if(fr)"Le choix sera enregistré au niveau de l’organisation et verrouillé. Les collaborateurs ne pourront pas le remplacer depuis leur profil."
+   else "The choice will be saved and locked at organization level. Employees cannot replace it from their profile." }
+   else { if(fr)"Le choix du Promoteur configurera automatiquement votre espace de travail."
+   else "The business profile selected by the owner will automatically configure your workspace." },color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall,modifier=Modifier.padding(top=12.dp))
  }
 }
 
