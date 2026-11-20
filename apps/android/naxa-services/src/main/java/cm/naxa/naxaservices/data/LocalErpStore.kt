@@ -33,6 +33,18 @@ data class LocalPressingOrder(
     val updatedAtMillis: Long
 )
 
+@Entity(tableName = "local_pressing_status_events", indices = [Index("orderId"), Index("createdAtMillis")])
+data class LocalPressingStatusEvent(
+    @PrimaryKey val id: String,
+    val orderId: String,
+    val orgId: String,
+    val siteId: String,
+    val fromStatus: String,
+    val toStatus: String,
+    val actorMemberId: String,
+    val createdAtMillis: Long
+)
+
 @Entity(tableName = "local_appointments", indices = [Index("siteId"), Index("startsAtMillis")])
 data class LocalAppointment(
     @PrimaryKey val id: String,
@@ -224,6 +236,9 @@ interface NaxaServicesDao {
     @Update
     suspend fun updatePressingOrder(order: LocalPressingOrder)
 
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertPressingStatusEvent(event: LocalPressingStatusEvent)
+
     @Query("SELECT * FROM local_appointments WHERE siteId = :siteId ORDER BY startsAtMillis ASC")
     fun observeAppointments(siteId: String): Flow<List<LocalAppointment>>
 
@@ -362,6 +377,7 @@ interface NaxaServicesDao {
 @Database(
     entities = [
         LocalPressingOrder::class,
+        LocalPressingStatusEvent::class,
         LocalAppointment::class,
         LocalCashSession::class,
         LocalSale::class,
@@ -407,7 +423,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             orgId = orgId,
             siteId = siteId,
             workstationId = workstationId?.takeIf(String::isNotBlank),
-            ticketNumber = "PRS-" + now.toString(),
+            ticketNumber = "PRS-" + now.toString() + "-" + UUID.randomUUID().toString().take(6).uppercase(),
             customerName = customerName.trim(),
             customerPhone = customerPhone.trim(),
             itemsSummary = itemsSummary.trim(),
@@ -432,7 +448,20 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             "ready" -> "picked_up"
             else -> throw IllegalStateException("Ce ticket ne peut plus avancer.")
         }
-        dao.updatePressingOrder(current.copy(status = next, updatedAtMillis = System.currentTimeMillis()))
+        val changedAt = System.currentTimeMillis()
+        dao.updatePressingOrder(current.copy(status = next, updatedAtMillis = changedAt))
+        dao.insertPressingStatusEvent(
+            LocalPressingStatusEvent(
+                id = UUID.randomUUID().toString(),
+                orderId = current.id,
+                orgId = current.orgId,
+                siteId = current.siteId,
+                fromStatus = current.status,
+                toStatus = next,
+                actorMemberId = actorMemberId,
+                createdAtMillis = changedAt
+            )
+        )
         enqueue("pressing_order", current.id, "pressing_order.status_changed:" + next, current.siteId)
     }
 
