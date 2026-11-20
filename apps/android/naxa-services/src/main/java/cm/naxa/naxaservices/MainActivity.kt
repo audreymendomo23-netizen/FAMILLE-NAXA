@@ -411,7 +411,6 @@ private val modules = listOf(
 )
 
 private fun canAccessRoute(route: AppRoute, roleCode: String): Boolean {
-    val managers = setOf("promoter", "network_manager", "site_manager")
     val common = setOf(AppRoute.DASHBOARD, AppRoute.MENU, AppRoute.HELP, AppRoute.SETTINGS)
     val allowed = when (roleCode) {
         "promoter", "network_manager", "site_manager" -> AppRoute.values().toSet()
