@@ -251,6 +251,43 @@ grant all on public.ns_suppliers, public.ns_purchase_documents, public.ns_purcha
   public.ns_purchase_receipts, public.ns_supplier_payments, public.ns_sale_lines,
   public.ns_accounting_entries, public.ns_performance_objectives to service_role;
 
+
+drop policy if exists ns_purchase_lines_manage on public.ns_purchase_lines;
+create policy ns_purchase_lines_manage on public.ns_purchase_lines
+  for all to authenticated
+  using (public.ns_can_manage_site(org_id, site_id))
+  with check (
+    public.ns_can_manage_site(org_id, site_id)
+    and exists (
+      select 1 from public.ns_purchase_documents d
+      where d.id = purchase_id and d.org_id = org_id and d.site_id = site_id
+    )
+  );
+
+drop policy if exists ns_sale_lines_insert on public.ns_sale_lines;
+create policy ns_sale_lines_insert on public.ns_sale_lines
+  for insert to authenticated with check (
+    public.ns_can_operate_site(org_id, site_id)
+    and unit_cost_at_sale_xaf is null and cost_of_goods_xaf is null and cogs_posted_at is null
+    and exists (
+      select 1 from public.ns_sales sale
+      where sale.id = sale_id and sale.org_id = org_id and sale.site_id = site_id
+        and sale.status = 'draft'
+    )
+  );
+
+revoke all on public.ns_suppliers, public.ns_purchase_documents, public.ns_purchase_lines,
+  public.ns_purchase_receipts, public.ns_supplier_payments, public.ns_sale_lines,
+  public.ns_accounting_entries, public.ns_performance_objectives from public, anon, authenticated;
+grant select on public.ns_suppliers, public.ns_purchase_documents, public.ns_purchase_lines,
+  public.ns_purchase_receipts, public.ns_supplier_payments, public.ns_sale_lines,
+  public.ns_accounting_entries, public.ns_performance_objectives to authenticated;
+grant insert, update on public.ns_suppliers, public.ns_purchase_documents, public.ns_purchase_lines to authenticated;
+grant insert on public.ns_sale_lines to authenticated;
+grant all on public.ns_suppliers, public.ns_purchase_documents, public.ns_purchase_lines,
+  public.ns_purchase_receipts, public.ns_supplier_payments, public.ns_sale_lines,
+  public.ns_accounting_entries, public.ns_performance_objectives to service_role;
+
 create or replace function public.ns_post_accounting_entry(
   p_org_id uuid, p_site_id uuid, p_source_type text, p_source_id uuid, p_event_code text,
   p_debit_account text, p_credit_account text, p_amount_xaf bigint, p_description text
@@ -521,6 +558,109 @@ end;
 $naxa$;
 
 -- Approved objectives are versioned, never overwritten retroactively.
+
+create or replace function public.ns_post_sale_inventory(
+  p_org_id uuid, p_site_id uuid, p_sale_id uuid, p_inventory_posting_key uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_sale public.ns_sales%rowtype;
+  v_line public.ns_sale_lines%rowtype;
+  v_item public.ns_inventory_items%rowtype;
+  v_payment record;
+  v_confirmed bigint;
+  v_unit_cost bigint;
+  v_line_cogs bigint;
+  v_total_cogs bigint := 0;
+  v_treasury text;
+  v_existing_key uuid;
+  v_now timestamptz := now();
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id, p_site_id) then
+    raise exception 'NAXA_SALE_INVENTORY_FORBIDDEN';
+  end if;
+  if p_sale_id is null or p_inventory_posting_key is null then raise exception 'NAXA_SALE_INVENTORY_INVALID'; end if;
+
+  select * into v_sale from public.ns_sales
+    where id = p_sale_id and org_id = p_org_id and site_id = p_site_id for update;
+  if not found or v_sale.status <> 'posted' then raise exception 'NAXA_SALE_NOT_POSTED'; end if;
+
+  if v_sale.inventory_posting_key is not null then
+    if v_sale.inventory_posting_key = p_inventory_posting_key and v_sale.cost_snapshot_complete then
+      return jsonb_build_object('idempotent', true, 'sale_id', v_sale.id, 'cost_of_goods_xaf', v_sale.cost_of_goods_xaf);
+    end if;
+    raise exception 'NAXA_SALE_INVENTORY_ALREADY_POSTED';
+  end if;
+
+  select coalesce(sum(amount_xaf),0)::bigint into v_confirmed
+  from public.ns_payments
+  where sale_id = p_sale_id and org_id = p_org_id and site_id = p_site_id and status = 'confirmed';
+  if v_confirmed < v_sale.total_xaf then raise exception 'NAXA_SALE_NOT_FULLY_SETTLED'; end if;
+
+  for v_line in
+    select * from public.ns_sale_lines
+    where sale_id = p_sale_id and org_id = p_org_id and site_id = p_site_id
+    order by id
+    for update
+  loop
+    if v_line.cogs_posted_at is not null then raise exception 'NAXA_SALE_LINE_ALREADY_COSTED'; end if;
+    select * into v_item from public.ns_inventory_items
+      where id = v_line.inventory_item_id and org_id = p_org_id and site_id = p_site_id and active
+      for update;
+    if not found or v_item.quantity < v_line.quantity then raise exception 'NAXA_SALE_STOCK_INSUFFICIENT'; end if;
+
+    v_unit_cost := v_item.average_unit_cost_xaf;
+    v_line_cogs := round(v_line.quantity * v_unit_cost)::bigint;
+    update public.ns_inventory_items
+      set quantity = quantity - v_line.quantity
+      where id = v_item.id and org_id = p_org_id and site_id = p_site_id;
+
+    update public.ns_sale_lines
+      set unit_cost_at_sale_xaf = v_unit_cost, cost_of_goods_xaf = v_line_cogs, cogs_posted_at = v_now
+      where id = v_line.id and org_id = p_org_id and site_id = p_site_id;
+
+    insert into public.ns_inventory_movements(
+      org_id, site_id, item_id, movement_type, quantity_delta, reason, idempotency_key, actor_member_id
+    ) values (
+      p_org_id, p_site_id, v_item.id, 'consumption', -v_line.quantity,
+      'Vente confirmée ' || v_sale.sale_number, v_line.idempotency_key, v_member
+    );
+
+    if v_line_cogs > 0 then
+      perform public.ns_post_accounting_entry(p_org_id, p_site_id, 'sale_line', v_line.id, 'cost_of_goods_sold',
+        'COST_OF_GOODS_SOLD', 'INVENTORY_ASSET', v_line_cogs, 'Coût des ventes ' || v_line.description);
+    end if;
+    v_total_cogs := v_total_cogs + v_line_cogs;
+  end loop;
+
+  for v_payment in
+    select * from public.ns_payments
+    where sale_id = p_sale_id and org_id = p_org_id and site_id = p_site_id and status = 'confirmed'
+    order by confirmed_at nulls last, created_at, id
+  loop
+    v_treasury := case v_payment.payment_method
+      when 'cash' then 'CASH_REGISTER'
+      when 'mobile_money' then 'MOBILE_MONEY_CLEARING'
+      when 'mixed' then 'TREASURY_MIXED_CLEARING'
+      else 'OTHER_TREASURY'
+    end;
+    perform public.ns_post_accounting_entry(p_org_id, p_site_id, 'sale_payment', v_payment.id, 'revenue_recognized',
+      v_treasury, 'SALES_REVENUE', v_payment.amount_xaf, 'Encaissement vente ' || v_sale.sale_number);
+  end loop;
+
+  update public.ns_sales
+    set cost_of_goods_xaf = v_total_cogs, cost_snapshot_complete = true, inventory_posting_key = p_inventory_posting_key
+    where id = p_sale_id and org_id = p_org_id and site_id = p_site_id;
+  return jsonb_build_object('idempotent', false, 'sale_id', p_sale_id, 'cost_of_goods_xaf', v_total_cogs,
+    'revenue_xaf', v_confirmed, 'gross_profit_xaf', v_confirmed - v_total_cogs);
+end;
+$naxa$;
+
 create or replace function public.ns_create_performance_objective(
   p_org_id uuid, p_site_id uuid, p_period_type text, p_period_start date,
   p_period_end date, p_target_revenue_xaf bigint, p_reason text
@@ -599,7 +739,11 @@ select org_id, site_id, date_trunc('year', performance_day)::date as performance
 from public.ns_performance_daily
 group by org_id, site_id, date_trunc('year', performance_day)::date;
 
-revoke all on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) from public, anon;
+revoke all on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) from public, anon;
+grant execute on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) to authenticated, service_role;
+revoke all on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) from public, anon, authenticated;
+grant execute on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) to service_role;
+
 grant execute on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) to authenticated, service_role;
 revoke all on function public.ns_receive_supplier_purchase_line(uuid,uuid,uuid,uuid,numeric,uuid,text) from public, anon;
 grant execute on function public.ns_receive_supplier_purchase_line(uuid,uuid,uuid,uuid,numeric,uuid,text) to authenticated, service_role;
