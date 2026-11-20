@@ -642,7 +642,7 @@ fun StockContent(
                             modifier = Modifier.weight(1f)
                         ) { Text("Importer le fichier des stocks") }
                     }
-                    Text("Format pris en charge : CSV UTF-8. Les lignes et colonnes sont validées avant toute écriture.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Format pris en charge : CSV UTF-8 (séparateur virgule ou point-virgule). Les lignes et colonnes sont validées avant toute écriture.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (importPreview.isNotEmpty()) {
                         Text("Aperçu : $importFileName", fontWeight = FontWeight.SemiBold)
                         Text("${importPreview.size} ligne(s) valide(s) · $importDuplicateCount SKU déjà présent(s)")
@@ -810,7 +810,12 @@ fun StockContent(
 
 private fun parseStockImportCsv(raw: String): List<LocalInventoryImportRow> {
     require(raw.isNotBlank()) { "Le fichier CSV est vide." }
+    require(raw.length <= 20 * 1024 * 1024) { "Le fichier dépasse la limite de 20 Mo." }
     val text = raw.removePrefix("\uFEFF")
+    val headerLine = text.lineSequence().firstOrNull {
+        it.isNotBlank() && !it.startsWith("#NAXA_STOCK_TEMPLATE")
+    } ?: throw IllegalArgumentException("En-tête CSV introuvable.")
+    val delimiter = if (headerLine.count { it == ';' } > headerLine.count { it == ',' }) ';' else ','
     val records = mutableListOf<List<String>>()
     val row = mutableListOf<String>()
     val field = StringBuilder()
@@ -823,7 +828,7 @@ private fun parseStockImportCsv(raw: String): List<LocalInventoryImportRow> {
                 field.append('"'); index++
             }
             char == '"' -> quoted = !quoted
-            char == ',' && !quoted -> { row.add(field.toString()); field.setLength(0) }
+            char == delimiter && !quoted -> { row.add(field.toString()); field.setLength(0) }
             (char == '\n' || char == '\r') && !quoted -> {
                 if (char == '\r' && index + 1 < text.length && text[index + 1] == '\n') index++
                 row.add(field.toString())
