@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.Divider
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -57,12 +58,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.Image
 import cm.naxa.naxaservices.auth.AuthApi
 import cm.naxa.naxaservices.auth.AuthApiException
 import cm.naxa.naxaservices.auth.AuthSession
@@ -246,12 +250,11 @@ private fun NaxaServicesRoot() {
 @Composable
 private fun NaxaServicesWordmark() {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Box(
-            Modifier.size(48.dp).background(Color(0xFFDD3A33), RoundedCornerShape(14.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Text("N", color = Color.White, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineLarge)
-        }
+        Image(
+            painter = painterResource(R.drawable.naxa_services_monogram),
+            contentDescription = "NAXA Services",
+            modifier = Modifier.size(48.dp)
+        )
         Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
             Text("NAXA", color = MaterialTheme.colorScheme.onBackground, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineMedium)
             Text("SERVICES", color = Color(0xFFDD3A33), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, letterSpacing = 3.sp)
@@ -506,6 +509,7 @@ private fun PressingLocalContent(
                                 error = null
                                 runCatching {
                                     repository.createPressingOrder(
+                                        orgId = session.account.organizationId,
                                         siteId = siteId,
                                         workstationId = workstationId.ifBlank { null },
                                         customerName = customer,
@@ -620,6 +624,7 @@ private fun AgendaLocalContent(
                                     val durationMinutes = duration.toLongOrNull() ?: throw IllegalArgumentException("Durée invalide.")
                                     require(durationMinutes in 5..600) { "La durée doit être comprise entre 5 et 600 minutes." }
                                     repository.createAppointment(
+                                        orgId = session.account.organizationId,
                                         siteId = siteId,
                                         workstationId = workstationId.ifBlank { null },
                                         customerName = customer,
@@ -706,7 +711,7 @@ private fun CashLocalContent(
                                     busy = true
                                     error = null
                                     runCatching {
-                                        repository.openCashSession(siteId, registerId, registerName, openingFloat.toLongOrNull() ?: 0L, session.account.memberId)
+                                        repository.openCashSession(session.account.organizationId, siteId, registerId, registerName, openingFloat.toLongOrNull() ?: 0L, session.account.memberId)
                                     }.onSuccess { notice = "Caisse ouverte localement : " + it.id }
                                         .onFailure { error = it.message ?: "Ouverture de caisse impossible." }
                                     busy = false
