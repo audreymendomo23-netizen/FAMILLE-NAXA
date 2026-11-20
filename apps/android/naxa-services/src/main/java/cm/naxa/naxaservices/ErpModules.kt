@@ -56,12 +56,12 @@ fun AuthorizedSitePicker(
     } else {
         Box {
             OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Point de vente : " + (siteIds.indexOf(selectedSiteId) + 1).coerceAtLeast(1).toString() + " · " + selectedSiteId)
+                Text("Point de vente : " + (siteLabels[selectedSiteId] ?: selectedSiteId))
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 siteIds.forEachIndexed { index, id ->
                     DropdownMenuItem(
-                        text = { Text("Point " + (index + 1).toString() + " · " + id) },
+                        text = { Text(siteLabels[id] ?: ("Point " + (index + 1).toString() + " · " + id)) },
                         onClick = { onSelect(id); expanded = false }
                     )
                 }
@@ -105,7 +105,7 @@ fun ServicesCatalogContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle("Catalogue des prestations", "Configure les services et tarifs séparément pour chaque point de vente.")
-            AuthorizedSitePicker(siteIds, siteId) { siteId = it }
+            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }) { siteId = it }
             LocalOnlyNotice()
         }
         item {
@@ -595,7 +595,11 @@ internal fun OrganizationWorkspaceContent(
             item {
                 Text("Emplacement dans un établissement", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 val selectable = (session.account.activeSiteIds + localSites.map { it.id }).distinct()
-                AuthorizedSitePicker(selectable, selectedSite) { selectedSite = it }
+                AuthorizedSitePicker(
+                    selectable,
+                    selectedSite,
+                    session.account.activeSites.associate { it.id to it.name } + localSites.associate { it.id to it.name }
+                ) { selectedSite = it }
                 Text("Exemples : fauteuil de coiffure, comptoir pressing, atelier, réception ou caisse.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {
@@ -663,7 +667,11 @@ fun SupportContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle("Assistance et briefings", "Centralise les difficultés d’exploitation sans transmettre de secrets.")
-            AuthorizedSitePicker(session.account.activeSiteIds, siteId) { siteId = it }
+            AuthorizedSitePicker(
+                session.account.activeSiteIds,
+                siteId,
+                session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
+            ) { siteId = it }
             LocalOnlyNotice("Les demandes restent en brouillon sur l’appareil tant que la passerelle support n’est pas connectée.")
         }
         item {
