@@ -222,7 +222,6 @@ async function login(body: Record<string, unknown>, request: Request) {
     headers: serviceHeaders({ Prefer: "return=minimal" }),
     body: JSON.stringify({ last_login_at: new Date().toISOString() }),
   });
-  await touchDevice(String(account.id), (body.device as Record<string, unknown>) ?? {}, body.remember_device === true, true);
   return { status: 200, body: await sessionPayload(auth.data, account) };
 }
 
@@ -234,7 +233,21 @@ async function refreshSession(body: Record<string, unknown>, device: Record<stri
   const userId = String((auth.data.user as Record<string, unknown> | undefined)?.id ?? "");
   const account = await accountByAuthUser(userId);
   if (!account || account.status !== "active") return { status: 403, body: { message: "Accès suspendu." } };
-  try { await touchDevice(String(account.id), device, true, false); } catch (_error) { return { status: 401, body: { message: "Cet appareil a été révoqué. Connecte-toi avec ton identifiant et ton mot de passe." } }; }
+  try {
+    await touchDevice(
+      String(account.id),
+      device,
+      true,
+      false,
+      await sha256(refreshToken),
+      await sha256(String(auth.data.refresh_token ?? "")),
+      jwtClaim(String(auth.data.access_token ?? ""), "session_id"),
+    );
+  } catch (_error) {
+    // Auth has already rotated the refresh token, but it is never returned
+    // to a revoked installation or one presenting a mismatched token.
+    return { status: 401, body: { message: "Cet appareil ou cette session a été révoqué. Reconnecte-toi." } };
+  }
   return { status: 200, body: await sessionPayload(auth.data, account) };
 }
 
