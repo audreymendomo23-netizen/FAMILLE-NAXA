@@ -14,6 +14,7 @@ import androidx.room.withTransaction
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
+import java.util.Calendar
 import java.util.UUID
 
 @Entity(tableName = "local_pressing_orders", indices = [Index(value = ["siteId"]), Index(value = ["ticketNumber"], unique = true)])
@@ -183,7 +184,61 @@ data class LocalCustomer(
     val phoneContact: String,
     val notesPrivate: String,
     val contactConsent: Boolean,
-    val createdAtMillis: Long
+    val createdAtMillis: Long,
+    val addressLine: String = "",
+    val neighborhood: String = "",
+    val landmark: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val locationAccuracyMeters: Float? = null,
+    val locationCapturedAtMillis: Long? = null,
+    val locationConsentAtMillis: Long? = null
+)
+
+@Entity(
+    tableName = "local_customer_followups",
+    indices = [
+        Index(value = ["orgId", "siteId", "nextDueAtMillis"]),
+        Index(value = ["customerId"]),
+        Index(value = ["orgId", "siteId", "status"])
+    ]
+)
+data class LocalCustomerFollowUp(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val customerId: String,
+    val title: String,
+    val frequency: String,
+    val channel: String,
+    val notes: String,
+    val nextDueAtMillis: Long,
+    val status: String = "active",
+    val createdByMemberId: String,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long,
+    val lastCompletedAtMillis: Long? = null
+)
+
+@Entity(
+    tableName = "local_customer_contact_events",
+    indices = [
+        Index(value = ["orgId", "siteId", "happenedAtMillis"]),
+        Index(value = ["customerId", "happenedAtMillis"]),
+        Index(value = ["followUpId"])
+    ]
+)
+data class LocalCustomerContactEvent(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val customerId: String,
+    val followUpId: String,
+    val eventType: String,
+    val outcome: String,
+    val notes: String,
+    val actorMemberId: String,
+    val happenedAtMillis: Long
 )
 
 @Entity(tableName = "local_inventory_items", indices = [Index(value = ["siteId"]), Index(value = ["name"])])
@@ -379,8 +434,32 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_customers WHERE orgId = :orgId AND siteId = :siteId ORDER BY displayName COLLATE NOCASE ASC")
     fun observeCustomers(orgId: String, siteId: String): Flow<List<LocalCustomer>>
 
+    @Query("SELECT * FROM local_customers WHERE id = :customerId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
+    suspend fun findCustomer(customerId: String, orgId: String, siteId: String): LocalCustomer?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertCustomer(customer: LocalCustomer)
+
+    @Update
+    suspend fun updateCustomer(customer: LocalCustomer)
+
+    @Query("SELECT * FROM local_customer_followups WHERE orgId = :orgId AND siteId = :siteId AND status = 'active' ORDER BY nextDueAtMillis ASC")
+    fun observeCustomerFollowUps(orgId: String, siteId: String): Flow<List<LocalCustomerFollowUp>>
+
+    @Query("SELECT * FROM local_customer_followups WHERE id = :followUpId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
+    suspend fun findCustomerFollowUp(followUpId: String, orgId: String, siteId: String): LocalCustomerFollowUp?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertCustomerFollowUp(followUp: LocalCustomerFollowUp)
+
+    @Update
+    suspend fun updateCustomerFollowUp(followUp: LocalCustomerFollowUp)
+
+    @Query("SELECT * FROM local_customer_contact_events WHERE orgId = :orgId AND siteId = :siteId ORDER BY happenedAtMillis DESC LIMIT 100")
+    fun observeCustomerContactEvents(orgId: String, siteId: String): Flow<List<LocalCustomerContactEvent>>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertCustomerContactEvent(event: LocalCustomerContactEvent)
 
     @Query("SELECT * FROM local_inventory_items WHERE orgId = :orgId AND siteId = :siteId AND active = 1 ORDER BY name COLLATE NOCASE ASC")
     fun observeInventoryItems(orgId: String, siteId: String): Flow<List<LocalInventoryItem>>
@@ -457,13 +536,15 @@ interface NaxaServicesDao {
         LocalWorkstation::class,
         LocalService::class,
         LocalCustomer::class,
+        LocalCustomerFollowUp::class,
+        LocalCustomerContactEvent::class,
         LocalInventoryItem::class,
         LocalInventoryMovement::class,
         LocalSupportRequest::class,
         LocalManagementRecord::class,
         LocalInventoryValuation::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -487,6 +568,38 @@ val NS_SERVICES_MIGRATION_1_2: Migration = object : Migration(1, 2) {
                 "unitCostXaf INTEGER NOT NULL, sellingPriceXaf INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL)"
         )
         database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_local_inventory_valuations_orgId_siteId_inventoryItemId ON local_inventory_valuations(orgId, siteId, inventoryItemId)")
+    }
+}
+
+val NS_SERVICES_MIGRATION_2_3: Migration = object : Migration(2, 3) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE local_customers ADD COLUMN addressLine TEXT NOT NULL DEFAULT ''")
+        database.execSQL("ALTER TABLE local_customers ADD COLUMN neighborhood TEXT NOT NULL DEFAULT ''")
+        database.execSQL("ALTER TABLE local_customers ADD COLUMN landmark TEXT NOT NULL DEFAULT ''")
+        database.execSQL("ALTER TABLE local_customers ADD COLUMN latitude REAL")
+        database.execSQL("ALTER TABLE local_customers ADD COLUMN longitude REAL")
+        database.execSQL("ALTER TABLE local_customers ADD COLUMN locationAccuracyMeters REAL")
+        database.execSQL("ALTER TABLE local_customers ADD COLUMN locationCapturedAtMillis INTEGER")
+        database.execSQL("ALTER TABLE local_customers ADD COLUMN locationConsentAtMillis INTEGER")
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS local_customer_followups (" +
+                "id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, customerId TEXT NOT NULL, " +
+                "title TEXT NOT NULL, frequency TEXT NOT NULL, channel TEXT NOT NULL, notes TEXT NOT NULL, " +
+                "nextDueAtMillis INTEGER NOT NULL, status TEXT NOT NULL, createdByMemberId TEXT NOT NULL, " +
+                "createdAtMillis INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL, lastCompletedAtMillis INTEGER)"
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_customer_followups_orgId_siteId_nextDueAtMillis ON local_customer_followups(orgId, siteId, nextDueAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_customer_followups_customerId ON local_customer_followups(customerId)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_customer_followups_orgId_siteId_status ON local_customer_followups(orgId, siteId, status)")
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS local_customer_contact_events (" +
+                "id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, customerId TEXT NOT NULL, " +
+                "followUpId TEXT NOT NULL, eventType TEXT NOT NULL, outcome TEXT NOT NULL, notes TEXT NOT NULL, " +
+                "actorMemberId TEXT NOT NULL, happenedAtMillis INTEGER NOT NULL)"
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_customer_contact_events_orgId_siteId_happenedAtMillis ON local_customer_contact_events(orgId, siteId, happenedAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_customer_contact_events_customerId_happenedAtMillis ON local_customer_contact_events(customerId, happenedAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_customer_contact_events_followUpId ON local_customer_contact_events(followUpId)")
     }
 }
 
@@ -807,13 +920,131 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         service
     }
 
-    suspend fun createLocalCustomer(orgId: String, siteId: String, name: String, phone: String, privateNotes: String, contactConsent: Boolean): LocalCustomer = database.withTransaction {
+    suspend fun createLocalCustomer(
+        orgId: String,
+        siteId: String,
+        name: String,
+        phone: String,
+        privateNotes: String,
+        contactConsent: Boolean,
+        addressLine: String = "",
+        neighborhood: String = "",
+        landmark: String = "",
+        latitude: Double? = null,
+        longitude: Double? = null,
+        locationAccuracyMeters: Float? = null,
+        locationConsent: Boolean = false
+    ): LocalCustomer = database.withTransaction {
         require(orgId.isNotBlank() && siteId.isNotBlank() && name.isNotBlank()) { "Nom du client et point de vente obligatoires." }
         require(phone.length <= 32 && privateNotes.length <= 1000) { "Coordonnées ou note trop longues." }
-        val customer = LocalCustomer(UUID.randomUUID().toString(), orgId, siteId, name.trim(), phone.trim(), privateNotes.trim(), contactConsent, System.currentTimeMillis())
+        require(addressLine.length <= 240 && neighborhood.length <= 100 && landmark.length <= 160) { "Adresse ou repère trop long." }
+        require((latitude == null) == (longitude == null)) { "Les coordonnées GPS doivent être renseignées ensemble." }
+        require(latitude == null || latitude in -90.0..90.0) { "Latitude invalide." }
+        require(longitude == null || longitude in -180.0..180.0) { "Longitude invalide." }
+        require(locationAccuracyMeters == null || locationAccuracyMeters >= 0f) { "Précision GPS invalide." }
+        require(locationConsent || (latitude == null && longitude == null && locationAccuracyMeters == null)) {
+            "Le consentement du client est nécessaire avant d'enregistrer sa géolocalisation."
+        }
+        val now = System.currentTimeMillis()
+        val customer = LocalCustomer(
+            id = UUID.randomUUID().toString(),
+            orgId = orgId,
+            siteId = siteId,
+            displayName = name.trim(),
+            phoneContact = phone.trim(),
+            notesPrivate = privateNotes.trim(),
+            contactConsent = contactConsent,
+            createdAtMillis = now,
+            addressLine = addressLine.trim(),
+            neighborhood = neighborhood.trim(),
+            landmark = landmark.trim(),
+            latitude = latitude,
+            longitude = longitude,
+            locationAccuracyMeters = locationAccuracyMeters,
+            locationCapturedAtMillis = if (latitude != null) now else null,
+            locationConsentAtMillis = if (locationConsent) now else null
+        )
         dao.insertCustomer(customer)
         enqueue(orgId, "customer", customer.id, "customer.created", siteId)
         customer
+    }
+
+    suspend fun createCustomerFollowUp(
+        orgId: String,
+        siteId: String,
+        customerId: String,
+        title: String,
+        frequency: String,
+        channel: String,
+        notes: String,
+        actorMemberId: String
+    ): LocalCustomerFollowUp = database.withTransaction {
+        require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) { "Organisation, site et opérateur obligatoires." }
+        require(title.isNotBlank() && title.length <= 120 && notes.length <= 1000) { "Titre ou note de relance invalide." }
+        require(frequency in setOf("weekly", "monthly")) { "Fréquence de relance non prise en charge." }
+        require(channel in setOf("in_person", "phone", "whatsapp")) { "Canal de suivi non pris en charge." }
+        val customer = dao.findCustomer(customerId, orgId, siteId) ?: throw IllegalArgumentException("Client introuvable sur ce point de vente.")
+        if (channel != "in_person") {
+            require(customer.contactConsent && customer.phoneContact.isNotBlank()) {
+                "Le consentement de contact et un numéro de téléphone sont nécessaires pour une relance à distance."
+            }
+        }
+        val now = System.currentTimeMillis()
+        val calendar = Calendar.getInstance().apply { timeInMillis = now }
+        if (frequency == "weekly") calendar.add(Calendar.DAY_OF_MONTH, 7) else calendar.add(Calendar.MONTH, 1)
+        val followUp = LocalCustomerFollowUp(
+            id = UUID.randomUUID().toString(),
+            orgId = orgId,
+            siteId = siteId,
+            customerId = customerId,
+            title = title.trim(),
+            frequency = frequency,
+            channel = channel,
+            notes = notes.trim(),
+            nextDueAtMillis = calendar.timeInMillis,
+            createdByMemberId = actorMemberId,
+            createdAtMillis = now,
+            updatedAtMillis = now
+        )
+        dao.insertCustomerFollowUp(followUp)
+        dao.insertCustomerContactEvent(
+            LocalCustomerContactEvent(
+                id = UUID.randomUUID().toString(), orgId = orgId, siteId = siteId,
+                customerId = customerId, followUpId = followUp.id, eventType = "scheduled",
+                outcome = "pending", notes = notes.trim(), actorMemberId = actorMemberId, happenedAtMillis = now
+            )
+        )
+        enqueue(orgId, "customer_followup", followUp.id, "customer_followup.created", siteId)
+        followUp
+    }
+
+    suspend fun completeCustomerFollowUp(
+        orgId: String,
+        siteId: String,
+        followUpId: String,
+        outcome: String,
+        notes: String,
+        actorMemberId: String
+    ): LocalCustomerFollowUp = database.withTransaction {
+        require(outcome in setOf("completed", "no_answer", "rescheduled", "not_required")) { "Résultat de relance invalide." }
+        require(notes.length <= 1000 && actorMemberId.isNotBlank()) { "Opérateur ou note invalide." }
+        val current = dao.findCustomerFollowUp(followUpId, orgId, siteId)
+            ?: throw IllegalArgumentException("Relance introuvable sur ce point de vente.")
+        require(current.status == "active") { "Cette relance est déjà suspendue." }
+        val now = System.currentTimeMillis()
+        val calendar = Calendar.getInstance().apply { timeInMillis = maxOf(current.nextDueAtMillis, now) }
+        if (current.frequency == "weekly") calendar.add(Calendar.DAY_OF_MONTH, 7) else calendar.add(Calendar.MONTH, 1)
+        val updated = current.copy(nextDueAtMillis = calendar.timeInMillis, updatedAtMillis = now, lastCompletedAtMillis = now)
+        dao.updateCustomerFollowUp(updated)
+        dao.insertCustomerContactEvent(
+            LocalCustomerContactEvent(
+                id = UUID.randomUUID().toString(), orgId = orgId, siteId = siteId,
+                customerId = current.customerId, followUpId = current.id, eventType = "completed",
+                outcome = outcome, notes = notes.trim(), actorMemberId = actorMemberId, happenedAtMillis = now
+            )
+        )
+        enqueue(orgId, "customer_followup", current.id, "customer_followup.completed", siteId)
+        updated
     }
 
     suspend fun createInventoryItem(orgId: String, siteId: String, sku: String, name: String, unit: String, reorderLevel: Double): LocalInventoryItem = database.withTransaction {
