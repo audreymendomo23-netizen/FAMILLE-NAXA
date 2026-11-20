@@ -632,6 +632,87 @@ as $naxa$
   );
 $naxa$;
 
+
+create or replace function public.ns_can_access_pressing_order(p_org_id uuid, p_site_id uuid, p_order_id uuid, p_operate boolean default false)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $naxa$
+  select exists (
+    select 1
+    from public.ns_pressing_orders o
+    where o.id = p_order_id
+      and o.org_id = p_org_id
+      and o.site_id = p_site_id
+      and (
+        (o.workstation_id is null and (
+          (p_operate and public.ns_can_operate_site(p_org_id, p_site_id))
+          or (not p_operate and public.ns_can_access_site(p_org_id, p_site_id))
+        ))
+        or
+        (o.workstation_id is not null and (
+          (p_operate and public.ns_can_operate_workstation(p_org_id, p_site_id, o.workstation_id))
+          or (not p_operate and public.ns_can_access_workstation(p_org_id, p_site_id, o.workstation_id))
+        ))
+      )
+  );
+$naxa$;
+
+create or replace function public.ns_can_access_cash_register(p_org_id uuid, p_site_id uuid, p_register_id uuid, p_operate boolean default false)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $naxa$
+  select exists (
+    select 1
+    from public.ns_cash_registers r
+    where r.id = p_register_id
+      and r.org_id = p_org_id
+      and r.site_id = p_site_id
+      and (
+        (r.workstation_id is null and (
+          (p_operate and public.ns_can_operate_site(p_org_id, p_site_id))
+          or (not p_operate and public.ns_can_access_site(p_org_id, p_site_id))
+        ))
+        or
+        (r.workstation_id is not null and (
+          (p_operate and public.ns_can_operate_workstation(p_org_id, p_site_id, r.workstation_id))
+          or (not p_operate and public.ns_can_access_workstation(p_org_id, p_site_id, r.workstation_id))
+        ))
+      )
+  );
+$naxa$;
+
+create or replace function public.ns_can_access_payment(p_org_id uuid, p_site_id uuid, p_sale_id uuid, p_pressing_order_id uuid, p_operate boolean default false)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $naxa$
+  select
+    (p_sale_id is not null and exists (
+      select 1 from public.ns_sales s
+      where s.id = p_sale_id and s.org_id = p_org_id and s.site_id = p_site_id
+        and (
+          (s.workstation_id is null and (
+            (p_operate and public.ns_can_operate_site(p_org_id,p_site_id))
+            or (not p_operate and public.ns_can_access_site(p_org_id,p_site_id))
+          ))
+          or (s.workstation_id is not null and (
+            (p_operate and public.ns_can_operate_workstation(p_org_id,p_site_id,s.workstation_id))
+            or (not p_operate and public.ns_can_access_workstation(p_org_id,p_site_id,s.workstation_id))
+          ))
+        )
+    ))
+    or
+    (p_pressing_order_id is not null and public.ns_can_access_pressing_order(p_org_id,p_site_id,p_pressing_order_id,p_operate));
+$naxa$;
+
 create or replace function public.ns_can_manage_member(p_target_member_id uuid)
 returns boolean
 language sql
@@ -755,8 +836,14 @@ create policy ns_appointments_insert on public.ns_appointments
   );
 drop policy if exists ns_appointments_update on public.ns_appointments;
 create policy ns_appointments_update on public.ns_appointments
-  for update to authenticated using (public.ns_can_operate_site(org_id, site_id))
-  with check (public.ns_can_operate_site(org_id, site_id));
+  for update to authenticated using (
+    (workstation_id is null and public.ns_can_operate_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_operate_workstation(org_id, site_id, workstation_id))
+  )
+  with check (
+    (workstation_id is null and public.ns_can_operate_site(org_id, site_id))
+    or (workstation_id is not null and public.ns_can_operate_workstation(org_id, site_id, workstation_id))
+  );
 
 drop policy if exists ns_pressing_orders_select on public.ns_pressing_orders;
 create policy ns_pressing_orders_select on public.ns_pressing_orders
@@ -783,17 +870,17 @@ create policy ns_pressing_orders_update on public.ns_pressing_orders
 
 drop policy if exists ns_pressing_items_select on public.ns_pressing_items;
 create policy ns_pressing_items_select on public.ns_pressing_items
-  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+  for select to authenticated using (public.ns_can_access_pressing_order(org_id, site_id, order_id, false));
 drop policy if exists ns_pressing_items_insert on public.ns_pressing_items;
 create policy ns_pressing_items_insert on public.ns_pressing_items
-  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+  for insert to authenticated with check (public.ns_can_access_pressing_order(org_id, site_id, order_id, true));
 
 drop policy if exists ns_pressing_events_select on public.ns_pressing_status_events;
 create policy ns_pressing_events_select on public.ns_pressing_status_events
-  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+  for select to authenticated using (public.ns_can_access_pressing_order(org_id, site_id, order_id, false));
 drop policy if exists ns_pressing_events_insert on public.ns_pressing_status_events;
 create policy ns_pressing_events_insert on public.ns_pressing_status_events
-  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+  for insert to authenticated with check (public.ns_can_access_pressing_order(org_id, site_id, order_id, true));
 
 drop policy if exists ns_cash_registers_select on public.ns_cash_registers;
 create policy ns_cash_registers_select on public.ns_cash_registers
@@ -804,21 +891,15 @@ create policy ns_cash_registers_select on public.ns_cash_registers
 drop policy if exists ns_cash_registers_manage on public.ns_cash_registers;
 create policy ns_cash_registers_manage on public.ns_cash_registers
   for all to authenticated
-  using (
-    (workstation_id is null and public.ns_can_manage_site(org_id, site_id))
-    or (workstation_id is not null and public.ns_can_access_workstation(org_id, site_id, workstation_id))
-  )
-  with check (
-    (workstation_id is null and public.ns_can_manage_site(org_id, site_id))
-    or (workstation_id is not null and public.ns_can_access_workstation(org_id, site_id, workstation_id))
-  );
+  using (public.ns_can_manage_site(org_id, site_id))
+  with check (public.ns_can_manage_site(org_id, site_id));
 
 drop policy if exists ns_cash_sessions_select on public.ns_cash_sessions;
 create policy ns_cash_sessions_select on public.ns_cash_sessions
-  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+  for select to authenticated using (public.ns_can_access_cash_register(org_id, site_id, register_id, false));
 drop policy if exists ns_cash_sessions_insert on public.ns_cash_sessions;
 create policy ns_cash_sessions_insert on public.ns_cash_sessions
-  for insert to authenticated with check (public.ns_can_operate_site(org_id, site_id));
+  for insert to authenticated with check (public.ns_can_access_cash_register(org_id, site_id, register_id, true));
 
 drop policy if exists ns_sales_select on public.ns_sales;
 create policy ns_sales_select on public.ns_sales
@@ -835,12 +916,12 @@ create policy ns_sales_insert on public.ns_sales
 
 drop policy if exists ns_payments_select on public.ns_payments;
 create policy ns_payments_select on public.ns_payments
-  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+  for select to authenticated using (public.ns_can_access_payment(org_id, site_id, sale_id, pressing_order_id, false));
 drop policy if exists ns_payments_insert_pending on public.ns_payments;
 create policy ns_payments_insert_pending on public.ns_payments
   for insert to authenticated with check (
     status = 'pending' and confirmed_at is null and confirmed_by is null
-    and public.ns_can_operate_site(org_id, site_id)
+    and public.ns_can_access_payment(org_id, site_id, sale_id, pressing_order_id, true)
   );
 
 drop policy if exists ns_expenses_select on public.ns_expenses;
