@@ -417,3 +417,31 @@ Aucun module JOBLY Partner/referral n'est autorisé. Aucune fonction NAXA exista
 **Rapport complet :** `docs/audits/AUDIT_GLOBAL_SOURCES_NAXA_FAMILLE_ET_PRIORISATION_2026-11-20.md`. Il contient le comparatif des dix applications, l'architecture Security, les attentes fonctionnelles NAXA Services, la matrice de réemploi, les garde-fous anti-collision et les jalons J0–J3.
 
 **État : audit et recommandation uniquement.** Aucun code métier, schéma réel, migration, déploiement ou APK n'a été modifié.
+
+
+## 6.15 Démarrage NAXA SERVICES — authentification interne sans OTP ni boîte mail (20/11/2026)
+
+Le premier chantier applicatif retenu est **NAXA SERVICES**. Son J0 doit commencer par le cycle de vie des comptes et des appareils afin d'éviter de construire les écrans métier sur un parcours de connexion non validé.
+
+### Réponse au besoin
+Un parcours visible entièrement interne est possible sans SMTP, boîte mail, SMS, OTP, magic link ni inscription libre, tout en conservant Supabase Auth comme moteur de vérification du mot de passe et des sessions. Cela ne supprime pas la dépendance au service Supabase Auth ; cela supprime la dépendance aux canaux de communication e-mail/SMS. Un fournisseur OIDC autohébergé est possible, mais ajoute un service d'identité supplémentaire à opérer et n'est pas recommandé pour le MVP.
+
+### Option recommandée, sous réserve de preuve locale
+- Identifiant d'accès NAXA généré et propre à l'application, + mot de passe personnel.
+- Alias Auth technique, opaque, propre à l'application et au compte ; aucune vraie boîte mail et aucune fonction e-mail utilisée.
+- Création et confirmation du compte par un backend autorisé via l'API Admin ; l'API de création directe Supabase permet une confirmation admin sans envoyer d'invitation. Le login par mot de passe utilise le flux Auth officiel.
+- Activation initiale remise par un parcours interne maîtrisé, puis changement obligatoire du mot de passe.
+- Récupération par vérification manuelle par l'administration, reset côté serveur, révocation des sessions à risque et changement obligatoire au prochain accès.
+- Téléphone conservé comme coordonnée de contact ; pas utilisé comme identité Auth primaire si l'on maintient des comptes séparés par application.
+- Aucune inscription publique, aucun SSO transversal par défaut. Chaque app conserve ses comptes/identifiants d'accès et ses droits propres.
+- Verrouillage biométrique/PIN local facultatif ; ce code n'est jamais le mot de passe Auth ni une autorisation serveur.
+
+### Réserves techniques
+Supabase Auth natif accepte le mot de passe avec e-mail ou téléphone, pas avec un username arbitraire. L'alias technique constitue donc un mécanisme de résolution à valider en local : création Admin avec confirmation, acceptation de la syntaxe d'alias, login par mot de passe, absence de message envoyé, séparation des identités par application et résistance à l'énumération. Supabase avertit également du risque de recyclage du numéro de téléphone lorsqu'il sert d'identifiant. La documentation passkeys est actuellement expérimentale ; elle ne doit pas devenir une dépendance du MVP.
+
+### Écart documentaire à traiter
+Le cahier NAXA Services indique actuellement téléphone + mot de passe et récupération par e-mail/WhatsApp. Le Prompt Famille 0.4 propose aussi e-mail ou WhatsApp. Le modèle 0.2 mentionne une identité Auth partagée, alors que l'arbitrage ultérieur exige une identité utilisateur séparée. Ces documents seront harmonisés après le test technique, sans écraser l'arbitrage de séparation des identités.
+
+**Prochaine étape J0 :** preuve locale de l'Option A, puis finalisation de l'architecture identité/appareil/session/récupération et des tests négatifs. Aucun changement des paramètres Auth d'un projet Supabase réel, aucune migration réelle, aucune modification de code métier ni aucun déploiement n'ont été effectués.
+
+**Document détaillé :** `docs/architecture-360/DECISION_AUTHENTIFICATION_INTERNE_SANS_OTP_EMAIL.md`.
