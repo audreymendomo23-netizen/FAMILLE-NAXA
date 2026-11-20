@@ -103,26 +103,35 @@ object NaxaPerformanceEngine {
         val recent = confirmed.filter { !dateOf(it.createdAtMillis, zone).isBefore(today.minusDays(30)) }
         val averageTicket = if (recent.isEmpty()) 0.0 else recent.sumOf { it.totalXaf }.toDouble() / recent.size
         val actions = mutableListOf<RecoveryAction>()
-        val monthlyGap = (monthTarget ?: 0L) - monthForecast
-        if (monthTarget != null && monthlyGap > 0L && remainMonth > 0) {
-            val extraPerDay = ceil(monthlyGap.toDouble() / remainMonth).toLong()
-            val ticketCount = if (averageTicket > 0.0) ceil(extraPerDay / averageTicket).toInt() else null
-            val volume = ticketCount?.let { " Cela représente environ " + it + " vente(s) additionnelle(s) par jour au ticket moyen récent." }
-                ?: " Le ticket moyen sera calculable après davantage de ventes confirmées."
-            actions += RecoveryAction("Redressement de l'objectif mensuel",
-                "La projection est inférieure à la cible de " + xaf(monthlyGap) + ". Il faut produire environ " + xaf(extraPerDay) + " supplémentaires par jour." + volume, "high")
+        listOf(day, month, year).forEach { period ->
+            val gap = (period.targetGapXaf ?: 0L).coerceAtLeast(0L)
+            if (period.targetXaf != null && gap > 0L) {
+                val remainingDays = period.remainingDays.coerceAtLeast(1)
+                val extraPerDay = ceil(gap.toDouble() / remainingDays).toLong()
+                val ticketCount = if (averageTicket > 0.0) ceil(extraPerDay / averageTicket).toInt() else null
+                val volume = ticketCount?.let { " Au ticket moyen des 30 derniers jours, cela demande environ " + it + " vente(s) additionnelle(s) par jour." }
+                    ?: " Le volume de ventes additionnel sera calculable avec un historique suffisant."
+                actions += RecoveryAction(
+                    "Redressement de l'objectif " + period.label,
+                    "La projection est inférieure à la cible de " + xaf(gap) + ". Effort moyen restant : " + xaf(extraPerDay) + " par jour sur " + period.remainingDays + " jour(s)." + volume,
+                    if (period == day) "high" else "high"
+                )
+            }
         }
         val previous14Avg = avgDaily(byDay, today.minusDays(28), today.minusDays(15))
         if (previous14Avg > 0L && avg14 < previous14Avg * 0.9) {
             actions += RecoveryAction("Réactiver le rythme commercial",
                 "La moyenne des 14 derniers jours recule d'au moins 10 % par rapport aux 14 jours précédents. Relancer les devis ouverts, recontacter les clients inactifs et planifier des offres ciblées.", "high")
         }
-        val priorMonthRevenue = monthly.dropLast(1).lastOrNull()?.actualXaf ?: 0L
+        val priorMonthRevenue = previousMonthComparable
+        val previousComparableMonthEnd = previousMonth.atDay(today.dayOfMonth.coerceAtMost(previousMonth.lengthOfMonth()))
         val currentMonthCosts = accountingEntries.filter {
-            dateOf(it.occurredAtMillis, zone).let { d -> d.year == today.year && d.monthValue == today.monthValue } && it.debitAccount == "COST_OF_GOODS_SOLD"
+            dateOf(it.occurredAtMillis, zone).let { d -> d.year == today.year && d.monthValue == today.monthValue && !d.isAfter(today) } &&
+                it.debitAccount == "COST_OF_GOODS_SOLD"
         }.sumOf { it.amountXaf }
         val priorMonthCosts = accountingEntries.filter {
-            dateOf(it.occurredAtMillis, zone).let { d -> d.year == previousMonth.year && d.monthValue == previousMonth.monthValue } && it.debitAccount == "COST_OF_GOODS_SOLD"
+            dateOf(it.occurredAtMillis, zone).let { d -> d.year == previousMonth.year && d.monthValue == previousMonth.monthValue && !d.isAfter(previousComparableMonthEnd) } &&
+                it.debitAccount == "COST_OF_GOODS_SOLD"
         }.sumOf { it.amountXaf }
         val uncostedCurrentMonth = confirmed.count {
             dateOf(it.createdAtMillis, zone).let { d -> d.year == today.year && d.monthValue == today.monthValue } &&
@@ -147,15 +156,16 @@ object NaxaPerformanceEngine {
         val firstDate = confirmed.minOfOrNull { dateOf(it.createdAtMillis, zone) }
         val coverage = firstDate?.let { ChronoUnit.DAYS.between(it, today).toInt() + 1 } ?: 0
         return PerformanceDashboard(day, month, year, daily, monthly, yearly, revenue, costedRevenue, cogs, gross, margin, opex,
-            operatingProfit, supplierPayablesXaf, uncosted, lowStockCount, actions.take(5), coverage)
+            operatingProfit, supplierPayablesXaf, uncosted, lowStockCount, actions.take(8), coverage)
     }
 
     private fun projection(label: String, actual: Long, forecast: Long, target: Long?, previous: Long, remaining: Int) =
         PeriodProjection(label, actual, forecast, target, previous, target?.minus(forecast),
             target?.takeIf { it > 0 }?.let { forecast.toDouble() * 100.0 / it }, remaining)
 
-    private fun targetFor(rows: List<LocalManagementRecord>, period: String, date: LocalDate, zone: ZoneId): Long? =
-        rows.asSequence().filter { it.recordType == "business_goal" && it.counterparty.equals(period, true) && it.amountXaf > 0L }
+    private fun targetFor(rows: List<LocalManagementRecord>, period: String, date: LocalDate, zone: ZoneId): Long? {
+        val latestPerSite = rows.asSequence()
+            .filter { it.recordType == "business_goal" && it.counterparty.equals(period, true) && it.amountXaf > 0L }
             .filter {
                 val created = dateOf(it.createdAtMillis, zone)
                 when (period) {
@@ -164,7 +174,12 @@ object NaxaPerformanceEngine {
                     "annual", "yearly" -> created.year == date.year
                     else -> false
                 }
-            }.maxByOrNull { it.createdAtMillis }?.amountXaf
+            }
+            .groupBy { it.siteId }
+            .values
+            .mapNotNull { siteRecords -> siteRecords.maxByOrNull { it.createdAtMillis }?.amountXaf }
+        return latestPerSite.takeIf { it.isNotEmpty() }?.sum()
+    }
 
     private fun dateOf(millis: Long, zone: ZoneId) = Instant.ofEpochMilli(millis).atZone(zone).toLocalDate()
     private fun sum(values: Map<LocalDate, Long>, from: LocalDate, to: LocalDate): Long =
