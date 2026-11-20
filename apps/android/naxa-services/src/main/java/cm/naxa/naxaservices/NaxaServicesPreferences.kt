@@ -25,6 +25,8 @@ class NaxaServicesPreferences(context:Context) {
  private val prefs=context.getSharedPreferences("naxa_services_preferences_v2",Context.MODE_PRIVATE)
  fun saveActivity(orgId:String,profile:String){ if(orgId.isNotBlank() && NaxaActivityCatalog.find(profile)!=null) prefs.edit().putString("activity:"+orgId,profile).apply() }
  fun cachedActivity(orgId:String):String?=prefs.getString("activity:"+orgId,null)
+ fun locale():String=prefs.getString("locale","fr")?.takeIf { it in setOf("fr","en") } ?: "fr"
+ fun saveLocale(value:String){if(value in setOf("fr","en")) prefs.edit().putString("locale",value).apply()}
  fun saveTheme(mode:String,startMinute:Int,endMinute:Int,flashlight:Boolean){ prefs.edit().putString("theme_mode",mode).putInt("night_start",startMinute.coerceIn(0,1439)).putInt("night_end",endMinute.coerceIn(0,1439)).putBoolean("flashlight_enabled",flashlight).apply() }
  fun themeMode():String=prefs.getString("theme_mode","dark")?:"dark"
  fun nightStart():Int=prefs.getInt("night_start",20*60)

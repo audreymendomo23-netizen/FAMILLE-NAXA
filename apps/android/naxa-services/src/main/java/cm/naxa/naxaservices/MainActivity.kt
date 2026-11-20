@@ -475,8 +475,10 @@ private fun NaxaServicesWordmark() {
 private fun LoginScreen(
     busy: Boolean,
     message: String?,
+    locale: String,
     onLogin: (String, String, Boolean) -> Unit,
-    onForgot: () -> Unit
+    onForgot: () -> Unit,
+    onLocale: (String) -> Unit
 ) {
     var identifier by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -488,7 +490,11 @@ private fun LoginScreen(
         verticalArrangement = Arrangement.Center
     ) {
         NaxaServicesWordmark()
-        Spacer(Modifier.height(36.dp))
+        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
+            TextButton(onClick={onLocale("fr")},enabled=locale!="fr"){Text("FR")}
+            TextButton(onClick={onLocale("en")},enabled=locale!="en"){Text("EN")}
+        }
+        Spacer(Modifier.height(26.dp))
         Text(stringResource(R.string.login_title), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.login_subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant)
