@@ -625,7 +625,7 @@ private fun AgendaLocalContent(
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.agenda_local_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(stringResource(R.string.agenda_local_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            AuthorizedSitePicker(session.account.activeSiteIds, siteId) { siteId = it }
+            AuthorizedSitePicker(session.account.activeSiteIds, siteId, session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }) { siteId = it }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -721,7 +721,7 @@ private fun CashLocalContent(
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.cash_local_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(stringResource(R.string.cash_local_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            AuthorizedSitePicker(session.account.activeSiteIds, siteId) { siteId = it }
+            AuthorizedSitePicker(session.account.activeSiteIds, siteId, session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }) { siteId = it }
             Text(stringResource(R.string.outbox_pending_count, pendingOutbox), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.secondary)
         }
         if (openSession == null) {
