@@ -1162,6 +1162,19 @@ val NS_SERVICES_MIGRATION_8_9: Migration = object : Migration(8, 9) {
         database.execSQL("CREATE INDEX IF NOT EXISTS index_local_accounting_entries_orgId_siteId_occurredAtMillis ON local_accounting_entries(orgId, siteId, occurredAtMillis)")
         database.execSQL("CREATE INDEX IF NOT EXISTS index_local_accounting_entries_orgId_siteId_debitAccount_occurredAtMillis ON local_accounting_entries(orgId, siteId, debitAccount, occurredAtMillis)")
         database.execSQL("CREATE INDEX IF NOT EXISTS index_local_accounting_entries_orgId_siteId_creditAccount_occurredAtMillis ON local_accounting_entries(orgId, siteId, creditAccount, occurredAtMillis)")
+        // One-time migration of existing outflows into the new journal; deterministic IDs make reruns safe.
+        database.execSQL(
+            "INSERT OR IGNORE INTO local_accounting_entries (id, orgId, siteId, journalBatchId, sourceType, sourceId, eventCode, debitAccount, creditAccount, amountXaf, description, actorMemberId, occurredAtMillis) " +
+            "SELECT 'legacy-expense-' || id, orgId, siteId, 'legacy-expense:' || id, 'legacy_expense', id, 'expense_imported', " +
+            "'OPERATING_EXPENSE:' || UPPER(category), 'TREASURY_UNSPECIFIED', amountXaf, description, actorMemberId, createdAtMillis " +
+            "FROM local_expenses"
+        )
+        database.execSQL(
+            "INSERT OR IGNORE INTO local_accounting_entries (id, orgId, siteId, journalBatchId, sourceType, sourceId, eventCode, debitAccount, creditAccount, amountXaf, description, actorMemberId, occurredAtMillis) " +
+            "SELECT 'legacy-charge-payment-' || id, orgId, siteId, 'legacy-charge-payment:' || id, 'legacy_charge_payment', id, 'charge_payment_imported', " +
+            "'OPERATING_EXPENSE_RECURRING', 'TREASURY_UNSPECIFIED', amountXaf, 'Ancien règlement de charge récurrente', actorMemberId, paidAtMillis " +
+            "FROM local_charge_payments"
+        )
     }
 }
 
@@ -1356,7 +1369,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         require(paymentMethod in setOf("cash", "bank", "mobile_money", "other"))
         dao.findSupplierPaymentByKey(orgId, idempotencyKey)?.let { existing ->
             require(existing.siteId == siteId && existing.purchaseId == purchaseId && existing.amountXaf == amountXaf &&
-                existing.paymentMethod == paymentMethod && existing.paymentReference == paymentReference) {
+                existing.paymentMethod == paymentMethod && existing.paymentReference == paymentReference &&
+                existing.cashSessionId == cashSessionId) {
                 "Clé d'idempotence déjà utilisée pour un paiement différent."
             }
             return@withTransaction existing
@@ -1429,7 +1443,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
     ) {
         require(amountXaf > 0L && debitAccount.isNotBlank() && creditAccount.isNotBlank() && debitAccount != creditAccount)
         if (dao.hasAccountingEntry(orgId, sourceType, sourceId, eventCode) > 0) return
-        val batchId = UUID.randomUUID().toString()
+        val batchId = sourceType + ":" + sourceId
         dao.insertAccountingEntry(
             LocalAccountingEntry(
                 UUID.randomUUID().toString(), orgId, siteId, batchId, sourceType, sourceId, eventCode,
