@@ -819,7 +819,7 @@ private fun ErpScreen(
         if (!canAccessConfiguredRoute(route, roleCode, activityProfile)) {
             AccessDeniedContent(Modifier.padding(padding)) { onNavigate(AppRoute.DASHBOARD) }
         } else if (route == AppRoute.DASHBOARD) {
-            DashboardContent(Modifier.padding(padding), accountName, roleCode, locale, activityProfile, localRepository, current, onNavigate, onLogout, tourActive, tourStep, onTourNext, onTourSkip)
+            DashboardContent(Modifier.padding(padding), accountName, roleCode, locale, activityProfile, localRepository, activeSession, onNavigate, onLogout, tourActive, tourStep, onTourNext, onTourSkip)
         } else if (route == AppRoute.MENU) {
             ModuleMenu(Modifier.padding(padding), roleCode, activityProfile, onNavigate, onLogout)
         } else if (route == AppRoute.PRESSING) {

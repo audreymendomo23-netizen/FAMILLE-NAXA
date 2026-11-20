@@ -496,8 +496,13 @@ internal fun ProfileContent(
 @Composable
 fun LivechatContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val scope = rememberCoroutineScope()
-    val siteId = session.account.activeSiteIds.firstOrNull().orEmpty()
-    val requests by remember(session.account.organizationId) { repository.dao.observeSupportRequests(session.account.organizationId) }.collectAsState(initial = emptyList())
+    val siteIds = session.account.activeSiteIds
+    var siteId by rememberSaveable(session.account.organizationId) {
+        mutableStateOf(siteIds.firstOrNull().orEmpty())
+    }
+    val requests by remember(session.account.organizationId, siteId) {
+        repository.dao.observeSupportRequestsForSite(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
     var subject by rememberSaveable { mutableStateOf("") }
     var message by rememberSaveable { mutableStateOf("") }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -506,6 +511,11 @@ fun LivechatContent(modifier: Modifier, repository: NaxaServicesLocalRepository,
             Spacer(Modifier.height(12.dp))
             Text("Livechat et assistance", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("FAQ et demandes d’assistance. Les messages sont conservés localement et attendent la passerelle support. Les appels et le partage d’écran temps réel nécessitent encore le service média et les permissions de session.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            AuthorizedSitePicker(
+                siteIds,
+                siteId,
+                session.account.activeSites.associate { it.id to it.name }
+            ) { siteId = it }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -531,7 +541,7 @@ fun LivechatContent(modifier: Modifier, repository: NaxaServicesLocalRepository,
                                 .onSuccess { subject = ""; message = ""; notice = "Demande enregistrée localement. Elle sera transmise à la synchronisation." }
                                 .onFailure { notice = it.message ?: "Envoi impossible." }
                         }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Créer une demande") }
+                    }, enabled = siteId.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Créer une demande") }
                     if (notice != null) Text(notice!!, color = MaterialTheme.colorScheme.secondary)
                 }
             }

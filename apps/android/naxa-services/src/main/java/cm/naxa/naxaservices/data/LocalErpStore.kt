@@ -415,6 +415,9 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_support_requests WHERE orgId = :orgId ORDER BY createdAtMillis DESC")
     fun observeSupportRequests(orgId: String): Flow<List<LocalSupportRequest>>
 
+    @Query("SELECT * FROM local_support_requests WHERE orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis DESC")
+    fun observeSupportRequestsForSite(orgId: String, siteId: String): Flow<List<LocalSupportRequest>>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertSupportRequest(request: LocalSupportRequest)
 
