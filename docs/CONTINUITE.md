@@ -270,43 +270,32 @@ Les fonctions de facturation peuvent partager un contrat technique et des réfé
 À la reprise, commencer par récupérer le ZIP Jobly, établir les preuves du code correspondant aux apports documentés, puis mettre à jour la matrice comparative et le module Billing & Entitlements. Ne pas lancer de migration Production, déploiement ou publication APK dans le cadre de cette reprise.
 
 
-### 6.11 Matrice d'application des inspirations JOBLY aux dix produits
+### 6.11 Matrice anti-doublon NAXA / JOBLY pour les dix applications
 
-Cette matrice est une **proposition de portabilité fonctionnelle**, pas un engagement de construire toutes les fonctions dans chaque application. Chaque activation doit être confrontée au cahier métier, au modèle économique et aux contraintes légales du produit.
+**Règle de priorité : NAXA est la source de vérité pour les produits, les processus métier, les identités, les données et les fonctions déjà définies dans FAMILLE-NAXA. JOBLY est uniquement une source d'inspiration technique complémentaire.** Une capacité ne sera ni copiée ni développée en parallèle si un équivalent existe déjà dans le socle NAXA ou dans une application.
 
-| Capacité inspirée de JOBLY | Applications candidates | Décision d'orientation |
-|---|---|---|
-| Billing & Entitlements | Les 10 applications | Socle commun prioritaire ; règles, unités facturables, tarifs, quotas et droits propres à chaque application |
-| Feature flags / configuration à distance | Les 10 applications | Socle commun ; configuration auditable, sans remplacer RBAC/RLS ni les contrôles serveur |
-| Centre de notifications et préférences | Les 10 applications | Socle commun ; catégories propres au produit, préférences marketing séparées des alertes opérationnelles |
-| Bannières / annonces administrables | Les 10 applications, selon pertinence | Module optionnel ; informations, campagnes, CTA, dates et ciblage par application |
-| Publicité sponsorisée | Seulement produits dont le modèle commercial le justifie | Option commerciale distincte, jamais imposée ni présentée comme déjà validée |
-| Chat / FAQ / IA / handoff humain | Les 10 applications, selon charge de support | Parcours d'assistance réutilisable ; auditer le service Support NAXA déjà documenté avant tout développement |
-| QR ou lien de partage temporaire | KIOSKO, BOOTIK, ZIPPLE, COTIZ, LOYABLE, NAXA SERVICES, NAXA HOTEL, CAMPUS237, NAXA SECURITY, GRILLAD | Bibliothèque de partage sécurisé optionnelle ; portée minimale, expiration, révocation et audit |
-| Quotas et mesure du coût IA | Toutes les applications qui utilisent l'IA ou OCR | Socle d'observabilité ; quotas par entitlement, mesure par fonction et alertes de budget |
-| Referral / partenaires / attribution | KIOSKO d'abord ; autres produits B2B selon leurs canaux | Moteur d'attribution réutilisable ; commissions, KYC et paiements activés uniquement après validation métier et juridique |
+| Domaine | Source propriétaire / existante à privilégier | Apport JOBLY autorisé | Décision anti-collision |
+|---|---|---|---|
+| Paiements et abonnements | Socle NAXA/KIOSKO et contrats propres à chaque produit | Patrons robustes de cycle de paiement, webhook, idempotence, rapprochement et modèle Plan/Subscription/Payment/Entitlements | Renforcer le parcours existant après audit ; un seul moteur de paiement/facturation, aucune seconde table ou API parallèle |
+| Droits fonctionnels et quotas | RBAC, permissions et configuration NAXA | Modèle d'entitlements et quotas métier/IA dissociés du nom du plan | Compléter les droits existants sans remplacer RBAC/RLS ni créer un second système d'autorisations |
+| Intelligence artificielle | Socle AI/IA NAXA et besoins propres à chaque application | Patterns AI Gateway multi-fournisseurs, fallback, journalisation, limitation des entrées, minimisation des données et mesure des coûts | Étendre le moteur IA NAXA s'il existe déjà ; ne pas créer un deuxième gateway ou deux registres de fournisseurs |
+| Mémoire et contexte IA | Données opérationnelles NAXA, historique métier et permissions de chaque application | Patterns de contexte, mémoire de session et mémoire dérivée | Ajouter uniquement une couche dérivée et cloisonnée si un besoin non couvert est démontré ; la base métier NAXA reste la source de vérité |
+| Notifications | Socle notifications NAXA | Idées de préférences, catégories et mesure de livraison/engagement | Réutiliser le service NAXA ; compléter seulement les fonctions réellement absentes, pas de second centre ni de second moteur d'envoi |
+| Support et assistance | Stack Support NAXA déjà documentée (tickets, files, agents, chat, voix/vidéo, SLA) | Parcours FAQ/IA et transfert humain décrits par JOBLY | Pas de nouveau Helpdesk/Chat ; améliorer le support NAXA après audit de couverture |
+| QR, codes-barres et partage | Capacités QR/barcode déjà prévues dans certains produits NAXA | Principes de sécurité du partage : jeton opaque, expiration, portée minimale, révocation, audit | Garder les flux QR existants ; renforcer leur sécurité dans leur module propriétaire, sans créer un service QR concurrent |
+| Audit, événements et BI | Audit centralisé et BI/tableaux de bord NAXA | Patterns d'instrumentation d'événements et de coûts par fonction | Un registre d'audit et une chaîne analytique cohérente ; enrichir les événements existants sans dupliquer les journaux métier |
+| Feature flags et configuration distante | Registre produits, feature flags et remote config déjà prévus dans l'architecture NAXA | Aucun module générique correspondant n'a été confirmé dans le ZIP JOBLY | NAXA reste propriétaire ; ne pas attribuer cette capacité au code JOBLY ni en importer un doublon |
+| Géolocalisation et mobilité | Modèles de sites, lieux et opérations territoriales propres aux applications NAXA | Helpers GPS, calcul de distance et étapes de validation JOBLY | Réutilisation ponctuelle seulement après comparaison ; les règles de localisation de GRILLAD, SECURITY et des autres produits restent NAXA |
+| Contenus et viralité | Identité visuelle et parcours commerciaux propres à chaque produit | Helpers de génération/partage de contenu JOBLY, si utiles | Pas de CMS marketing commun par défaut ; vérifier d'abord les outils NAXA existants et activer uniquement pour un besoin produit validé |
+| Parrainage, Partner et commissions de referral JOBLY | Aucun transfert depuis JOBLY | **Aucun** | **EXCLU : ne pas reprendre, adapter, copier ou intégrer les modules, tables, API, interfaces, rôles, parcours KYC, codes de parrainage, attribution, commissions ou payout Partner de JOBLY.** |
 
-#### Exemples d'adaptation métier
+#### Garde-fous communs aux dix applications
 
-- **KIOSKO :** droits liés aux fonctions de caisse/float, nombre de points, appareils ou options activés ; annonces de service et alertes ; QR/lien de reçu à accès limité si utile. La surveillance des paiements d'abonnement doit rester distincte des transactions Mobile Money des clients.
-- **BOOTIK :** droits par boutique, utilisateurs, volume d'articles ou fonctions avancées ; campagnes promotionnelles de produits ; partage temporaire de factures ou reçus. Les limites doivent tenir compte des profils commerce et dépôt de gaz.
-- **ZIPPLE :** droits par établissement ou capacité convenue ; annonces de menus, événements et offres ; QR de commande, ticket ou partage de facture selon le parcours choisi.
-- **NAXA SERVICES :** droits par salon/pressing, prestataires ou fonctionnalités ; rappels et campagnes de fidélité ; lien limité pour ticket de dépôt, reçu ou statut de linge.
-- **COTIZ :** droits par groupe ou membre selon la tarification validée ; notifications de séance et échéances ; reçus ou relevés partageables sous contrôle. Aucune publicité intrusive dans les échanges d'un groupe et aucune commission de parrainage ne doit être supposée.
-- **LOYABLE :** droits par portefeuille, bien ou unité convenue ; annonces et rappels de loyers ; liens temporaires pour quittances ou états des lieux avec consentement et journalisation.
-- **NAXA HOTEL :** droits par établissement, chambre ou capacité contractuelle ; campagnes et annonces hôtelières ; QR/lien de réservation ou de facture avec durée et portée contrôlées. Les règles de réservation et de chambre restent dans le PMS.
-- **CAMPUS237 :** droits selon le modèle par parent, établissement ou autre unité validée ; annonces ciblées par établissement/classe/parent ; QR temporaires pour documents ou opérations scolaires, avec protection renforcée des données des mineurs.
-- **NAXA SECURITY :** droits par organisation, site, équipement ou capacité convenue ; notifications et alertes de service ; liens d'accès à des preuves/événements soumis à permissions renforcées, expiration et audit. Aucune publicité ne doit perturber une alerte de sécurité.
-- **GRILLAD :** droits selon organisation, Manager, vendeurs, lieux ou capacité convenue ; annonces d'exploitation et informations d'activité ; QR/lien temporaire pour reçu ou rapport. Les trois modes Manager et les cloisonnements par lieu restent inchangés.
-
-#### Comparatif préliminaire avec les capacités historiques de NAXA
-
-- **Déjà documenté dans l'écosystème NAXA :** authentification et permissions, audit, offline/synchronisation, notifications, abonnements/paiements, tableaux de bord/BI et une plateforme d'assistance avec tickets, agents, files et fonctions de communication.
-- **À approfondir avec l'apport JOBLY :** séparation formelle Plan/Subscription/Payment/Entitlement, webhooks idempotents et réconciliation, droits de fonction/quotas indépendants du nom du plan, préférences de notification, gestion de campagnes/contenus depuis un back-office, mesure détaillée des coûts IA par fonction, et partage QR à jeton opaque avec expiration/révocation.
-- **À prouver avant de classer comme réutilisable :** état de code, couverture des tests, compatibilité des schémas, sécurité RLS, séparation des applications et intégration réelle de chaque capacité.
-- **À ne pas reconstruire sans audit :** le support client NAXA, les notifications, les paiements, le BI et les fonctions QR/barcode déjà existantes dans certains domaines. Leur présence dans un cahier ou une architecture ne prouve toutefois pas qu'elles sont complètes ni prêtes à être mutualisées.
-
-
+- Identités et espaces de données distincts par application ; aucun SSO ou mémoire globale inter-applications implicite.
+- L'administration centrale FAMILLE-NAXA gère les métadonnées et configurations autorisées ; elle n'accède pas aux dossiers opérationnels ni aux données personnelles des clients.
+- L'audit des opérations privilégiées reste centralisé selon les règles NAXA ; les opérations métier restent cloisonnées.
+- Une capacité commune fournit un service technique ou une bibliothèque ; elle ne fusionne jamais les règles métier des produits.
+- Les prix et règles JOBLY ne deviennent jamais des prix, contrats ou droits des applications NAXA.
 
 ## 6.12 Audit statique du code source JOBLY — ZIP complet
 
@@ -314,14 +303,18 @@ Cette matrice est une **proposition de portabilité fonctionnelle**, pas un enga
 
 **Verdict :** JOBLY apporte de bonnes références d'architecture et plusieurs composants candidats, mais le code n'est pas un module prêt à copier dans FAMILLE-NAXA. Les parties métier JOBLY doivent être séparées des fondations réutilisables et plusieurs incohérences doivent être corrigées avant toute reprise.
 
-### Briques à récupérer comme références de conception
+**Périmètre explicitement exclu :** tout ce qui concerne le parrainage, JOBLY Partner, les partenaires, le KYC partenaire, les codes de referral, l'attribution de parrainage, les commissions et les payout. Aucun code, schéma, table, API, interface ou workflow de cette famille ne doit être repris de JOBLY.
 
-1. **Billing & abonnements :** séquence Plan → Subscription → Payment → Entitlements ; catalogue de formules ; tarifs mensuels/annuels ; états de paiement ; historique ; annulation ; rapprochement ; webhook ; clé d'idempotence. À reconstruire en modèle FAMILLE-NAXA par application et par organisation cliente.
-2. **Entitlements & quotas :** droits fonctionnels et limites de capacité par formule, séparés du simple nom du plan. Les quotas doivent être calculés par application et par unité facturable, avec une consommation consultable et auditable.
-3. **Usage IA & coûts :** journal de consommation par fonction, utilisateur, modèle, fournisseur, durée et crédits ; réservation atomique des crédits par transaction SQL ; seuils et alertes de budget. Reprendre le patron de quota atomique après correction du traitement des échecs.
-4. **AI Gateway :** registre d'adaptateurs de fournisseurs, orchestration par priorité, fallback déterministe, liste blanche des entrées, limitation des tailles, réduction de certaines données personnelles, contexte contrôlé, consentement, traces et actions soumises à validation humaine. Seul le noyau générique est candidat ; le contexte Career/Talent et J'IA restent JOBLY.
-5. **Acquisition partenaires :** code/lien d'attribution, onboarding/KYC, rattachement de la conversion, commission déclenchée après un événement admissible, suivi de performance et code promotionnel. Optionnel pour des partenaires externes ; ne pas mélanger avec la rémunération des salariés commerciaux NAXA.
-6. **Traçabilité et préférences :** journal d'audit, suivi des actions privilégiées, préférences par espace produit et consentement. À aligner sur la séparation d'identités et l'administration centrale limitée aux métadonnées décidées pour FAMILLE-NAXA.
+### Briques JOBLY conservées comme références candidates
+
+1. **Billing & abonnements :** séquence Plan → Subscription → Payment → Entitlements ; catalogue de formules ; états de paiement ; historique ; rapprochement ; webhook et clé d'idempotence. Ces patrons ne servent qu'à renforcer le dispositif NAXA existant : un seul moteur canonique après audit.
+2. **Entitlements & quotas :** droits fonctionnels et limites de capacité par formule, séparés du nom du plan. À intégrer au modèle de droits NAXA sans créer de second RBAC, de seconde autorité de permission ou de tables concurrentes.
+3. **Usage IA & coûts :** journal de consommation par fonction, utilisateur, modèle, fournisseur, durée et crédits ; réservation atomique des crédits ; seuils et alertes de budget. Reprendre le patron seulement après correction des compensations d'échec.
+4. **AI Gateway :** registre d'adaptateurs de fournisseurs, orchestration, fallback déterministe, contrôle des entrées, minimisation de données, contexte contrôlé et validation humaine. À considérer comme extension éventuelle du socle AI NAXA, jamais comme un deuxième moteur IA.
+5. **Contexte et mémoire IA :** patterns de mémoire/session et de contexte utilisateur. À utiliser uniquement comme couche dérivée, par application et par autorisation ; les données métier NAXA demeurent la source de vérité.
+6. **Sécurité des liens et QR :** principes de jeton opaque, portée minimale, expiration, révocation et audit. À appliquer aux flux QR NAXA existants après audit, sans nouveau service QR concurrent.
+7. **Instrumentation produit :** mesures d'usage, de durée, d'erreur et de coût par fonction. À brancher sur l'audit/BI NAXA existant plutôt que créer un second journal ou un entrepôt de données parallèle.
+8. **Helpers GPS/mobilité et partage de contenus :** composants ponctuels à évaluer au besoin ; ne pas en faire automatiquement des services transverses ou modifier les règles de géolocalisation propres aux produits.
 
 ### Anomalies et limites bloquantes relevées dans le ZIP
 
@@ -333,7 +326,7 @@ Cette matrice est une **proposition de portabilité fonctionnelle**, pas un enga
 - **Comptabilisation IA à corriger :** les crédits sont réservés avant l'appel au runtime ; les chemins d'échec du runtime ne libèrent pas systématiquement la réservation ni ne marquent la consommation en échec. Deux listes de coûts IA existent en parallèle.
 - **Partage QR/lien non généralisable tel quel :** la table `QRShare` utilise un hash de token mais le QR Jobly ID construit une référence déterministe ; le flux CVShare stocke un token utilisable et ne définit pas d'expiration lors de sa création. Le principe de partage limité est intéressant, pas une implémentation de sécurité prête à mutualiser.
 - **Capacités non trouvées comme modules génériques opérationnels :** feature flags/remote config, moteur complet de notifications push et préférences de notification globales, CMS de campagnes/bannières/publicités, centre de support/tickets, moteur SMS Mobile Money, noyau offline/synchronisation métier multi-applications. Ne pas les considérer comme livrés par JOBLY.
-- **Architecture mono-produit :** les rôles Talent/Recruiter/Partner et le rôle Admin de JOBLY ne remplacent pas l'isolation des dix applications ni la règle FAMILLE-NAXA selon laquelle l'admin central gère les métadonnées sans accès aux dossiers opérationnels clients.
+- **Architecture mono-produit :** les rôles Talent/Recruiter et le rôle Admin de JOBLY ne remplacent pas l'isolation des dix applications ni la règle FAMILLE-NAXA selon laquelle l'admin central gère les métadonnées sans accès aux dossiers opérationnels clients. Les rôles et modules Partner sont explicitement exclus du périmètre de reprise.
 
 ### Pistes de facturation à étudier par application
 
@@ -358,3 +351,51 @@ Ces dimensions sont des unités de mesure candidates, pas des tarifs ni des arbi
 - **À reconstruire ou corriger avant intégration :** schéma et cycle Billing, adaptateurs de paiement, remboursements, idempotence concurrente, QR/liens sécurisés, quotas IA avec compensation.
 - **Non démontré dans ce snapshot :** validation build/runtime complète. Le ZIP ne contient ni `node_modules` ni fichier lockfile ; les rapports embarqués signalent encore des parcours E2E à exécuter et une traduction FR/EN non certifiée. Cet audit est statique ; aucun build, test contre un fournisseur réel ou test de base de données n'a été exécuté ici.
 - **Règles de reprise :** ne pas copier les prix JOBLY ; ne pas migrer la base JOBLY dans Supabase FAMILLE-NAXA ; ne pas fusionner les identités ; ne pas donner au central admin accès aux données opérationnelles ; ne pas modifier production, déployer ou publier d'APK sans autorisation explicite.
+
+
+## 6.13 Directive de non-collision et registre d'intégration NAXA / JOBLY
+
+Cette directive est obligatoire pour toute conception, modification du monorepo ou récupération de code JOBLY.
+
+### Ordre de priorité des sources
+
+1. **Cahiers des charges et arbitrages NAXA approuvés :** autorité sur les besoins, règles métier, modèles d'accès, unités de gestion, données et résultats attendus de chaque application.
+2. **Code, schémas, migrations et tests NAXA existants :** autorité sur toute capacité déjà présente techniquement. Son niveau réel doit être vérifié ; une fonctionnalité seulement documentée ne doit pas être déclarée opérationnelle.
+3. **JOBLY :** source secondaire de patrons techniques seulement, sans priorité sur une décision NAXA et sans importation de domaine métier JOBLY.
+
+### Procédure obligatoire avant d'ajouter un composant JOBLY
+
+Pour chaque capacité candidate :
+- rechercher le composant NAXA correspondant dans le code, les packages, les API, les schémas et les migrations ;
+- vérifier les cahiers des charges et les arbitrages de l'application concernée ;
+- classifier la capacité NAXA : opérationnelle, partielle, seulement documentée, absente ou à remplacer ;
+- identifier un seul module propriétaire, un seul contrat d'API canonique et une seule autorité de données ;
+- si NAXA possède déjà le module, conserver son propriétaire et n'utiliser JOBLY que pour combler un défaut précis, via une extension ou un adaptateur ;
+- si aucune capacité NAXA n'existe, proposer un nouveau module seulement après validation de son périmètre, de ses dépendances et de ses règles d'isolation ;
+- documenter les tests de non-régression, droits/RLS, séparation des applications, mode hors ligne si pertinent et journalisation avant intégration.
+
+### Règles anti-collision techniques
+
+- Interdiction de créer deux tables ayant la même responsabilité métier, deux services concurrents ou deux systèmes de permissions pour une même capacité.
+- Interdiction de dupliquer les notifications, paiements, QR, support, audit, BI, configuration distante ou moteur IA sans preuve d'un besoin distinct et décision écrite.
+- Une bibliothèque commune peut mutualiser des algorithmes ou adaptateurs ; elle ne peut pas fusionner les bases opérationnelles, les identités ou les politiques métier.
+- Les noms, schémas, API et événements existants NAXA sont conservés comme contrats canoniques, sauf décision de refonte explicite.
+- Toute fonction inspirée de JOBLY doit être étiquetée comme candidate, adaptée, testée et validée ; jamais réputée approuvée du seul fait qu'elle apparaît dans le ZIP.
+- Le parrainage et JOBLY Partner restent hors périmètre, même s'ils apparaissent dans l'archive ou dans une ancienne proposition de matrice.
+
+### Registre initial des propriétaires de capacités
+
+| Capacité | Propriétaire à privilégier | Rôle autorisé de JOBLY |
+|---|---|---|
+| Identités, organisations, RBAC/RLS | Fondation NAXA | Aucun remplacement ; référence secondaire uniquement si un défaut concret est démontré |
+| Paiements et abonnements | Contrat Billing NAXA, avec KIOSKO pour les flux de validation qui lui sont assignés | Amélioration technique après audit |
+| Notifications | Service NAXA | Idées de préférences/mesures si manquantes |
+| Support et assistance | Service Support NAXA | Patterns FAQ/IA/handoff si non couverts |
+| QR et codes-barres métier | Modules NAXA propriétaires par application | Renforcement de sécurité uniquement |
+| Audit et BI | Fondation NAXA | Instrumentation complémentaire |
+| Feature flags et remote config | Administration plateforme NAXA | Aucun module JOBLY confirmé dans le ZIP |
+| IA, fournisseurs et mesure des coûts | Socle AI NAXA | Adaptateur/patron multi-fournisseur et observabilité après vérification du socle existant |
+| Mémoire et contexte IA | Données métier de chaque application NAXA | Couche dérivée, cloisonnée et limitée |
+| GPS et mobilité | Modèles de lieux et workflows propres à NAXA | Helpers ponctuels uniquement |
+| Parrainage / Partner / referral | Exclu | Aucun usage autorisé |
+
