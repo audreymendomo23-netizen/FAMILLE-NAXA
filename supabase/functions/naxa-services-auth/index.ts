@@ -485,6 +485,14 @@ async function updateOrganizationProfile(body: Record<string, unknown>, token: s
       !["fr", "en"].includes(defaultLocale)) {
     return { status: 400, body: { message: "Profil d'organisation invalide." } };
   }
+  const organizationRows = await rest(
+    "ns_organizations?select=id&status=eq.active&id=eq." +
+      encodeURIComponent(String(actor.member.org_id)) + "&limit=1",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[];
+  if (!organizationRows?.length) {
+    return { status: 404, body: { message: "Organisation introuvable ou inactive." } };
+  }
   await rest("ns_organizations?id=eq." + encodeURIComponent(String(actor.member.org_id)), {
     method: "PATCH",
     headers: serviceHeaders({ Prefer: "return=representation" }),
