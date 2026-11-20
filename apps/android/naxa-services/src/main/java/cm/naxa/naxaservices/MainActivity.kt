@@ -54,6 +54,9 @@ import androidx.compose.foundation.layout.weight
 import cm.naxa.naxaservices.auth.AuthApi
 import cm.naxa.naxaservices.auth.AuthApiException
 import cm.naxa.naxaservices.auth.AuthSession
+import cm.naxa.naxaservices.auth.ProvisionedAccess
+import cm.naxa.naxaservices.auth.RecoveryRequestItem
+import cm.naxa.naxaservices.auth.RecoveryReset
 import cm.naxa.naxaservices.auth.SessionVault
 import kotlinx.coroutines.launch
 
@@ -162,6 +165,8 @@ private fun NaxaServicesRoot() {
                     } else {
                         ErpScreen(
                             route = AppRoute.valueOf(route),
+                            authApi = api,
+                            activeSession = active,
                             accountName = active.account.displayName,
                             roleCode = active.account.roleCode,
                             lightTheme = lightTheme,
@@ -344,6 +349,8 @@ private val modules = listOf(
 @Composable
 private fun ErpScreen(
     route: AppRoute,
+    authApi: AuthApi,
+    activeSession: AuthSession,
     accountName: String,
     roleCode: String,
     lightTheme: Boolean,
@@ -381,6 +388,10 @@ private fun ErpScreen(
             DashboardContent(Modifier.padding(padding), accountName, roleCode, onNavigate, onLogout)
         } else if (route == AppRoute.MENU) {
             ModuleMenu(Modifier.padding(padding), onNavigate, onLogout)
+        } else if (route == AppRoute.TEAM) {
+            TeamManagementContent(Modifier.padding(padding), authApi, activeSession)
+        } else if (route == AppRoute.SECURITY) {
+            AccessManagementContent(Modifier.padding(padding), authApi, activeSession)
         } else if (currentSpec != null) {
             ModuleContent(Modifier.padding(padding), currentSpec, onNavigate)
         } else {
@@ -390,6 +401,218 @@ private fun ErpScreen(
 }
 
 @Composable
+
+@Composable
+private fun TeamManagementContent(
+    modifier: Modifier,
+    api: AuthApi,
+    session: AuthSession
+) {
+    val scope = rememberCoroutineScope()
+    var name by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
+    var role by rememberSaveable { mutableStateOf("cashier") }
+    var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
+    var workstationId by rememberSaveable { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var provisioned by remember { mutableStateOf<ProvisionedAccess?>(null) }
+
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.team_access_admin_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.team_access_admin_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_display_name)) }, singleLine = true)
+                    OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_phone_optional)) }, singleLine = true)
+                    OutlinedTextField(role, { role = it.trim().lowercase() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_role_code)) }, singleLine = true)
+                    OutlinedTextField(siteId, { siteId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_site_id)) }, singleLine = true)
+                    OutlinedTextField(workstationId, { workstationId = it.trim() }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.member_workstation_id_optional)) }, singleLine = true)
+                    Text(stringResource(R.string.provision_scope_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    Button(
+                        onClick = {
+                            scope.launch {
+                                busy = true
+                                error = null
+                                provisioned = null
+                                runCatching {
+                                    api.provisionMember(
+                                        accessToken = session.accessToken,
+                                        displayName = name,
+                                        roleCode = role,
+                                        siteId = siteId,
+                                        workstationId = workstationId.ifBlank { null },
+                                        contactPhone = phone
+                                    )
+                                }.onSuccess {
+                                    provisioned = it
+                                    name = ""
+                                    phone = ""
+                                    workstationId = ""
+                                }.onFailure {
+                                    error = it.message ?: "Création du compte impossible."
+                                }
+                                busy = false
+                            }
+                        },
+                        enabled = !busy && name.isNotBlank() && siteId.isNotBlank() && role.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth().height(52.dp)
+                    ) {
+                        if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                        else Text(stringResource(R.string.provision_member))
+                    }
+                }
+            }
+        }
+        if (provisioned != null) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(stringResource(R.string.provisioned_credentials_title), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                        Text(stringResource(R.string.provisioned_login_id) + ": " + provisioned!!.loginId)
+                        Text(stringResource(R.string.provisioned_temporary_password) + ": " + provisioned!!.temporaryPassword, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.provisioned_one_time_warning), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        TextButton(onClick = { provisioned = null }) { Text(stringResource(R.string.hide_credentials)) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AccessManagementContent(
+    modifier: Modifier,
+    api: AuthApi,
+    session: AuthSession
+) {
+    val scope = rememberCoroutineScope()
+    var requests by remember { mutableStateOf<List<RecoveryRequestItem>>(emptyList()) }
+    var selected by remember { mutableStateOf<RecoveryRequestItem?>(null) }
+    var verificationMethod by rememberSaveable { mutableStateOf("Présence physique") }
+    var verificationNote by rememberSaveable { mutableStateOf("") }
+    var installationId by rememberSaveable { mutableStateOf("") }
+    var accountId by rememberSaveable { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var reset by remember { mutableStateOf<RecoveryReset?>(null) }
+
+    fun reload() {
+        scope.launch {
+            busy = true
+            error = null
+            runCatching { api.listRecoveryRequests(session.accessToken) }
+                .onSuccess { requests = it }
+                .onFailure { error = it.message ?: "Impossible de charger la file." }
+            busy = false
+        }
+    }
+    LaunchedEffect(session.account.memberId) { reload() }
+
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            Text(stringResource(R.string.recovery_queue_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.recovery_queue_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { reload() }) { Text(stringResource(R.string.refresh_queue)) }
+                if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            }
+            if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
+        }
+        if (requests.isEmpty()) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                    Text(stringResource(R.string.no_recovery_requests), Modifier.padding(18.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else {
+            items(requests) { item ->
+                Card(
+                    onClick = { selected = item; reset = null },
+                    colors = CardDefaults.cardColors(containerColor = if (selected?.id == item.id) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(item.displayName, fontWeight = FontWeight.Bold)
+                        Text(item.loginId + " · " + item.roleCode, color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall)
+                        Text(item.note.ifBlank { stringResource(R.string.no_recovery_note) }, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        Text(item.requestedAt, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+        if (selected != null) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(stringResource(R.string.verify_identity_title), fontWeight = FontWeight.Bold)
+                        Text(selected!!.displayName + " · " + selected!!.loginId)
+                        OutlinedTextField(verificationMethod, { verificationMethod = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.identity_check_method)) }, singleLine = true)
+                        OutlinedTextField(verificationNote, { verificationNote = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.identity_check_note)) }, minLines = 3)
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    error = null
+                                    runCatching {
+                                        api.completeRecovery(session.accessToken, selected!!.id, verificationMethod, verificationNote)
+                                    }.onSuccess {
+                                        reset = it
+                                        selected = null
+                                        verificationNote = ""
+                                        reload()
+                                    }.onFailure { error = it.message ?: "Réinitialisation impossible." }
+                                    busy = false
+                                }
+                            },
+                            enabled = !busy && verificationMethod.isNotBlank() && verificationNote.length >= 12,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(stringResource(R.string.complete_recovery)) }
+                    }
+                }
+            }
+        }
+        if (reset != null) {
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(stringResource(R.string.reset_credentials_title), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                        Text(stringResource(R.string.provisioned_login_id) + ": " + reset!!.loginId)
+                        Text(stringResource(R.string.provisioned_temporary_password) + ": " + reset!!.temporaryPassword, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.provisioned_one_time_warning), style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { reset = null }) { Text(stringResource(R.string.hide_credentials)) }
+                    }
+                }
+            }
+        }
+        item {
+            Divider()
+            Text(stringResource(R.string.revoke_device_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            OutlinedTextField(accountId, { accountId = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.device_account_id_optional)) }, singleLine = true)
+            OutlinedTextField(installationId, { installationId = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.device_installation_id)) }, singleLine = true)
+            Button(
+                onClick = {
+                    scope.launch {
+                        busy = true
+                        runCatching { api.revokeDevice(session.accessToken, installationId, accountId.ifBlank { null }) }
+                            .onSuccess { error = null; installationId = ""; accountId = "" }
+                            .onFailure { error = it.message ?: "Révocation impossible." }
+                        busy = false
+                    }
+                },
+                enabled = !busy && installationId.isNotBlank(),
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(stringResource(R.string.revoke_device)) }
+        }
+    }
+}
+
 private fun DashboardContent(
     modifier: Modifier,
     name: String,
