@@ -733,6 +733,9 @@ interface NaxaServicesDao {
     @Query("SELECT COALESCE(SUM(metricDelta), 0) FROM local_loyalty_events WHERE orgId = :orgId AND programId = :programId AND customerId = :customerId AND eventType = 'activity' AND createdAtMillis >= :sinceMillis")
     suspend fun sumLoyaltyMetric(orgId: String, programId: String, customerId: String, sinceMillis: Long): Long
 
+    @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_loyalty_events WHERE orgId = :orgId AND programId = :programId AND customerId = :customerId AND eventType = 'activity' AND createdAtMillis >= :sinceMillis")
+    suspend fun sumLoyaltyAmount(orgId: String, programId: String, customerId: String, sinceMillis: Long): Long
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertLoyaltyEvent(event: LocalLoyaltyEvent)
 
@@ -930,16 +933,12 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 dao.updateRecurringCharge(charge.copy(active = false, updatedAtMillis = now, lastReminderAtMillis = null))
             } else {
                 val calendar = Calendar.getInstance().apply { timeInMillis = cycleDue }
-                var nextDue = cycleDue
-                do {
-                    when (charge.recurrence) {
-                        "monthly" -> calendar.add(Calendar.MONTH, 1)
-                        "quarterly" -> calendar.add(Calendar.MONTH, 3)
-                        "annual" -> calendar.add(Calendar.YEAR, 1)
-                    }
-                    nextDue = calendar.timeInMillis
-                } while (nextDue <= now)
-                dao.updateRecurringCharge(charge.copy(nextDueAtMillis = nextDue, updatedAtMillis = now, lastReminderAtMillis = null))
+                when (charge.recurrence) {
+                    "monthly" -> calendar.add(Calendar.MONTH, 1)
+                    "quarterly" -> calendar.add(Calendar.MONTH, 3)
+                    "annual" -> calendar.add(Calendar.YEAR, 1)
+                }
+                dao.updateRecurringCharge(charge.copy(nextDueAtMillis = calendar.timeInMillis, updatedAtMillis = now, lastReminderAtMillis = null))
             }
         }
         enqueue(orgId, "recurring_charge", charge.id, "recurring_charge.payment_recorded", siteId)
@@ -1016,15 +1015,16 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         require(program.active && amountXaf >= 0L && actorMemberId.isNotBlank())
         val customer = dao.findCustomer(customerId, program.orgId, siteId) ?: throw IllegalArgumentException("Client introuvable sur ce point de vente.")
         val now = System.currentTimeMillis()
+        val since = if (program.windowDays > 0) now - program.windowDays * 86_400_000L else 0L
+        val previous = dao.sumLoyaltyMetric(program.orgId, program.id, customer.id, since)
+        val previousAmount = dao.sumLoyaltyAmount(program.orgId, program.id, customer.id, since)
         val delta = when (program.metricCode) {
-            "points" -> if (amountXaf == 0L) 0L else amountXaf / program.unitAmountXaf
+            "points" -> (previousAmount + amountXaf) / program.unitAmountXaf - previousAmount / program.unitAmountXaf
             "visits" -> 1L
             "spend" -> amountXaf
             else -> throw IllegalArgumentException("Indicateur de fidélité non pris en charge.")
         }
         require(delta > 0L) { "Le montant doit produire au moins un point, une visite ou une valeur d'achat." }
-        val since = if (program.windowDays > 0) now - program.windowDays * 86_400_000L else 0L
-        val previous = dao.sumLoyaltyMetric(program.orgId, program.id, customer.id, since)
         val activityEvent = LocalLoyaltyEvent(
             UUID.randomUUID().toString(), program.orgId, siteId, program.id, customer.id,
             "activity", amountXaf, delta, null, null, null,
