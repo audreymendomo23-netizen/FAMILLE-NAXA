@@ -1230,7 +1230,7 @@ private fun AgendaLocalContent(
                                     }.onFailure { error = it.message ?: "Waitlist conversion failed." }
                                 }
                             },
-                            enabled = waitReason.trim().length >= 3 && waitDuration.toIntOrNull() in 5..600,
+                            enabled = waitReason.trim().length >= 3 && (waitDuration.toIntOrNull()?.let { it in 5..600 } == true),
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (fr) "Créer le rendez-vous et convertir" else "Create appointment and convert") }
                     }
