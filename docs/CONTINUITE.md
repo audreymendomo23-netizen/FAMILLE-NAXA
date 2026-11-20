@@ -523,7 +523,7 @@ Les montants sont exprimés en FCFA. Les unités et périodicités sont définie
 | LOYABLE | **Abonnement unique à accès complet : 1 000 FCFA × nombre de chambres actives/en gestion** dans le portefeuille du Promoteur. Montant dynamique selon la quantité de chambres ; aucun palier PREMIUM distinct. |
 | NAXA HOTEL | **Abonnement unique à accès complet : 2 000 FCFA × nombre de chambres actives** rattachées à l'hôtel/réseau du Promoteur. Montant dynamique selon la quantité de chambres ; aucun palier PREMIUM distinct. |
 | NAXA SECURITY | ACCÈS : 5 000 ; PREMIUM : 15 000. Conserver les règles d'extension de capacité déjà arbitrées (+20 % par extension), et appliquer l'abonnement Promoteur à tout son réseau dans les limites des capacités souscrites. |
-| GRILLAD | **ACCÈS : 1 500 pour 1 point de vente ; PREMIUM : 3 000 pour un maximum de 5 points de vente ; PRO : 5 000 pour un nombre illimité de points de vente.** La capacité s'applique à l'ensemble du réseau du Promoteur. |
+| GRILLAD | **Tarification dynamique par quantité de points de vente actifs du réseau Promoteur : 1 point = ACCÈS 1 500 ; de 2 à 5 points = PREMIUM 3 000 au total ; à partir de 6 points = PRO 5 000 au total, sans plafond de points.** Le palier et le montant sont recalculés automatiquement à partir du nombre de points de vente actifs. |
 | CAMPUS237 | Établissement gratuit. Abonnements individuels par parent : **Pack Individuel : 1 000 pour suivre 1 élève dans une école ; Pack Famille : 3 000 pour suivre jusqu'à 5 élèves**, dans la même école ou dans plusieurs écoles différentes. |
 
 #### Règle de souscription du Promoteur et couverture de son réseau
@@ -531,7 +531,7 @@ Les montants sont exprimés en FCFA. Les unités et périodicités sont définie
 Pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES, NAXA SECURITY et GRILLAD, **un seul abonnement souscrit par le Promoteur pour une application couvre l'ensemble du réseau rattaché à son organisation** : les points de vente, sites, établissements et unités autorisés du même réseau. Il n'est pas nécessaire de souscrire ni de payer un abonnement identique pour chaque site.
 
 Les capacités ou plafonds propres à la formule restent applicables à l'ensemble du réseau :
-- GRILLAD : 1 point de vente en ACCÈS ; maximum 5 en PREMIUM ; illimité en PRO.
+- GRILLAD : le nombre de points de vente actifs sélectionne automatiquement le palier tarifaire du réseau : 1 = 1 500 FCFA ; 2 à 5 = 3 000 FCFA au total ; 6 et plus = 5 000 FCFA au total, illimité.
 - NAXA SECURITY : conserver les capacités d'équipement/flux souscrites et les extensions prévues (+20 % par extension).
 - Pour les autres applications, aucun plafond de sites supplémentaire n'est inventé par cette règle ; appliquer les capacités définies dans leur cahier et catalogue approuvés.
 
@@ -542,11 +542,29 @@ Les cas facturés selon une unité ou un compte non Promoteur restent des except
 Un même Promoteur ne peut détenir ni utiliser simultanément plusieurs souscriptions identiques ou plusieurs exemplaires du même pack pour une même application.
 
 - Pour les applications à abonnement Promoteur, une seule souscription active (ou en essai, renouvellement en attente ou période de grâce) est autorisée par couple **Promoteur + application**. Cette souscription couvre son réseau complet.
-- Le Promoteur choisit un seul pack actif par application. Un passage d'ACCÈS à PREMIUM, ou entre les niveaux GRILLAD, est une modification/évolution de la souscription existante, et non la création d'un second abonnement parallèle.
+- Le Promoteur dispose d'une seule souscription active par application. Pour les formules à paliers GRILLAD, le nombre de points de vente actifs détermine automatiquement le palier ; l'évolution de quantité ou de palier modifie la souscription existante et ne crée jamais un second abonnement.
 - Une souscription expirée, résiliée ou remplacée reste dans l'historique ; elle ne constitue pas une seconde souscription active.
 - La règle d'unicité est appliquée côté serveur et en base de données, avec contrainte/transaction empêchant les créations concurrentes et journalisant les tentatives de doublon.
 - Les exceptions COTIZ et CAMPUS237 s'appliquent à leur véritable payeur et unité : membre × cotisation pour COTIZ ; parent × application pour CAMPUS237. Un parent ne peut avoir qu'un seul pack CAMPUS237 actif à la fois ; le passage d'Individuel à Famille remplace le pack courant.
 - Pour LOYABLE et NAXA HOTEL, conserver une seule souscription Promoteur par application et tout le réseau ; la quantité de chambres est portée par cette souscription et son montant est recalculé dynamiquement (1 000 FCFA/chambre LOYABLE ; 2 000 FCFA/chambre NAXA HOTEL), sans souscription distincte par chambre.
+
+#### Règles spécifiques GRILLAD — abonnement dynamique par nombre de points de vente
+
+GRILLAD applique le même principe de souscription unique à quantité variable que LOYABLE et NAXA HOTEL, mais avec une tarification par paliers. Le nombre de points de vente actifs du réseau du Promoteur détermine automatiquement le palier applicable :
+
+| Nombre de points de vente actifs | Formule | Montant total de l'abonnement |
+|---:|---|---:|
+| 1 | ACCÈS | 1 500 FCFA |
+| 2 à 5 | PREMIUM | 3 000 FCFA |
+| 6 et plus | PRO | 5 000 FCFA, sans limite de points |
+
+Le montant indiqué est le montant total de la formule pour le réseau du Promoteur, et non un prix multiplié par chaque point de vente. Le palier PRO à 5 000 FCFA signifie que le réseau peut exploiter un nombre illimité de points de vente ; il ne signifie pas une facturation de 5 000 FCFA par point.
+
+Le système recalcule le palier à partir du nombre de points de vente actifs rattachés au Promoteur. Exemples : 1 point = 1 500 FCFA ; 4 points = 3 000 FCFA ; 8 points = 5 000 FCFA. L'ajout ou la désactivation d'un point de vente met à jour la quantité, le palier et le montant affichés, avec historique de l'ancienne valeur, de la nouvelle valeur, de la date d'effet et de l'auteur.
+
+Une seule souscription GRILLAD est conservée par Promoteur. Le nombre de points de vente est une quantité de cette souscription ; il ne faut jamais créer un abonnement séparé par point de vente. Les points de vente désactivés, archivés ou en brouillon ne sont pas comptabilisés comme actifs. Les opérations de changement de quantité et de palier sont historisées et protégées contre les modifications concurrentes.
+
+La règle de prise d'effet d'un changement de palier en cours de période (immédiatement avec prorata, ou à la prochaine échéance) doit être définie dans le paramétrage commercial avant l'activation de la facturation automatique. Aucun prorata ni remboursement rétroactif ne doit être inventé.
 
 #### Règles spécifiques COTIZ
 
@@ -679,3 +697,10 @@ Pour construire les fonctions manquantes, appliquer l'ordre suivant :
 
 Pour chaque fonction, désigner un propriétaire canonique, réutiliser ou adapter l'actif existant lorsqu'il est valide, et construire uniquement le manque démontré. Ne jamais créer deux moteurs concurrents de paiement, notification, IA, support, audit ou synchronisation.
 
+### 6.17.13 Point de reprise — finalisation NAXA SERVICES
+
+Après validation du présent référentiel commercial, reprendre la branche de travail `work/naxa-services-completion-20261120` au dernier état vérifié, sans recommencer les écrans, modèles Room, parcours Auth ou contrôles CI déjà construits. Le rapport de référence est `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`.
+
+État connu au dernier audit : APK Android debug compilé et tests Auth de contrat réussis ; recette instrumentée Android, tests sur appareils, validation Supabase isolée/RLS, API métier serveur et moteur de synchronisation restent ouverts. La prochaine passe de finalisation doit commencer par la reprise exacte de la branche et la vérification du HEAD/CI, puis traiter les parcours métier prioritaires sans régression. Ne pas déclarer NAXA SERVICES prêt pour production sur la seule base d'une compilation verte.
+
+Les nouvelles règles d'abonnement Promoteur, de quantités LOYABLE/NAXA HOTEL et de paliers GRILLAD doivent être implémentées dans le catalogue central partagé, mais ne doivent pas provoquer de modification du projet NAXA autonome ni de déploiement sur ses environnements. Les tests E2E NAXA SERVICES doivent utiliser des données et environnements isolés.
