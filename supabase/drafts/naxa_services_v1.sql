@@ -430,6 +430,25 @@ begin
 end;
 $;
 
+alter table public.ns_organizations enable row level security;
+alter table public.ns_sites enable row level security;
+alter table public.ns_workstations enable row level security;
+alter table public.ns_services enable row level security;
+alter table public.ns_customers enable row level security;
+alter table public.ns_appointments enable row level security;
+alter table public.ns_pressing_orders enable row level security;
+alter table public.ns_pressing_items enable row level security;
+alter table public.ns_pressing_status_events enable row level security;
+alter table public.ns_cash_registers enable row level security;
+alter table public.ns_cash_sessions enable row level security;
+alter table public.ns_sales enable row level security;
+alter table public.ns_payments enable row level security;
+alter table public.ns_expenses enable row level security;
+alter table public.ns_commission_rules enable row level security;
+alter table public.ns_commission_entries enable row level security;
+alter table public.ns_inventory_items enable row level security;
+alter table public.ns_inventory_movements enable row level security;
+
 alter table public.ns_accounts enable row level security;
 alter table public.ns_members enable row level security;
 alter table public.ns_member_scopes enable row level security;
