@@ -122,6 +122,32 @@ export const NAXA_FAMILY_CATALOG = Object.freeze({
   }),
 });
 
+/**
+ * Explicit schedule for every family application. The billing lifecycle selects
+ * the catalog at each new service-period start; no already-paid period is repriced.
+ */
+export const NAXA_FAMILY_MATURITY_SCHEDULE = Object.freeze(
+  Object.fromEntries(
+    Object.keys(NAXA_FAMILY_CATALOG).map((appId) => [
+      appId,
+      Object.freeze({
+        launchCatalog: "launch",
+        matureCatalog: "mature",
+        effectiveDate: MATURITY_EFFECTIVE_DATE,
+        timeZone: MATURITY_TIME_ZONE,
+        applyWhen: "new_subscription_or_renewal_period_starts_on_or_after",
+      }),
+    ]),
+  ),
+);
+
+export function getNaxaFamilyMaturitySchedule(appId) {
+  const id = String(appId ?? "").toUpperCase();
+  const schedule = NAXA_FAMILY_MATURITY_SCHEDULE[id];
+  if (!schedule) throw new RangeError("unknown_family_app");
+  return schedule;
+}
+
 function validLocalDate(date) {
   if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     throw new TypeError("invalid_local_date_expected_YYYY_MM_DD");
