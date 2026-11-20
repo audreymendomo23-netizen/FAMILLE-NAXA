@@ -520,8 +520,8 @@ Les montants sont exprimés en FCFA. Les unités et périodicités sont définie
 | ZIPPLE | ACCÈS : 5 000 ; PREMIUM : 15 000. |
 | NAXA SERVICES | ACCÈS : 3 000 ; PREMIUM : **10 000**. |
 | COTIZ | **Abonnement individuel par membre et par cotisation : 500**. Chaque membre paie son propre abonnement pour chaque cotisation à laquelle il participe. Le compte Président reste gratuit jusqu'à 100 membres. |
-| LOYABLE | **Abonnement unique à accès complet : 1 000 par chambre/unité locative facturable**, avec une souscription Promoteur couvrant tout son portefeuille/réseau. Aucun palier PREMIUM distinct. |
-| NAXA HOTEL | **Abonnement unique à accès complet : 2 000 par chambre**, avec une souscription Promoteur couvrant tout son hôtel/réseau. Aucun palier PREMIUM distinct. |
+| LOYABLE | **Abonnement unique à accès complet : 1 000 FCFA × nombre de chambres actives/en gestion** dans le portefeuille du Promoteur. Montant dynamique selon la quantité de chambres ; aucun palier PREMIUM distinct. |
+| NAXA HOTEL | **Abonnement unique à accès complet : 2 000 FCFA × nombre de chambres actives** rattachées à l'hôtel/réseau du Promoteur. Montant dynamique selon la quantité de chambres ; aucun palier PREMIUM distinct. |
 | NAXA SECURITY | ACCÈS : 5 000 ; PREMIUM : 15 000. Conserver les règles d'extension de capacité déjà arbitrées (+20 % par extension), et appliquer l'abonnement Promoteur à tout son réseau dans les limites des capacités souscrites. |
 | GRILLAD | **ACCÈS : 1 500 pour 1 point de vente ; PREMIUM : 3 000 pour un maximum de 5 points de vente ; PRO : 5 000 pour un nombre illimité de points de vente.** La capacité s'applique à l'ensemble du réseau du Promoteur. |
 | CAMPUS237 | Établissement gratuit. Abonnements individuels par parent : **Pack Individuel : 1 000 pour suivre 1 élève dans une école ; Pack Famille : 3 000 pour suivre jusqu'à 5 élèves**, dans la même école ou dans plusieurs écoles différentes. |
@@ -546,15 +546,26 @@ Un même Promoteur ne peut détenir ni utiliser simultanément plusieurs souscri
 - Une souscription expirée, résiliée ou remplacée reste dans l'historique ; elle ne constitue pas une seconde souscription active.
 - La règle d'unicité est appliquée côté serveur et en base de données, avec contrainte/transaction empêchant les créations concurrentes et journalisant les tentatives de doublon.
 - Les exceptions COTIZ et CAMPUS237 s'appliquent à leur véritable payeur et unité : membre × cotisation pour COTIZ ; parent × application pour CAMPUS237. Un parent ne peut avoir qu'un seul pack CAMPUS237 actif à la fois ; le passage d'Individuel à Famille remplace le pack courant.
-- Pour LOYABLE et NAXA HOTEL, conserver une seule souscription Promoteur par application et faire varier la quantité facturable de chambres/unités sans créer de souscriptions répétées identiques.
+- Pour LOYABLE et NAXA HOTEL, conserver une seule souscription Promoteur par application et tout le réseau ; la quantité de chambres est portée par cette souscription et son montant est recalculé dynamiquement (1 000 FCFA/chambre LOYABLE ; 2 000 FCFA/chambre NAXA HOTEL), sans souscription distincte par chambre.
 
 #### Règles spécifiques COTIZ
 
 L'unité facturable est chaque membre pour chaque cotisation, et non le groupe ou le Promoteur du groupe. Chaque membre paie individuellement 500 FCFA par cotisation à laquelle il participe. Le compte Président reste gratuit jusqu'à 100 membres. COTIZ conserve son rôle de registre et de gestion ; il ne devient pas détenteur ou opérateur des fonds des membres.
 
-#### Règles spécifiques LOYABLE et NAXA HOTEL
+#### Règles spécifiques LOYABLE et NAXA HOTEL — abonnement dynamique au nombre de chambres
 
-Chaque application possède un abonnement unique à accès complet, calculé par chambre/unité facturable au tarif indiqué. Les capacités métier, la sécurité et le multisite nécessaires au fonctionnement complet sont inclus. Aucun ancien tarif supérieur ou supplément de formule à 4 000 F ou 5 000 F ne doit être réintroduit. Les coûts éventuels de matériel, d'installation ou de services externes, s'ils existent, sont des postes distincts et ne changent pas le prix du logiciel.
+LOYABLE et NAXA HOTEL ont chacun un seul abonnement à accès complet, sans distinction ACCÈS/PREMIUM. Le prix unitaire est multiplié par le nombre de chambres rattachées au périmètre du Promoteur :
+
+- **LOYABLE : montant de l'abonnement = nombre de chambres actives/en gestion × 1 000 FCFA.**
+- **NAXA HOTEL : montant de l'abonnement = nombre de chambres actives × 2 000 FCFA.**
+
+Le calcul est dynamique : le back-office et l'application récupèrent le nombre de chambres enregistré et activé dans le réseau du Promoteur, calculent le montant correspondant et affichent le détail de quantité, prix unitaire et total. Exemple : 12 chambres LOYABLE = 12 000 FCFA ; 20 chambres NAXA HOTEL = 40 000 FCFA.
+
+Le Promoteur conserve **une seule souscription par application** pour tout son réseau. Les chambres sont comptabilisées comme une quantité rattachée à cette souscription ; elles ne génèrent pas des abonnements séparés par chambre. L'ajout, la désactivation ou la suppression d'une chambre met à jour la quantité facturable et le montant calculé, avec journal de l'ancienne quantité, de la nouvelle quantité, de la date d'effet et de l'auteur de la modification.
+
+Le relevé de facturation doit rendre visibles le nombre de chambres retenues, le prix unitaire, la période couverte et le total. Toute modification de quantité est historisée et ne doit pas entraîner une facturation rétroactive non annoncée. La règle de prise d'effet d'un ajout ou d'un retrait en cours de période (immédiatement avec prorata, ou à la prochaine échéance) reste un paramètre commercial à confirmer avant l'activation de la facturation automatique ; aucun prorata ne doit être inventé.
+
+Les capacités métier, la sécurité et le multisite nécessaires au fonctionnement complet sont inclus. Aucun ancien tarif supérieur ou supplément de formule à 4 000 F ou 5 000 F ne doit être réintroduit. Les coûts éventuels de matériel, d'installation ou de services externes, s'ils existent, sont des postes distincts et ne changent pas le prix unitaire logiciel.
 
 #### Règles spécifiques CAMPUS237
 
