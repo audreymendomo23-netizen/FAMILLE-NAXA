@@ -29,6 +29,11 @@ data class AuthSession(
     val account: AuthAccount
 )
 
+data class ProvisionScope(
+    val siteId: String,
+    val workstationId: String? = null
+)
+
 data class ProvisionedAccess(
     val loginId: String,
     val temporaryPassword: String,
@@ -91,14 +96,22 @@ class AuthApi(private val context: Context) {
         accessToken: String,
         displayName: String,
         roleCode: String,
-        siteId: String,
-        workstationId: String? = null,
+        scopes: List<ProvisionScope>,
         contactPhone: String = ""
     ): ProvisionedAccess {
-        val scope = JSONObject()
-            .put("scope_type", if (workstationId.isNullOrBlank()) "site" else "workstation")
-            .put("site_id", siteId)
-        if (!workstationId.isNullOrBlank()) scope.put("workstation_id", workstationId)
+        val normalizedScopes = scopes.distinctBy { it.siteId + ":" + (it.workstationId ?: "") }
+        require(normalizedScopes.isNotEmpty() && normalizedScopes.size <= 20) {
+            "Sélectionne entre 1 et 20 périmètres de point de vente."
+        }
+        val scopeArray = JSONArray()
+        normalizedScopes.forEach { item ->
+            require(item.siteId.isNotBlank()) { "Un point de vente sélectionné est invalide." }
+            val scope = JSONObject()
+                .put("scope_type", if (item.workstationId.isNullOrBlank()) "site" else "workstation")
+                .put("site_id", item.siteId)
+            if (!item.workstationId.isNullOrBlank()) scope.put("workstation_id", item.workstationId)
+            scopeArray.put(scope)
+        }
         val result = request(
             JSONObject()
                 .put("action", "provision_member")
@@ -106,7 +119,7 @@ class AuthApi(private val context: Context) {
                 .put("display_name", displayName.trim())
                 .put("role_code", roleCode)
                 .put("contact_phone", contactPhone.trim())
-                .put("scopes", JSONArray().put(scope)),
+                .put("scopes", scopeArray),
             accessToken
         )
         return ProvisionedAccess(
