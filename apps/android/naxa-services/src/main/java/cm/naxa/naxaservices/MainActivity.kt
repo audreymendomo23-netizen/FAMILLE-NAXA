@@ -118,7 +118,7 @@ private fun NaxaServicesRoot() {
     val preferences = remember { NaxaServicesPreferences(context) }
     val localDatabase = remember {
         Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db")
-            .addMigrations(NS_SERVICES_MIGRATION_1_2)
+            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3)
             .build()
     }
     val localRepository = remember { NaxaServicesLocalRepository(localDatabase) }
