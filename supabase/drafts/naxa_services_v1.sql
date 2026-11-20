@@ -369,6 +369,84 @@ create table if not exists public.ns_audit_events (
   occurred_at timestamptz not null default now()
 );
 
+
+create table if not exists public.ns_devices (
+  id uuid primary key default gen_random_uuid(),
+  account_id uuid not null references public.ns_accounts(id) on delete cascade,
+  installation_id text not null,
+  platform text not null check (platform in ('android','web')),
+  label text,
+  remember_device boolean not null default false,
+  first_seen_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now(),
+  revoked_at timestamptz,
+  unique (account_id, installation_id)
+);
+
+create table if not exists public.ns_auth_attempts (
+  id bigserial primary key,
+  login_hash text not null,
+  ip_hash text not null,
+  succeeded boolean not null default false,
+  attempted_at timestamptz not null default now()
+);
+create index if not exists ns_auth_attempts_login_idx on public.ns_auth_attempts(login_hash, attempted_at desc);
+create index if not exists ns_auth_attempts_ip_idx on public.ns_auth_attempts(ip_hash, attempted_at desc);
+
+create or replace function public.ns_auth_is_limited(p_login_hash text, p_ip_hash text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $
+  select
+    (select count(*) from public.ns_auth_attempts
+      where login_hash = p_login_hash
+        and attempted_at > now() - interval '15 minutes'
+        and succeeded = false) >= 5
+    or
+    (select count(*) from public.ns_auth_attempts
+      where ip_hash = p_ip_hash
+        and attempted_at > now() - interval '15 minutes'
+        and succeeded = false) >= 20;
+$;
+
+create or replace function public.ns_auth_record_attempt(
+  p_login_hash text,
+  p_ip_hash text,
+  p_succeeded boolean
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $
+begin
+  insert into public.ns_auth_attempts(login_hash, ip_hash, succeeded)
+  values (p_login_hash, p_ip_hash, p_succeeded);
+  delete from public.ns_auth_attempts
+    where attempted_at < now() - interval '2 days';
+end;
+$;
+
+alter table public.ns_accounts enable row level security;
+alter table public.ns_members enable row level security;
+alter table public.ns_member_scopes enable row level security;
+alter table public.ns_auth_recovery_requests enable row level security;
+alter table public.ns_auth_attempts enable row level security;
+alter table public.ns_devices enable row level security;
+alter table public.ns_audit_events enable row level security;
+
+revoke all on public.ns_accounts from anon, authenticated;
+revoke all on public.ns_auth_attempts from anon, authenticated;
+revoke all on public.ns_auth_recovery_requests from anon, authenticated;
+revoke all on public.ns_devices from anon, authenticated;
+revoke all on function public.ns_auth_is_limited(text, text) from public, anon, authenticated;
+revoke all on function public.ns_auth_record_attempt(text, text, boolean) from public, anon, authenticated;
+grant execute on function public.ns_auth_is_limited(text, text) to service_role;
+grant execute on function public.ns_auth_record_attempt(text, text, boolean) to service_role;
+
 -- Do not create policies yet. First reconcile the existing cross-app RLS contract
 -- and prove helper ownership, grants and tenant boundary tests.
 rollback;

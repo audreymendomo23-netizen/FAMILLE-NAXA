@@ -1,6 +1,0 @@
-export function validateMonthlyPrice(v){if(!Number.isSafeInteger(v)||v<0)throw new RangeError("invalid_fcfa_amount");return v}
-export function roundDownToHundred(v){if(!Number.isSafeInteger(v)||v<0)throw new RangeError("invalid_fcfa_amount");return Math.floor(v/100)*100}
-export function packagePrice(monthly,months){validateMonthlyPrice(monthly);if(months===3)return roundDownToHundred(Math.floor(monthly*27/10));if(months===6)return monthly*5;if(months===12)return monthly*10;throw new RangeError("unsupported_package")}
-export function upgradeProrata(oldPrice,newPrice,days){validateMonthlyPrice(oldPrice);validateMonthlyPrice(newPrice);if(!Number.isInteger(days)||days<0||days>30)throw new RangeError("invalid_remaining_days");if(newPrice<=oldPrice||days===0)return 0;return Math.max(100,Math.round((newPrice-oldPrice)*days/30))}
-export function giftMonthsAllowed(used,requested){for(const n of [used,requested])if(!Number.isSafeInteger(n)||n<0)throw new RangeError("invalid_gift_months");return Math.max(0,Math.min(requested,3-used))}
-export function provisionalAccessUntil(now,alreadyGranted){if(!(now instanceof Date)||Number.isNaN(now.getTime()))throw new TypeError("invalid_date");return alreadyGranted?null:new Date(now.getTime()+86400000)}
