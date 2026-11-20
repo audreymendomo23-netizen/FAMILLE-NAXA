@@ -82,25 +82,33 @@ declare
   v_wave integer;
   v_reward_kind text;
   v_reward_id uuid;
+  v_existing_subscription_id text;
+  v_existing_referred_org_id uuid;
 begin
   if p_referred_org_id is null
      or nullif(trim(p_provider_event_id), '') is null
      or nullif(trim(p_subscription_id), '') is null
      or p_paid_at is null
+     or p_referrer_plan_cadence is null
      or p_referrer_plan_cadence not in ('monthly','annual') then
     raise exception 'NAXA_REFERRAL_FIRST_PAYMENT_INVALID';
   end if;
 
-  select id into v_referral_id
+  select id, first_subscription_id, referred_org_id
+    into v_referral_id, v_existing_subscription_id, v_existing_referred_org_id
   from public.ns_referrals
   where provider_event_id = p_provider_event_id
   limit 1;
   if found then
-    return jsonb_build_object('qualified', true, 'idempotent', true, 'referral_id', v_referral_id);
+    if v_existing_subscription_id = trim(p_subscription_id)
+       and v_existing_referred_org_id = p_referred_org_id then
+      return jsonb_build_object('qualified', true, 'idempotent', true, 'referral_id', v_referral_id);
+    end if;
+    raise exception 'NAXA_REFERRAL_PROVIDER_EVENT_REUSED';
   end if;
 
-  select id, referrer_org_id, status
-    into v_referral_id, v_referrer_org_id, v_status
+  select id, referrer_org_id, status, first_subscription_id
+    into v_referral_id, v_referrer_org_id, v_status, v_existing_subscription_id
   from public.ns_referrals
   where referred_org_id = p_referred_org_id
   for update;
@@ -108,7 +116,10 @@ begin
     return jsonb_build_object('qualified', false, 'reason', 'no_referral_code_applied');
   end if;
   if v_status = 'qualified' then
-    return jsonb_build_object('qualified', true, 'idempotent', true, 'referral_id', v_referral_id);
+    if v_existing_subscription_id = trim(p_subscription_id) then
+      return jsonb_build_object('qualified', true, 'idempotent', true, 'referral_id', v_referral_id);
+    end if;
+    return jsonb_build_object('qualified', false, 'reason', 'already_qualified_by_another_subscription');
   end if;
   if v_status <> 'pending' then
     return jsonb_build_object('qualified', false, 'reason', 'referral_not_pending');
