@@ -65,12 +65,13 @@ class AuthApi(private val context: Context) {
                 .put("device", devicePayload())
         )
 
-    suspend fun refresh(refreshToken: String): AuthSession =
+    suspend fun refresh(refreshToken: String, rememberDevice: Boolean): AuthSession =
         requestSession(
             JSONObject()
                 .put("action", "refresh")
                 .put("app_code", "naxa-services")
                 .put("refresh_token", refreshToken)
+                .put("remember_device", rememberDevice)
                 .put("device", devicePayload())
         )
 
