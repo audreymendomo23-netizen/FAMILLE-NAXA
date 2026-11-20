@@ -306,3 +306,55 @@ Cette matrice est une **proposition de portabilité fonctionnelle**, pas un enga
 - **À prouver avant de classer comme réutilisable :** état de code, couverture des tests, compatibilité des schémas, sécurité RLS, séparation des applications et intégration réelle de chaque capacité.
 - **À ne pas reconstruire sans audit :** le support client NAXA, les notifications, les paiements, le BI et les fonctions QR/barcode déjà existantes dans certains domaines. Leur présence dans un cahier ou une architecture ne prouve toutefois pas qu'elles sont complètes ni prêtes à être mutualisées.
 
+
+
+## 6.12 Audit statique du code source JOBLY — ZIP complet
+
+**Source examinée :** `Jobly-JIA-V5-20-20-21-09-2026.zip`, snapshot dont les entrées datent du 21/09/2026, environ 458 fichiers répartis dans 240 dossiers. L'audit a couvert le catalogue d'abonnements, les API de paiement, les droits/quota, l'orchestration IA, les migrations SQL, les rôles partenaires, le partage par lien/QR, les politiques RLS et les rapports de validation présents dans l'archive.
+
+**Verdict :** JOBLY apporte de bonnes références d'architecture et plusieurs composants candidats, mais le code n'est pas un module prêt à copier dans FAMILLE-NAXA. Les parties métier JOBLY doivent être séparées des fondations réutilisables et plusieurs incohérences doivent être corrigées avant toute reprise.
+
+### Briques à récupérer comme références de conception
+
+1. **Billing & abonnements :** séquence Plan → Subscription → Payment → Entitlements ; catalogue de formules ; tarifs mensuels/annuels ; états de paiement ; historique ; annulation ; rapprochement ; webhook ; clé d'idempotence. À reconstruire en modèle FAMILLE-NAXA par application et par organisation cliente.
+2. **Entitlements & quotas :** droits fonctionnels et limites de capacité par formule, séparés du simple nom du plan. Les quotas doivent être calculés par application et par unité facturable, avec une consommation consultable et auditable.
+3. **Usage IA & coûts :** journal de consommation par fonction, utilisateur, modèle, fournisseur, durée et crédits ; réservation atomique des crédits par transaction SQL ; seuils et alertes de budget. Reprendre le patron de quota atomique après correction du traitement des échecs.
+4. **AI Gateway :** registre d'adaptateurs de fournisseurs, orchestration par priorité, fallback déterministe, liste blanche des entrées, limitation des tailles, réduction de certaines données personnelles, contexte contrôlé, consentement, traces et actions soumises à validation humaine. Seul le noyau générique est candidat ; le contexte Career/Talent et J'IA restent JOBLY.
+5. **Acquisition partenaires :** code/lien d'attribution, onboarding/KYC, rattachement de la conversion, commission déclenchée après un événement admissible, suivi de performance et code promotionnel. Optionnel pour des partenaires externes ; ne pas mélanger avec la rémunération des salariés commerciaux NAXA.
+6. **Traçabilité et préférences :** journal d'audit, suivi des actions privilégiées, préférences par espace produit et consentement. À aligner sur la séparation d'identités et l'administration centrale limitée aux métadonnées décidées pour FAMILLE-NAXA.
+
+### Anomalies et limites bloquantes relevées dans le ZIP
+
+- **Incohérence schéma/API abonnements :** le schéma Prisma et la migration initiale portent `Subscription.plan`; les API JOBLY lisent/écrivent `planCode`. La migration partenaire ajoute `productType`, mais le schéma Prisma livré n'est pas synchronisé. Aucune migration du ZIP examinée n'ajoute `Subscription.planCode`. À résoudre avant reprise ou exploitation.
+- **Facturation Recruiter incomplète :** un catalogue séparé Recruiter existe, mais la route principale d'abonnement appelle le catalogue Talent ; la route Entitlements retourne également les droits Talent après avoir déterminé le type de profil. Le cycle B2B ne constitue donc pas une implémentation générique et complète.
+- **Paiement non prêt pour production :** le fournisseur IClan pointe par défaut vers l'environnement de test et utilise des routes `/api/test/`. Le remboursement observé change le statut local du paiement et annule l'abonnement, sans appel de remboursement au fournisseur.
+- **Idempotence à renforcer :** la clé est vérifiée avant création puis enregistrée après l'appel au fournisseur ; cette séquence ne réserve pas atomiquement la clé avant l'initiation et peut laisser un risque de double tentative concurrente.
+- **Cycle d'abonnement incomplet :** le code fourni ne démontre pas le renouvellement automatique, la relance d'impayé, la période de grâce ou l'expiration automatique fondée sur `currentPeriodEnd`. Les droits dépendent surtout du statut enregistré.
+- **Comptabilisation IA à corriger :** les crédits sont réservés avant l'appel au runtime ; les chemins d'échec du runtime ne libèrent pas systématiquement la réservation ni ne marquent la consommation en échec. Deux listes de coûts IA existent en parallèle.
+- **Partage QR/lien non généralisable tel quel :** la table `QRShare` utilise un hash de token mais le QR Jobly ID construit une référence déterministe ; le flux CVShare stocke un token utilisable et ne définit pas d'expiration lors de sa création. Le principe de partage limité est intéressant, pas une implémentation de sécurité prête à mutualiser.
+- **Capacités non trouvées comme modules génériques opérationnels :** feature flags/remote config, moteur complet de notifications push et préférences de notification globales, CMS de campagnes/bannières/publicités, centre de support/tickets, moteur SMS Mobile Money, noyau offline/synchronisation métier multi-applications. Ne pas les considérer comme livrés par JOBLY.
+- **Architecture mono-produit :** les rôles Talent/Recruiter/Partner et le rôle Admin de JOBLY ne remplacent pas l'isolation des dix applications ni la règle FAMILLE-NAXA selon laquelle l'admin central gère les métadonnées sans accès aux dossiers opérationnels clients.
+
+### Pistes de facturation à étudier par application
+
+Ces dimensions sont des unités de mesure candidates, pas des tarifs ni des arbitrages commerciaux approuvés :
+
+| Application | Unités/capacités à étudier dans les Entitlements |
+|---|---|
+| KIOSKO | Point de vente, opérateurs, appareils et options. Abonnement KIOSKO strictement séparé des opérations Mobile Money des clients. |
+| COTIZ | Groupe, membres actifs et fonctionnalités de gestion. L'abonnement ne doit jamais transformer COTIZ en détenteur ou opérateur des fonds des membres. |
+| BOOTIK | Boutique, point de vente, utilisateurs, capacité catalogue et options propres au profil commerce/dépôt de gaz. |
+| ZIPPLE | Établissement, sites, utilisateurs et modules opérationnels restauration/bar/braiseur. |
+| LOYABLE | Portefeuille, biens/unités locatives et comptes propriétaires/gestionnaires. |
+| NAXA SERVICES | Établissement pressing/salon, personnel et capacité des rendez-vous/tickets. |
+| NAXA HOTEL | Hôtel, chambres, utilisateurs et modules PMS activés. |
+| NAXA SECURITY | Organisation, sites, capacité d'équipements/flux et conservation ; respecter les extensions de capacité déjà décidées et la séparation des données de sécurité. |
+| CAMPUS237 | Conserver le modèle commercial déjà arbitré par parent ; étudier les droits par parent/établissement sans remplacer le tarif validé. |
+| GRILLAD | Organisation, lieux de service, Manager, vendeurs et capacité des sessions, en préservant les trois modes de fonctionnement. |
+
+### Niveau de confiance et prochaines étapes
+
+- **Réutilisable après refonte :** concepts Billing/Entitlements, suivi de consommation, moteur IA abstrait, attribution partenaire, journal d'audit et préférences.
+- **À reconstruire ou corriger avant intégration :** schéma et cycle Billing, adaptateurs de paiement, remboursements, idempotence concurrente, QR/liens sécurisés, quotas IA avec compensation.
+- **Non démontré dans ce snapshot :** validation build/runtime complète. Le ZIP ne contient ni `node_modules` ni fichier lockfile ; les rapports embarqués signalent encore des parcours E2E à exécuter et une traduction FR/EN non certifiée. Cet audit est statique ; aucun build, test contre un fournisseur réel ou test de base de données n'a été exécuté ici.
+- **Règles de reprise :** ne pas copier les prix JOBLY ; ne pas migrer la base JOBLY dans Supabase FAMILLE-NAXA ; ne pas fusionner les identités ; ne pas donner au central admin accès aux données opérationnelles ; ne pas modifier production, déployer ou publier d'APK sans autorisation explicite.
