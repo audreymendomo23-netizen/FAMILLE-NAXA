@@ -50,6 +50,7 @@ import cm.naxa.naxaservices.data.LocalSite
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import java.util.Calendar
 import kotlinx.coroutines.flow.first
+import kotlin.math.roundToLong
 import kotlinx.coroutines.launch
 
 @Composable
@@ -258,6 +259,8 @@ fun CustomersContent(
     }
 }
 
+private fun formatInventoryXaf(value: Long): String = "%,d FCFA".format(value).replace(',', ' ')
+
 @Composable
 fun StockContent(
     modifier: Modifier,
@@ -283,6 +286,14 @@ fun StockContent(
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    val unvaluedItems = stock.count { item -> valuations.none { it.inventoryItemId == item.id } }
+    val stockCostValue = stock.sumOf { item ->
+        (item.quantity * (valuations.firstOrNull { it.inventoryItemId == item.id }?.unitCostXaf ?: 0L).toDouble()).roundToLong()
+    }
+    val stockSaleValue = stock.sumOf { item ->
+        (item.quantity * (valuations.firstOrNull { it.inventoryItemId == item.id }?.sellingPriceXaf ?: 0L).toDouble()).roundToLong()
+    }
+    val potentialGrossMargin = stockSaleValue - stockCostValue
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
@@ -294,6 +305,19 @@ fun StockContent(
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
             ) { siteId = it; selectedItemId = ""; unitCostXaf = ""; sellingPriceXaf = "" }
             LocalOnlyNotice("Chaque mouvement est journalisé localement ; le stock ne peut pas devenir négatif.")
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Valorisation estimative du point de vente", fontWeight = FontWeight.Bold)
+                    Text("Coût total du stock : " + formatInventoryXaf(stockCostValue))
+                    Text("Valeur de vente théorique : " + formatInventoryXaf(stockSaleValue))
+                    Text("Marge brute potentielle : " + formatInventoryXaf(potentialGrossMargin), fontWeight = FontWeight.Bold)
+                    Text("Articles non valorisés : " + unvaluedItems + " / " + stock.size, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Calcul local fondé sur les coûts et prix saisis. Hors taxes, pertes, remises, frais indirects et mouvements non synchronisés.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
