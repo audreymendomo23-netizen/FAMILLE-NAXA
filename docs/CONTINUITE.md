@@ -1077,3 +1077,40 @@ Le commit de code/configuration `34682dd53f45f42db7ca815df0af6c74291bc80d` a son
 
 Le commit `c87bf03b436c03cf5a84dcc9e01885e369e6cbaf` ne change que les filtres de déclenchement du workflow afin de surveiller les changements de fonction Referral, migration candidate, configuration Supabase et catalogue. Le workflow `44793189090` est un contrôle supplémentaire : trois jobs non Android ont réussi ; le job Android était encore en compilation au dernier relevé. La preuve fonctionnelle/Android terminée reste le workflow `44792804538`.
 
+
+
+## 6.17.21 — NAXA SERVICES : stocks fournisseurs, charges récurrentes et fidélité (20 novembre 2026)
+
+Poursuite sur la branche `work/naxa-services-completion-20261120`, sans fusion du code vers `main`.
+
+### Parcours ajoutés au code Android
+
+- **Stock et fournisseurs :** contact WhatsApp international enregistré par article, repris dans le modèle CSV, consultable et modifiable dans la fiche de stock. Quand le stock atteint le seuil de réapprovisionnement, l'application propose une quantité cible et ouvre WhatsApp avec un message de commande prérempli. L'utilisateur doit confirmer l'envoi ; l'application n'envoie rien automatiquement.
+- **Charges et échéances :** nouvelle page accessible depuis Profil, avec libellé/catégorie libre, montant, périodicité (mensuelle, trimestrielle, annuelle ou unique), prochaine échéance, délai de rappel, paiements partiels ou complets et historique des règlements. Un Worker Android quotidien prépare des notifications locales, limitées à l'organisation connectée.
+- **Pilotage financier :** l'écran affiche le chiffre d'affaires issu des ventes confirmées, les règlements des charges récurrentes et un solde indicatif. Ce solde ne représente pas le résultat SYSCOHADA, ne calcule pas les impôts et ne remplace pas une validation comptable.
+- **Fidélité :** nouvelle entrée Profil et quatre modèles par profil d'activité : points, passages/visites, dépenses cumulées et fréquence de visite. Les règles, seuils, fenêtres, avantages, activation et historique sont configurables. Les activités et récompenses sont persistées localement ; leur alimentation automatique depuis les ventes et le CRM attend l'API ERP synchronisée.
+- **Migration locale :** Room passe de la version 7 à 8 ; la migration ajoute les données fournisseur, charges, règlements, programmes et événements de fidélité, sans supprimer les données existantes.
+
+### Parrainage PME
+
+Le parcours de parrainage déjà ajouté au Profil conserve le code organisation, le suivi des PME inscrites et de la première activation payée, avec récompenses par blocs successifs de cinq. La migration candidate distingue le cycle mensuel gratuit de l'extension annuelle d'un mois. La correction du 20 novembre renforce l'idempotence des webhooks et rejette une cadence nulle ou un identifiant d'événement réutilisé pour un autre abonnement.
+
+**Limite à ne pas masquer :** l'attribution du gain est encore au statut d'avantage à appliquer. L'abonnement gratuit / le mois additionnel ne sera réel qu'après connexion au moteur d'entitlements et au fournisseur de paiement, avec webhooks signés et secrets configurés.
+
+### Contrats serveur candidats et limites d'environnement
+
+Le fichier `supabase/drafts/naxa_services_v3_operations_rewards_sync.sql` ajoute des candidats de tables pour les charges, paiements, programmes et événements de fidélité, reçus de synchronisation idempotents, conflits et file de notifications, avec contrôles de portée organisation/site. Le fichier reste explicitement en transaction de retour arrière (`rollback`) : il n'a pas été appliqué.
+
+Le seul projet Supabase connecté est le projet existant **NAXA** ; il ne contient ni tables `ns_*` NAXA SERVICES ni Edge Function NAXA SERVICES déployée. La création d'une branche de base dédiée demande une validation de coût ; aucune dépense n'a été engagée. Aucune migration, aucun secret, webhook, prélèvement, livraison FCM/SMS/WhatsApp côté serveur ni déploiement n'a été exécuté.
+
+### État des validations
+
+- Les tests de contrat Auth, Referral et tarifs ont réussi sur la tentative GitHub Actions `44800815315`.
+- Le job Android était encore en cours lors de cette mise à jour ; ne pas considérer la nouvelle version APK comme validée tant que ce job n'a pas fini avec succès.
+- La compilation Android antérieure du parrainage et du noyau NAXA SERVICES reste validée sur le workflow `44792804538`, mais ne couvre pas ces nouveaux modules.
+
+### Qualification globale non acquise
+
+Les points suivants restent à fermer avant de déclarer NAXA SERVICES « VERT GLOBAL » : API ERP distante et synchronisation offline de bout en bout ; application et tests réels du RLS ; intégration de paiement récurrent, webhooks et entitlements ; synchronisation serveur des rappels/CRM et fournisseurs push/SMS/WhatsApp ; interconnexion réelle fidélité-caisse ; rapprochement complet SYSCOHADA/fiscalité/paie validé par des professionnels ; essais instrumentés sur appareils, charge et restauration ; release Android signée ; Web/PWA séparée ; traduction Fulfulde complète et relue ; console centrale des dix applications, mutualisation effective des Customer Service Officers, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
+
+Ces travaux exigent notamment un projet Supabase isolé autorisé, secrets de prestataires, règles opérationnelles validées, clés de signature, appareils de recette et validations professionnelles. Le code reste sur la branche de travail ; le présent ajout de continuité ne vaut ni fusion, ni mise en production.
