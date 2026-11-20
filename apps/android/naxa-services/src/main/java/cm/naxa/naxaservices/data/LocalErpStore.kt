@@ -1489,6 +1489,34 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             "Transition interdite : ${current.status} → $nextStatus pour ${current.recordType}."
         }
         val now = System.currentTimeMillis()
+        // Receiving a purchase order updates the selected site's inventory only
+        // when the order contains one explicitly linked stock item and quantity.
+        if (current.recordType == "purchase" && nextStatus == "received") {
+            val metadata = runCatching { org.json.JSONObject(current.metadataJson) }.getOrElse {
+                throw IllegalArgumentException("Les lignes d'achat doivent être corrigées avant la réception.")
+            }
+            val inventoryItemId = metadata.optString("inventoryItemId").takeIf { it.isNotBlank() }
+            val receivedQuantity = metadata.optDouble("quantity", 0.0)
+            if (inventoryItemId != null) {
+                require(receivedQuantity.isFinite() && receivedQuantity > 0.0) { "Quantité reçue invalide." }
+                val stockItem = dao.findInventoryItem(inventoryItemId, orgId, siteId)
+                    ?: throw IllegalArgumentException("L'article lié à l'achat n'existe plus dans ce point de vente.")
+                val movement = LocalInventoryMovement(
+                    id = UUID.randomUUID().toString(),
+                    orgId = orgId,
+                    siteId = siteId,
+                    itemId = stockItem.id,
+                    movementType = "in",
+                    quantityDelta = receivedQuantity,
+                    reason = "Réception de l'achat ${current.reference}",
+                    actorMemberId = actorMemberId,
+                    createdAtMillis = now
+                )
+                dao.insertInventoryMovement(movement)
+                dao.updateInventoryItem(stockItem.copy(quantity = stockItem.quantity + receivedQuantity))
+                enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.purchase_received", siteId)
+            }
+        }
         val updated = current.copy(status = nextStatus)
         dao.updateManagementRecord(updated)
         dao.insertWorkflowEvent(
