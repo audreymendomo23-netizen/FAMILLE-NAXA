@@ -225,4 +225,9 @@
     <string name="close_cash_session">Clôturer la session</string>
     <string name="local_sales">Ventes locales</string>
     <string name="no_local_sales">Aucune vente enregistrée.</string>
+    <string name="pressing_total_and_deposit">Total : %1$d FCFA · Acompte : %2$d FCFA</string>
+    <string name="appointment_local_status">Statut : %1$s</string>
+    <string name="outbox_pending_count">%1$d événement(s) en attente de synchronisation</string>
+    <string name="cash_session_open">Session ouverte · %1$s</string>
+    <string name="cash_opening_amount_xaf">Fond de caisse initial : %1$d FCFA</string>
 </resources>
