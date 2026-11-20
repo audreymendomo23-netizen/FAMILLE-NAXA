@@ -2071,11 +2071,11 @@ private fun DashboardContent(
     onTourNext: () -> Unit,
     onTourSkip: () -> Unit
 ) {
-    var hour by remember { mutableIntStateOf(Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) }
+    var hour by remember { mutableIntStateOf(Calendar.getInstance(java.util.TimeZone.getTimeZone("Africa/Douala")).get(Calendar.HOUR_OF_DAY)) }
     var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
         while (true) {
-            val clock = Calendar.getInstance()
+            val clock = Calendar.getInstance(java.util.TimeZone.getTimeZone("Africa/Douala"))
             hour = clock.get(Calendar.HOUR_OF_DAY)
             nowMillis = System.currentTimeMillis()
             delay(60_000L)
@@ -2086,7 +2086,7 @@ private fun DashboardContent(
         mutableStateOf(siteIds.firstOrNull().orEmpty())
     }
     val dayStartMillis = remember(nowMillis) {
-        Calendar.getInstance().apply {
+        Calendar.getInstance(java.util.TimeZone.getTimeZone("Africa/Douala")).apply {
             timeInMillis = nowMillis
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -2138,9 +2138,9 @@ private fun DashboardContent(
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (locale == "en") "Today's activity" else "Activité du jour", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     AuthorizedSitePicker(siteIds, siteId, siteLabels) { siteId = it }
-                    DashboardMetricRow(if (locale == "en") "Sales recorded locally" else "Ventes enregistrées localement", dashboardXaf(salesToday))
-                    DashboardMetricRow(if (locale == "en") "Expenses entered" else "Dépenses saisies", dashboardXaf(expensesToday))
-                    DashboardMetricRow(if (locale == "en") "Simplified cash flow" else "Flux simplifié", dashboardXaf(salesToday - expensesToday))
+                    DashboardMetricRow(if (locale == "en") "Confirmed turnover" else "Chiffre d'affaires confirmé", dashboardXaf(salesToday))
+                    DashboardMetricRow(if (locale == "en") "Journalized operating expenses" else "Charges d'exploitation journalisées", dashboardXaf(expensesToday))
+                    DashboardMetricRow(if (locale == "en") "Indicative balance before stock costs and supplier settlements" else "Solde indicatif avant coût des ventes et règlements fournisseurs", dashboardXaf(salesToday - expensesToday))
                     if (activityProfile in setOf("coiffure", "beaute")) {
                         DashboardMetricRow(if (locale == "en") "Appointments today" else "Rendez-vous du jour", appointmentsToday.toString())
                     }
