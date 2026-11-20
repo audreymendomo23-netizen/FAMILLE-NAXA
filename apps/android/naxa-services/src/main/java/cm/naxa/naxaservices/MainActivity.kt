@@ -14,6 +14,7 @@ import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_3_4
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_4_5
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_5_6
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_6_7
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_7_8
 import cm.naxa.naxaservices.data.LocalPressingOrder
 import cm.naxa.naxaservices.data.LocalPressingStatusEvent
 import cm.naxa.naxaservices.data.LocalAppointment
@@ -110,7 +111,7 @@ internal enum class AppRoute {
     LOGIN, RECOVERY, CHANGE_PASSWORD, ACTIVITY_SETUP, LEGAL_ACCEPTANCE, DISCOVERY,
     DASHBOARD, AGENDA, PRESSING, WORK_ORDERS, CASH, SERVICES, CUSTOMERS, TEAM, STOCK, REPORTS,
     ORGANIZATION, NETWORK, SITES, WORKSTATIONS, SECURITY, SETTINGS, HELP, MENU,
-    PROFILE, APPEARANCE, BILLING, SUBSCRIPTIONS, PURCHASES, TAXES, OBJECTIVES, TEAM_PERFORMANCE,
+    PROFILE, APPEARANCE, BILLING, SUBSCRIPTIONS, PURCHASES, TAXES, CHARGES, OBJECTIVES, TEAM_PERFORMANCE,
     AI_INSIGHTS, LIVECHAT
 }
 
@@ -125,7 +126,7 @@ private fun NaxaServicesRoot() {
     val preferences = remember { NaxaServicesPreferences(context) }
     val localDatabase = remember {
         Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db")
-            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7)
+            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7, NS_SERVICES_MIGRATION_7_8)
             .build()
     }
     val localRepository = remember { NaxaServicesLocalRepository(localDatabase) }
@@ -866,6 +867,8 @@ private fun ErpScreen(
             PurchasesContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.TAXES) {
             TaxesContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.CHARGES) {
+            RecurringChargesContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.OBJECTIVES) {
             ObjectivesContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.TEAM_PERFORMANCE) {
