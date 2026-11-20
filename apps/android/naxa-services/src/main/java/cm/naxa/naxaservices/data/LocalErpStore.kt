@@ -1894,6 +1894,82 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         item
     }
 
+    suspend fun createInventoryTransfer(
+        orgId: String,
+        sourceSiteId: String,
+        destinationSiteId: String,
+        inventoryItemId: String,
+        quantity: Double,
+        actorMemberId: String,
+        actorRoleCode: String
+    ): LocalManagementRecord = database.withTransaction {
+        require(actorRoleCode == "promoter") { "Seul le Promoteur du réseau peut initier un transfert inter-sites." }
+        require(orgId.isNotBlank() && actorMemberId.isNotBlank()) { "Organisation et opérateur obligatoires." }
+        require(sourceSiteId.isNotBlank() && destinationSiteId.isNotBlank() && sourceSiteId != destinationSiteId) {
+            "Les deux points de vente doivent être renseignés et distincts."
+        }
+        require(quantity.isFinite() && quantity > 0.0) { "La quantité à transférer doit être strictement positive." }
+
+        val sourceSite = dao.findSite(sourceSiteId, orgId)
+            ?: throw IllegalArgumentException("Le point de vente source n'appartient pas à cette organisation.")
+        val destinationSite = dao.findSite(destinationSiteId, orgId)
+            ?: throw IllegalArgumentException("Le point de vente destination n'appartient pas à cette organisation.")
+        require(sourceSite.status == "active" && destinationSite.status == "active") {
+            "Les deux points de vente doivent être actifs."
+        }
+
+        val item = dao.findInventoryItem(inventoryItemId, orgId, sourceSiteId)
+            ?: throw IllegalArgumentException("L'article source est introuvable dans ce point de vente.")
+        require(item.active && item.quantity >= quantity) { "Stock source insuffisant ou article inactif." }
+
+        val destinationMatches = dao.findInventoryItemsBySku(orgId, destinationSiteId, item.sku)
+        require(destinationMatches.size <= 1) {
+            "Le SKU existe plusieurs fois à destination ; corrige les doublons avant le transfert."
+        }
+        destinationMatches.singleOrNull()?.let { destinationItem ->
+            require(destinationItem.unit.trim().equals(item.unit.trim(), ignoreCase = true)) {
+                "L'unité de l'article destination diffère de celle du stock source."
+            }
+        }
+
+        val now = System.currentTimeMillis()
+        val reference = "TRF-" + now.toString() + "-" + UUID.randomUUID().toString().take(6).uppercase()
+        val metadata = org.json.JSONObject()
+            .put("transferVersion", 1)
+            .put("sourceSiteId", sourceSite.id)
+            .put("sourceSiteName", sourceSite.name)
+            .put("destinationSiteId", destinationSite.id)
+            .put("destinationSiteName", destinationSite.name)
+            .put("inventoryItemId", item.id)
+            .put("sku", item.sku)
+            .put("itemName", item.name)
+            .put("unit", item.unit)
+            .put("quantity", quantity)
+            .put("requestedAtMillis", now)
+            .put("requestedBy", actorMemberId)
+            .toString()
+
+        val transfer = LocalManagementRecord(
+            id = UUID.randomUUID().toString(),
+            orgId = orgId,
+            siteId = sourceSiteId,
+            recordType = "inventory_transfer",
+            reference = reference,
+            title = item.name,
+            counterparty = destinationSite.name,
+            amountXaf = 0L,
+            paidXaf = 0L,
+            dueAtMillis = null,
+            status = "open",
+            metadataJson = metadata,
+            actorMemberId = actorMemberId,
+            createdAtMillis = now
+        )
+        dao.insertManagementRecord(transfer)
+        enqueue(orgId, "inventory_transfer", transfer.id, "inventory_transfer.requested", sourceSiteId)
+        transfer
+    }
+
     suspend fun transitionManagementRecord(
         orgId: String,
         siteId: String,
@@ -1994,6 +2070,11 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                     "delivered" -> setOf("closed")
                     else -> emptySet()
                 }
+            "inventory_transfer" -> when (current.status) {
+                "open" -> setOf("approved", "rejected")
+                "approved" -> setOf("received", "rejected")
+                else -> emptySet()
+            }
             "purchase" -> when (current.status) {
                 "draft", "open" -> setOf("ordered", "cancelled")
                 "ordered" -> setOf("partially_received", "received", "cancelled")
@@ -2053,7 +2134,113 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.purchase_received", siteId)
             }
         }
-        val updated = current.copy(status = nextStatus)
+        var updatedMetadataJson = current.metadataJson
+        if (current.recordType == "inventory_transfer" && nextStatus == "received") {
+            val metadata = runCatching { org.json.JSONObject(current.metadataJson) }.getOrElse {
+                throw IllegalArgumentException("Métadonnées du transfert invalides.")
+            }
+            val sourceSiteId = metadata.optString("sourceSiteId")
+            val destinationSiteId = metadata.optString("destinationSiteId")
+            val inventoryItemId = metadata.optString("inventoryItemId")
+            val expectedSku = metadata.optString("sku")
+            val quantity = metadata.optDouble("quantity", 0.0)
+            require(sourceSiteId == siteId && destinationSiteId.isNotBlank() && destinationSiteId != sourceSiteId) {
+                "Périmètre source/destination du transfert invalide."
+            }
+            require(inventoryItemId.isNotBlank() && expectedSku.isNotBlank() && quantity.isFinite() && quantity > 0.0) {
+                "Article, SKU ou quantité de transfert invalide."
+            }
+            val sourceSite = dao.findSite(sourceSiteId, orgId)
+                ?: throw IllegalArgumentException("Le site source n'existe plus dans cette organisation.")
+            val destinationSite = dao.findSite(destinationSiteId, orgId)
+                ?: throw IllegalArgumentException("Le site destination n'existe plus dans cette organisation.")
+            require(sourceSite.status == "active" && destinationSite.status == "active") {
+                "Le transfert ne peut pas être réceptionné car l'un des sites est inactif."
+            }
+            val sourceItem = dao.findInventoryItem(inventoryItemId, orgId, sourceSiteId)
+                ?: throw IllegalArgumentException("L'article source du transfert n'existe plus.")
+            require(sourceItem.active && sourceItem.sku == expectedSku && sourceItem.quantity >= quantity) {
+                "Stock source insuffisant ou article modifié depuis la demande."
+            }
+
+            val destinationMatches = dao.findInventoryItemsBySku(orgId, destinationSiteId, expectedSku)
+            require(destinationMatches.size <= 1) {
+                "Plusieurs articles portent ce SKU à destination ; réception refusée."
+            }
+            val destinationItem = destinationMatches.singleOrNull()
+            if (destinationItem != null) {
+                require(destinationItem.unit.trim().equals(sourceItem.unit.trim(), ignoreCase = true)) {
+                    "Unité source/destination incompatible ; réception refusée."
+                }
+            }
+
+            val receivedItem = if (destinationItem == null) {
+                LocalInventoryItem(
+                    id = UUID.randomUUID().toString(),
+                    orgId = orgId,
+                    siteId = destinationSiteId,
+                    sku = sourceItem.sku,
+                    name = sourceItem.name,
+                    unit = sourceItem.unit,
+                    quantity = quantity,
+                    reorderLevel = sourceItem.reorderLevel,
+                    active = true,
+                    createdAtMillis = now
+                ).also { dao.insertInventoryItem(it) }
+            } else {
+                destinationItem.copy(quantity = destinationItem.quantity + quantity)
+                    .also { dao.updateInventoryItem(it) }
+            }
+
+            dao.updateInventoryItem(sourceItem.copy(quantity = sourceItem.quantity - quantity))
+            val sourceMovement = LocalInventoryMovement(
+                id = UUID.randomUUID().toString(),
+                orgId = orgId,
+                siteId = sourceSiteId,
+                itemId = sourceItem.id,
+                movementType = "transfer_out",
+                quantityDelta = -quantity,
+                reason = "Transfert reçu à " + destinationSite.name + " · " + current.reference,
+                actorMemberId = actorMemberId,
+                createdAtMillis = now
+            )
+            val destinationMovement = LocalInventoryMovement(
+                id = UUID.randomUUID().toString(),
+                orgId = orgId,
+                siteId = destinationSiteId,
+                itemId = receivedItem.id,
+                movementType = "transfer_in",
+                quantityDelta = quantity,
+                reason = "Transfert reçu depuis " + sourceSite.name + " · " + current.reference,
+                actorMemberId = actorMemberId,
+                createdAtMillis = now
+            )
+            dao.insertInventoryMovement(sourceMovement)
+            dao.insertInventoryMovement(destinationMovement)
+            enqueue(orgId, "inventory_movement", sourceMovement.id, "inventory_movement.transfer_out", sourceSiteId)
+            enqueue(orgId, "inventory_movement", destinationMovement.id, "inventory_movement.transfer_in", destinationSiteId)
+
+            metadata.put("receivedAtMillis", now)
+                .put("receivedBy", actorMemberId)
+                .put("destinationInventoryItemId", receivedItem.id)
+            updatedMetadataJson = metadata.toString()
+            dao.insertWorkflowEvent(
+                LocalWorkflowEvent(
+                    id = UUID.randomUUID().toString(),
+                    orgId = orgId,
+                    siteId = destinationSiteId,
+                    aggregateType = "inventory_transfer",
+                    aggregateId = current.id,
+                    fromStatus = "approved",
+                    toStatus = "received",
+                    reason = reason.trim(),
+                    actorMemberId = actorMemberId,
+                    createdAtMillis = now
+                )
+            )
+            enqueue(orgId, "inventory_transfer", current.id, "inventory_transfer.received_at_destination", destinationSiteId)
+        }
+        val updated = current.copy(status = nextStatus, metadataJson = updatedMetadataJson)
         dao.updateManagementRecord(updated)
         dao.insertWorkflowEvent(
             LocalWorkflowEvent(
