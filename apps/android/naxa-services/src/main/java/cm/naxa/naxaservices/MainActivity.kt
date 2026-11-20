@@ -979,9 +979,9 @@ private fun PressingLocalContent(
                                         promisedAtMillis = promisedAt,
                                         actorMemberId = session.account.memberId
                                     )
-                                }.onSuccess {
+                                }.onSuccess { newOrder ->
                                     customer = ""; phone = ""; garments = ""; total = ""; deposit = "0"
-                                    notice = if (fr) "Ticket créé. Étiquette de référence : PRS-… ; statut reçu." else "Ticket created. Reference label: PRS-…; status received."
+                                    notice = if (fr) "Ticket créé : " + newOrder.ticketNumber + " · statut reçu." else "Ticket created: " + newOrder.ticketNumber + " · received."
                                     error = null
                                 }.onFailure { error = it.message ?: if (fr) "Création du ticket impossible." else "Unable to create ticket." }
                                 busy = false
@@ -1005,6 +1005,7 @@ private fun PressingLocalContent(
                 PressingOrderCard(
                     order = order,
                     events = events,
+                    fr = fr,
                     reason = advanceReasons[order.id].orEmpty(),
                     onReasonChange = { value -> advanceReasons = advanceReasons + (order.id to value) },
                     onAdvance = {
@@ -1030,11 +1031,11 @@ private fun PressingLocalContent(
 private fun PressingOrderCard(
     order: LocalPressingOrder,
     events: List<LocalPressingStatusEvent>,
+    fr: Boolean,
     reason: String,
     onReasonChange: (String) -> Unit,
     onAdvance: () -> Unit
 ) {
-    val fr = true
     val status = when (order.status) {
         "received" -> stringResource(R.string.pressing_status_received)
         "in_progress" -> stringResource(R.string.pressing_status_in_progress)
@@ -1058,15 +1059,15 @@ private fun PressingOrderCard(
             Text(order.customerName, style = MaterialTheme.typography.titleMedium)
             if (order.customerPhone.isNotBlank()) Text(order.customerPhone, style = MaterialTheme.typography.bodySmall)
             Text(order.itemsSummary, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text("Retrait promis : $promised", style = MaterialTheme.typography.bodySmall)
-            order.workstationId?.let { Text("Poste : $it", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+            Text((if (fr) "Retrait promis : " else "Promised pickup: ") + promised, style = MaterialTheme.typography.bodySmall)
+            order.workstationId?.let { Text((if (fr) "Poste : " else "Workstation: ") + it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
             Text(stringResource(R.string.pressing_total_and_deposit, order.totalXaf, order.depositXaf), style = MaterialTheme.typography.bodySmall)
             if (order.status != "picked_up") {
                 OutlinedTextField(
                     reason,
                     onReasonChange,
                     Modifier.fillMaxWidth(),
-                    label = { Text("Motif obligatoire pour l'étape suivante") },
+                    label = { Text(if (fr) "Motif obligatoire pour l'étape suivante" else "Reason required for next stage") },
                     minLines = 1
                 )
                 Button(onClick = onAdvance, enabled = reason.trim().length >= 3, modifier = Modifier.fillMaxWidth()) {
@@ -1074,10 +1075,10 @@ private fun PressingOrderCard(
                 }
             }
             if (events.isNotEmpty()) {
-                Text("Historique du ticket", fontWeight = FontWeight.SemiBold)
+                Text(if (fr) "Historique du ticket" else "Ticket history", fontWeight = FontWeight.SemiBold)
                 events.take(6).forEach { event ->
                     Text(
-                        event.fromStatus + " → " + event.toStatus + " · " + (event.reason.ifBlank { "Étape initiale" }),
+                        event.fromStatus + " → " + event.toStatus + " · " + event.reason.ifBlank { if (fr) "Étape initiale" else "Initial stage" },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
