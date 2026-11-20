@@ -399,3 +399,21 @@ Pour chaque capacité candidate :
 | GPS et mobilité | Modèles de lieux et workflows propres à NAXA | Helpers ponctuels uniquement |
 | Parrainage / Partner / referral | Exclu | Aucun usage autorisé |
 
+
+
+## 6.14 Audit global des deux dépôts et choix de la première application — 20/11/2026
+
+L'audit global couvre désormais :
+- le monorepo cible `FAMILLE-NAXA` (dix shells Android/Web-PWA, packages, contrats, design system, offline partiel, sécurité/RLS et limites des fondations) ;
+- le dépôt source historique `NAXA` (authentification, permissions, paiements/SMS, caisse/POS, stock, notifications/Push, messagerie, comptabilité, BI/IA, prestations et NAXA SECURITY) ;
+- le ZIP complet JOBLY comme référence technique secondaire, avec exclusion absolue de JOBLY Partner/parrainage/KYC/referral/commissions/payout.
+
+**Décision de séquencement recommandée : commencer par NAXA SERVICES**, en raison des actifs réutilisables déjà présents pour catalogue/demandes de prestations, créneaux/rendez-vous, disponibilités, rappels, notifications, caisse, comptabilité et reporting. Ce choix ne signifie pas que ces modules sont copiables en bloc : leurs tables, identités et autorisations actuelles sont liées à l'ancien produit NAXA et notamment à `partners/partner_members` pour les prestations à domicile. NAXA Services doit posséder son propre modèle d'établissement, employés, clients, prestations, dépôts, rendez-vous et caisse dans le périmètre Famille.
+
+**NAXA SECURITY est documenté comme patrimoine logiciel substantiel existant**, avec gateway local, ONVIF, MediaMTX/RTSPS/WHEP, événements, enregistrement local, horodatage et haute surveillance. Les lots restent partiels pour plusieurs dépendances matérielles et le pilote physique ; cette application n'est donc pas l'option la plus rapide à clôturer opérationnellement. Les PDF spécifiques Security restent à lire page par page avant sa phase de construction.
+
+Aucun module JOBLY Partner/referral n'est autorisé. Aucune fonction NAXA existante ne doit être dupliquée sans audit et désignation d'un propriétaire canonique.
+
+**Rapport complet :** `docs/audits/AUDIT_GLOBAL_SOURCES_NAXA_FAMILLE_ET_PRIORISATION_2026-11-20.md`. Il contient le comparatif des dix applications, l'architecture Security, les attentes fonctionnelles NAXA Services, la matrice de réemploi, les garde-fous anti-collision et les jalons J0–J3.
+
+**État : audit et recommandation uniquement.** Aucun code métier, schéma réel, migration, déploiement ou APK n'a été modifié.
