@@ -1,6 +1,7 @@
 package cm.naxa.naxaservices
 
 import android.os.Bundle
+import android.content.res.Configuration
 
 import androidx.room.Room
 import androidx.compose.runtime.collectAsState
@@ -50,6 +51,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,6 +60,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.changedToDown
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -79,6 +86,7 @@ import cm.naxa.naxaservices.auth.RecoveryReset
 import cm.naxa.naxaservices.auth.SessionVault
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import java.util.Calendar
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -88,17 +96,27 @@ class MainActivity : ComponentActivity() {
 }
 
 internal enum class AppRoute {
-    LOGIN, RECOVERY, CHANGE_PASSWORD, DASHBOARD, AGENDA, PRESSING, CASH,
-    SERVICES, CUSTOMERS, TEAM, STOCK, REPORTS, ORGANIZATION, NETWORK,
-    SITES, WORKSTATIONS, SECURITY, SETTINGS, HELP, MENU
+    LOGIN, RECOVERY, CHANGE_PASSWORD, ACTIVITY_SETUP, LEGAL_ACCEPTANCE, DISCOVERY,
+    DASHBOARD, AGENDA, PRESSING, CASH, SERVICES, CUSTOMERS, TEAM, STOCK, REPORTS,
+    ORGANIZATION, NETWORK, SITES, WORKSTATIONS, SECURITY, SETTINGS, HELP, MENU,
+    PROFILE, APPEARANCE, BILLING, SUBSCRIPTIONS, PURCHASES, TAXES, OBJECTIVES,
+    AI_INSIGHTS, LIVECHAT
 }
+
+private const val TERMS_VERSION = "2026-11-v1"
+private const val PRIVACY_VERSION = "2026-11-v1"
 
 @Composable
 private fun NaxaServicesRoot() {
     val context = androidx.compose.ui.platform.LocalContext.current
     val api = remember { AuthApi(context) }
     val vault = remember { SessionVault(context) }
-    val localDatabase = remember { Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db").build() }
+    val preferences = remember { NaxaServicesPreferences(context) }
+    val localDatabase = remember {
+        Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db")
+            .addMigrations(NS_SERVICES_MIGRATION_1_2)
+            .build()
+    }
     val localRepository = remember { NaxaServicesLocalRepository(localDatabase) }
     val scope = rememberCoroutineScope()
 
@@ -108,7 +126,35 @@ private fun NaxaServicesRoot() {
     var message by remember { mutableStateOf<String?>(null) }
     var pendingRefresh by remember { mutableStateOf<String?>(null) }
     var rememberSession by rememberSaveable { mutableStateOf(false) }
-    var lightTheme by rememberSaveable { mutableStateOf(false) }
+    var locale by rememberSaveable { mutableStateOf(preferences.locale()) }
+    var lightTheme by rememberSaveable { mutableStateOf(preferences.isLightNow()) }
+    var tourActive by rememberSaveable { mutableStateOf(false) }
+    var tourStep by rememberSaveable { mutableIntStateOf(0) }
+    var torchTarget by remember { mutableStateOf<Offset?>(null) }
+
+    fun routeAfterAuthentication(auth: AuthSession): String {
+        locale = auth.account.defaultLocale
+        preferences.saveLocale(locale)
+        val activity = auth.account.activityProfile
+        if (activity.isNullOrBlank()) {
+            tourActive = false
+            return AppRoute.ACTIVITY_SETUP.name
+        }
+        preferences.saveActivity(auth.account.organizationId, activity)
+        val acceptedTerms = "terms:$TERMS_VERSION" in auth.account.acceptedLegalDocs
+        val acceptedPrivacy = "privacy:$PRIVACY_VERSION" in auth.account.acceptedLegalDocs
+        if (!acceptedTerms || !acceptedPrivacy) {
+            tourActive = false
+            return AppRoute.LEGAL_ACCEPTANCE.name
+        }
+        if (!auth.account.discoveryCompleted) {
+            tourActive = false
+            return AppRoute.DISCOVERY.name
+        }
+        tourStep = 0
+        tourActive = !auth.account.tourCompleted
+        return AppRoute.DASHBOARD.name
+    }
 
     LaunchedEffect(Unit) {
         pendingRefresh = vault.loadRefreshToken()
@@ -119,7 +165,7 @@ private fun NaxaServicesRoot() {
                 .onSuccess {
                     session = it
                     vault.save(it)
-                    route = if (it.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else AppRoute.DASHBOARD.name
+                    route = if (it.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else routeAfterAuthentication(it)
                 }
                 .onFailure {
                     vault.clear()
@@ -127,6 +173,20 @@ private fun NaxaServicesRoot() {
                     route = AppRoute.LOGIN.name
                 }
             busy = false
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            lightTheme = preferences.isLightNow()
+            delay(60_000L)
+        }
+    }
+
+    LaunchedEffect(torchTarget) {
+        if (torchTarget != null) {
+            delay(1_400L)
+            torchTarget = null
         }
     }
 
@@ -177,7 +237,7 @@ private fun NaxaServicesRoot() {
                     session = it
                     rememberSession = rememberMe
                     if (rememberMe) vault.save(it) else vault.clear()
-                    route = if (it.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else AppRoute.DASHBOARD.name
+                    route = if (it.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else routeAfterAuthentication(it)
                 }
                 .onFailure { message = it.message ?: "Connexion impossible." }
             busy = false
@@ -207,7 +267,7 @@ private fun NaxaServicesRoot() {
                     .onSuccess {
                         session = it
                         if (vault.loadRefreshToken() != null) vault.save(it)
-                        route = AppRoute.DASHBOARD.name
+                        route = routeAfterAuthentication(it)
                         message = "Mot de passe mis à jour."
                     }
                     .onFailure { message = it.message ?: "Modification impossible." }
@@ -216,40 +276,180 @@ private fun NaxaServicesRoot() {
         }
     }
 
+    val active = session
+    val currentLocale = active?.account?.defaultLocale ?: locale
+    val appConfiguration = remember(currentLocale) {
+        Configuration(context.resources.configuration).apply {
+            setLocale(Locale(currentLocale))
+            setLayoutDirection(Locale(currentLocale))
+        }
+    }
+
     NaxaServicesTheme(light = lightTheme) {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            when (AppRoute.valueOf(route)) {
-                AppRoute.LOGIN -> LoginScreen(busy, message, onLogin, { route = AppRoute.RECOVERY.name })
-                AppRoute.RECOVERY -> RecoveryScreen(busy, message, onRecovery, { route = AppRoute.LOGIN.name })
-                AppRoute.CHANGE_PASSWORD -> ChangePasswordScreen(busy, message, onChangePassword)
-                else -> {
-                    val active = session
-                    if (active == null) {
-                        route = AppRoute.LOGIN.name
-                    } else {
-                        ErpScreen(
-                            route = AppRoute.valueOf(route),
-                            authApi = api,
-                            activeSession = active,
-                            localRepository = localRepository,
-                            accountName = active.account.displayName,
-                            roleCode = active.account.roleCode,
-                            lightTheme = lightTheme,
-                            onTheme = { lightTheme = !lightTheme },
-                            onNavigate = { route = it.name },
-                            onLogout = {
-                                scope.launch {
-                                    runCatching { api.logout(active.accessToken) }
-                                    vault.clear()
-                                    rememberSession = false
-                                    session = null
-                                    route = AppRoute.LOGIN.name
-                                }
-                            },
-                            message = message,
-                            onDismissMessage = { message = null }
-                        )
+        CompositionLocalProvider(LocalConfiguration provides appConfiguration) {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                Box(
+                    Modifier.fillMaxSize().pointerInput(lightTheme, preferences.flashlightEnabled()) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Final)
+                                val down = event.changes.firstOrNull { it.changedToDown() }
+                                if (down != null) torchTarget = down.position
+                            }
+                        }
                     }
+                ) {
+                    when (AppRoute.valueOf(route)) {
+                        AppRoute.LOGIN -> LoginScreen(
+                            busy, message, locale,
+                            onLogin,
+                            { route = AppRoute.RECOVERY.name },
+                            onLocale = { locale = it; preferences.saveLocale(it) }
+                        )
+                        AppRoute.RECOVERY -> RecoveryScreen(busy, message, onRecovery, { route = AppRoute.LOGIN.name })
+                        AppRoute.CHANGE_PASSWORD -> ChangePasswordScreen(busy, message, onChangePassword)
+                        AppRoute.ACTIVITY_SETUP -> {
+                            val current = session
+                            if (current == null) route = AppRoute.LOGIN.name
+                            else ActivitySelectionScreen(
+                                locale = current.account.defaultLocale,
+                                initialSelection = preferences.cachedActivity(current.account.organizationId),
+                                canChoose = current.account.roleCode == "promoter",
+                                busy = busy,
+                                error = message
+                            ) { selected ->
+                                scope.launch {
+                                    busy = true
+                                    message = null
+                                    runCatching { api.setOrganizationActivityProfile(current.accessToken, selected) }
+                                        .onSuccess { saved ->
+                                            preferences.saveActivity(current.account.organizationId, saved)
+                                            val updated = current.copy(account = current.account.copy(activityProfile = saved))
+                                            session = updated
+                                            route = routeAfterAuthentication(updated)
+                                        }
+                                        .onFailure { message = it.message ?: "Le Promoteur doit enregistrer l’activité de l’organisation." }
+                                    busy = false
+                                }
+                            }
+                        }
+                        AppRoute.LEGAL_ACCEPTANCE -> {
+                            val current = session
+                            if (current == null) route = AppRoute.LOGIN.name
+                            else {
+                                val hasTerms = "terms:$TERMS_VERSION" in current.account.acceptedLegalDocs
+                                val hasPrivacy = "privacy:$PRIVACY_VERSION" in current.account.acceptedLegalDocs
+                                LegalAcceptanceScreen(
+                                    locale = current.account.defaultLocale,
+                                    initialTermsAccepted = hasTerms,
+                                    initialPrivacyAccepted = hasPrivacy,
+                                    onAccept = { terms, privacy ->
+                                        scope.launch {
+                                            busy = true
+                                            message = null
+                                            runCatching {
+                                                if (terms && !hasTerms) api.acceptLegalDocument(current.accessToken, "terms", TERMS_VERSION, current.account.defaultLocale)
+                                                if (privacy && !hasPrivacy) api.acceptLegalDocument(current.accessToken, "privacy", PRIVACY_VERSION, current.account.defaultLocale)
+                                            }.onSuccess {
+                                                val accepted = current.account.acceptedLegalDocs +
+                                                    (if (terms) setOf("terms:$TERMS_VERSION") else emptySet()) +
+                                                    (if (privacy) setOf("privacy:$PRIVACY_VERSION") else emptySet())
+                                                val updated = current.copy(account = current.account.copy(acceptedLegalDocs = accepted))
+                                                session = updated
+                                                route = AppRoute.DISCOVERY.name
+                                            }.onFailure { message = it.message ?: "L’acceptation n’a pas pu être enregistrée." }
+                                            busy = false
+                                        }
+                                    },
+                                    busy = busy,
+                                    error = message
+                                )
+                            }
+                        }
+                        AppRoute.DISCOVERY -> {
+                            DiscoveryScreen(locale = session?.account?.defaultLocale ?: locale) {
+                                val current = session
+                                if (current == null) route = AppRoute.LOGIN.name
+                                else scope.launch {
+                                    busy = true
+                                    runCatching { api.completeOnboardingStep(current.accessToken, "discovery") }
+                                        .onSuccess {
+                                            val updated = current.copy(account = current.account.copy(discoveryCompleted = true))
+                                            session = updated
+                                            tourActive = !updated.account.tourCompleted
+                                            tourStep = 0
+                                            route = AppRoute.DASHBOARD.name
+                                        }
+                                        .onFailure { message = it.message ?: "Impossible d’enregistrer la découverte." }
+                                    busy = false
+                                }
+                            }
+                        }
+                        else -> {
+                            val current = session
+                            if (current == null) {
+                                route = AppRoute.LOGIN.name
+                            } else {
+                                ErpScreen(
+                                    route = AppRoute.valueOf(route),
+                                    authApi = api,
+                                    activeSession = current,
+                                    localRepository = localRepository,
+                                    accountName = current.account.displayName,
+                                    roleCode = current.account.roleCode,
+                                    lightTheme = lightTheme,
+                                    onTheme = {
+                                        val nextMode = if (lightTheme) "dark" else "light"
+                                        preferences.saveTheme(nextMode, preferences.nightStart(), preferences.nightEnd(), preferences.flashlightEnabled())
+                                        lightTheme = !lightTheme
+                                    },
+                                    onNavigate = { route = it.name },
+                                    onLogout = {
+                                        scope.launch {
+                                            runCatching { api.logout(current.accessToken) }
+                                            vault.clear()
+                                            rememberSession = false
+                                            session = null
+                                            tourActive = false
+                                            route = AppRoute.LOGIN.name
+                                        }
+                                    },
+                                    message = message,
+                                    onDismissMessage = { message = null },
+                                    preferences = preferences,
+                                    activityProfile = current.account.activityProfile,
+                                    tourActive = tourActive,
+                                    tourStep = tourStep,
+                                    onTourNext = {
+                                        if (tourStep >= 4) {
+                                            scope.launch {
+                                                runCatching { api.completeOnboardingStep(current.accessToken, "tour") }
+                                                    .onSuccess {
+                                                        session = current.copy(account = current.account.copy(tourCompleted = true))
+                                                        tourActive = false
+                                                    }
+                                                    .onFailure { message = it.message ?: "Le guide n’a pas pu être marqué comme terminé." }
+                                            }
+                                        } else tourStep += 1
+                                    },
+                                    onTourSkip = {
+                                        scope.launch {
+                                            runCatching { api.completeOnboardingStep(current.accessToken, "tour") }
+                                                .onSuccess {
+                                                    session = current.copy(account = current.account.copy(tourCompleted = true))
+                                                    tourActive = false
+                                                }
+                                                .onFailure { message = it.message ?: "Le guide n’a pas pu être marqué comme terminé." }
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    MiniTorchOverlay(
+                        target = torchTarget,
+                        active = !lightTheme && preferences.flashlightEnabled()
+                    )
                 }
             }
         }
