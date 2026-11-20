@@ -704,51 +704,122 @@ fun TaxesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, se
 fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val scope = rememberCoroutineScope()
     val siteIds = session.account.activeSiteIds
+    val orgId = session.account.organizationId
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
-    val records by remember(siteId) { repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, "business_goal") }.collectAsState(initial = emptyList())
-    val calendar = remember { Calendar.getInstance() }
-    val start = remember { (calendar.clone() as Calendar).apply { set(Calendar.HOUR_OF_DAY,0); set(Calendar.MINUTE,0); set(Calendar.SECOND,0); set(Calendar.MILLISECOND,0) }.timeInMillis }
-    val end = start + 86_400_000L
-    val sales by remember(siteId,start) { repository.dao.observeSalesTotal(session.account.organizationId, siteId, start, end) }.collectAsState(initial = 0L)
-    var title by rememberSaveable { mutableStateOf("Objectif de chiffre d’affaires du jour") }
+    val records by remember(siteId) {
+        repository.dao.observeManagementRecordsByType(orgId, siteId, "business_goal")
+    }.collectAsState(initial = emptyList())
+    var title by rememberSaveable { mutableStateOf("Objectif de chiffre d’affaires") }
     var target by rememberSaveable { mutableStateOf("") }
     var period by rememberSaveable { mutableStateOf("daily") }
     var notice by remember { mutableStateOf<String?>(null) }
+    val zone = remember { ZoneId.systemDefault() }
+    val today = java.time.LocalDate.now(zone)
+    val periodStart = when (period) {
+        "monthly" -> today.withDayOfMonth(1)
+        "annual" -> today.withDayOfYear(1)
+        else -> today
+    }
+    val periodEnd = when (period) {
+        "monthly" -> periodStart.plusMonths(1).minusDays(1)
+        "annual" -> periodStart.plusYears(1).minusDays(1)
+        else -> today
+    }
+    val startMillis = periodStart.atStartOfDay(zone).toInstant().toEpochMilli()
+    val endMillis = periodEnd.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() - 1L
+    val sales by remember(orgId, siteId, startMillis, endMillis) {
+        repository.dao.observeSalesTotal(orgId, siteId, startMillis, endMillis)
+    }.collectAsState(initial = 0L)
+    val activeTarget = records.filter {
+        it.counterparty == period &&
+            when (period) {
+                "daily" -> java.time.Instant.ofEpochMilli(it.createdAtMillis).atZone(zone).toLocalDate() == today
+                "monthly" -> {
+                    val date = java.time.Instant.ofEpochMilli(it.createdAtMillis).atZone(zone).toLocalDate()
+                    date.year == today.year && date.monthValue == today.monthValue
+                }
+                else -> java.time.Instant.ofEpochMilli(it.createdAtMillis).atZone(zone).year == today.year
+            }
+    }.maxByOrNull { it.createdAtMillis }
+    val goal = activeTarget?.amountXaf ?: (target.toLongOrNull() ?: 0L)
+    val progress = if (goal > 0L) (sales.toDouble() * 100.0 / goal.toDouble()) else 0.0
+    val gap = (goal - sales).coerceAtLeast(0L)
+
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
             Text("Pilotage et objectifs", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Objectifs datés, réalisé, écart et historique des décisions. La cible enregistrée n’est pas réécrite rétroactivement.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Baselines datées et historisées. Un nouvel objectif ajoute une nouvelle version ; il ne réécrit pas les objectifs déjà enregistrés.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
-            LocalOnlyNotice("Les objectifs et réalisés visibles ici sont issus du stockage local de ce site.")
+            LocalOnlyNotice("Le réalisé provient des ventes confirmées locales de ce site. La consolidation réseau complète dépendra de la synchronisation ERP.")
         }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Réalisation aujourd’hui : " + xaf(sales), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Objectif") })
-                    OutlinedTextField(target, { target = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Cible (FCFA)") })
+                    Text("Période de pilotage")
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf("daily", "weekly", "monthly").forEach { value -> OutlinedButton(onClick = { period = value }) { Text(if (period == value) "✓ " + value else value) } }
-                    }
-                    val goal = target.toLongOrNull() ?: 0L
-                    val ratio = if (goal > 0) (sales.toDouble() / goal.toDouble()).coerceIn(0.0,1.0).toFloat() else 0f
-                    androidx.compose.material3.LinearProgressIndicator(progress = ratio, modifier = Modifier.fillMaxWidth())
-                    Text(if (goal > 0) "Atteinte : " + (ratio * 100).toInt() + " % · Écart : " + xaf(goal - sales) else "Saisis une cible pour suivre l’atteinte.")
-                    Button(onClick = {
-                        if (goal <= 0 || title.isBlank()) notice = "Un objectif et une cible positive sont requis."
-                        else scope.launch {
-                            runCatching { repository.createManagementRecord(session.account.organizationId, siteId, "business_goal", "OBJ-" + System.currentTimeMillis(), title, period, goal, 0, null, "open", "{\"period\":\"" + period + "\",\"baseline\":\"approved_at_creation\"}", session.account.memberId) }
-                                .onSuccess { target = ""; notice = "Objectif enregistré avec date et auteur." }
-                                .onFailure { notice = it.message ?: "Enregistrement impossible." }
+                        listOf("daily" to "Jour", "monthly" to "Mois", "annual" to "Année").forEach { option ->
+                            OutlinedButton(onClick = { period = option.first }) {
+                                Text((if (period == option.first) "✓ " else "") + option.second)
+                            }
                         }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Fixer l’objectif") }
-                    if (notice != null) Text(notice!!, color = MaterialTheme.colorScheme.secondary)
+                    }
+                    Text("Du " + periodStart.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) +
+                        " au " + periodEnd.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")),
+                        style = MaterialTheme.typography.bodySmall)
+                    Text("CA confirmé : " + xaf(sales), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Objectif") })
+                    OutlinedTextField(target, { target = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Cible de CA (FCFA)") }, singleLine = true)
+                    if (activeTarget != null) {
+                        Text("Baseline actuellement applicable : " + xaf(activeTarget.amountXaf) + " · enregistrée le " +
+                            java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(activeTarget.createdAtMillis)),
+                            style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (goal > 0L) {
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = progress.toFloat().coerceIn(0f, 1f), modifier = Modifier.fillMaxWidth()
+                        )
+                        Text("Atteinte : " + String.format(java.util.Locale.FRANCE, "%.1f", progress) +
+                            " % · " + if (gap > 0L) "reste " + xaf(gap) else "objectif atteint")
+                    } else Text("Aucune cible enregistrée pour cette période.")
+                    Button(
+                        onClick = {
+                            val value = target.toLongOrNull() ?: 0L
+                            if (value <= 0L || title.isBlank()) notice = "Un objectif et une cible positive sont requis."
+                            else scope.launch {
+                                runCatching {
+                                    repository.createManagementRecord(
+                                        orgId, siteId, "business_goal",
+                                        "OBJ-" + System.currentTimeMillis(), title.trim(), period, value, 0L,
+                                        endMillis, "open",
+                                        org.json.JSONObject()
+                                            .put("period", period)
+                                            .put("period_start", periodStart.toString())
+                                            .put("period_end", periodEnd.toString())
+                                            .put("baseline", "approved_at_creation")
+                                            .put("version", records.count { it.counterparty == period } + 1)
+                                            .toString(),
+                                        session.account.memberId
+                                    )
+                                }.onSuccess {
+                                    target = ""; notice = "Objectif approuvé et historisé. La baseline précédente est conservée."
+                                }.onFailure { notice = it.message ?: "Enregistrement impossible." }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Enregistrer une nouvelle baseline") }
+                    notice?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                 }
             }
         }
-        item { Text("Objectifs enregistrés", fontWeight = FontWeight.Bold) }
-        items(records) { Text(it.title + " · " + it.counterparty + " · " + xaf(it.amountXaf), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text("Historique des objectifs approuvés", fontWeight = FontWeight.Bold) }
+        items(records.sortedByDescending { it.createdAtMillis }) { record ->
+            Text(
+                record.title + " · " + record.counterparty + " · " + xaf(record.amountXaf) + " · " +
+                    java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(record.createdAtMillis)),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
     }
 }
 
@@ -795,7 +866,7 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
                 period.targetXaf?.let {
                     Text("Objectif approuvé : " + xaf(it))
                     Text(
-                        if (period.targetGapXaf ?: 0L > 0L) "Écart prévisionnel : " + xaf(period.targetGapXaf ?: 0L)
+                        if ((period.targetGapXaf ?: 0L) > 0L) "Écart prévisionnel : " + xaf(period.targetGapXaf ?: 0L)
                         else "Objectif projeté atteint ou dépassé",
                         color = if ((period.targetGapXaf ?: 0L) > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
                     )
