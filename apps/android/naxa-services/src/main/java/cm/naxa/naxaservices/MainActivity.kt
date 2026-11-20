@@ -410,6 +410,40 @@ private val modules = listOf(
     ModuleSpec(AppRoute.HELP, R.string.module_help, R.string.help_desc, listOf(R.string.action_faq, R.string.action_contact_support, R.string.action_briefings))
 )
 
+private fun canAccessRoute(route: AppRoute, roleCode: String): Boolean {
+    val managers = setOf("promoter", "network_manager", "site_manager")
+    val common = setOf(AppRoute.DASHBOARD, AppRoute.MENU, AppRoute.HELP, AppRoute.SETTINGS)
+    val allowed = when (roleCode) {
+        "promoter", "network_manager", "site_manager" -> AppRoute.values().toSet()
+        "cashier" -> common + setOf(AppRoute.CASH, AppRoute.CUSTOMERS, AppRoute.REPORTS)
+        "receptionist" -> common + setOf(AppRoute.AGENDA, AppRoute.CUSTOMERS)
+        "hair_stylist" -> common + setOf(AppRoute.AGENDA, AppRoute.CUSTOMERS)
+        "pressing_operator" -> common + setOf(AppRoute.PRESSING, AppRoute.CUSTOMERS)
+        "stock_manager" -> common + setOf(AppRoute.STOCK)
+        "accountant" -> common + setOf(AppRoute.REPORTS)
+        // Workstation-only authorization is intentionally unavailable until all
+        // local and remote reads/writes are filtered at workstation level.
+        "workstation_manager" -> common
+        else -> common
+    }
+    return route in allowed
+}
+
+@Composable
+private fun AccessDeniedContent(modifier: Modifier, onBack: () -> Unit) {
+    Column(
+        modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text("Accès non autorisé", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Text("Ce module n’est pas disponible pour le rôle associé à ce compte.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(16.dp))
+        Button(onClick = onBack) { Text("Retour à l’accueil") }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ErpScreen(
@@ -437,9 +471,15 @@ private fun ErpScreen(
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(selected = route == AppRoute.DASHBOARD, onClick = { onNavigate(AppRoute.DASHBOARD) }, icon = { Text("⌂") }, label = { Text(stringResource(R.string.nav_home)) })
-                NavigationBarItem(selected = route == AppRoute.AGENDA, onClick = { onNavigate(AppRoute.AGENDA) }, icon = { Text("◷") }, label = { Text(stringResource(R.string.nav_agenda)) })
-                NavigationBarItem(selected = route == AppRoute.PRESSING, onClick = { onNavigate(AppRoute.PRESSING) }, icon = { Text("▤") }, label = { Text(stringResource(R.string.nav_pressing)) })
-                NavigationBarItem(selected = route == AppRoute.CASH, onClick = { onNavigate(AppRoute.CASH) }, icon = { Text("₣") }, label = { Text(stringResource(R.string.nav_cash)) })
+                if (canAccessRoute(AppRoute.AGENDA, roleCode)) {
+                    NavigationBarItem(selected = route == AppRoute.AGENDA, onClick = { onNavigate(AppRoute.AGENDA) }, icon = { Text("◷") }, label = { Text(stringResource(R.string.nav_agenda)) })
+                }
+                if (canAccessRoute(AppRoute.PRESSING, roleCode)) {
+                    NavigationBarItem(selected = route == AppRoute.PRESSING, onClick = { onNavigate(AppRoute.PRESSING) }, icon = { Text("▤") }, label = { Text(stringResource(R.string.nav_pressing)) })
+                }
+                if (canAccessRoute(AppRoute.CASH, roleCode)) {
+                    NavigationBarItem(selected = route == AppRoute.CASH, onClick = { onNavigate(AppRoute.CASH) }, icon = { Text("₣") }, label = { Text(stringResource(R.string.nav_cash)) })
+                }
                 NavigationBarItem(selected = route == AppRoute.MENU, onClick = { onNavigate(AppRoute.MENU) }, icon = { Text("•••") }, label = { Text(stringResource(R.string.nav_more)) })
             }
         },
@@ -450,10 +490,12 @@ private fun ErpScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        if (route == AppRoute.DASHBOARD) {
+        if (!canAccessRoute(route, roleCode)) {
+            AccessDeniedContent(Modifier.padding(padding)) { onNavigate(AppRoute.DASHBOARD) }
+        } else if (route == AppRoute.DASHBOARD) {
             DashboardContent(Modifier.padding(padding), accountName, roleCode, onNavigate, onLogout)
         } else if (route == AppRoute.MENU) {
-            ModuleMenu(Modifier.padding(padding), onNavigate, onLogout)
+            ModuleMenu(Modifier.padding(padding), roleCode, onNavigate, onLogout)
         } else if (route == AppRoute.PRESSING) {
             PressingLocalContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.AGENDA) {
@@ -481,7 +523,7 @@ private fun ErpScreen(
         } else if (currentSpec != null) {
             ModuleContent(Modifier.padding(padding), currentSpec, onNavigate)
         } else {
-            ModuleMenu(Modifier.padding(padding), onNavigate, onLogout)
+            ModuleMenu(Modifier.padding(padding), roleCode, onNavigate, onLogout)
         }
     }
 }
@@ -1258,7 +1300,7 @@ private fun DashboardContent(
         item {
             Text(stringResource(R.string.quick_actions), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
-        items(listOf(AppRoute.CASH, AppRoute.PRESSING, AppRoute.AGENDA, AppRoute.SERVICES, AppRoute.CUSTOMERS, AppRoute.TEAM)) { target ->
+        items(listOf(AppRoute.CASH, AppRoute.PRESSING, AppRoute.AGENDA, AppRoute.SERVICES, AppRoute.CUSTOMERS, AppRoute.TEAM).filter { canAccessRoute(it, role) }) { target ->
             val spec = modules.firstOrNull { it.route == target }
             if (spec != null) {
                 Card(onClick = { onNavigate(target) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -1274,8 +1316,12 @@ private fun DashboardContent(
         }
         item {
             TextButton(onClick = { onNavigate(AppRoute.MENU) }) { Text(stringResource(R.string.nav_more)) }
-            TextButton(onClick = { onNavigate(AppRoute.NETWORK) }) { Text(stringResource(R.string.network_overview)) }
-            TextButton(onClick = { onNavigate(AppRoute.SECURITY) }) { Text(stringResource(R.string.security_devices)) }
+            if (canAccessRoute(AppRoute.NETWORK, role)) {
+                TextButton(onClick = { onNavigate(AppRoute.NETWORK) }) { Text(stringResource(R.string.network_overview)) }
+            }
+            if (canAccessRoute(AppRoute.SECURITY, role)) {
+                TextButton(onClick = { onNavigate(AppRoute.SECURITY) }) { Text(stringResource(R.string.security_devices)) }
+            }
             TextButton(onClick = onLogout) { Text(stringResource(R.string.sign_out)) }
             Spacer(Modifier.height(18.dp))
         }
@@ -1341,13 +1387,14 @@ private fun ModuleContent(modifier: Modifier, spec: ModuleSpec, onNavigate: (App
 }
 
 @Composable
-private fun ModuleMenu(modifier: Modifier, onNavigate: (AppRoute) -> Unit, onLogout: () -> Unit) {
+private fun ModuleMenu(modifier: Modifier, roleCode: String, onNavigate: (AppRoute) -> Unit, onLogout: () -> Unit) {
+    val visibleModules = modules.filter { canAccessRoute(it.route, roleCode) }
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
             Text(stringResource(R.string.all_modules), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         }
-        items(modules) { spec ->
+        items(visibleModules) { spec ->
             Card(onClick = { onNavigate(spec.route) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp)) {
                     Text(stringResource(spec.title), fontWeight = FontWeight.Bold)
