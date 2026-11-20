@@ -79,6 +79,8 @@ import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.Calendar
+import java.time.ZoneId
+import java.time.LocalDate
 import kotlin.math.roundToLong
 
 private fun xaf(v: Long): String = "%,d F".format(v).replace(',', ' ')
@@ -752,39 +754,138 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
 
 @Composable
 fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
-    val siteId = session.account.activeSiteIds.firstOrNull().orEmpty()
-    val now = System.currentTimeMillis()
-    val start = now - 30L * 86_400_000L
-    val sales by remember(siteId,start) { repository.dao.observeSalesTotal(session.account.organizationId, siteId, start, now) }.collectAsState(initial = 0L)
-    val expenses by remember(siteId,start) { repository.dao.observeExpensesTotal(session.account.organizationId, siteId, start, now) }.collectAsState(initial = 0L)
+    val orgId = session.account.organizationId
+    val siteIds = session.account.activeSiteIds
+    val zone = remember { ZoneId.systemDefault() }
+    val fromMillis = remember { LocalDate.now(zone).minusYears(5).atStartOfDay(zone).toInstant().toEpochMilli() }
+    val sales by remember(orgId, siteIds, fromMillis) {
+        repository.dao.observeSalesForSites(orgId, siteIds, fromMillis)
+    }.collectAsState(initial = emptyList())
+    val accounting by remember(orgId, siteIds, fromMillis) {
+        repository.dao.observeAccountingEntriesForSites(orgId, siteIds, fromMillis)
+    }.collectAsState(initial = emptyList())
+    val objectives by remember(orgId, siteIds) {
+        repository.dao.observeManagementRecordsForSites(orgId, siteIds, "business_goal")
+    }.collectAsState(initial = emptyList())
+    val supplierPayables by remember(orgId, siteIds) {
+        repository.dao.observeSupplierPayablesForSites(orgId, siteIds)
+    }.collectAsState(initial = 0L)
+    val lowStockCount by remember(orgId, siteIds) {
+        repository.dao.observeLowStockCountForSites(orgId, siteIds)
+    }.collectAsState(initial = 0)
+    val dashboard = remember(sales, accounting, objectives, supplierPayables, lowStockCount) {
+        NaxaPerformanceEngine.analyze(
+            sales, accounting, objectives, supplierPayables, lowStockCount,
+            System.currentTimeMillis(), zone
+        )
+    }
+    fun showComparison(value: PeriodProjection): String {
+        val delta = value.projectedXaf - value.comparablePreviousXaf
+        val pct = if (value.comparablePreviousXaf > 0L) delta.toDouble() * 100.0 / value.comparablePreviousXaf else null
+        return if (pct == null) "Comparaison antérieure non disponible"
+        else (if (delta >= 0L) "+" else "") + xaf(delta) + " (" + String.format(java.util.Locale.FRANCE, "%.1f", pct) + " %)"
+    }
+    fun projectionCard(title: String, period: PeriodProjection) {
+        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(title, fontWeight = FontWeight.Bold)
+                Text("Réalisé confirmé : " + xaf(period.actualXaf))
+                Text("Projection de clôture : " + xaf(period.projectedXaf), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Période comparable : " + xaf(period.comparablePreviousXaf) + " · " + showComparison(period))
+                period.targetXaf?.let {
+                    Text("Objectif approuvé : " + xaf(it))
+                    Text(
+                        if (period.targetGapXaf ?: 0L > 0L) "Écart prévisionnel : " + xaf(period.targetGapXaf ?: 0L)
+                        else "Objectif projeté atteint ou dépassé",
+                        color = if ((period.targetGapXaf ?: 0L) > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                    )
+                    period.achievementPercent?.let { ratio ->
+                        androidx.compose.material3.LinearProgressIndicator(
+                            progress = (ratio / 100.0).toFloat().coerceIn(0f, 1f),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text("Atteinte projetée : " + String.format(java.util.Locale.FRANCE, "%.1f", ratio) + " %")
+                    }
+                } ?: Text("Aucun objectif approuvé enregistré pour cette période.")
+            }
+        }
+    }
+
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text("Assistant de gestion", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Indicateurs déterministes calculés à partir des données locales. Les prédictions avancées et l’assistant IA distant nécessitent encore un moteur IA, un contexte sécurisé et des données synchronisées.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Assistant IA de pilotage", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(
+                "Prévisions de CA, comparaison des périodes et recommandations de redressement. Les projections utilisent les ventes confirmées locales et les objectifs enregistrés ; aucune vente en attente n'est comptée.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            LocalOnlyNotice(
+                "Moteur statistique local explicable : moyenne glissante de 14 jours pour la journée, 28 jours pour la clôture mensuelle et 90 jours pour la clôture annuelle. Les résultats dépendent de l'historique disponible et se recalculent à chaque actualisation des données."
+            )
+            Text("Périmètre : " + siteIds.size + " site(s) accessibles et consolidés.", style = MaterialTheme.typography.labelSmall)
+            Text("Couverture des ventes : " + dashboard.dataCoverageDays + " jour(s).", style = MaterialTheme.typography.labelSmall)
         }
+        item { projectionCard("Aujourd'hui · jour par jour", dashboard.day) }
+        item { projectionCard("Mois en cours · mois par mois", dashboard.month) }
+        item { projectionCard("Année en cours · année par année", dashboard.year) }
         item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Synthèse locale — 30 derniers jours", fontWeight = FontWeight.Bold)
-                    Text("Ventes confirmées : " + xaf(sales))
-                    Text("Dépenses enregistrées : " + xaf(expenses))
-                    Text("Solde simplifié avant coûts de stock, commissions, taxes et charges non saisies : " + xaf(sales - expenses), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Rentabilité et engagements fournisseurs", fontWeight = FontWeight.Bold)
+                    Text("Chiffre d'affaires confirmé (période couverte) : " + xaf(dashboard.revenueXaf))
+                    Text("Coût des marchandises vendues : " + xaf(dashboard.costOfGoodsXaf))
+                    Text("Marge brute calculée : " + xaf(dashboard.grossProfitXaf) +
+                        (dashboard.grossMarginPercent?.let { " · " + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %" } ?: ""))
+                    Text("Charges d'exploitation journalisées : " + xaf(dashboard.operatingExpensesXaf))
+                    Text("Solde de gestion indicatif : " + xaf(dashboard.operatingProfitProxyXaf), fontWeight = FontWeight.Bold)
+                    Text("Dette fournisseurs non réglée : " + xaf(dashboard.supplierPayablesXaf))
+                    if (dashboard.uncostedStockSalesCount > 0) {
+                        Text(
+                            dashboard.uncostedStockSalesCount.toString() + " vente(s) de stock antérieure(s) ne possèdent pas de coût historique fiable ; elles sont signalées et ne sont pas inventées dans le coût des ventes.",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    Text(
+                        "Les achats de stock n'augmentent pas le CA et ne sont pas déduits immédiatement de la marge : ils augmentent la valeur du stock et la dette fournisseur. Le coût est passé en coût des ventes lorsque le stock est vendu.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Le solde de gestion est un indicateur local avant éléments non enregistrés, amortissements, commissions et fiscalité ; il n'est pas un résultat SYSCOHADA certifié.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
         }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-                Column(Modifier.padding(16.dp)) {
-                    Text("Contrôles à effectuer", fontWeight = FontWeight.Bold)
-                    Text("• Rapprocher les paiements Mobile Money en attente.")
-                    Text("• Comparer les dépenses et achats avec les justificatifs.")
-                    Text("• Vérifier les articles proches du seuil minimum.")
-                    Text("• Contrôler les objectifs et les échéances clients.")
-                    Text("Ces pistes sont des règles de contrôle, pas des prédictions générées par un modèle entraîné.")
+        item { Text("Performance jour par jour · 14 derniers jours", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        items(dashboard.dailyTrend) { row ->
+            Text(row.label + " · " + xaf(row.actualXaf) + " · vs veille : " +
+                (row.deltaPercent?.let { (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %" } ?: "—"),
+                style = MaterialTheme.typography.bodySmall)
+        }
+        item { Text("Performance mois par mois · 12 derniers mois", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        items(dashboard.monthlyTrend) { row ->
+            Text(row.label + " · " + xaf(row.actualXaf) + " · vs mois précédent : " +
+                (row.deltaPercent?.let { (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %" } ?: "—"),
+                style = MaterialTheme.typography.bodySmall)
+        }
+        item { Text("Performance année par année · 5 derniers exercices", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        items(dashboard.yearlyTrend) { row ->
+            Text(row.label + " · " + xaf(row.actualXaf) + " · vs exercice précédent : " +
+                (row.deltaPercent?.let { (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %" } ?: "—"),
+                style = MaterialTheme.typography.bodySmall)
+        }
+        item { Text("Stratégies de redressement et de progression", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        items(dashboard.recoveryActions) { action ->
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(action.title + " · " + action.priority.uppercase(), fontWeight = FontWeight.Bold)
+                    Text(action.detail)
                 }
             }
         }
+        item { Spacer(Modifier.height(24.dp)) }
     }
 }
 
