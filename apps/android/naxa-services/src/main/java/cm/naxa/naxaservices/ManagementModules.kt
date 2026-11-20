@@ -734,6 +734,9 @@ fun WorkOrdersContent(
     val records by remember(siteId, recordType) {
         repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, recordType)
     }.collectAsState(initial = emptyList())
+    val workstations by remember(siteId) {
+        repository.dao.observeWorkstations(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
 
     val labels = when (profile) {
         "couture" -> listOf(
@@ -816,6 +819,7 @@ fun WorkOrdersContent(
         )
     }
 
+    var workstationId by rememberSaveable { mutableStateOf("") }
     var customer by rememberSaveable { mutableStateOf("") }
     var title by rememberSaveable { mutableStateOf("") }
     var specificPrimary by rememberSaveable { mutableStateOf("") }
@@ -854,13 +858,22 @@ fun WorkOrdersContent(
             AuthorizedSitePicker(
                 sites, siteId,
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
-            ) { siteId = it }
+            ) { siteId = it; workstationId = "" }
             LocalOnlyNotice(if (fr) "Dossiers locaux en attente de synchronisation. Les encaissements et décisions fiscales ne sont jamais validés par cette fiche." else "Local records pending synchronization. Cash receipts and tax decisions are never approved by this form.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (fr) "Nouveau dossier" else "New work order", fontWeight = FontWeight.Bold)
+                    Text(if (fr) "Emplacement / poste (facultatif — le registre reste consolidé au niveau du site)" else "Workstation (optional — site ledger remains consolidated)", fontWeight = FontWeight.SemiBold)
+                    OutlinedButton(onClick = { workstationId = "" }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (workstationId.isBlank()) (if (fr) "✓ Aucun poste dédié" else "✓ No dedicated workstation") else if (fr) "Aucun poste dédié" else "No dedicated workstation")
+                    }
+                    workstations.filter { it.status == "active" }.forEach { workstation ->
+                        OutlinedButton(onClick = { workstationId = workstation.id }, modifier = Modifier.fillMaxWidth()) {
+                            Text((if (workstationId == workstation.id) "✓ " else "") + workstation.name + " · " + workstation.kind)
+                        }
+                    }
                     OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Client" else "Customer") }, singleLine = true)
                     OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Titre du dossier" else "Work order title") }, singleLine = true)
                     OutlinedTextField(specificPrimary, { specificPrimary = it }, Modifier.fillMaxWidth(), label = { Text(labels[0]) }, singleLine = true)
@@ -893,7 +906,8 @@ fun WorkOrdersContent(
                                         (if (recordType == "repair_order") "REP-" else if (recordType == "service_order") "SRV-" else "WO-") + System.currentTimeMillis(),
                                         title.trim(), customer.trim(), amount, paid,
                                         System.currentTimeMillis() + (dueDays.toLongOrNull() ?: 3L).coerceIn(1L, 365L) * 86_400_000L,
-                                        "received", metadata, session.account.memberId
+                                        "received", metadata, session.account.memberId,
+                                        workstationId.takeIf { it.isNotBlank() }
                                     )
                                 }.onSuccess {
                                     customer = ""; title = ""; specificPrimary = ""; specifications = ""
@@ -923,6 +937,9 @@ fun WorkOrdersContent(
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(item.reference + " · " + item.title, fontWeight = FontWeight.Bold)
                     Text(item.counterparty)
+                    item.workstationId?.let { id ->
+                        Text(workstations.firstOrNull { it.id == id }?.name ?: id, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    }
                     Text(labels[0] + " : " + (runCatching { JSONObject(item.metadataJson).optString("primaryDetail") }.getOrDefault("")))
                     Text((if (fr) "Devis" else "Quote") + " : " + xaf(item.amountXaf) + " · " + (if (fr) "Acompte" else "Deposit") + " : " + xaf(item.paidXaf))
                     Text((if (fr) "Statut" else "Status") + " : " + item.status, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
