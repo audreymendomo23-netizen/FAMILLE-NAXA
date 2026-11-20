@@ -486,62 +486,70 @@ Fichiers principaux :
 
 Cette section consigne les décisions explicites du propriétaire du projet. En cas de contradiction avec une formulation antérieure de ce document, la présente section prévaut pour le périmètre qu'elle couvre. Elle complète les cahiers des charges propres aux dix applications sans remplacer leurs règles métier.
 
-### 6.17.1 Référentiel des formules et héritage strict des fonctionnalités
+### 6.17.1 Référentiel des formules fondé sur l'architecture des comptes
 
-Les noms commerciaux **ACCÈS**, **PREMIUM** et **PRO** sont utilisés lorsqu'une application commercialise effectivement trois formules.
+Le catalogue commercial ne doit plus être organisé autour de trois paliers. **La formule PRO est supprimée du référentiel Famille : aucun pack Pro, aucun prix Pro et aucun entitlement Pro ne doit être créé ou conservé.**
 
-La règle d'héritage est impérative et cumulative :
+Deux noms de formule sont utilisés uniquement lorsque l'application possède réellement deux niveaux d'architecture commerciale :
 
-- **ACCÈS** contient l'ensemble des fonctionnalités incluses dans le premier niveau commercial de l'application.
-- **PREMIUM** contient obligatoirement toutes les fonctionnalités d'ACCÈS, sans retrait ni dégradation, auxquelles s'ajoutent les fonctionnalités Premium.
-- **PRO** contient obligatoirement toutes les fonctionnalités de PREMIUM et donc toutes celles d'ACCÈS, auxquelles s'ajoutent les fonctionnalités Pro.
+- **ACCÈS — architecture à compte unique :** un compte principal exploite une entité ou unité opérationnelle selon le modèle métier du produit. Il bénéficie de toutes les fonctionnalités nécessaires à l'exploitation complète de cette architecture. ACCÈS n'est pas une version bridée du produit et ne perd aucun module métier essentiel au fonctionnement d'un compte unique.
+- **PREMIUM — architecture multiniveau :** une organisation peut structurer plusieurs niveaux de comptes, rôles, collaborateurs, responsables, établissements, sites ou unités subordonnées selon le produit. PREMIUM inclut intégralement toutes les fonctions et tous les droits d'ACCÈS, auxquels s'ajoutent les capacités d'organisation, de délégation, de supervision et de consolidation correspondant à l'architecture multiniveau.
 
-En notation d'entitlements :
+La règle d'inclusion est impérative :
 - `ENTITLEMENTS(ACCÈS) ⊆ ENTITLEMENTS(PREMIUM)` ;
-- `ENTITLEMENTS(PREMIUM) ⊆ ENTITLEMENTS(PRO)`.
+- une souscription PREMIUM ne peut retirer, dégrader ou rendre indisponible aucun droit accordé par ACCÈS ;
+- les écarts entre les deux formules doivent principalement refléter la structure de comptes et de responsabilités prise en charge, et non une découpe artificielle des fonctionnalités métier.
 
-Ces inclusions doivent être garanties par le catalogue, le contrôle d'accès serveur et des tests automatisés. Une formule supérieure ne peut jamais retirer un droit accordé par la formule inférieure.
+La notion de « compte unique » et celle d'« architecture multiniveau » doivent être décrites précisément pour chaque application : entité facturée, compte propriétaire, nombre et nature des sous-comptes, rôles, sites, délégations et droits de consolidation. Ne pas assimiler automatiquement plusieurs employés à plusieurs niveaux d'architecture si le cahier métier distingue compte, utilisateur, poste, rôle et établissement.
 
-**Ne pas créer artificiellement trois formules dans toutes les applications.** Lorsqu'une application ne possède qu'une ou deux offres, conserver son nombre d'offres, ses unités de facturation, ses montants et sa logique, sans ajouter un palier ni lui attribuer de nouveaux noms commerciaux non décidés. Une tarification à l'acte, par membre, par cotisation, par local, par chambre ou par parent ne devient pas automatiquement un abonnement à trois niveaux.
+**Application avec une seule tarification :** conserver un seul produit commercial affiché sous l'intitulé générique **« Abonnement »** (ou la tarification à l'unité déjà définie). Ne pas créer ACCÈS et PREMIUM artificiellement, même si le produit possède techniquement plusieurs rôles ou entités.
 
-Les fonctionnalités obligatoires de sécurité, confidentialité, authentification, protection des données, journalisation de sécurité et export/récupération des données du client ne doivent pas être transformées en avantages payants. Les différences de formules portent sur les capacités commerciales, le niveau d'automatisation, les volumes, les fonctions avancées et les services complémentaires.
+Les fonctionnalités de sécurité, confidentialité, authentification, protection des données, journalisation de sécurité, continuité et récupération/export des données ne constituent jamais des options payantes réservées à PREMIUM.
 
-### 6.17.2 Catalogue tarifaire de référence
+Le vocabulaire, l'architecture et la matrice de droits doivent être validés par application à partir de son cahier des charges et de son modèle réel avant de configurer le catalogue serveur.
 
-Les montants ci-dessous sont les montants communiqués par le propriétaire du projet, en FCFA. Pour les quatre applications à trois offres, l'ordre est ACCÈS / PREMIUM / PRO.
+### 6.17.2 Catalogue tarifaire de référence — ACCÈS / PREMIUM / ABONNEMENT
 
-| Application | Catalogue à conserver |
+Les tarifs ci-dessous conservent les montants communiqués par le propriétaire du projet, en FCFA. Pour les applications qui avaient trois prix, le troisième prix — ancien niveau PRO — est supprimé. Les deux premiers montants sont conservés pour ACCÈS et PREMIUM.
+
+| Application | Formule / tarif à conserver |
 |---|---|
-| KIOSKO | ACCÈS : 2 000 ; PREMIUM : 4 000 ; PRO : 5 000 |
-| BOOTIK | ACCÈS : 4 000 ; PREMIUM : 10 000 ; PRO : 13 000 |
-| ZIPPLE | ACCÈS : 5 000 ; PREMIUM : 15 000 ; PRO : 18 000 |
-| NAXA SERVICES | ACCÈS : 3 000 ; PREMIUM : 7 000 ; PRO : 10 000 |
-| COTIZ | 500 par membre et par cotisation ; compte Président gratuit jusqu'à 100 membres. Conserver cette tarification sans créer de formules supplémentaires. |
-| LOYABLE | 1 000 par local ; option à 4 000 avec caméra de surveillance et mode multisite. Conserver les deux offres sans en ajouter une troisième. |
-| NAXA HOTEL | 2 000 par chambre ; option à 5 000 par chambre avec caméra de surveillance et mode multisite. Conserver les deux offres sans en ajouter une troisième. |
-| NAXA SECURITY | Deux offres : 5 000 et 15 000. Ne pas créer de troisième formule sans décision ultérieure. Conserver les capacités et extensions déjà arbitrées. |
-| GRILLAD | Deux offres : 1 500 et 3 000. Ne pas créer de troisième formule. |
-| CAMPUS237 | Établissement gratuit ; deux offres côté parent : 1 000 et 3 000. Ne pas créer de troisième formule côté établissement ou parent. |
+| KIOSKO | ACCÈS : 2 000 ; PREMIUM : 4 000. Supprimer l'ancien prix PRO de 5 000. |
+| BOOTIK | ACCÈS : 4 000 ; PREMIUM : 10 000. Supprimer l'ancien prix PRO de 13 000. |
+| ZIPPLE | ACCÈS : 5 000 ; PREMIUM : 15 000. Supprimer l'ancien prix PRO de 18 000. |
+| NAXA SERVICES | ACCÈS : 3 000 ; PREMIUM : 7 000. Supprimer l'ancien prix PRO de 10 000. |
+| COTIZ | Intitulé générique **Abonnement** : 500 par membre et par cotisation ; compte Président gratuit jusqu'à 100 membres. Ne créer ni ACCÈS ni PREMIUM. |
+| LOYABLE | ACCÈS : 1 000 par local ; PREMIUM : 4 000 avec caméra de surveillance et mode multisite. Conserver les deux montants et le contenu commercial déjà annoncé. |
+| NAXA HOTEL | ACCÈS : 2 000 par chambre ; PREMIUM : 5 000 par chambre avec caméra de surveillance et mode multisite. Conserver les deux montants et le contenu commercial déjà annoncé. |
+| NAXA SECURITY | ACCÈS : 5 000 ; PREMIUM : 15 000. Conserver les deux niveaux et les règles d'extensions de capacité déjà arbitrées (+20 % par extension selon la décision existante). |
+| GRILLAD | ACCÈS : 1 500 ; PREMIUM : 3 000. Conserver les deux montants et mapper les architectures d'exploitation réelles sur les capacités de compte unique ou multiniveau. |
+| CAMPUS237 | Établissement gratuit. Côté parent : conserver les deux montants de 1 000 et 3 000 ; les libellés ACCÈS/PREMIUM ne sont appliqués qu'en cohérence avec les deux architectures parentales réellement définies. Ne pas créer de troisième formule ni facturer l'établissement. |
 
-Les périodicités et unités qui ne sont pas explicitement établies ci-dessus restent à vérifier dans les cahiers et décisions métier avant paramétrage définitif. Ne pas supposer qu'une tarification par cotisation ou par membre est mensuelle.
+Pour toute autre application ou tout autre modèle qui ne possède qu'un seul prix, afficher **« Abonnement »** sans créer de formule supplémentaire. Les prix unitaires, par membre, par cotisation, par local, par chambre ou par parent ne doivent pas être transformés artificiellement en forfaits à plusieurs paliers.
+
+Les tarifs LOYABLE, NAXA HOTEL, NAXA SECURITY, GRILLAD et CAMPUS237 doivent être rattachés à leur architecture réelle et à leurs unités facturables documentées. Aucun changement de montant n'est autorisé par cette mise à jour. Les périodicités qui ne sont pas confirmées restent à vérifier avant activation commerciale ; ne pas supposer qu'une tarification par cotisation ou par unité est mensuelle.
 
 ### 6.17.3 Règles d'abonnement déjà communiquées
 
 - À l'installation/activation initiale, toutes les fonctionnalités sont disponibles pendant **72 heures**. Cette période est contrôlée côté serveur, attribuée une seule fois à l'unité facturable définie par l'application et ne doit pas être réinitialisable par réinstallation ou changement d'appareil.
-- Pour une formule mensuelle éligible, le prix annuel est égal à dix mensualités : deux mois sont offerts. La réduction annuelle ne s'applique pas automatiquement aux tarifications à l'acte ou à la cotisation ; celles-ci nécessitent une règle commerciale explicite.
+- Pour une formule mensuelle récurrente éligible, le prix annuel est égal à dix mensualités : deux mois sont offerts. Cette remise s'applique aux abonnements mensuels concernés, et non automatiquement aux paiements par acte, par cotisation ou aux autres tarifications unitaires dont la périodicité n'est pas établie.
 - La période d'essai, le statut de paiement, les dates d'effet et les droits sont établis par le serveur. Une déclaration locale ou une référence de paiement saisie par l'utilisateur ne suffit pas à activer des entitlements.
 - Conserver les données et les fonctions nécessaires à la consultation du compte, au renouvellement et à la récupération des données en cas d'expiration. Le verrouillage concerne les opérations payantes selon les règles contractuelles validées.
 - Les prix et règles propres à une application restent sous le contrôle de son catalogue versionné. Une modification tarifaire ne change pas rétroactivement un abonnement déjà payé.
+- Aucune formule Pro n'est proposée, tarifée, activée ou présente dans les interfaces du catalogue.
 
 ### 6.17.4 Modèle de droits et administration des catalogues
 
 Conserver le modèle de référence **Plan → Subscription → Payment → Entitlements** et l'adapter aux contrats NAXA déjà présents. Il ne faut ni créer un second moteur de paiement ni remplacer le RBAC/RLS existant.
 
-- Les droits de formule sont des entitlements explicites et versionnés, pas des tests dispersés sur le nom commercial du plan.
-- Les permissions déterminent ce qu'un utilisateur peut faire ; les entitlements déterminent ce que l'organisation a souscrit. Les deux contrôles doivent être satisfaits.
-- Les limites de sites, chambres, membres, appareils, utilisateurs, stockage, opérations et consommation IA sont paramétrées uniquement lorsqu'elles correspondent au modèle métier de l'application.
-- Les prix, périodicités, capacités, dates d'effet et historiques sont administrables dans le back-office central avec traçabilité.
-- Les tests doivent prouver les droits inclusifs ACCÈS → PREMIUM → PRO ainsi que les cas d'une et deux offres, l'essai de 72 heures, paiement en attente/échoué/confirmé, remboursement, échéance et renouvellement.
+- Les droits de formule sont des entitlements explicites, versionnés et rattachés à une application, un plan et une période.
+- Les permissions déterminent ce qu'un utilisateur peut faire ; les entitlements déterminent l'architecture et les capacités souscrites par l'organisation. Les deux contrôles doivent être satisfaits.
+- ACCÈS correspond à l'architecture à compte unique et donne accès à toutes ses fonctionnalités métier. PREMIUM comprend tous les droits d'ACCÈS et ajoute les capacités multiniveaux prévues pour l'application.
+- Pour un produit à tarif unique, le catalogue expose uniquement « Abonnement » et la règle de facturation existante. Ne pas générer automatiquement un plan ACCÈS ou PREMIUM.
+- Les limites de sites, chambres, membres, appareils, utilisateurs et stockage ne sont configurées que lorsqu'elles découlent de l'architecture et du modèle métier approuvés.
+- Les fonctionnalités IA sont incluses dans l'abonnement et ne génèrent aucune facturation à l'appel, au token, au crédit ou au dépassement. La consommation IA reste mesurée en interne pour la sécurité, la capacité et le contrôle des coûts ; les mécanismes de fair use peuvent protéger le service, mais ne doivent déclencher aucun supplément facturé au client.
+- Les prix, périodicités, architectures, capacités, dates d'effet et historiques sont administrables dans le back-office central avec traçabilité.
+- Les tests doivent prouver l'inclusion complète ACCÈS → PREMIUM, l'absence de formule supplémentaire pour les produits à tarif unique, les 72 heures d'essai, les paiements en attente/échoués/confirmés, les remboursements, l'échéance et le renouvellement.
 
 ### 6.17.5 Pilotage central NAXA FAMILY
 
@@ -559,9 +567,9 @@ Les comptes Customer Services Officer doivent pouvoir traiter, depuis une file c
 
 ### 6.17.7 Réutilisation des services IA NAXA sans régression
 
-NAXA reste propriétaire de son moteur IA, de ses modèles, prompts système, fournisseurs, configurations, mémoires et règles d'exploitation. FAMILLE-NAXA doit consommer les capacités autorisées par une passerelle/adaptateur contrôlé, avec identification de l'application et de l'organisation, permissions, quotas, limites de dépense, minimisation des données, journalisation des coûts et mécanisme de coupure.
+NAXA reste propriétaire de son moteur IA, de ses modèles, prompts système, fournisseurs, configurations, mémoires et règles d'exploitation. FAMILLE-NAXA doit consommer les capacités autorisées par une passerelle/adaptateur contrôlé, avec identification de l'application et de l'organisation, permissions, limites techniques de débit, minimisation des données, mesure interne des coûts et mécanisme de coupure. L'IA est incluse dans les abonnements : aucune facturation à l'utilisation, au token, au crédit ou aucun supplément IA ne doit être présenté au client.
 
-La connexion des dix applications ne doit pas modifier les modèles, prompts, fournisseurs, paramètres, mémoires, données ou tests E2E de l'IA du projet NAXA indépendant. Les contextes et historiques IA de chaque application sont séparés. En cas d'indisponibilité IA, les opérations métier essentielles doivent continuer selon un mode de repli déterministe ; l'IA ne valide pas seule les actes financiers, sanctions ou actions sensibles de sécurité.
+La connexion des dix applications ne doit pas modifier les modèles, prompts, fournisseurs, paramètres, mémoires, données ou tests E2E de l'IA du projet NAXA indépendant. Les contextes et historiques IA de chaque application sont séparés. Les coûts IA sont absorbés par l'économie globale des abonnements et sont suivis uniquement en interne ; aucun usage IA n'est facturé en supplément. Des limites techniques de fair use, anti-abus et protection de capacité peuvent être appliquées sans transformer l'IA en option payante. En cas d'indisponibilité IA, les opérations métier essentielles doivent continuer selon un mode de repli déterministe ; l'IA ne valide pas seule les actes financiers, sanctions ou actions sensibles de sécurité.
 
 ### 6.17.8 CRM, relances, géolocalisation et imports de stock
 
