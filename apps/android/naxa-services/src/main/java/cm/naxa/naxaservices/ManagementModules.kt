@@ -1618,12 +1618,17 @@ fun RecurringChargesContent(
         set(Calendar.DAY_OF_MONTH, getActualMaximum(Calendar.DAY_OF_MONTH)); set(Calendar.HOUR_OF_DAY, 23); set(Calendar.MINUTE, 59); set(Calendar.SECOND, 59); set(Calendar.MILLISECOND, 999)
     }.timeInMillis
     var monthSales by remember { mutableStateOf(0L) }
-    LaunchedEffect(orgId, siteIds, monthStart) {
+    var monthFixedCharges by remember { mutableStateOf(0L) }
+    LaunchedEffect(orgId, siteIds, monthStart, monthEnd) {
         monthSales = siteIds.sumOf { id ->
             repository.dao.observeSalesTotal(orgId, id, monthStart, monthEnd).first()
         }
+        monthFixedCharges = siteIds.sumOf { id ->
+            repository.dao.observeChargePayments(orgId, id).first()
+                .filter { it.paidAtMillis in monthStart..monthEnd }
+                .sumOf { it.amountXaf }
+        }
     }
-    val monthFixedCharges = payments.filter { it.paidAtMillis in monthStart..monthEnd }.sumOf { it.amountXaf }
     val due = charges.filter { it.active && it.nextDueAtMillis <= now + it.reminderDays * 86_400_000L }
     val fmt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
 
