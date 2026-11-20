@@ -978,3 +978,42 @@ Le rapport de construction comporte désormais la section 36. Le code Android na
 La CI du dernier état n'est pas entièrement verte/terminée. Le succès d'un SHA précédent ne doit pas être réutilisé comme preuve du HEAD courant.
 
 Ces fonctionnalités sont encore fondées sur Room/outbox locale lorsque précisé dans le rapport. Aucune mise en production, aucune migration Supabase, aucun déploiement Edge et aucun changement du projet NAXA autonome n'est déclaré. La passerelle paiement/webhook, le backend/RLS/synchroniseur, FCM/SMS/WhatsApp, la Release signée, les tests sur appareils physiques, l'admin 10 apps/CSO, l'IA mutualisée et l'intégration NAXA SECURITY restent ouverts.
+
+## 6.17.19 Reprise confirmée — construction NAXA SERVICES et CI verte (20 novembre 2026)
+
+Cette section actualise le statut des sections 6.17.17–6.17.18. Les décisions tarifaires, la date de maturité et les règles métier précédentes restent inchangées.
+
+### Référence de code et preuve de construction
+
+- Branche de travail : `work/naxa-services-completion-20261120`.
+- Dernier commit de code Android soumis aux trois gates : `7a0729c7ea8d9a852385652a688f2abe27eca586`.
+- Dernier commit de tarification et tests : `f90c82886d5ae33ce97e1966e73ac40bf8cfaca3`.
+- Workflow final : `44784781041`, commit testé `f90c82886d5ae33ce97e1966e73ac40bf8cfaca3`, conclusion `success`.
+- Trois jobs réussis : APK Android debug, contrats Auth scope/business-mode et tests du catalogue de maturité des dix applications.
+- Artefact : `naxa-services-debug-apk`, ID `14653536762`, SHA-256 `5b390da34b8202f78780c00bb73bf0bd58905767508994229187bf63e030b474`. Il s'agit d'un APK **debug**, pas d'une Release signée.
+- Dernier commit documentaire de la branche après mise à jour du rapport : `4f1e2d7256829a897ffb2adfb7558a7b2dff5dd4`. Aucun changement de code n'a été apporté après le commit testé.
+
+### Fonctions natives ajoutées ou consolidées dans le lot
+
+- Moteur tarifaire effectif-daté pour les dix applications, avec bascule le **1er mai 2027 à 00:00, heure de Douala**. Les nouveaux cycles ou renouvellements commencent sur le catalogue maturité à cette date ; les périodes déjà payées ne sont pas repricées.
+- Règles NAXA SECURITY : +20 % par extension de capacité ; essais CAMPUS237 spécifiques (30 jours école, accès Parent Essentiel gratuit, 72 heures pour les autres packs parent payants).
+- Caisse liée au stock : vente espèces avec mouvement de sortie atomique ; réservation locale pour Mobile Money pending, annulation auditée et libération de la réservation. La confirmation réelle demeure réservée à un webhook serveur vérifié.
+- Transfert inter-sites Promoteur : demande et approbation sans mouvement ; réception depuis le site destination avec revalidation du stock, incrément/décrément dans une transaction Room, mouvements source/destination et historique d'audit.
+- Pointage d'équipe séquentiel, affectation facultative à un poste, commissions/avances/primes sous validation motivée.
+- Work orders différenciés par profil métier, catalogue de prestations modifiable, pressing avec retrait promis et historique, agenda avec reprogrammation et liste d'attente convertible.
+- CRM local avec modification des fiches et retrait du consentement GPS ; suppression des coordonnées et métadonnées de capture lors de la révocation.
+
+### Langue Fulfulde — distinction importante
+
+Le code de préférence `ff-CM` est accepté et mémorisé. Toutefois, le dépôt Android contient encore les ressources françaises (`values`) et anglaises (`values-en`) uniquement : aucun pack complet `values-ff-rCM` n'est livré. Les écrans peuvent donc retomber sur le français lorsque Fulfulde est choisi. Ne pas qualifier la traduction Fulfulde de terminée avant création et relecture du pack complet par un locuteur camerounais compétent.
+
+### Réserves techniques et fonctionnelles
+
+Le build vert confirme la compilation Android, les contrats Auth et le calcul tarifaire. Il ne vaut pas recette de production. Restent à intégrer et tester : API ERP distante, synchroniseur/outbox/idempotence, RLS réelle, paiements et webhooks, entitlements, FCM/WhatsApp/SMS, planificateur serveur de relances CRM, validation distante des transferts multi-appareils, SYSCOHADA, fiscalité/paie avec experts, appels/partage écran, sauvegarde Drive, tests instrumentés et appareils physiques, Release signée et Web/PWA séparée.
+
+Les intégrations centrales documentées restent des lots distincts : pilotage central des dix applications depuis NAXA, comptes Customer Service Officer réellement mutualisés, passerelle IA versionnée et intégration vidéo/audio/alertes NAXA SECURITY. La sécurité applicative NAXA SERVICES reste également un chantier distinct de NAXA SECURITY.
+
+### Protection du périmètre
+
+Aucun déploiement Supabase ni migration réelle Supabase n'a été exécuté dans cette passe. Le projet NAXA autonome n'a pas été modifié. La branche de travail n'a pas été fusionnée automatiquement dans `main`. Le rapport technique exhaustif demeure dans `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`, section 37.
+
