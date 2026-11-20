@@ -1,3 +1,4 @@
+import { isNaxaBusinessMode, nativeSiteIdsForScopes } from "./scope_contract.ts";
 // NAXA SERVICES authentication gateway — source only, NOT deployed.
 // Required server-side secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
 // Never set SUPABASE_SERVICE_ROLE_KEY in Android/Web build variables.
@@ -71,13 +72,10 @@ async function activeSiteIds(memberId: string, orgId: string) {
   const rows = await rest(q, { headers: serviceHeaders() }) as Record<string, unknown>[];
   // The current native ERP operates at site scope. Workstation-only assignments
   // must not be widened to the whole site until workstation-level filters exist.
-  const explicitSites = (rows ?? []).flatMap((row) =>
-    row.scope_type === "site" && row.site_id ? [String(row.site_id)] : []
-  );
   const hasOrganizationScope = (rows ?? []).some((row) => row.scope_type === "organization");
-  if (!hasOrganizationScope) return [...new Set(explicitSites)];
+  if (!hasOrganizationScope) return nativeSiteIdsForScopes(rows ?? []);
   const sites = await rest("ns_sites?select=id&org_id=eq." + encodeURIComponent(orgId) + "&status=eq.active", { headers: serviceHeaders() }) as Record<string, unknown>[];
-  return [...new Set([...explicitSites, ...(sites ?? []).map((site) => String(site.id))])];
+  return nativeSiteIdsForScopes(rows ?? [], (sites ?? []).map((site) => String(site.id)));
 }
 async function sessionPayload(authData: Record<string, unknown>, account: Record<string, unknown>) {
   if (account.status !== "active") throw new Error("ACCOUNT_NOT_ACTIVE");
@@ -481,8 +479,7 @@ async function updateOrganizationProfile(body: Record<string, unknown>, token: s
   const displayName = String(body.display_name ?? "").trim().slice(0, 120);
   const businessMode = String(body.business_mode ?? "");
   const defaultLocale = String(body.default_locale ?? "fr");
-  if (!displayName || !["solo", "single_site_multi_workstation", "multi_site_network"].includes(businessMode) ||
-      !["fr", "en"].includes(defaultLocale)) {
+  if (!displayName || !isNaxaBusinessMode(businessMode) || !["fr", "en"].includes(defaultLocale)) {
     return { status: 400, body: { message: "Profil d'organisation invalide." } };
   }
   const organizationRows = await rest(
