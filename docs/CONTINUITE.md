@@ -488,62 +488,83 @@ Cette section consigne les décisions explicites du propriétaire du projet. En 
 
 ### 6.17.1 Référentiel des formules fondé sur l'architecture des comptes
 
-Le catalogue commercial ne doit plus être organisé autour de trois paliers. **La formule PRO est supprimée du référentiel Famille : aucun pack Pro, aucun prix Pro et aucun entitlement Pro ne doit être créé ou conservé.**
+Les formules sont définies à partir de l'architecture de comptes et de l'unité d'exploitation réellement gérée par chaque application, et non par une segmentation artificielle de ses fonctionnalités.
 
-Deux noms de formule sont utilisés uniquement lorsque l'application possède réellement deux niveaux d'architecture commerciale :
+- **ACCÈS — architecture à compte unique :** un Promoteur/compte principal exploite une entité ou un point d'exploitation. Toutes les fonctionnalités métier nécessaires à cette architecture sont incluses.
+- **PREMIUM — architecture multiniveau :** le Promoteur organise et pilote plusieurs niveaux de comptes, responsables, collaborateurs, établissements, sites ou unités subordonnées, selon le métier de l'application. PREMIUM inclut intégralement ACCÈS et ajoute les capacités de structuration, délégation, supervision et consolidation propres au multiniveau.
+- **PRO :** exceptionnellement conservé pour GRILLAD uniquement, où le troisième niveau correspond à une capacité illimitée de points de vente. Aucun pack PRO générique ne doit être créé pour les autres applications.
 
-- **ACCÈS — architecture à compte unique :** un compte principal exploite une entité ou unité opérationnelle selon le modèle métier du produit. Il bénéficie de toutes les fonctionnalités nécessaires à l'exploitation complète de cette architecture. ACCÈS n'est pas une version bridée du produit et ne perd aucun module métier essentiel au fonctionnement d'un compte unique.
-- **PREMIUM — architecture multiniveau :** une organisation peut structurer plusieurs niveaux de comptes, rôles, collaborateurs, responsables, établissements, sites ou unités subordonnées selon le produit. PREMIUM inclut intégralement toutes les fonctions et tous les droits d'ACCÈS, auxquels s'ajoutent les capacités d'organisation, de délégation, de supervision et de consolidation correspondant à l'architecture multiniveau.
-
-La règle d'inclusion est impérative :
+La règle d'inclusion pour les applications ACCÈS/PREMIUM est impérative :
 - `ENTITLEMENTS(ACCÈS) ⊆ ENTITLEMENTS(PREMIUM)` ;
-- une souscription PREMIUM ne peut retirer, dégrader ou rendre indisponible aucun droit accordé par ACCÈS ;
-- les écarts entre les deux formules doivent principalement refléter la structure de comptes et de responsabilités prise en charge, et non une découpe artificielle des fonctionnalités métier.
+- PREMIUM ne peut retirer, dégrader ou rendre indisponible aucun droit accordé par ACCÈS ;
+- les écarts concernent principalement l'architecture et les capacités de pilotage, pas la suppression de fonctions métier essentielles.
 
-La notion de « compte unique » et celle d'« architecture multiniveau » doivent être décrites précisément pour chaque application : entité facturée, compte propriétaire, nombre et nature des sous-comptes, rôles, sites, délégations et droits de consolidation. Ne pas assimiler automatiquement plusieurs employés à plusieurs niveaux d'architecture si le cahier métier distingue compte, utilisateur, poste, rôle et établissement.
+Pour GRILLAD, les trois niveaux sont cumulatifs en fonctionnalités et différenciés par le nombre de points de vente autorisés : ACCÈS = un point ; PREMIUM = jusqu'à cinq points ; PRO = nombre illimité de points. Les règles détaillées figurent dans le catalogue 6.17.2.
 
-**Application avec une seule tarification :** conserver un seul produit commercial affiché sous l'intitulé générique **« Abonnement »** (ou la tarification à l'unité déjà définie). Ne pas créer ACCÈS et PREMIUM artificiellement, même si le produit possède techniquement plusieurs rôles ou entités.
+La notion de compte unique, de multiniveau, de réseau et d'unité facturable doit être documentée pour chaque application : Promoteur propriétaire, organisation, sous-comptes, rôles, sites, points de vente, quantités facturées et droits de consolidation. Un salarié, un poste ou un appareil n'est pas automatiquement un compte ou un site facturable.
 
-Les fonctionnalités de sécurité, confidentialité, authentification, protection des données, journalisation de sécurité, continuité et récupération/export des données ne constituent jamais des options payantes réservées à PREMIUM.
+**Application à tarif unique :** afficher **« Abonnement »** sans créer ACCÈS ou PREMIUM artificiellement. Les tarifications à l'unité ou individuelles gardent leurs règles dédiées.
 
-Le vocabulaire, l'architecture et la matrice de droits doivent être validés par application à partir de son cahier des charges et de son modèle réel avant de configurer le catalogue serveur.
+Les fonctions de sécurité, confidentialité, authentification, protection des données, journalisation de sécurité, continuité et récupération/export des données restent incluses et ne peuvent être réservées à une formule supérieure.
 
-### 6.17.2 Catalogue tarifaire de référence — ACCÈS / PREMIUM / ABONNEMENT et offres spéciales
+Le catalogue final et les droits doivent être vérifiés contre le cahier des charges et le modèle d'organisation de chaque application avant activation commerciale.
 
-Les montants sont exprimés en FCFA. Les prix ACCÈS et PREMIUM des applications à deux niveaux sont conservés comme précédemment décidés. Les tarifs supprimés ne doivent pas subsister dans les catalogues actifs, les interfaces, les API ou les migrations de données commerciales.
+### 6.17.2 Catalogue tarifaire de référence — abonnements Promoteur, unités individuelles et capacités
+
+Les montants sont exprimés en FCFA. Les unités et périodicités sont définies par produit ; les montants ci-dessous ne doivent pas être convertis en mensualités tant que la périodicité correspondante n'a pas été confirmée dans les décisions commerciales.
 
 | Application | Formule / tarif à conserver |
 |---|---|
-| KIOSKO | ACCÈS : 2 000 ; PREMIUM : 4 000. |
+| KIOSKO | ACCÈS : 2 000 ; PREMIUM : **5 000**. |
 | BOOTIK | ACCÈS : 4 000 ; PREMIUM : 10 000. |
 | ZIPPLE | ACCÈS : 5 000 ; PREMIUM : 15 000. |
-| NAXA SERVICES | ACCÈS : 3 000 ; PREMIUM : 7 000. |
-| COTIZ | **Abonnement individuel par membre** : chaque membre d'une même cotisation souscrit et règle individuellement 500 par membre et par cotisation. Ce n'est pas un abonnement unique payé au nom du groupe. Le compte Président reste gratuit jusqu'à 100 membres, conformément à la règle déjà décidée. Ne créer ni ACCÈS ni PREMIUM. |
-| LOYABLE | **Abonnement unique : 1 000 par chambre, accès complet.** Aucun pack PREMIUM séparé, aucun tarif à 4 000 et aucun supplément de formule pour la caméra ou le multisite. |
-| NAXA HOTEL | **Abonnement unique : 2 000 par chambre, accès complet.** Aucun pack PREMIUM séparé, aucun tarif à 5 000 et aucun supplément de formule pour la caméra ou le multisite. |
-| NAXA SECURITY | ACCÈS : 5 000 ; PREMIUM : 15 000. Conserver les deux niveaux et les règles d'extensions de capacité déjà arbitrées (+20 % par extension selon la décision existante). |
-| GRILLAD | ACCÈS : 1 500 ; PREMIUM : 3 000. Conserver les deux montants et mapper les architectures d'exploitation réelles sur les capacités de compte unique ou multiniveau. |
-| CAMPUS237 | Établissement gratuit. Abonnements facturés individuellement à chaque parent : **Pack Individuel : 1 000 par parent pour suivre 1 élève d'une école ; Pack Famille : 3 000 par parent pour suivre jusqu'à 5 élèves**, inscrits dans la même école ou dans plusieurs écoles différentes. Ne pas créer de troisième pack et ne pas facturer les établissements. |
+| NAXA SERVICES | ACCÈS : 3 000 ; PREMIUM : **10 000**. |
+| COTIZ | **Abonnement individuel par membre et par cotisation : 500**. Chaque membre paie son propre abonnement pour chaque cotisation à laquelle il participe. Le compte Président reste gratuit jusqu'à 100 membres. |
+| LOYABLE | **Abonnement unique à accès complet : 1 000 par chambre/unité locative facturable**, avec une souscription Promoteur couvrant tout son portefeuille/réseau. Aucun palier PREMIUM distinct. |
+| NAXA HOTEL | **Abonnement unique à accès complet : 2 000 par chambre**, avec une souscription Promoteur couvrant tout son hôtel/réseau. Aucun palier PREMIUM distinct. |
+| NAXA SECURITY | ACCÈS : 5 000 ; PREMIUM : 15 000. Conserver les règles d'extension de capacité déjà arbitrées (+20 % par extension), et appliquer l'abonnement Promoteur à tout son réseau dans les limites des capacités souscrites. |
+| GRILLAD | **ACCÈS : 1 500 pour 1 point de vente ; PREMIUM : 3 000 pour un maximum de 5 points de vente ; PRO : 5 000 pour un nombre illimité de points de vente.** La capacité s'applique à l'ensemble du réseau du Promoteur. |
+| CAMPUS237 | Établissement gratuit. Abonnements individuels par parent : **Pack Individuel : 1 000 pour suivre 1 élève dans une école ; Pack Famille : 3 000 pour suivre jusqu'à 5 élèves**, dans la même école ou dans plusieurs écoles différentes. |
+
+#### Règle de souscription du Promoteur et couverture de son réseau
+
+Pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES, NAXA SECURITY et GRILLAD, **un seul abonnement souscrit par le Promoteur pour une application couvre l'ensemble du réseau rattaché à son organisation** : les points de vente, sites, établissements et unités autorisés du même réseau. Il n'est pas nécessaire de souscrire ni de payer un abonnement identique pour chaque site.
+
+Les capacités ou plafonds propres à la formule restent applicables à l'ensemble du réseau :
+- GRILLAD : 1 point de vente en ACCÈS ; maximum 5 en PREMIUM ; illimité en PRO.
+- NAXA SECURITY : conserver les capacités d'équipement/flux souscrites et les extensions prévues (+20 % par extension).
+- Pour les autres applications, aucun plafond de sites supplémentaire n'est inventé par cette règle ; appliquer les capacités définies dans leur cahier et catalogue approuvés.
+
+Les cas facturés selon une unité ou un compte non Promoteur restent des exceptions : COTIZ (chaque membre pour chaque cotisation), LOYABLE (quantité de chambres/unités locatives), NAXA HOTEL (quantité de chambres) et CAMPUS237 (chaque parent et son pack). Une souscription unique peut porter une quantité de chambres/unités ; il ne faut pas générer plusieurs abonnements identiques pour un même Promoteur uniquement parce qu'il possède plusieurs chambres.
+
+#### Règle d'unicité d'un pack par Promoteur et par application
+
+Un même Promoteur ne peut détenir ni utiliser simultanément plusieurs souscriptions identiques ou plusieurs exemplaires du même pack pour une même application.
+
+- Pour les applications à abonnement Promoteur, une seule souscription active (ou en essai, renouvellement en attente ou période de grâce) est autorisée par couple **Promoteur + application**. Cette souscription couvre son réseau complet.
+- Le Promoteur choisit un seul pack actif par application. Un passage d'ACCÈS à PREMIUM, ou entre les niveaux GRILLAD, est une modification/évolution de la souscription existante, et non la création d'un second abonnement parallèle.
+- Une souscription expirée, résiliée ou remplacée reste dans l'historique ; elle ne constitue pas une seconde souscription active.
+- La règle d'unicité est appliquée côté serveur et en base de données, avec contrainte/transaction empêchant les créations concurrentes et journalisant les tentatives de doublon.
+- Les exceptions COTIZ et CAMPUS237 s'appliquent à leur véritable payeur et unité : membre × cotisation pour COTIZ ; parent × application pour CAMPUS237. Un parent ne peut avoir qu'un seul pack CAMPUS237 actif à la fois ; le passage d'Individuel à Famille remplace le pack courant.
+- Pour LOYABLE et NAXA HOTEL, conserver une seule souscription Promoteur par application et faire varier la quantité facturable de chambres/unités sans créer de souscriptions répétées identiques.
 
 #### Règles spécifiques COTIZ
 
-L'unité facturable est le membre, et non le groupe de tontine ou l'ensemble de la cotisation. Chaque membre rattaché à une même cotisation possède son propre abonnement individuel à 500 FCFA par cotisation. Le statut gratuit du compte Président jusqu'à 100 membres est conservé. La gestion des cotisations par COTIZ ne signifie pas que COTIZ détient ou transfère les fonds des membres.
+L'unité facturable est chaque membre pour chaque cotisation, et non le groupe ou le Promoteur du groupe. Chaque membre paie individuellement 500 FCFA par cotisation à laquelle il participe. Le compte Président reste gratuit jusqu'à 100 membres. COTIZ conserve son rôle de registre et de gestion ; il ne devient pas détenteur ou opérateur des fonds des membres.
 
 #### Règles spécifiques LOYABLE et NAXA HOTEL
 
-Chaque application possède un seul abonnement à accès complet, exprimé par chambre au tarif indiqué. Il n'existe pas de distinction commerciale ACCÈS/PREMIUM pour ces deux produits dans le catalogue actuel. La suppression des anciens tarifs renforcés ne doit pas désactiver les fonctions métier, la sécurité ou les capacités multisites incluses dans le périmètre complet de chaque application. Les coûts éventuels d'équipements physiques, d'installation ou de services externes ne sont pas assimilés à un supplément de formule logiciel et nécessitent un traitement distinct s'ils existent.
+Chaque application possède un abonnement unique à accès complet, calculé par chambre/unité facturable au tarif indiqué. Les capacités métier, la sécurité et le multisite nécessaires au fonctionnement complet sont inclus. Aucun ancien tarif supérieur ou supplément de formule à 4 000 F ou 5 000 F ne doit être réintroduit. Les coûts éventuels de matériel, d'installation ou de services externes, s'ils existent, sont des postes distincts et ne changent pas le prix du logiciel.
 
 #### Règles spécifiques CAMPUS237
 
 - Le **Pack Individuel** est attaché à un compte parent et autorise le suivi d'un élève dans une école.
-- Le **Pack Famille** est attaché à un compte parent et autorise le suivi d'un maximum de cinq élèves ; ces élèves peuvent être inscrits dans la même école ou dans plusieurs écoles différentes.
-- La souscription est individuelle par parent. Le fait que deux parents suivent le même élève ne fusionne pas leurs comptes ou abonnements.
-- L'établissement scolaire ne paie aucun abonnement CAMPUS237.
-- Les deux packs parentaux sont les seules offres prévues à ce stade. Aucun pack PRO ou troisième niveau ne doit être ajouté.
+- Le **Pack Famille** est attaché à un compte parent et autorise le suivi de cinq élèves au maximum ; ils peuvent fréquenter la même école ou des écoles différentes.
+- Chaque parent souscrit en son propre nom. Deux parents d'un même élève gardent des comptes et abonnements indépendants.
+- L'établissement scolaire ne paie aucun abonnement.
+- Le parent ne détient qu'un pack actif à la fois ; une évolution entre les deux packs modifie la souscription existante.
 
-Pour toute autre application ou tout autre modèle qui ne possède qu'un seul prix, afficher **« Abonnement »** sans créer de formule supplémentaire. Les prix unitaires, par membre, par cotisation, par chambre ou par parent ne doivent pas être transformés artificiellement en forfaits à plusieurs paliers.
-
-Les périodicités qui ne sont pas explicitement confirmées restent à vérifier avant activation commerciale ; ne pas supposer qu'une tarification par cotisation ou par unité est mensuelle.
+Pour toute autre application à tarif unique, afficher **« Abonnement »** sans créer de formules artificielles.
 
 ### 6.17.3 Règles d'abonnement déjà communiquées
 
@@ -552,7 +573,7 @@ Les périodicités qui ne sont pas explicitement confirmées restent à vérifie
 - La période d'essai, le statut de paiement, les dates d'effet et les droits sont établis par le serveur. Une déclaration locale ou une référence de paiement saisie par l'utilisateur ne suffit pas à activer des entitlements.
 - Conserver les données et les fonctions nécessaires à la consultation du compte, au renouvellement et à la récupération des données en cas d'expiration. Le verrouillage concerne les opérations payantes selon les règles contractuelles validées.
 - Les prix et règles propres à une application restent sous le contrôle de son catalogue versionné. Une modification tarifaire ne change pas rétroactivement un abonnement déjà payé.
-- Aucune formule Pro n'est proposée, tarifée, activée ou présente dans les interfaces du catalogue.
+- Aucune formule PRO générique n'est proposée pour les applications autres que GRILLAD. GRILLAD conserve son niveau PRO spécifique à 5 000 FCFA pour les points de vente illimités.
 
 ### 6.17.4 Modèle de droits et administration des catalogues
 
@@ -560,7 +581,7 @@ Conserver le modèle de référence **Plan → Subscription → Payment → Enti
 
 - Les droits de formule sont des entitlements explicites, versionnés et rattachés à une application, un plan et une période.
 - Les permissions déterminent ce qu'un utilisateur peut faire ; les entitlements déterminent l'architecture et les capacités souscrites par l'organisation. Les deux contrôles doivent être satisfaits.
-- ACCÈS correspond à l'architecture à compte unique et donne accès à toutes ses fonctionnalités métier. PREMIUM comprend tous les droits d'ACCÈS et ajoute les capacités multiniveaux prévues pour l'application.
+- ACCÈS correspond à l'architecture à compte unique et donne accès à toutes ses fonctionnalités métier. PREMIUM comprend tous les droits d'ACCÈS et ajoute les capacités multiniveaux prévues pour l'application. L'abonnement Promoteur couvre tout son réseau pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES, NAXA SECURITY et GRILLAD ; aucun abonnement par site n'est créé. GRILLAD conserve en outre son PRO propre, défini uniquement par sa capacité illimitée de points de vente.
 - Pour un produit à tarif unique, le catalogue expose uniquement « Abonnement » et la règle de facturation existante. Ne pas générer automatiquement un plan ACCÈS ou PREMIUM.
 - Les limites de sites, chambres, membres, appareils, utilisateurs et stockage ne sont configurées que lorsqu'elles découlent de l'architecture et du modèle métier approuvés.
 - Les fonctionnalités IA sont incluses dans l'abonnement et ne génèrent aucune facturation à l'appel, au token, au crédit ou au dépassement. La consommation IA reste mesurée en interne pour la sécurité, la capacité et le contrôle des coûts ; les mécanismes de fair use peuvent protéger le service, mais ne doivent déclencher aucun supplément facturé au client.
@@ -619,7 +640,24 @@ L'autorisation de migration ne vaut pas autorisation automatique de déployer un
 
 **État de cette mise à jour :** seule la présente règle documentaire est enregistrée par cette modification. Aucune migration Supabase n'est exécutée par le seul fait de l'actualisation du document.
 
-### 6.17.11 Priorité de réemploi
+### 6.17.11 Dossier d'identification et KYC des Promoteurs
+
+Avant l'activation commerciale d'un compte Promoteur des applications FAMILLE-NAXA, le dossier Promoteur doit être constitué et vérifié. Les pièces requises sont :
+
+1. **Pièce d'identité :** copie de la CNI ou récépissé d'identification en cours de validité, selon le document légal disponible et accepté.
+2. **Formulaire KYC (Know Your Customer) :** informations d'identification du Promoteur, coordonnées vérifiées, activité déclarée, qualité/relation avec l'entreprise et informations de vérification requises.
+3. **Plan de localisation :** plan permettant de localiser l'entreprise ou le siège d'exploitation, avec adresse, quartier, repères et, lorsque pertinent, coordonnées GPS du site.
+4. **Preuve d'activité :** document ou élément vérifiable démontrant l'existence et l'exercice de l'activité déclarée (ex. autorisation, registre, patente, facture professionnelle, enseigne ou justificatif pertinent selon le statut et le secteur).
+
+Le contrôle suit un cycle explicite : dossier incomplet, soumis, en vérification, validé ou rejeté avec motif ; les mises à jour et renouvellements des pièces sont tracés. Aucun Promoteur n'est activé définitivement sur la seule base d'un formulaire non vérifié.
+
+Le même dossier d'identification vérifié peut être référencé pour les différentes applications utilisées par un même Promoteur afin d'éviter les demandes répétitives, sous réserve de la validité des pièces et de l'autorisation appropriée. Cette mutualisation documentaire ne fusionne pas les identités, les comptes Auth, les organisations, les permissions ou les données opérationnelles des applications.
+
+Les pièces KYC sont des données personnelles sensibles du point de vue opérationnel : elles sont stockées dans un espace privé sécurisé, chiffré lorsque le service le permet, accessibles uniquement aux agents habilités, avec accès temporaire et journalisé. Aucun scan de CNI, récépissé ou justificatif KYC ne doit être ajouté au dépôt Git public, aux logs applicatifs ou aux prompts IA. La durée de conservation, les motifs de collecte et les droits de consultation/correction/suppression doivent être définis dans la politique de confidentialité et validés juridiquement.
+
+Cette exigence vise les comptes Promoteurs et représentants des organisations. Elle ne doit pas être appliquée automatiquement à chaque membre COTIZ, parent CAMPUS237 ou client final, sauf obligation légale ou règle spécifique du produit validée séparément.
+
+### 6.17.12 Priorité de réemploi
 
 Pour construire les fonctions manquantes, appliquer l'ordre suivant :
 
