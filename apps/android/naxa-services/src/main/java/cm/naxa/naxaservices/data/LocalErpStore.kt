@@ -45,7 +45,8 @@ data class LocalPressingStatusEvent(
     val fromStatus: String,
     val toStatus: String,
     val actorMemberId: String,
-    val createdAtMillis: Long
+    val createdAtMillis: Long,
+    val reason: String = ""
 )
 
 @Entity(tableName = "local_appointments", indices = [Index(value = ["siteId"]), Index(value = ["startsAtMillis"])])
@@ -372,6 +373,9 @@ interface NaxaServicesDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertPressingStatusEvent(event: LocalPressingStatusEvent)
 
+    @Query("SELECT * FROM local_pressing_status_events WHERE orderId = :orderId AND orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis DESC")
+    fun observePressingStatusEvents(orderId: String, orgId: String, siteId: String): Flow<List<LocalPressingStatusEvent>>
+
     @Query("SELECT * FROM local_appointments WHERE orgId = :orgId AND siteId = :siteId ORDER BY startsAtMillis ASC")
     fun observeAppointments(orgId: String, siteId: String): Flow<List<LocalAppointment>>
 
@@ -612,7 +616,7 @@ interface NaxaServicesDao {
         LocalWorkflowEvent::class,
         LocalInventoryValuation::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -696,6 +700,12 @@ val NS_SERVICES_MIGRATION_4_5: Migration = object : Migration(4, 5) {
     }
 }
 
+val NS_SERVICES_MIGRATION_5_6: Migration = object : Migration(5, 6) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE local_pressing_status_events ADD COLUMN reason TEXT NOT NULL DEFAULT ''")
+    }
+}
+
 class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
     val dao: NaxaServicesDao = database.naxaServicesDao()
 
@@ -742,9 +752,10 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         order
     }
 
-    suspend fun advancePressingOrder(order: LocalPressingOrder, actorMemberId: String) = database.withTransaction {
+    suspend fun advancePressingOrder(order: LocalPressingOrder, actorMemberId: String, reason: String) = database.withTransaction {
         val current = dao.findPressingOrder(order.id, order.orgId, order.siteId) ?: throw IllegalStateException("Ticket introuvable.")
         require(current.orgId == order.orgId && current.siteId == order.siteId && actorMemberId.isNotBlank()) { "Périmètre du ticket invalide." }
+        require(reason.trim().length >= 3 && reason.length <= 500) { "Un motif de changement de statut est obligatoire." }
         val next = when (current.status) {
             "received" -> "in_progress"
             "in_progress" -> "ready"
@@ -762,7 +773,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 fromStatus = current.status,
                 toStatus = next,
                 actorMemberId = actorMemberId,
-                createdAtMillis = changedAt
+                createdAtMillis = changedAt,
+                reason = reason.trim()
             )
         )
         enqueue(current.orgId, "pressing_order", current.id, "pressing_order.status_changed:" + next, current.siteId)
