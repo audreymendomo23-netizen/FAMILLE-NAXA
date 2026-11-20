@@ -1794,8 +1794,8 @@ fun LoyaltyProgramsContent(
             }
         }
         if (selected != null) {
-            item {
-                val current = selected
+        val current = selected
+        item {
                 var name by rememberSaveable(current.id) { mutableStateOf(current.name) }
                 var description by rememberSaveable(current.id) { mutableStateOf(current.description) }
                 var metric by rememberSaveable(current.id) { mutableStateOf(current.metricCode) }
