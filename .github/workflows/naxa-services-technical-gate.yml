@@ -1,0 +1,72 @@
+name: NAXA SERVICES — Android + Auth contract gate
+
+on:
+  push:
+    branches:
+      - work/naxa-services-completion-20261120
+    paths:
+      - "apps/android/naxa-services/**"
+      - "packages/core-android/**"
+      - "supabase/functions/naxa-services-auth/**"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - ".github/workflows/naxa-services-technical-gate.yml"
+  pull_request:
+    paths:
+      - "apps/android/naxa-services/**"
+      - "packages/core-android/**"
+      - "supabase/functions/naxa-services-auth/**"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - ".github/workflows/naxa-services-technical-gate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: naxa-services-technical-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  auth-contract:
+    name: Auth scope and business-mode contract tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Format Auth contract sources
+        run: deno fmt --check supabase/functions/naxa-services-auth/index.ts supabase/functions/naxa-services-auth/scope_contract.ts supabase/functions/naxa-services-auth/contract_test.ts
+      - name: Run pure Auth contract tests
+        run: deno test --no-check supabase/functions/naxa-services-auth/contract_test.ts
+
+  android-debug:
+    name: Assemble NAXA SERVICES Android debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Gradle compatible with Android Gradle Plugin 8.6.1
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - name: Install Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android 35 platform and build tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Compile and package NAXA SERVICES
+        run: gradle --no-daemon :naxa-services:assembleDebug
+      - name: Upload debug APK for technical review
+        uses: actions/upload-artifact@v4
+        with:
+          name: naxa-services-debug-apk
+          path: apps/android/naxa-services/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
