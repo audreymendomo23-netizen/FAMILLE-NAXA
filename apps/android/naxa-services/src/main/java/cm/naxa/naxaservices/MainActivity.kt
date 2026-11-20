@@ -430,6 +430,8 @@ private fun ErpScreen(
             TeamManagementContent(Modifier.padding(padding), authApi, activeSession)
         } else if (route == AppRoute.SECURITY) {
             AccessManagementContent(Modifier.padding(padding), authApi, activeSession)
+        } else if (route == AppRoute.ORGANIZATION || route == AppRoute.NETWORK || route == AppRoute.SITES || route == AppRoute.WORKSTATIONS) {
+            OrganizationModeContent(Modifier.padding(padding), route, activeSession)
         } else if (currentSpec != null) {
             ModuleContent(Modifier.padding(padding), currentSpec, onNavigate)
         } else {
@@ -438,7 +440,139 @@ private fun ErpScreen(
     }
 }
 
+
 @Composable
+private fun OrganizationModeContent(
+    modifier: Modifier,
+    route: AppRoute,
+    session: AuthSession
+) {
+    var mode by rememberSaveable { mutableStateOf("solo") }
+    LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item {
+            Spacer(Modifier.height(12.dp))
+            Text(
+                when (route) {
+                    AppRoute.ORGANIZATION -> stringResource(R.string.organization_modes_title)
+                    AppRoute.NETWORK -> stringResource(R.string.network_scope_title)
+                    AppRoute.SITES -> stringResource(R.string.site_autonomy_title)
+                    else -> stringResource(R.string.workstation_scope_title)
+                },
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text(stringResource(R.string.organization_modes_desc), color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (route == AppRoute.ORGANIZATION) {
+            item {
+                ArchitectureModeCard(
+                    stringResource(R.string.mode_pme_title),
+                    stringResource(R.string.mode_pme_desc),
+                    selected = mode == "solo",
+                    onClick = { mode = "solo" }
+                )
+            }
+            item {
+                ArchitectureModeCard(
+                    stringResource(R.string.mode_manager_title),
+                    stringResource(R.string.mode_manager_desc),
+                    selected = mode == "single_site_multi_workstation",
+                    onClick = { mode = "single_site_multi_workstation" }
+                )
+            }
+            item {
+                ArchitectureModeCard(
+                    stringResource(R.string.mode_promoter_title),
+                    stringResource(R.string.mode_promoter_desc),
+                    selected = mode == "multi_site_network",
+                    onClick = { mode = "multi_site_network" }
+                )
+            }
+            item {
+                Text(stringResource(R.string.structure_selection_preview), color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        if (route == AppRoute.NETWORK || route == AppRoute.SITES) {
+            item {
+                Text(stringResource(R.string.authorized_site_scope), fontWeight = FontWeight.Bold)
+                if (session.account.activeSiteIds.isEmpty()) {
+                    Text(stringResource(R.string.no_active_sites), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    session.account.activeSiteIds.forEachIndexed { index, siteId ->
+                        Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text((index + 1).toString().padStart(2, '0'), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                                Spacer(Modifier.width(14.dp))
+                                Column(Modifier.weight(1f)) {
+                                    Text(stringResource(R.string.site_reference, index + 1), fontWeight = FontWeight.SemiBold)
+                                    Text(siteId, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text(stringResource(R.string.scope_authorized), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            item {
+                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                    Column(Modifier.padding(18.dp)) {
+                        Text(stringResource(R.string.network_non_mixing_title), fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.network_non_mixing_desc), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+        if (route == AppRoute.WORKSTATIONS) {
+            item {
+                Text(stringResource(R.string.workstation_types_title), fontWeight = FontWeight.Bold)
+                listOf(
+                    R.string.workstation_hair,
+                    R.string.workstation_pressing,
+                    R.string.workstation_reception,
+                    R.string.workstation_cash
+                ).forEachIndexed { index, label ->
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                        Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f)) {
+                                Text(stringResource(label), fontWeight = FontWeight.SemiBold)
+                                Text(stringResource(R.string.workstation_not_created), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            }
+                            Text((index + 1).toString().padStart(2, '0'), color = MaterialTheme.colorScheme.primary)
+                        }
+                    }
+                }
+            }
+        }
+        item {
+            Text(stringResource(R.string.organization_scope_safety), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(18.dp))
+        }
+    }
+}
+
+@Composable
+private fun ArchitectureModeCard(
+    title: String,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
+        ),
+        shape = RoundedCornerShape(18.dp)
+    ) {
+        Row(Modifier.fillMaxWidth().padding(18.dp), verticalAlignment = Alignment.Top) {
+            Text(if (selected) "●" else "○", color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 13.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(title, fontWeight = FontWeight.Bold)
+                Text(description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
 
 @Composable
 private fun TeamManagementContent(
