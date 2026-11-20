@@ -8,6 +8,7 @@ import androidx.compose.runtime.collectAsState
 import cm.naxa.naxaservices.data.NsServicesDatabase
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_1_2
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_2_3
 import cm.naxa.naxaservices.data.LocalPressingOrder
 import cm.naxa.naxaservices.data.LocalAppointment
 import cm.naxa.naxaservices.data.LocalCashSession
