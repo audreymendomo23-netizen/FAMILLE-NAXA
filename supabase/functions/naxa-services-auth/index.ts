@@ -326,7 +326,28 @@ async function accountSummary(account: Record<string, unknown>) {
   };
 }
 
-async function logout(token: string) {
+async function logout(body: Record<string, unknown>, token: string) {
+  const user = await authCall("user", { method: "GET" }, token);
+  if (!user.ok || !user.data.id) return { status: 401, body: { message: "Session expirée." } };
+  const account = await accountByAuthUser(String(user.data.id));
+  const installationId = String((body.device as Record<string, unknown> | undefined)?.installation_id ?? "");
+  const sessionId = jwtClaim(token, "session_id");
+  if (account && installationId && sessionId) {
+    await rest(
+      "ns_devices?account_id=eq." + encodeURIComponent(String(account.id)) +
+        "&installation_id=eq." + encodeURIComponent(installationId) +
+        "&session_id=eq." + encodeURIComponent(sessionId),
+      {
+        method: "PATCH",
+        headers: serviceHeaders({ Prefer: "return=minimal" }),
+        body: JSON.stringify({ revoked_at: new Date().toISOString(), remember_device: false }),
+      },
+    );
+    const member = await activeMember(String(account.id));
+    if (member) {
+      await auditAction(String(member.org_id), String(user.data.id), String(member.id), "session.logout", "device", installationId, "Déconnexion de l'appareil");
+    }
+  }
   const result = await authCall("logout?scope=local", { method: "POST" }, token);
   if (!result.ok) return { status: 401, body: { message: "La session n'a pas pu être révoquée." } };
   return { status: 200, body: { signed_out: true } };
@@ -673,7 +694,7 @@ Deno.serve(async (request: Request) => {
     else if (action === "request_recovery") result = await requestRecovery(body, request);
     else if (action === "list_recovery_requests") result = await listRecoveryRequests(bearer);
     else if (action === "change_password") result = await changePassword(body, bearer);
-    else if (action === "logout") result = await logout(bearer);
+    else if (action === "logout") result = await logout(body, bearer);
     else if (action === "provision_member") result = await provisionMember(body, bearer);
     else if (action === "complete_recovery") result = await completeRecovery(body, bearer);
     else if (action === "revoke_device") result = await revokeDevice(body, bearer);
