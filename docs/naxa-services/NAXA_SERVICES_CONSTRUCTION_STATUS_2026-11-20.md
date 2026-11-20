@@ -1071,14 +1071,15 @@ Le code Android appelle une fonction Edge distincte ; le code ne devient actif q
 
 La fonction SQL de qualification est idempotente dans le ledger, mais cela ne remplace pas encore les tests d'intégration transactionnels sur une base isolée, ni les tests webhook du fournisseur de paiement.
 
-### 38.5 CI du commit de parrainage
+### 38.5 CI du commit de parrainage — résultat final
 
-- Premier workflow : `44791819448`, commit `c76b6680c84635368ae7abd6430018aa13876e40`, conclusion `failure` sur la compilation Android.
-- Cause exacte : import Kotlin explicite de `androidx.compose.foundation.layout.weight`, extension de portée interne. Le contrat de parrainage, Auth et tarification avaient réussi.
-- Correctif : suppression de cet import inutile, commit `f9cb368dec3ac2e00ad7088b054cb30ec1e5badb`.
-- Nouveau workflow : `44792194242`, commit testé `f9cb368dec3ac2e00ad7088b054cb30ec1e5badb`, déclenché et en attente/d'exécution au moment de cette mise à jour. Relever son résultat final avant annonce de build vert.
-- Aucun APK du nouveau SHA n'est considéré comme validé tant que le job Android n'a pas fini avec succès.
-  
+- Premier workflow : `44791819448`, SHA `c76b6680c84635368ae7abd6430018aa13876e40`, échec Android dû à l'import explicite non nécessaire de `androidx.compose.foundation.layout.weight`.
+- Correctif appliqué : suppression de cet import, commit `f9cb368dec3ac2e00ad7088b054cb30ec1e5badb`.
+- Workflow de validation du correctif : `44792194242`, conclusion **SUCCESS**, 4 jobs sur 4 réussis.
+- Résultats : build Android debug réussi ; test/type-check du contrat de parrainage réussi ; Auth scope/business-mode réussi ; catalogue de tarification réussi.
+- Artefact : `naxa-services-debug-apk`, ID `14656354059`, taille 11 560 550 octets, SHA-256 `f26dd357c47d677fe5c456b936af28ad2fda89c092525ff31385fdfafd11ef42`, expiration `2026-11-27T18:25:06Z`.
+- Ce succès certifie le commit applicatif `f9cb368...` sous CI. Il ne certifie ni déploiement Edge/Supabase, ni qualification de production de tous les lots listés à la section 38.6.
+
 ### 38.6 Point de reprise et backlog global inchangé
 
 Le lot de parrainage est ajouté sans réécrire les écrans et modules métiers précédents. Les réserves antérieures de la section 37 restent ouvertes : API ERP distante et synchronisation offline complète, idempotence et résolution de conflits réseau, RLS vérifiée par tests d'isolation, paiement récurrent réel et webhooks, entitlements, FCM/SMS/WhatsApp et planificateur CRM, SYSCOHADA/fiscalité/paie validés par professionnels, essais physiques/performance/restauration, Release Android signée, Web/PWA séparée, Fulfulde complet relu, pilotage central des dix applications/CSO, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
