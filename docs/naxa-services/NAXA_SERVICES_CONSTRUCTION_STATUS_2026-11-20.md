@@ -836,17 +836,17 @@ Le parcours d'import :
 
 **Limites actuelles :** seul le format CSV est pris en charge ; XLS/XLSX, correspondance manuelle de colonnes arbitraires, export d'un rapport détaillé d'erreurs, API d'import serveur, RLS et synchronisation distante restent à développer/tester. L'import actuel agit sur le stockage local de l'application et son outbox, pas sur une base serveur validée.
 
-### 35.5 Preuves CI — distinguer la version validée de la dernière modification
+### 35.5 Preuves CI — builds confirmés
 
 **Dernier build entièrement vérifié :**
-- Workflow `44769339200` — terminé avec succès sur `96bb9b294e967b258add1884c5b72e228f4f69e2`.
-- Job Android : compilation et assemblage debug réussis ; artefact `naxa-services-debug-apk` archivé sous l'ID `14646801027` (SHA-256 `5108d757c79cfab6d463bc9838225251d04bc78c64fe9ebf4b48670f8dbedb63)).
+- Workflow `44770034786` — terminé avec succès sur le commit de code `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee`.
+- Job Android : compilation et assemblage debug réussis ; artefact `naxa-services-debug-apk` archivé sous l'ID `14647006494` (11 335 054 octets ; SHA-256 `5347fa2e7f58c7501c1d2e25747917487e28734645e74ba77e449def7cd285dd`).
 - Job Auth scope/business mode : succès.
+- Le build précédent `44769339200` / commit `96bb9b2` avait également réussi avec l'artefact `14646801027`.
 
-**Dernier commit de la branche au moment de cette mise à jour :**
-- `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee`, ajout de la détection CSV virgule/point-virgule et de la limite de taille.
-- Workflow `44770034786` : job Auth Deno terminé avec succès ; job Android encore en cours à l'heure de rédaction. Ne pas attribuer le succès du workflow `44769339200` au commit `2dc2a85`.
-- L'APK de l'artefact `14646801027` correspond au commit `96bb9b2`, pas au commit `2dc2a85`.
+**Dernier commit de code validé :**
+- `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee`, incluant la détection CSV virgule/point-virgule et la limite de taille.
+- Workflow `44770034786` : les deux jobs Android et Auth sont terminés avec succès. L'artefact `14647006494` correspond bien à ce commit.
 
 **Aucune recette sur appareil physique, validation Supabase/RLS, synchronisation serveur, Release Android signée, déploiement ou mise en production n'est déclarée réalisée par ces builds.**
 
@@ -863,7 +863,7 @@ Le parcours d'import :
 ### 35.7 Point de reprise technique courant
 
 - Branche : `work/naxa-services-completion-20261120`.
-- Dernier HEAD connu à cette rédaction : `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee`.
-- Le dernier build entièrement vert reste `96bb9b294e967b258add1884c5b72e228f4f69e2` / workflow `44769339200`.
-- Le workflow du HEAD courant `44770034786` a les contrats Auth verts ; le job Android est encore en cours.
-- Préserver les acquis et continuer uniquement après lecture du résultat de ce workflow ; ne pas fusionner automatiquement la branche et ne pas toucher au projet NAXA autonome.
+- Commit de code Android validé : `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee`.
+- Workflow `44770034786` : terminé avec succès ; jobs Android debug et Auth Deno verts ; artefact `14647006494`.
+- Après ce build, seul le rapport de continuité a été mis à jour. Le HEAD de branche est maintenant `873ff85e952c453da0c65b58eb8ca9010dc819d8` (commit documentaire) ; le code Android testé reste `2dc2a85`.
+- Préserver les acquis et continuer par lots testés ; ne pas fusionner automatiquement la branche et ne pas toucher au projet NAXA autonome.
