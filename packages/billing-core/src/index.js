@@ -278,3 +278,24 @@ export function resolveRenewalPrice(subscription, renewalLocalDate) {
     previousPeriodUnchanged: true,
   };
 }
+
+/** Convert a server instant to the Cameroon local calendar date. */
+export function localCalendarDateInZone(instant, timeZone = MATURITY_TIME_ZONE) {
+  const date = instant instanceof Date ? instant : new Date(instant);
+  if (Number.isNaN(date.getTime())) throw new TypeError("invalid_renewal_instant");
+  if (typeof timeZone !== "string" || !timeZone.trim()) throw new TypeError("invalid_time_zone");
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return values.year + "-" + values.month + "-" + values.day;
+}
+
+/** Resolve a renewal using the server instant converted to Africa/Douala date. */
+export function resolveRenewalPriceAtInstant(subscription, renewalInstant = new Date()) {
+  const localDate = localCalendarDateInZone(renewalInstant, MATURITY_TIME_ZONE);
+  return resolveRenewalPrice(subscription, localDate);
+}
