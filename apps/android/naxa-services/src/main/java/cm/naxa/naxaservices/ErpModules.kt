@@ -1,7 +1,9 @@
 package cm.naxa.naxaservices
 
 import android.Manifest
+import android.content.Context
 import android.content.pm.PackageManager
+import android.location.LocationManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -190,31 +192,111 @@ fun CustomersContent(
     repository: NaxaServicesLocalRepository,
     session: AuthSession
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
     val siteIds = session.account.activeSiteIds
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
-    val customers by remember(siteId) { repository.dao.observeCustomers(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    val customers by remember(siteId) {
+        repository.dao.observeCustomers(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
+    val followUps by remember(siteId) {
+        repository.dao.observeCustomerFollowUps(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
+    val contactEvents by remember(siteId) {
+        repository.dao.observeCustomerContactEvents(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
+
     var name by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     var notes by rememberSaveable { mutableStateOf("") }
-    var consent by rememberSaveable { mutableStateOf(false) }
+    var contactConsent by rememberSaveable { mutableStateOf(false) }
+    var addressLine by rememberSaveable { mutableStateOf("") }
+    var neighborhood by rememberSaveable { mutableStateOf("") }
+    var landmark by rememberSaveable { mutableStateOf("") }
+    var locationConsent by rememberSaveable { mutableStateOf(false) }
+    var latitude by rememberSaveable { mutableStateOf("") }
+    var longitude by rememberSaveable { mutableStateOf("") }
+    var locationAccuracy by rememberSaveable { mutableStateOf("") }
+    var locationMessage by remember { mutableStateOf<String?>(null) }
     var search by rememberSaveable { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
-    val visible = customers.filter {
-        it.displayName.contains(search, ignoreCase = true) || it.phoneContact.contains(search, ignoreCase = true)
+    var selectedCustomerId by rememberSaveable { mutableStateOf("") }
+    var followUpTitle by rememberSaveable { mutableStateOf("Suivi client") }
+    var followUpFrequency by rememberSaveable { mutableStateOf("monthly") }
+    var followUpChannel by rememberSaveable { mutableStateOf("phone") }
+    var followUpNotes by rememberSaveable { mutableStateOf("") }
+    var followUpError by remember { mutableStateOf<String?>(null) }
+
+    fun readRecentLocation() {
+        try {
+            val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val coarseGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            if (!fineGranted && !coarseGranted) {
+                locationMessage = "Autorisation de localisation non accordée."
+                return
+            }
+            val manager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val now = System.currentTimeMillis()
+            val candidates = manager.allProviders
+                .filter { provider -> runCatching { manager.isProviderEnabled(provider) }.getOrDefault(false) }
+                .mapNotNull { provider ->
+                    runCatching { manager.getLastKnownLocation(provider) }.getOrNull()
+                }
+                .filter { location -> now - location.time in 0..(15 * 60 * 1000L) }
+            val latest = candidates.maxByOrNull { it.time }
+            if (latest == null) {
+                locationMessage = "Aucune position récente n'est disponible. Saisis l'adresse manuellement ou réessaie après activation de la localisation."
+                return
+            }
+            latitude = latest.latitude.toString()
+            longitude = latest.longitude.toString()
+            locationAccuracy = if (latest.hasAccuracy()) latest.accuracy.toString() else ""
+            locationMessage = "Position récente récupérée. Vérifie l'adresse et le repère avant d'enregistrer."
+        } catch (_: SecurityException) {
+            locationMessage = "Accès à la position refusé. Tu peux saisir l'adresse manuellement."
+        } catch (_: Exception) {
+            locationMessage = "Position indisponible. Tu peux saisir l'adresse manuellement."
+        }
     }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        ) {
+            readRecentLocation()
+        } else {
+            locationMessage = "Autorisation refusée. L'adresse manuelle reste disponible."
+        }
+    }
+
+    val visible = customers.filter {
+        it.displayName.contains(search, ignoreCase = true) ||
+            it.phoneContact.contains(search, ignoreCase = true) ||
+            it.addressLine.contains(search, ignoreCase = true)
+    }
+    val selectedCustomer = customers.firstOrNull { it.id == selectedCustomerId && it.orgId == session.account.organizationId && it.siteId == siteId }
+
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            ModulePageTitle("Clients et fidélisation", "Fiches client privées, historique local et consentement de contact explicite.")
+            ModulePageTitle(
+                "Clients, CRM et fidélisation",
+                "Fiches clients, routines de relance et adresses de service à domicile."
+            )
             AuthorizedSitePicker(
                 siteIds,
                 siteId,
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
-            ) { siteId = it }
-            LocalOnlyNotice("Les fiches clients ne sont pas partagées entre points de vente dans ce stockage local.")
+            ) {
+                siteId = it
+                selectedCustomerId = ""
+            }
+            LocalOnlyNotice("CRM local pour ce point de vente. Les relances ne sont pas encore envoyées automatiquement : elles restent enregistrées dans l'agenda local jusqu'au raccordement du planificateur serveur et des notifications.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -224,38 +306,203 @@ fun CustomersContent(
                     OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text("Téléphone (facultatif)") }, singleLine = true)
                     OutlinedTextField(notes, { notes = it }, Modifier.fillMaxWidth(), label = { Text("Notes privées (facultatif)") }, minLines = 2)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = consent, onCheckedChange = { consent = it })
-                        Text("Le client accepte les communications")
+                        Checkbox(checked = contactConsent, onCheckedChange = { contactConsent = it })
+                        Text("Le client accepte les communications commerciales et de suivi")
                     }
+                    Text("Adresse de prestation / livraison à domicile", fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(addressLine, { addressLine = it }, Modifier.fillMaxWidth(), label = { Text("Adresse (facultatif)") }, singleLine = true)
+                    OutlinedTextField(neighborhood, { neighborhood = it }, Modifier.fillMaxWidth(), label = { Text("Quartier") }, singleLine = true)
+                    OutlinedTextField(landmark, { landmark = it }, Modifier.fillMaxWidth(), label = { Text("Repère ou consigne d'accès") }, singleLine = true)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = locationConsent, onCheckedChange = {
+                            locationConsent = it
+                            if (!it) {
+                                latitude = ""; longitude = ""; locationAccuracy = ""
+                                locationMessage = "Coordonnées GPS effacées du formulaire."
+                            }
+                        })
+                        Text("Le client autorise l'enregistrement de sa position pour le service ou la livraison demandée.")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            locationMessage = null
+                            if (!locationConsent) {
+                                locationMessage = "Obtiens d'abord le consentement explicite du client."
+                            } else {
+                                val fineGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                                val coarseGranted = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                                if (fineGranted || coarseGranted) readRecentLocation()
+                                else locationPermissionLauncher.launch(arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION
+                                ))
+                            }
+                        },
+                        enabled = locationConsent && !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Récupérer une position GPS récente") }
+                    if (latitude.isNotBlank() && longitude.isNotBlank()) {
+                        Text("Latitude : $latitude · Longitude : $longitude", style = MaterialTheme.typography.bodySmall)
+                        if (locationAccuracy.isNotBlank()) Text("Précision annoncée : $locationAccuracy m", style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (!locationMessage.isNullOrBlank()) Text(locationMessage!!, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Text("La géolocalisation est facultative. Pas de suivi continu du client ; l'adresse peut être saisie sans GPS.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
                     Button(
                         onClick = {
                             scope.launch {
-                                busy = true; error = null
-                                runCatching { repository.createLocalCustomer(session.account.organizationId, siteId, name, phone, notes, consent) }
-                                    .onSuccess { name = ""; phone = ""; notes = ""; consent = false }
-                                    .onFailure { error = it.message ?: "Création impossible." }
+                                busy = true
+                                error = null
+                                runCatching {
+                                    repository.createLocalCustomer(
+                                        session.account.organizationId,
+                                        siteId,
+                                        name,
+                                        phone,
+                                        notes,
+                                        contactConsent,
+                                        addressLine,
+                                        neighborhood,
+                                        landmark,
+                                        latitude.toDoubleOrNull(),
+                                        longitude.toDoubleOrNull(),
+                                        locationAccuracy.toFloatOrNull(),
+                                        locationConsent
+                                    )
+                                }.onSuccess {
+                                    name = ""; phone = ""; notes = ""; contactConsent = false
+                                    addressLine = ""; neighborhood = ""; landmark = ""
+                                    locationConsent = false; latitude = ""; longitude = ""; locationAccuracy = ""
+                                    locationMessage = null
+                                    notice = "Fiche client enregistrée localement."
+                                }.onFailure { error = it.message ?: "Création impossible." }
                                 busy = false
                             }
                         },
-                        enabled = !busy && siteId.isNotBlank() && name.isNotBlank(),
+                        enabled = !busy && siteId.isNotBlank() && name.isNotBlank() &&
+                            ((latitude.isBlank() && longitude.isBlank()) ||
+                                (locationConsent && latitude.toDoubleOrNull() != null && longitude.toDoubleOrNull() != null)),
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(if (busy) "Enregistrement…" else "Enregistrer le client") }
+                    if (!notice.isNullOrBlank()) Text(notice!!, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
-        item { OutlinedTextField(search, { search = it }, Modifier.fillMaxWidth(), label = { Text("Rechercher un client") }, singleLine = true) }
-        item { Text(visible.size.toString() + " client(s)", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("Programmer une relance client", fontWeight = FontWeight.Bold)
+                    Text(
+                        selectedCustomer?.displayName?.let { "Client sélectionné : $it" } ?: "Sélectionne d'abord un client dans la liste ci-dessous.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(followUpTitle, { followUpTitle = it }, Modifier.fillMaxWidth(), label = { Text("Objet du suivi") }, singleLine = true)
+                    Text("Fréquence", fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { followUpFrequency = "weekly" }, enabled = followUpFrequency != "weekly") { Text("Chaque semaine") }
+                        OutlinedButton(onClick = { followUpFrequency = "monthly" }, enabled = followUpFrequency != "monthly") { Text("Chaque mois") }
+                    }
+                    Text("Canal prévu", fontWeight = FontWeight.SemiBold)
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = { followUpChannel = "in_person" }, enabled = followUpChannel != "in_person") { Text("Sur place") }
+                        OutlinedButton(onClick = { followUpChannel = "phone" }, enabled = followUpChannel != "phone") { Text("Téléphone") }
+                        OutlinedButton(onClick = { followUpChannel = "whatsapp" }, enabled = followUpChannel != "whatsapp") { Text("WhatsApp") }
+                    }
+                    OutlinedTextField(followUpNotes, { followUpNotes = it }, Modifier.fillMaxWidth(), label = { Text("Consignes de relance (facultatif)") }, minLines = 2)
+                    if (!followUpError.isNullOrBlank()) Text(followUpError!!, color = MaterialTheme.colorScheme.error)
+                    Button(
+                        onClick = {
+                            val customer = selectedCustomer
+                            scope.launch {
+                                followUpError = null
+                                runCatching {
+                                    require(customer != null) { "Sélectionne un client avant de programmer la relance." }
+                                    repository.createCustomerFollowUp(
+                                        session.account.organizationId, siteId, customer.id,
+                                        followUpTitle, followUpFrequency, followUpChannel, followUpNotes,
+                                        session.account.memberId
+                                    )
+                                }.onSuccess {
+                                    followUpNotes = ""
+                                    notice = "Routine enregistrée. La première échéance est calculée à partir d'aujourd'hui."
+                                }.onFailure { followUpError = it.message ?: "Création de relance impossible." }
+                            }
+                        },
+                        enabled = selectedCustomer != null && !busy,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Enregistrer la routine") }
+                }
+            }
+        }
+
+        item { Text("Clients (" + visible.size + ")", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         if (visible.isEmpty()) item { Text("Aucun client correspondant sur ce point de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(visible) { customer ->
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Card(
+                onClick = { selectedCustomerId = customer.id },
+                colors = CardDefaults.cardColors(
+                    containerColor = if (selectedCustomerId == customer.id) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface
+                )
+            ) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(customer.displayName, fontWeight = FontWeight.Bold)
                     if (customer.phoneContact.isNotBlank()) Text(customer.phoneContact)
+                    if (customer.addressLine.isNotBlank()) Text("Adresse : " + customer.addressLine)
+                    if (customer.neighborhood.isNotBlank()) Text("Quartier : " + customer.neighborhood)
+                    if (customer.landmark.isNotBlank()) Text("Repère : " + customer.landmark)
+                    if (customer.latitude != null && customer.longitude != null) Text("GPS enregistré avec consentement")
                     if (customer.notesPrivate.isNotBlank()) Text(customer.notesPrivate, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(if (customer.contactConsent) "Consentement de contact enregistré" else "Aucun consentement de contact", style = MaterialTheme.typography.labelSmall)
+                    Text(if (selectedCustomerId == customer.id) "Sélectionné pour le suivi" else "Toucher pour sélectionner", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
+        }
+
+        item { Text("Routines de relance", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (followUps.isEmpty()) item { Text("Aucune routine de relance sur ce point de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        items(followUps) { followUp ->
+            val owner = customers.firstOrNull { it.id == followUp.customerId }
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(owner?.displayName ?: "Client", fontWeight = FontWeight.Bold)
+                    Text(followUp.title)
+                    Text(
+                        (if (followUp.frequency == "weekly") "Hebdomadaire" else "Mensuelle") +
+                            " · " + when (followUp.channel) {
+                                "phone" -> "Téléphone"
+                                "whatsapp" -> "WhatsApp"
+                                else -> "Sur place"
+                            }
+                    )
+                    Text("Prochaine échéance : " + java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(followUp.nextDueAtMillis)))
+                    if (followUp.notes.isNotBlank()) Text(followUp.notes, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(
+                        onClick = {
+                            scope.launch {
+                                runCatching {
+                                    repository.completeCustomerFollowUp(
+                                        session.account.organizationId, siteId, followUp.id,
+                                        "completed", "Relance effectuée", session.account.memberId
+                                    )
+                                }.onSuccess { notice = "Relance clôturée et prochaine échéance reprogrammée." }
+                                    .onFailure { followUpError = it.message ?: "Mise à jour impossible." }
+                            }
+                        }
+                    ) { Text("Marquer comme effectuée") }
+                }
+            }
+        }
+
+        item { Text("Historique des suivis récents", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (contactEvents.isEmpty()) item { Text("Aucun événement de suivi enregistré.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        items(contactEvents.take(20)) { event ->
+            val owner = customers.firstOrNull { it.id == event.customerId }
+            Text(
+                (owner?.displayName ?: "Client") + " · " + event.outcome +
+                    " · " + java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(event.happenedAtMillis)),
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }
