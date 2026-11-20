@@ -1197,24 +1197,70 @@ private fun AgendaLocalContent(
         item { Text(if (fr) "Clients en attente" else "Waiting customers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(waitlist) { row ->
             var waitReason by rememberSaveable(row.id) { mutableStateOf("") }
+            var waitStart by rememberSaveable(row.id) {
+                mutableStateOf(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(System.currentTimeMillis() + 60L * 60L * 1000L)))
+            }
+            var waitDuration by rememberSaveable(row.id) { mutableStateOf("30") }
+            var waitDeposit by rememberSaveable(row.id) { mutableStateOf("0") }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(row.counterparty, fontWeight = FontWeight.Bold)
                     Text(row.title + " · " + row.status)
-                    OutlinedTextField(waitReason, { waitReason = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Motif de mise à jour" else "Update reason") })
-                    listOf("contacted" to (if (fr) "Client contacté" else "Customer contacted"), "booked" to (if (fr) "Convertir en rendez-vous" else "Convert to booking"), "cancelled" to (if (fr) "Retirer de la liste" else "Remove from waitlist")).forEach { (status, label) ->
+                    OutlinedTextField(waitReason, { waitReason = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Motif de mise à jour / conversion" else "Reason for update / conversion") })
+                    if (row.status in setOf("open", "contacted")) {
+                        OutlinedTextField(waitStart, { waitStart = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Créneau retenu (AAAA-MM-JJ HH:MM)" else "Booked slot (YYYY-MM-DD HH:MM)") }, singleLine = true)
+                        OutlinedTextField(waitDuration, { waitDuration = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Durée (minutes)" else "Duration (minutes)") }, singleLine = true)
+                        OutlinedTextField(waitDeposit, { waitDeposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Acompte (FCFA)" else "Deposit (XAF)") }, singleLine = true)
                         OutlinedButton(
                             onClick = {
                                 scope.launch {
                                     runCatching {
-                                        repository.transitionManagementRecord(session.account.organizationId, siteId, row.id, status, waitReason, session.account.memberId)
-                                    }.onSuccess { waitReason = ""; message = if (fr) "Liste d'attente mise à jour." else "Waitlist updated." }
+                                        val parsed = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).apply { isLenient = false }.parse(waitStart)?.time
+                                            ?: throw IllegalArgumentException(if (fr) "Date invalide." else "Invalid date.")
+                                        repository.convertWaitlistToAppointment(
+                                            session.account.organizationId, siteId, row.id,
+                                            workstationId.takeIf { it.isNotBlank() },
+                                            parsed, waitDuration.toIntOrNull() ?: 0,
+                                            waitDeposit.toLongOrNull() ?: 0L,
+                                            waitReason, session.account.memberId
+                                        )
+                                    }.onSuccess {
+                                        waitReason = ""
+                                        message = if (fr) "La liste d'attente a été convertie en rendez-vous réel." else "Waitlist entry converted into a real appointment."
+                                    }.onFailure { error = it.message ?: "Waitlist conversion failed." }
+                                }
+                            },
+                            enabled = waitReason.trim().length >= 3 && waitDuration.toIntOrNull() in 5..600,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (fr) "Créer le rendez-vous et convertir" else "Create appointment and convert") }
+                    }
+                    if (row.status == "open") {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching {
+                                        repository.transitionManagementRecord(session.account.organizationId, siteId, row.id, "contacted", waitReason, session.account.memberId)
+                                    }.onSuccess { waitReason = ""; message = if (fr) "Client marqué comme contacté." else "Customer marked as contacted." }
                                         .onFailure { error = it.message ?: "Waitlist transition failed." }
                                 }
                             },
                             enabled = waitReason.trim().length >= 3,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(label) }
+                        ) { Text(if (fr) "Marquer le client comme contacté" else "Mark customer as contacted") }
+                    }
+                    if (row.status in setOf("open", "contacted")) {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    runCatching {
+                                        repository.transitionManagementRecord(session.account.organizationId, siteId, row.id, "cancelled", waitReason, session.account.memberId)
+                                    }.onSuccess { waitReason = ""; message = if (fr) "Entrée retirée de la liste." else "Entry removed from waitlist." }
+                                        .onFailure { error = it.message ?: "Waitlist transition failed." }
+                                }
+                            },
+                            enabled = waitReason.trim().length >= 3,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (fr) "Retirer de la liste" else "Remove from waitlist") }
                     }
                 }
             }
