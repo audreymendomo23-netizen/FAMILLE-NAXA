@@ -13,12 +13,21 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.UUID
 
+data class AuthSite(
+    val id: String,
+    val code: String,
+    val name: String,
+    val addressLabel: String,
+    val phoneContact: String
+)
+
 data class AuthAccount(
     val memberId: String,
     val displayName: String,
     val roleCode: String,
     val organizationId: String,
-    val activeSiteIds: List<String>
+    val activeSiteIds: List<String>,
+    val activeSites: List<AuthSite>
 )
 
 data class AuthSession(
@@ -224,6 +233,26 @@ class AuthApi(private val context: Context) {
         if (siteArray != null) {
             for (i in 0 until siteArray.length()) siteIds += siteArray.optString(i)
         }
+        val siteMetadata = mutableMapOf<String, AuthSite>()
+        val activeSitesArray = account.optJSONArray("active_sites")
+        if (activeSitesArray != null) {
+            for (i in 0 until activeSitesArray.length()) {
+                val item = activeSitesArray.optJSONObject(i) ?: continue
+                val id = item.optString("id")
+                if (id.isNotBlank() && id in siteIds) {
+                    siteMetadata[id] = AuthSite(
+                        id = id,
+                        code = item.optString("code"),
+                        name = item.optString("name").ifBlank { "Point de vente" },
+                        addressLabel = item.optString("address_label"),
+                        phoneContact = item.optString("phone_contact")
+                    )
+                }
+            }
+        }
+        val activeSites = siteIds.map { id ->
+            siteMetadata[id] ?: AuthSite(id, "", "Point de vente", "", "")
+        }
         return AuthSession(
             accessToken = json.optString("access_token"),
             refreshToken = json.optString("refresh_token"),
@@ -234,7 +263,8 @@ class AuthApi(private val context: Context) {
                 displayName = account.optString("display_name"),
                 roleCode = account.optString("role_code"),
                 organizationId = account.optString("organization_id"),
-                activeSiteIds = siteIds
+                activeSiteIds = siteIds,
+                activeSites = activeSites
             )
         ).also {
             if (it.accessToken.isBlank() || it.refreshToken.isBlank()) {
