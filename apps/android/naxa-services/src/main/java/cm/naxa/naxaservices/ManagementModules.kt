@@ -874,7 +874,6 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
 }
 
 @Composable
-@Composable
 private fun FinancialTrendRow(point: FinancialTrendPoint, comparisonLabel: String) {
     fun change(value: Long): String =
         (if (value > 0L) "+" else if (value < 0L) "−" else "") +
@@ -910,6 +909,7 @@ private fun FinancialTrendRow(point: FinancialTrendPoint, comparisonLabel: Strin
     }
 }
 
+@Composable
 private fun PerformanceProjectionCard(title: String, period: PeriodProjection) {
     val delta = period.projectedXaf - period.comparablePreviousXaf
     val comparison = if (period.comparablePreviousXaf > 0L) {
