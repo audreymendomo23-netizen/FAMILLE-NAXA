@@ -1,0 +1,224 @@
+name: Famille NAXA — validation groupée 0.1/0.2
+
+concurrency:
+  group: famille-naxa-main-validation
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/drafts/**"
+      - "supabase/tests/**"
+      - "supabase/migrations/**"
+      - "supabase/local-tests/**"
+      - ".github/workflows/famille-technical-gate.yml"
+      - "apps/**"
+      - "android/**"
+      - "web/**"
+      - "apps/android/**"
+      - "apps/web/**"
+      - "scripts/**"
+      - "packages/**"
+      - "gradle/**"
+      - "pnpm-workspace.yaml"
+      - "pnpm-lock.yaml"
+      - "package.json"
+      - "settings.gradle.kts"
+      - "build.gradle.kts"
+      - "gradle.properties"
+      - "playwright.config.ts"
+      - "tests/**"
+      - "infra/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sql-postgres-17:
+    name: SQL draft + contraintes + isolation par défaut
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: famille_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d famille_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: famille_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Préparer le minimum Supabase Auth pour le test isolé
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE anon NOLOGIN;
+          CREATE ROLE authenticated NOLOGIN;
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.users (
+            id uuid PRIMARY KEY,
+            email text UNIQUE
+          );
+          SQL
+      - name: Exécuter le draft PostgreSQL 17 dans la base éphémère
+        run: psql -v ON_ERROR_STOP=1 -f supabase/drafts/0001_famille_core_proposed.sql
+      - name: Tester seed, clés composites et refus d'accès par défaut
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/0001_famille_core_smoke.sql
+
+  app-build-readiness:
+    name: Prompt 0.1 — build Android natif + Web/PWA
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.23.4"
+      - name: Installer pnpm 12.21.0
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.21.0
+          run_install: false
+      - name: Générer les 10 socles Android et les 10 applications Next.js/PWA
+        run: node scripts/bootstrap-foundations.mjs
+      - name: Vérifier les manifests et les points d'entrée des 20 applications
+        shell: bash
+        run: |
+          set -euo pipefail
+          apps=(kiosko bootik zipple naxa-services cotiz loyable naxa-hotel campus237 naxa-security grillad)
+          for app in "${apps[@]}"; do
+            test -f "apps/android/${app}/build.gradle.kts"
+            test -f "apps/android/${app}/src/main/AndroidManifest.xml"
+            test -n "$(find "apps/android/${app}/src/androidTest/java" -name 'AppShellInstrumentedTest.kt' -print -quit)"
+            test -f "apps/web/${app}/package.json"
+            test -f "apps/web/${app}/app/page.tsx"
+            test -f "apps/web/${app}/app/manifest.ts"
+            test -f "apps/web/${app}/app/sw.ts"
+            test -f "apps/web/${app}/public/icons/app.svg"
+          done
+      - name: Installer les dépendances du workspace pnpm
+        run: pnpm install --no-frozen-lockfile
+      - name: Vérifier la reproductibilité du lockfile
+        run: pnpm install --frozen-lockfile
+      - name: Tester les contrats Web de sécurité et de distribution
+        run: pnpm test:core-web
+      - name: Tester les contrats de synchronisation et conflits
+        run: pnpm test:contracts
+      - name: Tester le moteur de règles explicables
+        run: pnpm test:assistant
+      - name: Tester les calculs d'abonnement FCFA
+        run: pnpm test:billing
+      - name: Vérifier les contrastes WCAG AA des thèmes
+        run: pnpm test:design-system
+      - name: Vérifier les types des dix applications Web
+        run: pnpm typecheck:web
+      - name: Compiler les dix applications Next.js/PWA
+        run: pnpm build:web
+      - name: Installer Chromium pour Playwright
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Tests E2E et accessibilité axe-core
+        run: pnpm test:e2e
+      - name: Installer Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Installer Gradle 9.5.0
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "9.5.0"
+      - name: Installer le SDK Android API 37
+        uses: android-actions/setup-android@v3
+      - name: Installer les plateformes et outils Android ciblés
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null
+          sdkmanager --install "platforms;android-37" "build-tools;36.0.0" "platform-tools"
+      - name: Générer et vérifier le Gradle Wrapper 9.5.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle wrapper --gradle-version 9.5.0 --distribution-type bin
+          sed -i '/^distributionSha256Sum=/d' gradle/wrapper/gradle-wrapper.properties
+          printf '%s\n' 'distributionSha256Sum=553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746' >> gradle/wrapper/gradle-wrapper.properties
+          chmod +x gradlew
+          ./gradlew --no-daemon --version
+      - name: Compiler dix APK debug et release et exécuter les tests unitaires
+        run: ./gradlew --no-daemon assembleDebug assembleRelease testDebugUnitTest
+      - name: Tests Compose instrumentés sur émulateur Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: ./gradlew --no-daemon connectedDebugAndroidTest
+      - name: Persister les socles générés, le wrapper et le lockfile sur main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A -- apps/android apps/web packages scripts settings.gradle.kts build.gradle.kts gradle.properties gradle pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc .gitignore playwright.config.ts tests infra
+          if git diff --cached --quiet; then
+            echo "Aucun fichier généré nouveau à persister."
+          else
+            git commit -m "chore: persister le socle Prompt 0.1 [skip ci]"
+            git push origin HEAD:main
+          fi
+  prompt-03-rls:
+    name: Prompt 0.3 — policies RLS et scénarios d'isolation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: famille_prompt_03
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d famille_prompt_03"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: famille_prompt_03
+    steps:
+      - uses: actions/checkout@v4
+      - name: Installer client PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+      - name: Bootstrap Supabase Auth local isolé
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0002_bootstrap_local_auth.sql
+      - name: Appliquer le schéma commun en base éphémère
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0001_famille_core_proposed.sql
+      - name: Appliquer la migration candidate RLS 0002
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/0002_famille_core_rls.sql
+      - name: Appliquer la candidate contextualisée 0003 (PostgreSQL éphémère uniquement)
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0003_prompt_0_3_contextual_rls.sql
+      - name: Vérifier les claims app_id et le refus par défaut
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0003_prompt_0_3_context_assertions.sql
+      - name: Rejouer la matrice complète après contextualisation (PostgreSQL 17)
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0002_prompt_0_3_rls_assertions.sql

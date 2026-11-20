@@ -1,0 +1,1 @@
+import {it,expect} from "vitest";import {decideConflict} from "./index";it("requires review for financial conflicts",()=>expect(decideConflict("payment",1,2)).toBe("manual_review"));it("compensates stock conflicts",()=>expect(decideConflict("inventory",1,2)).toBe("compensate"));

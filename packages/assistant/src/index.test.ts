@@ -1,0 +1,1 @@
+import {it,expect} from "vitest";import {explainSignals} from "./index";it("explains anomalies and leaves the decision to a human",()=>expect(explainSignals([{key:"late",value:4,threshold:2,explanation:"Retard à examiner"}])).toEqual({status:"review",reasons:["Retard à examiner"],requiresHumanDecision:true}));
