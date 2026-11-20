@@ -674,7 +674,15 @@ internal fun OrganizationWorkspaceContent(
                             onClick = {
                                 scope.launch {
                                     busy = true; error = null
-                                    runCatching { repository.createLocalWorkstation(orgId, selectedSite, workstationCode, workstationName, workstationType, capacity.toInt()) }
+                                    runCatching { repository.createLocalWorkstation(
+                                            orgId,
+                                            selectedSite,
+                                            workstationCode,
+                                            workstationName,
+                                            workstationType,
+                                            capacity.toInt(),
+                                            isServerAuthorizedSite = selectedSite in session.account.activeSiteIds
+                                        ) }
                                         .onSuccess { workstationCode = ""; workstationName = ""; capacity = "1"; notice = "Emplacement préparé localement ; il n’est pas encore actif." }
                                         .onFailure { error = it.message ?: "Création impossible." }
                                     busy = false
