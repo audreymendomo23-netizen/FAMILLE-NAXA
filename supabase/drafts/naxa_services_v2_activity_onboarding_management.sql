@@ -32,7 +32,7 @@ alter table public.ns_members
   drop constraint if exists ns_members_preferred_locale_check;
 alter table public.ns_members
   add constraint ns_members_preferred_locale_check
-  check (preferred_locale is null or preferred_locale in ('fr','en'));
+  check (preferred_locale is null or preferred_locale in ('fr','en','ff-CM'));
 
 create table if not exists public.ns_legal_acceptances (
   id uuid primary key default gen_random_uuid(),
