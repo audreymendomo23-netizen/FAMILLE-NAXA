@@ -496,7 +496,6 @@ private fun PressingLocalContent(
 ) {
     val scope = rememberCoroutineScope()
     var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
-    var workstationId by rememberSaveable { mutableStateOf("") }
     var customer by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     var garments by rememberSaveable { mutableStateOf("") }
@@ -983,9 +982,9 @@ private fun TeamManagementContent(
     var name by rememberSaveable { mutableStateOf("") }
     var phone by rememberSaveable { mutableStateOf("") }
     val assignableRoles = when (session.account.roleCode) {
-        "promoter" -> listOf("network_manager", "site_manager", "workstation_manager", "cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant")
-        "network_manager" -> listOf("site_manager", "workstation_manager", "cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant")
-        "site_manager" -> listOf("workstation_manager", "cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant")
+        "promoter" -> listOf("network_manager", "site_manager", "cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant")
+        "network_manager" -> listOf("site_manager", "cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant")
+        "site_manager" -> listOf("cashier", "receptionist", "hair_stylist", "pressing_operator", "stock_manager", "accountant")
         else -> emptyList()
     }
     var role by rememberSaveable { mutableStateOf(assignableRoles.firstOrNull() ?: "cashier") }
@@ -1041,7 +1040,6 @@ private fun TeamManagementContent(
                                     onCheckedChange = { checked ->
                                         val updated = if (checked) (selectedSiteIds + site.id).distinct() else selectedSiteIds - site.id
                                         selectedSiteIds = updated
-                                        if (updated.size != 1) workstationId = ""
                                     }
                                 )
                                 Column {
@@ -1051,17 +1049,8 @@ private fun TeamManagementContent(
                             }
                         }
                     }
-                    OutlinedTextField(
-                        workstationId,
-                        { workstationId = it.trim() },
-                        Modifier.fillMaxWidth(),
-                        label = { Text(stringResource(R.string.member_workstation_id_optional)) },
-                        singleLine = true,
-                        enabled = selectedSiteIds.size == 1
-                    )
                     Text(
-                        if (selectedSiteIds.size > 1) "Un accès multi-sites est défini au niveau de chaque point de vente, sans poste unique partagé."
-                        else stringResource(R.string.provision_scope_hint),
+                        "Un collaborateur peut recevoir plusieurs points de vente. L’accès individuel à un poste précis sera activé après le filtrage dédié de ses données.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1077,21 +1066,20 @@ private fun TeamManagementContent(
                                         accessToken = session.accessToken,
                                         displayName = name,
                                         roleCode = role,
-                                        scopes = selectedSiteIds.map { ProvisionScope(it, workstationId.ifBlank { null }) },
+                                        scopes = selectedSiteIds.map { ProvisionScope(it) },
                                         contactPhone = phone
                                     )
                                 }.onSuccess {
                                     provisioned = it
                                     name = ""
                                     phone = ""
-                                    workstationId = ""
                                 }.onFailure {
                                     error = it.message ?: "Création du compte impossible."
                                 }
                                 busy = false
                             }
                         },
-                        enabled = !busy && assignableRoles.isNotEmpty() && name.isNotBlank() && selectedSiteIds.isNotEmpty() && role in assignableRoles && (workstationId.isBlank() || selectedSiteIds.size == 1),
+                        enabled = !busy && assignableRoles.isNotEmpty() && name.isNotBlank() && selectedSiteIds.isNotEmpty() && role in assignableRoles,
                         modifier = Modifier.fillMaxWidth().height(52.dp)
                     ) {
                         if (busy) CircularProgressIndicator(Modifier.size(18.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
