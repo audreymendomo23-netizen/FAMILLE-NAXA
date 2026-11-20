@@ -551,7 +551,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             orgId = cashSession.orgId,
             siteId = siteId,
             cashSessionId = cashSessionId,
-            saleNumber = "VTE-" + now.toString(),
+            saleNumber = "VTE-" + now.toString() + "-" + UUID.randomUUID().toString().take(6).uppercase(),
             description = description.trim(),
             totalXaf = totalXaf,
             paymentMethod = paymentMethod,
@@ -657,7 +657,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         require(durationMinutes == null || durationMinutes in 1..1440) { "Durée invalide." }
         require(priceXaf >= 0) { "Tarif invalide." }
         val now = System.currentTimeMillis()
-        val service = LocalService(UUID.randomUUID().toString(), orgId, siteId, "SRV-" + now.toString(), activity, name.trim(), durationMinutes, priceXaf, createdAtMillis = now)
+        val service = LocalService(UUID.randomUUID().toString(), orgId, siteId, "SRV-" + now.toString() + "-" + UUID.randomUUID().toString().take(6).uppercase(), activity, name.trim(), durationMinutes, priceXaf, createdAtMillis = now)
         dao.insertService(service)
         enqueue(orgId, "service", service.id, "service.created", siteId)
         service
@@ -690,10 +690,21 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         val delta = if (movementType == "in" || movementType == "adjustment") quantity else -quantity
         val updatedQuantity = current.quantity + delta
         require(updatedQuantity >= 0.0) { "Stock insuffisant : le mouvement créerait un stock négatif." }
-        dao.insertInventoryMovement(LocalInventoryMovement(UUID.randomUUID().toString(), orgId, siteId, itemId, movementType, delta, reason.trim(), actorMemberId, System.currentTimeMillis()))
+        val movement = LocalInventoryMovement(
+            id = UUID.randomUUID().toString(),
+            orgId = orgId,
+            siteId = siteId,
+            itemId = itemId,
+            movementType = movementType,
+            quantityDelta = delta,
+            reason = reason.trim(),
+            actorMemberId = actorMemberId,
+            createdAtMillis = System.currentTimeMillis()
+        )
+        dao.insertInventoryMovement(movement)
         val updated = current.copy(quantity = updatedQuantity)
         dao.updateInventoryItem(updated)
-        enqueue(orgId, "inventory_movement", itemId, "inventory_movement.created", siteId)
+        enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.created", siteId)
         updated
     }
 
