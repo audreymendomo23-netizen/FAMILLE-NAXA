@@ -1016,6 +1016,21 @@ fun WorkOrdersContent(
     val fr = session.account.defaultLocale != "en"
     var siteId by rememberSaveable { mutableStateOf(sites.firstOrNull().orEmpty()) }
     val profile = activityProfile ?: "autre"
+    val profileTitle = when (profile) {
+        "pressing" -> if (fr) "Pressing" else "Laundry"
+        "coiffure" -> if (fr) "Coiffure" else "Hair salon"
+        "couture" -> if (fr) "Couture" else "Tailoring"
+        "beaute" -> if (fr) "Beauté / soins" else "Beauty / treatments"
+        "parfumerie" -> if (fr) "Parfumerie" else "Perfume retail"
+        "reparation" -> if (fr) "Réparation" else "Repair"
+        "menuiserie" -> if (fr) "Menuiserie" else "Carpentry"
+        "garage" -> if (fr) "Garage" else "Garage"
+        "nettoyage" -> if (fr) "Nettoyage" else "Cleaning"
+        "domicile" -> if (fr) "Services à domicile" else "Home services"
+        "impression" -> if (fr) "Imprimerie" else "Printing"
+        "photo_evenementiel" -> if (fr) "Photo / événementiel" else "Photography / events"
+        else -> if (fr) "Services" else "Services"
+    }
     val recordType = when (profile) {
         "reparation", "garage" -> "repair_order"
         "domicile", "nettoyage", "photo_evenementiel" -> "service_order"
@@ -1210,7 +1225,7 @@ fun WorkOrdersContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle(
-                if (fr) "Ordres de travail — \${NaxaActivityCatalog.find(profile)?.titleFr ?: "Services"}" else "Work orders — \${NaxaActivityCatalog.find(profile)?.titleEn ?: "Services"}",
+                (if (fr) "Ordres de travail — " else "Work orders — ") + profileTitle,
                 if (fr) "Dossiers métier, devis, affectations, étapes de production et remise client. Chaque dossier reste rattaché à son site d'origine." else "Activity-specific jobs, quotes, assignments, production stages and handover. Each job remains bound to its source site."
             )
             AuthorizedSitePicker(
