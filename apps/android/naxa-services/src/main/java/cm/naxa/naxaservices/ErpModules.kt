@@ -44,13 +44,17 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cm.naxa.naxaservices.auth.AuthApi
 import cm.naxa.naxaservices.auth.AuthSession
+import cm.naxa.naxaservices.data.LocalInventoryImportRow
 import cm.naxa.naxaservices.data.LocalInventoryItem
 import cm.naxa.naxaservices.data.LocalSite
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
+import java.io.InputStreamReader
+import java.io.OutputStreamWriter
 import java.util.Calendar
 import kotlinx.coroutines.flow.first
 import kotlin.math.roundToLong
@@ -515,6 +519,7 @@ fun StockContent(
     repository: NaxaServicesLocalRepository,
     session: AuthSession
 ) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val siteIds = session.account.activeSiteIds
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
@@ -534,6 +539,61 @@ fun StockContent(
     var error by remember { mutableStateOf<String?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var includeReorderField by rememberSaveable { mutableStateOf(true) }
+    var includePurchasePriceField by rememberSaveable { mutableStateOf(true) }
+    var includeSellingPriceField by rememberSaveable { mutableStateOf(true) }
+    var importPreview by remember { mutableStateOf<List<LocalInventoryImportRow>>(emptyList()) }
+    var importFileName by remember { mutableStateOf("") }
+    var updateExistingItems by rememberSaveable { mutableStateOf(false) }
+    var importMessage by remember { mutableStateOf<String?>(null) }
+
+    val templateLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                val columns = buildList {
+                    add("sku"); add("name"); add("unit"); add("quantity")
+                    if (includeReorderField) add("reorder_level")
+                    if (includePurchasePriceField) add("purchase_price_xaf")
+                    if (includeSellingPriceField) add("selling_price_xaf")
+                }
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    OutputStreamWriter(output, Charsets.UTF_8).use { writer ->
+                        writer.append("#NAXA_STOCK_TEMPLATE,1\n")
+                        writer.append(columns.joinToString(",")).append("\n")
+                    }
+                } ?: error("Impossible d'écrire le fichier sélectionné.")
+            }.onSuccess {
+                importMessage = "Template CSV créé. Renseigne une ligne par article avant l'import."
+            }.onFailure {
+                error = it.message ?: "Téléchargement du template impossible."
+            }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                val content = context.contentResolver.openInputStream(uri)?.use { input ->
+                    InputStreamReader(input, Charsets.UTF_8).buffered().readText()
+                } ?: error("Impossible de lire le fichier sélectionné.")
+                parseStockImportCsv(content)
+            }.onSuccess { parsed ->
+                importPreview = parsed
+                importFileName = uri.lastPathSegment ?: "fichier.csv"
+                importMessage = "Aperçu chargé. Vérifie les doublons et confirme l'import."
+                error = null
+            }.onFailure {
+                importPreview = emptyList()
+                error = it.message ?: "Lecture ou validation du fichier impossible."
+            }
+        }
+    }
+    val importDuplicateCount = importPreview.count { row ->
+        stock.any { it.sku.trim().equals(row.sku.trim(), ignoreCase = true) }
+    }
     val unvaluedItems = stock.count { item -> valuations.none { it.inventoryItemId == item.id } }
     val stockCostValue = stock.sumOf { item ->
         (item.quantity * (valuations.firstOrNull { it.inventoryItemId == item.id }?.unitCostXaf ?: 0L).toDouble()).roundToLong()
@@ -553,6 +613,80 @@ fun StockContent(
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
             ) { siteId = it; selectedItemId = ""; unitCostXaf = ""; sellingPriceXaf = "" }
             LocalOnlyNotice("Chaque mouvement est journalisé localement ; le stock ne peut pas devenir négatif.")
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Importation des stocks (CSV)", fontWeight = FontWeight.Bold)
+                    Text("Le template adapte ses colonnes aux champs sélectionnés. Colonnes obligatoires : SKU, désignation, unité et quantité initiale.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = includeReorderField, onCheckedChange = { includeReorderField = it })
+                        Text("Seuil d'alerte")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = includePurchasePriceField, onCheckedChange = { includePurchasePriceField = it })
+                        Text("Coût d'achat")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = includeSellingPriceField, onCheckedChange = { includeSellingPriceField = it })
+                        Text("Prix de vente")
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { templateLauncher.launch("naxa-services-stock-template.csv") },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Télécharger le template") }
+                        Button(
+                            onClick = { importLauncher.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel")) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Importer le fichier des stocks") }
+                    }
+                    Text("Format pris en charge : CSV UTF-8. Les lignes et colonnes sont validées avant toute écriture.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (importPreview.isNotEmpty()) {
+                        Text("Aperçu : $importFileName", fontWeight = FontWeight.SemiBold)
+                        Text("\${importPreview.size} ligne(s) valide(s) · $importDuplicateCount SKU déjà présent(s)")
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(checked = updateExistingItems, onCheckedChange = { updateExistingItems = it })
+                            Text("Mettre à jour les articles existants (confirmation explicite)")
+                        }
+                        importPreview.take(8).forEach { row ->
+                            Text(
+                                "\${row.sku} · \${row.name} · \${row.quantity} \${row.unit} · seuil \${row.reorderLevel}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        if (importPreview.size > 8) Text("… et \${importPreview.size - 8} autre(s) ligne(s)", style = MaterialTheme.typography.bodySmall)
+                        Button(
+                            onClick = {
+                                scope.launch {
+                                    busy = true
+                                    error = null
+                                    runCatching {
+                                        repository.importInventoryBatch(
+                                            session.account.organizationId,
+                                            siteId,
+                                            importPreview,
+                                            updateExistingItems,
+                                            session.account.memberId
+                                        )
+                                    }.onSuccess { result ->
+                                        notice = "Import terminé : \${result.first} article(s) créé(s), \${result.second} mis à jour."
+                                        importPreview = emptyList()
+                                        importFileName = ""
+                                        updateExistingItems = false
+                                        importMessage = null
+                                    }.onFailure { error = it.message ?: "Import annulé." }
+                                    busy = false
+                                }
+                            },
+                            enabled = !busy && importPreview.isNotEmpty() && (importDuplicateCount == 0 || updateExistingItems),
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (busy) "Import en cours…" else "Confirmer l'import CSV") }
+                        Text("L'import est transactionnel : si une ligne échoue, aucune ligne du lot n'est appliquée. Les quantités initiales et ajustements sont journalisés comme mouvements.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    if (!importMessage.isNullOrBlank()) Text(importMessage!!, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                }
+            }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(18.dp)) {
@@ -670,6 +804,108 @@ fun StockContent(
         if (!error.isNullOrBlank()) item { Text(error!!, color = MaterialTheme.colorScheme.error) }
         if (!notice.isNullOrBlank()) item { Text(notice!!, color = MaterialTheme.colorScheme.secondary) }
     }
+}
+
+
+private fun parseStockImportCsv(raw: String): List<LocalInventoryImportRow> {
+    require(raw.isNotBlank()) { "Le fichier CSV est vide." }
+    val text = raw.removePrefix("\uFEFF")
+    val records = mutableListOf<List<String>>()
+    val row = mutableListOf<String>()
+    val field = StringBuilder()
+    var quoted = false
+    var index = 0
+    while (index < text.length) {
+        val char = text[index]
+        when {
+            char == '"' && quoted && index + 1 < text.length && text[index + 1] == '"' -> {
+                field.append('"'); index++
+            }
+            char == '"' -> quoted = !quoted
+            char == ',' && !quoted -> { row.add(field.toString()); field.setLength(0) }
+            (char == '\n' || char == '\r') && !quoted -> {
+                if (char == '\r' && index + 1 < text.length && text[index + 1] == '\n') index++
+                row.add(field.toString())
+                if (row.any { it.isNotBlank() }) records.add(row.toList())
+                row.clear(); field.setLength(0)
+            }
+            else -> field.append(char)
+        }
+        index++
+    }
+    require(!quoted) { "Le CSV contient un guillemet non fermé." }
+    row.add(field.toString())
+    if (row.any { it.isNotBlank() }) records.add(row.toList())
+    val dataRecords = records.filterNot { it.firstOrNull()?.startsWith("#NAXA_STOCK_TEMPLATE") == true }
+    require(dataRecords.size >= 2) { "Le CSV doit contenir une ligne d'en-tête et au moins un article." }
+
+    fun normalize(value: String): String = java.text.Normalizer.normalize(value.trim().lowercase(java.util.Locale.ROOT), java.text.Normalizer.Form.NFD)
+        .replace(Regex("\\p{Mn}+"), "")
+        .replace(Regex("[^a-z0-9]+"), "_")
+        .trim('_')
+
+    val header = dataRecords.first().map(::normalize)
+    fun findColumn(vararg aliases: String): Int? {
+        return header.indexOfFirst { it in aliases.toSet() }.takeIf { it >= 0 }
+    }
+    val skuIndex = findColumn("sku", "reference", "ref", "code", "barcode", "code_barre")
+    val nameIndex = findColumn("name", "nom", "designation", "produit", "article", "product_name")
+    val unitIndex = findColumn("unit", "unite", "unite_mesure", "measure_unit")
+    val quantityIndex = findColumn("quantity", "quantite", "stock", "stock_initial", "initial_quantity")
+    val reorderIndex = findColumn("reorder_level", "seuil", "seuil_alerte", "stock_minimum")
+    val purchaseIndex = findColumn("purchase_price_xaf", "purchase_price", "prix_achat", "cout_achat", "unit_cost")
+    val sellingIndex = findColumn("selling_price_xaf", "selling_price", "prix_vente", "prix_public", "sale_price")
+    require(skuIndex != null && nameIndex != null && unitIndex != null && quantityIndex != null) {
+        "Colonnes obligatoires manquantes : sku, name, unit, quantity. Utilise le template NAXA SERVICES."
+    }
+
+    fun cell(cells: List<String>, column: Int?): String =
+        column?.let { cells.getOrNull(it)?.trim().orEmpty() }.orEmpty()
+    fun decimal(value: String, fieldName: String, rowNumber: Int): Double {
+        if (value.isBlank()) return 0.0
+        val parsed = value.replace(" ", "").replace(",", ".").toDoubleOrNull()
+        require(parsed != null && parsed.isFinite() && parsed >= 0.0) {
+            "Ligne $rowNumber : valeur $fieldName invalide."
+        }
+        return parsed
+    }
+    fun amount(value: String, fieldName: String, rowNumber: Int): Long? {
+        if (value.isBlank()) return null
+        val parsed = value.replace(" ", "").replace(",", ".").toDoubleOrNull()
+        require(parsed != null && parsed.isFinite() && parsed >= 0.0 && parsed <= Long.MAX_VALUE.toDouble()) {
+            "Ligne $rowNumber : montant $fieldName invalide."
+        }
+        require(parsed % 1.0 == 0.0) { "Ligne $rowNumber : $fieldName doit être un montant entier en FCFA." }
+        return parsed.toLong()
+    }
+
+    val result = mutableListOf<LocalInventoryImportRow>()
+    dataRecords.drop(1).forEachIndexed { offset, cells ->
+        val rowNumber = offset + 2
+        if (cells.all { it.isBlank() }) return@forEachIndexed
+        val sku = cell(cells, skuIndex)
+        val name = cell(cells, nameIndex)
+        val unit = cell(cells, unitIndex)
+        require(sku.isNotBlank() && name.isNotBlank() && unit.isNotBlank()) {
+            "Ligne $rowNumber : SKU, désignation et unité sont obligatoires."
+        }
+        result.add(
+            LocalInventoryImportRow(
+                sku = sku,
+                name = name,
+                unit = unit,
+                quantity = decimal(cell(cells, quantityIndex), "quantité", rowNumber),
+                reorderLevel = decimal(cell(cells, reorderIndex), "seuil d'alerte", rowNumber),
+                unitCostXaf = amount(cell(cells, purchaseIndex), "coût d'achat", rowNumber),
+                sellingPriceXaf = amount(cell(cells, sellingIndex), "prix de vente", rowNumber)
+            )
+        )
+    }
+    require(result.isNotEmpty()) { "Aucun article exploitable dans le CSV." }
+    require(result.size <= 5000) { "Limite de 5 000 articles par import." }
+    val duplicateSku = result.groupBy { it.sku.trim().uppercase() }.entries.firstOrNull { it.value.size > 1 }?.key
+    require(duplicateSku == null) { "Le fichier contient plusieurs lignes avec le SKU $duplicateSku." }
+    return result
 }
 
 private data class SiteDailyReport(
