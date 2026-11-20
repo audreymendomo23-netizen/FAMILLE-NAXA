@@ -934,3 +934,27 @@ Reprendre la branche work/naxa-services-completion-20261120 à son HEAD vérifi�
 **Point de reprise vérifié le 20 novembre 2026 :** HEAD de la branche de travail 58fba9e9f19d809436b114b31434c4a3b2f174fd (commit documentaire) ; parent applicatif 5acd99136a72ba310052532e74e6049992175347. Le workflow 44745166818 est terminé avec succès sur le commit applicatif 5acd99136a72ba310052532e74e6049992175347 : assemblage APK Android debug et tests de contrat Auth réussis. La branche est en avance de 107 commits et en retard de 9 commits par rapport à main au moment du contrôle ; les neuf commits de retard sont documentaires et doivent être intégrés de manière contrôlée. L'APK debug n'est pas une Release. Aucune migration réelle, aucun déploiement de fonction Edge, aucune Release signée et aucune mise en production ne sont réputés accomplis.
 
 **Règle de sécurité opérationnelle :** ne pas toucher au projet NAXA autonome, à son moteur IA, à ses secrets, à ses données ou à ses workflows E2E. Les migrations autorisées pour FAMILLE-NAXA restent limitées à des ressources explicitement propriétaires de Famille et à un environnement isolé ; l'autorisation de migration ne vaut pas autorisation de déploiement ni de publication.
+
+### 6.17.17 État de reprise effectif — NAXA SERVICES, lot du 20 novembre 2026
+
+Cette section actualise le point de reprise antérieur du §6.17.16. En cas de différence sur l'état d'avancement technique, cette section et le rapport `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md` font foi pour le lot CRM/GPS/Fulfulde/CSV.
+
+**Branche active :** `work/naxa-services-completion-20261120`.
+
+**État fonctionnel ajouté à la branche :**
+- Sélecteur Fulfulde `ff-CM` aux préférences, à la connexion et au paramétrage de langue organisation ; contrats Auth mis à jour. La traduction complète reste à faire ; les CGU et la politique acceptées restent en français/anglais jusqu'à validation de traductions humaines.
+- Room version 3 et migration additive 2→3 pour l'adresse, le quartier, les repères et les coordonnées GPS facultatives des clients, avec précision, date de capture et date de consentement.
+- Écran CRM client avec routines de relance hebdomadaires/mensuelles, canaux, prochaine échéance, clôture/reprogrammation et historique des événements.
+- Capture GPS ponctuelle après consentement et permissions Android ; seule une dernière position disponible de moins de quinze minutes est proposée, avec saisie manuelle d'adresse comme alternative. Aucun suivi continu.
+- Template configurable de stock et import CSV UTF-8 avec aperçu, validation, détection des doublons, mise à jour explicitement confirmée, transaction locale et mouvements de stock audités. Le dernier code ajoute la détection du séparateur virgule/point-virgule.
+
+**Limites :** CRM, routines, clients, stocks et mouvements de ce lot sont encore locaux/Room et alimentent l'outbox préparatoire. Le planificateur serveur, l'envoi automatique SMS/WhatsApp, FCM, l'API CRM/GPS, les politiques RLS et la synchronisation distante restent ouverts. L'import ne prend pas encore XLS/XLSX, mapping manuel de colonnes arbitraires ni rapport d'erreurs téléchargeable. Les services ne doivent pas être décrits comme entièrement opérationnels en production.
+
+**Preuves de build :**
+- Le commit `96bb9b294e967b258add1884c5b72e228f4f69e2` a passé le workflow `44769339200` : build Android debug et contrat Auth réussis ; artefact `naxa-services-debug-apk` ID `14646801027`.
+- Le dernier HEAD au moment de la présente actualisation est `2dc2a85cd99828b9ab38389c6a5f646dea0f4cee`. Le workflow `44770034786` a réussi le job Auth ; le job Android est encore en cours de validation. Ne pas attribuer le succès du workflow précédent à ce dernier HEAD avant sa conclusion.
+- L'APK vérifié sur `96bb9b2` est une build **debug**, pas une Release signée.
+
+**Périmètre non livré par ce lot :** administration centrale des dix applications depuis NAXA, mutualisation réelle des comptes Customer Service Officer, paiement/abonnement réel et entitlements, passerelle IA vers NAXA, intégration fonctionnelle NAXA SECURITY, backend ERP/RLS, comptabilité SYSCOHADA, fiscalité, notifications serveur, sauvegarde Drive, appels/partage écran, Web/PWA, tests physiques et Release signée. Ces sujets restent au backlog du §6.17.15–6.17.16.
+
+Le rapport détaillé, ses commits et les réserves de recette sont maintenus dans `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`. Aucune migration Supabase réelle, aucun déploiement Edge, aucune publication APK Release et aucun changement du projet NAXA autonome n'ont été réalisés par ce lot.
