@@ -1396,6 +1396,46 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         updated
     }
 
+    suspend fun updateServiceCatalogItem(
+        orgId: String,
+        siteId: String,
+        serviceId: String,
+        name: String,
+        durationMinutes: Int?,
+        priceXaf: Long,
+        category: String,
+        description: String,
+        providerMemberIdsJson: String,
+        requiredWorkstationKindsJson: String,
+        packageSessions: Int?,
+        actorMemberId: String
+    ): LocalService = database.withTransaction {
+        require(name.isNotBlank() && actorMemberId.isNotBlank()) { "Nom de prestation et opérateur obligatoires." }
+        require(durationMinutes == null || durationMinutes in 1..1440) { "Durée invalide." }
+        require(priceXaf >= 0L) { "Tarif invalide." }
+        require(category in setOf("pressing", "hair", "beauty", "tailoring", "repair", "manufacturing", "vehicle", "cleaning", "home", "printing", "event", "retail", "general")) {
+            "Catégorie de prestation invalide."
+        }
+        require(description.length <= 1000 && providerMemberIdsJson.length <= 2000 && requiredWorkstationKindsJson.length <= 1000) {
+            "Configuration trop longue."
+        }
+        require(packageSessions == null || packageSessions in 1..100) { "Nombre de séances du forfait invalide." }
+        val current = dao.findService(orgId, siteId, serviceId) ?: throw IllegalArgumentException("Prestation introuvable sur ce point de vente.")
+        val updated = current.copy(
+            name = name.trim(),
+            durationMinutes = durationMinutes,
+            priceXaf = priceXaf,
+            category = category,
+            description = description.trim(),
+            providerMemberIdsJson = providerMemberIdsJson,
+            requiredWorkstationKindsJson = requiredWorkstationKindsJson,
+            packageSessions = packageSessions
+        )
+        dao.updateService(updated)
+        enqueue(orgId, "service", serviceId, "service.updated", siteId)
+        updated
+    }
+
     suspend fun saveServiceConfiguration(
         orgId: String,
         siteId: String,
