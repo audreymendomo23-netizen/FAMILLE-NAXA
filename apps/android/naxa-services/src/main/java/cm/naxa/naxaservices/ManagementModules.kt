@@ -834,18 +834,86 @@ fun WorkOrdersContent(
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
-    fun transitions(status: String): List<Pair<String, String>> = when (status) {
-        "received", "open" -> listOf("diagnostic" to (if (fr) "Diagnostiquer" else "Diagnose"), "quote_pending" to (if (fr) "Envoyer le devis" else "Send quote"), "in_progress" to (if (fr) "Démarrer" else "Start"), "cancelled" to (if (fr) "Annuler" else "Cancel"))
-        "diagnostic" -> listOf("quote_pending" to (if (fr) "Proposer un devis" else "Send quote"), "awaiting_approval" to (if (fr) "Attendre accord client" else "Await approval"), "in_progress" to (if (fr) "Démarrer" else "Start"), "cancelled" to (if (fr) "Annuler" else "Cancel"))
-        "quote_pending" -> listOf("waiting_customer" to (if (fr) "Attendre le client" else "Await customer"), "approved" to (if (fr) "Devis accepté" else "Quote approved"), "cancelled" to (if (fr) "Annuler" else "Cancel"))
-        "waiting_customer", "awaiting_approval" -> listOf("approved" to (if (fr) "Accord reçu" else "Approval received"), "cancelled" to (if (fr) "Annuler" else "Cancel"))
-        "approved" -> listOf("waiting_parts" to (if (fr) "Attendre les pièces" else "Await parts"), "in_progress" to (if (fr) "Démarrer" else "Start"))
-        "waiting_parts" -> listOf("in_progress" to (if (fr) "Pièces reçues — démarrer" else "Parts received — start"))
-        "in_progress" -> listOf("quality_check" to (if (fr) "Contrôle qualité" else "Quality check"), "ready" to (if (fr) "Prêt" else "Ready"))
-        "quality_check" -> listOf("in_progress" to (if (fr) "Reprendre" else "Resume"), "ready" to (if (fr) "Valider prêt" else "Approve ready"))
-        "ready" -> listOf("delivered" to (if (fr) "Remis au client" else "Delivered"))
-        "delivered" -> listOf("closed" to (if (fr) "Clôturer" else "Close"))
-        else -> emptyList()
+    fun transitions(status: String): List<Pair<String, String>> {
+        val stages: Map<String, Set<String>> = when (profile) {
+            "couture" -> mapOf(
+                "received" to setOf("measurement", "diagnostic"), "open" to setOf("measurement", "diagnostic"),
+                "measurement" to setOf("quote_pending"), "diagnostic" to setOf("quote_pending"),
+                "quote_pending" to setOf("waiting_customer", "approved"),
+                "waiting_customer" to setOf("approved"), "approved" to setOf("waiting_parts", "in_progress"),
+                "waiting_parts" to setOf("in_progress"), "in_progress" to setOf("fitting", "quality_check"),
+                "fitting" to setOf("in_progress", "quality_check"), "quality_check" to setOf("fitting", "ready"),
+                "ready" to setOf("delivered"), "delivered" to setOf("closed")
+            )
+            "menuiserie" -> mapOf(
+                "received" to setOf("diagnostic", "quote_pending"), "open" to setOf("diagnostic", "quote_pending"),
+                "diagnostic" to setOf("quote_pending"), "quote_pending" to setOf("waiting_customer", "approved"),
+                "waiting_customer" to setOf("approved"), "approved" to setOf("waiting_parts", "fabrication"),
+                "waiting_parts" to setOf("fabrication"), "fabrication" to setOf("quality_check"),
+                "quality_check" to setOf("fabrication", "installation", "ready"),
+                "installation" to setOf("ready"), "ready" to setOf("delivered"), "delivered" to setOf("closed")
+            )
+            "impression" -> mapOf(
+                "received" to setOf("quote_pending", "proof_ready"), "open" to setOf("quote_pending", "proof_ready"),
+                "quote_pending" to setOf("waiting_customer", "proof_ready"),
+                "waiting_customer" to setOf("approved"), "proof_ready" to setOf("approved", "in_progress"),
+                "approved" to setOf("production"), "production" to setOf("quality_check"),
+                "quality_check" to setOf("production", "ready"), "ready" to setOf("delivered"), "delivered" to setOf("closed")
+            )
+            "domicile", "nettoyage" -> mapOf(
+                "received" to setOf("quote_pending", "approved"), "open" to setOf("quote_pending", "approved"),
+                "quote_pending" to setOf("waiting_customer", "approved"), "waiting_customer" to setOf("approved"),
+                "approved" to setOf("planning", "on_site"), "planning" to setOf("on_site"),
+                "on_site" to setOf("in_progress"), "in_progress" to setOf("quality_check"),
+                "quality_check" to setOf("in_progress", "ready"), "ready" to setOf("delivered"), "delivered" to setOf("closed")
+            )
+            "photo_evenementiel" -> mapOf(
+                "received" to setOf("quote_pending", "planning"), "open" to setOf("quote_pending", "planning"),
+                "quote_pending" to setOf("waiting_customer", "approved"), "waiting_customer" to setOf("approved"),
+                "approved" to setOf("planning"), "planning" to setOf("shooting"),
+                "shooting" to setOf("post_production"), "post_production" to setOf("quality_check"),
+                "quality_check" to setOf("post_production", "ready"), "ready" to setOf("delivered"), "delivered" to setOf("closed")
+            )
+            else -> emptyMap()
+        }
+        val statuses = stages[status] ?: when (status) {
+            "received", "open" -> setOf("diagnostic", "quote_pending", "in_progress", "cancelled")
+            "diagnostic" -> setOf("quote_pending", "awaiting_approval", "in_progress", "cancelled")
+            "quote_pending" -> setOf("waiting_customer", "approved", "cancelled")
+            "waiting_customer", "awaiting_approval" -> setOf("approved", "cancelled")
+            "approved" -> setOf("waiting_parts", "in_progress")
+            "waiting_parts" -> setOf("in_progress")
+            "in_progress" -> setOf("quality_check", "ready")
+            "quality_check" -> setOf("in_progress", "ready")
+            "ready" -> setOf("delivered")
+            "delivered" -> setOf("closed")
+            else -> emptySet()
+        }
+        val label = mapOf(
+            "measurement" to if (fr) "Prendre les mensurations" else "Measure",
+            "diagnostic" to if (fr) "Diagnostiquer" else "Diagnose",
+            "quote_pending" to if (fr) "Préparer le devis" else "Prepare quote",
+            "waiting_customer" to if (fr) "Attendre le client" else "Await customer",
+            "approved" to if (fr) "Accord reçu" else "Approval received",
+            "waiting_parts" to if (fr) "Attendre les pièces" else "Await parts",
+            "fabrication" to if (fr) "Lancer la fabrication" else "Start fabrication",
+            "fitting" to if (fr) "Essayage" else "Fitting",
+            "proof_ready" to if (fr) "Épreuve prête" else "Proof ready",
+            "production" to if (fr) "Démarrer la production" else "Start production",
+            "planning" to if (fr) "Planifier l'intervention" else "Plan intervention",
+            "on_site" to if (fr) "Équipe sur site" else "Team on site",
+            "shooting" to if (fr) "Prise de vue" else "Photo / video session",
+            "post_production" to if (fr) "Post-production" else "Post-production",
+            "in_progress" to if (fr) "Démarrer / reprendre" else "Start / resume",
+            "quality_check" to if (fr) "Contrôle qualité" else "Quality check",
+            "ready" to if (fr) "Valider prêt" else "Approve ready",
+            "installation" to if (fr) "Installer / poser" else "Install",
+            "delivered" to if (fr) "Remis au client" else "Delivered",
+            "closed" to if (fr) "Clôturer" else "Close",
+            "cancelled" to if (fr) "Annuler" else "Cancel",
+            "awaiting_approval" to if (fr) "Attendre accord client" else "Await approval"
+        )
+        return statuses.map { it to (label[it] ?: it) }
     }
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
