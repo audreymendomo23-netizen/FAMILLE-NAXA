@@ -1375,9 +1375,9 @@ private fun CashLocalContent(
     var saleStockQuantity by rememberSaveable { mutableStateOf("1") }
     val selectedStockItem = stockItems.firstOrNull { it.id == selectedStockItemId }
     val selectedStockValuation = selectedStockItem?.let { item -> stockValuations.firstOrNull { it.inventoryItemId == item.id } }
-    val stockSaleQuantity = saleStockQuantity.replace(",", ".").toDoubleOrNull() ?: 0.0
+    val parsedStockSaleQuantity: Double = saleStockQuantity.replace(",", ".").toDoubleOrNull() ?: 0.0
     val linkedStockPrice = selectedStockValuation?.sellingPriceXaf ?: 0L
-    val linkedStockTotal = (stockSaleQuantity * linkedStockPrice.toDouble()).takeIf { it.isFinite() && it <= Long.MAX_VALUE.toDouble() }?.toLong() ?: 0L
+    val linkedStockTotal = (parsedStockSaleQuantity * linkedStockPrice.toDouble()).takeIf { it.isFinite() && it <= Long.MAX_VALUE.toDouble() }?.toLong() ?: 0L
 
     var registerId by rememberSaveable { mutableStateOf("") }
     var registerName by rememberSaveable { mutableStateOf("Caisse principale") }
@@ -1504,8 +1504,7 @@ private fun CashLocalContent(
                                             paymentMethod,
                                             session.account.memberId,
                                             inventoryItemId = selectedStockItem?.id,
-                                            stockQuantity = selectedStockItem?.let { stockSaleQuantity }
-                                                ?.let { raw -> raw.replace(",", ".").toDoubleOrNull() }
+                                            stockQuantity = selectedStockItem?.let { saleStockQuantity.replace(",", ".").toDoubleOrNull() }
                                         )
                                     }.onSuccess { pair ->
                                         saleDescription = ""
@@ -1532,8 +1531,9 @@ private fun CashLocalContent(
                                 paymentMethod in setOf("cash", "mobile_money") &&
                                 (selectedStockItem == null || (
                                     linkedStockPrice > 0L &&
-                                    stockSaleQuantity.isNotBlank() &&
-                                    stockSaleQuantity.replace(",", ".").toDoubleOrNull()?.let { it > 0.0 && it <= selectedStockItem.quantity } == true
+                                    saleStockQuantity.isNotBlank() &&
+                                    parsedStockSaleQuantity > 0.0 &&
+                                    parsedStockSaleQuantity <= selectedStockItem.quantity
                                 )),
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(stringResource(R.string.record_sale_local)) }
