@@ -234,3 +234,10 @@ Le statut reste EN VALIDATION CI ; ne déclarer VERT qu'après preuve intégrale
 - Statut non vert complet : builds locaux non exécutés (résolution réseau indisponible), alias GoTrue non prouvé, fonction non déployée, provisioning/reset Admin incomplets, policies RLS détaillées et recettes métier non exécutées. Les opérations ERP restent à connecter aux repositories et à la synchronisation.
 - Logo : SVG reconstruit depuis la spécification écrite ; original binaire spécifique non vérifié dans cette passe.
 - Aucun changement de Supabase Replay/Production, aucun déploiement ni APK publiée.
+
+
+### Complément Auth / RLS — 20 novembre 2026
+- L'Edge Function source gère désormais aussi l'enrôlement d'un membre dans un scope autorisé, la finalisation d'une récupération après contrôle d'identité et la révocation d'un appareil.
+- Les refresh tokens sont liés côté serveur à leur hash SHA-256, à l'installation et au session_id du JWT ; aucun refresh token en clair n'est stocké en base.
+- Le draft SQL comprend maintenant les helpers et policies RLS par organisation, site et poste, ainsi que l'exigence d'une session d'appareil active pour ns_current_account_id().
+- Limites inchangées : alias GoTrue non prouvé, fonction non déployée, SQL non appliqué, tests RLS/session non exécutés, écrans de provisioning et de traitement de recovery à intégrer à l'interface responsable.
