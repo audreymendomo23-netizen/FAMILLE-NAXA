@@ -578,6 +578,9 @@ interface NaxaServicesDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertSupportRequest(request: LocalSupportRequest)
 
+    @Query("SELECT * FROM local_management_records WHERE orgId = :orgId AND siteId = :siteId AND counterparty = :staffName AND recordType IN ('staff_clock_in','staff_break_start','staff_break_end','staff_clock_out') ORDER BY createdAtMillis DESC LIMIT 1")
+    suspend fun findLatestStaffTimeEvent(orgId: String, siteId: String, staffName: String): LocalManagementRecord?
+
     @Query("SELECT * FROM local_management_records WHERE orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis DESC")
     fun observeManagementRecords(orgId: String, siteId: String): Flow<List<LocalManagementRecord>>
 
@@ -1703,6 +1706,87 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         enqueue(orgId, "appointment", appointment.id, "appointment.created_from_waitlist", siteId)
         enqueue(orgId, "appointment_waitlist", waitlist.id, "appointment_waitlist.converted", siteId)
         appointment
+    }
+
+    suspend fun recordStaffTimeEvent(
+        orgId: String,
+        siteId: String,
+        eventType: String,
+        staffName: String,
+        actorMemberId: String,
+        workstationId: String? = null
+    ): LocalManagementRecord = database.withTransaction {
+        require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) {
+            "Organisation, site et opérateur obligatoires."
+        }
+        val staff = staffName.trim()
+        require(staff.length in 2..120) { "Nom ou identifiant de collaborateur invalide." }
+        require(eventType in setOf("staff_clock_in", "staff_break_start", "staff_break_end", "staff_clock_out")) {
+            "Événement de pointage non pris en charge."
+        }
+        val latest = dao.findLatestStaffTimeEvent(orgId, siteId, staff)
+        val allowed = when (eventType) {
+            "staff_clock_in" -> latest == null || latest.recordType == "staff_clock_out"
+            "staff_break_start" -> latest?.recordType in setOf("staff_clock_in", "staff_break_end")
+            "staff_break_end" -> latest?.recordType == "staff_break_start"
+            "staff_clock_out" -> latest?.recordType in setOf("staff_clock_in", "staff_break_end")
+            else -> false
+        }
+        require(allowed) {
+            val current = latest?.recordType ?: "aucun pointage"
+            "Séquence de pointage invalide. Dernier événement : $current."
+        }
+        val normalizedWorkstation = workstationId?.takeIf { it.isNotBlank() }
+        if (normalizedWorkstation != null) {
+            require(dao.findWorkstation(normalizedWorkstation, orgId, siteId) != null) {
+                "L'emplacement choisi ne fait pas partie de ce point de vente."
+            }
+        }
+        val now = System.currentTimeMillis()
+        val title = when (eventType) {
+            "staff_clock_in" -> "Prise de service"
+            "staff_break_start" -> "Début de pause"
+            "staff_break_end" -> "Fin de pause"
+            else -> "Fin de service"
+        }
+        val item = LocalManagementRecord(
+            id = UUID.randomUUID().toString(),
+            orgId = orgId,
+            siteId = siteId,
+            recordType = eventType,
+            reference = "TIME-" + now.toString() + "-" + UUID.randomUUID().toString().take(6).uppercase(),
+            title = title,
+            counterparty = staff,
+            amountXaf = 0L,
+            paidXaf = 0L,
+            dueAtMillis = null,
+            status = "open",
+            metadataJson = org.json.JSONObject()
+                .put("event", eventType)
+                .put("recordedLocal", true)
+                .put("workstationId", normalizedWorkstation)
+                .toString(),
+            actorMemberId = actorMemberId,
+            createdAtMillis = now,
+            workstationId = normalizedWorkstation
+        )
+        dao.insertManagementRecord(item)
+        dao.insertWorkflowEvent(
+            LocalWorkflowEvent(
+                id = UUID.randomUUID().toString(),
+                orgId = orgId,
+                siteId = siteId,
+                aggregateType = eventType,
+                aggregateId = item.id,
+                fromStatus = latest?.recordType ?: "",
+                toStatus = eventType,
+                reason = "Pointage chronologique validé",
+                actorMemberId = actorMemberId,
+                createdAtMillis = now
+            )
+        )
+        enqueue(orgId, eventType, item.id, eventType + ".recorded", siteId)
+        item
     }
 
     suspend fun createManagementRecord(
