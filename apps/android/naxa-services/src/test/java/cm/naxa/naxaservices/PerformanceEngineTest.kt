@@ -184,4 +184,71 @@ class PerformanceEngineTest {
         assertTrue(result.recoveryActions.any { it.title.contains("objectif " + result.year.label) })
     }
 
+    @Test
+    fun supplierReceiptsAndPaymentsAffectTheCorrectFinancialLinesWithoutInflatingRevenue() {
+        fun entry(
+            id: String, sourceType: String, eventCode: String,
+            debit: String, credit: String, amount: Long
+        ) = LocalAccountingEntry(
+            id = id,
+            orgId = "org-1",
+            siteId = "site-1",
+            journalBatchId = "batch-" + id,
+            sourceType = sourceType,
+            sourceId = id,
+            eventCode = eventCode,
+            debitAccount = debit,
+            creditAccount = credit,
+            amountXaf = amount,
+            description = id,
+            actorMemberId = "member-1",
+            occurredAtMillis = now
+        )
+
+        val entries = listOf(
+            entry("stock-receipt", "purchase_receipt", "goods_received", "INVENTORY_ASSET", "SUPPLIER_PAYABLE", 100_000L),
+            entry("expense-receipt", "purchase_receipt", "expense_received", "OPERATING_EXPENSE_PURCHASE", "SUPPLIER_PAYABLE", 20_000L),
+            entry("asset-receipt", "purchase_receipt", "asset_received", "FIXED_ASSET", "SUPPLIER_PAYABLE", 30_000L),
+            entry("recoverable-tax", "purchase_receipt", "recoverable_tax", "INPUT_TAX_RECEIVABLE", "SUPPLIER_PAYABLE", 5_000L),
+            entry("supplier-payment", "supplier_payment", "payable_settlement", "SUPPLIER_PAYABLE", "BANK", 50_000L)
+        )
+        val result = NaxaPerformanceEngine.analyze(
+            sales = listOf(sale("sale", today, 100_000L, 60_000L)),
+            accountingEntries = entries,
+            objectives = emptyList(),
+            supplierPayablesXaf = 105_000L,
+            lowStockCount = 0,
+            nowMillis = now,
+            zone = zone
+        )
+
+        assertEquals(100_000L, result.revenueXaf)
+        assertEquals(20_000L, result.operatingExpensesXaf)
+        assertEquals(20_000L, result.operatingProfitProxyXaf)
+        assertEquals(100_000L, result.currentMonthSupplierStockPurchasesXaf)
+        assertEquals(20_000L, result.currentMonthSupplierOperatingPurchasesXaf)
+        assertEquals(30_000L, result.currentMonthSupplierFixedAssetsXaf)
+        assertEquals(50_000L, result.currentMonthSupplierPaymentsXaf)
+        assertEquals(105_000L, result.supplierPayablesXaf)
+    }
+
+    @Test
+    fun performanceCalendarUsesDoualaLocalDateAcrossUtcMidnight() {
+        val utc = ZoneId.of("UTC")
+        val boundary = LocalDate.of(2026, 11, 20).atTime(23, 30).atZone(utc).toInstant().toEpochMilli()
+        val saleAtBoundary = sale("douala-boundary", today, 12_000L, 7_000L).copy(createdAtMillis = boundary)
+        val result = NaxaPerformanceEngine.analyze(
+            sales = listOf(saleAtBoundary),
+            accountingEntries = emptyList(),
+            objectives = emptyList(),
+            supplierPayablesXaf = 0L,
+            lowStockCount = 0,
+            nowMillis = boundary,
+            zone = ZoneId.of("Africa/Douala")
+        )
+        assertEquals("2026-11-21", result.day.label)
+        assertEquals(12_000L, result.day.actualXaf)
+        assertEquals("2026-11-21", result.dailyTrend.last().label)
+    }
+
 }

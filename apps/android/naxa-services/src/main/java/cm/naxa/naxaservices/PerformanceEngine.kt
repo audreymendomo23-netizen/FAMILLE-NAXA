@@ -24,6 +24,8 @@ data class PerformanceDashboard(
     val revenueXaf: Long, val costedRevenueXaf: Long, val costOfGoodsXaf: Long,
     val grossProfitXaf: Long, val grossMarginPercent: Double?,
     val operatingExpensesXaf: Long, val operatingProfitProxyXaf: Long?, val supplierPayablesXaf: Long,
+    val currentMonthSupplierStockPurchasesXaf: Long, val currentMonthSupplierOperatingPurchasesXaf: Long,
+    val currentMonthSupplierFixedAssetsXaf: Long, val currentMonthSupplierPaymentsXaf: Long,
     val uncostedStockSalesCount: Int, val lowStockCount: Int, val recoveryActions: List<RecoveryAction>, val dataCoverageDays: Int
 )
 
@@ -32,7 +34,7 @@ object NaxaPerformanceEngine {
     fun analyze(
         sales: List<LocalSale>, accountingEntries: List<LocalAccountingEntry>,
         objectives: List<LocalManagementRecord>, supplierPayablesXaf: Long, lowStockCount: Int,
-        nowMillis: Long, zone: ZoneId = ZoneId.systemDefault()
+        nowMillis: Long, zone: ZoneId = ZoneId.of("Africa/Douala")
     ): PerformanceDashboard {
         val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
         val confirmed = sales.filter { it.status == "confirmed" && it.totalXaf > 0L }
@@ -44,6 +46,26 @@ object NaxaPerformanceEngine {
         val cogs = costedSales.sumOf { it.costOfGoodsXaf.coerceAtLeast(0L) }
         val gross = costedRevenue - cogs
         val opex = accountingEntries.filter { it.debitAccount.startsWith("OPERATING_EXPENSE") }.sumOf { it.amountXaf }
+        // Supplier flows are separated so stock receipts and asset acquisitions are not mistaken for
+        // operating expenses, while supplier settlements are not expensed a second time.
+        val currentMonthEntries = accountingEntries.filter {
+            dateOf(it.occurredAtMillis, zone).let { date ->
+                date.year == today.year && date.monthValue == today.monthValue && !date.isAfter(today)
+            }
+        }
+        val supplierStockPurchases = currentMonthEntries.filter {
+            it.sourceType == "purchase_receipt" && it.debitAccount == "INVENTORY_ASSET"
+        }.sumOf { it.amountXaf }
+        val supplierOperatingPurchases = currentMonthEntries.filter {
+            it.sourceType == "purchase_receipt" && it.debitAccount.startsWith("OPERATING_EXPENSE")
+        }.sumOf { it.amountXaf }
+        val supplierFixedAssets = currentMonthEntries.filter {
+            it.sourceType == "purchase_receipt" && it.debitAccount == "FIXED_ASSET"
+        }.sumOf { it.amountXaf }
+        val supplierPayments = currentMonthEntries.filter {
+            it.sourceType == "supplier_payment" && it.eventCode == "payable_settlement" &&
+                it.debitAccount == "SUPPLIER_PAYABLE"
+        }.sumOf { it.amountXaf }
         val margin = if (costedRevenue > 0L) gross.toDouble() * 100.0 / costedRevenue else null
         val operatingProfit = if (uncosted == 0) gross - opex else null
         val avg14 = avgDaily(byDay, today.minusDays(14), today.minusDays(1))
@@ -152,7 +174,8 @@ object NaxaPerformanceEngine {
         val firstDate = confirmed.minOfOrNull { dateOf(it.createdAtMillis, zone) }
         val coverage = firstDate?.let { ChronoUnit.DAYS.between(it, today).toInt() + 1 } ?: 0
         return PerformanceDashboard(day, month, year, daily, monthly, yearly, revenue, costedRevenue, cogs, gross, margin, opex,
-            operatingProfit, supplierPayablesXaf, uncosted, lowStockCount, actions.take(8), coverage)
+            operatingProfit, supplierPayablesXaf, supplierStockPurchases, supplierOperatingPurchases,
+            supplierFixedAssets, supplierPayments, uncosted, lowStockCount, actions.take(8), coverage)
     }
 
     private fun projection(label: String, actual: Long, forecast: Long, target: Long?, previous: Long, remaining: Int) =

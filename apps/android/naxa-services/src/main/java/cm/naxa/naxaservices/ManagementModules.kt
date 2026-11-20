@@ -754,7 +754,7 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
     var target by rememberSaveable { mutableStateOf("") }
     var period by rememberSaveable { mutableStateOf("daily") }
     var notice by remember { mutableStateOf<String?>(null) }
-    val zone = remember { ZoneId.systemDefault() }
+    val zone = remember { ZoneId.of("Africa/Douala") }
     val today = java.time.LocalDate.now(zone)
     val periodStart = when (period) {
         "monthly" -> today.withDayOfMonth(1)
@@ -900,7 +900,7 @@ private fun PerformanceProjectionCard(title: String, period: PeriodProjection) {
 fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
     val orgId = session.account.organizationId
     val siteIds = session.account.activeSiteIds
-    val zone = remember { ZoneId.systemDefault() }
+    val zone = remember { ZoneId.of("Africa/Douala") }
     val fromMillis = remember { LocalDate.now(zone).minusYears(5).atStartOfDay(zone).toInstant().toEpochMilli() }
     val sales by remember(orgId, siteIds, fromMillis) {
         repository.dao.observeSalesForSites(orgId, siteIds, fromMillis)
@@ -954,6 +954,11 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
                         (dashboard.operatingProfitProxyXaf?.let { xaf(it) } ?: "non déterminable : COGS historique incomplet"),
                         fontWeight = FontWeight.Bold)
                     Text("Dette fournisseurs non réglée : " + xaf(dashboard.supplierPayablesXaf))
+                    Text("Flux fournisseurs comptabilisés ce mois-ci", fontWeight = FontWeight.SemiBold)
+                    Text("Stocks reçus et capitalisés : " + xaf(dashboard.currentMonthSupplierStockPurchasesXaf))
+                    Text("Achats courants reçus et passés en charges : " + xaf(dashboard.currentMonthSupplierOperatingPurchasesXaf))
+                    Text("Immobilisations reçues : " + xaf(dashboard.currentMonthSupplierFixedAssetsXaf))
+                    Text("Règlements fournisseurs (trésorerie, sans seconde charge) : " + xaf(dashboard.currentMonthSupplierPaymentsXaf))
                     if (dashboard.uncostedStockSalesCount > 0) {
                         Text(
                             dashboard.uncostedStockSalesCount.toString() + " vente(s) de stock antérieure(s) ne possèdent pas de coût historique fiable ; elles sont signalées et ne sont pas inventées dans le coût des ventes.",
@@ -975,20 +980,23 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
         }
         item { Text("Performance jour par jour · 14 derniers jours", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.dailyTrend) { row ->
-            Text(row.label + " · " + xaf(row.actualXaf) + " · vs veille : " +
-                (row.deltaPercent?.let { (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %" } ?: "—"),
+            val delta = (if (row.deltaXaf >= 0L) "+" else "−") + xaf(if (row.deltaXaf >= 0L) row.deltaXaf else -row.deltaXaf)
+            val rate = row.deltaPercent?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %)" } ?: ""
+            Text(row.label + " · " + xaf(row.actualXaf) + " · écart vs veille : " + delta + rate,
                 style = MaterialTheme.typography.bodySmall)
         }
         item { Text("Performance mois par mois · 12 derniers mois", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.monthlyTrend) { row ->
-            Text(row.label + " · " + xaf(row.actualXaf) + " · vs mois précédent : " +
-                (row.deltaPercent?.let { (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %" } ?: "—"),
+            val delta = (if (row.deltaXaf >= 0L) "+" else "−") + xaf(if (row.deltaXaf >= 0L) row.deltaXaf else -row.deltaXaf)
+            val rate = row.deltaPercent?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %)" } ?: ""
+            Text(row.label + " · " + xaf(row.actualXaf) + " · écart vs mois précédent : " + delta + rate,
                 style = MaterialTheme.typography.bodySmall)
         }
         item { Text("Performance année par année · 5 derniers exercices", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.yearlyTrend) { row ->
-            Text(row.label + " · " + xaf(row.actualXaf) + " · vs exercice précédent : " +
-                (row.deltaPercent?.let { (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %" } ?: "—"),
+            val delta = (if (row.deltaXaf >= 0L) "+" else "−") + xaf(if (row.deltaXaf >= 0L) row.deltaXaf else -row.deltaXaf)
+            val rate = row.deltaPercent?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %)" } ?: ""
+            Text(row.label + " · " + xaf(row.actualXaf) + " · écart vs exercice précédent : " + delta + rate,
                 style = MaterialTheme.typography.bodySmall)
         }
         item { Text("Stratégies de redressement et de progression", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
