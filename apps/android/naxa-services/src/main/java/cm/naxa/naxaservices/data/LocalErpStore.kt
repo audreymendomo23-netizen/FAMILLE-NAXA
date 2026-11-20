@@ -11,6 +11,8 @@ import androidx.room.Query
 import androidx.room.RoomDatabase
 import androidx.room.Update
 import androidx.room.withTransaction
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import java.util.UUID
 
@@ -223,6 +225,41 @@ data class LocalSupportRequest(
     val createdAtMillis: Long
 )
 
+@Entity(
+    tableName = "local_management_records",
+    indices = [Index(value = ["orgId", "siteId", "recordType", "createdAtMillis"]), Index(value = ["orgId", "siteId", "reference"])]
+)
+data class LocalManagementRecord(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val recordType: String,
+    val reference: String,
+    val title: String,
+    val counterparty: String,
+    val amountXaf: Long,
+    val paidXaf: Long,
+    val dueAtMillis: Long?,
+    val status: String,
+    val metadataJson: String,
+    val actorMemberId: String,
+    val createdAtMillis: Long
+)
+
+@Entity(
+    tableName = "local_inventory_valuations",
+    indices = [Index(value = ["orgId", "siteId", "inventoryItemId"], unique = true)]
+)
+data class LocalInventoryValuation(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val inventoryItemId: String,
+    val unitCostXaf: Long,
+    val sellingPriceXaf: Long,
+    val updatedAtMillis: Long
+)
+
 @Dao
 interface NaxaServicesDao {
     @Query("SELECT * FROM local_pressing_orders WHERE orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis DESC")
@@ -377,6 +414,24 @@ interface NaxaServicesDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertSupportRequest(request: LocalSupportRequest)
+
+    @Query("SELECT * FROM local_management_records WHERE orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis DESC")
+    fun observeManagementRecords(orgId: String, siteId: String): Flow<List<LocalManagementRecord>>
+
+    @Query("SELECT * FROM local_management_records WHERE orgId = :orgId AND siteId = :siteId AND recordType = :recordType ORDER BY createdAtMillis DESC")
+    fun observeManagementRecordsByType(orgId: String, siteId: String, recordType: String): Flow<List<LocalManagementRecord>>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertManagementRecord(record: LocalManagementRecord)
+
+    @Query("SELECT * FROM local_inventory_valuations WHERE orgId = :orgId AND siteId = :siteId ORDER BY updatedAtMillis DESC")
+    fun observeInventoryValuations(orgId: String, siteId: String): Flow<List<LocalInventoryValuation>>
+
+    @Query("SELECT * FROM local_inventory_valuations WHERE orgId = :orgId AND siteId = :siteId AND inventoryItemId = :itemId LIMIT 1")
+    suspend fun findInventoryValuation(orgId: String, siteId: String, itemId: String): LocalInventoryValuation?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertInventoryValuation(valuation: LocalInventoryValuation)
 }
 
 @Database(
@@ -395,13 +450,35 @@ interface NaxaServicesDao {
         LocalCustomer::class,
         LocalInventoryItem::class,
         LocalInventoryMovement::class,
-        LocalSupportRequest::class
+        LocalSupportRequest::class,
+        LocalManagementRecord::class,
+        LocalInventoryValuation::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
     abstract fun naxaServicesDao(): NaxaServicesDao
+}
+
+val NS_SERVICES_MIGRATION_1_2: Migration = object : Migration(1, 2) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS local_management_records (" +
+                "id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, " +
+                "recordType TEXT NOT NULL, reference TEXT NOT NULL, title TEXT NOT NULL, counterparty TEXT NOT NULL, " +
+                "amountXaf INTEGER NOT NULL, paidXaf INTEGER NOT NULL, dueAtMillis INTEGER, status TEXT NOT NULL, " +
+                "metadataJson TEXT NOT NULL, actorMemberId TEXT NOT NULL, createdAtMillis INTEGER NOT NULL)"
+        )
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_management_records_orgId_siteId_recordType_createdAtMillis ON local_management_records(orgId, siteId, recordType, createdAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_management_records_orgId_siteId_reference ON local_management_records(orgId, siteId, reference)")
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS local_inventory_valuations (" +
+                "id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, inventoryItemId TEXT NOT NULL, " +
+                "unitCostXaf INTEGER NOT NULL, sellingPriceXaf INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL)"
+        )
+        database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_local_inventory_valuations_orgId_siteId_inventoryItemId ON local_inventory_valuations(orgId, siteId, inventoryItemId)")
+    }
 }
 
 class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
@@ -740,6 +817,59 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         dao.insertSupportRequest(item)
         enqueue(orgId, "support_request", item.id, "support_request.created", siteId)
         item
+    }
+
+    suspend fun createManagementRecord(
+        orgId: String,
+        siteId: String,
+        recordType: String,
+        reference: String,
+        title: String,
+        counterparty: String,
+        amountXaf: Long,
+        paidXaf: Long,
+        dueAtMillis: Long?,
+        status: String,
+        metadataJson: String,
+        actorMemberId: String
+    ): LocalManagementRecord = database.withTransaction {
+        val allowedTypes = setOf("quote", "invoice", "credit_note", "refund_due", "purchase", "tax_estimate", "business_goal", "subscription_request", "support_chat")
+        require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) { "Organisation, site et opérateur obligatoires." }
+        require(recordType in allowedTypes) { "Type de registre non autorisé." }
+        require(title.isNotBlank() && amountXaf >= 0L && paidXaf >= 0L && paidXaf <= amountXaf) { "Montants ou libellé incohérents." }
+        require(status in setOf("draft", "open", "partial", "paid", "cancelled", "pending_review")) { "Statut non autorisé." }
+        val now = System.currentTimeMillis()
+        val item = LocalManagementRecord(
+            id = UUID.randomUUID().toString(), orgId = orgId, siteId = siteId,
+            recordType = recordType, reference = reference.trim(), title = title.trim(),
+            counterparty = counterparty.trim(), amountXaf = amountXaf, paidXaf = paidXaf,
+            dueAtMillis = dueAtMillis, status = status, metadataJson = metadataJson.take(4000),
+            actorMemberId = actorMemberId, createdAtMillis = now
+        )
+        dao.insertManagementRecord(item)
+        enqueue(orgId, recordType, item.id, recordType + ".created", siteId)
+        item
+    }
+
+    suspend fun saveInventoryValuation(
+        orgId: String,
+        siteId: String,
+        itemId: String,
+        unitCostXaf: Long,
+        sellingPriceXaf: Long
+    ): LocalInventoryValuation = database.withTransaction {
+        require(unitCostXaf >= 0L && sellingPriceXaf >= 0L) { "Le coût et le prix doivent être positifs ou nuls." }
+        require(dao.findInventoryItem(itemId, orgId, siteId) != null) { "Article absent de ce site." }
+        val current = dao.findInventoryValuation(orgId, siteId, itemId)
+        val valuation = LocalInventoryValuation(
+            id = current?.id ?: UUID.randomUUID().toString(),
+            orgId = orgId, siteId = siteId, inventoryItemId = itemId,
+            unitCostXaf = unitCostXaf, sellingPriceXaf = sellingPriceXaf,
+            updatedAtMillis = System.currentTimeMillis()
+        )
+        dao.upsertInventoryValuation(valuation)
+        enqueue(orgId, "inventory_valuation", itemId, "inventory_valuation.updated", siteId)
+        valuation
     }
 
     private suspend fun enqueue(orgId: String, type: String, aggregateId: String, action: String, siteId: String?): LocalOutboxEvent {
