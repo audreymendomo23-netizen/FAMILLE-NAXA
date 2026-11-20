@@ -224,12 +224,7 @@ create policy ns_suppliers_manage on public.ns_suppliers
 
 create policy ns_purchase_documents_select on public.ns_purchase_documents
   for select to authenticated using (public.ns_can_access_site(org_id, site_id));
-create policy ns_purchase_documents_insert on public.ns_purchase_documents
-  for insert to authenticated with check (
-    created_by = public.ns_current_member_id(org_id)
-    and updated_by = public.ns_current_member_id(org_id)
-    and public.ns_can_manage_site(org_id, site_id)
-  );
+-- Purchase headers and lines are created only through ns_create_supplier_purchase().
 
 create policy ns_purchase_lines_select on public.ns_purchase_lines
   for select to authenticated using (public.ns_can_access_site(org_id, site_id));
@@ -243,10 +238,7 @@ create policy ns_accounting_entries_select on public.ns_accounting_entries
   for select to authenticated using (public.ns_can_access_site(org_id, site_id));
 create policy ns_performance_objectives_select on public.ns_performance_objectives
   for select to authenticated using (public.ns_can_access_site(org_id, site_id));
-create policy ns_performance_objectives_insert on public.ns_performance_objectives
-  for insert to authenticated with check (
-    created_by = public.ns_current_member_id(org_id) and public.ns_can_manage_site(org_id, site_id)
-  );
+-- Objective baselines are appended only through ns_create_performance_objective().
 
 revoke all on public.ns_purchase_receipts, public.ns_supplier_payments, public.ns_accounting_entries from anon, authenticated;
 grant select on public.ns_purchase_receipts, public.ns_supplier_payments, public.ns_accounting_entries to authenticated;
@@ -287,11 +279,136 @@ grant select on public.ns_suppliers, public.ns_purchase_documents, public.ns_pur
   public.ns_purchase_receipts, public.ns_supplier_payments, public.ns_sale_lines,
   public.ns_accounting_entries, public.ns_performance_objectives to authenticated;
 grant insert, update on public.ns_suppliers to authenticated;
-grant insert on public.ns_purchase_documents, public.ns_purchase_lines to authenticated;
 grant insert on public.ns_sale_lines to authenticated;
 grant all on public.ns_suppliers, public.ns_purchase_documents, public.ns_purchase_lines,
   public.ns_purchase_receipts, public.ns_supplier_payments, public.ns_sale_lines,
   public.ns_accounting_entries, public.ns_performance_objectives to service_role;
+
+
+create or replace function public.ns_create_supplier_purchase(
+  p_org_id uuid,
+  p_site_id uuid,
+  p_supplier_id uuid,
+  p_reference text,
+  p_supplier_invoice_number text,
+  p_lines jsonb,
+  p_recoverable_tax_xaf bigint default 0,
+  p_non_recoverable_tax_xaf bigint default 0,
+  p_shipping_xaf bigint default 0,
+  p_other_fees_xaf bigint default 0,
+  p_due_at timestamptz default null,
+  p_notes text default ''
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_supplier public.ns_suppliers%rowtype;
+  v_purchase_id uuid;
+  v_subtotal bigint := 0;
+  v_line record;
+  v_line_amount bigint;
+  v_count integer := 0;
+  v_total bigint;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_site(p_org_id, p_site_id) then
+    raise exception 'NAXA_PURCHASE_CREATE_FORBIDDEN';
+  end if;
+  if p_reference is null or length(trim(p_reference)) not between 3 and 80
+     or p_lines is null or jsonb_typeof(p_lines) <> 'array'
+     or jsonb_array_length(p_lines) < 1 or jsonb_array_length(p_lines) > 100
+     or coalesce(p_recoverable_tax_xaf,0) < 0
+     or coalesce(p_non_recoverable_tax_xaf,0) < 0
+     or coalesce(p_shipping_xaf,0) < 0 or coalesce(p_other_fees_xaf,0) < 0 then
+    raise exception 'NAXA_PURCHASE_CREATE_INVALID';
+  end if;
+
+  select * into v_supplier from public.ns_suppliers
+    where id = p_supplier_id and org_id = p_org_id and site_id = p_site_id and active
+    for share;
+  if not found then raise exception 'NAXA_PURCHASE_SUPPLIER_NOT_FOUND'; end if;
+
+  for v_line in
+    select * from jsonb_to_recordset(p_lines) as x(
+      inventory_item_id uuid,
+      description text,
+      item_type text,
+      unit text,
+      quantity_ordered numeric,
+      unit_cost_xaf bigint
+    )
+  loop
+    v_count := v_count + 1;
+    if v_line.description is null or length(trim(v_line.description)) not between 1 and 240
+       or v_line.item_type not in ('stock','operating_expense','fixed_asset')
+       or v_line.quantity_ordered is null or v_line.quantity_ordered <= 0
+       or v_line.quantity_ordered > 100000000
+       or v_line.unit_cost_xaf is null or v_line.unit_cost_xaf <= 0 then
+      raise exception 'NAXA_PURCHASE_LINE_INVALID';
+    end if;
+    if v_line.item_type = 'stock' then
+      if v_line.inventory_item_id is null or not exists (
+        select 1 from public.ns_inventory_items i
+        where i.id = v_line.inventory_item_id and i.org_id = p_org_id
+          and i.site_id = p_site_id and i.active
+      ) then
+        raise exception 'NAXA_PURCHASE_LINE_STOCK_SCOPE_INVALID';
+      end if;
+    elsif v_line.inventory_item_id is not null then
+      raise exception 'NAXA_PURCHASE_NONSTOCK_ITEM_LINK_INVALID';
+    end if;
+    v_line_amount := round(v_line.quantity_ordered * v_line.unit_cost_xaf)::bigint;
+    if v_line_amount <= 0 or v_subtotal > 9000000000000000000::bigint - v_line_amount then
+      raise exception 'NAXA_PURCHASE_SUBTOTAL_OVERFLOW';
+    end if;
+    v_subtotal := v_subtotal + v_line_amount;
+  end loop;
+  if v_count < 1 or v_subtotal <= 0 then raise exception 'NAXA_PURCHASE_EMPTY'; end if;
+
+  v_total := v_subtotal + coalesce(p_recoverable_tax_xaf,0)
+      + coalesce(p_non_recoverable_tax_xaf,0)
+      + coalesce(p_shipping_xaf,0) + coalesce(p_other_fees_xaf,0);
+  if v_total <= 0 then raise exception 'NAXA_PURCHASE_TOTAL_INVALID'; end if;
+
+  insert into public.ns_purchase_documents(
+    org_id, site_id, supplier_id, supplier_name_snapshot, reference, supplier_invoice_number,
+    status, subtotal_xaf, recoverable_tax_xaf, non_recoverable_tax_xaf, shipping_xaf, other_fees_xaf,
+    received_base_xaf, recognized_non_recoverable_xaf, recognized_recoverable_tax_xaf,
+    received_total_xaf, paid_total_xaf, due_at, notes, created_by, updated_by
+  ) values (
+    p_org_id, p_site_id, p_supplier_id, v_supplier.name, trim(p_reference),
+    coalesce(trim(p_supplier_invoice_number),''), 'ordered', v_subtotal,
+    coalesce(p_recoverable_tax_xaf,0), coalesce(p_non_recoverable_tax_xaf,0),
+    coalesce(p_shipping_xaf,0), coalesce(p_other_fees_xaf,0),
+    0, 0, 0, 0, 0, p_due_at, coalesce(trim(p_notes),''), v_member, v_member
+  ) returning id into v_purchase_id;
+
+  insert into public.ns_purchase_lines(
+    org_id, site_id, purchase_id, inventory_item_id, description, item_type, unit,
+    quantity_ordered, quantity_received, unit_cost_xaf
+  )
+  select p_org_id, p_site_id, v_purchase_id, x.inventory_item_id, trim(x.description),
+         x.item_type, coalesce(nullif(trim(x.unit),''),'unité'),
+         x.quantity_ordered, 0, x.unit_cost_xaf
+  from jsonb_to_recordset(p_lines) as x(
+    inventory_item_id uuid, description text, item_type text, unit text,
+    quantity_ordered numeric, unit_cost_xaf bigint
+  );
+
+  return jsonb_build_object(
+    'purchase_id', v_purchase_id,
+    'supplier_id', p_supplier_id,
+    'subtotal_xaf', v_subtotal,
+    'total_ordered_xaf', v_total,
+    'line_count', v_count,
+    'status', 'ordered',
+    'stock_and_payables_posted', false
+  );
+end;
+$naxa$;
 
 create or replace function public.ns_post_accounting_entry(
   p_org_id uuid, p_site_id uuid, p_source_type text, p_source_id uuid, p_event_code text,
@@ -754,6 +871,9 @@ group by org_id, site_id, date_trunc('year', performance_day)::date;
 
 revoke all on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) from public, anon;
 grant execute on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) to authenticated, service_role;
+
+revoke all on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) from public, anon;
+grant execute on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) to authenticated, service_role;
 revoke all on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) from public, anon, authenticated;
 grant execute on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) to service_role;
 revoke all on function public.ns_receive_supplier_purchase_line(uuid,uuid,uuid,uuid,numeric,uuid,text) from public, anon;
