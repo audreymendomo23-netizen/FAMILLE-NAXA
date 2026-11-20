@@ -1359,97 +1359,155 @@ fun TeamPerformanceContent(
 ) {
     val scope = rememberCoroutineScope()
     val siteIds = session.account.activeSiteIds
+    val fr = session.account.defaultLocale != "en"
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
-    val records by remember(siteId) { repository.dao.observeManagementRecords(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    val records by remember(siteId) {
+        repository.dao.observeManagementRecords(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
+    val workstations by remember(siteId) {
+        repository.dao.observeWorkstations(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
+
     var staff by rememberSaveable { mutableStateOf("") }
     var detail by rememberSaveable { mutableStateOf("") }
     var amount by rememberSaveable { mutableStateOf("") }
-    var operation by rememberSaveable { mutableStateOf("staff_clock_in") }
+    var attendanceOperation by rememberSaveable { mutableStateOf("staff_clock_in") }
+    var payrollOperation by rememberSaveable { mutableStateOf("staff_commission") }
+    var attendanceWorkstationId by rememberSaveable { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
-    val attendance = records.filter { it.recordType in setOf("staff_clock_in", "staff_clock_out", "staff_break_start", "staff_break_end") }
-    val payroll = records.filter { it.recordType in setOf("staff_commission", "staff_advance", "staff_bonus") }
+    val attendance = records.filter {
+        it.recordType in setOf("staff_clock_in", "staff_clock_out", "staff_break_start", "staff_break_end")
+    }
+    val payroll = records.filter {
+        it.recordType in setOf("staff_commission", "staff_advance", "staff_bonus")
+    }
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            ModulePageTitle("Présences, horaires et rémunérations variables", "Prise et fin de service, pauses, commissions par prestation, avances et primes.")
-            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
-            LocalOnlyNotice("Ces événements sont journalisés localement par site. La validation et la synchronisation serveur restent à tester.")
+            ModulePageTitle(
+                if (fr) "Présences, horaires et rémunérations variables" else "Attendance, working hours and variable pay",
+                if (fr) "Pointage chronologique, pauses, affectation par poste, commissions, avances et primes." else "Validated clocking sequence, breaks, workstation assignment, commissions, advances and bonuses."
+            )
+            AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) {
+                siteId = it
+                attendanceWorkstationId = ""
+            }
+            LocalOnlyNotice(
+                if (fr) "Les pointages sont locaux, horodatés et contrôlés par séquence. La validation RH/paie serveur et la synchronisation restent à raccorder." else "Clock events are local, timestamped and sequence-validated. Server HR/payroll approval and synchronization remain to be connected."
+            )
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Pointage et mouvements d’équipe", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(staff, { staff = it }, Modifier.fillMaxWidth(), label = { Text("Collaborateur") }, singleLine = true)
+                    Text(if (fr) "Pointage et mouvements d’équipe" else "Team time clock", fontWeight = FontWeight.Bold)
+                    OutlinedTextField(
+                        staff, { staff = it }, Modifier.fillMaxWidth(),
+                        label = { Text(if (fr) "Collaborateur (nom ou identifiant)" else "Staff member (name or ID)") },
+                        singleLine = true
+                    )
+                    Text(if (fr) "Emplacement / poste (facultatif)" else "Workstation (optional)", fontWeight = FontWeight.SemiBold)
+                    OutlinedButton(onClick = { attendanceWorkstationId = "" }, modifier = Modifier.fillMaxWidth()) {
+                        Text(if (attendanceWorkstationId.isBlank()) (if (fr) "✓ Pointage au niveau du site" else "✓ Site-level time clock") else if (fr) "Aucun poste dédié" else "No dedicated workstation")
+                    }
+                    workstations.filter { it.status == "active" }.forEach { workstation ->
+                        OutlinedButton(onClick = { attendanceWorkstationId = workstation.id }, modifier = Modifier.fillMaxWidth()) {
+                            Text((if (attendanceWorkstationId == workstation.id) "✓ " else "") + workstation.name + " · " + workstation.kind)
+                        }
+                    }
                     listOf(
-                        "staff_clock_in" to "Prise de service",
-                        "staff_break_start" to "Début de pause",
-                        "staff_break_end" to "Fin de pause",
-                        "staff_clock_out" to "Fin de service"
+                        "staff_clock_in" to (if (fr) "Prise de service" else "Clock in"),
+                        "staff_break_start" to (if (fr) "Début de pause" else "Start break"),
+                        "staff_break_end" to (if (fr) "Fin de pause" else "End break"),
+                        "staff_clock_out" to (if (fr) "Fin de service" else "Clock out")
                     ).forEach { (value, label) ->
-                        OutlinedButton(onClick = { operation = value }, modifier = Modifier.fillMaxWidth()) {
-                            Text(if (operation == value) "✓ $label" else label)
+                        OutlinedButton(onClick = { attendanceOperation = value }, modifier = Modifier.fillMaxWidth()) {
+                            Text(if (attendanceOperation == value) "✓ $label" else label)
                         }
                     }
-                    Button(onClick = {
-                        if (staff.isBlank() || siteId.isBlank()) error = "Choisis un collaborateur et un point de vente."
-                        else scope.launch {
-                            runCatching {
-                                repository.createManagementRecord(
-                                    session.account.organizationId, siteId, operation,
-                                    "TIME-" + System.currentTimeMillis(), operation, staff,
-                                    0, 0, null, "open",
-                                    "{\"event\":\"" + operation + "\",\"recorded_local\":\"true\"}",
-                                    session.account.memberId
-                                )
-                            }.onSuccess { message = "Événement d’horaire enregistré."; error = null }
-                                .onFailure { error = it.message ?: "Pointage impossible." }
-                        }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Enregistrer le pointage") }
+                    Text(
+                        if (fr) "Séquence : prise de service → pause → reprise → sortie. Les doubles pointages et sorties sans prise de service sont refusés." else "Sequence: clock in → break → resume → clock out. Duplicate clock-ins and clock-outs without a shift are rejected.",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    Button(
+                        onClick = {
+                            if (staff.isBlank() || siteId.isBlank()) {
+                                error = if (fr) "Choisis un collaborateur et un point de vente." else "Choose a staff member and site."
+                            } else scope.launch {
+                                runCatching {
+                                    repository.recordStaffTimeEvent(
+                                        session.account.organizationId, siteId, attendanceOperation,
+                                        staff, session.account.memberId,
+                                        attendanceWorkstationId.takeIf { it.isNotBlank() }
+                                    )
+                                }.onSuccess {
+                                    message = if (fr) "Pointage enregistré ; séquence validée et historisée." else "Clock event saved; sequence validated and recorded."
+                                    error = null
+                                }.onFailure { error = it.message ?: if (fr) "Pointage impossible." else "Unable to record time event." }
+                            }
+                        },
+                        enabled = staff.isNotBlank() && siteId.isNotBlank(),
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (fr) "Enregistrer le pointage" else "Record time event") }
                 }
             }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Commission, avance ou prime", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(staff, { staff = it }, Modifier.fillMaxWidth(), label = { Text("Collaborateur") }, singleLine = true)
-                    OutlinedTextField(detail, { detail = it }, Modifier.fillMaxWidth(), label = { Text("Prestation / motif") }, singleLine = true)
-                    OutlinedTextField(amount, { amount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Montant (FCFA)") }, singleLine = true)
+                    Text(if (fr) "Commission, avance ou prime" else "Commission, advance or bonus", fontWeight = FontWeight.Bold)
+                    OutlinedTextField(staff, { staff = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Collaborateur" else "Staff member") }, singleLine = true)
+                    OutlinedTextField(detail, { detail = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Prestation / motif" else "Service / reason") }, singleLine = true)
+                    OutlinedTextField(amount, { amount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Montant (FCFA)" else "Amount (XAF)") }, singleLine = true)
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        listOf("staff_commission" to "Commission", "staff_advance" to "Avance", "staff_bonus" to "Prime").forEach { (value, label) ->
-                            OutlinedButton(onClick = { operation = value }) { Text(if (operation == value) "✓ $label" else label) }
+                        listOf(
+                            "staff_commission" to (if (fr) "Commission" else "Commission"),
+                            "staff_advance" to (if (fr) "Avance" else "Advance"),
+                            "staff_bonus" to (if (fr) "Prime" else "Bonus")
+                        ).forEach { (value, label) ->
+                            OutlinedButton(onClick = { payrollOperation = value }) {
+                                Text(if (payrollOperation == value) "✓ $label" else label)
+                            }
                         }
                     }
-                    Button(onClick = {
-                        val value = amount.toLongOrNull() ?: 0L
-                        if (staff.isBlank() || detail.isBlank() || value <= 0 || siteId.isBlank()) error = "Collaborateur, motif et montant positif requis."
-                        else scope.launch {
-                            runCatching {
-                                repository.createManagementRecord(
-                                    session.account.organizationId, siteId, operation,
-                                    "STAFF-" + System.currentTimeMillis(), detail, staff,
-                                    value, 0, null, "pending_review",
-                                    "{\"event\":\"" + operation + "\",\"approved\":false}",
-                                    session.account.memberId
-                                )
-                            }.onSuccess { message = "Mouvement de rémunération enregistré en attente de validation."; amount = ""; detail = ""; error = null }
-                                .onFailure { error = it.message ?: "Enregistrement impossible." }
-                        }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Enregistrer le mouvement") }
-                    if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
-                    if (message != null) Text(message!!, color = MaterialTheme.colorScheme.secondary)
+                    Button(
+                        onClick = {
+                            val value = amount.toLongOrNull() ?: 0L
+                            if (staff.isBlank() || detail.isBlank() || value <= 0 || siteId.isBlank()) {
+                                error = if (fr) "Collaborateur, motif et montant positif requis." else "Staff, reason and a positive amount are required."
+                            } else scope.launch {
+                                runCatching {
+                                    repository.createManagementRecord(
+                                        session.account.organizationId, siteId, payrollOperation,
+                                        "STAFF-" + System.currentTimeMillis(), detail, staff,
+                                        value, 0, null, "pending_review",
+                                        JSONObject().put("event", payrollOperation).put("approved", false).toString(),
+                                        session.account.memberId,
+                                        attendanceWorkstationId.takeIf { it.isNotBlank() }
+                                    )
+                                }.onSuccess {
+                                    message = if (fr) "Mouvement de rémunération enregistré en attente de validation." else "Variable pay record saved for approval."
+                                    amount = ""; detail = ""; error = null
+                                }.onFailure { error = it.message ?: if (fr) "Enregistrement impossible." else "Unable to save record." }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (fr) "Enregistrer le mouvement" else "Save variable-pay record") }
                 }
             }
         }
-        item { Text("Horaires récents", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(if (fr) "Horaires récents" else "Recent attendance", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(attendance.take(40)) { row ->
-            Text(row.counterparty + " · " + row.title + " · " + java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(row.createdAtMillis)),
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                row.counterparty + " · " + row.title + " · " +
+                    java.text.SimpleDateFormat("dd/MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(row.createdAtMillis)),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-        item { Text("Commissions, avances et primes", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(if (fr) "Commissions, avances et primes" else "Commissions, advances and bonuses", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(payroll.take(40)) { row ->
             var approvalReason by rememberSaveable(row.id) { mutableStateOf("") }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -1461,7 +1519,7 @@ fun TeamPerformanceContent(
                             approvalReason,
                             { approvalReason = it },
                             Modifier.fillMaxWidth(),
-                            label = { Text("Motif de validation ou de rejet obligatoire") }
+                            label = { Text(if (fr) "Motif de validation ou de rejet obligatoire" else "Reason required to approve or reject") }
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
@@ -1472,13 +1530,13 @@ fun TeamPerformanceContent(
                                                 session.account.organizationId, siteId, row.id,
                                                 "approved", approvalReason, session.account.memberId
                                             )
-                                        }.onSuccess { message = "Mouvement approuvé et historisé."; error = null }
-                                            .onFailure { error = it.message ?: "Validation impossible." }
+                                        }.onSuccess { message = if (fr) "Mouvement approuvé et historisé." else "Record approved and audited."; error = null }
+                                            .onFailure { error = it.message ?: "Approval failed." }
                                     }
                                 },
                                 enabled = approvalReason.trim().length >= 3,
                                 modifier = Modifier.weight(1f)
-                            ) { Text("Approuver") }
+                            ) { Text(if (fr) "Approuver" else "Approve") }
                             OutlinedButton(
                                 onClick = {
                                     scope.launch {
@@ -1487,13 +1545,13 @@ fun TeamPerformanceContent(
                                                 session.account.organizationId, siteId, row.id,
                                                 "rejected", approvalReason, session.account.memberId
                                             )
-                                        }.onSuccess { message = "Mouvement rejeté et historisé."; error = null }
-                                            .onFailure { error = it.message ?: "Rejet impossible." }
+                                        }.onSuccess { message = if (fr) "Mouvement rejeté et historisé." else "Record rejected and audited."; error = null }
+                                            .onFailure { error = it.message ?: "Rejection failed." }
                                     }
                                 },
                                 enabled = approvalReason.trim().length >= 3,
                                 modifier = Modifier.weight(1f)
-                            ) { Text("Rejeter") }
+                            ) { Text(if (fr) "Rejeter" else "Reject") }
                         }
                     }
                 }
@@ -1501,4 +1559,3 @@ fun TeamPerformanceContent(
         }
     }
 }
-
