@@ -148,19 +148,27 @@ create table if not exists public.ns_sale_lines (
   org_id uuid not null,
   site_id uuid not null,
   sale_id uuid not null references public.ns_sales(id) on delete restrict,
-  inventory_item_id uuid not null references public.ns_inventory_items(id) on delete restrict,
+  item_type text not null check (item_type in ('stock','service')),
+  inventory_item_id uuid,
   description text not null,
   quantity numeric(14,3) not null check (quantity > 0),
   unit_price_xaf bigint not null check (unit_price_xaf >= 0),
   discount_xaf bigint not null default 0 check (discount_xaf >= 0),
   unit_cost_at_sale_xaf bigint,
   cost_of_goods_xaf bigint,
+  cost_snapshot_complete boolean not null default false,
   cogs_posted_at timestamptz,
   idempotency_key uuid not null,
   foreign key (site_id, org_id) references public.ns_sites(id, org_id) on delete restrict,
   unique (org_id, idempotency_key),
-  check ((cogs_posted_at is null and unit_cost_at_sale_xaf is null and cost_of_goods_xaf is null)
-      or (cogs_posted_at is not null and unit_cost_at_sale_xaf is not null and cost_of_goods_xaf is not null))
+  check (
+    (item_type = 'stock' and inventory_item_id is not null)
+    or (item_type = 'service' and inventory_item_id is null)
+  ),
+  check (
+    (cogs_posted_at is null and unit_cost_at_sale_xaf is null and cost_of_goods_xaf is null)
+    or (cogs_posted_at is not null and unit_cost_at_sale_xaf is not null and cost_of_goods_xaf is not null)
+  )
 );
 create index if not exists ns_sale_lines_sale_idx
   on public.ns_sale_lines(org_id, site_id, sale_id);
@@ -268,12 +276,15 @@ drop policy if exists ns_sale_lines_insert on public.ns_sale_lines;
 create policy ns_sale_lines_insert on public.ns_sale_lines
   for insert to authenticated with check (
     public.ns_can_operate_site(org_id, site_id)
-    and unit_cost_at_sale_xaf is null and cost_of_goods_xaf is null and cogs_posted_at is null
+    and unit_cost_at_sale_xaf is null and cost_of_goods_xaf is null
+    and cost_snapshot_complete = false and cogs_posted_at is null
     and exists (
       select 1 from public.ns_sales sale
       where sale.id = sale_id and sale.org_id = org_id and sale.site_id = site_id
         and sale.status = 'draft'
     )
+    and ((item_type = 'stock' and inventory_item_id is not null)
+      or (item_type = 'service' and inventory_item_id is null))
   );
 
 revoke all on public.ns_suppliers, public.ns_purchase_documents, public.ns_purchase_lines,
@@ -732,22 +743,34 @@ declare
   v_line_cogs bigint;
   v_total_cogs bigint := 0;
   v_treasury text;
-  v_existing_key uuid;
+  v_line_count integer := 0;
+  v_all_costed boolean := true;
   v_now timestamptz := now();
 begin
   v_member := public.ns_current_member_id(p_org_id);
   if v_member is null or not public.ns_can_operate_site(p_org_id, p_site_id) then
     raise exception 'NAXA_SALE_INVENTORY_FORBIDDEN';
   end if;
-  if p_sale_id is null or p_inventory_posting_key is null then raise exception 'NAXA_SALE_INVENTORY_INVALID'; end if;
+  if p_sale_id is null or p_inventory_posting_key is null then
+    raise exception 'NAXA_SALE_INVENTORY_INVALID';
+  end if;
 
-  select * into v_sale from public.ns_sales
-    where id = p_sale_id and org_id = p_org_id and site_id = p_site_id for update;
-  if not found or v_sale.status <> 'posted' then raise exception 'NAXA_SALE_NOT_POSTED'; end if;
+  select * into v_sale
+  from public.ns_sales
+  where id = p_sale_id and org_id = p_org_id and site_id = p_site_id
+  for update;
+  if not found or v_sale.status <> 'posted' then
+    raise exception 'NAXA_SALE_NOT_POSTED';
+  end if;
 
   if v_sale.inventory_posting_key is not null then
-    if v_sale.inventory_posting_key = p_inventory_posting_key and v_sale.cost_snapshot_complete then
-      return jsonb_build_object('idempotent', true, 'sale_id', v_sale.id, 'cost_of_goods_xaf', v_sale.cost_of_goods_xaf);
+    if v_sale.inventory_posting_key = p_inventory_posting_key then
+      return jsonb_build_object(
+        'idempotent', true, 'sale_id', v_sale.id,
+        'revenue_xaf', v_sale.total_xaf,
+        'cost_of_goods_xaf', v_sale.cost_of_goods_xaf,
+        'cost_snapshot_complete', v_sale.cost_snapshot_complete
+      );
     end if;
     raise exception 'NAXA_SALE_INVENTORY_ALREADY_POSTED';
   end if;
@@ -756,6 +779,7 @@ begin
   from public.ns_payments
   where sale_id = p_sale_id and org_id = p_org_id and site_id = p_site_id and status = 'confirmed';
   if v_confirmed < v_sale.total_xaf then raise exception 'NAXA_SALE_NOT_FULLY_SETTLED'; end if;
+  if v_confirmed > v_sale.total_xaf then raise exception 'NAXA_SALE_PAYMENT_MISMATCH'; end if;
 
   for v_line in
     select * from public.ns_sale_lines
@@ -763,32 +787,49 @@ begin
     order by id
     for update
   loop
+    v_line_count := v_line_count + 1;
     if v_line.cogs_posted_at is not null then raise exception 'NAXA_SALE_LINE_ALREADY_COSTED'; end if;
-    select * into v_item from public.ns_inventory_items
+
+    if v_line.item_type = 'stock' then
+      select * into v_item
+      from public.ns_inventory_items
       where id = v_line.inventory_item_id and org_id = p_org_id and site_id = p_site_id and active
       for update;
-    if not found or v_item.quantity < v_line.quantity then raise exception 'NAXA_SALE_STOCK_INSUFFICIENT'; end if;
+      if not found or v_item.quantity < v_line.quantity then raise exception 'NAXA_SALE_STOCK_INSUFFICIENT'; end if;
 
-    v_unit_cost := v_item.average_unit_cost_xaf;
-    v_line_cogs := round(v_line.quantity * v_unit_cost)::bigint;
-    update public.ns_inventory_items
-      set quantity = quantity - v_line.quantity
-      where id = v_item.id and org_id = p_org_id and site_id = p_site_id;
+      v_unit_cost := v_item.average_unit_cost_xaf;
+      v_line_cogs := round(v_line.quantity * v_unit_cost)::bigint;
+      update public.ns_inventory_items
+        set quantity = quantity - v_line.quantity
+        where id = v_item.id and org_id = p_org_id and site_id = p_site_id;
+      update public.ns_sale_lines
+        set unit_cost_at_sale_xaf = v_unit_cost,
+            cost_of_goods_xaf = v_line_cogs,
+            cost_snapshot_complete = true,
+            cogs_posted_at = v_now
+        where id = v_line.id and org_id = p_org_id and site_id = p_site_id;
 
-    update public.ns_sale_lines
-      set unit_cost_at_sale_xaf = v_unit_cost, cost_of_goods_xaf = v_line_cogs, cogs_posted_at = v_now
-      where id = v_line.id and org_id = p_org_id and site_id = p_site_id;
+      insert into public.ns_inventory_movements(
+        org_id, site_id, item_id, movement_type, quantity_delta, reason, idempotency_key, actor_member_id
+      ) values (
+        p_org_id, p_site_id, v_item.id, 'consumption', -v_line.quantity,
+        'Vente confirmée ' || v_sale.sale_number, v_line.idempotency_key, v_member
+      );
 
-    insert into public.ns_inventory_movements(
-      org_id, site_id, item_id, movement_type, quantity_delta, reason, idempotency_key, actor_member_id
-    ) values (
-      p_org_id, p_site_id, v_item.id, 'consumption', -v_line.quantity,
-      'Vente confirmée ' || v_sale.sale_number, v_line.idempotency_key, v_member
-    );
-
-    if v_line_cogs > 0 then
-      perform public.ns_post_accounting_entry(p_org_id, p_site_id, 'sale_line', v_line.id, 'cost_of_goods_sold',
-        'COST_OF_GOODS_SOLD', 'INVENTORY_ASSET', v_line_cogs, 'Coût des ventes ' || v_line.description);
+      if v_line_cogs > 0 then
+        perform public.ns_post_accounting_entry(p_org_id, p_site_id, 'sale_line', v_line.id, 'cost_of_goods_sold',
+          'COST_OF_GOODS_SOLD', 'INVENTORY_ASSET', v_line_cogs, 'Coût des ventes ' || v_line.description);
+      end if;
+    else
+      -- Service revenue remains turnover, but no gross margin is claimed until its direct labour/material cost is documented.
+      v_all_costed := false;
+      v_line_cogs := 0;
+      update public.ns_sale_lines
+        set unit_cost_at_sale_xaf = 0,
+            cost_of_goods_xaf = 0,
+            cost_snapshot_complete = false,
+            cogs_posted_at = v_now
+        where id = v_line.id and org_id = p_org_id and site_id = p_site_id;
     end if;
     v_total_cogs := v_total_cogs + v_line_cogs;
   end loop;
@@ -809,12 +850,20 @@ begin
   end loop;
 
   update public.ns_sales
-    set cost_of_goods_xaf = v_total_cogs, cost_snapshot_complete = true, inventory_posting_key = p_inventory_posting_key
+    set cost_of_goods_xaf = v_total_cogs,
+        cost_snapshot_complete = (v_line_count > 0 and v_all_costed),
+        inventory_posting_key = p_inventory_posting_key
     where id = p_sale_id and org_id = p_org_id and site_id = p_site_id;
-  return jsonb_build_object('idempotent', false, 'sale_id', p_sale_id, 'cost_of_goods_xaf', v_total_cogs,
-    'revenue_xaf', v_confirmed, 'gross_profit_xaf', v_confirmed - v_total_cogs);
+  return jsonb_build_object(
+    'idempotent', false,
+    'sale_id', p_sale_id,
+    'revenue_xaf', v_confirmed,
+    'cost_of_goods_xaf', v_total_cogs,
+    'cost_snapshot_complete', (v_line_count > 0 and v_all_costed),
+    'gross_profit_xaf', case when v_line_count > 0 and v_all_costed then v_confirmed - v_total_cogs else null end
+  );
 end;
-$naxa$;
+$naxa$;;
 
 create or replace function public.ns_create_performance_objective(
   p_org_id uuid, p_site_id uuid, p_period_type text, p_period_start date,
