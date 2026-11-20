@@ -21,8 +21,9 @@ data class RecoveryAction(val title: String, val detail: String, val priority: S
 data class PerformanceDashboard(
     val day: PeriodProjection, val month: PeriodProjection, val year: PeriodProjection,
     val dailyTrend: List<PerformancePoint>, val monthlyTrend: List<PerformancePoint>, val yearlyTrend: List<PerformancePoint>,
-    val revenueXaf: Long, val costOfGoodsXaf: Long, val grossProfitXaf: Long, val grossMarginPercent: Double?,
-    val operatingExpensesXaf: Long, val operatingProfitProxyXaf: Long, val supplierPayablesXaf: Long,
+    val revenueXaf: Long, val costedRevenueXaf: Long, val costOfGoodsXaf: Long,
+    val grossProfitXaf: Long, val grossMarginPercent: Double?,
+    val operatingExpensesXaf: Long, val operatingProfitProxyXaf: Long?, val supplierPayablesXaf: Long,
     val uncostedStockSalesCount: Int, val lowStockCount: Int, val recoveryActions: List<RecoveryAction>, val dataCoverageDays: Int
 )
 
@@ -37,12 +38,18 @@ object NaxaPerformanceEngine {
         val confirmed = sales.filter { it.status == "confirmed" && it.totalXaf > 0L }
         val byDay = confirmed.groupBy { dateOf(it.createdAtMillis, zone) }.mapValues { it.value.sumOf(LocalSale::totalXaf) }
         val revenue = confirmed.sumOf { it.totalXaf }
-        val cogs = confirmed.sumOf { it.costOfGoodsXaf.coerceAtLeast(0L) }
-        val gross = revenue - cogs
+        val uncosted = confirmed.count {
+            it.inventoryItemId != null && it.stockQuantity != null && !it.costSnapshotComplete
+        }
+        val costedSales = confirmed.filter {
+            it.inventoryItemId == null || it.stockQuantity == null || it.costSnapshotComplete
+        }
+        val costedRevenue = costedSales.sumOf { it.totalXaf }
+        val cogs = costedSales.sumOf { it.costOfGoodsXaf.coerceAtLeast(0L) }
+        val gross = costedRevenue - cogs
         val opex = accountingEntries.filter { it.debitAccount.startsWith("OPERATING_EXPENSE") }.sumOf { it.amountXaf }
-        val uncosted = confirmed.count { it.inventoryItemId != null && it.stockQuantity != null && it.costOfGoodsXaf == 0L }
-        // Legacy sales with an unknown acquisition cost must not produce a misleading gross margin.
-        val margin = if (revenue > 0L && uncosted == 0) gross.toDouble() * 100.0 / revenue else null
+        val margin = if (costedRevenue > 0L) gross.toDouble() * 100.0 / costedRevenue else null
+        val operatingProfit = if (uncosted == 0) gross - opex else null
         val avg14 = avgDaily(byDay, today.minusDays(14), today.minusDays(1))
         val avg28 = avgDaily(byDay, today.minusDays(28), today.minusDays(1))
         val avg90 = avgDaily(byDay, today.minusDays(90), today.minusDays(1))
@@ -80,14 +87,17 @@ object NaxaPerformanceEngine {
         }
         val monthly = (11L downTo 0L).map { n ->
             val p = monthKey.minusMonths(n)
-            point(p.toString(), sum(byDay, p.atDay(1), p.atEndOfMonth()),
-                sum(byDay, p.minusMonths(1).atDay(1), p.minusMonths(1).atEndOfMonth()))
+            val currentEnd = if (p == monthKey) today else p.atEndOfMonth()
+            val previousComparable = if (p == monthKey) previousMonthComparable
+                else sum(byDay, p.minusMonths(1).atDay(1), p.minusMonths(1).atEndOfMonth())
+            point(p.toString(), sum(byDay, p.atDay(1), currentEnd), previousComparable)
         }
         val yearly = (4 downTo 0).map { n ->
             val y = today.year - n
             val end = if (y == today.year) today else LocalDate.of(y, 12, 31)
             point(y.toString(), sum(byDay, LocalDate.of(y, 1, 1), end),
-                sum(byDay, LocalDate.of(y - 1, 1, 1), LocalDate.of(y - 1, 12, 31)))
+                if (y == today.year) previousYearComparable
+                else sum(byDay, LocalDate.of(y - 1, 1, 1), LocalDate.of(y - 1, 12, 31)))
         }
 
         val recent = confirmed.filter { !dateOf(it.createdAtMillis, zone).isBefore(today.minusDays(30)) }
@@ -116,11 +126,11 @@ object NaxaPerformanceEngine {
         }.sumOf { it.amountXaf }
         val uncostedCurrentMonth = confirmed.count {
             dateOf(it.createdAtMillis, zone).let { d -> d.year == today.year && d.monthValue == today.monthValue } &&
-                it.inventoryItemId != null && it.stockQuantity != null && it.costOfGoodsXaf == 0L
+                it.inventoryItemId != null && it.stockQuantity != null && !it.costSnapshotComplete
         }
         val uncostedPriorMonth = confirmed.count {
             dateOf(it.createdAtMillis, zone).let { d -> d.year == previousMonth.year && d.monthValue == previousMonth.monthValue } &&
-                it.inventoryItemId != null && it.stockQuantity != null && it.costOfGoodsXaf == 0L
+                it.inventoryItemId != null && it.stockQuantity != null && !it.costSnapshotComplete
         }
         val currentRate = if (monthActual > 0 && uncostedCurrentMonth == 0) (monthActual - currentMonthCosts).toDouble() / monthActual else null
         val priorRate = if (priorMonthRevenue > 0 && uncostedPriorMonth == 0) (priorMonthRevenue - priorMonthCosts).toDouble() / priorMonthRevenue else null
@@ -136,8 +146,8 @@ object NaxaPerformanceEngine {
             "Aucun écart prioritaire n'est détecté dans les données locales disponibles. Continuer le suivi des ventes confirmées, des marges, des objectifs et des échéances fournisseurs.", "low")
         val firstDate = confirmed.minOfOrNull { dateOf(it.createdAtMillis, zone) }
         val coverage = firstDate?.let { ChronoUnit.DAYS.between(it, today).toInt() + 1 } ?: 0
-        return PerformanceDashboard(day, month, year, daily, monthly, yearly, revenue, cogs, gross, margin, opex,
-            gross - opex, supplierPayablesXaf, uncosted, lowStockCount, actions.take(5), coverage)
+        return PerformanceDashboard(day, month, year, daily, monthly, yearly, revenue, costedRevenue, cogs, gross, margin, opex,
+            operatingProfit, supplierPayablesXaf, uncosted, lowStockCount, actions.take(5), coverage)
     }
 
     private fun projection(label: String, actual: Long, forecast: Long, target: Long?, previous: Long, remaining: Int) =
