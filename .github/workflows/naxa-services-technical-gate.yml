@@ -7,6 +7,7 @@ on:
     paths:
       - "apps/android/naxa-services/**"
       - "packages/core-android/**"
+      - "packages/billing-core/**"
       - "supabase/functions/naxa-services-auth/**"
       - "settings.gradle.kts"
       - "build.gradle.kts"
@@ -42,6 +43,18 @@ jobs:
         run: deno check supabase/functions/naxa-services-auth/index.ts supabase/functions/naxa-services-auth/scope_contract.ts supabase/functions/naxa-services-auth/contract_test.ts
       - name: Run pure Auth contract tests
         run: deno test supabase/functions/naxa-services-auth/contract_test.ts
+
+  billing-catalog:
+    name: NAXA FAMILY launch and maturity tariff tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Test effective-dated family tariff catalogue
+        run: node --test packages/billing-core/test/*.test.js
 
   android-debug:
     name: Assemble NAXA SERVICES Android debug APK
