@@ -1,7 +1,6 @@
 package cm.naxa.naxaservices.auth
 
 import android.os.Build
-import android.provider.Settings
 import android.content.Context
 import cm.naxa.naxaservices.BuildConfig
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +27,27 @@ data class AuthSession(
     val expiresIn: Long,
     val requirePasswordChange: Boolean,
     val account: AuthAccount
+)
+
+data class ProvisionedAccess(
+    val loginId: String,
+    val temporaryPassword: String,
+    val displayName: String,
+    val roleCode: String
+)
+
+data class RecoveryRequestItem(
+    val id: String,
+    val requestedAt: String,
+    val displayName: String,
+    val loginId: String,
+    val roleCode: String,
+    val note: String
+)
+
+data class RecoveryReset(
+    val loginId: String,
+    val temporaryPassword: String
 )
 
 class AuthApi(private val context: Context) {
@@ -63,6 +83,100 @@ class AuthApi(private val context: Context) {
                 .put("request_note", note.trim())
                 .put("device", devicePayload())
         )
+    }
+
+
+    suspend fun provisionMember(
+        accessToken: String,
+        displayName: String,
+        roleCode: String,
+        siteId: String,
+        workstationId: String? = null,
+        contactPhone: String = ""
+    ): ProvisionedAccess {
+        val scope = JSONObject()
+            .put("scope_type", if (workstationId.isNullOrBlank()) "site" else "workstation")
+            .put("site_id", siteId)
+        if (!workstationId.isNullOrBlank()) scope.put("workstation_id", workstationId)
+        val result = request(
+            JSONObject()
+                .put("action", "provision_member")
+                .put("app_code", "naxa-services")
+                .put("display_name", displayName.trim())
+                .put("role_code", roleCode)
+                .put("contact_phone", contactPhone.trim())
+                .put("scopes", JSONArray().put(scope)),
+            accessToken
+        )
+        return ProvisionedAccess(
+            loginId = result.optString("login_id"),
+            temporaryPassword = result.optString("temporary_password"),
+            displayName = result.optString("display_name"),
+            roleCode = result.optString("role_code")
+        ).also {
+            if (it.loginId.isBlank() || it.temporaryPassword.isBlank()) {
+                throw AuthApiException("Réponse de création incomplète.")
+            }
+        }
+    }
+
+    suspend fun listRecoveryRequests(accessToken: String): List<RecoveryRequestItem> {
+        val result = request(
+            JSONObject()
+                .put("action", "list_recovery_requests")
+                .put("app_code", "naxa-services"),
+            accessToken
+        )
+        val rows = result.optJSONArray("requests") ?: JSONArray()
+        return buildList {
+            for (i in 0 until rows.length()) {
+                val row = rows.optJSONObject(i) ?: continue
+                add(
+                    RecoveryRequestItem(
+                        id = row.optString("id"),
+                        requestedAt = row.optString("requested_at"),
+                        displayName = row.optString("display_name"),
+                        loginId = row.optString("login_id"),
+                        roleCode = row.optString("role_code"),
+                        note = row.optString("request_note")
+                    )
+                )
+            }
+        }
+    }
+
+    suspend fun completeRecovery(
+        accessToken: String,
+        requestId: String,
+        verificationMethod: String,
+        verificationNote: String
+    ): RecoveryReset {
+        val result = request(
+            JSONObject()
+                .put("action", "complete_recovery")
+                .put("app_code", "naxa-services")
+                .put("recovery_request_id", requestId)
+                .put("identity_check_method", verificationMethod.trim())
+                .put("identity_check_note", verificationNote.trim()),
+            accessToken
+        )
+        return RecoveryReset(
+            loginId = result.optString("login_id"),
+            temporaryPassword = result.optString("temporary_password")
+        ).also {
+            if (it.loginId.isBlank() || it.temporaryPassword.isBlank()) {
+                throw AuthApiException("Réponse de réinitialisation incomplète.")
+            }
+        }
+    }
+
+    suspend fun revokeDevice(accessToken: String, installationId: String, accountId: String? = null) {
+        val body = JSONObject()
+            .put("action", "revoke_device")
+            .put("app_code", "naxa-services")
+            .put("installation_id", installationId)
+        if (!accountId.isNullOrBlank()) body.put("account_id", accountId)
+        request(body, accessToken)
     }
 
     suspend fun changePassword(session: AuthSession, currentPassword: String, newPassword: String): AuthSession =
@@ -155,9 +269,6 @@ class AuthApi(private val context: Context) {
     }
 
     private fun devicePayload(): JSONObject {
-        val androidId = runCatching {
-            Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        }.getOrNull().orEmpty()
         val devicePrefs = context.getSharedPreferences("naxa_services_device", Context.MODE_PRIVATE)
         val installationId = devicePrefs.getString("installation_id", null) ?: UUID.randomUUID().toString().also {
             devicePrefs.edit().putString("installation_id", it).apply()
