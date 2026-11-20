@@ -273,13 +273,8 @@
     <string name="action_sales_analysis">Sales analysis</string>
     <string name="action_margin_analysis">Margin analysis</string>
     <string name="action_forecast">Forecasts</string>
-    <string name="action_faq">FAQ</string>
-    <string name="action_contact_support">Contact support</string>
     <string name="action_call_support">Call support</string>
-    <string name="action_language">Language</string>
-    <string name="action_theme">Theme</string>
     <string name="action_night_schedule">Schedule night mode</string>
     <string name="action_personal_information">Personal information</string>
-    <string name="action_history">History</string>
     <string name="action_sign_out">Sign out</string>
 </resources>

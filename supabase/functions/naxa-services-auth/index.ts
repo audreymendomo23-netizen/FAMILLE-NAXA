@@ -1,4 +1,4 @@
-import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, nativeSiteIdsForScopes } from "./scope_contract.ts";
+import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, nativeSiteIdsForScopes } from "./scope_contract.ts";
 // NAXA SERVICES authentication gateway — source only, NOT deployed.
 // Required server-side secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
 // Never set SUPABASE_SERVICE_ROLE_KEY in Android/Web build variables.
