@@ -295,6 +295,8 @@ create or replace function public.ns_create_supplier_purchase(
   p_supplier_id uuid,
   p_reference text,
   p_supplier_invoice_number text,
+  p_idempotency_key uuid,
+  p_payload_sha256 text,
   p_lines jsonb,
   p_recoverable_tax_xaf bigint default 0,
   p_non_recoverable_tax_xaf bigint default 0,
@@ -310,6 +312,7 @@ as $naxa$
 declare
   v_member uuid;
   v_supplier public.ns_suppliers%rowtype;
+  v_existing public.ns_purchase_documents%rowtype;
   v_purchase_id uuid;
   v_subtotal bigint := 0;
   v_line record;
@@ -322,12 +325,31 @@ begin
     raise exception 'NAXA_PURCHASE_CREATE_FORBIDDEN';
   end if;
   if p_reference is null or length(trim(p_reference)) not between 3 and 80
+     or p_idempotency_key is null or p_payload_sha256 is null
+     or p_payload_sha256 !~ '^[0-9a-f]{64}$'
      or p_lines is null or jsonb_typeof(p_lines) <> 'array'
      or jsonb_array_length(p_lines) < 1 or jsonb_array_length(p_lines) > 100
      or coalesce(p_recoverable_tax_xaf,0) < 0
      or coalesce(p_non_recoverable_tax_xaf,0) < 0
      or coalesce(p_shipping_xaf,0) < 0 or coalesce(p_other_fees_xaf,0) < 0 then
     raise exception 'NAXA_PURCHASE_CREATE_INVALID';
+  end if;
+
+  select * into v_existing from public.ns_purchase_documents
+    where org_id = p_org_id and idempotency_key = p_idempotency_key;
+  if found then
+    if v_existing.site_id = p_site_id and v_existing.supplier_id = p_supplier_id
+       and v_existing.payload_sha256 = p_payload_sha256 then
+      return jsonb_build_object(
+        'idempotent', true,
+        'purchase_id', v_existing.id,
+        'subtotal_xaf', v_existing.subtotal_xaf,
+        'total_ordered_xaf', v_existing.subtotal_xaf + v_existing.recoverable_tax_xaf
+          + v_existing.non_recoverable_tax_xaf + v_existing.shipping_xaf + v_existing.other_fees_xaf,
+        'status', v_existing.status
+      );
+    end if;
+    raise exception 'NAXA_PURCHASE_CREATE_IDEMPOTENCY_REUSED';
   end if;
 
   select * into v_supplier from public.ns_suppliers
@@ -380,11 +402,12 @@ begin
   insert into public.ns_purchase_documents(
     org_id, site_id, supplier_id, supplier_name_snapshot, reference, supplier_invoice_number,
     status, subtotal_xaf, recoverable_tax_xaf, non_recoverable_tax_xaf, shipping_xaf, other_fees_xaf,
+    idempotency_key, payload_sha256,
     received_base_xaf, recognized_non_recoverable_xaf, recognized_recoverable_tax_xaf,
     received_total_xaf, paid_total_xaf, due_at, notes, created_by, updated_by
   ) values (
     p_org_id, p_site_id, p_supplier_id, v_supplier.name, trim(p_reference),
-    coalesce(trim(p_supplier_invoice_number),''), 'ordered', v_subtotal,
+    coalesce(trim(p_supplier_invoice_number),''), 'ordered', p_idempotency_key, p_payload_sha256, v_subtotal,
     coalesce(p_recoverable_tax_xaf,0), coalesce(p_non_recoverable_tax_xaf,0),
     coalesce(p_shipping_xaf,0), coalesce(p_other_fees_xaf,0),
     0, 0, 0, 0, 0, p_due_at, coalesce(trim(p_notes),''), v_member, v_member
@@ -431,10 +454,15 @@ begin
   if v_member is null or not public.ns_can_operate_site(p_org_id, p_site_id) then
     raise exception 'NAXA_ACCOUNTING_POST_FORBIDDEN';
   end if;
-  if p_amount_xaf is null or p_amount_xaf <= 0 or p_debit_account = p_credit_account
+  if p_source_id is null or p_source_type is null or p_event_code is null
+     or p_debit_account is null or p_credit_account is null
+     or p_amount_xaf is null or p_amount_xaf <= 0 or p_debit_account = p_credit_account
      or length(trim(p_source_type)) = 0 or length(trim(p_event_code)) = 0 then
     raise exception 'NAXA_ACCOUNTING_ENTRY_INVALID';
   end if;
+  perform pg_advisory_xact_lock(hashtextextended(
+    p_org_id::text || ':' || p_source_type || ':' || p_source_id::text || ':' || p_event_code, 0
+  ));
   select * into v_existing from public.ns_accounting_entries
     where org_id = p_org_id and source_type = p_source_type and source_id = p_source_id and event_code = p_event_code
     for update;
@@ -873,11 +901,12 @@ select org_id, site_id, date_trunc('year', performance_day)::date as performance
 from public.ns_performance_daily
 group by org_id, site_id, date_trunc('year', performance_day)::date;
 
+grant select on public.ns_performance_daily, public.ns_performance_monthly, public.ns_performance_annual to authenticated, service_role;
 revoke all on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) from public, anon;
 grant execute on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) to authenticated, service_role;
 
-revoke all on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) from public, anon;
-grant execute on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) to authenticated, service_role;
+revoke all on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,uuid,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) from public, anon;
+grant execute on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,uuid,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) to authenticated, service_role;
 revoke all on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) from public, anon, authenticated;
 grant execute on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) to service_role;
 revoke all on function public.ns_receive_supplier_purchase_line(uuid,uuid,uuid,uuid,numeric,uuid,text) from public, anon;
