@@ -19,6 +19,7 @@ import android.print.PrintDocumentInfo
 import android.print.PrintManager
 import android.content.ClipData
 import androidx.core.content.FileProvider
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Image
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -1610,6 +1611,12 @@ fun RecurringChargesContent(
     var message by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        message = if (granted) "Notifications d'échéance activées." else "Les notifications restent désactivées ; autorise-les dans les paramètres Android."
+    }
     val now = System.currentTimeMillis()
     val monthStart = Calendar.getInstance().apply {
         set(Calendar.DAY_OF_MONTH, 1); set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
@@ -1630,6 +1637,7 @@ fun RecurringChargesContent(
         }
     }
     val due = charges.filter { it.active && it.nextDueAtMillis <= now + it.reminderDays * 86_400_000L }
+    val otherScheduled = charges.filter { it.active && due.none { dueCharge -> dueCharge.id == it.id } }
     val fmt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -1637,7 +1645,15 @@ fun RecurringChargesContent(
             Spacer(Modifier.height(12.dp))
             ModulePageTitle("Charges, échéances et trésorerie", "Configure les dépenses récurrentes, suis les règlements et anticipe les dates de paiement.")
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
-            LocalOnlyNotice("Les rappels sont calculés à partir des échéances enregistrées sur cet appareil. La synchronisation multi-appareils et les notifications serveur restent dépendantes du backend.")
+            LocalOnlyNotice("Les rappels Android sont calculés localement sur cet appareil. Les notifications multi-appareils, SMS et WhatsApp côté serveur restent dépendantes du backend.")
+            if (android.os.Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
+            ) {
+                OutlinedButton(
+                    onClick = { notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text("Autoriser les notifications d'échéance") }
+            }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -1739,6 +1755,35 @@ fun RecurringChargesContent(
                         dueInDays = (((charge.nextDueAtMillis - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0L)).toString()
                         reminderDays = charge.reminderDays.toString()
                     }) { Text("Modifier cette charge") }
+                }
+            }
+        }
+        item { Text("Autres échéances programmées", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (otherScheduled.isEmpty()) item { Text("Aucune autre charge active à venir.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        items(otherScheduled) { charge ->
+            val paid = payments.filter { it.chargeId == charge.id && it.referenceDueAtMillis == charge.nextDueAtMillis }.sumOf { it.amountXaf }
+            val balance = (charge.amountXaf - paid).coerceAtLeast(0L)
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
+                Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Text(charge.name + " · " + charge.category, fontWeight = FontWeight.Bold)
+                    Text("Prochaine échéance : " + fmt.format(java.util.Date(charge.nextDueAtMillis)) + " · " + charge.recurrence)
+                    Text("Montant : " + xaf(charge.amountXaf) + " · rappel " + charge.reminderDays + " jour(s) avant")
+                    Text("Solde sur l'échéance actuelle : " + xaf(balance))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = {
+                            editingId = charge.id; name = charge.name; category = charge.category; amount = charge.amountXaf.toString()
+                            recurrence = charge.recurrence
+                            dueInDays = (((charge.nextDueAtMillis - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0L)).toString()
+                            reminderDays = charge.reminderDays.toString()
+                        }) { Text("Modifier") }
+                        TextButton(onClick = {
+                            scope.launch {
+                                runCatching { repository.deactivateRecurringCharge(orgId, siteId, charge.id, session.account.memberId) }
+                                    .onSuccess { message = "Charge désactivée ; son historique est conservé." }
+                                    .onFailure { error = it.message ?: "Désactivation impossible." }
+                            }
+                        }) { Text("Désactiver") }
+                    }
                 }
             }
         }
