@@ -247,12 +247,12 @@ fun StockContent(
     val siteIds = session.account.activeSiteIds
     var siteId by rememberSaveable { mutableStateOf(siteIds.firstOrNull().orEmpty()) }
     val stock by remember(siteId) { repository.dao.observeInventoryItems(siteId) }.collectAsState(initial = emptyList())
+    var selectedItemId by rememberSaveable { mutableStateOf("") }
     val selected = stock.firstOrNull { it.id == selectedItemId }
     var itemName by rememberSaveable { mutableStateOf("") }
     var sku by rememberSaveable { mutableStateOf("") }
     var unit by rememberSaveable { mutableStateOf("unité") }
     var reorder by rememberSaveable { mutableStateOf("0") }
-    var selectedItemId by rememberSaveable { mutableStateOf("") }
     var movementType by rememberSaveable { mutableStateOf("in") }
     var quantity by rememberSaveable { mutableStateOf("") }
     var reason by rememberSaveable { mutableStateOf("") }
