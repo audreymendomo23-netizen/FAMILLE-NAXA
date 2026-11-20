@@ -1,0 +1,31 @@
+export type NaxaBusinessMode =
+  | "solo"
+  | "single_site_multi_workstation"
+  | "multi_site_network";
+
+const BUSINESS_MODES: readonly NaxaBusinessMode[] = [
+  "solo",
+  "single_site_multi_workstation",
+  "multi_site_network",
+];
+
+export function isNaxaBusinessMode(value: string): value is NaxaBusinessMode {
+  return BUSINESS_MODES.includes(value as NaxaBusinessMode);
+}
+
+/**
+ * The current Android ERP reads and writes at site scope. A workstation-only
+ * assignment must never be promoted to whole-site visibility. Organization
+ * scope receives only the active site IDs supplied by the trusted server.
+ */
+export function nativeSiteIdsForScopes(
+  scopes: readonly Record<string, unknown>[],
+  activeOrganizationSiteIds: readonly string[] = [],
+): string[] {
+  const hasOrganizationScope = scopes.some((scope) => scope.scope_type === "organization");
+  if (hasOrganizationScope) return [...new Set(activeOrganizationSiteIds)];
+  const explicitSiteIds = scopes.flatMap((scope) =>
+    scope.scope_type === "site" && scope.site_id ? [String(scope.site_id)] : []
+  );
+  return [...new Set(explicitSiteIds)];
+}
