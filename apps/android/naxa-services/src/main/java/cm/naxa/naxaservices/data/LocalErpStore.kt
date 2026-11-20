@@ -107,7 +107,9 @@ data class LocalSale(
     val actorMemberId: String,
     val createdAtMillis: Long,
     val inventoryItemId: String? = null,
-    val stockQuantity: Double? = null
+    val stockQuantity: Double? = null,
+    @ColumnInfo(defaultValue = "0") val unitCostAtSaleXaf: Long = 0L,
+    @ColumnInfo(defaultValue = "0") val costOfGoodsXaf: Long = 0L
 )
 
 @Entity(tableName = "local_expenses", indices = [Index(value = ["siteId"]), Index(value = ["cashSessionId"]), Index(value = ["createdAtMillis"])])
@@ -446,6 +448,157 @@ data class LocalLoyaltyEvent(
     val createdAtMillis: Long
 )
 
+
+@Entity(
+    tableName = "local_suppliers",
+    indices = [Index(value = ["orgId", "siteId", "normalizedName"], unique = true), Index(value = ["orgId", "siteId", "active"])]
+)
+data class LocalSupplier(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val name: String,
+    val normalizedName: String,
+    val phone: String,
+    val whatsapp: String,
+    val email: String,
+    val address: String,
+    val paymentTermsDays: Int,
+    val notes: String,
+    val active: Boolean,
+    val createdByMemberId: String,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long
+)
+
+@Entity(
+    tableName = "local_purchase_documents",
+    indices = [
+        Index(value = ["orgId", "siteId", "status", "createdAtMillis"]),
+        Index(value = ["supplierId", "createdAtMillis"]),
+        Index(value = ["siteId", "reference"], unique = true)
+    ]
+)
+data class LocalPurchaseDocument(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val supplierId: String,
+    val supplierNameSnapshot: String,
+    val reference: String,
+    val supplierInvoiceNumber: String,
+    val status: String,
+    val subtotalXaf: Long,
+    val recoverableTaxXaf: Long,
+    val nonRecoverableTaxXaf: Long,
+    val shippingXaf: Long,
+    val otherFeesXaf: Long,
+    val receivedBaseXaf: Long,
+    val recognizedNonRecoverableXaf: Long,
+    val recognizedRecoverableTaxXaf: Long,
+    val receivedTotalXaf: Long,
+    val paidTotalXaf: Long,
+    val dueAtMillis: Long?,
+    val notes: String,
+    val actorMemberId: String,
+    val createdAtMillis: Long,
+    val updatedAtMillis: Long
+)
+
+@Entity(
+    tableName = "local_purchase_lines",
+    indices = [Index(value = ["purchaseId"]), Index(value = ["orgId", "siteId", "inventoryItemId"])]
+)
+data class LocalPurchaseLine(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val purchaseId: String,
+    val inventoryItemId: String?,
+    val description: String,
+    val itemType: String,
+    val unit: String,
+    val quantityOrdered: Double,
+    val quantityReceived: Double,
+    val unitCostXaf: Long,
+    val createdAtMillis: Long
+)
+
+@Entity(
+    tableName = "local_purchase_receipts",
+    indices = [Index(value = ["purchaseId", "receivedAtMillis"]), Index(value = ["orgId", "siteId", "receivedAtMillis"])]
+)
+data class LocalPurchaseReceipt(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val purchaseId: String,
+    val purchaseLineId: String,
+    val quantityReceived: Double,
+    val baseCostXaf: Long,
+    val nonRecoverableCostXaf: Long,
+    val recoverableTaxXaf: Long,
+    val actorMemberId: String,
+    val receivedAtMillis: Long
+)
+
+@Entity(
+    tableName = "local_supplier_payments",
+    indices = [
+        Index(value = ["orgId", "siteId", "paidAtMillis"]),
+        Index(value = ["purchaseId", "paidAtMillis"]),
+        Index(value = ["orgId", "idempotencyKey"], unique = true)
+    ]
+)
+data class LocalSupplierPayment(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val purchaseId: String,
+    val supplierId: String,
+    val cashSessionId: String?,
+    val amountXaf: Long,
+    val paymentMethod: String,
+    val paymentReference: String,
+    val idempotencyKey: String,
+    val actorMemberId: String,
+    val paidAtMillis: Long
+)
+
+@Entity(
+    tableName = "local_accounting_entries",
+    indices = [
+        Index(value = ["orgId", "sourceType", "sourceId", "eventCode"], unique = true),
+        Index(value = ["orgId", "siteId", "occurredAtMillis"]),
+        Index(value = ["orgId", "siteId", "debitAccount", "occurredAtMillis"]),
+        Index(value = ["orgId", "siteId", "creditAccount", "occurredAtMillis"])
+    ]
+)
+data class LocalAccountingEntry(
+    @PrimaryKey val id: String,
+    val orgId: String,
+    val siteId: String,
+    val journalBatchId: String,
+    val sourceType: String,
+    val sourceId: String,
+    val eventCode: String,
+    val debitAccount: String,
+    val creditAccount: String,
+    val amountXaf: Long,
+    val description: String,
+    val actorMemberId: String,
+    val occurredAtMillis: Long
+)
+
+data class SupplierPurchaseLineDraft(
+    val inventoryItemId: String?,
+    val description: String,
+    val itemType: String,
+    val unit: String,
+    val quantity: Double,
+    val unitCostXaf: Long
+)
+
 @Dao
 interface NaxaServicesDao {
     @Query("SELECT * FROM local_pressing_orders WHERE orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis DESC")
@@ -694,6 +847,76 @@ interface NaxaServicesDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertInventoryValuation(valuation: LocalInventoryValuation)
 
+
+    @Query("SELECT * FROM local_suppliers WHERE orgId = :orgId AND siteId = :siteId AND active = 1 ORDER BY name COLLATE NOCASE ASC")
+    fun observeSuppliers(orgId: String, siteId: String): Flow<List<LocalSupplier>>
+
+    @Query("SELECT * FROM local_suppliers WHERE id = :supplierId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
+    suspend fun findSupplier(supplierId: String, orgId: String, siteId: String): LocalSupplier?
+
+    @Query("SELECT * FROM local_suppliers WHERE orgId = :orgId AND siteId = :siteId AND normalizedName = :normalizedName LIMIT 1")
+    suspend fun findSupplierByName(orgId: String, siteId: String, normalizedName: String): LocalSupplier?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertSupplier(supplier: LocalSupplier)
+
+    @Update
+    suspend fun updateSupplier(supplier: LocalSupplier)
+
+    @Query("SELECT * FROM local_purchase_documents WHERE orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis DESC")
+    fun observePurchaseDocuments(orgId: String, siteId: String): Flow<List<LocalPurchaseDocument>>
+
+    @Query("SELECT * FROM local_purchase_documents WHERE id = :purchaseId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
+    suspend fun findPurchaseDocument(purchaseId: String, orgId: String, siteId: String): LocalPurchaseDocument?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertPurchaseDocument(purchase: LocalPurchaseDocument)
+
+    @Update
+    suspend fun updatePurchaseDocument(purchase: LocalPurchaseDocument)
+
+    @Query("SELECT * FROM local_purchase_lines WHERE purchaseId = :purchaseId AND orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis ASC")
+    fun observePurchaseLines(orgId: String, siteId: String, purchaseId: String): Flow<List<LocalPurchaseLine>>
+
+    @Query("SELECT * FROM local_purchase_lines WHERE id = :lineId AND purchaseId = :purchaseId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
+    suspend fun findPurchaseLine(orgId: String, siteId: String, purchaseId: String, lineId: String): LocalPurchaseLine?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertPurchaseLine(line: LocalPurchaseLine)
+
+    @Update
+    suspend fun updatePurchaseLine(line: LocalPurchaseLine)
+
+    @Query("SELECT * FROM local_purchase_receipts WHERE purchaseId = :purchaseId AND orgId = :orgId AND siteId = :siteId ORDER BY receivedAtMillis DESC")
+    fun observePurchaseReceipts(orgId: String, siteId: String, purchaseId: String): Flow<List<LocalPurchaseReceipt>>
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertPurchaseReceipt(receipt: LocalPurchaseReceipt)
+
+    @Query("SELECT * FROM local_supplier_payments WHERE orgId = :orgId AND siteId = :siteId ORDER BY paidAtMillis DESC")
+    fun observeSupplierPayments(orgId: String, siteId: String): Flow<List<LocalSupplierPayment>>
+
+    @Query("SELECT * FROM local_supplier_payments WHERE orgId = :orgId AND idempotencyKey = :idempotencyKey LIMIT 1")
+    suspend fun findSupplierPaymentByKey(orgId: String, idempotencyKey: String): LocalSupplierPayment?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertSupplierPayment(payment: LocalSupplierPayment)
+
+    @Query("SELECT * FROM local_accounting_entries WHERE orgId = :orgId AND siteId = :siteId AND occurredAtMillis BETWEEN :fromMillis AND :toMillis ORDER BY occurredAtMillis DESC")
+    fun observeAccountingEntries(orgId: String, siteId: String, fromMillis: Long, toMillis: Long): Flow<List<LocalAccountingEntry>>
+
+    @Query("SELECT * FROM local_accounting_entries WHERE orgId = :orgId AND siteId = :siteId ORDER BY occurredAtMillis DESC")
+    fun observeAllAccountingEntries(orgId: String, siteId: String): Flow<List<LocalAccountingEntry>>
+
+    @Query("SELECT COUNT(*) FROM local_accounting_entries WHERE orgId = :orgId AND sourceType = :sourceType AND sourceId = :sourceId AND eventCode = :eventCode")
+    suspend fun hasAccountingEntry(orgId: String, sourceType: String, sourceId: String, eventCode: String): Int
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertAccountingEntry(entry: LocalAccountingEntry)
+
+    @Query("SELECT COALESCE(SUM(receivedTotalXaf - paidTotalXaf), 0) FROM local_purchase_documents WHERE orgId = :orgId AND siteId = :siteId AND status <> 'cancelled'")
+    fun observeSupplierPayables(orgId: String, siteId: String): Flow<Long>
+
     @Query("SELECT * FROM local_recurring_charges WHERE orgId = :orgId AND siteId = :siteId ORDER BY nextDueAtMillis ASC")
     fun observeRecurringCharges(orgId: String, siteId: String): Flow<List<LocalRecurringCharge>>
 
@@ -771,9 +994,15 @@ interface NaxaServicesDao {
         LocalRecurringCharge::class,
         LocalChargePayment::class,
         LocalLoyaltyProgram::class,
-        LocalLoyaltyEvent::class
+        LocalLoyaltyEvent::class,
+        LocalSupplier::class,
+        LocalPurchaseDocument::class,
+        LocalPurchaseLine::class,
+        LocalPurchaseReceipt::class,
+        LocalSupplierPayment::class,
+        LocalAccountingEntry::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -888,8 +1117,283 @@ val NS_SERVICES_MIGRATION_7_8: Migration = object : Migration(7, 8) {
     }
 }
 
+val NS_SERVICES_MIGRATION_8_9: Migration = object : Migration(8, 9) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE local_sales ADD COLUMN unitCostAtSaleXaf INTEGER NOT NULL DEFAULT 0")
+        database.execSQL("ALTER TABLE local_sales ADD COLUMN costOfGoodsXaf INTEGER NOT NULL DEFAULT 0")
+        database.execSQL("CREATE TABLE IF NOT EXISTS local_suppliers (id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, name TEXT NOT NULL, normalizedName TEXT NOT NULL, phone TEXT NOT NULL, whatsapp TEXT NOT NULL, email TEXT NOT NULL, address TEXT NOT NULL, paymentTermsDays INTEGER NOT NULL, notes TEXT NOT NULL, active INTEGER NOT NULL, createdByMemberId TEXT NOT NULL, createdAtMillis INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL)")
+        database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_local_suppliers_orgId_siteId_normalizedName ON local_suppliers(orgId, siteId, normalizedName)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_suppliers_orgId_siteId_active ON local_suppliers(orgId, siteId, active)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS local_purchase_documents (id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, supplierId TEXT NOT NULL, supplierNameSnapshot TEXT NOT NULL, reference TEXT NOT NULL, supplierInvoiceNumber TEXT NOT NULL, status TEXT NOT NULL, subtotalXaf INTEGER NOT NULL, recoverableTaxXaf INTEGER NOT NULL, nonRecoverableTaxXaf INTEGER NOT NULL, shippingXaf INTEGER NOT NULL, otherFeesXaf INTEGER NOT NULL, receivedBaseXaf INTEGER NOT NULL, recognizedNonRecoverableXaf INTEGER NOT NULL, recognizedRecoverableTaxXaf INTEGER NOT NULL, receivedTotalXaf INTEGER NOT NULL, paidTotalXaf INTEGER NOT NULL, dueAtMillis INTEGER, notes TEXT NOT NULL, actorMemberId TEXT NOT NULL, createdAtMillis INTEGER NOT NULL, updatedAtMillis INTEGER NOT NULL)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_purchase_documents_orgId_siteId_status_createdAtMillis ON local_purchase_documents(orgId, siteId, status, createdAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_purchase_documents_supplierId_createdAtMillis ON local_purchase_documents(supplierId, createdAtMillis)")
+        database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_local_purchase_documents_siteId_reference ON local_purchase_documents(siteId, reference)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS local_purchase_lines (id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, purchaseId TEXT NOT NULL, inventoryItemId TEXT, description TEXT NOT NULL, itemType TEXT NOT NULL, unit TEXT NOT NULL, quantityOrdered REAL NOT NULL, quantityReceived REAL NOT NULL, unitCostXaf INTEGER NOT NULL, createdAtMillis INTEGER NOT NULL)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_purchase_lines_purchaseId ON local_purchase_lines(purchaseId)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_purchase_lines_orgId_siteId_inventoryItemId ON local_purchase_lines(orgId, siteId, inventoryItemId)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS local_purchase_receipts (id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, purchaseId TEXT NOT NULL, purchaseLineId TEXT NOT NULL, quantityReceived REAL NOT NULL, baseCostXaf INTEGER NOT NULL, nonRecoverableCostXaf INTEGER NOT NULL, recoverableTaxXaf INTEGER NOT NULL, actorMemberId TEXT NOT NULL, receivedAtMillis INTEGER NOT NULL)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_purchase_receipts_purchaseId_receivedAtMillis ON local_purchase_receipts(purchaseId, receivedAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_purchase_receipts_orgId_siteId_receivedAtMillis ON local_purchase_receipts(orgId, siteId, receivedAtMillis)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS local_supplier_payments (id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, purchaseId TEXT NOT NULL, supplierId TEXT NOT NULL, cashSessionId TEXT, amountXaf INTEGER NOT NULL, paymentMethod TEXT NOT NULL, paymentReference TEXT NOT NULL, idempotencyKey TEXT NOT NULL, actorMemberId TEXT NOT NULL, paidAtMillis INTEGER NOT NULL)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_supplier_payments_orgId_siteId_paidAtMillis ON local_supplier_payments(orgId, siteId, paidAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_supplier_payments_purchaseId_paidAtMillis ON local_supplier_payments(purchaseId, paidAtMillis)")
+        database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_local_supplier_payments_orgId_idempotencyKey ON local_supplier_payments(orgId, idempotencyKey)")
+        database.execSQL("CREATE TABLE IF NOT EXISTS local_accounting_entries (id TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, siteId TEXT NOT NULL, journalBatchId TEXT NOT NULL, sourceType TEXT NOT NULL, sourceId TEXT NOT NULL, eventCode TEXT NOT NULL, debitAccount TEXT NOT NULL, creditAccount TEXT NOT NULL, amountXaf INTEGER NOT NULL, description TEXT NOT NULL, actorMemberId TEXT NOT NULL, occurredAtMillis INTEGER NOT NULL)")
+        database.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_local_accounting_entries_orgId_sourceType_sourceId_eventCode ON local_accounting_entries(orgId, sourceType, sourceId, eventCode)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_accounting_entries_orgId_siteId_occurredAtMillis ON local_accounting_entries(orgId, siteId, occurredAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_accounting_entries_orgId_siteId_debitAccount_occurredAtMillis ON local_accounting_entries(orgId, siteId, debitAccount, occurredAtMillis)")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_accounting_entries_orgId_siteId_creditAccount_occurredAtMillis ON local_accounting_entries(orgId, siteId, creditAccount, occurredAtMillis)")
+    }
+}
+
 class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
     val dao: NaxaServicesDao = database.naxaServicesDao()
+
+
+    suspend fun saveSupplier(
+        orgId: String, siteId: String, name: String, phone: String, whatsapp: String,
+        email: String, address: String, paymentTermsDays: Int, notes: String, actorMemberId: String
+    ): LocalSupplier = database.withTransaction {
+        require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank())
+        require(name.trim().length in 2..120 && paymentTermsDays in 0..365)
+        val normalized = name.trim().lowercase(java.util.Locale.ROOT)
+            .replace(Regex("\\s+"), " ")
+        val current = dao.findSupplierByName(orgId, siteId, normalized)
+        val now = System.currentTimeMillis()
+        val supplier = if (current == null) {
+            LocalSupplier(
+                UUID.randomUUID().toString(), orgId, siteId, name.trim(), normalized,
+                phone.trim(), whatsapp.filter(Char::isDigit), email.trim(), address.trim(),
+                paymentTermsDays, notes.trim(), true, actorMemberId, now, now
+            ).also { dao.insertSupplier(it) }
+        } else {
+            current.copy(
+                name = name.trim(), phone = phone.trim(), whatsapp = whatsapp.filter(Char::isDigit),
+                email = email.trim(), address = address.trim(), paymentTermsDays = paymentTermsDays,
+                notes = notes.trim(), active = true, updatedAtMillis = now
+            ).also { dao.updateSupplier(it) }
+        }
+        enqueue(orgId, "supplier", supplier.id, "supplier.saved", siteId)
+        supplier
+    }
+
+    suspend fun createSupplierPurchase(
+        orgId: String, siteId: String, supplierId: String, reference: String, invoiceNumber: String,
+        lines: List<SupplierPurchaseLineDraft>, recoverableTaxXaf: Long, nonRecoverableTaxXaf: Long,
+        shippingXaf: Long, otherFeesXaf: Long, dueAtMillis: Long?, notes: String, actorMemberId: String
+    ): LocalPurchaseDocument = database.withTransaction {
+        require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank())
+        require(reference.trim().length in 3..80 && lines.isNotEmpty() && lines.size <= 100)
+        require(recoverableTaxXaf >= 0L && nonRecoverableTaxXaf >= 0L && shippingXaf >= 0L && otherFeesXaf >= 0L)
+        val supplier = dao.findSupplier(supplierId, orgId, siteId) ?: throw IllegalArgumentException("Fournisseur introuvable sur ce point de vente.")
+        var subtotal = 0L
+        lines.forEach { line ->
+            require(line.description.isNotBlank() && line.quantity.isFinite() && line.quantity > 0.0)
+            require(line.unitCostXaf > 0L && line.itemType in setOf("stock", "operating_expense", "fixed_asset"))
+            if (line.itemType == "stock") {
+                require(!line.inventoryItemId.isNullOrBlank() && dao.findInventoryItem(line.inventoryItemId, orgId, siteId) != null) {
+                    "Chaque ligne de stock doit pointer vers un article actif du même site."
+                }
+            } else require(line.inventoryItemId == null) { "Une ligne hors stock ne doit pas référencer un article de stock." }
+            val amount = (line.quantity * line.unitCostXaf).takeIf { it.isFinite() && it <= Long.MAX_VALUE.toDouble() }?.let { kotlin.math.round(it).toLong() }
+                ?: throw IllegalArgumentException("Montant de ligne invalide.")
+            require(amount > 0L && subtotal <= Long.MAX_VALUE - amount)
+            subtotal += amount
+        }
+        val total = listOf(subtotal, recoverableTaxXaf, nonRecoverableTaxXaf, shippingXaf, otherFeesXaf)
+            .fold(0L) { acc, value -> require(acc <= Long.MAX_VALUE - value); acc + value }
+        require(total > 0L)
+        val now = System.currentTimeMillis()
+        val purchase = LocalPurchaseDocument(
+            id = UUID.randomUUID().toString(), orgId = orgId, siteId = siteId, supplierId = supplier.id,
+            supplierNameSnapshot = supplier.name, reference = reference.trim(), supplierInvoiceNumber = invoiceNumber.trim(),
+            status = "ordered", subtotalXaf = subtotal, recoverableTaxXaf = recoverableTaxXaf,
+            nonRecoverableTaxXaf = nonRecoverableTaxXaf, shippingXaf = shippingXaf, otherFeesXaf = otherFeesXaf,
+            receivedBaseXaf = 0L, recognizedNonRecoverableXaf = 0L, recognizedRecoverableTaxXaf = 0L,
+            receivedTotalXaf = 0L, paidTotalXaf = 0L, dueAtMillis = dueAtMillis,
+            notes = notes.trim(), actorMemberId = actorMemberId, createdAtMillis = now, updatedAtMillis = now
+        )
+        dao.insertPurchaseDocument(purchase)
+        lines.forEach { line ->
+            dao.insertPurchaseLine(
+                LocalPurchaseLine(
+                    id = UUID.randomUUID().toString(), orgId = orgId, siteId = siteId,
+                    purchaseId = purchase.id, inventoryItemId = line.inventoryItemId, description = line.description.trim(),
+                    itemType = line.itemType, unit = line.unit.trim().ifBlank { "unité" },
+                    quantityOrdered = line.quantity, quantityReceived = 0.0,
+                    unitCostXaf = line.unitCostXaf, createdAtMillis = now
+                )
+            )
+        }
+        enqueue(orgId, "purchase", purchase.id, "purchase.ordered", siteId)
+        purchase
+    }
+
+    suspend fun receiveSupplierPurchaseLine(
+        orgId: String, siteId: String, purchaseId: String, lineId: String,
+        quantityToReceive: Double, actorMemberId: String
+    ): LocalPurchaseReceipt = database.withTransaction {
+        require(quantityToReceive.isFinite() && quantityToReceive > 0.0 && actorMemberId.isNotBlank())
+        val purchase = dao.findPurchaseDocument(purchaseId, orgId, siteId) ?: throw IllegalArgumentException("Commande fournisseur introuvable.")
+        require(purchase.status !in setOf("cancelled", "closed")) { "Cette commande est clôturée ou annulée." }
+        val line = dao.findPurchaseLine(orgId, siteId, purchaseId, lineId) ?: throw IllegalArgumentException("Ligne d'achat introuvable.")
+        val remaining = (line.quantityOrdered - line.quantityReceived).coerceAtLeast(0.0)
+        require(quantityToReceive <= remaining + 0.000001) { "La quantité reçue dépasse le reliquat commandé." }
+        val base = (quantityToReceive * line.unitCostXaf).takeIf { it.isFinite() && it <= Long.MAX_VALUE.toDouble() }?.let { kotlin.math.round(it).toLong() }
+            ?: throw IllegalArgumentException("Valeur de réception invalide.")
+        val nextReceivedBase = purchase.receivedBaseXaf + base
+        require(nextReceivedBase <= purchase.subtotalXaf) { "La réception dépasse le montant de base de la commande." }
+        fun allocate(total: Long, receivedBase: Long): Long =
+            if (purchase.subtotalXaf <= 0L) 0L
+            else kotlin.math.round(total.toDouble() * receivedBase.toDouble() / purchase.subtotalXaf.toDouble()).toLong()
+        val newNonRecoverable = allocate(purchase.nonRecoverableTaxXaf + purchase.shippingXaf + purchase.otherFeesXaf, nextReceivedBase)
+        val nonRecoverableDelta = (newNonRecoverable - purchase.recognizedNonRecoverableXaf).coerceAtLeast(0L)
+        val newRecoverable = allocate(purchase.recoverableTaxXaf, nextReceivedBase)
+        val recoverableDelta = (newRecoverable - purchase.recognizedRecoverableTaxXaf).coerceAtLeast(0L)
+        val now = System.currentTimeMillis()
+        val receiptId = UUID.randomUUID().toString()
+        val receipt = LocalPurchaseReceipt(
+            receiptId, orgId, siteId, purchaseId, line.id, quantityToReceive, base,
+            nonRecoverableDelta, recoverableDelta, actorMemberId, now
+        )
+        dao.insertPurchaseReceipt(receipt)
+        val expenseBase = base + nonRecoverableDelta
+        when (line.itemType) {
+            "stock" -> {
+                val itemId = line.inventoryItemId ?: throw IllegalStateException("Article de stock manquant.")
+                val item = dao.findInventoryItem(itemId, orgId, siteId) ?: throw IllegalStateException("Article de stock introuvable.")
+                val currentValuation = dao.findInventoryValuation(orgId, siteId, itemId)
+                val oldCost = currentValuation?.unitCostXaf ?: 0L
+                val newQuantity = item.quantity + quantityToReceive
+                val newAverageCost = if (newQuantity <= 0.0) oldCost else
+                    kotlin.math.round((item.quantity * oldCost.toDouble() + expenseBase.toDouble()) / newQuantity).toLong()
+                dao.updateInventoryItem(item.copy(quantity = newQuantity))
+                val movement = LocalInventoryMovement(
+                    id = receiptId, orgId = orgId, siteId = siteId, itemId = itemId, movementType = "in",
+                    quantityDelta = quantityToReceive, reason = "Réception fournisseur " + purchase.reference,
+                    actorMemberId = actorMemberId, createdAtMillis = now
+                )
+                dao.insertInventoryMovement(movement)
+                dao.upsertInventoryValuation(
+                    LocalInventoryValuation(
+                        currentValuation?.id ?: UUID.randomUUID().toString(), orgId, siteId, itemId,
+                        newAverageCost, currentValuation?.sellingPriceXaf ?: 0L, now
+                    )
+                )
+                postAccountingEntry(orgId, siteId, "purchase_receipt", receiptId, "goods_received",
+                    "INVENTORY_ASSET", "SUPPLIER_PAYABLE", expenseBase, "Réception de stock · " + line.description, actorMemberId, now)
+            }
+            "operating_expense" -> postAccountingEntry(
+                orgId, siteId, "purchase_receipt", receiptId, "expense_received",
+                "OPERATING_EXPENSE_PURCHASE", "SUPPLIER_PAYABLE", expenseBase,
+                "Achat consommable/service · " + line.description, actorMemberId, now
+            )
+            "fixed_asset" -> postAccountingEntry(
+                orgId, siteId, "purchase_receipt", receiptId, "asset_received",
+                "FIXED_ASSET", "SUPPLIER_PAYABLE", expenseBase,
+                "Immobilisation reçue · " + line.description, actorMemberId, now
+            )
+            else -> throw IllegalArgumentException("Type de ligne d'achat non reconnu.")
+        }
+        if (recoverableDelta > 0L) {
+            postAccountingEntry(orgId, siteId, "purchase_receipt", receiptId, "recoverable_tax",
+                "INPUT_TAX_RECEIVABLE", "SUPPLIER_PAYABLE", recoverableDelta,
+                "Taxe récupérable estimée · " + purchase.reference, actorMemberId, now)
+        }
+        val updatedLine = line.copy(quantityReceived = line.quantityReceived + quantityToReceive)
+        dao.updatePurchaseLine(updatedLine)
+        val nextLines = listOf(updatedLine) // Status is refreshed from the persisted purchase detail below.
+        val receivedComplete = nextLines.all { it.quantityReceived + 0.000001 >= it.quantityOrdered } &&
+            (purchase.receivedBaseXaf + base >= purchase.subtotalXaf - 1L)
+        val nextReceivedTotal = purchase.receivedTotalXaf + expenseBase + recoverableDelta
+        val updatedPurchase = purchase.copy(
+            status = if (receivedComplete) "received" else "partially_received",
+            receivedBaseXaf = nextReceivedBase,
+            recognizedNonRecoverableXaf = newNonRecoverable,
+            recognizedRecoverableTaxXaf = newRecoverable,
+            receivedTotalXaf = nextReceivedTotal,
+            updatedAtMillis = now
+        )
+        dao.updatePurchaseDocument(updatedPurchase)
+        dao.insertWorkflowEvent(
+            LocalWorkflowEvent(UUID.randomUUID().toString(), orgId, siteId, "purchase", purchaseId,
+                purchase.status, updatedPurchase.status, "Réception de " + quantityToReceive + " " + line.unit,
+                actorMemberId, now)
+        )
+        enqueue(orgId, "purchase_receipt", receiptId, "purchase.receipt.confirmed", siteId)
+        receipt
+    }
+
+    suspend fun recordSupplierPayment(
+        orgId: String, siteId: String, purchaseId: String, amountXaf: Long, paymentMethod: String,
+        cashSessionId: String?, paymentReference: String, idempotencyKey: String, actorMemberId: String
+    ): LocalSupplierPayment = database.withTransaction {
+        require(amountXaf > 0L && actorMemberId.isNotBlank() && idempotencyKey.isNotBlank())
+        require(paymentMethod in setOf("cash", "bank", "mobile_money", "other"))
+        dao.findSupplierPaymentByKey(orgId, idempotencyKey)?.let { existing ->
+            require(existing.siteId == siteId && existing.purchaseId == purchaseId && existing.amountXaf == amountXaf &&
+                existing.paymentMethod == paymentMethod && existing.paymentReference == paymentReference) {
+                "Clé d'idempotence déjà utilisée pour un paiement différent."
+            }
+            return@withTransaction existing
+        }
+        val purchase = dao.findPurchaseDocument(purchaseId, orgId, siteId) ?: throw IllegalArgumentException("Achat introuvable.")
+        require(purchase.status !in setOf("draft", "ordered", "cancelled")) { "Une facture ne peut être réglée qu'après réception." }
+        val balance = (purchase.receivedTotalXaf - purchase.paidTotalXaf).coerceAtLeast(0L)
+        require(amountXaf <= balance) { "Le règlement dépasse la dette fournisseur restante." }
+        if (paymentMethod == "cash") {
+            require(!cashSessionId.isNullOrBlank()) { "Une caisse ouverte est obligatoire pour un règlement en espèces." }
+            val session = dao.findCashSession(cashSessionId, orgId, siteId) ?: throw IllegalArgumentException("Session de caisse introuvable.")
+            require(session.status == "open") { "La caisse sélectionnée est fermée." }
+        } else require(cashSessionId.isNullOrBlank()) { "Ne lie pas un règlement bancaire à une session de caisse espèces." }
+        val now = System.currentTimeMillis()
+        val payment = LocalSupplierPayment(
+            UUID.randomUUID().toString(), orgId, siteId, purchase.id, purchase.supplierId,
+            cashSessionId, amountXaf, paymentMethod, paymentReference.trim(), idempotencyKey,
+            actorMemberId, now
+        )
+        dao.insertSupplierPayment(payment)
+        if (paymentMethod == "cash") {
+            dao.insertExpense(
+                LocalExpense(UUID.randomUUID().toString(), orgId, siteId, cashSessionId!!, "supplier_payment",
+                    "Règlement fournisseur " + purchase.reference, amountXaf, actorMemberId, now)
+            )
+        }
+        val creditAccount = when (paymentMethod) {
+            "cash" -> "CASH_REGISTER"
+            "bank" -> "BANK"
+            "mobile_money" -> "MOBILE_MONEY_CLEARING"
+            else -> "OTHER_TREASURY"
+        }
+        postAccountingEntry(orgId, siteId, "supplier_payment", payment.id, "payable_settlement",
+            "SUPPLIER_PAYABLE", creditAccount, amountXaf, "Règlement fournisseur " + purchase.reference, actorMemberId, now)
+        val newPaid = purchase.paidTotalXaf + amountXaf
+        val updated = purchase.copy(
+            paidTotalXaf = newPaid,
+            status = if (newPaid >= purchase.receivedTotalXaf && purchase.status == "received") "closed" else purchase.status,
+            updatedAtMillis = now
+        )
+        dao.updatePurchaseDocument(updated)
+        enqueue(orgId, "supplier_payment", payment.id, "supplier.payment.recorded", siteId)
+        payment
+    }
+
+    private suspend fun postAccountingEntry(
+        orgId: String, siteId: String, sourceType: String, sourceId: String, eventCode: String,
+        debitAccount: String, creditAccount: String, amountXaf: Long, description: String,
+        actorMemberId: String, occurredAtMillis: Long
+    ) {
+        require(amountXaf > 0L && debitAccount.isNotBlank() && creditAccount.isNotBlank() && debitAccount != creditAccount)
+        if (dao.hasAccountingEntry(orgId, sourceType, sourceId, eventCode) > 0) return
+        val batchId = UUID.randomUUID().toString()
+        dao.insertAccountingEntry(
+            LocalAccountingEntry(
+                UUID.randomUUID().toString(), orgId, siteId, batchId, sourceType, sourceId, eventCode,
+                debitAccount, creditAccount, amountXaf, description, actorMemberId, occurredAtMillis
+            )
+        )
+        enqueue(orgId, "accounting_entry", batchId, "accounting.entry.posted", siteId)
+    }
 
     suspend fun saveSupplierWhatsApp(orgId: String, siteId: String, itemId: String, value: String): LocalInventoryItem = database.withTransaction {
         val phone = value.filter(Char::isDigit)
