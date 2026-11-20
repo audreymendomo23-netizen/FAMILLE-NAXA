@@ -698,10 +698,21 @@ Les dossiers sont préparés dans 'assets/naxa-services/activities/' avec un REA
 - La photo de profil est conservée comme URI locale ; aucun service serveur d'avatar n'est encore branché.
 - Les photos métier ne sont pas encore dans le repo ; les dossiers sont prêts.
 - Les tests sur émulateur/appareils physiques, la migration Room depuis une version installée, la recette multi-sites/RLS et la recette Supabase restent à faire.
-- Le nouveau contrôle CI 44740489677 est entièrement terminé avec le résultat SUCCESS sur le commit de code `df9d3889d2825cfdba7a05dbefe067d6e658bac4` : contrat Auth/Deno réussi, compilation Kotlin/Compose/Room/KAPT et assemblage APK debug réussis ; artifact `naxa-services-debug-apk` ID `14630094134`, 11 207 951 octets. Le HEAD courant `63c57b083653938b8f85a0fd29fd4b8fcc1b76a8` ajoute uniquement de la documentation après ce commit de code ; aucun fichier applicatif n'a changé depuis la compilation.
+- Le contrôle CI le plus récent est le run [44742072881](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44742072881), résultat global `success`, sur le commit `789048c9e212ead46697f72ef62125de53959bb3`. Auth/Deno et compilation Kotlin/Compose/Room/KAPT sont réussis ; le workflow a également vérifié les 13 dossiers photos d'activité et les 4 documents légaux embarqués. Artifact `naxa-services-debug-apk`, ID `14630957608`. APK extrait : 12 052 148 octets, SHA-256 `c230f15227604169a48774220ff804ae951dc59590f67519e57370edc8fc71a4`. Le HEAD courant de branche inclut ce commit et les correctifs fonctionnels décrits ci-dessous.
 
 ## 32. Décision de statut
 
-**Porte de compilation Android debug : VERT** sur le commit de code `df9d3889d2825cfdba7a05dbefe067d6e658bac4` (run 44740489677). **Statut fonctionnel global : PARTIEL / EN RECETTE.** La version ne sera pas « verte production » avant la migration et la recette RLS isolée, le transport de synchronisation idempotent, la validation des flux de paiement/abonnement, les essais sur appareil et la recette métier des trois modèles organisationnels.
+**Porte de compilation Android debug : VERT** sur le commit `789048c9e212ead46697f72ef62125de53959bb3` (run 44742072881). **Statut fonctionnel global : PARTIEL / EN RECETTE.** La version ne sera pas « verte production » avant la migration et la recette RLS isolée, le transport de synchronisation idempotent, la validation des flux de paiement/abonnement, les essais sur appareil et la recette métier des trois modèles organisationnels.
 
 Aucun merge, aucune migration Supabase réelle, aucun déploiement Edge Function, aucune publication Release et aucune mise en production ne sont couverts par cette passe documentaire.
+
+## 33. Vérifications supplémentaires de reprise — 20 novembre 2026
+
+- Le parcours de sélection d'activité ne donne plus le choix à un salarié lorsque l'organisation n'a pas encore de profil : un message l'oriente vers le Promoteur et lui laisse une sortie par déconnexion.
+- Les routes d'écran sont désormais contrôlées par l'intersection du rôle et du profil métier, y compris en accès direct ; masquer une entrée de menu ne constitue plus l'unique protection d'interface.
+- La lecture des CGU et de la politique utilise le contenu intégral bilingue embarqué dans les assets Android. L'acceptation reste distincte et versionnée. La validation contractuelle finale doit encore être faite par un juriste camerounais.
+- L'Edge Function Auth possède un chemin de compatibilité de lecture avant l'application de la migration v2 ; les actions de sélection d'activité et d'acceptation nécessitent toujours la migration sur l'environnement de recette.
+- Le workflow CI vérifie maintenant la présence des 13 dossiers photos et des quatre fichiers légaux avant Gradle.
+- L'artifact CI 14630957608 a été téléchargé et inspecté : l'archive contient le fichier naxa-services-debug.apk (12 052 148 octets). Son SHA-256 calculé après extraction est c230f15227604169a48774220ff804ae951dc59590f67519e57370edc8fc71a4.
+
+Ces vérifications ne remplacent pas l'installation sur un téléphone, l'essai des parcours par rôle, la migration sur Supabase isolé, les tests RLS et les essais de restauration/synchronisation hors connexion.
