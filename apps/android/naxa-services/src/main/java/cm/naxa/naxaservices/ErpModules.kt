@@ -496,14 +496,18 @@ internal fun OrganizationWorkspaceContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle(title, "Une organisation, plusieurs niveaux de gestion, des périmètres strictement séparés.")
-            LocalOnlyNotice("Les modifications sont des brouillons locaux. L’activation contractuelle et les droits définitifs relèvent du serveur.")
+            if (route == AppRoute.ORGANIZATION) {
+                LocalOnlyNotice("Le profil et le modèle sont enregistrés côté serveur. Les nouveaux sites et postes ajoutés depuis les autres onglets restent des brouillons locaux.")
+            } else {
+                LocalOnlyNotice("Les nouveaux sites et postes sont préparés localement. Leur activation et les droits définitifs relèvent du serveur.")
+            }
         }
         if (route == AppRoute.ORGANIZATION) {
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                         Text("Profil de l’organisation", fontWeight = FontWeight.Bold)
-                        OutlinedTextField(displayName, { displayName = it }, Modifier.fillMaxWidth(), label = { Text("Nom commercial") }, singleLine = true)
+                        OutlinedTextField(displayName, { displayName = it }, Modifier.fillMaxWidth(), label = { Text("Nom commercial") }, singleLine = true, enabled = canManageNetwork)
                         Text("Choisir le modèle d’exploitation", fontWeight = FontWeight.SemiBold)
                         if (!canManageNetwork) {
                             Text("Le modèle d’exploitation est administré par le Promoteur de l’organisation.", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -792,4 +796,4 @@ private fun AuthSession.roleCanManageNetwork(): Boolean =
     account.roleCode == "promoter"
 
 private fun AuthSession.roleCanManageWorkstations(): Boolean =
-    account.roleCode in setOf("promoter", "network_manager", "site_manager", "workstation_manager")
+    account.roleCode in setOf("promoter", "network_manager", "site_manager")
