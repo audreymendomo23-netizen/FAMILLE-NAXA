@@ -86,6 +86,28 @@ async function actorContext(token: string): Promise<Actor | null> {
   const account = accounts?.[0];
   if (!account || account.status !== "active" || typeof account.id !== "string") return null;
 
+  // Match the Supabase JWT session to a live, non-revoked NAXA device.
+  // This keeps the Edge gateway aligned with ns_current_account_id() in SQL.
+  const jwtParts = token.split(".");
+  if (jwtParts.length !== 3) return null;
+  let claims: Json;
+  try {
+    const encoded = jwtParts[1].replace(/-/g, "+").replace(/_/g, "/");
+    claims = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, "="))) as Json;
+  } catch {
+    return null;
+  }
+  const sessionId = typeof claims.session_id === "string" ? claims.session_id : "";
+  if (!sessionId) return null;
+  const devices = await rest(query("ns_devices", {
+    select: "id",
+    account_id: "eq." + account.id,
+    session_id: "eq." + sessionId,
+    revoked_at: "is.null",
+    limit: "1",
+  })) as Json[];
+  if (!devices?.length) return null;
+
   const members = await rest(query("ns_members", {
     select: "id,org_id,role_code,status",
     account_id: "eq." + account.id, status: "eq.active", limit: "2",
@@ -273,6 +295,12 @@ async function spinWheel(actor: Actor, body: Json) {
   })) as Json[];
   if (!customers?.[0] || typeof customers[0].site_id !== "string") throw new ApiError(404, "CUSTOMER_NOT_FOUND");
   await requireSiteOperation(actor, customers[0].site_id);
+  const campaigns = await rest(query("ns_promotion_campaigns", {
+    select: "id,status",
+    id: "eq." + campaignId, org_id: "eq." + actor.orgId,
+    campaign_type: "eq.wheel", status: "eq.active", limit: "1",
+  })) as Json[];
+  if (!campaigns?.length) throw new ApiError(409, "WHEEL_CAMPAIGN_NOT_ACTIVE_OR_NOT_AUTHORIZED");
   return await rpc("ns_spin_promotion_wheel", {
     p_campaign_id: campaignId, p_customer_id: customerId, p_attempt_id: attemptId,
   });
