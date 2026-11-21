@@ -249,6 +249,17 @@ begin
     return jsonb_build_object('accepted', false, 'reason', 'self_referral');
   end if;
 
+  select * into v_existing
+  from public.ns_customer_referrals r
+  where r.org_id = p_org_id and r.referred_customer_id = p_referred_customer_id
+  for update;
+  if found then
+    if v_existing.referral_code_id = v_code.id then
+      return jsonb_build_object('accepted', true, 'idempotent', true, 'referral_id', v_existing.id, 'status', v_existing.status);
+    end if;
+    return jsonb_build_object('accepted', false, 'reason', 'customer_already_attributed');
+  end if;
+
   if exists (
     select 1
     from public.ns_sales s
@@ -263,17 +274,6 @@ begin
     having sum(p.amount_xaf) >= s.total_xaf
   ) then
     return jsonb_build_object('accepted', false, 'reason', 'first_paid_sale_already_recorded');
-  end if;
-
-  select * into v_existing
-  from public.ns_customer_referrals r
-  where r.org_id = p_org_id and r.referred_customer_id = p_referred_customer_id
-  for update;
-  if found then
-    if v_existing.referral_code_id = v_code.id then
-      return jsonb_build_object('accepted', true, 'idempotent', true, 'referral_id', v_existing.id, 'status', v_existing.status);
-    end if;
-    return jsonb_build_object('accepted', false, 'reason', 'customer_already_attributed');
   end if;
 
   insert into public.ns_customer_referrals(
