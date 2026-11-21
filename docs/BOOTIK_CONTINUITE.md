@@ -218,3 +218,13 @@ Une étape n'est VERT que si :
 4. Reprendre au premier point non terminé, sans recommencer un contrôle déjà vert sauf si une modification l'invalide.
 5. Ne pas réduire le périmètre validé pour accélérer une livraison.
 6. Ne pas modifier la branche principale, ne pas déployer, ne pas appliquer de migration à un environnement partagé et ne pas publier d'APK sans autorisation explicite du propriétaire du projet.
+
+
+## 11. Compléments de non-régression intégrés au cahier V1.1
+
+Les exigences historiques suivantes ont été conservées ou adaptées au nouveau périmètre :
+- Registre des appareils autorisés par organisation/site/caisse, notification au Promoteur lors d'un nouvel appareil et révocation/déconnexion à distance ; le plafond doit rester configurable pour ne pas bloquer les scénarios multi-caisses.
+- Rapprochement distinct des espèces et des encaissements Mobile Money marchand.
+- Mini-catalogue partageable, avec sélection explicite des articles et des informations publiables ; aucune donnée de coût, marge ou client n'est exposée.
+- Recherche locale fluide sur au moins 5 000 fiches et scan code-barres hors connexion dans la recette de référence.
+- Les autres fonctionnalités historiques identifiées dans la section 4 du présent document restent couvertes par les critères de non-régression du cahier des charges.
