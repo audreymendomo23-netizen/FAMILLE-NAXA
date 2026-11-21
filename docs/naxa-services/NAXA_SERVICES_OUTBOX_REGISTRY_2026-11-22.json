@@ -1,0 +1,3102 @@
+{
+  "title": "NAXA SERVICES — registre exhaustif des 55 points d'émission d'outbox",
+  "version": "1.0",
+  "date": "2026-11-22",
+  "repository": "audreymendomo23-netizen/FAMILLE-NAXA",
+  "branch": "work/naxa-services-completion-20261120",
+  "audited_application_head": "ada9bc2fe4986925a6afcc07238c0bbdc11f2073",
+  "source_file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+  "source_callsite_count": 55,
+  "classified_callsite_count": 55,
+  "classification_counts": {
+    "REMOTE_MUTATION": 43,
+    "DERIVED_SERVER_LEDGER": 1,
+    "COMPOSITE_CHILD": 7,
+    "SERVER_AUTHORITATIVE_MIRROR": 1,
+    "API_DIRECT_MIRROR": 1,
+    "LEGACY_LOCAL_HELPER": 2
+  },
+  "current_coordinator_supported_action_codes": [
+    "inventory_item.created",
+    "inventory_item.import_updated",
+    "inventory_item.imported",
+    "inventory_item.supplier_whatsapp_updated",
+    "inventory_movement.created",
+    "inventory_movement.import_adjustment",
+    "inventory_movement.import_initial",
+    "purchase.ordered",
+    "purchase.receipt.confirmed",
+    "supplier.payment.recorded",
+    "supplier.saved"
+  ],
+  "protocol": {
+    "envelope_version": 1,
+    "event_id": "UUID generated once at enqueue; preserve across retries",
+    "app_id": "naxa-services",
+    "organization": "org_id required and revalidated server-side",
+    "site": "site_id required for site-scoped operations; null only for explicit org-level operations",
+    "workstation": "workstation_id optional and validated when present",
+    "actor": "derived from authenticated access token/server membership, never from client-supplied actor as authority",
+    "device": "registered installation resolved from authenticated session; persist device-scoped sequence for deterministic ordering",
+    "aggregate": "aggregate_type + stable aggregate_id; no raw SQL/table selector",
+    "action": "typed allowlisted action; action schema version 1",
+    "payload_hash": "canonical hash computed by server after normalization",
+    "receipt": "same transaction as business mutation; returned with event_id, action, aggregate ID, server ID/version, hash and applied_at",
+    "conflict": "financial/stock/time events are append-only; mutable master data use optimistic version; no last-write-wins for financial facts",
+    "retry": "network/timeout/429/5xx exponential backoff with jitter; 4xx validation/scope terminal; missing dependency blocked; never discard unacknowledged event"
+  },
+  "release_rule": "N1 is closed when every source callsite appears exactly once, each row has a classification and contract/disposition, all independent remote mutations define an allowlisted action/payload/scope/dependency/receipt/idempotency/conflict/retry/test set, and all derived/API-mirror/legacy events are explicitly excluded from standalone replay.",
+  "rows": [
+    {
+      "id": "OBX-001",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1295,
+        "method": "saveSupplier",
+        "aggregateType": "supplier",
+        "actionExpression": "\"supplier.saved\""
+      },
+      "action_codes": [
+        "supplier.saved"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "contract": {
+        "version": 1,
+        "handler": "save_supplier",
+        "source_of_truth": "Supplier master data (one organisation/site); UUID supplier.id shared local/server.",
+        "payload_fields": [
+          "supplier_id",
+          "org_id",
+          "site_id",
+          "name",
+          "phone",
+          "whatsapp",
+          "email",
+          "address",
+          "payment_terms_days",
+          "notes"
+        ],
+        "dependencies": [],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY; duplicate supplier name/code policy enforced by server",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-002",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1374,
+        "method": "createSupplierPurchase",
+        "aggregateType": "purchase",
+        "actionExpression": "\"purchase.ordered\""
+      },
+      "action_codes": [
+        "purchase.ordered"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "contract": {
+        "version": 1,
+        "handler": "create_supplier_purchase",
+        "source_of_truth": "Supplier purchase document and its ordered lines.",
+        "payload_fields": [
+          "purchase_id",
+          "idempotency_key",
+          "org_id",
+          "site_id",
+          "supplier_id",
+          "reference",
+          "supplier_invoice_number",
+          "lines[line_id,inventory_item_id,item_type,description,unit,quantity_ordered,unit_cost_xaf]",
+          "recoverable_tax_xaf",
+          "non_recoverable_tax_xaf",
+          "shipping_xaf",
+          "other_fees_xaf",
+          "due_at",
+          "notes"
+        ],
+        "dependencies": [
+          "supplier_id",
+          "every stock line inventory_item_id must resolve to a server-confirmed item on same org/site"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; immutable ordered document; changes require explicit amendment action",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-003",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1489,
+        "method": "receiveSupplierPurchaseLine",
+        "aggregateType": "purchase_receipt",
+        "actionExpression": "\"purchase.receipt.confirmed\""
+      },
+      "action_codes": [
+        "purchase.receipt.confirmed"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "contract": {
+        "version": 1,
+        "handler": "receive_supplier_purchase_line",
+        "source_of_truth": "Supplier receipt event; server purchase/line balances and accounting are authoritative after receipt.",
+        "payload_fields": [
+          "receipt_id",
+          "org_id",
+          "site_id",
+          "purchase_id",
+          "line_id",
+          "quantity",
+          "idempotency_key"
+        ],
+        "dependencies": [
+          "purchase_id and line_id already exist remotely",
+          "received quantity does not exceed remaining ordered quantity"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; concurrent partial receipts serialize against server remaining quantity",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-004",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1554,
+        "method": "recordSupplierPayment",
+        "aggregateType": "supplier_payment",
+        "actionExpression": "\"supplier.payment.recorded\""
+      },
+      "action_codes": [
+        "supplier.payment.recorded"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "contract": {
+        "version": 1,
+        "handler": "record_supplier_payment",
+        "source_of_truth": "Supplier payment ledger linked to supplier purchase and treasury session.",
+        "payload_fields": [
+          "payment_id",
+          "org_id",
+          "site_id",
+          "purchase_id",
+          "amount_xaf",
+          "payment_method",
+          "cash_session_id",
+          "payment_reference",
+          "idempotency_key"
+        ],
+        "dependencies": [
+          "purchase receipt exists remotely",
+          "cash_session_id must resolve to a server-open session when payment_method=cash"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; never merge or last-write-wins a payment",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-005",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1592,
+        "method": "postAccountingEntry",
+        "aggregateType": "accounting_entry",
+        "actionExpression": "\"accounting.entry.posted\""
+      },
+      "action_codes": [
+        "accounting.entry.posted"
+      ],
+      "classification": "DERIVED_SERVER_LEDGER",
+      "disposition": "DO_NOT_SEND",
+      "implementation_status": "EXCLUDED_FROM_GENERIC_ERP_REPLAY_BY_DESIGN",
+      "contract": {
+        "version": 1,
+        "handler": "Server-side ledger posting inside the canonical parent RPC; no accounting.entry.posted RPC.",
+        "source_of_truth": "Local derived accounting journal projection; server must derive its own ledger from accepted source transactions, not trust client-selected account labels.",
+        "payload_fields": [
+          "batch_id",
+          "source_type",
+          "source_id",
+          "event_code",
+          "debit_account",
+          "credit_account",
+          "amount_xaf",
+          "description",
+          "actor_member_id",
+          "occurred_at"
+        ],
+        "dependencies": [],
+        "scope": {
+          "org_id": "retained for local audit/cache context",
+          "site_id": "retained when present; not an authorization source"
+        },
+        "actor": "Local actor retained for audit where available; any server action must derive authorization actor from its authenticated session.",
+        "device": "Local event remains device-scoped; no server replay.",
+        "idempotency": "No remote idempotency receipt because no remote mutation is issued. Keep local deduplication according to the source aggregate.",
+        "receipt": "No server receipt expected; this row must never be labelled server-synced by the ERP coordinator.",
+        "conflict": "No remote conflict resolution; parent canonical server transaction owns any replicated effect.",
+        "retry": "Do not retry to ERP; local retention and local diagnostics only.",
+        "tests": [
+          "event is classified and not selected by the sync coordinator",
+          "no duplicate remote mutation is generated by the canonical parent/API pathway"
+        ],
+        "reason": "This event is emitted by postAccountingEntry() after local business mutations. Sending it separately would trust client-side symbolic accounts and double-post entries. The remote ledger is derived atomically from the canonical accepted sale/purchase/payment/expense/charge operation."
+      }
+    },
+    {
+      "id": "OBX-006",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1601,
+        "method": "saveSupplierWhatsApp",
+        "aggregateType": "inventory_item",
+        "actionExpression": "\"inventory_item.supplier_whatsapp_updated\""
+      },
+      "action_codes": [
+        "inventory_item.supplier_whatsapp_updated"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "contract": {
+        "version": 1,
+        "handler": "save_inventory_item",
+        "source_of_truth": "Inventory item master record; WhatsApp contact is item/supplier metadata, not an automated message instruction.",
+        "payload_fields": [
+          "inventory_item_id",
+          "org_id",
+          "site_id",
+          "sku",
+          "name",
+          "unit",
+          "reorder_level",
+          "supplier_whatsapp"
+        ],
+        "dependencies": [
+          "inventory_item_id exists remotely within same org/site"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "OPTIMISTIC_VERSIONED; never silently overwrite. Return conflict with server/client versions; user or approved business rule resolves.",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-007",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1621,
+        "method": "saveRecurringCharge",
+        "aggregateType": "recurring_charge",
+        "actionExpression": "\"recurring_charge.saved\""
+      },
+      "action_codes": [
+        "recurring_charge.saved"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "upsert_recurring_charge",
+        "source_of_truth": "Recurring charge schedule and its current state.",
+        "payload_fields": [
+          "charge_id",
+          "org_id",
+          "site_id",
+          "name",
+          "category",
+          "amount_xaf",
+          "recurrence",
+          "next_due_at",
+          "reminder_days",
+          "active",
+          "created_by_member_id",
+          "created_at",
+          "updated_at"
+        ],
+        "dependencies": [],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY; server revision controls concurrent edits",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-008",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1654,
+        "method": "recordRecurringChargePayment",
+        "aggregateType": "recurring_charge",
+        "actionExpression": "\"recurring_charge.payment_recorded\""
+      },
+      "action_codes": [
+        "recurring_charge.payment_recorded"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "record_recurring_charge_payment",
+        "source_of_truth": "Charge payment ledger; each partial/full payment is immutable; charge next due date is server-derived.",
+        "payload_fields": [
+          "payment_id",
+          "charge_id",
+          "org_id",
+          "site_id",
+          "reference_due_at",
+          "paid_at",
+          "amount_xaf"
+        ],
+        "dependencies": [
+          "recurring_charge exists remotely",
+          "remaining balance for this due cycle is at least amount_xaf"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; server serializes partial payments and advances recurrence only after full settlement",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-009",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1668,
+        "method": "deactivateRecurringCharge",
+        "aggregateType": "recurring_charge",
+        "actionExpression": "\"recurring_charge.deactivated\""
+      },
+      "action_codes": [
+        "recurring_charge.deactivated"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "deactivate_recurring_charge",
+        "source_of_truth": "Recurring charge schedule and versioned active state.",
+        "payload_fields": [
+          "charge_id",
+          "org_id",
+          "site_id",
+          "deactivated_at",
+          "reason_or_actor_context"
+        ],
+        "dependencies": [
+          "recurring_charge exists remotely"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY; duplicate deactivation idempotent",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-010",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1720,
+        "method": "saveLoyaltyProgram",
+        "aggregateType": "loyalty_program",
+        "actionExpression": "\"loyalty_program.updated\""
+      },
+      "action_codes": [
+        "loyalty_program.updated"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "upsert_loyalty_program",
+        "source_of_truth": "Organisation-level activity loyalty policy; site_id is intentionally null.",
+        "payload_fields": [
+          "program_id",
+          "org_id",
+          "activity_profile",
+          "program_code",
+          "name",
+          "description",
+          "metric_code",
+          "unit_amount_xaf",
+          "target_value",
+          "reward_description",
+          "window_days",
+          "active",
+          "updated_at"
+        ],
+        "dependencies": [],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "null; organization-scoped action",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY; promoter/owner permission required",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-011",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1764,
+        "method": "recordLoyaltyActivity",
+        "aggregateType": "loyalty_activity",
+        "actionExpression": "\"loyalty_activity.recorded\""
+      },
+      "action_codes": [
+        "loyalty_activity.recorded"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "record_loyalty_activity",
+        "source_of_truth": "Loyalty activity ledger; server recomputes metric delta and reward waves from approved program and confirmed qualifying activity.",
+        "payload_fields": [
+          "activity_event_id",
+          "org_id",
+          "site_id",
+          "program_id",
+          "customer_id",
+          "amount_xaf",
+          "occurred_at"
+        ],
+        "dependencies": [
+          "loyalty_program exists and active",
+          "customer belongs to same org/site",
+          "qualifying paid sale/service reference should be attached when caisse integration is enabled"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; same source sale/activity cannot earn twice",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-012",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1771,
+        "method": "redeemLoyaltyReward",
+        "aggregateType": "loyalty_reward",
+        "actionExpression": "\"loyalty_reward.redeemed\""
+      },
+      "action_codes": [
+        "loyalty_reward.redeemed"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "canonical_parent_action": "redeem_loyalty_reward",
+      "contract": {
+        "version": 1,
+        "handler": "redeem_loyalty_reward",
+        "source_of_truth": "Loyalty reward ledger and redemption state.",
+        "payload_fields": [
+          "reward_event_id",
+          "org_id",
+          "site_id",
+          "program_id",
+          "customer_id",
+          "wave_number",
+          "related_event_id",
+          "redemption_status",
+          "redeemed_at"
+        ],
+        "dependencies": [
+          "reward must exist and be available",
+          "customer and program belong to same org"
+        ],
+        "scope": {
+          "org_id": "required",
+          "site_id": "required",
+          "workstation_id": "optional"
+        },
+        "actor": "Derived from the authenticated server session.",
+        "device": "Resolve registered installation/device from authenticated session; immutable device sequence.",
+        "idempotency": "Stable event_id UUID; one redemption per reward event; duplicate returns same receipt.",
+        "receipt": "Atomic receipt with reward event ID, new state/revision, applied_at and payload hash.",
+        "conflict": "APPEND_ONLY; reject if reward is not available or has already been redeemed by another event.",
+        "retry": "Network/429/5xx backoff same event id; 4xx terminal; missing reward blocked.",
+        "tests": [
+          "available reward redeemed",
+          "already redeemed rejected/idempotent duplicate",
+          "cross-tenant/site denied",
+          "concurrent redemption yields exactly one winner"
+        ]
+      }
+    },
+    {
+      "id": "OBX-013",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1814,
+        "method": "createPressingOrder",
+        "aggregateType": "pressing_order",
+        "actionExpression": "\"pressing_order.created\""
+      },
+      "action_codes": [
+        "pressing_order.created"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "create_pressing_order",
+        "source_of_truth": "Pressing ticket/order table and its status history.",
+        "payload_fields": [
+          "order_id",
+          "org_id",
+          "site_id",
+          "workstation_id",
+          "ticket_number",
+          "customer_name",
+          "customer_phone",
+          "items_summary",
+          "total_xaf",
+          "deposit_xaf",
+          "promised_at",
+          "status",
+          "created_at"
+        ],
+        "dependencies": [
+          "workstation_id if present must belong to site",
+          "ticket number unique within the organisation"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional; must belong to site and member scope"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; ticket is immutable after creation except explicit status/adjustment commands",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-014",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1843,
+        "method": "advancePressingOrder",
+        "aggregateType": "pressing_order",
+        "actionExpression": "\"pressing_order.status_changed:\" + next"
+      },
+      "action_codes": [
+        "pressing_order.status_changed"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "transition_pressing_order",
+        "source_of_truth": "Pressing order and append-only LocalPressingStatusEvent history.",
+        "payload_fields": [
+          "order_id",
+          "org_id",
+          "site_id",
+          "from_status",
+          "to_status",
+          "reason",
+          "expected_version",
+          "transitioned_at"
+        ],
+        "dependencies": [
+          "pressing_order exists",
+          "transition allowed by pressing lifecycle"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY_VERSIONED; server validates state machine and expected version",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-015",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1886,
+        "method": "createAppointment",
+        "aggregateType": "appointment",
+        "actionExpression": "\"appointment.created\""
+      },
+      "action_codes": [
+        "appointment.created"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "create_appointment",
+        "source_of_truth": "Appointment schedule.",
+        "payload_fields": [
+          "appointment_id",
+          "org_id",
+          "site_id",
+          "workstation_id",
+          "customer_reference_or_name",
+          "service_reference_or_name",
+          "assigned_member_id",
+          "starts_at",
+          "ends_at",
+          "deposit_xaf",
+          "status",
+          "created_at"
+        ],
+        "dependencies": [
+          "site active",
+          "workstation and assigned member belong to site",
+          "no overlapping appointment for workstation/member"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional; must belong to site and member scope"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "SLOT_UNIQUENESS; server rechecks overlap at commit",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-016",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1912,
+        "method": "openCashSession",
+        "aggregateType": "cash_session",
+        "actionExpression": "\"cash_session.opened\""
+      },
+      "action_codes": [
+        "cash_session.opened"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "open_cash_session",
+        "source_of_truth": "Cash register session and authoritative opening float.",
+        "payload_fields": [
+          "cash_session_id",
+          "org_id",
+          "site_id",
+          "register_id",
+          "register_name",
+          "opening_float_xaf",
+          "opened_by_member_id",
+          "opened_at"
+        ],
+        "dependencies": [
+          "register belongs to site",
+          "no other open session for same register"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY_STATE_MACHINE; one open session per register",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-017",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1984,
+        "method": "recordSale",
+        "aggregateType": "inventory_movement",
+        "actionExpression": "\"inventory_movement.sale_out\""
+      },
+      "action_codes": [
+        "inventory_movement.sale_out"
+      ],
+      "classification": "COMPOSITE_CHILD",
+      "disposition": "DO_NOT_SEND_INDEPENDENTLY",
+      "implementation_status": "CONTRACTED_AS_CHILD_OF_PARENT_MUTATION",
+      "canonical_parent_action": "sale.created",
+      "contract": {
+        "version": 1,
+        "handler": "Included atomically in sale.created",
+        "source_of_truth": "Server sale posting derives its inventory movement from the sale lines and cost snapshot.",
+        "payload_fields": [
+          "movement_id",
+          "inventory_item_id",
+          "quantity_delta",
+          "movement_type",
+          "reason",
+          "sale_id"
+        ],
+        "dependencies": [
+          "sale.created accepted and paid/confirmed",
+          "stock item mapping present"
+        ],
+        "scope": {
+          "org_id": "inherited from parent; server revalidates",
+          "site_id": "inherited from parent/explicit source+destination sites",
+          "workstation_id": "inherited where applicable"
+        },
+        "actor": "Inherited from the authenticated actor on the parent command; server records the actor for each resulting row.",
+        "device": "Inherits parent event/device sequence; no independent device operation.",
+        "idempotency": "Parent event_id is the only idempotency key; child row IDs are stable and unique within org.",
+        "receipt": "The parent transaction receipt lists child IDs and versions; no separate child receipt.",
+        "conflict": "Resolve at the parent aggregate. Child projections are created in the same transaction or none are.",
+        "retry": "Retry parent with same event_id; never retry the child as a standalone event.",
+        "tests": [
+          "parent and all children commit atomically",
+          "retry creates no duplicate child",
+          "failed parent leaves no child mutation",
+          "scope/dependency violation rejects the whole command"
+        ],
+        "qualification_note": "This movement is inserted in the same local transaction as sale.created; it must be created server-side within sale posting, never replayed independently."
+      }
+    },
+    {
+      "id": "OBX-018",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 1987,
+        "method": "recordSale",
+        "aggregateType": "sale",
+        "actionExpression": "\"sale.created\""
+      },
+      "action_codes": [
+        "sale.created"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "record_sale",
+        "source_of_truth": "Sale record, tender state and associated line/cost snapshot.",
+        "payload_fields": [
+          "sale_id",
+          "org_id",
+          "site_id",
+          "cash_session_id",
+          "sale_number",
+          "description",
+          "total_xaf",
+          "payment_method",
+          "status",
+          "inventory_item_id",
+          "stock_quantity",
+          "unit_cost_at_sale_xaf",
+          "cost_of_goods_xaf",
+          "cost_snapshot_complete",
+          "created_at"
+        ],
+        "dependencies": [
+          "cash_session exists remotely and is open",
+          "inventory_item exists remotely if stock is sold",
+          "mobile_money stays pending until signed provider confirmation"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; one sale ID and one server posting",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-019",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2028,
+        "method": "cancelPendingMobileMoneySale",
+        "aggregateType": "sale",
+        "actionExpression": "\"sale.mobile_money_cancelled\""
+      },
+      "action_codes": [
+        "sale.mobile_money_cancelled"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "cancel_pending_mobile_money_sale",
+        "source_of_truth": "Pending sale state; no money received until provider confirmation is verified.",
+        "payload_fields": [
+          "sale_id",
+          "org_id",
+          "site_id",
+          "cancelled_at",
+          "reason",
+          "expected_status"
+        ],
+        "dependencies": [
+          "sale exists remotely with payment_method=mobile_money and status=pending"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_STATE_MACHINE; cancellation only before payment confirmation",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-020",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2072,
+        "method": "applyServerConfirmedMobileMoneySale",
+        "aggregateType": "inventory_movement",
+        "actionExpression": "\"inventory_movement.mobile_money_sale_out\""
+      },
+      "action_codes": [
+        "inventory_movement.mobile_money_sale_out"
+      ],
+      "classification": "COMPOSITE_CHILD",
+      "disposition": "DO_NOT_SEND_INDEPENDENTLY",
+      "implementation_status": "CONTRACTED_AS_CHILD_OF_PARENT_MUTATION",
+      "canonical_parent_action": "sale.payment_confirmed_server",
+      "contract": {
+        "version": 1,
+        "handler": "Included atomically in sale.payment_confirmed_server",
+        "source_of_truth": "Server-confirmed Mobile Money sale; movement is a server-side consequence.",
+        "payload_fields": [
+          "movement_id",
+          "sale_id",
+          "inventory_item_id",
+          "quantity_delta",
+          "cost_snapshot"
+        ],
+        "dependencies": [
+          "verified provider webhook has confirmed matching amount/currency/reference",
+          "sale is still pending"
+        ],
+        "scope": {
+          "org_id": "inherited from parent; server revalidates",
+          "site_id": "inherited from parent/explicit source+destination sites",
+          "workstation_id": "inherited where applicable"
+        },
+        "actor": "Inherited from the authenticated actor on the parent command; server records the actor for each resulting row.",
+        "device": "Inherits parent event/device sequence; no independent device operation.",
+        "idempotency": "Parent event_id is the only idempotency key; child row IDs are stable and unique within org.",
+        "receipt": "The parent transaction receipt lists child IDs and versions; no separate child receipt.",
+        "conflict": "Resolve at the parent aggregate. Child projections are created in the same transaction or none are.",
+        "retry": "Retry parent with same event_id; never retry the child as a standalone event.",
+        "tests": [
+          "parent and all children commit atomically",
+          "retry creates no duplicate child",
+          "failed parent leaves no child mutation",
+          "scope/dependency violation rejects the whole command"
+        ],
+        "qualification_note": "The local method applies an already server-confirmed payment result; the stock out must be produced by the authoritative payment-confirmation transaction."
+      }
+    },
+    {
+      "id": "OBX-021",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2091,
+        "method": "applyServerConfirmedMobileMoneySale",
+        "aggregateType": "sale",
+        "actionExpression": "\"sale.payment_confirmed_server\""
+      },
+      "action_codes": [
+        "sale.payment_confirmed_server"
+      ],
+      "classification": "SERVER_AUTHORITATIVE_MIRROR",
+      "disposition": "DO_NOT_ECHO_TO_SERVER",
+      "implementation_status": "EXCLUDED_FROM_GENERIC_ERP_REPLAY_BY_DESIGN",
+      "contract": {
+        "version": 1,
+        "handler": "Mobile Money webhook/Edge confirmation owns this transition; Android only mirrors the confirmed state.",
+        "source_of_truth": "Server-side signed Mobile Money confirmation and sale ledger; the Android method receives/applies this authoritative result locally.",
+        "payload_fields": [
+          "sale_id",
+          "provider",
+          "provider_reference",
+          "amount_xaf",
+          "currency",
+          "confirmed_at",
+          "server_transaction_id"
+        ],
+        "dependencies": [],
+        "scope": {
+          "org_id": "retained for local audit/cache context",
+          "site_id": "retained when present; not an authorization source"
+        },
+        "actor": "Local actor retained for audit where available; any server action must derive authorization actor from its authenticated session.",
+        "device": "Local event remains device-scoped; no server replay.",
+        "idempotency": "No remote idempotency receipt because no remote mutation is issued. Keep local deduplication according to the source aggregate.",
+        "receipt": "No server receipt expected; this row must never be labelled server-synced by the ERP coordinator.",
+        "conflict": "No remote conflict resolution; parent canonical server transaction owns any replicated effect.",
+        "retry": "Do not retry to ERP; local retention and local diagnostics only.",
+        "tests": [
+          "event is classified and not selected by the sync coordinator",
+          "no duplicate remote mutation is generated by the canonical parent/API pathway"
+        ],
+        "reason": "This action is a local application of server confirmation. Echoing it as a client mutation would falsely claim authority over provider payment confirmation."
+      }
+    },
+    {
+      "id": "OBX-022",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2124,
+        "method": "addExpense",
+        "aggregateType": "expense",
+        "actionExpression": "\"expense.created\""
+      },
+      "action_codes": [
+        "expense.created"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "record_expense",
+        "source_of_truth": "Expense ledger linked to a cash session or an explicitly supported non-cash treasury account.",
+        "payload_fields": [
+          "expense_id",
+          "org_id",
+          "site_id",
+          "cash_session_id",
+          "category",
+          "description",
+          "amount_xaf",
+          "occurred_at"
+        ],
+        "dependencies": [
+          "cash_session exists remotely and open when cash",
+          "category/policy permits expense"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; corrections via reversal/adjustment, never overwrite",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-023",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2152,
+        "method": "closeCashSession",
+        "aggregateType": "cash_session",
+        "actionExpression": "\"cash_session.closed\""
+      },
+      "action_codes": [
+        "cash_session.closed"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "close_cash_session",
+        "source_of_truth": "Cash session close count, variance and close audit.",
+        "payload_fields": [
+          "cash_session_id",
+          "org_id",
+          "site_id",
+          "closed_by_member_id",
+          "closed_at",
+          "counted_close_xaf",
+          "variance_xaf",
+          "variance_reason"
+        ],
+        "dependencies": [
+          "cash_session open remotely",
+          "all accepted cash movements for session applied"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY_STATE_MACHINE; server computes expected balance and variance",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-024",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2166,
+        "method": "saveOrganizationProfile",
+        "aggregateType": "organization",
+        "actionExpression": "\"organization.profile_saved\""
+      },
+      "action_codes": [
+        "organization.profile_saved"
+      ],
+      "classification": "API_DIRECT_MIRROR",
+      "disposition": "DO_NOT_SEND",
+      "implementation_status": "EXCLUDED_FROM_GENERIC_ERP_REPLAY_BY_DESIGN",
+      "contract": {
+        "version": 1,
+        "handler": "AuthApi.updateOrganizationProfile (existing direct endpoint)",
+        "source_of_truth": "Auth/organization profile is authoritative through AuthApi.updateOrganizationProfile; LocalOrganizationProfile is a UI cache and offline draft.",
+        "payload_fields": [
+          "org_id",
+          "display_name",
+          "business_mode",
+          "default_locale",
+          "updated_at"
+        ],
+        "dependencies": [],
+        "scope": {
+          "org_id": "required; organisation-level action",
+          "site_id": "null"
+        },
+        "actor": "Local actor retained for audit where available; any server action must derive authorization actor from its authenticated session.",
+        "device": "Local event remains device-scoped; no server replay.",
+        "idempotency": "No remote idempotency receipt because no remote mutation is issued. Keep local deduplication according to the source aggregate.",
+        "receipt": "No server receipt expected; this row must never be labelled server-synced by the ERP coordinator.",
+        "conflict": "No remote conflict resolution; parent canonical server transaction owns any replicated effect.",
+        "retry": "Do not retry to ERP; local retention and local diagnostics only.",
+        "tests": [
+          "AuthApi endpoint acknowledged before server-confirmed UI state",
+          "fallback is explicitly local draft and never marked server-confirmed"
+        ],
+        "reason": "The active UI invokes the direct authenticated AuthApi endpoint first; Room write mirrors success or preserves a clearly labelled local-only draft after failure. This outbox pointer is not an ERP replay contract."
+      }
+    },
+    {
+      "id": "OBX-025",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2173,
+        "method": "createLocalSite",
+        "aggregateType": "site",
+        "actionExpression": "\"site.created\""
+      },
+      "action_codes": [
+        "site.created"
+      ],
+      "classification": "LEGACY_LOCAL_HELPER",
+      "disposition": "DO_NOT_SEND",
+      "implementation_status": "EXCLUDED_FROM_GENERIC_ERP_REPLAY_BY_DESIGN",
+      "contract": {
+        "version": 1,
+        "handler": "AuthApi.createSite (existing direct endpoint)",
+        "source_of_truth": "Server-managed site directory via AuthApi.createSite; LocalSite legacy cache helper has no active UI caller.",
+        "payload_fields": [
+          "site_id",
+          "org_id",
+          "code",
+          "name",
+          "address_label",
+          "phone_contact",
+          "status"
+        ],
+        "dependencies": [],
+        "scope": {
+          "org_id": "retained for local audit/cache context",
+          "site_id": "retained when present; not an authorization source"
+        },
+        "actor": "Local actor retained for audit where available; any server action must derive authorization actor from its authenticated session.",
+        "device": "Local event remains device-scoped; no server replay.",
+        "idempotency": "No remote idempotency receipt because no remote mutation is issued. Keep local deduplication according to the source aggregate.",
+        "receipt": "No server receipt expected; this row must never be labelled server-synced by the ERP coordinator.",
+        "conflict": "No remote conflict resolution; parent canonical server transaction owns any replicated effect.",
+        "retry": "Do not retry to ERP; local retention and local diagnostics only.",
+        "tests": [
+          "static repository scan confirms there is no active createLocalSite caller",
+          "AuthApi.createSite is the sole live site-create UI path"
+        ],
+        "reason": "The current site creation screen calls AuthApi.createSite directly and does not call createLocalSite; the latter is a legacy local helper. Its queue event must not be mistaken for a valid API mutation."
+      }
+    },
+    {
+      "id": "OBX-026",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2227,
+        "method": "createLocalWorkstation",
+        "aggregateType": "workstation",
+        "actionExpression": "\"workstation.created\""
+      },
+      "action_codes": [
+        "workstation.created"
+      ],
+      "classification": "LEGACY_LOCAL_HELPER",
+      "disposition": "DO_NOT_SEND",
+      "implementation_status": "EXCLUDED_FROM_GENERIC_ERP_REPLAY_BY_DESIGN",
+      "contract": {
+        "version": 1,
+        "handler": "AuthApi.createWorkstation (existing direct endpoint)",
+        "source_of_truth": "Server-managed workstation directory via AuthApi.createWorkstation; LocalWorkstation local draft helper has no active UI caller.",
+        "payload_fields": [
+          "workstation_id",
+          "org_id",
+          "site_id",
+          "code",
+          "name",
+          "kind",
+          "capacity",
+          "status"
+        ],
+        "dependencies": [],
+        "scope": {
+          "org_id": "retained for local audit/cache context",
+          "site_id": "retained when present; not an authorization source"
+        },
+        "actor": "Local actor retained for audit where available; any server action must derive authorization actor from its authenticated session.",
+        "device": "Local event remains device-scoped; no server replay.",
+        "idempotency": "No remote idempotency receipt because no remote mutation is issued. Keep local deduplication according to the source aggregate.",
+        "receipt": "No server receipt expected; this row must never be labelled server-synced by the ERP coordinator.",
+        "conflict": "No remote conflict resolution; parent canonical server transaction owns any replicated effect.",
+        "retry": "Do not retry to ERP; local retention and local diagnostics only.",
+        "tests": [
+          "static repository scan confirms there is no active createLocalWorkstation caller",
+          "AuthApi.createWorkstation is the sole live workstation-create UI path"
+        ],
+        "reason": "The current workstation screen calls AuthApi.createWorkstation directly and caches the returned server row; createLocalWorkstation is not called by active UI."
+      }
+    },
+    {
+      "id": "OBX-027",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2269,
+        "method": "createLocalService",
+        "aggregateType": "service",
+        "actionExpression": "\"service.created\""
+      },
+      "action_codes": [
+        "service.created"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "create_service",
+        "source_of_truth": "Service catalogue entry and activity configuration.",
+        "payload_fields": [
+          "service_id",
+          "org_id",
+          "site_id",
+          "code",
+          "activity",
+          "name",
+          "duration_minutes",
+          "price_xaf",
+          "active",
+          "category",
+          "description",
+          "provider_member_ids",
+          "required_workstation_kinds",
+          "package_sessions"
+        ],
+        "dependencies": [
+          "site exists",
+          "provider members and required workstation kinds belong to same site"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY; unique service code per site",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-028",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2318,
+        "method": "createLocalCustomer",
+        "aggregateType": "customer",
+        "actionExpression": "\"customer.created\""
+      },
+      "action_codes": [
+        "customer.created"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "upsert_customer",
+        "source_of_truth": "Customer master and consent record.",
+        "payload_fields": [
+          "customer_id",
+          "org_id",
+          "site_id",
+          "display_name",
+          "phone_contact",
+          "contact_consent",
+          "address_line",
+          "neighborhood",
+          "landmark",
+          "location_if_location_consent",
+          "notes_private_only_if_role_authorized"
+        ],
+        "dependencies": [
+          "site active",
+          "consent policy checked",
+          "precise location omitted unless location_consent_at is present"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY; customer merge/deduplication requires explicit review",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-029",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2369,
+        "method": "updateLocalCustomer",
+        "aggregateType": "customer",
+        "actionExpression": "\"customer.updated\""
+      },
+      "action_codes": [
+        "customer.updated"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "upsert_customer",
+        "source_of_truth": "Customer master and consent record.",
+        "payload_fields": [
+          "customer_id",
+          "org_id",
+          "site_id",
+          "display_name",
+          "phone_contact",
+          "contact_consent",
+          "address_line",
+          "neighborhood",
+          "landmark",
+          "location_if_location_consent",
+          "notes_private_only_if_role_authorized"
+        ],
+        "dependencies": [
+          "customer exists in same org/site",
+          "location payload only with explicit consent"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY; concurrent edits return conflict, no silent overwrite",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-030",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2418,
+        "method": "createCustomerFollowUp",
+        "aggregateType": "customer_followup",
+        "actionExpression": "\"customer_followup.created\""
+      },
+      "action_codes": [
+        "customer_followup.created"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "create_customer_followup",
+        "source_of_truth": "CRM follow-up schedule; no message is sent by this operation.",
+        "payload_fields": [
+          "followup_id",
+          "org_id",
+          "site_id",
+          "customer_id",
+          "title",
+          "frequency",
+          "channel",
+          "notes",
+          "next_due_at",
+          "status",
+          "created_at"
+        ],
+        "dependencies": [
+          "customer exists same org/site",
+          "whatsapp/phone channel only records planned channel; no outbound message without user action/authorization"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY; schedule revision controls changes",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-031",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2447,
+        "method": "completeCustomerFollowUp",
+        "aggregateType": "customer_followup",
+        "actionExpression": "\"customer_followup.completed\""
+      },
+      "action_codes": [
+        "customer_followup.completed"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "complete_customer_followup",
+        "source_of_truth": "CRM follow-up schedule and completion ledger.",
+        "payload_fields": [
+          "followup_id",
+          "org_id",
+          "site_id",
+          "completed_at",
+          "next_due_at_if_repeating",
+          "completion_note"
+        ],
+        "dependencies": [
+          "follow-up exists and active"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY_COMPLETION; same follow-up cycle cannot complete twice",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-032",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2458,
+        "method": "createInventoryItem",
+        "aggregateType": "inventory_item",
+        "actionExpression": "\"inventory_item.created\""
+      },
+      "action_codes": [
+        "inventory_item.created"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "contract": {
+        "version": 1,
+        "handler": "save_inventory_item",
+        "source_of_truth": "Inventory item master (quantity on hand comes from movement ledger, not master snapshot).",
+        "payload_fields": [
+          "inventory_item_id",
+          "org_id",
+          "site_id",
+          "sku",
+          "name",
+          "unit",
+          "reorder_level",
+          "supplier_whatsapp"
+        ],
+        "dependencies": [
+          "UUID stable",
+          "SKU uniqueness policy applied within site"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "OPTIMISTIC_VERSIONED; never silently overwrite. Return conflict with server/client versions; user or approved business rule resolves.",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-033",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2517,
+        "method": "importInventoryBatch",
+        "aggregateType": "inventory_movement",
+        "actionExpression": "\"inventory_movement.import_adjustment\""
+      },
+      "action_codes": [
+        "inventory_movement.import_adjustment"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "contract": {
+        "version": 1,
+        "handler": "record_inventory_movement",
+        "source_of_truth": "Imported adjustment movement; never overwrite historical movements.",
+        "payload_fields": [
+          "movement_id",
+          "org_id",
+          "site_id",
+          "inventory_item_id",
+          "movement_type",
+          "quantity_delta",
+          "reason",
+          "import_batch_id"
+        ],
+        "dependencies": [
+          "inventory_item mapping exists",
+          "import batch and row validation passed"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; import row idempotency per batch and row ID",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-034",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2534,
+        "method": "importInventoryBatch",
+        "aggregateType": "inventory_valuation",
+        "actionExpression": "\"inventory_valuation.import_updated\""
+      },
+      "action_codes": [
+        "inventory_valuation.import_updated"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "upsert_inventory_valuation",
+        "source_of_truth": "Inventory valuation is a distinct value entity (unit cost and selling price); not represented by inventory_item snapshot.",
+        "payload_fields": [
+          "valuation_id",
+          "inventory_item_id",
+          "org_id",
+          "site_id",
+          "unit_cost_xaf",
+          "selling_price_xaf",
+          "updated_at",
+          "import_batch_id"
+        ],
+        "dependencies": [
+          "inventory_item exists same org/site"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY; reject stale revision or explicit conflict",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-035",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2536,
+        "method": "importInventoryBatch",
+        "aggregateType": "inventory_item",
+        "actionExpression": "\"inventory_item.import_updated\""
+      },
+      "action_codes": [
+        "inventory_item.import_updated"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "contract": {
+        "version": 1,
+        "handler": "save_inventory_item",
+        "source_of_truth": "Inventory item master metadata.",
+        "payload_fields": [
+          "inventory_item_id",
+          "org_id",
+          "site_id",
+          "sku",
+          "name",
+          "unit",
+          "reorder_level",
+          "supplier_whatsapp"
+        ],
+        "dependencies": [
+          "inventory_item exists same org/site"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "OPTIMISTIC_VERSIONED; never silently overwrite. Return conflict with server/client versions; user or approved business rule resolves.",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-036",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2552,
+        "method": "importInventoryBatch",
+        "aggregateType": "inventory_item",
+        "actionExpression": "\"inventory_item.imported\""
+      },
+      "action_codes": [
+        "inventory_item.imported"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "contract": {
+        "version": 1,
+        "handler": "save_inventory_item",
+        "source_of_truth": "Inventory item master metadata.",
+        "payload_fields": [
+          "inventory_item_id",
+          "org_id",
+          "site_id",
+          "sku",
+          "name",
+          "unit",
+          "reorder_level",
+          "supplier_whatsapp"
+        ],
+        "dependencies": [
+          "UUID stable; duplicate batch rows rejected/deduped"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "OPTIMISTIC_VERSIONED; never silently overwrite. Return conflict with server/client versions; user or approved business rule resolves.",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-037",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2567,
+        "method": "importInventoryBatch",
+        "aggregateType": "inventory_movement",
+        "actionExpression": "\"inventory_movement.import_initial\""
+      },
+      "action_codes": [
+        "inventory_movement.import_initial"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "contract": {
+        "version": 1,
+        "handler": "record_inventory_movement",
+        "source_of_truth": "Opening stock quantity as immutable initial movement.",
+        "payload_fields": [
+          "movement_id",
+          "org_id",
+          "site_id",
+          "inventory_item_id",
+          "movement_type",
+          "quantity_delta",
+          "reason",
+          "import_batch_id"
+        ],
+        "dependencies": [
+          "inventory_item mapping exists",
+          "import batch row unique"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; opening stock event applied once",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-038",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2581,
+        "method": "importInventoryBatch",
+        "aggregateType": "inventory_valuation",
+        "actionExpression": "\"inventory_valuation.imported\""
+      },
+      "action_codes": [
+        "inventory_valuation.imported"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "upsert_inventory_valuation",
+        "source_of_truth": "Inventory valuation created by stock import.",
+        "payload_fields": [
+          "valuation_id",
+          "inventory_item_id",
+          "org_id",
+          "site_id",
+          "unit_cost_xaf",
+          "selling_price_xaf",
+          "updated_at",
+          "import_batch_id"
+        ],
+        "dependencies": [
+          "inventory_item exists same org/site"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-039",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2612,
+        "method": "recordInventoryMovement",
+        "aggregateType": "inventory_movement",
+        "actionExpression": "\"inventory_movement.created\""
+      },
+      "action_codes": [
+        "inventory_movement.created"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "contract": {
+        "version": 1,
+        "handler": "record_inventory_movement",
+        "source_of_truth": "Inventory movement ledger; stock on hand is derived by summing accepted movements.",
+        "payload_fields": [
+          "movement_id",
+          "org_id",
+          "site_id",
+          "inventory_item_id",
+          "movement_type",
+          "quantity_delta",
+          "reason",
+          "occurred_at"
+        ],
+        "dependencies": [
+          "inventory_item mapping exists",
+          "movement type/quantity sign valid",
+          "no negative stock where policy forbids"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; corrections are new adjustment movements",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-040",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2621,
+        "method": "createSupportRequest",
+        "aggregateType": "support_request",
+        "actionExpression": "\"support_request.created\""
+      },
+      "action_codes": [
+        "support_request.created"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "create_support_request",
+        "source_of_truth": "Support inbox case; local draft remains unsubmitted until remote receipt.",
+        "payload_fields": [
+          "request_id",
+          "org_id",
+          "site_id",
+          "subject",
+          "description",
+          "priority",
+          "created_at"
+        ],
+        "dependencies": [
+          "authenticated organization/member",
+          "site must be valid when supplied"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY; support case immutable except explicit reply/status actions",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-041",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2655,
+        "method": "transitionAppointmentStatus",
+        "aggregateType": "appointment",
+        "actionExpression": "\"appointment.status_changed\""
+      },
+      "action_codes": [
+        "appointment.status_changed"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "transition_appointment",
+        "source_of_truth": "Appointment state and immutable status transition log.",
+        "payload_fields": [
+          "appointment_id",
+          "org_id",
+          "site_id",
+          "from_status",
+          "to_status",
+          "reason",
+          "expected_version",
+          "transitioned_at"
+        ],
+        "dependencies": [
+          "appointment exists",
+          "transition allowed from current server status"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "OPTIMISTIC_VERSIONED; status conflicts require refresh/review",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-042",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2689,
+        "method": "rescheduleAppointment",
+        "aggregateType": "appointment",
+        "actionExpression": "\"appointment.rescheduled\""
+      },
+      "action_codes": [
+        "appointment.rescheduled"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "reschedule_appointment",
+        "source_of_truth": "Appointment schedule and resource reservation.",
+        "payload_fields": [
+          "appointment_id",
+          "org_id",
+          "site_id",
+          "workstation_id",
+          "starts_at",
+          "ends_at",
+          "assigned_member_id",
+          "expected_version",
+          "reason"
+        ],
+        "dependencies": [
+          "site and workstation/assigned member valid",
+          "new slot has no overlap"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional; must belong to site and member scope"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "SLOT_UNIQUENESS; server locks/checks slot atomically",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-043",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2729,
+        "method": "updateServiceCatalogItem",
+        "aggregateType": "service",
+        "actionExpression": "\"service.updated\""
+      },
+      "action_codes": [
+        "service.updated"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "update_service",
+        "source_of_truth": "Service catalogue entry.",
+        "payload_fields": [
+          "service_id",
+          "org_id",
+          "site_id",
+          "code",
+          "activity",
+          "name",
+          "duration_minutes",
+          "price_xaf",
+          "active",
+          "expected_version"
+        ],
+        "dependencies": [
+          "service exists in same org/site"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-044",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2761,
+        "method": "saveServiceConfiguration",
+        "aggregateType": "service",
+        "actionExpression": "\"service.configuration_updated\""
+      },
+      "action_codes": [
+        "service.configuration_updated"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "update_service_configuration",
+        "source_of_truth": "Service catalogue provider/workstation/package configuration.",
+        "payload_fields": [
+          "service_id",
+          "org_id",
+          "site_id",
+          "category",
+          "description",
+          "provider_member_ids",
+          "required_workstation_kinds",
+          "package_sessions",
+          "expected_version"
+        ],
+        "dependencies": [
+          "service exists",
+          "provider/workstation references belong to site"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-045",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2825,
+        "method": "convertWaitlistToAppointment",
+        "aggregateType": "appointment",
+        "actionExpression": "\"appointment.created_from_waitlist\""
+      },
+      "action_codes": [
+        "appointment.created_from_waitlist"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "convert_waitlist_to_appointment",
+        "source_of_truth": "Atomic conversion of one waitlist record into one appointment.",
+        "payload_fields": [
+          "appointment_id",
+          "org_id",
+          "site_id",
+          "waitlist_record_id",
+          "workstation_id",
+          "starts_at",
+          "duration_minutes",
+          "deposit_xaf",
+          "reason",
+          "assigned_member_id"
+        ],
+        "dependencies": [
+          "waitlist entry is open/contacted",
+          "no appointment slot conflict",
+          "site/workstation/member valid"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional; must belong to site and member scope"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "ATOMIC_COMPOSITE; waitlist and appointment change in one transaction",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-046",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2826,
+        "method": "convertWaitlistToAppointment",
+        "aggregateType": "appointment_waitlist",
+        "actionExpression": "\"appointment_waitlist.converted\""
+      },
+      "action_codes": [
+        "appointment_waitlist.converted"
+      ],
+      "classification": "COMPOSITE_CHILD",
+      "disposition": "DO_NOT_SEND_INDEPENDENTLY",
+      "implementation_status": "CONTRACTED_AS_CHILD_OF_PARENT_MUTATION",
+      "canonical_parent_action": "appointment.created_from_waitlist",
+      "contract": {
+        "version": 1,
+        "handler": "Included atomically in appointment.created_from_waitlist",
+        "source_of_truth": "Waitlist record state is changed to booked/converted by the same conversion transaction.",
+        "payload_fields": [
+          "waitlist_id",
+          "appointment_id",
+          "from_status",
+          "to_status",
+          "reason",
+          "converted_at"
+        ],
+        "dependencies": [
+          "parent waitlist entry exists"
+        ],
+        "scope": {
+          "org_id": "inherited from parent; server revalidates",
+          "site_id": "inherited from parent/explicit source+destination sites",
+          "workstation_id": "inherited where applicable"
+        },
+        "actor": "Inherited from the authenticated actor on the parent command; server records the actor for each resulting row.",
+        "device": "Inherits parent event/device sequence; no independent device operation.",
+        "idempotency": "Parent event_id is the only idempotency key; child row IDs are stable and unique within org.",
+        "receipt": "The parent transaction receipt lists child IDs and versions; no separate child receipt.",
+        "conflict": "Resolve at the parent aggregate. Child projections are created in the same transaction or none are.",
+        "retry": "Retry parent with same event_id; never retry the child as a standalone event.",
+        "tests": [
+          "parent and all children commit atomically",
+          "retry creates no duplicate child",
+          "failed parent leaves no child mutation",
+          "scope/dependency violation rejects the whole command"
+        ],
+        "qualification_note": "The waitlist status and appointment are one atomic domain command. This event is only a child notification of the conversion and is not separately dispatched."
+      }
+    },
+    {
+      "id": "OBX-047",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2907,
+        "method": "recordStaffTimeEvent",
+        "aggregateType": "staff_time_event",
+        "actionExpression": "eventType + \".recorded\""
+      },
+      "action_codes": [
+        "staff_clock_in.recorded",
+        "staff_break_start.recorded",
+        "staff_break_end.recorded",
+        "staff_clock_out.recorded"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "record_staff_time_event",
+        "source_of_truth": "Staff timekeeping event ledger; staff identity must be a stable organisation-scoped staff UUID, not display name alone.",
+        "payload_fields": [
+          "time_event_id",
+          "org_id",
+          "site_id",
+          "workstation_id",
+          "staff_member_id",
+          "staff_name_snapshot",
+          "event_type",
+          "occurred_at"
+        ],
+        "dependencies": [
+          "staff_member_id must resolve to an active staff/person record in org",
+          "clock sequence valid on server"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional; must belong to site and member scope"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY_SEQUENCE; server serializes clock/break sequence per staff member",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-048",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 2947,
+        "method": "createManagementRecord",
+        "aggregateType": "management_record",
+        "actionExpression": "recordType + \".created\""
+      },
+      "action_codes": [
+        "quote.created",
+        "invoice.created",
+        "credit_note.created",
+        "refund_due.created",
+        "customer_receivable.created",
+        "purchase.created",
+        "supplier.created",
+        "tax_estimate.created",
+        "business_goal.created",
+        "subscription_request.created",
+        "support_chat.created",
+        "work_order.created",
+        "repair_order.created",
+        "service_order.created",
+        "appointment_waitlist.created",
+        "staff_clock_in.created",
+        "staff_clock_out.created",
+        "staff_break_start.created",
+        "staff_break_end.created",
+        "staff_commission.created",
+        "staff_advance.created",
+        "staff_bonus.created"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "create_management_record",
+        "source_of_truth": "Polymorphic management register for documents/work orders/HR variables and drafts; exact record_type is validated against the allowlist.",
+        "payload_fields": [
+          "record_id",
+          "org_id",
+          "site_id",
+          "workstation_id",
+          "record_type",
+          "reference",
+          "title",
+          "counterparty",
+          "amount_xaf",
+          "paid_xaf",
+          "due_at",
+          "status",
+          "metadata_json",
+          "created_at"
+        ],
+        "dependencies": [
+          "record type and status allowlist",
+          "workstation belongs to site when present",
+          "payment/entitlement/commission is not finalized from draft status"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional; must belong to site and member scope"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "APPEND_ONLY_CREATE; UUID and record_type stable",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-049",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 3023,
+        "method": "createInventoryTransfer",
+        "aggregateType": "inventory_transfer",
+        "actionExpression": "\"inventory_transfer.requested\""
+      },
+      "action_codes": [
+        "inventory_transfer.requested"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "create_inventory_transfer",
+        "source_of_truth": "Inventory transfer between two sites; this command creates the transfer request only.",
+        "payload_fields": [
+          "transfer_id",
+          "org_id",
+          "source_site_id",
+          "destination_site_id",
+          "inventory_item_id",
+          "sku_snapshot",
+          "quantity",
+          "requested_by",
+          "requested_at",
+          "reference",
+          "status"
+        ],
+        "dependencies": [
+          "actor role promoter",
+          "both sites active and in same org",
+          "source item exists and sufficient stock"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_STATE_MACHINE; request ID unique",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-050",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 3188,
+        "method": "transitionManagementRecord",
+        "aggregateType": "inventory_movement",
+        "actionExpression": "\"inventory_movement.purchase_received\""
+      },
+      "action_codes": [
+        "inventory_movement.purchase_received"
+      ],
+      "classification": "COMPOSITE_CHILD",
+      "disposition": "DO_NOT_SEND_INDEPENDENTLY",
+      "implementation_status": "CONTRACTED_AS_CHILD_OF_PARENT_MUTATION",
+      "canonical_parent_action": "management_record.status_changed",
+      "contract": {
+        "version": 1,
+        "handler": "Included atomically in management_record.status_changed",
+        "source_of_truth": "Stock movement created by receiving a legacy management_record purchase; include the movement as part of the parent transition transaction.",
+        "payload_fields": [
+          "movement_id",
+          "inventory_item_id",
+          "quantity_delta",
+          "reason",
+          "purchase_record_id"
+        ],
+        "dependencies": [
+          "parent management_record type=purchase transitions to received",
+          "item belongs to same org/site and quantity > 0"
+        ],
+        "scope": {
+          "org_id": "inherited from parent; server revalidates",
+          "site_id": "inherited from parent/explicit source+destination sites",
+          "workstation_id": "inherited where applicable"
+        },
+        "actor": "Inherited from the authenticated actor on the parent command; server records the actor for each resulting row.",
+        "device": "Inherits parent event/device sequence; no independent device operation.",
+        "idempotency": "Parent event_id is the only idempotency key; child row IDs are stable and unique within org.",
+        "receipt": "The parent transaction receipt lists child IDs and versions; no separate child receipt.",
+        "conflict": "Resolve at the parent aggregate. Child projections are created in the same transaction or none are.",
+        "retry": "Retry parent with same event_id; never retry the child as a standalone event.",
+        "tests": [
+          "parent and all children commit atomically",
+          "retry creates no duplicate child",
+          "failed parent leaves no child mutation",
+          "scope/dependency violation rejects the whole command"
+        ],
+        "qualification_note": "The movement is produced inside transitionManagementRecord() for the generic/legacy purchase record. It must be included in the parent status-transition command, not sent as a second stock movement."
+      }
+    },
+    {
+      "id": "OBX-051",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 3274,
+        "method": "transitionManagementRecord",
+        "aggregateType": "inventory_movement",
+        "actionExpression": "\"inventory_movement.transfer_out\""
+      },
+      "action_codes": [
+        "inventory_movement.transfer_out"
+      ],
+      "classification": "COMPOSITE_CHILD",
+      "disposition": "DO_NOT_SEND_INDEPENDENTLY",
+      "implementation_status": "CONTRACTED_AS_CHILD_OF_PARENT_MUTATION",
+      "canonical_parent_action": "inventory_transfer.received_at_destination",
+      "contract": {
+        "version": 1,
+        "handler": "Included atomically in inventory_transfer.received_at_destination",
+        "source_of_truth": "Source-site deduction movement created atomically when a transfer is received.",
+        "payload_fields": [
+          "movement_id",
+          "inventory_item_id",
+          "source_site_id",
+          "quantity_delta",
+          "transfer_id",
+          "reason"
+        ],
+        "dependencies": [
+          "approved transfer exists",
+          "source stock still sufficient"
+        ],
+        "scope": {
+          "org_id": "inherited from parent; server revalidates",
+          "site_id": "inherited from parent/explicit source+destination sites",
+          "workstation_id": "inherited where applicable"
+        },
+        "actor": "Inherited from the authenticated actor on the parent command; server records the actor for each resulting row.",
+        "device": "Inherits parent event/device sequence; no independent device operation.",
+        "idempotency": "Parent event_id is the only idempotency key; child row IDs are stable and unique within org.",
+        "receipt": "The parent transaction receipt lists child IDs and versions; no separate child receipt.",
+        "conflict": "Resolve at the parent aggregate. Child projections are created in the same transaction or none are.",
+        "retry": "Retry parent with same event_id; never retry the child as a standalone event.",
+        "tests": [
+          "parent and all children commit atomically",
+          "retry creates no duplicate child",
+          "failed parent leaves no child mutation",
+          "scope/dependency violation rejects the whole command"
+        ],
+        "qualification_note": "The source movement is one leg of the atomic transfer receipt; no independent send."
+      }
+    },
+    {
+      "id": "OBX-052",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 3275,
+        "method": "transitionManagementRecord",
+        "aggregateType": "inventory_movement",
+        "actionExpression": "\"inventory_movement.transfer_in\""
+      },
+      "action_codes": [
+        "inventory_movement.transfer_in"
+      ],
+      "classification": "COMPOSITE_CHILD",
+      "disposition": "DO_NOT_SEND_INDEPENDENTLY",
+      "implementation_status": "CONTRACTED_AS_CHILD_OF_PARENT_MUTATION",
+      "canonical_parent_action": "inventory_transfer.received_at_destination",
+      "contract": {
+        "version": 1,
+        "handler": "Included atomically in inventory_transfer.received_at_destination",
+        "source_of_truth": "Destination-site addition movement created atomically when a transfer is received.",
+        "payload_fields": [
+          "movement_id",
+          "inventory_item_id",
+          "destination_site_id",
+          "quantity_delta",
+          "transfer_id",
+          "reason"
+        ],
+        "dependencies": [
+          "approved transfer exists",
+          "destination SKU/unit compatibility verified"
+        ],
+        "scope": {
+          "org_id": "inherited from parent; server revalidates",
+          "site_id": "inherited from parent/explicit source+destination sites",
+          "workstation_id": "inherited where applicable"
+        },
+        "actor": "Inherited from the authenticated actor on the parent command; server records the actor for each resulting row.",
+        "device": "Inherits parent event/device sequence; no independent device operation.",
+        "idempotency": "Parent event_id is the only idempotency key; child row IDs are stable and unique within org.",
+        "receipt": "The parent transaction receipt lists child IDs and versions; no separate child receipt.",
+        "conflict": "Resolve at the parent aggregate. Child projections are created in the same transaction or none are.",
+        "retry": "Retry parent with same event_id; never retry the child as a standalone event.",
+        "tests": [
+          "parent and all children commit atomically",
+          "retry creates no duplicate child",
+          "failed parent leaves no child mutation",
+          "scope/dependency violation rejects the whole command"
+        ],
+        "qualification_note": "The destination movement is the second leg of the atomic transfer receipt; no independent send."
+      }
+    },
+    {
+      "id": "OBX-053",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 3295,
+        "method": "transitionManagementRecord",
+        "aggregateType": "inventory_transfer",
+        "actionExpression": "\"inventory_transfer.received_at_destination\""
+      },
+      "action_codes": [
+        "inventory_transfer.received_at_destination"
+      ],
+      "classification": "COMPOSITE_CHILD",
+      "disposition": "DO_NOT_SEND_INDEPENDENTLY",
+      "implementation_status": "CONTRACTED_AS_CHILD_OF_PARENT_MUTATION",
+      "canonical_parent_action": "receive_inventory_transfer",
+      "contract": {
+        "version": 1,
+        "handler": "Included atomically in receive_inventory_transfer",
+        "source_of_truth": "Atomic receive command owns transfer state plus both source/destination movements; this event is a local projection marker.",
+        "payload_fields": [
+          "transfer_id",
+          "source_site_id",
+          "destination_site_id",
+          "destination_inventory_item_id",
+          "received_at",
+          "received_by",
+          "reason"
+        ],
+        "dependencies": [
+          "transfer status approved",
+          "cross-site permissions validated",
+          "source stock and destination SKU/unit checks pass"
+        ],
+        "scope": {
+          "org_id": "inherited from parent; server revalidates",
+          "site_id": "inherited from parent/explicit source+destination sites",
+          "workstation_id": "inherited where applicable"
+        },
+        "actor": "Inherited from the authenticated actor on the parent command; server records the actor for each resulting row.",
+        "device": "Inherits parent event/device sequence; no independent device operation.",
+        "idempotency": "Parent event_id is the only idempotency key; child row IDs are stable and unique within org.",
+        "receipt": "The parent transaction receipt lists child IDs and versions; no separate child receipt.",
+        "conflict": "Resolve at the parent aggregate. Child projections are created in the same transaction or none are.",
+        "retry": "Retry parent with same event_id; never retry the child as a standalone event.",
+        "tests": [
+          "parent and all children commit atomically",
+          "retry creates no duplicate child",
+          "failed parent leaves no child mutation",
+          "scope/dependency violation rejects the whole command"
+        ],
+        "qualification_note": "The specialized receipt is the canonical transfer receive command at the server. The local movement rows are child effects; this outbox entry is classified as the event marker for the same command."
+      }
+    },
+    {
+      "id": "OBX-054",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 3313,
+        "method": "transitionManagementRecord",
+        "aggregateType": "management_record",
+        "actionExpression": "current.recordType + \".status_changed\""
+      },
+      "action_codes": [
+        "quote.status_changed",
+        "invoice.status_changed",
+        "credit_note.status_changed",
+        "refund_due.status_changed",
+        "customer_receivable.status_changed",
+        "purchase.status_changed",
+        "supplier.status_changed",
+        "tax_estimate.status_changed",
+        "business_goal.status_changed",
+        "subscription_request.status_changed",
+        "support_chat.status_changed",
+        "work_order.status_changed",
+        "repair_order.status_changed",
+        "service_order.status_changed",
+        "appointment_waitlist.status_changed",
+        "staff_clock_in.status_changed",
+        "staff_clock_out.status_changed",
+        "staff_break_start.status_changed",
+        "staff_break_end.status_changed",
+        "staff_commission.status_changed",
+        "staff_advance.status_changed",
+        "staff_bonus.status_changed",
+        "inventory_transfer.status_changed"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "transition_management_record",
+        "source_of_truth": "Management record lifecycle and append-only workflow history. For inventory_transfer, dispatch the specialised receive command and suppress the generic duplicate transition event.",
+        "payload_fields": [
+          "record_id",
+          "org_id",
+          "site_id",
+          "workstation_id",
+          "record_type",
+          "from_status",
+          "to_status",
+          "reason",
+          "expected_version",
+          "metadata_json_delta",
+          "transitioned_at"
+        ],
+        "dependencies": [
+          "record exists and belongs to org/site",
+          "transition allowed by record-type state machine",
+          "special composite dependencies for purchase receipt or inventory transfer are included"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional; must belong to site and member scope"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "OPTIMISTIC_VERSIONED_APPEND; transition event append-only; aggregate revision checked",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    },
+    {
+      "id": "OBX-055",
+      "source": {
+        "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
+        "line": 3334,
+        "method": "saveInventoryValuation",
+        "aggregateType": "inventory_valuation",
+        "actionExpression": "\"inventory_valuation.updated\""
+      },
+      "action_codes": [
+        "inventory_valuation.updated"
+      ],
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "contract": {
+        "version": 1,
+        "handler": "upsert_inventory_valuation",
+        "source_of_truth": "Inventory valuation record distinct from item master and movement ledger.",
+        "payload_fields": [
+          "valuation_id",
+          "org_id",
+          "site_id",
+          "inventory_item_id",
+          "unit_cost_xaf",
+          "selling_price_xaf",
+          "updated_at"
+        ],
+        "dependencies": [
+          "inventory item exists same org/site"
+        ],
+        "scope": {
+          "org_id": "required; verified from bearer-authenticated membership",
+          "site_id": "required; must belong to org and active member scope",
+          "workstation_id": "optional only when applicable"
+        },
+        "actor": "Derived from the authenticated server session. Never trust actor/member IDs from the client as authorization.",
+        "device": "Resolve registered installation/device from the authenticated session; carry immutable device sequence for ordering.",
+        "idempotency": "Stable event_id UUID + org_id; same event_id/same canonical payload returns original receipt; same event_id/different payload is rejected and audited.",
+        "receipt": "Atomic mutation receipt: event_id, action_code, aggregate_type/id, server_id, server_version, payload_hash, applied_at, outcome.",
+        "conflict": "VERSIONED_ENTITY; valuation revision check",
+        "retry": "Network/timeouts/429/5xx: exponential backoff with jitter, same event_id. 4xx validation/scope: terminal rejected. Missing parent: blocked_dependency; keep row.",
+        "tests": [
+          "valid mutation",
+          "wrong organisation/site/workstation/role",
+          "same event duplicate idempotence",
+          "same event ID with divergent payload rejected",
+          "missing parent dependency blocked",
+          "offline retry preserves event ID and ordering",
+          "crash/restart does not lose or double-apply"
+        ]
+      }
+    }
+  ]
+}
