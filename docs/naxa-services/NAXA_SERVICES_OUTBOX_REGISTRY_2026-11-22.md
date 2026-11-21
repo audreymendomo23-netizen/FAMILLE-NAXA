@@ -70,14 +70,14 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 | OBX-044 | 2761 | `saveServiceConfiguration` | `service` | `"service.configuration_updated"` | service.configuration_updated | **REMOTE_MUTATION** | `update_service_configuration` |
 | OBX-045 | 2825 | `convertWaitlistToAppointment` | `appointment` | `"appointment.created_from_waitlist"` | appointment.created_from_waitlist | **REMOTE_MUTATION** | `convert_waitlist_to_appointment` |
 | OBX-046 | 2826 | `convertWaitlistToAppointment` | `appointment_waitlist` | `"appointment_waitlist.converted"` | appointment_waitlist.converted | **COMPOSITE_CHILD** | Enfant de `appointment.created_from_waitlist` |
-| OBX-047 | 2907 | `recordStaffTimeEvent` | `staff_time_event` | `eventType + ".recorded"` | staff_clock_in.recorded, staff_break_start.recorded, staff_break_end.recorded, staff_clock_out.recorded | **REMOTE_MUTATION** | `record_staff_time_event` |
-| OBX-048 | 2947 | `createManagementRecord` | `management_record` | `recordType + ".created"` | quote.created, invoice.created, credit_note.created, refund_due.created, customer_receivable.created, purchase.created, supplier.created, tax_estimate.created, business_goal.created, subscription_request.created, support_chat.created, work_order.created, repair_order.created, service_order.created, appointment_waitlist.created, staff_clock_in.created, staff_clock_out.created, staff_break_start.created, staff_break_end.created, staff_commission.created, staff_advance.created, staff_bonus.created | **REMOTE_MUTATION** | `create_management_record` |
+| OBX-047 | 2907 | `recordStaffTimeEvent` | `eventType` | `eventType + ".recorded"` | staff_clock_in.recorded, staff_break_start.recorded, staff_break_end.recorded, staff_clock_out.recorded | **REMOTE_MUTATION** | `record_staff_time_event` |
+| OBX-048 | 2947 | `createManagementRecord` | `recordType` | `recordType + ".created"` | quote.created, invoice.created, credit_note.created, refund_due.created, customer_receivable.created, purchase.created, supplier.created, tax_estimate.created, business_goal.created, subscription_request.created, support_chat.created, work_order.created, repair_order.created, service_order.created, appointment_waitlist.created, staff_clock_in.created, staff_clock_out.created, staff_break_start.created, staff_break_end.created, staff_commission.created, staff_advance.created, staff_bonus.created | **REMOTE_MUTATION** | `create_management_record` |
 | OBX-049 | 3023 | `createInventoryTransfer` | `inventory_transfer` | `"inventory_transfer.requested"` | inventory_transfer.requested | **REMOTE_MUTATION** | `create_inventory_transfer` |
 | OBX-050 | 3188 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.purchase_received"` | inventory_movement.purchase_received | **COMPOSITE_CHILD** | Enfant de `management_record.status_changed` |
 | OBX-051 | 3274 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_out"` | inventory_movement.transfer_out | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
 | OBX-052 | 3275 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_in"` | inventory_movement.transfer_in | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
 | OBX-053 | 3295 | `transitionManagementRecord` | `inventory_transfer` | `"inventory_transfer.received_at_destination"` | inventory_transfer.received_at_destination | **COMPOSITE_CHILD** | Enfant de `receive_inventory_transfer` |
-| OBX-054 | 3313 | `transitionManagementRecord` | `management_record` | `current.recordType + ".status_changed"` | quote.status_changed, invoice.status_changed, credit_note.status_changed, refund_due.status_changed, customer_receivable.status_changed, purchase.status_changed, supplier.status_changed, tax_estimate.status_changed, business_goal.status_changed, subscription_request.status_changed, support_chat.status_changed, work_order.status_changed, repair_order.status_changed, service_order.status_changed, appointment_waitlist.status_changed, staff_clock_in.status_changed, staff_clock_out.status_changed, staff_break_start.status_changed, staff_break_end.status_changed, staff_commission.status_changed, staff_advance.status_changed, staff_bonus.status_changed, inventory_transfer.status_changed | **REMOTE_MUTATION** | `transition_management_record` |
+| OBX-054 | 3313 | `transitionManagementRecord` | `current.recordType` | `current.recordType + ".status_changed"` | quote.status_changed, invoice.status_changed, credit_note.status_changed, refund_due.status_changed, customer_receivable.status_changed, purchase.status_changed, supplier.status_changed, tax_estimate.status_changed, business_goal.status_changed, subscription_request.status_changed, support_chat.status_changed, work_order.status_changed, repair_order.status_changed, service_order.status_changed, appointment_waitlist.status_changed, staff_clock_in.status_changed, staff_clock_out.status_changed, staff_break_start.status_changed, staff_break_end.status_changed, staff_commission.status_changed, staff_advance.status_changed, staff_bonus.status_changed, inventory_transfer.status_changed | **REMOTE_MUTATION** | `transition_management_record` |
 | OBX-055 | 3334 | `saveInventoryValuation` | `inventory_valuation` | `"inventory_valuation.updated"` | inventory_valuation.updated | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
 
 ## Décompte des routes
@@ -705,7 +705,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-047 — staff_clock_in.recorded / staff_break_start.recorded / staff_break_end.recorded / staff_clock_out.recorded
 
-- Source : ligne 2907, `recordStaffTimeEvent`, agrégat `staff_time_event`, expression `eventType + ".recorded"`.
+- Source : ligne 2907, `recordStaffTimeEvent`, agrégat `eventType`, expression `eventType + ".recorded"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Staff timekeeping event ledger; staff identity must be a stable organisation-scoped staff UUID, not display name alone.
 - Handler / route : `record_staff_time_event`.
@@ -718,7 +718,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-048 — quote.created / invoice.created / credit_note.created / refund_due.created / customer_receivable.created / purchase.created / supplier.created / tax_estimate.created / business_goal.created / subscription_request.created / support_chat.created / work_order.created / repair_order.created / service_order.created / appointment_waitlist.created / staff_clock_in.created / staff_clock_out.created / staff_break_start.created / staff_break_end.created / staff_commission.created / staff_advance.created / staff_bonus.created
 
-- Source : ligne 2947, `createManagementRecord`, agrégat `management_record`, expression `recordType + ".created"`.
+- Source : ligne 2947, `createManagementRecord`, agrégat `recordType`, expression `recordType + ".created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Polymorphic management register for documents/work orders/HR variables and drafts; exact record_type is validated against the allowlist.
 - Handler / route : `create_management_record`.
@@ -804,7 +804,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-054 — quote.status_changed / invoice.status_changed / credit_note.status_changed / refund_due.status_changed / customer_receivable.status_changed / purchase.status_changed / supplier.status_changed / tax_estimate.status_changed / business_goal.status_changed / subscription_request.status_changed / support_chat.status_changed / work_order.status_changed / repair_order.status_changed / service_order.status_changed / appointment_waitlist.status_changed / staff_clock_in.status_changed / staff_clock_out.status_changed / staff_break_start.status_changed / staff_break_end.status_changed / staff_commission.status_changed / staff_advance.status_changed / staff_bonus.status_changed / inventory_transfer.status_changed
 
-- Source : ligne 3313, `transitionManagementRecord`, agrégat `management_record`, expression `current.recordType + ".status_changed"`.
+- Source : ligne 3313, `transitionManagementRecord`, agrégat `current.recordType`, expression `current.recordType + ".status_changed"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Management record lifecycle and append-only workflow history. For inventory_transfer, dispatch the specialised receive command and suppress the generic duplicate transition event.
 - Handler / route : `transition_management_record`.
