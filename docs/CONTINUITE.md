@@ -1205,3 +1205,12 @@ Correctifs :
 Le test Deno statique `supabase/tests/drafts/naxa_services_static_security_test.ts` contrôle RLS, la classification des tables sans policy, les helpers de scope `ns_*`, l'absence de policies inconditionnelles, les privilèges server-only et `search_path = ''` des fonctions `SECURITY DEFINER`. Le workflow NAXA SERVICES exécute ce test dans un job dédié et surveille `supabase/tests/drafts/**`.
 
 **Limite :** le contrôle valide la cohérence statique des drafts uniquement. Il n'exécute pas PostgreSQL et ne démontre aucun scénario RLS positif/négatif. v1-v4 restent non appliqués ; aucun projet Supabase n'a été modifié et `main` reste inchangé.
+
+
+## 6.17.26 — Cause racine et protocole de synchronisation ERP
+
+L'outbox Android dispose d'environ 55 points d'enqueue mais son payload actuel n'embarque que `aggregate_id` et `site_id`. Il s'agit d'un journal local d'intentions, pas d'une file que le serveur peut rejouer. Les écrans ne proposent pas de synchronisation active et conservent leurs mentions de données locales.
+
+Le cycle fournisseur a une dépendance supplémentaire : les RPC v4 génèrent des UUID serveur pour les commandes/lignes, tandis que les événements locaux utilisent les UUID Room. Les réceptions et paiements suivants exigent les IDs serveur ; les règlements espèces demandent aussi une caisse distante ouverte. Le worker ne doit pas être construit sur un simple envoi des pointeurs.
+
+Le protocole candidat est documenté dans `docs/naxa-services/NAXA_SERVICES_SYNC_PROTOCOL_V1.md` : enveloppe versionnée, payloads complets, IDs stables/mappings, idempotence, dépendances, états d'erreur, conflits, scopes serveur et gates de tests multi-appareils. Il n'est pas implémenté ni activé. Aucun schéma n'a été appliqué, aucun projet Supabase n'a été modifié et aucune synchronisation n'est déclarée opérationnelle.

@@ -1420,3 +1420,22 @@ Le job CI indépendant `sql-static-security` exécute ce contrôle Deno. Les fil
 Ces assertions examinent le texte SQL versionné ; elles ne remplacent pas l'exécution PostgreSQL, les tests positifs/négatifs des rôles, ni les scénarios d'isolation entre organisations, sites, appareils et membres. Les drafts v1-v4 demeurent non appliqués. La sécurité RLS n'est donc pas qualifiée en environnement d'exécution.
 
 **Statut :** correctifs SQL et contrôles CI ajoutés sur la branche de travail ; validation du job CI requise après commit. Aucun déploiement, aucune migration, aucune modification du projet Supabase historique et aucune fusion dans `main`.
+
+
+# Addendum 7 — Cause racine du chantier synchronisation ERP (21 novembre 2026)
+
+## 43.1 Défaut confirmé dans l'outbox locale
+
+L'audit du dépôt local confirme environ 55 appels au helper `enqueue`. Le payload généré par le helper ne contient actuellement que `aggregate_id` et `site_id` ; il ne porte pas les valeurs métier nécessaires pour rejouer l'action. Le compte d'événements en attente décrit donc des intentions locales, pas une file prête à être transmise. Il n'existe pas de worker de synchronisation actif et l'écran Paramètres indique explicitement que le contrat serveur reste à terminer.
+
+## 43.2 Rupture de chaîne d'identifiants dans le cycle fournisseur
+
+Le draft v4 crée une commande serveur et ses lignes avec des UUID générés par PostgreSQL. Les commandes et lignes locales possèdent déjà leurs propres UUID. Les RPC de réception et de règlement attendent les IDs serveur. En plus, un règlement espèces nécessite une session de caisse serveur ouverte. Un envoi des seules données actuelles ne peut donc pas garantir la liaison correcte entre commande, réception, règlement et caisse.
+
+## 43.3 Décision de sécurité
+
+Aucun worker ne sera ajouté pour transmettre ces pointeurs incomplets et marquer arbitrairement les opérations `synced`. Les écrans continueront d'indiquer que les opérations sont locales/non consolidées jusqu'à livraison du contrat d'événements complet, des IDs stables ou mappings, des RPC idempotentes et des tests de reprise/conflits.
+
+La spécification candidate est maintenant versionnée dans `docs/naxa-services/NAXA_SERVICES_SYNC_PROTOCOL_V1.md`. Elle définit l'enveloppe, les dépendances, les statuts, les règles de reprise, les contrôles de périmètre et les gates d'activation.
+
+**Statut :** cause racine et protocole documentés ; l'implémentation de la synchronisation reste ouverte. Aucun déploiement, aucune migration et aucun changement du projet Supabase historique.
