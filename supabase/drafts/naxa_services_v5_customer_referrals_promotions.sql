@@ -249,6 +249,22 @@ begin
     return jsonb_build_object('accepted', false, 'reason', 'self_referral');
   end if;
 
+  if exists (
+    select 1
+    from public.ns_sales s
+    join public.ns_payments p
+      on p.sale_id = s.id and p.org_id = s.org_id and p.site_id = s.site_id
+    where s.org_id = p_org_id
+      and s.customer_id = p_referred_customer_id
+      and s.status = 'posted'
+      and p.status = 'confirmed'
+      and p.confirmed_at is not null
+    group by s.id, s.total_xaf
+    having sum(p.amount_xaf) >= s.total_xaf
+  ) then
+    return jsonb_build_object('accepted', false, 'reason', 'first_paid_sale_already_recorded');
+  end if;
+
   select * into v_existing
   from public.ns_customer_referrals r
   where r.org_id = p_org_id and r.referred_customer_id = p_referred_customer_id
@@ -316,7 +332,7 @@ begin
     return jsonb_build_object('qualified', false, 'reason', 'sale_not_eligible');
   end if;
 
-  select coalesce(sum(p.amount_xaf), 0)::bigint, min(p.confirmed_at)
+  select coalesce(sum(p.amount_xaf), 0)::bigint, max(p.confirmed_at)
   into v_paid_total, v_paid_at
   from public.ns_payments p
   where p.org_id = v_sale.org_id and p.site_id = v_sale.site_id
@@ -353,7 +369,7 @@ begin
     and p.confirmed_at is not null
   group by s.id, s.created_at, s.total_xaf
   having sum(p.amount_xaf) >= s.total_xaf
-  order by min(p.confirmed_at), s.created_at, s.id
+  order by max(p.confirmed_at), s.created_at, s.id
   limit 1;
 
   if v_first_paid_sale_id is distinct from p_sale_id then
