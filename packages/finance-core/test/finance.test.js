@@ -1,0 +1,138 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  normalizePaymentIntent, classifyProviderInitiation, verifyPaymentConfirmation,
+  assertPaymentTransition, createPaymentAdapterRegistry, calculateCommission,
+  reverseCommission, calculateFiscalQuote,
+} from "../src/index.js";
+
+const intent = {
+  provider: "mtn_momo",
+  organizationId: "20000000-0000-4000-8000-000000000001",
+  siteId: "30000000-0000-4000-8000-000000000001",
+  idempotencyKey: "40000000-0000-4000-8000-000000000001",
+  merchantReference: "NS-INV-2026-0001",
+  amountXaf: 12500,
+  currency: "XAF",
+  beneficiaryReference: "merchant-cm-001",
+};
+const confirmation = {
+  provider: "mtn_momo", merchantReference: intent.merchantReference,
+  providerReference: "provider-ref-2026-001", amountXaf: 12500,
+  currency: "XAF", status: "SUCCESSFUL",
+};
+
+test("payment initiation acknowledgements never mean paid", () => {
+  assert.equal(classifyProviderInitiation("mtn_momo", 202, "SUCCESSFUL"), "pending");
+  assert.equal(classifyProviderInitiation("orange_money", 200, "PENDING"), "pending");
+  assert.equal(classifyProviderInitiation("mtn_momo", 503), "pending");
+  assert.equal(classifyProviderInitiation("orange_money", 200, "DECLINED"), "failed");
+});
+test("payment intent validates XAF, scope, provider and idempotency", () => {
+  assert.equal(normalizePaymentIntent(intent).amountXaf, 12500);
+  assert.throws(() => normalizePaymentIntent({ ...intent, currency: "USD" }), /UNSUPPORTED_PAYMENT_CURRENCY/);
+  assert.throws(() => normalizePaymentIntent({ ...intent, provider: "unknown" }), /UNSUPPORTED_PAYMENT_PROVIDER/);
+  assert.throws(() => normalizePaymentIntent({ ...intent, amountXaf: 0 }), /INVALID_PAYMENT_AMOUNT/);
+});
+test("payment confirmation requires verified signature and exact amount/reference/currency", () => {
+  assert.throws(() => verifyPaymentConfirmation(intent, confirmation, { signatureVerified: false }), /PROVIDER_SIGNATURE_NOT_VERIFIED/);
+  assert.throws(() => verifyPaymentConfirmation(intent, { ...confirmation, amountXaf: 12501 }, { signatureVerified: true }), /PAYMENT_AMOUNT_MISMATCH/);
+  assert.throws(() => verifyPaymentConfirmation(intent, { ...confirmation, merchantReference: "other-reference" }, { signatureVerified: true }), /PAYMENT_REFERENCE_MISMATCH/);
+  const result = verifyPaymentConfirmation(intent, confirmation, { signatureVerified: true, method: "provider_webhook_signature", verifiedAt: "2026-11-21T19:00:00Z" });
+  assert.equal(result.status, "verified");
+  assert.equal(result.amountXaf, 12500);
+  assert.equal(result.providerReference, confirmation.providerReference);
+});
+test("payment state machine prevents terminal state rewrites", () => {
+  assert.equal(assertPaymentTransition("pending", "verified"), true);
+  assert.equal(assertPaymentTransition("pending", "pending"), false);
+  assert.throws(() => assertPaymentTransition("verified", "refunded"), /PAYMENT_STATE_IS_TERMINAL/);
+});
+test("payment provider registry fails closed without an adapter", () => {
+  const registry = createPaymentAdapterRegistry([]);
+  assert.equal(registry.supports("mtn_momo"), false);
+  assert.throws(() => registry.get("orange_money"), /PAYMENT_PROVIDER_ADAPTER_NOT_CONFIGURED/);
+  assert.equal(createPaymentAdapterRegistry([{
+    provider: "mtn_momo", initiate: async () => ({}), verifyNotification: async () => true,
+  }]).supports("mtn_momo"), true);
+});
+
+const approvedRule = {
+  version: 3, status: "approved", approvedBy: "member-finance-lead",
+  approvedAt: "2026-11-01T09:00:00Z", effectiveFrom: "2026-11-01",
+  effectiveTo: null, method: "percent_bps", rateBps: 1000,
+};
+const saleLine = {
+  status: "completed", paymentStatus: "confirmed", confirmedPaidXaf: 50000,
+  refundedXaf: 5000, commissionableBaseXaf: 45000,
+};
+const allocations = [
+  { memberId: "50000000-0000-4000-8000-000000000002", shareBps: 3333 },
+  { memberId: "50000000-0000-4000-8000-000000000001", shareBps: 6667 },
+];
+
+test("commission calculates only after completion and confirmed payment, net of refunds", () => {
+  const result = calculateCommission({
+    rule: approvedRule, saleLine, allocations,
+    calculationDate: "2026-11-21",
+    sourceEventId: "60000000-0000-4000-8000-000000000001",
+  });
+  assert.equal(result.baseXaf, 40000);
+  assert.equal(result.totalCommissionXaf, 4000);
+  assert.equal(result.entries.reduce((sum, item) => sum + item.amountXaf, 0), 4000);
+  assert.ok(result.entries.every((item) => item.status === "pending_approval"));
+});
+test("commission refuses draft rates and unpaid or incomplete work", () => {
+  assert.throws(() => calculateCommission({
+    rule: { ...approvedRule, status: "draft" }, saleLine, allocations,
+    calculationDate: "2026-11-21", sourceEventId: "60000000-0000-4000-8000-000000000001",
+  }), /COMMISSION_RULE_NOT_APPROVED/);
+  assert.throws(() => calculateCommission({
+    rule: approvedRule, saleLine: { ...saleLine, paymentStatus: "pending" }, allocations,
+    calculationDate: "2026-11-21", sourceEventId: "60000000-0000-4000-8000-000000000001",
+  }), /SALE_PAYMENT_NOT_CONFIRMED/);
+});
+test("commission shares must sum exactly to 100 percent", () => {
+  assert.throws(() => calculateCommission({
+    rule: approvedRule, saleLine, allocations: [{ ...allocations[0], shareBps: 9000 }],
+    calculationDate: "2026-11-21", sourceEventId: "60000000-0000-4000-8000-000000000001",
+  }), /COMMISSION_SHARES_MUST_TOTAL_10000_BPS/);
+});
+test("refund reversals are append-only adjustments", () => {
+  const reversal = reverseCommission({
+    sourceEntryId: "commission-entry-001", originalAmountXaf: 4000,
+    refundAmountXaf: 1000, reversalEventId: "70000000-0000-4000-8000-000000000001",
+  });
+  assert.equal(reversal.amountXaf, -1000);
+  assert.equal(reversal.status, "pending_approval");
+  assert.throws(() => reverseCommission({
+    originalAmountXaf: 1000, refundAmountXaf: 1500,
+    reversalEventId: "70000000-0000-4000-8000-000000000001",
+  }), /REVERSAL_EXCEEDS_ORIGINAL_COMMISSION/);
+});
+
+const approvedTaxPolicy = {
+  version: "CGI-CM-2026-v1", status: "approved", approvedBy: "tax-advisor-01",
+  approvedAt: "2026-11-01T10:00:00Z", effectiveFrom: "2026-01-01",
+  effectiveTo: null, taxType: "output_tax", rateBps: 1925, priceMode: "exclusive",
+  sourceReference: "DGI CGI 2026 — tax policy reviewed",
+};
+
+test("fiscal calculation blocks when policy is absent, draft or stale", () => {
+  assert.equal(calculateFiscalQuote({ amountXaf: 10000, transactionDate: "2026-11-21" }).status, "blocked_unvalidated_policy");
+  assert.equal(calculateFiscalQuote({ amountXaf: 10000, transactionDate: "2026-11-21", policy: { ...approvedTaxPolicy, status: "draft" } }).status, "blocked_unvalidated_policy");
+  assert.equal(calculateFiscalQuote({ amountXaf: 10000, transactionDate: "2025-12-31", policy: approvedTaxPolicy }).status, "blocked_unvalidated_policy");
+});
+test("fiscal engine applies only the approved effective-dated policy supplied", () => {
+  const result = calculateFiscalQuote({
+    amountXaf: 10000, transactionDate: "2026-11-21", policy: approvedTaxPolicy,
+  });
+  assert.equal(result.status, "calculated_by_approved_policy");
+  assert.equal(result.taxXaf, 1925);
+  assert.equal(result.totalXaf, 11925);
+  const exempt = calculateFiscalQuote({
+    amountXaf: 10000, transactionDate: "2026-11-21", policy: approvedTaxPolicy, exempt: true,
+  });
+  assert.equal(exempt.taxXaf, 0);
+  assert.equal(exempt.exempt, true);
+});

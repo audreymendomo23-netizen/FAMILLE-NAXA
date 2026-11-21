@@ -3,6 +3,7 @@
   "private": true,
   "workspaces": [
     "packages/contracts",
+    "packages/finance-core",
     "packages/design-system",
     "packages/assistant",
     "packages/offline-web",
@@ -15,6 +16,8 @@
     "test:contracts": "npm test --workspace @famille/contracts",
     "test:assistant": "npm test --workspace @famille/assistant-rules",
     "test:core-web": "npm test --workspace @naxa/core-web",
-    "test:billing": "npm test --workspace @famille/billing-core"
+    "test:billing": "npm test --workspace @famille/billing-core",
+    "test:finance": "npm test --workspace @famille/finance-core",
+    "test:offline-web": "npm test --workspace @famille/offline-web"
   }
 }

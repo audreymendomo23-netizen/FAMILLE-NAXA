@@ -1,0 +1,68 @@
+name: NAXA SERVICES — signed Android release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "naxa-services-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  signed-release:
+    name: Build, sign and verify Android release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate release signing configuration
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.NAXA_SERVICES_RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.NAXA_SERVICES_RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.NAXA_SERVICES_RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.NAXA_SERVICES_RELEASE_KEY_PASSWORD }}
+        run: |
+          test -n "$RELEASE_KEYSTORE" || { echo "::error::Missing NAXA_SERVICES_RELEASE_KEYSTORE_BASE64"; exit 1; }
+          test -n "$RELEASE_STORE_PASSWORD" || { echo "::error::Missing NAXA_SERVICES_RELEASE_STORE_PASSWORD"; exit 1; }
+          test -n "$RELEASE_KEY_ALIAS" || { echo "::error::Missing NAXA_SERVICES_RELEASE_KEY_ALIAS"; exit 1; }
+          test -n "$RELEASE_KEY_PASSWORD" || { echo "::error::Missing NAXA_SERVICES_RELEASE_KEY_PASSWORD"; exit 1; }
+      - name: Decode signing key into runner temporary storage
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.NAXA_SERVICES_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "$RELEASE_KEYSTORE" | base64 --decode > "$RUNNER_TEMP/naxa-services-release.jks"
+          chmod 600 "$RUNNER_TEMP/naxa-services-release.jks"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+      - name: Install Android 35 platform and build tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Assemble signed release
+        env:
+          NAXA_SERVICES_RELEASE_STORE_FILE: ${{ runner.temp }}/naxa-services-release.jks
+          NAXA_SERVICES_RELEASE_STORE_PASSWORD: ${{ secrets.NAXA_SERVICES_RELEASE_STORE_PASSWORD }}
+          NAXA_SERVICES_RELEASE_KEY_ALIAS: ${{ secrets.NAXA_SERVICES_RELEASE_KEY_ALIAS }}
+          NAXA_SERVICES_RELEASE_KEY_PASSWORD: ${{ secrets.NAXA_SERVICES_RELEASE_KEY_PASSWORD }}
+        run: gradle --no-daemon :naxa-services:assembleRelease
+      - name: Verify release signature and checksum
+        run: |
+          apk="$(find apps/android/naxa-services/build/outputs/apk/release -maxdepth 1 -name '*.apk' -print -quit)"
+          test -n "$apk"
+          apksigner verify --verbose --print-certs "$apk"
+          sha256sum "$apk" > "$apk.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: naxa-services-signed-release
+          path: |
+            apps/android/naxa-services/build/outputs/apk/release/*.apk
+            apps/android/naxa-services/build/outputs/apk/release/*.sha256
+          if-no-files-found: error
+          retention-days: 14

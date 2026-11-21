@@ -1,0 +1,53 @@
+name: NAXA SERVICES — encrypted backup and restore drill
+
+on:
+  push:
+    branches: [work/naxa-services-completion-20261120]
+    paths:
+      - "infra/backup/**"
+      - ".github/workflows/naxa-services-backup-restore.yml"
+  pull_request:
+    paths:
+      - "infra/backup/**"
+      - ".github/workflows/naxa-services-backup-restore.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup-restore-drill:
+    name: PostgreSQL 17 encrypted backup and clean restore
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client and GnuPG
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client gnupg
+      - name: Create isolated source and restore databases
+        run: |
+          createdb naxa_backup_source
+          createdb naxa_backup_target
+      - name: Run encrypted backup and full restore drill
+        env:
+          BACKUP_TEST_SOURCE_URL: postgres://postgres:postgres@localhost:5432/naxa_backup_source
+          BACKUP_TEST_TARGET_URL: postgres://postgres:postgres@localhost:5432/naxa_backup_target
+        run: bash infra/backup/test-backup-restore.sh

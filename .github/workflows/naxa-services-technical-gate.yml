@@ -8,6 +8,12 @@ on:
       - "apps/android/naxa-services/**"
       - "packages/core-android/**"
       - "packages/billing-core/**"
+      - "packages/finance-core/**"
+      - "packages/offline-web/**"
+      - "infra/backup/**"
+      - "docs/naxa-services/NAXA_SERVICES_REMAINING_RED_GATES_2026-11-21.md"
+      - ".github/workflows/naxa-services-backup-restore.yml"
+      - ".github/workflows/naxa-services-release.yml"
       - "packages/contracts/**"
       - "supabase/functions/naxa-services-auth/**"
       - "supabase/functions/naxa-services-referrals/**"
@@ -43,6 +49,12 @@ on:
       - "supabase/functions/naxa-services-accounting/**"
       - "supabase/config.toml"
       - "packages/billing-core/**"
+      - "packages/finance-core/**"
+      - "packages/offline-web/**"
+      - "infra/backup/**"
+      - "docs/naxa-services/NAXA_SERVICES_REMAINING_RED_GATES_2026-11-21.md"
+      - ".github/workflows/naxa-services-backup-restore.yml"
+      - ".github/workflows/naxa-services-release.yml"
       - "packages/contracts/**"
       - "settings.gradle.kts"
       - "build.gradle.kts"
@@ -96,6 +108,23 @@ jobs:
           node-version: "22"
       - name: Test effective-dated family tariff catalogue
         run: node --test packages/billing-core/test/*.test.js
+
+
+  finance-policy:
+    name: NAXA SERVICES payment, commission and fiscal policy tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install workspace dependencies
+        run: npm install --no-audit --no-fund
+      - name: Test provider confirmation, commissions and effective-dated fiscal rules
+        run: npm test --workspace @famille/finance-core
+      - name: Test offline Web/PWA queue policy
+        run: npm test --workspace @famille/offline-web
 
   referrals-contract:
     name: NAXA SERVICES referral API contract

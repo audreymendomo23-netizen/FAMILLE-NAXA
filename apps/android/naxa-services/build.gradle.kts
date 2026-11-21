@@ -56,6 +56,19 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+    signingConfigs {
+        create("naxaRelease") {
+            storeFile = file(System.getenv("NAXA_SERVICES_RELEASE_STORE_FILE") ?: "missing-release-key.jks")
+            storePassword = System.getenv("NAXA_SERVICES_RELEASE_STORE_PASSWORD") ?: ""
+            keyAlias = System.getenv("NAXA_SERVICES_RELEASE_KEY_ALIAS") ?: ""
+            keyPassword = System.getenv("NAXA_SERVICES_RELEASE_KEY_PASSWORD") ?: ""
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("naxaRelease")
+        }
+    }
     buildFeatures {
         compose = true
         buildConfig = true
