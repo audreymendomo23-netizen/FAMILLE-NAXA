@@ -310,4 +310,9 @@
     <string name="local_pin_change_cancel">Cancel</string>
     <string name="local_pin_change_saved">The local code has been changed.</string>
     <string name="local_pin_change_failed">Change refused. Check your current code and try again.</string>
+    <string name="module_customer_promotions">Customer referrals and wheel</string>
+    <string name="customer_promotions_desc">Customer referral campaigns, codes, benefits and secure promotional wheel setup.</string>
+    <string name="action_referral_campaign">Create a customer campaign</string>
+    <string name="action_share_customer_code">Share a customer code</string>
+    <string name="action_wheel_setup">Configure a wheel</string>
 </resources>

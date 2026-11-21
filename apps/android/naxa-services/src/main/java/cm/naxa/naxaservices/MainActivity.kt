@@ -123,7 +123,7 @@ class MainActivity : ComponentActivity() {
 
 internal enum class AppRoute {
     LOGIN, RECOVERY, CHANGE_PASSWORD, ACTIVITY_SETUP, LEGAL_ACCEPTANCE, DISCOVERY,
-    DASHBOARD, AGENDA, PRESSING, WORK_ORDERS, CASH, SERVICES, CUSTOMERS, TEAM, STOCK, REPORTS,
+    DASHBOARD, AGENDA, PRESSING, WORK_ORDERS, CASH, SERVICES, CUSTOMERS, CUSTOMER_PROMOTIONS, TEAM, STOCK, REPORTS,
     ORGANIZATION, NETWORK, SITES, WORKSTATIONS, SECURITY, SETTINGS, HELP, MENU,
     PROFILE, APPEARANCE, BILLING, SUBSCRIPTIONS, PURCHASES, TAXES, CHARGES, OBJECTIVES, TEAM_PERFORMANCE,
     AI_INSIGHTS, LIVECHAT
@@ -735,6 +735,7 @@ private val modules = listOf(
     ModuleSpec(AppRoute.CASH, R.string.module_cash, R.string.cash_desc, listOf(R.string.action_new_sale, R.string.action_open_cash, R.string.action_close_cash, R.string.action_expense)),
     ModuleSpec(AppRoute.SERVICES, R.string.module_services, R.string.services_desc, listOf(R.string.action_add_service, R.string.action_price_lists, R.string.action_packages)),
     ModuleSpec(AppRoute.CUSTOMERS, R.string.module_customers, R.string.customers_desc, listOf(R.string.action_new_customer, R.string.action_history, R.string.action_loyalty)),
+    ModuleSpec(AppRoute.CUSTOMER_PROMOTIONS, R.string.module_customer_promotions, R.string.customer_promotions_desc, listOf(R.string.action_referral_campaign, R.string.action_share_customer_code, R.string.action_wheel_setup)),
     ModuleSpec(AppRoute.TEAM, R.string.module_team, R.string.team_desc, listOf(R.string.action_add_member, R.string.action_assign)),
     ModuleSpec(AppRoute.TEAM_PERFORMANCE, R.string.module_team_performance, R.string.team_performance_desc, listOf(R.string.action_clock_in, R.string.action_clock_out, R.string.action_commissions, R.string.action_advances)),
     ModuleSpec(AppRoute.STOCK, R.string.module_stock, R.string.stock_desc, listOf(R.string.action_inventory, R.string.action_consumption, R.string.action_low_stock)),
@@ -764,7 +765,7 @@ private val commonRoutes = setOf(
 
 private fun activityVisibleRoutes(activity: String?): Set<AppRoute> {
     val shared = commonRoutes + setOf(
-        AppRoute.SECURITY, AppRoute.CASH, AppRoute.CUSTOMERS, AppRoute.STOCK, AppRoute.PURCHASES,
+        AppRoute.SECURITY, AppRoute.CASH, AppRoute.CUSTOMERS, AppRoute.CUSTOMER_PROMOTIONS, AppRoute.STOCK, AppRoute.PURCHASES,
         AppRoute.BILLING, AppRoute.SUBSCRIPTIONS, AppRoute.OBJECTIVES,
         AppRoute.TAXES, AppRoute.AI_INSIGHTS, AppRoute.REPORTS, AppRoute.TEAM, AppRoute.TEAM_PERFORMANCE,
         AppRoute.ORGANIZATION, AppRoute.NETWORK, AppRoute.SITES, AppRoute.WORKSTATIONS
@@ -780,6 +781,7 @@ private fun activityVisibleRoutes(activity: String?): Set<AppRoute> {
 }
 
 private fun canAccessRoute(route: AppRoute, roleCode: String): Boolean {
+    if (route == AppRoute.CUSTOMER_PROMOTIONS && roleCode != "promoter") return false
     val common = commonRoutes + setOf(AppRoute.DASHBOARD, AppRoute.MENU)
     val allowed = when (roleCode) {
         "promoter", "network_manager" -> AppRoute.values().toSet()
@@ -917,6 +919,8 @@ private fun ErpScreen(
             ServicesCatalogContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.CUSTOMERS) {
             CustomersContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.CUSTOMER_PROMOTIONS) {
+            CustomerPromotionsContent(Modifier.padding(padding), localRepository, activeSession, authApi) { onNavigate(AppRoute.PROFILE) }
         } else if (route == AppRoute.STOCK) {
             StockContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.REPORTS) {

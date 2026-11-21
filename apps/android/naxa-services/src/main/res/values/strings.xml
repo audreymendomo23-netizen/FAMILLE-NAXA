@@ -310,4 +310,9 @@
     <string name="local_pin_change_cancel">Annuler</string>
     <string name="local_pin_change_saved">Le code local a été modifié.</string>
     <string name="local_pin_change_failed">Modification refusée. Vérifie le code actuel et réessaie.</string>
+    <string name="module_customer_promotions">Parrainage client et roue</string>
+    <string name="customer_promotions_desc">Campagnes de recommandation client, codes, avantages et préparation sécurisée de la roue promotionnelle.</string>
+    <string name="action_referral_campaign">Créer une campagne client</string>
+    <string name="action_share_customer_code">Partager un code client</string>
+    <string name="action_wheel_setup">Configurer une roue</string>
 </resources>

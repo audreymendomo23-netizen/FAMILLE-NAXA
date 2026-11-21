@@ -1145,7 +1145,8 @@ internal fun ProfileContent(
             OutlinedButton(onClick = { onNavigate(AppRoute.SECURITY) }, modifier = Modifier.fillMaxWidth()) { Text("Comptes, appareils et accès") }
             LocalAccessPinSettingsCard(session.account.memberId)
             if (session.account.roleCode == "promoter") {
-                OutlinedButton(onClick = { showReferralScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Parrainage et suivi de mes gains") }
+                OutlinedButton(onClick = { showReferralScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Parrainage PME et suivi de mes gains") }
+                OutlinedButton(onClick = { onNavigate(AppRoute.CUSTOMER_PROMOTIONS) }, modifier = Modifier.fillMaxWidth()) { Text("Parrainage client et roue promotionnelle") }
                 OutlinedButton(onClick = { showLoyaltyScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Programme de fidélité") }
                 OutlinedButton(onClick = { onNavigate(AppRoute.CHARGES) }, modifier = Modifier.fillMaxWidth()) { Text("Charges et échéances de paiement") }
             }

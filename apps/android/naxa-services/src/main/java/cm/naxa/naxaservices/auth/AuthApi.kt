@@ -114,8 +114,15 @@ class AuthApi(private val context: Context) {
         endpoint.replace(Regex("/naxa-services-auth/?$"), "/naxa-services-referrals")
     }
 
+    private val customerPromotionsEndpoint: String get() = endpoint.replace(Regex("/naxa-services-auth/?$"), "/naxa-services-customer-promotions")
+
     private val accountingEndpoint: String get() = BuildConfig.ACCOUNTING_FUNCTION_URL.trim().ifBlank {
         endpoint.replace(Regex("/naxa-services-auth/?$"), "/naxa-services-accounting")
+    }
+
+    suspend fun customerPromotionsRequest(accessToken: String, body: JSONObject): JSONObject {
+        if (customerPromotionsEndpoint.isBlank()) throw AuthApiException("La passerelle de parrainage client et promotions n'est pas configurée.")
+        return request(JSONObject(body.toString()), accessToken, customerPromotionsEndpoint)
     }
 
     suspend fun accountingRequest(accessToken: String, body: JSONObject): JSONObject {
