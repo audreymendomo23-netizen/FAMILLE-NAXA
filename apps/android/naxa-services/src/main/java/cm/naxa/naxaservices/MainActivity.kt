@@ -100,14 +100,24 @@ import cm.naxa.naxaservices.auth.RecoveryReset
 import cm.naxa.naxaservices.auth.SessionVault
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import androidx.compose.runtime.key
 import java.util.Calendar
 import cm.naxa.core.notifications.NotificationChannels
 import cm.naxa.core.notifications.BriefingScheduler
 
 class MainActivity : ComponentActivity() {
+    private val lockGeneration = MutableStateFlow(0)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { NaxaServicesTheme { NaxaServicesRoot() } }
+        setContent { NaxaServicesTheme { NaxaServicesRoot(lockGeneration) } }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        lockGeneration.value = lockGeneration.value + 1
     }
 }
 
@@ -123,11 +133,13 @@ private const val TERMS_VERSION = "2026-11-v1"
 private const val PRIVACY_VERSION = "2026-11-v1"
 
 @Composable
-private fun NaxaServicesRoot() {
+private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val api = remember { AuthApi(context) }
     val vault = remember { SessionVault(context) }
     val preferences = remember { NaxaServicesPreferences(context) }
+    val localPinManager = remember(context) { LocalAccessPinManager(context) }
+    val lockGenerationValue by lockGeneration.collectAsState()
     val localDatabase = remember {
         Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db")
             .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7, NS_SERVICES_MIGRATION_7_8, NS_SERVICES_MIGRATION_8_9, NS_SERVICES_MIGRATION_9_10, NS_SERVICES_MIGRATION_10_11, NS_SERVICES_MIGRATION_11_12)
@@ -138,6 +150,8 @@ private fun NaxaServicesRoot() {
 
     var route by rememberSaveable { mutableStateOf(AppRoute.LOGIN.name) }
     var session by remember { mutableStateOf<AuthSession?>(null) }
+    var localPinGateState by remember { mutableStateOf("closed") }
+    var lastHandledLockGeneration by remember { mutableIntStateOf(lockGenerationValue) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var pendingRefresh by remember { mutableStateOf<String?>(null) }
@@ -147,6 +161,22 @@ private fun NaxaServicesRoot() {
     var tourActive by rememberSaveable { mutableStateOf(false) }
     var tourStep by rememberSaveable { mutableIntStateOf(0) }
     var torchTarget by remember { mutableStateOf<Offset?>(null) }
+
+    LaunchedEffect(session?.account?.memberId) {
+        val memberId = session?.account?.memberId
+        localPinGateState = when {
+            memberId.isNullOrBlank() -> "closed"
+            localPinManager.isConfigured(memberId) -> "unlock"
+            else -> "setup"
+        }
+    }
+
+    LaunchedEffect(lockGenerationValue) {
+        if (lockGenerationValue != lastHandledLockGeneration) {
+            lastHandledLockGeneration = lockGenerationValue
+            if (session != null && localPinGateState == "open") localPinGateState = "unlock"
+        }
+    }
 
     fun routeAfterAuthentication(auth: AuthSession): String {
         locale = preferences.memberLocale(auth.account.memberId) ?: auth.account.defaultLocale
@@ -529,6 +559,26 @@ private fun NaxaServicesRoot() {
                         target = torchTarget,
                         active = !lightTheme && preferences.flashlightEnabled()
                     )
+                    val gatedSession = session
+                    if (gatedSession != null && localPinGateState != "open" && localPinGateState != "closed") {
+                        key(gatedSession.account.memberId, localPinGateState, lockGenerationValue) {
+                            LocalAccessPinGate(
+                                memberId = gatedSession.account.memberId,
+                                displayName = gatedSession.account.displayName,
+                                isSetup = localPinGateState == "setup",
+                                authApi = api,
+                                manager = localPinManager,
+                                rememberSession = rememberSession,
+                                onUnlocked = { localPinGateState = "open" },
+                                onReauthenticated = { updated ->
+                                    session = updated
+                                    if (rememberSession) vault.save(updated) else vault.clear()
+                                    if (updated.requirePasswordChange) route = AppRoute.CHANGE_PASSWORD.name
+                                    localPinGateState = "setup"
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
