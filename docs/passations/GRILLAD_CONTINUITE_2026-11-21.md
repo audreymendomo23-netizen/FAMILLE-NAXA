@@ -5,7 +5,7 @@
 **Dépôt :** audreymendomo23-netizen/FAMILLE-NAXA  
 **Branche de référence :** main  
 **Statut :** passation documentaire établie ; les points explicitement marqués ouverts restent à arbitrer  
-**Cahier associé :** [GRILLAD — Cahier des charges fonctionnel V1.1](../cahiers-des-charges/GRILLAD_V1_1.md)
+**Cahier associé :** [GRILLAD — Cahier des charges fonctionnel V1.2](../cahiers-des-charges/GRILLAD_V1_2.md)
 
 ---
 
@@ -63,52 +63,43 @@ Le choix du nom GRILLAD est retenu dans FAM-007 [V]. La disponibilité juridique
 
 Les décisions suivantes sont déjà portées par le registre et la continuité Famille NAXA. Elles doivent être conservées jusqu'à éventuelle modification explicite.
 
-### 4.1 Trois configurations opérationnelles Manager — FAM-009 [V]
+### 4.1 Configurations Manager et réseau — FAM-009 [V]
 
-La continuité générale décrit trois configurations d'organisation du travail :
+Les trois configurations historiques sont conservées, mais elles doivent désormais être lues avec une architecture réseau explicite :
 
-1. **Manager autonome sur un lieu :** pas de vendeur obligatoire.
-2. **Manager et un vendeur sur un lieu.**
-3. **Manager supervisant plusieurs vendeurs sur plusieurs lieux physiques précis.**
+1. Manager autonome sur un point de vente, sans vendeur obligatoire.
+2. Manager et un ou plusieurs vendeurs sur un même point de vente.
+3. Manager réseau supervisant plusieurs points de vente, chacun pouvant employer plusieurs vendeurs et disposer d'un responsable local.
 
-Chaque affectation, session, stock, caisse, vente et dépense doit être rattaché à un lieu autorisé. Les stocks et caisses de lieux distincts ne se mélangent jamais.
+**Décision d'organisation complémentaire :** un Promoteur peut gérer plusieurs points de vente ; chaque point de vente peut avoir plusieurs vendeurs. Chaque vendeur utilise son propre compte, ses ventes sont attribuées à son identité et à son point de vente, et ses droits sont limités aux points qui lui sont affectés.
 
-Cette décision n'est pas contradictoire avec GRD-004. Les trois configurations décrivent l'organisation humaine et opérationnelle ; les deux modes indépendant/centralisé décrivent la manière de gérer et consolider les données. Ce sont deux axes différents. Le cahier associé les conserve séparément.
+Hiérarchie cible :
 
-La continuité historique parle de lieux physiques géolocalisés. Cela désigne l'identification et la localisation des établissements, et ne vaut pas approbation d'un suivi GPS permanent du personnel.
+`Promoteur / Organisation → Points de vente multiples → Équipes multiples par point`
 
-### 4.2 Abonnement global Promoteur et périodicité — FAM-020 [V]
+Les stocks, préparations, caisses, ventes et dépenses restent ventilés par point de vente. Un point ne peut pas consulter les données d'un autre point sans autorisation. Un manager peut superviser un ou plusieurs points selon sa délégation.
 
-La règle tarifaire commune du portefeuille est :
+Cette architecture est distincte des deux modes de gestion des données de GRD-004 :
+- **Indépendant :** chaque point gère séparément ses opérations.
+- **Centralisé :** le Promoteur peut partager des paramètres et consulter une consolidation autorisée, sans fusion des caisses, stocks ou recettes.
 
-- abonnements mensuels ou annuels uniquement ;
-- un abonnement annuel récurrent donne 12 mois de service pour le prix de 10 mensualités ;
-- aucun forfait de 3 ou 6 mois ;
-- une modification commerciale ne doit pas être appliquée rétroactivement à une période déjà payée.
+La gestion simultanée de plusieurs vendeurs sur un même point doit être prise en charge. Chaque vente est associée au vendeur connecté. Le modèle de caisse (caisse commune par point ou sessions/tiroirs distincts par vendeur) reste à détailler ; l'attribution des opérations et la responsabilité de clôture doivent en tout cas rester traçables.
 
-Pour GRILLAD, la continuité générale précise qu'une seule souscription Promoteur couvre le réseau GRILLAD. Aucun deuxième abonnement ne doit être facturé automatiquement par point de vente, employé, appareil ou site.
+La localisation des points de vente ne constitue pas une autorisation de suivi GPS permanent du personnel.
 
-### 4.3 Grille tarifaire GRILLAD — continuité générale, §6.17.14 [V]
+### 4.2 Formules commerciales GRILLAD et périodicité — décision corrigée [V]
 
-La grille mensuelle inscrite dans la continuité comme arbitrage tarifaire validé est la suivante :
+GRILLAD ne propose que deux formules :
+- **ACCÈS :** un point de vente, avec possibilité d'y affecter plusieurs vendeurs.
+- **PREMIUM :** plusieurs points de vente dans le réseau du Promoteur, avec plusieurs vendeurs possibles sur chaque point.
 
-| Points de vente actifs du réseau Promoteur | Formule | Montant mensuel global |
-|---:|---|---:|
-| 1 | ACCÈS | 1 500 FCFA |
-| 2 à 5 | PREMIUM | 3 000 FCFA |
-| 6 à 10 | PRO | 5 000 FCFA |
-| 11 à 25 | PRO | 10 000 FCFA |
-| 26 à 50 | PRO | 15 000 FCFA |
-| 51 à 100 | PRO | 25 000 FCFA |
-| Plus de 100 | Sur devis | Sur devis |
+Aucun pack PRO n'est retenu. Aucun plafond numérique de vendeurs par point ni de points Premium n'est établi ici ; ne pas inventer de limite.
 
-Le montant est global pour le réseau Promoteur et n'est pas multiplié par le nombre de sites. Les points brouillon, archivés ou désactivés ne sont pas comptés comme actifs.
+La périodicité est mensuelle ou annuelle. Le paiement annuel correspond à **10 mensualités pour 12 mois de service** (deux mois offerts). Aucune formule de trois ou six mois.
 
-Sur la base de FAM-020, les équivalents annuels sont calculés à 10 mensualités pour 12 mois de service : 15 000, 30 000, 50 000, 100 000, 150 000 et 250 000 FCFA pour les tranches tarifées ci-dessus. Le palier supérieur à 100 reste sur devis.
+Les montants mensuels exacts ACCÈS et PREMIUM n'ont pas été retrouvés dans les éléments accessibles et restent à confirmer. Le tarif annuel de chaque formule sera égal à dix fois son tarif mensuel. Aucun tarif par palier de points, supplément par vendeur ou frais automatique par point de vente ne doit être codé sans décision expresse.
 
-**Contradiction à retenir et non à masquer :** une formulation plus ancienne du §6.17.5 présente PRO comme une capacité illimitée de points de vente, alors que le tableau plus récent du §6.17.14 borne les paliers à 100 points et prévoit un devis au-delà. Le §6.17.14 est daté du 20 novembre 2026 et indique expressément remplacer les anciennes grilles. Il prévaut donc pour les montants et tranches. La capacité « illimitée » ne doit pas être codée comme une promesse commerciale en contradiction avec le plafond tarifaire sans nouvel arbitrage.
-
-**Ouvert :** date d'effet d'un changement de palier en cours de période, application immédiate ou prochaine échéance, prorata et remboursement. Aucun calcul de prorata ne doit être inventé.
+Le modèle de facturation et la portée de la souscription doivent rester compatibles avec le moteur commun **Plan → Subscription → Payment → Entitlements**. Les droits de formule et les permissions individuelles sont contrôlés séparément.
 
 ## 5. Éléments écrits comme validés dans GRILLAD V1.0, mais à confirmer
 
@@ -184,7 +175,7 @@ L'état logiciel reste donc **NON AUDITÉ PAR CETTE MISSION DOCUMENTAIRE**. Il n
 
 ## 9. Ordre de reprise recommandé
 
-1. **Geler la référence documentaire** : utiliser le cahier GRILLAD V1.1 associé à cette passation ; ne pas importer les fonctions proposées comme des décisions.
+1. **Geler la référence documentaire** : utiliser le cahier GRILLAD V1.2 associé à cette passation ; ne pas importer les fonctions proposées comme des décisions.
 2. **Fermer les arbitrages** : confirmer les sujets listés en section 10.
 3. **Auditer le code existant** : Android, Web, contrats, données locales, APIs, RLS, tests et CI ; identifier chaque fonction déjà construite avant toute correction.
 4. **Construire la matrice exigences → code → test → preuve** : une ligne par exigence, avec fichier, test, résultat et lien de preuve.
@@ -202,12 +193,13 @@ L'état logiciel reste donc **NON AUDITÉ PAR CETTE MISSION DOCUMENTAIRE**. Il n
 | O-04 | Confirmer si les cinq familles doivent toutes pouvoir être actives simultanément sur le même point | [O] |
 | O-05 | Fixer la méthode de calcul du coût de revient et les éléments inclus | [O] |
 | O-06 | Fixer moyens de paiement, règles de caisse, fonds initial, paiements mixtes et remboursements | [O] |
-| O-07 | Fixer la règle d'effet des changements de palier d'abonnement en cours de période | [O] |
+| O-07 | Confirmer les tarifs mensuels ACCÈS et PREMIUM ; annuel égal à 10 mensualités pour 12 mois | [O] |
 | O-08 | Définir l'exception éventuelle à la vente directe pour GRILLAD Connect depuis un QR ZIPPLE | [B] |
 | O-09 | Valider ou exclure le pointage GPS et la preuve d'arrivée/départ du personnel | [O] |
 | O-10 | Valider langues, notifications, Livechat et éventuelle intégration NAXA SECURITY | [O] |
 | O-11 | Définir reçus, impressions, conservation des données et exports | [O] |
-| O-12 | Définir l'unité et le périmètre de facturation réseau Promoteur, sans contredire la grille globale | [O] |
+| O-13 | Définir les modalités de caisse lorsque plusieurs vendeurs travaillent simultanément sur un même point de vente | [O] |
+| O-12 | Confirmer l'unité contractuelle de souscription et les limites éventuellement attachées à PREMIUM, sans tarification automatique par vendeur ou point | [O] |
 
 ## 11. Références du dépôt
 
@@ -215,7 +207,7 @@ L'état logiciel reste donc **NON AUDITÉ PAR CETTE MISSION DOCUMENTAIRE**. Il n
 - [Continuité générale Famille NAXA](../CONTINUITE.md)
 - [Architecture cible](../ARCHITECTURE_CIBLE.md)
 - [Index documentaire](../INDEX.md)
-- [Cahier GRILLAD V1.1](../cahiers-des-charges/GRILLAD_V1_1.md)
+- [Cahier GRILLAD V1.2](../cahiers-des-charges/GRILLAD_V1_2.md)
 
 ---
 
