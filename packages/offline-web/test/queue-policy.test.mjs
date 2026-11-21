@@ -38,3 +38,10 @@ test("batch sizes are safely clamped", () => {
   assert.equal(normalizeQueueBatchLimit(250), 100);
   assert.throws(() => normalizeQueueBatchLimit(2.5));
 });
+
+test("offline events are isolated by application scope", async () => {
+  const { queueItemBelongsToApp } = await import("../src/queue-policy.js");
+  assert.equal(queueItemBelongsToApp({ appId: "naxa-services-web" }, "naxa-services-web"), true);
+  assert.equal(queueItemBelongsToApp({ appId: "other-app" }, "naxa-services-web"), false);
+  assert.equal(queueItemBelongsToApp({ eventId: "legacy" }, "naxa-services-web"), false);
+});

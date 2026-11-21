@@ -4,6 +4,7 @@ export const MAX_RETRY_DELAY_MS = 30 * 60 * 1000;
 
 export function assertSameEventPayload(existing, incoming) {
   if (!existing || existing.eventId !== incoming?.eventId) throw new TypeError("INVALID_QUEUE_EVENT");
+  if (existing.appId && incoming.appId && existing.appId !== incoming.appId) throw new Error("QUEUE_APP_SCOPE_MISMATCH");
   if (existing.payload !== incoming.payload) throw new Error("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD");
   return true;
 }
@@ -41,4 +42,9 @@ export function canRetrySyncFailure({ status, attemptCount, errorCode }) {
 export function normalizeQueueBatchLimit(value = 50) {
   if (!Number.isInteger(value)) throw new TypeError("INVALID_QUEUE_BATCH_LIMIT");
   return Math.max(1, Math.min(100, value));
+}
+
+export function queueItemBelongsToApp(item, appId) {
+  if (typeof appId !== "string" || !appId.trim()) throw new TypeError("INVALID_QUEUE_APP_ID");
+  return item?.appId === appId;
 }
