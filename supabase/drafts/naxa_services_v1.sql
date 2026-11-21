@@ -1017,10 +1017,10 @@ create policy ns_audit_events_select on public.ns_audit_events
 
 -- Internal Auth account aliases, login hashes, device hashes, recovery notes and
 -- audit writes are managed only by the server-side Edge Function/service_role.
-revoke all on public.ns_accounts from anon, authenticated;
-revoke all on public.ns_auth_attempts from anon, authenticated;
-revoke all on public.ns_auth_recovery_requests from anon, authenticated;
-revoke all on public.ns_devices from anon, authenticated;
+revoke all on public.ns_accounts from public, anon, authenticated;
+revoke all on public.ns_auth_attempts from public, anon, authenticated;
+revoke all on public.ns_auth_recovery_requests from public, anon, authenticated;
+revoke all on public.ns_devices from public, anon, authenticated;
 revoke all on public.ns_audit_events from public, anon, authenticated;
 revoke all on function public.ns_auth_is_limited(text, text) from public, anon, authenticated;
 revoke all on function public.ns_auth_record_attempt(text, text, boolean) from public, anon, authenticated;

@@ -113,7 +113,7 @@ jobs:
         with:
           deno-version: v2.x
       - name: Run static RLS, server-only grants and SECURITY DEFINER checks
-        run: deno test supabase/tests/drafts/naxa_services_static_security_test.ts
+        run: deno test --allow-read=supabase/drafts supabase/tests/drafts/naxa_services_static_security_test.ts
 
   android-debug:
     name: Assemble NAXA SERVICES Android debug APK
