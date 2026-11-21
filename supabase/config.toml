@@ -6,3 +6,6 @@ verify_jwt = false
 
 [functions.naxa-services-customer-promotions]
 verify_jwt = false
+
+[functions.naxa-services-notifications]
+verify_jwt = false

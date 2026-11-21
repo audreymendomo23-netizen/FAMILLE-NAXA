@@ -11,6 +11,7 @@ on:
       - "supabase/functions/naxa-services-auth/**"
       - "supabase/functions/naxa-services-referrals/**"
       - "supabase/functions/naxa-services-customer-promotions/**"
+      - "supabase/functions/naxa-services-notifications/**"
       - "supabase/drafts/naxa_services_v1.sql"
       - "supabase/drafts/naxa_services_v2_activity_onboarding_management.sql"
       - "supabase/drafts/naxa_services_referrals_v1.sql"
@@ -31,6 +32,7 @@ on:
       - "supabase/functions/naxa-services-auth/**"
       - "supabase/functions/naxa-services-referrals/**"
       - "supabase/functions/naxa-services-customer-promotions/**"
+      - "supabase/functions/naxa-services-notifications/**"
       - "supabase/drafts/naxa_services_v1.sql"
       - "supabase/drafts/naxa_services_v2_activity_onboarding_management.sql"
       - "supabase/drafts/naxa_services_referrals_v1.sql"
@@ -92,6 +94,20 @@ jobs:
         run: deno check supabase/functions/naxa-services-referrals/index.ts supabase/functions/naxa-services-referrals/referral_contract.ts supabase/functions/naxa-services-referrals/contract_test.ts
       - name: Run referral contract tests
         run: deno test supabase/functions/naxa-services-referrals/contract_test.ts
+
+  notifications-contract:
+    name: NAXA SERVICES remote notifications and FCM contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Type-check notification registration, inbox and FCM worker
+        run: deno check supabase/functions/naxa-services-notifications/index.ts supabase/functions/naxa-services-notifications/notification_contract.ts supabase/functions/naxa-services-notifications/contract_test.ts
+      - name: Run notification token, payload and delivery-state tests
+        run: deno test supabase/functions/naxa-services-notifications/contract_test.ts
 
   customer-promotions-contract:
     name: NAXA SERVICES customer referral and promotion contract
