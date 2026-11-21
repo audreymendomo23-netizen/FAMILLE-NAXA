@@ -150,7 +150,7 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
 
     var route by rememberSaveable { mutableStateOf(AppRoute.LOGIN.name) }
     var session by remember { mutableStateOf<AuthSession?>(null) }
-    var localPinGateState by remember { mutableStateOf("closed") }
+    var localPinUnlockedMemberId by remember { mutableStateOf<String?>(null) }
     var lastHandledLockGeneration by remember { mutableIntStateOf(lockGenerationValue) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -162,19 +162,10 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
     var tourStep by rememberSaveable { mutableIntStateOf(0) }
     var torchTarget by remember { mutableStateOf<Offset?>(null) }
 
-    LaunchedEffect(session?.account?.memberId) {
-        val memberId = session?.account?.memberId
-        localPinGateState = when {
-            memberId.isNullOrBlank() -> "closed"
-            localPinManager.isConfigured(memberId) -> "unlock"
-            else -> "setup"
-        }
-    }
-
     LaunchedEffect(lockGenerationValue) {
         if (lockGenerationValue != lastHandledLockGeneration) {
             lastHandledLockGeneration = lockGenerationValue
-            if (session != null && localPinGateState == "open") localPinGateState = "unlock"
+            localPinUnlockedMemberId = null
         }
     }
 
@@ -275,6 +266,7 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
                         if (authError?.statusCode == 401 || authError?.statusCode == 403) {
                             vault.clear()
                             rememberSession = false
+                            localPinUnlockedMemberId = null
                             session = null
                             route = AppRoute.LOGIN.name
                             message = "Session expirée ou révoquée. Connecte-toi à nouveau."
@@ -304,6 +296,7 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
                         runCatching { api.setMemberPreferredLocale(authenticated.accessToken, selectedLocale) }
                             .onSuccess { preferences.saveMemberLocale(authenticated.account.memberId, selectedLocale) }
                     }
+                    localPinUnlockedMemberId = null
                     session = withLocale
                     rememberSession = rememberMe
                     if (rememberMe) vault.save(withLocale) else vault.clear()
@@ -492,6 +485,7 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
                                             runCatching { api.logout(current.accessToken) }
                                             vault.clear()
                                             rememberSession = false
+                                            localPinUnlockedMemberId = null
                                             session = null
                                             tourActive = false
                                             route = AppRoute.LOGIN.name
@@ -560,21 +554,26 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
                         active = !lightTheme && preferences.flashlightEnabled()
                     )
                     val gatedSession = session
-                    if (gatedSession != null && localPinGateState != "open" && localPinGateState != "closed") {
-                        key(gatedSession.account.memberId, localPinGateState, lockGenerationValue) {
+                    if (gatedSession != null && LocalAccessPinGatePolicy.requiresUnlock(
+                            gatedSession.account.memberId,
+                            localPinUnlockedMemberId
+                        )
+                    ) {
+                        val pinIsConfigured = localPinManager.isConfigured(gatedSession.account.memberId)
+                        key(gatedSession.account.memberId, pinIsConfigured, lockGenerationValue) {
                             LocalAccessPinGate(
                                 memberId = gatedSession.account.memberId,
                                 displayName = gatedSession.account.displayName,
-                                isSetup = localPinGateState == "setup",
+                                isSetup = !pinIsConfigured,
                                 authApi = api,
                                 manager = localPinManager,
                                 rememberSession = rememberSession,
-                                onUnlocked = { localPinGateState = "open" },
+                                onUnlocked = { localPinUnlockedMemberId = gatedSession.account.memberId },
                                 onReauthenticated = { updated ->
+                                    localPinUnlockedMemberId = null
                                     session = updated
                                     if (rememberSession) vault.save(updated) else vault.clear()
                                     if (updated.requirePasswordChange) route = AppRoute.CHANGE_PASSWORD.name
-                                    localPinGateState = "setup"
                                 }
                             )
                         }

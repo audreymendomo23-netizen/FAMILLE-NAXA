@@ -25,3 +25,7 @@
 
 ## Limites
 La recette sur appareils physiques et différents constructeurs Android reste nécessaire. En cas de perte des données Keystore, l'utilisateur doit se réauthentifier ; aucun contournement local n'est prévu. La variante livrée utilise l'alternative PIN prévue au cahier des charges, pas la biométrie.
+
+
+## Correctif d'ordre d'affichage
+L'accès autorisé est désormais mémorisé par `member_id`, pas par un simple état global « ouvert ». Toute session dont le membre ne correspond pas au membre déverrouillé affiche le verrou avant le contenu ERP ; l'événement `onStop` invalide immédiatement l'autorisation locale.

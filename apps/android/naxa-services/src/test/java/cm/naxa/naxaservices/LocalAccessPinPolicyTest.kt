@@ -13,6 +13,14 @@ class LocalAccessPinPolicyTest {
         assertFalse(LocalAccessPinPolicy.isValid("04a7"))
         assertFalse(LocalAccessPinPolicy.isValid("０４２７"))
     }
+    @Test fun activeMemberMustMatchTheMemberThatWasUnlocked() {
+        assertTrue(LocalAccessPinGatePolicy.requiresUnlock("member-a", null))
+        assertFalse(LocalAccessPinGatePolicy.requiresUnlock("member-a", "member-a"))
+        assertTrue(LocalAccessPinGatePolicy.requiresUnlock("member-b", "member-a"))
+        assertFalse(LocalAccessPinGatePolicy.requiresUnlock(null, "member-a"))
+        assertFalse(LocalAccessPinGatePolicy.requiresUnlock("", "member-a"))
+    }
+
     @Test fun lockoutEscalatesAfterEachFiveFailures() {
         assertEquals(0L, LocalAccessPinPolicy.lockoutDurationMillis(4))
         assertEquals(30_000L, LocalAccessPinPolicy.lockoutDurationMillis(5))

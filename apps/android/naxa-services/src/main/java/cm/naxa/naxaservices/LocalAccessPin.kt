@@ -50,6 +50,11 @@ import javax.crypto.KeyGenerator
 import javax.crypto.Mac
 import javax.crypto.SecretKey
 
+internal object LocalAccessPinGatePolicy {
+    fun requiresUnlock(authenticatedMemberId: String?, unlockedMemberId: String?): Boolean =
+        !authenticatedMemberId.isNullOrBlank() && authenticatedMemberId != unlockedMemberId
+}
+
 internal object LocalAccessPinPolicy {
     const val PIN_LENGTH = 4
     const val MAX_ATTEMPTS_PER_WINDOW = 5
