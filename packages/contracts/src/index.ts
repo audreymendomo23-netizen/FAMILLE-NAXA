@@ -1,6 +1,6 @@
 export type AppId =
   | "kiosko" | "bootik" | "zipple" | "naxa-services" | "cotiz"
-  | "loyable" | "naxa-hotel" | "campus237" | "naxa-security" | "grillad";
+  | "loyable" | "naxa-hotel" | "campus237" | "naxa-security" | "jobly" | "naxa" | "grillad";
 
 export type DomainKind =
   | "catalog" | "profile" | "inventory" | "inventory_movement"
@@ -60,7 +60,7 @@ export type SyncEnvelopeError =
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const APP_IDS = new Set<AppId>([
   "kiosko", "bootik", "zipple", "naxa-services", "cotiz",
-  "loyable", "naxa-hotel", "campus237", "naxa-security", "grillad",
+  "loyable", "naxa-hotel", "campus237", "naxa-security", "jobly", "naxa", "grillad",
 ]);
 const DOMAIN_KINDS = new Set<DomainKind>([
   "catalog", "profile", "inventory", "inventory_movement", "customer", "crm",
