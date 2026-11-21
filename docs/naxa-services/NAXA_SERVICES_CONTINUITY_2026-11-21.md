@@ -1,11 +1,11 @@
 # NAXA SERVICES — document de continuité dédié
 
-**Version :** 1.0  
-**Date d'audit :** 21 novembre 2026  
+**Version :** 1.1  
+**Date de mise à jour :** 22 novembre 2026  
 **Dépôt :** `audreymendomo23-netizen/FAMILLE-NAXA`  
 **Branche de travail :** `work/naxa-services-completion-20261120`  
-**HEAD de référence :** `38df9449e196c1074272097d9440fcf132dfa99b`  
-**Statut global :** **NON VERT — construction fonctionnelle à poursuivre avant Supabase**
+**HEAD de référence :** `ada9bc2fe4986925a6afcc07238c0bbdc11f2073`  
+**Statut global :** **VERT CI (12/12) et VERT RLS LABORATOIRE — NON VERT OPÉRATIONNEL / PRODUCTION**
 
 Ce document est le point de reprise spécifique de NAXA SERVICES. Il complète `docs/CONTINUITE.md` et le registre `NAXA_SERVICES_REMAINING_RED_GATES_2026-11-21.md`. Il ne remplace pas les cahiers des charges ni les décisions métier.
 
@@ -22,11 +22,13 @@ Ce document est le point de reprise spécifique de NAXA SERVICES. Il complète `
 
 ### 2.1 Branche et commits vérifiés
 
-- Branche de travail : `work/naxa-services-completion-20261120`.
-- HEAD et dernier gate technique : `38df9449e196c1074272097d9440fcf132dfa99b`.
-- Gate technique [44944767801](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44944767801) : terminé, **12/12 jobs en succès**.
-- Le commit `ac239b915777dfa0bfdb0b45dddc902f6a28aafb` est le HEAD du workflow séparé de sauvegarde/restauration [44942987790](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44942987790), qui a terminé **1/1 job en succès**. Il ne faut pas le présenter comme commit du dernier gate technique.
-- Aucune fusion vers `main`, aucun déploiement et aucune migration sur Supabase historique constatés.
+- Branche de travail vérifiée : `work/naxa-services-completion-20261120`.
+- HEAD vérifié le 22 novembre : `ada9bc2fe4986925a6afcc07238c0bbdc11f2073`.
+- Dernier gate technique associé à ce HEAD : [44953846842](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44953846842), terminé le 21 novembre 2026 à 21:59 UTC, **12/12 jobs en succès**.
+- Le gate antérieur [44944767801](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44944767801) est un point de contrôle historique, désormais remplacé par le run 44953846842.
+- Le workflow séparé de sauvegarde/restauration [44942987790](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44942987790) a terminé **1/1 job en succès** sur le commit `ac239b915777dfa0bfdb0b45dddc902f6a28aafb`. Il s'agit d'un drill sur deux bases PostgreSQL jetables, pas d'une restauration hébergée.
+- Aucun projet Supabase NAXA Services n'a été créé ; aucun draft n'a été appliqué au projet historique NAXA / pharmacie. Cette reprise documentaire et les développements de la branche n'autorisent aucune migration ou mise en production.
+- La branche `main` n'est pas la branche de travail de cette intervention ; aucune fusion ou déploiement vers `main` n'est prévu par ce document.
 
 ### 2.2 Ce que couvre le gate technique
 
@@ -36,12 +38,9 @@ Ce résultat valide le socle CI et les contrats testés. Il ne prouve pas que to
 
 ### 2.3 Artefacts
 
-- APK Debug : artefact GitHub Actions [14723675607](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44944767801), taille 13 571 428 octets.
-- Digest SHA-256 de l'archive de l'artefact : `fc436b37e95cc28d74d072f903e228a68da7eb994ab1e2c2569fac3fbee9a90a`.
-- Ne pas confondre le digest de l'archive avec le hash du fichier APK individuel.
-- La Release reste non signée tant que le keystore/certificat du propriétaire et les secrets GitHub ne sont pas disponibles.
-
-Le drill backup/restore PostgreSQL 17 est vert sur deux bases jetables isolées. Il ne représente pas encore une reprise réelle d'un environnement hébergé.
+- APK Android **Debug** : artefact [14726537650](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44953846842), taille **13 578 529 octets**.
+- Digest SHA-256 de l'archive de l'artefact : `6945196a120541fde9a952300803127ab3ce01dac16eac5918f1bb62cfd78cd1`.
+- Il s'agit d'une APK Debug destinée à la revue technique, pas d'une APK Release signée. Le keystore/certificat du propriétaire et les quatre secrets GitHub du workflow Release restent requis.
 
 ## 3. Architecture présente et limite de qualification
 
@@ -105,20 +104,21 @@ Chaque événement doit avoir :
 
 Aucun envoi générique de simples pointeurs locaux ne doit être introduit.
 
-## 5. Web/PWA — travaux obligatoires
+## 5. Web/PWA — état corrigé et travaux obligatoires
 
-Le code actuel de `apps/web/naxa-services/src/main.tsx` conserve les opérations via `addLocalEntry()` dans l'état React. Les enregistrements disparaissent au rechargement et ne sont pas envoyés au backend. Les pages de modules montrent explicitement des états locaux/à connecter.
+Le portail Web utilise React, Vite et une session Auth réelle. Il reste une application Web séparée de l'Android Kotlin/Compose ; les deux clients doivent partager les contrats métier et règles d'autorisation, et non le même code d'interface.
 
-Le package `packages/offline-web` contient une base IndexedDB avec lease multi-onglets, retries, états de conflit/rejet et acquittement par reçu serveur. Ce mécanisme n'est pas encore raccordé à chaque formulaire et module Web.
+**Avancée vérifiée au HEAD `ada9bc2` :** la création d'un article de stock authentifiée utilise `normalizeInventoryItemDraft`, génère des identifiants stables, enfile l'événement dans `packages/offline-web` via IndexedDB, appelle l'action serveur `save_inventory_item`, exige un reçu serveur et n'acquitte la file qu'après validation du reçu. Les états de nouvelle tentative/rejet sont traités. Cette action Web ciblée ne représente pas une parité ERP globale.
 
-Sortie requise :
-- brancher les formulaires et vues sur les API de domaine ;
-- partager les règles d'autorisation, validations et statuts métier avec l'Android ;
-- mettre les snapshots en IndexedDB avant envoi ;
-- appliquer les reçus explicites, conserver les conflits et les rejets ;
-- recharger les vues depuis la base serveur et le cache local ;
-- tester online/offline, reconnexion, double onglet, reprise après crash et changements de session ;
-- ne jamais afficher une création locale comme un encaissement ou un document serveur confirmé.
+**Limite qui reste démontrée :** les autres formulaires et écrans de gestion (agenda, pressing, caisse/ventes, prestations, CRM, mouvements et inventaires, achats/réceptions/paiements, charges, fidélité, équipe, rapports et administration) ne sont pas tous raccordés à des API de domaine avec persistance et reçus serveur. Plusieurs opérations continuent d'utiliser `addLocalEntry()` et l'état React local. Elles ne doivent pas être présentées comme des opérations ERP Web persistées ou confirmées côté serveur.
+
+Critères de fermeture :
+- chaque parcours métier Web livré est connecté à une API de domaine autorisée, avec validation et scope organisation/site/poste/rôle identiques à l'Android ;
+- les écritures offline sont persistées dans IndexedDB avec IDs stables, dépendances, reprises et états de conflit/rejet ;
+- chaque mutation n'est déclarée confirmée qu'après un reçu serveur vérifié ;
+- les écrans relisent l'état serveur et le cache local après rechargement ;
+- les tests couvrent online/offline, reconnexion, onglets multiples, double soumission, crash/reprise, changement de session, conflit et droits ;
+- la matrice de parité est tenue fonction par fonction. Le build Vite seul ne vaut pas parité métier.
 
 ## 6. Intégrations et contrôles réglementaires encore rouges
 
@@ -142,7 +142,7 @@ Ces éléments ne sont pas tous résolubles par du code seul. Les validations ex
 | Lot de travail | Preuve obligatoire | Statut |
 |---|---|---|
 | Inventaire des 55 points d'outbox | Classer chaque call site : mutation métier à synchroniser, journal local, copie/cache ou action couverte par une API directe | À QUALIFIER — ne pas assimiler 55 événements à 55 fonctions manquantes |
-| Cycle fournisseur | Quatre snapshots, quatre actions supportées par le coordinateur manuel ; dépendances article distant et caisse espèces | PARTIEL — code et coordinateur présents ; dépendances et activation isolée non prouvées |
+| Cycle fournisseur et prérequis stock | 11 codes d'action acceptés par le coordinateur manuel : fournisseur, articles, mouvements, commande, réception et règlement | PARTIEL — périmètre étendu ; synchronisation manuelle/opt-in, mapping article requis et caisse espèces encore bloquante |
 | Autres domaines Room | Plusieurs écrans et registres fonctionnent localement ; mentions LocalOnly et fonctions API directes à comparer | ROUGE pour réplication universelle ; VERT LOCAL pour les parcours locaux attestés |
 | Handlers serveur ERP par domaine | Edge accounting couvre le cycle fournisseur, post_sale_inventory, objectifs et lecture performance ; vérifier le raccordement effectif de chaque action | PARTIEL — pas de preuve de couverture de tous les agrégats |
 | Reçus transactionnels et conflits globaux | Tables/contrats de reçus et conflits présents dans les drafts ; coordinateur actif limité au cycle fournisseur | PARTIEL — pas de preuve mutation + reçu atomiques pour tous les domaines |
@@ -188,23 +188,68 @@ Ces éléments ne sont pas tous résolubles par du code seul. Les validations ex
 
 Document complémentaire : `docs/naxa-services/NAXA_SERVICES_SYNC_PROTOCOL_V1.md`.
 
-
 ---
 
-## 11. Correctif d'audit comparatif — 21 novembre 2026
+## 12. Mise à jour de continuité et définition des huit gates — 22 novembre 2026
 
-Le comptage des 55 appels d'outbox n'est pas un inventaire de 55 fonctionnalités non terminées. Le précédent texte qui présentait les 51 appels sans snapshot comme 51 fonctions incomplètes est retiré : il n'était pas suffisamment étayé.
+Cette section est la référence courante et prévaut sur les chiffres de HEAD, les descriptions de synchronisation et les statuts d'artefact des sections historiques précédentes. Elle formalise les huit points de fermeture déjà ordonnés dans le registre des points rouges. Les huit gates sont des portes de preuve ; ils ne signifient pas que huit modules isolés suffisent à rendre le produit prêt à commercialiser.
 
-Le document de confrontation NAXA_SERVICES_EVIDENCE_RECONCILIATION_2026-11-21.md met en regard les déclarations des sections 30, 34, 39, 41, 44, 46 et 47 du dossier de construction, les écrans Android, les fonctions Auth/Edge, les contrats et les tests.
+### 12.1 Référence technique courante
 
-Règle de qualification :
-- VERT LOCAL : parcours Android/Room construit et explicitement livré dans la portée locale ;
-- VERT API/CONTRAT : endpoint, client et contrat/test présents, sans présumer de leur déploiement réel ;
-- PARTIEL : une partie du parcours fonctionne, mais un maillon métier, ledger, worker ou dépendance reste ouvert ;
-- ROUGE PROUVÉ : une contre-preuve directe existe (écran local, appel métier absent, route absente du coordinateur actif, garde fail-closed ou workflow non exécuté) ;
-- BLOQUÉ EXTERNE : projet, secret, compte marchand, clé ou validation professionnelle/juridique manquante ;
-- À QUALIFIER : les éléments disponibles ne suffisent pas pour conclure.
+- Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`.
+- Branche : `work/naxa-services-completion-20261120`.
+- HEAD : `ada9bc2fe4986925a6afcc07238c0bbdc11f2073`.
+- Dernier gate : [run 44953846842](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44953846842), **12/12 jobs SUCCESS**.
+- Contrôles couverts : build Web et tests de session Auth ; contrats Auth/périmètres/modes métier ; politiques paiement/commissions/fiscalité ; comptabilité fournisseurs/prévisions ; sécurité statique SQL ; build et tests Android unitaires/instrumentés sur émulateur ; schéma et RLS runtime PostgreSQL 17 jetable ; contrats notifications/FCM ; parrainage client/promotions ; API de parrainage ; tarifs Famille ; contrat de synchronisation inter-applications.
+- Artefact : APK Debug `14726537650`, 13 578 529 octets, SHA-256 archive `6945196a120541fde9a952300803127ab3ce01dac16eac5918f1bb62cfd78cd1`.
+- Sauvegarde/restauration : run distinct `44942987790`, 1/1 SUCCESS sur deux bases PostgreSQL jetables. Le run et son commit ne sont pas le HEAD du dernier gate technique.
+- Non démontré : déploiement Supabase hébergé dédié, dispatch FCM réel, transactions marchandes Mobile Money réelles, synchronisation ERP universelle, parité complète Web/PWA, Release signée et recette physique.
 
-Le parrainage client Android, le centre de notifications Android, l'API Auth/profil/site/poste, les briefings locaux et les rappels de charges locaux sont des capacités réellement présentes : elles ne doivent plus être listées comme absentes. Les limites restant démontrées concernent leur portée (FCM réel, intégration de récompense au ledger, synchronisation CRM/ERP, déploiement), pas leur simple existence.
+### 12.2 Ce que signifie « mise au vert »
 
-Le gate CI le plus récent est le run 44946137015, 12/12 jobs SUCCESS sur le commit documentaire 697d58f. L'artefact Android correspondant est Debug, ID 14724147044, digest d'archive SHA-256 edfa9665b220a1442b1a82455d6da2e07f221172d7b226761cf25c95b46b5e7e. La branche main reste indépendante.
+Un statut vert est toujours accompagné de son niveau et de sa preuve :
+
+- **VERT LOCAL** : le parcours métier fonctionne sur l'appareil et sa base locale, avec tests du flux local. Cela ne prouve ni réplication ni disponibilité multi-appareils.
+- **VERT API/CONTRAT** : client, endpoint/handler et contrat sont présents ; les tests de validation sont passés. Cela ne prouve pas que l'endpoint est déployé dans un environnement réel.
+- **VERT LABORATOIRE** : migration candidate appliquée à une base jetable, tests SQL/RLS exécutés et résultats conservés. Cela ne prouve pas l'isolation d'un projet Supabase hébergé.
+- **VERT INTÉGRATION** : environnement fournisseur/Firebase réel ou sandbox officielle configurée, secrets installés dans un coffre, et parcours de bout en bout exécuté avec preuve observable.
+- **VERT OPÉRATIONNEL** : le scénario métier complet est utilisable par l'utilisateur, depuis l'écran jusqu'à la mutation serveur, au reçu, au ledger/état attendu, à la reprise et à l'audit ; les tests négatifs et de non-régression passent.
+- **VERT PRODUCTION** : version signée et déployée sur l'environnement dédié, contrôle d'accès et observabilité actifs, sauvegarde/restauration opérationnelle, procédure de retour arrière et recette utilisateur approuvée.
+
+Un niveau inférieur ne doit jamais être présenté comme un niveau supérieur. Un build, un écran, une simulation, un endpoint non déployé, un HTTP 2xx/202 sans reçu, ou un test sur base jetable ne suffit pas à déclarer un parcours opérationnel ou en production.
+
+### 12.3 Les huit gates et leur définition de sortie
+
+| N° | Gate | État vérifié au 22/11/2026 | Définition précise de la mise au vert |
+|---:|---|---|---|
+| 1 | Inventaire et qualification des événements métier | **À QUALIFIER / PARTIEL** | Les 55 points d'émission d'outbox sont recensés un par un et classés : mutation à répliquer, événement local/audit, cache/mirror ou action déjà couverte par une API directe. Pour chaque mutation à répliquer : agrégat, code d'action/version, snapshot, ID stable, organisation/site/poste/acteur, dépendances, source de vérité, handler, reçu, conflit, stratégie retry et test sont documentés. Aucun événement n'est déclaré manquant sur la seule base d'un comptage. Le code actuel accepte 11 codes d'action du cycle fournisseur et des prérequis stock ; la couverture complète des autres domaines n'est pas démontrée. Le gate est vert quand 100 % des call sites sont classés et que chaque mutation promise a un contrat approuvé, sans événement orphelin ni doublon de périmètre. |
+| 2 | Handlers et mutations serveur | **PARTIEL — contrats/RPC en laboratoire, pas de backend hébergé dédié** | Chaque action issue de la matrice possède un handler typé et un RPC transactionnel ; Auth vérifie organisation, site, poste, rôle et propriété de l'agrégat. La mutation métier et son reçu idempotent sont persistés atomiquement. Un double envoi identique renvoie le même résultat ; un même ID avec payload divergent est rejeté ; une dépendance manquante ou un scope invalide est bloqué ; un crash/retry ne crée ni doublon ni perte. Tous les scénarios sont testés positivement et négativement sur PostgreSQL jetable et, après autorisation, sur l'environnement dédié. Le gate est vert lorsque toutes les actions du gate 1 ont une implémentation serveur prouvée, et non lorsque quelques RPC compilent. |
+| 3 | Synchronisation Android globale | **ROUGE — cycle fournisseur/stock étendu, synchronisation universelle non livrée** | Chaque mutation locale qui doit être partagée rejoint une outbox durable avec snapshot versionné, identifiants stables et dépendances ; le coordinateur prend en charge toutes les actions approuvées, automatiquement et manuellement, avec backoff, reprise, mapping des IDs distants et résolution de conflits. Les reçus persistants seuls font passer un événement à synchronisé. Les scénarios multi-appareils, hors ligne prolongé, redémarrage, double envoi, ordre de dépendances, changement de site et rejet serveur passent. Au HEAD courant, `SupplierSyncCoordinator` n'est toujours que manuel/opt-in ; il accepte 11 codes `supplier.*`, `inventory_item.*`, `inventory_movement.*` et `purchase.*`, et bloque encore les achats sans mapping article ainsi que les règlements espèces sans mapping de session de caisse. Les autres domaines ne sont pas couverts par un coordinateur global. |
+| 4 | Web/PWA et parité métier | **PARTIEL — Auth/build et création d'article stock reliée ; autres parcours incomplets** | Tous les modules Web annoncés sont raccordés aux mêmes contrats métier sécurisés que l'Android, avec file IndexedDB, persistance, reçus, retries et conflits ; les données restent visibles après rechargement et concordent entre Web, Android et serveur. Tests online/offline, reconnexion, multi-onglet, double clic, crash, changement de session et scopes passent. Au HEAD courant, la création d'article de stock authentifiée utilise la file offline et l'action serveur `save_inventory_item` avec vérification du reçu ; ce chemin précis ne vaut pas parité ERP. Les autres formulaires qui passent encore par `addLocalEntry()` restent des brouillons locaux et doivent être connectés ou explicitement présentés comme tels. |
+| 5 | Finance, comptabilité, commissions, fidélité et récompenses | **PARTIEL — moteurs/tests présents ; automatisations et visas non achevés** | Une vente/prestation ne produit un revenu qu'après confirmation de paiement ; les commissions se calculent automatiquement à partir d'une prestation achevée, payée et d'un barème daté approuvé ; les partages, plafonds, annulations et extournes sont audités. Les programmes de fidélité restent les quatre programmes indépendants déjà prévus, configurables par activité ; leur fermeture exige le déclenchement depuis les événements métier réels, un ledger idempotent et la synchronisation, sans inventer de seuils ou barèmes non validés. Le parrainage PME conserve la règle décidée : récompense par vagues de cinq PME ayant chacune terminé leur première souscription payante (parrain mensuel : un mois/cycle offert ; parrain annuel : un mois supplémentaire d'Accès à la fin de la période annuelle ; vagues 5, 10, 15… répétables) ; le webhook de paiement doit déclencher le crédit réel d'entitlement, pas seulement un statut `pending_entitlement`. Le parrainage client doit relier son contrat API au ledger/récompense réel. Le catalogue tarifaire Famille et sa règle annuelle 10 mois payés pour 12 mois de service, à date d'effet du 1er mai 2027, sont testés comme politiques ; ils ne prouvent pas une collecte réelle. SYSCOHADA, fiscalité camerounaise, paie et CNPS requièrent plan de comptes complet, paramètres datés et visa de professionnels compétents. Les barèmes de commission et taux non confirmés ne doivent pas être inventés. |
+| 6 | Intégrations externes : Mobile Money et FCM | **BLOQUÉ EXTERNE / CONTRATS TESTÉS SEULEMENT** | FCM : projet Firebase propre à NAXA Services, configuration Android, service-account et secrets de chiffrement/worker installés dans un coffre, worker déployé, token enregistré/révocable, push réellement reçu sur appareils de test, statut de livraison contrôlé et scénario de panne/reprise prouvé. Mobile Money : contrats/KYC MTN MoMo et Orange Money, accès sandbox, identifiants marchands/bénéficiaires, clés et webhooks signés, frais confirmés, validation montant/devise/référence/idempotence, notification serveur et rapprochement bancaire/ledger de bout en bout. Le moteur fail-closed et les contrats CI sont utiles, mais ne constituent pas une transaction réelle. Les messages WhatsApp préparés et déclenchés par l'utilisateur restent distincts d'un service d'envoi automatique. |
+| 7 | Release, conformité, sauvegarde et recette terrain | **PARTIEL / BLOQUÉ PAR CLÉS, AVIS ET RECETTE PHYSIQUE** | La Release Android doit être construite avec le keystore du propriétaire, les quatre secrets requis stockés dans GitHub Secrets, puis vérifiée par `apksigner` et checksum ; une APK Debug ne satisfait pas ce critère. La sauvegarde/restauration doit être exécutée sur l'environnement hébergé dédié avec restauration complète, contrôle d'intégrité et exercice de reprise après incident ; le drill sur deux DB jetables est seulement VERT LABORATOIRE. Les scénarios doivent être acceptés sur appareils physiques, imprimantes, réseau dégradé, permissions, batterie, accessibilité, FR/EN et Fulfulde relu par un locuteur compétent. La roue promotionnelle reste désactivée jusqu'à avis juridique écrit et autorisation applicable. Les validations comptables/fiscales/sociales sont traitées au gate 5, pas simulées ici. |
+| 8 | Gate final, dossier de preuves et passage Supabase dédié | **NON LANCÉ — suspension volontaire** | Le dernier HEAD repasse l'ensemble des gates automatisés ; un dossier fonction par fonction relie exigence, code, API, test, résultat, artefact et preuve terrain. Les gates 1 à 7 ont chacun leur niveau vert exigé pour le périmètre de lancement, aucun blocage critique non accepté ne subsiste, et la matrice montre les limites explicitement exclues de la première version. Ce n'est qu'après cette revue que le propriétaire peut autoriser la création d'un projet Supabase NAXA Services isolé, distinct de celui de la pharmacie, l'application contrôlée des migrations, le déploiement des Edge Functions/secrets et les tests réels Auth/RLS/receipts/backup/restore. Aucun draft ne sera jamais appliqué au projet historique NAXA / pharmacie. |
+
+### 12.4 Éléments déjà décidés à préserver — ne pas rouvrir sans arbitrage
+
+- Les parcours locaux Android Room déjà livrés (catalogue/prestations, rendez-vous, pressing/tickets, caisse/ventes/dépenses, CRM, stock/import, fournisseurs/achats, équipe/pointage, multi-sites/postes, charges récurrentes, quatre fidélités et pilotage) sont conservés. Leur absence de réplication serveur ne justifie pas de les reconstruire.
+- Pour le stock, conserver le parcours WhatsApp fournisseur initié par l'utilisateur : contact fournisseur, seuil bas, proposition de commande et message prérempli ; ne pas inventer un service d'envoi automatique.
+- Les charges récurrentes gardent fréquence, échéance, paiement partiel/total, historique et rappels locaux ; la réplication et les rappels multi-appareils sont une couche distincte.
+- Les quatre programmes de fidélité sont indépendants et configurables par activité ; les seuils, points et montants de récompense doivent être proposés puis validés, jamais supposés.
+- Les décisions de parrainage PME et de facturation annuelle décrites au gate 5 sont conservées. Les offres de prix NAXA Services qui se contredisent dans les anciens dossiers restent à arbitrer ; aucun tarif final n'est choisi dans cette mise à jour.
+- Les trois modes d'exploitation (PME autonome ; établissement avec plusieurs postes ; organisation multisite) et les périmètres organisation/site/poste doivent rester testés et séparés.
+- La roue promotionnelle reste coupée tant que l'avis juridique/autorisation n'est pas obtenu. NAXA Services ne doit pas être raccordé à la base historique de la pharmacie.
+
+### 12.5 Ordre d'exécution après cette mise à jour
+
+1. Terminer l'inventaire des 55 call sites et approuver le périmètre de réplication par domaine.
+2. Élargir les handlers/RPC et leurs reçus transactionnels selon la matrice, en conservant les tests PostgreSQL jetables.
+3. Construire les coordinateurs Android par agrégat avec les dépendances et la résolution de conflits, puis couvrir multi-appareils.
+4. Étendre la file Web/PWA des parcours déjà intégrés (à commencer par stock) à chaque module du périmètre validé.
+5. Relier les événements de caisse/prestation aux commissions, fidélités, parrainages, paiements et journaux ; obtenir les visas métier et professionnels.
+6. Obtenir les environnements et contrats Firebase/Mobile Money, puis réaliser les essais intégrés réels.
+7. Préparer signature, conformité, recette physique et restauration hébergée.
+8. Exécuter un gate final complet, constituer le dossier de preuves et seulement ensuite soumettre la création du projet Supabase dédié à autorisation.
+
+**Décision de continuité au 22 novembre 2026 :** le dépôt est **VERT CI 12/12** sur le HEAD mentionné, et le laboratoire PostgreSQL 17 couvre le schéma/RLS ; la restauration laboratoire est **VERT 1/1** sur son run distinct. NAXA SERVICES n'est pas déclaré globalement vert : les gates 1 à 8 conservent les statuts précis ci-dessus. Aucun Supabase NAXA Services hébergé, aucune Release signée et aucune intégration marchande/FCM réelle ne sont attestés à cette date.
