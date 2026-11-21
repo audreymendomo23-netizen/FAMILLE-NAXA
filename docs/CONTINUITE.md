@@ -1,7 +1,9 @@
 # Continuité — Famille NAXA
 
-> Mise à jour : 20 novembre 2026  
+> Mise à jour : 21 novembre 2026  
 > Référence de continuité pour l'audit documentaire, l'architecture et la construction du monorepo.
+>
+> **Dossier produit LOYABLE :** [Continuité dédiée LOYABLE](CONTINUITE_LOYABLE.md) — décisions métier, quatre espaces, QR/liens locataires, annonces, paiements, centre de maintenance et réutilisation qualifiée du réseau NAXA.
 
 ## 1. Périmètre officiel
 
