@@ -1159,3 +1159,26 @@ Ce document dédié devient la référence de reprise LOYABLE pour :
 - les points ouverts et l'ordre des prochains travaux.
 
 **Règle de cohérence :** les décisions spécifiques LOYABLE du 21 novembre 2026 consignées dans ce document dédié prévalent sur les formulations plus anciennes du cahier LOYABLE, notamment pour les états des lieux (désormais exclus). Les statuts de développement doivent toujours être vérifiés séparément ; une exigence documentée n'est pas une preuve d'implémentation.
+
+## 9. Mise à jour LOYABLE — Centre de maintenance et interconnexion NAXA SERVICES (21 novembre 2026)
+
+Le cahier des charges détaillé du Centre de maintenance LOYABLE et de son interconnexion avec NAXA SERVICES est créé à :
+
+- **docs/loyable/LOYABLE_CAHIER_DES_CHARGES_CENTRE_MAINTENANCE_INTERCONNEXION.md**
+- Continuité LOYABLE mise à jour : **docs/loyable/LOYABLE_CONTINUITE.md**
+
+### Décision utilisateur intégrée au référentiel
+
+Le registre des prestataires compatibles avec LOYABLE V1 ne retient que les activités **Réparation** et **Menuiserie** du catalogue NAXA SERVICES. Le catalogue complet NAXA SERVICES reste inchangé ; les autres catégories ne sont pas proposées dans le registre LOYABLE V1. Les sous-spécialités, zones, disponibilités, capacités, collaborateurs habilités et niveaux de vérification complètent les deux catégories, sans présumer des compétences non vérifiées.
+
+### Réutilisation inter-applications — statut exact
+
+- **NAXA :** composants transverses potentiellement réutilisables après audit de compatibilité (organisations/périmètres, rôles, audit, stockage privé, notifications, contrats et synchronisation). Les schémas et données spécifiques à la pharmacie ne sont pas repris.
+- **NAXA SERVICES :** le rapport de construction consulté documente des fondations Android locales pour organisations/sites, catalogue, agenda, prestataires/équipe et certains workflows. La synchronisation ERP est encore partielle ; aucun ordre de maintenance LOYABLE ni contrat inter-applications complet n'est déclaré opérationnel.
+- **JOBLY :** seuls les patterns de profil partenaire, vérification/KYC, QR/code révocable, attribution, états et idempotence sont des références à adapter. Les comptes, wallets, commissions et règles commerciales JOBLY Partner ne sont pas réutilisés pour les prestataires.
+
+### Portée documentaire et technique
+
+Cette mise à jour est documentaire. Elle n'a créé ni modifié de code applicatif, ni migration Supabase, ni fonction serveur, ni endpoint, ni secret, ni déploiement. La présence d'une exigence dans le cahier n'est pas une preuve d'implémentation. Les arbitrages opérationnels encore ouverts sont listés dans le cahier détaillé, notamment plafonds de dépense, SLA/urgences, sous-spécialités réellement vérifiées, partage des coordonnées, conservation des médias, qualité et refacturation locataire.
+
+**Règle de reprise :** démarrer par l'inventaire réel des organisations NAXA SERVICES Réparation/Menuiserie, puis finaliser les décisions métier et le contrat d'intégration avant tout développement du parcours vertical.
