@@ -1145,3 +1145,17 @@ Les scripts Supabase v1/v2/Referral/v3 sont des drafts ; le v3 reste rollback-on
 Restent également : RLS réel appliqué et testé, API/synchronisation/idempotence/conflits complets, paiements récurrents réels et webhooks, services FCM/SMS/WhatsApp Business, certification comptable/fiscale/paie, recette instrumentée et restauration, release Android signée, Web/PWA séparée, Fulfulde relu, centralisation des dix apps, Customer Service Officers partagés, passerelle IA versionnée et intégration fonctionnelle NAXA SECURITY.
 
 **Statut à conserver :** le code Android de cette passe et les 4 jobs CI sont verts sur la branche. NAXA SERVICES n'est pas qualifié « VERT GLOBAL ». Le code n'a pas été fusionné dans main et aucun déploiement production n'a été effectué.
+
+## 8. Dossier de continuité dédié — LOYABLE (21 novembre 2026)
+
+Le référentiel produit LOYABLE a été séparé dans **`docs/loyable/LOYABLE_CONTINUITE.md`** afin de conserver ses décisions, son périmètre fonctionnel, son Centre de maintenance et ses dépendances inter-applications sans alourdir ni mélanger les cahiers des autres produits.
+
+Ce document dédié devient la référence de reprise LOYABLE pour :
+- les quatre espaces Gestion, Locataire, Immobilier et Publication NAXA ;
+- les décisions validées sur les accès QR/lien, les loyers, les reçus, les annonces, les tarifs et les fonctions du bailleur ;
+- le Centre de maintenance de bout en bout ;
+- la capitalisation du catalogue et du réseau de prestataires NAXA SERVICES ;
+- le contrat d'intégration à concevoir entre LOYABLE et NAXA SERVICES ;
+- les points ouverts et l'ordre des prochains travaux.
+
+**Règle de cohérence :** les décisions spécifiques LOYABLE du 21 novembre 2026 consignées dans ce document dédié prévalent sur les formulations plus anciennes du cahier LOYABLE, notamment pour les états des lieux (désormais exclus). Les statuts de développement doivent toujours être vérifiés séparément ; une exigence documentée n'est pas une preuve d'implémentation.
