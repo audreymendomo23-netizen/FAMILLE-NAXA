@@ -155,3 +155,43 @@ L'activation est fausse par défaut et exige une référence de projet de recett
 ## 13. Contrôle client de périmètre avant envoi
 
 Le coordinateur Android vérifie que l'organisation de chaque payload est celle de la session et que le site est affecté au membre. Les événements d'un site non affecté passent en `blocked_dependency`, sans être transmis. Les événements d'une organisation incohérente sont rejetés. Cette protection cliente n'accorde aucun droit : les contrôles organisation/site côté Edge et RPC restent obligatoires.
+
+
+---
+
+## 14. État effectif après l'audit du 21 novembre 2026
+
+Le gate technique du commit `38df9449e196c1074272097d9440fcf132dfa99b` est terminé **12/12 jobs SUCCESS**. Le résultat inclut le contrat commun de file offline et l'assemblage/test Android, mais ne valide pas l'ensemble des événements métier.
+
+L'inspection du code a identifié 55 points d'émission dans `LocalErpStore.kt`. Parmi eux, seuls les quatre événements du cycle fournisseur ont des snapshots explicites et un coordinateur serveur actuellement implémenté :
+`supplier.saved`, `purchase.ordered`, `purchase.receipt.confirmed` et `supplier.payment.recorded`.
+
+Les autres appels utilisent le payload de repli `aggregate_id` / `site_id`. Ils ne constituent pas des snapshots métier et ne doivent pas être envoyés à une passerelle générique ni marqués synchronisés. Un statut `synced` doit rester réservé à un reçu serveur authentique, relié à la mutation métier idempotente.
+
+Le coordinateur actuel est manuel, limité au cycle fournisseur, désactivé par défaut et fermé lorsque la référence de projet dédiée n'est pas configurée. Il bloque les commandes contenant des lignes de stock sans correspondance serveur et les paiements espèces sans session distante correspondante.
+
+## 15. Lots requis pour une synchronisation réellement universelle
+
+La synchronisation n'est considérée complète qu'après réussite de chacune des lignes suivantes :
+
+| Lot | Couverture minimale | Test de sortie |
+|---|---|---|
+| Snapshot outbox | Les 55 points d'émission ont un schéma d'événement versionné, un payload complet/minimisé, des IDs stables, l'organisation, le site, l'acteur et les dépendances nécessaires | Test de couverture statique interdisant un payload de repli dans les opérations métier |
+| Serveur typé | Chaque action autorisée est gérée par un handler typé et une transaction métier adaptée | Handler de chaque code d'action : cas valide, invalide, hors scope et doublon |
+| Reçus | Reçu unique par event ID, mutation et reçu en même transaction, empreinte du payload et réponse rejouable | Deux envois identiques = une mutation ; même ID avec contenu divergent = rejet |
+| Dépendances | Références entre fournisseur, article, achat, réception, caisse, vente, paiement, stock, etc. | Les événements enfants restent bloqués tant que leurs dépendances ne sont pas confirmées |
+| Conflits | Politique par agrégat, versions serveur, review humaine pour mutations non fusionnables | Tests deux appareils modifiant le même agrégat et deux postes indépendants |
+| Android | WorkManager, réseau instable, lease, backoff, reprise après crash, statut UI et observabilité | Tests instrumentés et scénario multi-appareils sur environnement isolé |
+| Web/PWA | IndexedDB et même API/contrats métier, authentification, file, reprise, reçus, conflits et états UI | Parcours navigateur hors ligne/en ligne sans perte ni doublon |
+| Cloisonnement | Contrôle serveur de l'identité, organisation, site, poste, membre et permission pour chaque action | Tests négatifs de cross-tenant/cross-site/cross-device et RLS runtime |
+
+Un test de l'enveloppe commune n'est pas un substitut aux tests de couverture de tous les types d'événements. La synchronisation universelle demeure **ROUGE** tant que ces gates ne sont pas exécutés et prouvés.
+
+## 16. Ordre de reprise
+
+1. Inventorier les 55 codes d'action et leurs agrégats/dépendances.
+2. Définir les schémas payload par agrégat et mettre à jour les points d'émission dans la même transaction que les mutations Room.
+3. Compléter les RPC/handlers serveur et les tests PostgreSQL jetables couvrant l'ensemble des mutations.
+4. Ajouter orchestration Android automatique et reprise multi-appareils.
+5. Raccorder chaque écran du Web/PWA au backend et à la file offline partagée.
+6. Ne permettre l'activation qu'après une preuve de compatibilité de l'environnement dédié. Le projet NAXA historique est explicitement hors périmètre.

@@ -1228,3 +1228,46 @@ Activation protégée : `NS_ENABLE_SUPPLIER_SYNC=true`, références projet/conf
 
 
 Contrôle final ajouté au coordinateur : organisation du payload strictement égale à l'organisation de session, site du payload strictement présent dans les affectations du membre. Un site non affecté reste bloqué sans interrompre le traitement des autres sites autorisés ; l'Edge/RPC reste l'autorité finale d'autorisation.
+
+
+---
+
+## 6.17.29 — Reprise spécifique NAXA SERVICES et interdiction de passer prématurément à Supabase (21 novembre 2026)
+
+Cette section complète et, pour les statuts divergents, remplace les relevés intermédiaires des sections 6.17.22 à 6.17.28.
+
+### Références confirmées
+
+- Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`.
+- Branche de travail : `work/naxa-services-completion-20261120`.
+- HEAD audité : `38df9449e196c1074272097d9440fcf132dfa99b`.
+- Gate technique : [run 44944767801 — 12/12 jobs SUCCESS](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44944767801).
+- Sauvegarde/restauration : [run 44942987790 — 1/1 job SUCCESS](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44942987790), exécuté sur `ac239b915777dfa0bfdb0b45dddc902f6a28aafb`.
+- Artefact Debug du gate courant : [14723675607](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44944767801), empreinte SHA-256 archive `fc436b37e95cc28d74d072f903e228a68da7eb994ab1e2c2569fac3fbee9a90a`.
+
+**Clarification des commits :** `ac239b9` est le commit du drill sauvegarde/restauration ; le gate technique le plus récent est sur `38df9449e196c1074272097d9440fcf132dfa99b`. Le HEAD de la branche de travail est bien `38df9449e196c1074272097d9440fcf132dfa99b`. Aucun merge ou déploiement n'a eu lieu.
+
+### Audit du vrai périmètre de synchronisation
+
+Le registre local Room a 55 points d'émission outbox. Le coordinateur serveur actuel ne synchronise que les quatre opérations fournisseur/achats : fournisseur, commande, réception et règlement. La grande majorité des autres événements ne transporte que des références d'agrégat et de site, pas le snapshot métier qui permettrait un rejeu sûr. Le cycle fournisseur reste lui-même conditionné par le mapping des articles stock et des sessions de caisse espèces.
+
+Le portail Web est authentifié, mais ses vues ERP utilisent encore des brouillons en mémoire React. La file générique IndexedDB existe dans le package offline-web, mais elle n'est pas raccordée à l'ensemble des modules Web et à leurs contrats serveur.
+
+Ces écarts sont des travaux de construction réels, et non des variables d'environnement que l'on peut simplement activer.
+
+### Règle de qualification
+
+- **Vert CI :** tests de contrat/finance/Auth/FCM, contrôle statique SQL/RLS, PostgreSQL 17 jetable, build Web, tests Android instrumentés et APK Debug ; 12/12.
+- **Vert sauvegarde de laboratoire :** sauvegarde chiffrée et restauration réussie sur bases PostgreSQL jetables ; 1/1.
+- **Rouge fonctionnel :** sync Android universelle, handlers des événements métier, sync multi-appareils, Web/PWA opérationnel et parité des modules.
+- **Rouge intégration externe :** livraison Firebase réelle, comptes Mobile Money et webhooks, certificats de Release, environnement hébergé isolé, validations réglementaires et professionnelles, recette physique.
+
+Un build ou un contrat vert ne remplace jamais une recette métier. Aucun statut vert ne sera attribué aux fonctions qui ne sont pas exécutables de bout en bout.
+
+### Conditions de passage à l'étape Supabase
+
+Avant de créer le projet NAXA Services isolé, les parcours métier doivent être complétés et testés sur PostgreSQL jetable avec de vraies transactions/handlers, reçus idempotents, conflits et reprises. Android et Web/PWA doivent utiliser les mêmes contrats métier et afficher le vrai statut de synchronisation. Les validations réglementaires et les comptes externes sont suivis comme gates d'activation distincts ; ils ne doivent pas être maquillés en succès mockés.
+
+**Décision : aucun projet Supabase ne sera créé, aucun draft ne sera appliqué à la pharmacie, aucun déploiement ne sera réalisé et aucune fonctionnalité réglementée ne sera activée dans cette tranche.** Le registre dédié et le protocole de synchronisation précisent les travaux et critères de sortie.
+
+Voir le document de passation dédié : [`docs/naxa-services/NAXA_SERVICES_CONTINUITY_2026-11-21.md`](naxa-services/NAXA_SERVICES_CONTINUITY_2026-11-21.md).

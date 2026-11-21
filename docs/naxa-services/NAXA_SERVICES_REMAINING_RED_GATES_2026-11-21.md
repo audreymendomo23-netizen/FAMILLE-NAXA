@@ -133,3 +133,94 @@ Les statuts paiements sont désormais alignés entre le moteur financier, les co
 7. La roue promotionnelle reste désactivée jusqu'à avis juridique écrit et autorisation applicable.
 
 **Décision de statut :** VERT pour les contrats/CI, schéma/RLS jetable, build Web, sauvegarde-restauration de test et APK Android Debug déjà vérifié. Pas encore VERT pour la mise en production ou la fermeture de tous les lots métier. Les éléments manquants ci-dessus ne sont pas des échecs de tests ; ce sont des gates d'environnement, d'intégration, d'autorisation ou de livraison.
+
+
+---
+
+## 10. Audit de reprise — état exact du 21 novembre 2026, 21:xx (UTC+1)
+
+Cette section remplace les statuts intermédiaires des sections précédentes lorsqu'ils divergent des preuves CI ci-dessous.
+
+### 10.1 Références Git vérifiées
+
+- Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`
+- Branche de travail : `work/naxa-services-completion-20261120`
+- HEAD vérifié : `38df9449e196c1074272097d9440fcf132dfa99b`
+- Le HEAD de la branche est identique au commit du dernier gate technique.
+- Aucun commit de cette reprise n'est poussé sur `main`; aucune fusion, aucun déploiement et aucune migration vers un projet Supabase ne sont effectués.
+
+### 10.2 Gates techniques réellement terminés
+
+| Preuve | Commit du workflow | Résultat réel |
+|---|---|---|
+| [Gate Android + Auth + Web + finance + contrats + PostgreSQL 17](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44944767801) | `38df9449e196c1074272097d9440fcf132dfa99b` | **12/12 jobs SUCCESS** |
+| [Drill chiffré sauvegarde/restauration PostgreSQL 17](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44942987790) | `ac239b915777dfa0bfdb0b45dddc902f6a28aafb` | **1/1 job SUCCESS** |
+
+Les 12 jobs du gate technique ont tous terminé avec la conclusion `success` : authentification/périmètres, build Web, contrats de synchronisation hors ligne, catalogue tarifaire Famille, paiements/commissions/fiscalité, API parrainage, notifications/FCM, promotions/parrainage client, comptabilité fournisseurs/prévisions, sécurité statique des drafts SQL, assemblage/test Android instrumenté et PostgreSQL 17/RLS runtime.
+
+**Correction importante :** `ac239b9` correspond au HEAD du workflow de sauvegarde/restauration, pas au HEAD du dernier gate technique. Le dernier gate technique est exécuté sur `38df9449e196c1074272097d9440fcf132dfa99b`.
+
+### 10.3 Artefact Android
+
+- Artefact GitHub Actions du gate courant : [naxa-services-debug-apk — 14723675607](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44944767801).
+- Taille de l'archive : 13 571 428 octets.
+- Empreinte de l'archive publiée par GitHub : `sha256:fc436b37e95cc28d74d072f903e228a68da7eb994ab1e2c2569fac3fbee9a90a`.
+- Il s'agit d'un APK **Debug**. Il ne constitue pas une Release signée distribuable en production.
+
+Le drill de sauvegarde/restauration prouve la sauvegarde chiffrée, le contrôle d'intégrité et la restauration sur des bases PostgreSQL jetables et isolées. Il ne prouve pas encore une restauration d'un environnement Supabase hébergé réel.
+
+### 10.4 Contrôle de complétude — synchronisation Android
+
+L'audit de `apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt` retrouve **55 points d'émission** d'événements outbox.
+
+À la date de cet audit, le coordinateur `SupplierSyncCoordinator` ne prend en charge que quatre actions avec snapshots métier explicites et endpoints serveur correspondants :
+
+- `supplier.saved`
+- `purchase.ordered`
+- `purchase.receipt.confirmed`
+- `supplier.payment.recorded`
+
+Les autres points d'émission utilisent encore le payload de repli `aggregate_id` + `site_id` (l'identifiant d'organisation reste dans la ligne Room), au lieu d'un snapshot métier complet et versionné. Ils ne sont donc pas rejouables de manière sûre côté serveur. Les actions de stock, caisse, ventes, dépenses, rendez-vous, pressing, services, clients/CRM, équipe/gestion, transferts, fidélité et charges récurrentes ne doivent pas être comptées comme synchronisées.
+
+Le coordinateur fournisseur reste manuel et explicitement opt-in. Deux dépendances sont bloquées de façon fail-closed : article de stock non mappé dans la base distante et paiement fournisseur espèces sans session de caisse distante correspondante. La variable d'activation reste désactivée par défaut et exige une référence de projet Famille dédiée concordante.
+
+**Statut : ROUGE — sync ERP universelle non livrée.** Le test du contrat d'enveloppe commun est vert ; il ne teste pas 55 handlers métier ni une réplication multi-appareils.
+
+### 10.5 Contrôle de complétude — Web/PWA
+
+Le portail `apps/web/naxa-services/src/main.tsx` possède une authentification Web réelle (session, renouvellement, changement de mot de passe initial et révocation à la déconnexion). En revanche, les opérations métier visibles sont encore des brouillons locaux : `addLocalEntry()` modifie l'état React de la session, sans persistance IndexedDB ni mutation API métier. Les pages agenda, pressing, caisse, services, CRM, stock, rapports, équipe et administration ne sont donc pas des modules Web ERP opérationnels.
+
+Le package `packages/offline-web` fournit une file IndexedDB, des leases, retries et contrôles de reçus serveur. Il n'est pas encore intégré aux écrans métiers NAXA Services ni raccordé à un ensemble complet de handlers ERP.
+
+**Statut : ROUGE — parité métier Web/PWA et synchronisation Web non livrées.** Le build Vite et les tests Auth réussis ne constituent pas une recette fonctionnelle Web.
+
+### 10.6 Registre réel des autres gates
+
+| Gate | État | Condition nécessaire pour passer au vert |
+|---|---|---|
+| Firebase/FCM | ROUGE — intégration réelle non activée | Projet Firebase NAXA Services, identité de service, clés de chiffrement et secret du worker dans le coffre, test FCM de bout en bout sur appareil. Le code de contrat/test ne vaut pas livraison push. |
+| Mobile Money MTN/Orange | ROUGE — production/sandbox non raccordée | Contrat marchand/KYC, accès sandbox, clés/webhooks, comptes bénéficiaires, frais confirmés et rapprochement réel. Le moteur fail-closed ne doit pas simuler une confirmation. |
+| Commissions | AMBRE/ROUGE — moteur présent, politique non approuvée | Barèmes datés et signés par organisation, règles de partage, traitement des extournes et contrôle des gains par la direction. |
+| SYSCOHADA | ROUGE — couverture et visa à achever | Plan de comptes, journaux, périodes, équilibrage, écritures d'inventaire et rapprochement validés par expert-comptable camerounais. |
+| Fiscalité | ROUGE — moteur versionné sans taux arbitraire | Régime et paramètres effectifs-datés confirmés pour l'entité et l'opération par conseil fiscal/expert-comptable. |
+| Paie/CNPS | ROUGE — règles non approuvées | Paramètres de paie, retenues, déclarations et bulletins vérifiés par professionnel compétent au Cameroun. |
+| Release Android signée | ROUGE — Debug seul | Certificat/keystore détenu par le propriétaire et secrets de signature enregistrés dans GitHub Secrets, puis build et vérification apksigner. |
+| Roue promotionnelle | ROUGE — fonctionnalité volontairement désactivée | Avis juridique écrit, autorisation applicable, règles publiques et décision explicite d'activation. Aucune activation par défaut. |
+| Restauration hébergée | AMBRE — drill jetable vert | Procédure de sauvegarde/restauration et test de reprise exécutés sur l'environnement isolé hébergé après son établissement ; aucune base pharmacie. |
+| Recette physique, accessibilité, Fulfulde | ROUGE — non démontrée | Parcours sur appareils réels, réseau instable, impression, permissions, langues, accessibilité et validation métier documentés. |
+| Projet Supabase dédié | NON CRÉÉ — gate final volontairement suspendu | Création uniquement après clôture des lots fonctionnels et autorisation explicite ; aucune migration sur le projet historique NAXA. |
+
+### 10.7 Ordre obligatoire de fermeture avant tout projet Supabase
+
+1. Remplacer les 51 événements incomplets par des snapshots explicites, versionnés et minimisés, avec dépendances et identifiants stables.
+2. Livrer les handlers serveur typés couvrant chaque action autorisée, avec contrôle Auth/organisation/site/poste/rôle, transaction métier + reçu idempotent, règles de conflit, tests positifs/négatifs et reprise après interruption.
+3. Livrer la synchronisation Android automatique et manuelle, son ordonnancement, sa reprise, ses mappings inter-agrégats et les tests multi-appareils.
+4. Connecter les modules Web/PWA à ces mêmes contrats, avec persistance IndexedDB, états de file, reçus, conflits, authentification et droits identiques.
+5. Compléter les règles financières et les tests de bout en bout sur PostgreSQL jetable ; obtenir les visas comptables, fiscaux et paie nécessaires avant toute activation de barème.
+6. Préparer et tester les intégrations Firebase et Mobile Money en environnements de test réels dès que les accès marchands/Firebase sont fournis ; aucun secret ne doit être commité.
+7. Fermer les gates de signature, de conformité, de sauvegarde/restauration hébergée et de recette physique.
+8. Refaire le gate complet sur le dernier HEAD et publier une matrice de preuve **fonction par fonction** avant la demande de création Supabase isolée.
+
+### 10.8 Décision
+
+Le gate de build/contrats/RLS jetable est **VERT 12/12** et le drill de sauvegarde/restauration jetable est **VERT 1/1**. Cela ne rend pas l'application entière verte. La synchronisation ERP universelle, les opérations Web/PWA et plusieurs intégrations/validations restent rouges. **Le projet Supabase dédié n'est pas créé et aucune migration n'est autorisée par cette mise à jour documentaire.**
