@@ -177,6 +177,7 @@ Aucune action financière ne peut être validée par la seule IA.
 - Authentification conforme au socle Famille NAXA.
 - Verrouillage local par code d'accès/PIN applicatif et biométrie lorsque supportée ; les secrets d'authentification ne sont jamais stockés en clair.
 - Blocage et journalisation après tentatives anormales, révocation des appareils et sessions à distance.
+- Registre des appareils autorisés par organisation/site/caisse ; notification au Promoteur lors d'un nouvel appareil, possibilité de déconnexion à distance et révocation immédiate. Le plafond d'appareils est configurable selon les droits souscrits et les besoins multi-caisses ; le repère historique de deux appareils actifs par point est conservé comme valeur initiale, sans bloquer l'extension autorisée du parc.
 - Permissions serveur et RLS même si un écran est masqué.
 - Aucun OTP/PIN reçu par SMS ne doit être lu, conservé, transmis ou affiché. Les SMS qui contiennent de tels secrets sont ignorés.
 
@@ -345,6 +346,14 @@ Exemples :
 - Alertes internes lorsqu'un article est bloqué, en litige ou signalé.
 - Aucun mécanisme ne doit encourager le commerce de biens volés, contrefaits ou légalement interdits ; procédures de vérification adaptées aux catégories sensibles.
 
+## 7.6 Mini-catalogue partageable
+
+- Le Promoteur choisit les articles publiables, les prix publics, les photos et la disponibilité indicative.
+- BOOTIK génère une page catalogue partageable par lien/WhatsApp, légère et actualisable à partir des données autorisées.
+- Les prix internes, coûts, marges, quantités exactes sensibles et données des clients ne sont jamais publiés.
+- Le lien peut être désactivé/révoqué ; les articles épuisés ou désactivés ne sont plus proposés comme disponibles.
+- La consultation du mini-catalogue ne donne pas accès à l'espace privé BOOTIK.
+
 ## 8. Caisse et ventes Détaillants
 
 ### 8.1 Parcours standard
@@ -364,6 +373,7 @@ Exemples :
 - Comptage physique par moyen de paiement.
 - Comparaison du solde théorique au montant compté et gestion des écarts.
 - Ouverture/clôture horodatées et signées par utilisateur.
+- Suivi séparé des espèces et des encaissements Mobile Money marchand, avec rapprochement par moyen de paiement ; le Mobile Money n'est pas artificiellement représenté comme un tiroir physique.
 - Rapports par session, caisse, utilisateur, site, activité et jour.
 - Aucun effacement de vente : annulation, avoir ou correction avec motif et autorisation.
 
@@ -1028,6 +1038,7 @@ La recette doit être réalisée par lots et au niveau transversal. Chaque test 
 - transfert avec validation du réceptionnaire ;
 - alertes de stock sans doublon ;
 - emplacement retrouvé par recherche ;
+- recherche locale fluide sur au moins 5 000 fiches et scan code-barres hors connexion ;
 - FEFO, péremption, lot rappelé et produit bloqué.
 
 ### 26.3 Profils métiers
