@@ -1182,3 +1182,77 @@ Le registre des prestataires compatibles avec LOYABLE V1 ne retient que les acti
 Cette mise à jour est documentaire. Elle n'a créé ni modifié de code applicatif, ni migration Supabase, ni fonction serveur, ni endpoint, ni secret, ni déploiement. La présence d'une exigence dans le cahier n'est pas une preuve d'implémentation. Les arbitrages opérationnels encore ouverts sont listés dans le cahier détaillé, notamment plafonds de dépense, SLA/urgences, sous-spécialités réellement vérifiées, partage des coordonnées, conservation des médias, qualité et refacturation locataire.
 
 **Règle de reprise :** démarrer par l'inventaire réel des organisations NAXA SERVICES Réparation/Menuiserie, puis finaliser les décisions métier et le contrat d'intégration avant tout développement du parcours vertical.
+
+## 10. Addendum LOYABLE — abonnement, Marketplace, réseau prestataires, messagerie et sécurité (21 novembre 2026)
+
+Références mises à jour :
+- Cahier détaillé : `docs/loyable/LOYABLE_CAHIER_DES_CHARGES_CENTRE_MAINTENANCE_INTERCONNEXION.md` (version 1.1).
+- Continuité produit : `docs/loyable/LOYABLE_CONTINUITE.md` (version 1.2).
+
+### 10.1 Abonnement dynamique LOYABLE — règle déjà approuvée conservée
+
+LOYABLE garde une souscription unique à accès complet, sans paliers ACCÈS/PREMIUM, calculée sur **1 000 FCFA × nombre de chambres actives/en gestion** du portefeuille du Promoteur. La quantité est versionnée et recalculée ; la prise d'effet et le prorata lors d'une modification en cours de période restent à arbitrer.
+
+### 10.2 Expiration, rappel et verrouillage — nouvelle décision utilisateur
+
+- Notification au Promoteur 72 heures avant la date/heure d'expiration, sur événement serveur idempotent.
+- À l'échéance sans paiement confirmé, le compte opérationnel du bailleur est verrouillé : accès aux fonctions de gestion LOYABLE refusé côté serveur, pas seulement masqué dans l'interface.
+- Un paiement pending, une référence saisie ou une preuve non vérifiée ne déverrouille pas l'espace.
+- Un parcours restreint et séparé de renouvellement/paiement doit rester accessible pour réactiver la souscription.
+- Les données et historiques ne sont pas supprimés.
+- L'accès strict du locataire à ses propres documents et au signalement de maintenance pendant la suspension est une proposition à confirmer ; il ne doit pas ouvrir l'espace bailleur.
+
+Cette règle est une exception spécifique LOYABLE aux formulations génériques de maintien d'un accès de consultation après expiration. Elle ne modifie pas automatiquement les règles des autres applications.
+
+### 10.3 Marketplace
+
+Les annonces partenaires dépendantes de la souscription sont masquées de toutes les surfaces publiques (recherche, URL directe, détail et indexation) dès l'expiration non payée. Elles sont conservées et peuvent être réactivées automatiquement après paiement serveur confirmé, seulement si le logement et l'annonce restent éligibles. Les publications assistées des bailleurs non partenaires conservent leur facturation et leur échéancier propres.
+
+### 10.4 Parrainage LOYABLE — proposition commerciale non validée
+
+Proposition indépendante des programmes JOBLY Partner et NAXA SERVICES : code/lien/QR par bailleur ; rattachement avant première souscription ; qualification après premier paiement confirmé côté serveur ; un mois LOYABLE offert par groupes de trois nouveaux bailleurs payants ; mois appliqué au prochain cycle mensuel ou ajouté en fin de période annuelle ; récompense non monétaire, non transférable et non retirable ; anti-auto-parrainage, anti-doublon, idempotence et ledger d'avantages.
+
+**Le seuil de trois activations est une proposition [P], à faire valider avant le développement du programme.**
+
+### 10.5 Répertoire des demandes et géolocalisation prestataire
+
+En complément de l'invitation directe, le cahier prévoit un flux de missions disponibles côté NAXA SERVICES, limité aux catégories LOYABLE Réparation/Menuiserie. Le prestataire filtre par catégorie, ville et proximité. La recherche de proximité peut utiliser la position volontaire ou la zone de service déclarée ; le GPS n'est pas obligatoire. Avant l'affectation, l'adresse exacte, le numéro et l'identité du locataire restent masqués. Le prestataire manifeste son intérêt ; le bailleur choisit.
+
+### 10.6 Messagerie bailleur-prestataire
+
+Messagerie dans LOYABLE et NAXA SERVICES, attachée à la demande/mission, avec texte, pièces privées, notifications, historique et états réellement vérifiés (envoyé, reçu, distribué, lu). Droits limités à l'organisation et à la mission ; la messagerie n'est ni le compte partagé ni le support client central.
+
+### 10.7 Sécurité et vidéosurveillance inspirées de NAXA SECURITY
+
+Cible optionnelle « Sécurité de l'immeuble » : patterns d'architecture locale/hybride, gestion par site/zone, vidéo, alertes, rôles dédiés, journalisation et accès contrôlés. Les droits vidéo restent distincts de la gestion locative. Priorité aux zones communes ; audio désactivé par défaut et soumis à validation séparée. NAXA ne fournit pas le matériel et n'opère pas une prestation de surveillance humaine. Les tarifs et extensions NAXA SECURITY ne sont pas copiés automatiquement dans LOYABLE.
+
+**Portée de l'audit :** le fichier Android `apps/android/naxa-security/src/main/java/cm/naxa/naxasecurity/MainActivity.kt` examiné dans `main` ne montre qu'un écran socle (« NAXA Security — parcours métier à intégrer »). Il ne prouve pas une vidéosurveillance, un flux caméra ou une passerelle opérationnelle déjà réutilisable. L'intégration exige donc un audit dédié du produit et de ses contrats.
+
+### 10.8 Service client
+
+Le support LOYABLE s'inspire du fonctionnement métier visé dans NAXA SERVICES et doit d'abord étudier la réutilisation du Support/CSO central canonique : tickets catégorisés, priorité, canal, statut, SLA, responsable, historique, messages, pièces et escalade. Les droits CSO sont limités, temporaires si exceptionnels, justifiés et journalisés.
+
+Le rapport NAXA SERVICES consulté précise que son assistance Android inspectée garde actuellement des demandes locales ; il ne démontre pas un Livechat connecté ni appels audio/vidéo ou partage d'écran.
+
+### 10.9 Sauvegarde et restauration
+
+Le modèle visé reprend les exigences documentées NAXA SERVICES/Famille NAXA : sauvegardes locales et serveur chiffrées, versionnées et intègres, base métier + pièces jointes, calendrier réglable/événements critiques, stockage séparé, Google Drive via OAuth limité si retenu, restauration explicite avec vérification et audit, tests de restauration. Gmail n'est pas le coffre de sauvegarde ; aucun jeton, secret ou clé privée n'est exporté.
+
+Le rapport NAXA SERVICES indique que Drive et la restauration ne sont pas encore démontrés comme livrés. Les capacités doivent être auditées avant réemploi.
+
+### 10.10 Référentiel de statut
+
+| Domaine | Niveau documentaire |
+|---|---|
+| Prix dynamique LOYABLE 1 000 F/chambre active/en gestion | Décision existante [V] |
+| Rappel H−72 et verrouillage bailleur à l'expiration | Nouvelle décision utilisateur [V] |
+| Masquage et réactivation Marketplace après paiement | Nouvelle décision utilisateur [V] |
+| Recherche prestataire catégorie/ville/proximité | Nouvelle décision utilisateur [V], détails de confidentialité [P] |
+| Messagerie bailleur-prestataire | Nouvelle décision utilisateur [V], contrats et droits [P] |
+| Architecture vidéo NAXA SECURITY pour immeubles | Orientation retenue [V/P], intégration technique non constatée |
+| Support inspiré NAXA SERVICES | Orientation retenue [V/P], Livechat distant non démontré |
+| Sauvegarde/restauration inspirée Famille/NAXA SERVICES | Orientation retenue [V/P], Drive/restauration non démontrés |
+| Parrainage : 1 mois pour 3 filleuls payants | Proposition [P], validation commerciale requise |
+| Maintien des accès locataires pendant suspension bailleur | Proposition [P], confirmation requise |
+
+Aucun code LOYABLE, endpoint, table, migration Supabase, fonction serveur, secret, déploiement ou test de production n'a été ajouté ou exécuté dans cette mise à jour documentaire.
