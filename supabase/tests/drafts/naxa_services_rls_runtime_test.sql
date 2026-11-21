@@ -28,6 +28,7 @@ INSERT INTO public.ns_sales(id,org_id,site_id,sale_number,subtotal_xaf,discount_
 VALUES ('a0000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','CI-SALE-001',1000,0,1000,'posted','60000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000001');
 COMMIT;
 
+BEGIN;
 SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-a"}',false);
 SET ROLE authenticated;
