@@ -540,16 +540,18 @@ La persistance/reprise de session suit le modèle déjà prévu dans NAXA ; les 
 
 ### 14.10 Référentiel de réalisation
 
-Le cahier des charges détaillé a été enrichi jusqu'à la section 31 avec ces exigences, critères de recette et arbitrages :
+Le cahier des charges détaillé a été enrichi jusqu'à la section 32 avec ces exigences, critères de recette et arbitrages :
 - verrouillage et renouvellement dynamique ;
 - alerte H−72 ;
 - masquage/réactivation Marketplace ;
-- parrainage LOYABLE proposé ;
+- parrainage LOYABLE validé, QR actif uniquement si le bailleur est actif ;
 - tableau de missions et filtre ville/proximité ;
 - messagerie des missions ;
-- sécurité/vidéosurveillance optionnelle ;
+- vidéosurveillance opérée via le module NAXA SECURITY ;
 - support client ;
-- sauvegarde/restauration.
+- contrat locataire photo/PDF ;
+- sauvegarde/restauration Google Drive pilotée par le client ;
+- session NAXA et authentification NAXA SERVICES.
 
 Référence : docs/loyable/LOYABLE_CAHIER_DES_CHARGES_CENTRE_MAINTENANCE_INTERCONNEXION.md.
 
