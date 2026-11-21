@@ -534,7 +534,7 @@ Les montants sont exprimés en FCFA. Les unités et périodicités sont définie
 
 #### Règle de souscription du Promoteur et couverture de son réseau
 
-Pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES, NAXA SECURITY et GRILLAD, **un seul abonnement souscrit par le Promoteur pour une application couvre l'ensemble du réseau rattaché à son organisation** : les points de vente, sites, établissements et unités autorisés du même réseau. Il n'est pas nécessaire de souscrire ni de payer un abonnement identique pour chaque site.
+Pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES et NAXA SECURITY, un abonnement Promoteur couvre le réseau selon les capacités de la formule validée. Pour GRILLAD, une seule souscription est rattachée au Promoteur : ACCÈS autorise un point de vente ; PREMIUM autorise plusieurs points de vente, chacun pouvant compter plusieurs vendeurs. Il n'est pas créé d'abonnement par vendeur ; les éventuelles capacités de chaque formule sont contrôlées par entitlements.
 
 Les capacités ou plafonds propres à la formule restent applicables à l'ensemble du réseau :
 - GRILLAD : seuls les plans ACCÈS (un point de vente) et PREMIUM (plusieurs points de vente) sont retenus. Plusieurs vendeurs peuvent être affectés à chaque point. Les montants et les éventuels plafonds d'entitlements doivent être explicitement configurés ; aucun changement automatique de prix en fonction du nombre de points n'est approuvé.
@@ -548,29 +548,22 @@ Les cas facturés selon une unité ou un compte non Promoteur restent des except
 Un même Promoteur ne peut détenir ni utiliser simultanément plusieurs souscriptions identiques ou plusieurs exemplaires du même pack pour une même application.
 
 - Pour les applications à abonnement Promoteur, une seule souscription active (ou en essai, renouvellement en attente ou période de grâce) est autorisée par couple **Promoteur + application**. Cette souscription couvre son réseau complet.
-- Le Promoteur dispose d'une seule souscription active par application. Pour les formules à paliers GRILLAD, le nombre de points de vente actifs détermine automatiquement le palier ; l'évolution de quantité ou de palier modifie la souscription existante et ne crée jamais un second abonnement.
+- Le Promoteur dispose d'une seule souscription active par application. Pour GRILLAD, la formule ACCÈS ou PREMIUM détermine l'architecture autorisée ; aucun palier automatique ou recalcul du prix selon le nombre de points ne s'applique.
 - Une souscription expirée, résiliée ou remplacée reste dans l'historique ; elle ne constitue pas une seconde souscription active.
 - La règle d'unicité est appliquée côté serveur et en base de données, avec contrainte/transaction empêchant les créations concurrentes et journalisant les tentatives de doublon.
 - Les exceptions COTIZ et CAMPUS237 s'appliquent à leur véritable payeur et unité : membre × cotisation pour COTIZ ; parent × application pour CAMPUS237. Un parent ne peut avoir qu'un seul pack CAMPUS237 actif à la fois ; le passage d'Individuel à Famille remplace le pack courant.
 - Pour LOYABLE et NAXA HOTEL, conserver une seule souscription Promoteur par application et tout le réseau ; la quantité de chambres est portée par cette souscription et son montant est recalculé dynamiquement (1 000 FCFA/chambre LOYABLE ; 2 000 FCFA/chambre NAXA HOTEL), sans souscription distincte par chambre.
 
-#### Règles spécifiques GRILLAD — abonnement dynamique par nombre de points de vente
+#### Règles spécifiques GRILLAD — formules ACCÈS et PREMIUM
 
-GRILLAD applique le même principe de souscription unique à quantité variable que LOYABLE et NAXA HOTEL, mais avec une tarification par paliers. Le nombre de points de vente actifs du réseau du Promoteur détermine automatiquement le palier applicable :
+GRILLAD ne dispose que de deux formules :
 
-| Nombre de points de vente actifs | Formule | Montant total de l'abonnement |
-|---:|---|---:|
-| 1 | ACCÈS | 1 500 FCFA |
-| 2 à 5 | PREMIUM | 3 000 FCFA |
-| 6 et plus | PRO | 5 000 FCFA, sans limite de points |
+- **ACCÈS :** un point de vente ; plusieurs vendeurs peuvent y être affectés.
+- **PREMIUM :** plusieurs points de vente ; chaque point peut employer plusieurs vendeurs.
 
-Le montant indiqué est le montant total de la formule pour le réseau du Promoteur, et non un prix multiplié par chaque point de vente. Le palier PRO à 5 000 FCFA signifie que le réseau peut exploiter un nombre illimité de points de vente ; il ne signifie pas une facturation de 5 000 FCFA par point.
+Une seule souscription est rattachée au Promoteur pour GRILLAD. La formule choisie détermine la portée de l'architecture et les entitlements associés. Aucun abonnement séparé n'est créé par vendeur. Aucun tarif progressif par nombre de points, aucune limite « un / cinq / illimité » et aucun niveau PRO ne sont retenus.
 
-Le système recalcule le palier à partir du nombre de points de vente actifs rattachés au Promoteur. Exemples : 1 point = 1 500 FCFA ; 4 points = 3 000 FCFA ; 8 points = 5 000 FCFA. L'ajout ou la désactivation d'un point de vente met à jour la quantité, le palier et le montant affichés, avec historique de l'ancienne valeur, de la nouvelle valeur, de la date d'effet et de l'auteur.
-
-Une seule souscription GRILLAD est conservée par Promoteur. Le nombre de points de vente est une quantité de cette souscription ; il ne faut jamais créer un abonnement séparé par point de vente. Les points de vente désactivés, archivés ou en brouillon ne sont pas comptabilisés comme actifs. Les opérations de changement de quantité et de palier sont historisées et protégées contre les modifications concurrentes.
-
-La règle de prise d'effet d'un changement de palier en cours de période (immédiatement avec prorata, ou à la prochaine échéance) doit être définie dans le paramétrage commercial avant l'activation de la facturation automatique. Aucun prorata ni remboursement rétroactif ne doit être inventé.
+Les montants mensuels des deux formules restent à confirmer. L'annuel donne douze mois de service pour le prix de dix mensualités. Les plafonds numériques éventuels de points Premium ou de vendeurs par point restent à arbitrer et ne doivent pas être inventés. Les opérations de changement de formule sont historisées et protégées contre les modifications concurrentes.
 
 #### Règles spécifiques COTIZ
 
@@ -724,7 +717,7 @@ Les règles corrigées d'abonnement GRILLAD ACCÈS/PREMIUM et d'architecture mul
 3. Pour les abonnements mensuels récurrents éligibles, l'annuel est égal à **10 mensualités pour 12 mois de service** : deux mois sont offerts (remise de 16,67 %). Cette règle s'applique aussi aux tarifs calculés par quantité lorsque la souscription est bien un engagement annuel. Elle ne s'applique pas aux frais ponctuels, transactions isolées ou actes unitaires sans abonnement récurrent.
 4. Les prix déjà payés ne changent pas rétroactivement. Toute évolution de tarif est versionnée et datée ; le client est informé avant l'application du nouveau prix.
 5. Les prix restent exprimés en FCFA. Le traitement HT/TTC, la fiscalité et les mentions de facture doivent être validés par le conseil comptable/fiscal ; aucune hypothèse fiscale n'est créée par le présent addendum.
-6. Une souscription Promoteur unique couvre tout son réseau pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES, NAXA SECURITY et GRILLAD. Ne pas facturer automatiquement un second abonnement pour chaque site, point de vente, utilisateur, salarié ou appareil.
+6. Une souscription Promoteur unique couvre le réseau selon la formule et les capacités définies pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES et NAXA SECURITY. Pour GRILLAD, une seule souscription Promoteur existe : ACCÈS autorise un point de vente ; PREMIUM autorise plusieurs points. Aucun abonnement distinct par vendeur n'est facturé ; aucun supplément ou plafond par site/vendeur ne doit être inventé hors entitlements explicitement validés.
 7. Le modèle d'entitlements reste **Plan → Subscription → Payment → Entitlements**, avec catalogue versionné par application. Le paiement doit être confirmé côté serveur avant d'activer les droits. Les fonctions de sécurité, confidentialité et protection des données ne deviennent jamais des options tarifaires.
 8. Les fonctions IA sont incluses dans les abonnements et ne sont jamais facturées à l'appel, au token, au crédit ou à l'usage. La mesure des coûts reste interne.
 
@@ -740,7 +733,7 @@ Les règles corrigées d'abonnement GRILLAD ACCÈS/PREMIUM et d'architecture mul
 | LOYABLE | Voir tranches ci-dessous | Identique | Une souscription Promoteur ; calcul progressif par chambre/unité active en gestion |
 | NAXA HOTEL | 2 000 par chambre active | Identique | Une souscription Promoteur ; quantité de chambres actives |
 | NAXA SECURITY | ACCÈS 5 000 ; PREMIUM 15 000 | ACCÈS 7 500 ; PREMIUM 20 000 | Une souscription Promoteur ; capacité incluse et extensions contrôlées |
-| GRILLAD | Voir paliers ci-dessous | Identique | Une souscription Promoteur au niveau du réseau ; montant global, pas par point |
+| GRILLAD | ACCÈS / PREMIUM ; montants mensuels à confirmer | Annuel = 10 mensualités | ACCÈS : 1 point ; PREMIUM : plusieurs points, plusieurs vendeurs possibles par point ; pas de PRO ni de paliers |
 | CAMPUS237 | Voir tarifs établissement et parents ci-dessous | Identique | Établissement + abonnement parent facultatif et indépendant |
 
 #### COTIZ — prix unitaire mensuel dégressif
