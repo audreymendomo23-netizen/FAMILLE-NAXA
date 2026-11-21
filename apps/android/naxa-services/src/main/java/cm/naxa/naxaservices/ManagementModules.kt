@@ -1143,6 +1143,7 @@ internal fun ProfileContent(
             Text("Préférences et sécurité", fontWeight = FontWeight.Bold)
             OutlinedButton(onClick = { onNavigate(AppRoute.APPEARANCE) }, modifier = Modifier.fillMaxWidth()) { Text("Langue, thème et mode nuit") }
             OutlinedButton(onClick = { onNavigate(AppRoute.SECURITY) }, modifier = Modifier.fillMaxWidth()) { Text("Comptes, appareils et accès") }
+            OutlinedButton(onClick = { onNavigate(AppRoute.NOTIFICATIONS) }, modifier = Modifier.fillMaxWidth()) { Text("Centre de notifications") }
             LocalAccessPinSettingsCard(session.account.memberId)
             if (session.account.roleCode == "promoter") {
                 OutlinedButton(onClick = { showReferralScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Parrainage PME et suivi de mes gains") }

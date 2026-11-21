@@ -123,7 +123,7 @@ class MainActivity : ComponentActivity() {
 
 internal enum class AppRoute {
     LOGIN, RECOVERY, CHANGE_PASSWORD, ACTIVITY_SETUP, LEGAL_ACCEPTANCE, DISCOVERY,
-    DASHBOARD, AGENDA, PRESSING, WORK_ORDERS, CASH, SERVICES, CUSTOMERS, CUSTOMER_PROMOTIONS, TEAM, STOCK, REPORTS,
+    DASHBOARD, AGENDA, PRESSING, WORK_ORDERS, CASH, SERVICES, CUSTOMERS, CUSTOMER_PROMOTIONS, NOTIFICATIONS, TEAM, STOCK, REPORTS,
     ORGANIZATION, NETWORK, SITES, WORKSTATIONS, SECURITY, SETTINGS, HELP, MENU,
     PROFILE, APPEARANCE, BILLING, SUBSCRIPTIONS, PURCHASES, TAXES, CHARGES, OBJECTIVES, TEAM_PERFORMANCE,
     AI_INSIGHTS, LIVECHAT
@@ -760,7 +760,7 @@ private val modules = listOf(
 
 private val commonRoutes = setOf(
     AppRoute.DASHBOARD, AppRoute.MENU, AppRoute.PROFILE, AppRoute.APPEARANCE,
-    AppRoute.LIVECHAT, AppRoute.HELP, AppRoute.SETTINGS
+    AppRoute.NOTIFICATIONS, AppRoute.LIVECHAT, AppRoute.HELP, AppRoute.SETTINGS
 )
 
 private fun activityVisibleRoutes(activity: String?): Set<AppRoute> {
@@ -872,6 +872,7 @@ private fun ErpScreen(
             TopAppBar(
                 title = { Column { Text("NAXA SERVICES", fontWeight = FontWeight.Black); Text(accountName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
                 actions = {
+                    TextButton(onClick = { onNavigate(AppRoute.NOTIFICATIONS) }) { Text("Alertes") }
                     TextButton(onClick = { onNavigate(AppRoute.PROFILE) }) { Text("Profil") }
                     TextButton(onClick = onTheme) { Text(if (lightTheme) stringResource(R.string.dark_mode) else stringResource(R.string.light_mode)) }
                 }
@@ -921,6 +922,8 @@ private fun ErpScreen(
             CustomersContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.CUSTOMER_PROMOTIONS) {
             CustomerPromotionsContent(Modifier.padding(padding), localRepository, activeSession, authApi) { onNavigate(AppRoute.PROFILE) }
+        } else if (route == AppRoute.NOTIFICATIONS) {
+            NotificationInboxContent(Modifier.padding(padding), activeSession, authApi) { onNavigate(AppRoute.PROFILE) }
         } else if (route == AppRoute.STOCK) {
             StockContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.REPORTS) {

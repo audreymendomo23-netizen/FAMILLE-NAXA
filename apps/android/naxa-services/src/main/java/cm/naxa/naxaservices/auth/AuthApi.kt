@@ -107,6 +107,18 @@ data class ReferralDashboard(
     val rewards: List<ReferralReward>
 )
 
+data class NotificationInboxItem(
+    val id: String,
+    val eventCode: String,
+    val title: String?,
+    val body: String?,
+    val route: String?,
+    val status: String,
+    val sentAt: String,
+    val readAt: String?,
+    val actionedAt: String?
+)
+
 class AuthApi(private val context: Context) {
     private val endpoint: String get() = BuildConfig.AUTH_FUNCTION_URL.trim()
     private val anonKey: String get() = BuildConfig.SUPABASE_ANON_KEY.trim()
@@ -115,9 +127,52 @@ class AuthApi(private val context: Context) {
     }
 
     private val customerPromotionsEndpoint: String get() = endpoint.replace(Regex("/naxa-services-auth/?$"), "/naxa-services-customer-promotions")
+    private val notificationEndpoint: String get() = endpoint.replace(Regex("/naxa-services-auth/?$"), "/naxa-services-notifications")
 
     private val accountingEndpoint: String get() = BuildConfig.ACCOUNTING_FUNCTION_URL.trim().ifBlank {
         endpoint.replace(Regex("/naxa-services-auth/?$"), "/naxa-services-accounting")
+    }
+
+    suspend fun notificationInbox(accessToken: String, limit: Int = 50): List<NotificationInboxItem> {
+        require(limit in 1..100) { "La limite doit être comprise entre 1 et 100." }
+        if (notificationEndpoint.isBlank()) throw AuthApiException("La passerelle de notifications NAXA Services n'est pas configurée.")
+        val response = request(
+            JSONObject().put("action", "list_inbox").put("app_code", "naxa-services").put("limit", limit),
+            accessToken,
+            notificationEndpoint
+        )
+        if (!response.optBoolean("ok", false)) throw AuthApiException("Le serveur n'a pas confirmé la lecture des notifications.")
+        val rows = response.optJSONArray("result") ?: JSONArray()
+        return buildList {
+            for (index in 0 until rows.length()) {
+                val row = rows.optJSONObject(index) ?: continue
+                val payload = row.optJSONObject("payload_redacted") ?: JSONObject()
+                add(NotificationInboxItem(
+                    id = row.optString("id"),
+                    eventCode = row.optString("event_code"),
+                    title = payload.optString("title").takeIf { it.isNotBlank() && it != "null" },
+                    body = payload.optString("body").takeIf { it.isNotBlank() && it != "null" },
+                    route = payload.optString("route").takeIf { it.isNotBlank() && it != "null" },
+                    status = row.optString("status"),
+                    sentAt = row.optString("sent_at"),
+                    readAt = row.optString("read_at").takeIf { it.isNotBlank() && it != "null" },
+                    actionedAt = row.optString("actioned_at").takeIf { it.isNotBlank() && it != "null" }
+                ))
+            }
+        }
+    }
+
+    suspend fun acknowledgeNotification(accessToken: String, notificationId: String, status: String) {
+        require(notificationId.matches(Regex("^[0-9a-fA-F-]{36}$"))) { "Identifiant de notification invalide." }
+        require(status == "read" || status == "actioned") { "État de notification invalide." }
+        if (notificationEndpoint.isBlank()) throw AuthApiException("La passerelle de notifications NAXA Services n'est pas configurée.")
+        val response = request(
+            JSONObject().put("action", "acknowledge_inbox").put("app_code", "naxa-services")
+                .put("id", notificationId).put("status", status),
+            accessToken,
+            notificationEndpoint
+        )
+        if (!response.optBoolean("ok", false)) throw AuthApiException("Le serveur n'a pas confirmé la mise à jour de la notification.")
     }
 
     suspend fun customerPromotionsRequest(accessToken: String, body: JSONObject): JSONObject {
