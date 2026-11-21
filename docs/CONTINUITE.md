@@ -1,6 +1,6 @@
 # Continuité — Famille NAXA
 
-> Mise à jour : 20 novembre 2026  
+> Mise à jour : 21 novembre 2026  
 > Référence de continuité pour l'audit documentaire, l'architecture et la construction du monorepo.
 
 ## 1. Périmètre officiel
@@ -124,6 +124,8 @@ Le module devra au minimum distinguer :
 Les unités facturables restent propres aux produits : point de vente pour KIOSKO, boutique pour BOOTIK, établissement pour ZIPPLE, membres pour COTIZ, biens ou unités contractuelles pour LOYABLE, établissement/prestataires pour NAXA SERVICES, chambres ou établissement pour NAXA HOTEL, organisation/sites/capacités pour NAXA SECURITY, parents ou unité retenue pour CAMPUS237, et unité validée pour GRILLAD.
 
 **Ne pas copier les prix JOBLY dans les autres applications.** Chaque produit conserve son catalogue, ses prix, ses limites et ses règles de renouvellement. Les tarifs et unités de chaque application doivent être validés séparément.
+
+**Règle commerciale transversale FAM-020 — décision du 21 novembre 2026 :** pour toutes les solutions du portefeuille, les seules périodicités d'abonnement sont mensuelle et annuelle. Le paiement annuel donne 12 mois de service pour l'équivalent de 10 mensualités, soit 2 mois offerts. Aucune solution ne peut proposer de formule de 3 mois ou de 6 mois, ni une promotion cumulée qui accorderait 3 ou 6 mois d'accès. Chaque cahier produit doit reprendre cette règle sans inventer de tarif annuel différent.
 
 ### 6.3 Contrôle d'accès par fonctionnalité
 
