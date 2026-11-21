@@ -481,5 +481,3 @@ Le profil prestataire enrichi, le registre filtré et le contrat API sont des or
 - Continuité générale à référencer : docs/CONTINUITE.md.
 
 **État de fin de cette mise à jour documentaire : les catégories Réparation et Menuiserie sont intégrées au référentiel ; le cahier de conception est créé ; aucune fonctionnalité LOYABLE/NAXA SERVICES n'est déclarée intégrée, déployée ou testée par ces documents.**
-
-**État de fin de cette mise à jour : document de continuité créé ; aucune fonctionnalité LOYABLE n'est déclarée développée ou testée par cette seule mise à jour documentaire.**
