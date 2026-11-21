@@ -23,3 +23,20 @@
 | FAM-019 | L'Administrateur central peut effectuer les opérations d'administration autorisées ; toute mutation doit être journalisée de façon append-only avec acteur, application, organisation/lieu si applicable, action, cible et horodatage | VALIDÉ |
 | FAM-020 | Pour toutes les solutions du portefeuille, les abonnements sont proposés au mois ou à l'année uniquement ; l'annuel donne 12 mois de service contre 10 mensualités payées (2 mois offerts) ; aucune offre ni formule de 3 ou 6 mois | VALIDÉ — 21/11/2026 |
 
+
+## Décisions GRILLAD consolidées — 21 novembre 2026
+
+| ID | Décision | État |
+|---|---|---|
+| GRD-001 | GRILLAD commercialise strictement cinq familles : porc, poulet, poisson, brochettes et omelettes ; aucune sixième famille de restauration | VALIDÉ — 21/11/2026 ; complément de FAM-008 |
+| GRD-002 | Le canal de vente retenu dans la baseline GRILLAD est la vente directe uniquement ; pas de réservation, précommande, marketplace, prise de commande par tiers ou livraison | VALIDÉ — 21/11/2026 |
+| GRD-003 | Le suivi des préparations reste simple : quantités préparées, vendues et restantes ; pas de traçabilité avancée de cuisson | VALIDÉ — 21/11/2026 |
+| GRD-004 | Gestion multisite GRILLAD avec deux modes de données : indépendant et centralisé, avec droits paramétrables et conservation de la ventilation par établissement | VALIDÉ — 21/11/2026 |
+| GRD-005 | Le périmètre financier métier GRILLAD comprend caisse, dépenses, coûts de revient et marges ; les indicateurs de gestion ne constituent pas une comptabilité certifiée | VALIDÉ — 21/11/2026 |
+| GRD-006 | Une souscription Promoteur GRILLAD couvre l'ensemble du réseau, sans facturation automatique par site, vendeur ou appareil | VALIDÉ — continuité Famille NAXA, §6.17.14 |
+| GRD-007 | Grille mensuelle : 1 point ACCÈS 1 500 F ; 2–5 PREMIUM 3 000 F ; 6–10 PRO 5 000 F ; 11–25 PRO 10 000 F ; 26–50 PRO 15 000 F ; 51–100 PRO 25 000 F ; plus de 100 sur devis | VALIDÉ — continuité Famille NAXA, §6.17.14 ; changement de palier en cours de période ouvert |
+| GRD-008 | L'annuel GRILLAD éligible équivaut à 10 mensualités pour 12 mois de service ; aucune formule de 3 ou 6 mois | VALIDÉ — application de FAM-020 |
+| GRD-009 | Parrainage QR/commissions, assistant IA complet et fonctionnement offline étendu sont mentionnés comme validés dans GRILLAD V1.0, mais leur preuve primaire n'a pas été retrouvée dans les sources conversationnelles accessibles ; confirmation requise avant gel définitif | À RECONFIRMER — ne pas présumer leur livraison |
+| GRD-010 | QR GRILLAD Connect via ZIPPLE, pointage GPS du personnel, Fulfulde, Livechat, notifications distantes et intégration NAXA SECURITY ne sont pas inclus dans la baseline confirmée ; ce sont des propositions ou points ouverts | PROPOSÉ / OUVERT / BLOQUÉ SELON SUJET |
+
+**Note de gouvernance GRILLAD :** les trois configurations Manager de FAM-009 (Manager seul ; Manager + un vendeur ; Manager et plusieurs vendeurs sur plusieurs lieux) sont conservées. Elles décrivent l'organisation humaine et opérationnelle, distincte des deux modes de gestion des données de GRD-004 (indépendant / centralisé). Les cinq arbitrages GRD-001 à GRD-005 sont retrouvés dans les échanges récents ; les points GRD-009 restent explicitement à reconfirmer. Les statuts validés concernent les décisions produit, pas l'état d'implémentation logicielle.
