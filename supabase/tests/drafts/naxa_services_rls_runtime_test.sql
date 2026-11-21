@@ -35,13 +35,13 @@ COMMIT;
 
 INSERT INTO public.ns_customer_referral_campaigns(
   id,org_id,name,status,starts_at,ends_at,beneficiary_mode,reward_kind,reward_value,
-  minimum_paid_sale_xaf,reward_expiry_days,terms_version,created_by,approved_by,approved_at
+  minimum_paid_sale_xaf,reward_expiry_days,terms_version,terms_text,created_by,approved_by,approved_at
 ) VALUES (
   'd1000000-0000-4000-8000-000000000001',
   '20000000-0000-4000-8000-000000000001',
   'CI customer referral',
   'active',now()-interval '1 day',now()+interval '30 days',
-  'both','points',100,500,30,'ci-v1',
+  'both','points',100,500,30,'ci-v1','Conditions CI : le filleul effectue un premier achat encaissé. L’avantage est consultable et valable pendant la durée publiée.',
   '60000000-0000-4000-8000-000000000001',
   '60000000-0000-4000-8000-000000000001',now()
 );
