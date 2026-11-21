@@ -1884,5 +1884,5 @@ Les références ci-dessous orientent la conception. Leur applicabilité au type
 
 ---
 
-**Fin du cahier des charges NAXA SECURITY 360° V1.0.**  
+**Fin du cahier des charges NAXA SECURITY 360° V1.1.**  
 **Règle de clôture :** le présent document valide le périmètre et les exigences. Il ne déclare aucune fonctionnalité du module Android, du Web/PWA, de NAXA EDGE, d'un fournisseur de paiement ou d'un équipement tiers comme déjà livrée. La qualification VERT GLOBAL dépendra des preuves définies dans les sections 28 et 29.
