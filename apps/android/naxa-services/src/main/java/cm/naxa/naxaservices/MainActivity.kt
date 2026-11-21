@@ -109,10 +109,27 @@ import cm.naxa.core.notifications.BriefingScheduler
 
 class MainActivity : ComponentActivity() {
     private val lockGeneration = MutableStateFlow(0)
+    private val notificationOpenSignal = MutableStateFlow(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { NaxaServicesTheme { NaxaServicesRoot(lockGeneration) } }
+        setContent { NaxaServicesTheme { NaxaServicesRoot(lockGeneration, notificationOpenSignal) } }
+        consumeNotificationIntent(intent)
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        consumeNotificationIntent(intent)
+    }
+
+    private fun consumeNotificationIntent(source: android.content.Intent?) {
+        val notificationId = source?.getStringExtra("naxa_notification_id")
+        if (!notificationId.isNullOrBlank()) {
+            notificationOpenSignal.value = notificationOpenSignal.value + 1
+            source.removeExtra("naxa_notification_id")
+            source.removeExtra("naxa_notification_route")
+        }
     }
 
     override fun onStop() {
@@ -133,7 +150,10 @@ private const val TERMS_VERSION = "2026-11-v1"
 private const val PRIVACY_VERSION = "2026-11-v1"
 
 @Composable
-private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
+private fun NaxaServicesRoot(
+    lockGeneration: StateFlow<Int>,
+    notificationOpenSignal: StateFlow<Int>
+) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val api = remember { AuthApi(context) }
     val vault = remember { SessionVault(context) }
@@ -150,7 +170,14 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
 
     var route by rememberSaveable { mutableStateOf(AppRoute.LOGIN.name) }
     var session by remember { mutableStateOf<AuthSession?>(null) }
+    val notificationOpenRequest by notificationOpenSignal.collectAsState()
     val pushRegistration by PushTokenRegistry.state.collectAsState()
+
+    LaunchedEffect(notificationOpenRequest, session?.account?.memberId) {
+        if (notificationOpenRequest > 0 && session != null) {
+            route = AppRoute.NOTIFICATIONS.name
+        }
+    }
 
     LaunchedEffect(Unit) {
         PushTokenRegistry.initialize(context)
