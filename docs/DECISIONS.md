@@ -21,4 +21,5 @@
 | FAM-017 | Un seul Administrateur central Famille pour les dix plateformes ; accès transversal limité aux métadonnées d'administration, comptes, états, abonnements, paramètres et agrégats autorisés ; aucune lecture des transactions métier détaillées | VALIDÉ |
 | FAM-018 | Identités utilisateurs distinctes par plateforme : un compte Auth utilisateur ordinaire ne peut être rattaché qu'à une seule application ; l'Administrateur central dispose d'un compte dédié hors memberships applicatifs | VALIDÉ |
 | FAM-019 | L'Administrateur central peut effectuer les opérations d'administration autorisées ; toute mutation doit être journalisée de façon append-only avec acteur, application, organisation/lieu si applicable, action, cible et horodatage | VALIDÉ |
+| FAM-020 | Pour toutes les solutions du portefeuille, les abonnements sont proposés au mois ou à l'année uniquement ; l'annuel donne 12 mois de service contre 10 mensualités payées (2 mois offerts) ; aucune offre ni formule de 3 ou 6 mois | VALIDÉ — 21/11/2026 |
 
