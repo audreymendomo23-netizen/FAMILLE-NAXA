@@ -714,17 +714,20 @@ interface NaxaServicesDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertOutboxEvent(event: LocalOutboxEvent)
 
-    @Query("SELECT * FROM local_outbox_events WHERE orgId = :orgId AND actionCode IN (:actions) AND state IN ('queued','retry_wait') AND (nextAttemptAtEpochMs IS NULL OR nextAttemptAtEpochMs <= :now) ORDER BY deviceSequence ASC LIMIT :limit")
+    @Query("SELECT * FROM local_outbox_events WHERE orgId = :orgId AND actionCode IN (:actions) AND state IN ('queued','retry_wait','blocked_dependency') AND (nextAttemptAtEpochMs IS NULL OR nextAttemptAtEpochMs <= :now) ORDER BY deviceSequence ASC LIMIT :limit")
     suspend fun loadRetryableOutboxEvents(orgId: String, actions: List<String>, now: Long, limit: Int = 100): List<LocalOutboxEvent>
 
     @Query("UPDATE local_outbox_events SET state = 'queued', nextAttemptAtEpochMs = NULL, lastErrorCode = NULL WHERE eventId = :eventId AND orgId = :orgId AND state = 'blocked_dependency'")
     suspend fun requeueBlockedOutboxEvent(eventId: String, orgId: String): Int
 
-    @Query("UPDATE local_outbox_events SET state = :state, attemptCount = attemptCount + 1, lastAttemptAtEpochMs = :attemptedAt, nextAttemptAtEpochMs = :nextAttemptAt, lastErrorCode = :errorCode WHERE eventId = :eventId AND orgId = :orgId AND state <> 'synced'")
+    @Query("UPDATE local_outbox_events SET state = :state, attemptCount = attemptCount + CASE WHEN :state = 'blocked_dependency' THEN 0 ELSE 1 END, lastAttemptAtEpochMs = :attemptedAt, nextAttemptAtEpochMs = :nextAttemptAt, lastErrorCode = :errorCode WHERE eventId = :eventId AND orgId = :orgId AND state <> 'synced'")
     suspend fun updateOutboxAttempt(eventId: String, orgId: String, state: String, attemptedAt: Long, nextAttemptAt: Long?, errorCode: String?): Int
 
     @Query("UPDATE local_outbox_events SET state = 'synced', remoteId = :remoteId, lastErrorCode = NULL, nextAttemptAtEpochMs = NULL WHERE eventId = :eventId AND orgId = :orgId")
     suspend fun markOutboxEventSynced(eventId: String, orgId: String, remoteId: String?): Int
+
+    @Query("SELECT COUNT(*) FROM local_outbox_events WHERE orgId = :orgId AND aggregateType = 'inventory_item' AND aggregateId = :itemId AND state = 'synced' AND remoteId = :itemId")
+    suspend fun countSyncedInventoryItemMapping(orgId: String, itemId: String): Int
 
     @Query("SELECT * FROM local_organization_profiles WHERE orgId = :orgId LIMIT 1")
     fun observeOrganizationProfile(orgId: String): Flow<LocalOrganizationProfile?>
@@ -1595,7 +1598,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         val current = dao.findInventoryItem(itemId, orgId, siteId) ?: throw IllegalArgumentException("Article introuvable sur ce site.")
         current.copy(supplierWhatsApp = phone).also {
             dao.updateInventoryItem(it)
-            enqueue(orgId, "inventory_item", itemId, "inventory_item.supplier_whatsapp_updated", siteId)
+            enqueue(orgId, "inventory_item", itemId, "inventory_item.supplier_whatsapp_updated", siteId, inventoryItemSyncSnapshot(it))
         }
     }
 
@@ -2452,7 +2455,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         require(phone.isBlank() || phone.length in 9..15) { "Le contact WhatsApp doit comporter l'indicatif pays." }
         val item = LocalInventoryItem(UUID.randomUUID().toString(), orgId, siteId, sku.trim(), name.trim(), unit.trim(), 0.0, reorderLevel, createdAtMillis = System.currentTimeMillis(), supplierWhatsApp = phone)
         dao.insertInventoryItem(item)
-        enqueue(orgId, "inventory_item", item.id, "inventory_item.created", siteId)
+        enqueue(orgId, "inventory_item", item.id, "inventory_item.created", siteId, inventoryItemSyncSnapshot(item))
         item
     }
 
@@ -2511,9 +2514,10 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                         createdAtMillis = now
                     )
                     dao.insertInventoryMovement(movement)
-                    enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.import_adjustment", siteId)
+                    enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.import_adjustment", siteId, inventoryMovementSyncSnapshot(movement))
                 }
-                dao.updateInventoryItem(changed.copy(quantity = row.quantity, supplierWhatsApp = row.supplierWhatsApp.filter(Char::isDigit)))
+                val updatedItem = changed.copy(quantity = row.quantity, supplierWhatsApp = row.supplierWhatsApp.filter(Char::isDigit))
+                dao.updateInventoryItem(updatedItem)
                 if (row.unitCostXaf != null || row.sellingPriceXaf != null) {
                     val oldValue = dao.findInventoryValuation(orgId, siteId, existing.id)
                     dao.upsertInventoryValuation(
@@ -2529,7 +2533,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                     )
                     enqueue(orgId, "inventory_valuation", existing.id, "inventory_valuation.import_updated", siteId)
                 }
-                enqueue(orgId, "inventory_item", existing.id, "inventory_item.import_updated", siteId)
+                enqueue(orgId, "inventory_item", existing.id, "inventory_item.import_updated", siteId, inventoryItemSyncSnapshot(updatedItem))
                 updated += 1
             } else {
                 val item = LocalInventoryItem(
@@ -2545,7 +2549,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                     supplierWhatsApp = row.supplierWhatsApp.filter(Char::isDigit)
                 )
                 dao.insertInventoryItem(item)
-                enqueue(orgId, "inventory_item", item.id, "inventory_item.imported", siteId)
+                enqueue(orgId, "inventory_item", item.id, "inventory_item.imported", siteId, inventoryItemSyncSnapshot(item))
                 if (row.quantity > 0.0) {
                     val movement = LocalInventoryMovement(
                         id = UUID.randomUUID().toString(),
@@ -2560,7 +2564,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                     )
                     dao.insertInventoryMovement(movement)
                     dao.updateInventoryItem(item.copy(quantity = row.quantity))
-                    enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.import_initial", siteId)
+                    enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.import_initial", siteId, inventoryMovementSyncSnapshot(movement))
                 }
                 if (row.unitCostXaf != null || row.sellingPriceXaf != null) {
                     dao.upsertInventoryValuation(
@@ -2605,7 +2609,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         dao.insertInventoryMovement(movement)
         val updated = current.copy(quantity = updatedQuantity)
         dao.updateInventoryItem(updated)
-        enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.created", siteId)
+        enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.created", siteId, inventoryMovementSyncSnapshot(movement))
         updated
     }
 
@@ -3331,6 +3335,28 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         valuation
     }
 
+    private fun inventoryItemSyncSnapshot(item: LocalInventoryItem): String =
+        JSONObject()
+            .put("inventory_item_id", item.id)
+            .put("org_id", item.orgId)
+            .put("site_id", item.siteId)
+            .put("sku", item.sku.trim().uppercase(java.util.Locale.ROOT))
+            .put("name", item.name.trim())
+            .put("unit", item.unit.trim())
+            .put("reorder_level", item.reorderLevel)
+            .put("supplier_whatsapp", item.supplierWhatsApp.filter(Char::isDigit))
+            .toString()
+
+    private fun inventoryMovementSyncSnapshot(movement: LocalInventoryMovement): String =
+        JSONObject()
+            .put("movement_id", movement.id)
+            .put("org_id", movement.orgId)
+            .put("site_id", movement.siteId)
+            .put("inventory_item_id", movement.itemId)
+            .put("movement_type", movement.movementType)
+            .put("quantity_delta", movement.quantityDelta)
+            .put("reason", movement.reason.trim())
+            .toString()
     private suspend fun enqueue(
         orgId: String,
         type: String,
