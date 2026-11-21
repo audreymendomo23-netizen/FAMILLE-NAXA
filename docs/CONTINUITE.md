@@ -50,7 +50,7 @@ Les documents historiques suivants ont été consultés dans le dépôt NAXA, br
 | COTIZ | `7 famille naxa/01-cahiers-des-charges/05-cotiz.md` | `7 famille naxa/02-prompts/05-cotiz.md` | Groupes, membres, cotisations, tours, pénalités, séances, épargne, prêts internes et garanties |
 | LOYABLE | `7 famille naxa/01-cahiers-des-charges/06-loyable.md` | `7 famille naxa/02-prompts/06-loyable.md` | Biens, contrats, locataires, calendrier des loyers, quittances, charges, travaux, cautions et multi-propriétaires |
 | NAXA HOTEL | `7 famille naxa/01-cahiers-des-charges/07-naxa-hotel.md` | `7 famille naxa/02-prompts/07-naxa-hotel.md` | Chambres, réservations, check-in/out, folio, ménage, maintenance, économat, postes et multi-hôtels |
-| GRILLAD | `7 famille naxa/01-cahiers-des-charges/08-grillad.md` | `7 famille naxa/02-prompts/08-grillad.md` | ERP strictement consacré aux grillades, trois modes Manager, lieux physiques précis, préparation, cuisson, rendement, ventes et clôture de soirée |
+| GRILLAD | `7 famille naxa/01-cahiers-des-charges/08-grillad.md` | `7 famille naxa/02-prompts/08-grillad.md` | ERP spécialisé grillades ; Promoteur, points de vente multiples, plusieurs vendeurs par point, préparation simple, ventes directes, caisse et rentabilité |
 
 GRILLAD est une application autonome et non un module de ZIPPLE. Son catalogue métier est limité aux cinq familles validées : porc braisé, poulet braisé, poisson braisé, brochettes et omelettes. Les boissons, accompagnements, repas complets et desserts restent hors périmètre sauf décision expresse ultérieure.
 
@@ -81,7 +81,7 @@ Dans un point employant plusieurs vendeurs, les ventes concurrentes doivent êtr
 - LOYABLE suit les biens, contrats, loyers, cautions, travaux et revenus locatifs.
 - NAXA HOTEL est un PMS avec réservations, risques de double réservation hors connexion, folios, ménage, maintenance et clôture de nuit.
 - NAXA SECURITY est un ERP logiciel de sécurité vidéo/audio et d'alertes ; l'entreprise ne fournit pas les caméras ou équipements et n'assure pas la surveillance humaine.
-- GRILLAD est un ERP spécialisé pour les cinq familles de grillades validées, avec trois modes d'organisation et des lieux physiques géolocalisés.
+- GRILLAD est un ERP spécialisé pour les cinq familles validées, organisé en réseau de plusieurs points de vente avec plusieurs vendeurs par point ; les lieux sont localisés, mais aucun suivi GPS permanent du personnel n'est prévu.
 - CAMPUS237 doit être cadré à partir de son cahier complet, avec protection renforcée des données concernant les mineurs et les représentants légaux.
 
 ## 6. Références JOBLY — éléments à étudier pour enrichir les dix applications
@@ -349,7 +349,7 @@ Ces dimensions sont des unités de mesure candidates, pas des tarifs ni des arbi
 | NAXA HOTEL | Hôtel, chambres, utilisateurs et modules PMS activés. |
 | NAXA SECURITY | Organisation, sites, capacité d'équipements/flux et conservation ; respecter les extensions de capacité déjà décidées et la séparation des données de sécurité. |
 | CAMPUS237 | Conserver le modèle commercial déjà arbitré par parent ; étudier les droits par parent/établissement sans remplacer le tarif validé. |
-| GRILLAD | Organisation, lieux de service, Manager, vendeurs et capacité des sessions, en préservant les trois modes de fonctionnement. |
+| GRILLAD | Organisation Promoteur, points de vente multiples, plusieurs vendeurs par point, responsables locaux, caisse par point et capacités ACCÈS/PREMIUM. |
 
 ### Niveau de confiance et prochaines étapes
 
@@ -547,7 +547,7 @@ Les cas facturés selon une unité ou un compte non Promoteur restent des except
 
 Un même Promoteur ne peut détenir ni utiliser simultanément plusieurs souscriptions identiques ou plusieurs exemplaires du même pack pour une même application.
 
-- Pour les applications à abonnement Promoteur, une seule souscription active (ou en essai, renouvellement en attente ou période de grâce) est autorisée par couple **Promoteur + application**. Cette souscription couvre son réseau complet.
+- Pour les applications à abonnement Promoteur, une seule souscription active (ou en essai, renouvellement en attente ou période de grâce) est autorisée par couple **Promoteur + application**. La portée effective de la souscription dépend des entitlements de la formule. Pour GRILLAD, ACCÈS autorise un point et PREMIUM plusieurs points ; ne pas étendre ACCÈS à tout le réseau par défaut.
 - Le Promoteur dispose d'une seule souscription active par application. Pour GRILLAD, la formule ACCÈS ou PREMIUM détermine l'architecture autorisée ; aucun palier automatique ou recalcul du prix selon le nombre de points ne s'applique.
 - Une souscription expirée, résiliée ou remplacée reste dans l'historique ; elle ne constitue pas une seconde souscription active.
 - La règle d'unicité est appliquée côté serveur et en base de données, avec contrainte/transaction empêchant les créations concurrentes et journalisant les tentatives de doublon.
