@@ -316,6 +316,99 @@ END
 $payment_guard$;
 RESET ROLE;
 
+DO $inventory_sync$
+DECLARE
+  v_item jsonb;
+  v_updated jsonb;
+  v_replay jsonb;
+  v_quantity numeric(14,3);
+  v_count integer;
+  v_rejected boolean := false;
+BEGIN
+  v_item := public.ns_save_inventory_item(
+    '92000000-0000-4000-8000-000000000001'::uuid,
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    'CI-STOCK-001','Inventory sync test item','pièce',2.5,'237690000001'
+  );
+  IF v_item->>'inventory_item_id' <> '92000000-0000-4000-8000-000000000001' THEN
+    RAISE EXCEPTION 'INVENTORY_ITEM_LOCAL_UUID_NOT_PRESERVED: %',v_item;
+  END IF;
+  PERFORM public.ns_record_inventory_movement(
+    '93000000-0000-4000-8000-000000000001'::uuid,
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    '92000000-0000-4000-8000-000000000001'::uuid,
+    'in',12.5,'Opening inventory balance from import'
+  );
+  v_replay := public.ns_record_inventory_movement(
+    '93000000-0000-4000-8000-000000000001'::uuid,
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    '92000000-0000-4000-8000-000000000001'::uuid,
+    'in',12.5,'Opening inventory balance from import'
+  );
+  IF coalesce((v_replay->>'idempotent_replay')::boolean,false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'INVENTORY_MOVEMENT_REPLAY_NOT_IDEMPOTENT: %',v_replay;
+  END IF;
+  SELECT quantity INTO v_quantity FROM public.ns_inventory_items
+    WHERE id='92000000-0000-4000-8000-000000000001';
+  SELECT count(*) INTO v_count FROM public.ns_inventory_movements
+    WHERE id='93000000-0000-4000-8000-000000000001';
+  IF v_quantity<>12.5 OR v_count<>1 THEN
+    RAISE EXCEPTION 'INVENTORY_MOVEMENT_DUPLICATED_OR_WRONG_BALANCE: quantity %, rows %',v_quantity,v_count;
+  END IF;
+  v_updated := public.ns_save_inventory_item(
+    '92000000-0000-4000-8000-000000000001'::uuid,
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    'CI-STOCK-001','Inventory sync test item updated','pièce',3.0,'237690000002'
+  );
+  SELECT quantity INTO v_quantity FROM public.ns_inventory_items
+    WHERE id='92000000-0000-4000-8000-000000000001';
+  IF v_quantity<>12.5 OR v_updated->>'name'<>'Inventory sync test item updated' THEN
+    RAISE EXCEPTION 'INVENTORY_METADATA_UPDATE_OVERWROTE_QUANTITY';
+  END IF;
+  BEGIN
+    PERFORM public.ns_record_inventory_movement(
+      '93000000-0000-4000-8000-000000000001'::uuid,
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,
+      '92000000-0000-4000-8000-000000000001'::uuid,
+      'in',13.5,'Changed payload under same movement ID'
+    );
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='NAXA_INVENTORY_MOVEMENT_IDEMPOTENCY_CONFLICT' THEN v_rejected:=true; ELSE RAISE; END IF;
+  END;
+  IF NOT v_rejected THEN RAISE EXCEPTION 'INVENTORY_MOVEMENT_CHANGED_REPLAY_NOT_REJECTED'; END IF;
+  v_rejected:=false;
+  BEGIN
+    PERFORM public.ns_record_inventory_movement(
+      '93000000-0000-4000-8000-000000000002'::uuid,
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,
+      '92000000-0000-4000-8000-000000000001'::uuid,
+      'consumption',-99,'Impossible negative stock test'
+    );
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='NAXA_INVENTORY_STOCK_WOULD_BE_NEGATIVE' THEN v_rejected:=true; ELSE RAISE; END IF;
+  END;
+  IF NOT v_rejected THEN RAISE EXCEPTION 'NEGATIVE_STOCK_MOVEMENT_NOT_REJECTED'; END IF;
+  v_rejected:=false;
+  BEGIN
+    PERFORM public.ns_save_inventory_item(
+      '92000000-0000-4000-8000-000000000002'::uuid,
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000002'::uuid,
+      'CI-STOCK-SITE-B','Forbidden site item','pièce',0,''
+    );
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='NAXA_INVENTORY_ITEM_SAVE_FORBIDDEN' THEN v_rejected:=true; ELSE RAISE; END IF;
+  END;
+  IF NOT v_rejected THEN RAISE EXCEPTION 'INVENTORY_ITEM_CROSS_SITE_WRITE_NOT_REJECTED'; END IF;
+END
+$inventory_sync$;
+
 UPDATE public.ns_devices SET revoked_at=now() WHERE id='80000000-0000-4000-8000-000000000001';
 SET ROLE authenticated;
 DO $revocation$

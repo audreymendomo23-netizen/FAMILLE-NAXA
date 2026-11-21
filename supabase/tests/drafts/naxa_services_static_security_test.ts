@@ -214,3 +214,21 @@ Deno.test("supplier sync drafts preserve local supplier, purchase and line UUIDs
   assert(/grant\s+execute\s+on\s+function\s+public\.ns_save_supplier\([^;]+\)\s+to\s+authenticated,\s*service_role/i.test(sql),
     "Supplier identity RPC must have explicit execution grants");
 });
+
+Deno.test("inventory sync RPCs preserve canonical IDs, tenant scope and replay-safe movement writes", async () => {
+  const sql = await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  assert(/create\s+or\s+replace\s+function\s+public\.ns_save_inventory_item\s*\(/i.test(sql),
+    "Stable inventory item upsert RPC is required");
+  assert(/where\s+id\s*=\s*p_inventory_item_id\s+for\s+update/i.test(sql),
+    "Inventory item upsert must lock the canonical local UUID");
+  assert(/create\s+or\s+replace\s+function\s+public\.ns_record_inventory_movement\s*\(/i.test(sql),
+    "Append-only inventory movement RPC is required");
+  assert(/v_existing\.idempotency_key\s*<>\s*p_movement_id/i.test(sql),
+    "Changed payload under an existing movement ID must be rejected");
+  assert(/v_next_quantity\s*<\s*0/i.test(sql),
+    "A movement may not create negative stock");
+  assert(/grant\s+execute\s+on\s+function\s+public\.ns_save_inventory_item\([^;]+\)\s+to\s+authenticated,\s*service_role/i.test(sql),
+    "Inventory item RPC must have explicit scoped grants");
+  assert(/grant\s+execute\s+on\s+function\s+public\.ns_record_inventory_movement\([^;]+\)\s+to\s+authenticated,\s*service_role/i.test(sql),
+    "Inventory movement RPC must have explicit scoped grants");
+});
