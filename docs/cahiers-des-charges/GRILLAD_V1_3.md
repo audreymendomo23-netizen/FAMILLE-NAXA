@@ -4,7 +4,7 @@
 **Produit :** GRILLAD  
 **Type :** ERP autonome spécialisé dans la gestion des activités de grillades  
 **Dépôt de référence :** audreymendomo23-netizen/FAMILLE-NAXA  
-**Statut :** référentiel fonctionnel consolidé ; cinq arbitrages métier confirmés, décisions historiques conservées, compléments explicitement classés [C], [P] ou [O]  
+**Statut :** référentiel fonctionnel consolidé ; décisions métier et tarifs validés intégrés, décisions historiques conservées, compléments explicitement classés [C], [P] ou [O]  
 **Document de continuité :** [GRILLAD — Continuité et passation](../passations/GRILLAD_CONTINUITE_2026-11-21.md)
 
 ---
@@ -639,6 +639,7 @@ Chaque recette doit être exécutée dans un environnement de test isolé avec d
 | REC-25 | Connecter un vendeur autorisé au point A puis tenter d'ouvrir le point B | L'accès à B est refusé si aucune affectation n'existe. |
 | REC-26 | Faire vendre simultanément plusieurs vendeurs sur un même article | Les quantités disponibles sont décrémentées de façon cohérente, sans vente doublonnée ni dépassement silencieux. |
 | REC-27 | Comparer le rapport d'un responsable local au rapport du Promoteur en mode centralisé | Le responsable ne voit que son périmètre ; le Promoteur voit uniquement la consolidation autorisée et la ventilation par point. |
+| REC-28 | Vérifier les tarifs mensuels et annuels ACCÈS/PREMIUM | ACCÈS = 2 000 FCFA/mois ou 24 000 FCFA/12 mois, sans remise ; PREMIUM = 6 000 FCFA/mois ou 60 000 FCFA/12 mois, avec deux mois offerts. |
 
 ## 17. Porte de livraison — définition stricte de « terminé »
 
