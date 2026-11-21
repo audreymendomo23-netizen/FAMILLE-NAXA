@@ -9,6 +9,8 @@ const CORS = {
 
 type JsonObject = Record<string, unknown>;
 
+const EVENT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 function reply(status: number, body: JsonObject): Response {
   return new Response(JSON.stringify(body), { status, headers: CORS });
 }
@@ -126,6 +128,10 @@ export async function handleAccountingRequest(
     body = raw as JsonObject;
   } catch {
     return reply(400, { error: "INVALID_JSON" });
+  }
+  const eventId = typeof body.event_id === "string" ? body.event_id.trim() : "";
+  if (body.event_id !== undefined && !EVENT_UUID.test(eventId)) {
+    return reply(400, { error: "INVALID_EVENT_ID" });
   }
 
   const baseUrl = env.supabaseUrl.replace(/\/+$/, "");
@@ -286,7 +292,9 @@ export async function handleAccountingRequest(
       default:
         return reply(400, { error: "UNSUPPORTED_ACCOUNTING_ACTION" });
     }
-    return reply(200, { ok: true, result });
+    const responseBody: JsonObject = { ok: true, result };
+    if (eventId) responseBody.receipt = { eventId, status: "applied" };
+    return reply(200, responseBody);
   } catch (error) {
     const message = error instanceof Error ? error.message : "ACCOUNTING_REQUEST_FAILED";
     const status = message === "AUTHENTICATION_REQUIRED" ? 401 :
