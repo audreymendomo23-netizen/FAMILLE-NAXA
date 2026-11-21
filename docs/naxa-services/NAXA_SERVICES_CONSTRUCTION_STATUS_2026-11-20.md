@@ -1480,3 +1480,49 @@ Aucune migration SQL n'a été appliquée ; aucun endpoint Edge n'a été déplo
 Avant chaque appel, le coordinateur compare maintenant `payload.org_id` à l'organisation de session et vérifie que `payload.site_id` figure dans les sites affectés au membre actif. Une incohérence d'organisation est rejetée ; un site non affecté est bloqué comme dépendance, et le coordinateur peut poursuivre les événements d'autres sites autorisés de la même organisation.
 
 Cette vérification cliente complète, sans remplacer, les contrôles d'autorisation de l'Edge/RPC.
+
+
+# Addendum 9 — Audit de reprise des éléments restants et arbitrages (21 novembre 2026)
+
+**Branche contrôlée :** `work/naxa-services-completion-20261120`  
+**HEAD avant cet addendum :** `3f9f5181fb00852ef0d89be438956581bb8ebf09`  
+**CI de référence :** [44874158038 — SUCCESS, 6/6 jobs](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44874158038).  
+**APK :** artifact debug `naxa-services-debug-apk`, ID `14695281738`.  
+**main :** `65dfbcf29a5e9add1be79ef77ac930b3350eba9d`, non modifiée.
+
+## 45.1 Vérification des fonctionnalités déjà présentes
+
+- **Parrainage PME :** écran accessible depuis le profil dans `ManagementModules.kt`, fonction `ReferralScreen`, contrat API et fonction Edge présents. La règle existante est une récompense par vague de cinq premières souscriptions payées : un cycle mensuel gratuit si le parrain est en cadence mensuelle, ou un mois ajouté à l'échéance annuelle si la cadence est annuelle. La confirmation de paiement et l'application effective de l'entitlement restent dépendantes du flux serveur de paiement/abonnement.
+- **Parrainage client :** distinct du parrainage PME ; aucune politique de récompense client ni chaîne complète « code client → nouveau client → première vente encaissée → crédit récompense » n'est livrée.
+- **Commissions :** l'écran Équipe permet une saisie manuelle de commissions, avances et primes, suivie d'une validation. Le calcul automatique et systématique par prestation réalisée et réellement encaissée n'est pas démontré.
+- **Roue promotionnelle :** aucune fonctionnalité de roue n'est présente dans les routes ou modules examinés.
+- **Notifications :** les canaux Android et les rappels locaux existent. Les écrans indiquent que le push FCM / les notifications WhatsApp côté serveur attendent une passerelle ; aucun envoi FCM distant multi-appareil n'est qualifié.
+- **Synchronisation :** le contrat commun et l'outbox locale existent, mais le coordinateur Android est limité au cycle fournisseur, en synchronisation manuelle. Il traite quatre actions fournisseur/achats ; il bloque notamment les achats nécessitant un article distant non mappé et les règlements espèces dont la session de caisse distante n'existe pas. Ce n'est pas une synchronisation globale ERP.
+- **Mobile Money :** le parcours local peut maintenir un paiement en attente et permettre son annulation auditée. Aucune confirmation fournisseur réelle, aucun webhook marchand intégré et aucun rapprochement automatique ne sont qualifiés.
+- **Comptabilité / paie :** journal et indicateurs de gestion locaux existent, mais ils ne constituent ni un grand livre SYSCOHADA validé ni un moteur de paie et de retenues statutaires certifié.
+
+## 45.2 Environnement Supabase et garde de non-régression
+
+L'inventaire en lecture seule des projets Supabase accessibles à cette session n'a retourné qu'un projet nommé `NAXA`, correspondant au projet historique qui doit rester hors du périmètre de recette NAXA SERVICES. Aucun projet Famille NAXA/NAXA SERVICES isolé n'est actuellement disponible dans cet inventaire.
+
+En conséquence :
+- ne pas appliquer les drafts SQL v1-v4 ou le draft Referral sur ce projet historique ;
+- ne pas déployer les Edge Functions, configurer des secrets FCM/Mobile Money, ni exécuter de migration réelle sans environnement isolé ;
+- créer ou désigner une base de recette séparée, avec autorisation d'accès et budget explicite, avant les tests d'exécution PostgreSQL/RLS.
+
+## 45.3 Décisions techniques recommandées, sans activation implicite
+
+Les propositions, critères et blocages sont consignés dans `ARBITRAGES_METIER_ET_REGLEMENTAIRES_2026-11-21.md`. Les règles de sécurité suivantes deviennent les critères de non-régression :
+
+- une vente, un paiement, une souscription ou une récompense n'est confirmé que par une preuve serveur idempotente ;
+- aucun conflit financier n'est résolu par écrasement automatique ;
+- toute commission, taxe, règle de paie ou récompense dépend d'une politique versionnée et datée ;
+- une roue promotionnelle reste désactivée jusqu'à une qualification juridique camerounaise écrite ;
+- aucune clé privilégiée, clé FCM serveur ou secret de paiement ne doit être embarqué dans Android/Web ;
+- WhatsApp reste un lien préparé soumis à l'action de l'utilisateur ; aucun SMS sortant payant n'est ajouté par défaut.
+
+## 45.4 Statut
+
+**Statut global inchangé : CI technique verte pour le périmètre testé, mais parrainage client, roue promotionnelle, notifications distantes, synchronisation ERP globale, paiement Mobile Money, commissions automatiques, comptabilité SYSCOHADA, fiscalité et paie restent non qualifiés ou bloqués par des décisions/environnements externes.**
+
+Aucune migration, aucun déploiement, aucune publication Release, aucune fusion dans `main` et aucune modification du projet Supabase historique n'ont été réalisés.
