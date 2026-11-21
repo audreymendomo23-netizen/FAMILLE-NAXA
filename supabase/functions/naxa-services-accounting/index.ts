@@ -1,4 +1,4 @@
-import { normalizeSupplierPurchaseSyncPayload, normalizeSupplierSyncPayload } from "./sync_contract.ts";
+import { normalizeInventoryItemSyncPayload, normalizeInventoryMovementSyncPayload, normalizeSupplierPurchaseSyncPayload, normalizeSupplierSyncPayload } from "./sync_contract.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -139,6 +139,33 @@ export async function handleAccountingRequest(
     let result: unknown;
 
     switch (action) {
+      case "save_inventory_item": {
+        const payload = normalizeInventoryItemSyncPayload(body);
+        result = await postRpc(baseUrl, env.anonKey, token, "ns_save_inventory_item", {
+          p_inventory_item_id: payload.inventory_item_id,
+          p_org_id: payload.org_id,
+          p_site_id: payload.site_id,
+          p_sku: payload.sku,
+          p_name: payload.name,
+          p_unit: payload.unit,
+          p_reorder_level: payload.reorder_level,
+          p_supplier_whatsapp: payload.supplier_whatsapp,
+        });
+        break;
+      }
+      case "record_inventory_movement": {
+        const payload = normalizeInventoryMovementSyncPayload(body);
+        result = await postRpc(baseUrl, env.anonKey, token, "ns_record_inventory_movement", {
+          p_movement_id: payload.movement_id,
+          p_org_id: payload.org_id,
+          p_site_id: payload.site_id,
+          p_inventory_item_id: payload.inventory_item_id,
+          p_movement_type: payload.movement_type,
+          p_quantity_delta: payload.quantity_delta,
+          p_reason: payload.reason,
+        });
+        break;
+      }
       case "save_supplier": {
         const payload = normalizeSupplierSyncPayload(body);
         result = await postRpc(baseUrl, env.anonKey, token, "ns_save_supplier", {
