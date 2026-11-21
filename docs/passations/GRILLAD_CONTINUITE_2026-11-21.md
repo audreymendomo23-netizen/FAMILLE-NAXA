@@ -5,7 +5,7 @@
 **Dépôt :** audreymendomo23-netizen/FAMILLE-NAXA  
 **Branche de référence :** main  
 **Statut :** passation documentaire établie ; les points explicitement marqués ouverts restent à arbitrer  
-**Cahier associé :** [GRILLAD — Cahier des charges fonctionnel V1.2](../cahiers-des-charges/GRILLAD_V1_2.md)
+**Cahier associé :** [GRILLAD — Cahier des charges fonctionnel V1.3](../cahiers-des-charges/GRILLAD_V1_3.md)
 
 ---
 
@@ -95,9 +95,9 @@ GRILLAD ne propose que deux formules :
 
 Aucun pack PRO n'est retenu. Aucun plafond numérique de vendeurs par point ni de points Premium n'est établi ici ; ne pas inventer de limite.
 
-La périodicité est mensuelle ou annuelle. Le paiement annuel correspond à **10 mensualités pour 12 mois de service** (deux mois offerts). Aucune formule de trois ou six mois.
+Les périodicités sont mensuelle ou annuelle. Les tarifs validés sont : **ACCÈS 2 000 FCFA/mois et 24 000 FCFA/an** ; **PREMIUM 6 000 FCFA/mois et 60 000 FCFA/an**.
 
-Les montants mensuels exacts ACCÈS et PREMIUM n'ont pas été retrouvés dans les éléments accessibles et restent à confirmer. Le tarif annuel de chaque formule sera égal à dix fois son tarif mensuel. Aucun tarif par palier de points, supplément par vendeur ou frais automatique par point de vente ne doit être codé sans décision expresse.
+La règle annuelle est différenciée : ACCÈS est facturé 12 mensualités pour 12 mois, sans mois offert ; PREMIUM est facturé 10 mensualités pour 12 mois, avec deux mois offerts. Aucune formule de trois ou six mois. Aucun tarif par palier de points, supplément par vendeur ou frais automatique par point de vente n'est ajouté.
 
 Le modèle de facturation et la portée de la souscription doivent rester compatibles avec le moteur commun **Plan → Subscription → Payment → Entitlements**. Les droits de formule et les permissions individuelles sont contrôlés séparément.
 
@@ -175,7 +175,7 @@ L'état logiciel reste donc **NON AUDITÉ PAR CETTE MISSION DOCUMENTAIRE**. Il n
 
 ## 9. Ordre de reprise recommandé
 
-1. **Geler la référence documentaire** : utiliser le cahier GRILLAD V1.2 associé à cette passation ; ne pas importer les fonctions proposées comme des décisions.
+1. **Geler la référence documentaire** : utiliser le cahier GRILLAD V1.3 associé à cette passation ; ne pas importer les fonctions proposées comme des décisions.
 2. **Fermer les arbitrages** : confirmer les sujets listés en section 10.
 3. **Auditer le code existant** : Android, Web, contrats, données locales, APIs, RLS, tests et CI ; identifier chaque fonction déjà construite avant toute correction.
 4. **Construire la matrice exigences → code → test → preuve** : une ligne par exigence, avec fichier, test, résultat et lien de preuve.
@@ -193,7 +193,7 @@ L'état logiciel reste donc **NON AUDITÉ PAR CETTE MISSION DOCUMENTAIRE**. Il n
 | O-04 | Confirmer si les cinq familles doivent toutes pouvoir être actives simultanément sur le même point | [O] |
 | O-05 | Fixer la méthode de calcul du coût de revient et les éléments inclus | [O] |
 | O-06 | Fixer moyens de paiement, règles de caisse, fonds initial, paiements mixtes et remboursements | [O] |
-| O-07 | Confirmer les tarifs mensuels ACCÈS et PREMIUM ; annuel égal à 10 mensualités pour 12 mois | [O] |
+| O-07 | Tarifs mensuels et annuels ACCÈS/PREMIUM | **CLOS — validés : ACCÈS 2 000/24 000 F ; PREMIUM 6 000/60 000 F ; règles annuelles distinctes** |
 | O-08 | Définir l'exception éventuelle à la vente directe pour GRILLAD Connect depuis un QR ZIPPLE | [B] |
 | O-09 | Valider ou exclure le pointage GPS et la preuve d'arrivée/départ du personnel | [O] |
 | O-10 | Valider langues, notifications, Livechat et éventuelle intégration NAXA SECURITY | [O] |
@@ -207,7 +207,7 @@ L'état logiciel reste donc **NON AUDITÉ PAR CETTE MISSION DOCUMENTAIRE**. Il n
 - [Continuité générale Famille NAXA](../CONTINUITE.md)
 - [Architecture cible](../ARCHITECTURE_CIBLE.md)
 - [Index documentaire](../INDEX.md)
-- [Cahier GRILLAD V1.2](../cahiers-des-charges/GRILLAD_V1_2.md)
+- [Cahier GRILLAD V1.3](../cahiers-des-charges/GRILLAD_V1_3.md)
 
 ---
 
