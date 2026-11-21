@@ -1,5 +1,7 @@
 # GRILLAD — Cahier des charges fonctionnel V1.1
 
+> **VERSION REMPLACÉE :** ce document est conservé comme historique. La référence courante est [GRILLAD V1.2](GRILLAD_V1_2.md), qui corrige les formules commerciales et formalise l'architecture multi-points de vente / multi-vendeurs par point.
+
 **Date de référence :** 21 novembre 2026  
 **Produit :** GRILLAD  
 **Type :** ERP autonome spécialisé dans la gestion des activités de grillades  
