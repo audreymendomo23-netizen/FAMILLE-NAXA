@@ -1526,3 +1526,98 @@ Les propositions, critères et blocages sont consignés dans `ARBITRAGES_METIER_
 **Statut global inchangé : CI technique verte pour le périmètre testé, mais parrainage client, roue promotionnelle, notifications distantes, synchronisation ERP globale, paiement Mobile Money, commissions automatiques, comptabilité SYSCOHADA, fiscalité et paie restent non qualifiés ou bloqués par des décisions/environnements externes.**
 
 Aucune migration, aucun déploiement, aucune publication Release, aucune fusion dans `main` et aucune modification du projet Supabase historique n'ont été réalisés.
+
+
+# Addendum 10 — Reprise des chantiers de parrainage client, roue, notifications et synchronisation (21 novembre 2026)
+
+**Branche de travail :** `work/naxa-services-completion-20261120`  
+**Commit testé :** `ef8335a31b31288f20d77939bfd78662c0ff6c6c`  
+**Run CI :** [44878459375](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44878459375) — contrôles non Android réussis ; job Android en cours au moment de la rédaction.  
+**main :** `65dfbcf29a5e9add1be79ef77ac930b3350eba9d`, inchangée.
+
+## 46.1 Parrainage client — nouveau socle serveur
+
+Ajout du draft `supabase/drafts/naxa_services_v5_customer_referrals_promotions.sql` et de la passerelle `supabase/functions/naxa-services-customer-promotions/`.
+
+Fonctions présentes :
+- campagnes client configurables et créées en brouillon, bénéficiaire parrain ou les deux, type/valeur/plafond minimum/durée de l'avantage ;
+- code client unique par campagne, format fixe et application unique avant première vente payée ;
+- qualification uniquement après vente postée entièrement encaissée et confirmation serveur ; montant encaissé total contrôlé ;
+- sélection de la première vente payée complète ; fenêtre de campagne contrôlée sur l'horodatage du dernier paiement qui complète la vente ;
+- rejet auto-parrainage, client déjà attribué, campagne inactive/hors périmètre et attribution postérieure à une première vente payée ;
+- récompenses générées une seule fois et émission référencée dans un registre externe ;
+- contrôles idempotents sur code, événement fournisseur et émission.
+
+Le test PostgreSQL 17 vérifie l'attribution avant paiement, la qualification d'une vente totalement payée, deux bénéficiaires lorsque la campagne le prévoit, la reprise idempotente, la délivrance idempotente et le refus de l'auto-parrainage.
+
+**État produit :** API et règles SQL prêtes pour revue d'intégration ; écran Android client, partage de code, parcours client complet et publication d'une première politique de récompense restent à intégrer. Aucune valeur commerciale n'est présélectionnée en production.
+
+## 46.2 Roue promotionnelle — moteur sécurisé, activation verrouillée
+
+Dans le même draft v5 :
+- campagnes, lots pondérés, plafonds de stock et tirages idempotents ;
+- tirage centralisé côté serveur avec aléa cryptographique, rejet d'échantillonnage biaisé, verrouillage de campagne et de stock ;
+- aucune sélection du lot depuis le client ;
+- activation bloquée sans conditions datées, avis juridique référencé, autorisation référencée, identité du relecteur et approbation ;
+- passerelle Edge sans transition vers `approved` ou `active`.
+
+Les tests PostgreSQL démontrent que la campagne brouillon ne peut pas être tirée et qu'une campagne active sans pièces d'autorisation ne peut pas être insérée.
+
+**État produit :** fonction explicitement désactivée ; revue juridique camerounaise et éventuelle autorisation exigées avant activation. La qualification sous la loi n° 2015/012 et le décret n° 2019/2300/PM doit être confirmée par un conseil/autorité compétent. Aucun lancement public ou lot réel n'est autorisé par ce commit.
+
+## 46.3 Notifications distantes — schéma, passerelle et worker FCM
+
+Ajout du draft `supabase/drafts/naxa_services_v6_notifications.sql` et de `supabase/functions/naxa-services-notifications/`.
+
+Fonctions présentes :
+- enregistrement du token Android/Web lié au membre, à l'appareil et à la session active ;
+- chiffrement AES-256-GCM du token FCM côté serveur, IV propre à chaque enregistrement, empreinte SHA-256 pour déduplication et suffixe limité à quatre caractères ;
+- révocation d'appareil/token ;
+- revendication du lot d'outbox par `FOR UPDATE SKIP LOCKED`, bail de cinq minutes et jeton de revendication ;
+- worker FCM HTTP v1 utilisant un compte de service fourni uniquement par secret serveur ;
+- reprise différée et plafonnée des erreurs transitoires, révocation des tokens déclarés invalides ;
+- boîte de réception membre avec états monotones `sent → read → actioned`.
+
+Les tests vérifient le typage Deno, les validations payload/token, les permissions server-only, l'idempotence du claim/finalize, la création de l'entrée d'inbox, la non-régression de l'état lu et le retry.
+
+**État produit :** code et tests présents, mais pas d'activation réelle : projet Firebase NAXA SERVICES, configuration Android/FCM, secret de chiffrement, compte de service, secret worker, fonction déployée, planification de l'envoi, événements métier producteurs et raccordement UI Android restent à faire. `sent` signifie accepté par FCM, jamais reçu/lu par une personne.
+
+## 46.4 Synchronisation commune — contrat consolidé, réplication encore partielle
+
+Le package `packages/contracts` couvre maintenant les identifiants des 11 marques du portefeuille (l'identifiant historique `grillad` est conservé pour compatibilité) et les domaines NAXA SERVICES : profil, clients/CRM, catalogue, rendez-vous, pressing, ventes, paiements, caisse, dépenses, stock/mouvements, fournisseurs/achats/réceptions/règlements, RH, commissions, comptabilité, fidélité, récurrences, parrainage et notifications.
+
+La validation d'enveloppe vérifie identifiants tenant/appareil/acteur/événement, session, séquence appareil, version agrégat, horodatage, version de schéma et taille du payload. La politique refuse le last-write-wins financier et demande un examen humain pour les conflits de paiement/vente/abonnement/caisse/dépense/règlement fournisseur/commission/comptabilité/parrainage ; le stock requiert un mouvement compensatoire.
+
+**État produit :** contrats et tests Vitest passent dans la CI. Cela ne suffit pas à revendiquer une synchronisation globale : le coordinateur Android actuellement raccordé est toujours le coordinateur fournisseur manuel, limité à quatre événements ; le Web/PWA est une file locale générique ; les handlers serveur idempotents pour tous les agrégats, les reçus de synchronisation globaux, les politiques de conflits par domaine, la réplication multi-appareils et les tests hors ligne complets restent à construire.
+
+## 46.5 CI et environnement vérifié
+
+Le workflow a maintenant dix contrôles :
+1. contrat d'authentification/portée ;
+2. catalogue des tarifs Famille ;
+3. contrat du parrainage PME ;
+4. contrat des notifications FCM ;
+5. contrat du parrainage client/roue ;
+6. intégration PostgreSQL 17 + RLS runtime ;
+7. contrat d'approvisionnement/comptabilité ;
+8. tests de sécurité statiques ;
+9. contrat commun de synchronisation ;
+10. build/tests Android.
+
+Sur le run `44878459375`, les neuf contrôles non Android ont réussi, y compris l'application de drafts v1 à v6 dans PostgreSQL jetable et les tests runtime RLS. Le job Android exécutait encore les tests/assemblage au moment de l'édition de cet addendum.
+
+Les migrations candidates v1 à v6 restent `ROLLBACK` par défaut dans le dépôt. La CI modifie uniquement la copie temporaire sur le service PostgreSQL éphémère. Aucun secret FCM ou paiement n'est commité, aucun déploiement Supabase n'est effectué et le projet historique `NAXA` reste intact.
+
+## 46.6 Éléments qui ne sont pas déclarés terminés
+
+- **Parrainage client :** écran Android, publication de campagne avec politique décidée, partage/code côté client, contrôles anti-fraude renforcés (téléphones normalisés, doublons) et ledger réel de points/remises.
+- **Roue :** qualification juridique écrite, autorisation éventuelle, règlement complet, UI, gestion réelle des lots et approbation explicite.
+- **Notifications distantes :** projet Firebase, secrets, déploiement et planification, producteurs des événements métier, UI Android et tests de livraison terrain.
+- **Synchronisation globale :** handlers serveur par domaine, receipts globaux, mécanisme de conflits, coordinateurs Android et Web/PWA complets, bascule sûre de l'outbox, tests réseau instable/multi-appareils.
+- **Commissions :** attribution des prestations aux collaborateurs, barèmes effectifs-datés approuvés et calcul automatique basé sur l'encaissement confirmé ; ne pas inventer de taux.
+- **Mobile Money :** contrats marchand/sandbox MTN MoMo et/ou Orange Money, adaptateurs, webhooks authentifiés et rapprochement ; aucune transaction réelle.
+- **Fiscalité / SYSCOHADA / paie :** moteurs versionnés et validés par expert-comptable/paie camerounais avec les paramètres DGI/CNPS en vigueur ; ne pas traiter les journaux de gestion existants comme une comptabilité certifiée ni inventer les retenues.
+- **Environnement :** projet Supabase NAXA SERVICES isolé et Firebase distincts requis avant migration ou déploiement.
+- **Autres écarts de l'audit :** backups/restauration, Web/PWA parité, tests physiques, build Release signé, Fulfulde, automatisations CRM/loyauté, livechat/IA et console CSO.
+
+**Conclusion :** le code serveur de première version, les gardes de sécurité et les tests de contrat pour le parrainage client, la roue et les notifications sont ajoutés. La synchronisation partagée est mieux spécifiée et testée. L'ensemble NAXA SERVICES n'est toujours pas « intégralement opérationnel » : les raccordements UI, les handlers de synchronisation par domaine, les dépendances externes et les validations professionnelles demeurent des portes de sortie obligatoires.
