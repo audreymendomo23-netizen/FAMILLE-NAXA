@@ -73,3 +73,15 @@ La création d'un projet Famille/NAXA Services distinct reste nécessaire. Sa r�
 - conseil juridique et autorisation applicable pour la roue promotionnelle.
 
 **Conclusion :** cette tranche fait progresser simultanément les socles techniques qui peuvent être développés et testés sans secrets externes. Elle ne transforme pas artificiellement en VERT les points qui exigent de véritables comptes marchands, un Firebase dédié, un projet Supabase isolé, des décisions économiques ou un visa professionnel.
+
+
+## 7. Addendum — politiques financières et événements prestataires (21 novembre 2026)
+
+Le draft v7 complète les tests PostgreSQL jetables :
+- versions de politique de commission (taux en points de base ou montant fixe, dates d'effet, approbation explicite, version approuvée immuable) ;
+- écritures d'ajustement de commission signées et append-only, liées à un événement source idempotent ;
+- politiques fiscales par type d'impôt, version, taux en points de base, mode TTC/HT, dates et références de source ; le statut `approved` exige une approbation et la référence documentaire ;
+- comptes Mobile Money dont la configuration ne contient qu'un pointeur vers le coffre, jamais de secret ;
+- événements de callback Mobile Money limités à des empreintes et métadonnées non sensibles, tables interdites aux rôles clients ; un événement `verified` ou `applied` exige une preuve de vérification serveur.
+
+Les API Edge qui administrent ces nouvelles tables, l'intégration marchande et le rapprochement restent des gates séparées. Le draft v7 est exécuté seulement sur la base PostgreSQL jetable du CI ; il n'est pas appliqué au projet Supabase NAXA historique.

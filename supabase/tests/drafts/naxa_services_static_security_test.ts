@@ -72,6 +72,11 @@ const DRAFTS: DraftSpec[] = [
     tablesWithoutPolicy: ["ns_push_tokens", "ns_notification_inbox"],
     restrictedTables: ["ns_push_tokens", "ns_notification_inbox"],
   },
+  {
+    file: "naxa_services_v7_financial_controls.sql",
+    tablesWithoutPolicy: ["ns_payment_provider_accounts", "ns_payment_provider_events"],
+    restrictedTables: ["ns_payment_provider_accounts", "ns_payment_provider_events"],
+  },
 ];
 
 const SERVER_ONLY_TABLES = DRAFTS.flatMap((draft) => draft.restrictedTables);

@@ -335,4 +335,32 @@ BEGIN
 END
 $stale$;
 RESET ROLE;
+
+SET ROLE authenticated;
+DO $financial_server_write_guard$
+BEGIN
+  BEGIN
+    INSERT INTO public.ns_commission_policy_versions DEFAULT VALUES;
+    RAISE EXCEPTION 'RLS_ALLOWED_CLIENT_COMMISSION_POLICY_WRITE';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    INSERT INTO public.ns_fiscal_policies DEFAULT VALUES;
+    RAISE EXCEPTION 'RLS_ALLOWED_CLIENT_FISCAL_POLICY_WRITE';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    SELECT 1 FROM public.ns_payment_provider_accounts LIMIT 1;
+    RAISE EXCEPTION 'RLS_ALLOWED_CLIENT_PROVIDER_ACCOUNT_READ';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+  BEGIN
+    SELECT 1 FROM public.ns_payment_provider_events LIMIT 1;
+    RAISE EXCEPTION 'RLS_ALLOWED_CLIENT_PROVIDER_EVENT_READ';
+  EXCEPTION WHEN insufficient_privilege THEN NULL;
+  END;
+END
+$financial_server_write_guard$;
+RESET ROLE;
+
 ROLLBACK;
