@@ -1256,3 +1256,23 @@ Le rapport NAXA SERVICES indique que Drive et la restauration ne sont pas encore
 | Maintien des accès locataires pendant suspension bailleur | Proposition [P], confirmation requise |
 
 Aucun code LOYABLE, endpoint, table, migration Supabase, fonction serveur, secret, déploiement ou test de production n'a été ajouté ou exécuté dans cette mise à jour documentaire.
+
+
+## 11. Addendum LOYABLE — validations complémentaires du 21 novembre 2026
+
+Le cahier détaillé et le document de continuité LOYABLE intègrent les décisions suivantes :
+
+- **Parrainage validé :** un mois offert par groupe de trois filleuls bailleurs dont le premier abonnement a été payé et confirmé côté serveur. Le code/QR et le lien ne sont utilisables que lorsque le bailleur parrain est actif ; ils sont désactivés pendant l'inactivité et réactivés avec le même code après réactivation. Les filleuls déjà rattachés conservent leur attribution.
+- **Dossier locataire :** le bailleur peut joindre le contrat de chaque locataire par photo(s) ou PDF ; le document est privé, versionné et limité au locataire concerné et aux rôles autorisés.
+- **Accès pendant la suspension :** l'espace du bailleur est bloqué à expiration non payée, mais le locataire conserve l'accès à son propre dossier, au contrat et documents autorisés, aux reçus/quittances et à la déclaration de maintenance. Les nouvelles demandes sont enregistrées en attente de réactivation ; aucun prestataire ni engagement de dépense n'est lancé pendant la suspension.
+- **Missions prestataires :** le tableau filtrable par catégorie, ville et proximité demeure. La diffusion automatique est annulée : le bailleur doit publier volontairement chaque demande. Les données privées du locataire restent masquées avant affectation.
+- **Vidéosurveillance :** LOYABLE se raccorde au module NAXA SECURITY. Le bailleur connecte son matériel et visualise les caméras compatibles/autorisées de son organisation depuis LOYABLE, sous réserve de l'audit de compatibilité et des capacités du module.
+- **Support :** une proposition de SLA (horaires et niveaux P1–P4) est inscrite au cahier ; elle reste en attente de validation utilisateur et n'est pas un engagement contractuel.
+- **Sauvegarde client :** le client connecte son propre Google Drive depuis Profil et déclenche lui-même ses sauvegardes/restaurations dans LOYABLE. Les sauvegardes d'exploitation NAXA restent distinctes.
+- **Session et authentification :** persistance de session selon le modèle NAXA ; parcours d'authentification selon le modèle NAXA SERVICES, après audit et sans fusion des identités entre applications.
+
+Références :
+- `docs/loyable/LOYABLE_CONTINUITE.md`
+- `docs/loyable/LOYABLE_CAHIER_DES_CHARGES_CENTRE_MAINTENANCE_INTERCONNEXION.md`
+
+Cette consolidation est documentaire uniquement : elle ne démontre aucune implémentation, migration, intégration caméra, connexion Google OAuth, test de sécurité ou déploiement applicatif.
