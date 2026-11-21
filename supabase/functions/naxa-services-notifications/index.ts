@@ -138,6 +138,12 @@ function fromBase64(value: string): Uint8Array {
   return Uint8Array.from(atob(value), (char) => char.charCodeAt(0));
 }
 
+function toArrayBuffer(value: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(value.byteLength);
+  copy.set(value);
+  return copy.buffer;
+}
+
 async function digestHex(value: string) {
   const bytes = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)));
   return Array.from(bytes, (part) => part.toString(16).padStart(2, "0")).join("");
@@ -145,14 +151,14 @@ async function digestHex(value: string) {
 
 async function encryptPushToken(token: string) {
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  const key = await crypto.subtle.importKey("raw", hexBytes(TOKEN_ENCRYPTION_KEY), { name: "AES-GCM" }, false, ["encrypt"]);
-  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(token)));
+  const key = await crypto.subtle.importKey("raw", toArrayBuffer(hexBytes(TOKEN_ENCRYPTION_KEY)), { name: "AES-GCM" }, false, ["encrypt"]);
+  const ciphertext = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: toArrayBuffer(iv) }, key, toArrayBuffer(new TextEncoder().encode(token))));
   return { token_ciphertext: base64(ciphertext), token_iv: base64(iv), token_fingerprint: await digestHex(token), token_tail: token.slice(-4) };
 }
 
 async function decryptPushToken(ciphertext: string, ivText: string) {
-  const key = await crypto.subtle.importKey("raw", hexBytes(TOKEN_ENCRYPTION_KEY), { name: "AES-GCM" }, false, ["decrypt"]);
-  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64(ivText) }, key, fromBase64(ciphertext));
+  const key = await crypto.subtle.importKey("raw", toArrayBuffer(hexBytes(TOKEN_ENCRYPTION_KEY)), { name: "AES-GCM" }, false, ["decrypt"]);
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: toArrayBuffer(fromBase64(ivText)) }, key, toArrayBuffer(fromBase64(ciphertext)));
   return new TextDecoder().decode(plain);
 }
 
@@ -256,7 +262,7 @@ async function fcmAccessToken(account: ServiceAccount) {
   }));
   const unsigned = header + "." + payload;
   const key = await crypto.subtle.importKey(
-    "pkcs8", pemBytes(account.private_key),
+    "pkcs8", toArrayBuffer(pemBytes(account.private_key)),
     { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"],
   );
   const signature = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned)));
