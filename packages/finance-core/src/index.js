@@ -1,6 +1,6 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROVIDERS = new Set(["mtn_momo", "orange_money"]);
-const TERMINAL_PAYMENT_STATES = new Set(["succeeded", "failed", "expired", "cancelled", "refunded"]);
+const TERMINAL_PAYMENT_STATES = new Set(["succeeded", "verified", "failed", "expired", "cancelled", "refunded"]);
 
 function record(value, code) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(code);
@@ -173,7 +173,7 @@ export function calculateCommission(input) {
   if (base === 0) return Object.freeze({ status: "no_commission", baseXaf: 0, totalCommissionXaf: 0, entries: [] });
 
   const total = rule.method === "percent_bps"
-    ? Math.floor((base * rule.rateBps) / 10000)
+    ? Number((BigInt(base) * BigInt(rule.rateBps)) / 10000n)
     : rule.fixedAmountXaf;
   if (!Number.isSafeInteger(total) || total < 0) throw new RangeError("COMMISSION_TOTAL_OUT_OF_RANGE");
 
@@ -194,7 +194,7 @@ export function calculateCommission(input) {
 
   const entries = normalized.map((allocation) => ({
     memberId: allocation.memberId,
-    amountXaf: Math.floor((total * allocation.shareBps) / 10000),
+    amountXaf: Number((BigInt(total) * BigInt(allocation.shareBps)) / 10000n),
     status: "pending_approval",
     sourceEventId: value.sourceEventId,
     idempotencyKey: value.sourceEventId + ":" + allocation.memberId,
@@ -256,6 +256,7 @@ export function validateFiscalPolicy(policyInput, transactionDate) {
 export function calculateFiscalQuote(input) {
   const value = record(input, "INVALID_FISCAL_QUOTE");
   const base = positiveInteger(value.amountXaf, "INVALID_FISCAL_BASE");
+  if (value.policy == null) return Object.freeze({ status: "blocked_unvalidated_policy", amountXaf: null, totalXaf: null, reason: "FISCAL_POLICY_NOT_PROFESSIONALLY_APPROVED" });
   let policy;
   try {
     policy = validateFiscalPolicy(value.policy, value.transactionDate);
@@ -271,17 +272,19 @@ export function calculateFiscalQuote(input) {
   let taxableBase = base;
   let tax;
   if (policy.priceMode === "inclusive") {
-    taxableBase = Math.floor((base * 10000) / (10000 + policy.rateBps));
+    taxableBase = Number((BigInt(base) * 10000n) / (10000n + BigInt(policy.rateBps)));
     tax = base - taxableBase;
   } else {
-    tax = Math.floor((base * policy.rateBps) / 10000);
+    tax = Number((BigInt(base) * BigInt(policy.rateBps)) / 10000n);
   }
+  const totalXaf = policy.priceMode === "inclusive" ? base : base + tax;
+  if (!Number.isSafeInteger(totalXaf)) throw new RangeError("FISCAL_TOTAL_OUT_OF_RANGE");
   return Object.freeze({
     status: "calculated_by_approved_policy",
     taxType: policy.taxType,
     baseXaf: taxableBase,
     taxXaf: tax,
-    totalXaf: policy.priceMode === "inclusive" ? base : base + tax,
+    totalXaf,
     exempt: false,
     policyVersion: policy.version,
     sourceReference: policy.sourceReference,

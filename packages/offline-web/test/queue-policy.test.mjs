@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  assertSameEventPayload, nextRetryAt, classifySyncReceipt,
+  assertSameEventPayload, assertReceiptMatchesEvent, nextRetryAt, classifySyncReceipt,
   canRetrySyncFailure, normalizeQueueBatchLimit,
 } from "../src/queue-policy.js";
 
@@ -16,6 +16,10 @@ test("only an applied server receipt acknowledges an event", () => {
   assert.equal(classifySyncReceipt({ status: "conflict" }), "conflict");
   assert.equal(classifySyncReceipt({ status: "rejected" }), "rejected");
   assert.throws(() => classifySyncReceipt({ status: "http_200" }));
+});
+test("a receipt must be tied to the exact event it acknowledges", () => {
+  assert.equal(assertReceiptMatchesEvent("event-1", { eventId: "event-1", status: "applied" }), true);
+  assert.throws(() => assertReceiptMatchesEvent("event-1", { eventId: "event-2", status: "applied" }), /SERVER_RECEIPT_EVENT_MISMATCH/);
 });
 test("retry schedule is bounded and deterministic with injected jitter", () => {
   assert.equal(nextRetryAt(1, 1000, () => 0), 3000);

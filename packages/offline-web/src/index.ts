@@ -1,5 +1,5 @@
 import {
-  assertSameEventPayload, nextRetryAt, classifySyncReceipt,
+  assertSameEventPayload, assertReceiptMatchesEvent, nextRetryAt, classifySyncReceipt,
   canRetrySyncFailure, normalizeQueueBatchLimit, MAX_QUEUE_ATTEMPTS,
 } from "./queue-policy.js";
 
@@ -86,6 +86,14 @@ export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60
             (item.attemptCount ?? 0) < MAX_QUEUE_ATTEMPTS)
           .sort((a, b) => a.createdAt - b.createdAt)
           .slice(0, take);
+        const exhausted = (request.result as QueueItem[]).filter((item) =>
+          item.state === "sending" && (item.leaseUntil ?? 0) <= now &&
+          (item.attemptCount ?? 0) >= MAX_QUEUE_ATTEMPTS
+        );
+        for (const item of exhausted) {
+          store.put({ ...item, state: "rejected", leaseUntil: null, nextAttemptAt: null,
+            lastErrorCode: "MAX_RETRY_ATTEMPTS_EXCEEDED" });
+        }
         acquired = due.map((item) => ({
           ...item, state: "sending", attemptCount: (item.attemptCount ?? 0) + 1,
           leaseUntil: now + leaseMs,
@@ -102,6 +110,7 @@ export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60
 /** Only an explicit server receipt may complete a queue item. HTTP 200/202 is not enough. */
 export async function applyServerReceipt(eventId: string, receipt: unknown): Promise<QueueState> {
   if (!eventId) throw new TypeError("INVALID_QUEUE_EVENT_ID");
+  assertReceiptMatchesEvent(eventId, receipt);
   const state = classifySyncReceipt(receipt);
   const db = await openDb();
   try {

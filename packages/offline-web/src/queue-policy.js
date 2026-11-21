@@ -16,6 +16,13 @@ export function nextRetryAt(attemptCount, now = Date.now(), random = Math.random
   return now + Math.min(MAX_RETRY_DELAY_MS, base + jitter);
 }
 
+export function assertReceiptMatchesEvent(eventId, receipt) {
+  if (typeof eventId !== "string" || !eventId || !receipt || typeof receipt !== "object" || receipt.eventId !== eventId) {
+    throw new Error("SERVER_RECEIPT_EVENT_MISMATCH");
+  }
+  return true;
+}
+
 export function classifySyncReceipt(receipt) {
   const state = receipt?.status;
   if (state === "applied") return "acknowledged";

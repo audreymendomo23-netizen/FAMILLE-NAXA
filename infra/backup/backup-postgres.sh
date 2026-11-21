@@ -14,6 +14,10 @@ mkdir -p "$BACKUP_OUTPUT_DIR"
 chmod 700 "$BACKUP_OUTPUT_DIR"
 stamp="$(date -u +%Y%m%dT%H%M%SZ)"
 name="${BACKUP_NAME:-naxa-services-postgres-$stamp}"
+if [[ ! "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,100}$ || "$name" == *..* ]]; then
+  echo "Invalid BACKUP_NAME; only a short filename-safe label is allowed" >&2
+  exit 10
+fi
 work="$(mktemp -d "$BACKUP_OUTPUT_DIR/.backup-work.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 passfile="$work/passphrase"
