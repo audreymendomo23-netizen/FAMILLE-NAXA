@@ -236,7 +236,8 @@ create policy ns_commission_policy_versions_select on public.ns_commission_polic
 drop policy if exists ns_commission_adjustments_select on public.ns_commission_adjustments;
 create policy ns_commission_adjustments_select on public.ns_commission_adjustments
   for select to authenticated using (public.ns_can_access_site(org_id, site_id));
-drop policy if exists ns_fiscal_policies_select on public.ns_fiscal_policies
+drop policy if exists ns_fiscal_policies_select on public.ns_fiscal_policies;
+create policy ns_fiscal_policies_select on public.ns_fiscal_policies
   for select to authenticated
   using (
     (site_id is null and public.ns_is_org_member(org_id))
