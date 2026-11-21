@@ -8,6 +8,7 @@ on:
       - "apps/android/naxa-services/**"
       - "packages/core-android/**"
       - "packages/billing-core/**"
+      - "packages/contracts/**"
       - "supabase/functions/naxa-services-auth/**"
       - "supabase/functions/naxa-services-referrals/**"
       - "supabase/functions/naxa-services-customer-promotions/**"
@@ -42,6 +43,7 @@ on:
       - "supabase/functions/naxa-services-accounting/**"
       - "supabase/config.toml"
       - "packages/billing-core/**"
+      - "packages/contracts/**"
       - "settings.gradle.kts"
       - "build.gradle.kts"
       - ".github/workflows/naxa-services-technical-gate.yml"
@@ -68,6 +70,20 @@ jobs:
         run: deno check supabase/functions/naxa-services-auth/index.ts supabase/functions/naxa-services-auth/scope_contract.ts supabase/functions/naxa-services-auth/contract_test.ts
       - name: Run pure Auth contract tests
         run: deno test supabase/functions/naxa-services-auth/contract_test.ts
+
+  sync-contract:
+    name: Cross-application offline synchronization contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install workspace dependencies
+        run: npm install --no-audit --no-fund
+      - name: Validate cross-application sync envelope and conflict policies
+        run: npm run test:contracts
 
   billing-catalog:
     name: NAXA FAMILY launch and maturity tariff tests
