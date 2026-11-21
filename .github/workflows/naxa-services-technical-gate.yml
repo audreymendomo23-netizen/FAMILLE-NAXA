@@ -15,6 +15,7 @@ on:
       - "supabase/drafts/naxa_services_referrals_v1.sql"
       - "supabase/drafts/naxa_services_v3_operations_rewards_sync.sql"
       - "supabase/drafts/naxa_services_v4_supplier_accounting_forecast.sql"
+      - "supabase/drafts/naxa_services_v5_customer_referrals_promotions.sql"
       - "supabase/tests/drafts/**"
       - "supabase/functions/naxa-services-accounting/**"
       - "supabase/config.toml"
@@ -155,7 +156,8 @@ jobs:
             supabase/drafts/naxa_services_v2_activity_onboarding_management.sql \
             supabase/drafts/naxa_services_v3_operations_rewards_sync.sql \
             supabase/drafts/naxa_services_v4_supplier_accounting_forecast.sql \
-            supabase/drafts/naxa_services_referrals_v1.sql; do
+            supabase/drafts/naxa_services_referrals_v1.sql \
+            supabase/drafts/naxa_services_v5_customer_referrals_promotions.sql; do
             echo "Applying disposable test copy of $draft"
             # The repository candidate files remain ROLLBACK-by-default.
             sed -E '$s/rollback;/commit/' "$draft" | psql -v ON_ERROR_STOP=1

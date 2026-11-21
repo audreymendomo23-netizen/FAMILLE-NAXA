@@ -46,6 +46,27 @@ const DRAFTS: DraftSpec[] = [
     tablesWithoutPolicy: [],
     restrictedTables: [],
   },
+  {
+    file: "naxa_services_v5_customer_referrals_promotions.sql",
+    tablesWithoutPolicy: [
+      "ns_customer_referral_campaigns",
+      "ns_customer_referral_codes",
+      "ns_customer_referrals",
+      "ns_customer_referral_rewards",
+      "ns_promotion_campaigns",
+      "ns_promotion_prizes",
+      "ns_promotion_spins",
+    ],
+    restrictedTables: [
+      "ns_customer_referral_campaigns",
+      "ns_customer_referral_codes",
+      "ns_customer_referrals",
+      "ns_customer_referral_rewards",
+      "ns_promotion_campaigns",
+      "ns_promotion_prizes",
+      "ns_promotion_spins",
+    ],
+  },
 ];
 
 const SERVER_ONLY_TABLES = DRAFTS.flatMap((draft) => draft.restrictedTables);

@@ -24,9 +24,46 @@ INSERT INTO public.ns_customers(id,org_id,site_id,display_name,phone_contact) VA
  ('90000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','Customer A1','690000001'),
  ('90000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000002','Customer A2','690000002'),
  ('90000000-0000-4000-8000-000000000003','20000000-0000-4000-8000-000000000002','30000000-0000-4000-8000-000000000003','Customer B1','690000003');
+INSERT INTO public.ns_customers(id,org_id,site_id,display_name,phone_contact)
+VALUES ('90000000-0000-4000-8000-000000000004','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','Referred customer A1','690000004');
 INSERT INTO public.ns_sales(id,org_id,site_id,sale_number,subtotal_xaf,discount_xaf,total_xaf,status,created_by,customer_id)
 VALUES ('a0000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','CI-SALE-001',1000,0,1000,'posted','60000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000001');
+INSERT INTO public.ns_sales(id,org_id,site_id,sale_number,subtotal_xaf,discount_xaf,total_xaf,status,created_by,customer_id)
+VALUES ('a0000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','CI-SALE-002',1500,0,1500,'posted','60000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000004');
+INSERT INTO public.ns_payments(id,org_id,site_id,sale_id,payment_method,amount_xaf,status,confirmation_source,confirmed_by,confirmed_at,idempotency_key)
+VALUES ('b0000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','a0000000-0000-4000-8000-000000000002','mobile_money',1500,'confirmed','provider_webhook','60000000-0000-4000-8000-000000000001',now(),'c0000000-0000-4000-8000-000000000002');
 COMMIT;
+
+INSERT INTO public.ns_customer_referral_campaigns(
+  id,org_id,name,status,starts_at,ends_at,beneficiary_mode,reward_kind,reward_value,
+  minimum_paid_sale_xaf,reward_expiry_days,terms_version,created_by,approved_by,approved_at
+) VALUES (
+  'd1000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  'CI customer referral',
+  'active',now()-interval '1 day',now()+interval '30 days',
+  'both','points',100,500,30,'ci-v1',
+  '60000000-0000-4000-8000-000000000001',
+  '60000000-0000-4000-8000-000000000001',now()
+);
+INSERT INTO public.ns_customer_referral_codes(
+  id,org_id,site_id,campaign_id,customer_id,code
+) VALUES (
+  'd2000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  'd1000000-0000-4000-8000-000000000001',
+  '90000000-0000-4000-8000-000000000001',
+  'CREF-CI202611'
+);
+INSERT INTO public.ns_promotion_campaigns(
+  id,org_id,title,campaign_type,status,starts_at,created_by
+) VALUES (
+  'd3000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  'CI wheel legal gate','wheel','draft',now()-interval '1 day',
+  '60000000-0000-4000-8000-000000000001'
+);
 
 BEGIN;
 SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
@@ -43,9 +80,114 @@ BEGIN
   IF has_table_privilege(current_user,'public.ns_payments','UPDATE') THEN RAISE EXCEPTION 'CLIENT_CAN_UPDATE_PAYMENT_STATUS'; END IF;
   IF has_table_privilege(current_user,'public.ns_referrals','SELECT') OR has_table_privilege(current_user,'public.ns_referrals','INSERT') OR has_table_privilege(current_user,'public.ns_referral_rewards','UPDATE') THEN RAISE EXCEPTION 'CLIENT_HAS_DIRECT_REFERRAL_TABLE_ACCESS'; END IF;
   IF has_table_privilege(current_user,'public.ns_sync_receipts','SELECT') OR has_table_privilege(current_user,'public.ns_sync_conflicts','INSERT') OR has_table_privilege(current_user,'public.ns_notification_outbox','SELECT') THEN RAISE EXCEPTION 'CLIENT_HAS_SERVER_ONLY_SYNC_OR_NOTIFICATION_ACCESS'; END IF;
+  IF has_table_privilege(current_user,'public.ns_customer_referral_campaigns','SELECT')
+     OR has_table_privilege(current_user,'public.ns_customer_referral_codes','INSERT')
+     OR has_table_privilege(current_user,'public.ns_customer_referral_rewards','UPDATE')
+     OR has_table_privilege(current_user,'public.ns_promotion_campaigns','SELECT')
+     OR has_table_privilege(current_user,'public.ns_promotion_spins','INSERT') THEN
+    RAISE EXCEPTION 'CLIENT_HAS_DIRECT_CUSTOMER_REFERRAL_OR_PROMOTION_ACCESS';
+  END IF;
+  IF has_function_privilege(current_user,'public.ns_spin_promotion_wheel(uuid,uuid,uuid)','EXECUTE')
+     OR has_function_privilege(current_user,'public.ns_record_customer_referral_first_paid_sale(uuid,text)','EXECUTE') THEN
+    RAISE EXCEPTION 'CLIENT_CAN_CALL_SERVER_ONLY_REFERRAL_OR_PROMOTION_RPC';
+  END IF;
+  IF NOT has_table_privilege('service_role','public.ns_customer_referrals','SELECT')
+     OR NOT has_table_privilege('service_role','public.ns_promotion_spins','INSERT')
+     OR NOT has_function_privilege('service_role','public.ns_spin_promotion_wheel(uuid,uuid,uuid)','EXECUTE') THEN
+    RAISE EXCEPTION 'V5_SERVER_ONLY_GRANTS_MISSING';
+  END IF;
   IF NOT has_table_privilege('service_role','public.ns_referrals','SELECT') OR NOT has_table_privilege('service_role','public.ns_sync_receipts','SELECT') THEN RAISE EXCEPTION 'SERVER_ROLE_GRANTS_MISSING'; END IF;
 END
 $rls$;
+
+DO $customer_referral$
+DECLARE
+  v_apply jsonb;
+  v_qualify jsonb;
+  v_repeat jsonb;
+  v_reward_id uuid;
+  v_reward_count integer;
+  v_issued boolean;
+BEGIN
+  v_apply := public.ns_apply_customer_referral_code(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    '90000000-0000-4000-8000-000000000004'::uuid,
+    'CREF-CI202611'
+  );
+  IF coalesce((v_apply->>'accepted')::boolean,false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'CUSTOMER_REFERRAL_CODE_NOT_ACCEPTED: %',v_apply;
+  END IF;
+
+  v_qualify := public.ns_record_customer_referral_first_paid_sale(
+    'a0000000-0000-4000-8000-000000000002'::uuid,'ci-provider-event-customer-sale-002'
+  );
+  IF coalesce((v_qualify->>'qualified')::boolean,false) IS NOT TRUE
+     OR coalesce((v_qualify->>'rewards_created')::integer,0) <> 2 THEN
+    RAISE EXCEPTION 'CUSTOMER_REFERRAL_FIRST_PAID_SALE_NOT_QUALIFIED: %',v_qualify;
+  END IF;
+
+  v_repeat := public.ns_record_customer_referral_first_paid_sale(
+    'a0000000-0000-4000-8000-000000000002'::uuid,'ci-provider-event-customer-sale-002'
+  );
+  IF coalesce((v_repeat->>'idempotent')::boolean,false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'CUSTOMER_REFERRAL_EVENT_NOT_IDEMPOTENT: %',v_repeat;
+  END IF;
+
+  SELECT count(*)::integer INTO v_reward_count FROM public.ns_customer_referral_rewards;
+  IF v_reward_count <> 2 THEN RAISE EXCEPTION 'CUSTOMER_REFERRAL_DUPLICATE_REWARD: %',v_reward_count; END IF;
+
+  SELECT id INTO v_reward_id FROM public.ns_customer_referral_rewards ORDER BY created_at LIMIT 1;
+  v_issued := public.ns_mark_customer_referral_reward_issued(v_reward_id,'ci-loyalty-ledger-001');
+  IF NOT v_issued THEN RAISE EXCEPTION 'CUSTOMER_REFERRAL_REWARD_ISSUE_FAILED'; END IF;
+  IF NOT public.ns_mark_customer_referral_reward_issued(v_reward_id,'ci-loyalty-ledger-001') THEN
+    RAISE EXCEPTION 'CUSTOMER_REFERRAL_REWARD_ISSUE_NOT_IDEMPOTENT';
+  END IF;
+
+  v_apply := public.ns_apply_customer_referral_code(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    '90000000-0000-4000-8000-000000000001'::uuid,
+    'CREF-CI202611'
+  );
+  IF coalesce((v_apply->>'accepted')::boolean,true) IS TRUE
+     OR v_apply->>'reason' <> 'self_referral' THEN
+    RAISE EXCEPTION 'CUSTOMER_SELF_REFERRAL_NOT_REJECTED: %',v_apply;
+  END IF;
+END
+$customer_referral$;
+
+DO $promotion_legal_gate$
+DECLARE
+  v_rejected boolean := false;
+BEGIN
+  BEGIN
+    INSERT INTO public.ns_promotion_campaigns(
+      id,org_id,title,campaign_type,status,starts_at,terms_version,created_by,approved_by,approved_at
+    ) VALUES (
+      'd3000000-0000-4000-8000-000000000002',
+      '20000000-0000-4000-8000-000000000001',
+      'CI forbidden unapproved wheel','wheel','active',now()-interval '1 day','ci-v1',
+      '60000000-0000-4000-8000-000000000001',
+      '60000000-0000-4000-8000-000000000001',now()
+    );
+  EXCEPTION WHEN check_violation THEN
+    v_rejected := true;
+  END;
+  IF NOT v_rejected THEN RAISE EXCEPTION 'UNAPPROVED_PROMOTION_CAMPAIGN_ACTIVATED'; END IF;
+
+  BEGIN
+    PERFORM public.ns_spin_promotion_wheel(
+      'd3000000-0000-4000-8000-000000000001'::uuid,
+      '90000000-0000-4000-8000-000000000001'::uuid,
+      'd4000000-0000-4000-8000-000000000001'::uuid
+    );
+    RAISE EXCEPTION 'DRAFT_PROMOTION_CAMPAIGN_ALLOWED_A_SPIN';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'NAXA_PROMOTION_CAMPAIGN_NOT_ACTIVE_OR_NOT_LEGAL' THEN RAISE; END IF;
+  END;
+END
+$promotion_legal_gate$;
 
 DO $insert_guard$
 BEGIN
