@@ -714,7 +714,7 @@ Les règles corrigées d'abonnement GRILLAD ACCÈS/PREMIUM et d'architecture mul
 
 1. Positionnement hybride : prix d'entrée accessibles aux petites structures, puis progression selon l'architecture multiniveau, le volume et les capacités réellement consommées.
 2. Les tarifs de lancement sont les montants à afficher à l'ouverture commerciale. Les tarifs « à maturité » sont approuvés comme cibles, mais ne deviennent pas actifs automatiquement : leur activation exige un jalon fonctionnel et économique vérifié, une date d'effet, une version du catalogue et une communication préalable aux clients concernés.
-3. Pour les abonnements mensuels récurrents éligibles, l'annuel est égal à **10 mensualités pour 12 mois de service** : deux mois sont offerts (remise de 16,67 %). Cette règle s'applique aussi aux tarifs calculés par quantité lorsque la souscription est bien un engagement annuel. Elle ne s'applique pas aux frais ponctuels, transactions isolées ou actes unitaires sans abonnement récurrent.
+3. Pour les abonnements mensuels récurrents éligibles, la règle annuelle générique est **10 mensualités pour 12 mois de service** (deux mois offerts), sauf exception explicitement définie au niveau du produit ou du plan. **Exception GRILLAD ACCÈS :** l'annuel est de 24 000 FCFA, soit 12 mensualités de 2 000 FCFA, sans mois offert. **GRILLAD PREMIUM :** l'annuel est de 60 000 FCFA, soit 10 mensualités de 6 000 FCFA, avec deux mois offerts. Les exceptions explicites du catalogue produit prévalent sur le mécanisme générique. La règle ne s'applique pas aux frais ponctuels, transactions isolées ou actes unitaires sans abonnement récurrent.
 4. Les prix déjà payés ne changent pas rétroactivement. Toute évolution de tarif est versionnée et datée ; le client est informé avant l'application du nouveau prix.
 5. Les prix restent exprimés en FCFA. Le traitement HT/TTC, la fiscalité et les mentions de facture doivent être validés par le conseil comptable/fiscal ; aucune hypothèse fiscale n'est créée par le présent addendum.
 6. Une souscription Promoteur unique couvre le réseau selon la formule et les capacités définies pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES et NAXA SECURITY. Pour GRILLAD, une seule souscription Promoteur existe : ACCÈS autorise un point de vente ; PREMIUM autorise plusieurs points. Aucun abonnement distinct par vendeur n'est facturé ; aucun supplément ou plafond par site/vendeur ne doit être inventé hors entitlements explicitement validés.
@@ -733,7 +733,7 @@ Les règles corrigées d'abonnement GRILLAD ACCÈS/PREMIUM et d'architecture mul
 | LOYABLE | Voir tranches ci-dessous | Identique | Une souscription Promoteur ; calcul progressif par chambre/unité active en gestion |
 | NAXA HOTEL | 2 000 par chambre active | Identique | Une souscription Promoteur ; quantité de chambres actives |
 | NAXA SECURITY | ACCÈS 5 000 ; PREMIUM 15 000 | ACCÈS 7 500 ; PREMIUM 20 000 | Une souscription Promoteur ; capacité incluse et extensions contrôlées |
-| GRILLAD | ACCÈS / PREMIUM ; montants mensuels à confirmer | Annuel = 10 mensualités | ACCÈS : 1 point ; PREMIUM : plusieurs points, plusieurs vendeurs possibles par point ; pas de PRO ni de paliers |
+| GRILLAD | ACCÈS 2 000 F ; PREMIUM 6 000 F | ACCÈS 24 000 F (12 mensualités, sans remise) ; PREMIUM 60 000 F (10 mensualités, 2 mois offerts) | ACCÈS : 1 point ; PREMIUM : plusieurs points, plusieurs vendeurs possibles par point ; pas de PRO ni de paliers |
 | CAMPUS237 | Voir tarifs établissement et parents ci-dessous | Identique | Établissement + abonnement parent facultatif et indépendant |
 
 #### COTIZ — prix unitaire mensuel dégressif
@@ -769,18 +769,19 @@ Exemples : 5 chambres = 5 000 F ; 20 chambres = 20 000 F ; 80 chambres = 59 000 
 
 Le montant mensuel est égal au nombre de chambres actives rattachées au Promoteur multiplié par 2 000 F. Exemple : 10 chambres = 20 000 F ; 20 chambres = 40 000 F. Les fonctions métier et capacités multisites incluses restent couvertes par cette souscription unique ; aucun supplément de pack ACCÈS/PREMIUM n'est ajouté.
 
-#### GRILLAD — correction du modèle commercial et des architectures (21 novembre 2026)
+#### GRILLAD — tarifs et architectures validés (21 novembre 2026)
 
 Le Promoteur choisit exclusivement entre **ACCÈS** et **PREMIUM** :
 
-| Formule | Architecture | Tarif mensuel | Tarif annuel |
+| Formule | Architecture | Tarif mensuel | Tarif annuel pour 12 mois |
 |---|---|---:|---:|
-| ACCÈS | 1 point de vente ; plusieurs vendeurs possibles sur ce point | À confirmer | 10 mensualités |
-| PREMIUM | Plusieurs points de vente ; plusieurs vendeurs possibles sur chaque point | À confirmer | 10 mensualités |
+|---|---|---:|---:|
+| ACCÈS | 1 point de vente ; plusieurs vendeurs possibles sur ce point | **2 000 F** | **24 000 F** — 12 mensualités, sans remise |
+| PREMIUM | Plusieurs points de vente ; plusieurs vendeurs possibles sur chaque point | **6 000 F** | **60 000 F** — 10 mensualités, 2 mois offerts |
 
-L'abonnement annuel donne douze mois de service pour le prix de dix mensualités. Aucun forfait de trois ou six mois n'est proposé.
+Les deux formules sont disponibles au mois ou à l'année. Aucun forfait de trois ou six mois n'est proposé. La règle de deux mois offerts s'applique à PREMIUM, pas à ACCÈS.
 
-Cette décision remplace les anciennes grilles GRILLAD par nombre de points de vente, ainsi que tout niveau PRO. Les montants mensuels ACCÈS et PREMIUM ne sont pas établis dans les sources accessibles et ne doivent pas être inventés. Les éventuels plafonds numériques de points PREMIUM et de vendeurs par point restent à arbitrer. Aucun changement automatique de prix par nombre de points, aucun supplément par vendeur et aucun pack PRO ne sont implémentés sans décision écrite ultérieure.
+Cette décision remplace les anciennes grilles GRILLAD par nombre de points de vente, ainsi que tout niveau PRO et toute ancienne règle uniforme de remise annuelle. Les éventuels plafonds numériques de points PREMIUM et de vendeurs par point restent à arbitrer. Aucun changement automatique de prix par nombre de points, aucun supplément par vendeur et aucun pack PRO ne sont appliqués sans décision écrite ultérieure.
 
 #### NAXA SECURITY — capacité et extensions
 
@@ -820,13 +821,13 @@ La distinction de valeur est obligatoire : l'établissement paie pour administre
 
 - Conserver les états de paiement serveur, l'unicité de souscription, les périodes d'essai, les renouvellements, périodes de grâce, reçus, historique et entitlements.
 - Pour les changements de quantité des souscriptions LOYABLE et NAXA HOTEL, la date d'effet, le prorata éventuel et les éventuels remboursements restent des paramètres contractuels à fixer avant facturation automatique. Ne pas calculer de prorata arbitraire.
-- Les tarifs cibles à maturité de KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES et NAXA SECURITY ne deviennent actifs qu'après jalon d'activation, décision datée et nouvelle version du catalogue. Les tarifs GRILLAD ACCÈS et PREMIUM restent à renseigner après arbitrage explicite.
+- Les tarifs cibles à maturité de KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES et NAXA SECURITY ne deviennent actifs qu'après jalon d'activation, décision datée et nouvelle version du catalogue. Les tarifs GRILLAD sont validés : ACCÈS 2 000 F/mois et 24 000 F/an ; PREMIUM 6 000 F/mois et 60 000 F/an. Le catalogue et les tests doivent conserver les règles annuelles différenciées de ces deux plans.
 - Les catalogues tarifaires sont testés sur les montants, périodes, changements de formule, renouvellements, doublons et paiements échoués/confirmés ; aucune ancienne tranche tarifaire GRILLAD ne doit subsister.
 - Les comptes et souscriptions des établissements et parents CAMPUS237 sont deux unités de facturation distinctes ; un même parent peut être associé à plusieurs écoles sans payer plusieurs fois son pack parent.
 
 ### Addendum GRILLAD du 21 novembre 2026 — correction faisant foi
 
-Pour GRILLAD, la présente correction prévaut sur toute mention antérieure de PRO, de tarifs par tranche ou de limites « un / cinq / illimité » liées à l'ancien catalogue. Les seuls plans sont ACCÈS et PREMIUM. ACCÈS couvre un point de vente avec plusieurs vendeurs possibles ; PREMIUM couvre plusieurs points de vente, chacun pouvant comporter plusieurs vendeurs. Les montants sont à confirmer ; l'annuel vaut dix mensualités pour douze mois de service. Aucun plafond de points Premium ni de vendeurs par point ne doit être codé en dur avant arbitrage.
+Pour GRILLAD, la présente correction prévaut sur toute mention antérieure de PRO, de tarifs par tranche, de limites « un / cinq / illimité » et de remise annuelle uniforme. Les seuls plans sont ACCÈS et PREMIUM. ACCÈS couvre un point de vente avec plusieurs vendeurs possibles, à 2 000 F/mois et 24 000 F/an (12 mensualités, sans remise). PREMIUM couvre plusieurs points de vente, chacun pouvant comporter plusieurs vendeurs, à 6 000 F/mois et 60 000 F/an (10 mensualités, deux mois offerts). Aucun plafond de points Premium ni de vendeurs par point ne doit être codé en dur avant arbitrage.
 
 ## 6.17.15 Périmètre d'intégration central NAXA FAMILY — administration, support, abonnements et IA
 
@@ -848,7 +849,7 @@ Cette mutualisation ne fusionne pas les identités, organisations, Auth, rôles 
 
 Reprendre de JOBLY les principes de parcours, présentation des offres, comparaison des packs, checkout, états d'abonnement et expérience utilisateur. Réutiliser le service de paiement/abonnement NAXA existant après audit de compatibilité, sans créer un second moteur concurrent. Le contrat commun reste Plan → Subscription → Payment → Entitlements, avec catalogue versionné par application, paiement serveur confirmé, états pending/success/failed/refunded, idempotence, reçus, renouvellement, période de grâce et contrôle des droits. Les règles tarifaires et les unités facturables propres à chaque application du §6.17.14 prévalent.
 
-L'essai générique de 72 heures reste en vigueur, sauf exception institutionnelle CAMPUS237 à 30 jours décrite au §6.17.14. Pour une formule annuelle éligible, deux mois sont offerts (10 mensualités pour 12 mois). Ne jamais activer un entitlement à partir d'une simple déclaration locale de paiement ou d'un justificatif non vérifié.
+L'essai générique de 72 heures reste en vigueur, sauf exception institutionnelle CAMPUS237 à 30 jours décrite au §6.17.14. Pour une formule annuelle éligible à la remise, deux mois sont offerts (10 mensualités pour 12 mois), sauf exception propre au plan. GRILLAD ACCÈS ne bénéficie pas de cette remise ; GRILLAD PREMIUM en bénéficie. Ne jamais activer un entitlement à partir d'une simple déclaration locale de paiement ou d'un justificatif non vérifié.
 
 ### Réutilisation des services IA NAXA — cloisonnement et absence de régression
 
