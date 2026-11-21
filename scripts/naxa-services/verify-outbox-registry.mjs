@@ -39,15 +39,15 @@ function splitArguments(input) {
   if (current.trim()) result.push(current.trim());
   return result;
 }
-function normalize(value) { return value.replace(/\\s+/g, " ").trim(); }
+function normalize(value) { return value.replace(/\s+/g, " ").trim(); }
 
-const sourceLines = source.split(/\\r?\\n/);
+const sourceLines = source.split(/\r?\n/);
 const discovered = [];
 let method = "";
 for (let i = 0; i < sourceLines.length; i++) {
-  const signature = sourceLines[i].match(/^    (?:private )?(?:suspend )?fun ([A-Za-z0-9_]+)\\s*\\(/);
+  const signature = sourceLines[i].match(/^    (?:private )?(?:suspend )?fun ([A-Za-z0-9_]+)\s*\(/);
   if (signature) method = signature[1];
-  if (!sourceLines[i].includes("enqueue(") || /fun enqueue\\(/.test(sourceLines[i])) continue;
+  if (!sourceLines[i].includes("enqueue(") || /fun enqueue\(/.test(sourceLines[i])) continue;
   const line = sourceLines[i];
   const start = line.indexOf("enqueue(") + "enqueue(".length;
   let depth = 1, quote = null, escaped = false, end = start;
@@ -55,7 +55,7 @@ for (let i = 0; i < sourceLines.length; i++) {
     const ch = line[end];
     if (quote) {
       if (escaped) escaped = false;
-      else if (ch === "\\\\") escaped = true;
+      else if (ch === "\\") escaped = true;
       else if (ch === quote) quote = null;
       continue;
     }
@@ -63,13 +63,13 @@ for (let i = 0; i < sourceLines.length; i++) {
     if (ch === "(") depth++;
     else if (ch === ")") depth--;
   }
-  assert.equal(depth, 0, `Unclosed enqueue call at line ${i + 1}`);
+  assert.equal(depth, 0, "Unclosed enqueue call at line " + (i + 1));
   const args = splitArguments(line.slice(start, end - 1));
-  assert.ok(args.length >= 5, `enqueue must have five args at line ${i + 1}`);
+  assert.ok(args.length >= 5, "enqueue must have five args at line " + (i + 1));
   discovered.push({
     line: i + 1,
     method,
-    aggregateType: args[1],
+    aggregateType: normalize(args[1]),
     actionExpression: normalize(args[3]),
   });
 }
@@ -79,34 +79,34 @@ assert.equal(manifest.rows.length, manifest.source_callsite_count, "The registry
 const key = x => [x.method, x.aggregateType, normalize(x.actionExpression)].join("::");
 const manifestMap = new Map();
 for (const row of manifest.rows) {
-  assert.ok(!manifestMap.has(key({method:row.source.method,aggregateType:row.source.aggregateType,actionExpression:row.source.actionExpression})),
-    `Duplicate registry entry: ${row.id}`);
-  manifestMap.set(key({method:row.source.method,aggregateType:row.source.aggregateType,actionExpression:row.source.actionExpression}), row);
+  const rowKey = key({method:row.source.method,aggregateType:row.source.aggregateType,actionExpression:row.source.actionExpression});
+  assert.ok(!manifestMap.has(rowKey), "Duplicate registry entry: " + row.id);
+  manifestMap.set(rowKey, row);
   assert.ok(row.source.line > 0);
-  assert.ok(row.action_codes.length > 0, `No concrete action code for ${row.id}`);
-  assert.ok(row.classification && row.disposition, `Unclassified outbox call ${row.id}`);
-  assert.ok(row.contract.source_of_truth, `No source of truth for ${row.id}`);
-  assert.ok(row.contract.payload_fields.length > 0, `No contract fields for ${row.id}`);
-  assert.ok(row.contract.scope && row.contract.actor && row.contract.device, `Missing scope/actor/device contract for ${row.id}`);
-  assert.ok(row.contract.idempotency && row.contract.receipt && row.contract.conflict && row.contract.retry, `Incomplete consistency contract for ${row.id}`);
-  assert.ok(row.contract.tests.length > 0, `No test criteria for ${row.id}`);
+  assert.ok(row.action_codes.length > 0, "No concrete action code for " + row.id);
+  assert.ok(row.classification && row.disposition, "Unclassified outbox call " + row.id);
+  assert.ok(row.contract.source_of_truth, "No source of truth for " + row.id);
+  assert.ok(row.contract.payload_fields.length > 0, "No contract fields for " + row.id);
+  assert.ok(row.contract.scope && row.contract.actor && row.contract.device, "Missing scope/actor/device contract for " + row.id);
+  assert.ok(row.contract.idempotency && row.contract.receipt && row.contract.conflict && row.contract.retry, "Incomplete consistency contract for " + row.id);
+  assert.ok(row.contract.tests.length > 0, "No test criteria for " + row.id);
   if (row.classification === "REMOTE_MUTATION") {
-    assert.equal(row.disposition, "SEND_AS_CANONICAL_MUTATION", `Remote mutation must be sent: ${row.id}`);
-    assert.ok(row.contract.handler && !row.contract.handler.startsWith("No "), `Missing handler for ${row.id}`);
+    assert.equal(row.disposition, "SEND_AS_CANONICAL_MUTATION", "Remote mutation must be sent: " + row.id);
+    assert.ok(row.contract.handler && !row.contract.handler.startsWith("No "), "Missing handler for " + row.id);
   } else {
-    assert.notEqual(row.disposition, "SEND_AS_CANONICAL_MUTATION", `Non-mutation must not be sent: ${row.id}`);
-    assert.ok(row.contract.reason || row.canonical_parent_action || row.contract.handler, `Missing exclusion/parent rationale: ${row.id}`);
+    assert.notEqual(row.disposition, "SEND_AS_CANONICAL_MUTATION", "Non-mutation must not be sent: " + row.id);
+    assert.ok(row.contract.reason || row.canonical_parent_action || row.contract.handler, "Missing exclusion/parent rationale: " + row.id);
   }
 }
 for (const call of discovered) {
-  assert.ok(manifestMap.has(key(call)), `Outbox call missing from registry: line ${call.line} ${key(call)}`);
+  assert.ok(manifestMap.has(key(call)), "Outbox call missing from registry: line " + call.line + " " + key(call));
 }
 for (const row of manifest.rows) {
-  assert.ok(discovered.some(call => key(call) === key({method:row.source.method,aggregateType:row.source.aggregateType,actionExpression:row.source.actionExpression})),
-    `Stale registry row: ${row.id} ${key({method:row.source.method,aggregateType:row.source.aggregateType,actionExpression:row.source.actionExpression})}`);
+  const rowKey = key({method:row.source.method,aggregateType:row.source.aggregateType,actionExpression:row.source.actionExpression});
+  assert.ok(discovered.some(call => key(call) === rowKey), "Stale registry row: " + row.id + " " + rowKey);
 }
 
-const supportedBlock = coordinator.match(/private val supportedActions = setOf\\(([\\s\\S]*?)\\n    \\)/);
+const supportedBlock = coordinator.match(/private val supportedActions = setOf\(([\s\S]*?)\n    \)/);
 assert.ok(supportedBlock, "Cannot read SupplierSyncCoordinator supportedActions.");
 const actualSupported = [...supportedBlock[1].matchAll(/"([^"]+)"/g)].map(m => m[1]).sort();
 const registeredSupported = manifest.rows
@@ -125,19 +125,19 @@ function findKotlinFiles(dir) {
   return out;
 }
 const kotlinRoot = join(root, "apps/android/naxa-services/src");
-const allKotlin = findKotlinFiles(kotlinRoot).map(path => readFileSync(path, "utf8")).join("\\n");
+const allKotlin = findKotlinFiles(kotlinRoot).map(path => readFileSync(path, "utf8")).join("\n");
 for (const [legacyMethod, apiMethod] of [["createLocalSite","createSite"],["createLocalWorkstation","createWorkstation"]]) {
-  const definitionPattern = new RegExp(`\\\\bfun\\\\s+${legacyMethod}\\\\s*\\\\(`, "g");
+  const definitionPattern = new RegExp("\\bfun\\s+" + legacyMethod + "\\s*\\(", "g");
   const definitions = [...allKotlin.matchAll(definitionPattern)].length;
-  const callPattern = new RegExp(`\\\\b${legacyMethod}\\\\s*\\\\(`, "g");
+  const callPattern = new RegExp("\\b" + legacyMethod + "\\s*\\(", "g");
   const calls = [...allKotlin.matchAll(callPattern)].length;
-  assert.equal(definitions, 1, `Expected one legacy helper definition: ${legacyMethod}`);
-  assert.equal(calls, 1, `Legacy local helper must have no callers: ${legacyMethod}`);
-  assert.match(authApi, new RegExp(`suspend fun ${apiMethod}\\\\s*\\\\(`), `Direct API missing: ${apiMethod}`);
+  assert.equal(definitions, 1, "Expected one legacy helper definition: " + legacyMethod);
+  assert.equal(calls, 1, "Legacy local helper must have no callers: " + legacyMethod);
+  assert.match(authApi, new RegExp("suspend fun " + apiMethod + "\\s*\\("), "Direct API missing: " + apiMethod);
 }
-assert.match(erpUi, /api\\.createSite\\(/, "Live site-create UI must use the server API.");
-assert.match(erpUi, /api\\.createWorkstation\\(/, "Live workstation-create UI must use the server API.");
-assert.match(erpUi, /api\\.updateOrganizationProfile\\(/, "Organization profile must use the server API first.");
+assert.match(erpUi, /api\.createSite\(/, "Live site-create UI must use the server API.");
+assert.match(erpUi, /api\.createWorkstation\(/, "Live workstation-create UI must use the server API.");
+assert.match(erpUi, /api\.updateOrganizationProfile\(/, "Organization profile must use the server API first.");
 
 const counts = manifest.rows.reduce((out,row) => (out[row.classification]=(out[row.classification]||0)+1,out), {});
 assert.deepEqual(counts, manifest.classification_counts, "Manifest classification totals are inconsistent.");
