@@ -114,7 +114,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000001'::uuid,
     '30000000-0000-4000-8000-000000000001'::uuid,
     '90000000-0000-4000-8000-000000000004'::uuid,
-    'CREF-CI202611'
+    'CREF-C1A02611F0'
   );
   IF coalesce((v_apply->>'accepted')::boolean,false) IS NOT TRUE THEN
     RAISE EXCEPTION 'CUSTOMER_REFERRAL_CODE_NOT_ACCEPTED: %',v_apply;
@@ -153,7 +153,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000001'::uuid,
     '30000000-0000-4000-8000-000000000001'::uuid,
     '90000000-0000-4000-8000-000000000001'::uuid,
-    'CREF-CI202611'
+    'CREF-C1A02611F0'
   );
   IF coalesce((v_apply->>'accepted')::boolean,true) IS TRUE
      OR v_apply->>'reason' <> 'self_referral' THEN
