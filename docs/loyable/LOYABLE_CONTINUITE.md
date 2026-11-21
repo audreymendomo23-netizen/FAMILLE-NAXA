@@ -1,10 +1,10 @@
 # LOYABLE — Document de continuité produit et technique
 
-> Version : 1.0  
-> Date de mise à jour : 21 novembre 2026  
+> Version : 1.1  
+> Date de mise à jour : 21 novembre 2026 — addendum Centre de maintenance et interconnexion  
 > Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`  
 > Branche documentaire : `main`  
-> Statut : vision produit consolidée — conception détaillée à poursuivre  
+> Statut : continuité produit consolidée — cahier détaillé du Centre de maintenance créé ; intégration non implémentée  
 > Référentiel : décisions utilisateur du 21 novembre 2026, cahier LOYABLE historique et audit de NAXA SERVICES.
 
 Ce document est la référence de reprise spécifique à LOYABLE. Il distingue les décisions validées [V], les propositions d'architecture à confirmer [P], les points encore ouverts [O] et les constats vérifiés [C]. Une exigence inscrite ici n'est pas réputée développée ou testée.
@@ -209,53 +209,71 @@ Parcours initial prévu : choix de langue → authentification et sélection d'a
 
 **Constat de code à ne pas masquer [C] :** le rapport de construction NAXA SERVICES du 20 novembre 2026 indique que l'inspection de la branche de travail n'a pas retrouvé l'écran de choix initial d'activité dans le parcours Auth inspecté ; après authentification, l'application arrivait au tableau de bord ou à l'écran de changement de mot de passe. Le catalogue de 13 activités et le parcours décrit ci-dessus sont donc à préserver comme décision produit, mais leur présence dans le code livré doit être re-vérifiée et complétée avant de les considérer opérationnels.
 
-### 5.3 Activités pertinentes pour la maintenance immobilière
+### 5.3 Catégories compatibles retenues pour LOYABLE [V]
 
-Les profils du catalogue qui peuvent alimenter le Centre de maintenance comprennent notamment :
-- Réparation : téléphones, électronique et électroménager ;
-- Menuiserie ;
-- Garage : seulement pour les demandes liées à un équipement ou véhicule, si ce service est pertinent au site ;
-- Nettoyage ;
-- Domicile ;
-- Autre personnalisable, après qualification et validation.
+La décision du 21 novembre 2026 limite les catégories du registre de prestataires LOYABLE aux deux activités suivantes du catalogue NAXA SERVICES :
 
-Le catalogue existant ne décrit pas encore explicitement les spécialités plomberie, électricité, climatisation, serrurerie ou maçonnerie. Ne pas les déclarer déjà disponibles. Elles pourront être ajoutées comme sous-spécialités ou capacités détaillées après inventaire et validation du réseau réel [O].
+- **Réparation** : la référence métier du catalogue couvre les téléphones, l'électronique et l'électroménager. Les sous-spécialités fines seront déclarées par chaque organisation et vérifiées séparément.
+- **Menuiserie** : la référence métier couvre notamment les portes, fenêtres, meubles et installations. Les sous-spécialités fines seront déclarées et vérifiées séparément.
 
-### 5.4 Extension nécessaire dans NAXA SERVICES [P]
+Le catalogue complet des 13 activités demeure inchangé dans NAXA SERVICES. Cette restriction concerne uniquement le filtre de compatibilité du Centre de maintenance LOYABLE. Elle ne supprime ni ne masque les autres activités dans NAXA SERVICES.
 
-Pour rendre le réseau réellement exploitable par LOYABLE, NAXA SERVICES devra exposer un profil de prestataire structuré :
-- activité principale sélectionnée par l'organisation ;
-- sous-spécialités réellement proposées ;
-- prestations et compétences ;
-- types d'intervention acceptés (domicile, atelier, sur site) ;
-- zones desservies et rayon/limites géographiques ;
-- horaires et disponibilités ;
-- capacité/charge de travail ;
-- statut actif, suspendu ou indisponible ;
-- contacts professionnels ;
-- documents et éléments de vérification requis ;
-- historique et indicateurs de qualité autorisés.
+Ne sont donc pas des catégories de prestataires intégrées à LOYABLE V1 : Pressing, Coiffure, Couture, Beauté, Parfumerie, Garage, Nettoyage, Domicile, Imprimerie, Photographie et Autre. Les métiers plomberie, électricité, climatisation, serrurerie et maçonnerie ne sont pas ajoutés par déduction à la présente intégration ; ils demanderaient un arbitrage distinct.
 
-La sélection d'activité à la première connexion est une classification initiale de l'organisation, pas une preuve de compétence individuelle. Le registre doit distinguer l'activité déclarée, les spécialités proposées, les qualifications vérifiées et les personnes effectivement habilitées à intervenir.
+Les sous-spécialités Réparation/Menuiserie, les pièces justificatives, l'état de vérification et les collaborateurs habilités restent à inventorier. L'activité principale sélectionnée par le Promoteur ne constitue pas à elle seule une preuve de compétence.
+
+### 5.4 Profil professionnel enrichi dans NAXA SERVICES [P]
+
+Pour exploiter le réseau sans construire un deuxième annuaire, chaque organisation NAXA SERVICES doit pouvoir renseigner un profil professionnel structuré comportant :
+
+- activité principale choisie par le Promoteur ;
+- catégorie LOYABLE compatible, limitée à Réparation ou Menuiserie ;
+- sous-spécialités déclarées et spécialités vérifiées, distinguées ;
+- prestations réellement proposées, prix indicatifs et durées éventuelles ;
+- zones d'intervention ;
+- horaires, disponibilités, périodes d'indisponibilité et capacité ;
+- collaborateurs habilités à recevoir ou exécuter les missions ;
+- moyens de contact professionnels ;
+- justificatifs/qualifications lorsqu'ils existent ;
+- statut actif, temporairement indisponible, suspendu ou à vérifier ;
+- date et origine de la dernière mise à jour.
+
+Le profil distingue obligatoirement activité déclarée, compétence déclarée, compétence vérifiée, collaborateur habilité et disponibilité confirmée. Un contrôle d'identité de l'organisation ne vaut pas validation technique d'une spécialité.
+
+L'orientation fonctionnelle de ce profil est retenue pour la conception ; son ajout au modèle de données et aux écrans NAXA SERVICES demeure à spécifier et à développer. Aucun de ces champs ne doit être présenté comme déjà disponible en production.
 
 ### 5.5 Intégration du workflow entre applications [P]
 
-- LOYABLE crée une demande et un ordre d'intervention référencés.
-- Le bailleur choisit un concierge ou un prestataire compatible ; aucune affectation automatique sans règle validée.
-- NAXA SERVICES reçoit un ordre de travail externe dans l'organisation du prestataire, sans exposer le contrat complet ni les informations non nécessaires du locataire.
-- Le prestataire accepte/refuse, propose un créneau, établit un devis et met à jour les étapes dans NAXA SERVICES.
-- Les statuts, devis, photos et dépenses utiles sont renvoyés à LOYABLE via des événements signés/idempotents.
-- Le bailleur valide le devis et les dépenses selon ses seuils, puis contrôle la clôture dans LOYABLE.
-- Le locataire voit uniquement les informations de suivi qui lui sont destinées.
-- Chaque application conserve son propre journal d'audit ; les références croisées permettent de reconstituer le dossier complet.
+- LOYABLE crée une demande et un ordre de travail référencés.
+- Le bailleur choisit explicitement un concierge ou un prestataire compatible Réparation/Menuiserie.
+- NAXA SERVICES reçoit un ordre externe distinct des rendez-vous clients et tickets pressing.
+- Le Promoteur ou le collaborateur habilité accepte/refuse, propose un créneau, rédige le devis et met à jour les étapes dans NAXA SERVICES.
+- Les décisions, devis, statuts, preuves et dépenses utiles reviennent à LOYABLE par API/événements versionnés.
+- Le bailleur approuve le devis, les avenants et les dépenses selon ses droits ; il contrôle le résultat et clôture dans LOYABLE.
+- Le locataire ne voit que les étapes et le compte rendu qui lui sont destinés.
+- Les deux applications conservent leurs journaux d'audit et des identifiants corrélés.
+- Les événements sont idempotents, signés côté serveur, rejouables et contrôlés par organisation/site/mission.
+- Le partage des coordonnées du locataire et de l'adresse précise du logement est minimal, justifié et limité à la mission.
+- Aucun SSO, aucune fusion de compte et aucun accès global du prestataire au portefeuille immobilier.
 
-### 5.6 Ce qui existe déjà et ce qui n'est pas encore démontré [C]
+### 5.6 État réel des composants NAXA SERVICES et limites techniques [C]
 
-Le rapport NAXA SERVICES du 20 novembre 2026 documente déjà des fondations locales : catalogue de prestations avec prix/durée/prestataire habilité, agenda par prestataire ou poste, rendez-vous, équipe/prestataires, commissions, clients, demandes d'assistance, dépenses et certains suivis de travaux dans les exigences métier.
+Le rapport de construction consulté sur la branche de travail NAXA SERVICES confirme plusieurs fondations Android locales réutilisables :
 
-Cependant, le même rapport indique que l'API ERP distante, le moteur de synchronisation de bout en bout, les accusés de réception, l'idempotence serveur complète et les workflows métier persistés côté serveur restent à construire/recetter. L'outbox locale n'est pas un moteur de synchronisation. La connexion LOYABLE ↔ NAXA SERVICES n'est donc pas considérée comme existante.
+- authentification interne, sessions et gestion des accès ;
+- organisations avec modèles solo, multi-postes sur un site et réseau multi-sites ;
+- séparation locale des données par organisation/site ;
+- catalogue de prestations et prestataires ;
+- agenda/rendez-vous avec contrôle local des conflits de site, poste et prestataire ;
+- équipe, clients/CRM, stocks/consommables, caisse, dépenses et rapports locaux ;
+- tickets pressing avec statuts et historique ;
+- écrans d'organisation, accès, assistance et paramètres.
 
----
+Le rapport précise aussi que l'outbox locale n'est pas à elle seule un moteur de synchronisation. Les addenda les plus récents documentent une synchronisation manuelle partielle pour certains flux fournisseur, un contrat commun plus large et des drafts de services serveur ; ils ne démontrent pas une réplication complète de tous les domaines, un workflow de maintenance LOYABLE ou une API inter-applications déjà en service.
+
+Les workflows de devis, d'ordre de travail immobilier externe, d'approbation bailleur, de transmission de photos vers LOYABLE, d'accusés de réception inter-applications et de clôture coordonnée restent à concevoir, développer et tester. La simple présence d'un écran, d'une entité locale ou d'un contrat draft ne prouve pas que le flux est opérationnel.
+
+Le rapport NAXA SERVICES consulté se trouve sur la branche de travail work/naxa-services-completion-20261120. Son contenu n'est pas une preuve que l'ensemble de ces évolutions a été fusionné dans main ni déployé en production.
 
 ## 6. Annonces immobilières et règles de facturation
 
@@ -375,71 +393,93 @@ Réutiliser les composants communs uniquement après audit de compatibilité : a
 
 ### Validées [V]
 
-- Quatre espaces : Gestion, Locataire, Immobilier, Publication NAXA.
-- Centre de maintenance dans l'espace locataire, piloté par le bailleur.
-- États des lieux exclus.
-- Rentabilité, calendrier et assistant IA dans l'espace bailleur.
-- QR code du site + identifiant locataire + lien personnel WhatsApp.
-- Pas de vérification supplémentaire OTP dans le parcours locataire.
-- LOYABLE Immobilier accessible par QR et lien.
-- Contact annonce → WhatsApp du bailleur ; appel marketing → WhatsApp commercial NAXA.
-- Publications partenaires gratuites, modifiables, statistiques de vues et retrait quand le bien devient occupé.
-- Publications externes réalisées par NAXA, règlement hors plateforme déclaré par NAXA, tarif de base 2 000 FCFA pour six annonces puis 500 FCFA par annonce supplémentaire.
-- Expiration des annonces assistées au bout de deux mois, renouvellement payant ou retrait anticipé après audit humain établissant l'occupation.
-- Paiements locatifs déclarés avec preuve, validation humaine du bailleur, reçu généré côté bailleur et disponible au téléchargement du locataire.
-- Reçu par règlement confirmé et quittance lorsque toute la période exigible est réglée.
-- NAXA SERVICES est le réseau métier à étudier pour les interventions techniques, sans confondre les deux applications.
+- Quatre espaces LOYABLE : Gestion, Locataire, Immobilier et Publication NAXA.
+- Centre de maintenance dans l'espace locataire, piloté depuis l'espace bailleur.
+- États des lieux exclus du périmètre retenu.
+- QR du site + identifiant locataire + lien personnel transmis par WhatsApp ; pas de vérification OTP supplémentaire dans le parcours locataire retenu.
+- Paiements locatifs déclarés avec preuve, confirmation humaine du bailleur, reçu par règlement confirmé et quittance lorsque la période exigible est entièrement réglée.
+- Publications partenaires gratuites ; publications externes assistées par NAXA selon les règles tarifaires décrites dans la continuité.
+- NAXA SERVICES constitue le réseau métier à étudier pour les interventions.
+- **Seules les catégories Réparation et Menuiserie du catalogue NAXA SERVICES sont retenues comme catégories compatibles du registre LOYABLE V1.**
+- Les autres activités de NAXA SERVICES restent dans son propre catalogue et ne sont pas supprimées.
 
-### Propositions à intégrer au cahier détaillé [P]
+### Orientation produit retenue / conception à détailler [P]
 
-- Workflow complet de maintenance avec devis, affectation, exécution, preuves, dépenses, contrôle et clôture.
-- Profil prestataire structuré avec spécialités, zone, disponibilité et capacité.
-- Ordre de travail inter-applications LOYABLE → NAXA SERVICES.
-- API événementielle idempotente, journal de transitions et transmission minimale des données.
-- Compte rendu de clôture visible au locataire et au bailleur selon les droits.
+- Profil professionnel NAXA SERVICES enrichi : spécialités, prestations, zones, disponibilité, capacité, collaborateurs habilités et statut.
+- Recherche des prestataires selon catégorie, spécialité, zone, disponibilité, capacité et statut.
+- Ordre de travail distinct des tickets et rendez-vous habituels NAXA SERVICES.
+- Acceptation/refus, planification, diagnostic, devis versionné, approbation bailleur, exécution, justificatifs, reprise et clôture.
+- API événementielle idempotente, journal de transitions, accusés serveur et transmission minimale des données.
+- Historique privé de qualité des interventions, visible selon les droits du bailleur.
+- Utilisation des patterns JOBLY de profil/KYC/QR/attribution uniquement après adaptation ; aucune réutilisation automatique du domaine commercial Partner.
 
 ### Points ouverts [O]
 
-1. Quelles sous-spécialités techniques exactes sont présentes dans le réseau réel NAXA SERVICES (ex. plomberie, électricité, climatisation, serrurerie, maçonnerie) et lesquelles sont réellement vérifiées ?
-2. Le quota externe de six publications est-il cumulatif sur les deux mois ou simultanément actif ?
-3. Confirmer le calcul du renouvellement des publications externes après deux mois.
-4. Définir les seuils de dépenses que le concierge peut engager sans approbation préalable du bailleur.
-5. Définir si le locataire peut noter/signaliser la qualité d'une intervention et si cette évaluation est privée ou publique.
-6. Définir les règles de refacturation au locataire selon le contrat et la responsabilité de la réparation.
-
----
+1. Quelles sous-spécialités Réparation et Menuiserie sont réellement proposées et vérifiables dans le réseau existant ?
+2. Quels critères et justificatifs servent à distinguer spécialité déclarée et spécialité vérifiée ?
+3. Quels seuils de dépense le concierge peut-il engager sans approbation préalable ?
+4. Quel délai de réponse, délai d'intervention et traitement des urgences doivent être affichés ?
+5. Comment partager les coordonnées du locataire et l'adresse précise du logement, et à quel moment ?
+6. Quelle durée de conservation appliquer aux photos, vidéos et pièces justificatives ?
+7. Le locataire peut-il évaluer l'intervention ; cette évaluation reste-t-elle privée ?
+8. Quels faits composent l'historique de qualité du prestataire ?
+9. Quelles règles juridiques/contractuelles régissent une éventuelle refacturation au locataire ?
+10. Quels frais d'annulation ou de déplacement sont applicables en cas d'absence ou de refus tardif ?
 
 ## 10. Plan de réalisation proposé
 
-1. Cartographie fonctionnelle complète des quatre espaces et des parcours.
-2. Matrice rôles/droits et règles de confidentialité.
-3. Modèle de données LOYABLE et dictionnaire des statuts.
-4. Spécification du Centre de maintenance et du registre de prestataires.
-5. Contrat d'intégration LOYABLE ↔ NAXA SERVICES (API, événements, identifiants, idempotence, consentement et journalisation).
-6. Annonces immobilières et contrôle des publications externes.
-7. Rentabilité, calendrier, assistant IA et notifications.
-8. Architecture Android/Web, synchronisation et tests.
-9. Recette fonctionnelle et sécurité avant toute qualification de mise en service.
+1. Confirmer l'inventaire des organisations prestataires NAXA SERVICES et leur éligibilité Réparation/Menuiserie.
+2. Cartographier les écrans LOYABLE du locataire, bailleur, gestionnaire et concierge.
+3. Finaliser la matrice de droits, les règles de confidentialité et le modèle de données.
+4. Spécifier les profils prestataires et l'ordre de travail externe dans NAXA SERVICES.
+5. Écrire le contrat LOYABLE ↔ NAXA SERVICES : API, événements, identifiants, idempotence, accusés, erreurs et pièces.
+6. Implémenter et tester chaque application séparément avant le parcours vertical inter-applications.
+7. Réaliser une recette isolée sécurité/RLS, synchronisation, conflits, multi-appareils et droits.
+8. Faire un pilote limité et documenter la recette avant toute activation de production.
 
----
+Le cahier détaillé de référence est désormais : **docs/loyable/LOYABLE_CAHIER_DES_CHARGES_CENTRE_MAINTENANCE_INTERCONNEXION.md**.
 
 ## 11. Références et limites documentaires
 
-- Cahier LOYABLE historique : `7 famille naxa/01-cahiers-des-charges/06-loyable.md`.
-- Prompts LOYABLE historiques : `7 famille naxa/02-prompts/06-loyable.md`.
-- Cahier NAXA SERVICES : `7 famille naxa/01-cahiers-des-charges/04-naxa-services.md`.
-- Prompts NAXA SERVICES : `7 famille naxa/02-prompts/04-naxa-services.md`.
-- État de construction NAXA SERVICES au 20 novembre 2026 : `docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md`.
-- Continuité générale Famille NAXA : `docs/CONTINUITE.md`.
+- Cahier LOYABLE historique : 7 famille naxa/01-cahiers-des-charges/06-loyable.md.
+- Prompts LOYABLE historiques : 7 famille naxa/02-prompts/06-loyable.md.
+- Cahier NAXA SERVICES : 7 famille naxa/01-cahiers-des-charges/04-naxa-services.md.
+- Prompts NAXA SERVICES : 7 famille naxa/02-prompts/04-naxa-services.md.
+- Prompts du socle commun : 7 famille naxa/02-prompts/00-socle-commun.md.
+- Rapport de construction NAXA SERVICES du 20 novembre 2026 : docs/naxa-services/NAXA_SERVICES_CONSTRUCTION_STATUS_2026-11-20.md, consulté sur la branche work/naxa-services-completion-20261120.
+- Références JOBLY : Pack_Documentaire_JOBLY_2026.pdf et 00_ECOSYSTEME_JOBLY_DOCUMENT_MAITRE_V2.pdf.
+- Cahier détaillé du Centre de maintenance : docs/loyable/LOYABLE_CAHIER_DES_CHARGES_CENTRE_MAINTENANCE_INTERCONNEXION.md.
+- Continuité générale Famille NAXA : docs/CONTINUITE.md.
 
-Le cahier LOYABLE historique contient des éléments désormais exclus (états des lieux) et ne couvre pas toute la vision validée du 21 novembre 2026. En cas de contradiction, les décisions utilisateur datées du 21 novembre 2026 consignées dans ce document prévalent pour la conception LOYABLE.
+Le cahier historique LOYABLE contient des éléments désormais exclus (états des lieux) et ne couvre pas toutes les décisions ultérieures. Les décisions utilisateur du 21 novembre 2026 consignées dans cette continuité et dans le cahier détaillé prévalent pour la conception LOYABLE.
 
-Le catalogue NAXA SERVICES de 13 activités et le parcours initial de sélection sont des décisions produit antérieures à préserver. Le rapport de construction du 20 novembre indique toutefois que l'écran de sélection n'était pas retrouvé dans le code inspecté : il faut donc vérifier/corriger l'implémentation NAXA SERVICES séparément, sans prétendre que cette fonction est déjà opérationnelle.
+Le catalogue NAXA SERVICES de 13 activités reste propre à NAXA SERVICES. Le registre LOYABLE n'en expose que Réparation et Menuiserie. Le rapport de construction consulté indique que le parcours de sélection d'activité n'était pas retrouvé dans le code inspecté ; il doit être vérifié séparément avant d'être qualifié d'opérationnel.
 
----
+Les composants NAXA et JOBLY ne sont pas présumés réutilisables techniquement : le cahier détaillé impose un audit de compatibilité, des dépendances, des permissions et des tests avant portage.
 
 ## 12. Règle de reprise
 
-À la reprise, ne pas recommencer les décisions déjà validées. Commencer par la cartographie fonctionnelle LOYABLE et le workflow de maintenance inter-applications, en utilisant le catalogue d'activités NAXA SERVICES comme base de qualification des prestataires. Ne modifier ni déployer les environnements Supabase ou les applications sans suivre les règles de gouvernance Famille NAXA et les autorisations applicables.
+À la reprise, ne pas refaire les arbitrages déjà validés. Utiliser le cahier détaillé du Centre de maintenance comme base de conception. Commencer par l'inventaire des organisations Réparation/Menuiserie, puis le parcours vertical signalement → qualification → affectation → devis → exécution → contrôle → clôture. Garder les applications autonomes et ne modifier ni déployer les environnements Supabase ou les applications sans autorisation écrite applicable.
+
+## 13. Addendum du 21 novembre 2026 — périmètre final de l'interconnexion
+
+### Décision de catégorie
+La restriction Réparation/Menuiserie est désormais intégrée à la continuité. Elle s'applique au registre et à la recherche des prestataires LOYABLE, pas au catalogue complet NAXA SERVICES.
+
+### Réutilisation inter-applications
+- NAXA : réutiliser uniquement les composants transverses compatibles après audit ; ne pas réutiliser les tables et données propres à la pharmacie.
+- NAXA SERVICES : préserver le socle organisation/site, le catalogue, l'agenda, l'équipe et les composants locaux existants ; ajouter les ordres immobiliers comme un domaine distinct.
+- JOBLY : adapter les modèles de profil, KYC, QR/code révocable, provenance, états et idempotence ; ne pas réutiliser les comptes, commissions, wallets ou règles de referral Partner.
+- Aucun compte utilisateur, bail, transaction locative ou dossier professionnel n'est fusionné entre les applications.
+
+### Statut d'intégration
+Le profil prestataire enrichi, le registre filtré et le contrat API sont des orientations fonctionnelles et des exigences à construire. Le rapport NAXA SERVICES de la branche de travail ne démontre ni workflow complet d'ordre immobilier externe, ni synchronisation ERP globale, ni raccordement de production à LOYABLE.
+
+### Livrables documentaires
+- Cahier des charges détaillé : docs/loyable/LOYABLE_CAHIER_DES_CHARGES_CENTRE_MAINTENANCE_INTERCONNEXION.md.
+- Présente continuité mise à jour : docs/loyable/LOYABLE_CONTINUITE.md.
+- Continuité générale à référencer : docs/CONTINUITE.md.
+
+**État de fin de cette mise à jour documentaire : les catégories Réparation et Menuiserie sont intégrées au référentiel ; le cahier de conception est créé ; aucune fonctionnalité LOYABLE/NAXA SERVICES n'est déclarée intégrée, déployée ou testée par ces documents.**
 
 **État de fin de cette mise à jour : document de continuité créé ; aucune fonctionnalité LOYABLE n'est déclarée développée ou testée par cette seule mise à jour documentaire.**
