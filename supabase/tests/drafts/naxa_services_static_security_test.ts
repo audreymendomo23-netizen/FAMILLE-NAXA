@@ -67,6 +67,11 @@ const DRAFTS: DraftSpec[] = [
       "ns_promotion_spins",
     ],
   },
+  {
+    file: "naxa_services_v6_notifications.sql",
+    tablesWithoutPolicy: ["ns_push_tokens", "ns_notification_inbox"],
+    restrictedTables: ["ns_push_tokens", "ns_notification_inbox"],
+  },
 ];
 
 const SERVER_ONLY_TABLES = DRAFTS.flatMap((draft) => draft.restrictedTables);

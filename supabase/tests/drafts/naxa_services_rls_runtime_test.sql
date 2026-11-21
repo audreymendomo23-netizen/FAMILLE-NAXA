@@ -64,6 +64,35 @@ INSERT INTO public.ns_promotion_campaigns(
   '60000000-0000-4000-8000-000000000001'
 );
 
+INSERT INTO public.ns_notification_outbox(
+  id,org_id,site_id,recipient_member_id,channel,event_code,idempotency_key,payload_redacted,scheduled_at,status,attempts
+) VALUES (
+  'e1000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  '60000000-0000-4000-8000-000000000001',
+  'push','ci.notification.sent','ci-notification-001',
+  '{"title":"CI notification","body":"Redacted delivery fixture"}'::jsonb,
+  now()-interval '1 minute','pending',0
+),(
+  'e1000000-0000-4000-8000-000000000002',
+  '20000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  '60000000-0000-4000-8000-000000000001',
+  'push','ci.notification.retry','ci-notification-002',
+  '{"title":"CI retry","body":"Retry fixture"}'::jsonb,
+  now()-interval '1 minute','pending',0
+);
+INSERT INTO public.ns_push_tokens(
+  id,org_id,member_id,device_id,platform,token_ciphertext,token_iv,token_fingerprint,token_tail
+) VALUES (
+  'e2000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  '60000000-0000-4000-8000-000000000001',
+  '80000000-0000-4000-8000-000000000001',
+  'android',repeat('A',64),repeat('B',16),repeat('c',64),'ABCD'
+);
+
 BEGIN;
 SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-a"}',false);
@@ -94,6 +123,18 @@ BEGIN
      OR NOT has_table_privilege('service_role','public.ns_promotion_spins','INSERT')
      OR NOT has_function_privilege('service_role','public.ns_spin_promotion_wheel(uuid,uuid,uuid)','EXECUTE') THEN
     RAISE EXCEPTION 'V5_SERVER_ONLY_GRANTS_MISSING';
+  END IF;
+  IF has_table_privilege(current_user,'public.ns_push_tokens','SELECT')
+     OR has_table_privilege(current_user,'public.ns_push_tokens','INSERT')
+     OR has_table_privilege(current_user,'public.ns_notification_inbox','SELECT')
+     OR has_table_privilege(current_user,'public.ns_notification_inbox','UPDATE')
+     OR has_function_privilege(current_user,'public.ns_claim_notification_batch(integer)','EXECUTE') THEN
+    RAISE EXCEPTION 'CLIENT_HAS_DIRECT_REMOTE_NOTIFICATION_ACCESS';
+  END IF;
+  IF NOT has_table_privilege('service_role','public.ns_push_tokens','SELECT')
+     OR NOT has_table_privilege('service_role','public.ns_notification_inbox','INSERT')
+     OR NOT has_function_privilege('service_role','public.ns_claim_notification_batch(integer)','EXECUTE') THEN
+    RAISE EXCEPTION 'V6_SERVER_ONLY_GRANTS_MISSING';
   END IF;
   IF NOT has_table_privilege('service_role','public.ns_referrals','SELECT') OR NOT has_table_privilege('service_role','public.ns_sync_receipts','SELECT') THEN RAISE EXCEPTION 'SERVER_ROLE_GRANTS_MISSING'; END IF;
 END
@@ -193,6 +234,63 @@ BEGIN
   END;
 END
 $promotion_legal_gate$;
+
+DO $notification_claim$
+DECLARE
+  v_claim record;
+  v_retry_claim record;
+  v_finished boolean;
+  v_status text;
+BEGIN
+  SELECT * INTO v_claim
+  FROM public.ns_claim_notification_batch(10)
+  WHERE id = 'e1000000-0000-4000-8000-000000000001';
+  IF NOT FOUND OR v_claim.claim_token IS NULL THEN
+    RAISE EXCEPTION 'NOTIFICATION_OUTBOX_CLAIM_FAILED';
+  END IF;
+  IF v_claim.attempts <> 1 THEN RAISE EXCEPTION 'NOTIFICATION_ATTEMPT_NOT_INCREMENTED'; END IF;
+
+  v_finished := public.ns_finish_notification_send(
+    v_claim.id,v_claim.claim_token,'projects/naxa-services/messages/ci-message-001'
+  );
+  IF NOT v_finished THEN RAISE EXCEPTION 'NOTIFICATION_FINALIZATION_FAILED'; END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.ns_notification_outbox
+    WHERE id = v_claim.id AND status = 'sent' AND provider_reference = 'projects/naxa-services/messages/ci-message-001'
+  ) THEN RAISE EXCEPTION 'NOTIFICATION_OUTBOX_NOT_MARKED_SENT'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.ns_notification_inbox
+    WHERE notification_id = v_claim.id AND member_id = '60000000-0000-4000-8000-000000000001'
+      AND status = 'sent' AND read_at IS NULL
+  ) THEN RAISE EXCEPTION 'NOTIFICATION_INBOX_ENTRY_NOT_CREATED'; END IF;
+
+  UPDATE public.ns_notification_inbox SET status = 'read', read_at = now()
+  WHERE notification_id = v_claim.id AND member_id = '60000000-0000-4000-8000-000000000001';
+  v_finished := public.ns_finish_notification_send(
+    v_claim.id,v_claim.claim_token,'projects/naxa-services/messages/duplicate-001'
+  );
+  IF v_finished THEN RAISE EXCEPTION 'STALE_NOTIFICATION_CLAIM_WAS_ACCEPTED'; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.ns_notification_inbox
+    WHERE notification_id = v_claim.id AND status = 'read' AND read_at IS NOT NULL
+  ) THEN RAISE EXCEPTION 'NOTIFICATION_READ_STATE_WAS_OVERWRITTEN'; END IF;
+
+  SELECT * INTO v_retry_claim
+  FROM public.ns_claim_notification_batch(10)
+  WHERE id = 'e1000000-0000-4000-8000-000000000002';
+  IF NOT FOUND OR v_retry_claim.claim_token IS NULL THEN RAISE EXCEPTION 'NOTIFICATION_RETRY_CLAIM_FAILED'; END IF;
+  v_status := public.ns_fail_notification_send(
+    v_retry_claim.id,v_retry_claim.claim_token,'FCM_TEMPORARY_UNAVAILABLE',true
+  );
+  IF v_status <> 'pending' THEN RAISE EXCEPTION 'RETRYABLE_NOTIFICATION_NOT_REQUEUED: %',v_status; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.ns_notification_outbox
+    WHERE id = v_retry_claim.id AND status = 'pending' AND claim_token IS NULL
+      AND scheduled_at > now() AND attempts = 1
+  ) THEN RAISE EXCEPTION 'NOTIFICATION_RETRY_BACKOFF_NOT_SET'; END IF;
+END
+$notification_claim$;
 
 SET ROLE authenticated;
 DO $insert_guard$
