@@ -2561,7 +2561,7 @@
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
         "line": 2907,
         "method": "recordStaffTimeEvent",
-        "aggregateType": "staff_time_event",
+        "aggregateType": "eventType",
         "actionExpression": "eventType + \".recorded\""
       },
       "action_codes": [
@@ -2619,7 +2619,7 @@
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
         "line": 2947,
         "method": "createManagementRecord",
-        "aggregateType": "management_record",
+        "aggregateType": "recordType",
         "actionExpression": "recordType + \".created\""
       },
       "action_codes": [
@@ -2761,7 +2761,7 @@
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
         "line": 3188,
         "method": "transitionManagementRecord",
-        "aggregateType": "inventory_movement",
+        "aggregateType": "current.recordType",
         "actionExpression": "\"inventory_movement.purchase_received\""
       },
       "action_codes": [
@@ -2812,7 +2812,7 @@
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
         "line": 3274,
         "method": "transitionManagementRecord",
-        "aggregateType": "inventory_movement",
+        "aggregateType": "current.recordType",
         "actionExpression": "\"inventory_movement.transfer_out\""
       },
       "action_codes": [
@@ -2864,7 +2864,7 @@
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
         "line": 3275,
         "method": "transitionManagementRecord",
-        "aggregateType": "inventory_movement",
+        "aggregateType": "current.recordType",
         "actionExpression": "\"inventory_movement.transfer_in\""
       },
       "action_codes": [
@@ -2916,7 +2916,7 @@
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
         "line": 3295,
         "method": "transitionManagementRecord",
-        "aggregateType": "inventory_transfer",
+        "aggregateType": "current.recordType",
         "actionExpression": "\"inventory_transfer.received_at_destination\""
       },
       "action_codes": [
@@ -2970,7 +2970,7 @@
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
         "line": 3313,
         "method": "transitionManagementRecord",
-        "aggregateType": "management_record",
+        "aggregateType": "current.recordType",
         "actionExpression": "current.recordType + \".status_changed\""
       },
       "action_codes": [
