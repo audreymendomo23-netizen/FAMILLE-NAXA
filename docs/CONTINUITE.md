@@ -1208,55 +1208,53 @@ Cette règle est une exception spécifique LOYABLE aux formulations génériques
 
 Les annonces partenaires dépendantes de la souscription sont masquées de toutes les surfaces publiques (recherche, URL directe, détail et indexation) dès l'expiration non payée. Elles sont conservées et peuvent être réactivées automatiquement après paiement serveur confirmé, seulement si le logement et l'annonce restent éligibles. Les publications assistées des bailleurs non partenaires conservent leur facturation et leur échéancier propres.
 
-### 10.4 Parrainage LOYABLE — proposition commerciale non validée
+### 10.4 Parrainage LOYABLE — règle validée [V]
 
-Proposition indépendante des programmes JOBLY Partner et NAXA SERVICES : code/lien/QR par bailleur ; rattachement avant première souscription ; qualification après premier paiement confirmé côté serveur ; un mois LOYABLE offert par groupes de trois nouveaux bailleurs payants ; mois appliqué au prochain cycle mensuel ou ajouté en fin de période annuelle ; récompense non monétaire, non transférable et non retirable ; anti-auto-parrainage, anti-doublon, idempotence et ledger d'avantages.
+Chaque groupe de trois nouveaux bailleurs dont le premier abonnement est effectivement payé et confirmé côté serveur donne au parrain un mois LOYABLE offert. Mensuel : un cycle ajouté à la prochaine échéance ; annuel : un mois calendaire ajouté en fin de période. Le crédit est non monétaire, non transférable et non retirable ; les groupes sont cumulatifs par séries de trois. Anti-auto-parrainage, anti-doublon, exclusion des essais/paiements en attente/annulés/remboursés et ledger idempotent obligatoires.
 
-**Le seuil de trois activations est une proposition [P], à faire valider avant le développement du programme.**
+Le code QR et le lien de parrainage sont utilisables uniquement lorsque le bailleur est actif. Ils sont désactivés pendant l'inactivité, l'expiration ou la suspension, puis réactivés automatiquement avec le même code après confirmation du retour à l'état actif. Les filleuls déjà rattachés lorsque le code était actif conservent leur attribution.
 
-### 10.5 Répertoire des demandes et géolocalisation prestataire
+### 10.5 Répertoire des demandes et géolocalisation prestataire — diffusion volontaire [V]
 
-En complément de l'invitation directe, le cahier prévoit un flux de missions disponibles côté NAXA SERVICES, limité aux catégories LOYABLE Réparation/Menuiserie. Le prestataire filtre par catégorie, ville et proximité. La recherche de proximité peut utiliser la position volontaire ou la zone de service déclarée ; le GPS n'est pas obligatoire. Avant l'affectation, l'adresse exacte, le numéro et l'identité du locataire restent masqués. Le prestataire manifeste son intérêt ; le bailleur choisit.
+Le tableau des missions LOYABLE destinées aux prestataires NAXA SERVICES reste disponible pour les catégories Réparation/Menuiserie, avec filtres catégorie, ville et proximité ; le GPS reste facultatif et l'adresse/identité du locataire restent masquées avant affectation. **La diffusion automatique est annulée** : chaque mission n'apparaît dans le tableau qu'après action volontaire « Publier aux prestataires » du bailleur. L'invitation directe reste possible. Le prestataire manifeste son intérêt et le bailleur décide de l'affectation.
 
 ### 10.6 Messagerie bailleur-prestataire
 
 Messagerie dans LOYABLE et NAXA SERVICES, attachée à la demande/mission, avec texte, pièces privées, notifications, historique et états réellement vérifiés (envoyé, reçu, distribué, lu). Droits limités à l'organisation et à la mission ; la messagerie n'est ni le compte partagé ni le support client central.
 
-### 10.7 Sécurité et vidéosurveillance inspirées de NAXA SECURITY
+### 10.7 Vidéosurveillance via le module NAXA SECURITY [V/P]
 
-Cible optionnelle « Sécurité de l'immeuble » : patterns d'architecture locale/hybride, gestion par site/zone, vidéo, alertes, rôles dédiés, journalisation et accès contrôlés. Les droits vidéo restent distincts de la gestion locative. Priorité aux zones communes ; audio désactivé par défaut et soumis à validation séparée. NAXA ne fournit pas le matériel et n'opère pas une prestation de surveillance humaine. Les tarifs et extensions NAXA SECURITY ne sont pas copiés automatiquement dans LOYABLE.
+LOYABLE se raccorde au module NAXA SECURITY. Le bailleur connecte son propre matériel à LOYABLE via ce module et accède à toutes les caméras effectivement connectées, compatibles et autorisées pour son organisation. SECURITY gère l'appairage, les identifiants techniques, les flux, les droits, alertes et journaux ; LOYABLE affiche les vues autorisées. Le direct multi-caméras et l'accès aux enregistrements dépendent des capacités du matériel et du connecteur. L'inventaire des matériels/protocoles compatibles reste à auditer ; aucune compatibilité universelle n'est présumée. Droits vidéo séparés des droits locatifs, priorité aux espaces communs, audio désactivé par défaut. NAXA ne fournit pas le matériel et n'opère pas de surveillance humaine.
 
-**Portée de l'audit :** le fichier Android `apps/android/naxa-security/src/main/java/cm/naxa/naxasecurity/MainActivity.kt` examiné dans `main` ne montre qu'un écran socle (« NAXA Security — parcours métier à intégrer »). Il ne prouve pas une vidéosurveillance, un flux caméra ou une passerelle opérationnelle déjà réutilisable. L'intégration exige donc un audit dédié du produit et de ses contrats.
+**Portée de l'audit :** le fichier Android NAXA SECURITY examiné dans main ne démontrait qu'un écran socle ; l'intégration caméra décrite ici est une cible, pas une fonctionnalité déjà opérationnelle.
 
-### 10.8 Service client
+### 10.8 Service client et proposition de SLA [P — validation utilisateur requise]
 
-Le support LOYABLE s'inspire du fonctionnement métier visé dans NAXA SERVICES et doit d'abord étudier la réutilisation du Support/CSO central canonique : tickets catégorisés, priorité, canal, statut, SLA, responsable, historique, messages, pièces et escalade. Les droits CSO sont limités, temporaires si exceptionnels, justifiés et journalisés.
+Le support LOYABLE s'inspire de NAXA SERVICES et doit réutiliser le Support/CSO central après audit de compatibilité. Proposition d'horaires : lundi–vendredi 08 h–18 h et samedi 09 h–13 h (Africa/Douala), fermé dimanche/jours fériés. P1 : réponse humaine ≤1 h ouvrée, confinement/contournement ≤4 h et résolution cible ≤1 jour ouvré ; P2 : réponse ≤4 h ouvrées, contournement ≤1 jour et résolution cible ≤2 jours ouvrés ; P3 : réponse ≤1 jour ouvré et résolution cible ≤5 jours ouvrés ; P4 : réponse ≤2 jours ouvrés et qualification/orientation ≤10 jours ouvrés. Les compteurs sont suspendus dans l'attente d'informations client ou d'un fournisseur externe. Pas de promesse 24/7. Ces délais restent une proposition à valider, pas un engagement contractuel.
 
-Le rapport NAXA SERVICES consulté précise que son assistance Android inspectée garde actuellement des demandes locales ; il ne démontre pas un Livechat connecté ni appels audio/vidéo ou partage d'écran.
+### 10.9 Sauvegarde personnelle Google Drive et sessions NAXA [V/P]
 
-### 10.9 Sauvegarde et restauration
+Le client connecte son propre Google Drive depuis Profil → Sauvegarde, conserve ses archives dans son compte et déclenche lui-même sauvegarde/restauration dans LOYABLE. OAuth limité, espace dédié, vérification d'intégrité et restauration avec aperçu/confirmation ; le client gère son compte, son quota et la conservation. Les sauvegardes d'exploitation des services NAXA restent une responsabilité centrale distincte.
 
-Le modèle visé reprend les exigences documentées NAXA SERVICES/Famille NAXA : sauvegardes locales et serveur chiffrées, versionnées et intègres, base métier + pièces jointes, calendrier réglable/événements critiques, stockage séparé, Google Drive via OAuth limité si retenu, restauration explicite avec vérification et audit, tests de restauration. Gmail n'est pas le coffre de sauvegarde ; aucun jeton, secret ou clé privée n'est exporté.
-
-Le rapport NAXA SERVICES indique que Drive et la restauration ne sont pas encore démontrés comme livrés. Les capacités doivent être auditées avant réemploi.
+La persistance de session suit le modèle prévu dans NAXA ; les jetons ne sont jamais placés dans les archives Drive. Le parcours d'authentification reprend le modèle NAXA SERVICES, après audit des composants exacts et sans fusion des comptes.
 
 ### 10.10 Référentiel de statut
 
 | Domaine | Niveau documentaire |
 |---|---|
 | Prix dynamique LOYABLE 1 000 F/chambre active/en gestion | Décision existante [V] |
-| Rappel H−72 et verrouillage bailleur à l'expiration | Nouvelle décision utilisateur [V] |
-| Masquage et réactivation Marketplace après paiement | Nouvelle décision utilisateur [V] |
-| Recherche prestataire catégorie/ville/proximité | Nouvelle décision utilisateur [V], détails de confidentialité [P] |
-| Messagerie bailleur-prestataire | Nouvelle décision utilisateur [V], contrats et droits [P] |
-| Architecture vidéo NAXA SECURITY pour immeubles | Orientation retenue [V/P], intégration technique non constatée |
-| Support inspiré NAXA SERVICES | Orientation retenue [V/P], Livechat distant non démontré |
-| Sauvegarde/restauration inspirée Famille/NAXA SERVICES | Orientation retenue [V/P], Drive/restauration non démontrés |
-| Parrainage : 1 mois pour 3 filleuls payants | Proposition [P], validation commerciale requise |
-| Maintien des accès locataires pendant suspension bailleur | Proposition [P], confirmation requise |
+| Rappel H−72, verrouillage bailleur et continuité limitée du locataire | Décisions utilisateur [V] |
+| Masquage et réactivation des annonces Marketplace après paiement | Décision utilisateur [V] |
+| Parrainage : 1 mois par 3 filleuls payants, QR actif avec le bailleur | Décision utilisateur [V] |
+| Missions prestataires et filtres catégorie/ville/proximité | Décision utilisateur [V] ; publication volontaire [V] |
+| Messagerie bailleur-prestataire | Décision utilisateur [V], contrats/droits à concevoir [P] |
+| Module vidéo NAXA SECURITY | Orientation utilisateur [V], intégration caméra non constatée [P/C] |
+| Service client et SLA P1–P4 | Modèle à valider par l'utilisateur [P] |
+| Contrat locataire par photo/PDF | Décision utilisateur [V] |
+| Google Drive client depuis Profil | Décision utilisateur [V], intégration OAuth/restauration non démontrées [P/C] |
+| Session NAXA et parcours Auth NAXA SERVICES | Orientation validée [V], audit de réutilisation requis [P] |
 
 Aucun code LOYABLE, endpoint, table, migration Supabase, fonction serveur, secret, déploiement ou test de production n'a été ajouté ou exécuté dans cette mise à jour documentaire.
-
 
 ## 11. Addendum LOYABLE — validations complémentaires du 21 novembre 2026
 
