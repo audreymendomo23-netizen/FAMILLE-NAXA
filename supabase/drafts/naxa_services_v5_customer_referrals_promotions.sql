@@ -146,7 +146,6 @@ create table if not exists public.ns_promotion_campaigns (
       and nullif(trim(legal_reviewer_name), '') is not null
       and legal_reviewed_at is not null
       and authorization_expires_at is not null
-      and authorization_expires_at > now()
       and approved_by is not null and approved_at is not null
     )
   )
@@ -290,6 +289,7 @@ declare
   v_paid_at timestamptz;
   v_first_paid_sale_id uuid;
   v_reward_count integer := 0;
+  v_rows integer := 0;
   v_reward_ids jsonb := '[]'::jsonb;
 begin
   if p_sale_id is null or nullif(trim(p_provider_event_id), '') is null then
@@ -417,7 +417,8 @@ begin
       case when v_campaign.reward_expiry_days is null then null else v_paid_at + make_interval(days => v_campaign.reward_expiry_days) end
     )
     on conflict (referral_id, beneficiary_customer_id) do nothing;
-    get diagnostics v_reward_count = v_reward_count + row_count;
+    get diagnostics v_rows = row_count;
+    v_reward_count := v_reward_count + v_rows;
   end if;
 
   select coalesce(jsonb_agg(r.id order by r.created_at), '[]'::jsonb)
@@ -559,7 +560,9 @@ begin
   end loop;
   v_pick := mod(v_random, v_total_weight);
 
-  select p.* into v_selected
+  select p.id, p.org_id, p.campaign_id, p.label, p.prize_kind, p.reward_value,
+         p.weight, p.max_awards, p.awarded_count, p.active, p.created_at
+  into v_selected
   from (
     select prizes.*, sum(prizes.weight) over (order by prizes.created_at, prizes.id) as cumulative_weight
     from public.ns_promotion_prizes prizes
