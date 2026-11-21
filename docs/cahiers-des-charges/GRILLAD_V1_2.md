@@ -1,5 +1,7 @@
 # GRILLAD — Cahier des charges fonctionnel V1.2
 
+> **VERSION HISTORIQUE REMPLACÉE.** Les tarifs GRILLAD ont été validés depuis dans la V1.3. Utiliser [GRILLAD V1.3](GRILLAD_V1_3.md) comme référentiel actuel. La V1.2 est conservée uniquement pour l'historique documentaire.
+
 **Date de référence :** 21 novembre 2026  
 **Produit :** GRILLAD  
 **Type :** ERP autonome spécialisé dans la gestion des activités de grillades  
