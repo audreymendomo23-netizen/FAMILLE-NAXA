@@ -3,3 +3,6 @@ verify_jwt = false
 
 [functions.naxa-services-accounting]
 verify_jwt = false
+
+[functions.naxa-services-customer-promotions]
+verify_jwt = false
