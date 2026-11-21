@@ -1,4 +1,6 @@
 # Index documentaire
+- [Cahier des charges NAXA SECURITY 360° V1.1](naxa-security/NAXA_SECURITY_CAHIER_DES_CHARGES_V1.1.md)
+- [Continuité produit NAXA SECURITY 360° — 22 novembre 2026](naxa-security/NAXA_SECURITY_CONTINUITE_2026-11-22.md)
 - [Architecture cible](ARCHITECTURE_CIBLE.md)
 - [Décisions](DECISIONS.md)
 - [Continuité générale](CONTINUITE.md)
