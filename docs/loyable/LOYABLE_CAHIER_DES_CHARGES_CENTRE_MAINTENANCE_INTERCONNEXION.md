@@ -1205,24 +1205,33 @@ La « sauvegarde de session » ne doit donc pas être confondue avec la sauvegar
 | SUB-006 | P0 | Parcours restreint de renouvellement | Paiement possible sans accès au dossier métier |
 | MKT-001 | P0 | Masquer annonces liées à abonnement expiré | Non visibles en recherche, lien direct, endpoint et index |
 | MKT-002 | P0 | Réactiver annonces après paiement confirmé | Seulement annonces encore éligibles, sans recréation |
-| REF-001 | P1 | Code/lien/QR de parrainage LOYABLE | Attribution unique et traçable |
+| REF-001 | P1 | Code/lien/QR de parrainage LOYABLE | Attribution unique ; activé si bailleur actif et désactivé si inactif/expiré/suspendu |
 | REF-002 | P1 | Qualifier sur premier paiement confirmé | Essai/pending/remboursé exclus |
 | REF-003 | P1 | Récompenses cumulatives par seuil | Pas de doublon, état et ledger vérifiables |
-| PROV-001 | P0 | Liste de missions prestataires | Flux réservé à Réparation/Menuiserie |
+| PROV-001 | P0 | Liste de missions prestataires | Flux réservé à Réparation/Menuiserie et alimenté uniquement après publication volontaire du bailleur |
 | PROV-002 | P0 | Filtres catégorie et ville | Résultats correspondent aux filtres |
 | PROV-003 | P0 | Filtre proximité | Distance calculée uniquement avec coordonnées fiables et consenties |
 | PROV-004 | P0 | Confidentialité avant affectation | Pas d'adresse exacte ni de données locataire |
 | MSG-001 | P0 | Messagerie bailleur-prestataire | Conversation isolée par demande/mission |
 | MSG-002 | P0 | États de message fiables | Envoyé/reçu/lu non confondus |
 | MSG-003 | P0 | Contrôle des pièces jointes | Fichier privé, droits et lien temporaire |
-| SEC-001 | P1 | Domaine sécurité immeuble distinct | Droits vidéo séparés des droits locatifs |
+| SEC-001 | P1 | Raccordement au module NAXA SECURITY | Le bailleur connecte son matériel et voit les caméras compatibles autorisées de ses sites |
 | SEC-002 | P1 | Accès vidéo audité | Chaque lecture/export est autorisé et journalisé |
 | SEC-003 | P1 | Traitement local/hybride évaluable | Flux et stockage documentés, pas de fuite publique |
 | CS-001 | P1 | Tickets support LOYABLE | Ticket, catégorie, priorité, statut, SLA et historique |
 | CS-002 | P1 | Réutilisation CSO contrôlée | Accès limité à l'organisation et au ticket autorisé |
-| BAK-001 | P1 | Sauvegarde chiffrée/versionnée | Intégrité vérifiée par manifeste/empreintes |
-| BAK-002 | P1 | Restauration explicite | Confirmation, contrôle d'intégrité et journal d'audit |
+| TEN-001 | P0 | Dépôt du contrat depuis le dossier bailleur | Photo(s) et PDF acceptés, document lié au bail/locataire |
+| TEN-002 | P0 | Accès au contrat par le locataire | Seul le locataire concerné et les rôles autorisés peuvent consulter/télécharger |
+| TEN-003 | P0 | Continuité locataire pendant suspension bailleur | Dossier propre consultable ; demande maintenance créée et mise en attente de réactivation |
+| REF-004 | P1 | Récompense par seuil de trois filleuls payants | Un seul mois crédité par seuil atteint, sans double attribution |
+| PROV-005 | P0 | Pas de diffusion automatique | Une mission n'apparaît qu'après action explicite « Publier aux prestataires » |
+| SEC-004 | P1 | Accès aux caméras par site/zone | Contrôle des rôles, journaux de consultation et aucun flux public |
+| AUTH-001 | P0 | Parcours d'authentification de référence NAXA SERVICES | Connexion, récupération et routage par profil testés sans fusion des comptes |
+| SES-001 | P0 | Persistance de session suivant le modèle NAXA | Expiration/révocation/suspension ne contourne pas les droits ; aucun jeton dans Drive |
+| BAK-001 | P1 | Sauvegarde personnelle Google Drive | Compte connecté depuis Profil ; archive chiffrée/versionnée et intégrité vérifiée |
+| BAK-002 | P1 | Restauration personnelle par le client | Aperçu, confirmation, provenance et intégrité vérifiées |
 | BAK-003 | P1 | Anti-écrasement | Données serveur plus récentes protégées |
+| BAK-004 | P1 | Séparation sauvegarde/session | Aucun jeton, secret caméra ou clé privée exporté vers le Drive |
 
 ## 30. Arbitrages et décisions restant à confirmer
 
