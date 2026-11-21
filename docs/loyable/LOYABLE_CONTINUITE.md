@@ -43,6 +43,7 @@ Fonctions :
 - tableau de bord du patrimoine et des biens ;
 - portefeuille, immeubles, sites, logements et unités ;
 - fiches des locataires et historique locatif ;
+- dépôt du contrat dans chaque dossier locataire par photo(s) ou PDF, avec versions et partage privé au locataire concerné ;
 - contrats, échéances, renouvellements, demandes de préavis et demandes de résiliation ;
 - loyers attendus, retards, paiements partiels, avances et soldes ;
 - examen des déclarations et preuves de paiement ;
@@ -62,7 +63,7 @@ Les opérations contractuelles du locataire (renouvellement, préavis, résiliat
 Accès et fonctions :
 - accès par QR code du site et identifiant locataire ;
 - accès direct par lien personnel envoyé par le bailleur via WhatsApp ;
-- consultation du contrat et téléchargement ;
+- consultation et téléchargement du contrat téléversé par le bailleur (photo(s) ou PDF) dans le dossier locataire ;
 - consultation du loyer, des échéances, des retards, des charges et de l'historique ;
 - déclaration d'un paiement et dépôt d'une preuve (photo, capture ou document) ;
 - téléchargement des reçus et quittances à tout moment ;
@@ -501,47 +502,41 @@ Les annonces de bailleurs partenaires dont la visibilité dépend de la souscrip
 
 Les publications assistées des bailleurs non partenaires conservent leur modèle tarifaire et leur cycle distinct ; ne pas les transformer implicitement en abonnements.
 
-### 14.3 Accès des locataires pendant la suspension [P à confirmer]
+### 14.3 Accès des locataires pendant la suspension [V]
 
-La suspension décidée concerne l'espace bailleur. Il est proposé que le locataire conserve au minimum l'accès à son propre contrat, aux documents déjà émis et à la déclaration d'un incident de maintenance. Les demandes nouvelles restent enregistrées mais leur traitement par le bailleur dépend de la réactivation. L'étendue exacte de ce maintien doit être confirmée et testée.
+La suspension de l'abonnement bailleur ne suspend pas l'espace Locataire. Chaque locataire conserve l'accès à son propre dossier actif, au contrat et aux documents qui lui sont destinés, aux reçus/quittances déjà émis, à son historique et à la création d'un signalement de maintenance. Il ne peut ni ouvrir l'espace bailleur, ni consulter un autre logement/locataire, ni modifier le bail ou engager une dépense. Une demande de maintenance créée pendant la suspension est enregistrée avec l'état « en attente de réactivation du bailleur » ; aucun prestataire n'est affecté et aucun engagement financier n'est déclenché tant que le bailleur n'a pas réactivé son compte.
 
-### 14.4 Parrainage propre à LOYABLE [P]
+### 14.4 Parrainage LOYABLE [V]
 
-Proposition commerciale indépendante de JOBLY Partner et du parrainage PME NAXA SERVICES :
-- code/lien/QR unique par bailleur ;
-- rattachement du filleul avant sa première souscription payée ;
-- qualification uniquement après premier abonnement réellement payé et confirmé côté serveur ;
-- trois bailleurs filleuls valablement activés donnent un mois d'abonnement LOYABLE offert au parrain ;
-- périodicité mensuelle : un cycle mensuel crédité ; périodicité annuelle : un mois calendaire ajouté à la date de fin ;
-- groupes successifs de 3, crédits non monétaires, non transférables et non retirables ;
-- auto-parrainage, doublons, essai, pending, annulation et remboursement exclus ;
-- ledger idempotent de la progression et des récompenses.
+Le seuil de trois filleuls est validé : chaque groupe de trois nouveaux bailleurs dont le premier abonnement est réellement payé et confirmé côté serveur donne au parrain un mois LOYABLE offert. Mensuel : un cycle ajouté à la prochaine échéance ; annuel : un mois calendaire ajouté en fin de période. Le crédit est non monétaire, non transférable et non retirable ; les groupes sont cumulatifs par séries de trois. Auto-parrainage, doublons, essai, paiement en attente, annulation et remboursement sont exclus ; le ledger des attributions et récompenses est idempotent et non destructif.
 
-Le seuil de trois filleuls est une proposition à valider, pas une décision commerciale confirmée.
+Le QR et le lien sont uniques et suivent l'état du bailleur : utilisables uniquement lorsque son abonnement/compte est actif ; désactivés pour toute nouvelle attribution pendant l'inactivité, l'expiration ou la suspension ; réactivés automatiquement avec le même code après réactivation confirmée. Les filleuls déjà rattachés lorsque le code était actif conservent leur attribution.
 
-### 14.5 Flux de missions côté prestataire et recherche géographique [V/P]
+### 14.5 Missions prestataires et diffusion volontaire [V]
 
-Outre l'invitation directe, le cahier détaillé prévoit un tableau de demandes de maintenance éligibles côté NAXA SERVICES. Les organisations actives Réparation/Menuiserie voient les missions disponibles et filtrent par catégorie, ville et proximité. La proximité utilise une position volontaire ou une zone de service déclarée ; le GPS n'est pas obligatoire. Avant affectation, l'adresse exacte et les coordonnées du locataire restent masquées. Le prestataire exprime son intérêt ; le bailleur choisit explicitement.
+Le tableau de missions est conservé : les organisations actives Réparation/Menuiserie peuvent voir les missions publiées et filtrer par catégorie, ville et proximité. Le GPS reste facultatif ; la distance est approximative et les données privées du locataire restent masquées avant affectation. **Aucune mission n'est diffusée automatiquement** : le bailleur doit sélectionner explicitement « Publier aux prestataires ». Il peut aussi inviter directement un professionnel. Le prestataire manifeste son intérêt et le bailleur décide de l'affectation.
 
 ### 14.6 Messagerie bailleur ↔ prestataire [V/P]
 
 Une conversation est intégrée aux deux applications, attachée à une demande ou à un ordre de travail. Elle permet textes, pièces autorisées, notifications et états de livraison/lecture vérifiables. Les permissions suivent la mission et sont révoquées à sa fin selon la politique de conservation. La messagerie de mission reste distincte du Support client et ne partage pas les comptes des deux applications.
 
-### 14.7 Architecture de sécurité / vidéosurveillance [V/P]
+### 14.7 Vidéosurveillance via le module NAXA SECURITY [V/P]
 
-LOYABLE pourra s'appuyer sur les patterns NAXA SECURITY pour une extension optionnelle « Sécurité de l'immeuble » : dispositifs vidéo référencés par site/zone, traitement local/hybride, alertes, rôles, journalisation et accès vidéo segmenté. Les droits de vidéosurveillance sont distincts des droits de gestion locative. La vidéo des zones communes est prioritaire ; audio désactivé par défaut et soumis à arbitrage/revue juridique. NAXA ne fournit pas le matériel et n'opère pas de surveillance humaine. Le lien commercial et l'éventuel abonnement SECURITY séparé restent à arbitrer.
+LOYABLE se raccorde au module NAXA SECURITY ; il ne crée pas un moteur caméra séparé. Le bailleur connecte son propre matériel de surveillance à LOYABLE via ce module et accède à toutes ses caméras effectivement connectées, compatibles et autorisées dans son organisation. SECURITY gère l'appairage, les identifiants techniques, la sécurisation des flux, les rôles, alertes et journaux ; LOYABLE affiche les vues accessibles dans le contexte immobilier. Le direct multi-caméras et la consultation des enregistrements dépendent des capacités du matériel et du connecteur. La liste des modèles/protocoles doit être auditée avant promesse de compatibilité universelle. Les droits caméra sont séparés des droits locatifs ; priorité aux zones communes, audio désactivé par défaut. NAXA ne fournit pas le matériel et n'opère pas de surveillance humaine.
 
-### 14.8 Service client et support [V/P]
+### 14.8 Service client et proposition de SLA [P — validation utilisateur requise]
 
-Le support LOYABLE s'inspire du modèle NAXA SERVICES, et doit réutiliser le service Support NAXA/CSO central après audit de compatibilité plutôt que créer un helpdesk concurrent. Cible : ticket catégorisé, priorité, statut, SLA, conversation, pièces, responsable, historique et escalade. L'accès du CSO aux données du bailleur est limité, justifié, temporaire et audité.
+LOYABLE réutilise le support central/CSO après audit de compatibilité, sans créer un helpdesk concurrent. Tickets catégorisés, priorité, statut, SLA, conversation, pièces, responsable, historique et escalade ; accès CSO limité, justifié, temporaire et audité.
+
+Proposition : ouverture lundi–vendredi 08 h–18 h et samedi 09 h–13 h (Africa/Douala), fermé dimanche et jours fériés ; P1 première réponse humaine ≤1 h ouvrée, confinement/contournement ≤4 h et résolution cible ≤1 jour ouvré ; P2 réponse ≤4 h ouvrées, contournement ≤1 jour et résolution cible ≤2 jours ouvrés ; P3 réponse ≤1 jour ouvré et résolution cible ≤5 jours ouvrés ; P4 réponse ≤2 jours ouvrés et qualification/orientation ≤10 jours ouvrés. Le chronomètre est suspendu dans l'attente d'informations du client ou d'un fournisseur externe. Pas de promesse 24/7. Les SLA sont à valider avant engagement contractuel.
 
 **Limite documentée :** le rapport NAXA SERVICES consulté décrit une assistance qui conserve des demandes localement, sans Livechat distant qualifié, appel audio/vidéo ou partage d'écran démontré.
 
-### 14.9 Sauvegarde et restauration [V/P]
+### 14.9 Sauvegarde personnelle Google Drive [V]
 
-Reprendre le modèle de sauvegarde documenté : base locale, documents et pièces jointes chiffrés, versionnés et vérifiables ; sauvegarde déclenchée après opérations/synchronisations critiques et selon calendrier ; stockage externe via Google Drive et OAuth limité si retenu ; restaurations explicitement autorisées, contrôlées et auditées ; sauvegardes serveur quotidiennes sur stockage séparé et tests réguliers de restauration. Gmail ne sert pas de coffre d'archive et aucun jeton, secret ou clé privée ne doit être exporté dans une sauvegarde.
+Le client connecte son propre compte Google Drive depuis Profil → Sauvegarde ; il conserve ses archives sur ce Drive et déclenche lui-même la sauvegarde et la restauration depuis LOYABLE. L'application utilise une autorisation OAuth limitée et un espace dédié ; elle affiche le statut, la date du dernier backup et les erreurs. La restauration est initiée par le client, avec contrôle d'intégrité, aperçu, confirmation et prévention de l'écrasement des données serveur plus récentes. Le client est responsable de son compte/quota Drive et de la conservation de ses archives. Les sauvegardes internes de l'infrastructure NAXA restent séparées et relèvent de NAXA.
 
-**Limite documentée :** le rapport de construction NAXA SERVICES indique que Drive et la restauration ne sont pas encore démontrés comme livrés. Ce modèle est une référence à adapter, pas une capacité certifiée existante.
+La persistance/reprise de session suit le modèle déjà prévu dans NAXA ; les jetons et secrets restent dans le stockage sécurisé de session et ne sont jamais inclus dans le backup Drive. Le modèle de session doit être audité avant réutilisation exacte.
 
 ### 14.10 Référentiel de réalisation
 
@@ -560,6 +555,15 @@ Référence : docs/loyable/LOYABLE_CAHIER_DES_CHARGES_CENTRE_MAINTENANCE_INTERCO
 
 ### 14.11 Statut exact
 
-Les règles d'abonnement, le rappel H−72, la suspension bailleur, le masquage Marketplace, la recherche prestataire et la messagerie sont maintenant des exigences documentées. Le parrainage à trois activations, la poursuite de certains accès locataires, la diffusion des missions, les détails GPS, le périmètre vidéo, les SLA du support et la politique de sauvegarde nécessitent encore les arbitrages indiqués au cahier.
+Sont désormais validés comme règles produit : parrainage à trois filleuls payants ; QR actif uniquement lorsque le bailleur est actif ; accès locataire strictement limité maintenu pendant la suspension ; dépôt du contrat locataire par photo(s)/PDF ; diffusion volontaire et non automatique des missions ; vidéosurveillance via le module NAXA SECURITY ; sauvegarde/restauration du client depuis son propre Google Drive connecté dans Profil ; persistance de session selon le modèle NAXA ; parcours d'authentification selon le modèle NAXA SERVICES.
+
+Restent à valider par l'utilisateur : la proposition de SLA du support. Restent à concevoir/auditer : compatibilité réelle des caméras, protocole de raccordement SECURITY, composants d'authentification/session réutilisables, fréquences/rétention Drive, et autres arbitrages listés dans le cahier détaillé.
 
 Aucun code applicatif, endpoint, table, migration Supabase, fonction serveur, secret, déploiement ou test de production n'a été ajouté ou exécuté par cette mise à jour documentaire.
+
+
+### 14.12 Contrats locataires et authentification [V/P]
+
+Chaque dossier locataire dans l'espace bailleur permet de téléverser le contrat par photo(s) depuis l'appareil/la galerie ou par fichier PDF. Le document est privé, versionné, rattaché au bail et visible uniquement par les personnes autorisées, notamment le locataire concerné dans son espace.
+
+Le parcours d'authentification reprend le modèle NAXA SERVICES après audit des composants exacts : inscription/connexion selon le profil, contrôle des informations requises, récupération d'accès, gestion d'erreurs et orientation vers l'espace autorisé. Les comptes LOYABLE restent distincts de ceux de NAXA SERVICES ; pas de fusion/SSO implicite. La session reprend le modèle déjà prévu dans NAXA, sans exporter les jetons vers Google Drive.
