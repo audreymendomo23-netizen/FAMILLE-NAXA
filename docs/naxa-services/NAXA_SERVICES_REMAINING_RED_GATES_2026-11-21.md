@@ -85,3 +85,17 @@ Le draft v7 complète les tests PostgreSQL jetables :
 - événements de callback Mobile Money limités à des empreintes et métadonnées non sensibles, tables interdites aux rôles clients ; un événement `verified` ou `applied` exige une preuve de vérification serveur.
 
 Les API Edge qui administrent ces nouvelles tables, l'intégration marchande et le rapprochement restent des gates séparées. Le draft v7 est exécuté seulement sur la base PostgreSQL jetable du CI ; il n'est pas appliqué au projet Supabase NAXA historique.
+
+
+### Alignement des statuts Mobile Money
+
+Le moteur financier, les contrats transversaux et le schéma v7 utilisent désormais les mêmes statuts métier : `initiated`, `pending`, `confirmed`, `failed`, `expired`, `cancelled`, `refunded`, `reversed`. Un simple HTTP 2xx/202 demeure `pending`. Les statuts `refunded` et `reversed` sont terminaux ; la transition vers un remboursement ou une extourne n'est autorisée qu'à partir d'un paiement `confirmed`.
+
+
+## 8. Web authentification et alignement des paiements (21 novembre 2026)
+
+Le portail Web NAXA Services reçoit maintenant une session d'authentification complète du backend, vérifie la présence des jetons et du périmètre membre/organisation/sites, enregistre uniquement un identifiant d'installation non secret dans le stockage local, et garde les jetons d'accès/renouvellement en mémoire de l'onglet. Le renouvellement avant expiration, la révocation à la déconnexion et le remplacement obligatoire d'un mot de passe initial sont raccordés à l'Edge Auth. Les tests unitaires couvrent la validation du périmètre et la borne de durée de session.
+
+**Limite maintenue :** cette authentification ne transforme pas les écrans CRM, agenda, pressing, caisse, stock, RH et rapports en modules Web connectés. Leurs opérations restent des brouillons locaux ; aucun montant ni reçu commercial n'est présenté comme enregistré en backend. Le gate ajoute un build Web et les tests du parseur de session.
+
+Les statuts paiements sont désormais alignés entre le moteur financier, les contrats et le draft PostgreSQL v7 : `initiated`, `pending`, `confirmed`, `failed`, `expired`, `cancelled`, `refunded`, `reversed`. Un code HTTP `202` reste une demande en attente ; une confirmation exige la vérification serveur du prestataire et la comparaison du montant, de la devise et de la référence.

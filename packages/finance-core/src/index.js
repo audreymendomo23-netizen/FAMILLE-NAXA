@@ -1,6 +1,6 @@
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROVIDERS = new Set(["mtn_momo", "orange_money"]);
-const TERMINAL_PAYMENT_STATES = new Set(["succeeded", "verified", "failed", "expired", "cancelled", "refunded"]);
+const TERMINAL_PAYMENT_STATES = new Set(["failed", "expired", "cancelled", "refunded", "reversed"]);
 
 function record(value, code) {
   if (!value || typeof value !== "object" || Array.isArray(value)) throw new TypeError(code);
@@ -65,10 +65,10 @@ export function classifyProviderInitiation(provider, httpStatus, providerStatus 
 }
 
 const PROVIDER_STATUS = Object.freeze({
-  success: "succeeded",
-  succeeded: "succeeded",
-  successful: "succeeded",
-  completed: "succeeded",
+  success: "confirmed",
+  succeeded: "confirmed",
+  successful: "confirmed",
+  completed: "confirmed",
   failed: "failed",
   rejected: "failed",
   declined: "failed",
@@ -76,7 +76,7 @@ const PROVIDER_STATUS = Object.freeze({
   cancelled: "cancelled",
   canceled: "cancelled",
   refunded: "refunded",
-  reversed: "refunded",
+  reversed: "reversed",
 });
 
 export function verifyPaymentConfirmation(intentInput, confirmationInput, verification) {
@@ -93,7 +93,7 @@ export function verifyPaymentConfirmation(intentInput, confirmationInput, verifi
     throw new Error("PROVIDER_REFERENCE_MISSING");
   }
   return Object.freeze({
-    status: status === "succeeded" ? "verified" : status,
+    status: status === "confirmed" ? "confirmed" : status,
     provider: intent.provider,
     merchantReference: intent.merchantReference,
     providerReference: confirmation.providerReference,
@@ -105,12 +105,21 @@ export function verifyPaymentConfirmation(intentInput, confirmationInput, verifi
 }
 
 export function assertPaymentTransition(currentState, nextState) {
-  const states = new Set(["initiated", "pending", "verified", "failed", "expired", "cancelled", "refunded"]);
+  const states = new Set(["initiated", "pending", "confirmed", "failed", "expired", "cancelled", "refunded", "reversed"]);
   if (!states.has(currentState) || !states.has(nextState)) throw new TypeError("INVALID_PAYMENT_STATE");
   if (currentState === nextState) return false;
   if (TERMINAL_PAYMENT_STATES.has(currentState)) throw new Error("PAYMENT_STATE_IS_TERMINAL");
-  if (nextState === "verified" && currentState !== "pending" && currentState !== "initiated") {
-    throw new Error("PAYMENT_CANNOT_BE_VERIFIED_FROM_STATE");
+  if (nextState === "confirmed" && currentState !== "pending" && currentState !== "initiated") {
+    throw new Error("PAYMENT_CANNOT_BE_CONFIRMED_FROM_STATE");
+  }
+  if (nextState === "failed" || nextState === "expired" || nextState === "cancelled") {
+    if (currentState !== "initiated" && currentState !== "pending") throw new Error("PAYMENT_CANNOT_BE_CLOSED_FROM_STATE");
+  }
+  if (nextState === "refunded" && currentState !== "confirmed") {
+    throw new Error("PAYMENT_CANNOT_BE_REFUNDED_FROM_STATE");
+  }
+  if (nextState === "reversed" && currentState !== "confirmed") {
+    throw new Error("PAYMENT_CANNOT_BE_REVERSED_FROM_STATE");
   }
   return true;
 }

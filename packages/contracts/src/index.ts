@@ -28,7 +28,7 @@ export function decideConflict(kind: DomainKind, expected: number, actual: numbe
   return "manual_review";
 }
 
-export type PaymentState = "declared" | "captured" | "submitted" | "verified" | "rejected" | "reversed";
+export type PaymentState = "initiated" | "pending" | "confirmed" | "failed" | "expired" | "cancelled" | "refunded" | "reversed";
 export type NotificationState = "created" | "queued" | "sent" | "received" | "read" | "actioned" | "failed";
 export type SyncReceiptState = "accepted" | "applied" | "conflict" | "rejected";
 

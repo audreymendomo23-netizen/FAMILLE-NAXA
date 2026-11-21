@@ -41,6 +41,12 @@ create unique index if not exists ns_commission_policy_versions_id_org_idx
 create index if not exists ns_commission_policy_scope_date_idx
   on public.ns_commission_policy_versions(org_id, site_id, policy_code, effective_from desc);
 
+alter table public.ns_payments
+  drop constraint if exists ns_payments_status_check;
+alter table public.ns_payments
+  add constraint ns_payments_status_check
+  check (status in ('initiated','pending','confirmed','failed','expired','cancelled','refunded','reversed'));
+
 alter table public.ns_commission_entries
   add column if not exists policy_version_id uuid,
   add column if not exists source_event_id uuid,

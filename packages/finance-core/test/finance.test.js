@@ -39,14 +39,21 @@ test("payment confirmation requires verified signature and exact amount/referenc
   assert.throws(() => verifyPaymentConfirmation(intent, { ...confirmation, amountXaf: 12501 }, { signatureVerified: true }), /PAYMENT_AMOUNT_MISMATCH/);
   assert.throws(() => verifyPaymentConfirmation(intent, { ...confirmation, merchantReference: "other-reference" }, { signatureVerified: true }), /PAYMENT_REFERENCE_MISMATCH/);
   const result = verifyPaymentConfirmation(intent, confirmation, { signatureVerified: true, method: "provider_webhook_signature", verifiedAt: "2026-11-21T19:00:00Z" });
-  assert.equal(result.status, "verified");
+  assert.equal(result.status, "confirmed");
   assert.equal(result.amountXaf, 12500);
   assert.equal(result.providerReference, confirmation.providerReference);
+  const reversal = verifyPaymentConfirmation(intent, {
+    ...confirmation, status: "REVERSED", providerReference: "provider-ref-reversal-001",
+  }, { signatureVerified: true, method: "provider_status_poll" });
+  assert.equal(reversal.status, "reversed");
 });
-test("payment state machine prevents terminal state rewrites", () => {
-  assert.equal(assertPaymentTransition("pending", "verified"), true);
+test("payment state machine aligns with ERP confirmed, refunded and reversed states", () => {
+  assert.equal(assertPaymentTransition("pending", "confirmed"), true);
   assert.equal(assertPaymentTransition("pending", "pending"), false);
-  assert.throws(() => assertPaymentTransition("verified", "refunded"), /PAYMENT_STATE_IS_TERMINAL/);
+  assert.equal(assertPaymentTransition("confirmed", "refunded"), true);
+  assert.equal(assertPaymentTransition("confirmed", "reversed"), true);
+  assert.throws(() => assertPaymentTransition("pending", "refunded"), /PAYMENT_CANNOT_BE_REFUNDED_FROM_STATE/);
+  assert.throws(() => assertPaymentTransition("refunded", "confirmed"), /PAYMENT_STATE_IS_TERMINAL/);
 });
 test("payment provider registry fails closed without an adapter", () => {
   const registry = createPaymentAdapterRegistry([]);

@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { parseWebSession, type WebAuthSession } from "./auth/session";
 import { createRoot } from "react-dom/client";
 import "@famille/design-system/tokens.css";
 import "./naxa-services.css";
@@ -51,11 +52,25 @@ const moduleCopy: Record<ModuleId, { eyebrow: string; headline: string; helper: 
 
 function App() {
   const [authenticated, setAuthenticated] = useState(false);
+  const [authSession, setAuthSession] = useState<WebAuthSession | null>(null);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [installationId] = useState(() => {
+    try {
+      const existing = localStorage.getItem("naxa-services-installation-id");
+      if (existing) return existing;
+      const generated = crypto.randomUUID();
+      localStorage.setItem("naxa-services-installation-id", generated);
+      return generated;
+    } catch {
+      return crypto.randomUUID();
+    }
+  });
   const [preview, setPreview] = useState(false);
   const [active, setActive] = useState<ModuleId>("overview");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
-  const [remember, setRemember] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
   const [recoveryNote, setRecoveryNote] = useState("");
   const [authMessage, setAuthMessage] = useState("");
@@ -80,12 +95,24 @@ function App() {
   const authEndpoint = env.VITE_NAXA_SERVICES_AUTH_URL ?? "";
   const anonKey = env.VITE_SUPABASE_ANON_KEY ?? "";
 
-  async function authRequest(body: Record<string, unknown>) {
+  function webDevicePayload() {
+    return {
+      installation_id: installationId,
+      platform: "web",
+      label: navigator.userAgent.slice(0, 90),
+    };
+  }
+
+  async function authRequest(body: Record<string, unknown>, bearer?: string) {
     if (!authEndpoint || !anonKey) throw new Error("Le service d'authentification web n'est pas configuré.");
     const response = await fetch(authEndpoint, {
       method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: "Bearer " + anonKey },
+      credentials: "omit",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+        Authorization: "Bearer " + (bearer ?? authSession?.accessToken ?? anonKey),
+      },
       body: JSON.stringify({ app_code: "naxa-services", ...body }),
     });
     const data = await response.json().catch(() => ({}));
@@ -98,9 +125,24 @@ function App() {
     setBusy(true);
     setAuthMessage("");
     try {
-      await authRequest({ action: "login", identifier: identifier.trim().toUpperCase(), password, remember_device: remember, device: { platform: "web", label: navigator.userAgent.slice(0, 90) } });
-      setAuthMessage("La réponse de connexion est reçue. La création de session Web reste à valider avec la politique de cookies sécurisés.");
+      const data = await authRequest({
+        action: "login",
+        identifier: identifier.trim().toUpperCase(),
+        password,
+        remember_device: false,
+        device: webDevicePayload(),
+      }, anonKey);
+      const nextSession = parseWebSession(data);
+      setAuthSession(nextSession);
+      setAuthenticated(true);
+      setPreview(false);
+      setPassword("");
+      setAuthMessage(nextSession.requirePasswordChange
+        ? "Connexion réussie. Le mot de passe initial doit être remplacé avant les opérations."
+        : "Session authentifiée. Les modules métier Web restent en brouillons locaux tant que leurs connecteurs ERP ne sont pas raccordés.");
     } catch (error) {
+      setAuthSession(null);
+      setAuthenticated(false);
       setAuthMessage(error instanceof Error ? error.message : "Connexion impossible.");
     } finally {
       setBusy(false);
@@ -112,12 +154,93 @@ function App() {
     setBusy(true);
     setAuthMessage("");
     try {
-      await authRequest({ action: "request_recovery", identifier: identifier.trim().toUpperCase(), request_note: recoveryNote, device: { platform: "web" } });
+      await authRequest({ action: "request_recovery", identifier: identifier.trim().toUpperCase(), request_note: recoveryNote, device: webDevicePayload() }, anonKey);
       setAuthMessage("Demande transmise si le compte est identifiable. Le responsable effectuera le contrôle d'identité.");
     } catch (error) {
       setAuthMessage(error instanceof Error ? error.message : "Demande impossible.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function refreshWebSession(activeSession: WebAuthSession): Promise<WebAuthSession> {
+    const data = await authRequest({
+      action: "refresh",
+      refresh_token: activeSession.refreshToken,
+      remember_device: false,
+      device: webDevicePayload(),
+    }, anonKey);
+    const refreshed = parseWebSession(data);
+    setAuthSession(refreshed);
+    return refreshed;
+  }
+
+  async function ensureFreshSession(activeSession: WebAuthSession): Promise<WebAuthSession> {
+    if (activeSession.expiresAt > Date.now() + 60_000) return activeSession;
+    return await refreshWebSession(activeSession);
+  }
+
+  async function changeWebPassword(event: React.FormEvent) {
+    event.preventDefault();
+    const activeSession = authSession;
+    if (!activeSession) return;
+    if (newPassword.length < 10 || newPassword.length > 256) {
+      setAuthMessage("Le nouveau mot de passe doit contenir entre 10 et 256 caractères.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setAuthMessage("La confirmation du nouveau mot de passe ne correspond pas.");
+      return;
+    }
+    setBusy(true);
+    setAuthMessage("");
+    try {
+      const freshSession = await ensureFreshSession(activeSession);
+      const data = await authRequest({
+        action: "change_password",
+        current_password: currentPassword,
+        new_password: newPassword,
+        refresh_token: freshSession.refreshToken,
+      }, freshSession.accessToken);
+      const updated = parseWebSession(data);
+      setAuthSession(updated);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setAuthMessage("Mot de passe modifié. Les données affichées dans le portail restent des brouillons locaux.");
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Le changement de mot de passe a échoué.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function signOut() {
+    const activeSession = authSession;
+    setBusy(true);
+    let serverRevoked = false;
+    try {
+      if (activeSession) {
+        const freshSession = await ensureFreshSession(activeSession);
+        await authRequest({ action: "logout", device: webDevicePayload() }, freshSession.accessToken);
+        serverRevoked = true;
+      }
+    } catch {
+      serverRevoked = false;
+    } finally {
+      setAuthSession(null);
+      setAuthenticated(false);
+      setPreview(false);
+      setPassword("");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setEntries({} as Record<ModuleId, Entry[]>);
+      setActive("overview");
+      setBusy(false);
+      setAuthMessage(serverRevoked || !activeSession
+        ? "Session fermée."
+        : "Session locale fermée ; la révocation serveur n'a pas pu être confirmée. Une reconnexion sera nécessaire.");
     }
   }
 
@@ -132,6 +255,42 @@ function App() {
   }
 
   const visibleModules = modules.filter((m) => (m.title + " " + m.description + " " + m.group).toLowerCase().includes(search.toLowerCase()));
+
+  if (authenticated && authSession?.requirePasswordChange) {
+    return (
+      <div className={"app auth-app " + theme}>
+        <div className="auth-art">
+          <div className="auth-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
+          <div className="auth-copy">
+            <span className="eyebrow">PROTECTION DU COMPTE</span>
+            <h1>Une dernière<br /><em>étape.</em></h1>
+            <p>Le mot de passe initial doit être remplacé avant tout accès aux pages de gestion.</p>
+            <div className="auth-proof"><span>01</span> Votre identité est authentifiée</div>
+            <div className="auth-proof"><span>02</span> Le changement est contrôlé côté serveur</div>
+            <div className="auth-proof"><span>03</span> Les jetons restent en mémoire dans cet onglet</div>
+          </div>
+          <div className="auth-footer">NAXA SERVICES · COMPTE SÉCURISÉ</div>
+        </div>
+        <main className="auth-panel">
+          <div className="mobile-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
+          <div className="auth-form-wrap">
+            <span className="eyebrow">CHANGEMENT OBLIGATOIRE</span>
+            <h2>Créer un nouveau mot de passe</h2>
+            <p className="muted">Minimum 10 caractères. Le changement est vérifié par le serveur avant l'ouverture de l'espace.</p>
+            <form onSubmit={changeWebPassword} className="auth-form">
+              <label>Mot de passe actuel<input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" required /></label>
+              <label>Nouveau mot de passe<input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" minLength={10} maxLength={256} required /></label>
+              <label>Confirmer le nouveau mot de passe<input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" minLength={10} maxLength={256} required /></label>
+              {authMessage && <div className="notice">{authMessage}</div>}
+              <button className="btn primary" disabled={busy}>{busy ? "Vérification…" : "Enregistrer le nouveau mot de passe"}</button>
+            </form>
+            <button className="link-button" onClick={signOut} disabled={busy}>Fermer la session</button>
+          </div>
+          <div className="panel-bottom"><span>FR · EN</span><span>Connexion sécurisée</span></div>
+        </main>
+      </div>
+    );
+  }
 
   if (!authenticated && !preview) {
     return (
@@ -158,7 +317,7 @@ function App() {
               <label>Identifiant NAXA Services<input value={identifier} onChange={(e) => setIdentifier(e.target.value.toUpperCase())} placeholder="NS-000000" autoComplete="username" required /></label>
               {!showRecovery && <label>Mot de passe<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></label>}
               {showRecovery && <label>Note au responsable (facultatif)<textarea rows={3} value={recoveryNote} onChange={(e) => setRecoveryNote(e.target.value)} placeholder="Expliquez brièvement votre demande" /></label>}
-              {!showRecovery && <label className="check-label"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /><span>Rester connecté sur cet appareil</span></label>}
+              {!showRecovery && <p className="small muted">Session Web conservée uniquement en mémoire dans cet onglet. Aucun jeton n'est enregistré dans le stockage persistant du navigateur.</p>}
               {authMessage && <div className="notice">{authMessage}</div>}
               <button className="btn primary" disabled={busy}>{busy ? "Traitement…" : showRecovery ? "Envoyer la demande" : "Se connecter"}</button>
             </form>
@@ -187,20 +346,21 @@ function App() {
         </nav>
         <div className="side-bottom">
           <button className="nav-item" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><span className="nav-glyph">◐</span>{theme === "dark" ? "Mode clair" : "Mode sombre"}</button>
-          <button className="nav-item" onClick={() => { setPreview(false); setAuthenticated(false); setActive("overview"); }}><span className="nav-glyph">↪</span>Déconnexion</button>
-          <div className="user-mini"><div className="avatar">NS</div><div><strong>{preview ? "Aperçu local" : "Espace connecté"}</strong><small>NAXA Services</small></div></div>
+          <button className="nav-item" onClick={signOut} disabled={busy}><span className="nav-glyph">↪</span>Déconnexion</button>
+          <div className="user-mini"><div className="avatar">NS</div><div><strong>{preview ? "Aperçu local" : authSession?.account.display_name ?? "Espace connecté"}</strong><small>{authSession ? (authSession.account.organization_name || authSession.account.role_code || "NAXA Services") : "NAXA Services"}</small></div></div>
         </div>
       </aside>
       <main className="main-area">
         <header className="topbar">
           <div className="crumb"><span>NAXA SERVICES</span><b>/</b>{selected.title}</div>
           <div className="top-actions">
-            <span className="sync-pill"><i /> {preview ? "Données locales" : "Connexion en attente"}</span>
+            <span className="sync-pill"><i /> {preview ? "Données locales" : authSession ? (authSession.requirePasswordChange ? "Changement du mot de passe requis" : "Session authentifiée · modules locaux") : "Connexion en attente"}</span>
             <button className="icon-button" title="Aide" onClick={() => setActive("help")}>?</button>
             <div className="avatar">NS</div>
           </div>
         </header>
         <section className="content-area">
+          {authSession && authMessage && <div className="notice">{authMessage}</div>}
           <div className="page-heading">
             <div><span className="eyebrow">{moduleCopy[active].eyebrow}</span><h1>{moduleCopy[active].headline}</h1><p>{moduleCopy[active].helper}</p></div>
             <div className="heading-actions">
@@ -218,7 +378,7 @@ function App() {
             active === "cash" ? <CashPage entries={entries.cash ?? []} /> :
             <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} />}
 
-          <div className="page-footnote"><span>ⓘ</span> {preview ? "Les créations sont gardées en mémoire dans cette session uniquement." : "Aucun accès opérationnel n'est accordé avant authentification et synchronisation côté serveur."}</div>
+          <div className="page-footnote"><span>ⓘ</span> {preview ? "Les créations sont gardées en mémoire dans cette session uniquement." : authSession ? "Identité et session authentifiées ; les opérations affichées restent des brouillons locaux et ne sont pas envoyées au serveur." : "Aucun accès opérationnel n'est accordé avant authentification et synchronisation côté serveur."}</div>
         </section>
         <nav className="mobile-tabs">
           {(["overview", "agenda", "pressing", "cash", "services"] as ModuleId[]).map((id) => <button key={id} className={active === id ? "selected" : ""} onClick={() => setActive(id)}><span>{iconFor(id)}</span>{modules.find((m) => m.id === id)?.title.split(" ")[0]}</button>)}

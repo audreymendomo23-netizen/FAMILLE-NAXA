@@ -6,6 +6,7 @@ on:
       - work/naxa-services-completion-20261120
     paths:
       - "apps/android/naxa-services/**"
+      - "apps/web/naxa-services/**"
       - "packages/core-android/**"
       - "packages/billing-core/**"
       - "packages/finance-core/**"
@@ -36,6 +37,7 @@ on:
   pull_request:
     paths:
       - "apps/android/naxa-services/**"
+      - "apps/web/naxa-services/**"
       - "packages/core-android/**"
       - "supabase/functions/naxa-services-auth/**"
       - "supabase/functions/naxa-services-referrals/**"
@@ -83,6 +85,22 @@ jobs:
         run: deno check supabase/functions/naxa-services-auth/index.ts supabase/functions/naxa-services-auth/scope_contract.ts supabase/functions/naxa-services-auth/contract_test.ts
       - name: Run pure Auth contract tests
         run: deno test supabase/functions/naxa-services-auth/contract_test.ts
+
+  naxa-services-web-build:
+    name: NAXA SERVICES Web build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install workspace dependencies
+        run: npm install --no-audit --no-fund
+      - name: Run Web authentication session tests
+        run: npm test --workspace @famille/naxa-services-web
+      - name: Build NAXA SERVICES Web
+        run: npm run build --workspace @famille/naxa-services-web
 
   sync-contract:
     name: Cross-application offline synchronization contract
