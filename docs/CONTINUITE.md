@@ -1191,3 +1191,17 @@ Le dernier ensemble code apporte le cycle achats fournisseurs et ses écritures 
 **HEAD de code testé :** `edb75ba714ba1a2ffb24cb0f8e23019553970fe4`. Des commits suivants ne changent que les documents de continuité/statut. Aucun changement du code applicatif ne figure après ce commit dans la présente branche au moment de ce relevé.
 
 Cette preuve confirme les tests de contrat et le build Android debug, pas une qualification production. Les fonctions Achats/Pilotage restent locales Room tant que la passerelle comptable v4 et la synchronisation ERP complète ne sont pas installées et validées dans un projet Supabase Famille isolé. Aucun déploiement réel, migration, paiement, webhook, release signée ou fusion vers `main` n'a été effectué. Le statut demeure **non qualifié VERT GLOBAL** jusqu'à la recette serveur/synchronisation, sécurité RLS, validations comptables/fiscales et autres chantiers listés au §6.17.22–6.17.23.
+
+
+## 6.17.25 — Renforcement statique de la frontière RLS NAXA SERVICES (21 novembre 2026)
+
+L'audit des scripts v1 à v4 confirme l'activation RLS de toutes les tables créées. Les tables sans policy client sont explicitement server-only : comptes, tentatives Auth, demandes de récupération, appareils, acceptations légales, reçus de synchronisation, conflits et file de notifications.
+
+Correctifs :
+- v1 révoque explicitement `PUBLIC`, `anon` et `authenticated` sur les tables internes Auth/audit et donne explicitement accès à `service_role` ;
+- v2 réserve explicitement `ns_legal_acceptances` à `service_role` ;
+- v3/v4 conservent leurs frontières client/serveur et RPC contrôlées.
+
+Le test Deno statique `supabase/tests/drafts/naxa_services_static_security_test.ts` contrôle RLS, la classification des tables sans policy, les helpers de scope `ns_*`, l'absence de policies inconditionnelles, les privilèges server-only et `search_path = ''` des fonctions `SECURITY DEFINER`. Le workflow NAXA SERVICES exécute ce test dans un job dédié et surveille `supabase/tests/drafts/**`.
+
+**Limite :** le contrôle valide la cohérence statique des drafts uniquement. Il n'exécute pas PostgreSQL et ne démontre aucun scénario RLS positif/négatif. v1-v4 restent non appliqués ; aucun projet Supabase n'a été modifié et `main` reste inchangé.

@@ -15,6 +15,7 @@ on:
       - "supabase/drafts/naxa_services_referrals_v1.sql"
       - "supabase/drafts/naxa_services_v3_operations_rewards_sync.sql"
       - "supabase/drafts/naxa_services_v4_supplier_accounting_forecast.sql"
+      - "supabase/tests/drafts/**"
       - "supabase/functions/naxa-services-accounting/**"
       - "supabase/config.toml"
       - "settings.gradle.kts"
@@ -31,6 +32,7 @@ on:
       - "supabase/drafts/naxa_services_referrals_v1.sql"
       - "supabase/drafts/naxa_services_v3_operations_rewards_sync.sql"
       - "supabase/drafts/naxa_services_v4_supplier_accounting_forecast.sql"
+      - "supabase/tests/drafts/**"
       - "supabase/functions/naxa-services-accounting/**"
       - "supabase/config.toml"
       - "packages/billing-core/**"
@@ -100,6 +102,18 @@ jobs:
         run: deno check supabase/functions/naxa-services-accounting/index.ts supabase/functions/naxa-services-accounting/accounting_contract.ts supabase/functions/naxa-services-accounting/contract_test.ts
       - name: Run supplier accounting and forecast contracts
         run: deno test supabase/functions/naxa-services-accounting/contract_test.ts
+
+  sql-static-security:
+    name: NAXA SERVICES draft SQL security boundary checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Run static RLS, server-only grants and SECURITY DEFINER checks
+        run: deno test supabase/tests/drafts/naxa_services_static_security_test.ts
 
   android-debug:
     name: Assemble NAXA SERVICES Android debug APK

@@ -1381,3 +1381,42 @@ Les écrans Achats, Rapports et Pilotage utilisent encore la base Room locale. L
 Les autres réserves des §39.9 et §40.5 restent ouvertes : application et tests RLS, synchronisation offline complète, paiements récurrents/webhooks/entitlements, fournisseurs FCM/SMS/WhatsApp Business, validation comptable/fiscale/paie SYSCOHADA, inventaires/retours/transferts complets, essais instrumentés/performance/restauration, Release signée, Web/PWA, Fulfulde complet relu, console centrale des dix applications, mutualisation opérationnelle des CSO et intégration fonctionnelle NAXA SECURITY.
 
 **Décision :** le lot financier et le code Android du commit `edb75ba` sont validés par le CI debug. Ce résultat ne qualifie pas NAXA SERVICES « VERT GLOBAL » et n'autorise ni migration Supabase, ni déploiement Edge, ni distribution publique, ni fusion dans `main`.
+
+
+# Addendum 6 — Renforcement statique de la frontière RLS NAXA SERVICES (21 novembre 2026)
+
+**Branche :** `work/naxa-services-completion-20261120`  
+**Commit de base :** `0b5afbee39daad4881e70987555c2d42a68ac3e9`  
+**Périmètre :** drafts SQL NAXA SERVICES, contrôles CI statiques et documentation. Aucun schéma n'a été appliqué à une base.
+
+## 42.1 Contradiction et cause racine
+
+La revue des scripts v1 à v4 confirme que toutes les tables créées activent RLS. Les tables internes sans politique client — comptes, tentatives Auth, demandes de récupération, appareils, acceptations légales, reçus de synchronisation, conflits et file de notifications — sont réservées au serveur.
+
+Plusieurs révocations v1/v2 ne citaient cependant que `anon` et `authenticated`, sans révoquer explicitement le rôle PostgreSQL `PUBLIC`. Le draft v1 ne déclarait pas non plus explicitement l'octroi `service_role` sur les tables internes.
+
+## 42.2 Corrections apportées
+
+- v1 : révocation explicite de `PUBLIC`, `anon` et `authenticated` sur `ns_accounts`, `ns_auth_attempts`, `ns_auth_recovery_requests`, `ns_devices` et `ns_audit_events` ; accès explicite accordé à `service_role`.
+- v2 : révocation explicite des mêmes rôles sur `ns_legal_acceptances`, réservée à `service_role`.
+- v3 : les tables de synchronisation et de notifications conservent leur accès réservé au serveur.
+- v4 : les reçus, règlements fournisseurs et écritures restent en lecture selon RLS ; leurs mutations passent par les RPC contrôlées.
+
+## 42.3 Garde-fous CI
+
+Le nouveau test `supabase/tests/drafts/naxa_services_static_security_test.ts` contrôle :
+1. l'activation RLS de chaque table créée ;
+2. la classification explicite des tables sans policy ;
+3. le recours des politiques à des helpers de périmètre `ns_*`, sans policy inconditionnelle `USING (true)` / `WITH CHECK (true)` ;
+4. la révocation `PUBLIC` / `anon` / `authenticated` et l'octroi `service_role` sur chaque table restreinte ;
+5. l'absence de privilèges directs client sur ces tables ;
+6. `search_path = ''` pour chaque fonction `SECURITY DEFINER` ;
+7. le caractère transactionnel et explicitement non-production des scripts.
+
+Le job CI indépendant `sql-static-security` exécute ce contrôle Deno. Les filtres push et pull request surveillent désormais aussi `supabase/tests/drafts/**`.
+
+## 42.4 Portée de la preuve et limites
+
+Ces assertions examinent le texte SQL versionné ; elles ne remplacent pas l'exécution PostgreSQL, les tests positifs/négatifs des rôles, ni les scénarios d'isolation entre organisations, sites, appareils et membres. Les drafts v1-v4 demeurent non appliqués. La sécurité RLS n'est donc pas qualifiée en environnement d'exécution.
+
+**Statut :** correctifs SQL et contrôles CI ajoutés sur la branche de travail ; validation du job CI requise après commit. Aucun déploiement, aucune migration, aucune modification du projet Supabase historique et aucune fusion dans `main`.

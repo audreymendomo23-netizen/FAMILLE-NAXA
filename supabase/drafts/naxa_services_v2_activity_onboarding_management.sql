@@ -49,7 +49,7 @@ create index if not exists ns_legal_acceptances_org_member_idx
   on public.ns_legal_acceptances(org_id, member_id, accepted_at desc);
 
 alter table public.ns_legal_acceptances enable row level security;
-revoke all on public.ns_legal_acceptances from anon, authenticated;
+revoke all on public.ns_legal_acceptances from public, anon, authenticated;
 grant all on public.ns_legal_acceptances to service_role;
 
 -- A non-null activity profile cannot be changed. The trigger protects against concurrent first-choice requests.
