@@ -88,3 +88,46 @@ Deno.test("invalid due date and unsafe integer amount are rejected", () => {
   } catch { amountRejected = true; }
   if (!amountRejected) throw new Error("Unsafe integer amounts must be rejected");
 });
+
+import {
+  normalizeInventoryItemSyncPayload,
+  normalizeInventoryMovementSyncPayload,
+} from "./sync_contract.ts";
+const INVENTORY_ITEM_A="88888888-8888-4888-8888-888888888881";
+const INVENTORY_MOVE_A="88888888-8888-4888-8888-888888888882";
+const ORG_A="88888888-8888-4888-8888-888888888883";
+const SITE_A="88888888-8888-4888-8888-888888888884";
+Deno.test("inventory item sync validates stable UUID and metadata",()=>{
+  const item=normalizeInventoryItemSyncPayload({
+    inventory_item_id:INVENTORY_ITEM_A,org_id:ORG_A,site_id:SITE_A,
+    sku:" sku-001 ",name:"Savon",unit:"pièce",reorder_level:2.5,
+    supplier_whatsapp:"+237 690 00 00 00"
+  });
+  if(item.sku!=="SKU-001"||item.reorder_level!==2.5||item.supplier_whatsapp!=="237690000000")
+    throw new Error("Inventory item normalization mismatch");
+  let failed=false;
+  try {
+    normalizeInventoryItemSyncPayload({
+      inventory_item_id:INVENTORY_ITEM_A,org_id:ORG_A,site_id:SITE_A,
+      sku:"",name:"Savon",unit:"pièce",reorder_level:-1,supplier_whatsapp:""
+    });
+  } catch { failed=true; }
+  if(!failed) throw new Error("Negative reorder level must be rejected");
+});
+Deno.test("inventory movement sync enforces signed quantity semantics",()=>{
+  const move=normalizeInventoryMovementSyncPayload({
+    movement_id:INVENTORY_MOVE_A,org_id:ORG_A,site_id:SITE_A,
+    inventory_item_id:INVENTORY_ITEM_A,movement_type:"consumption",
+    quantity_delta:-1.25,reason:"Consommation validée"
+  });
+  if(move.quantity_delta!==-1.25) throw new Error("Signed movement delta must be preserved");
+  let failed=false;
+  try {
+    normalizeInventoryMovementSyncPayload({
+      movement_id:INVENTORY_MOVE_A,org_id:ORG_A,site_id:SITE_A,
+      inventory_item_id:INVENTORY_ITEM_A,movement_type:"consumption",
+      quantity_delta:1.25,reason:"Consommation invalide"
+    });
+  } catch { failed=true; }
+  if(!failed) throw new Error("Positive consumption must be rejected");
+});

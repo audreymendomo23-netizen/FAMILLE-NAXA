@@ -107,3 +107,46 @@ export function normalizeSupplierPurchaseSyncPayload(value: unknown): SupplierPu
     notes: text(body.notes, "PURCHASE_NOTES", 0, 1000),
   };
 }
+
+export type InventoryItemSyncPayload = {
+  inventory_item_id:string; org_id:string; site_id:string; sku:string;
+  name:string; unit:string; reorder_level:number; supplier_whatsapp:string;
+};
+export type InventoryMovementSyncPayload = {
+  movement_id:string; org_id:string; site_id:string; inventory_item_id:string;
+  movement_type:"in"|"consumption"|"loss"|"adjustment"; quantity_delta:number; reason:string;
+};
+export function normalizeInventoryItemSyncPayload(value:unknown):InventoryItemSyncPayload {
+  const body=record(value,"INVENTORY_ITEM_BODY");
+  const sku=text(body.sku,"INVENTORY_ITEM_SKU",0,80).toUpperCase();
+  const name=text(body.name,"INVENTORY_ITEM_NAME",1,160);
+  const unit=text(body.unit,"INVENTORY_ITEM_UNIT",1,40);
+  const reorder=body.reorder_level;
+  if(typeof reorder!=="number"||!Number.isFinite(reorder)||reorder<0||reorder>99999999999.999||
+     Math.abs(reorder*1000-Math.round(reorder*1000))>0.000001) throw new Error("INVALID_INVENTORY_ITEM_REORDER_LEVEL");
+  const whatsapp=text(body.supplier_whatsapp,"INVENTORY_ITEM_WHATSAPP",0,32).replace(/\D/g,"");
+  if(whatsapp&&!/^\d{9,15}$/.test(whatsapp)) throw new Error("INVALID_INVENTORY_ITEM_WHATSAPP");
+  return {
+    inventory_item_id:uuid(body.inventory_item_id,"INVENTORY_ITEM_ID"),
+    org_id:uuid(body.org_id,"ORG_ID"),site_id:uuid(body.site_id,"SITE_ID"),
+    sku,name,unit,reorder_level:reorder,supplier_whatsapp:whatsapp
+  };
+}
+export function normalizeInventoryMovementSyncPayload(value:unknown):InventoryMovementSyncPayload {
+  const body=record(value,"INVENTORY_MOVEMENT_BODY");
+  const kind=body.movement_type;
+  if(kind!=="in"&&kind!=="consumption"&&kind!=="loss"&&kind!=="adjustment") throw new Error("INVALID_INVENTORY_MOVEMENT_TYPE");
+  const delta=body.quantity_delta;
+  if(typeof delta!=="number"||!Number.isFinite(delta)||delta===0||Math.abs(delta)>99999999999.999||
+     Math.abs(delta*1000-Math.round(delta*1000))>0.000001||
+     (kind==="in"&&delta<0)||((kind==="consumption"||kind==="loss")&&delta>0)) {
+    throw new Error("INVALID_INVENTORY_MOVEMENT_QUANTITY");
+  }
+  return {
+    movement_id:uuid(body.movement_id,"MOVEMENT_ID"),
+    org_id:uuid(body.org_id,"ORG_ID"),site_id:uuid(body.site_id,"SITE_ID"),
+    inventory_item_id:uuid(body.inventory_item_id,"INVENTORY_ITEM_ID"),
+    movement_type:kind,quantity_delta:delta,
+    reason:text(body.reason,"INVENTORY_MOVEMENT_REASON",3,240)
+  };
+}

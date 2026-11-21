@@ -358,6 +358,131 @@ begin
 end;
 $naxa$;
 
+
+create or replace function public.ns_save_inventory_item(
+  p_inventory_item_id uuid, p_org_id uuid, p_site_id uuid, p_sku text,
+  p_name text, p_unit text, p_reorder_level numeric, p_supplier_whatsapp text default ''
+) returns jsonb
+language plpgsql security definer set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_existing public.ns_inventory_items%rowtype;
+  v_result public.ns_inventory_items%rowtype;
+  v_sku text;
+  v_name text;
+  v_unit text;
+  v_whatsapp text;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_INVENTORY_ITEM_SAVE_FORBIDDEN';
+  end if;
+  v_sku := nullif(upper(trim(coalesce(p_sku,''))),'');
+  v_name := trim(coalesce(p_name,''));
+  v_unit := trim(coalesce(p_unit,''));
+  v_whatsapp := regexp_replace(coalesce(p_supplier_whatsapp,''),'\D','','g');
+  if p_inventory_item_id is null or length(coalesce(p_sku,'')) > 80
+     or length(v_name) not between 1 and 160 or length(v_unit) not between 1 and 40
+     or p_reorder_level is null or p_reorder_level < 0
+     or p_reorder_level::text in ('NaN','Infinity','-Infinity')
+     or p_reorder_level > 99999999999.999
+     or length(v_whatsapp) not in (0,9,10,11,12,13,14,15) then
+    raise exception 'NAXA_INVENTORY_ITEM_SAVE_INVALID';
+  end if;
+  select * into v_existing from public.ns_inventory_items
+  where id = p_inventory_item_id for update;
+  if found then
+    if v_existing.org_id <> p_org_id or v_existing.site_id <> p_site_id then
+      raise exception 'NAXA_INVENTORY_ITEM_ID_SCOPE_CONFLICT';
+    end if;
+    update public.ns_inventory_items
+      set sku=v_sku,name=v_name,unit=v_unit,reorder_level=p_reorder_level,
+          supplier_whatsapp=v_whatsapp,active=true
+      where id=p_inventory_item_id returning * into v_result;
+  else
+    insert into public.ns_inventory_items(
+      id,org_id,site_id,sku,name,unit,quantity,reorder_level,active,supplier_whatsapp
+    ) values (
+      p_inventory_item_id,p_org_id,p_site_id,v_sku,v_name,v_unit,0,p_reorder_level,true,v_whatsapp
+    ) returning * into v_result;
+  end if;
+  return jsonb_build_object(
+    'inventory_item_id',v_result.id,'org_id',v_result.org_id,'site_id',v_result.site_id,
+    'sku',v_result.sku,'name',v_result.name,'unit',v_result.unit,'quantity',v_result.quantity,
+    'idempotent_identity',true
+  );
+end;
+$naxa$;
+
+create or replace function public.ns_record_inventory_movement(
+  p_movement_id uuid,p_org_id uuid,p_site_id uuid,p_inventory_item_id uuid,
+  p_movement_type text,p_quantity_delta numeric,p_reason text
+) returns jsonb
+language plpgsql security definer set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_existing public.ns_inventory_movements%rowtype;
+  v_item public.ns_inventory_items%rowtype;
+  v_next_quantity numeric(14,3);
+  v_reason text;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_INVENTORY_MOVEMENT_FORBIDDEN';
+  end if;
+  v_reason := trim(coalesce(p_reason,''));
+  if p_movement_id is null or p_inventory_item_id is null
+     or p_movement_type not in ('in','consumption','loss','adjustment')
+     or p_quantity_delta is null or p_quantity_delta=0
+     or p_quantity_delta::text in ('NaN','Infinity','-Infinity')
+     or abs(p_quantity_delta)>99999999999.999
+     or abs(p_quantity_delta*1000-round(p_quantity_delta*1000))>0.000001
+     or (p_movement_type='in' and p_quantity_delta<=0)
+     or (p_movement_type in ('consumption','loss') and p_quantity_delta>=0)
+     or length(v_reason) not between 3 and 240 then
+    raise exception 'NAXA_INVENTORY_MOVEMENT_INVALID';
+  end if;
+  select * into v_existing from public.ns_inventory_movements
+  where id=p_movement_id for update;
+  if found then
+    if v_existing.org_id<>p_org_id or v_existing.site_id<>p_site_id
+       or v_existing.item_id<>p_inventory_item_id
+       or v_existing.movement_type<>p_movement_type
+       or v_existing.quantity_delta<>p_quantity_delta
+       or v_existing.reason<>v_reason
+       or v_existing.idempotency_key<>p_movement_id then
+      raise exception 'NAXA_INVENTORY_MOVEMENT_IDEMPOTENCY_CONFLICT';
+    end if;
+    select quantity into v_next_quantity from public.ns_inventory_items
+    where id=p_inventory_item_id and org_id=p_org_id and site_id=p_site_id;
+    return jsonb_build_object(
+      'movement_id',v_existing.id,'inventory_item_id',v_existing.item_id,
+      'quantity',v_next_quantity,'idempotent_replay',true
+    );
+  end if;
+  select * into v_item from public.ns_inventory_items
+  where id=p_inventory_item_id and org_id=p_org_id and site_id=p_site_id and active
+  for update;
+  if not found then raise exception 'NAXA_INVENTORY_ITEM_NOT_FOUND'; end if;
+  v_next_quantity := v_item.quantity+p_quantity_delta;
+  if v_next_quantity<0 then raise exception 'NAXA_INVENTORY_STOCK_WOULD_BE_NEGATIVE'; end if;
+  update public.ns_inventory_items set quantity=v_next_quantity
+  where id=p_inventory_item_id and org_id=p_org_id and site_id=p_site_id;
+  insert into public.ns_inventory_movements(
+    id,org_id,site_id,item_id,movement_type,quantity_delta,reason,idempotency_key,actor_member_id
+  ) values (
+    p_movement_id,p_org_id,p_site_id,p_inventory_item_id,p_movement_type,
+    p_quantity_delta,v_reason,p_movement_id,v_member
+  );
+  return jsonb_build_object(
+    'movement_id',p_movement_id,'inventory_item_id',p_inventory_item_id,
+    'quantity',v_next_quantity,'idempotent_replay',false
+  );
+end;
+$naxa$;
+
 create or replace function public.ns_create_supplier_purchase(
   p_org_id uuid,
   p_site_id uuid,
@@ -1023,6 +1148,12 @@ from public.ns_performance_daily
 group by org_id, site_id, date_trunc('year', performance_day)::date;
 
 grant select on public.ns_performance_daily, public.ns_performance_monthly, public.ns_performance_annual to authenticated, service_role;
+
+revoke all on function public.ns_save_inventory_item(uuid,uuid,uuid,text,text,text,numeric,text) from public,anon;
+grant execute on function public.ns_save_inventory_item(uuid,uuid,uuid,text,text,text,numeric,text) to authenticated,service_role;
+revoke all on function public.ns_record_inventory_movement(uuid,uuid,uuid,uuid,text,numeric,text) from public,anon;
+grant execute on function public.ns_record_inventory_movement(uuid,uuid,uuid,uuid,text,numeric,text) to authenticated,service_role;
+
 revoke all on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) from public, anon;
 grant execute on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) to authenticated, service_role;
 
