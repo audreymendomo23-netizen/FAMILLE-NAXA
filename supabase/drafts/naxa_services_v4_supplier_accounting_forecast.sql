@@ -434,6 +434,7 @@ begin
   end if;
   v_reason := trim(coalesce(p_reason,''));
   if p_movement_id is null or p_inventory_item_id is null
+     or p_movement_type is null
      or p_movement_type not in ('in','consumption','loss','adjustment')
      or p_quantity_delta is null or p_quantity_delta=0
      or p_quantity_delta::text in ('NaN','Infinity','-Infinity')
