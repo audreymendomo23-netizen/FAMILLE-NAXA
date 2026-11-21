@@ -30,8 +30,7 @@ INSERT INTO public.ns_sales(id,org_id,site_id,sale_number,subtotal_xaf,discount_
 VALUES ('a0000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','CI-SALE-001',1000,0,1000,'posted','60000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000001');
 INSERT INTO public.ns_sales(id,org_id,site_id,sale_number,subtotal_xaf,discount_xaf,total_xaf,status,created_by,customer_id)
 VALUES ('a0000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','CI-SALE-002',1500,0,1500,'posted','60000000-0000-4000-8000-000000000001','90000000-0000-4000-8000-000000000004');
-INSERT INTO public.ns_payments(id,org_id,site_id,sale_id,payment_method,amount_xaf,status,confirmation_source,confirmed_by,confirmed_at,idempotency_key)
-VALUES ('b0000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','a0000000-0000-4000-8000-000000000002','mobile_money',1500,'confirmed','provider_webhook','60000000-0000-4000-8000-000000000001',now(),'c0000000-0000-4000-8000-000000000002');
+
 COMMIT;
 
 INSERT INTO public.ns_customer_referral_campaigns(
@@ -54,7 +53,7 @@ INSERT INTO public.ns_customer_referral_codes(
   '30000000-0000-4000-8000-000000000001',
   'd1000000-0000-4000-8000-000000000001',
   '90000000-0000-4000-8000-000000000001',
-  'CREF-CI202611'
+  'CREF-C1A02611F0'
 );
 INSERT INTO public.ns_promotion_campaigns(
   id,org_id,title,campaign_type,status,starts_at,created_by
@@ -120,6 +119,10 @@ BEGIN
   IF coalesce((v_apply->>'accepted')::boolean,false) IS NOT TRUE THEN
     RAISE EXCEPTION 'CUSTOMER_REFERRAL_CODE_NOT_ACCEPTED: %',v_apply;
   END IF;
+
+  -- The referral must be attributed before the first paid sale.
+  INSERT INTO public.ns_payments(id,org_id,site_id,sale_id,payment_method,amount_xaf,status,confirmation_source,confirmed_by,confirmed_at,idempotency_key)
+  VALUES ('b0000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','a0000000-0000-4000-8000-000000000002','mobile_money',1500,'confirmed','provider_webhook','60000000-0000-4000-8000-000000000001',now(),'c0000000-0000-4000-8000-000000000002');
 
   v_qualify := public.ns_record_customer_referral_first_paid_sale(
     'a0000000-0000-4000-8000-000000000002'::uuid,'ci-provider-event-customer-sale-002'
