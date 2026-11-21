@@ -1,7 +1,7 @@
 # ZIPPLE — Cahier des charges fonctionnel 360° V2.0
 
 **Date de référence :** 21 novembre 2026  
-**Dernière décision tarifaire intégrée :** 21 novembre 2026  
+**Dernière révision intégrée :** 21 novembre 2026 — abonnement annuel et parrainage client  
 **Statut :** périmètre fonctionnel consolidé et gelé par validation du promoteur  
 **Produit :** ERP de gestion des restaurants, restaurants-bars et snack-bars  
 **Dépôt de référence :** audreymendomo23-netizen/FAMILLE-NAXA  
@@ -43,6 +43,8 @@ Le périmètre fonctionnel est gelé à cette version. Les évolutions ultérieu
   - https://github.com/audreymendomo23-netizen/NAXA/blob/main/7%20famille%20naxa/02-prompts/03-zipple.md
 - Cahier NAXA, notamment le mécanisme de livraison configurable F54 et les parcours de paiement décrits dans la documentation historique :
   - https://github.com/audreymendomo23-netizen/NAXA/blob/main/docs/CAHIER_DES_CHARGES.md
+- Cahier NAXA Services V1.0, section V5 : fiche et historique client, points de fidélité, carte QR, offres et parrainage client (référence fonctionnelle du module de relation client) :
+  - https://github.com/audreymendomo23-netizen/NAXA/blob/main/7%20famille%20naxa/01-cahiers-des-charges/04-naxa-services.md
 - Architecture et règles de gouvernance du monorepo Famille NAXA :
   - https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/AGENTS.md
   - https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/main/docs/ARCHITECTURE_CIBLE.md
@@ -308,6 +310,53 @@ ZIPPLE doit :
 - empêcher qu’un invité puisse modifier ou consulter les commandes privées d’un autre invité.
 
 Le fractionnement et le transfert d’addition restent réservés aux employés autorisés.
+
+---
+
+## 3.6. Fichier client, fidélité et parrainage — modèle NAXA Services
+
+Le module de relation client reprend le principe métier documenté dans NAXA Services : fiche client, historique, préférences, points de fidélité, carte QR, offres et parrainage client. [V]
+
+Cette fonction complète les commandes publiques sans modifier la règle fondamentale : **aucun compte client ZIPPLE, aucun mot de passe et aucune installation d’application ne sont requis.** Le client peut toujours commander anonymement. L’identification dans une fiche professionnelle est facultative et sert uniquement aux services de fidélité, au parrainage et à l'historique autorisé.
+
+### Fiche et identification client
+
+- Le restaurant ou le Snack-Bar peut créer une fiche client à partir des informations strictement utiles, notamment un nom d’usage et un numéro de téléphone communiqué volontairement.
+- Le client peut rattacher une commande à sa fiche en saisissant son numéro ou en présentant sa carte QR ; le personnel peut également faire ce rattachement avec les droits nécessaires.
+- Une commande anonyme reste possible sans création de fiche.
+- La fiche ne constitue pas un compte de connexion. Elle n'ouvre aucun accès aux commandes, aux données ou à l'espace professionnel.
+- Les données client sont isolées par organisation et accessibles uniquement aux rôles habilités.
+
+### Code et QR personnel de parrainage
+
+- Chaque fiche client éligible peut disposer d'un code de parrainage unique et d'un QR personnel associé. [V]
+- Le code est opaque, non séquentiel et révocable ; le QR ne contient ni nom, ni numéro de téléphone, ni donnée personnelle directement lisible.
+- Le client parrain partage son code ou son QR à une personne qu'il invite.
+- Le nouveau client peut saisir le code sur la page publique de commande ou présenter le QR au personnel avant la validation de sa première commande payante.
+- Le personnel peut rattacher le code à la fiche du nouveau client avec une trace de l'opération.
+- Un seul parrain est rattaché à un nouveau client pour une même organisation. Le rattachement ne peut plus être modifié après validation de la commande déclencheuse, sauf correction exceptionnelle par un rôle autorisé et journalisée.
+
+### Validation et attribution de la récompense
+
+- Un parrainage devient **qualifié** uniquement après une première commande éligible effectivement terminée et intégralement réglée.
+- Une commande annulée, impayée, remboursée intégralement ou constituée uniquement d'un avantage gratuit ne déclenche aucune récompense.
+- Un nouveau client ne peut produire qu'un seul parrainage qualifié au sein d'une même organisation, même s'il fréquente plusieurs établissements de cette organisation.
+- Le moteur de fidélité enregistre le parrain, le filleul, le code utilisé, la commande déclencheuse, l'établissement, les dates, le statut et la récompense.
+- La nature de l'avantage, sa valeur, son bénéficiaire (parrain et/ou filleul), ses conditions d'utilisation, sa durée de validité et son éventuel plafond sont configurables par le promoteur. [P]
+- Les récompenses peuvent être gérées sous forme de points, de bon ou d'avantage de fidélité utilisable sur une commande ultérieure. Le barème chiffré n'est pas imposé par ce cahier : il doit être défini par le promoteur avant activation commerciale. [O]
+- Par défaut, les récompenses ne sont pas convertibles en espèces ni retirables. Toute exception doit faire l'objet d'une règle explicite et d'un contrôle financier.
+- En cas d'annulation ou de remboursement postérieur à l'attribution, ZIPPLE doit bloquer ou reprendre la récompense selon son état d'utilisation, avec une écriture inverse et un journal d'audit.
+
+### Prévention de la fraude et suivi
+
+- Interdire l'auto-parrainage et les rattachements circulaires.
+- Détecter les doublons évidents de coordonnées et les répétitions anormales ; placer les cas douteux en revue plutôt que supprimer silencieusement les traces.
+- Empêcher la réutilisation d'un code sur plusieurs fiches d'un même nouveau client.
+- Conserver l'historique des codes, rattachements, validations, corrections, récompenses acquises et récompenses utilisées.
+- Afficher au promoteur : invitations émises, parrainages saisis, parrainages qualifiés, taux de conversion, récompenses à attribuer, attribuées et utilisées, coûts des avantages et résultats par établissement.
+- Le programme client de ZIPPLE est distinct d'un programme de partenaires commerciaux externes. Il ne rémunère pas automatiquement un intermédiaire externe.
+
+Le parcours de parrainage et de fidélité est prévu pour les deux espaces Restaurant et Snack-Bar. Il ne crée jamais de canal de livraison dans le Snack-Bar et ne modifie pas l'absence de compte client.
 
 ---
 
@@ -1490,9 +1539,13 @@ Les fichiers sont privés, soumis aux permissions, journalisés et rattachés à
 - activation des droits par entitlements ;
 - gestion des limites d’utilisateurs, appareils, sites et options ;
 - historique des changements ;
-- données métier conservées selon les règles de résiliation et d’export.
+- données métier conservées selon les règles de résiliation et d’export ;
+- périodicités vendues : mensuelle ou annuelle uniquement ;
+- formule annuelle : accès pendant 12 mois consécutifs pour le prix de 10 mensualités, soit 2 mois offerts ;
+- aucune formule commerciale de 3 mois ou de 6 mois, ni promotion accordant 3 ou 6 mois d'accès ;
+- aucune campagne ou remise ne peut cumuler des avantages pour transformer l'offre annuelle en 3 ou 6 mois offerts.
 
-Aucune troisième formule ne doit être créée sous un autre nom.
+Aucune troisième formule ne doit être créée sous un autre nom. La règle de durée annuelle est transversale à toutes les solutions du portefeuille, conformément à la décision FAM-020 du registre central.
 
 ## 17.7. Sécurité, audit et observabilité
 
@@ -1533,7 +1586,11 @@ Aucune troisième formule ne doit être créée sous un autre nom.
 - retours clients ;
 - notation par poste ;
 - incidents ;
-- performances du personnel.
+- performances du personnel ;
+- parrainages saisis et qualifiés ;
+- conversion des filleuls en clients payants ;
+- récompenses de fidélité/parrainage à attribuer, attribuées et utilisées ;
+- coût des avantages et comparaison par établissement.
 
 ## 18.2. Vue gérant
 
@@ -1617,7 +1674,11 @@ Le modèle doit notamment couvrir :
 - préparations et productions ;
 - fournisseurs ;
 - commandes d’achat et réceptions ;
+- fiches clients et préférences facultatives ;
 - commandes clients invité ;
+- codes et QR de parrainage ;
+- rattachements parrain/filleul ;
+- comptes, mouvements et récompenses de fidélité ;
 - lignes de commande ;
 - routage et tickets de préparation ;
 - événements de service ;
@@ -1714,6 +1775,8 @@ Seules deux offres sont retenues :
 
 Aucun pack Basic, Essentiel, Pro, Réseau ou troisième niveau ne doit être présenté comme une offre ZIPPLE actuelle. [V]
 
+Les seules périodicités de souscription sont **mensuelle** et **annuelle**. Cette règle applique la décision transversale FAM-020 : aucune formule de 3 mois ou de 6 mois, aucun forfait prépayé de ces durées et aucune promotion ne doit accorder 3 ou 6 mois d'accès. [V]
+
 Les fonctionnalités et limites précises de chaque offre doivent être pilotées par des droits configurables. La matrice Accès/Premium ne doit pas être inventée par l’équipe technique. Elle doit être fondée sur une décision commerciale explicite, notamment pour :
 - nombre d’établissements ;
 - utilisateurs et appareils simultanés ;
@@ -1733,21 +1796,36 @@ Les fonctions nécessaires à l’intégrité des ventes, des stocks, des paieme
 | Document maître portefeuille V1.4, 8 novembre 2026 | Basic 5 000 F/mois et 50 000 F/an ; Premium 15 000 F/mois et 150 000 F/an ; Pro 18 000 F/mois et 180 000 F/an | Ancienne grille à trois offres, supersédée |
 | Business Model 11 Solutions, 10 novembre 2026 | Modèle Excel ZIPPLE : 5 000 / 15 000 / 18 000 F par mois | Ancienne grille de travail à harmoniser, supersédée |
 | Ancien arbitrage documenté | Pro : 18 000 F/mois × 10 = 180 000 F/an | Arbitrage historique concernant l'ancien pack Pro ; ne constitue pas la règle annuelle du Premium actuel |
-| **Décision explicite du promoteur, 21 novembre 2026** | **Accès : 5 000 FCFA/mois ; Premium : 18 000 FCFA/mois** | **[V] VALIDÉ — tarifs actuels ZIPPLE** |
+| **Décision explicite du promoteur, 21 novembre 2026 — tarifs mensuels** | **Accès : 5 000 FCFA/mois ; Premium : 18 000 FCFA/mois** | **[V] VALIDÉ — tarifs mensuels actuels ZIPPLE** |
+| **Décision explicite du promoteur, 21 novembre 2026 — annuel** | **Accès : 50 000 FCFA/an ; Premium : 180 000 FCFA/an** (10 mensualités payées pour 12 mois d'accès) | **[V] VALIDÉ — 2 mois offerts sur l'annuel** |
+| **Décision transversale FAM-020, 21 novembre 2026** | **Souscription mensuelle ou annuelle uniquement ; aucune formule de 3 ou 6 mois** | **[V] VALIDÉ — portefeuille de solutions** |
 
-## 21.3. Conclusion tarifaire
+## 21.3. Tarifs et périodicités applicables
 
-- ZIPPLE commercialise exactement deux offres : **Accès** et **Premium**.
-- **Accès : 5 000 FCFA par mois.**
-- **Premium : 18 000 FCFA par mois.**
-- Les anciennes formules Essentiel, Basic, Pro et Réseau ne sont plus des offres commerciales ZIPPLE.
-- Le montant annuel historique de 180 000 FCFA concernait l'ancien Pro. Il n'est pas automatiquement reconduit comme tarif annuel Premium.
-- Aucun tarif annuel, remise annuelle ou périodicité autre que mensuelle n'est validé par la présente décision.
-- La matrice détaillée des droits et limites de chaque offre doit rester conforme à la décision commerciale et ne doit pas être inventée par le code.
+Les montants et périodes suivants sont validés :
 
-**Règle : les prix mensuels Accès et Premium sont approuvés et peuvent être utilisés comme tarifs de référence dans le paramétrage commercial ZIPPLE. Aucun tarif annuel ni remise ne doit être appliqué tant qu'il n'a pas été expressément validé.**
+| Offre | Paiement mensuel | Paiement annuel | Durée de service annuelle |
+|---|---:|---:|---:|
+| **Accès** | **5 000 FCFA** | **50 000 FCFA** | **12 mois** |
+| **Premium** | **18 000 FCFA** | **180 000 FCFA** | **12 mois** |
 
-L'audit historique distingue les anciennes propositions des prix actuels. La décision explicite du promoteur du 21 novembre 2026 est la source d'autorité pour les tarifs Accès et Premium.
+Le tarif annuel correspond exactement à **10 mensualités payées pour 12 mois de service**. Les deux mensualités restantes sont offertes et intégrées au prix annuel : il ne s'agit pas d'un crédit de deux mois à cumuler avec d'autres promotions.
+
+Règles obligatoires :
+- Les seuls choix commerciaux de paiement sont **mensuel** et **annuel**.
+- Aucun abonnement, forfait ou offre de 3 mois ou de 6 mois ne peut être proposé par ZIPPLE.
+- Aucune campagne promotionnelle ne peut offrir une durée d'accès de 3 ou 6 mois, ni cumuler les avantages pour atteindre ces durées.
+- Le renouvellement annuel donne droit à 12 mois de service à compter de la date de prise d'effet du renouvellement, contre le paiement de 10 mensualités.
+- Aucun troisième pack ne doit être créé sous un autre nom.
+- Les anciennes formules Essentiel, Basic, Pro et Réseau sont retirées des offres actuelles.
+- La matrice détaillée des droits et limites Accès/Premium reste pilotée par les entitlements validés et ne doit pas être inventée par le code.
+- Les valeurs des récompenses du parrainage client sont distinctes de l'abonnement ZIPPLE ; elles ne peuvent pas prolonger automatiquement la durée de l'abonnement logiciel.
+
+**Calculs annuels validés :**
+- Accès : 5 000 × 10 = **50 000 FCFA/an**, soit 10 000 FCFA d'économie par rapport à 12 mensualités.
+- Premium : 18 000 × 10 = **180 000 FCFA/an**, soit 36 000 FCFA d'économie par rapport à 12 mensualités.
+
+Cette règle applique à ZIPPLE la décision commerciale transversale FAM-020 du 21 novembre 2026, applicable à l'ensemble du portefeuille de solutions.
 
 ---
 
@@ -1940,6 +2018,22 @@ La recette doit être faite sur des données de test et par établissement isol�
 
 ---
 
+## 23.11. Fidélité et parrainage client
+
+1. Créer une fiche client sans créer de compte de connexion.
+2. Générer un code et un QR de parrainage uniques sans exposer de donnée personnelle dans le QR.
+3. Passer une commande anonyme et vérifier qu'elle reste possible sans fiche client.
+4. Saisir un code de parrainage sur la page publique ou le rattacher par un employé avant validation de la première commande.
+5. Vérifier qu'un seul parrain peut être associé à un nouveau client dans une même organisation.
+6. Vérifier qu'une commande annulée, impayée ou remboursée intégralement ne qualifie pas le parrainage.
+7. Régler et terminer la première commande, puis vérifier l'unique qualification du parrainage et l'inscription de la récompense dans le registre.
+8. Tenter l'auto-parrainage et un doublon de filleul ; vérifier le blocage ou la revue anti-fraude.
+9. Vérifier l'historique du code, du rattachement, de la commande déclencheuse, de la récompense et de son utilisation.
+10. Vérifier les indicateurs parrainage dans le tableau de bord promoteur et par établissement.
+11. Vérifier que la politique de récompense n'ouvre aucun compte client et n'accorde pas de mois supplémentaires d'abonnement logiciel.
+
+---
+
 # 24. Décisions consolidées et sujets non bloquants
 
 ## 24.1. Décisions validées [V]
@@ -1965,6 +2059,8 @@ La recette doit être faite sur des données de test et par établissement isol�
 - Support et livechat.
 - Charte bleue nuit #0E224D et orange #F56202.
 - Deux offres : Accès et Premium.
+- Abonnements mensuels ou annuels uniquement ; annuel = 10 mensualités payées pour 12 mois de service ; aucune formule de 3 ou 6 mois, conformément à FAM-020.
+- Fidélité et parrainage client inspirés du modèle NAXA Services, sans compte client ZIPPLE.
 
 ## 24.2. Points techniques à vérifier sans rouvrir la vision
 
@@ -1981,20 +2077,20 @@ Ces contrôles ne constituent pas des alternatives au périmètre retenu. Ils so
 
 ## 24.3. Prix
 
-Les offres et tarifs mensuels sont validés : Accès à 5 000 FCFA/mois et Premium à 18 000 FCFA/mois. La matrice précise des droits doit être appliquée selon les entitlements validés ; les tarifs annuels et remises restent ouverts.
+Les tarifs mensuels et annuels sont validés : Accès à 5 000 FCFA/mois ou 50 000 FCFA/an ; Premium à 18 000 FCFA/mois ou 180 000 FCFA/an. Le paiement annuel correspond à 10 mensualités pour 12 mois de service, donc 2 mois offerts. Les seules périodicités sont mensuelle et annuelle ; aucune formule de 3 ou 6 mois n'est autorisée. La matrice précise des droits reste pilotée par les entitlements validés.
 
 ---
 
 # 25. Règle de gel et gouvernance du document
 
-Cette V2.0 devient la référence fonctionnelle ZIPPLE à compter du 21 novembre 2026.
+Cette V2.0, révisée le 21 novembre 2026 pour intégrer la politique annuelle transversale et le parrainage client, constitue la référence fonctionnelle ZIPPLE gelée. Toute évolution ultérieure doit faire l'objet d'une nouvelle décision tracée et d'une nouvelle révision documentaire.
 
 - Les décisions [V] ne doivent pas être remplacées par une ancienne proposition.
 - Les anciennes grilles tarifaires à trois niveaux ne sont plus les offres actuelles.
 - Les règles [P] ne deviennent pas des arbitrages commerciaux.
-- Les points [O] doivent rester visibles jusqu’à validation ou preuve. Les prix mensuels Accès et Premium sont maintenant arbitrés ; les prix annuels et remises restent ouverts.
+- Les points [O] doivent rester visibles jusqu’à validation ou preuve. Les tarifs mensuels et annuels sont arbitrés ; le barème chiffré et la nature définitive des récompenses de parrainage client restent à paramétrer avant activation commerciale.
 - Toute modification de périmètre doit être enregistrée avec date, auteur, valeur précédente, valeur nouvelle, motif et validation du promoteur.
 - Les changements techniques doivent respecter les règles du monorepo Famille NAXA : audit, contradiction, cause racine, correction, tests/preuves, documentation et état.
 - Aucun déploiement, aucune migration Production et aucune publication APK ne sont autorisés par le seul fait de ce cahier des charges.
 
-**Conclusion : ZIPPLE = un ERP, deux espaces métier, un module Bar activable dans Restaurant, une page publique de commande sans compte client, une chaîne opérationnelle reliée aux stocks et aux finances, une livraison limitée au Restaurant, une intégration NAXA Security, un pilotage multi-sites et deux offres commerciales uniquement : Accès et Premium.**
+**Conclusion : ZIPPLE = un ERP, deux espaces métier, un module Bar activable dans Restaurant, une page publique de commande sans compte client, une chaîne opérationnelle reliée aux stocks et aux finances, une livraison limitée au Restaurant, une intégration NAXA Security, un pilotage multi-sites, une fidélité avec parrainage client sans compte applicatif et deux offres uniquement : Accès et Premium, payables au mois ou à l'année (10 mois payés pour 12 mois de service).**
