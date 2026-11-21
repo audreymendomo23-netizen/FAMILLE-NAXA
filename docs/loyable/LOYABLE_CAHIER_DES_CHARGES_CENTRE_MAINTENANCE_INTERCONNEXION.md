@@ -1,6 +1,6 @@
 # Cahier des charges — Centre de maintenance LOYABLE et interconnexion NAXA SERVICES
 
-> Version 1.0 — proposition consolidée du 21 novembre 2026  
+> Version 1.1 — consolidation complémentaire du 21 novembre 2026  
 > Statut : référentiel fonctionnel et technique de conception, non preuve d'implémentation.
 
 ## 0. Convention de lecture
@@ -772,3 +772,437 @@ Les éléments JOBLY sont des références de conception ; aucun module Partner 
 - Aucune migration Supabase, fonction serveur, intégration API ou déploiement n'a été effectué dans cette passe.
 
 **Ce document constitue la base proposée pour valider le Centre de maintenance LOYABLE et le chantier d'interconnexion.**
+
+---
+
+## 22. Abonnement LOYABLE dynamique, verrouillage et Marketplace
+
+### 22.1 Référentiel tarifaire [V]
+
+LOYABLE conserve le modèle commercial déjà inscrit dans la continuité générale FAMILLE-NAXA :
+
+- une seule souscription par bailleur Promoteur / organisation LOYABLE ;
+- un abonnement unique donnant accès à l'ensemble des fonctionnalités LOYABLE ;
+- pas de paliers ACCÈS/PREMIUM artificiels pour LOYABLE ;
+- prix de référence : **1 000 FCFA × nombre de chambres actives/en gestion** dans le portefeuille du Promoteur ;
+- le montant est recalculé à partir du nombre réel de chambres retenues dans l'unité facturable ;
+- une souscription porte une quantité de chambres : il ne faut pas créer un abonnement distinct pour chaque chambre.
+
+Le système doit afficher le détail de facturation : nombre de chambres retenues, prix unitaire, période couverte, montant total, avantages éventuels et historique de quantité.
+
+Pour les périodes annuelles éligibles, la règle générale FAMILLE-NAXA d'un tarif annuel égal à dix mensualités (deux mois offerts) demeure la référence, sous réserve de l'éligibilité contractuelle de l'offre LOYABLE. Le catalogue doit calculer le tarif annuel à partir de la quantité applicable et de la version de prix en vigueur à la souscription.
+
+### 22.2 Quantité dynamique et historique [V/P]
+
+La quantité est calculée sur les chambres actives/en gestion rattachées au périmètre facturable du Promoteur. Le service de facturation doit :
+- recalculer la quantité lors d'une activation, désactivation, création ou archivage de chambre ;
+- enregistrer ancienne quantité, nouvelle quantité, auteur, date de constat et date d'effet ;
+- afficher au bailleur l'incidence de la modification avant sa prise d'effet ;
+- conserver un instantané de la quantité facturée pour chaque période ;
+- ne jamais appliquer rétroactivement une hausse non annoncée ;
+- empêcher les modifications concurrentes qui rendraient incohérente une facture.
+
+**Arbitrage toujours ouvert [O] :** l'effet d'une modification de quantité en cours de période (application immédiate avec prorata ou application au prochain renouvellement) n'est pas fixé par les décisions retrouvées. Aucune proratisation automatique ne doit être inventée. Le principe de calcul dynamique est retenu, mais la règle de date d'effet doit être configurée et approuvée avant facturation automatique.
+
+### 22.3 Cycle de vie et expiration
+
+États fonctionnels proposés :
+- trial : essai initial de 72 heures, accordé une seule fois à l'unité facturable ;
+- active : abonnement payé et période en cours ;
+- expiring_soon : abonnement toujours actif, mais échéance dans 72 heures ou moins ;
+- payment_pending : une transaction de renouvellement est en attente de confirmation ;
+- expired : période échue sans paiement confirmé ;
+- suspended : suspension administrative motivée ;
+- cancelled : résiliation selon les conditions contractuelles ;
+- restored : réactivation après confirmation serveur du paiement.
+
+L'état payment_pending n'est pas un paiement réussi. Une saisie de référence, capture d'écran ou déclaration du bailleur ne réactive pas le compte. Seule la confirmation vérifiée côté serveur par le mécanisme de paiement autorisé met à jour l'entitlement.
+
+### 22.4 Notification d'expiration à H−72 [V]
+
+Le serveur doit programmer et émettre une notification **72 heures avant la date et l'heure exactes d'expiration** du bailleur.
+
+Exigences :
+- calcul sur l'heure serveur et le fuseau horaire de référence LOYABLE (Africa/Douala) ;
+- déclenchement une seule fois par échéance et par souscription ;
+- identifiant d'événement idempotent afin qu'un rejeu ne produise pas de doublon ;
+- notification au Promoteur et aux autres administrateurs de facturation explicitement autorisés ;
+- affichage de la date, heure, quantité de chambres facturées et montant du renouvellement attendu ;
+- accès direct à l'écran/portail de renouvellement, sans ouvrir les fonctions métier si elles sont déjà suspendues ;
+- inscription de la notification dans le centre interne avec statut de préparation, d'envoi et de lecture lorsque le canal permet de le connaître ;
+- push si activé ; centre de notifications toujours disponible lors de la prochaine connexion ; canaux de secours uniquement selon les consentements et connecteurs réellement configurés.
+
+Une modification de la date d'échéance ou un renouvellement confirmé annule/réarme l'événement de rappel lié à l'ancienne échéance. Un job de contrôle doit détecter les rappels manqués et les consigner sans envoyer plusieurs rappels identiques.
+
+### 22.5 Verrouillage de l'espace bailleur à l'expiration [V]
+
+**Décision fonctionnelle : si le bailleur n'a pas payé son renouvellement à l'échéance, son accès opérationnel à son compte LOYABLE est suspendu.**
+
+Conséquences :
+- l'accès au tableau de bord bailleur, aux biens, aux contrats, aux loyers, aux rapports, à la maintenance, aux messages et aux paramètres métier est refusé ;
+- le serveur et les politiques d'accès rejettent les opérations métier, même si l'application Android conserve une session locale ;
+- les données ne sont ni supprimées, ni réinitialisées, ni transférées à un autre bailleur ;
+- les fonctions de synchronisation métier ne peuvent pas contourner le verrouillage ;
+- une route restreinte de renouvellement/paiement, séparée de l'espace de gestion, demeure accessible afin de permettre la réactivation ; elle n'expose ni le portefeuille ni les données locatives ;
+- si le paiement est pending ou échoué à l'instant d'expiration, le compte reste bloqué jusqu'à confirmation serveur ;
+- aucune période de grâce n'est appliquée par défaut à LOYABLE après l'échéance, sauf règle commerciale ultérieure explicitement approuvée.
+
+La date et l'heure d'expiration sont déterminées côté serveur. Le changement de date sur le téléphone ou la réinstallation de l'application ne doit pas prolonger l'accès.
+
+**Droits des locataires [P à confirmer] :** le verrouillage demandé concerne l'espace du bailleur. Il est proposé de maintenir au locataire l'accès strict à son propre contrat, à ses documents déjà émis et aux fonctions nécessaires pour signaler un incident, sans lui donner accès au compte bailleur. L'impact exact sur la maintenance en attente pendant la suspension du bailleur doit être testé et confirmé avant développement.
+
+### 22.6 Retrait et restauration automatique des annonces Marketplace [V]
+
+Les annonces publiées par un bailleur partenaire LOYABLE sont liées à l'état de son abonnement :
+
+- abonnement valide : annonces publiables et visibles selon leur disponibilité immobilière normale ;
+- abonnement expiré/non payé : annonces retirées de la recherche et des pages publiques du Marketplace ;
+- réabonnement confirmé : les annonces éligibles redeviennent visibles automatiquement, sans obliger le bailleur à les recréer ni à ressaisir les photos ;
+- annonces volontairement retirées, logements occupés, annonces expirées ou invalidées : ne sont pas réactivées par le seul paiement ;
+- aucune annonce n'est supprimée lors du verrouillage ; sa visibilité est suspendue par un état de publication calculé.
+
+États de publication proposés :
+- draft ;
+- published_active ;
+- hidden_subscription_expired ;
+- hidden_owner_action ;
+- hidden_occupied ;
+- expired_listing ;
+- rejected_or_under_review ;
+- republished_after_payment.
+
+Le backend doit imposer le contrôle de l'entitlement lors de la recherche, de la consultation directe d'une annonce, du sitemap/index public, des liens partagés et des endpoints de détails. Masquer une carte côté interface sans bloquer les endpoints directs est insuffisant.
+
+La réactivation s'effectue après événement serveur de paiement confirmé, puis recalcul des critères d'éligibilité de chaque annonce. Le système ne réactive pas une annonce occupée, retirée volontairement ou arrivée à expiration pour une autre raison.
+
+**Périmètre de cette règle :** elle concerne les publications des bailleurs partenaires dont l'accès Marketplace dépend de leur souscription LOYABLE. Les publications assistées des bailleurs non partenaires, facturées selon le tarif unitaire et la durée de publication déjà documentés, conservent leur cycle propre ; elles ne sont pas converties implicitement en abonnement.
+
+### 22.7 Critères de recette de l'abonnement
+
+- Un abonnement actif donne accès au portefeuille du Promoteur et à toutes les fonctions prévues.
+- Une modification de quantité met à jour l'estimation et l'historique sans créer un second abonnement.
+- Le rappel H−72 est généré une fois par échéance.
+- Le changement de téléphone, la réinstallation ou la déconnexion/reconnexion ne réinitialisent ni essai ni échéance.
+- À l'expiration, un appel API direct vers une fonction métier est refusé.
+- Un paiement pending ne déverrouille pas le compte.
+- Un paiement confirmé restaure les entitlements et l'accès opérationnel.
+- Les annonces deviennent invisibles dans toutes les voies publiques à l'expiration.
+- Après réabonnement, seules les annonces toujours éligibles sont republiées.
+- Les données, photos, vues et historiques sont conservés pendant la suspension.
+
+## 23. Parrainage propre à LOYABLE
+
+### 23.1 Objectif et séparation [V/P]
+
+LOYABLE disposera de son propre programme de recommandation bailleur → bailleur. Il ne réutilise pas directement le programme Partner JOBLY ni le programme de parrainage PME NAXA SERVICES. Les patterns de code attribué, provenance, anti-fraude, idempotence et journal de récompense peuvent être étudiés, mais la politique commerciale LOYABLE reste distincte.
+
+### 23.2 Proposition de règle commerciale V1 [P — à valider]
+
+Je recommande le mécanisme suivant, adapté au tarif LOYABLE calculé par chambre :
+
+- chaque bailleur Promoteur ayant un abonnement actif obtient un code et un lien/QR de parrainage uniques ;
+- le nouveau bailleur doit renseigner le code avant sa première souscription payante ;
+- le rattachement est unique et non transférable après qualification ;
+- le parrainage devient valide lorsque le nouveau bailleur paie et fait confirmer côté serveur son premier abonnement LOYABLE ; une inscription, un essai, un paiement pending ou un paiement ensuite remboursé ne compte pas ;
+- **à chaque groupe de trois nouveaux bailleurs valablement activés, le parrain gagne un mois d'abonnement LOYABLE offert** ;
+- pour un abonné mensuel, un cycle mensuel est crédité à la prochaine échéance ;
+- pour un abonné annuel, un mois calendaire est ajouté à la date de fin de la période déjà payée ;
+- le bénéfice est un crédit de service non monétaire, non transférable et non retirable ;
+- les groupes sont cumulatifs par séries de trois (3, 6, 9, etc.) ; les activations partielles restent suivies jusqu'au prochain seuil ;
+- le montant du service offert suit le modèle dynamique du bailleur par nombre de chambres, sans créer une deuxième souscription.
+
+Le seuil de trois activations est une proposition commerciale spécifique à LOYABLE et non une décision déjà confirmée. Il devra être validé avant codage du moteur de récompense. Il peut être ajusté par le catalogue commercial versionné, sans modifier rétroactivement les parrainages déjà qualifiés.
+
+### 23.3 Parcours et suivi
+
+Dans Profil/Paramètres → Parrainage LOYABLE :
+- générer/copier le code et partager le lien/QR ;
+- consulter chaque filleul avec date de rattachement, état de vérification, date du premier paiement confirmé, formule/périodicité et statut d'éligibilité à la récompense ;
+- afficher le nombre de filleuls valides, la progression vers le prochain seuil, les récompenses gagnées, en attente, appliquées ou rejetées ;
+- consulter l'historique des crédits et leur date d'utilisation ;
+- ne jamais exposer les données locatives ou financières détaillées des filleuls.
+
+### 23.4 Anti-fraude et registre de récompenses
+
+- refuser l'auto-parrainage ;
+- empêcher qu'un même bailleur ou une même organisation soit attribué à plusieurs parrains ;
+- empêcher le changement rétroactif de parrain après paiement ;
+- détecter doublons d'organisation et de coordonnées normalisées, puis envoyer les cas ambigus en revue ;
+- ne pas compter une souscription gratuite, un essai, un paiement pending, annulé ou remboursé ;
+- qualifier uniquement sur événement de paiement serveur signé et idempotent ;
+- enregistrer chaque récompense dans un ledger non destructif : source, parrain, filleul, seuil atteint, montant/valeur, durée, état, date d'application et référence d'entitlement ;
+- protéger contre la double émission et le rejeu du webhook ;
+- conserver une action d'annulation compensatoire en cas de fraude démontrée, sans effacer l'historique.
+
+Les conditions générales du programme, les exclusions et les plafonds de récompense devront être approuvés avant son lancement public.
+
+## 24. Répertoire des missions et recherche géographique côté prestataire
+
+### 24.1 Deux parcours de diffusion complémentaires [P]
+
+Le bailleur doit pouvoir :
+- inviter directement un prestataire connu, comme défini dans les sections précédentes ;
+- ou diffuser une demande qualifiée dans un tableau de missions disponibles à des prestataires NAXA SERVICES éligibles.
+
+Ce tableau n'est pas un annuaire public des locataires. Il s'agit d'un flux d'opportunités professionnelles visible uniquement aux organisations actives et éligibles des catégories Réparation et Menuiserie.
+
+### 24.2 Liste des missions côté NAXA SERVICES [V]
+
+Le prestataire visualise une liste des demandes disponibles avec :
+- catégorie : Réparation ou Menuiserie ;
+- sous-spécialité demandée ;
+- ville ;
+- quartier ou zone approximative lorsqu'elle peut être partagée ;
+- distance approximative par rapport à son point de recherche ;
+- description technique synthétique ;
+- niveau de priorité affiché ;
+- fenêtre de disponibilité ou date souhaitée ;
+- statut de la mission et délai restant pour manifester son intérêt.
+
+Il peut filtrer par catégorie, par ville et par proximité. Il peut trier par distance, date de publication, priorité et compatibilité de spécialité, dans la mesure où les données existent.
+
+### 24.3 Calcul de proximité [P]
+
+Le calcul de distance utilise :
+- la position courante du prestataire si celui-ci l'autorise expressément ;
+- ou l'adresse/zone de service enregistrée dans son profil ;
+- ou un point de recherche choisi manuellement dans la ville.
+
+Le prestataire doit pouvoir utiliser le filtre ville sans activer le GPS. L'accès à la localisation du terminal est facultatif, expliqué et révocable. La distance affichée est approximative ; elle ne révèle pas les coordonnées GPS précises du logement.
+
+Les rayons de recherche proposés (par exemple 5, 10, 20 ou 50 km) doivent rester configurables ; les valeurs définitives sont à arbitrer [O]. Si aucune coordonnée fiable n'est disponible, le système affiche la ville/zone et ne fabrique pas de distance.
+
+### 24.4 Confidentialité avant affectation
+
+Avant que le bailleur choisisse un prestataire :
+- ne pas afficher le nom complet du locataire ;
+- ne pas afficher son numéro de téléphone ;
+- ne pas afficher l'adresse précise, le numéro d'unité ou les consignes d'accès ;
+- ne pas afficher le bail, les loyers, les arriérés ou les documents privés ;
+- utiliser une localisation approximative et les informations techniques strictement nécessaires.
+
+Le prestataire peut manifester son intérêt ou poser une question sans obtenir les données privées. Le bailleur examine les propositions et choisit explicitement le prestataire. Après affectation et ouverture des droits nécessaires, les informations strictement utiles à l'exécution sont partagées.
+
+### 24.5 Compatibilité et disponibilité
+
+Seuls les prestataires actifs dont la catégorie est Réparation ou Menuiserie, la spécialité compatible, la zone couverte et les habilitations suffisantes peuvent voir les demandes correspondantes. Un prestataire suspendu ou indisponible peut être exclu du flux. Voir une demande ou manifester un intérêt ne vaut ni affectation ni contrat conclu.
+
+## 25. Messagerie bailleur ↔ prestataire NAXA SERVICES
+
+### 25.1 Objectif [V]
+
+Intégrer une messagerie dans LOYABLE et NAXA SERVICES pour permettre au bailleur et au prestataire NAXA SERVICES de communiquer au sujet d'une demande, d'une proposition ou d'un ordre de travail.
+
+### 25.2 Conversation liée à un dossier [P]
+
+- Chaque conversation est rattachée à une demande/mission et aux organisations autorisées.
+- Une conversation peut être ouverte lorsqu'un prestataire manifeste son intérêt ou lorsqu'un bailleur l'invite directement.
+- Avant affectation, les échanges restent limités à la demande anonymisée ; après affectation, les informations opérationnelles autorisées peuvent être échangées.
+- Les messages ne donnent jamais accès au portefeuille immobilier ou au CRM complet de l'autre organisation.
+- Le locataire n'est pas ajouté par défaut à la conversation bailleur-prestataire.
+- Les communications sont consultables dans les deux applications selon les droits du membre et l'état du dossier.
+
+### 25.3 Fonctions de messagerie
+
+- messages texte ;
+- pièces jointes autorisées : photos d'un diagnostic, devis, document de travail, compte rendu ;
+- horodatage serveur, auteur, statut envoyé/reçu/lu si techniquement confirmé ;
+- notifications avec anti-doublon et préférences ;
+- historique chronologique ;
+- indicateur de message non lu ;
+- signalement, blocage ou escalade vers le support ;
+- archivage logique à la clôture du dossier selon la politique de conservation.
+
+Aucun message ne doit annoncer qu'il est « lu » si seul l'envoi ou l'accusé serveur a été constaté. Le système distingue envoyé, reçu par le serveur, distribué à l'appareil et lu.
+
+### 25.4 Sécurité et modération
+
+- autorisation sur la conversation et l'ordre à chaque lecture/écriture ;
+- retrait d'accès à la fin de l'affectation ou en cas de révocation, tout en conservant les archives légalement nécessaires ;
+- fichiers privés avec URL signée temporaire ;
+- détection des fichiers interdits, limitation de taille et contrôle du type ;
+- journalisation des actions sensibles ;
+- aucun partage automatique du numéro personnel ;
+- suppression/rectification selon une politique documentée, avec conservation des éléments nécessaires aux litiges et à l'audit.
+
+La messagerie de mission est distincte du Support client NAXA/LOYABLE.
+
+## 26. Architecture de sécurité et vidéosurveillance inspirée de NAXA SECURITY
+
+### 26.1 Orientation [V/P]
+
+LOYABLE doit pouvoir s'appuyer, pour les extensions de sécurité immobilière, sur le modèle d'architecture de NAXA SECURITY : gestion logicielle des dispositifs vidéo, déploiement hybride/local et distant, alertes, assistance IA encadrée, gestion multi-sites et droits par comptes. Cette réutilisation vise les patterns et contrats, pas une fusion des produits NAXA SECURITY et LOYABLE.
+
+### 26.2 Périmètre fonctionnel proposé [P]
+
+Créer un domaine optionnel « Sécurité de l'immeuble » qui pourra, après validation :
+- référencer les dispositifs vidéo compatibles installés par le client ou un installateur tiers ;
+- associer les caméras à un immeuble, une zone commune et un site ;
+- gérer les droits de consultation par propriétaire, gestionnaire ou agent autorisé ;
+- afficher les flux ou événements accessibles selon l'architecture retenue ;
+- recevoir les alertes d'événements ;
+- conserver les journaux d'accès et de consultation ;
+- permettre un traitement local/hybride afin de limiter les flux remontés au cloud ;
+- utiliser l'IA uniquement comme aide à la détection/analyse, avec validation humaine pour les suites sensibles.
+
+Cette section définit une cible d'architecture, pas une fonction déjà disponible dans LOYABLE ni une passerelle NAXA SECURITY déjà opérationnelle.
+
+### 26.3 Séparation des responsabilités
+
+- NAXA fournit le logiciel, la configuration, l'installation logicielle, la formation et le support selon le contrat retenu.
+- NAXA ne fournit pas les caméras ou autres matériels et ne vend pas un service de surveillance humaine.
+- Le bailleur ou l'exploitant reste responsable du choix des zones, des finalités, des personnes autorisées, de l'information des occupants et de la conformité de son dispositif.
+- Les comptes et droits vidéo sont distincts des droits de gestion locative ; posséder un rôle de bailleur ne donne pas automatiquement l'accès à tous les flux vidéo.
+- Les abonnements, capacités, installations et extensions NAXA SECURITY ne doivent pas être copiés automatiquement dans le tarif de LOYABLE. Le lien commercial et les éventuels frais restent à arbitrer.
+
+### 26.4 Protection de la vie privée et exigences de sécurité
+
+- priorité aux espaces communs et zones d'accès ; pas de surveillance générale de l'intérieur des logements loués ;
+- aucune caméra dans une zone privée/intime ;
+- signalétique et information adaptées des personnes concernées ;
+- accès selon le besoin d'en connaître, avec journal d'accès et révocation ;
+- chiffrement en transit et au repos, secrets côté serveur et gestion de clés séparée ;
+- durée de conservation minimale, configurée et justifiée ;
+- export vidéo soumis à permission et journalisation ;
+- flux non accessibles publiquement et absence de lien permanent non protégé ;
+- analyse IA explicable autant que possible, sans sanction automatique d'un locataire ;
+- enregistrement audio désactivé par défaut et soumis à une validation juridique distincte [O].
+
+La réglementation applicable aux données personnelles et à la vidéosurveillance au Cameroun doit être examinée avec le conseil compétent avant toute mise en service. La faisabilité d'une intégration avec le parc d'équipements réel doit être vérifiée.
+
+## 27. Service client LOYABLE inspiré de NAXA SERVICES
+
+### 27.1 Orientation [V]
+
+LOYABLE adopte une assistance structurée inspirée du modèle NAXA SERVICES, en réutilisant le support canonique FAMILLE-NAXA lorsque son contrat, ses droits et ses capacités sont compatibles. Il ne faut pas créer un helpdesk concurrent si le support NAXA peut être adapté.
+
+### 27.2 Parcours d'assistance [P]
+
+Depuis Profil/Assistance, le bailleur ou le membre autorisé peut :
+- ouvrir un ticket ;
+- sélectionner une catégorie (compte/abonnement, paiement, publication Marketplace, maintenance, prestataire, messagerie, sécurité, sauvegarde, incident technique) ;
+- choisir une priorité suggérée ;
+- décrire le problème et joindre des pièces ;
+- consulter le statut, les réponses et l'historique ;
+- répondre ou compléter le ticket ;
+- demander une escalade.
+
+Le service client dispose d'une file de traitement avec application LOYABLE, organisation, catégorie, priorité, canal, statut, SLA, responsable et historique. Les notes internes sont invisibles au client.
+
+### 27.3 États, canaux et SLA
+
+États proposés : open, triaged, assigned, waiting_customer, waiting_provider, escalated, resolved, closed, reopened.
+
+Canaux cibles : centre d'assistance/tickets, messagerie du ticket, push/notification, appel ou WhatsApp selon les connecteurs et processus réellement activés. Un lien WhatsApp préparé ne doit pas être présenté comme un message envoyé automatiquement.
+
+Les délais de première réponse et de résolution sont des SLA à définir selon la criticité et les ressources du support [O]. Aucun support humain 24/7 n'est promis sans organisation et astreinte approuvées.
+
+### 27.4 Frontières et confidentialité
+
+Le CSO ne reçoit pas un accès général au compte, aux contrats ou aux flux vidéo. Un accès exceptionnel à un dossier doit être limité dans le temps, justifié, approuvé si nécessaire et journalisé. Le ticket de support et la conversation avec un prestataire sont deux objets distincts.
+
+**État constaté [C] :** le rapport de construction NAXA SERVICES décrit une assistance qui permet de créer et consulter des demandes conservées localement ; il précise qu'elle n'est pas un Livechat connecté et ne démontre ni appel audio/vidéo ni partage d'écran. Le cahier reprend donc un modèle cible, pas une fonction existante certifiée.
+
+## 28. Sauvegarde et restauration sur le modèle FAMILLE-NAXA / NAXA SERVICES
+
+### 28.1 Principe [V/P]
+
+LOYABLE doit reprendre un modèle de sauvegarde sécurisé et versionné pour la base locale, les pièces jointes et les documents, ainsi qu'une sauvegarde serveur indépendante de l'environnement principal.
+
+### 28.2 Données et métadonnées
+
+Chaque sauvegarde comprend, dans son périmètre autorisé :
+- base locale et données métier ;
+- pièces jointes, documents, reçus et justificatifs ;
+- version de schéma et version d'application ;
+- horodatage, propriétaire, organisation, appareil et périmètre ;
+- manifeste, tailles et empreintes d'intégrité ;
+- statut de chiffrement et informations nécessaires à la restauration, sans exposer la clé.
+
+Ne jamais inclure les jetons d'accès/refresh, mots de passe, secrets serveur, clés privées ou secrets de fournisseur dans une archive de sauvegarde utilisateur.
+
+### 28.3 Planification, stockage et sécurité
+
+- sauvegarde chiffrée et versionnée ;
+- calendrier configurable et sauvegarde après opérations/synchronisations critiques ;
+- sauvegardes serveur quotidiennes sur un emplacement distinct du service principal, avec fréquence renforcée pour les données transactionnelles critiques ;
+- stockage utilisateur externe via Google Drive après autorisation OAuth limitée, si ce fournisseur est retenu ; Gmail n'est pas un coffre de sauvegarde et ne doit pas recevoir d'archive sensible par e-mail ;
+- rétention, quotas, chiffrement des pièces et coûts clairement paramétrés ;
+- journal des sauvegardes réussies/échouées et alerte de capacité ;
+- possibilité d'export dans un format documenté et portable.
+
+### 28.4 Restauration contrôlée
+
+- restauration initiée explicitement par un Promoteur ou administrateur habilité ;
+- vérification de l'intégrité et de la compatibilité de version avant restauration ;
+- prévisualisation du périmètre et avertissement sur les données qui seront restaurées ;
+- sauvegarde de sécurité avant remplacement ;
+- protection contre la restauration d'une organisation vers une autre ;
+- journal d'audit avec auteur, date, sauvegarde source, appareil et résultat ;
+- tests réguliers de restauration complète et partielle ;
+- ne jamais restaurer un ancien état en écrasant silencieusement des transactions serveur plus récentes.
+
+### 28.5 État de référence et limites [C]
+
+Le rapport de construction NAXA SERVICES décrit ce modèle comme une exigence : base locale, pièces et documents sauvegardés, chiffrés, versionnés, intègres, restaurables sur autorisation, avec Google Drive via OAuth limité. Il précise que les sauvegardes Drive et la restauration ne sont pas démontrées comme livrées. Le référentiel de sécurité général demande également des sauvegardes automatiques chiffrées, séparées de l'environnement principal, ainsi que des tests réguliers de restauration. Ces références doivent être auditées avant d'affirmer qu'un composant est réutilisable.
+
+## 29. Exigences et critères de recette additionnels
+
+| ID | Priorité | Exigence | Critère de recette |
+|---|---|---|---|
+| SUB-001 | P0 | Abonnement unique dynamique au nombre de chambres | Une souscription et une quantité versionnée par bailleur |
+| SUB-002 | P0 | Montant de référence | Total = chambres facturables × 1 000 FCFA, hors règle tarifaire versionnée |
+| SUB-003 | P0 | Rappel 72 heures avant expiration | Une notification idempotente à H−72 |
+| SUB-004 | P0 | Verrouillage bailleur à échéance non payée | API métier refusée à la date/heure serveur |
+| SUB-005 | P0 | Paiement pending ne déverrouille pas | Accès suspendu jusqu'au succès vérifié |
+| SUB-006 | P0 | Parcours restreint de renouvellement | Paiement possible sans accès au dossier métier |
+| MKT-001 | P0 | Masquer annonces liées à abonnement expiré | Non visibles en recherche, lien direct, endpoint et index |
+| MKT-002 | P0 | Réactiver annonces après paiement confirmé | Seulement annonces encore éligibles, sans recréation |
+| REF-001 | P1 | Code/lien/QR de parrainage LOYABLE | Attribution unique et traçable |
+| REF-002 | P1 | Qualifier sur premier paiement confirmé | Essai/pending/remboursé exclus |
+| REF-003 | P1 | Récompenses cumulatives par seuil | Pas de doublon, état et ledger vérifiables |
+| PROV-001 | P0 | Liste de missions prestataires | Flux réservé à Réparation/Menuiserie |
+| PROV-002 | P0 | Filtres catégorie et ville | Résultats correspondent aux filtres |
+| PROV-003 | P0 | Filtre proximité | Distance calculée uniquement avec coordonnées fiables et consenties |
+| PROV-004 | P0 | Confidentialité avant affectation | Pas d'adresse exacte ni de données locataire |
+| MSG-001 | P0 | Messagerie bailleur-prestataire | Conversation isolée par demande/mission |
+| MSG-002 | P0 | États de message fiables | Envoyé/reçu/lu non confondus |
+| MSG-003 | P0 | Contrôle des pièces jointes | Fichier privé, droits et lien temporaire |
+| SEC-001 | P1 | Domaine sécurité immeuble distinct | Droits vidéo séparés des droits locatifs |
+| SEC-002 | P1 | Accès vidéo audité | Chaque lecture/export est autorisé et journalisé |
+| SEC-003 | P1 | Traitement local/hybride évaluable | Flux et stockage documentés, pas de fuite publique |
+| CS-001 | P1 | Tickets support LOYABLE | Ticket, catégorie, priorité, statut, SLA et historique |
+| CS-002 | P1 | Réutilisation CSO contrôlée | Accès limité à l'organisation et au ticket autorisé |
+| BAK-001 | P1 | Sauvegarde chiffrée/versionnée | Intégrité vérifiée par manifeste/empreintes |
+| BAK-002 | P1 | Restauration explicite | Confirmation, contrôle d'intégrité et journal d'audit |
+| BAK-003 | P1 | Anti-écrasement | Données serveur plus récentes protégées |
+
+## 30. Arbitrages et décisions restant à confirmer
+
+1. Confirmer le seuil du parrainage proposé : trois nouveaux bailleurs ayant payé leur premier abonnement pour obtenir un mois de service offert.
+2. Confirmer le périmètre des chambres facturables et la règle de prise d'effet d'une variation de quantité en cours de période.
+3. Confirmer que les locataires conservent leur accès limité à leurs propres documents et au signalement de maintenance lorsque le compte bailleur est suspendu.
+4. Définir si les demandes de maintenance sont diffusées au réseau par défaut ou uniquement après action « diffuser aux prestataires » du bailleur.
+5. Définir les rayons de proximité et les villes couvertes, ainsi que le comportement en l'absence de géolocalisation.
+6. Confirmer si la messagerie est ouverte dès la manifestation d'intérêt ou seulement après sélection/affectation du prestataire.
+7. Définir la politique de conservation, suppression et export des messages et pièces.
+8. Confirmer le périmètre exact du module vidéo, les équipements compatibles, la conservation, le mode local/hybride et l'éventuelle activation audio.
+9. Définir les SLA et horaires du service client ; confirmer les canaux effectivement disponibles.
+10. Définir fournisseur de sauvegarde, rétention, chiffrement, quotas, fréquence locale, RPO/RTO et comptes Drive autorisés.
+11. Définir le tarif éventuel du module vidéo et son lien avec l'abonnement LOYABLE ou une souscription NAXA SECURITY séparée.
+
+## 31. Statut de cette consolidation
+
+- [V] Suspension de l'accès opérationnel du bailleur après expiration non payée.
+- [V] Masquage des annonces Marketplace liées au bailleur suspendu et restauration après réabonnement confirmé.
+- [V] Notification 72 heures avant l'expiration.
+- [V] Maintien du principe d'abonnement LOYABLE dynamique déjà approuvé : 1 000 FCFA par chambre active/en gestion, une seule souscription à accès complet.
+- [V] Ajout d'une messagerie bailleur/prestataire NAXA SERVICES.
+- [V] Liste des missions côté prestataire par catégorie, avec filtres ville et proximité.
+- [V] Inspiration des modèles NAXA SECURITY pour l'architecture de sécurité/vidéosurveillance, du modèle NAXA SERVICES pour le service client et des références Famille NAXA pour la sauvegarde.
+- [P] Proposition d'un parrainage LOYABLE : un mois offert pour trois bailleurs filleuls ayant payé leur premier abonnement.
+- [P] Tableau de missions diffusé aux prestataires éligibles avec informations anonymisées avant affectation.
+- [P] Domaine optionnel de sécurité de l'immeuble connecté à NAXA SECURITY, distinct des droits de gestion locative.
+- [O] Les arbitrages listés à la section 30 restent à confirmer.
+- [C] Le rapport NAXA SERVICES consulté indique que le Livechat distant et les sauvegardes Drive/restaurations ne sont pas démontrés comme opérationnels ; les modèles sont donc des références à adapter, pas des fonctionnalités réutilisables déjà certifiées.
+- Aucune fonctionnalité n'est déclarée implémentée, testée, déployée ou en production par cette mise à jour documentaire.
