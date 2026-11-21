@@ -243,7 +243,7 @@ DECLARE
   v_status text;
 BEGIN
   SELECT * INTO v_claim
-  FROM public.ns_claim_notification_batch(10)
+  FROM public.ns_claim_notification_batch(1)
   WHERE id = 'e1000000-0000-4000-8000-000000000001';
   IF NOT FOUND OR v_claim.claim_token IS NULL THEN
     RAISE EXCEPTION 'NOTIFICATION_OUTBOX_CLAIM_FAILED';
@@ -277,7 +277,7 @@ BEGIN
   ) THEN RAISE EXCEPTION 'NOTIFICATION_READ_STATE_WAS_OVERWRITTEN'; END IF;
 
   SELECT * INTO v_retry_claim
-  FROM public.ns_claim_notification_batch(10)
+  FROM public.ns_claim_notification_batch(1)
   WHERE id = 'e1000000-0000-4000-8000-000000000002';
   IF NOT FOUND OR v_retry_claim.claim_token IS NULL THEN RAISE EXCEPTION 'NOTIFICATION_RETRY_CLAIM_FAILED'; END IF;
   v_status := public.ns_fail_notification_send(
