@@ -54,12 +54,16 @@ Les documents historiques suivants ont été consultés dans le dépôt NAXA, br
 
 GRILLAD est une application autonome et non un module de ZIPPLE. Son catalogue métier est limité aux cinq familles validées : porc braisé, poulet braisé, poisson braisé, brochettes et omelettes. Les boissons, accompagnements, repas complets et desserts restent hors périmètre sauf décision expresse ultérieure.
 
-Les trois modes GRILLAD sont obligatoires :
-1. Manager autonome sur un lieu, sans vendeur obligatoire.
-2. Manager et un vendeur sur un lieu.
-3. Manager supervisant plusieurs vendeurs sur plusieurs lieux précis.
+**Architecture hiérarchique obligatoire : Promoteur / Organisation → plusieurs points de vente → plusieurs vendeurs par point de vente.** Un Promoteur peut exploiter plusieurs points ; chaque point peut affecter plusieurs vendeurs simultanément, chacun avec un compte individuel. Chaque vente est attribuée au vendeur connecté et au point de vente concerné.
 
-Chaque lieu, affectation, session, stock, caisse, vente et dépense doit être rattaché à un lieu autorisé. La géolocalisation de présence est limitée au service ; elle ne doit pas devenir une surveillance hors service. Les stocks et caisses de lieux distincts ne se mélangent jamais.
+Les configurations d'exploitation comprennent :
+1. Manager autonome sur un point de vente, sans vendeur obligatoire.
+2. Manager et plusieurs vendeurs sur un même point.
+3. Manager réseau supervisant plusieurs points, chacun doté de plusieurs vendeurs et éventuellement d'un responsable local.
+
+Deux modes de données restent distincts : indépendant (chaque point gère séparément ses opérations) et centralisé (le Promoteur partage certains paramètres et consulte une consolidation autorisée, sans fusion des caisses, stocks ou ventes). Chaque affectation, préparation, session, stock, caisse, vente et dépense est rattaché à un point de vente précis. Les droits d'un vendeur sont limités aux points qui lui sont attribués. Le pointage GPS du personnel reste non validé et ne doit pas être assimilé à la géolocalisation du point de vente.
+
+Dans un point employant plusieurs vendeurs, les ventes concurrentes doivent être attribuées correctement. Le modèle de caisse (caisse commune du point ou sessions/tiroirs par vendeur) reste un arbitrage fonctionnel ouvert.
 
 ### 4.2 Documents à compléter avant validation finale
 
@@ -494,14 +498,14 @@ Les formules sont définies à partir de l'architecture de comptes et de l'unit�
 
 - **ACCÈS — architecture à compte unique :** un Promoteur/compte principal exploite une entité ou un point d'exploitation. Toutes les fonctionnalités métier nécessaires à cette architecture sont incluses.
 - **PREMIUM — architecture multiniveau :** le Promoteur organise et pilote plusieurs niveaux de comptes, responsables, collaborateurs, établissements, sites ou unités subordonnées, selon le métier de l'application. PREMIUM inclut intégralement ACCÈS et ajoute les capacités de structuration, délégation, supervision et consolidation propres au multiniveau.
-- **PRO :** exceptionnellement conservé pour GRILLAD uniquement, où le troisième niveau correspond à une capacité illimitée de points de vente. Aucun pack PRO générique ne doit être créé pour les autres applications.
+
 
 La règle d'inclusion pour les applications ACCÈS/PREMIUM est impérative :
 - `ENTITLEMENTS(ACCÈS) ⊆ ENTITLEMENTS(PREMIUM)` ;
 - PREMIUM ne peut retirer, dégrader ou rendre indisponible aucun droit accordé par ACCÈS ;
 - les écarts concernent principalement l'architecture et les capacités de pilotage, pas la suppression de fonctions métier essentielles.
 
-Pour GRILLAD, les trois niveaux sont cumulatifs en fonctionnalités et différenciés par le nombre de points de vente autorisés : ACCÈS = un point ; PREMIUM = jusqu'à cinq points ; PRO = nombre illimité de points. Les règles détaillées figurent dans le catalogue 6.17.2.
+Pour GRILLAD, deux formules seulement sont retenues : ACCÈS = un point de vente avec plusieurs vendeurs possibles sur ce point ; PREMIUM = plusieurs points de vente, chacun pouvant employer plusieurs vendeurs. Aucun plafond numérique ni palier PRO n'est retenu à ce stade. La distinction entre formules et les entitlements doivent respecter cette architecture, sans inventer de quotas non arbitrés.
 
 La notion de compte unique, de multiniveau, de réseau et d'unité facturable doit être documentée pour chaque application : Promoteur propriétaire, organisation, sous-comptes, rôles, sites, points de vente, quantités facturées et droits de consolidation. Un salarié, un poste ou un appareil n'est pas automatiquement un compte ou un site facturable.
 
@@ -525,7 +529,7 @@ Les montants sont exprimés en FCFA. Les unités et périodicités sont définie
 | LOYABLE | **Abonnement unique à accès complet : 1 000 FCFA × nombre de chambres actives/en gestion** dans le portefeuille du Promoteur. Montant dynamique selon la quantité de chambres ; aucun palier PREMIUM distinct. |
 | NAXA HOTEL | **Abonnement unique à accès complet : 2 000 FCFA × nombre de chambres actives** rattachées à l'hôtel/réseau du Promoteur. Montant dynamique selon la quantité de chambres ; aucun palier PREMIUM distinct. |
 | NAXA SECURITY | ACCÈS : 5 000 ; PREMIUM : 15 000. Conserver les règles d'extension de capacité déjà arbitrées (+20 % par extension), et appliquer l'abonnement Promoteur à tout son réseau dans les limites des capacités souscrites. |
-| GRILLAD | **Tarification dynamique par quantité de points de vente actifs du réseau Promoteur : 1 point = ACCÈS 1 500 ; de 2 à 5 points = PREMIUM 3 000 au total ; à partir de 6 points = PRO 5 000 au total, sans plafond de points.** Le palier et le montant sont recalculés automatiquement à partir du nombre de points de vente actifs. |
+| GRILLAD | **Deux formules uniquement : ACCÈS (un point de vente, plusieurs vendeurs possibles) et PREMIUM (plusieurs points de vente, plusieurs vendeurs par point).** Montants mensuels exacts des deux formules : à confirmer. Aucun tarif par paliers de points et aucun PRO. Annuel : 10 mensualités pour 12 mois de service. |
 | CAMPUS237 | Établissement gratuit. Abonnements individuels par parent : **Pack Individuel : 1 000 pour suivre 1 élève dans une école ; Pack Famille : 3 000 pour suivre jusqu'à 5 élèves**, dans la même école ou dans plusieurs écoles différentes. |
 
 #### Règle de souscription du Promoteur et couverture de son réseau
@@ -533,7 +537,7 @@ Les montants sont exprimés en FCFA. Les unités et périodicités sont définie
 Pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES, NAXA SECURITY et GRILLAD, **un seul abonnement souscrit par le Promoteur pour une application couvre l'ensemble du réseau rattaché à son organisation** : les points de vente, sites, établissements et unités autorisés du même réseau. Il n'est pas nécessaire de souscrire ni de payer un abonnement identique pour chaque site.
 
 Les capacités ou plafonds propres à la formule restent applicables à l'ensemble du réseau :
-- GRILLAD : le nombre de points de vente actifs sélectionne automatiquement le palier tarifaire du réseau : 1 = 1 500 FCFA ; 2 à 5 = 3 000 FCFA au total ; 6 et plus = 5 000 FCFA au total, illimité.
+- GRILLAD : seuls les plans ACCÈS (un point de vente) et PREMIUM (plusieurs points de vente) sont retenus. Plusieurs vendeurs peuvent être affectés à chaque point. Les montants et les éventuels plafonds d'entitlements doivent être explicitement configurés ; aucun changement automatique de prix en fonction du nombre de points n'est approuvé.
 - NAXA SECURITY : conserver les capacités d'équipement/flux souscrites et les extensions prévues (+20 % par extension).
 - Pour les autres applications, aucun plafond de sites supplémentaire n'est inventé par cette règle ; appliquer les capacités définies dans leur cahier et catalogue approuvés.
 
@@ -604,7 +608,7 @@ Pour toute autre application à tarif unique, afficher **« Abonnement »** sans
 - La période d'essai, le statut de paiement, les dates d'effet et les droits sont établis par le serveur. Une déclaration locale ou une référence de paiement saisie par l'utilisateur ne suffit pas à activer des entitlements.
 - Conserver les données et les fonctions nécessaires à la consultation du compte, au renouvellement et à la récupération des données en cas d'expiration. Le verrouillage concerne les opérations payantes selon les règles contractuelles validées.
 - Les prix et règles propres à une application restent sous le contrôle de son catalogue versionné. Une modification tarifaire ne change pas rétroactivement un abonnement déjà payé.
-- Aucune formule PRO générique n'est proposée pour les applications autres que GRILLAD. GRILLAD conserve son niveau PRO spécifique à 5 000 FCFA pour les points de vente illimités.
+- Aucun niveau PRO n'est proposé pour GRILLAD. Les seules formules GRILLAD sont ACCÈS et PREMIUM ; les montants mensuels restent à confirmer.
 
 ### 6.17.4 Modèle de droits et administration des catalogues
 
@@ -612,7 +616,7 @@ Conserver le modèle de référence **Plan → Subscription → Payment → Enti
 
 - Les droits de formule sont des entitlements explicites, versionnés et rattachés à une application, un plan et une période.
 - Les permissions déterminent ce qu'un utilisateur peut faire ; les entitlements déterminent l'architecture et les capacités souscrites par l'organisation. Les deux contrôles doivent être satisfaits.
-- ACCÈS correspond à l'architecture à compte unique et donne accès à toutes ses fonctionnalités métier. PREMIUM comprend tous les droits d'ACCÈS et ajoute les capacités multiniveaux prévues pour l'application. L'abonnement Promoteur couvre tout son réseau pour KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES, NAXA SECURITY et GRILLAD ; aucun abonnement par site n'est créé. GRILLAD conserve en outre son PRO propre, défini uniquement par sa capacité illimitée de points de vente.
+- ACCÈS correspond à l'architecture à compte unique / point de vente unique et donne accès à toutes les fonctionnalités métier, avec plusieurs vendeurs possibles sur ce point. PREMIUM inclut intégralement ACCÈS et permet l'architecture multiniveau GRILLAD : plusieurs points de vente, chacun avec plusieurs vendeurs possibles. Le nombre maximal de points Premium et de vendeurs par point reste à définir ; aucun PRO n'existe pour GRILLAD. Le Promoteur est le souscripteur ; la portée et les éventuelles limites exactes sont portées par les entitlements validés.
 - Pour un produit à tarif unique, le catalogue expose uniquement « Abonnement » et la règle de facturation existante. Ne pas générer automatiquement un plan ACCÈS ou PREMIUM.
 - Les limites de sites, chambres, membres, appareils, utilisateurs et stockage ne sont configurées que lorsqu'elles découlent de l'architecture et du modèle métier approuvés.
 - Les fonctionnalités IA sont incluses dans l'abonnement et ne génèrent aucune facturation à l'appel, au token, au crédit ou au dépassement. La consommation IA reste mesurée en interne pour la sécurité, la capacité et le contrôle des coûts ; les mécanismes de fair use peuvent protéger le service, mais ne doivent déclencher aucun supplément facturé au client.
@@ -705,7 +709,7 @@ Après validation du présent référentiel commercial, reprendre la branche de 
 
 État connu au dernier audit : APK Android debug compilé et tests Auth de contrat réussis ; recette instrumentée Android, tests sur appareils, validation Supabase isolée/RLS, API métier serveur et moteur de synchronisation restent ouverts. La prochaine passe de finalisation doit commencer par la reprise exacte de la branche et la vérification du HEAD/CI, puis traiter les parcours métier prioritaires sans régression. Ne pas déclarer NAXA SERVICES prêt pour production sur la seule base d'une compilation verte.
 
-Les nouvelles règles d'abonnement Promoteur, de quantités LOYABLE/NAXA HOTEL et de paliers GRILLAD doivent être implémentées dans le catalogue central partagé, mais ne doivent pas provoquer de modification du projet NAXA autonome ni de déploiement sur ses environnements. Les tests E2E NAXA SERVICES doivent utiliser des données et environnements isolés.
+Les règles corrigées d'abonnement GRILLAD ACCÈS/PREMIUM et d'architecture multisite/multivendeurs, ainsi que les règles de quantités LOYABLE/NAXA HOTEL, doivent être intégrées au catalogue central partagé, mais ne doivent pas provoquer de modification du projet NAXA autonome ni de déploiement sur ses environnements. Les tests E2E NAXA SERVICES doivent utiliser des données et environnements isolés.
 
 ---
 
@@ -772,21 +776,18 @@ Exemples : 5 chambres = 5 000 F ; 20 chambres = 20 000 F ; 80 chambres = 59 000 
 
 Le montant mensuel est égal au nombre de chambres actives rattachées au Promoteur multiplié par 2 000 F. Exemple : 10 chambres = 20 000 F ; 20 chambres = 40 000 F. Les fonctions métier et capacités multisites incluses restent couvertes par cette souscription unique ; aucun supplément de pack ACCÈS/PREMIUM n'est ajouté.
 
-#### GRILLAD — paliers globaux par réseau Promoteur
+#### GRILLAD — correction du modèle commercial et des architectures (21 novembre 2026)
 
-| Points de vente actifs du réseau | Formule | Montant mensuel global |
-|---:|---|---:|
-| 1 | ACCÈS | 1 500 F |
-| 2 à 5 | PREMIUM | 3 000 F |
-| 6 à 10 | PRO | 5 000 F |
-| 11 à 25 | PRO | 10 000 F |
-| 26 à 50 | PRO | 15 000 F |
-| 51 à 100 | PRO | 25 000 F |
-| Plus de 100 | Sur devis | Sur devis |
+Le Promoteur choisit exclusivement entre **ACCÈS** et **PREMIUM** :
 
-Le palier PRO à 5 000 F n'est plus illimité : il est limité à 10 points de vente actifs. La grille remplace l'ancienne règle « 6 et plus = 5 000 F illimité ». Le prix est un montant global par Promoteur, jamais multiplié par point de vente. Les points brouillon, archivés ou désactivés ne sont pas comptés. Le système met à jour quantité et palier sur la souscription existante et journalise les changements.
+| Formule | Architecture | Tarif mensuel | Tarif annuel |
+|---|---|---:|---:|
+| ACCÈS | 1 point de vente ; plusieurs vendeurs possibles sur ce point | À confirmer | 10 mensualités |
+| PREMIUM | Plusieurs points de vente ; plusieurs vendeurs possibles sur chaque point | À confirmer | 10 mensualités |
 
-La date d'effet d'un changement de palier en cours de période (immédiat/prorata ou prochaine échéance) doit être définie dans le catalogue avant l'automatisation de la facturation. Aucun prorata ni remboursement rétroactif n'est inventé. En attendant, un changement de montant en cours de période nécessite une règle d'effet explicite et visible.
+L'abonnement annuel donne douze mois de service pour le prix de dix mensualités. Aucun forfait de trois ou six mois n'est proposé.
+
+Cette décision remplace les anciennes grilles GRILLAD par nombre de points de vente, ainsi que tout niveau PRO. Les montants mensuels ACCÈS et PREMIUM ne sont pas établis dans les sources accessibles et ne doivent pas être inventés. Les éventuels plafonds numériques de points PREMIUM et de vendeurs par point restent à arbitrer. Aucun changement automatique de prix par nombre de points, aucun supplément par vendeur et aucun pack PRO ne sont implémentés sans décision écrite ultérieure.
 
 #### NAXA SECURITY — capacité et extensions
 
@@ -825,10 +826,14 @@ La distinction de valeur est obligatoire : l'établissement paie pour administre
 ### Mise en œuvre et contrôle des tarifs
 
 - Conserver les états de paiement serveur, l'unicité de souscription, les périodes d'essai, les renouvellements, périodes de grâce, reçus, historique et entitlements.
-- Pour les changements de quantité des souscriptions LOYABLE, NAXA HOTEL et GRILLAD, la date d'effet, le prorata éventuel et les éventuels remboursements restent des paramètres contractuels à fixer avant facturation automatique. Ne pas calculer de prorata arbitraire.
-- Les tarifs cibles à maturité de KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES et NAXA SECURITY ne deviennent actifs qu'après jalon d'activation, décision datée et nouvelle version du catalogue.
-- Toute grille est testée sur les limites de tranche, les quantités zéro, la désactivation/réactivation, les changements en cours de période, les changements de formule, les doublons et les paiements échoués/confirmés.
+- Pour les changements de quantité des souscriptions LOYABLE et NAXA HOTEL, la date d'effet, le prorata éventuel et les éventuels remboursements restent des paramètres contractuels à fixer avant facturation automatique. Ne pas calculer de prorata arbitraire.
+- Les tarifs cibles à maturité de KIOSKO, BOOTIK, ZIPPLE, NAXA SERVICES et NAXA SECURITY ne deviennent actifs qu'après jalon d'activation, décision datée et nouvelle version du catalogue. Les tarifs GRILLAD ACCÈS et PREMIUM restent à renseigner après arbitrage explicite.
+- Les catalogues tarifaires sont testés sur les montants, périodes, changements de formule, renouvellements, doublons et paiements échoués/confirmés ; aucune ancienne tranche tarifaire GRILLAD ne doit subsister.
 - Les comptes et souscriptions des établissements et parents CAMPUS237 sont deux unités de facturation distinctes ; un même parent peut être associé à plusieurs écoles sans payer plusieurs fois son pack parent.
+
+### Addendum GRILLAD du 21 novembre 2026 — correction faisant foi
+
+Pour GRILLAD, la présente correction prévaut sur toute mention antérieure de PRO, de tarifs par tranche ou de limites « un / cinq / illimité » liées à l'ancien catalogue. Les seuls plans sont ACCÈS et PREMIUM. ACCÈS couvre un point de vente avec plusieurs vendeurs possibles ; PREMIUM couvre plusieurs points de vente, chacun pouvant comporter plusieurs vendeurs. Les montants sont à confirmer ; l'annuel vaut dix mensualités pour douze mois de service. Aucun plafond de points Premium ni de vendeurs par point ne doit être codé en dur avant arbitrage.
 
 ## 6.17.15 Périmètre d'intégration central NAXA FAMILY — administration, support, abonnements et IA
 
