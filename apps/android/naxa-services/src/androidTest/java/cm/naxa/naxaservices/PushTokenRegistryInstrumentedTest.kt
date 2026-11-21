@@ -45,7 +45,7 @@ class PushTokenRegistryInstrumentedTest {
         assertNull(state.token)
         assertNull(state.registeredMemberId)
         assertNull(state.registeredSessionKey)
-        assertNull(context.getSharedPreferences("naxa_services_push_preferences", Context.MODE_PRIVATE)
-            .getString("fcm_token", null))
+        assertFalse(context.getSharedPreferences("naxa_services_push_preferences", Context.MODE_PRIVATE)
+            .getBoolean("remote_push_enabled", true))
     }
 }
