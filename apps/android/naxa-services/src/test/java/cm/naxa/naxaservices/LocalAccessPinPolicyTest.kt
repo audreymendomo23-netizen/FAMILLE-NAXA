@@ -18,7 +18,7 @@ class LocalAccessPinPolicyTest {
         assertFalse(LocalAccessPinGatePolicy.requiresUnlock("member-a", "member-a"))
         assertTrue(LocalAccessPinGatePolicy.requiresUnlock("member-b", "member-a"))
         assertFalse(LocalAccessPinGatePolicy.requiresUnlock(null, "member-a"))
-        assertFalse(LocalAccessPinGatePolicy.requiresUnlock("", "member-a"))
+        assertTrue(LocalAccessPinGatePolicy.requiresUnlock("", "member-a"))
     }
 
     @Test fun lockoutEscalatesAfterEachFiveFailures() {

@@ -52,7 +52,7 @@ import javax.crypto.SecretKey
 
 internal object LocalAccessPinGatePolicy {
     fun requiresUnlock(authenticatedMemberId: String?, unlockedMemberId: String?): Boolean =
-        !authenticatedMemberId.isNullOrBlank() && authenticatedMemberId != unlockedMemberId
+        authenticatedMemberId != null && authenticatedMemberId != unlockedMemberId
 }
 
 internal object LocalAccessPinPolicy {
