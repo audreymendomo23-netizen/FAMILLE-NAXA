@@ -150,6 +150,33 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
 
     var route by rememberSaveable { mutableStateOf(AppRoute.LOGIN.name) }
     var session by remember { mutableStateOf<AuthSession?>(null) }
+    val pushRegistration by PushTokenRegistry.state.collectAsState()
+
+    LaunchedEffect(Unit) {
+        PushTokenRegistry.initialize(context)
+    }
+    LaunchedEffect(
+        pushRegistration.enabled,
+        pushRegistration.token,
+        pushRegistration.retryNonce,
+        session?.accessToken,
+        session?.account?.memberId
+    ) {
+        val activeSession = session
+        if (!pushRegistration.enabled || activeSession == null) return@LaunchedEffect
+        val token = pushRegistration.token
+        if (token.isNullOrBlank()) {
+            runCatching { FirebasePushClient.fetchToken(context) }
+                .onSuccess { PushTokenRegistry.updateToken(context, it) }
+                .onFailure { PushTokenRegistry.markFailed(it.message ?: "FCM_TOKEN_FETCH_FAILED") }
+            return@LaunchedEffect
+        }
+        val registrationSessionKey = activeSession.account.memberId + ":" + activeSession.accessToken.hashCode()
+        if (pushRegistration.registeredSessionKey == registrationSessionKey) return@LaunchedEffect
+        runCatching { api.registerPushToken(activeSession.accessToken, token) }
+            .onSuccess { PushTokenRegistry.markRegistered(activeSession.account.memberId, registrationSessionKey) }
+            .onFailure { PushTokenRegistry.markFailed(it.message ?: "FCM_TOKEN_REGISTRATION_FAILED") }
+    }
     var localPinUnlockedMemberId by remember { mutableStateOf<String?>(null) }
     var lastHandledLockGeneration by remember { mutableIntStateOf(lockGenerationValue) }
     var busy by remember { mutableStateOf(false) }
@@ -382,6 +409,10 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
                                 error = message,
                                 onLogout = {
                                     scope.launch {
+                                        if (PushTokenRegistry.state.value.enabled) {
+                                            runCatching { api.revokeCurrentDevicePushTokens(current.accessToken) }
+                                            PushTokenRegistry.markUnregistered()
+                                        }
                                         runCatching { api.logout(current.accessToken) }
                                         vault.clear()
                                         rememberSession = false

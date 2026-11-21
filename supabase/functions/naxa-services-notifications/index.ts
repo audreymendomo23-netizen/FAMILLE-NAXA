@@ -199,6 +199,21 @@ async function revokeToken(actor: Actor, body: Json) {
   return { revoked: true };
 }
 
+async function revokeCurrentDeviceTokens(actor: Actor) {
+  const rows = await rest(pathQuery("ns_push_tokens", {
+    select: "id",
+    org_id: "eq." + actor.orgId,
+    member_id: "eq." + actor.memberId,
+    device_id: "eq." + actor.deviceId,
+    status: "eq.active",
+  }), {
+    method: "PATCH",
+    headers: { Prefer: "return=representation" },
+    body: JSON.stringify({ status: "revoked", revoked_at: new Date().toISOString() }),
+  }) as Json[];
+  return { revoked: rows?.length ?? 0 };
+}
+
 async function listInbox(actor: Actor, body: Json) {
   const limit = Math.max(1, Math.min(100, Number.isInteger(body.limit) ? Number(body.limit) : 30));
   const rows = await rest(pathQuery("ns_notification_inbox", {
@@ -411,6 +426,9 @@ Deno.serve(async (request: Request) => {
         break;
       case "revoke_push_token":
         result = await revokeToken(actor, body);
+        break;
+      case "revoke_current_device_tokens":
+        result = await revokeCurrentDeviceTokens(actor);
         break;
       case "list_inbox":
         result = await listInbox(actor, body);

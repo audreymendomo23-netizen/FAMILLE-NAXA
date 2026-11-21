@@ -1,5 +1,11 @@
 package cm.naxa.naxaservices
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +26,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import cm.naxa.naxaservices.auth.AuthApi
@@ -68,7 +76,40 @@ internal fun NotificationInboxContent(
     onBack: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val french = session.account.defaultLocale != "en"
+    val pushState by PushTokenRegistry.state.collectAsState()
+    var pushBusy by remember { mutableStateOf(false) }
+    var pushError by remember { mutableStateOf<String?>(null) }
+    var pushNotice by remember { mutableStateOf<String?>(null) }
+    val firebaseConfigured = remember { FirebasePushClient.isConfigured(context) }
+    val notificationPermissionGranted = Build.VERSION.SDK_INT < 33 ||
+        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+
+    suspend fun enablePushOnThisDevice() {
+        if (!FirebasePushClient.isConfigured(context)) {
+            throw IllegalStateException(if (french) "Configuration Firebase absente : le projet NAXA SERVICES doit d'abord être enregistré." else "Firebase configuration missing: the NAXA SERVICES project must be registered first.")
+        }
+        val token = FirebasePushClient.fetchToken(context)
+        PushTokenRegistry.enable(context, token)
+        pushError = null
+        pushNotice = if (french) "Autorisation enregistrée. L'appareil est en cours d'enregistrement auprès de NAXA." else "Permission saved. This device is being registered with NAXA."
+    }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            scope.launch {
+                pushBusy = true
+                runCatching { enablePushOnThisDevice() }
+                    .onFailure { pushError = it.message ?: "FCM_REGISTRATION_FAILED" }
+                pushBusy = false
+            }
+        } else {
+            pushError = if (french) "Autorisation Android refusée. Les notifications restent disponibles dans le centre de l'application." else "Android permission denied. Notifications remain available in the in-app centre."
+        }
+    }
     var inbox by remember { mutableStateOf<List<NotificationInboxItem>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -102,6 +143,68 @@ internal fun NotificationInboxContent(
         modifier = modifier.fillMaxSize().padding(horizontal = 18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(if (french) "Notifications sur cet appareil" else "Notifications on this device", fontWeight = FontWeight.Bold)
+                    Text(
+                        when {
+                            !firebaseConfigured -> if (french) "Firebase n'est pas encore configuré pour NAXA SERVICES. Le centre de notifications reste accessible." else "Firebase is not configured for NAXA SERVICES yet. The in-app inbox remains available."
+                            !notificationPermissionGranted -> if (french) "L'autorisation Android n'est pas accordée sur cet appareil." else "Android notification permission is not granted on this device."
+                            !pushState.enabled -> if (french) "Les notifications distantes sont désactivées sur cet appareil." else "Remote notifications are disabled on this device."
+                            pushState.registeredMemberId == session.account.memberId -> if (french) "Cet appareil est enregistré pour votre compte." else "This device is registered for your account."
+                            pushState.errorMessage != null -> (if (french) "Enregistrement en échec : " else "Registration failed: ") + pushState.errorMessage
+                            else -> if (french) "Enregistrement du jeton auprès du serveur…" else "Registering this device token with the server…"
+                        },
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (pushBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    pushError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                    pushNotice?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+                    Button(
+                        onClick = {
+                            if (Build.VERSION.SDK_INT >= 33 && !notificationPermissionGranted) {
+                                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                scope.launch {
+                                    pushBusy = true
+                                    pushError = null
+                                    runCatching { enablePushOnThisDevice() }
+                                        .onFailure { pushError = it.message ?: "FCM_REGISTRATION_FAILED" }
+                                    pushBusy = false
+                                }
+                            }
+                        },
+                        enabled = !pushBusy && firebaseConfigured,
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text(if (french) "Activer les notifications distantes" else "Enable remote notifications") }
+                    if (pushState.enabled) {
+                        OutlinedButton(
+                            onClick = {
+                                scope.launch {
+                                    pushBusy = true
+                                    pushError = null
+                                    runCatching {
+                                        authApi.revokeCurrentDevicePushTokens(session.accessToken)
+                                        PushTokenRegistry.disable(context)
+                                        pushNotice = if (french) "Jeton révoqué côté serveur. Les notifications distantes sont désactivées." else "Server token revoked. Remote notifications are disabled."
+                                    }.onFailure { pushError = it.message ?: "PUSH_TOKEN_REVOCATION_FAILED" }
+                                    pushBusy = false
+                                }
+                            },
+                            enabled = !pushBusy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(if (french) "Désactiver sur cet appareil" else "Disable on this device") }
+                        if (pushState.errorMessage != null) {
+                            TextButton(
+                                onClick = { PushTokenRegistry.retry() },
+                                enabled = !pushBusy
+                            ) { Text(if (french) "Réessayer l'enregistrement" else "Retry registration") }
+                        }
+                    }
+                }
+            }
+        }
         item {
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {

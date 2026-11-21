@@ -175,6 +175,29 @@ class AuthApi(private val context: Context) {
         if (!response.optBoolean("ok", false)) throw AuthApiException("Le serveur n'a pas confirmé la mise à jour de la notification.")
     }
 
+    suspend fun registerPushToken(accessToken: String, token: String, platform: String = "android") {
+        require(platform == "android" || platform == "web") { "Plateforme de notification invalide." }
+        require(token.length in 30..4096 && !token.any(Char::isWhitespace)) { "Jeton de notification invalide." }
+        if (notificationEndpoint.isBlank()) throw AuthApiException("La passerelle de notifications NAXA Services n'est pas configurée.")
+        val response = request(
+            JSONObject().put("action", "register_push_token").put("app_code", "naxa-services")
+                .put("token", token).put("platform", platform),
+            accessToken,
+            notificationEndpoint
+        )
+        if (!response.optBoolean("ok", false)) throw AuthApiException("Le serveur n'a pas confirmé l'enregistrement du jeton FCM.")
+    }
+
+    suspend fun revokeCurrentDevicePushTokens(accessToken: String) {
+        if (notificationEndpoint.isBlank()) throw AuthApiException("La passerelle de notifications NAXA Services n'est pas configurée.")
+        val response = request(
+            JSONObject().put("action", "revoke_current_device_tokens").put("app_code", "naxa-services"),
+            accessToken,
+            notificationEndpoint
+        )
+        if (!response.optBoolean("ok", false)) throw AuthApiException("Le serveur n'a pas confirmé la révocation des notifications de cet appareil.")
+    }
+
     suspend fun customerPromotionsRequest(accessToken: String, body: JSONObject): JSONObject {
         if (customerPromotionsEndpoint.isBlank()) throw AuthApiException("La passerelle de parrainage client et promotions n'est pas configurée.")
         return request(JSONObject(body.toString()), accessToken, customerPromotionsEndpoint)
