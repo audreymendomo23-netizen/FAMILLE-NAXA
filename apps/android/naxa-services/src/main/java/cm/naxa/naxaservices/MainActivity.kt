@@ -156,6 +156,7 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
         PushTokenRegistry.initialize(context)
     }
     LaunchedEffect(
+        lockGenerationValue,
         pushRegistration.enabled,
         pushRegistration.token,
         pushRegistration.retryNonce,
@@ -164,6 +165,16 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
     ) {
         val activeSession = session
         if (!pushRegistration.enabled || activeSession == null) return@LaunchedEffect
+        if (
+            android.os.Build.VERSION.SDK_INT >= 33 &&
+            androidx.core.content.ContextCompat.checkSelfPermission(
+                context, android.Manifest.permission.POST_NOTIFICATIONS
+            ) != android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            runCatching { api.revokeCurrentDevicePushTokens(activeSession.accessToken) }
+            PushTokenRegistry.markFailed("POST_NOTIFICATIONS_PERMISSION_REQUIRED")
+            return@LaunchedEffect
+        }
         val token = pushRegistration.token
         if (token.isNullOrBlank()) {
             runCatching { FirebasePushClient.fetchToken(context) }
