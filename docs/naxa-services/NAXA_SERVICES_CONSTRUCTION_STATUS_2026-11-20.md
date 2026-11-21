@@ -1621,3 +1621,72 @@ Les migrations candidates v1 à v6 restent `ROLLBACK` par défaut dans le dépô
 - **Autres écarts de l'audit :** backups/restauration, Web/PWA parité, tests physiques, build Release signé, Fulfulde, automatisations CRM/loyauté, livechat/IA et console CSO.
 
 **Conclusion :** le code serveur de première version, les gardes de sécurité et les tests de contrat pour le parrainage client, la roue et les notifications sont ajoutés. La synchronisation partagée est mieux spécifiée et testée. L'ensemble NAXA SERVICES n'est toujours pas « intégralement opérationnel » : les raccordements UI, les handlers de synchronisation par domaine, les dépendances externes et les validations professionnelles demeurent des portes de sortie obligatoires.
+
+
+## 47. Clôture technique Android, parrainage client et notifications (21 novembre 2026)
+
+### 47.1 Référence vérifiée et résultat CI
+
+La clôture technique de cette séquence est vérifiée sur la branche `work/naxa-services-completion-20261120`, commit applicatif `a9c38b8a75a0e6cb2d0c44aad07ee4f2fa1e64e2`.
+
+**Workflow final :** [44918404205](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44918404205) — conclusion GitHub `success`, **10 jobs sur 10 réussis** :
+
+1. contrat du parrainage client et promotions ;
+2. contrat des notifications distantes et FCM ;
+3. assemblage Android NAXA SERVICES, tests instrumentés et APK debug ;
+4. contrat de l'API de parrainage PME ;
+5. authentification, rôles et périmètres ;
+6. contrats comptables fournisseurs et prévisions ;
+7. schéma PostgreSQL 17 et tests RLS runtime ;
+8. contrat de synchronisation hors ligne multi-applications ;
+9. catalogue des tarifs Famille ;
+10. contrôles statiques de sécurité SQL.
+
+Le job Android a réussi les tests comptables/performance, les tests instrumentés Keystore/PIN et registre de notifications, l'assemblage et le dépôt de l'artefact.
+
+**Artefact :** `naxa-services-debug-apk`, ID GitHub Actions `14712561852`, taille `13 571 428` octets, empreinte SHA-256 `a14c5a92eef8eb215ad365a2d149c5baf56a45d295e97d9f051a3861c9ac40e3`. L'artefact expire le 28 novembre 2026 ; il doit être téléchargé avant cette date depuis l'onglet Artifacts du workflow ci-dessus.
+
+### 47.2 Correction du build Room/Kotlin
+
+Le blocage Android observé au run `44916721960` provenait du traitement Room par KAPT et de métadonnées Kotlin incompatibles. Le module NAXA SERVICES utilise désormais KSP `2.0.20-1.0.25`, aligné sur Kotlin Gradle Plugin `2.0.20`, pour traiter Room `2.8.5`.
+
+Le changement reste limité au processeur d'annotations du module. Les entités, le schéma Room, la version de base locale et les migrations métier n'ont pas été réécrits pour contourner l'erreur.
+
+### 47.3 Parrainage client et promotions Android
+
+Le composable Android `CustomerPromotionsContent` est raccordé à la passerelle `naxa-services-customer-promotions` et à ses actions de tableau de bord, de création/publication de campagne, de code, d'association de code et de consultation des filleuls/récompenses. La route de gestion est réservée au rôle Promoteur.
+
+Les règles serveur et SQL contrôlent notamment le consentement de contact, la normalisation et l'unicité du téléphone par organisation/site, l'absence d'auto-parrainage, l'unicité d'attribution et la qualification après première vente postée entièrement encaissée et confirmée. Les récompenses sont tracées dans le registre serveur avec opérations idempotentes ; leur émission réelle doit rester raccordée au registre métier/ledger approuvé.
+
+Les fiches CRM restent locales tant que la synchronisation ERP complète n'est pas installée. Le parcours de parrainage ne doit donc pas être présenté comme une synchronisation CRM globale terminée.
+
+### 47.4 Roue promotionnelle — contrôle maintenu
+
+L'écran permet de préparer des campagnes et leurs lots pondérés dans l'état brouillon. Il n'expose aucun tirage public ni activation depuis Android. Le tirage demeure protégé côté serveur et l'activation reste bloquée tant que les conditions, l'avis juridique référencé et les éventuelles autorisations ne sont pas établis et approuvés par les personnes compétentes au Cameroun.
+
+**Décision de clôture :** le moteur et ses contrôles techniques sont présents et testés ; la roue n'est pas autorisée à fonctionner en production. Cette désactivation est une barrière de conformité, pas un défaut CI.
+
+### 47.5 Notifications Android/FCM et sortie de session
+
+La route `NOTIFICATIONS` ouvre le centre d'inbox authentifié ; l'application Android dispose de l'enregistrement FCM, de la demande de permission Android, de l'affichage local, de la lecture et de l'accusé d'action.
+
+Le jeton est chiffré côté serveur et rattaché au membre, à l'appareil et à la session. Les traitements serveur distinguent l'acceptation FCM de la lecture humaine et permettent la révocation des jetons.
+
+Correctif final : les sorties de session depuis la configuration initiale, depuis l'espace principal et après une session expirée/révoquée tentent la révocation serveur du jeton et désactivent localement l'inscription push. Le test instrumenté `PushTokenRegistryInstrumentedTest` vérifie que l'option locale reste désactivée après réinitialisation du registre. La révocation serveur est best-effort en cas de coupure réseau ; la recette multi-compte/appareil en environnement réel reste nécessaire.
+
+### 47.6 Sens exact du statut VERT
+
+**VERT — CI et artefact Android debug :** acquis pour le commit applicatif `a9c38b8`, au sens des dix contrôles automatisés et du build/debug APK réussis dans le workflow `44918404205`.
+
+**VERT GLOBAL / production : non déclaré.** Les éléments suivants demeurent des portes obligatoires avant une mise en service réelle :
+
+- projet Supabase NAXA SERVICES isolé, revue puis application contrôlée des drafts/migrations v1 à v6, déploiement des Edge Functions, secrets et politiques d'exploitation ; la CI utilise uniquement une base PostgreSQL jetable ;
+- projet Firebase NAXA SERVICES, configuration Android publique correctement enregistrée, secrets serveur de chiffrement et compte de service, déploiement/planification du worker FCM, producteurs d'événements métier et tests de livraison sur appareils réels ;
+- synchronisation ERP globale : les contrats partagés sont testés, mais le coordinateur Android reste limité au cycle fournisseur manuel ; les autres agrégats, les handlers serveur, les reçus globaux et la résolution de conflits multi-appareils ne sont pas terminés ;
+- avis juridique et éventuelles autorisations pour toute activation de la roue promotionnelle ;
+- barèmes de commissions approuvés, intégrations marchandes Mobile Money et rapprochement, validation SYSCOHADA/fiscale/paie par les professionnels compétents ;
+- sauvegarde/restauration testée, parité Web/PWA, recette terrain, APK Release signé et autres chantiers transverses mentionnés à la section 46.6.
+
+Aucun draft SQL n'a été appliqué à un projet Supabase réel durant cette séquence ; aucun déploiement Edge/Firebase n'a été réalisé et aucun secret n'a été ajouté au dépôt. Les commits applicatifs de cette intervention sont restés sur la branche de travail ; aucune fusion ou poussée vers `main` n'a été effectuée par cette intervention.
+
+**Décision :** déclarer NAXA SERVICES **VERT CI / build Android debug** pour le commit testé, tout en maintenant **NON QUALIFIÉ PRODUCTION** jusqu'à la levée documentée des portes externes ci-dessus.
