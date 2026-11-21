@@ -2,6 +2,15 @@
 -- DRAFT ONLY. ROLLBACK by default. Never deploy without legal/business sign-off and isolated migration review.
 begin;
 
+-- The CRM core table remains the source of truth. This generated value is private to the server
+-- and enables deterministic duplicate-phone checks during customer referral attribution.
+alter table public.ns_customers
+  add column if not exists phone_normalized text generated always as
+    (nullif(regexp_replace(coalesce(phone_contact, ''), '[^0-9]', '', 'g'), '')) stored;
+create unique index if not exists ns_customers_org_site_phone_normalized_uq
+  on public.ns_customers(org_id, site_id, phone_normalized)
+  where phone_normalized is not null and phone_normalized <> '';
+
 create table if not exists public.ns_customer_referral_campaigns (
   id uuid primary key default gen_random_uuid(),
   org_id uuid not null references public.ns_organizations(id) on delete restrict,
@@ -16,6 +25,7 @@ create table if not exists public.ns_customer_referral_campaigns (
   minimum_paid_sale_xaf bigint not null default 0 check (minimum_paid_sale_xaf >= 0),
   reward_expiry_days integer check (reward_expiry_days is null or reward_expiry_days between 1 and 3650),
   terms_version text not null check (length(trim(terms_version)) between 1 and 80),
+  terms_text text not null check (length(trim(terms_text)) between 30 and 10000),
   created_by uuid not null,
   approved_by uuid,
   approved_at timestamptz,
@@ -28,7 +38,7 @@ create table if not exists public.ns_customer_referral_campaigns (
   check (ends_at is null or ends_at > starts_at),
   check (
     status <> 'active'
-    or (approved_by is not null and approved_at is not null and terms_version <> '')
+    or (approved_by is not null and approved_at is not null and terms_version <> '' and length(trim(terms_text)) >= 30)
   )
 );
 create index if not exists ns_customer_referral_campaigns_org_status_idx

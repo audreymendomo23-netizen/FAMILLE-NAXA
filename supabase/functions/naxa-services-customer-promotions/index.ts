@@ -3,6 +3,7 @@ import {
   isUuid,
   normalizeCustomerReferralCampaignDraft,
   normalizeCustomerReferralCode,
+  normalizeCustomerPhone,
   normalizeWheelPrizeDraft,
 } from "./promotion_contract.ts";
 
@@ -147,20 +148,67 @@ function randomCode() {
   return "CREF-" + Array.from(bytes, (x) => x.toString(16).padStart(2, "0")).join("").toUpperCase();
 }
 
+
+async function ensureCustomerSnapshot(actor: Actor, siteId: string, snapshotValue: unknown, customerId: string) {
+  if (snapshotValue === undefined || snapshotValue === null) return;
+  if (!snapshotValue || typeof snapshotValue !== "object" || Array.isArray(snapshotValue)) {
+    throw new ApiError(400, "INVALID_CUSTOMER_SNAPSHOT");
+  }
+  const snapshot = snapshotValue as Json;
+  const snapshotId = String(snapshot.id ?? "");
+  const name = typeof snapshot.display_name === "string" ? snapshot.display_name.trim() : "";
+  const phone = normalizeCustomerPhone(snapshot.phone_contact);
+  if (snapshotId !== customerId || !isUuid(snapshotId) || name.length < 2 || name.length > 120) {
+    throw new ApiError(400, "INVALID_CUSTOMER_SNAPSHOT");
+  }
+  if (snapshot.contact_consent !== true) throw new ApiError(403, "CUSTOMER_CONTACT_CONSENT_REQUIRED");
+
+  const existing = await rest(query("ns_customers", {
+    select: "id,site_id,phone_contact,contact_consent",
+    id: "eq." + snapshotId, org_id: "eq." + actor.orgId, limit: "1",
+  })) as Json[];
+  if (existing?.[0]) {
+    if (existing[0].site_id !== siteId) throw new ApiError(409, "CUSTOMER_SITE_MISMATCH");
+    if (existing[0].contact_consent !== true) throw new ApiError(403, "CUSTOMER_CONTACT_CONSENT_REQUIRED");
+    if (normalizeCustomerPhone(existing[0].phone_contact) !== phone) {
+      throw new ApiError(409, "CUSTOMER_PHONE_CHANGED_REVIEW_REQUIRED");
+    }
+    return;
+  }
+
+  const duplicates = await rest(query("ns_customers", {
+    select: "id", org_id: "eq." + actor.orgId,
+    site_id: "eq." + siteId, phone_normalized: "eq." + phone, limit: "2",
+  })) as Json[];
+  if (duplicates?.length) throw new ApiError(409, "DUPLICATE_CUSTOMER_PHONE_REVIEW_REQUIRED");
+
+  await rest("ns_customers", {
+    method: "POST", headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      id: snapshotId, org_id: actor.orgId, site_id: siteId,
+      display_name: name, phone_contact: phone, contact_consent: true,
+    }),
+  });
+}
+
 async function createCustomerCode(actor: Actor, body: Json) {
   const siteId = String(body.site_id ?? "");
   const campaignId = String(body.campaign_id ?? "");
   const customerId = String(body.customer_id ?? "");
   if (!isUuid(campaignId) || !isUuid(customerId)) throw new ApiError(400, "INVALID_REFERRAL_TARGET");
   await requireSiteOperation(actor, siteId);
+  await ensureCustomerSnapshot(actor, siteId, body.customer_snapshot, customerId);
   const customers = await rest(query("ns_customers", {
-    select: "id,site_id,org_id",
+    select: "id,site_id,org_id,phone_contact,contact_consent",
     id: "eq." + customerId,
     org_id: "eq." + actor.orgId,
     site_id: "eq." + siteId,
     limit: "1",
   })) as Json[];
   if (!customers?.length) throw new ApiError(404, "CUSTOMER_NOT_FOUND");
+  if (customers[0].contact_consent !== true || !String(customers[0].phone_contact ?? "").trim()) {
+    throw new ApiError(403, "CUSTOMER_CONTACT_CONSENT_AND_PHONE_REQUIRED");
+  }
 
   const campaigns = await rest(query("ns_customer_referral_campaigns", {
     select: "id,status,site_id,starts_at,ends_at",
@@ -212,10 +260,14 @@ async function applyCustomerCode(actor: Actor, body: Json) {
   const code = normalizeCustomerReferralCode(body.referral_code);
   if (!isUuid(customerId) || !isCustomerReferralCode(code)) throw new ApiError(400, "INVALID_REFERRAL_INPUT");
   await requireSiteOperation(actor, siteId);
+  await ensureCustomerSnapshot(actor, siteId, body.customer_snapshot, customerId);
   const customers = await rest(query("ns_customers", {
-    select: "id", id: "eq." + customerId, org_id: "eq." + actor.orgId, site_id: "eq." + siteId, limit: "1",
+    select: "id,contact_consent,phone_contact", id: "eq." + customerId, org_id: "eq." + actor.orgId, site_id: "eq." + siteId, limit: "1",
   })) as Json[];
   if (!customers?.length) throw new ApiError(404, "CUSTOMER_NOT_FOUND");
+  if (customers[0].contact_consent !== true || !String(customers[0].phone_contact ?? "").trim()) {
+    throw new ApiError(403, "CUSTOMER_CONTACT_CONSENT_AND_PHONE_REQUIRED");
+  }
   return await rpc("ns_apply_customer_referral_code", {
     p_org_id: actor.orgId, p_referred_site_id: siteId,
     p_referred_customer_id: customerId, p_code: code,
@@ -233,6 +285,41 @@ async function createReferralCampaign(actor: Actor, body: Json) {
   }) as Json[];
   if (!rows?.[0]?.id) throw new ApiError(503, "REFERRAL_CAMPAIGN_CREATE_FAILED");
   return { id: rows[0].id, status: "draft", message: "Campagne créée en brouillon. Les récompenses ne sont pas activées." };
+}
+
+
+async function publishCustomerReferralCampaign(actor: Actor, body: Json) {
+  requirePromoter(actor);
+  const campaignId = String(body.campaign_id ?? "");
+  const termsVersion = String(body.terms_version ?? "");
+  if (!isUuid(campaignId) || !termsVersion || termsVersion.length > 80) {
+    throw new ApiError(400, "INVALID_REFERRAL_CAMPAIGN_PUBLICATION");
+  }
+  const rows = await rest(query("ns_customer_referral_campaigns", {
+    select: "id,status,starts_at,ends_at,terms_version,terms_text",
+    id: "eq." + campaignId, org_id: "eq." + actor.orgId, status: "eq.draft", limit: "1",
+  })) as Json[];
+  const campaign = rows?.[0];
+  if (!campaign) throw new ApiError(404, "REFERRAL_CAMPAIGN_NOT_DRAFT");
+  if (campaign.terms_version !== termsVersion || typeof campaign.terms_text !== "string" || campaign.terms_text.trim().length < 30) {
+    throw new ApiError(409, "REFERRAL_CAMPAIGN_TERMS_NOT_CONFIRMED");
+  }
+  const startsAt = Date.parse(String(campaign.starts_at));
+  const endsAt = campaign.ends_at === null ? null : Date.parse(String(campaign.ends_at));
+  if (!Number.isFinite(startsAt) || (endsAt !== null && (!Number.isFinite(endsAt) || endsAt <= startsAt))) {
+    throw new ApiError(409, "REFERRAL_CAMPAIGN_DATES_INVALID");
+  }
+  const updated = await rest(query("ns_customer_referral_campaigns", {
+    id: "eq." + campaignId, org_id: "eq." + actor.orgId, status: "eq.draft",
+  }), {
+    method: "PATCH", headers: { Prefer: "return=representation" },
+    body: JSON.stringify({
+      status: "active", approved_by: actor.memberId,
+      approved_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+    }),
+  }) as Json[];
+  if (!updated?.[0]?.id) throw new ApiError(409, "REFERRAL_CAMPAIGN_ALREADY_CHANGED");
+  return { id: campaignId, status: "active", approved_at: updated[0].approved_at };
 }
 
 async function createWheelCampaign(actor: Actor, body: Json) {
@@ -309,9 +396,9 @@ async function spinWheel(actor: Actor, body: Json) {
 async function customerReferralDashboard(actor: Actor) {
   requirePromoter(actor);
   const orgId = actor.orgId;
-  const [campaigns, referrals, rewards] = await Promise.all([
+  const [campaigns, referrals, rewards, wheelCampaigns, wheelPrizes] = await Promise.all([
     rest(query("ns_customer_referral_campaigns", {
-      select: "id,name,status,starts_at,ends_at,beneficiary_mode,reward_kind,reward_value,minimum_paid_sale_xaf,terms_version",
+      select: "id,site_id,name,status,starts_at,ends_at,beneficiary_mode,reward_kind,reward_value,minimum_paid_sale_xaf,reward_expiry_days,terms_version,terms_text",
       org_id: "eq." + orgId, order: "created_at.desc", limit: "200",
     })) as Promise<Json[]>,
     rest(query("ns_customer_referrals", {
@@ -322,8 +409,16 @@ async function customerReferralDashboard(actor: Actor) {
       select: "id,campaign_id,referral_id,beneficiary_customer_id,reward_kind,reward_value,status,issued_at,expires_at",
       org_id: "eq." + orgId, order: "created_at.desc", limit: "500",
     })) as Promise<Json[]>,
+    rest(query("ns_promotion_campaigns", {
+      select: "id,site_id,title,status,starts_at,ends_at",
+      org_id: "eq." + orgId, campaign_type: "eq.wheel", order: "created_at.desc", limit: "100",
+    })) as Promise<Json[]>,
+    rest(query("ns_promotion_prizes", {
+      select: "id,campaign_id,label,prize_kind,reward_value,weight,max_awards,awarded_count,active",
+      org_id: "eq." + orgId, order: "created_at.asc", limit: "500",
+    })) as Promise<Json[]>,
   ]);
-  return { campaigns, referrals, rewards };
+  return { campaigns, referrals, rewards, wheel_campaigns: wheelCampaigns, wheel_prizes: wheelPrizes };
 }
 
 function constantTimeEqual(left: string, right: string) {
@@ -384,6 +479,9 @@ Deno.serve(async (request: Request) => {
     switch (action) {
       case "create_customer_referral_campaign":
         result = await createReferralCampaign(actor, body);
+        break;
+      case "publish_customer_referral_campaign":
+        result = await publishCustomerReferralCampaign(actor, body);
         break;
       case "create_customer_referral_code":
         result = await createCustomerCode(actor, body);

@@ -1,5 +1,6 @@
 export const CUSTOMER_PROMOTION_ACTIONS = [
   "create_customer_referral_campaign",
+  "publish_customer_referral_campaign",
   "create_customer_referral_code",
   "apply_customer_referral_code",
   "customer_referral_dashboard",
@@ -26,6 +27,7 @@ export interface CustomerReferralCampaignDraft {
   minimum_paid_sale_xaf: number;
   reward_expiry_days: number | null;
   terms_version: string;
+  terms_text: string;
 }
 
 export interface WheelPrizeDraft {
@@ -45,6 +47,13 @@ export function normalizeCustomerReferralCode(value: unknown): string {
 
 export function isCustomerReferralCode(value: unknown): value is string {
   return typeof value === "string" && REFERRAL_CODE.test(normalizeCustomerReferralCode(value));
+}
+
+export function normalizeCustomerPhone(value: unknown): string {
+  if (typeof value !== "string") throw new Error("INVALID_CUSTOMER_PHONE");
+  const digits = value.replace(/[^0-9]/g, "");
+  if (digits.length < 7 || digits.length > 15) throw new Error("INVALID_CUSTOMER_PHONE");
+  return digits;
 }
 
 export function isUuid(value: unknown): value is string {
@@ -106,6 +115,7 @@ export function normalizeCustomerReferralCampaignDraft(
     minimum_paid_sale_xaf: safeInteger(input.minimum_paid_sale_xaf ?? 0, 0, 1_000_000_000_000, "INVALID_MINIMUM_SALE"),
     reward_expiry_days: expiry,
     terms_version: safeText(input.terms_version, 1, 80),
+    terms_text: safeText(input.terms_text, 30, 10000),
   };
 }
 

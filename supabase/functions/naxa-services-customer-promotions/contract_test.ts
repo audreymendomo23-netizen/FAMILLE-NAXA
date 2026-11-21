@@ -1,6 +1,7 @@
 import {
   isAllowedPromotionTransition,
   isCustomerReferralCode,
+  normalizeCustomerPhone,
   normalizeCustomerReferralCampaignDraft,
   normalizeCustomerReferralCode,
   normalizeWheelPrizeDraft,
@@ -17,6 +18,13 @@ Deno.test("customer referral code normalization is deterministic", () => {
   if (isCustomerReferralCode("CREF-TOO-SHORT")) throw new Error("INVALID_CODE_ACCEPTED");
 });
 
+Deno.test("customer phone normalization is strict and deterministic", () => {
+  if (normalizeCustomerPhone("+237 699 00 11 22") !== "237699001122") throw new Error("PHONE_NORMALIZATION_FAILED");
+  let rejected = false;
+  try { normalizeCustomerPhone("12-34"); } catch { rejected = true; }
+  if (!rejected) throw new Error("INVALID_PHONE_ACCEPTED");
+});
+
 Deno.test("customer referral campaigns require explicit reward values and valid dates", () => {
   const draft = normalizeCustomerReferralCampaignDraft({
     site_id: SITE,
@@ -29,6 +37,7 @@ Deno.test("customer referral campaigns require explicit reward values and valid 
     minimum_paid_sale_xaf: 500,
     reward_expiry_days: 30,
     terms_version: "ci-v1",
+    terms_text: "Le parrain reçoit un avantage après le premier achat entièrement encaissé du filleul. Les conditions de validité, exclusions et expiration sont affichées au client.",
   }, ORG);
   if (draft.reward_value !== 100 || draft.beneficiary_mode !== "both" || draft.org_id !== ORG) {
     throw new Error("CUSTOMER_REFERRAL_CAMPAIGN_NORMALIZATION_FAILED");
@@ -42,6 +51,7 @@ Deno.test("customer referral campaigns require explicit reward values and valid 
       reward_kind: "points",
       reward_value: 0,
       terms_version: "ci-v1",
+      terms_text: "Conditions explicites suffisamment détaillées pour une campagne de test.",
     }, ORG);
   } catch { rejected = true; }
   if (!rejected) throw new Error("ZERO_VALUE_REWARD_ACCEPTED");
