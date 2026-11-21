@@ -1,6 +1,7 @@
 # ZIPPLE — Cahier des charges fonctionnel 360° V2.0
 
 **Date de référence :** 21 novembre 2026  
+**Dernière décision tarifaire intégrée :** 21 novembre 2026  
 **Statut :** périmètre fonctionnel consolidé et gelé par validation du promoteur  
 **Produit :** ERP de gestion des restaurants, restaurants-bars et snack-bars  
 **Dépôt de référence :** audreymendomo23-netizen/FAMILLE-NAXA  
@@ -1724,28 +1725,29 @@ Les fonctionnalités et limites précises de chaque offre doivent être pilotée
 
 Les fonctions nécessaires à l’intégrité des ventes, des stocks, des paiements et de la comptabilité ne doivent pas être désactivées au point de rendre l’offre Accès dangereuse ou incohérente.
 
-## 21.2. Audit des montants historiques retrouvés
+## 21.2. Audit des montants historiques et arbitrage tarifaire final
 
-| Source historique | Grille observée | Statut documentaire |
+| Source / décision | Grille ou tarif | Statut |
 |---|---|---|
-| Cahier ZIPPLE V1.0, 31 octobre 2026 | Essentiel 1 000 F/mois ; Pro 3 000 F/mois ; Réseau 6 000 F/mois | Grille marquée proposée [P] ; le cahier indique que les prix sont à tester auprès de commerçants avant de les figer |
-| Document maître portefeuille V1.4, 8 novembre 2026 | Basic 5 000 F/mois et 50 000 F/an ; Premium 15 000 F/mois et 150 000 F/an ; Pro 18 000 F/mois et 180 000 F/an | Ancienne grille à trois offres ; le texte distingue le forfait Pro annuel comme fixé à 180 000 F |
-| Business Model 11 Solutions, 10 novembre 2026 | Modèle Excel ZIPPLE : 5 000 / 15 000 / 18 000 F par mois | Les montants sont repris comme modèle de travail ; le document précise que les autres tarifs doivent être harmonisés |
-| Business Model 11 Solutions, 10 novembre 2026 | Pro : 18 000 F/mois × 10 = 180 000 F/an | Ancien arbitrage explicitement identifié comme validé pour l’offre Pro |
-| Décision actuelle du promoteur, 21 novembre 2026 | Deux offres : Accès et Premium | Noms des deux offres validés ; aucun montant actuel Accès/Premium n’est établi par les sources retrouvées |
+| Cahier ZIPPLE V1.0, 31 octobre 2026 | Essentiel 1 000 F/mois ; Pro 3 000 F/mois ; Réseau 6 000 F/mois | Ancienne proposition [P], retirée |
+| Document maître portefeuille V1.4, 8 novembre 2026 | Basic 5 000 F/mois et 50 000 F/an ; Premium 15 000 F/mois et 150 000 F/an ; Pro 18 000 F/mois et 180 000 F/an | Ancienne grille à trois offres, supersédée |
+| Business Model 11 Solutions, 10 novembre 2026 | Modèle Excel ZIPPLE : 5 000 / 15 000 / 18 000 F par mois | Ancienne grille de travail à harmoniser, supersédée |
+| Ancien arbitrage documenté | Pro : 18 000 F/mois × 10 = 180 000 F/an | Arbitrage historique concernant l'ancien pack Pro ; ne constitue pas la règle annuelle du Premium actuel |
+| **Décision explicite du promoteur, 21 novembre 2026** | **Accès : 5 000 FCFA/mois ; Premium : 18 000 FCFA/mois** | **[V] VALIDÉ — tarifs actuels ZIPPLE** |
 
 ## 21.3. Conclusion tarifaire
 
-- Les anciennes formules Essentiel/Basic, Pro et Réseau sont retirées de l’architecture actuelle.
-- Le montant de 180 000 F/an concernait l’ancien niveau Pro. Il ne peut pas être réaffecté automatiquement à Premium.
-- Le prix Premium de l’ancienne grille à trois niveaux n’est pas automatiquement validé pour le nouveau Premium.
-- Le prix d’Accès n’est pas établi.
-- Le prix de Premium n’est pas établi.
-- La périodicité annuelle et les éventuelles réductions ne sont pas considérées comme validées pour les nouvelles offres.
+- ZIPPLE commercialise exactement deux offres : **Accès** et **Premium**.
+- **Accès : 5 000 FCFA par mois.**
+- **Premium : 18 000 FCFA par mois.**
+- Les anciennes formules Essentiel, Basic, Pro et Réseau ne sont plus des offres commerciales ZIPPLE.
+- Le montant annuel historique de 180 000 FCFA concernait l'ancien Pro. Il n'est pas automatiquement reconduit comme tarif annuel Premium.
+- Aucun tarif annuel, remise annuelle ou périodicité autre que mensuelle n'est validé par la présente décision.
+- La matrice détaillée des droits et limites de chaque offre doit rester conforme à la décision commerciale et ne doit pas être inventée par le code.
 
-**Règle : les montants Accès et Premium restent « à valider ». Aucun prix ne doit être publié, codé en dur, facturé ou introduit dans une projection comme prix approuvé sans une décision explicite du promoteur.**
+**Règle : les prix mensuels Accès et Premium sont approuvés et peuvent être utilisés comme tarifs de référence dans le paramétrage commercial ZIPPLE. Aucun tarif annuel ni remise ne doit être appliqué tant qu'il n'a pas été expressément validé.**
 
-L’audit ci-dessus porte sur les cahiers et documents consolidés retrouvés dans la bibliothèque et les références documentaires consultables. Il ne prétend pas prouver l’absence absolue d’une décision qui se trouverait dans un échange non indexé ou un document non accessible.
+L'audit historique distingue les anciennes propositions des prix actuels. La décision explicite du promoteur du 21 novembre 2026 est la source d'autorité pour les tarifs Accès et Premium.
 
 ---
 
@@ -1979,7 +1981,7 @@ Ces contrôles ne constituent pas des alternatives au périmètre retenu. Ils so
 
 ## 24.3. Prix
 
-Les offres Accès et Premium sont confirmées, mais leurs montants et leur matrice précise de droits restent à confirmer. Le code ne doit contenir aucun montant inventé et le tarif ne doit pas être publié avant validation.
+Les offres et tarifs mensuels sont validés : Accès à 5 000 FCFA/mois et Premium à 18 000 FCFA/mois. La matrice précise des droits doit être appliquée selon les entitlements validés ; les tarifs annuels et remises restent ouverts.
 
 ---
 
@@ -1990,7 +1992,7 @@ Cette V2.0 devient la référence fonctionnelle ZIPPLE à compter du 21 novembre
 - Les décisions [V] ne doivent pas être remplacées par une ancienne proposition.
 - Les anciennes grilles tarifaires à trois niveaux ne sont plus les offres actuelles.
 - Les règles [P] ne deviennent pas des arbitrages commerciaux.
-- Les points [O] doivent rester visibles jusqu’à validation ou preuve.
+- Les points [O] doivent rester visibles jusqu’à validation ou preuve. Les prix mensuels Accès et Premium sont maintenant arbitrés ; les prix annuels et remises restent ouverts.
 - Toute modification de périmètre doit être enregistrée avec date, auteur, valeur précédente, valeur nouvelle, motif et validation du promoteur.
 - Les changements techniques doivent respecter les règles du monorepo Famille NAXA : audit, contradiction, cause racine, correction, tests/preuves, documentation et état.
 - Aucun déploiement, aucune migration Production et aucune publication APK ne sont autorisés par le seul fait de ce cahier des charges.
