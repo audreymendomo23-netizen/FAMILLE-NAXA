@@ -112,9 +112,10 @@ internal object FirebasePushClient {
 
     suspend fun fetchToken(context: Context): String = withContext(Dispatchers.IO) {
         if (!initialize(context)) throw IllegalStateException("FIREBASE_NOT_CONFIGURED")
-        val app = FirebaseApp.getApps(context).firstOrNull { it.name == FirebaseApp.DEFAULT_APP_NAME }
-            ?: throw IllegalStateException("FIREBASE_DEFAULT_APP_UNAVAILABLE")
-        val token = Tasks.await(FirebaseMessaging.getInstance(app).token, 20, TimeUnit.SECONDS)
+        if (FirebaseApp.getApps(context).none { it.name == FirebaseApp.DEFAULT_APP_NAME }) {
+            throw IllegalStateException("FIREBASE_DEFAULT_APP_UNAVAILABLE")
+        }
+        val token = Tasks.await(FirebaseMessaging.getInstance().token, 20, TimeUnit.SECONDS)
         require(token.isNotBlank()) { "FCM_EMPTY_TOKEN" }
         token
     }
