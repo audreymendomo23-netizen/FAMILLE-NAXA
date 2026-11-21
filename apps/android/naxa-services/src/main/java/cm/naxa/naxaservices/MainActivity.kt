@@ -554,7 +554,8 @@ private fun NaxaServicesRoot(lockGeneration: StateFlow<Int>) {
                         active = !lightTheme && preferences.flashlightEnabled()
                     )
                     val gatedSession = session
-                    if (gatedSession != null && LocalAccessPinGatePolicy.requiresUnlock(
+                    if (gatedSession != null && !gatedSession.requirePasswordChange &&
+                        LocalAccessPinGatePolicy.requiresUnlock(
                             gatedSession.account.memberId,
                             localPinUnlockedMemberId
                         )
