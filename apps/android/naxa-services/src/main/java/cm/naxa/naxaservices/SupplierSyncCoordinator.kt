@@ -1,0 +1,185 @@
+package cm.naxa.naxaservices
+
+import cm.naxa.naxaservices.auth.AuthApi
+import cm.naxa.naxaservices.auth.AuthApiException
+import cm.naxa.naxaservices.auth.AuthSession
+import cm.naxa.naxaservices.data.LocalOutboxEvent
+import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
+import kotlinx.coroutines.flow.first
+import org.json.JSONObject
+
+data class SupplierSyncSummary(
+    val applied: Int,
+    val retried: Int,
+    val blocked: Int,
+    val rejected: Int,
+    val remaining: Int
+)
+
+/**
+ * Manual, opt-in synchronization for supplier-cycle events only.
+ * The build flag is false by default; no automatic worker is scheduled.
+ */
+object SupplierSyncCoordinator {
+    private const val EXISTING_NAXA_PROJECT_REF = "ykgjfindlgseegmznaog"
+    private val supportedActions = setOf(
+        "supplier.saved",
+        "purchase.ordered",
+        "purchase.receipt.confirmed",
+        "supplier.payment.recorded"
+    )
+
+    fun isConfigured(): Boolean {
+        val configuredRef = BuildConfig.SUPABASE_PROJECT_REF.trim()
+        val familyRef = BuildConfig.FAMILY_SUPABASE_PROJECT_REF.trim()
+        val endpointRef = Regex("^https://([a-z0-9]+)\\.supabase\\.co/functions/v1/naxa-services-accounting/?$")
+            .matchEntire(BuildConfig.ACCOUNTING_FUNCTION_URL.trim())
+            ?.groupValues?.getOrNull(1)
+        return BuildConfig.SUPPLIER_SYNC_ENABLED &&
+            BuildConfig.SUPABASE_ANON_KEY.isNotBlank() &&
+            configuredRef.isNotBlank() &&
+            configuredRef == familyRef &&
+            endpointRef == familyRef &&
+            familyRef != EXISTING_NAXA_PROJECT_REF
+    }
+
+    suspend fun syncPending(
+        repository: NaxaServicesLocalRepository,
+        api: AuthApi,
+        session: AuthSession
+    ): SupplierSyncSummary {
+        require(session.account.organizationId.isNotBlank()) { "Organisation active manquante." }
+        check(isConfigured()) {
+            "Synchronisation bloquée : configure une passerelle Famille NAXA dédiée, différente du projet NAXA historique."
+        }
+
+        val dao = repository.dao
+        val orgId = session.account.organizationId
+        val events = dao.loadRetryableOutboxEvents(orgId, supportedActions.toList(), System.currentTimeMillis(), 250)
+            .filter { it.actionCode in supportedActions }
+            .sortedBy { it.deviceSequence }
+        var applied = 0
+        var retried = 0
+        var blocked = 0
+        var rejected = 0
+
+        for (event in events) {
+            val payload = runCatching { JSONObject(event.payloadJson) }.getOrNull()
+            if (payload == null || !hasRequiredSnapshot(event, payload)) {
+                dao.updateOutboxAttempt(
+                    event.eventId, orgId, "rejected", System.currentTimeMillis(), null,
+                    "OUTBOX_SNAPSHOT_INCOMPLETE"
+                )
+                rejected++
+                break
+            }
+
+            val action = when (event.actionCode) {
+                "supplier.saved" -> "save_supplier"
+                "purchase.ordered" -> "create_supplier_purchase"
+                "purchase.receipt.confirmed" -> "receive_supplier_purchase_line"
+                "supplier.payment.recorded" -> "record_supplier_payment"
+                else -> continue
+            }
+
+            // Stock purchases require the matching inventory item to exist remotely.
+            // Inventory IDs are not yet replicated by this sync slice.
+            if (event.actionCode == "purchase.ordered" && hasStockLineWithoutRemoteMapping(payload)) {
+                dao.updateOutboxAttempt(
+                    event.eventId, orgId, "blocked_dependency", System.currentTimeMillis(), null,
+                    "SERVER_INVENTORY_ITEM_MAPPING_REQUIRED"
+                )
+                blocked++
+                break
+            }
+
+            // Cash payments require a server-side cash session with the exact same ID.
+            // Until the register/session replication contract exists, never send a local-only cash session ID.
+            if (event.actionCode == "supplier.payment.recorded" &&
+                payload.optString("payment_method") == "cash") {
+                dao.updateOutboxAttempt(
+                    event.eventId, orgId, "blocked_dependency", System.currentTimeMillis(), null,
+                    "SERVER_CASH_SESSION_MAPPING_REQUIRED"
+                )
+                blocked++
+                break
+            }
+
+            payload.put("action", action).put("app_code", "naxa-services")
+            try {
+                val response = api.accountingRequest(session.accessToken, payload)
+                if (!response.optBoolean("ok", false)) throw IllegalStateException("ACCOUNTING_RESPONSE_NOT_CONFIRMED")
+                val result = response.optJSONObject("result")
+                    ?: throw IllegalStateException("ACCOUNTING_RESULT_MISSING")
+                val remoteId = when (event.actionCode) {
+                    "supplier.saved" -> result.optString("supplier_id")
+                    "purchase.ordered" -> result.optString("purchase_id")
+                    "purchase.receipt.confirmed" -> result.optString("receipt_id")
+                    "supplier.payment.recorded" -> result.optString("payment_id")
+                    else -> ""
+                }.takeIf { it.isNotBlank() && it != "null" }
+                    ?: throw IllegalStateException("ACCOUNTING_REMOTE_ID_MISSING")
+                val updated = dao.markOutboxEventSynced(event.eventId, orgId, remoteId)
+                if (updated == 0) throw IllegalStateException("OUTBOX_STATE_UPDATE_FAILED")
+                applied++
+            } catch (failure: Exception) {
+                val status = (failure as? AuthApiException)?.statusCode
+                val transient = status == null || status == 429 || status >= 500
+                val attempts = event.attemptCount + 1
+                val delay = (30_000L * (1L shl attempts.coerceAtMost(6))).coerceAtMost(30L * 60L * 1000L)
+                val now = System.currentTimeMillis()
+                val state = if (transient) "retry_wait" else "rejected"
+                val errorCode = when {
+                    status == 401 -> "AUTHENTICATION_REQUIRED"
+                    status == 403 -> "REMOTE_SCOPE_FORBIDDEN"
+                    status == 422 -> "REMOTE_VALIDATION_FAILED"
+                    transient -> "REMOTE_TEMPORARY_FAILURE"
+                    else -> "REMOTE_REQUEST_REJECTED"
+                }
+                dao.updateOutboxAttempt(
+                    event.eventId, orgId, state, now,
+                    if (transient) now + delay else null,
+                    errorCode
+                )
+                if (transient) retried++ else rejected++
+                break
+            }
+        }
+        val remaining = dao.observePendingOutboxCount(orgId).first()
+        return SupplierSyncSummary(applied, retried, blocked, rejected, remaining)
+    }
+
+    private fun hasStockLineWithoutRemoteMapping(payload: JSONObject): Boolean {
+        val lines = payload.optJSONArray("lines") ?: return true
+        for (index in 0 until lines.length()) {
+            val line = lines.optJSONObject(index) ?: return true
+            if (line.optString("item_type") == "stock" &&
+                line.optString("inventory_item_id").isBlank()) return true
+            // Even a well-formed local item ID is not a remote mapping. This
+            // feature slice must wait until inventory replication is implemented.
+            if (line.optString("item_type") == "stock") return true
+        }
+        return false
+    }
+
+    private fun hasRequiredSnapshot(event: LocalOutboxEvent, payload: JSONObject): Boolean {
+        val common = payload.optString("org_id").isNotBlank() &&
+            payload.optString("site_id").isNotBlank()
+        if (!common || event.schemaVersion < 1) return false
+        return when (event.actionCode) {
+            "supplier.saved" -> payload.optString("supplier_id").isNotBlank() &&
+                payload.optString("name").isNotBlank()
+            "purchase.ordered" -> payload.optString("purchase_id").isNotBlank() &&
+                payload.optString("supplier_id").isNotBlank() &&
+                payload.optJSONArray("lines")?.length()?.let { it > 0 } == true
+            "purchase.receipt.confirmed" -> payload.optString("purchase_id").isNotBlank() &&
+                payload.optString("line_id").isNotBlank() &&
+                payload.optString("idempotency_key").isNotBlank() &&
+                payload.optDouble("quantity", 0.0) > 0.0
+            "supplier.payment.recorded" -> payload.optString("purchase_id").isNotBlank() &&
+                payload.optString("idempotency_key").isNotBlank() &&
+                payload.optLong("amount_xaf", 0L) > 0L
+            else -> false
+        }
+    }
+}

@@ -300,6 +300,64 @@ grant all on public.ns_suppliers, public.ns_purchase_documents, public.ns_purcha
   public.ns_accounting_entries, public.ns_performance_objectives to service_role;
 
 
+create or replace function public.ns_save_supplier(
+  p_supplier_id uuid, p_org_id uuid, p_site_id uuid, p_name text,
+  p_phone text default '', p_whatsapp text default '', p_email text default '',
+  p_address text default '', p_payment_terms_days integer default 0, p_notes text default ''
+) returns jsonb
+language plpgsql security definer set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_existing public.ns_suppliers%rowtype;
+  v_name text;
+  v_normalized text;
+  v_whatsapp text;
+  v_result public.ns_suppliers%rowtype;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_site(p_org_id, p_site_id) then
+    raise exception 'NAXA_SUPPLIER_SAVE_FORBIDDEN';
+  end if;
+  v_name := trim(coalesce(p_name, ''));
+  v_normalized := lower(regexp_replace(v_name, '\s+', ' ', 'g'));
+  v_whatsapp := regexp_replace(coalesce(p_whatsapp, ''), '\D', '', 'g');
+  if p_supplier_id is null or length(v_name) not between 2 and 120
+     or length(coalesce(p_phone,'')) > 32 or length(v_whatsapp) not in (0,9,10,11,12,13,14,15)
+     or length(coalesce(p_email,'')) > 254 or length(coalesce(p_address,'')) > 200
+     or length(coalesce(p_notes,'')) > 1000
+     or coalesce(p_payment_terms_days,0) not between 0 and 365 then
+    raise exception 'NAXA_SUPPLIER_SAVE_INVALID';
+  end if;
+  select * into v_existing from public.ns_suppliers where id = p_supplier_id for update;
+  if found then
+    if v_existing.org_id <> p_org_id or v_existing.site_id <> p_site_id then
+      raise exception 'NAXA_SUPPLIER_ID_SCOPE_CONFLICT';
+    end if;
+    update public.ns_suppliers
+      set name = v_name, normalized_name = v_normalized,
+          phone = trim(coalesce(p_phone,'')), whatsapp = v_whatsapp,
+          email = trim(coalesce(p_email,'')), address = trim(coalesce(p_address,'')),
+          payment_terms_days = p_payment_terms_days, notes = trim(coalesce(p_notes,'')),
+          active = true, updated_by = v_member, updated_at = now()
+      where id = p_supplier_id returning * into v_result;
+  else
+    insert into public.ns_suppliers(
+      id, org_id, site_id, name, normalized_name, phone, whatsapp, email, address,
+      payment_terms_days, notes, active, created_by, updated_by
+    ) values (
+      p_supplier_id, p_org_id, p_site_id, v_name, v_normalized,
+      trim(coalesce(p_phone,'')), v_whatsapp, trim(coalesce(p_email,'')),
+      trim(coalesce(p_address,'')), p_payment_terms_days, trim(coalesce(p_notes,'')),
+      true, v_member, v_member
+    ) returning * into v_result;
+  end if;
+  return jsonb_build_object('supplier_id', v_result.id, 'org_id', v_result.org_id,
+    'site_id', v_result.site_id, 'name', v_result.name, 'whatsapp', v_result.whatsapp,
+    'updated_at', v_result.updated_at, 'idempotent_identity', true);
+end;
+$naxa$;
+
 create or replace function public.ns_create_supplier_purchase(
   p_org_id uuid,
   p_site_id uuid,
@@ -350,11 +408,16 @@ begin
   select * into v_existing from public.ns_purchase_documents
     where org_id = p_org_id and idempotency_key = p_idempotency_key;
   if found then
-    if v_existing.site_id = p_site_id and v_existing.supplier_id = p_supplier_id
-       and v_existing.payload_sha256 = p_payload_sha256 then
+    if v_existing.id = p_idempotency_key and v_existing.site_id = p_site_id
+       and v_existing.supplier_id = p_supplier_id and v_existing.payload_sha256 = p_payload_sha256 then
       return jsonb_build_object(
         'idempotent', true,
         'purchase_id', v_existing.id,
+        'line_ids', coalesce((
+          select jsonb_agg(jsonb_build_object('line_id', l.id) order by l.id)
+          from public.ns_purchase_lines l
+          where l.org_id = p_org_id and l.site_id = p_site_id and l.purchase_id = v_existing.id
+        ), '[]'::jsonb),
         'subtotal_xaf', v_existing.subtotal_xaf,
         'total_ordered_xaf', v_existing.subtotal_xaf + v_existing.recoverable_tax_xaf
           + v_existing.non_recoverable_tax_xaf + v_existing.shipping_xaf + v_existing.other_fees_xaf,
@@ -371,6 +434,7 @@ begin
 
   for v_line in
     select * from jsonb_to_recordset(p_lines) as x(
+      line_id uuid,
       inventory_item_id uuid,
       description text,
       item_type text,
@@ -380,7 +444,9 @@ begin
     )
   loop
     v_count := v_count + 1;
-    if v_line.description is null or length(trim(v_line.description)) not between 1 and 240
+    if v_line.line_id is null
+       or exists (select 1 from public.ns_purchase_lines l where l.id = v_line.line_id)
+       or v_line.description is null or length(trim(v_line.description)) not between 1 and 240
        or v_line.item_type not in ('stock','operating_expense','fixed_asset')
        or v_line.quantity_ordered is null or v_line.quantity_ordered <= 0
        or v_line.quantity_ordered > 100000000
@@ -412,13 +478,13 @@ begin
   if v_total <= 0 then raise exception 'NAXA_PURCHASE_TOTAL_INVALID'; end if;
 
   insert into public.ns_purchase_documents(
-    org_id, site_id, supplier_id, supplier_name_snapshot, reference, supplier_invoice_number,
+    id, org_id, site_id, supplier_id, supplier_name_snapshot, reference, supplier_invoice_number,
     status, subtotal_xaf, recoverable_tax_xaf, non_recoverable_tax_xaf, shipping_xaf, other_fees_xaf,
     idempotency_key, payload_sha256,
     received_base_xaf, recognized_non_recoverable_xaf, recognized_recoverable_tax_xaf,
     received_total_xaf, paid_total_xaf, due_at, notes, created_by, updated_by
   ) values (
-    p_org_id, p_site_id, p_supplier_id, v_supplier.name, trim(p_reference),
+    p_idempotency_key, p_org_id, p_site_id, p_supplier_id, v_supplier.name, trim(p_reference),
     coalesce(trim(p_supplier_invoice_number),''), 'ordered', v_subtotal,
     coalesce(p_recoverable_tax_xaf,0), coalesce(p_non_recoverable_tax_xaf,0),
     coalesce(p_shipping_xaf,0), coalesce(p_other_fees_xaf,0), p_idempotency_key, p_payload_sha256,
@@ -426,19 +492,24 @@ begin
   ) returning id into v_purchase_id;
 
   insert into public.ns_purchase_lines(
-    org_id, site_id, purchase_id, inventory_item_id, description, item_type, unit,
+    id, org_id, site_id, purchase_id, inventory_item_id, description, item_type, unit,
     quantity_ordered, quantity_received, unit_cost_xaf
   )
-  select p_org_id, p_site_id, v_purchase_id, x.inventory_item_id, trim(x.description),
+  select x.line_id, p_org_id, p_site_id, v_purchase_id, x.inventory_item_id, trim(x.description),
          x.item_type, coalesce(nullif(trim(x.unit),''),'unité'),
          x.quantity_ordered, 0, x.unit_cost_xaf
   from jsonb_to_recordset(p_lines) as x(
-    inventory_item_id uuid, description text, item_type text, unit text,
+    line_id uuid, inventory_item_id uuid, description text, item_type text, unit text,
     quantity_ordered numeric, unit_cost_xaf bigint
   );
 
   return jsonb_build_object(
     'purchase_id', v_purchase_id,
+    'line_ids', coalesce((
+      select jsonb_agg(jsonb_build_object('line_id', l.id) order by l.id)
+      from public.ns_purchase_lines l
+      where l.org_id = p_org_id and l.site_id = p_site_id and l.purchase_id = v_purchase_id
+    ), '[]'::jsonb),
     'supplier_id', p_supplier_id,
     'subtotal_xaf', v_subtotal,
     'total_ordered_xaf', v_total,
@@ -955,6 +1026,8 @@ grant select on public.ns_performance_daily, public.ns_performance_monthly, publ
 revoke all on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) from public, anon;
 grant execute on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) to authenticated, service_role;
 
+revoke all on function public.ns_save_supplier(uuid,uuid,uuid,text,text,text,text,text,integer,text) from public, anon;
+grant execute on function public.ns_save_supplier(uuid,uuid,uuid,text,text,text,text,text,integer,text) to authenticated, service_role;
 revoke all on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,uuid,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) from public, anon;
 grant execute on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,uuid,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) to authenticated, service_role;
 revoke all on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) from public, anon, authenticated;

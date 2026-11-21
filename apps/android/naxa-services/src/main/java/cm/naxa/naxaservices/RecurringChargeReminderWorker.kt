@@ -24,6 +24,7 @@ import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_7_8
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_8_9
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_9_10
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_10_11
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_11_12
 import cm.naxa.naxaservices.data.NsServicesDatabase
 import java.util.Calendar
 
@@ -52,7 +53,8 @@ class RecurringChargeReminderWorker(
             NS_SERVICES_MIGRATION_7_8,
             NS_SERVICES_MIGRATION_8_9,
             NS_SERVICES_MIGRATION_9_10,
-            NS_SERVICES_MIGRATION_10_11
+            NS_SERVICES_MIGRATION_10_11,
+            NS_SERVICES_MIGRATION_11_12
         ).build()
 
         return try {

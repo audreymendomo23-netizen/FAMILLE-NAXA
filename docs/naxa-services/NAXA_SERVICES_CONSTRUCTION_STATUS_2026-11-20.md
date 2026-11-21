@@ -1439,3 +1439,37 @@ Aucun worker ne sera ajouté pour transmettre ces pointeurs incomplets et marque
 La spécification candidate est maintenant versionnée dans `docs/naxa-services/NAXA_SERVICES_SYNC_PROTOCOL_V1.md`. Elle définit l'enveloppe, les dépendances, les statuts, les règles de reprise, les contrôles de périmètre et les gates d'activation.
 
 **Statut :** cause racine et protocole documentés ; l'implémentation de la synchronisation reste ouverte. Aucun déploiement, aucune migration et aucun changement du projet Supabase historique.
+
+
+# Addendum 8 — Identifiants stables et synchronisation manuelle fournisseur (21 novembre 2026)
+
+## 44.1 Identifiants locaux conservés côté serveur
+
+Le draft v4 utilise maintenant :
+- la clé UUID locale du fournisseur comme ID canonique via `ns_save_supplier`, avec contrôle d'organisation/site et mise à jour idempotente par ID ;
+- l'UUID local de commande comme `idempotency_key` et clé primaire serveur ;
+- les UUID locaux des lignes comme clés primaires serveur.
+
+Les réceptions et règlements utilisent ensuite les mêmes IDs de commande et de ligne que Room. Le serveur renvoie aussi les IDs des lignes de commande dans sa réponse.
+
+## 44.2 Outbox Room version 12
+
+La migration non destructive 11→12 ajoute au journal local le numéro de version du payload, le nombre de tentatives, la dernière tentative, la prochaine tentative, le dernier code d'erreur et l'ID distant. Le dépôt écrit désormais des snapshots complets pour les événements fournisseur, commande, réception et règlement ; les autres familles d'événements conservent leur payload historique tant que leurs contrats dédiés ne sont pas livrés.
+
+Le DAO expose le chargement des événements retentables, l'enregistrement d'une tentative, l'accusé d'application distante et la remise en file d'un événement bloqué.
+
+## 44.3 Contrat Edge et orchestration Android
+
+L'Edge accounting reçoit l'action `save_supplier` et valide tous les UUID, les types de lignes, les références de stock, les montants, les doublons d'IDs de ligne et l'égalité `purchase_id = idempotency_key`. Les tests Deno vérifient ces invariants.
+
+Un coordinateur manuel permet le traitement ordonné de fournisseur → commande → réception → règlement. Il marque `synced` seulement après une réponse `ok` et un ID distant, réessaie les erreurs transitoires avec backoff, rejette les erreurs de validation et bloque les paiements espèces tant qu'une session de caisse serveur ne correspond pas.
+
+## 44.4 Garde anti-déploiement involontaire
+
+Le bouton de synchronisation reste désactivé par défaut. Il exige `NS_ENABLE_SUPPLIER_SYNC=true`, des références Supabase de projet configurée/famille identiques, une URL Edge hébergée par cette référence, une clé publishable/anon et une référence différente du projet NAXA existant. Cela n'active pas l'API dans l'environnement actuel.
+
+## 44.5 Limites restantes
+
+Le lot ne synchronise pas encore les familles d'objets hors cycle fournisseur, notamment articles importés, caisses, clients, ventes, rendez-vous, opérations métiers, personnel et transferts. Un achat stock dépend d'un article déjà présent côté serveur. Les règlements espèces attendent la réplication de caisse. Le worker automatique, la réconciliation des conflits, les tests multi-appareils et les appels sur base Supabase isolée restent en attente.
+
+Aucune migration SQL n'a été appliquée ; aucun endpoint Edge n'a été déployé ; aucun projet Supabase existant n'a été modifié. Le code attend les tests Android/Deno de la CI.

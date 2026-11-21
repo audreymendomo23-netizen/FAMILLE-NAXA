@@ -1809,10 +1809,15 @@ fun SettingsContent(
     modifier: Modifier,
     repository: NaxaServicesLocalRepository,
     session: AuthSession,
+    api: AuthApi,
     lightTheme: Boolean,
     onTheme: () -> Unit
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    var supplierSyncBusy by remember { mutableStateOf(false) }
+    var supplierSyncStatus by remember { mutableStateOf<String?>(null) }
+    val supplierSyncConfigured = SupplierSyncCoordinator.isConfigured()
     var permissionGranted by remember { mutableStateOf(Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) }
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> permissionGranted = granted }
     val pending by repository.dao.observePendingOutboxCount(session.account.organizationId).collectAsState(initial = 0)
@@ -1850,7 +1855,31 @@ fun SettingsContent(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("File locale d’événements", fontWeight = FontWeight.Bold)
                     Text(pending.toString() + " événement(s) en attente ou non synchronisé(s)")
-                    LocalOnlyNotice("Aucun bouton de synchronisation n’est exposé : le contrat d’écriture serveur et ses tests restent à terminer.")
+                    if (supplierSyncConfigured) {
+                        OutlinedButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    supplierSyncBusy = true
+                                    supplierSyncStatus = null
+                                    runCatching { SupplierSyncCoordinator.syncPending(repository, api, session) }
+                                        .onSuccess { result ->
+                                            supplierSyncStatus = "Synchronisés : ${result.applied} · À réessayer : ${result.retried} · Bloqués : ${result.blocked} · Rejetés : ${result.rejected} · Restants : ${result.remaining}"
+                                        }
+                                        .onFailure { failure ->
+                                            supplierSyncStatus = failure.message ?: "Synchronisation impossible."
+                                        }
+                                    supplierSyncBusy = false
+                                }
+                            },
+                            enabled = !supplierSyncBusy,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(if (supplierSyncBusy) "Synchronisation…" else "Synchroniser les opérations fournisseurs")
+                        }
+                    } else {
+                        LocalOnlyNotice("Synchronisation fournisseurs désactivée par défaut. Elle exige une passerelle de recette Famille NAXA et l’option NS_ENABLE_SUPPLIER_SYNC=true dans un build dédié.")
+                    }
+                    supplierSyncStatus?.let { Text(it, color = MaterialTheme.colorScheme.secondary) }
                 }
             }
         }

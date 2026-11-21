@@ -27,6 +27,15 @@ android {
         buildConfigField("String", "REFERRALS_FUNCTION_URL", "\"" + referralsUrl + "\"")
         buildConfigField("String", "ACCOUNTING_FUNCTION_URL", "\"" + accountingUrl + "\"")
         buildConfigField("String", "SUPABASE_ANON_KEY", "\"" + anonKey + "\"")
+        val supplierSyncEnabled = (project.findProperty("NS_ENABLE_SUPPLIER_SYNC") as? String ?: "false")
+            .equals("true", ignoreCase = true)
+        buildConfigField("boolean", "SUPPLIER_SYNC_ENABLED", supplierSyncEnabled.toString())
+        val configuredProjectRef = (project.findProperty("NS_SUPABASE_PROJECT_REF") as? String ?: "").trim()
+            .replace("\\", "\\\\").replace("\"", "\\\"")
+        val familyProjectRef = (project.findProperty("NS_FAMILY_SUPABASE_PROJECT_REF") as? String ?: "").trim()
+            .replace("\\", "\\\\").replace("\"", "\\\"")
+        buildConfigField("String", "SUPABASE_PROJECT_REF", "\"" + configuredProjectRef + "\"")
+        buildConfigField("String", "FAMILY_SUPABASE_PROJECT_REF", "\"" + familyProjectRef + "\"")
     }
 
     compileOptions {

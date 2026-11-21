@@ -164,3 +164,22 @@ Deno.test("server-only classification has unique table names", () => {
   assert(new Set(SERVER_ONLY_TABLES).size === SERVER_ONLY_TABLES.length,
     "SERVER_ONLY_TABLES contains duplicate entries");
 });
+
+
+Deno.test("supplier sync drafts preserve local supplier, purchase and line UUIDs", async () => {
+  const sql = await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  assert(/create\s+or\s+replace\s+function\s+public\.ns_save_supplier\s*\(/i.test(sql),
+    "Supplier ID-preserving RPC is required");
+  assert(/where\s+id\s*=\s*p_supplier_id\s+for\s+update/i.test(sql),
+    "Supplier upsert must lock and scope an existing client UUID");
+  assert(/insert\s+into\s+public\.ns_purchase_documents\s*\(\s*id\s*,/i.test(sql),
+    "Purchase RPC must insert the caller's canonical ID");
+  assert(/p_idempotency_key\s*,\s*p_org_id\s*,\s*p_site_id/i.test(sql),
+    "Purchase ID must equal the idempotency UUID");
+  assert(/jsonb_to_recordset\(p_lines\)[\s\S]{0,250}line_id\s+uuid/i.test(sql),
+    "Purchase lines must accept explicit client UUIDs");
+  assert(/select\s+x\.line_id\s*,\s*p_org_id\s*,\s*p_site_id\s*,\s*v_purchase_id/i.test(sql),
+    "Purchase line UUIDs must be persisted rather than regenerated");
+  assert(/grant\s+execute\s+on\s+function\s+public\.ns_save_supplier\([^;]+\)\s+to\s+authenticated,\s*service_role/i.test(sql),
+    "Supplier identity RPC must have explicit execution grants");
+});

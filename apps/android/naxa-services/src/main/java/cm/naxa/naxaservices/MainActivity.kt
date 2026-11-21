@@ -18,6 +18,7 @@ import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_7_8
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_8_9
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_9_10
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_10_11
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_11_12
 import cm.naxa.naxaservices.data.LocalPressingOrder
 import cm.naxa.naxaservices.data.LocalPressingStatusEvent
 import cm.naxa.naxaservices.data.LocalAppointment
@@ -129,7 +130,7 @@ private fun NaxaServicesRoot() {
     val preferences = remember { NaxaServicesPreferences(context) }
     val localDatabase = remember {
         Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db")
-            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7, NS_SERVICES_MIGRATION_7_8, NS_SERVICES_MIGRATION_8_9, NS_SERVICES_MIGRATION_9_10, NS_SERVICES_MIGRATION_10_11)
+            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7, NS_SERVICES_MIGRATION_7_8, NS_SERVICES_MIGRATION_8_9, NS_SERVICES_MIGRATION_9_10, NS_SERVICES_MIGRATION_10_11, NS_SERVICES_MIGRATION_11_12)
             .build()
     }
     val localRepository = remember { NaxaServicesLocalRepository(localDatabase) }
@@ -899,7 +900,7 @@ private fun ErpScreen(
         } else if (route == AppRoute.WORK_ORDERS) {
             WorkOrdersContent(Modifier.padding(padding), localRepository, activeSession, activityProfile)
         } else if (route == AppRoute.SETTINGS) {
-            SettingsContent(Modifier.padding(padding), localRepository, activeSession, lightTheme, onTheme)
+            SettingsContent(Modifier.padding(padding), localRepository, activeSession, authApi, lightTheme, onTheme)
         } else if (currentSpec != null) {
             ModuleContent(Modifier.padding(padding), currentSpec, onNavigate)
         } else {

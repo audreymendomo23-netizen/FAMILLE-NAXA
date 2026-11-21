@@ -1214,3 +1214,14 @@ L'outbox Android dispose d'environ 55 points d'enqueue mais son payload actuel n
 Le cycle fournisseur a une dépendance supplémentaire : les RPC v4 génèrent des UUID serveur pour les commandes/lignes, tandis que les événements locaux utilisent les UUID Room. Les réceptions et paiements suivants exigent les IDs serveur ; les règlements espèces demandent aussi une caisse distante ouverte. Le worker ne doit pas être construit sur un simple envoi des pointeurs.
 
 Le protocole candidat est documenté dans `docs/naxa-services/NAXA_SERVICES_SYNC_PROTOCOL_V1.md` : enveloppe versionnée, payloads complets, IDs stables/mappings, idempotence, dépendances, états d'erreur, conflits, scopes serveur et gates de tests multi-appareils. Il n'est pas implémenté ni activé. Aucun schéma n'a été appliqué, aucun projet Supabase n'a été modifié et aucune synchronisation n'est déclarée opérationnelle.
+
+
+## 6.17.28 — Cycle fournisseur à identifiants stables et sync manuelle sécurisée
+
+Le cycle fournisseur adopte les identifiants Room comme identifiants serveur : l'ID fournisseur est transmis à `ns_save_supplier`, l'ID commande sert aussi de clé d'idempotence et les IDs locaux de lignes sont transmis comme clés primaires serveur. Les réceptions et paiements réutilisent ensuite le même couple commande/ligne.
+
+Room passe à la version 12 avec métadonnées de retry. Les snapshots d'outbox fournisseur/commande/réception/règlement portent leurs paramètres métier complets. L'Edge valide les IDs, types, références stock et montants ; les contrats Deno dédiés sont intégrés à la CI. Le coordinateur Android manuel traite les dépendances dans l'ordre, marque appliqué seulement après réponse serveur et ID distant, réessaie les erreurs temporaires, rejette les erreurs de validation et bloque les paiements espèces non appariés à une caisse distante.
+
+Activation protégée : `NS_ENABLE_SUPPLIER_SYNC=true`, références projet/configuration concordantes, endpoint hébergé par cette référence et interdiction explicite du projet NAXA historique. Par défaut, l'option est fausse et aucune requête de synchronisation n'est lancée.
+
+**Limites :** les événements autres que cycle fournisseur ne sont pas encore répliqués ; les articles de stock doivent déjà exister sur le serveur ; la caisse espèces, le worker automatique, les conflits multi-appareils et la recette sur environnement isolé ne sont pas clôturés. Aucun SQL ou Edge Function n'a été déployé.

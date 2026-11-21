@@ -1,3 +1,5 @@
+import { normalizeSupplierPurchaseSyncPayload, normalizeSupplierSyncPayload } from "./sync_contract.ts";
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
@@ -137,31 +139,39 @@ export async function handleAccountingRequest(
     let result: unknown;
 
     switch (action) {
+      case "save_supplier": {
+        const payload = normalizeSupplierSyncPayload(body);
+        result = await postRpc(baseUrl, env.anonKey, token, "ns_save_supplier", {
+          p_supplier_id: payload.supplier_id,
+          p_org_id: payload.org_id,
+          p_site_id: payload.site_id,
+          p_name: payload.name,
+          p_phone: payload.phone,
+          p_whatsapp: payload.whatsapp,
+          p_email: payload.email,
+          p_address: payload.address,
+          p_payment_terms_days: payload.payment_terms_days,
+          p_notes: payload.notes,
+        });
+        break;
+      }
       case "create_supplier_purchase": {
-        const lines = body.lines;
-        if (!Array.isArray(lines) || lines.length < 1 || lines.length > 100) throw new Error("INVALID_PURCHASE_LINES");
+        const payload = normalizeSupplierPurchaseSyncPayload(body);
         result = await postRpc(baseUrl, env.anonKey, token, "ns_create_supplier_purchase", {
-          p_org_id: requiredString(body.org_id, "org_id"),
-          p_site_id: requiredString(body.site_id, "site_id"),
-          p_supplier_id: requiredString(body.supplier_id, "supplier_id"),
-          p_reference: requiredString(body.reference, "reference"),
-          p_supplier_invoice_number: typeof body.supplier_invoice_number === "string" ? body.supplier_invoice_number : "",
-          p_idempotency_key: requiredString(body.idempotency_key, "idempotency_key"),
-          p_payload_sha256: await sha256({
-            org_id: body.org_id, site_id: body.site_id, supplier_id: body.supplier_id,
-            reference: body.reference, supplier_invoice_number: body.supplier_invoice_number ?? "",
-            lines, recoverable_tax_xaf: body.recoverable_tax_xaf ?? 0,
-            non_recoverable_tax_xaf: body.non_recoverable_tax_xaf ?? 0,
-            shipping_xaf: body.shipping_xaf ?? 0, other_fees_xaf: body.other_fees_xaf ?? 0,
-            due_at: body.due_at ?? null, notes: body.notes ?? "",
-          }),
-          p_lines: lines,
-          p_recoverable_tax_xaf: requiredNumber(body.recoverable_tax_xaf ?? 0, "recoverable_tax_xaf"),
-          p_non_recoverable_tax_xaf: requiredNumber(body.non_recoverable_tax_xaf ?? 0, "non_recoverable_tax_xaf"),
-          p_shipping_xaf: requiredNumber(body.shipping_xaf ?? 0, "shipping_xaf"),
-          p_other_fees_xaf: requiredNumber(body.other_fees_xaf ?? 0, "other_fees_xaf"),
-          p_due_at: typeof body.due_at === "string" ? body.due_at : null,
-          p_notes: typeof body.notes === "string" ? body.notes : "",
+          p_org_id: payload.org_id,
+          p_site_id: payload.site_id,
+          p_supplier_id: payload.supplier_id,
+          p_reference: payload.reference,
+          p_supplier_invoice_number: payload.supplier_invoice_number,
+          p_idempotency_key: payload.purchase_id,
+          p_payload_sha256: await sha256(payload),
+          p_lines: payload.lines,
+          p_recoverable_tax_xaf: payload.recoverable_tax_xaf,
+          p_non_recoverable_tax_xaf: payload.non_recoverable_tax_xaf,
+          p_shipping_xaf: payload.shipping_xaf,
+          p_other_fees_xaf: payload.other_fees_xaf,
+          p_due_at: payload.due_at,
+          p_notes: payload.notes,
         });
         break;
       }

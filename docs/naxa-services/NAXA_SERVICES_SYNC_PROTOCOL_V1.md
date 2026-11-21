@@ -139,3 +139,14 @@ Les tables `ns_sync_receipts`, `ns_sync_conflicts` et `ns_notification_outbox` r
 Ce document est une spécification de travail. Le worker, l'endpoint sync, les mappings d'IDs et les tests d'intégration ne sont pas implémentés ici. Les écrans qui indiquent que la synchronisation n'est pas encore raccordée doivent conserver cette mention jusqu'à réussite des gates ci-dessus.
 
 Aucune migration SQL n'est appliquée, aucune Edge Function n'est déployée, aucun projet Supabase existant n'est modifié et aucune version de production n'est déclarée.
+
+
+## 12. Addendum — Implémentation du contrat d'identifiants et de l'orchestration manuelle (21 novembre 2026)
+
+Le code candidat conserve les UUID locaux pour fournisseurs, commandes et lignes. `ns_save_supplier` accepte l'ID fournisseur local et rejette tout ID déjà détenu par une autre organisation/site. La création de commande utilise l'ID de la commande comme clé d'idempotence et clé primaire serveur ; le payload transmet un ID pour chaque ligne, que le RPC conserve également. Les réponses de commande retournent les IDs des lignes.
+
+Room version 12 ajoute métadonnées de tentative/reprise. Les événements du cycle fournisseur portent un snapshot complet. Le coordinateur manuel traite seulement les actions fournisseur, commande, réception et paiement, dans l'ordre du journal ; il n'accepte l'état `synced` qu'après réponse serveur et ID distant. Les erreurs transitoires sont retentées avec backoff ; les rejets et dépendances sont conservés. Un paiement espèces reste bloqué tant que la session de caisse serveur n'a pas de correspondance.
+
+L'activation est fausse par défaut et exige une référence de projet de recette Famille NAXA, identique à la référence configurée, ainsi qu'un endpoint Edge correspondant. Le projet NAXA historique connu est explicitement refusé.
+
+**Reste ouvert :** sync des articles importés/autres familles, réplication de caisse, worker automatique, résolution de conflits et tests sur deux appareils/base isolée. Cette implémentation n'a encore été ni compilée par la CI de ce commit, ni déployée.

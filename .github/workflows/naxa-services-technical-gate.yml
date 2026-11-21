@@ -98,10 +98,10 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Type-check accounting contract
-        run: deno check supabase/functions/naxa-services-accounting/index.ts supabase/functions/naxa-services-accounting/accounting_contract.ts supabase/functions/naxa-services-accounting/contract_test.ts
+      - name: Type-check accounting and stable-ID sync contracts
+        run: deno check supabase/functions/naxa-services-accounting/index.ts supabase/functions/naxa-services-accounting/accounting_contract.ts supabase/functions/naxa-services-accounting/contract_test.ts supabase/functions/naxa-services-accounting/sync_contract.ts supabase/functions/naxa-services-accounting/sync_contract_test.ts
       - name: Run supplier accounting and forecast contracts
-        run: deno test supabase/functions/naxa-services-accounting/contract_test.ts
+        run: deno test supabase/functions/naxa-services-accounting/contract_test.ts supabase/functions/naxa-services-accounting/sync_contract_test.ts
 
   sql-static-security:
     name: NAXA SERVICES draft SQL security boundary checks
