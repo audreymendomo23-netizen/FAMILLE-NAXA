@@ -73,6 +73,23 @@ object SupplierSyncCoordinator {
                 rejected++
                 break
             }
+            if (payload.optString("org_id") != orgId) {
+                dao.updateOutboxAttempt(
+                    event.eventId, orgId, "rejected", System.currentTimeMillis(), null,
+                    "OUTBOX_ORGANIZATION_SCOPE_MISMATCH"
+                )
+                rejected++
+                break
+            }
+            val eventSiteId = payload.optString("site_id")
+            if (eventSiteId.isBlank() || eventSiteId !in session.account.activeSiteIds) {
+                dao.updateOutboxAttempt(
+                    event.eventId, orgId, "blocked_dependency", System.currentTimeMillis(), null,
+                    "ACTIVE_MEMBER_SITE_SCOPE_NOT_AVAILABLE"
+                )
+                blocked++
+                continue
+            }
 
             val action = when (event.actionCode) {
                 "supplier.saved" -> "save_supplier"

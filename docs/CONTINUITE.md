@@ -1225,3 +1225,6 @@ Room passe à la version 12 avec métadonnées de retry. Les snapshots d'outbox 
 Activation protégée : `NS_ENABLE_SUPPLIER_SYNC=true`, références projet/configuration concordantes, endpoint hébergé par cette référence et interdiction explicite du projet NAXA historique. Par défaut, l'option est fausse et aucune requête de synchronisation n'est lancée.
 
 **Limites :** les événements autres que cycle fournisseur ne sont pas encore répliqués ; les articles de stock doivent déjà exister sur le serveur ; la caisse espèces, le worker automatique, les conflits multi-appareils et la recette sur environnement isolé ne sont pas clôturés. Aucun SQL ou Edge Function n'a été déployé.
+
+
+Contrôle final ajouté au coordinateur : organisation du payload strictement égale à l'organisation de session, site du payload strictement présent dans les affectations du membre. Un site non affecté reste bloqué sans interrompre le traitement des autres sites autorisés ; l'Edge/RPC reste l'autorité finale d'autorisation.

@@ -150,3 +150,8 @@ Room version 12 ajoute métadonnées de tentative/reprise. Les événements du c
 L'activation est fausse par défaut et exige une référence de projet de recette Famille NAXA, identique à la référence configurée, ainsi qu'un endpoint Edge correspondant. Le projet NAXA historique connu est explicitement refusé.
 
 **Reste ouvert :** sync des articles importés/autres familles, réplication de caisse, worker automatique, résolution de conflits et tests sur deux appareils/base isolée. Cette implémentation n'a encore été ni compilée par la CI de ce commit, ni déployée.
+
+
+## 13. Contrôle client de périmètre avant envoi
+
+Le coordinateur Android vérifie que l'organisation de chaque payload est celle de la session et que le site est affecté au membre. Les événements d'un site non affecté passent en `blocked_dependency`, sans être transmis. Les événements d'une organisation incohérente sont rejetés. Cette protection cliente n'accorde aucun droit : les contrôles organisation/site côté Edge et RPC restent obligatoires.

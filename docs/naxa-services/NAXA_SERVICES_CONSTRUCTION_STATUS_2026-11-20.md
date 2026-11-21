@@ -1473,3 +1473,10 @@ Le bouton de synchronisation reste désactivé par défaut. Il exige `NS_ENABLE_
 Le lot ne synchronise pas encore les familles d'objets hors cycle fournisseur, notamment articles importés, caisses, clients, ventes, rendez-vous, opérations métiers, personnel et transferts. Un achat stock dépend d'un article déjà présent côté serveur. Les règlements espèces attendent la réplication de caisse. Le worker automatique, la réconciliation des conflits, les tests multi-appareils et les appels sur base Supabase isolée restent en attente.
 
 Aucune migration SQL n'a été appliquée ; aucun endpoint Edge n'a été déployé ; aucun projet Supabase existant n'a été modifié. Le code attend les tests Android/Deno de la CI.
+
+
+## 44.6 Contrôle additionnel organisation/site au départ de la synchronisation
+
+Avant chaque appel, le coordinateur compare maintenant `payload.org_id` à l'organisation de session et vérifie que `payload.site_id` figure dans les sites affectés au membre actif. Une incohérence d'organisation est rejetée ; un site non affecté est bloqué comme dépendance, et le coordinateur peut poursuivre les événements d'autres sites autorisés de la même organisation.
+
+Cette vérification cliente complète, sans remplacer, les contrôles d'autorisation de l'Edge/RPC.
