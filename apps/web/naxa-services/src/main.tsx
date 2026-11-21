@@ -1,4 +1,6 @@
 import React, { useMemo, useState } from "react";
+import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued } from "@famille/offline-web";
+import { normalizeInventoryItemDraft } from "./erp/inventory";
 import { parseWebSession, type WebAuthSession } from "./auth/session";
 import { createRoot } from "react-dom/client";
 import "@famille/design-system/tokens.css";
@@ -10,6 +12,7 @@ type ModuleId =
   | "workstations" | "security" | "settings" | "help";
 
 type BusinessMode = "solo" | "single_site_multi_workstation" | "multi_site_network";
+const OFFLINE_APP_ID = "naxa-services-web";
 type Entry = { id: string; title: string; detail: string; state: string; createdAt: string };
 
 const modules: { id: ModuleId; title: string; description: string; group: string; action: string }[] = [
@@ -82,6 +85,12 @@ function App() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDetail, setDraftDetail] = useState("");
+  const [draftSku, setDraftSku] = useState("");
+  const [draftUnit, setDraftUnit] = useState("pièce");
+  const [draftReorderLevel, setDraftReorderLevel] = useState("0");
+  const [draftSupplierWhatsApp, setDraftSupplierWhatsApp] = useState("");
+  const [activeSiteId, setActiveSiteId] = useState("");
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [search, setSearch] = useState("");
 
   const selected = modules.find((m) => m.id === active)!;
@@ -93,6 +102,7 @@ function App() {
 
   const env = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
   const authEndpoint = env.VITE_NAXA_SERVICES_AUTH_URL ?? "";
+  const accountingEndpoint = env.VITE_NAXA_SERVICES_ACCOUNTING_URL ?? authEndpoint.replace(/naxa-services-auth(?=\/?$)/, "naxa-services-accounting");
   const anonKey = env.VITE_SUPABASE_ANON_KEY ?? "";
 
   function webDevicePayload() {
@@ -134,6 +144,8 @@ function App() {
       }, anonKey);
       const nextSession = parseWebSession(data);
       setAuthSession(nextSession);
+      setActiveSiteId(nextSession.account.active_site_ids[0] ?? "");
+      void listQueued(OFFLINE_APP_ID).then((items) => setPendingSyncCount(items.length)).catch(() => setPendingSyncCount(0));
       setAuthenticated(true);
       setPreview(false);
       setPassword("");
@@ -242,6 +254,102 @@ function App() {
         ? "Session fermée."
         : "Session locale fermée ; la révocation serveur n'a pas pu être confirmée. Une reconnexion sera nécessaire.");
     }
+  }
+
+
+  async function syncWebOutbox(activeSession: WebAuthSession) {
+    if (!accountingEndpoint || !anonKey) throw new Error("Le connecteur comptable Web n’est pas configuré.");
+    const freshSession = await ensureFreshSession(activeSession);
+    const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID);
+    let acknowledged = 0;
+    let retrying = 0;
+    let rejected = 0;
+    for (const queued of batch) {
+      let status: number | null = null;
+      let errorCode = "NETWORK_UNAVAILABLE";
+      let payload: Record<string, unknown> = {};
+      try {
+        payload = JSON.parse(queued.payload) as Record<string, unknown>;
+        const response = await fetch(accountingEndpoint, {
+          method: "POST",
+          credentials: "omit",
+          headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: "Bearer " + freshSession.accessToken },
+          body: JSON.stringify(payload),
+        });
+        status = response.status;
+        const data = await response.json().catch(() => ({})) as Record<string, unknown>;
+        if (!response.ok || data.ok !== true) {
+          errorCode = typeof data.error === "string" ? data.error : "REMOTE_REQUEST_FAILED";
+          throw new Error(errorCode);
+        }
+        if (!data.receipt) { errorCode = "SERVER_RECEIPT_MISSING"; throw new Error(errorCode); }
+        const state = await applyServerReceipt(queued.eventId, data.receipt, OFFLINE_APP_ID);
+        if (state === "acknowledged") {
+          acknowledged++;
+          const itemId = typeof payload.inventory_item_id === "string" ? payload.inventory_item_id : "";
+          if (itemId) setEntries((previous) => ({
+            ...previous,
+            stock: (previous.stock ?? []).map((entry) => entry.id === itemId ? { ...entry, state: "Synchronisé serveur" } : entry),
+          }));
+        } else if (state === "rejected") rejected++;
+      } catch {
+        const willRetry = await scheduleRetry(queued.eventId, { status, errorCode }, Date.now(), OFFLINE_APP_ID).catch(() => false);
+        if (willRetry) retrying++; else rejected++;
+        const itemId = typeof payload.inventory_item_id === "string" ? payload.inventory_item_id : "";
+        if (itemId && !willRetry) setEntries((previous) => ({
+          ...previous,
+          stock: (previous.stock ?? []).map((entry) => entry.id === itemId ? { ...entry, state: "Rejeté — vérifier le dossier" } : entry),
+        }));
+      }
+    }
+    const remaining = await listQueued(OFFLINE_APP_ID);
+    setPendingSyncCount(remaining.length);
+    if (acknowledged > 0) setAuthMessage(acknowledged + " article(s) confirmé(s) par le serveur.");
+    else if (retrying > 0) setAuthMessage(retrying + " opération(s) en attente de reprise réseau.");
+    else if (rejected > 0) setAuthMessage(rejected + " opération(s) rejetée(s) : vérifier les droits, le site ou les données.");
+    else if (batch.length === 0) setAuthMessage("Aucune opération NAXA Services en attente.");
+    return { acknowledged, retrying, rejected, remaining: remaining.length };
+  }
+
+  async function submitStockItem() {
+    const activeSession = authSession;
+    if (!activeSession) { addLocalEntry(); return; }
+    setBusy(true);
+    try {
+      const siteId = activeSiteId || activeSession.account.active_site_ids[0] || "";
+      if (!siteId || !activeSession.account.active_site_ids.includes(siteId)) throw new Error("Choisis un point de vente autorisé pour cette session.");
+      const item = normalizeInventoryItemDraft({
+        name: draftTitle, sku: draftSku, unit: draftUnit,
+        reorderLevel: Number(draftReorderLevel), supplierWhatsApp: draftSupplierWhatsApp,
+      });
+      const inventoryItemId = crypto.randomUUID();
+      const eventId = crypto.randomUUID();
+      const payload = {
+        action: "save_inventory_item", event_id: eventId, app_code: "naxa-services",
+        inventory_item_id: inventoryItemId, org_id: activeSession.account.organization_id,
+        site_id: siteId, sku: item.sku, name: item.name, unit: item.unit,
+        reorder_level: item.reorderLevel, supplier_whatsapp: item.supplierWhatsApp,
+      };
+      await enqueueOfflineEvent({
+        appId: OFFLINE_APP_ID, eventId, payload: JSON.stringify(payload),
+        state: "queued", createdAt: Date.now(),
+      });
+      setEntries((previous) => ({
+        ...previous,
+        stock: [...(previous.stock ?? []), {
+          id: inventoryItemId, title: item.name, detail: item.sku || item.unit,
+          state: navigator.onLine ? "En attente de confirmation serveur" : "En attente de connexion",
+          createdAt: new Date().toLocaleString("fr-FR"),
+        }],
+      }));
+      setDraftTitle(""); setDraftDetail(""); setDraftSku(""); setDraftUnit("pièce");
+      setDraftReorderLevel("0"); setDraftSupplierWhatsApp(""); setDialogOpen(false);
+      setPendingSyncCount((count) => count + 1);
+      if (navigator.onLine) await syncWebOutbox(activeSession);
+      else setAuthMessage("Article placé dans la file hors ligne. Utilise Synchroniser après le retour du réseau.");
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Création du consommable impossible.");
+    } finally { setBusy(false); }
   }
 
   function addLocalEntry() {
@@ -365,7 +473,8 @@ function App() {
             <div><span className="eyebrow">{moduleCopy[active].eyebrow}</span><h1>{moduleCopy[active].headline}</h1><p>{moduleCopy[active].helper}</p></div>
             <div className="heading-actions">
               {active !== "overview" && <button className="btn secondary" onClick={() => setActive("overview")}>Vue d'ensemble</button>}
-              <button className="btn primary" onClick={() => { setDraftTitle(""); setDraftDetail(""); setDialogOpen(true); }}>{selected.action}</button>
+              {active === "stock" && authSession && pendingSyncCount > 0 && <button className="btn secondary" disabled={busy} onClick={() => { void syncWebOutbox(authSession).catch((error) => setAuthMessage(error instanceof Error ? error.message : "Synchronisation impossible.")); }}>Synchroniser ({pendingSyncCount})</button>}
+              <button className="btn primary" onClick={() => { setDraftTitle(""); setDraftDetail(""); setDraftSku(""); setDraftUnit("pièce"); setDraftReorderLevel("0"); setDraftSupplierWhatsApp(""); setDialogOpen(true); }}>{selected.action}</button>
             </div>
           </div>
 
@@ -387,11 +496,20 @@ function App() {
       {dialogOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
           <div className="modal-head"><div><span className="eyebrow">NOUVELLE OPÉRATION · APERÇU</span><h2 id="modal-title">{selected.action}</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)}>×</button></div>
-          <form onSubmit={(e) => { e.preventDefault(); addLocalEntry(); }}>
-            <label>Nom / référence<input autoFocus value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} required placeholder="Ex. Référence de l'opération" /></label>
-            <label>Détails<textarea rows={3} value={draftDetail} onChange={(e) => setDraftDetail(e.target.value)} placeholder="Informations complémentaires" /></label>
-            <div className="notice">Brouillon local : aucun encaissement, ticket ou rendez-vous réel n'est créé.</div>
-            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>Annuler</button><button className="btn primary">Ajouter à l'aperçu</button></div>
+          <form onSubmit={(e) => { e.preventDefault(); if (active === "stock" && authSession) void submitStockItem(); else addLocalEntry(); }}>
+            <label>Nom / référence<input autoFocus value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} required placeholder="Ex. Lessive professionnelle" /></label>
+            {active === "stock" && authSession ? <>
+              <label>Point de vente<select value={activeSiteId} onChange={(e) => setActiveSiteId(e.target.value)} required>{authSession.account.active_site_ids.map((siteId) => <option key={siteId} value={siteId}>{siteId}</option>)}</select></label>
+              <label>SKU (facultatif)<input value={draftSku} onChange={(e) => setDraftSku(e.target.value)} maxLength={80} /></label>
+              <label>Unité<input value={draftUnit} onChange={(e) => setDraftUnit(e.target.value)} required maxLength={40} /></label>
+              <label>Seuil d'alerte<input type="number" min="0" step="0.001" value={draftReorderLevel} onChange={(e) => setDraftReorderLevel(e.target.value)} required /></label>
+              <label>WhatsApp fournisseur<input value={draftSupplierWhatsApp} onChange={(e) => setDraftSupplierWhatsApp(e.target.value)} maxLength={32} placeholder="+237 6xx xx xx xx" /></label>
+              <div className="notice">La fiche article est envoyée au RPC sécurisé ; les mouvements de quantité restent séparés et audités.</div>
+            </> : <>
+              <label>Détails<textarea rows={3} value={draftDetail} onChange={(e) => setDraftDetail(e.target.value)} placeholder="Informations complémentaires" /></label>
+              <div className="notice">Brouillon local : aucun encaissement, ticket ou rendez-vous réel n'est créé.</div>
+            </>}
+            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>Annuler</button><button className="btn primary" disabled={busy}>{active === "stock" && authSession ? "Mettre en file & synchroniser" : "Ajouter à l'aperçu"}</button></div>
           </form>
         </div>
       </div>}
