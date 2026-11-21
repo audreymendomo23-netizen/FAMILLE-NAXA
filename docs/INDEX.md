@@ -5,7 +5,8 @@
 - [Continuité Famille NAXA](CONTINUITE_FAMILLE_NAXA.md)
 
 - [Continuité GRILLAD — audit, décisions et passation](passations/GRILLAD_CONTINUITE_2026-11-21.md)
-- [Cahier des charges GRILLAD V1.1 — périmètre consolidé](cahiers-des-charges/GRILLAD_V1_1.md)
+- [Cahier des charges GRILLAD V1.2 — ACCÈS/PREMIUM et architecture multi-points](cahiers-des-charges/GRILLAD_V1_2.md)
+- [Cahier GRILLAD V1.1 — historique remplacé](cahiers-des-charges/GRILLAD_V1_1.md)
 - [Cahier des charges ZIPPLE V2.0 — référence gelée](cahiers-des-charges/ZIPPLE_V2_0.md)
 - [Cadrage technique — Prompt 0.1](architecture-360/PROMPT_0_1_CADRAGE_TECHNIQUE.md)
 - [Schéma commun — Prompt 0.2](architecture-360/PROMPT_0_2_SCHEMA_DONNEES_COMMUN.md)
