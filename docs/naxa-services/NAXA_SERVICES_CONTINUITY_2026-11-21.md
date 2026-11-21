@@ -63,15 +63,13 @@ Les drafts PostgreSQL v1 à v7 et les Edge Functions présentes sont vérifiés 
 
 ## 4. Synchronisation ERP — constat technique détaillé
 
-L'audit du fichier `apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt` dénombre 55 appels d'enqueue.
+L'audit de LocalErpStore.kt dénombre 55 appels au helper d'outbox. Ce chiffre mesure des points d'émission techniques, pas 55 fonctionnalités manquantes.
 
-Le coordinateur `SupplierSyncCoordinator.kt` ne connaît que quatre actions :
-- `supplier.saved`
-- `purchase.ordered`
-- `purchase.receipt.confirmed`
-- `supplier.payment.recorded`
+Le coordinateur SupplierSyncCoordinator.kt ne prend actuellement en charge que quatre actions pour la synchronisation ERP manuelle du cycle fournisseur : supplier.saved, purchase.ordered, purchase.receipt.confirmed et supplier.payment.recorded. Ces quatre actions disposent de snapshots spécifiques et d'un handler Edge/RPC correspondant.
 
-Ces quatre actions portent des snapshots spécifiques. Les autres appels de l'outbox emploient encore la structure de repli avec `aggregate_id` et `site_id`. L'organisation est stockée séparément sur l'événement Room, mais le snapshot n'est pas complet pour être joué par un serveur métier.
+Les 51 autres appels utilisent encore le payload de repli aggregate_id/site_id. Cela prouve qu'ils ne sont pas rejouables par ce coordinateur avec le contrat actuel ; cela ne prouve pas, à lui seul, que les fonctions correspondantes sont absentes. Certaines opérations ont des chemins API directs distincts de l'outbox (Auth, profil organisation, sites, postes, parrainage PME, parrainage client/promotions et centre de notifications). D'autres sont explicitement des registres locaux Room. Le classement fonction par fonction figure dans NAXA_SERVICES_EVIDENCE_RECONCILIATION_2026-11-21.md.
+
+Il faut donc distinguer : opération locale construite, opération envoyée par un endpoint dédié, et opération répliquée par la synchronisation générique. Ne pas déduire l'état d'une fonctionnalité de la seule présence de son événement dans l'outbox.
 
 Autres limites du cycle fournisseur :
 - les achats avec lignes stock restent bloqués tant que les articles locaux n'ont pas de mapping d'identifiant distant ;
@@ -143,14 +141,15 @@ Ces éléments ne sont pas tous résolubles par du code seul. Les validations ex
 
 | Lot de travail | Preuve obligatoire | Statut |
 |---|---|---|
-| Inventaire exact des 55 événements et dépendances | Liste versionnée et correspondance 1:1 | À faire |
-| Snapshots Room complets | Tests de payload pour chaque code d'action ; aucun payload de repli | ROUGE |
-| Handlers Edge/RPC typés | Tests PostgreSQL jetable valides/invalides/doublons/hors scope | ROUGE |
-| Reçus transactionnels et conflits | Mutation + receipt atomiques, payload divergent rejeté | ROUGE |
-| Sync Android globale | Worker WorkManager, retry, reprise, multi-device | ROUGE |
-| Sync Web/PWA globale | IndexedDB connectée aux modules et mêmes API | ROUGE |
-| Parité fonctionnelle Web | Agenda, pressing, caisse, services, CRM, stock, finance, RH/équipe, rapports | ROUGE |
-| Finance complète et validée | Journaux équilibrés, policies approuvées, paie/fiscalité contrôlées | ROUGE |
+| Inventaire des 55 points d'outbox | Classer chaque call site : mutation métier à synchroniser, journal local, copie/cache ou action couverte par une API directe | À QUALIFIER — ne pas assimiler 55 événements à 55 fonctions manquantes |
+| Cycle fournisseur | Quatre snapshots, quatre actions supportées par le coordinateur manuel ; dépendances article distant et caisse espèces | PARTIEL — code et coordinateur présents ; dépendances et activation isolée non prouvées |
+| Autres domaines Room | Plusieurs écrans et registres fonctionnent localement ; mentions LocalOnly et fonctions API directes à comparer | ROUGE pour réplication universelle ; VERT LOCAL pour les parcours locaux attestés |
+| Handlers serveur ERP par domaine | Edge accounting couvre le cycle fournisseur, post_sale_inventory, objectifs et lecture performance ; vérifier le raccordement effectif de chaque action | PARTIEL — pas de preuve de couverture de tous les agrégats |
+| Reçus transactionnels et conflits globaux | Tables/contrats de reçus et conflits présents dans les drafts ; coordinateur actif limité au cycle fournisseur | PARTIEL — pas de preuve mutation + reçu atomiques pour tous les domaines |
+| Sync Android universelle | Aucun coordinateur générique couvrant tous les agrégats ; coordinateur manuel fournisseur uniquement | ROUGE — synchronisation globale non démontrée |
+| Sync Web/PWA ERP | Auth réelle ; opérations Web dans l'état React local, sans utilisation de la file IndexedDB partagée | ROUGE — parité métier et sync Web non livrées |
+| Parité fonctionnelle Web | Build Vite et tests Auth réussis ; pas de connecteurs ERP métier démontrés dans les modules opérationnels | ROUGE — aperçu métier local uniquement |
+| Finance applicative complète | Moteurs autonomes et tests présents ; plusieurs écrans gardent des registres locaux ou saisies manuelles | PARTIEL — séparer moteur testé, intégration métier et validation professionnelle |
 | Firebase/FCM réel | Push reçu sur appareils de test | BLOQUÉ PAR PROJET/SECRETS |
 | Mobile Money réel | Sandbox opérateur, webhook vérifié et rapprochement | BLOQUÉ PAR CONTRATS/ACCÈS |
 | Release signée | Certificat propriétaire et vérification signature | BLOQUÉ PAR CLÉ/SECRETS |
@@ -188,3 +187,24 @@ Ces éléments ne sont pas tous résolubles par du code seul. Les validations ex
 **Prochain objectif technique :** remplacer le flux outbox à références minimales par un protocole d'événements métier complet, handler par handler, puis raccorder les modules Web/PWA. Aucun passage à Supabase avant preuves de sortie fonctionnelle.
 
 Document complémentaire : `docs/naxa-services/NAXA_SERVICES_SYNC_PROTOCOL_V1.md`.
+
+
+---
+
+## 11. Correctif d'audit comparatif — 21 novembre 2026
+
+Le comptage des 55 appels d'outbox n'est pas un inventaire de 55 fonctionnalités non terminées. Le précédent texte qui présentait les 51 appels sans snapshot comme 51 fonctions incomplètes est retiré : il n'était pas suffisamment étayé.
+
+Le document de confrontation NAXA_SERVICES_EVIDENCE_RECONCILIATION_2026-11-21.md met en regard les déclarations des sections 30, 34, 39, 41, 44, 46 et 47 du dossier de construction, les écrans Android, les fonctions Auth/Edge, les contrats et les tests.
+
+Règle de qualification :
+- VERT LOCAL : parcours Android/Room construit et explicitement livré dans la portée locale ;
+- VERT API/CONTRAT : endpoint, client et contrat/test présents, sans présumer de leur déploiement réel ;
+- PARTIEL : une partie du parcours fonctionne, mais un maillon métier, ledger, worker ou dépendance reste ouvert ;
+- ROUGE PROUVÉ : une contre-preuve directe existe (écran local, appel métier absent, route absente du coordinateur actif, garde fail-closed ou workflow non exécuté) ;
+- BLOQUÉ EXTERNE : projet, secret, compte marchand, clé ou validation professionnelle/juridique manquante ;
+- À QUALIFIER : les éléments disponibles ne suffisent pas pour conclure.
+
+Le parrainage client Android, le centre de notifications Android, l'API Auth/profil/site/poste, les briefings locaux et les rappels de charges locaux sont des capacités réellement présentes : elles ne doivent plus être listées comme absentes. Les limites restant démontrées concernent leur portée (FCM réel, intégration de récompense au ledger, synchronisation CRM/ERP, déploiement), pas leur simple existence.
+
+Le gate CI le plus récent est le run 44946137015, 12/12 jobs SUCCESS sur le commit documentaire 697d58f. L'artefact Android correspondant est Debug, ID 14724147044, digest d'archive SHA-256 edfa9665b220a1442b1a82455d6da2e07f221172d7b226761cf25c95b46b5e7e. La branche main reste indépendante.

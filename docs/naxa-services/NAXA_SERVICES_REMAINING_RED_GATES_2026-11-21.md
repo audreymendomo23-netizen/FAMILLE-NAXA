@@ -145,9 +145,10 @@ Cette section remplace les statuts intermédiaires des sections précédentes lo
 
 - Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`
 - Branche de travail : `work/naxa-services-completion-20261120`
-- HEAD vérifié : `38df9449e196c1074272097d9440fcf132dfa99b`
-- Le HEAD de la branche est identique au commit du dernier gate technique.
-- Aucun commit de cette reprise n'est poussé sur `main`; aucune fusion, aucun déploiement et aucune migration vers un projet Supabase ne sont effectués.
+- HEAD vérifié lors de l'audit comparatif : `697d58fcef969ba5bcf2b2f10ecfe21eba46a004`.
+- Le gate le plus récent [44946137015](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44946137015) a terminé 12/12 jobs SUCCESS sur ce HEAD documentaire.
+- Le commit `697d58f` ne modifie que des fichiers de documentation ; aucun code applicatif n'a été changé dans cette reprise.
+- `main` est restée sur `6836f37766a88504260156951bf648cdb905e19b`. Aucune fusion, aucun déploiement et aucune migration vers un projet Supabase ne sont effectués.
 
 ### 10.2 Gates techniques réellement terminés
 
@@ -162,9 +163,9 @@ Les 12 jobs du gate technique ont tous terminé avec la conclusion `success` : a
 
 ### 10.3 Artefact Android
 
-- Artefact GitHub Actions du gate courant : [naxa-services-debug-apk — 14723675607](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44944767801).
-- Taille de l'archive : 13 571 428 octets.
-- Empreinte de l'archive publiée par GitHub : `sha256:fc436b37e95cc28d74d072f903e228a68da7eb994ab1e2c2569fac3fbee9a90a`.
+- Artefact du gate le plus récent : [naxa-services-debug-apk — 14724147044](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44946137015).
+- Taille de l'archive : 13 571 429 octets.
+- Digest d'archive publié par GitHub : `sha256:edfa9665b220a1442b1a82455d6da2e07f221172d7b226761cf25c95b46b5e7e`.
 - Il s'agit d'un APK **Debug**. Il ne constitue pas une Release signée distribuable en production.
 
 Le drill de sauvegarde/restauration prouve la sauvegarde chiffrée, le contrôle d'intégrité et la restauration sur des bases PostgreSQL jetables et isolées. Il ne prouve pas encore une restauration d'un environnement Supabase hébergé réel.
@@ -180,7 +181,7 @@ L'audit de `apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/L
 - `purchase.receipt.confirmed`
 - `supplier.payment.recorded`
 
-Les autres points d'émission utilisent encore le payload de repli `aggregate_id` + `site_id` (l'identifiant d'organisation reste dans la ligne Room), au lieu d'un snapshot métier complet et versionné. Ils ne sont donc pas rejouables de manière sûre côté serveur. Les actions de stock, caisse, ventes, dépenses, rendez-vous, pressing, services, clients/CRM, équipe/gestion, transferts, fidélité et charges récurrentes ne doivent pas être comptées comme synchronisées.
+Les 51 autres points d'émission utilisent encore le payload de repli `aggregate_id` + `site_id`. Ce constat démontre une limite du transport par outbox ; il ne permet pas de conclure que 51 fonctionnalités seraient absentes. Des opérations ont des routes API directes hors outbox (Auth, profil organisation, sites/postes, parrainage PME, parrainage client/promotions, notifications). Plusieurs modules Android sont livrés au niveau local Room, avec des écrans et règles métier réels, mais leurs propres mentions LocalOnlyNotice confirment qu'ils ne sont pas répliqués au serveur à ce stade. Le détail par domaine et la preuve négative associée sont consignés dans NAXA_SERVICES_EVIDENCE_RECONCILIATION_2026-11-21.md.
 
 Le coordinateur fournisseur reste manuel et explicitement opt-in. Deux dépendances sont bloquées de façon fail-closed : article de stock non mappé dans la base distante et paiement fournisseur espèces sans session de caisse distante correspondante. La variable d'activation reste désactivée par défaut et exige une référence de projet Famille dédiée concordante.
 
@@ -212,7 +213,7 @@ Le package `packages/offline-web` fournit une file IndexedDB, des leases, retrie
 
 ### 10.7 Ordre obligatoire de fermeture avant tout projet Supabase
 
-1. Remplacer les 51 événements incomplets par des snapshots explicites, versionnés et minimisés, avec dépendances et identifiants stables.
+1. Établir la matrice des 55 points d'outbox et classer chaque appel : mutation métier à répliquer, journal local, cache/mirror ou action déjà servie par une API directe. Ne compléter les snapshots et handlers que pour les mutations ERP effectivement promises à la synchronisation.
 2. Livrer les handlers serveur typés couvrant chaque action autorisée, avec contrôle Auth/organisation/site/poste/rôle, transaction métier + reçu idempotent, règles de conflit, tests positifs/négatifs et reprise après interruption.
 3. Livrer la synchronisation Android automatique et manuelle, son ordonnancement, sa reprise, ses mappings inter-agrégats et les tests multi-appareils.
 4. Connecter les modules Web/PWA à ces mêmes contrats, avec persistance IndexedDB, états de file, reçus, conflits, authentification et droits identiques.
@@ -224,3 +225,31 @@ Le package `packages/offline-web` fournit une file IndexedDB, des leases, retrie
 ### 10.8 Décision
 
 Le gate de build/contrats/RLS jetable est **VERT 12/12** et le drill de sauvegarde/restauration jetable est **VERT 1/1**. Cela ne rend pas l'application entière verte. La synchronisation ERP universelle, les opérations Web/PWA et plusieurs intégrations/validations restent rouges. **Le projet Supabase dédié n'est pas créé et aucune migration n'est autorisée par cette mise à jour documentaire.**
+
+
+---
+
+## 11. Correctif de confrontation des déclarations — 21 novembre 2026
+
+Le présent registre est à lire avec l'audit de confrontation NAXA_SERVICES_EVIDENCE_RECONCILIATION_2026-11-21.md. Il corrige toute interprétation des 55 appels d'outbox comme 55 fonctions absentes.
+
+### Déclarations confirmées par le code et les tests
+- Parcours Android locaux : pressing, agenda, caisse/ventes, stock/valorisation/transferts, CRM local, charges récurrentes, fidélité, pointage/variables et pilotage ont du code Room et des écrans. Leur statut correct est VERT LOCAL pour les flux attestés.
+- Auth et gestion d'organisation : le client appelle les API Auth pour profil, site et poste ; l'Edge Auth possède les actions correspondantes.
+- Parrainage client : composable Android, route Promoteur, appels à l'Edge promotions, schéma candidat et tests PostgreSQL jetable sont présents.
+- Centre de notifications : route Android, inbox, actions read/actioned, enregistrement/révocation de token et worker FCM côté Edge sont présents dans le code. Les briefings matin/soir et rappels de charges sont aussi planifiés localement.
+- Finance : moteurs et tests existent pour les statuts de paiement, commissions sur prestation achevée et payée, extournes append-only et politiques fiscales datées.
+
+### Contre-preuves des limites
+- L'outbox Android n'est consommée par le coordinateur actif que pour quatre actions du cycle fournisseur ; celui-ci est manuel et opt-in.
+- Plusieurs écrans de gestion affichent des mentions locales ou appellent les repositories Room : cela établit une limite de réplication, pas une absence du parcours local.
+- Le Web a Auth et build/tests Auth, mais addLocalEntry() met les opérations en état React ; aucun endpoint métier n'est appelé depuis les formulaires opérationnels.
+- L'intégration FCM réelle dépend des configurations Firebase/Edge et d'un dispatch testé sur appareil ; les tests de contrat et la présence de l'UI ne prouvent pas un push réel.
+- Le moteur Mobile Money utilise une registry d'adaptateurs vide par défaut ; son test fail-closed ne prouve pas de transaction réelle MTN/Orange.
+- La commission UI saisit un montant manuel en pending_review ; le moteur de calcul existe, mais le calcul automatique depuis les prestations et encaissements n'est pas raccordé à cette UI.
+- La fiscalité UI crée une estimation locale en brouillon ; le moteur bloque l'absence de politique approuvée.
+- Le journal de gestion affiche des comptes symboliques et l'écran paie ne constitue pas un moteur de paie/CNPS certifié.
+- Le workflow signé exige quatre secrets de signature ; le gate 12/12 construit un APK Debug, pas une Release signée.
+- Les tests de backup/restore et de RLS sont verts sur PostgreSQL jetable ; ils ne constituent pas une restauration ou un déploiement sur environnement hébergé.
+
+Les éléments de code localement terminés ne doivent pas être comptés comme manquants. Les limites de serveur, de production, de conformité et de recette restent classées séparément.

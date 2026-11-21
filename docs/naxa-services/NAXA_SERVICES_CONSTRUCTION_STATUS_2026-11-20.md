@@ -1690,3 +1690,70 @@ Correctif final : les sorties de session depuis la configuration initiale, depui
 Aucun draft SQL n'a été appliqué à un projet Supabase réel durant cette séquence ; aucun déploiement Edge/Firebase n'a été réalisé et aucun secret n'a été ajouté au dépôt. Les commits applicatifs de cette intervention sont restés sur la branche de travail ; aucune fusion ou poussée vers `main` n'a été effectuée par cette intervention.
 
 **Décision :** déclarer NAXA SERVICES **VERT CI / build Android debug** pour le commit testé, tout en maintenant **NON QUALIFIÉ PRODUCTION** jusqu'à la levée documentée des portes externes ci-dessus.
+
+
+---
+
+## 48. Audit de confrontation des déclarations et des preuves (21 novembre 2026)
+
+Cette section confronte les déclarations de livraison antérieures aux chemins de code, aux tests et aux limites affichées par l'application. Elle prévaut sur toute lecture trop large de la liste « éléments non terminés » de §46.6. Un statut localement livré n'est pas synonyme de synchronisation serveur ; inversement, un endpoint isolé n'est pas une preuve de production.
+
+### 48.1 Preuves positives : ce qui est effectivement construit
+
+| Lot déclaré livré | Élément de preuve dans le dépôt | Qualification vérifiée |
+|---|---|---|
+| Parcours Android local | Room/LocalErpStore et routes Compose ; fonctions métier du dépôt appelées depuis les écrans | VERT LOCAL pour les parcours couverts par les sections 30, 34, 39 et 41 |
+| Cycle fournisseur | UI dans ManagementModules ; snapshots Room pour fournisseur/commande/réception/règlement ; SupplierSyncCoordinator ; Edge accounting et RPC draft v4 | PARTIEL : code et contrats existent ; coordinateur manuel, opt-in, seulement quatre actions et dépendances bloquantes |
+| Authentification et sessions | AuthApi Android/Web, Edge Auth (login, refresh, recovery, password, logout, provisioning, recovery admin) | VERT API/CONTRAT ; déploiement Supabase isolé et recette environnement réel non prouvés |
+| Profil organisation, site, poste | AuthApi.updateOrganizationProfile/createSite/createWorkstation/listWorkstations ; appels directs depuis OrganizationWorkspaceContent ; actions Edge Auth correspondantes | VERT API/CONTRAT pour ces parcours ciblés ; ne pas les compter comme des actions qui n'auraient aucune API |
+| Parrainage PME | ReferralScreen, AuthApi, Edge referrals, webhook HMAC et contrats Deno | PARTIEL : UI/API/contrats présents ; paiement réellement webhooké et entitlement appliqué restent non prouvés |
+| Parrainage client/promotions | CustomerPromotionsContent, route Promoteur, appels customerPromotionsRequest, Edge v5 et tests PostgreSQL de code/qualification/idempotence | VERT UI/API/CONTRAT ; émission réelle de récompense/ledger approuvé et déploiement hébergé restent à prouver |
+| Notifications Android | Route NOTIFICATIONS, NotificationInboxContent, register/revoke token, inbox read/actioned, FirebasePushClient et test instrumenté de registre token | VERT UI/CLIENT/CONTRAT ; livraison FCM réelle sur appareil non prouvée |
+| Briefings et rappels locaux | BriefingScheduler 07:00/19:00, WorkManager récurrent 24 h pour les charges | VERT LOCAL ; ne pas les confondre avec un dispatch FCM multi-appareils |
+| Charges récurrentes | Entités Room, écran de configuration/échéances, paiements partiels/complets, historique, désactivation et worker local | VERT LOCAL ; API serveur et synchronisation non démontrées |
+| Fidélité | Quatre programmes, configuration, activité saisie manuellement, vagues/récompenses et historique Room | VERT LOCAL ; déclenchement automatique par la caisse et sync multi-appareil explicitement non raccordés |
+| Moteur commissions | finance-core: calculateCommission exige prestation completed + paiement confirmed, règle approuvée et partage valide ; reverseCommission append-only ; tests correspondants | VERT LIBRAIRIE/TEST ; intégration automatique dans les prestations/caisse non démontrée |
+| Moteur fiscal | validateFiscalPolicy/calculateFiscalQuote exigent une politique datée approuvée ; tests absent/draft/stale et règle approuvée | VERT LIBRAIRIE/TEST ; l'écran métier actuel reste une estimation locale et ne transmet pas de déclaration |
+| Paiement Mobile Money | Moteur d'intention, machine à états, vérification montant/devise/référence et registry d'adaptateurs | VERT CONTRAT/TEST ; aucun adaptateur marchand réel par défaut, registry vide testée fail-closed |
+| Roue promotionnelle | Schéma/Edge v5, tirage serveur sécurisé, tests de blocage d'une campagne draft/non autorisée, UI de préparation | VERT GARDE TECHNIQUE ; désactivée par décision de conformité jusqu'à avis/autorisation, pas une anomalie de build |
+| PostgreSQL/RLS | CI applique les drafts candidats à PostgreSQL 17 jetable et exécute les tests runtime RLS tenant/site/device/payment/server-only ; contrôles statiques séparés | VERT LABORATOIRE ; migrations non appliquées à un projet Supabase hébergé |
+| Sauvegarde/restauration | Run 44942987790, job PostgreSQL 17 encrypted backup and clean restore, succès sur deux DB jetables | VERT LABORATOIRE ; restauration hébergée non prouvée |
+| Web Auth/build | Session Auth, refresh, changement mot de passe, logout ; Vite build et tests session dans la CI | VERT AUTH/BUILD ; cela ne constitue pas une parité ERP Web |
+
+### 48.2 Contre-preuves directes : limites actuellement prouvées
+
+| Lot | Preuve positive de la limite | Conclusion précise |
+|---|---|---|
+| Synchronisation Android universelle | SupplierSyncCoordinator se décrit comme un coordinateur manuel et opt-in, ne déclare que quatre supportedActions et charge uniquement ces actions | ROUGE : la sync générique des autres mutations métier n'est pas livrée par le coordinateur actuel |
+| Autres actions outbox | 55 call sites au total ; 4 snapshots spécifiques dans le cycle fournisseur ; 51 payloads utilisent le fallback aggregate_id/site_id | Le payload fallback est une preuve d'absence de snapshot rejouable via ce transport, pas une preuve que 51 fonctionnalités sont absentes. Chaque call site doit être classé avant ajout de handler |
+| Dépendances sync fournisseur | Le coordinateur bloque explicitement les lignes stock sans mapping distant et les règlements espèces sans session de caisse distante | PARTIEL : deux chaînes dépendantes ne sont pas encore bout en bout |
+| Modules locaux hors sync | Les écrans affichent LocalOnlyNotice pour catalogue, CRM, stock, pressing, rapports, équipe, charges et fidélité ; les méthodes concernées utilisent le repository Room | VERT LOCAL, ROUGE RÉPLICATION : le parcours est construit localement, mais pas consolidé serveur |
+| Web/PWA métier | main.tsx appelle le endpoint Auth ; addLocalEntry() modifie seulement l'état React ; le formulaire opérationnel appelle addLocalEntry ; package.json teste uniquement la session Auth | ROUGE prouvé : les formulaires métier Web ne sont pas connectés aux APIs ERP ni à la file offline-web |
+| FCM distant réel | BuildConfig Firebase est alimenté par propriétés Gradle vides par défaut ; Edge worker exige secrets de service/encryption/worker ; CI ne fait que type-check/contrats et tests PostgreSQL jetables | BLOQUÉ : code/UI présents, mais pas de preuve de projet, configuration, dispatch hébergé ni réception FCM réelle |
+| Parrainage PME effectif | Les déclarations §38.4/39.6 indiquent webhook paiement non raccordé et rewards pending_entitlement | PARTIEL : interface et contrats construits, gratification réelle non prouvée |
+| Récompenses parrainage client | §47.3 indique que l'émission réelle doit rester raccordée au registre métier/ledger approuvé | PARTIEL : qualification et création idempotente testées, ledger d'émission réel à démontrer |
+| Commission automatique | Le module Équipe saisit manuellement type/motif/montant et crée un enregistrement pending_review ; pas d'appel à calculateCommission depuis les écrans de prestation/caisse | ROUGE pour automatisation ; VERT pour moteur de calcul isolé |
+| SYSCOHADA | L'écran décrit le journal comme comptes symboliques ; le cycle fournisseur reste Room/local ; pas de plan de comptes certifié ni visa professionnel dans les preuves | NON QUALIFIÉ comptabilité réglementaire |
+| Paie/CNPS | Écran local de pointage et de commissions/avances/primes pending_review ; aucune chaîne bulletin/déclaration certifiée | NON QUALIFIÉ paie réglementaire |
+| Signature Release | Workflow release exige quatre secrets privés et apksigner ; le workflow technique courant produit un APK Debug | BLOQUÉ par keystore/secrets et gate Release non exécuté |
+| Recette physique | Le workflow exécute les tests instrumentés par android-emulator-runner ; aucun procès-verbal d'appareil physique n'est fourni | À FAIRE / NON PROUVÉ, pas un échec CI |
+| Supabase/Firebase hébergés | Seul projet visible est l'historique NAXA pharmacie ; drafts appliqués seulement à PostgreSQL jetable ; aucune fonction Edge déployée dans un projet dédié attestée | BLOQUÉ par environnement isolé et autorisation ; ne pas toucher au projet pharmacie |
+
+### 48.3 Correction du comptage de l'outbox
+
+Le chiffre 55 décrit les appels du helper enqueue dans LocalErpStore.kt. Quatre d'entre eux ont des snapshots spécifiques au cycle fournisseur. Les 51 autres utilisent le payload de repli. Ce fait ne permet pas de conclure à 51 fonctionnalités manquantes : certaines actions ont une API directe distincte, certaines lignes sont des événements d'audit/cache locaux, et d'autres correspondent à des mutations métier locales sans transport serveur.
+
+Le critère de synchronisation globale reste néanmoins non atteint, sur preuve différente : le coordinateur Android actif ne prend en charge que quatre actions ; les modules métier locaux ont des mentions explicites non synchronisées ; le Web n'appelle pas les APIs de domaine et n'utilise pas la file IndexedDB dans ses formulaires. Le backlog doit donc être constitué à partir de la matrice fonction → source de vérité → chemin de mutation → endpoint/handler → reçu → conflit → test, pas à partir du seul nombre d'enqueue.
+
+### 48.4 Statut du gate courant et de la branche
+
+- Gate sur le commit documentaire 697d58fcef969ba5bcf2b2f10ecfe21eba46a004 : [44946137015, 12/12 jobs SUCCESS](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44946137015).
+- Artifact Debug correspondant : 14724147044, 13 571 429 octets, digest SHA-256 archive edfa9665b220a1442b1a82455d6da2e07f221172d7b226761cf25c95b46b5e7e.
+- main reste sur 6836f37766a88504260156951bf648cdb905e19b ; le commit 697d58f est documentaire (pas de changement de code applicatif).
+- Le backup/restore laboratoire reste prouvé par le run [44942987790, 1/1 SUCCESS](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44942987790), sur PostgreSQL jetable.
+
+### 48.5 Décision
+
+Les fonctions Android locales réellement construites, les clients API Auth, le parrainage client, les notifications côté UI/contrats, les moteurs testés et les gardes réglementaires doivent être conservés comme tels. Les limites de synchronisation globale, de parité Web/PWA, d'intégrations hébergées, de calcul automatique des commissions, de Mobile Money réel, de comptabilité/paie réglementaires et de Release signée restent ouvertes parce que des contre-preuves concrètes les établissent.
+
+Aucune création Supabase ni migration sur le projet pharmacie n'est autorisée par ce rapport. Le passage à Supabase reste suspendu jusqu'à ce que les fonctions serveur qui sont réellement promises au produit soient inventoriées, construites et testées ; les parcours locaux déjà terminés ne doivent pas être reconstruits ni supprimés.

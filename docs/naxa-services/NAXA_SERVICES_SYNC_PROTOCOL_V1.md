@@ -195,3 +195,20 @@ Un test de l'enveloppe commune n'est pas un substitut aux tests de couverture de
 4. Ajouter orchestration Android automatique et reprise multi-appareils.
 5. Raccorder chaque écran du Web/PWA au backend et à la file offline partagée.
 6. Ne permettre l'activation qu'après une preuve de compatibilité de l'environnement dédié. Le projet NAXA historique est explicitement hors périmètre.
+
+
+---
+
+## 17. Correctif d'audit comparatif — les points d'outbox ne sont pas des fonctions manquantes
+
+L'inventaire de 55 appels à enqueue dans LocalErpStore.kt est un inventaire de points d'émission. Il ne doit pas être interprété comme 55 fonctions inachevées. L'audit comparatif a retrouvé des chemins API directs hors outbox pour Auth/session, profil organisation, sites et postes, parrainage PME, parrainage client/promotions et notifications. D'autres modules ont des parcours Android locaux Room achevés ou partiels.
+
+La preuve de la limite de synchronisation reste directe et indépendante du comptage :
+- SupplierSyncCoordinator.kt se décrit comme manuel/opt-in, ne déclare que quatre actions supportées et filtre la file sur ces actions ;
+- les autres écrans métier concernés affichent des mentions locales ou appellent uniquement le repository Room ;
+- plusieurs dépendances du cycle fournisseur (article stock distant, session caisse espèces) sont bloquées explicitement dans le coordinateur ;
+- le Web métier opère dans l'état React local et ne branche pas ses formulaires sur la file IndexedDB/les APIs de domaine.
+
+La prochaine passe doit classer chaque action de l'outbox avant d'ajouter un handler : mutation métier à synchroniser, journal/audit local, événement produit en parallèle d'une API directe, cache/mirror ou flux non retenu. Les tests de synchronisation doivent porter sur les mutations métier promises, pas sur une hypothèse que chaque événement outbox correspond à une API distincte.
+
+Le statut de synchronisation universelle reste ROUGE, mais son motif prouvé est : couverture actuelle du coordinateur limitée au cycle fournisseur + modules locaux sans connecteur ERP + Web sans connecteurs métier. Le chiffre 51 n'est pas un décompte de fonctions manquantes.

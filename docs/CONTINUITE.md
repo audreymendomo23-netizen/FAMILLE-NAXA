@@ -1271,3 +1271,22 @@ Avant de créer le projet NAXA Services isolé, les parcours métier doivent êt
 **Décision : aucun projet Supabase ne sera créé, aucun draft ne sera appliqué à la pharmacie, aucun déploiement ne sera réalisé et aucune fonctionnalité réglementée ne sera activée dans cette tranche.** Le registre dédié et le protocole de synchronisation précisent les travaux et critères de sortie.
 
 Voir le document de passation dédié : [`docs/naxa-services/NAXA_SERVICES_CONTINUITY_2026-11-21.md`](naxa-services/NAXA_SERVICES_CONTINUITY_2026-11-21.md).
+
+
+---
+
+## 6.17.30 — Audit de confrontation des déclarations et preuves NAXA SERVICES (21 novembre 2026)
+
+La reprise précédente a correctement identifié plusieurs limites serveur, mais l'interprétation du nombre de 55 appels outbox comme 51 fonctions incomplètes était excessive. Ce comptage n'est pas un décompte de fonctionnalités. Les appels outbox doivent être classés en mutations à répliquer, journaux locaux, copies/cache ou événements produits en parallèle d'un endpoint API direct.
+
+Le document de référence est NAXA_SERVICES_EVIDENCE_RECONCILIATION_2026-11-21.md. Il confronte les déclarations du dossier de construction (§30, 34, 39, 41, 44, 46, 47) aux fichiers Android, Web, Edge, SQL et tests.
+
+État corrigé :
+- VERT LOCAL : les parcours Android effectivement construits dans Room (pressing, agenda, caisse, stock, CRM local, charges, fidélité, pointage, rapports/pilotage) ne sont pas des fonctions absentes. Leur synchronisation serveur est une question distincte.
+- VERT API/CONTRAT : Auth, profil organisation, sites/postes, parrainage client/promotions et centre de notifications possèdent des routes et raccordements clients démontrés par le code ; le déploiement réel reste séparé.
+- PARTIEL : parrainage PME et cycle fournisseur sont codés avec UI/API/contrats, mais le webhook de paiement/entitlement ou les dépendances de sync restent ouverts.
+- ROUGE PROUVÉ : synchronisation ERP générique hors cycle fournisseur et Web/PWA métier : le coordinateur actif prend quatre actions ; les modules Web font des brouillons React et ne consomment pas les APIs ERP.
+- BLOQUÉ EXTERNE : push FCM réel, transactions marchandes Mobile Money, signature Release, validation juridique de la roue et visas comptables/fiscaux/paie.
+- VERT LABORATOIRE : tests PostgreSQL 17 et RLS sur bases jetables, ainsi que backup/restore chiffré sur bases jetables ; aucun déploiement Supabase hébergé n'en découle.
+
+Le gate CI le plus récent est le run 44946137015, 12/12 jobs SUCCESS, sur le commit documentaire 697d58f. L'artefact Debug courant est l'ID 14724147044, digest d'archive edfa9665b220a1442b1a82455d6da2e07f221172d7b226761cf25c95b46b5e7e. main demeure sur 6836f37766a88504260156951bf648cdb905e19b.
