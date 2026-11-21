@@ -99,3 +99,37 @@ Le portail Web NAXA Services reçoit maintenant une session d'authentification c
 **Limite maintenue :** cette authentification ne transforme pas les écrans CRM, agenda, pressing, caisse, stock, RH et rapports en modules Web connectés. Leurs opérations restent des brouillons locaux ; aucun montant ni reçu commercial n'est présenté comme enregistré en backend. Le gate ajoute un build Web et les tests du parseur de session.
 
 Les statuts paiements sont désormais alignés entre le moteur financier, les contrats et le draft PostgreSQL v7 : `initiated`, `pending`, `confirmed`, `failed`, `expired`, `cancelled`, `refunded`, `reversed`. Un code HTTP `202` reste une demande en attente ; une confirmation exige la vérification serveur du prestataire et la comparaison du montant, de la devise et de la référence.
+
+
+## 9. État consolidé de livraison et preuves (21 novembre 2026, 20:xx UTC)
+
+### Dernier commit audité
+- Branche : `work/naxa-services-completion-20261120`
+- Commit : `b0023e351743f716b4a532172d800a049fd4eddb`
+- La branche `main` reste indépendante ; aucune fusion ni écriture n'a été faite sur celle-ci.
+
+### Gate courant
+- Workflow : [NAXA SERVICES — Android + Auth contract gate](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44944459740)
+- Résultats vérifiés : 11 jobs sur 12 terminés en succès, dont le nouveau build Web/test de session et les tests SQL/RLS v7 sur PostgreSQL 17.
+- Le seul job encore en cours dans ce relevé est le job Android (tests instrumentés Keystore/PIN, puis assemblage et upload). Le build et les tests Android complets ont réussi sur le commit précédent `0e0e5d9ebd94ab2f539c1ce8a8b89c0f2ed1083a`. La comparaison GitHub montre qu'aucun fichier `apps/android/**` n'a changé entre ce commit et `b0023e3`; l'APK ci-dessous correspond donc au code Android identique et déjà vérifié, mais le nouveau passage Android reste ouvert jusqu'à fermeture du workflow courant.
+
+### APK Android Debug disponible
+- Artifact GitHub : `14721924884`, workflow précédent terminé vert.
+- SHA-256 APK : `fec5a4c2427222e422b06053d0346f203801ebd2f9d9ccab28adbf707c25e1fc`.
+- SHA-256 archive : `aad4903c6d393bbb0370b256defecb7b8a5b1af20957da518f83f08e1f92c975`.
+- Ce livrable est un APK Debug non signé pour distribution de production.
+
+### Sauvegarde/restauration
+- [Drill PostgreSQL 17 chiffré réussi](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44942987790) sur bases source et destination jetables.
+- Aucun backup/restauration n'a été exécuté contre le projet Supabase NAXA existant.
+
+### Blocages de lancement encore actifs
+1. Le projet Supabase dédié NAXA Services n'est pas créé ; le seul projet visible reste le projet historique NAXA partagé avec la pharmacie. Le devis de création retourné pour l'organisation visible était de 0 USD/mois, mais le projet isolé n'est pas créé sans confirmation de l'organisation et de la région.
+2. Firebase/FCM n'est pas activé dans un projet réel ; comptes, secrets de coffre, déploiement et tests de livraison sur appareil restent requis.
+3. MTN MoMo/Orange Money n'ont ni compte marchand/sandbox réel ni secrets/webhooks configurés ; l'engine et la persistance serveur restent en mode fail-closed.
+4. La synchronisation métier universelle Android/Web n'est pas implémentée : l'Android serveur ne traite que les quatre actions fournisseur/achats ; les autres domaines restent en file locale. Le Web possède authentification et file générique, mais ses écrans métier demeurent des brouillons locaux.
+5. Les barèmes de commission et paramètres fiscaux doivent être approuvés par l'organisation et le professionnel compétent ; paie/CNPS et comptabilité SYSCOHADA complète restent à faire valider.
+6. La Release signée exige la clé privée et les secrets GitHub nommés dans la section précédente ; le certificat n'est pas créé ni inventé.
+7. La roue promotionnelle reste désactivée jusqu'à avis juridique écrit et autorisation applicable.
+
+**Décision de statut :** VERT pour les contrats/CI, schéma/RLS jetable, build Web, sauvegarde-restauration de test et APK Android Debug déjà vérifié. Pas encore VERT pour la mise en production ou la fermeture de tous les lots métier. Les éléments manquants ci-dessus ne sont pas des échecs de tests ; ce sont des gates d'environnement, d'intégration, d'autorisation ou de livraison.
