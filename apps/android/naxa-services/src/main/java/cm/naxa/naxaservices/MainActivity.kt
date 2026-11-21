@@ -329,6 +329,8 @@ private fun NaxaServicesRoot(
                     .onFailure { error ->
                         val authError = error as? AuthApiException
                         if (authError?.statusCode == 401 || authError?.statusCode == 403) {
+                            runCatching { api.revokeCurrentDevicePushTokens(activeSession?.accessToken.orEmpty()) }
+                            PushTokenRegistry.disable(context)
                             vault.clear()
                             rememberSession = false
                             localPinUnlockedMemberId = null
@@ -447,10 +449,8 @@ private fun NaxaServicesRoot(
                                 error = message,
                                 onLogout = {
                                     scope.launch {
-                                        if (PushTokenRegistry.state.value.enabled) {
-                                            runCatching { api.revokeCurrentDevicePushTokens(current.accessToken) }
-                                            PushTokenRegistry.markUnregistered()
-                                        }
+                                        runCatching { api.revokeCurrentDevicePushTokens(current.accessToken) }
+                                        PushTokenRegistry.disable(context)
                                         runCatching { api.logout(current.accessToken) }
                                         vault.clear()
                                         rememberSession = false
@@ -551,6 +551,8 @@ private fun NaxaServicesRoot(
                                             androidx.work.WorkManager.getInstance(context).cancelUniqueWork(
                                                 "naxa-services-charge-reminders-" + current.account.organizationId
                                             )
+                                            runCatching { api.revokeCurrentDevicePushTokens(current.accessToken) }
+                                            PushTokenRegistry.disable(context)
                                             runCatching { api.logout(current.accessToken) }
                                             vault.clear()
                                             rememberSession = false
