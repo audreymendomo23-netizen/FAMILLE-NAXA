@@ -1,7 +1,7 @@
 # LOYABLE — Document de continuité produit et technique
 
-> Version : 1.1  
-> Date de mise à jour : 21 novembre 2026 — addendum Centre de maintenance et interconnexion  
+> Version : 1.2  
+> Date de mise à jour : 21 novembre 2026 — addendum abonnement, Marketplace, prestataires, sécurité et support  
 > Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`  
 > Branche documentaire : `main`  
 > Statut : continuité produit consolidée — cahier détaillé du Centre de maintenance créé ; intégration non implémentée  
@@ -481,3 +481,85 @@ Le profil prestataire enrichi, le registre filtré et le contrat API sont des or
 - Continuité générale à référencer : docs/CONTINUITE.md.
 
 **État de fin de cette mise à jour documentaire : les catégories Réparation et Menuiserie sont intégrées au référentiel ; le cahier de conception est créé ; aucune fonctionnalité LOYABLE/NAXA SERVICES n'est déclarée intégrée, déployée ou testée par ces documents.**
+
+## 14. Addendum du 21 novembre 2026 — abonnement, Marketplace, prestataires et services transverses
+
+### 14.1 Abonnement bailleur — règle retenue [V]
+
+- Une seule souscription LOYABLE par bailleur Promoteur/organisation.
+- Abonnement unique à accès complet, sans paliers ACCÈS/PREMIUM.
+- Modèle dynamique déjà approuvé : **1 000 FCFA × nombre de chambres actives/en gestion** du portefeuille.
+- La quantité et le montant sont recalculés et historisés ; la règle de date d'effet et de prorata lors d'un changement en cours de période reste à arbitrer.
+- Une alerte d'expiration est émise **72 heures avant la date/heure d'échéance**, une seule fois par échéance, avec traitement serveur idempotent.
+- Si le renouvellement n'est pas payé et confirmé à l'échéance, l'espace opérationnel du bailleur est suspendu. Un paiement pending ne restaure pas l'accès.
+- Un parcours restreint de renouvellement/paiement doit rester disponible en dehors du compte de gestion.
+- Les données ne sont jamais supprimées du fait de l'expiration.
+
+### 14.2 Marketplace [V]
+
+Les annonces de bailleurs partenaires dont la visibilité dépend de la souscription sont masquées dans les recherches, pages publiques, liens directs et endpoints lorsque le bailleur est expiré/non payé. Elles restent conservées. Après confirmation serveur du réabonnement, elles sont automatiquement republiées uniquement si elles sont encore éligibles (logement vacant, annonce non retirée, non expirée et non rejetée).
+
+Les publications assistées des bailleurs non partenaires conservent leur modèle tarifaire et leur cycle distinct ; ne pas les transformer implicitement en abonnements.
+
+### 14.3 Accès des locataires pendant la suspension [P à confirmer]
+
+La suspension décidée concerne l'espace bailleur. Il est proposé que le locataire conserve au minimum l'accès à son propre contrat, aux documents déjà émis et à la déclaration d'un incident de maintenance. Les demandes nouvelles restent enregistrées mais leur traitement par le bailleur dépend de la réactivation. L'étendue exacte de ce maintien doit être confirmée et testée.
+
+### 14.4 Parrainage propre à LOYABLE [P]
+
+Proposition commerciale indépendante de JOBLY Partner et du parrainage PME NAXA SERVICES :
+- code/lien/QR unique par bailleur ;
+- rattachement du filleul avant sa première souscription payée ;
+- qualification uniquement après premier abonnement réellement payé et confirmé côté serveur ;
+- trois bailleurs filleuls valablement activés donnent un mois d'abonnement LOYABLE offert au parrain ;
+- périodicité mensuelle : un cycle mensuel crédité ; périodicité annuelle : un mois calendaire ajouté à la date de fin ;
+- groupes successifs de 3, crédits non monétaires, non transférables et non retirables ;
+- auto-parrainage, doublons, essai, pending, annulation et remboursement exclus ;
+- ledger idempotent de la progression et des récompenses.
+
+Le seuil de trois filleuls est une proposition à valider, pas une décision commerciale confirmée.
+
+### 14.5 Flux de missions côté prestataire et recherche géographique [V/P]
+
+Outre l'invitation directe, le cahier détaillé prévoit un tableau de demandes de maintenance éligibles côté NAXA SERVICES. Les organisations actives Réparation/Menuiserie voient les missions disponibles et filtrent par catégorie, ville et proximité. La proximité utilise une position volontaire ou une zone de service déclarée ; le GPS n'est pas obligatoire. Avant affectation, l'adresse exacte et les coordonnées du locataire restent masquées. Le prestataire exprime son intérêt ; le bailleur choisit explicitement.
+
+### 14.6 Messagerie bailleur ↔ prestataire [V/P]
+
+Une conversation est intégrée aux deux applications, attachée à une demande ou à un ordre de travail. Elle permet textes, pièces autorisées, notifications et états de livraison/lecture vérifiables. Les permissions suivent la mission et sont révoquées à sa fin selon la politique de conservation. La messagerie de mission reste distincte du Support client et ne partage pas les comptes des deux applications.
+
+### 14.7 Architecture de sécurité / vidéosurveillance [V/P]
+
+LOYABLE pourra s'appuyer sur les patterns NAXA SECURITY pour une extension optionnelle « Sécurité de l'immeuble » : dispositifs vidéo référencés par site/zone, traitement local/hybride, alertes, rôles, journalisation et accès vidéo segmenté. Les droits de vidéosurveillance sont distincts des droits de gestion locative. La vidéo des zones communes est prioritaire ; audio désactivé par défaut et soumis à arbitrage/revue juridique. NAXA ne fournit pas le matériel et n'opère pas de surveillance humaine. Le lien commercial et l'éventuel abonnement SECURITY séparé restent à arbitrer.
+
+### 14.8 Service client et support [V/P]
+
+Le support LOYABLE s'inspire du modèle NAXA SERVICES, et doit réutiliser le service Support NAXA/CSO central après audit de compatibilité plutôt que créer un helpdesk concurrent. Cible : ticket catégorisé, priorité, statut, SLA, conversation, pièces, responsable, historique et escalade. L'accès du CSO aux données du bailleur est limité, justifié, temporaire et audité.
+
+**Limite documentée :** le rapport NAXA SERVICES consulté décrit une assistance qui conserve des demandes localement, sans Livechat distant qualifié, appel audio/vidéo ou partage d'écran démontré.
+
+### 14.9 Sauvegarde et restauration [V/P]
+
+Reprendre le modèle de sauvegarde documenté : base locale, documents et pièces jointes chiffrés, versionnés et vérifiables ; sauvegarde déclenchée après opérations/synchronisations critiques et selon calendrier ; stockage externe via Google Drive et OAuth limité si retenu ; restaurations explicitement autorisées, contrôlées et auditées ; sauvegardes serveur quotidiennes sur stockage séparé et tests réguliers de restauration. Gmail ne sert pas de coffre d'archive et aucun jeton, secret ou clé privée ne doit être exporté dans une sauvegarde.
+
+**Limite documentée :** le rapport de construction NAXA SERVICES indique que Drive et la restauration ne sont pas encore démontrés comme livrés. Ce modèle est une référence à adapter, pas une capacité certifiée existante.
+
+### 14.10 Référentiel de réalisation
+
+Le cahier des charges détaillé a été enrichi jusqu'à la section 31 avec ces exigences, critères de recette et arbitrages :
+- verrouillage et renouvellement dynamique ;
+- alerte H−72 ;
+- masquage/réactivation Marketplace ;
+- parrainage LOYABLE proposé ;
+- tableau de missions et filtre ville/proximité ;
+- messagerie des missions ;
+- sécurité/vidéosurveillance optionnelle ;
+- support client ;
+- sauvegarde/restauration.
+
+Référence : docs/loyable/LOYABLE_CAHIER_DES_CHARGES_CENTRE_MAINTENANCE_INTERCONNEXION.md.
+
+### 14.11 Statut exact
+
+Les règles d'abonnement, le rappel H−72, la suspension bailleur, le masquage Marketplace, la recherche prestataire et la messagerie sont maintenant des exigences documentées. Le parrainage à trois activations, la poursuite de certains accès locataires, la diffusion des missions, les détails GPS, le périmètre vidéo, les SLA du support et la politique de sauvegarde nécessitent encore les arbitrages indiqués au cahier.
+
+Aucun code applicatif, endpoint, table, migration Supabase, fonction serveur, secret, déploiement ou test de production n'a été ajouté ou exécuté par cette mise à jour documentaire.
