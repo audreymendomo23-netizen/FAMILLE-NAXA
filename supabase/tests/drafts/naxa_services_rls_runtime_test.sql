@@ -100,6 +100,8 @@ BEGIN
 END
 $rls$;
 
+-- Run only server RPC checks as the database owner; these functions are intentionally service_role-only.
+RESET ROLE;
 DO $customer_referral$
 DECLARE
   v_apply jsonb;
@@ -189,6 +191,7 @@ BEGIN
 END
 $promotion_legal_gate$;
 
+SET ROLE authenticated;
 DO $insert_guard$
 BEGIN
   BEGIN
