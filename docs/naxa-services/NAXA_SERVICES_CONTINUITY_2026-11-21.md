@@ -4,7 +4,7 @@
 **Date de mise à jour :** 22 novembre 2026  
 **Dépôt :** `audreymendomo23-netizen/FAMILLE-NAXA`  
 **Branche de travail :** `work/naxa-services-completion-20261120`  
-**HEAD de référence :** `ada9bc2fe4986925a6afcc07238c0bbdc11f2073`  
+**HEAD applicatif du dernier gate technique :** `ada9bc2fe4986925a6afcc07238c0bbdc11f2073`  
 **Statut global :** **VERT CI (12/12) et VERT RLS LABORATOIRE — NON VERT OPÉRATIONNEL / PRODUCTION**
 
 Ce document est le point de reprise spécifique de NAXA SERVICES. Il complète `docs/CONTINUITE.md` et le registre `NAXA_SERVICES_REMAINING_RED_GATES_2026-11-21.md`. Il ne remplace pas les cahiers des charges ni les décisions métier.
@@ -23,7 +23,7 @@ Ce document est le point de reprise spécifique de NAXA SERVICES. Il complète `
 ### 2.1 Branche et commits vérifiés
 
 - Branche de travail vérifiée : `work/naxa-services-completion-20261120`.
-- HEAD vérifié le 22 novembre : `ada9bc2fe4986925a6afcc07238c0bbdc11f2073`.
+- Dernier HEAD applicatif effectivement vérifié par le gate 12/12 : `ada9bc2fe4986925a6afcc07238c0bbdc11f2073`. Le présent commit est une mise à jour documentaire ultérieure ; il ne doit pas être présenté comme un nouveau commit applicatif testé.
 - Dernier gate technique associé à ce HEAD : [44953846842](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44953846842), terminé le 21 novembre 2026 à 21:59 UTC, **12/12 jobs en succès**.
 - Le gate antérieur [44944767801](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44944767801) est un point de contrôle historique, désormais remplacé par le run 44953846842.
 - Le workflow séparé de sauvegarde/restauration [44942987790](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44942987790) a terminé **1/1 job en succès** sur le commit `ac239b915777dfa0bfdb0b45dddc902f6a28aafb`. Il s'agit d'un drill sur deux bases PostgreSQL jetables, pas d'une restauration hébergée.
@@ -64,9 +64,9 @@ Les drafts PostgreSQL v1 à v7 et les Edge Functions présentes sont vérifiés 
 
 L'audit de LocalErpStore.kt dénombre 55 appels au helper d'outbox. Ce chiffre mesure des points d'émission techniques, pas 55 fonctionnalités manquantes.
 
-Le coordinateur SupplierSyncCoordinator.kt ne prend actuellement en charge que quatre actions pour la synchronisation ERP manuelle du cycle fournisseur : supplier.saved, purchase.ordered, purchase.receipt.confirmed et supplier.payment.recorded. Ces quatre actions disposent de snapshots spécifiques et d'un handler Edge/RPC correspondant.
+Au HEAD applicatif `ada9bc2`, `SupplierSyncCoordinator.kt` reste un coordinateur manuel, opt-in et limité ; il ne constitue pas un synchroniseur ERP universel. Son ensemble `supportedActions` accepte désormais **11 codes d'action** : `supplier.saved` ; quatre variantes `inventory_item.*` ; trois variantes `inventory_movement.*` ; `purchase.ordered` ; `purchase.receipt.confirmed` ; `supplier.payment.recorded`. Les 11 points d'émission correspondants ont des snapshots dédiés et des handlers Edge/RPC pour le cycle fournisseur et les prérequis articles/mouvements de stock. Cette évolution remplace la description historique qui ne comptait que quatre actions.
 
-Les 51 autres appels utilisent encore le payload de repli aggregate_id/site_id. Cela prouve qu'ils ne sont pas rejouables par ce coordinateur avec le contrat actuel ; cela ne prouve pas, à lui seul, que les fonctions correspondantes sont absentes. Certaines opérations ont des chemins API directs distincts de l'outbox (Auth, profil organisation, sites, postes, parrainage PME, parrainage client/promotions et centre de notifications). D'autres sont explicitement des registres locaux Room. Le classement fonction par fonction figure dans NAXA_SERVICES_EVIDENCE_RECONCILIATION_2026-11-21.md.
+Le dernier comptage du fichier `LocalErpStore.kt` confirme **55 points d'émission** : **11 avec snapshots métier dédiés** et **44 avec payload de repli `aggregate_id/site_id`**. Les 44 événements de repli ne sont pas rejouables par ce coordinateur avec son contrat actuel ; cela ne prouve pas, à lui seul, que 44 fonctionnalités sont absentes. Certaines opérations ont des chemins API directs distincts de l'outbox (Auth, profil organisation, sites, postes, parrainage PME, parrainage client/promotions et centre de notifications). D'autres sont explicitement des registres locaux Room. Chaque call site doit être classé fonction par fonction avant d'ajouter un handler.
 
 Il faut donc distinguer : opération locale construite, opération envoyée par un endpoint dédié, et opération répliquée par la synchronisation générique. Ne pas déduire l'état d'une fonctionnalité de la seule présence de son événement dans l'outbox.
 
@@ -198,7 +198,7 @@ Cette section est la référence courante et prévaut sur les chiffres de HEAD, 
 
 - Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`.
 - Branche : `work/naxa-services-completion-20261120`.
-- HEAD : `ada9bc2fe4986925a6afcc07238c0bbdc11f2073`.
+- HEAD applicatif validé par le gate 44953846842 : `ada9bc2fe4986925a6afcc07238c0bbdc11f2073`.
 - Dernier gate : [run 44953846842](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44953846842), **12/12 jobs SUCCESS**.
 - Contrôles couverts : build Web et tests de session Auth ; contrats Auth/périmètres/modes métier ; politiques paiement/commissions/fiscalité ; comptabilité fournisseurs/prévisions ; sécurité statique SQL ; build et tests Android unitaires/instrumentés sur émulateur ; schéma et RLS runtime PostgreSQL 17 jetable ; contrats notifications/FCM ; parrainage client/promotions ; API de parrainage ; tarifs Famille ; contrat de synchronisation inter-applications.
 - Artefact : APK Debug `14726537650`, 13 578 529 octets, SHA-256 archive `6945196a120541fde9a952300803127ab3ce01dac16eac5918f1bb62cfd78cd1`.
