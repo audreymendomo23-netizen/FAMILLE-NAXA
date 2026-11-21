@@ -17,13 +17,21 @@ data class SupplierSyncSummary(
 )
 
 /**
- * Manual, opt-in synchronization for supplier-cycle events only.
+ * Manual, opt-in synchronization for inventory prerequisites and supplier-cycle events.
+ * This is a bounded slice, not a universal ERP synchronizer.
  * The build flag is false by default; no automatic worker is scheduled.
  */
 object SupplierSyncCoordinator {
     private const val EXISTING_NAXA_PROJECT_REF = "ykgjfindlgseegmznaog"
     private val supportedActions = setOf(
         "supplier.saved",
+        "inventory_item.created",
+        "inventory_item.imported",
+        "inventory_item.import_updated",
+        "inventory_item.supplier_whatsapp_updated",
+        "inventory_movement.created",
+        "inventory_movement.import_initial",
+        "inventory_movement.import_adjustment",
         "purchase.ordered",
         "purchase.receipt.confirmed",
         "supplier.payment.recorded"
@@ -93,21 +101,43 @@ object SupplierSyncCoordinator {
 
             val action = when (event.actionCode) {
                 "supplier.saved" -> "save_supplier"
+                "inventory_item.created",
+                "inventory_item.imported",
+                "inventory_item.import_updated",
+                "inventory_item.supplier_whatsapp_updated" -> "save_inventory_item"
+                "inventory_movement.created",
+                "inventory_movement.import_initial",
+                "inventory_movement.import_adjustment" -> "record_inventory_movement"
                 "purchase.ordered" -> "create_supplier_purchase"
                 "purchase.receipt.confirmed" -> "receive_supplier_purchase_line"
                 "supplier.payment.recorded" -> "record_supplier_payment"
                 else -> continue
             }
 
-            // Stock purchases require the matching inventory item to exist remotely.
-            // Inventory IDs are not yet replicated by this sync slice.
-            if (event.actionCode == "purchase.ordered" && hasStockLineWithoutRemoteMapping(payload)) {
+            // A stock purchase may reference an item only after its stable UUID was acknowledged remotely.
+            if (event.actionCode == "purchase.ordered" && hasStockLineWithoutRemoteMapping(payload, dao, orgId)) {
                 dao.updateOutboxAttempt(
                     event.eventId, orgId, "blocked_dependency", System.currentTimeMillis(), null,
                     "SERVER_INVENTORY_ITEM_MAPPING_REQUIRED"
                 )
                 blocked++
-                break
+                continue
+            }
+
+            if (event.actionCode in setOf(
+                    "inventory_movement.created",
+                    "inventory_movement.import_initial",
+                    "inventory_movement.import_adjustment"
+                )) {
+                val itemId = payload.optString("inventory_item_id")
+                if (itemId.isBlank() || dao.countSyncedInventoryItemMapping(orgId, itemId) == 0) {
+                    dao.updateOutboxAttempt(
+                        event.eventId, orgId, "blocked_dependency", System.currentTimeMillis(), null,
+                        "SERVER_INVENTORY_ITEM_MAPPING_REQUIRED"
+                    )
+                    blocked++
+                    continue
+                }
             }
 
             // Cash payments require a server-side cash session with the exact same ID.
@@ -119,7 +149,7 @@ object SupplierSyncCoordinator {
                     "SERVER_CASH_SESSION_MAPPING_REQUIRED"
                 )
                 blocked++
-                break
+                continue
             }
 
             payload.put("action", action).put("app_code", "naxa-services")
@@ -130,6 +160,13 @@ object SupplierSyncCoordinator {
                     ?: throw IllegalStateException("ACCOUNTING_RESULT_MISSING")
                 val remoteId = when (event.actionCode) {
                     "supplier.saved" -> result.optString("supplier_id")
+                    "inventory_item.created",
+                    "inventory_item.imported",
+                    "inventory_item.import_updated",
+                    "inventory_item.supplier_whatsapp_updated" -> result.optString("inventory_item_id")
+                    "inventory_movement.created",
+                    "inventory_movement.import_initial",
+                    "inventory_movement.import_adjustment" -> result.optString("movement_id")
                     "purchase.ordered" -> result.optString("purchase_id")
                     "purchase.receipt.confirmed" -> result.optString("receipt_id")
                     "supplier.payment.recorded" -> result.optString("payment_id")
@@ -166,15 +203,17 @@ object SupplierSyncCoordinator {
         return SupplierSyncSummary(applied, retried, blocked, rejected, remaining)
     }
 
-    private fun hasStockLineWithoutRemoteMapping(payload: JSONObject): Boolean {
+    private suspend fun hasStockLineWithoutRemoteMapping(
+        payload: JSONObject,
+        dao: cm.naxa.naxaservices.data.NaxaServicesDao,
+        orgId: String
+    ): Boolean {
         val lines = payload.optJSONArray("lines") ?: return true
         for (index in 0 until lines.length()) {
             val line = lines.optJSONObject(index) ?: return true
-            if (line.optString("item_type") == "stock" &&
-                line.optString("inventory_item_id").isBlank()) return true
-            // Even a well-formed local item ID is not a remote mapping. This
-            // feature slice must wait until inventory replication is implemented.
-            if (line.optString("item_type") == "stock") return true
+            if (line.optString("item_type") != "stock") continue
+            val itemId = line.optString("inventory_item_id")
+            if (itemId.isBlank() || dao.countSyncedInventoryItemMapping(orgId, itemId) == 0) return true
         }
         return false
     }
@@ -186,6 +225,22 @@ object SupplierSyncCoordinator {
         return when (event.actionCode) {
             "supplier.saved" -> payload.optString("supplier_id").isNotBlank() &&
                 payload.optString("name").isNotBlank()
+            "inventory_item.created",
+            "inventory_item.imported",
+            "inventory_item.import_updated",
+            "inventory_item.supplier_whatsapp_updated" ->
+                payload.optString("inventory_item_id") == event.aggregateId &&
+                    payload.optString("name").isNotBlank() &&
+                    payload.optString("unit").isNotBlank() &&
+                    payload.optDouble("reorder_level", -1.0) >= 0.0
+            "inventory_movement.created",
+            "inventory_movement.import_initial",
+            "inventory_movement.import_adjustment" ->
+                payload.optString("movement_id") == event.aggregateId &&
+                    payload.optString("inventory_item_id").isNotBlank() &&
+                    payload.optString("movement_type") in setOf("in", "consumption", "loss", "adjustment") &&
+                    payload.optDouble("quantity_delta", 0.0) != 0.0 &&
+                    payload.optString("reason").isNotBlank()
             "purchase.ordered" -> payload.optString("purchase_id").isNotBlank() &&
                 payload.optString("supplier_id").isNotBlank() &&
                 payload.optJSONArray("lines")?.length()?.let { it > 0 } == true
