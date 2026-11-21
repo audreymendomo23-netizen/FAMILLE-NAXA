@@ -529,7 +529,7 @@ Les montants sont exprimés en FCFA. Les unités et périodicités sont définie
 | LOYABLE | **Abonnement unique à accès complet : 1 000 FCFA × nombre de chambres actives/en gestion** dans le portefeuille du Promoteur. Montant dynamique selon la quantité de chambres ; aucun palier PREMIUM distinct. |
 | NAXA HOTEL | **Abonnement unique à accès complet : 2 000 FCFA × nombre de chambres actives** rattachées à l'hôtel/réseau du Promoteur. Montant dynamique selon la quantité de chambres ; aucun palier PREMIUM distinct. |
 | NAXA SECURITY | ACCÈS : 5 000 ; PREMIUM : 15 000. Conserver les règles d'extension de capacité déjà arbitrées (+20 % par extension), et appliquer l'abonnement Promoteur à tout son réseau dans les limites des capacités souscrites. |
-| GRILLAD | **Deux formules uniquement : ACCÈS (un point de vente, plusieurs vendeurs possibles) et PREMIUM (plusieurs points de vente, plusieurs vendeurs par point).** Montants mensuels exacts des deux formules : à confirmer. Aucun tarif par paliers de points et aucun PRO. Annuel : 10 mensualités pour 12 mois de service. |
+| GRILLAD | **ACCÈS : 2 000 FCFA/mois et 24 000 FCFA/an (12 mensualités, sans mois offert). PREMIUM : 6 000 FCFA/mois et 60 000 FCFA/an (10 mensualités, deux mois offerts).** ACCÈS : un point avec plusieurs vendeurs ; PREMIUM : plusieurs points avec plusieurs vendeurs par point. Aucun tarif par paliers de points et aucun PRO. |
 | CAMPUS237 | Établissement gratuit. Abonnements individuels par parent : **Pack Individuel : 1 000 pour suivre 1 élève dans une école ; Pack Famille : 3 000 pour suivre jusqu'à 5 élèves**, dans la même école ou dans plusieurs écoles différentes. |
 
 #### Règle de souscription du Promoteur et couverture de son réseau
@@ -563,7 +563,7 @@ GRILLAD ne dispose que de deux formules :
 
 Une seule souscription est rattachée au Promoteur pour GRILLAD. La formule choisie détermine la portée de l'architecture et les entitlements associés. Aucun abonnement séparé n'est créé par vendeur. Aucun tarif progressif par nombre de points, aucune limite « un / cinq / illimité » et aucun niveau PRO ne sont retenus.
 
-Les montants mensuels des deux formules restent à confirmer. L'annuel donne douze mois de service pour le prix de dix mensualités. Les plafonds numériques éventuels de points Premium ou de vendeurs par point restent à arbitrer et ne doivent pas être inventés. Les opérations de changement de formule sont historisées et protégées contre les modifications concurrentes.
+Les montants mensuels validés sont ACCÈS à 2 000 FCFA et PREMIUM à 6 000 FCFA. Pour 12 mois, ACCÈS coûte 24 000 FCFA (12 mensualités, sans remise) ; PREMIUM coûte 60 000 FCFA (10 mensualités, deux mois offerts). Les plafonds numériques éventuels de points Premium ou de vendeurs par point restent à arbitrer et ne doivent pas être inventés. Les opérations de changement de formule sont historisées et protégées contre les modifications concurrentes.
 
 #### Règles spécifiques COTIZ
 
@@ -597,11 +597,11 @@ Pour toute autre application à tarif unique, afficher **« Abonnement »** sans
 ### 6.17.3 Règles d'abonnement déjà communiquées
 
 - À l'installation/activation initiale, toutes les fonctionnalités sont disponibles pendant **72 heures**. Cette période est contrôlée côté serveur, attribuée une seule fois à l'unité facturable définie par l'application et ne doit pas être réinitialisable par réinstallation ou changement d'appareil.
-- Pour une formule mensuelle récurrente éligible, le prix annuel est égal à dix mensualités : deux mois sont offerts. Cette remise s'applique aux abonnements mensuels concernés, et non automatiquement aux paiements par acte, par cotisation ou aux autres tarifications unitaires dont la périodicité n'est pas établie.
+- Pour une formule mensuelle récurrente éligible à la remise annuelle, le prix annuel est égal à dix mensualités : deux mois sont offerts. Les exceptions propres aux plans prévalent : pour GRILLAD ACCÈS, l'annuel est égal à douze mensualités sans remise ; pour GRILLAD PREMIUM, deux mensualités sont offertes. Cette remise ne s'applique pas automatiquement aux paiements par acte, par cotisation ou aux autres tarifications unitaires dont la périodicité n'est pas établie.
 - La période d'essai, le statut de paiement, les dates d'effet et les droits sont établis par le serveur. Une déclaration locale ou une référence de paiement saisie par l'utilisateur ne suffit pas à activer des entitlements.
 - Conserver les données et les fonctions nécessaires à la consultation du compte, au renouvellement et à la récupération des données en cas d'expiration. Le verrouillage concerne les opérations payantes selon les règles contractuelles validées.
 - Les prix et règles propres à une application restent sous le contrôle de son catalogue versionné. Une modification tarifaire ne change pas rétroactivement un abonnement déjà payé.
-- Aucun niveau PRO n'est proposé pour GRILLAD. Les seules formules GRILLAD sont ACCÈS et PREMIUM ; les montants mensuels restent à confirmer.
+- Aucun niveau PRO n'est proposé pour GRILLAD. Les seules formules sont ACCÈS (2 000 FCFA/mois ; 24 000 FCFA/an sans remise) et PREMIUM (6 000 FCFA/mois ; 60 000 FCFA/an avec deux mois offerts).
 
 ### 6.17.4 Modèle de droits et administration des catalogues
 
