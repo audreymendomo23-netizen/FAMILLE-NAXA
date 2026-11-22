@@ -1269,17 +1269,27 @@ BEGIN
       'cancelled_at',now()+interval '1 minute'
     )
   );
-  IF v_result->>'status'<>'applied' OR v_result->>'server_status'<>'voided'
-     OR v_result->>'payment_status'<>'failed'
-     OR coalesce((v_result->>'reservation_released')::boolean,false) IS NOT TRUE THEN
+  IF v_result->>'status'<>'applied'
+     OR v_result->'result'->>'status'<>'cancelled'
+     OR v_result->'result'->>'server_status'<>'voided'
+     OR v_result->'result'->>'payment_status'<>'failed'
+     OR coalesce((v_result->'result'->>'reservation_released')::boolean,false) IS NOT TRUE THEN
     RAISE EXCEPTION 'PENDING_MOBILE_MONEY_SALE_NOT_CANCELLED: %',v_result;
   END IF;
 
   BEGIN
-    PERFORM public.ns_cancel_pending_mobile_money_sale(
-      v_sale_id,'20000000-0000-4000-8000-000000000001'::uuid,
-      '30000000-0000-4000-8000-000000000001'::uuid,'pending',
-      'Tentative de suppression après paiement confirmé',now()+interval '2 minutes'
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      'a3000000-0000-4000-8000-000000000004'::uuid,94,
+      'sale',v_sale_id::text,'sale.mobile_money_cancelled',
+      jsonb_build_object(
+        'sale_id',v_sale_id,'org_id','20000000-0000-4000-8000-000000000001',
+        'site_id','30000000-0000-4000-8000-000000000001',
+        'expected_status','pending','reason','Tentative après paiement final',
+        'cancelled_at',now()+interval '2 minutes'
+      )
     );
     RAISE EXCEPTION 'CONFIRMED_CASH_SALE_WAS_ALLOWED_TO_CANCEL';
   EXCEPTION WHEN raise_exception THEN
