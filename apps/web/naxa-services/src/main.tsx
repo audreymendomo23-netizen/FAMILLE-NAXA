@@ -89,6 +89,13 @@ function App() {
   const [draftUnit, setDraftUnit] = useState("pièce");
   const [draftReorderLevel, setDraftReorderLevel] = useState("0");
   const [draftSupplierWhatsApp, setDraftSupplierWhatsApp] = useState("");
+  const [draftPhone, setDraftPhone] = useState("");
+  const [draftAmount, setDraftAmount] = useState("0");
+  const [draftDate, setDraftDate] = useState("");
+  const [draftEndDate, setDraftEndDate] = useState("");
+  const [draftActivity, setDraftActivity] = useState("general");
+  const [draftPriority, setDraftPriority] = useState("normal");
+  const [draftContactConsent, setDraftContactConsent] = useState(false);
   const [activeSiteId, setActiveSiteId] = useState("");
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [remoteChanges, setRemoteChanges] = useState<WebSyncChange[]>([]);
@@ -278,7 +285,7 @@ function App() {
         if(!response.ok||data.ok!==true){errorCode=typeof data.error==="string"?data.error:"REMOTE_REQUEST_FAILED";throw new Error(errorCode);}
         if(!data.result||typeof data.result!=="object"||Array.isArray(data.result)){errorCode="SERVER_RECEIPT_MISSING";throw new Error(errorCode);}
         const queueState=await applyServerReceipt(queued.eventId,data.result,OFFLINE_APP_ID);
-        if(queueState==="acknowledged"){acknowledged++;const p=payload as Record<string,unknown>,id=typeof p.inventory_item_id==="string"?p.inventory_item_id:"";if(id)setEntries(prev=>({...prev,stock:(prev.stock??[]).map(x=>x.id===id?{...x,state:"Confirmé par le serveur"}:x)}));}
+        if(queueState==="acknowledged"){acknowledged++;const moduleId=typeof command.module_id==="string"?command.module_id as ModuleId:"stock";const id=typeof command.aggregate_id==="string"?command.aggregate_id:"";if(id)setEntries(prev=>({...prev,[moduleId]:(prev[moduleId]??[]).map(x=>x.id===id?{...x,state:"Confirmé par le serveur"}:x)}));}
         else if(queueState==="rejected"||queueState==="conflict")rejected++;
       }catch{
         const willRetry=await scheduleRetry(queued.eventId,{status,errorCode},Date.now(),OFFLINE_APP_ID).catch(()=>false);
@@ -341,6 +348,92 @@ function App() {
     } catch (error) {
       setAuthMessage(error instanceof Error ? error.message : "Création du consommable impossible.");
     } finally { setBusy(false); }
+  }
+
+  async function submitWebBusinessEvent(
+    moduleId: ModuleId, actionCode: string, aggregateType: string, aggregateId: string,
+    payload: Record<string, unknown>, siteId: string, title: string, detail: string,
+  ) {
+    const session = authSession;
+    if (!session) throw new Error("AUTHENTICATION_REQUIRED");
+    if (!session.account.active_site_ids.includes(siteId)) throw new Error("SITE_SCOPE_FORBIDDEN");
+    const eventId = crypto.randomUUID();
+    const command = {
+      module_id: moduleId, action_code: actionCode, aggregate_type: aggregateType,
+      aggregate_id: aggregateId, org_id: session.account.organization_id, site_id: siteId,
+      payload: { ...payload, org_id: session.account.organization_id, site_id: siteId },
+    };
+    await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:session.deviceId,payload:JSON.stringify(command),state:"queued",createdAt:Date.now()});
+    setEntries(previous => ({...previous,[moduleId]:[...(previous[moduleId]??[]),{
+      id:aggregateId,title,detail,state:navigator.onLine?"En attente de confirmation serveur":"En attente de connexion",
+      createdAt:new Date().toLocaleString("fr-FR"),
+    }]}));
+    setPendingSyncCount(count=>count+1);
+    setDialogOpen(false);
+    setDraftTitle("");setDraftDetail("");setDraftSku("");setDraftPhone("");setDraftAmount("0");
+    setDraftDate("");setDraftEndDate("");setDraftContactConsent(false);setDraftPriority("normal");setDraftActivity("general");
+    if(navigator.onLine)await syncWebOutbox(session);
+    else setAuthMessage("Opération mise en file hors ligne ; elle sera envoyée au retour du réseau.");
+  }
+
+  async function submitModuleOperation() {
+    const session=authSession;
+    if(!session)throw new Error("AUTHENTICATION_REQUIRED");
+    const siteId=activeSiteId||session.account.active_site_ids[0]||"";
+    if(!siteId||!session.account.active_site_ids.includes(siteId))throw new Error("Choisis un point de vente autorisé.");
+    const id=crypto.randomUUID(),title=draftTitle.trim(),detail=draftDetail.trim(),amount=Number(draftAmount);
+    const toIso=(value:string,label:string)=>{const date=new Date(value);if(!value||!Number.isFinite(date.getTime()))throw new Error("Date invalide : "+label);return date.toISOString();};
+    switch(active){
+      case "customers":
+        if(title.length<2)throw new Error("Le nom du client doit contenir au moins 2 caractères.");
+        await submitWebBusinessEvent("customers","customer.created","customer",id,{
+          customer_id:id,display_name:title,phone_contact:draftPhone.trim(),contact_consent:draftContactConsent,
+          address_line:"",neighborhood:"",landmark:"",notes_private:"",
+        },siteId,title,draftPhone||"Fiche client");return;
+      case "services":
+        if(title.length<2||!draftSku.trim())throw new Error("Le nom et le code de prestation sont obligatoires.");
+        if(!Number.isSafeInteger(amount)||amount<0)throw new Error("Tarif invalide : montant entier positif ou nul en FCFA.");
+        await submitWebBusinessEvent("services","service.created","service",id,{
+          service_id:id,code:draftSku.trim().toUpperCase(),activity:draftActivity,name:title,
+          duration_minutes:null,price_xaf:amount,active:true,category:"",description:detail,
+          provider_member_ids:[],required_workstation_kinds:[],package_sessions:null,
+        },siteId,title,draftSku.toUpperCase()+" · "+amount.toLocaleString("fr-FR")+" FCFA");return;
+      case "pressing":
+        if(title.length<2||detail.length<2||!Number.isSafeInteger(amount)||amount<=0)throw new Error("Client, détail des articles et montant total sont obligatoires.");
+        await submitWebBusinessEvent("pressing","pressing_order.created","pressing_order",id,{
+          order_id:id,ticket_number:"PS-"+id.slice(0,8).toUpperCase(),customer_name:title,customer_phone:draftPhone.trim(),
+          items_summary:detail,total_xaf:amount,deposit_xaf:0,deposit_payment_method:null,cash_session_id:null,
+          promised_at:toIso(draftDate,"date promise"),workstation_id:null,
+        },siteId,"PS-"+id.slice(0,8).toUpperCase()+" · "+title,amount.toLocaleString("fr-FR")+" FCFA · sans acompte");return;
+      case "agenda":{
+        if(title.length<2||detail.length<2)throw new Error("Client et prestation obligatoires.");
+        const starts=toIso(draftDate,"début"),ends=toIso(draftEndDate,"fin");
+        if(new Date(ends).getTime()<=new Date(starts).getTime())throw new Error("La fin doit être postérieure au début.");
+        await submitWebBusinessEvent("agenda","appointment.created","appointment",id,{
+          appointment_id:id,customer_reference_or_name:title,service_reference_or_name:detail,
+          assigned_member_id:session.account.member_id,starts_at:starts,ends_at:ends,
+          deposit_xaf:0,status:"booked",workstation_id:null,
+        },siteId,title,detail);return;
+      }
+      case "cash":
+        if(!title||detail.length<2||!Number.isSafeInteger(amount)||amount<=0)throw new Error("Catégorie, motif et montant de dépense obligatoires.");
+        await submitWebBusinessEvent("cash","expense.created","expense",id,{
+          expense_id:id,category:title,description:detail,amount_xaf:amount,
+          occurred_at:draftDate?toIso(draftDate,"date de dépense"):new Date().toISOString(),
+          cash_session_id:null,idempotency_key:id,
+        },siteId,title,amount.toLocaleString("fr-FR")+" FCFA");return;
+      case "help":
+        if(title.length<3||detail.length<3)throw new Error("Sujet et description doivent contenir au moins 3 caractères.");
+        await submitWebBusinessEvent("help","support_request.created","support_request",id,{
+          request_id:id,subject:title,description:detail,priority:draftPriority,
+        },siteId,title,"Assistance · "+draftPriority);return;
+      case "team":
+        await submitWebBusinessEvent("team","staff_clock_in.recorded","staff_clock_in",id,{
+          time_event_id:id,staff_member_id:session.account.member_id,
+          staff_name_snapshot:session.account.display_name,occurred_at:new Date().toISOString(),workstation_id:null,
+        },siteId,session.account.display_name,"Pointage d'arrivée");return;
+      default: throw new Error("Aucun parcours métier Web n'est livré pour ce module.");
+    }
   }
 
   function addLocalEntry() {
@@ -470,7 +563,10 @@ function App() {
             <div className="heading-actions">
               {active !== "overview" && <button className="btn secondary" onClick={() => setActive("overview")}>Vue d'ensemble</button>}
               {active === "stock" && authSession && pendingSyncCount > 0 && <button className="btn secondary" disabled={busy} onClick={() => { void syncWebOutbox(authSession).catch((error) => setAuthMessage(error instanceof Error ? error.message : "Synchronisation impossible.")); }}>Synchroniser ({pendingSyncCount})</button>}
-              <button className="btn primary" disabled={busy || (!preview && active !== "stock")} title={!preview && active !== "stock" ? "Connecteur métier Web non livré." : undefined} onClick={() => { if(!preview&&active!=="stock"){setAuthMessage("Connecteur métier Web non livré pour ce module ; aucune donnée ne sera enregistrée localement.");return;} setDraftTitle("");setDraftDetail("");setDraftSku("");setDraftUnit("pièce");setDraftReorderLevel("0");setDraftSupplierWhatsApp("");setDialogOpen(true); }}>{!preview&&active!=="stock"?"Connecteur à livrer":selected.action}</button>
+              <button className="btn primary" disabled={busy || (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active))} title={!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active) ? "Connecteur métier Web non livré." : undefined} onClick={() => {
+                if (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)) { setAuthMessage("Connecteur métier Web non livré pour ce module."); return; }
+                setDraftTitle(active==="team"&&authSession?authSession.account.display_name:"");setDraftDetail("");setDraftSku("");setDraftUnit("pièce");setDraftReorderLevel("0");setDraftSupplierWhatsApp("");setDraftPhone("");setDraftAmount("0");setDraftDate("");setDraftEndDate("");setDraftPriority("normal");setDraftActivity("general");setDraftContactConsent(false);setDialogOpen(true);
+              }}>{!preview&&!["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)?"Connecteur à livrer":active==="team"?"Pointer mon arrivée":selected.action}</button>
             </div>
           </div>
 
@@ -491,9 +587,9 @@ function App() {
       </main>
       {dialogOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <div className="modal-head"><div><span className="eyebrow">NOUVELLE OPÉRATION · APERÇU</span><h2 id="modal-title">{selected.action}</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)}>×</button></div>
-          <form onSubmit={(e) => {e.preventDefault();if(active==="stock"&&authSession)void submitStockItem();else if(preview)addLocalEntry();else{setAuthMessage("Connecteur métier non disponible : aucune opération n'a été enregistrée.");setDialogOpen(false);}}}>
-            <label>Nom / référence<input autoFocus value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} required placeholder="Ex. Lessive professionnelle" /></label>
+          <div className="modal-head"><div><span className="eyebrow">{authSession&&!preview?"OPÉRATION · JOURNAL SERVEUR":"NOUVELLE OPÉRATION · APERÇU LOCAL"}</span><h2 id="modal-title">{active==="team"&&authSession&&!preview?"Pointer mon arrivée":selected.action}</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)}>×</button></div>
+          <form onSubmit={(e) => {e.preventDefault();if(active==="stock"&&authSession)void submitStockItem();else if(authSession&&!preview)void submitModuleOperation().catch(error=>setAuthMessage(error instanceof Error?error.message:"Opération impossible."));else if(preview)addLocalEntry();else{setAuthMessage("Connecteur métier non disponible.");setDialogOpen(false);}}}>
+            <label>{active==="customers"?"Nom du client":active==="pressing"?"Nom du client":active==="agenda"?"Nom / référence du client":active==="help"?"Sujet":active==="cash"?"Catégorie de dépense":active==="team"?"Membre":"Nom / référence"}<input autoFocus value={draftTitle} readOnly={active==="team"&&authSession&&!preview} onChange={(e) => setDraftTitle(e.target.value)} required placeholder="Saisir la valeur" /></label>
             {active === "stock" && authSession ? <>
               <label>Point de vente<select value={activeSiteId} onChange={(e) => setActiveSiteId(e.target.value)} required>{authSession.account.active_site_ids.map((siteId) => <option key={siteId} value={siteId}>{siteId}</option>)}</select></label>
               <label>SKU (facultatif)<input value={draftSku} onChange={(e) => setDraftSku(e.target.value)} maxLength={80} /></label>
@@ -501,11 +597,40 @@ function App() {
               <label>Seuil d'alerte<input type="number" min="0" step="0.001" value={draftReorderLevel} onChange={(e) => setDraftReorderLevel(e.target.value)} required /></label>
               <label>WhatsApp fournisseur<input value={draftSupplierWhatsApp} onChange={(e) => setDraftSupplierWhatsApp(e.target.value)} maxLength={32} placeholder="+237 6xx xx xx xx" /></label>
               <div className="notice">La fiche article rejoint l'outbox avec un identifiant et une séquence liés à cet appareil. Elle n'est confirmée qu'après le reçu du journal serveur.</div>
+            </> : authSession && !preview && active==="customers" ? <>
+              <label>Téléphone facultatif<input value={draftPhone} onChange={e=>setDraftPhone(e.target.value)} maxLength={32}/></label>
+              <label><input type="checkbox" checked={draftContactConsent} onChange={e=>setDraftContactConsent(e.target.checked)}/> Consentement de contact obtenu</label>
+            </> : authSession && !preview && active==="services" ? <>
+              <label>Code prestation<input value={draftSku} onChange={e=>setDraftSku(e.target.value)} required maxLength={80}/></label>
+              <label>Activité<select value={draftActivity} onChange={e=>setDraftActivity(e.target.value)}>{["pressing","hair","beauty","treatment","tailoring","perfume","repair","part","manufacturing","vehicle","cleaning","contract","home","printing","event","package","material","service","retail","general"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
+              <label>Tarif FCFA<input type="number" min="0" step="1" value={draftAmount} onChange={e=>setDraftAmount(e.target.value)} required/></label>
+              <label>Description<textarea rows={3} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} maxLength={2000}/></label>
+            </> : authSession && !preview && active==="pressing" ? <>
+              <label>Téléphone client<input value={draftPhone} onChange={e=>setDraftPhone(e.target.value)} maxLength={32}/></label>
+              <label>Articles déposés<textarea rows={3} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required minLength={2}/></label>
+              <label>Montant total FCFA<input type="number" min="1" step="1" value={draftAmount} onChange={e=>setDraftAmount(e.target.value)} required/></label>
+              <label>Date promise<input type="datetime-local" value={draftDate} onChange={e=>setDraftDate(e.target.value)} required/></label>
+              <div className="notice">Aucun acompte n'est encaissé dans ce parcours de création.</div>
+            </> : authSession && !preview && active==="agenda" ? <>
+              <label>Prestation (nom ou code)<input value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required/></label>
+              <label>Début<input type="datetime-local" value={draftDate} onChange={e=>setDraftDate(e.target.value)} required/></label>
+              <label>Fin<input type="datetime-local" value={draftEndDate} onChange={e=>setDraftEndDate(e.target.value)} required/></label>
+              <div className="notice">Le rendez-vous est affecté au membre connecté ; les chevauchements sont vérifiés côté serveur.</div>
+            </> : authSession && !preview && active==="cash" ? <>
+              <label>Motif<textarea rows={3} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required minLength={2}/></label>
+              <label>Montant FCFA<input type="number" min="1" step="1" value={draftAmount} onChange={e=>setDraftAmount(e.target.value)} required/></label>
+              <label>Date<input type="datetime-local" value={draftDate} onChange={e=>setDraftDate(e.target.value)}/></label>
+              <div className="notice">Dépense hors caisse. Aucun paiement client ou encaissement n'est créé.</div>
+            </> : authSession && !preview && active==="help" ? <>
+              <label>Description<textarea rows={4} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required minLength={3}/></label>
+              <label>Priorité<select value={draftPriority} onChange={e=>setDraftPriority(e.target.value)}>{["low","normal","high","urgent"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
+            </> : authSession && !preview && active==="team" ? <>
+              <div className="notice">Le pointage est enregistré uniquement pour le membre authentifié.</div>
             </> : <>
               <label>Détails<textarea rows={3} value={draftDetail} onChange={(e) => setDraftDetail(e.target.value)} placeholder="Informations complémentaires" /></label>
-              <div className="notice">Brouillon local : aucun encaissement, ticket ou rendez-vous réel n'est créé.</div>
+              <div className="notice">Aperçu local : aucune opération réelle n'est créée.</div>
             </>}
-            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>Annuler</button><button className="btn primary" disabled={busy}>{active === "stock" && authSession ? "Mettre en file & synchroniser" : "Ajouter à l'aperçu"}</button></div>
+            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>Annuler</button><button className="btn primary" disabled={busy}>{authSession&&!preview?"Mettre en file & synchroniser":"Ajouter à l'aperçu"}</button></div>
           </form>
         </div>
       </div>}
