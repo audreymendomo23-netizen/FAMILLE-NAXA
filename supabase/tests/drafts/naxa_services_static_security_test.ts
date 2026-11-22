@@ -323,9 +323,9 @@ Deno.test("N2 pressing and appointment RPCs enforce lifecycle versions and serve
     assert(new RegExp("create\\s+or\\s+replace\\s+function\\s+public\\."+fn+"\\s*\\(","i").test(sql),
       "Missing pressing/appointment handler "+fn);
   }
-  assert(/(?:p_expected_version\\s*<>\\s*v_order\\.revision|v_order\\.revision\\s*<>\\s*p_expected_version)/i.test(sql),
+  assert(sql.includes("v_order.revision<>p_expected_version"),
     "Pressing transitions require an expected revision");
-  assert(/(?:p_expected_version\\s*<>\\s*v_appointment\\.revision|v_appointment\\.revision\\s*<>\\s*p_expected_version)/i.test(sql),
+  assert(sql.includes("p_expected_version<>v_appointment.revision"),
     "Appointment transitions require an expected revision");
   assert(/pg_advisory_xact_lock[\s\S]{0,200}appointment-slots/i.test(sql),
     "Appointment slots must be serialized transactionally");
@@ -355,4 +355,23 @@ Deno.test("N2 cash session and expense handlers are scoped and compute close bal
     "Cash variance must be computed server-side");
   assert(/revoke\s+insert,update,delete\s+on\s+public\.ns_cash_sessions,public\.ns_expenses\s+from\s+public,anon,authenticated/i.test(sql),
     "Cash sessions and expenses must be mutated only by RPC");
+});
+
+
+Deno.test("N2 sale handlers post cash sale inventory once and keep Mobile Money pending until provider verification", async () => {
+  const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  assert(/create\\s+or\\s+replace\\s+function\\s+public\\.ns_create_sale\\s*\\(/i.test(sql),
+    "Sale creation handler is required");
+  assert(/create\\s+or\\s+replace\\s+function\\s+public\\.ns_cancel_pending_mobile_money_sale\\s*\\(/i.test(sql),
+    "Pending Mobile Money cancellation handler is required");
+  assert(/p_payment_method='cash'\\s+and\\s+p_expected_status<>'confirmed'/i.test(sql),
+    "Cash sale must be confirmed synchronously");
+  assert(/p_payment_method='mobile_money'\\s+and\\s+p_expected_status<>'pending'/i.test(sql),
+    "Mobile Money sale must remain pending on client creation");
+  assert(/ns_post_sale_inventory\\(p_org_id,p_site_id,p_sale_id,p_event_id\\)/i.test(sql),
+    "Cash sale must call the existing atomic stock/accounting posting operation");
+  assert(/status='failed',confirmation_source='cancelled_before_provider_confirmation'/i.test(sql),
+    "Only a pending provider payment can be cancelled before confirmation");
+  assert(/revoke\\s+insert,update,delete\\s+on\\s+public\\.ns_sales,public\\.ns_payments,public\\.ns_sale_lines\\s+from\\s+public,anon,authenticated/i.test(sql),
+    "Sale, payment and line writes must be RPC-only");
 });
