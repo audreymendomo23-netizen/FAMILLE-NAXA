@@ -679,6 +679,112 @@ BEGIN
 END
 $service_crm_assertions$;
 
+
+SET ROLE authenticated;
+DO $inventory_valuation_sync$
+DECLARE v_result jsonb; v_rejected boolean:=false; v_version integer;
+BEGIN
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '99000000-0000-4000-8000-000000000001'::uuid,20,
+    'inventory_valuation','92000000-0000-4000-8000-000000000001',
+    'inventory_valuation.imported',
+    jsonb_build_object(
+      'valuation_id','98000000-0000-4000-8000-000000000001',
+      'inventory_item_id','92000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'unit_cost_xaf',1500,'selling_price_xaf',3000,'expected_version',0
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'VALUATION_IMPORT_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '99000000-0000-4000-8000-000000000002'::uuid,21,
+    'inventory_valuation','92000000-0000-4000-8000-000000000001',
+    'inventory_valuation.import_updated',
+    jsonb_build_object(
+      'valuation_id','98000000-0000-4000-8000-000000000001',
+      'inventory_item_id','92000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'unit_cost_xaf',1600,'selling_price_xaf',3200,'expected_version',1
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'VALUATION_IMPORT_UPDATE_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '99000000-0000-4000-8000-000000000003'::uuid,22,
+    'inventory_valuation','92000000-0000-4000-8000-000000000001',
+    'inventory_valuation.updated',
+    jsonb_build_object(
+      'valuation_id','98000000-0000-4000-8000-000000000001',
+      'inventory_item_id','92000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'unit_cost_xaf',1700,'selling_price_xaf',3500,'expected_version',2
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'VALUATION_UPDATE_NOT_APPLIED: %',v_result; END IF;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      '99000000-0000-4000-8000-000000000004'::uuid,23,
+      'inventory_valuation','92000000-0000-4000-8000-000000000001',
+      'inventory_valuation.updated',
+      jsonb_build_object(
+        'valuation_id','98000000-0000-4000-8000-000000000001',
+        'inventory_item_id','92000000-0000-4000-8000-000000000001',
+        'org_id','20000000-0000-4000-8000-000000000001',
+        'site_id','30000000-0000-4000-8000-000000000001',
+        'unit_cost_xaf',1750,'selling_price_xaf',3600,'expected_version',1
+      )
+    );
+    RAISE EXCEPTION 'STALE_INVENTORY_VALUATION_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM<>'NAXA_INVENTORY_VALUATION_VERSION_CONFLICT' THEN RAISE; END IF;
+  END;
+END
+$inventory_valuation_sync$;
+RESET ROLE;
+
+DO $inventory_valuation_assertions$
+DECLARE v_cost bigint; v_price bigint; v_revision integer; v_item_cost bigint; v_item_price bigint;
+BEGIN
+  SELECT unit_cost_xaf,selling_price_xaf,revision INTO v_cost,v_price,v_revision
+  FROM public.ns_inventory_valuations
+  WHERE id='98000000-0000-4000-8000-000000000001';
+  SELECT average_unit_cost_xaf,selling_price_xaf INTO v_item_cost,v_item_price
+  FROM public.ns_inventory_items WHERE id='92000000-0000-4000-8000-000000000001';
+  IF v_cost<>1700 OR v_price<>3500 OR v_revision<>3 OR v_item_cost<>1700 OR v_item_price<>3500 THEN
+    RAISE EXCEPTION 'INVENTORY_VALUATION_LEDGER_OR_PROJECTION_INVALID';
+  END IF;
+END
+$inventory_valuation_assertions$;
+
+SET ROLE authenticated;
+DO $inventory_valuation_direct_write_guard$
+BEGIN
+  IF has_table_privilege(current_user,'public.ns_inventory_valuations','SELECT')
+     OR has_table_privilege(current_user,'public.ns_inventory_valuations','INSERT')
+     OR has_table_privilege(current_user,'public.ns_inventory_valuations','UPDATE') THEN
+    RAISE EXCEPTION 'CLIENT_CAN_BYPASS_INVENTORY_VALUATION_RPC';
+  END IF;
+END
+$inventory_valuation_direct_write_guard$;
+RESET ROLE;
+
 UPDATE public.ns_devices SET revoked_at=now() WHERE id='80000000-0000-4000-8000-000000000001';
 SET ROLE authenticated;
 DO $revocation$
