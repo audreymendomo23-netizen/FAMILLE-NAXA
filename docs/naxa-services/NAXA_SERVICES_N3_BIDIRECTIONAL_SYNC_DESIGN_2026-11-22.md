@@ -2,7 +2,7 @@
 
 **Date :** 22 novembre 2026  
 **Branche de travail :** `work/naxa-services-completion-20261120`  
-**Statut :** conception initiale / non implémentée / non validée  
+**Statut :** conception implémentée et validée en CI PostgreSQL 17 + Android 15 ; non déployée sur un projet Supabase hébergé  
 **Périmètre :** Android NAXA SERVICES uniquement ; le lot Web/PWA N4 reste séparé.
 
 ## 1. Objectif et verdict d'entrée
@@ -11,7 +11,7 @@ N3 doit permettre à une installation Android de récupérer, après reconnexion
 
 **Constat :** le push Android vers le serveur existe déjà dans `SupplierSyncCoordinator`. La passerelle SQL `public.ns_apply_sync_event` applique les mutations et émet un reçu idempotent. En revanche, aucun endpoint de pull utilisé par Android ni application des changements distants dans Room n'a été identifié au HEAD audité.
 
-**Verdict N3-B : OUVERT / NON VERT.** Cette note fixe les contraintes de conception avant toute migration candidate ou modification du client.
+**Verdict N3-B : VERT — implémentation et preuves CI terminées.** La migration candidate et le client Android ont été implémentés sur la branche de travail ; les tests PostgreSQL 17 jetables et Android 15 sont verts. Aucun déploiement Supabase hébergé n'a été effectué.
 
 ## 2. État existant observé
 
@@ -145,3 +145,31 @@ Un test de fonction serveur isolé ou un test de deux appareils qui ne valide qu
 - N4 Web/PWA reste hors de ce lot.
 
 **Décision proposée :** instruire d'abord la matrice d'accès et l'option A/B par domaine ; ensuite produire le draft serveur et son test d'isolation avant d'écrire l'applicateur Room.
+
+## 8. Résultat d'implémentation et clôture N3-B — 22 novembre 2026
+
+### 8.1 Composants réellement livrés sur la branche
+
+- SQL candidate : `public.ns_sync_counters`, `public.ns_sync_changes`, `public.ns_pull_sync_changes` et écriture du journal dans la transaction de `ns_apply_sync_event`.
+- Edge Function Accounting : action `pull_sync_changes`, validation du contrat, identité dérivée de la session et réponse paginée.
+- Android : `NaxaServicesSyncWorker`, `SupplierSyncCoordinator`, `LocalErpStore.persistRemoteSyncPage` et `NaxaServicesPeerSyncApplier`.
+- Room : stockage durable des changements distants, checkpoint par appareil, application transactionnelle, état de revue pour les changements non applicables et prévention de l'écho dans l'outbox.
+- Couverture : 92 codes d'action alignés entre Android et Edge ; 44 mutations indépendantes conservées au périmètre N2.
+
+### 8.2 Résultats de recette
+
+- Run GitHub Actions [#456 — 45030230301](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45030230301) : **12/12 jobs PASS**, `completed / success`.
+- PostgreSQL 17 jetable : tests serveur de pull, deux appareils, curseur, scopes, appareil révoqué, exclusion de l'événement propre et réception des événements pairs : PASS.
+- Android : tests unitaires et compilation : PASS ; `:naxa-services:connectedDebugAndroidTest` : **11/11 tests exécutés avec succès sur émulateur Android 15**.
+- Le test instrumenté bidirectionnel utilise deux bases Room indépendantes : mutation A→B, mutation B→A, rejeu sans doublon, aucune nouvelle outbox causée par une mutation distante.
+- Registre N1 : 55/55 points d'émission, vérification de bijection et parité du coordinateur/Edge : PASS.
+
+**Verdict final N3-B : VERT.** Avec N3-A, N3-C et N3-D, le gate N3 logiciel/CI est complet.
+
+### 8.3 Garde-fous de déploiement
+
+- L'unique projet Supabase connecté trouvé est `NAXA`, projet historique/pharmacie ; aucun projet `NAXA SERVICES` dédié n'est disponible dans la connexion.
+- Les drafts SQL ont été validés uniquement sur PostgreSQL 17 jetable en CI. Aucune migration ni Edge Function n'a été déployée.
+- `NS_ENABLE_SUPPLIER_SYNC=false` reste le défaut ; aucun déploiement ou activation hébergée n'est inclus dans le verdict N3 logiciel.
+- Branche validée : `work/naxa-services-completion-20261120` ; commit de recette : `b076898f568961a0c22bdd430d57db7a9e667b61`.
+
