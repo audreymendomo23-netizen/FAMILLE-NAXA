@@ -1774,6 +1774,28 @@ BEGIN
      OR has_table_privilege(current_user,'public.ns_customers','DELETE') THEN
     RAISE EXCEPTION 'CLIENT_CAN_BYPASS_CUSTOMER_DOMAIN_RPC';
   END IF;
+  IF has_table_privilege(current_user,'public.ns_management_records','INSERT')
+     OR has_table_privilege(current_user,'public.ns_management_records','UPDATE')
+     OR has_table_privilege(current_user,'public.ns_management_record_events','INSERT')
+     OR has_table_privilege(current_user,'public.ns_staff_time_events','INSERT')
+     OR has_table_privilege(current_user,'public.ns_inventory_transfers','INSERT')
+     OR has_table_privilege(current_user,'public.ns_inventory_transfers','UPDATE') THEN
+    RAISE EXCEPTION 'CLIENT_CAN_BYPASS_MANAGEMENT_STAFF_OR_TRANSFER_RPC';
+  END IF;
+  IF has_function_privilege(current_user,
+       'public.ns_update_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text,integer)','EXECUTE')
+     OR has_function_privilege(current_user,
+       'public.ns_create_management_record(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz,text,jsonb)','EXECUTE')
+     OR has_function_privilege(current_user,
+       'public.ns_record_staff_time_event(uuid,uuid,uuid,uuid,uuid,text,text,timestamptz)','EXECUTE')
+     OR has_function_privilege(current_user,
+       'public.ns_receive_inventory_transfer(uuid,uuid,uuid,uuid,uuid,uuid,text,text,numeric,integer,text,timestamptz)','EXECUTE') THEN
+    RAISE EXCEPTION 'CLIENT_CAN_BYPASS_N2_MUTATION_RECEIPTS';
+  END IF;
+  IF NOT has_function_privilege(current_user,
+       'public.ns_apply_sync_event(uuid,uuid,uuid,uuid,uuid,bigint,text,text,text,jsonb)','EXECUTE') THEN
+    RAISE EXCEPTION 'AUTHENTICATED_CANNOT_EXECUTE_ATOMIC_SYNC_GATEWAY';
+  END IF;
   IF has_table_privilege(current_user,'public.ns_customer_followups','INSERT')
      OR has_table_privilege(current_user,'public.ns_customer_followups','UPDATE')
      OR has_table_privilege(current_user,'public.ns_customer_followup_events','INSERT')
