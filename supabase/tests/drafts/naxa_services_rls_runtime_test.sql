@@ -531,6 +531,154 @@ BEGIN
 END
 $atomic_sync_receipt_assertions$;
 
+
+SET ROLE authenticated;
+DO $service_crm_sync$
+DECLARE
+  v_result jsonb;
+  v_service_id uuid := '96000000-0000-4000-8000-000000000001';
+  v_customer_id uuid := '96000000-0000-4000-8000-000000000002';
+  v_followup_id uuid := '96000000-0000-4000-8000-000000000003';
+  v_support_id uuid := '96000000-0000-4000-8000-000000000004';
+  v_event_id uuid;
+  v_payload jsonb;
+BEGIN
+  v_event_id := '97000000-0000-4000-8000-000000000001';
+  v_payload := jsonb_build_object(
+    'service_id',v_service_id,'org_id','20000000-0000-4000-8000-000000000001',
+    'site_id','30000000-0000-4000-8000-000000000001',
+    'code','CI-SERVICE-001','activity','pressing','name','Service CI',
+    'duration_minutes',30,'price_xaf',1500,'active',true,'category','pressing',
+    'description','Service de test transactionnel','provider_member_ids','[]'::jsonb,
+    'required_workstation_kinds','[]'::jsonb,'package_sessions',null
+  );
+  v_result := public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,v_event_id,10,
+    'service',v_service_id::text,'service.created',v_payload
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'SERVICE_CREATE_NOT_APPLIED: %',v_result; END IF;
+
+  v_event_id := '97000000-0000-4000-8000-000000000002';
+  v_payload := jsonb_build_object(
+    'service_id',v_service_id,'org_id','20000000-0000-4000-8000-000000000001',
+    'site_id','30000000-0000-4000-8000-000000000001',
+    'code','CI-SERVICE-001','activity','pressing','name','Service CI updated',
+    'duration_minutes',45,'price_xaf',1800,'active',true,'expected_version',1
+  );
+  v_result := public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,v_event_id,11,
+    'service',v_service_id::text,'service.updated',v_payload
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'SERVICE_UPDATE_NOT_APPLIED: %',v_result; END IF;
+
+  v_event_id := '97000000-0000-4000-8000-000000000003';
+  v_payload := jsonb_build_object(
+    'service_id',v_service_id,'org_id','20000000-0000-4000-8000-000000000001',
+    'site_id','30000000-0000-4000-8000-000000000001',
+    'category','pressing','description','Configuration mise à jour',
+    'provider_member_ids','[]'::jsonb,'required_workstation_kinds','[]'::jsonb,
+    'package_sessions',2,'expected_version',2
+  );
+  v_result := public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,v_event_id,12,
+    'service',v_service_id::text,'service.configuration_updated',v_payload
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'SERVICE_CONFIGURATION_NOT_APPLIED: %',v_result; END IF;
+
+  v_event_id := '97000000-0000-4000-8000-000000000004';
+  v_payload := jsonb_build_object(
+    'customer_id',v_customer_id,'org_id','20000000-0000-4000-8000-000000000001',
+    'site_id','30000000-0000-4000-8000-000000000001',
+    'display_name','Client CRM CI','phone_contact','690000009',
+    'contact_consent',false,'address_line','Rue de test','neighborhood','Akwa',
+    'landmark','près du marché','notes_private',''
+  );
+  v_result := public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,v_event_id,13,
+    'customer',v_customer_id::text,'customer.created',v_payload
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'CUSTOMER_CREATE_NOT_APPLIED: %',v_result; END IF;
+
+  v_event_id := '97000000-0000-4000-8000-000000000005';
+  v_payload := jsonb_build_object(
+    'followup_id',v_followup_id,'org_id','20000000-0000-4000-8000-000000000001',
+    'site_id','30000000-0000-4000-8000-000000000001','customer_id',v_customer_id,
+    'title','Rappeler le client','frequency','weekly','channel','whatsapp',
+    'notes','Relance CRM CI','next_due_at',now()+interval '7 days','status','active'
+  );
+  v_result := public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,v_event_id,14,
+    'customer_followup',v_followup_id::text,'customer_followup.created',v_payload
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'CUSTOMER_FOLLOWUP_CREATE_NOT_APPLIED: %',v_result; END IF;
+
+  v_event_id := '97000000-0000-4000-8000-000000000006';
+  v_payload := jsonb_build_object(
+    'followup_id',v_followup_id,'org_id','20000000-0000-4000-8000-000000000001',
+    'site_id','30000000-0000-4000-8000-000000000001',
+    'completed_at',now(),'next_due_at_if_repeating',now()+interval '14 days',
+    'completion_note','Client contacté en recette'
+  );
+  v_result := public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,v_event_id,15,
+    'customer_followup',v_followup_id::text,'customer_followup.completed',v_payload
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'CUSTOMER_FOLLOWUP_COMPLETION_NOT_APPLIED: %',v_result; END IF;
+
+  v_event_id := '97000000-0000-4000-8000-000000000007';
+  v_payload := jsonb_build_object(
+    'request_id',v_support_id,'org_id','20000000-0000-4000-8000-000000000001',
+    'site_id','30000000-0000-4000-8000-000000000001',
+    'subject','Demande support CI','description','Vérification du parcours de support serveur.',
+    'priority','normal'
+  );
+  v_result := public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,v_event_id,16,
+    'support_request',v_support_id::text,'support_request.created',v_payload
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'SUPPORT_REQUEST_CREATE_NOT_APPLIED: %',v_result; END IF;
+END
+$service_crm_sync$;
+RESET ROLE;
+
+DO $service_crm_assertions$
+DECLARE v_revision integer; v_followup_status text; v_followup_events integer; v_support_status text;
+BEGIN
+  SELECT revision INTO v_revision FROM public.ns_services
+   WHERE id='96000000-0000-4000-8000-000000000001';
+  IF v_revision<>3 THEN RAISE EXCEPTION 'SERVICE_VERSION_SEQUENCE_INVALID: %',v_revision; END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM public.ns_customers
+    WHERE id='96000000-0000-4000-8000-000000000002'
+      AND address_line='Rue de test' AND contact_consent=false
+  ) THEN RAISE EXCEPTION 'CUSTOMER_CONSENT_OR_ADDRESS_NOT_PERSISTED'; END IF;
+  SELECT status INTO v_followup_status FROM public.ns_customer_followups
+   WHERE id='96000000-0000-4000-8000-000000000003';
+  SELECT count(*) INTO v_followup_events FROM public.ns_customer_followup_events
+   WHERE followup_id='96000000-0000-4000-8000-000000000003';
+  IF v_followup_status<>'active' OR v_followup_events<>1 THEN
+    RAISE EXCEPTION 'FOLLOWUP_COMPLETION_LEDGER_INVALID: %, %',v_followup_status,v_followup_events;
+  END IF;
+  SELECT status INTO v_support_status FROM public.ns_support_requests
+   WHERE id='96000000-0000-4000-8000-000000000004';
+  IF v_support_status<>'open' THEN RAISE EXCEPTION 'SUPPORT_REQUEST_NOT_OPEN: %',v_support_status; END IF;
+END
+$service_crm_assertions$;
+
 UPDATE public.ns_devices SET revoked_at=now() WHERE id='80000000-0000-4000-8000-000000000001';
 SET ROLE authenticated;
 DO $revocation$
