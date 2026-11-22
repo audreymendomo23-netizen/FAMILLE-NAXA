@@ -1529,7 +1529,6 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
 
             val siteId = row.optString("site_id").takeUnless { it.isBlank() || it == "null" }
             val workstationId = row.optString("workstation_id").takeUnless { it.isBlank() || it == "null" }
-            val recordedAt = row.optString("recorded_at")
             dao.insertRemoteChange(
                 LocalRemoteChange(
                     eventId = eventId,
@@ -1543,10 +1542,11 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                     actionCode = actionCode,
                     aggregateVersion = aggregateVersion,
                     projectionJson = projectionJson,
-                    recordedAt = recordedAt,
+                    recordedAt = row.optString("recorded_at"),
                     receivedAtEpochMs = receivedAtEpochMs
                 )
             )
+
             val current = dao.findRemoteAggregate(orgId, aggregateType, aggregateId)
             val merged = JSONObject(current?.projectionJson ?: "{}")
             val keys = projection.keys()
@@ -1563,7 +1563,6 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 actionCode == "cash_session.closed" -> merged.put("status", "closed")
                 actionCode == "sale.mobile_money_cancelled" -> merged.put("status", "voided")
             }
-            val pendingLocal = dao.countPendingLocalMutations(orgId, aggregateType, aggregateId) > 0
             dao.upsertRemoteAggregate(
                 LocalRemoteAggregate(
                     orgId = orgId,
@@ -1573,7 +1572,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                     aggregateVersion = maxOf(current?.aggregateVersion ?: 0L, aggregateVersion),
                     lastChangeCursor = cursor,
                     projectionJson = merged.toString(),
-                    needsReview = pendingLocal || (current?.needsReview ?: false),
+                    needsReview = true,
                     updatedAtEpochMs = receivedAtEpochMs
                 )
             )
@@ -1582,13 +1581,51 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
 
         require(nextCursor >= priorPageCursor) { "SYNC_PULL_CURSOR_BEFORE_LAST_CHANGE" }
         dao.upsertSyncCheckpoint(
-            LocalSyncCheckpoint(
-                orgId = orgId,
-                deviceId = deviceId,
-                cursor = nextCursor,
-                updatedAtEpochMs = receivedAtEpochMs
-            )
+            LocalSyncCheckpoint(orgId, deviceId, nextCursor, receivedAtEpochMs)
         )
+
+        // Revisit older unresolved events after inserting this page: parents/dependencies
+        // may have arrived later. Local queued writes always win pending review, never deletion.
+        val unresolved = dao.loadRemoteChangesNeedingApplication(orgId, 500)
+        for (change in unresolved) {
+            val hasLocalMutation = dao.countPendingLocalMutations(
+                orgId, change.aggregateType, change.aggregateId
+            ) > 0
+            if (hasLocalMutation) {
+                dao.updateRemoteChangeApplication(
+                    change.eventId, orgId, "needs_review", "LOCAL_MUTATION_PENDING"
+                )
+                continue
+            }
+            val applied = NaxaServicesPeerSyncApplier.apply(dao, change)
+            dao.updateRemoteChangeApplication(
+                change.eventId,
+                orgId,
+                if (applied) "applied" else "needs_review",
+                if (applied) null else "REMOTE_SNAPSHOT_INCOMPLETE_OR_DEPENDENCY_MISSING"
+            )
+        }
+
+        val stillUnresolved = dao.loadRemoteChangesNeedingApplication(orgId, 500)
+            .map { it.aggregateType + "::" + it.aggregateId }.toSet()
+        val shadows = dao.observeRemoteAggregates // keep the update scoped to the aggregates changed in this page
+        val changedAggregates = changes.let { array ->
+            (0 until array.length()).mapNotNull { array.optJSONObject(it) }
+                .map { row -> row.optString("aggregate_type") + "::" + row.optString("aggregate_id") }
+                .toSet()
+        }
+        for (key in changedAggregates) {
+            val parts = key.split("::", limit = 2)
+            if (parts.size != 2) continue
+            val aggregate = dao.findRemoteAggregate(orgId, parts[0], parts[1]) ?: continue
+            val pendingLocal = dao.countPendingLocalMutations(orgId, aggregate.aggregateType, aggregate.aggregateId) > 0
+            dao.upsertRemoteAggregate(
+                aggregate.copy(
+                    needsReview = pendingLocal || key in stillUnresolved,
+                    updatedAtEpochMs = receivedAtEpochMs
+                )
+            )
+        }
         inserted
     }
 
