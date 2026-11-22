@@ -1351,6 +1351,376 @@ BEGIN
 END
 $sale_server_execute_guard$;
 
+
+SET ROLE authenticated;
+DO $customer_management_staff_sync$
+DECLARE
+  v_result jsonb;
+  v_replay jsonb;
+  v_event timestamptz:=now()+interval '20 hours';
+BEGIN
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a4000000-0000-4000-8000-000000000001'::uuid,160,
+    'customer','90000000-0000-4000-8000-000000000001','customer.updated',
+    jsonb_build_object(
+      'customer_id','90000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'display_name','Customer A1 updated','phone_contact','690000011',
+      'contact_consent',false,'address_line','Adresse mise à jour',
+      'neighborhood','Akwa','landmark','près du carrefour',
+      'notes_private','','expected_version',1
+    )
+  );
+  IF v_result->>'status'<>'applied'
+     OR (v_result->'result'->>'revision')::integer<>2 THEN
+    RAISE EXCEPTION 'CUSTOMER_UPDATE_NOT_VERSIONED: %',v_result;
+  END IF;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      'a4000000-0000-4000-8000-000000000002'::uuid,161,
+      'customer','90000000-0000-4000-8000-000000000001','customer.updated',
+      jsonb_build_object(
+        'customer_id','90000000-0000-4000-8000-000000000001',
+        'org_id','20000000-0000-4000-8000-000000000001',
+        'site_id','30000000-0000-4000-8000-000000000001',
+        'display_name','Stale customer edit','phone_contact','690000012',
+        'contact_consent',false,'address_line','','neighborhood','',
+        'landmark','','notes_private','','expected_version',1
+      )
+    );
+    RAISE EXCEPTION 'STALE_CUSTOMER_VERSION_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM<>'NAXA_CUSTOMER_VERSION_CONFLICT' THEN RAISE; END IF;
+  END;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a4000000-0000-4000-8000-000000000003'::uuid,162,
+    'quote','a5000000-0000-4000-8000-000000000001','quote.created',
+    jsonb_build_object(
+      'record_id','a5000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'record_type','quote','reference','DEV-CI-001','title','Devis de test',
+      'counterparty','Client CI','amount_xaf',25000,'paid_xaf',0,
+      'status','draft','metadata_json',jsonb_build_object('origin','runtime-ci')
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'MANAGEMENT_RECORD_CREATE_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a4000000-0000-4000-8000-000000000004'::uuid,163,
+    'quote','a5000000-0000-4000-8000-000000000001','quote.status_changed',
+    jsonb_build_object(
+      'record_id','a5000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'record_type','quote','from_status','draft','to_status','approved',
+      'reason','Validation CI','expected_version',1,'metadata_json_delta','{}'::jsonb
+    )
+  );
+  IF v_result->>'status'<>'applied' OR v_result->'result'->>'status'<>'approved' THEN
+    RAISE EXCEPTION 'MANAGEMENT_RECORD_TRANSITION_NOT_APPLIED: %',v_result;
+  END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a4000000-0000-4000-8000-000000000005'::uuid,164,
+    'appointment_waitlist','a5000000-0000-4000-8000-000000000002','appointment_waitlist.created',
+    jsonb_build_object(
+      'record_id','a5000000-0000-4000-8000-000000000002',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'record_type','appointment_waitlist','reference','WL-CI-001',
+      'title','Pressing standard','counterparty','Client liste attente',
+      'amount_xaf',0,'paid_xaf',0,'status','open','metadata_json','{}'::jsonb
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'WAITLIST_CREATE_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a4000000-0000-4000-8000-000000000006'::uuid,165,
+    'appointment','a5000000-0000-4000-8000-000000000003','appointment.created_from_waitlist',
+    jsonb_build_object(
+      'appointment_id','a5000000-0000-4000-8000-000000000003',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'waitlist_record_id','a5000000-0000-4000-8000-000000000002',
+      'workstation_id',null,'starts_at',now()+interval '10 hours',
+      'duration_minutes',30,'deposit_xaf',500,'reason','Confirmation liste attente CI',
+      'assigned_member_id','60000000-0000-4000-8000-000000000001'
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'WAITLIST_TO_APPOINTMENT_NOT_ATOMIC: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a4000000-0000-4000-8000-000000000007'::uuid,166,
+    'staff_clock_in','a5000000-0000-4000-8000-000000000010','staff_clock_in.recorded',
+    jsonb_build_object(
+      'time_event_id','a5000000-0000-4000-8000-000000000010',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'staff_member_id','60000000-0000-4000-8000-000000000001',
+      'staff_name_snapshot','Collaborateur CI','event_type','staff_clock_in',
+      'occurred_at',v_event
+    )
+  );
+  IF v_result->>'status'<>'applied' OR (v_result->'result'->>'sequence_no')::bigint<>1 THEN
+    RAISE EXCEPTION 'STAFF_CLOCK_IN_NOT_APPLIED: %',v_result;
+  END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a4000000-0000-4000-8000-000000000008'::uuid,167,
+    'staff_break_start','a5000000-0000-4000-8000-000000000011','staff_break_start.recorded',
+    jsonb_build_object(
+      'time_event_id','a5000000-0000-4000-8000-000000000011',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'staff_member_id','60000000-0000-4000-8000-000000000001',
+      'staff_name_snapshot','Collaborateur CI','event_type','staff_break_start',
+      'occurred_at',v_event+interval '1 minute'
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'STAFF_BREAK_START_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a4000000-0000-4000-8000-000000000009'::uuid,168,
+    'staff_break_end','a5000000-0000-4000-8000-000000000012','staff_break_end.recorded',
+    jsonb_build_object(
+      'time_event_id','a5000000-0000-4000-8000-000000000012',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'staff_member_id','60000000-0000-4000-8000-000000000001',
+      'staff_name_snapshot','Collaborateur CI','event_type','staff_break_end',
+      'occurred_at',v_event+interval '2 minutes'
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'STAFF_BREAK_END_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a4000000-0000-4000-8000-00000000000a'::uuid,169,
+    'staff_clock_out','a5000000-0000-4000-8000-000000000013','staff_clock_out.recorded',
+    jsonb_build_object(
+      'time_event_id','a5000000-0000-4000-8000-000000000013',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'staff_member_id','60000000-0000-4000-8000-000000000001',
+      'staff_name_snapshot','Collaborateur CI','event_type','staff_clock_out',
+      'occurred_at',v_event+interval '3 minutes'
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'STAFF_CLOCK_OUT_NOT_APPLIED: %',v_result; END IF;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      'a4000000-0000-4000-8000-00000000000b'::uuid,170,
+      'staff_break_end','a5000000-0000-4000-8000-000000000014','staff_break_end.recorded',
+      jsonb_build_object(
+        'time_event_id','a5000000-0000-4000-8000-000000000014',
+        'org_id','20000000-0000-4000-8000-000000000001',
+        'site_id','30000000-0000-4000-8000-000000000001',
+        'staff_member_id','60000000-0000-4000-8000-000000000001',
+        'staff_name_snapshot','Collaborateur CI','event_type','staff_break_end',
+        'occurred_at',v_event+interval '4 minutes'
+      )
+    );
+    RAISE EXCEPTION 'INVALID_STAFF_TIME_SEQUENCE_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM<>'NAXA_STAFF_TIME_SEQUENCE_INVALID' THEN RAISE; END IF;
+  END;
+END
+$customer_management_staff_sync$;
+RESET ROLE;
+
+DO $customer_management_staff_assertions$
+DECLARE v_customer_revision integer; v_quote_status text; v_quote_events integer;
+        v_waitlist_status text; v_appointment_status text; v_staff_events integer;
+BEGIN
+  SELECT revision INTO v_customer_revision FROM public.ns_customers
+   WHERE id='90000000-0000-4000-8000-000000000001';
+  IF v_customer_revision<>2 THEN RAISE EXCEPTION 'CUSTOMER_REVISION_NOT_INCREMENTED'; END IF;
+  SELECT status INTO v_quote_status FROM public.ns_management_records
+   WHERE id='a5000000-0000-4000-8000-000000000001';
+  SELECT count(*) INTO v_quote_events FROM public.ns_management_record_events
+   WHERE record_id='a5000000-0000-4000-8000-000000000001';
+  IF v_quote_status<>'approved' OR v_quote_events<>2 THEN
+    RAISE EXCEPTION 'MANAGEMENT_RECORD_HISTORY_INVALID';
+  END IF;
+  SELECT status INTO v_waitlist_status FROM public.ns_management_records
+   WHERE id='a5000000-0000-4000-8000-000000000002';
+  SELECT status INTO v_appointment_status FROM public.ns_appointments
+   WHERE id='a5000000-0000-4000-8000-000000000003';
+  IF v_waitlist_status<>'booked' OR v_appointment_status<>'booked' THEN
+    RAISE EXCEPTION 'WAITLIST_APPOINTMENT_CONVERSION_NOT_COMMITTED_TOGETHER';
+  END IF;
+  SELECT count(*) INTO v_staff_events FROM public.ns_staff_time_events
+   WHERE staff_member_id='60000000-0000-4000-8000-000000000001';
+  IF v_staff_events<>4 THEN RAISE EXCEPTION 'STAFF_TIME_SEQUENCE_LEDGER_INVALID: %',v_staff_events; END IF;
+END
+$customer_management_staff_assertions$;
+
+-- Switch to the organization promoter for inter-site transfer operations.
+RESET ROLE;
+SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000002',false);
+SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000002","session_id":"ci-session-promoter"}',false);
+SET ROLE authenticated;
+DO $inventory_transfer_sync$
+DECLARE
+  v_result jsonb; v_replay jsonb; v_transfer uuid:='a6000000-0000-4000-8000-000000000001';
+  v_source_qty numeric(14,3); v_destination_qty numeric(14,3);
+  v_destination_item uuid; v_movements integer;
+BEGIN
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000002'::uuid,
+    'a7000000-0000-4000-8000-000000000001'::uuid,200,
+    'inventory_transfer',v_transfer::text,'inventory_transfer.requested',
+    jsonb_build_object(
+      'transfer_id',v_transfer,'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'source_site_id','30000000-0000-4000-8000-000000000001',
+      'destination_site_id','30000000-0000-4000-8000-000000000002',
+      'inventory_item_id','92000000-0000-4000-8000-000000000001',
+      'sku_snapshot','CI-STOCK-001','unit','pièce','quantity',2.5,
+      'reference','TRF-CI-001','requested_at',now()
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'TRANSFER_REQUEST_NOT_CREATED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000002'::uuid,
+    'a7000000-0000-4000-8000-000000000002'::uuid,201,
+    'inventory_transfer',v_transfer::text,'inventory_transfer.status_changed',
+    jsonb_build_object(
+      'record_id',v_transfer,'transfer_id',v_transfer,
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'source_site_id','30000000-0000-4000-8000-000000000001',
+      'destination_site_id','30000000-0000-4000-8000-000000000002',
+      'from_status','open','to_status','approved','reason','Approbation CI',
+      'expected_version',1,'transitioned_at',now()
+    )
+  );
+  IF v_result->>'status'<>'applied' OR v_result->'result'->>'status'<>'approved' THEN
+    RAISE EXCEPTION 'TRANSFER_APPROVAL_NOT_APPLIED: %',v_result;
+  END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000002'::uuid,null,
+    '80000000-0000-4000-8000-000000000002'::uuid,
+    'a7000000-0000-4000-8000-000000000003'::uuid,202,
+    'inventory_transfer',v_transfer::text,'inventory_transfer.received_at_destination',
+    jsonb_build_object(
+      'transfer_id',v_transfer,'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000002',
+      'source_site_id','30000000-0000-4000-8000-000000000001',
+      'destination_site_id','30000000-0000-4000-8000-000000000002',
+      'inventory_item_id','92000000-0000-4000-8000-000000000001',
+      'sku_snapshot','CI-STOCK-001','unit','pièce','quantity',2.5,
+      'expected_version',2,'reason','Réception CI','received_at',now()+interval '1 minute'
+    )
+  );
+  IF v_result->>'status'<>'applied' OR v_result->'result'->>'status'<>'received' THEN
+    RAISE EXCEPTION 'TRANSFER_RECEIPT_NOT_APPLIED: %',v_result;
+  END IF;
+  v_destination_item:=(v_result->'result'->>'destination_inventory_item_id')::uuid;
+
+  v_replay:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000002'::uuid,null,
+    '80000000-0000-4000-8000-000000000002'::uuid,
+    'a7000000-0000-4000-8000-000000000004'::uuid,203,
+    'inventory_transfer',v_transfer::text,'inventory_transfer.received_at_destination',
+    jsonb_build_object(
+      'transfer_id',v_transfer,'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000002',
+      'source_site_id','30000000-0000-4000-8000-000000000001',
+      'destination_site_id','30000000-0000-4000-8000-000000000002',
+      'inventory_item_id','92000000-0000-4000-8000-000000000001',
+      'sku_snapshot','CI-STOCK-001','unit','pièce','quantity',2.5,
+      'expected_version',2,'reason','Réception CI','received_at',now()+interval '1 minute'
+    )
+  );
+  IF v_replay->>'status'<>'applied'
+     OR coalesce((v_replay->'result'->>'idempotent')::boolean,false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'TRANSFER_RECEIPT_REPLAY_NOT_IDEMPOTENT: %',v_replay;
+  END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000002'::uuid,
+    'a7000000-0000-4000-8000-000000000005'::uuid,204,
+    'inventory_transfer',v_transfer::text,'inventory_transfer.status_changed',
+    jsonb_build_object(
+      'record_id',v_transfer,'transfer_id',v_transfer,
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'source_site_id','30000000-0000-4000-8000-000000000001',
+      'destination_site_id','30000000-0000-4000-8000-000000000002',
+      'from_status','approved','to_status','received','reason','Réception CI',
+      'expected_version',2,'transitioned_at',now()+interval '1 minute'
+    )
+  );
+  IF v_result->>'status'<>'applied' OR coalesce((v_result->'result'->>'idempotent')::boolean,false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'DUPLICATE_GENERIC_TRANSFER_STATUS_NOT_IDEMPOTENT: %',v_result;
+  END IF;
+
+  SELECT quantity INTO v_source_qty FROM public.ns_inventory_items
+   WHERE id='92000000-0000-4000-8000-000000000001';
+  SELECT quantity INTO v_destination_qty FROM public.ns_inventory_items
+   WHERE id=v_destination_item;
+  SELECT count(*) INTO v_movements FROM public.ns_inventory_movements
+   WHERE reason like '%'||v_transfer::text;
+  IF v_source_qty<>8.0 OR v_destination_qty<>2.5 OR v_movements<>2 THEN
+    RAISE EXCEPTION 'TRANSFER_STOCK_LEDGER_NOT_ATOMIC: source %, destination %, movement_rows %',
+      v_source_qty,v_destination_qty,v_movements;
+  END IF;
+END
+$inventory_transfer_sync$;
+RESET ROLE;
+
+-- Restore the site-scoped manager session for device revocation checks.
+SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-a"}',false);
+
 UPDATE public.ns_devices SET revoked_at=now() WHERE id='80000000-0000-4000-8000-000000000001';
 SET ROLE authenticated;
 DO $revocation$
