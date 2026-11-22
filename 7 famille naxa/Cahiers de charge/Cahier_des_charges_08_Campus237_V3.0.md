@@ -1,7 +1,7 @@
 # CAHIER DES CHARGES MAÎTRE — CAMPUS237
 ## ERP scolaire, plateforme familiale, protection des élèves et écosystème éducatif à 360°
 
-**Version :** 3.0.1 — document maître consolidé avec addendum fonctionnel  
+**Version :** 3.0.2 — baseline enrichie et décisions pédagogiques/économiques verrouillées  
 **Date de référence :** 22 novembre 2026  
 **Produit :** Campus237  
 **Dépôt :** Famille NAXA  
