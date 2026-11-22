@@ -3,6 +3,7 @@ package cm.naxa.naxaservices
 import cm.naxa.naxaservices.data.LocalOutboxEvent
 import java.util.UUID
 import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import kotlinx.coroutines.delay
@@ -83,22 +84,22 @@ class SupplierSyncCoordinatorTest {
 
     @Test
     fun manualAndWorkerSyncCallsShareOneExclusiveLock() = runBlocking {
-        val active = java.util.concurrent.atomic.AtomicInteger(0)
-        val maximum = java.util.concurrent.atomic.AtomicInteger(0)
+        var active = 0
+        var maximum = 0
         kotlinx.coroutines.coroutineScope {
             repeat(2) {
                 launch {
                     SupplierSyncCoordinator.withSyncLock {
-                        val current = active.incrementAndGet()
-                        maximum.updateAndGet { previous -> maxOf(previous, current) }
+                        active += 1
+                        maximum = maxOf(maximum, active)
                         delay(40)
-                        active.decrementAndGet()
+                        active -= 1
                     }
                 }
             }
         }
-        assertEquals(1, maximum.get())
-        assertEquals(0, active.get())
+        assertEquals(1, maximum)
+        assertEquals(0, active)
     }
 
     @Test
