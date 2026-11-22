@@ -1207,6 +1207,55 @@ Le coordinateur `SupplierSyncCoordinator` reste borné au cycle fournisseur, man
 
 ---
  
+## 6.17.24 — N3 : orchestration Android universelle, lot en cours (22 novembre 2026)
+
+**Statut N3 : EN COURS — NON VERT.** Cette section ne modifie pas les statuts déjà acquis : N1 reste vert à 55/55 callsites et N2 reste vert à 44/44 mutations distantes.
+
+### Réalisations sur la branche de travail
+
+Branche : `work/naxa-services-completion-20261120` — dépôt `audreymendomo23-netizen/FAMILLE-NAXA`.
+
+Le lot N3 a apporté les éléments suivants :
+
+- Liaison du `device_id` à la session Auth enregistrée côté serveur ; le client ne peut pas imposer librement un identifiant de device.
+- Conservation chiffrée de l'identifiant d'appareil dans le coffre Android.
+- Coordinateur commun Android raccordé aux 92 codes d'action distants du registre. Chaque événement doit néanmoins passer les contrôles de snapshot, organisation, site, agrégat et version ; un événement incomplet reste bloqué et n'est jamais marqué `synced`.
+- Exclusion explicite des 11 événements dérivés/composites qui ne doivent pas être envoyés comme mutations autonomes.
+- File locale chargée dans l'ordre croissant du `device_sequence`, sans filtrer les événements inconnus ; le coordinateur s'arrête au premier événement non pris en charge ou bloqué afin qu'un événement ultérieur ne dépasse pas son prédécesseur.
+- Synchronisation manuelle et worker WorkManager périodique, soumis au réseau et désactivés tant que le projet Famille NAXA dédié n'est pas configuré.
+- Reçu serveur contrôlé avant passage à `synced` : statut, identifiant d'événement, action, agrégat et empreinte SHA-256.
+- Retry exponentiel avec jitter ; les dépendances non résolues restent bloquées.
+- Migration Room 13→14 : les anciennes lignes non synchronisées correspondant aux effets dérivés/composites sont requalifiées `not_applicable`, sans modifier les lignes déjà synchronisées.
+- Garde-fou séquence côté PostgreSQL : verrouillage de la ligne device, conservation de `last_sync_sequence`, acceptation des rejeux identiques déjà reçus et rejet des nouveaux événements dont la séquence n'est pas strictement croissante.
+
+### Preuves et CI
+
+- Le registre source conserve 55/55 points d'émission et 44/44 mutations distantes ; les 92 codes d'action du périmètre distant sont raccordés au coordinateur.
+- Le test PostgreSQL 17 ajoute un cas de séquence : événement de séquence 9 accepté, nouvel événement de séquence 8 rejeté.
+- Les tests unitaires de snapshots couvrent les identifiants RH stables, les versions de valorisation, les transitions versionnées et les actions inconnues.
+- Run de validation après ajout de la dépendance JSON JVM : [GitHub Actions #367 — 45002091084](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45002091084). Au moment de cette mise à jour, ce run est encore en cours ; son résultat final Android et son résultat global ne sont donc pas acquis.
+- Le run précédent #366 a confirmé le succès du contrôle PostgreSQL 17 avec le nouveau garde-fou de séquence, mais sa validation Android n'était pas clôturée.
+
+### Critères N3 restant à satisfaire avant passage au vert
+
+1. Obtenir une CI globale en succès, notamment tests unitaires, PIN/Keystore sur émulateur, compilation et assemblage APK.
+2. Ajouter et réussir les tests instrumentés Room couvrant la migration 13→14 et la conservation de l'ordre d'une file contenant des événements bloqués/non pris en charge.
+3. Sérialiser les appels simultanés du bouton manuel et du worker ; propager correctement les annulations sans les convertir en succès ou en erreur métier.
+4. Démontrer l'indépendance des compteurs de séquence entre deux devices distincts, tout en rejetant les événements désordonnés pour un même device.
+5. Ajouter des preuves d'intégration sur réseau instable, reprise après arrêt/crash, dépendances inter-agrégats et rejeu idempotent côté client/serveur.
+6. Vérifier les périmètres organisation/site/poste sur les scénarios de synchronisation Android instrumentés.
+
+**Règle de clôture :** le raccordement statique de 92 codes ne vaut pas preuve que 92 parcours métier ont tous été exécutés avec succès. N3 ne sera déclaré vert qu'après réussite des critères ci-dessus et conservation des traces CI correspondantes. N4 ne doit pas être ouvert avant cette clôture.
+
+### Limites de sécurité et de déploiement conservées
+
+- Aucun code applicatif n'a été fusionné dans `main`.
+- Aucun draft SQL n'a été appliqué à un projet Supabase hébergé.
+- Le drapeau de synchronisation reste désactivé par défaut ; aucune synchronisation de production n'est déclarée.
+- L'artefact Android précédent demeure un APK Debug, pas une Release de distribution signée.
+
+---
+
 ## 8. Dossier de continuité dédié — LOYABLE (21 novembre 2026)
 
 Le référentiel produit LOYABLE a été séparé dans **`docs/loyable/LOYABLE_CONTINUITE.md`** afin de conserver ses décisions, son périmètre fonctionnel, son Centre de maintenance et ses dépendances inter-applications sans alourdir ni mélanger les cahiers des autres produits.
