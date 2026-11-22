@@ -1513,7 +1513,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         val previous = dao.findSyncCheckpoint(orgId, deviceId)?.cursor ?: 0L
         require(nextCursor >= previous) { "SYNC_PULL_CURSOR_REGRESSION" }
 
-        var priorPageCursor = previous
+        var priorPageCursor = 0L
         var inserted = 0
         for (index in 0 until changes.length()) {
             val row = changes.optJSONObject(index) ?: throw IllegalArgumentException("SYNC_CHANGE_INVALID_ROW")
@@ -1548,6 +1548,9 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 ) { "SYNC_CHANGE_IDEMPOTENCY_CONFLICT" }
                 continue
             }
+            // A not-yet-seen event must never be silently skipped behind an already
+            // committed checkpoint. Known duplicates may be replayed from an old page.
+            require(cursor > previous) { "SYNC_CHANGE_UNKNOWN_BEHIND_CHECKPOINT" }
 
             val siteId = row.optString("site_id").takeUnless { it.isBlank() || it == "null" }
             val workstationId = row.optString("workstation_id").takeUnless { it.isBlank() || it == "null" }
