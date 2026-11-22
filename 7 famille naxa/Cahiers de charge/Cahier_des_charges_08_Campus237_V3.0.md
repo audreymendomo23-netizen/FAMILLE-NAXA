@@ -1731,7 +1731,7 @@ Cette section rassemble les décisions explicitement validées ou formulées dir
 - V2.0 : [Cahier des charges CAMPUS237 du 5 novembre 2026](Cahier_des_charges_08_Campus237.pdf).
 - Continuité famille NAXA / Campus237 / NAXA Security du 10 novembre 2026 : [fichier de continuité](../Continuite_projet_au_10_novembre_2026.md).
 - Prompts CAMPUS237 : [Prompts série 12](../Prompt/Prompts_12_Campus237.pdf).
-- Répertoire applicatif : [apps/campus237](../../../../apps/campus237/README.md).
+- Répertoire applicatif : [apps/campus237](../../apps/campus237/README.md).
 
 ## 36.2 Références externes à contrôler avant mise en service
 
