@@ -4478,7 +4478,17 @@ begin
     and c.change_cursor <= v_next_cursor
     and c.source_device_id <> p_device_id
     and (
-      (cardinality(c.target_site_ids)=0 and public.ns_can_manage_org(p_org_id))
+      (
+        cardinality(c.target_site_ids)=0
+        and exists (
+          select 1
+          from public.ns_member_scopes s
+          join public.ns_members m on m.id=s.member_id and m.org_id=s.org_id
+          where m.account_id=v_account_id and m.org_id=p_org_id
+            and m.id=v_member_id and m.status='active'
+            and s.scope_type='organization' and s.can_read
+        )
+      )
       or (
         cardinality(c.target_site_ids)>0
         and not exists (
