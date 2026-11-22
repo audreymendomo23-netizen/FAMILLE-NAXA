@@ -80,6 +80,8 @@ object NaxaServicesSyncScheduler {
     }
 }
 
+internal fun shouldRetrySyncWorker(retriedCount: Int): Boolean = retriedCount > 0
+
 class NaxaServicesSyncWorker(
     appContext: Context,
     params: WorkerParameters
@@ -131,7 +133,7 @@ class NaxaServicesSyncWorker(
         return try {
             val repository = NaxaServicesLocalRepository(database)
             val summary = SupplierSyncCoordinator.syncPending(repository, api, session)
-            if (summary.retried > 0) Result.retry() else Result.success()
+            if (shouldRetrySyncWorker(summary.retried)) Result.retry() else Result.success()
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {

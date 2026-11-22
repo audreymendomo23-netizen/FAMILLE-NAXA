@@ -170,6 +170,38 @@ object SupplierSyncCoordinator {
             familyRef != EXISTING_NAXA_PROJECT_REF
     }
 
+    internal data class SyncFailurePolicy(
+        val state: String,
+        val errorCode: String,
+        val retryable: Boolean,
+        val dependencyBlocked: Boolean
+    )
+
+    internal fun classifySyncFailure(statusCode: Int?, remoteCode: String): SyncFailurePolicy {
+        val normalized = remoteCode.uppercase()
+        val dependencyBlocked = normalized.contains("DEPENDENCY") ||
+            normalized.contains("NOT_FOUND") ||
+            normalized.contains("NOT_AVAILABLE") ||
+            normalized.contains("NOT_READY")
+        val transient = statusCode == null ||
+            statusCode in setOf(401, 408, 425, 429) ||
+            (statusCode != null && statusCode >= 500)
+        val state = when {
+            transient -> "retry_wait"
+            dependencyBlocked -> "blocked_dependency"
+            else -> "rejected"
+        }
+        val errorCode = when {
+            statusCode == 401 -> "AUTHENTICATION_REQUIRED"
+            statusCode == 403 -> "REMOTE_SCOPE_FORBIDDEN"
+            dependencyBlocked -> normalized.take(100).ifBlank { "REMOTE_DEPENDENCY_NOT_READY" }
+            statusCode == 422 -> "REMOTE_VALIDATION_FAILED"
+            transient -> "REMOTE_TEMPORARY_FAILURE"
+            else -> "REMOTE_REQUEST_REJECTED"
+        }
+        return SyncFailurePolicy(state, errorCode, transient, dependencyBlocked)
+    }
+
     private val syncMutex = Mutex()
 
     internal suspend fun <T> withSyncLock(block: suspend () -> T): T {
@@ -331,36 +363,18 @@ object SupplierSyncCoordinator {
                 throw cancelled
             } catch (failure: Exception) {
                 val status = (failure as? AuthApiException)?.statusCode
-                val remoteCode = failure.message.orEmpty().uppercase()
-                val dependencyBlocked = remoteCode.contains("DEPENDENCY") ||
-                    remoteCode.contains("NOT_FOUND") ||
-                    remoteCode.contains("NOT_AVAILABLE") ||
-                    remoteCode.contains("NOT_READY")
-                val transient = status == null || status == 401 || status == 429 || status >= 500
+                val policy = classifySyncFailure(status, failure.message.orEmpty())
                 val attempts = event.attemptCount + 1
                 val baseDelay = (30_000L * (1L shl attempts.coerceAtMost(6))).coerceAtMost(30L * 60L * 1000L)
                 val jitter = if (baseDelay > 4_000L) Random.nextLong(baseDelay / 4L + 1L) else 0L
                 val delay = baseDelay + jitter
                 val now = System.currentTimeMillis()
-                val state = when {
-                    transient -> "retry_wait"
-                    dependencyBlocked -> "blocked_dependency"
-                    else -> "rejected"
-                }
-                val errorCode = when {
-                    status == 401 -> "AUTHENTICATION_REQUIRED"
-                    status == 403 -> "REMOTE_SCOPE_FORBIDDEN"
-                    dependencyBlocked -> remoteCode.take(100).ifBlank { "REMOTE_DEPENDENCY_NOT_READY" }
-                    status == 422 -> "REMOTE_VALIDATION_FAILED"
-                    transient -> "REMOTE_TEMPORARY_FAILURE"
-                    else -> "REMOTE_REQUEST_REJECTED"
-                }
                 dao.updateOutboxAttempt(
-                    event.eventId, orgId, state, now,
-                    if (transient) now + delay else null,
-                    errorCode
+                    event.eventId, orgId, policy.state, now,
+                    if (policy.retryable) now + delay else null,
+                    policy.errorCode
                 )
-                if (transient) retried++ else if (dependencyBlocked) blocked++ else rejected++
+                if (policy.retryable) retried++ else if (policy.dependencyBlocked) blocked++ else rejected++
                 break
             }
         }

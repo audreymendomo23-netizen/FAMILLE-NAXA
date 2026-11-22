@@ -78,7 +78,8 @@ class OutboxMigrationAndOrderingInstrumentedTest {
     @Test
     fun retryableOutboxLoadsUnsupportedAndBlockedEventsInDeviceSequenceOrder() = runBlocking {
         val orgId = "org-${UUID.randomUUID()}"
-        val database = Room.inMemoryDatabaseBuilder(context, NsServicesDatabase::class.java).build()
+        val databaseName = "outbox-recovery-${UUID.randomUUID()}.db"
+        var database = Room.databaseBuilder(context, NsServicesDatabase::class.java, databaseName).build()
         try {
             val dao = database.naxaServicesDao()
             dao.insertOutboxEvent(
@@ -133,11 +134,6 @@ class OutboxMigrationAndOrderingInstrumentedTest {
                     state = "not_applicable"
                 )
             )
-            val pending = dao.loadRetryableOutboxEvents(orgId, 20)
-            assertEquals(listOf("earlier-unsupported", "later-supported"), pending.map { it.eventId })
-            assertEquals(1L, pending.first().deviceSequence)
-            assertEquals(11L, dao.nextOutboxSequence())
-
             val futureOrg = "future-retry-org-${UUID.randomUUID()}"
             val now = System.currentTimeMillis()
             dao.insertOutboxEvent(
@@ -167,11 +163,20 @@ class OutboxMigrationAndOrderingInstrumentedTest {
                     state = "queued"
                 )
             )
-            val retryQueue = dao.loadRetryableOutboxEvents(futureOrg, 20)
+            database.close()
+            database = Room.databaseBuilder(context, NsServicesDatabase::class.java, databaseName).build()
+            val recoveredDao = database.naxaServicesDao()
+            val pending = recoveredDao.loadRetryableOutboxEvents(orgId, 20)
+            assertEquals(listOf("earlier-unsupported", "later-supported"), pending.map { it.eventId })
+            assertEquals(1L, pending.first().deviceSequence)
+            assertEquals(11L, recoveredDao.nextOutboxSequence())
+
+            val retryQueue = recoveredDao.loadRetryableOutboxEvents(futureOrg, 20)
             assertEquals(listOf("future-retry-head", "later-event-after-retry"), retryQueue.map { it.eventId })
             assertTrue(SupplierSyncCoordinator.isRetryDelayPending(retryQueue.first(), now))
         } finally {
             database.close()
+            context.deleteDatabase(databaseName)
         }
     }
 }

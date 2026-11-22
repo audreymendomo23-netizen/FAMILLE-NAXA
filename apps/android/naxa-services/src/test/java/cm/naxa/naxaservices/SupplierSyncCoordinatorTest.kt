@@ -116,6 +116,22 @@ class SupplierSyncCoordinatorTest {
     }
 
     @Test
+    fun networkAndRateLimitFailuresAreRetriedWhileDependenciesStayBlocked() {
+        assertEquals("retry_wait", SupplierSyncCoordinator.classifySyncFailure(null, "Socket timeout").state)
+        assertEquals("retry_wait", SupplierSyncCoordinator.classifySyncFailure(408, "REQUEST_TIMEOUT").state)
+        assertEquals("retry_wait", SupplierSyncCoordinator.classifySyncFailure(429, "RATE_LIMITED").state)
+        assertEquals("retry_wait", SupplierSyncCoordinator.classifySyncFailure(503, "UPSTREAM_UNAVAILABLE").state)
+        assertEquals("blocked_dependency", SupplierSyncCoordinator.classifySyncFailure(404, "NAXA_SUPPLIER_NOT_FOUND").state)
+        assertEquals("rejected", SupplierSyncCoordinator.classifySyncFailure(422, "NAXA_SYNC_PAYLOAD_INVALID").state)
+    }
+
+    @Test
+    fun workManagerRetriesWhenAnyEventNeedsTransientRetry() {
+        assertTrue(shouldRetrySyncWorker(1))
+        assertFalse(shouldRetrySyncWorker(0))
+    }
+
+    @Test
     fun futureRetryDelayKeepsTheEarlierEventAtTheQueueHead() {
         val item = event("supplier.saved", "supplier", "supplier-1").copy(
             nextAttemptAtEpochMs = 500L
