@@ -2278,7 +2278,7 @@ school_public_profiles, school_verifications, school_admission_campaigns, school
 
 Les exigences suivantes sont confirmées comme exigences produit par le porteur du projet :
 
-39. L'APE/APEÉ doit pouvoir disposer d'un compte institutionnel dans CAMPUS237.
+39. L'APE/ APEE doit pouvoir disposer d'un compte institutionnel dans CAMPUS237.
 40. L'APE doit pouvoir organiser des visioconférences et réunions de parents depuis l'application.
 41. L'école doit pouvoir convoquer les parents et tenir les convocations en visioconférence.
 42. CAMPUS237 doit gérer les invitations, confirmations, accès, présences et suites de réunion de bout en bout.
