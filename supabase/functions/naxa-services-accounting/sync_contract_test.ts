@@ -384,3 +384,79 @@ Deno.test("atomic sync validates cash and pending Mobile Money sale commands", (
     }
   }
 });
+
+
+Deno.test("atomic sync envelope validates customer update and waitlist conversion", () => {
+  const customer="88888888-8888-4888-8888-888888888910";
+  const appointment="88888888-8888-4888-8888-888888888911";
+  const common={event_id:SYNC_EVENT,device_id:SYNC_DEVICE,device_sequence:100,
+    org_id:ORG_A,site_id:SITE_A,workstation_id:null};
+  const customerEvent=normalizeAtomicSyncEvent({
+    ...common,aggregate_type:"customer",aggregate_id:customer,action_code:"customer.updated",
+    payload:{customer_id:customer,org_id:ORG_A,site_id:SITE_A,expected_version:1}
+  });
+  const appointmentEvent=normalizeAtomicSyncEvent({
+    ...common,aggregate_type:"appointment",aggregate_id:appointment,action_code:"appointment.created_from_waitlist",
+    payload:{appointment_id:appointment,org_id:ORG_A,site_id:SITE_A,waitlist_record_id:"88888888-8888-4888-8888-888888888912"}
+  });
+  if(customerEvent.aggregate_id!==customer||appointmentEvent.aggregate_id!==appointment) {
+    throw new Error("Customer/waitlist aggregate identity mismatch");
+  }
+});
+Deno.test("atomic sync envelope validates staff time events as immutable time-event aggregates", () => {
+  const id="88888888-8888-4888-8888-888888888913";
+  for(const action of ["staff_clock_in.recorded","staff_break_start.recorded","staff_break_end.recorded","staff_clock_out.recorded"]) {
+    const aggregate=action.split(".")[0];
+    const normalized=normalizeAtomicSyncEvent({
+      event_id:SYNC_EVENT,device_id:SYNC_DEVICE,device_sequence:101,
+      org_id:ORG_A,site_id:SITE_A,workstation_id:null,
+      aggregate_type:aggregate,aggregate_id:id,action_code:action,
+      payload:{time_event_id:id,org_id:ORG_A,site_id:SITE_A,staff_member_id:SYNC_DEVICE}
+    });
+    if(normalized.action_code!==action||normalized.aggregate_type!==aggregate) {
+      throw new Error("Staff time action mismatch: "+action);
+    }
+  }
+});
+Deno.test("atomic sync envelope validates the full management register action catalogue", () => {
+  const types=[
+    "quote","invoice","credit_note","refund_due","customer_receivable","purchase",
+    "supplier","tax_estimate","business_goal","subscription_request","support_chat",
+    "work_order","repair_order","service_order","appointment_waitlist",
+    "staff_clock_in","staff_clock_out","staff_break_start","staff_break_end",
+    "staff_commission","staff_advance","staff_bonus"
+  ];
+  for(let index=0;index<types.length;index++){
+    const type=types[index],id="88888888-8888-4888-8888-"+String(8920+index).padStart(12,"0");
+    for(const action of [type+".created",type+".status_changed"]){
+      const normalized=normalizeAtomicSyncEvent({
+        event_id:SYNC_EVENT,device_id:SYNC_DEVICE,device_sequence:110+index,
+        org_id:ORG_A,site_id:SITE_A,workstation_id:null,
+        aggregate_type:type,aggregate_id:id,action_code:action,
+        payload:{record_id:id,org_id:ORG_A,site_id:SITE_A,record_type:type}
+      });
+      if(normalized.aggregate_id!==id||normalized.aggregate_type!==type){
+        throw new Error("Management record action mismatch: "+action);
+      }
+    }
+  }
+});
+Deno.test("atomic sync envelope validates both source and destination transfer commands", () => {
+  const transfer="88888888-8888-4888-8888-888888888914";
+  for(const [action,site,destination] of [
+    ["inventory_transfer.requested",SITE_A,SITE_B],
+    ["inventory_transfer.received_at_destination",SITE_B,SITE_B],
+    ["inventory_transfer.status_changed",SITE_A,SITE_B]
+  ] as const){
+    const normalized=normalizeAtomicSyncEvent({
+      event_id:SYNC_EVENT,device_id:SYNC_DEVICE,device_sequence:150,
+      org_id:ORG_A,site_id:site,workstation_id:null,
+      aggregate_type:"inventory_transfer",aggregate_id:transfer,action_code:action,
+      payload:{transfer_id:transfer,record_id:transfer,org_id:ORG_A,site_id:site,
+        source_site_id:SITE_A,destination_site_id:destination,inventory_item_id:"88888888-8888-4888-8888-888888888915"}
+    });
+    if(normalized.aggregate_type!=="inventory_transfer"||normalized.aggregate_id!==transfer){
+      throw new Error("Transfer action aggregate mismatch: "+action);
+    }
+  }
+});
