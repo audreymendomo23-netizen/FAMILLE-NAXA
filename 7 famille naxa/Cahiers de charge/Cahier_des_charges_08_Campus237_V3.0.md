@@ -1492,7 +1492,7 @@ employees, teacher_profiles, teacher_assignments, teacher_substitutions, contrac
 
 ## 29.6 Cours et pédagogie
 
-lesson_plans, lesson_plan_versions, lesson_resources, teacher_preparation_videos, lesson_sessions, lesson_status_events, lesson_logs, homework, assignments, attendance, absences, justifications, assessment_types, assessments, assessment_rosters, assessment_rubrics, exam_copies, copy_pages, scan_batches, grade_extractions, grade_reviews, grade_entries, grade_approvals, grade_publications, grade_revisions, report_cards, report_card_versions, report_card_calculations, report_card_publications, class_councils, exams, exam_registrations, exam_results.
+lesson_plans, lesson_plan_versions, lesson_resources, teacher_preparation_videos, lesson_sessions, lesson_status_events, lesson_logs, homework, assignments, attendance, absences, justifications, assessment_types, assessments, assessment_rosters, assessment_rubrics, exam_copies, copy_pages, scan_batches, grade_extractions, grade_reviews, grade_entries, grade_approvals, grade_publications, grade_revisions, report_cards, report_card_versions, report_card_calculations, report_card_publications, live_report_snapshots, academic_rankings, ranking_snapshots, ranking_filters, ranking_publications, ranking_cohort_definitions, learning_competencies, student_competency_records, skill_evidence, learning_gap_indicators, remediation_recommendations, recovery_assignments, class_councils, exams, exam_registrations, exam_results.
 
 ## 29.7 Portail, sécurité et NAXA SECURITY
 
@@ -1500,11 +1500,11 @@ gate_devices, gate_events, student_arrival_events, student_departure_events, pic
 
 ## 29.8 Services
 
-canteen_menus, canteen_orders, canteen_meals, canteen_checkins, allergies_minimal, bus_routes, bus_stops, bus_vehicles, bus_staff, bus_assignments, bus_events, shop_items, inventory_movements, purchase_orders, library_catalog, library_loans, dormitories, beds, dormitory_assignments, assets, maintenance_tickets.
+canteen_menus, canteen_orders, canteen_meals, canteen_checkins, allergies_minimal, bus_routes, bus_stops, bus_vehicles, bus_staff, bus_assignments, bus_events, vehicle_gps_devices, vehicle_gps_positions, bus_trip_sessions, bus_geofences, bus_eta_snapshots, student_boarding_events, student_alighting_events, safe_reunification_events, canteen_menu_versions, canteen_menu_publications, shop_items, inventory_movements, purchase_orders, library_catalog, library_loans, dormitories, beds, dormitory_assignments, assets, maintenance_tickets.
 
 ## 29.9 Communication et COMMUNITY
 
-chat_threads, chat_messages, call_logs, notification_batches, notification_recipients, notification_deliveries, community_spaces, community_members, community_channels, community_posts, community_comments, community_reactions, community_reports, moderation_actions, moderation_appeals, community_blocks, community_events.
+chat_threads, chat_messages, call_logs, notification_batches, notification_recipients, notification_deliveries, community_spaces, community_members, community_channels, community_posts, community_comments, community_reactions, community_reports, moderation_actions, school_transparency_projects, school_transparency_updates, school_transparency_documents, family_calendar_events, family_schedule_conflicts, parent_digest_snapshots, school_intelligence_queries, school_intelligence_results, moderation_appeals, community_blocks, community_events.
 
 ## 29.10 KNOWLEDGE et OPPORTUNITIES
 
@@ -1698,10 +1698,10 @@ Les décisions suivantes restent ouvertes. Elles doivent être traitées dans un
 
 | ID | Arbitrage | Donnée ou décision attendue |
 |---|---|---|
-| A-001 | Grille abonnement école | Tranches manquantes et résolution du chevauchement 30 000–50 000 / 40 001+ |
+| A-001 | Grille abonnement école | 🔒 RÉSOLU V3.0.2 : 60 FCFA sur les 1 000 premiers élèves, 50 FCFA du 1 001e au 5 000e, 40 FCFA dès le 5 001e ; progressif marginal, minimum 15 000 FCFA/mois |
 | A-002 | Seuils d'effectifs | Date de comptage, élèves actifs, inscriptions tardives et changements de tranche |
-| A-003 | Abonnement parent | Par enfant, par famille ou modèle mixte |
-| A-004 | Multi-écoles parent | Règle de prix lorsque les enfants fréquentent plusieurs partenaires |
+| A-003 | Abonnement parent | 🔒 RÉSOLU V3.0.2 : ACCESS gratuit et PREMIUM familial progressif selon le nombre d'enfants, chapitre 23.3 |
+| A-004 | Multi-écoles parent | 🔒 RÉSOLU V3.0.2 : un seul compte et abonnement familial ; un enfant compté une fois quel que soit le nombre d'écoles partenaires |
 | A-005 | Partage 80/20 | Maintien ou adaptation après introduction du tarif établissement |
 | A-006 | Ventilation inter-écoles | Répartition du fonds lorsque plusieurs enfants relèvent d'écoles différentes |
 | A-007 | Essai parent | Confirmation de la période d'essai de deux semaines |
@@ -2339,6 +2339,28 @@ Les exigences suivantes sont confirmées comme exigences produit par le porteur 
 46. Les écoles partenaires peuvent publier des offres et informations d'admission, notamment à l'approche de la rentrée.
 47. Le parent doit pouvoir interroger le volet de recherche pour trouver une école selon ses critères.
 48. Le parent doit pouvoir comparer les écoles et prendre un rendez-vous en présentiel pour mieux les connaître.
+49. Le bulletin est un dossier pédagogique vivant, recalculé après chaque note validée ; le bulletin officiel reste soumis à la clôture de la direction.
+50. Les évaluations diffusées alimentent ACADEMIC RADAR ; le parent peut consulter avant le bulletin le rang provisoire de son enfant et voir son évolution en temps réel.
+51. Les classements sont filtrables par groupe, école, section, cycle, niveau, série, classe, matière, période, année, évaluation et compétence.
+52. Le parent ne voit que le rang et les indicateurs de son enfant, jamais les noms ou notes nominatives des autres élèves.
+53. Licence école : 60 FCFA/élève pour les 1 000 premiers, 50 FCFA du 1 001e au 5 000e, 40 FCFA dès le 5 001e ; progressif marginal, minimum 15 000 FCFA/mois.
+54. Licence école facturée sur 12 mois et incluant tous les modules logiciels et les comptes du personnel autorisés sans supplément par utilisateur ou module.
+55. Les groupes scolaires cumulent les effectifs pour les tranches marginales ; le minimum s'applique une seule fois au groupe.
+56. ACCESS parent est gratuit, avec sécurité, suivi des cours, notes diffusées, rang personnel, bulletins, convocations, reçus, communauté et livret.
+57. PREMIUM est familial : 600 F/mois pour 1 enfant, 900 F pour 2, 1 150 F pour 3, 1 350 F pour 4, 1 550 F pour 5, puis +200 F par enfant supplémentaire ; annuel égal à sept mensualités.
+58. Un compte familial suit plusieurs enfants et plusieurs écoles sans double facturation d'un même enfant.
+59. LEARNING CONTINUITY suit les cours prévus, réellement dispensés et les rattrapages.
+60. SKILL PASSPORT accompagne les compétences et preuves vérifiées tout au long du cursus.
+61. LEARNING RECOVERY propose des remédiations supervisées par les enseignants.
+62. FAMILY COMMAND CENTER consolide calendriers et événements des enfants multi-écoles.
+63. SAFE REUNIFICATION trace les étapes de prise en charge, montée, descente et remise.
+64. SCHOOL TRANSPARENCY permet de suivre projets et réalisations avec données autorisées.
+65. SCHOOL INTELLIGENCE permet des requêtes de pilotage sourcées, datées et filtrées.
+66. Les bus équipés d'un GPS compatible peuvent être connectés à NAXA SECURITY afin que les parents autorisés suivent le véhicule sur un trajet actif où leur enfant est enregistré à bord.
+67. Le GPS localise le véhicule, pas l'enfant ; suivi limité au trajet et aux droits autorisés.
+68. Le menu de cantine du lendemain est publié la veille dans le fil officiel COMMUNITY ; les parents concernés reçoivent une notification.
+69. Les coûts matériel GPS, SIM/données et équipements tiers sont distincts du logiciel et transparents.
+70. Les fonctions de classement, géolocalisation, vidéos et données enfant restent soumises aux droits d'accès et aux gates de conformité.
 
 Les règles de sécurité, de signature, de correction, de réunion, de visite et de transfert décrites dans cet addendum sont des spécifications de mise en œuvre proposées pour rendre ces décisions sûres et testables. Les montants, frais, modalités juridiques et formalités restent soumis aux arbitrages correspondants.
 
