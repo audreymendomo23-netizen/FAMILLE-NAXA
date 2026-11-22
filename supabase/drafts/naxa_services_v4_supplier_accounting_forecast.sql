@@ -100,6 +100,11 @@ create policy ns_support_requests_select on public.ns_support_requests
     (site_id is null and public.ns_is_org_member(org_id))
     or (site_id is not null and public.ns_can_access_site(org_id, site_id))
   );
+-- Mutating these customer/service aggregates is only allowed through typed, audited RPCs.
+revoke insert, update, delete on public.ns_services, public.ns_customers
+  from public, anon, authenticated;
+grant select on public.ns_services, public.ns_customers to authenticated;
+
 revoke all on public.ns_customer_followups, public.ns_customer_followup_events, public.ns_support_requests
   from public, anon;
 grant select on public.ns_customer_followups, public.ns_customer_followup_events, public.ns_support_requests
