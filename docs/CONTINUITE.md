@@ -1,6 +1,6 @@
 # Continuité — Famille NAXA
 
-> Mise à jour : 21 novembre 2026  
+> Mise à jour : 22 novembre 2026  
 > Référence de continuité pour l'audit documentaire, l'architecture et la construction du monorepo.
 
 ## 1. Périmètre officiel
@@ -1147,6 +1147,66 @@ Restent également : RLS réel appliqué et testé, API/synchronisation/idempote
 
 **Statut à conserver :** le code Android de cette passe et les 4 jobs CI sont verts sur la branche. NAXA SERVICES n'est pas qualifié « VERT GLOBAL ». Le code n'a pas été fusionné dans main et aucun déploiement production n'a été effectué.
 
+## 6.17.23 — Clôture N2 et validation complète de la chaîne CI NAXA SERVICES (22 novembre 2026)
+
+Cette section actualise la section 6.17.22 à partir des preuves GitHub Actions du 22 novembre. Elle clôt le lot N2 et la construction Android Debug, mais **ne qualifie pas NAXA SERVICES VERT GLOBAL ni prêt pour la production**.
+
+### N1 et N2 — statuts figés
+
+- **N1 : VERT COMPLET — 55/55 points d'émission `enqueue()` qualifiés** dans le registre canonique du 22 novembre. Ne pas rouvrir sans changement du code source.
+- **N2 : VERT COMPLET — 44/44 mutations distantes** (REMOTE_MUTATION) couvertes par le contrat de passerelle atomique. Les 92 codes d'action associés sont présents dans l'allowlist TypeScript et le dispatcher SQL.
+- OBX-023 est clos : l'acompte pressing espèces nécessite une session de caisse ouverte du même site ; les autres moyens restent pending sans confirmation serveur ; l'avance client est enregistrée sans la confondre avec du chiffre d'affaires.
+
+### Preuves PostgreSQL 17 / Runtime RLS
+
+Le run CI de référence applique les drafts uniquement à une base PostgreSQL 17 jetable et vérifie les frontières Runtime RLS. Les scénarios confirmés comprennent :
+
+- création puis annulation d'une vente Mobile Money sans confirmation fictive ;
+- mise à jour client avec rejet d'une version périmée ;
+- création et transition d'un dossier de gestion ;
+- conversion atomique d'une liste d'attente en rendez-vous ;
+- séquence de pointage RH avec rejet d'une transition invalide ;
+- transfert multisite par un compte Promoteur, avec mouvements source et destination et rejeu idempotent.
+
+Les contrôles SQL statiques, les contrats Deno, les contrôles métier, la qualification N1, les contrats Auth/Referral/notifications/paiements/tarifs/accounting et le build Web sont également en succès sur le run de référence. Le build Web et les tests Auth ne constituent pas une preuve de parité ERP Web/PWA.
+
+### Clôture de la chaîne Android et artefact Debug
+
+- Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA`.
+- Branche de code : `work/naxa-services-completion-20261120`.
+- Commit testé : `42809f58b88e3c0a43408eb09d630994e2fd0aed`.
+- Run GitHub Actions : [44986586497 — SUCCESS](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44986586497).
+- **11/11 jobs SUCCESS**, aucun job en attente ou en échec.
+- Android : tests comptables/performance, tests PIN/Keystore, compilation, assemblage APK Debug et téléversement réussis.
+- Artefact `naxa-services-debug-apk` : ID `14739498340`, taille 13 590 875 octets, archive SHA-256 `cd2ad8ec0b8c6b1c891ffd3c40dbccfd8cd0854fd2cf0d4e3c57eba6d6aaa0e0`, expiration 29 novembre 2026 à 04:53:19 UTC.
+- Ce livrable est un **APK Debug**. Il ne constitue pas une Release Android signée.
+
+### Frontières conservées
+
+- Aucun code applicatif n'a été fusionné dans `main`.
+- Le document global de continuité est mis à jour sur `main` ; le code demeure sur sa branche de travail.
+- Les tests RLS/runtime sont des tests laboratoire sur PostgreSQL jetable ; aucun draft n'a été appliqué à un Supabase hébergé.
+- Le projet NAXA/pharmacie historique reste explicitement hors périmètre.
+- Aucun déploiement Edge, FCM, Mobile Money marchand, ni mise en production n'est déclaré.
+
+### Prochain lot obligatoire : N3 — orchestration Android universelle
+
+N3 est le prochain point de travail, N1 et N2 étant clos. Son critère de mise au vert est une synchronisation Android réellement universelle, et non l'extension cosmétique du coordinateur fournisseur actuel.
+
+Le lot N3 doit démontrer au minimum :
+
+1. snapshots versionnés et validés pour les mutations métier à synchroniser, sans envoyer comme mutations indépendantes les effets composites, ledgers dérivés ou miroirs serveur ;
+2. identité d'installation/appareil et séquence monotone liées au dispositif enregistré, avec identité d'acteur dérivée de la session ;
+3. coordinateur commun consommant les handlers N2, couvrant l'ensemble des familles de mutations retenues et leurs dépendances inter-agrégats ;
+4. déclenchement automatique WorkManager et action manuelle, avec leases, backoff/jitter, reprise après arrêt/crash et conservation des événements bloqués ;
+5. ordre déterministe par appareil/agrégat, sans fausse hypothèse d'ordre global entre appareils indépendants ;
+6. reçu serveur authentique avant l'état local `synced` ; rejeu identique idempotent et rejeu divergent rejeté ;
+7. tests instrumentés réseau instable, multi-appareils, doublons, dépendances manquantes, conflits de versions et périmètres organisation/site/poste.
+
+Le coordinateur `SupplierSyncCoordinator` reste borné au cycle fournisseur, manuel/opt-in et non universel. Jusqu'à la réussite de tous les critères N3 et de leurs preuves CI, le statut N3 reste **NON VERT**. N4 (Web/PWA métier) ne commence qu'après la clôture documentée de N3, conformément à l'ordre de fermeture.
+
+---
+ 
 ## 8. Dossier de continuité dédié — LOYABLE (21 novembre 2026)
 
 Le référentiel produit LOYABLE a été séparé dans **`docs/loyable/LOYABLE_CONTINUITE.md`** afin de conserver ses décisions, son périmètre fonctionnel, son Centre de maintenance et ses dépendances inter-applications sans alourdir ni mélanger les cahiers des autres produits.
