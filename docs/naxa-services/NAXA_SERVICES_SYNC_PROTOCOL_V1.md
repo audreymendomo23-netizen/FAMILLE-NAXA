@@ -212,3 +212,18 @@ La preuve de la limite de synchronisation reste directe et indépendante du comp
 La prochaine passe doit classer chaque action de l'outbox avant d'ajouter un handler : mutation métier à synchroniser, journal/audit local, événement produit en parallèle d'une API directe, cache/mirror ou flux non retenu. Les tests de synchronisation doivent porter sur les mutations métier promises, pas sur une hypothèse que chaque événement outbox correspond à une API distincte.
 
 Le statut de synchronisation universelle reste ROUGE, mais son motif prouvé est : couverture actuelle du coordinateur limitée au cycle fournisseur + modules locaux sans connecteur ERP + Web sans connecteurs métier. Le chiffre 51 n'est pas un décompte de fonctions manquantes.
+
+
+---
+
+## 18. Registre exhaustif des événements N1 — addendum du 22 novembre 2026
+
+Les descriptions historiques des sections 2.1, 14 et 17 datent d'un état antérieur du code. Le comptage et la classification courants sont désormais fixés par `NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md` et le registre JSON associé.
+
+Le registre établit une bijection **55/55** : **44 mutations à répliquer**, **6 effets enfants composites**, **1 ledger comptable dérivé**, **1 miroir de confirmation serveur**, **1 miroir d'API directe**, **2 helpers locaux legacy sans appelant**. Le coordinateur limité contient 11 action codes actifs : fournisseur, article, mouvement de stock et cycle fournisseur. Les 33 autres mutations disposent d'un contrat N1 mais pas encore de handler livré ; leur construction relève du N2.
+
+Le contrôle automatisé N1 vérifie chaque appel source (méthode, agrégat, expression action et ligne) contre une ligne unique du registre, les 11 codes du coordinateur, ainsi que les deux créations site/poste qui sont des routes Auth directes. Il bloque toute dérive non qualifiée en CI.
+
+Les observations de transport à conserver pour N2/N3 sont explicites : `LocalOutboxEvent` ne porte pas directement d'identité appareil ni acteur ; `deviceSequence` est généré par organisation dans la base locale et doit être lié à l'installation côté serveur ; `loyalty_program.updated` est organisationnel avec `site_id=null` alors que le coordinateur borné requiert un site. Elles ne remettent pas en cause l'exhaustivité N1.
+
+**Décision : N1 VERT COMPLET — 55/55.** Cela ne change pas le statut de la synchronisation universelle : le coordinateur demeure manuel/opt-in et les 33 handlers non implémentés restent au N2/N3 selon leur rôle.
