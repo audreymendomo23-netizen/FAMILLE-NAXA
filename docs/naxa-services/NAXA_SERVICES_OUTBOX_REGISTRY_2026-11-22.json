@@ -772,7 +772,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-014",
@@ -784,7 +785,9 @@
         "actionExpression": "\"pressing_order.status_changed:\" + next"
       },
       "action_codes": [
-        "pressing_order.status_changed"
+        "pressing_order.status_changed:in_progress",
+        "pressing_order.status_changed:ready",
+        "pressing_order.status_changed:picked_up"
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
@@ -827,7 +830,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-015",
@@ -887,7 +891,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-016",
@@ -2302,7 +2307,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-042",
@@ -2358,7 +2364,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-043",
