@@ -352,8 +352,15 @@ Deno.test("N2 pressing and appointment RPCs enforce lifecycle versions and serve
     "A cash pressing deposit must require a valid open cash session");
   assert(sql.includes("v_payment_status:=case when v_method='cash' then 'confirmed' else 'pending' end"),
     "Non-cash pressing deposits must remain pending until provider confirmation");
-  assert(sql.includes("'CUSTOMER_ADVANCES'") && sql.includes("'cash_deposit_received'"),
+  assert(sql.includes("'CUSTOMER_ADVANCES'") && sql.includes("'cash_deposit_received'") &&
+    sql.includes("'CASH_REGISTER'"),
     "Pressing cash deposits must post to customer advances, not revenue");
+  assert(sql.includes("alter table public.ns_payments") &&
+    sql.includes("cash_session_id uuid") &&
+    sql.includes("ns_payments_cash_session_scope_fk"),
+    "Pressing cash deposits require a site-scoped payment-to-session relation");
+  assert(sql.indexOf("ns_cash_sessions_id_site_org_idx") < sql.indexOf("ns_payments_cash_session_scope_fk"),
+    "Cash session composite key must exist before the pressing payment foreign key");
 });
 
 Deno.test("N2 cash session and expense handlers are scoped and compute close balances on server", async () => {
@@ -376,6 +383,9 @@ Deno.test("N2 cash session and expense handlers are scoped and compute close bal
     "Only confirmed pressing cash deposits linked to this session may enter the cash balance");
   assert(sql.includes("v_expected:=v_session.opening_float_xaf+v_cash_in+v_pressing_cash_in-v_expenses-v_supplier_out"),
     "Cash close must add confirmed pressing deposits exactly once");
+  assert(sql.includes("drop function if exists public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz)") &&
+    sql.includes("grant execute on function public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,text,uuid,timestamptz,uuid) to service_role"),
+    "Only the new explicit deposit contract may be executed by the server role");
   assert(sql.includes("'pressing_deposits_cash_xaf',v_pressing_cash_in"),
     "Cash close result must expose the reconciled pressing deposit amount");
   assert(/v_variance:=p_counted_close_xaf-v_expected/i.test(sql),
