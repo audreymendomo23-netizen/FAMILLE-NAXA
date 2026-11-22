@@ -7,6 +7,7 @@ import cm.naxa.naxaservices.data.LocalOutboxEvent
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import kotlinx.coroutines.flow.first
 import kotlin.random.Random
+import java.util.UUID
 import org.json.JSONObject
 
 data class SupplierSyncSummary(
@@ -18,11 +19,11 @@ data class SupplierSyncSummary(
 )
 
 /**
- * Shared transport for the currently snapshot-complete inventory/supplier event slice.
- * WorkManager supplies automatic retries when an explicitly remembered session is available;
- * the dashboard action remains available while a session is active. This is not yet universal:
- * the other outbox call sites stay queued until their full versioned snapshots are implemented.
- * The build flag is false by default.
+ * Shared transport for all registry-declared remote ERP mutations (92 action codes).
+ * Every event must still pass a typed snapshot, scope and version gate before transmission;
+ * incomplete payloads remain blocked at the head of the device sequence. WorkManager uses
+ * an explicitly remembered Auth session only. Runtime synchronization remains feature-flagged
+ * off by default until the dedicated Famille NAXA project is configured.
  */
 object SupplierSyncCoordinator {
     private const val EXISTING_NAXA_PROJECT_REF = "ykgjfindlgseegmznaog"
@@ -308,7 +309,7 @@ object SupplierSyncCoordinator {
                     remoteCode.contains("NOT_FOUND") ||
                     remoteCode.contains("NOT_AVAILABLE") ||
                     remoteCode.contains("NOT_READY")
-                val transient = status == null || status == 429 || status >= 500
+                val transient = status == null || status == 401 || status == 429 || status >= 500
                 val attempts = event.attemptCount + 1
                 val baseDelay = (30_000L * (1L shl attempts.coerceAtMost(6))).coerceAtMost(30L * 60L * 1000L)
                 val jitter = if (baseDelay > 4_000L) Random.nextLong(baseDelay / 4L + 1L) else 0L
@@ -477,7 +478,7 @@ object SupplierSyncCoordinator {
                 payload.optLong("unit_cost_xaf",-1L) >= 0L && payload.optLong("selling_price_xaf",-1L) >= 0L &&
                 payload.optInt("expected_version",-1) >= 0
             "staff_clock_in.recorded","staff_break_start.recorded","staff_break_end.recorded","staff_clock_out.recorded" ->
-                Regex("^[a-f0-9-]{36}$", RegexOption.IGNORE_CASE).matches(payload.optString("staff_member_id")) &&
+                runCatching { UUID.fromString(payload.optString("staff_member_id")) }.isSuccess &&
                 payload.optString("staff_name_snapshot").length in 2..120 &&
                 payload.optString("occurred_at").isNotBlank()
             "inventory_transfer.requested" -> payload.optString("source_site_id").isNotBlank() &&

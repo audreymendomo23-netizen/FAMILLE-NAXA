@@ -27,6 +27,7 @@ import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_9_10
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_10_11
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_11_12
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_12_13
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_13_14
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import cm.naxa.naxaservices.data.NsServicesDatabase
 import java.util.concurrent.TimeUnit
@@ -120,7 +121,8 @@ class NaxaServicesSyncWorker(
             NS_SERVICES_MIGRATION_9_10,
             NS_SERVICES_MIGRATION_10_11,
             NS_SERVICES_MIGRATION_11_12,
-            NS_SERVICES_MIGRATION_12_13
+            NS_SERVICES_MIGRATION_12_13,
+            NS_SERVICES_MIGRATION_13_14
         ).build()
 
         return try {

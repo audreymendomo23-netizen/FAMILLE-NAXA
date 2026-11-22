@@ -1089,7 +1089,7 @@ interface NaxaServicesDao {
         LocalSupplierPayment::class,
         LocalAccountingEntry::class
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -1278,6 +1278,33 @@ val NS_SERVICES_MIGRATION_12_13: Migration = object : Migration(12, 13) {
         database.execSQL("ALTER TABLE local_pressing_orders ADD COLUMN depositCashSessionId TEXT")
         database.execSQL("ALTER TABLE local_pressing_orders ADD COLUMN depositPaymentStatus TEXT NOT NULL DEFAULT 'none'")
         database.execSQL("CREATE INDEX IF NOT EXISTS index_local_pressing_orders_orgId_siteId_depositCashSessionId_depositPaymentStatus ON local_pressing_orders(orgId, siteId, depositCashSessionId, depositPaymentStatus)")
+    }
+}
+
+val NS_SERVICES_MIGRATION_13_14: Migration = object : Migration(13, 14) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            """
+            UPDATE local_outbox_events
+            SET state = 'not_applicable',
+                nextAttemptAtEpochMs = NULL,
+                lastErrorCode = NULL
+            WHERE actionCode IN (
+                'accounting.entry.posted',
+                'inventory_movement.sale_out',
+                'inventory_movement.mobile_money_sale_out',
+                'sale.payment_confirmed_server',
+                'organization.profile_saved',
+                'site.created',
+                'workstation.created',
+                'appointment_waitlist.converted',
+                'inventory_movement.purchase_received',
+                'inventory_movement.transfer_out',
+                'inventory_movement.transfer_in'
+            )
+            AND state <> 'synced'
+            """.trimIndent()
+        )
     }
 }
 
