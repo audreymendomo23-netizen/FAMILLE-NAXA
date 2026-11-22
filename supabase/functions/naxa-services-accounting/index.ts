@@ -1,4 +1,4 @@
-import { normalizeInventoryItemSyncPayload, normalizeInventoryMovementSyncPayload, normalizeSupplierPurchaseSyncPayload, normalizeSupplierSyncPayload } from "./sync_contract.ts";
+import { normalizeAtomicSyncEvent, normalizeInventoryItemSyncPayload, normalizeInventoryMovementSyncPayload, normalizeSupplierPurchaseSyncPayload, normalizeSupplierSyncPayload } from "./sync_contract.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -145,6 +145,26 @@ export async function handleAccountingRequest(
     let result: unknown;
 
     switch (action) {
+      case "apply_sync_event": {
+        const event = normalizeAtomicSyncEvent(body.event);
+        result = await postRpc(baseUrl, env.anonKey, token, "ns_apply_sync_event", {
+          p_org_id: event.org_id,
+          p_site_id: event.site_id,
+          p_workstation_id: event.workstation_id,
+          p_device_id: event.device_id,
+          p_event_id: event.event_id,
+          p_device_sequence: event.device_sequence,
+          p_aggregate_type: event.aggregate_type,
+          p_aggregate_id: event.aggregate_id,
+          p_action_code: event.action_code,
+          p_payload: event.payload,
+        });
+        if (!result || typeof result !== "object" || Array.isArray(result) ||
+            (result as JsonObject).status !== "applied") {
+          throw new Error("ERP_SYNC_RECEIPT_NOT_APPLIED");
+        }
+        break;
+      }
       case "save_inventory_item": {
         const payload = normalizeInventoryItemSyncPayload(body);
         result = await postRpc(baseUrl, env.anonKey, token, "ns_save_inventory_item", {
@@ -293,7 +313,6 @@ export async function handleAccountingRequest(
         return reply(400, { error: "UNSUPPORTED_ACCOUNTING_ACTION" });
     }
     const responseBody: JsonObject = { ok: true, result };
-    if (eventId) responseBody.receipt = { eventId, status: "applied" };
     return reply(200, responseBody);
   } catch (error) {
     const message = error instanceof Error ? error.message : "ACCOUNTING_REQUEST_FAILED";
