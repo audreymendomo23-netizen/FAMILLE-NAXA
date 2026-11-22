@@ -6,12 +6,14 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const sourcePath = join(root, "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt");
 const coordinatorPath = join(root, "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/SupplierSyncCoordinator.kt");
+const edgeContractPath = join(root, "supabase/functions/naxa-services-accounting/sync_contract.ts");
 const erpUiPath = join(root, "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/ErpModules.kt");
 const authApiPath = join(root, "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/auth/AuthApi.kt");
 const manifestPath = join(root, "docs/naxa-services/NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.json");
 
 const source = readFileSync(sourcePath, "utf8");
 const coordinator = readFileSync(coordinatorPath, "utf8");
+const edgeContract = readFileSync(edgeContractPath, "utf8");
 const erpUi = readFileSync(erpUiPath, "utf8");
 const authApi = readFileSync(authApiPath, "utf8");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -128,6 +130,16 @@ assert.deepEqual(
 );
 assert.ok(actualSupported.length > 0 && actualSupported.length <= 92, "Coordinator action coverage is outside the registry contract.");
 
+const edgeActionsBlock = edgeContract.match(/const ATOMIC_SYNC_ACTIONS:[^{]+\\{([\\s\\S]*?)\\n\\};/);
+assert.ok(edgeActionsBlock, "Cannot read the Edge atomic sync action allowlist.");
+const edgeSupported = [...edgeActionsBlock[1].matchAll(/^\\s*"([^"]+)":\\s*\\{/gm)]
+  .map(match => match[1]).sort();
+assert.deepEqual(
+  actualSupported,
+  edgeSupported,
+  "Android sync action coverage differs from the Edge allowlist."
+);
+
 function findKotlinFiles(dir) {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -160,5 +172,7 @@ console.log(JSON.stringify({
   registry_rows:manifest.rows.length,
   classifications:counts,
   current_bounded_coordinator_actions:actualSupported.length,
+  edge_allowed_sync_actions:edgeSupported.length,
+  android_edge_action_parity:true,
   exact_callsite_bijection:true
 }, null, 2));
