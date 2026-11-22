@@ -17,7 +17,7 @@
 
 ## 2. Synchronisation : ce qui reste bloquant
 
-Le socle commun d'enveloppe et la table serveur des reçus/conflits existent. Le coordinateur Android livré n'émet cependant que les quatre actions fournisseur/achats. L'outbox locale contient encore des événements dont certains payloads sont des références minimales et non des snapshots métier complets.
+Le socle commun d'enveloppe et la table serveur des reçus/conflits existent. Le coordinateur Android borné accepte désormais 11 codes d'action avec snapshots métier et handlers pour fournisseur, articles et mouvements de stock ; il reste manuel/opt-in et non universel. L'outbox locale contient encore des événements dont certains payloads sont des références minimales et non des snapshots métier complets.
 
 Aucun worker global ne doit envoyer un événement sans handler serveur typé. Aucun évènement ne passe à `synced` sur un simple HTTP 2xx. Les opérations finance, stock, caisse, ventes, rendez-vous, pressing, CRM, équipe et commissions doivent disposer chacune :
 1. d'un snapshot complet et versionné côté outbox ;
@@ -127,7 +127,7 @@ Les statuts paiements sont désormais alignés entre le moteur financier, les co
 1. Le projet Supabase dédié NAXA Services n'est pas créé ; le seul projet visible reste le projet historique NAXA partagé avec la pharmacie. Le devis de création retourné pour l'organisation visible était de 0 USD/mois, mais le projet isolé n'est pas créé sans confirmation de l'organisation et de la région.
 2. Firebase/FCM n'est pas activé dans un projet réel ; comptes, secrets de coffre, déploiement et tests de livraison sur appareil restent requis.
 3. MTN MoMo/Orange Money n'ont ni compte marchand/sandbox réel ni secrets/webhooks configurés ; l'engine et la persistance serveur restent en mode fail-closed.
-4. La synchronisation métier universelle Android/Web n'est pas implémentée : l'Android serveur ne traite que les quatre actions fournisseur/achats ; les autres domaines restent en file locale. Le Web possède authentification et file générique, mais ses écrans métier demeurent des brouillons locaux.
+4. La synchronisation métier universelle Android/Web n'est pas implémentée : le coordinateur Android borné traite 11 codes fournisseur/articles/mouvements de stock, mais pas l'ensemble des mutations ERP ; les autres domaines restent en file locale. Le Web possède authentification et file générique, mais ses écrans métier demeurent des brouillons locaux.
 5. Les barèmes de commission et paramètres fiscaux doivent être approuvés par l'organisation et le professionnel compétent ; paie/CNPS et comptabilité SYSCOHADA complète restent à faire valider.
 6. La Release signée exige la clé privée et les secrets GitHub nommés dans la section précédente ; le certificat n'est pas créé ni inventé.
 7. La roue promotionnelle reste désactivée jusqu'à avis juridique écrit et autorisation applicable.
@@ -174,18 +174,18 @@ Le drill de sauvegarde/restauration prouve la sauvegarde chiffrée, le contrôle
 
 L'audit de `apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt` retrouve **55 points d'émission** d'événements outbox.
 
-À la date de cet audit, le coordinateur `SupplierSyncCoordinator` ne prend en charge que quatre actions avec snapshots métier explicites et endpoints serveur correspondants :
+The coordinateur `SupplierSyncCoordinator` accepte actuellement 11 codes d'action avec snapshots et handlers correspondants :
 
-- `supplier.saved`
-- `purchase.ordered`
-- `purchase.receipt.confirmed`
-- `supplier.payment.recorded`
+- fournisseur : `supplier.saved` ;
+- article : `inventory_item.created`, `inventory_item.imported`, `inventory_item.import_updated`, `inventory_item.supplier_whatsapp_updated` ;
+- mouvement : `inventory_movement.created`, `inventory_movement.import_initial`, `inventory_movement.import_adjustment` ;
+- achats : `purchase.ordered`, `purchase.receipt.confirmed`, `supplier.payment.recorded`.
 
-Les 51 autres points d'émission utilisent encore le payload de repli `aggregate_id` + `site_id`. Ce constat démontre une limite du transport par outbox ; il ne permet pas de conclure que 51 fonctionnalités seraient absentes. Des opérations ont des routes API directes hors outbox (Auth, profil organisation, sites/postes, parrainage PME, parrainage client/promotions, notifications). Plusieurs modules Android sont livrés au niveau local Room, avec des écrans et règles métier réels, mais leurs propres mentions LocalOnlyNotice confirment qu'ils ne sont pas répliqués au serveur à ce stade. Le détail par domaine et la preuve négative associée sont consignés dans NAXA_SERVICES_EVIDENCE_RECONCILIATION_2026-11-21.md.
+Le registre N1 `NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md` qualifie les 55 points d'émission en **44 mutations indépendantes**, **6 enfants composites**, **1 ledger dérivé**, **1 miroir de confirmation serveur**, **1 miroir d'API directe** et **2 anciens helpers locaux sans appelant**. Ce comptage ne signifie ni 55 handlers à créer ni 44 fonctionnalités absentes. Les 33 contrats de mutation sans handler actuel relèvent du N2 ; les sept modules locaux et les chemins API directs sont décrits avec leur vraie source de vérité dans le registre.
 
 Le coordinateur fournisseur reste manuel et explicitement opt-in. Deux dépendances sont bloquées de façon fail-closed : article de stock non mappé dans la base distante et paiement fournisseur espèces sans session de caisse distante correspondante. La variable d'activation reste désactivée par défaut et exige une référence de projet Famille dédiée concordante.
 
-**Statut : ROUGE — sync ERP universelle non livrée.** Le test du contrat d'enveloppe commun est vert ; il ne teste pas 55 handlers métier ni une réplication multi-appareils.
+**Statut : VERT N1 — inventaire et qualification 55/55.** Le registre est exhaustif et le garde-fou CI compare chaque call site au registre. **Statut N3 : ROUGE — synchronisation Android universelle non livrée.** Les 33 handlers non présents, le coordinateur global et la réplication multi-appareils restent N2/N3 ; ils ne sont pas des travaux non qualifiés de N1.
 
 ### 10.5 Contrôle de complétude — Web/PWA
 
@@ -213,7 +213,7 @@ Le package `packages/offline-web` fournit une file IndexedDB, des leases, retrie
 
 ### 10.7 Ordre obligatoire de fermeture avant tout projet Supabase
 
-1. Établir la matrice des 55 points d'outbox et classer chaque appel : mutation métier à répliquer, journal local, cache/mirror ou action déjà servie par une API directe. Ne compléter les snapshots et handlers que pour les mutations ERP effectivement promises à la synchronisation.
+1. **N1 TERMINÉ — VERT 55/55.** Le registre de qualification et son garde-fou CI sont publiés. Ne rouvrir N1 que si le code source change ; les handlers sont traités au N2.
 2. Livrer les handlers serveur typés couvrant chaque action autorisée, avec contrôle Auth/organisation/site/poste/rôle, transaction métier + reçu idempotent, règles de conflit, tests positifs/négatifs et reprise après interruption.
 3. Livrer la synchronisation Android automatique et manuelle, son ordonnancement, sa reprise, ses mappings inter-agrégats et les tests multi-appareils.
 4. Connecter les modules Web/PWA à ces mêmes contrats, avec persistance IndexedDB, états de file, reçus, conflits, authentification et droits identiques.
@@ -241,7 +241,7 @@ Le présent registre est à lire avec l'audit de confrontation NAXA_SERVICES_EVI
 - Finance : moteurs et tests existent pour les statuts de paiement, commissions sur prestation achevée et payée, extournes append-only et politiques fiscales datées.
 
 ### Contre-preuves des limites
-- L'outbox Android n'est consommée par le coordinateur actif que pour quatre actions du cycle fournisseur ; celui-ci est manuel et opt-in.
+- L'outbox Android est consommée par le coordinateur borné pour 11 codes d'action fournisseur/articles/mouvements ; celui-ci reste manuel et opt-in, et ne couvre pas tous les domaines.
 - Plusieurs écrans de gestion affichent des mentions locales ou appellent les repositories Room : cela établit une limite de réplication, pas une absence du parcours local.
 - Le Web a Auth et build/tests Auth, mais addLocalEntry() met les opérations en état React ; aucun endpoint métier n'est appelé depuis les formulaires opérationnels.
 - L'intégration FCM réelle dépend des configurations Firebase/Edge et d'un dispatch testé sur appareil ; les tests de contrat et la présence de l'UI ne prouvent pas un push réel.
@@ -253,3 +253,12 @@ Le présent registre est à lire avec l'audit de confrontation NAXA_SERVICES_EVI
 - Les tests de backup/restore et de RLS sont verts sur PostgreSQL jetable ; ils ne constituent pas une restauration ou un déploiement sur environnement hébergé.
 
 Les éléments de code localement terminés ne doivent pas être comptés comme manquants. Les limites de serveur, de production, de conformité et de recette restent classées séparément.
+
+
+---
+
+## 12. Addendum — fermeture complète du N1 (22 novembre 2026)
+
+**N1 : VERT COMPLET — 55/55 call sites qualifiés et contrôlés.** Le registre canonique `NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md` + JSON comporte 44 mutations indépendantes avec contrat, 6 effets composites à ne pas expédier isolément, 1 ledger dérivé, 1 miroir de confirmation serveur, 1 miroir d'API directe et 2 helpers locaux legacy non appelés. Chaque contrat définit champs, source de vérité, scope, dépendances, idempotence, reçu, conflit, retry et tests.
+
+Le script `scripts/naxa-services/verify-outbox-registry.mjs` compare chaque call site à une unique ligne du registre et contrôle les 11 action codes actuellement acceptés par le coordinateur ; le script est exécuté par le workflow technique sur push et pull request. Un changement de source non qualifié fait échouer le gate. N2 (33 handlers non implémentés) et N3 (orchestration Android universelle) demeurent séparés et ne sont pas déclarés verts.
