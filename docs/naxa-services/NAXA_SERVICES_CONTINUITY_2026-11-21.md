@@ -87,7 +87,7 @@ Les codes d'action doivent être recensés et associés à leur payload et handl
 - clients, mises à jour clients, suivis CRM et demandes de support ;
 - autres enregistrements de gestion propres aux modules.
 
-La liste doit être extraite et validée contre les 55 call sites à chaque étape. Ne pas inventer un mapping serveur par ressemblance de nom.
+Le registre exhaustif N1 `NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md` classe les 55 call sites un par un. Il constitue la référence de qualification et doit être mis à jour par le contrôle automatisé à chaque évolution de `LocalErpStore.kt` ; ne jamais inventer un mapping serveur par ressemblance de nom.
 
 ### 4.2 Critères obligatoires par événement
 
@@ -141,7 +141,7 @@ Ces éléments ne sont pas tous résolubles par du code seul. Les validations ex
 
 | Lot de travail | Preuve obligatoire | Statut |
 |---|---|---|
-| Inventaire des 55 points d'outbox | Classer chaque call site : mutation métier à synchroniser, journal local, copie/cache ou action couverte par une API directe | À QUALIFIER — ne pas assimiler 55 événements à 55 fonctions manquantes |
+| Inventaire des 55 points d'outbox (N1) | Registre exact 55/55 ; 43 mutations indépendantes avec contrat, 7 effets composites, 1 ledger dérivé, 1 miroir serveur, 1 miroir API directe, 2 helpers locaux obsolètes ; bijection vérifiée par script CI | **VERT N1** — détails dans `NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md` et `.json` |
 | Cycle fournisseur et prérequis stock | 11 codes d'action acceptés par le coordinateur manuel : fournisseur, articles, mouvements, commande, réception et règlement | PARTIEL — périmètre étendu ; synchronisation manuelle/opt-in, mapping article requis et caisse espèces encore bloquante |
 | Autres domaines Room | Plusieurs écrans et registres fonctionnent localement ; mentions LocalOnly et fonctions API directes à comparer | ROUGE pour réplication universelle ; VERT LOCAL pour les parcours locaux attestés |
 | Handlers serveur ERP par domaine | Edge accounting couvre le cycle fournisseur, post_sale_inventory, objectifs et lecture performance ; vérifier le raccordement effectif de chaque action | PARTIEL — pas de preuve de couverture de tous les agrégats |
@@ -158,7 +158,7 @@ Ces éléments ne sont pas tous résolubles par du code seul. Les validations ex
 
 ## 8. Ordre strict de reprise
 
-1. Construire la matrice des 55 actions et dépendances depuis les sources Android et les tables SQL.
+1. **N1 TERMINÉ —** matrice des 55 call sites et dépendances établie, qualifiée et contrôlée automatiquement. Ne pas rouvrir N1 sans changement du code source ou contre-preuve.
 2. Compléter les snapshots et les validations des outbox, sans modifier les workflows d'activation par défaut.
 3. Concevoir et tester les handlers métiers serveur sur PostgreSQL jetable, avec reçus transactionnels, scopes et conflits.
 4. Répliquer les parcours Android, automatiser la file et tester la reprise multi-appareils.
@@ -222,7 +222,7 @@ Un niveau inférieur ne doit jamais être présenté comme un niveau supérieur.
 
 | N° | Gate | État vérifié au 22/11/2026 | Définition précise de la mise au vert |
 |---:|---|---|---|
-| 1 | Inventaire et qualification des événements métier | **À QUALIFIER / PARTIEL** | Les 55 points d'émission d'outbox sont recensés un par un et classés : mutation à répliquer, événement local/audit, cache/mirror ou action déjà couverte par une API directe. Pour chaque mutation à répliquer : agrégat, code d'action/version, snapshot, ID stable, organisation/site/poste/acteur, dépendances, source de vérité, handler, reçu, conflit, stratégie retry et test sont documentés. Aucun événement n'est déclaré manquant sur la seule base d'un comptage. Le code actuel accepte 11 codes d'action du cycle fournisseur et des prérequis stock ; la couverture complète des autres domaines n'est pas démontrée. Le gate est vert quand 100 % des call sites sont classés et que chaque mutation promise a un contrat approuvé, sans événement orphelin ni doublon de périmètre. |
+| 1 | Inventaire et qualification des événements métier | **VERT N1 — 55/55** | Registre canonique `NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md` + JSON détaillé : 43 mutations à répliquer avec contrat v1 (dont 11 déjà reconnues par le coordinateur borné et 32 contrats destinés aux gates de réalisation suivants), 7 enfants composites, 1 projection comptable dérivée, 1 miroir de confirmation serveur, 1 miroir d'API directe et 2 helpers locaux non appelés. Chaque ligne contient source exacte (méthode/agrégat/action), codes d'action possibles, source de vérité, champs de snapshot, scopes org/site/poste, acteur, appareil, dépendances, handler cible, reçu, idempotence, conflit, retry et tests. Le script `scripts/naxa-services/verify-outbox-registry.mjs` compare la bijection exacte des 55 appels, vérifie les 11 actions réellement déclarées par `SupplierSyncCoordinator.kt` et contrôle les chemins API directs/legacy. Le workflow CI exécute ce contrôle. Le N1 est fermé ; N2/N3 restent des gates distincts et ne sont pas déclarés verts par cette qualification. |
 | 2 | Handlers et mutations serveur | **PARTIEL — contrats/RPC en laboratoire, pas de backend hébergé dédié** | Chaque action issue de la matrice possède un handler typé et un RPC transactionnel ; Auth vérifie organisation, site, poste, rôle et propriété de l'agrégat. La mutation métier et son reçu idempotent sont persistés atomiquement. Un double envoi identique renvoie le même résultat ; un même ID avec payload divergent est rejeté ; une dépendance manquante ou un scope invalide est bloqué ; un crash/retry ne crée ni doublon ni perte. Tous les scénarios sont testés positivement et négativement sur PostgreSQL jetable et, après autorisation, sur l'environnement dédié. Le gate est vert lorsque toutes les actions du gate 1 ont une implémentation serveur prouvée, et non lorsque quelques RPC compilent. |
 | 3 | Synchronisation Android globale | **ROUGE — cycle fournisseur/stock étendu, synchronisation universelle non livrée** | Chaque mutation locale qui doit être partagée rejoint une outbox durable avec snapshot versionné, identifiants stables et dépendances ; le coordinateur prend en charge toutes les actions approuvées, automatiquement et manuellement, avec backoff, reprise, mapping des IDs distants et résolution de conflits. Les reçus persistants seuls font passer un événement à synchronisé. Les scénarios multi-appareils, hors ligne prolongé, redémarrage, double envoi, ordre de dépendances, changement de site et rejet serveur passent. Au HEAD courant, `SupplierSyncCoordinator` n'est toujours que manuel/opt-in ; il accepte 11 codes `supplier.*`, `inventory_item.*`, `inventory_movement.*` et `purchase.*`, et bloque encore les achats sans mapping article ainsi que les règlements espèces sans mapping de session de caisse. Les autres domaines ne sont pas couverts par un coordinateur global. |
 | 4 | Web/PWA et parité métier | **PARTIEL — Auth/build et création d'article stock reliée ; autres parcours incomplets** | Tous les modules Web annoncés sont raccordés aux mêmes contrats métier sécurisés que l'Android, avec file IndexedDB, persistance, reçus, retries et conflits ; les données restent visibles après rechargement et concordent entre Web, Android et serveur. Tests online/offline, reconnexion, multi-onglet, double clic, crash, changement de session et scopes passent. Au HEAD courant, la création d'article de stock authentifiée utilise la file offline et l'action serveur `save_inventory_item` avec vérification du reçu ; ce chemin précis ne vaut pas parité ERP. Les autres formulaires qui passent encore par `addLocalEntry()` restent des brouillons locaux et doivent être connectés ou explicitement présentés comme tels. |
@@ -243,7 +243,7 @@ Un niveau inférieur ne doit jamais être présenté comme un niveau supérieur.
 
 ### 12.5 Ordre d'exécution après cette mise à jour
 
-1. Terminer l'inventaire des 55 call sites et approuver le périmètre de réplication par domaine.
+1. **N1 terminé / vert :** conserver le registre 55/55 et son garde-fou CI. Toute nouvelle émission doit ajouter sa qualification au même changement de code.
 2. Élargir les handlers/RPC et leurs reçus transactionnels selon la matrice, en conservant les tests PostgreSQL jetables.
 3. Construire les coordinateurs Android par agrégat avec les dépendances et la résolution de conflits, puis couvrir multi-appareils.
 4. Étendre la file Web/PWA des parcours déjà intégrés (à commencer par stock) à chaque module du périmètre validé.
@@ -252,4 +252,16 @@ Un niveau inférieur ne doit jamais être présenté comme un niveau supérieur.
 7. Préparer signature, conformité, recette physique et restauration hébergée.
 8. Exécuter un gate final complet, constituer le dossier de preuves et seulement ensuite soumettre la création du projet Supabase dédié à autorisation.
 
-**Décision de continuité au 22 novembre 2026 :** le dépôt est **VERT CI 12/12** sur le HEAD mentionné, et le laboratoire PostgreSQL 17 couvre le schéma/RLS ; la restauration laboratoire est **VERT 1/1** sur son run distinct. NAXA SERVICES n'est pas déclaré globalement vert : les gates 1 à 8 conservent les statuts précis ci-dessus. Aucun Supabase NAXA Services hébergé, aucune Release signée et aucune intégration marchande/FCM réelle ne sont attestés à cette date.
+**Décision de continuité au 22 novembre 2026 :** le dépôt est **VERT CI 12/12** sur le HEAD applicatif mentionné ; le laboratoire PostgreSQL 17 et RLS est vert, et la restauration laboratoire est **VERT 1/1** sur son run distinct. Le point N1 est désormais **VERT 55/55**, avec registre versionné et contrôle de complétude intégré à la CI. NAXA SERVICES n'est pas déclaré globalement vert : N2 à N8 conservent leurs statuts distincts. Aucun Supabase NAXA Services hébergé, aucune Release signée et aucune intégration marchande/FCM réelle ne sont attestés à cette date.
+
+
+## 13. Fermeture du point de contrôle N1 — 22 novembre 2026
+
+- **Résultat : VERT N1 — 55/55 call sites qualifiés.**
+- Matrice lisible : `docs/naxa-services/NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md`.
+- Registre machine : `docs/naxa-services/NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.json`.
+- Contrôle bloquant : `scripts/naxa-services/verify-outbox-registry.mjs`, appelé par le job `Cross-application offline synchronization contract` dans le workflow technique.
+- Le garde-fou vérifie l'identité exacte méthode/agrégat/expression action de chacun des 55 appels ; il échoue devant un ajout, retrait, renommage ou doublon non qualifié. Il vérifie aussi que les 11 actions déclarées par le coordinateur borné correspondent exactement aux 11 lignes qualifiées comme déjà prises en charge et que les helpers de création de site/poste considérés comme obsolètes restent sans appelant.
+- Comptage : 43 mutations à répliquer, 7 enfants composites non expédiables isolément, 1 ledger dérivé, 1 miroir de confirmation serveur, 1 miroir d'API directe, 2 helpers locaux legacy.
+- **Périmètre fermé :** N1 ne construit pas les 32 handlers encore contractuels, n'étend pas le coordinateur Android et ne développe pas la parité Web. Ces réalisations restent sous N2/N3/N4, sans être reportées dans N1.
+
