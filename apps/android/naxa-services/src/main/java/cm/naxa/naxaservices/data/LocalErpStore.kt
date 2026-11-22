@@ -1129,6 +1129,31 @@ interface NaxaServicesDao {
 
     @Query("UPDATE local_loyalty_events SET rewardStatus = 'redeemed' WHERE id = :eventId AND orgId = :orgId AND siteId = :siteId AND eventType = 'reward_earned' AND rewardStatus = 'available'")
     suspend fun redeemLoyaltyReward(eventId: String, orgId: String, siteId: String): Int
+
+    // Peer replication upserts are deliberately distinct from user-input insert helpers.
+    // They are only invoked after a server-authenticated, scope-filtered pull page is persisted.
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemotePressingOrder(value: LocalPressingOrder)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemotePressingStatusEvent(value: LocalPressingStatusEvent)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteAppointment(value: LocalAppointment)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteCashSession(value: LocalCashSession)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteSale(value: LocalSale)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteExpense(value: LocalExpense)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteService(value: LocalService)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteCustomer(value: LocalCustomer)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteCustomerFollowUp(value: LocalCustomerFollowUp)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteInventoryItem(value: LocalInventoryItem)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteInventoryMovement(value: LocalInventoryMovement)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteSupportRequest(value: LocalSupportRequest)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteManagementRecord(value: LocalManagementRecord)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteWorkflowEvent(value: LocalWorkflowEvent)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteSupplier(value: LocalSupplier)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemotePurchaseDocument(value: LocalPurchaseDocument)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemotePurchaseLine(value: LocalPurchaseLine)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemotePurchaseReceipt(value: LocalPurchaseReceipt)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteSupplierPayment(value: LocalSupplierPayment)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteRecurringCharge(value: LocalRecurringCharge)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteChargePayment(value: LocalChargePayment)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun upsertRemoteLoyaltyEvent(value: LocalLoyaltyEvent)
 }
 
 @Database(
