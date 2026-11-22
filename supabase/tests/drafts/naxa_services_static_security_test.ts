@@ -336,3 +336,24 @@ Deno.test("N2 pressing and appointment RPCs validate states, versions and atomic
   assert(/revoke\\s+insert,update,delete\\s+on\\s+public\\.ns_pressing_status_events,public\\.ns_appointment_status_events\\s+from\\s+public,anon,authenticated/i.test(sql),
     "Status event ledgers must be append-only server writes");
 });
+
+
+Deno.test("N2 pressing and appointment RPCs enforce lifecycle versions and server-side slot locks", async () => {
+  const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  for(const fn of ["ns_create_pressing_order","ns_transition_pressing_order","ns_create_appointment","ns_transition_appointment","ns_reschedule_appointment"]) {
+    assert(new RegExp("create\\s+or\\s+replace\\s+function\\s+public\\."+fn+"\\s*\\(","i").test(sql),
+      "Missing pressing/appointment handler "+fn);
+  }
+  assert(/p_expected_version\\s*<>\\s*v_order\\.revision/i.test(sql),
+    "Pressing transitions require an expected revision");
+  assert(/p_expected_version\\s*<>\\s*v_appointment\\.revision/i.test(sql),
+    "Appointment transitions require an expected revision");
+  assert(/pg_advisory_xact_lock[\\s\\S]{0,200}appointment-slots/i.test(sql),
+    "Appointment slots must be serialized transactionally");
+  assert(/a\\.starts_at<p_ends_at\\s+and\\s+a\\.ends_at>p_starts_at/i.test(sql),
+    "Server-side appointment overlap detection is required");
+  assert(/revoke\\s+insert,update,delete\\s+on\\s+public\\.ns_pressing_orders,public\\.ns_appointments\\s+from\\s+public,anon,authenticated/i.test(sql),
+    "Pressing/appointment client writes must be RPC-only");
+  assert(/revoke\\s+insert,update,delete\\s+on\\s+public\\.ns_pressing_status_events,public\\.ns_appointment_status_events\\s+from\\s+public,anon,authenticated/i.test(sql),
+    "Pressing and appointment status ledgers must be append-only server writes");
+});
