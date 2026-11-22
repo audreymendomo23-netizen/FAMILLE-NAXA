@@ -11,7 +11,6 @@ import cm.naxa.naxaservices.data.LocalOutboxEvent
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_13_14
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_15_16
 import cm.naxa.naxaservices.data.LocalLoyaltyEvent
-import cm.naxa.naxaservices.data.LocalOutboxEvent
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import cm.naxa.naxaservices.data.NsServicesDatabase
 import java.util.UUID
@@ -127,6 +126,84 @@ class OutboxMigrationAndOrderingInstrumentedTest {
         }
     }
 
+
+    @Test
+    fun twoIndependentAndroidInstallationsReplicatePeerMutationsBothDirectionsWithoutEcho() = runBlocking<Unit> {
+        val orgId = UUID.randomUUID().toString()
+        val siteId = UUID.randomUUID().toString()
+        val supplierId = UUID.randomUUID().toString()
+        val deviceA = UUID.randomUUID().toString()
+        val deviceB = UUID.randomUUID().toString()
+        val actorId = UUID.randomUUID().toString()
+        val eventA = UUID.randomUUID().toString()
+        val eventB = UUID.randomUUID().toString()
+        val databaseAName = "peer-device-a-${UUID.randomUUID()}.db"
+        val databaseBName = "peer-device-b-${UUID.randomUUID()}.db"
+        val databaseA = Room.databaseBuilder(context, NsServicesDatabase::class.java, databaseAName).build()
+        val databaseB = Room.databaseBuilder(context, NsServicesDatabase::class.java, databaseBName).build()
+
+        fun page(receiverDeviceId: String, cursor: Long, eventId: String, sourceDeviceId: String, supplierName: String) =
+            JSONObject()
+                .put("device_id", receiverDeviceId)
+                .put("next_cursor", cursor)
+                .put("has_more", false)
+                .put("changes", JSONArray().put(
+                    JSONObject()
+                        .put("cursor", cursor)
+                        .put("event_id", eventId)
+                        .put("source_device_id", sourceDeviceId)
+                        .put("site_id", siteId)
+                        .put("visible_site_ids", JSONArray().put(siteId))
+                        .put("workstation_id", JSONObject.NULL)
+                        .put("aggregate_type", "supplier")
+                        .put("aggregate_id", supplierId)
+                        .put("action_code", "supplier.saved")
+                        .put("aggregate_version", cursor)
+                        .put("recorded_at", "2026-11-22T14:00:00Z")
+                        .put("payload", JSONObject()
+                            .put("supplier_id", supplierId)
+                            .put("org_id", orgId)
+                            .put("site_id", siteId)
+                            .put("actor_member_id", actorId)
+                            .put("name", supplierName)
+                            .put("phone", "")
+                            .put("whatsapp", "")
+                            .put("email", "")
+                            .put("address", "")
+                            .put("payment_terms_days", 0)
+                            .put("notes", "")
+                            .put("active", true)
+                        )
+                ))
+
+        try {
+            val repositoryA = NaxaServicesLocalRepository(databaseA)
+            val repositoryB = NaxaServicesLocalRepository(databaseB)
+
+            // Device A publishes; the independent Room database on device B pulls and applies it.
+            assertEquals(1, repositoryB.persistRemoteSyncPage(
+                orgId, deviceB, page(deviceB, 1L, eventA, deviceA, "Grossiste depuis A"), 100L
+            ))
+            assertEquals("Grossiste depuis A", repositoryB.dao.findSupplier(supplierId, orgId, siteId)?.name)
+
+            // Device B publishes a later revision; device A independently pulls and applies it.
+            val reversePage = page(deviceA, 2L, eventB, deviceB, "Grossiste mis à jour depuis B")
+            assertEquals(1, repositoryA.persistRemoteSyncPage(orgId, deviceA, reversePage, 200L))
+            assertEquals("Grossiste mis à jour depuis B", repositoryA.dao.findSupplier(supplierId, orgId, siteId)?.name)
+
+            // Lost responses and page replays are safe; remote writes never create a new outbox mutation.
+            assertEquals(0, repositoryA.persistRemoteSyncPage(orgId, deviceA, reversePage, 300L))
+            assertEquals(0, repositoryA.dao.countOutboxActions(orgId, "supplier", supplierId, listOf("supplier.saved")))
+            assertEquals(0, repositoryB.dao.countOutboxActions(orgId, "supplier", supplierId, listOf("supplier.saved")))
+            assertEquals(1, repositoryA.dao.countRemoteChanges(orgId))
+            assertEquals(1, repositoryB.dao.countRemoteChanges(orgId))
+        } finally {
+            databaseA.close()
+            databaseB.close()
+            context.deleteDatabase(databaseAName)
+            context.deleteDatabase(databaseBName)
+        }
+    }
 
     @Test
     fun remotePeerChangesPersistAtomicallyIdempotentlyAndWithoutOutboxEcho() = runBlocking<Unit> {
