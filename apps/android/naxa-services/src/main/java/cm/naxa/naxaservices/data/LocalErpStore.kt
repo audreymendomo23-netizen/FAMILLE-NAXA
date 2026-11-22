@@ -184,7 +184,9 @@ data class LocalRemoteChange(
     val aggregateVersion: Long,
     val projectionJson: String,
     val recordedAt: String,
-    val receivedAtEpochMs: Long
+    val receivedAtEpochMs: Long,
+    @ColumnInfo(defaultValue = "'pending'") val applicationStatus: String = "pending",
+    val lastErrorCode: String? = null
 )
 
 @Entity(
@@ -801,6 +803,12 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_remote_changes WHERE eventId = :eventId LIMIT 1")
     suspend fun findRemoteChange(eventId: String): LocalRemoteChange?
 
+    @Query("UPDATE local_remote_changes SET applicationStatus = :status, lastErrorCode = :errorCode WHERE eventId = :eventId AND orgId = :orgId")
+    suspend fun updateRemoteChangeApplication(eventId: String, orgId: String, status: String, errorCode: String?): Int
+
+    @Query("SELECT * FROM local_remote_changes WHERE orgId = :orgId AND applicationStatus <> 'applied' ORDER BY changeCursor ASC LIMIT :limit")
+    suspend fun loadRemoteChangesNeedingApplication(orgId: String, limit: Int = 250): List<LocalRemoteChange>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertRemoteChange(change: LocalRemoteChange)
 
@@ -1207,7 +1215,7 @@ interface NaxaServicesDao {
         LocalSupplierPayment::class,
         LocalAccountingEntry::class
     ],
-    version = 15,
+    version = 16,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -1455,6 +1463,13 @@ val NS_SERVICES_MIGRATION_14_15: Migration = object : Migration(14, 15) {
             "CREATE INDEX IF NOT EXISTS index_local_remote_aggregates_orgId_siteId_aggregateType " +
                 "ON local_remote_aggregates(orgId, siteId, aggregateType)"
         )
+    }
+}
+
+val NS_SERVICES_MIGRATION_15_16: Migration = object : Migration(15, 16) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE local_remote_changes ADD COLUMN applicationStatus TEXT NOT NULL DEFAULT 'pending'")
+        database.execSQL("ALTER TABLE local_remote_changes ADD COLUMN lastErrorCode TEXT")
     }
 }
 
