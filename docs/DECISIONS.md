@@ -25,8 +25,9 @@
 | FAM-021 | NAXA HOTEL : les clients hébergés accèdent sans application ni compte à un portail Web de séjour par QR de chambre, limité au catalogue hôtel, aux catalogues ZIPPLE/NAXA SERVICES pour les services absents de l'hôtel, au lien Marketplace LOYABLE et au lien pharmacie publique NAXA | VALIDÉ — 22/11/2026 |
 | FAM-022 | LOYABLE : publication et accès à la réservation hôtelière gratuits pour un hôtel utilisateur NAXA HOTEL avec abonnement actif ; hôtel externe facturé 10 000 FCFA/mois et intégré/administré par l'administration centrale | VALIDÉ — 22/11/2026 |
 | FAM-023 | NAXA HOTEL : lorsqu'un établissement exploite un restaurant et/ou un bar, les commandes client par QR sans application sont gérées via ZIPPLE ; commandes, caisses, stocks et domaines restent séparés, imputation au folio soumise à validation | VALIDÉ — 22/11/2026 |
-| FAM-024 | NAXA HOTEL : les offres Essentiel et Premium intègrent le socle NAXA SECURITY ; Premium étend capacités et périmètres sans retirer le socle de sécurité Essentiel ; aucun matériel ni service humain de télésurveillance fourni par NAXA | VALIDÉ — 22/11/2026 |
+| FAM-024 | NAXA HOTEL : le socle NAXA SECURITY est inclus dans l'abonnement unique, quelle que soit la présence d'un service de restauration ; les capacités additionnelles au-delà du socle contractuel sont chiffrées au besoin ; aucun matériel ni service humain de télésurveillance fourni par NAXA | VALIDÉ — 22/11/2026 ; clarification tarifaire FAM-025 |
 
+| FAM-025 | NAXA HOTEL : un abonnement unique mensuel sans paiement annuel ; prix dynamique selon le nombre de chambres et l'exploitation d'un service de restauration ; barèmes publics pour 1–49 chambres, devis mensuel négocié dès 50 chambres et pour les groupes multi-hôtels ; quantité de chambres arrêtée à chaque renouvellement sans rétroactivité. Cette règle est une exception propre à NAXA HOTEL au régime général FAM-020 ; détail au cahier, section 24. | VALIDÉ — 22/11/2026 |
 
 ## Décisions GRILLAD consolidées — 21 novembre 2026
 
