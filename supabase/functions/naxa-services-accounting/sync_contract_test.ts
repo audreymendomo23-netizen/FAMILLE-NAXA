@@ -245,3 +245,17 @@ Deno.test("atomic sync envelope covers customer, CRM follow-up and support mutat
     if(normalized.action_code!==action) throw new Error("Mutation type not accepted: "+action);
   }
 });
+
+Deno.test("support request sync may be organization-scoped when no site is attached", () => {
+  const request = "88888888-8888-4888-8888-888888888895";
+  const value = {
+    event_id: SYNC_EVENT, device_id: SYNC_DEVICE, device_sequence: 30,
+    org_id: ORG_A, site_id: null, workstation_id: null,
+    aggregate_type: "support_request", aggregate_id: request,
+    action_code: "support_request.created",
+    payload: { request_id: request, org_id: ORG_A }
+  };
+  if (normalizeAtomicSyncEvent(value).site_id !== null) {
+    throw new Error("Organization-scoped support request should permit null site");
+  }
+});
