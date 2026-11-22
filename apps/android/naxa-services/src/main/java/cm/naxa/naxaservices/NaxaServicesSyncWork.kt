@@ -28,6 +28,7 @@ import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_10_11
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_11_12
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_12_13
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_13_14
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_14_15
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import cm.naxa.naxaservices.data.NsServicesDatabase
 import kotlinx.coroutines.CancellationException
@@ -127,7 +128,8 @@ class NaxaServicesSyncWorker(
             NS_SERVICES_MIGRATION_10_11,
             NS_SERVICES_MIGRATION_11_12,
             NS_SERVICES_MIGRATION_12_13,
-            NS_SERVICES_MIGRATION_13_14
+            NS_SERVICES_MIGRATION_13_14,
+            NS_SERVICES_MIGRATION_14_15
         ).build()
 
         return try {
