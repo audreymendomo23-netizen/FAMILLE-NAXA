@@ -473,3 +473,26 @@ Deno.test("N2 atomic dispatcher exposes all newly implemented event codes fail-c
   assert(/else\\s+raise\\s+exception\\s+'NAXA_SYNC_ACTION_NOT_SUPPORTED'/i.test(sql),
     "Unmapped actions must stay rejected by default");
 });
+
+
+Deno.test("N2 legacy supplier stock loyalty and sale helpers are server-role-only", async () => {
+  const v3=await readDraft("naxa_services_v3_operations_rewards_sync.sql");
+  const v4=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  const check=(sql:string,fn:string)=>{
+    const revokeStart=sql.indexOf("revoke all on function public."+fn+"(");
+    const grantStart=sql.indexOf("grant execute on function public."+fn+"(");
+    assert(revokeStart>=0&&grantStart>=0,fn+" must define execute privilege boundaries");
+    const revoke=sql.slice(revokeStart,sql.indexOf(";",revokeStart)).replace(/\\s+/g," ").replace(/,\\s*/g,", ");
+    const grant=sql.slice(grantStart,sql.indexOf(";",grantStart)).replace(/\\s+/g," ").replace(/,\\s*/g,", ");
+    assert(revoke.endsWith("from public, anon, authenticated"),fn+" must not be client-callable");
+    assert(grant.endsWith("to service_role"),fn+" must be callable only by the server role");
+  };
+  for(const fn of [
+    "ns_save_inventory_item","ns_record_inventory_movement","ns_post_sale_inventory",
+    "ns_save_supplier","ns_create_supplier_purchase","ns_receive_supplier_purchase_line",
+    "ns_record_supplier_payment"
+  ]) check(v4,fn);
+  for(const fn of ["ns_record_charge_payment","ns_record_loyalty_activity","ns_redeem_loyalty_reward"]) {
+    check(v3,fn);
+  }
+});
