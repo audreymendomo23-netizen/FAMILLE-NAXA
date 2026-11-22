@@ -1,10 +1,10 @@
 {
   "title": "NAXA SERVICES — registre exhaustif des 55 points d'émission d'outbox",
-  "version": "1.1",
+  "version": "1.2",
   "date": "2026-11-22",
   "repository": "audreymendomo23-netizen/FAMILLE-NAXA",
   "branch": "work/naxa-services-completion-20261120",
-  "audited_application_head": "7b0abdd1308b609f65b6c7a3681035ab7abaee10",
+  "audited_application_head": "129ec81e753ff63e8088af6b545909c7b66245e2",
   "source_file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
   "source_callsite_count": 55,
   "classified_callsite_count": 55,
@@ -46,6 +46,7 @@
     "inventory_transfer.received_at_destination",
     "inventory_transfer.requested",
     "inventory_transfer.status_changed",
+    "inventory_valuation.import_updated",
     "inventory_valuation.imported",
     "inventory_valuation.updated",
     "invoice.created",
@@ -82,12 +83,16 @@
     "staff_bonus.created",
     "staff_bonus.status_changed",
     "staff_break_end.created",
+    "staff_break_end.recorded",
     "staff_break_end.status_changed",
     "staff_break_start.created",
+    "staff_break_start.recorded",
     "staff_break_start.status_changed",
     "staff_clock_in.created",
+    "staff_clock_in.recorded",
     "staff_clock_in.status_changed",
     "staff_clock_out.created",
+    "staff_clock_out.recorded",
     "staff_clock_out.status_changed",
     "staff_commission.created",
     "staff_commission.status_changed",
@@ -244,7 +249,7 @@
       "id": "OBX-003",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1517,
+        "line": 1518,
         "method": "receiveSupplierPurchaseLine",
         "aggregateType": "purchase_receipt",
         "actionExpression": "\"purchase.receipt.confirmed\""
@@ -299,7 +304,7 @@
       "id": "OBX-004",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1582,
+        "line": 1584,
         "method": "recordSupplierPayment",
         "aggregateType": "supplier_payment",
         "actionExpression": "\"supplier.payment.recorded\""
@@ -356,7 +361,7 @@
       "id": "OBX-005",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1620,
+        "line": 1622,
         "method": "postAccountingEntry",
         "aggregateType": "accounting_entry",
         "actionExpression": "\"accounting.entry.posted\""
@@ -405,7 +410,7 @@
       "id": "OBX-006",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1629,
+        "line": 1631,
         "method": "saveSupplierWhatsApp",
         "aggregateType": "inventory_item",
         "actionExpression": "\"inventory_item.supplier_whatsapp_updated\""
@@ -460,7 +465,7 @@
       "id": "OBX-007",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1663,
+        "line": 1665,
         "method": "saveRecurringCharge",
         "aggregateType": "recurring_charge",
         "actionExpression": "\"recurring_charge.saved\""
@@ -518,7 +523,7 @@
       "id": "OBX-008",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1706,
+        "line": 1708,
         "method": "recordRecurringChargePayment",
         "aggregateType": "recurring_charge",
         "actionExpression": "\"recurring_charge.payment_recorded\""
@@ -573,7 +578,7 @@
       "id": "OBX-009",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1727,
+        "line": 1729,
         "method": "deactivateRecurringCharge",
         "aggregateType": "recurring_charge",
         "actionExpression": "\"recurring_charge.deactivated\""
@@ -625,7 +630,7 @@
       "id": "OBX-010",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1793,
+        "line": 1795,
         "method": "saveLoyaltyProgram",
         "aggregateType": "loyalty_program",
         "actionExpression": "\"loyalty_program.updated\""
@@ -683,7 +688,7 @@
       "id": "OBX-011",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1845,
+        "line": 1847,
         "method": "recordLoyaltyActivity",
         "aggregateType": "loyalty_activity",
         "actionExpression": "\"loyalty_activity.recorded\""
@@ -739,7 +744,7 @@
       "id": "OBX-012",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1863,
+        "line": 1865,
         "method": "redeemLoyaltyReward",
         "aggregateType": "loyalty_reward",
         "actionExpression": "\"loyalty_reward.redeemed\""
@@ -794,7 +799,7 @@
       "id": "OBX-013",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1935,
+        "line": 1939,
         "method": "createPressingOrder",
         "aggregateType": "pressing_order",
         "actionExpression": "\"pressing_order.created\""
@@ -855,7 +860,7 @@
       "id": "OBX-014",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 1977,
+        "line": 1981,
         "method": "advancePressingOrder",
         "aggregateType": "pressing_order",
         "actionExpression": "\"pressing_order.status_changed:\" + next"
@@ -913,7 +918,7 @@
       "id": "OBX-015",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2032,
+        "line": 2036,
         "method": "createAppointment",
         "aggregateType": "appointment",
         "actionExpression": "\"appointment.created\""
@@ -974,7 +979,7 @@
       "id": "OBX-016",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2067,
+        "line": 2071,
         "method": "openCashSession",
         "aggregateType": "cash_session",
         "actionExpression": "\"cash_session.opened\""
@@ -1030,7 +1035,7 @@
       "id": "OBX-017",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2139,
+        "line": 2143,
         "method": "recordSale",
         "aggregateType": "inventory_movement",
         "actionExpression": "\"inventory_movement.sale_out\""
@@ -1082,7 +1087,7 @@
       "id": "OBX-018",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2158,
+        "line": 2162,
         "method": "recordSale",
         "aggregateType": "sale",
         "actionExpression": "\"sale.created\""
@@ -1146,7 +1151,7 @@
       "id": "OBX-019",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2206,
+        "line": 2210,
         "method": "cancelPendingMobileMoneySale",
         "aggregateType": "sale",
         "actionExpression": "\"sale.mobile_money_cancelled\""
@@ -1199,7 +1204,7 @@
       "id": "OBX-020",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2250,
+        "line": 2254,
         "method": "applyServerConfirmedMobileMoneySale",
         "aggregateType": "inventory_movement",
         "actionExpression": "\"inventory_movement.mobile_money_sale_out\""
@@ -1250,7 +1255,7 @@
       "id": "OBX-021",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2269,
+        "line": 2273,
         "method": "applyServerConfirmedMobileMoneySale",
         "aggregateType": "sale",
         "actionExpression": "\"sale.payment_confirmed_server\""
@@ -1296,7 +1301,7 @@
       "id": "OBX-022",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2312,
+        "line": 2316,
         "method": "addExpense",
         "aggregateType": "expense",
         "actionExpression": "\"expense.created\""
@@ -1353,7 +1358,7 @@
       "id": "OBX-023",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2350,
+        "line": 2354,
         "method": "closeCashSession",
         "aggregateType": "cash_session",
         "actionExpression": "\"cash_session.closed\""
@@ -1409,7 +1414,7 @@
       "id": "OBX-024",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2364,
+        "line": 2368,
         "method": "saveOrganizationProfile",
         "aggregateType": "organization",
         "actionExpression": "\"organization.profile_saved\""
@@ -1453,7 +1458,7 @@
       "id": "OBX-025",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2371,
+        "line": 2375,
         "method": "createLocalSite",
         "aggregateType": "site",
         "actionExpression": "\"site.created\""
@@ -1499,7 +1504,7 @@
       "id": "OBX-026",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2425,
+        "line": 2429,
         "method": "createLocalWorkstation",
         "aggregateType": "workstation",
         "actionExpression": "\"workstation.created\""
@@ -1546,7 +1551,7 @@
       "id": "OBX-027",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2482,
+        "line": 2486,
         "method": "createLocalService",
         "aggregateType": "service",
         "actionExpression": "\"service.created\""
@@ -1608,7 +1613,7 @@
       "id": "OBX-028",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2545,
+        "line": 2549,
         "method": "createLocalCustomer",
         "aggregateType": "customer",
         "actionExpression": "\"customer.created\""
@@ -1668,7 +1673,7 @@
       "id": "OBX-029",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2615,
+        "line": 2619,
         "method": "updateLocalCustomer",
         "aggregateType": "customer",
         "actionExpression": "\"customer.updated\""
@@ -1727,7 +1732,7 @@
       "id": "OBX-030",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2676,
+        "line": 2680,
         "method": "createCustomerFollowUp",
         "aggregateType": "customer_followup",
         "actionExpression": "\"customer_followup.created\""
@@ -1786,7 +1791,7 @@
       "id": "OBX-031",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2713,
+        "line": 2717,
         "method": "completeCustomerFollowUp",
         "aggregateType": "customer_followup",
         "actionExpression": "\"customer_followup.completed\""
@@ -1839,7 +1844,7 @@
       "id": "OBX-032",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2724,
+        "line": 2728,
         "method": "createInventoryItem",
         "aggregateType": "inventory_item",
         "actionExpression": "\"inventory_item.created\""
@@ -1895,7 +1900,7 @@
       "id": "OBX-033",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2783,
+        "line": 2787,
         "method": "importInventoryBatch",
         "aggregateType": "inventory_movement",
         "actionExpression": "\"inventory_movement.import_adjustment\""
@@ -1951,7 +1956,7 @@
       "id": "OBX-034",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2800,
+        "line": 2821,
         "method": "importInventoryBatch",
         "aggregateType": "inventory_valuation",
         "actionExpression": "\"inventory_valuation.import_updated\""
@@ -1961,7 +1966,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "upsert_inventory_valuation",
@@ -2007,7 +2012,7 @@
       "id": "OBX-035",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2802,
+        "line": 2823,
         "method": "importInventoryBatch",
         "aggregateType": "inventory_item",
         "actionExpression": "\"inventory_item.import_updated\""
@@ -2062,7 +2067,7 @@
       "id": "OBX-036",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2818,
+        "line": 2839,
         "method": "importInventoryBatch",
         "aggregateType": "inventory_item",
         "actionExpression": "\"inventory_item.imported\""
@@ -2117,7 +2122,7 @@
       "id": "OBX-037",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2833,
+        "line": 2854,
         "method": "importInventoryBatch",
         "aggregateType": "inventory_movement",
         "actionExpression": "\"inventory_movement.import_initial\""
@@ -2173,7 +2178,7 @@
       "id": "OBX-038",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2856,
+        "line": 2877,
         "method": "importInventoryBatch",
         "aggregateType": "inventory_valuation",
         "actionExpression": "\"inventory_valuation.imported\""
@@ -2229,7 +2234,7 @@
       "id": "OBX-039",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2887,
+        "line": 2908,
         "method": "recordInventoryMovement",
         "aggregateType": "inventory_movement",
         "actionExpression": "\"inventory_movement.created\""
@@ -2286,7 +2291,7 @@
       "id": "OBX-040",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2904,
+        "line": 2925,
         "method": "createSupportRequest",
         "aggregateType": "support_request",
         "actionExpression": "\"support_request.created\""
@@ -2341,7 +2346,7 @@
       "id": "OBX-041",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2951,
+        "line": 2972,
         "method": "transitionAppointmentStatus",
         "aggregateType": "appointment",
         "actionExpression": "\"appointment.status_changed\""
@@ -2397,7 +2402,7 @@
       "id": "OBX-042",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 2999,
+        "line": 3020,
         "method": "rescheduleAppointment",
         "aggregateType": "appointment",
         "actionExpression": "\"appointment.rescheduled\""
@@ -2454,7 +2459,7 @@
       "id": "OBX-043",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3054,
+        "line": 3075,
         "method": "updateServiceCatalogItem",
         "aggregateType": "service",
         "actionExpression": "\"service.updated\""
@@ -2511,7 +2516,7 @@
       "id": "OBX-044",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3100,
+        "line": 3121,
         "method": "saveServiceConfiguration",
         "aggregateType": "service",
         "actionExpression": "\"service.configuration_updated\""
@@ -2568,7 +2573,7 @@
       "id": "OBX-045",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3175,
+        "line": 3196,
         "method": "convertWaitlistToAppointment",
         "aggregateType": "appointment",
         "actionExpression": "\"appointment.created_from_waitlist\""
@@ -2627,7 +2632,7 @@
       "id": "OBX-046",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3176,
+        "line": 3197,
         "method": "convertWaitlistToAppointment",
         "aggregateType": "appointment_waitlist",
         "actionExpression": "\"appointment_waitlist.converted\""
@@ -2678,7 +2683,7 @@
       "id": "OBX-047",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3257,
+        "line": 3291,
         "method": "recordStaffTimeEvent",
         "aggregateType": "eventType",
         "actionExpression": "eventType + \".recorded\""
@@ -2691,7 +2696,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "record_staff_time_event",
@@ -2737,7 +2742,7 @@
       "id": "OBX-048",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3312,
+        "line": 3346,
         "method": "createManagementRecord",
         "aggregateType": "recordType",
         "actionExpression": "recordType + \".created\""
@@ -2821,7 +2826,7 @@
       "id": "OBX-049",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3402,
+        "line": 3436,
         "method": "createInventoryTransfer",
         "aggregateType": "inventory_transfer",
         "actionExpression": "\"inventory_transfer.requested\""
@@ -2881,7 +2886,7 @@
       "id": "OBX-050",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3567,
+        "line": 3601,
         "method": "transitionManagementRecord",
         "aggregateType": "inventory_movement",
         "actionExpression": "\"inventory_movement.purchase_received\""
@@ -2932,7 +2937,7 @@
       "id": "OBX-051",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3653,
+        "line": 3687,
         "method": "transitionManagementRecord",
         "aggregateType": "inventory_movement",
         "actionExpression": "\"inventory_movement.transfer_out\""
@@ -2984,7 +2989,7 @@
       "id": "OBX-052",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3654,
+        "line": 3688,
         "method": "transitionManagementRecord",
         "aggregateType": "inventory_movement",
         "actionExpression": "\"inventory_movement.transfer_in\""
@@ -3036,7 +3041,7 @@
       "id": "OBX-053",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3692,
+        "line": 3726,
         "method": "transitionManagementRecord",
         "aggregateType": "inventory_transfer",
         "actionExpression": "\"inventory_transfer.received_at_destination\""
@@ -3101,7 +3106,7 @@
       "id": "OBX-054",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3727,
+        "line": 3763,
         "method": "transitionManagementRecord",
         "aggregateType": "current.recordType",
         "actionExpression": "current.recordType + \".status_changed\""
@@ -3183,7 +3188,7 @@
       "id": "OBX-055",
       "source": {
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
-        "line": 3749,
+        "line": 3803,
         "method": "saveInventoryValuation",
         "aggregateType": "inventory_valuation",
         "actionExpression": "\"inventory_valuation.updated\""
