@@ -24,7 +24,7 @@ internal object NaxaServicesPeerSyncApplier {
         val actor=p.sText("actor_member_id")
         val now=p.sMillis("updated_at",p.sMillis("created_at",p.sMillis("occurred_at",change.receivedAtEpochMs)))
         val id=change.aggregateId
-        when(change.actionCode) {
+        return when(change.actionCode) {
             "supplier.saved" -> {
                 if(site==null||actor.isBlank())return false
                 val sid=p.sText("supplier_id",id);val name=p.sText("name")
