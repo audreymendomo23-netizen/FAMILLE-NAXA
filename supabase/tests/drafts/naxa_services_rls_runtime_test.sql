@@ -699,7 +699,9 @@ BEGIN
     );
     RAISE EXCEPTION 'N3_REVOKED_DEVICE_PULL_WAS_ACCEPTED';
   EXCEPTION WHEN raise_exception THEN
-    IF SQLERRM<>'NAXA_SYNC_DEVICE_NOT_REGISTERED' THEN RAISE; END IF;
+    -- The authenticated account resolver is bound to a non-revoked device/session;
+    -- revocation therefore fails closed before the per-device lookup.
+    IF SQLERRM<>'NAXA_SYNC_AUTH_REQUIRED' THEN RAISE; END IF;
   END;
 END
 $n3_revoked_device$;
