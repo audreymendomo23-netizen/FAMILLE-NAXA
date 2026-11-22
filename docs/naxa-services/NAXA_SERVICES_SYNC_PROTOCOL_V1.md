@@ -163,7 +163,7 @@ Le coordinateur Android vérifie que l'organisation de chaque payload est celle 
 
 Le gate technique du commit `38df9449e196c1074272097d9440fcf132dfa99b` est terminé **12/12 jobs SUCCESS**. Le résultat inclut le contrat commun de file offline et l'assemblage/test Android, mais ne valide pas l'ensemble des événements métier.
 
-L'inspection du code a identifié 55 points d'émission dans `LocalErpStore.kt`. Parmi eux, seuls les quatre événements du cycle fournisseur ont des snapshots explicites et un coordinateur serveur actuellement implémenté :
+L'audit initial de cette version du protocole identifiait 55 points d'émission et quatre événements fournisseur alors pris en charge. **État courant au 22 novembre 2026 :** 11 codes d'action et call sites ont maintenant des snapshots explicites et un handler dans le coordinateur borné ; le registre N1 du 22 novembre est la source de vérité pour les 55 points.
 `supplier.saved`, `purchase.ordered`, `purchase.receipt.confirmed` et `supplier.payment.recorded`.
 
 Les autres appels utilisent le payload de repli `aggregate_id` / `site_id`. Ils ne constituent pas des snapshots métier et ne doivent pas être envoyés à une passerelle générique ni marqués synchronisés. Un statut `synced` doit rester réservé à un reçu serveur authentique, relié à la mutation métier idempotente.
@@ -204,7 +204,7 @@ Un test de l'enveloppe commune n'est pas un substitut aux tests de couverture de
 L'inventaire de 55 appels à enqueue dans LocalErpStore.kt est un inventaire de points d'émission. Il ne doit pas être interprété comme 55 fonctions inachevées. L'audit comparatif a retrouvé des chemins API directs hors outbox pour Auth/session, profil organisation, sites et postes, parrainage PME, parrainage client/promotions et notifications. D'autres modules ont des parcours Android locaux Room achevés ou partiels.
 
 La preuve de la limite de synchronisation reste directe et indépendante du comptage :
-- SupplierSyncCoordinator.kt se décrit comme manuel/opt-in, ne déclare que quatre actions supportées et filtre la file sur ces actions ;
+- SupplierSyncCoordinator.kt se décrit comme manuel/opt-in ; il déclare désormais 11 action codes actifs (quatre variantes d'article, trois variantes de mouvement, fournisseur et cycle achats/fournisseurs). Il reste limité à ce périmètre et ne constitue pas le synchroniseur ERP universel ;
 - les autres écrans métier concernés affichent des mentions locales ou appellent uniquement le repository Room ;
 - plusieurs dépendances du cycle fournisseur (article stock distant, session caisse espèces) sont bloquées explicitement dans le coordinateur ;
 - le Web métier opère dans l'état React local et ne branche pas ses formulaires sur la file IndexedDB/les APIs de domaine.
