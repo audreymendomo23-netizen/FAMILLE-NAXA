@@ -2825,6 +2825,9 @@ begin
      and not public.ns_can_operate_workstation(p_org_id,p_site_id,v_register.workstation_id) then
     raise exception 'NAXA_CASH_REGISTER_WORKSTATION_FORBIDDEN';
   end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_org_id::text||':'||p_register_id::text||':cash-open',0)
+  );
   if exists(select 1 from public.ns_cash_sessions s
     where s.org_id=p_org_id and s.site_id=p_site_id
       and s.register_id=p_register_id and s.status='open') then
