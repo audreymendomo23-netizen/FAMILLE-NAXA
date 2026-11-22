@@ -2226,6 +2226,12 @@ begin
     where sl.org_id=p_org_id and sl.site_id=p_site_id
       and sl.inventory_item_id=p_inventory_item_id
       and sl.item_type='stock' and s.status='draft';
+    v_reserved:=v_reserved+coalesce((
+      select sum(t.quantity)::numeric(14,3)
+      from public.ns_inventory_transfers t
+      where t.org_id=p_org_id and t.source_site_id=p_site_id
+        and t.inventory_item_id=p_inventory_item_id and t.status in ('open','approved')
+    ),0);
     if v_item.quantity-v_reserved<p_stock_quantity then
       raise exception 'NAXA_SALE_STOCK_RESERVED_OR_INSUFFICIENT';
     end if;
@@ -2888,12 +2894,15 @@ begin
   end if;
 
   select count(*) into v_matches from public.ns_inventory_items
-   where org_id=p_org_id and site_id=p_destination_site_id and sku=p_sku_snapshot and active;
+   where org_id=p_org_id and site_id=p_destination_site_id and sku=p_sku_snapshot;
   if v_matches>1 then raise exception 'NAXA_INVENTORY_TRANSFER_DESTINATION_SKU_DUPLICATE'; end if;
   select * into v_destination_item from public.ns_inventory_items
-   where org_id=p_org_id and site_id=p_destination_site_id and sku=p_sku_snapshot and active
+   where org_id=p_org_id and site_id=p_destination_site_id and sku=p_sku_snapshot
    for update;
   if found then
+    if not v_destination_item.active then
+      raise exception 'NAXA_INVENTORY_TRANSFER_DESTINATION_ITEM_INACTIVE';
+    end if;
     if lower(trim(v_destination_item.unit))<>lower(trim(p_unit)) then
       raise exception 'NAXA_INVENTORY_TRANSFER_DESTINATION_UNIT_MISMATCH';
     end if;
