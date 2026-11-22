@@ -1424,7 +1424,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
     /**
      * Persists an authenticated server page and its cursor atomically. Incoming
      * peer changes are written only to the remote replica tables; this method
-     * never calls enqueue() and therefore cannot echo a remote mutation upstream.
+     * never creates an outbound queue item and therefore cannot echo a remote mutation upstream.
      */
     suspend fun persistRemoteSyncPage(
         orgId: String,
