@@ -1,5 +1,5 @@
 # Continuité — Famille NAXA
-Dernière mise à jour : 14 novembre 2026
+Dernière mise à jour : 22 novembre 2026 — complément NAXA HOTEL
 Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA` — `main`.
 
 ## Décisions canoniques
@@ -241,3 +241,96 @@ Le statut reste EN VALIDATION CI ; ne déclarer VERT qu'après preuve intégrale
 - Les refresh tokens sont liés côté serveur à leur hash SHA-256, à l'installation et au session_id du JWT ; aucun refresh token en clair n'est stocké en base.
 - Le draft SQL comprend maintenant les helpers et policies RLS par organisation, site et poste, ainsi que l'exigence d'une session d'appareil active pour ns_current_account_id().
 - Limites inchangées : alias GoTrue non prouvé, fonction non déployée, SQL non appliqué, tests RLS/session non exécutés, écrans de provisioning et de traitement de recovery à intégrer à l'interface responsable.
+
+
+---
+
+## Complément de continuité — NAXA HOTEL 360°, portail QR, marketplace et tarification
+**Mise à jour : 22 novembre 2026**  
+**Référence du cahier :** 7 famille naxa/01-cahiers-des-charges/07-naxa-hotel.md  
+**Statut :** cadrage fonctionnel ajouté ; grille tarifaire proposée [P] ; aucun développement ou déploiement certifié par cette mise à jour documentaire.
+
+### 1. Baseline fonctionnelle conservée
+
+Le projet NAXA HOTEL conserve le périmètre 360° de 18 domaines (administration, PMS, commercial/groupes/événements, distribution/revenue management, CRM/expérience, housekeeping, restauration/bar/room service via ZIPPLE, services via NAXA SERVICES, économat/stocks, maintenance/patrimoine, RH, finance/comptabilité, caisse/paiements, conformité/audit, sécurité NAXA SECURITY, portail de séjour, énergie/eau/environnement, direction/BI/IA). Les deux ajouts précédemment identifiés restent inclus : module 19 Livechat/communication professionnelle et module 20 Support Client NAXA HOTEL.
+
+Aucun module antérieur n'est supprimé. Le détail opérationnel et la recette sont consignés dans l'addendum du cahier hôtel.
+
+### 2. Portail client par QR code — aucun téléchargement d'application
+
+Décision fonctionnelle : les clients d'un hôtel ne sont pas utilisateurs de l'application NAXA HOTEL. Ils n'installent aucune application et ne créent aucun compte. Un QR code par chambre ouvre un portail Web de séjour limité à exactement quatre entrées :
+
+1. catalogue des services proposés par l'hôtel ;
+2. catalogues des utilisateurs professionnels ZIPPLE et NAXA SERVICES, uniquement pour les services que l'hôtel n'offre pas ;
+3. lien vers la page publique Marketplace LOYABLE ;
+4. lien vers la page publique de la pharmacie NAXA pour rechercher un médicament et consulter sa disponibilité.
+
+Aucun autre menu, chat client, fidélité, avis, publicité, réservation dans le portail QR, caméra, tableau de bord, profil ou espace client ne doit être ajouté. Les modules Livechat et Support restent des fonctions professionnelles hors du portail QR.
+
+Le QR doit être lié côté serveur à l'hôtel et à la chambre via un identifiant opaque/révocable. Aucune identité, date de séjour, réservation, folio ou donnée personnelle n'est encodée directement dans le QR. Les liens LOYABLE et pharmacie NAXA sont des liens externes vers leurs pages publiques réelles, à configurer ; ne pas inventer leurs URL.
+
+### 3. Restaurant/bar : commande client par QR avec ZIPPLE
+
+Si l'hôtel exploite un restaurant, un bar ou les deux, la commande par QR est intégrée, sans application client :
+- QR de chambre pour room service si activé ;
+- QR sur table restaurant ;
+- QR dans les espaces/tables du bar ;
+- menus, prix, disponibilités et tickets possédés par ZIPPLE ;
+- commandes du restaurant et du bar séparées et routées vers les équipes/cuisines correspondantes ;
+- références de commande et statuts consultables par le client via une page Web légère ;
+- paiement dans ZIPPLE ou demande d'imputation au folio NAXA HOTEL selon les droits et validations de l'établissement ;
+- aucune imputation automatique sur chambre à partir d'un QR partagé ; séjour ouvert, validation et idempotence serveur obligatoires.
+
+ZIPPLE reste source de vérité pour catalogue, recettes, stock, préparation, caisse et paiement. NAXA HOTEL reste source de vérité pour séjours, chambres et folios. L'échange est réalisé par API/événements versionnés ; aucune écriture directe inter-applications. Le moteur QR de commande restaurant/bar est inclus dans les deux formules hôtelières proposées ; aucun supplément QR distinct n'est proposé dans cette grille.
+
+### 4. Marketplace LOYABLE — hôtellerie et réservations
+
+Une catégorie publique « Hébergements et établissements hôteliers » est distincte de la location résidentielle.
+
+- Hôtel client NAXA HOTEL : publication et accès à la réservation hôtelière LOYABLE gratuits si l'abonnement NAXA HOTEL est actif. Les annonces sont créées/synchronisées à partir des données autorisées du PMS. NAXA HOTEL est l'autorité pour tarifs, inventaire, disponibilités et confirmation ; LOYABLE est l'autorité pour publication et découverte publique.
+- Hôtel externe qui n'utilise pas NAXA HOTEL : 10 000 FCFA par mois pour l'accès à la publication et à la réservation sur LOYABLE. L'intégration, la vérification, la création et la gestion de l'annonce passent par l'administration centrale de l'entreprise ; pas d'auto-inscription ni d'auto-publication pour ce segment. Les demandes de réservation doivent être vérifiées et confirmées par l'hôtel. En absence de connecteur PMS, les disponibilités sont administrées manuellement/déclarées et horodatées.
+
+Ce tarif hôtel externe ne s'applique pas par annonce et ne remplace pas le modèle LOYABLE classique bailleur (1 000 FCFA × chambres actives/en gestion/mois). Le tarif annuel et les SLA d'administration des hôtels externes restent à préciser.
+
+### 5. Intégration NAXA SECURITY dans les deux offres hôtelières
+
+Le socle NAXA SECURITY est inclus dans Essentiel et Premium. Premium étend les capacités, quotas, périmètres et analyses. L'hôtel ne perd pas les fonctions de sécurité de base en Essentiel. Les intégrations dépendent des caméras, capteurs, centrales, appareils et réseaux réellement compatibles. NAXA ne fournit aucun matériel, câblage, installation physique ou service humain de télésurveillance. Les systèmes locaux certifiés d'alarme et de protection incendie doivent continuer à fonctionner indépendamment du cloud.
+
+### 6. Grille NAXA HOTEL proposée — modèle LOYABLE [P]
+
+La proposition est calculée par organisation/promoteur sur la quantité réelle de chambres actives/en gestion, avec une facture détaillée et un minimum de facturation :
+
+| Formule | Prix par chambre active et par mois | Minimum par organisation et par mois |
+|---|---:|---:|
+| Essentiel | 800 FCFA | 10 000 FCFA |
+| Premium | 1 000 FCFA | 18 000 FCFA |
+
+Formule :
+- Essentiel = max(10 000, 800 × chambres actives)
+- Premium = max(18 000, 1 000 × chambres actives)
+
+Pour les deux formules, paiement annuel proposé = dix mensualités pour douze mois de service, conformément à FAM-020. Aucune formule de trois ou six mois. Exemples : pour 20 chambres, Essentiel 16 000 F/mois et 160 000 F/an ; Premium 20 000 F/mois et 200 000 F/an. Pour 50 chambres, Essentiel 40 000 F/mois et 400 000 F/an ; Premium 50 000 F/mois et 500 000 F/an.
+
+Le benchmark public consulté le 22 novembre 2026 affiche notamment : Hotelia à partir de 16 200 F/mois pour l'hébergement et 27 000 F/mois pour le tout-en-un ; The African Hotelier à 25 000 F/mois (1–20 chambres) et 50 000 F/mois (21–50) ; 1412 PMS à 29 000, 39 000 et 69 000 F/mois. Ces offres ont des quotas et périmètres différents ; ces prix servent au positionnement et non à certifier une équivalence technique. Sources : https://www.hotelia.cloud/ ; https://theafricanhotelier.com/pms-hotelier/ ; https://1412pms.com/.
+
+**Différenciation proposée :**
+- Essentiel : un établissement, PMS opérationnel complet, fonctions quotidiennes, gestion de base des équipes, stocks, caisse et pilotage, QR services clients (4 entrées uniquement), QR commandes restaurant/bar via ZIPPLE, sécurité NAXA SECURITY de base, publication LOYABLE gratuite si abonnement actif.
+- Premium : tout Essentiel, gestion multi-hôtels/organisation, consolidation, droits et reporting avancés, revenue management/IA supervisée, fonctionnalités ZIPPLE avancées et capacités NAXA SECURITY étendues, support prioritaire à SLA publié.
+
+Les deux formules préservent les fonctions essentielles à l'activité et à la sécurité. Les quotas numériques, notamment chambres, utilisateurs, sites, appareils, caméras, stockage, rétention, flux et points de service, restent à chiffrer selon les coûts et capacités réels. Les frais uniques de mise en service/formation/migration et le matériel ne sont pas inclus dans le tarif mensuel proposé.
+
+**État [P] :** tarifs à arbitrer ; les tarifs historiques du cahier NAXA HOTEL du 31 octobre ne deviennent pas des prix actuels validés. Le traitement des chambres ajoutées/retirées pendant la période (prorata immédiat ou renouvellement suivant) reste ouvert, à l'image du point ouvert dans LOYABLE.
+
+### 7. Points ouverts et prochaines vérifications
+
+1. Arbitrage des tarifs 800/1 000 FCFA par chambre et minima 10 000/18 000 F.
+2. Confirmation de Premium multi-hôtels et du périmètre de quantité facturable à l'échelle du groupe.
+3. Règle d'effet des variations du nombre de chambres en cours de période.
+4. Quotas publiés et coût des capacités NAXA SECURITY/ZIPPLE.
+5. SLA et horaires du support standard/prioritaire ; SLA de gestion administrative des hôtels externes LOYABLE.
+6. Tarif annuel éventuel du forfait externe LOYABLE de 10 000 F/mois.
+7. Tests E2E des contrats NAXA HOTEL ↔ ZIPPLE ↔ LOYABLE, des QR révoqués, des commandes répétées, de la confirmation des réservations et de l'imputation au folio.
+
+### 8. Statut de réalisation
+
+Cette mise à jour est documentaire. Elle ne prouve pas que le portail QR, les contrats d'API, le catalogue de prestataires, les commandes ZIPPLE, les liaisons LOYABLE, les entitlements, NAXA SECURITY ou les écrans NAXA HOTEL sont implémentés, compilés, testés ou déployés. Les applications Android/Web NAXA HOTEL restent à auditer et à construire selon les preuves techniques du dépôt. Aucune migration Supabase, publication APK ou mise en production n'est autorisée par ce document.
