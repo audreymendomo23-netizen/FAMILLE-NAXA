@@ -266,3 +266,34 @@ Deno.test("N2 atomic sync gateway writes the server receipt in the business tran
       "N2 sync dispatcher missing allowlisted action " + action);
   }
 });
+
+
+Deno.test("N2 service, customer, CRM and support handlers are scoped and server-write-only", async () => {
+  const sql = await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  for (const fn of [
+    "ns_create_service","ns_update_service","ns_update_service_configuration",
+    "ns_create_customer","ns_create_customer_followup",
+    "ns_complete_customer_followup","ns_create_support_request"
+  ]) {
+    assert(new RegExp("create\\\\s+or\\\\s+replace\\\\s+function\\\\s+public\\\\."+fn+"\\\\s*\\\\(", "i").test(sql),
+      "Missing N2 handler " + fn);
+  }
+  assert(/p_expected_version\\s*<>\\s*v_service\\.revision/i.test(sql),
+    "Service catalogue edits must enforce optimistic version checks");
+  assert(/p_location_consent_at\\s+is\\s+null/i.test(sql),
+    "Customer GPS must require explicit location consent");
+  assert(/insert\\s+into\\s+public\\.ns_customer_followup_events/i.test(sql),
+    "Follow-up completion must preserve its append-only completion event");
+  assert(/revoke\\s+insert,\\s*update,\\s*delete\\s+on\\s+public\\.ns_services,\\s*public\\.ns_customers\\s+from\\s+public,\\s*anon,\\s*authenticated/i.test(sql),
+    "Service and customer writes must be restricted to server-side RPCs");
+  for (const table of ["ns_customer_followups","ns_customer_followup_events","ns_support_requests"]) {
+    assert(new RegExp("alter\\\\s+table\\\\s+public\\\\."+table+"\\\\s+enable\\\\s+row\\\\s+level\\\\s+security","i").test(sql),
+      table + " must enable RLS");
+    assert(new RegExp("create\\\\s+policy\\\\s+[^;]+\\\\s+on\\\\s+public\\\\."+table,"i").test(sql),
+      table + " must have a scoped read policy");
+  }
+  assert(/revoke\\s+all\\s+on\\s+function\\s+public\\.ns_create_service\\([^;]+\\)\\s+from\\s+public,\\s*anon/i.test(sql),
+    "Service RPC must revoke public/anon execution");
+  assert(/grant\\s+execute\\s+on\\s+function\\s+public\\.ns_create_service\\([^;]+\\)\\s+to\\s+authenticated,\\s*service_role/i.test(sql),
+    "Service RPC must explicitly grant authenticated/service_role execution");
+});
