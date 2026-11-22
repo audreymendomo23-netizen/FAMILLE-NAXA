@@ -2393,3 +2393,382 @@ L'addendum est considéré correctement spécifié lorsque :
 - les critères de recette du chapitre 43 sont couverts.
 
 **Fin de l'addendum CAMPUS237 V3.0.1.**
+
+
+
+---
+
+# 47. ADDENDUM V3.0.2 — BULLETIN VIVANT, ACADEMIC RADAR, ABONNEMENTS ET SERVICES INTELLIGENTS
+
+Le présent addendum est approuvé par le porteur du projet le 22 novembre 2026. Il fige les ajouts pédagogiques, familiaux, économiques et opérationnels ci-dessous. Il complète les chapitres 9, 10, 11, 16, 21, 22, 23, 27, 29, 32, 33, 34 et 35. En cas de conflit, ses règles tarifaires et fonctionnelles prévalent sur les formulations antérieures non encore arbitrées.
+
+## 47.1 Bulletin scolaire vivant — mise à jour au fil des soumissions
+
+🔒 Le bulletin se met à jour progressivement au fur et à mesure que les enseignants valident et transmettent les notes.
+
+Le fonctionnement distingue les états suivants :
+1. **Scan / saisie en cours :** notes non validées ; elles ne sont pas prises en compte comme résultats pédagogiques officiels.
+2. **Validée par le professeur :** la note a reçu le OK explicite de l'enseignant ; elle peut mettre à jour le bulletin de travail et les indicateurs internes.
+3. **Diffusée :** le professeur clique sur DIFFUSER pour la session d'évaluation ; les notes deviennent visibles aux parents concernés et alimentent les rangs provisoires parentaux.
+4. **Bulletin provisoire :** les moyennes, appréciations et indicateurs évoluent avec les évaluations diffusées.
+5. **Conseil de classe / contrôle :** les résultats sont examinés selon le circuit pédagogique de l'établissement.
+6. **Clôturé et publié :** la direction autorisée valide le bulletin officiel de la période.
+7. **Rectifié :** toute correction postérieure est ajoutée sous forme d'événement rectificatif et n'efface pas l'historique.
+
+Une note validée mais non diffusée peut alimenter les vues pédagogiques internes réservées aux personnels habilités, mais ne déclenche pas la publication parentale. Les notes non corrigées, non validées ou non diffusées ne sont pas considérées comme des résultats publiés.
+
+Les bulletins provisoires portent clairement la mention « provisoire » et la date/heure de mise à jour. Les notes manquantes, absences, dispenses, évaluations neutralisées et rattrapages ne sont jamais assimilés automatiquement à un zéro.
+
+Le calcul des moyennes utilise des règles versionnées : pondération, coefficients, arrondis, matières facultatives, absence, dispense, note neutralisée, rattrapage et changement de barème. Toute modification des règles recalcule les résultats avec trace et justification.
+
+## 47.2 ACADEMIC RADAR — rang de l'enfant avant le bulletin
+
+🔒 **Le parent peut interroger à tout moment le classement de son enfant avant la remise du bulletin.** Le rang affiché change au fur et à mesure que les enseignants diffusent de nouvelles évaluations.
+
+À chaque diffusion d'une évaluation :
+- le résultat validé rejoint le corpus de résultats publiés ;
+- le moteur recalcule moyennes, indicateurs et cohortes pertinentes ;
+- les rangs provisoires concernés sont actualisés ;
+- l'application parent reçoit un événement de mise à jour ;
+- le parent peut voir le nouveau rang sans attendre le bulletin de fin de période.
+
+La fiche de rang parentale affiche :
+- rang provisoire de l'enfant ;
+- matière et classe/niveau ;
+- taille de la cohorte de comparaison ;
+- période sélectionnée ;
+- nombre d'évaluations et matières prises en compte ;
+- taux de couverture des données publiées ;
+- percentile si pertinent ;
+- évolution du rang depuis la précédente actualisation ;
+- date et heure du calcul ;
+- avertissement de caractère provisoire et de dépendance aux notes publiées.
+
+Le système ne doit pas suggérer une précision supérieure à la couverture réelle. Si seulement une matière ou un petit nombre d'évaluations est disponible, le rang est marqué « partiel / précoce ». Il ne doit pas être présenté comme un verdict sur la valeur ou les capacités de l'enfant.
+
+### 47.2.1 Règles de comparabilité
+
+Le rang par matière est calculé dans une cohorte comparable : même établissement, même section, même niveau, même matière, même période et mêmes règles de notation, par défaut.
+
+Le rang par classe est calculé uniquement sur les élèves de la classe et selon les règles communes à la classe.
+
+Les comparaisons entre niveaux, séries, écoles ou groupes sont autorisées uniquement lorsque le programme, les barèmes et les évaluations sont comparables ou qu'une normalisation méthodologiquement documentée est disponible. Une moyenne brute de 6e et de 3e ne doit pas être utilisée comme si les deux niveaux étaient identiques.
+
+Les filtres nominatifs de la direction sont limités au périmètre de l'utilisateur. Les parents ne voient jamais les noms, photos ou notes détaillées des camarades. Les classements nominatifs publics d'enfants sont interdits. Les égalités de rang suivent une règle constante et documentée.
+
+### 47.2.2 Notifications
+
+Les nouvelles notes sont notifiées après diffusion par le professeur. Les changements de rang peuvent être regroupés pour éviter une notification à chaque recalcul, mais le rang consultable est actualisé immédiatement après synchronisation. Une notification ne révèle pas de notes sur un écran verrouillé.
+
+## 47.3 Licence unique établissement — modèle final
+
+🔒 Le modèle établissement est une **licence unique par élève actif**, avec tarif progressif marginal :
+- 60 FCFA par élève pour les 1 000 premiers ;
+- 50 FCFA par élève du 1 001e au 5 000e ;
+- 40 FCFA par élève à partir du 5 001e.
+
+Minimum de facturation : 15 000 FCFA par mois pour un établissement indépendant. Le minimum ne s'applique qu'une fois à un groupe scolaire sous contrat consolidé.
+
+La facturation court sur 12 mois. Tous les modules logiciels inclus dans le cahier sont compris, notamment administration, finance, RH, Teacher Space, SMART GRADING, bulletins, ACADEMIC RADAR, Family ACCESS, Community, Knowledge, School Finder, Opportunities et modules logiciels NAXA SECURITY.
+
+Aucun supplément de licence n'est facturé par enseignant, par personnel, par compte ou par module. Les coûts tiers spécifiques — équipement, GPS, caméra, matériel, installation, SIM/données, connectivité, intervention et stockage/calcul vidéo exceptionnel — sont séparés, affichés et contractuellement approuvés avant consommation.
+
+### 47.3.1 Calcul des tranches
+
+Les tranches sont marginales et progressives. Exemple à 2 500 élèves :
+- 1 000 × 60 = 60 000 FCFA ;
+- 1 500 × 50 = 75 000 FCFA ;
+- total mensuel = 135 000 FCFA.
+
+Exemple à 10 000 élèves :
+- 1 000 × 60 = 60 000 FCFA ;
+- 4 000 × 50 = 200 000 FCFA ;
+- 5 000 × 40 = 200 000 FCFA ;
+- total mensuel = 460 000 FCFA.
+
+Le minimum de 15 000 FCFA s'applique si le montant calculé est inférieur, à l'échelle de l'établissement indépendant ou du groupe consolidé.
+
+### 47.3.2 Multi-écoles
+
+Pour un groupe, le nombre d'élèves actifs des écoles de l'organisation est cumulé. Les tranches marginales s'appliquent à l'effectif cumulé. Une facture consolidée peut être produite avec ventilation analytique par école.
+
+Un élève ne peut être compté qu'une seule fois au même instant de facturation dans une même organisation. Les règles de mouvements d'effectif, double inscription temporaire, changement d'école et transfert doivent être appliquées et auditées.
+
+## 47.4 ACCESS gratuit et PREMIUM familial
+
+🔒 Un parent possède un compte familial unique pour suivre plusieurs enfants dans plusieurs établissements partenaires. ACCESS est gratuit ; PREMIUM est facultatif, tarifé selon le nombre d'enfants distincts gérés.
+
+### 47.4.1 ACCESS gratuit
+
+ACCESS comprend sans paiement :
+- sécurité, arrivée, sortie et retrait autorisé ;
+- alertes de présence et de changement important ;
+- suivi du bus lorsqu'il est disponible et que l'enfant est enregistré à bord ;
+- absences et changements de cours ;
+- programme du jour et statut du professeur/remplaçant confirmé ;
+- capsules de préparation publiées ;
+- notes diffusées, rang provisoire de l'enfant et bulletins ;
+- convocations, rendez-vous et communications officielles ;
+- consultation des frais et reçus ;
+- COMMUNITY des établissements fréquentés ;
+- livret scolaire unique et demande de transfert ;
+- ressources KNOWLEDGE libres ou autorisées ;
+- informations de cantine.
+
+Aucune fonction essentielle de sécurité, aucune alerte arrivée/sortie, aucun accès aux notes diffusées, au rang de son enfant ou au bulletin ne peut être bloqué par défaut derrière Premium.
+
+### 47.4.2 PREMIUM familial
+
+| Enfants distincts dans le compte | Mensuel (9 mois scolaires) | Annuel (7 mensualités) |
+|---:|---:|---:|
+| 1 | 600 FCFA | 4 200 FCFA |
+| 2 | 900 FCFA | 6 300 FCFA |
+| 3 | 1 150 FCFA | 8 050 FCFA |
+| 4 | 1 350 FCFA | 9 450 FCFA |
+| 5 | 1 550 FCFA | 10 850 FCFA |
+| 6 et plus | 1 550 + 200 FCFA par enfant au-delà du 5e | Mensuel × 7 |
+
+L'abonnement est attaché au compte familial et à ses enfants vérifiés, et non à un établissement. Deux enfants dans deux écoles partenaires constituent un seul abonnement familial de deux enfants. Le même enfant n'est pas recompté lors d'un changement d'école.
+
+Premium comprend assistant IA familial, résumés écrits et audio, analyses avancées, parcours de révision et exercices recommandés, calendrier familial consolidé, détection de conflits d'agenda, recommandations de ressources, historique comparatif avancé et préparation assistée de rendez-vous.
+
+L'abonnement n'étend jamais les droits de garde ni les droits d'accès. Le payeur n'acquiert pas automatiquement un droit légal sur tous les enfants ; les responsables doivent être vérifiés selon les règles relatives à la famille.
+
+## 47.5 LEARNING CONTINUITY — continuité pédagogique et rattrapage des cours
+
+🔒 Le système compare le cours prévu au cours réellement dispensé et suit chaque cours manqué jusqu'à sa récupération ou une décision documentée.
+
+Pour chaque séance, le registre conserve :
+- cours prévu, matière, classe, date et heure ;
+- enseignant initialement affecté ;
+- statut de présence de l'enseignant ;
+- remplacement éventuel ;
+- cours réellement dispensé ;
+- activité alternative encadrée ;
+- heure réelle de début et fin si confirmée ;
+- progression du programme ;
+- devoir ou travail associé ;
+- statut : dispensé, partiellement dispensé, remplacé, reporté, annulé ou à rattraper.
+
+Toute séance non dispensée crée une action de rattrapage avec matière, durée, responsable, date proposée et statut. Le censeur suit les heures à récupérer. Les heures ne sont considérées comme rattrapées qu'après confirmation du cours réellement tenu.
+
+Le parent voit le programme prévu, le professeur prévu, le statut d'absence confirmé, le remplaçant et l'activité réellement organisée. Le motif personnel d'une absence n'est pas communiqué.
+
+## 47.6 SKILL PASSPORT — passeport de compétences
+
+🔒 Le livret unique est complété par un passeport de compétences longitudinal. Il conserve :
+- compétences par domaine ;
+- niveau ou palier évalué ;
+- date et contexte ;
+- enseignant ou organisme validateur ;
+- preuve ou réalisation ;
+- établissement émetteur ;
+- statut : déclaré, observé, évalué, attesté ou certifié.
+
+Le système distingue les compétences évaluées dans un établissement, les réalisations déclarées par l'élève, les compétences attestées par un tiers et les certifications officielles. Le passeport ne remplace pas les diplômes, certificats ou titres réglementaires.
+
+Il suit l'élève au transfert, dans la limite des règles de portabilité, de consentement et de conservation définies pour le livret scolaire.
+
+## 47.7 LEARNING RECOVERY — remédiation pédagogique
+
+🔒 Le système analyse les résultats et évaluations de compétences afin d'identifier les notions à renforcer, sans produire de profil psychologique ou de score de dangerosité de l'élève.
+
+Il peut recommander :
+- chapitres à reprendre ;
+- exercices de remédiation ;
+- ressources KNOWLEDGE adaptées ;
+- séances de soutien ou tutorat ;
+- nouvelle évaluation courte ;
+- suivi de progression.
+
+Les recommandations sont présentées à l'enseignant ou au responsable pédagogique pour validation. Le parent reçoit les objectifs et ressources autorisés. L'IA ne décide jamais qu'un élève est incapable, ne le stigmatise pas et ne déclenche pas automatiquement de sanction ou de changement de filière.
+
+## 47.8 FAMILY COMMAND CENTER — tableau de bord familial multi-écoles
+
+🔒 Un écran familial consolide les informations des enfants rattachés :
+- emploi du temps et cours actuels ;
+- arrivées, sorties et bus ;
+- devoirs, évaluations et résultats ;
+- changements de cours ;
+- rendez-vous, réunions, convocations et visioconférences ;
+- événements et visites ;
+- cantine et menus ;
+- paiements et échéances ;
+- alertes et tâches familiales.
+
+Le moteur repère les conflits (deux réunions simultanées, rendez-vous de deux écoles, chevauchement d'activités ou récupération impossible) et propose des rappels ou solutions. Il ne modifie jamais un rendez-vous sans accord du parent.
+
+Chaque enfant conserve son contexte d'école et ses droits. Les agrégations ne fusionnent pas les données pédagogiques ou financières de différentes écoles dans une seule comptabilité.
+
+## 47.9 SAFE REUNIFICATION — continuité de prise en charge
+
+🔒 Le dispositif complète le scan du badge au portail :
+1. élève enregistré à l'arrivée ;
+2. élève affecté au trajet et au bus ;
+3. montée dans le véhicule confirmée par scan ou agent autorisé ;
+4. trajet suivi par GPS du véhicule si compatible ;
+5. arrivée à l'arrêt ou à l'école confirmée ;
+6. descente enregistrée ;
+7. remise à un responsable autorisé si la procédure l'exige.
+
+Le système détecte les ruptures ou incohérences d'événements et signale un état à vérifier. Le GPS localise le véhicule, pas le corps, le téléphone ou le badge de l'enfant. Les événements de prise en charge sont distincts de la géolocalisation.
+
+En cas d'urgence, le personnel autorisé peut activer un mode de rassemblement et recenser les élèves avec statut confirmé, absent ou inconnu. L'outil assiste les équipes ; il ne garantit pas la sécurité physique.
+
+## 47.10 GPS DES BUS SCOLAIRES — intégration NAXA SECURITY
+
+🔒 Les bus équipés d'un dispositif GPS compatible peuvent être connectés à CAMPUS237 via NAXA SECURITY. Les parents autorisés peuvent suivre sur une carte la position du bus pendant le trajet actif où leur enfant est enregistré comme étant à bord.
+
+Fonctions :
+- connexion du GPS ou fournisseur télématique compatible ;
+- association du véhicule, conducteur, accompagnateur, trajet et arrêts ;
+- affichage de la position du bus et de l'heure de dernière mise à jour ;
+- estimation d'arrivée au prochain arrêt et à l'école ou au point de retour ;
+- zones géographiques virtuelles autour des arrêts, de l'école et des points autorisés ;
+- notification de proximité ou d'arrivée selon le paramétrage ;
+- événement de montée et de descente confirmé par scan de badge ou agent ;
+- historique de trajet limité aux finalités définies ;
+- alertes de sortie de parcours, arrêt prolongé ou anomalie GPS selon règles validées ;
+- écran parent restreint au bus et trajet de son enfant.
+
+La carte montre la position du véhicule, jamais une position GPS individuelle de l'enfant. Le parent ne suit le bus en temps réel que si son enfant est inscrit sur ce trajet et, pour le suivi pendant le trajet, enregistré comme monté. Les positions en dehors d'un trajet actif ne sont pas diffusées aux parents.
+
+L'accès parent est fermé à la fin du trajet ou après le débarquement confirmé, sauf affichage d'information d'arrivée nécessaire. Les parents ne voient ni l'historique d'autres enfants ni les trajets privés du véhicule.
+
+Si le réseau ou le GPS tombe, la carte indique clairement « dernière position connue », la date/heure et l'ancienneté. Le système ne prétend pas être en temps réel sur une position périmée.
+
+La connexion nécessite compatibilité du GPS, autorisation de la flotte, information des familles et du personnel, base juridique, contrat du fournisseur, minimisation et durées de conservation. Les SIM, données et équipements tiers peuvent être facturés séparément s'ils ne sont pas fournis par l'établissement.
+
+## 47.11 CANTINE — menu publié la veille dans COMMUNITY
+
+🔒 Le menu de la cantine du lendemain doit être diffusé la veille dans le forum / fil officiel COMMUNITY de l'établissement afin que le parent sache ce que son enfant mangera le jour suivant.
+
+Le responsable cantine prépare et valide le menu daté. Le système publie automatiquement ou programme la publication la veille, à l'heure configurée par l'établissement. Le post est identifié comme communication officielle et épinglé ou facilement accessible.
+
+Le menu présente, selon les données disponibles :
+- date du repas ;
+- petit-déjeuner, déjeuner, goûter ou dîner selon service ;
+- plats et accompagnements ;
+- boissons et collations ;
+- options ou substitutions ;
+- allergènes connus ;
+- éventuelles ruptures ou changements ;
+- mention provisoire si le menu n'a pas été validé.
+
+Les parents des élèves concernés reçoivent une notification dans CAMPUS237 FAMILY. Toute modification de dernière minute génère une nouvelle version et une notification de mise à jour.
+
+Les informations individuelles sur allergies, diagnostics ou régimes médicaux ne sont jamais publiées dans le forum général. Les alertes individuelles liées aux ingrédients sont envoyées uniquement aux tuteurs autorisés et au personnel de cantine habilité, sur la base des informations nécessaires.
+
+## 47.12 SCHOOL TRANSPARENCY — projets et reddition de comptes
+
+🔒 L'établissement et l'APE peuvent publier un tableau de transparence sur les projets scolaires, travaux, activités, objectifs, contributions associatives, dépenses agrégées autorisées, réalisations et états d'avancement.
+
+Chaque projet présente intitulé, objectif, responsable, calendrier, budget prévisionnel ou enveloppe autorisée, ressources ou contributions reçues, avancement, preuves de réalisation et compte rendu final.
+
+Les informations publiées sont approuvées par les responsables habilités. Les salaires individuels, coordonnées bancaires, informations familiales et dépenses confidentielles ne sont pas exposés. Les contributions APE restent séparées des paiements de scolarité et des revenus de licence.
+
+## 47.13 SCHOOL INTELLIGENCE — assistant de pilotage décisionnel
+
+🔒 Le promoteur et les directions peuvent interroger le système en langage naturel. Exemples :
+- « Quel établissement a la meilleure moyenne de mathématiques en 3e ce trimestre ? »
+- « Quelles classes ont le plus de cours non rattrapés ? »
+- « Quels enseignants n'ont pas encore diffusé les notes attendues ? »
+- « Quelle matière progresse le plus ? »
+- « Quel est le taux d'arrivée à l'heure par école ? »
+- « Quels incidents restent sans responsable ou sans clôture ? »
+
+Chaque réponse comprend la période, le périmètre, les filtres, les données sources, l'heure de calcul et la définition de l'indicateur. L'assistant respecte les permissions, n'invente pas de chiffres et peut répondre qu'il manque des données. Les données personnelles sont minimisées dans les réponses transversales.
+
+## 47.14 Modèle de données complémentaire
+
+Les entités conceptuelles à intégrer au dictionnaire de données :
+- live_report_snapshots, report_card_states, published_assessment_coverage ;
+- academic_rankings, ranking_snapshots, ranking_cohort_definitions, ranking_publications, ranking_change_events ;
+- learning_competencies, skill_evidence, student_competency_records, competency_validations ;
+- learning_gap_indicators, remediation_recommendations, remediation_assignments, remediation_assessments ;
+- family_calendar_events, family_schedule_conflicts, family_digest_snapshots ;
+- lesson_recovery_tasks, lesson_recovery_events, planned_vs_delivered_lessons ;
+- vehicle_gps_devices, vehicle_gps_positions, bus_trip_sessions, bus_geofences, bus_eta_snapshots ;
+- student_boarding_events, student_alighting_events, safe_reunification_events ;
+- canteen_menu_versions, canteen_menu_publications, canteen_menu_changes ;
+- school_transparency_projects, school_transparency_updates, school_transparency_documents ;
+- school_intelligence_queries, school_intelligence_results, intelligence_data_sources ;
+- school_subscription_snapshots, active_student_counts, family_premium_subscriptions, family_subscription_children, subscription_billing_events.
+
+Les noms sont conceptuels, pas une migration SQL déjà appliquée.
+
+## 47.15 Critères de recette V3.0.2
+
+### Bulletin vivant et ACADEMIC RADAR
+1. Après validation, les notes alimentent le calcul pédagogique selon leurs statuts.
+2. Après DIFFUSER, le rang provisoire est recalculé sans attendre le bulletin officiel.
+3. Le parent peut consulter le rang de son enfant avant la remise du bulletin.
+4. L'arrivée d'une nouvelle note diffusée peut faire évoluer le rang et la tendance.
+5. Le parent ne peut jamais afficher les notes ou noms de ses camarades.
+6. Les rangs affichent période, périmètre, couverture, date de calcul et statut provisoire.
+7. Une comparaison non comparable entre niveaux est bloquée ou clairement normalisée.
+8. Les ex æquo suivent une règle documentée.
+9. Un bulletin officiel demeure distinct du rang provisoire.
+
+### Licence établissement et PREMIUM
+10. La facture établissement applique les tranches marginales 60/50/40.
+11. Le minimum de 15 000 FCFA est appliqué une seule fois à une école indépendante ou un groupe consolidé.
+12. Les modules et comptes du personnel ne génèrent aucun supplément de licence par siège ou module.
+13. Le calcul de groupe cumule les élèves actifs et ne compte pas deux fois le même élève dans l'organisation.
+14. Deux enfants dans deux écoles produisent un seul Premium familial de deux enfants.
+15. Les paliers 1 à 5 enfants et la formule 6+ donnent les montants exacts du chapitre 23.3.
+16. Le prix annuel correspond exactement à sept mensualités.
+17. ACCESS donne accès aux fonctions essentielles sans paiement Premium.
+18. Le statut de payeur n'accorde pas de droits parentaux supplémentaires.
+
+### Learning Continuity et Family Command Center
+19. Toute séance non dispensée crée une tâche de rattrapage.
+20. La tâche n'est clôturée qu'après cours réalisé ou décision documentée.
+21. Le parent voit cours prévu, cours réel, remplacement confirmé et heure de mise à jour.
+22. Le calendrier familial regroupe les enfants de plusieurs écoles.
+23. Les conflits sont détectés sans déplacer automatiquement les rendez-vous.
+
+### GPS bus et Safe Reunification
+24. Un parent ne voit que le bus affecté à son enfant et les trajets autorisés.
+25. Le suivi en cours de route s'active après l'enregistrement de la montée.
+26. Le parent voit une position fraîche ou un horodatage de dernière position, jamais une fausse position temps réel.
+27. Le GPS est celui du véhicule, pas celui de l'enfant.
+28. La position parentale cesse d'être accessible à la fin du trajet selon la politique.
+29. Les montées et descentes sont horodatées et rattachées au trajet.
+30. Les alertes de zone et retards sont testées avec perte de réseau et GPS.
+31. L'absence de réseau affiche clairement l'état dégradé.
+
+### Menu de cantine
+32. Le menu du lendemain est publié la veille sur le fil officiel COMMUNITY.
+33. Les parents concernés reçoivent la notification.
+34. Une modification du menu crée une nouvelle version et une alerte.
+35. Les données médicales individuelles ne sont jamais publiées dans le forum.
+
+### Intelligence et transparence
+36. Learning Recovery propose une remédiation sans diagnostic ni décision automatique.
+37. Skill Passport conserve la provenance et le statut de chaque compétence.
+38. School Transparency n'expose que les indicateurs et pièces autorisés.
+39. School Intelligence cite le périmètre, les filtres, les sources et l'heure de calcul.
+40. Les réponses de l'assistant ne dépassent jamais les droits de l'utilisateur.
+
+## 47.16 Arbitrages résiduels après gel
+
+Les arbitrages A-001, A-003 et A-004 sont clôturés par les décisions V3.0.2.
+
+Restent ouverts :
+- A-002 : instantané des effectifs, mouvements, date et prorata ;
+- A-005 : maintien ou adaptation du partage 80/20 du Premium vers le fonds de l'école après introduction de l'abonnement école ;
+- A-006 : ventilation éventuelle d'un fonds entre plusieurs écoles ;
+- A-007 : confirmation de la période d'essai Premium de deux semaines ;
+- A-008 : taux/commissions d'affiliation ;
+- A-009 : tarifs Opportunities ;
+- A-012 à A-030 : intégrations, conformité, fournisseurs, coûts et paramètres listés au chapitre 34 ;
+- A-031 : fournisseurs GPS compatibles, fréquence de position, précision, coûts SIM/data et durées de conservation ;
+- A-032 : heure exacte de publication du menu la veille, définie par établissement ;
+- A-033 : méthode et seuils de comparabilité des classements inter-établissements ;
+- A-034 : calendrier, formule et règles de normalisation des classements ;
+- A-035 : limites d'usage, quotas et coûts des services IA à forte consommation.
+
+Ces arbitrages ne remettent pas en cause les décisions métier gelées ; ils précisent des paramètres d'exécution ou les gates de conformité.
+
+**Fin de l'addendum CAMPUS237 V3.0.2.**
