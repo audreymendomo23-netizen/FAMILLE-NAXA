@@ -1190,27 +1190,39 @@ Exports PDF et Excel mis en forme. Les filtres favoris peuvent être enregistré
 
 # 23. MODÈLE ÉCONOMIQUE ET TARIFICATION
 
-## 23.1 Établissements
+## 23.1 Abonnement unique établissement — tarification dégressive par élève actif
 
-La V2.0 prévoyait la gratuité de l'ERP pour les établissements. Cette règle est remplacée dans la présente baseline par l'orientation tarifaire école communiquée ultérieurement : abonnement mensuel selon effectifs.
+🔒 Décision commerciale gelée V3.0.2 : un seul abonnement logiciel établissement, calculé par élève actif et par mois. L'école ne paie pas par professeur, compte, utilisateur ou module. Les comptes du personnel autorisés et tous les modules logiciels CAMPUS237 sont inclus.
 
-Tarifs mensuels communiqués :
-
-| Effectif communiqué | Prix mensuel communiqué |
+| Tranche marginale d'élèves actifs | Tarif par élève dans la tranche |
 |---|---:|
-| 500 à 1 000 élèves | 15 000 FCFA |
-| 1 001 à 5 000 élèves | 20 000 FCFA |
-| 5 001 à 10 000 élèves | 30 000 FCFA |
-| 30 000 à 50 000 élèves | 40 000 FCFA |
-| À partir de 40 001 élèves | Sur négociation |
+| Du 1er au 1 000e | 60 FCFA / élève / mois |
+| Du 1 001e au 5 000e | 50 FCFA / élève / mois |
+| À partir du 5 001e | 40 FCFA / élève / mois |
 
-⚠️ **La grille est conservée telle qu'elle a été communiquée, mais elle n'est pas encore calculable sans ambiguïté.** Les tranches 30 000–50 000 et 40 001+ se chevauchent. Les effectifs inférieurs à 500 et la plage 10 001–29 999 ne sont pas tarifés. Aucun tarif manquant n'est inventé. La facturation automatisée ne peut démarrer qu'après validation d'une grille sans chevauchement et sans intervalle manquant.
+Les tranches sont marginales : chaque taux ne s'applique qu'aux élèves compris dans sa tranche, et non à la totalité de l'effectif. Minimum de facturation : 15 000 FCFA par mois pour une école indépendante. Pour un groupe sous contrat consolidé, le minimum s'applique une seule fois au groupe.
+
+| Élèves actifs | Calcul | Mensuel |
+|---:|---|---:|
+| 200 | minimum contractuel | 15 000 FCFA |
+| 500 | 500 × 60 | 30 000 FCFA |
+| 800 | 800 × 60 | 48 000 FCFA |
+| 1 000 | 1 000 × 60 | 60 000 FCFA |
+| 2 500 | 1 000 × 60 + 1 500 × 50 | 135 000 FCFA |
+| 5 000 | 1 000 × 60 + 4 000 × 50 | 260 000 FCFA |
+| 10 000 | 1 000 × 60 + 4 000 × 50 + 5 000 × 40 | 460 000 FCFA |
+
+La licence inclut l'ensemble des modules logiciels : administration, finance, RH, Teacher Space, SMART GRADING, bulletins, Academic Radar, Family ACCESS, Community, Knowledge, School Finder, Opportunities et logiciels NAXA SECURITY. Aucun supplément par enseignant, compte ou module n'est appliqué.
+
+Matériel, caméras, GPS, installation, SIM/données, connectivité, intervention physique et capacité exceptionnelle de stockage/calcul vidéo peuvent faire l'objet d'un contrat tiers distinct, transparent et accepté. Cela ne crée pas de frais supplémentaires par utilisateur ou module logiciel.
+
+La licence est facturée sur 12 mois pour couvrir hébergement, sauvegardes, maintenance, support et conservation. Le comptage des élèves actifs et les mouvements d'effectif sont audités et définis uniformément.
 
 ## 23.2 Groupes scolaires
 
 🔒 Le prix multi-sites est déterminé selon le total d'élèves inscrits dans l'ensemble des établissements du promoteur, et non par application indépendante de la tranche à chaque école. L'architecture multi-sites est incluse dans le principe de l'offre.
 
-Le comptage des élèves actifs, la date de photographie de l'effectif, les transferts, les inscriptions en cours d'année et les changements de tranche doivent être précisés.
+Pour un groupe, les effectifs actifs de toutes les écoles rattachées sont additionnés, puis les tranches marginales 60/50/40 sont appliquées au total. Une facture consolidée est émise et ventilée analytiquement par école. Le minimum de 15 000 FCFA s'applique une seule fois au groupe. Le comptage, les mouvements en cours d'année, les transferts et les doubles inscriptions temporaires sont tracés ; un élève est compté une seule fois à l'instant de facturation dans une même organisation.
 
 ## 23.3 Parents
 
