@@ -12,6 +12,41 @@ alter table public.ns_pressing_orders
   add column if not exists customer_phone_snapshot text not null default '',
   add column if not exists items_summary text not null default '',
   add column if not exists revision integer not null default 1 check (revision > 0);
+
+alter table public.ns_payments
+  add column if not exists cash_session_id uuid;
+
+do $naxa$
+begin
+  if not exists (
+    select 1 from pg_catalog.pg_constraint
+    where conname='ns_payments_cash_session_scope_fk'
+      and conrelid='public.ns_payments'::regclass
+  ) then
+    alter table public.ns_payments
+      add constraint ns_payments_cash_session_scope_fk
+      foreign key (cash_session_id,site_id,org_id)
+      references public.ns_cash_sessions(id,site_id,org_id) on delete restrict;
+  end if;
+  if not exists (
+    select 1 from pg_catalog.pg_constraint
+    where conname='ns_payments_pressing_cash_session_method_check'
+      and conrelid='public.ns_payments'::regclass
+  ) then
+    alter table public.ns_payments
+      add constraint ns_payments_pressing_cash_session_method_check
+      check (
+        pressing_order_id is null
+        or (payment_method='cash' and cash_session_id is not null)
+        or (payment_method<>'cash' and cash_session_id is null)
+      ) not valid;
+  end if;
+end;
+$naxa$;
+create index if not exists ns_payments_pressing_cash_session_idx
+  on public.ns_payments(org_id,site_id,cash_session_id,status)
+  where pressing_order_id is not null and payment_method='cash';
+
 create unique index if not exists ns_pressing_orders_id_site_org_idx
   on public.ns_pressing_orders(id,site_id,org_id);
 create unique index if not exists ns_pressing_orders_org_ticket_uidx
@@ -1674,29 +1709,68 @@ end;
 $naxa$;
 
 
+drop function if exists public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz);
+
 create or replace function public.ns_create_pressing_order(
   p_order_id uuid,p_org_id uuid,p_site_id uuid,p_workstation_id uuid,
   p_ticket_number text,p_customer_name text,p_customer_phone text,
-  p_items_summary text,p_total_xaf bigint,p_deposit_xaf bigint,p_promised_at timestamptz
+  p_items_summary text,p_total_xaf bigint,p_deposit_xaf bigint,
+  p_deposit_payment_method text,p_cash_session_id uuid,
+  p_promised_at timestamptz,p_event_id uuid
 ) returns jsonb
 language plpgsql
 security definer
 set search_path = ''
 as $naxa$
-declare v_member uuid; v_order public.ns_pressing_orders%rowtype;
+declare
+  v_member uuid;
+  v_order public.ns_pressing_orders%rowtype;
+  v_cash_session public.ns_cash_sessions%rowtype;
+  v_payment_id uuid;
+  v_payment_status text:='none';
+  v_accounting_entry_id uuid;
+  v_method text;
 begin
   v_member:=public.ns_current_member_id(p_org_id);
   if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
     raise exception 'NAXA_PRESSING_ORDER_FORBIDDEN';
   end if;
-  if p_order_id is null or length(trim(coalesce(p_ticket_number,''))) not between 3 and 80
+  v_method:=nullif(lower(trim(coalesce(p_deposit_payment_method,''))),'');
+  if p_order_id is null or p_event_id is null
+     or length(trim(coalesce(p_ticket_number,''))) not between 3 and 80
      or length(trim(coalesce(p_customer_name,''))) not between 2 and 160
      or length(coalesce(p_customer_phone,''))>32
      or length(trim(coalesce(p_items_summary,''))) not between 2 and 2000
      or p_total_xaf is null or p_total_xaf<=0
-     or p_deposit_xaf is null or p_deposit_xaf<0 or p_deposit_xaf>p_total_xaf then
+     or p_deposit_xaf is null or p_deposit_xaf<0 or p_deposit_xaf>p_total_xaf
+     or p_promised_at is null then
     raise exception 'NAXA_PRESSING_ORDER_INVALID';
   end if;
+
+  if p_deposit_xaf=0 then
+    if v_method is not null or p_cash_session_id is not null then
+      raise exception 'NAXA_PRESSING_DEPOSIT_TERMS_INVALID';
+    end if;
+  else
+    if v_method not in ('cash','mobile_money','other') then
+      raise exception 'NAXA_PRESSING_DEPOSIT_METHOD_REQUIRED';
+    end if;
+    if v_method='cash' then
+      if p_cash_session_id is null then
+        raise exception 'NAXA_PRESSING_DEPOSIT_CASH_SESSION_REQUIRED';
+      end if;
+      select * into v_cash_session
+      from public.ns_cash_sessions
+      where id=p_cash_session_id and org_id=p_org_id and site_id=p_site_id
+      for update;
+      if not found or v_cash_session.status<>'open' then
+        raise exception 'NAXA_PRESSING_DEPOSIT_CASH_SESSION_NOT_OPEN';
+      end if;
+    elsif p_cash_session_id is not null then
+      raise exception 'NAXA_PRESSING_NONCASH_SESSION_FORBIDDEN';
+    end if;
+  end if;
+
   if p_workstation_id is not null and (
     not exists(select 1 from public.ns_workstations w
       where w.id=p_workstation_id and w.org_id=p_org_id
@@ -1720,8 +1794,41 @@ begin
     gen_random_uuid(),p_org_id,p_site_id,p_order_id,null,'received',
     'Ticket créé',v_member,now()
   );
-  return jsonb_build_object('order_id',v_order.id,'ticket_number',v_order.ticket_number,
-    'status',v_order.status,'revision',v_order.revision,'created',true);
+
+  if p_deposit_xaf>0 then
+    v_payment_id:=gen_random_uuid();
+    v_payment_status:=case when v_method='cash' then 'confirmed' else 'pending' end;
+    insert into public.ns_payments(
+      id,org_id,site_id,sale_id,pressing_order_id,cash_session_id,
+      payment_method,provider_reference,amount_xaf,status,confirmation_source,
+      confirmed_by,confirmed_at,idempotency_key,created_at
+    ) values (
+      v_payment_id,p_org_id,p_site_id,null,p_order_id,
+      case when v_method='cash' then p_cash_session_id else null end,
+      v_method,null,p_deposit_xaf,v_payment_status,
+      case when v_method='cash' then 'cash_register' else null end,
+      case when v_method='cash' then v_member else null end,
+      case when v_method='cash' then now() else null end,
+      p_event_id,now()
+    );
+
+    if v_method='cash' then
+      v_accounting_entry_id:=public.ns_post_accounting_entry(
+        p_org_id,p_site_id,'pressing_payment',v_payment_id,'cash_deposit_received',
+        'CASH_REGISTER','CUSTOMER_ADVANCES',p_deposit_xaf,
+        'Acompte espèces ticket pressing '||trim(p_ticket_number)
+      );
+    end if;
+  end if;
+
+  return jsonb_build_object(
+    'order_id',v_order.id,'ticket_number',v_order.ticket_number,
+    'status',v_order.status,'revision',v_order.revision,'created',true,
+    'deposit_xaf',v_order.deposit_xaf,'deposit_payment_id',v_payment_id,
+    'deposit_payment_method',v_method,'deposit_payment_status',v_payment_status,
+    'cash_session_id',case when v_method='cash' then p_cash_session_id else null end,
+    'accounting_entry_id',v_accounting_entry_id
+  );
 end;
 $naxa$;
 
@@ -1975,8 +2082,8 @@ revoke insert,update,delete on public.ns_pressing_status_events,public.ns_appoin
 grant select on public.ns_pressing_orders,public.ns_appointments to authenticated;
 grant all on public.ns_pressing_orders,public.ns_appointments to service_role;
 
-revoke all on function public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz) from public, anon, authenticated;
-grant execute on function public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz) to service_role;
+revoke all on function public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,text,uuid,timestamptz,uuid) from public, anon, authenticated;
+grant execute on function public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,text,uuid,timestamptz,uuid) to service_role;
 revoke all on function public.ns_transition_pressing_order(uuid,uuid,uuid,text,text,text,integer,timestamptz) from public, anon, authenticated;
 grant execute on function public.ns_transition_pressing_order(uuid,uuid,uuid,text,text,text,integer,timestamptz) to service_role;
 revoke all on function public.ns_create_appointment(uuid,uuid,uuid,uuid,text,text,uuid,timestamptz,timestamptz,bigint,text) from public, anon, authenticated;
@@ -2095,7 +2202,8 @@ set search_path = ''
 as $naxa$
 declare
   v_member uuid; v_session public.ns_cash_sessions%rowtype;
-  v_cash_in bigint; v_expenses bigint; v_supplier_out bigint;
+  v_cash_in bigint; v_pressing_cash_in bigint;
+  v_expenses bigint; v_supplier_out bigint;
   v_expected bigint; v_variance bigint; v_closed_at timestamptz;
 begin
   v_member:=public.ns_current_member_id(p_org_id);
@@ -2116,6 +2224,12 @@ begin
   where s.cash_session_id=p_cash_session_id and p.org_id=p_org_id and p.site_id=p_site_id
     and p.payment_method='cash' and p.status='confirmed';
 
+  select coalesce(sum(p.amount_xaf),0)::bigint into v_pressing_cash_in
+  from public.ns_payments p
+  where p.cash_session_id=p_cash_session_id and p.org_id=p_org_id and p.site_id=p_site_id
+    and p.pressing_order_id is not null
+    and p.payment_method='cash' and p.status='confirmed';
+
   select coalesce(sum(e.amount_xaf),0)::bigint into v_expenses
   from public.ns_expenses e
   where e.cash_session_id=p_cash_session_id and e.org_id=p_org_id and e.site_id=p_site_id;
@@ -2125,7 +2239,7 @@ begin
   where sp.cash_session_id=p_cash_session_id and sp.org_id=p_org_id and sp.site_id=p_site_id
     and sp.payment_method='cash';
 
-  v_expected:=v_session.opening_float_xaf+v_cash_in-v_expenses-v_supplier_out;
+  v_expected:=v_session.opening_float_xaf+v_cash_in+v_pressing_cash_in-v_expenses-v_supplier_out;
   if v_expected<0 then raise exception 'NAXA_CASH_SESSION_EXPECTED_BALANCE_NEGATIVE'; end if;
   v_variance:=p_counted_close_xaf-v_expected;
   if v_variance<>0 and length(trim(coalesce(p_variance_reason,'')))<3 then
@@ -2140,6 +2254,8 @@ begin
     returning * into v_session;
   return jsonb_build_object(
     'cash_session_id',v_session.id,'status',v_session.status,
+    'sales_cash_xaf',v_cash_in,'pressing_deposits_cash_xaf',v_pressing_cash_in,
+    'expenses_xaf',v_expenses,'supplier_cash_out_xaf',v_supplier_out,
     'expected_close_xaf',v_expected,'counted_close_xaf',p_counted_close_xaf,
     'variance_xaf',v_variance,'closed_at',v_session.closed_at
   );
@@ -3441,7 +3557,9 @@ begin
         p_payload->>'ticket_number',p_payload->>'customer_name',
         coalesce(p_payload->>'customer_phone',''),p_payload->>'items_summary',
         (p_payload->>'total_xaf')::bigint,(p_payload->>'deposit_xaf')::bigint,
-        nullif(p_payload->>'promised_at','')::timestamptz
+        nullif(p_payload->>'deposit_payment_method',''),
+        nullif(p_payload->>'cash_session_id','')::uuid,
+        nullif(p_payload->>'promised_at','')::timestamptz,p_event_id
       );
     when 'pressing_order.status_changed:in_progress' then
       v_result := public.ns_transition_pressing_order(
