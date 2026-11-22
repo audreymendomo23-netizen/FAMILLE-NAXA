@@ -356,7 +356,7 @@ object SupplierSyncCoordinator {
         return false
     }
 
-    private fun hasRequiredSnapshot(event: LocalOutboxEvent, payload: JSONObject): Boolean {
+    internal fun hasRequiredSnapshot(event: LocalOutboxEvent, payload: JSONObject): Boolean {
         val action = event.actionCode
         val site = payload.optString("site_id").takeUnless { it.isBlank() || it == "null" }
         val common = payload.optString("org_id").isNotBlank() &&
