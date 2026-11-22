@@ -1,11 +1,11 @@
 # NAXA SERVICES — document de continuité dédié
 
-**Version :** 1.1  
+**Version :** 1.2  
 **Date de mise à jour :** 22 novembre 2026  
 **Dépôt :** `audreymendomo23-netizen/FAMILLE-NAXA`  
 **Branche de travail :** `work/naxa-services-completion-20261120`  
-**HEAD applicatif du dernier gate technique :** `ada9bc2fe4986925a6afcc07238c0bbdc11f2073`  
-**Statut global :** **VERT CI (12/12) et VERT RLS LABORATOIRE — NON VERT OPÉRATIONNEL / PRODUCTION**
+**HEAD applicatif du dernier gate technique :** `c9883a31fbabe32a294eb42515841080847b3508`  
+**Statut global :** **CI TECHNIQUE VERT 12/12 ; N1 VERT 55/55 ; N2 VERT 44/44 ; N3 PARTIEL / NON VERT MULTI-APPAREILS ; NON VERT OPÉRATIONNEL / PRODUCTION**
 
 Ce document est le point de reprise spécifique de NAXA SERVICES. Il complète `docs/CONTINUITE.md` et le registre `NAXA_SERVICES_REMAINING_RED_GATES_2026-11-21.md`. Il ne remplace pas les cahiers des charges ni les décisions métier.
 
@@ -224,7 +224,7 @@ Un niveau inférieur ne doit jamais être présenté comme un niveau supérieur.
 |---:|---|---|---|
 | 1 | Inventaire et qualification des événements métier | **VERT N1 — 55/55** | Registre canonique `NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md` + JSON détaillé : 44 mutations à répliquer avec contrat v1 (dont 11 déjà reconnues par le coordinateur borné et 33 contrats destinés aux gates de réalisation suivants), 6 enfants composites, 1 projection comptable dérivée, 1 miroir de confirmation serveur, 1 miroir d'API directe et 2 helpers locaux non appelés. Chaque ligne contient source exacte (méthode/agrégat/action), codes d'action possibles, source de vérité, champs de snapshot, scopes org/site/poste, acteur, appareil, dépendances, handler cible, reçu, idempotence, conflit, retry et tests. Le script `scripts/naxa-services/verify-outbox-registry.mjs` compare la bijection exacte des 55 appels, vérifie les 11 actions réellement déclarées par `SupplierSyncCoordinator.kt` et contrôle les chemins API directs/legacy. Le workflow CI exécute ce contrôle. Le N1 est fermé ; N2/N3 restent des gates distincts et ne sont pas déclarés verts par cette qualification. |
 | 2 | Handlers et mutations serveur | **PARTIEL — contrats/RPC en laboratoire, pas de backend hébergé dédié** | Chaque action issue de la matrice possède un handler typé et un RPC transactionnel ; Auth vérifie organisation, site, poste, rôle et propriété de l'agrégat. La mutation métier et son reçu idempotent sont persistés atomiquement. Un double envoi identique renvoie le même résultat ; un même ID avec payload divergent est rejeté ; une dépendance manquante ou un scope invalide est bloqué ; un crash/retry ne crée ni doublon ni perte. Tous les scénarios sont testés positivement et négativement sur PostgreSQL jetable et, après autorisation, sur l'environnement dédié. Le gate est vert lorsque toutes les actions du gate 1 ont une implémentation serveur prouvée, et non lorsque quelques RPC compilent. |
-| 3 | Synchronisation Android globale | **ROUGE — cycle fournisseur/stock étendu, synchronisation universelle non livrée** | Chaque mutation locale qui doit être partagée rejoint une outbox durable avec snapshot versionné, identifiants stables et dépendances ; le coordinateur prend en charge toutes les actions approuvées, automatiquement et manuellement, avec backoff, reprise, mapping des IDs distants et résolution de conflits. Les reçus persistants seuls font passer un événement à synchronisé. Les scénarios multi-appareils, hors ligne prolongé, redémarrage, double envoi, ordre de dépendances, changement de site et rejet serveur passent. Au HEAD courant, `SupplierSyncCoordinator` n'est toujours que manuel/opt-in ; il accepte 11 codes `supplier.*`, `inventory_item.*`, `inventory_movement.*` et `purchase.*`, et bloque encore les achats sans mapping article ainsi que les règlements espèces sans mapping de session de caisse. Les autres domaines ne sont pas couverts par un coordinateur global. |
+| 3 | Synchronisation Android globale | **PARTIEL — moteur d’envoi Android et passerelle serveur présents ; réplication bidirectionnelle multi-appareils non démontrée** | Le code Android porte maintenant 92 codes d’action distincts dans `SupplierSyncCoordinator`, valide les snapshots/scopes et exige un reçu serveur cohérent avant de marquer une outbox `synced`. `NaxaServicesSyncWorker` et WorkManager assurent une tentative périodique connectée avec retry ; l’activation reste conditionnée à `NS_ENABLE_SUPPLIER_SYNC=true`, à une configuration Famille dédiée différente du projet pharmacie et au choix « Rester connecté ». Le serveur `ns_apply_sync_event` applique les mutations, vérifie l’appareil/session, l’idempotence et la séquence par appareil. En revanche, aucun endpoint/flux de pull n’est exposé à l’application et aucun traitement des mutations distantes pour mettre à jour les projections Room n’est démontré. Les tests présents couvrent snapshots, retry, migration et ordre local ; ils ne prouvent pas une réplication A↔B. **N3 reste non vert** tant que la récupération incrémentale, l’application idempotente dans Room et les tests bout-en-bout sur deux appareils ne sont pas passés. |
 | 4 | Web/PWA et parité métier | **PARTIEL — Auth/build et création d'article stock reliée ; autres parcours incomplets** | Tous les modules Web annoncés sont raccordés aux mêmes contrats métier sécurisés que l'Android, avec file IndexedDB, persistance, reçus, retries et conflits ; les données restent visibles après rechargement et concordent entre Web, Android et serveur. Tests online/offline, reconnexion, multi-onglet, double clic, crash, changement de session et scopes passent. Au HEAD courant, la création d'article de stock authentifiée utilise la file offline et l'action serveur `save_inventory_item` avec vérification du reçu ; ce chemin précis ne vaut pas parité ERP. Les autres formulaires qui passent encore par `addLocalEntry()` restent des brouillons locaux et doivent être connectés ou explicitement présentés comme tels. |
 | 5 | Finance, comptabilité, commissions, fidélité et récompenses | **PARTIEL — moteurs/tests présents ; automatisations et visas non achevés** | Une vente/prestation ne produit un revenu qu'après confirmation de paiement ; les commissions se calculent automatiquement à partir d'une prestation achevée, payée et d'un barème daté approuvé ; les partages, plafonds, annulations et extournes sont audités. Les programmes de fidélité restent les quatre programmes indépendants déjà prévus, configurables par activité ; leur fermeture exige le déclenchement depuis les événements métier réels, un ledger idempotent et la synchronisation, sans inventer de seuils ou barèmes non validés. Le parrainage PME conserve la règle décidée : récompense par vagues de cinq PME ayant chacune terminé leur première souscription payante (parrain mensuel : un mois/cycle offert ; parrain annuel : un mois supplémentaire d'Accès à la fin de la période annuelle ; vagues 5, 10, 15… répétables) ; le webhook de paiement doit déclencher le crédit réel d'entitlement, pas seulement un statut `pending_entitlement`. Le parrainage client doit relier son contrat API au ledger/récompense réel. Le catalogue tarifaire Famille et sa règle annuelle 10 mois payés pour 12 mois de service, à date d'effet du 1er mai 2027, sont testés comme politiques ; ils ne prouvent pas une collecte réelle. SYSCOHADA, fiscalité camerounaise, paie et CNPS requièrent plan de comptes complet, paramètres datés et visa de professionnels compétents. Les barèmes de commission et taux non confirmés ne doivent pas être inventés. |
 | 6 | Intégrations externes : Mobile Money et FCM | **BLOQUÉ EXTERNE / CONTRATS TESTÉS SEULEMENT** | FCM : projet Firebase propre à NAXA Services, configuration Android, service-account et secrets de chiffrement/worker installés dans un coffre, worker déployé, token enregistré/révocable, push réellement reçu sur appareils de test, statut de livraison contrôlé et scénario de panne/reprise prouvé. Mobile Money : contrats/KYC MTN MoMo et Orange Money, accès sandbox, identifiants marchands/bénéficiaires, clés et webhooks signés, frais confirmés, validation montant/devise/référence/idempotence, notification serveur et rapprochement bancaire/ledger de bout en bout. Le moteur fail-closed et les contrats CI sont utiles, mais ne constituent pas une transaction réelle. Les messages WhatsApp préparés et déclenchés par l'utilisateur restent distincts d'un service d'envoi automatique. |
@@ -472,4 +472,86 @@ Au dernier relevé lors de la rédaction de cette section :
 ### 16.6 Prochaine étape
 
 Aucune mutation N2 ne reste à implémenter. Terminer le job Android du run de référence, puis seulement communiquer l'état final de l'APK. Le chantier fonctionnel N2 est fermé à 44/44.
+
+## 17. Clôture du gate Android et livraison Debug — 22 novembre 2026
+
+### 17.1 Résultat CI vérifié
+
+- Run GitHub Actions : [45012696504 — run #385](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45012696504).
+- Workflow : `.github/workflows/naxa-services-technical-gate.yml`.
+- Branche : `work/naxa-services-completion-20261120`.
+- Commit applicatif : `c9883a31fbabe32a294eb42515841080847b3508`.
+- Résultat GitHub vérifié : `status=completed`, `conclusion=success`, **12/12 jobs terminés avec succès**.
+- Les 12 jobs couvrent notamment les tests unitaires Android, `:naxa-services:assembleDebug`, la recette instrumentée sur émulateur, PostgreSQL 17/RLS, sécurité SQL, contrats Auth, Web, notifications, referrals, tarifs, finance et le contrôle de registre N1.
+- L’émulateur de la recette de connexion est Android 15 selon le compte rendu de recette. Les tests Keystore/PIN sont annoncés 7/7 réussis dans le résultat de livraison.
+
+### 17.2 Artefact livré
+
+- Artefact GitHub Actions : [naxa-services-debug-apk — ID 14750471915](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45012696504/artifacts/14750471915), présent et non expiré au contrôle.
+- Taille APK annoncée dans le compte rendu de livraison : **14,65 Mo**. L’API GitHub expose une taille d’archive d’artefact de 13 617 362 octets ; il ne s’agit pas nécessairement de la taille exacte du binaire APK seul.
+- SHA-256 APK communiqué avec la livraison : `9d16a9efab6ab886916bad68dcebda937030e459f44d41024f39553546da817b`. Cette empreinte est consignée comme valeur communiquée ; elle n’a pas été recalculée à partir du binaire pendant la présente vérification.
+- Type : **APK Debug pour validation technique**, pas une Release signée ni une autorisation de distribution/production.
+
+### 17.3 Périmètre Git et sécurité
+
+- HEAD de la branche de travail vérifié : `c9883a31fbabe32a294eb42515841080847b3508`.
+- HEAD de `main` vérifié séparément : `0eb79951d2701264ebbb9ae81a01fb25ae7d3931`. Aucun changement `main`, merge ou déploiement n’a été effectué dans cette mise à jour.
+- La présente opération n’a exécuté aucune migration, aucun DDL/DML, aucune configuration ni aucun déploiement Supabase. Le projet NAXA pharmacie reste explicitement hors périmètre.
+- **Limite de qualification :** le succès du run #385 clôt la recette technique Android ciblée ; il ne clôt pas N3 et ne démontre pas la réplication multi-appareils.
+
+---
+
+## 18. Ouverture N3 — synchronisation Android et réplication multi-appareils
+
+Cette section prévaut sur les mentions antérieures du gate 3 dans la section 12.3. N1 et N2 sont clôturés ; N3 est ouvert sur la base du code existant. Il ne faut ni recommencer N1/N2 ni confondre le push des outbox avec une synchronisation bidirectionnelle.
+
+### 18.1 Prérequis amont clos
+
+- **N1 — VERT COMPLET : 55/55** points d’émission qualifiés, bijection contrôlée par `verify-outbox-registry.mjs`.
+- **N2 — VERT COMPLET : 44/44** mutations indépendantes reliées à 92 codes d’action et à la passerelle serveur atomique, selon la clôture de la section 16.
+- Run #385 : gate CI technique global **12/12 SUCCESS**. Ce résultat ne remplace pas les preuves N3 spécifiques.
+
+### 18.2 État réel du code N3 au HEAD `c9883a3`
+
+**Briques déjà présentes — ne pas les reconstruire sans nécessité :**
+
+1. `SupplierSyncCoordinator` déclare **92 codes d’action distincts** et contrôle les snapshots, la cohérence organisation/site, les dépendances, l’appareil et les états de retry. Les actions dont le snapshot est incomplet ou dont le handler n’est pas autorisé restent bloquées.
+2. Le coordinateur envoie `apply_sync_event` et n’acquitte une ligne locale qu’après validation du reçu : statut `applied`, même `event_id`, action, agrégat et empreinte SHA-256 au format attendu.
+3. Le traitement est protégé par un verrou de synchronisation en processus ; les échecs transitoires sont conservés en `retry_wait` avec délai exponentiel/jitter ; les dépendances bloquées et rejets ne sont pas marqués synchronisés.
+4. `NaxaServicesSyncWorker` utilise WorkManager, une contrainte réseau connecté, une planification périodique de 15 minutes, un rafraîchissement Auth et une session/appareil enregistré. Le worker traite la file sortante locale.
+5. La RPC serveur `ns_apply_sync_event` vérifie la session et l’appareil actif, impose une séquence monotone par appareil et retourne un reçu idempotent ; le même événement rejoué à l’identique retourne le reçu existant et un contenu divergent est rejeté.
+6. Les tests instrumentés vérifient la migration Room et la persistance/l’ordre de la file locale après réouverture ; les tests unitaires vérifient notamment les snapshots, les règles de retry et le verrou concurrent.
+
+**Limites qui maintiennent N3 non vert :**
+
+- `NS_ENABLE_SUPPLIER_SYNC` est défini à `false` par défaut dans Gradle.
+- `isConfigured()` exige l’activation explicite, les paramètres Auth/Accounting, la concordance du projet configuré avec le projet Famille et l’exclusion du project ref NAXA historique.
+- La planification périodique de l’application n’est déclenchée que si une session mémorisée (« Rester connecté ») et un appareil sont présents ; sinon le scheduler est annulé. La méthode one-shot `enqueueNow` existe dans le scheduler, mais aucun appel depuis l’interface de l’application n’a été trouvé au HEAD audité.
+- Le flux client observé est **sortant** : Android transmet des mutations locales vers le serveur. L’Edge Function Accounting expose `apply_sync_event`, mais aucun endpoint de récupération incrémentale (pull/cursor) à destination des appareils n’a été trouvé dans ce périmètre.
+- Aucune logique démontrée ne récupère les changements créés par un autre appareil puis ne les applique idempotemment aux tables/projections Room du présent appareil.
+- Les tests PostgreSQL actuels valident le premier envoi, le rejeu identique, le rejeu divergent, les rejets de scope et une séquence inversée pour le même appareil. Ils ne démontrent pas l’échange bidirectionnel de mutations et d’états entre deux installations distinctes.
+- Les tests UI de connexion, le build APK et le PASS 12/12 ne couvrent pas cette absence de pull/apply. Le projet Supabase NAXA Services dédié n’est pas attesté comme configuré : aucun test d’intégration réel multi-appareils n’est donc déclaré.
+
+**Verdict d’entrée : PARTIEL / NON VERT MULTI-APPAREILS.** Le push sortant et ses contrôles sont avancés, mais ils ne constituent pas à eux seuls une réplication ERP.
+
+### 18.3 Plan d’exécution N3
+
+| Sous-lot | Travail attendu | Preuve de sortie |
+|---|---|---|
+| N3-A — sécuriser le push | Fermer les écarts entre les 92 actions enregistrées et les snapshots effectivement produits ; vérifier la séquence par installation, les dépendances, l’activation, le lancement manuel et les reprises WorkManager. Conserver tout événement non acquitté. | Tests unitaires et Room : ordre, redémarrage, retry, événement bloqué en tête, reprise après changement de session/appareil, aucune transition `synced` sans reçu valide. |
+| N3-B — flux de changements serveur | Concevoir un journal de changements serveur durable et un endpoint pull paginé avec curseur par appareil ; filtrer côté serveur par organisation, site, appareil/compte et permissions. Définir rétention, ordre, rejeu, révocation et comportement des curseurs expirés. Ne pas exposer les tables ni les reçus privés directement au client. | Tests PostgreSQL 17 jetables : isolation inter-organisation/site, deux appareils, pagination, curseur stable, doublons, reprise après timeout, révocation et aucune fuite de payload. |
+| N3-C — application locale | Convertir les changements distants autorisés en mises à jour Room transactionnelles et idempotentes ; maintenir les mêmes invariants métier, versions et règles de conflit que N2. Éviter de réémettre vers le serveur un changement reçu d’un pair. | Tests Room : application une seule fois, rejeu sans doublon, ordre/dépendances, rollback, crash/restart, conservation des modifications locales non acquittées et résolution contrôlée des conflits. |
+| N3-D — recette multi-appareils | Exécuter des scénarios appareil A ↔ appareil B, puis A/B ↔ serveur, avec connectivité variable et périmètres distincts. Ajouter le gate CI multi-appareils au workflow technique. | Deux installations distinctes : création/modification sur A visible sur B après pull ; mutation sur B visible sur A ; offline/reconnexion, double envoi, crash, version concurrente, changement de site, membre/appareil révoqué, absence de cross-tenant. Logs et reçus corrélés. |
+| N3-E — activation contrôlée | Conserver le feature flag désactivé tant que la recette laboratoire et la configuration du projet dédié ne sont pas approuvées. Préparer observabilité, reprise et retour arrière avant toute activation réelle. | Test d’intégration sur environnement NAXA Services dédié et autorisé ; aucune activation ni migration vers le Supabase historique pharmacie. |
+
+### 18.4 Ordre et règles de protection
+
+1. Continuer depuis le HEAD existant de `work/naxa-services-completion-20261120` ; ne pas réouvrir N1 ou N2.
+2. Cartographier les entités Room et leurs invariants avant d’écrire le pull/apply ; commencer par un vertical slice réversible, puis étendre domaine par domaine.
+3. Tester les mécanismes serveur uniquement sur PostgreSQL 17 jetable tant qu’un environnement dédié n’est pas configuré et autorisé.
+4. Garder `NS_ENABLE_SUPPLIER_SYNC=false` dans la configuration par défaut ; aucune activation réelle par défaut, aucun secret ajouté au dépôt.
+5. Ne pas appliquer de draft au Supabase NAXA pharmacie, ne pas modifier `main`, ne pas déployer d’Edge Function et ne pas distribuer d’APK sans autorisation distincte.
+6. N3 ne sera déclaré **VERT** qu’après les preuves N3-A à N3-D sur deux appareils distincts ; une compilation, un push vers serveur ou un run CI générique 12/12 ne suffisent pas.
+
+**Prochaine action concrète :** concevoir N3-B autour d’un journal de changements contrôlé et d’un curseur de pull par appareil, puis réaliser le premier vertical slice serveur + Room + test de rejeu sur deux appareils. N4 (raccordement et parité Web/PWA) reste séparé et n’est pas inclus dans cette clôture N3.
 
