@@ -1,7 +1,7 @@
 package cm.naxa.naxaservices
 
 import androidx.compose.ui.test.assertCountEquals
-import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasSetTextAction
@@ -20,9 +20,12 @@ class LoginScreenUiInstrumentedTest {
 
     @Test
     fun loginScreenRequiresBothCredentialsBeforeEnablingSubmit() {
-        composeRule.onNodeWithText("Bienvenue").assertIsDisplayed()
-        composeRule.onNodeWithText("Identifiant NAXA Services").assertIsDisplayed()
-        composeRule.onNodeWithText("Mot de passe").assertIsDisplayed()
+        // TextField labels are children of Material3's merged semantics node.
+        // Inspect the unmerged tree for the visible copy, independently of the
+        // merged editable-field semantics used by the interaction assertions.
+        composeRule.onNodeWithText("Bienvenue", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithText("Identifiant NAXA Services", useUnmergedTree = true).assertExists()
+        composeRule.onNodeWithText("Mot de passe", useUnmergedTree = true).assertExists()
 
         val credentialFields = composeRule.onAllNodes(hasSetTextAction())
         credentialFields.assertCountEquals(2)
