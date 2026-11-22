@@ -13,6 +13,7 @@ import cm.naxa.naxaservices.data.NsServicesDatabase
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -76,10 +77,10 @@ class OutboxMigrationAndOrderingInstrumentedTest {
     }
 
     @Test
-    fun retryableOutboxLoadsUnsupportedAndBlockedEventsInDeviceSequenceOrder() = runBlocking {
+    fun retryableOutboxLoadsUnsupportedAndBlockedEventsInDeviceSequenceOrder() = runBlocking<Unit> {
         val orgId = "org-${UUID.randomUUID()}"
         val databaseName = "outbox-recovery-${UUID.randomUUID()}.db"
-        var database = Room.databaseBuilder(context, NsServicesDatabase::class.java, databaseName).build()
+        var database = Room.databaseBuilder<NsServicesDatabase>(context, databaseName).build()
         try {
             val dao = database.naxaServicesDao()
             dao.insertOutboxEvent(
