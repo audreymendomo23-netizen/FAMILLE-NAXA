@@ -376,3 +376,22 @@ Deno.test("N2 cash session and expense handlers calculate balances server-side",
   assert(/revoke\\s+insert,update,delete\\s+on\\s+public\\.ns_cash_sessions,public\\.ns_expenses\\s+from\\s+public,anon,authenticated/i.test(sql),
     "Cash sessions and expenses must be mutated only by RPC");
 });
+
+
+Deno.test("N2 cash session and expense handlers are scoped, idempotent and compute close balance on server", async () => {
+  const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  for(const fn of ["ns_open_cash_session","ns_record_expense","ns_close_cash_session"]) {
+    assert(new RegExp("create\\s+or\\s+replace\\s+function\\s+public\\."+fn+"\\s*\\(","i").test(sql),
+      "Missing cash handler "+fn);
+  }
+  assert(/ns_cash_sessions_one_open_per_register_uidx/i.test(sql),
+    "Only one open cash session per register is allowed");
+  assert(/pg_advisory_xact_lock[\\s\\S]{0,180}cash-open/i.test(sql),
+    "Register opening must be serialized");
+  assert(/v_expected:=v_session\\.opening_float_xaf\\+v_cash_in-v_expenses-v_supplier_out/i.test(sql),
+    "Cash close balance must be server-computed");
+  assert(/v_variance:=p_counted_close_xaf-v_expected/i.test(sql),
+    "Cash variance must be server-computed");
+  assert(/revoke\\s+insert,update,delete\\s+on\\s+public\\.ns_cash_sessions,public\\.ns_expenses\\s+from\\s+public,anon,authenticated/i.test(sql),
+    "Cash sessions and expenses must be mutated only by RPC");
+});
