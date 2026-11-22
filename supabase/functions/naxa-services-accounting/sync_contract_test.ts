@@ -461,3 +461,32 @@ Deno.test("atomic sync envelope validates both source and destination transfer c
     }
   }
 });
+
+
+import { normalizeSyncPullRequest } from "./sync_contract.ts";
+Deno.test("sync pull request validates cursor, limit, organization and device", () => {
+  const page = normalizeSyncPullRequest({
+    org_id: ORG_A, device_id: SYNC_DEVICE, after_cursor: 12, limit: 50,
+  });
+  if (page.org_id !== ORG_A || page.device_id !== SYNC_DEVICE ||
+      page.after_cursor !== 12 || page.limit !== 50) {
+    throw new Error("Sync pull request fields were not normalized");
+  }
+  const defaults = normalizeSyncPullRequest({ org_id: ORG_A, device_id: SYNC_DEVICE });
+  if (defaults.after_cursor !== 0 || defaults.limit !== 100) {
+    throw new Error("Sync pull defaults mismatch");
+  }
+});
+Deno.test("sync pull request rejects invalid cursor, limit and identifiers", () => {
+  for (const invalid of [
+    { org_id: ORG_A, device_id: SYNC_DEVICE, after_cursor: -1 },
+    { org_id: ORG_A, device_id: SYNC_DEVICE, after_cursor: Number.MAX_SAFE_INTEGER + 1 },
+    { org_id: ORG_A, device_id: SYNC_DEVICE, limit: 0 },
+    { org_id: ORG_A, device_id: SYNC_DEVICE, limit: 201 },
+    { org_id: ORG_A, device_id: "not-a-device" },
+  ]) {
+    let rejected = false;
+    try { normalizeSyncPullRequest(invalid); } catch { rejected = true; }
+    if (!rejected) throw new Error("Invalid sync pull request must be rejected");
+  }
+});
