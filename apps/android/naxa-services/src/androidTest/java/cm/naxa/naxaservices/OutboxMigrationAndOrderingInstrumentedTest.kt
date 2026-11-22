@@ -9,8 +9,11 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cm.naxa.naxaservices.data.LocalOutboxEvent
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_13_14
+import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import cm.naxa.naxaservices.data.NsServicesDatabase
 import java.util.UUID
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -72,6 +75,107 @@ class OutboxMigrationAndOrderingInstrumentedTest {
             }
         } finally {
             helper.close()
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+
+    @Test
+    fun remotePeerChangesPersistAtomicallyIdempotentlyAndWithoutOutboxEcho() = runBlocking<Unit> {
+        val orgId = "org-${UUID.randomUUID()}"
+        val deviceId = "device-${UUID.randomUUID()}"
+        val supplierId = "supplier-${UUID.randomUUID()}"
+        val eventId = UUID.randomUUID().toString()
+        val databaseName = "remote-sync-${UUID.randomUUID()}.db"
+        val database = Room.databaseBuilder(context, NsServicesDatabase::class.java, databaseName).build()
+        try {
+            val repository = NaxaServicesLocalRepository(database)
+            val first = JSONObject()
+                .put("cursor", 1)
+                .put("event_id", eventId)
+                .put("source_device_id", "aaaaaaaa-0000-4000-8000-000000000001")
+                .put("site_id", "site-1")
+                .put("workstation_id", JSONObject.NULL)
+                .put("aggregate_type", "supplier")
+                .put("aggregate_id", supplierId)
+                .put("action_code", "supplier.saved")
+                .put("aggregate_version", 1)
+                .put("payload", JSONObject()
+                    .put("supplier_id", supplierId)
+                    .put("org_id", orgId)
+                    .put("site_id", "site-1")
+                    .put("name", "Grossiste A"))
+                .put("recorded_at", "2026-11-22T10:00:00Z")
+            val second = JSONObject()
+                .put("cursor", 2)
+                .put("event_id", UUID.randomUUID().toString())
+                .put("source_device_id", "bbbbbbbb-0000-4000-8000-000000000002")
+                .put("site_id", "site-1")
+                .put("workstation_id", JSONObject.NULL)
+                .put("aggregate_type", "supplier")
+                .put("aggregate_id", supplierId)
+                .put("action_code", "supplier.saved")
+                .put("aggregate_version", 2)
+                .put("payload", JSONObject()
+                    .put("supplier_id", supplierId)
+                    .put("org_id", orgId)
+                    .put("site_id", "site-1")
+                    .put("name", "Grossiste A actualisé")
+                    .put("phone", "690000000"))
+                .put("recorded_at", "2026-11-22T10:01:00Z")
+            val changes = JSONArray().put(first).put(second)
+            val page = JSONObject()
+                .put("device_id", deviceId)
+                .put("changes", changes)
+                .put("next_cursor", 2)
+                .put("has_more", false)
+
+            assertEquals(2, repository.persistRemoteSyncPage(orgId, deviceId, page, 100L))
+            assertEquals(0, repository.persistRemoteSyncPage(orgId, deviceId, page, 200L))
+            assertEquals(2, repository.dao.countRemoteChanges(orgId))
+            assertEquals(2L, repository.dao.findSyncCheckpoint(orgId, deviceId)?.cursor)
+
+            val projection = repository.dao.findRemoteAggregate(orgId, "supplier", supplierId)
+            assertEquals("Grossiste A actualisé", JSONObject(projection!!.projectionJson).optString("name"))
+            assertEquals("690000000", JSONObject(projection.projectionJson).optString("phone"))
+            assertEquals(2L, projection.lastChangeCursor)
+
+            assertEquals(0, repository.dao.countOutboxActions(
+                orgId, "supplier", supplierId, listOf("supplier.saved")
+            ))
+
+            val divergent = JSONObject(first.toString())
+                .put("payload", JSONObject(first.getJSONObject("payload").toString()).put("name", "Payload divergent"))
+            val invalidPage = JSONObject()
+                .put("device_id", deviceId)
+                .put("changes", JSONArray().put(
+                    JSONObject()
+                        .put("cursor", 3)
+                        .put("event_id", UUID.randomUUID().toString())
+                        .put("source_device_id", "cccccccc-0000-4000-8000-000000000003")
+                        .put("site_id", "site-1")
+                        .put("aggregate_type", "supplier")
+                        .put("aggregate_id", supplierId)
+                        .put("action_code", "supplier.saved")
+                        .put("aggregate_version", 3)
+                        .put("payload", JSONObject().put("supplier_id", supplierId).put("name", "Must rollback"))
+                        .put("recorded_at", "2026-11-22T10:02:00Z")
+                ).put(divergent))
+                .put("next_cursor", 3)
+                .put("has_more", false)
+            var rejected = false
+            try {
+                repository.persistRemoteSyncPage(orgId, deviceId, invalidPage, 300L)
+            } catch (_: IllegalArgumentException) {
+                rejected = true
+            }
+            assertTrue(rejected)
+            assertEquals(2, repository.dao.countRemoteChanges(orgId))
+            assertEquals(2L, repository.dao.findSyncCheckpoint(orgId, deviceId)?.cursor)
+            assertEquals("Grossiste A actualisé",
+                JSONObject(repository.dao.findRemoteAggregate(orgId, "supplier", supplierId)!!.projectionJson).optString("name"))
+        } finally {
+            database.close()
             context.deleteDatabase(databaseName)
         }
     }
