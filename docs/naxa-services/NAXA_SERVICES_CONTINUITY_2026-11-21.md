@@ -270,3 +270,73 @@ Un niveau inférieur ne doit jamais être présenté comme un niveau supérieur.
 ### 13.1 Précision sur le transport source
 
 Le registre constate deux contraintes concrètes à conserver pour N2/N3 : le modèle `LocalOutboxEvent` n'inclut pas directement l'ID d'installation ni l'acteur ; ils doivent être résolus à partir de la session Auth et de l'appareil enregistré. La séquence Room est actuellement calculée par organisation dans la base locale ; le protocole futur doit l'associer à l'installation pour l'unicité côté serveur. Enfin, `loyalty_program.updated` est organisationnel (`site_id=null`) et ne peut pas être pris par le coordinateur borné qui exige aujourd'hui un site. Ces limites sont documentées dans le registre et ne constituent pas des lignes non qualifiées du N1.
+---
+
+## 14. Reprise et audit du point de contrôle N2 — 22 novembre 2026
+
+### 14.1 N1 reste fermé et intégralement vert
+
+- **Décision maintenue : N1 = VERT COMPLET, clôturé.**
+- Preuve de référence N1 : run https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44964977570, job Cross-application offline synchronization contract, PASS, source_call_sites=55, registry_rows=55, exact_callsite_bijection=true.
+- Aucune reprise de l'inventaire N1 n'est nécessaire. Les travaux N2 ne changent ni le périmètre ni la qualification des 55 call sites. Toute évolution future du code source reste protégée par le même contrôle.
+
+### 14.2 Critères N2 appliqués à l'audit
+
+N2 ne consiste pas à ajouter des noms de fonctions ou des contrats. Pour chaque mutation REMOTE_MUTATION, les conditions cumulatives sont :
+1. handler/RPC serveur concret, typé et appelé par une passerelle contrôlée ;
+2. identité du membre dérivée de la session Auth et vérification d'un appareil/installation actif ;
+3. scope organisation/site/poste et rôle contrôlés côté serveur, sans faire confiance aux identifiants d'acteur envoyés par le client ;
+4. validation des champs, dépendances et états métier ;
+5. mutation métier et reçu d'idempotence persistés dans une seule transaction ;
+6. même event_id + même contenu = même reçu ; même event_id + contenu divergent = rejet ;
+7. concurrence, erreurs de dépendance, échecs et rollback testés sur PostgreSQL jetable ;
+8. grants explicites, SECURITY DEFINER avec search_path vide, tables server-only non accessibles directement aux clients ;
+9. action non reconnue refusée par défaut, sans marquage ni reçu fictif.
+
+### 14.3 Résultat N2 au présent audit
+
+**PARTIEL — 17/44 call sites**
+
+Le premier lot implémente une passerelle atomique public.ns_apply_sync_event dans le draft v4, expose l'action apply_sync_event dans l'Edge Function naxa-services-accounting, et valide l'enveloppe entrante dans sync_contract.ts.
+
+**17 call sites sur 44** sont maintenant couverts et testés : OBX-001, OBX-002, OBX-003, OBX-004, OBX-006, OBX-007, OBX-008, OBX-009, OBX-010, OBX-011, OBX-012, OBX-032, OBX-033, OBX-035, OBX-036, OBX-037 et OBX-039. Les handlers complémentaires couvrent les frais récurrents et la fidélité ; les 11 actions bornées du cycle fournisseur/stock sont également accessibles via la passerelle atomique. Le registre JSON marque précisément ces 17 lignes.
+
+**Comportement testé :**
+- reçu applied et mutation sur le même commit transactionnel ;
+- digest SHA-256 calculé par PostgreSQL à partir du payload JSONB ;
+- verrou d'idempotence par organisation et event_id ;
+- rejeu identique retournant le résultat antérieur ;
+- rejeu divergent rejeté ;
+- membre hors scope site refusé ;
+- mutation invalide provoquant le rollback du reçu ;
+- appareil enregistré, non révoqué et lié à la session Auth exigé.
+
+**Preuve CI :** run https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44969249875, commit de code 76fb1cb1fcad91c10ec4e764e4a25c9f1b34ab72. Les jobs PostgreSQL 17/runtime RLS, sécurité statique SQL et contrats accounting/sync ont réussi. La vérification complète du workflow reste distincte des trois jobs de validation N2 ; ne pas déduire un gate global 12/12 de ces succès isolés.
+
+### 14.4 Conditions N2 non encore vertes
+
+**27/44 call sites restent sans handler serveur démontré :** OBX-013, OBX-014, OBX-015, OBX-016, OBX-018, OBX-019, OBX-022, OBX-023, OBX-027, OBX-028, OBX-029, OBX-030, OBX-031, OBX-034, OBX-038, OBX-040, OBX-041, OBX-042, OBX-043, OBX-044, OBX-045, OBX-047, OBX-048, OBX-049, OBX-053, OBX-054 et OBX-055.
+
+Ces lignes couvrent pressing et transitions, rendez-vous et liste d'attente, sessions de caisse, ventes, annulations de ventes Mobile Money, dépenses, catalogue de services, clients, suivis CRM, valorisation de stock, demandes de support, pointages du personnel, documents de gestion, transferts multisites et transitions métier. Elles ne peuvent pas être déclarées terminées au moyen d'un handler générique qui contournerait leurs invariants.
+
+Le dispatcher applique un refus par défaut pour les actions non prises en charge : pas de reçu applied, pas de faux succès. Le point N2 reste **PARTIEL / NON VERT** jusqu'à la preuve des 44/44 mutations indépendantes.
+
+### 14.5 Frontières à ne pas franchir
+
+- N1 est clos et ne doit pas être refait.
+- N2 porte sur les handlers et mutations serveur ; le coordinateur automatique Android, les workers, l'ordre global, les mappings clients et la réplication multi-appareils restent N3.
+- La file et les opérations métier Web/PWA restent N4.
+- Le projet Supabase NAXA Services dédié n'est pas créé ; le draft v4 reste candidat CI sur PostgreSQL jetable. Aucun draft n'est appliqué au projet historique NAXA/pharmacie.
+- main, les migrations hébergées et la production ne sont pas modifiées.
+
+### 14.6 Ordre de traitement N2 restant
+
+Traiter les 27 call sites restants par groupes de domaines, tout en conservant l'allowlist fail-closed :
+1. catalogue/clients/CRM/support (services, clients, suivis, support) ;
+2. pressing et rendez-vous/liste d'attente ;
+3. caisse, ventes, paiements/annulations et dépenses ;
+4. valorisation de stock et transferts multisites ;
+5. pointages et documents de gestion/états ;
+6. tests transactionnels inter-domaines, revue des grants et gate de clôture 44/44.
+
+Ne pas engager le N3 tant que le dispatcher N2 n'a pas un handler et un test transactionnel pour chacun des 44 call sites indépendants.
