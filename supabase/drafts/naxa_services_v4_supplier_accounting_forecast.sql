@@ -3134,6 +3134,8 @@ declare
   v_payload_aggregate text;
   v_result jsonb;
   v_response jsonb;
+  v_sync_cursor bigint;
+  v_target_site_ids uuid[];
 begin
   if p_org_id is null or p_device_id is null or p_event_id is null
      or p_device_sequence is null or p_device_sequence <= 0
@@ -3791,11 +3793,46 @@ begin
       raise exception 'NAXA_SYNC_ACTION_NOT_SUPPORTED';
   end case;
 
+  -- Allocate the organisation cursor under a transactional row lock. Unlike a
+  -- PostgreSQL sequence, this is commit-ordered: the next writer cannot allocate
+  -- a cursor until this transaction commits or rolls back.
+  insert into public.ns_sync_counters(org_id, last_change_cursor)
+  values (p_org_id, 1)
+  on conflict (org_id) do update
+    set last_change_cursor = public.ns_sync_counters.last_change_cursor + 1
+  returning last_change_cursor into v_sync_cursor;
+
+  v_target_site_ids := array(
+    select distinct candidate_site
+    from unnest(array[
+      p_site_id,
+      case when p_action_code like 'inventory_transfer.%'
+        then nullif(p_payload->>'source_site_id','')::uuid else null end,
+      case when p_action_code like 'inventory_transfer.%'
+        then nullif(p_payload->>'destination_site_id','')::uuid else null end
+    ]) as target(candidate_site)
+    where candidate_site is not null
+  );
+
+  insert into public.ns_sync_changes(
+    org_id, change_cursor, source_event_id, source_device_id,
+    site_id, target_site_ids, workstation_id, aggregate_type, aggregate_id,
+    action_code, aggregate_version, projection_json
+  ) values (
+    p_org_id, v_sync_cursor, p_event_id, p_device_id,
+    p_site_id, v_target_site_ids, p_workstation_id, p_aggregate_type, p_aggregate_id,
+    p_action_code,
+    coalesce(nullif(v_result->>'server_version','')::bigint,
+             nullif(p_payload->>'expected_version','')::bigint + 1, 1),
+    public.ns_sync_redact_payload(p_payload)
+  );
+
   v_response := jsonb_build_object(
     'status','applied', 'event_id',p_event_id,
     'action_code',p_action_code, 'aggregate_type',p_aggregate_type,
     'aggregate_id',p_aggregate_id, 'payload_sha256',v_payload_hash,
-    'result',coalesce(v_result,'{}'::jsonb), 'idempotent',false
+    'result',coalesce(v_result,'{}'::jsonb), 'idempotent',false,
+    'sync_cursor',v_sync_cursor
   );
   update public.ns_sync_receipts
     set status = 'applied', response_json = v_response, applied_at = now()
@@ -4274,5 +4311,199 @@ revoke all on function public.ns_record_supplier_payment(uuid,uuid,uuid,bigint,t
 grant execute on function public.ns_record_supplier_payment(uuid,uuid,uuid,bigint,text,uuid,text,uuid,text) to service_role;
 revoke all on function public.ns_create_performance_objective(uuid,uuid,text,date,date,bigint,text) from public, anon;
 grant execute on function public.ns_create_performance_objective(uuid,uuid,text,date,date,bigint,text) to authenticated, service_role;
+
+-- N3: commit-ordered change journal. Receipts prove an accepted write;
+-- this journal is the separate, scope-filtered distribution stream for peer devices.
+create table if not exists public.ns_sync_counters (
+  org_id uuid primary key references public.ns_organizations(id) on delete restrict,
+  last_change_cursor bigint not null default 0 check (last_change_cursor >= 0)
+);
+
+create table if not exists public.ns_sync_changes (
+  org_id uuid not null references public.ns_organizations(id) on delete restrict,
+  change_cursor bigint not null check (change_cursor > 0),
+  source_event_id uuid not null,
+  source_device_id uuid not null references public.ns_devices(id) on delete restrict,
+  site_id uuid,
+  target_site_ids uuid[] not null default '{}'::uuid[],
+  workstation_id uuid,
+  aggregate_type text not null,
+  aggregate_id text not null,
+  action_code text not null,
+  aggregate_version bigint not null default 1 check (aggregate_version >= 0),
+  projection_json jsonb not null check (jsonb_typeof(projection_json) = 'object'),
+  recorded_at timestamptz not null default now(),
+  primary key (org_id, change_cursor),
+  unique (org_id, source_event_id),
+  foreign key (site_id, org_id) references public.ns_sites(id, org_id) on delete restrict,
+  foreign key (workstation_id, site_id, org_id)
+    references public.ns_workstations(id, site_id, org_id) on delete restrict
+);
+create index if not exists ns_sync_changes_site_cursor_idx
+  on public.ns_sync_changes(org_id, site_id, change_cursor);
+create index if not exists ns_sync_changes_workstation_cursor_idx
+  on public.ns_sync_changes(org_id, workstation_id, change_cursor)
+  where workstation_id is not null;
+alter table public.ns_sync_counters enable row level security;
+alter table public.ns_sync_changes enable row level security;
+revoke all on public.ns_sync_counters, public.ns_sync_changes from public, anon, authenticated;
+grant all on public.ns_sync_counters, public.ns_sync_changes to service_role;
+
+-- Recursively remove fields that must never be distributed to peer devices.
+create or replace function public.ns_sync_redact_payload(p_value jsonb)
+returns jsonb
+language plpgsql
+immutable
+set search_path = ''
+as $naxa$
+declare
+  v_result jsonb;
+begin
+  if p_value is null then return null; end if;
+  case pg_catalog.jsonb_typeof(p_value)
+    when 'object' then
+      select coalesce(
+        pg_catalog.jsonb_object_agg(e.key, public.ns_sync_redact_payload(e.value)),
+        '{}'::jsonb
+      ) into v_result
+      from pg_catalog.jsonb_each(p_value) as e(key, value)
+      where lower(e.key) <> all (array[
+        'password','password_hash','temporary_password','access_token','refresh_token',
+        'service_role_key','secret','api_key','token','token_ciphertext','token_iv',
+        'token_fingerprint','pin','pin_hash','otp','security_answer','auth_alias',
+        'notes_private','private_notes'
+      ]::text[]);
+      return v_result;
+    when 'array' then
+      select coalesce(
+        pg_catalog.jsonb_agg(public.ns_sync_redact_payload(e.value)),
+        '[]'::jsonb
+      ) into v_result
+      from pg_catalog.jsonb_array_elements(p_value) as e(value);
+      return v_result;
+    else
+      return p_value;
+  end case;
+end;
+$naxa$;
+revoke all on function public.ns_sync_redact_payload(jsonb) from public, anon, authenticated;
+
+-- The authenticated device can only pull its own organisation's changes.
+-- The function scans a bounded ordered page before filtering visibility so that
+-- invisible rows advance the cursor without leaking their existence or contents.
+create or replace function public.ns_pull_sync_changes(
+  p_org_id uuid,
+  p_device_id uuid,
+  p_after_cursor bigint,
+  p_limit integer default 100
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_account_id uuid;
+  v_member_id uuid;
+  v_session_id text;
+  v_device public.ns_devices%rowtype;
+  v_high_watermark bigint := 0;
+  v_scanned_to bigint;
+  v_next_cursor bigint;
+  v_changes jsonb;
+begin
+  if p_org_id is null or p_device_id is null or p_after_cursor is null
+     or p_after_cursor < 0 or p_limit is null or p_limit not between 1 and 200 then
+    raise exception 'NAXA_SYNC_PULL_ARGUMENT_INVALID';
+  end if;
+  v_account_id := public.ns_current_account_id();
+  v_member_id := public.ns_current_member_id(p_org_id);
+  v_session_id := auth.jwt() ->> 'session_id';
+  if v_account_id is null or v_member_id is null or v_session_id is null then
+    raise exception 'NAXA_SYNC_AUTH_REQUIRED';
+  end if;
+  select * into v_device
+  from public.ns_devices d
+  where d.id = p_device_id
+    and d.account_id = v_account_id
+    and d.session_id = v_session_id
+    and d.revoked_at is null
+  for update;
+  if not found then raise exception 'NAXA_SYNC_DEVICE_NOT_REGISTERED'; end if;
+
+  select coalesce(c.last_change_cursor,0) into v_high_watermark
+  from (select 1) seed
+  left join public.ns_sync_counters c on c.org_id = p_org_id;
+  if p_after_cursor > v_high_watermark then
+    raise exception 'NAXA_SYNC_PULL_CURSOR_AHEAD';
+  end if;
+
+  select coalesce(max(batch.change_cursor), p_after_cursor)
+    into v_scanned_to
+  from (
+    select change_cursor
+    from public.ns_sync_changes
+    where org_id = p_org_id and change_cursor > p_after_cursor
+    order by change_cursor
+    limit p_limit
+  ) batch;
+
+  -- If the bounded scan reached the end, advance to the current high watermark.
+  v_next_cursor := case when v_scanned_to < v_high_watermark and
+       (select count(*) from public.ns_sync_changes c
+        where c.org_id=p_org_id and c.change_cursor>p_after_cursor
+          and c.change_cursor<=v_scanned_to) = p_limit
+    then v_scanned_to else v_high_watermark end;
+
+  select coalesce(
+    pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'cursor',c.change_cursor,
+        'event_id',c.source_event_id,
+        'source_device_id',c.source_device_id,
+        'site_id',c.site_id,
+        'workstation_id',c.workstation_id,
+        'aggregate_type',c.aggregate_type,
+        'aggregate_id',c.aggregate_id,
+        'action_code',c.action_code,
+        'aggregate_version',c.aggregate_version,
+        'payload',c.projection_json,
+        'recorded_at',c.recorded_at
+      ) order by c.change_cursor
+    ),
+    '[]'::jsonb
+  ) into v_changes
+  from public.ns_sync_changes c
+  where c.org_id = p_org_id
+    and c.change_cursor > p_after_cursor
+    and c.change_cursor <= v_next_cursor
+    and c.source_device_id <> p_device_id
+    and (
+      (cardinality(c.target_site_ids)=0 and public.ns_can_manage_org(p_org_id))
+      or (
+        cardinality(c.target_site_ids)>0
+        and not exists (
+          select 1 from unnest(c.target_site_ids) as target(site_id)
+          where not (
+            case when c.workstation_id is not null and target.site_id=c.site_id
+              then public.ns_can_access_workstation(p_org_id,target.site_id,c.workstation_id)
+              else public.ns_can_access_site(p_org_id,target.site_id)
+            end
+          )
+        )
+      )
+    );
+
+  return pg_catalog.jsonb_build_object(
+    'changes',v_changes,
+    'next_cursor',v_next_cursor,
+    'has_more',v_next_cursor < v_high_watermark,
+    'server_time',now(),
+    'device_id',p_device_id
+  );
+end;
+$naxa$;
+
+revoke all on function public.ns_pull_sync_changes(uuid,uuid,bigint,integer) from public, anon;
+grant execute on function public.ns_pull_sync_changes(uuid,uuid,bigint,integer) to authenticated, service_role;
 
 rollback;
