@@ -228,3 +228,29 @@ Les exigences historiques suivantes ont été conservées ou adaptées au nouvea
 - Mini-catalogue partageable, avec sélection explicite des articles et des informations publiables ; aucune donnée de coût, marge ou client n'est exposée.
 - Recherche locale fluide sur au moins 5 000 fiches et scan code-barres hors connexion dans la recette de référence.
 - Les autres fonctionnalités historiques identifiées dans la section 4 du présent document restent couvertes par les critères de non-régression du cahier des charges.
+
+
+## 12. État d'implantation — première tranche (22 novembre 2026)
+
+La première tranche du socle Détaillants a été préparée dans la branche :
+
+`feat/bootik-retail-foundation-mainline-2026-11-22`
+
+Elle comprend :
+- le namespace Android autonome `cm.naxa.bootik` ;
+- l'écran initial BOOTIK Détaillants, avec nom d'organisation, premier site et sélection des 14 profils ;
+- les identifiants métier stables des 14 profils Détaillants et des 8 profils Distributeurs réservés à la phase suivante ;
+- le stockage local Room `bootik-local.db` et les brouillons organisation/activité/site, non synchronisés ;
+- une outbox locale dédiée `bk_offline_events` ;
+- les ressources de langue françaises et anglaises ;
+- un contrat de domaine qui interdit la confirmation d'une commande B2B sans validation humaine du distributeur, et exige l'accord du détaillant si le distributeur a modifié les conditions ;
+- un draft SQL isolé sous le schéma `bootik`, objets `bk_*`, avec RLS activé/forcé et aucun grant/policy client ;
+- un contrat de recette anti-collision et un audit dédié.
+
+**Limites à conserver explicitement :** aucun compte ou abonnement serveur n'est créé par l'écran initial ; aucune synchronisation distante, caisse, vente, import Excel, CRM complet, achat, paiement, reporting ni vertical métier n'est déclaré livré dans cette tranche. Le draft SQL n'est appliqué ni à Replay ni à Production. Les tests JUnit/Compose/PostgreSQL sont écrits mais leur exécution n'est pas encore prouvée.
+
+Rapports de tranche :
+- [Audit anti-collision BOOTIK / NAXA SERVICES / NAXA](audits/AUDIT_ANTI_COLLISION_BOOTIK_NAXA_SERVICES_NAXA_2026-11-22.md)
+- [État d'implantation tranche 1](audits/BOOTIK_IMPLANTATION_TRANCHE_1_2026-11-22.md)
+
+La branche de travail a été créée depuis le HEAD courant de `main` observé pendant cette passe, afin d'intégrer la continuité NAXA SERVICES la plus récente sans écrire dans ses fichiers. La branche n'est pas fusionnée dans `main`.
