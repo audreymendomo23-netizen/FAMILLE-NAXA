@@ -1,13 +1,13 @@
 # CAHIER DES CHARGES MAÎTRE — CAMPUS237
 ## ERP scolaire, plateforme familiale, protection des élèves et écosystème éducatif à 360°
 
-**Version :** 3.0.2 — baseline enrichie et décisions pédagogiques/économiques verrouillées  
+**Version :** 3.0.3 — baseline consolidée, barème établissement corrigé et tarifs parents confirmés  
 **Date de référence :** 22 novembre 2026  
 **Produit :** Campus237  
 **Dépôt :** Famille NAXA  
 **Document précédent :** Cahier_des_charges_08_Campus237.pdf — V2.0 du 5 novembre 2026  
 **Nature :** spécification fonctionnelle, métier, opérationnelle, économique, technique et de conformité  
-**Statut :** baseline V3.0 consolidée et amendée par les addenda V3.0.1 et V3.0.2 du 22 novembre 2026 ; les décisions approuvées sont verrouillées et les seuls arbitrages résiduels sont identifiés.
+**Statut :** baseline V3.0 consolidée et amendée par les addenda V3.0.1, V3.0.2 et V3.0.3 du 22 novembre 2026 ; les décisions approuvées sont verrouillées et les seuls arbitrages résiduels sont identifiés.
 
 ---
 
@@ -28,7 +28,7 @@ Le présent document est le cahier des charges maître de CAMPUS237. Il consolid
 - CAMPUS237 KNOWLEDGE et CAMPUS237 OPPORTUNITIES ;
 - les exigences métier, financières, techniques, de sécurité, de conformité, de recette et d'exploitation.
 
-La V2.0 demeure conservée comme document historique. La V3.0.2 devient le document de référence pour les nouvelles spécifications, sous réserve des arbitrages explicitement indiqués dans ce document. La V3.0 ne signifie pas que le logiciel est déjà développé, testé, certifié ou mis en production.
+La V2.0 demeure conservée comme document historique. La V3.0.3 devient le document de référence pour les nouvelles spécifications, sous réserve des arbitrages explicitement indiqués dans ce document. La V3.0 ne signifie pas que le logiciel est déjà développé, testé, certifié ou mis en production.
 
 ## 0.2 Légende des statuts
 
@@ -61,6 +61,7 @@ La V2.0 demeure conservée comme document historique. La V3.0.2 devient le docum
 | V3.0 | 22/11/2026 | Consolidation maître : SMART ENROLL, SMART GRADING, TEACHER SPACE, cours réels et préparations filmées, QR d'arrivée/sortie, NAXA SECURITY avec détection IA d'événements dangereux, COMMUNITY, KNOWLEDGE, OPPORTUNITIES et clarification des arbitrages |
 | V3.0.1 | 22/11/2026 | Addendum : compte APE et réunions/visioconférences, convocations scolaires hybrides, livret scolaire unique portable et non modifiable en place, offres de rentrée et recherche conversationnelle d'établissements avec rendez-vous en présentiel |
 | V3.0.2 | 22/11/2026 | Bulletin vivant, ACADEMIC RADAR et rang parental avant bulletin, modèle de licence établissement par élève, ACCESS gratuit et PREMIUM familial, continuité pédagogique, compétences, remédiation, tableau familial, réunification, GPS bus et menus cantine |
+| V3.0.3 | 22/11/2026 | Correction du tarif établissement à 30/20/10 FCFA par élève selon tranches marginales ; confirmation de la grille ACCESS/PREMIUM familiale ; mise à jour des calculs, arbitrages et critères de recette |
 
 ---
 
@@ -1229,25 +1230,25 @@ Exports PDF et Excel mis en forme et filtres favoris enregistrés. Les rapports 
 
 ## 23.1 Abonnement unique établissement — tarification dégressive par élève actif
 
-🔒 Décision commerciale gelée V3.0.2 : un seul abonnement logiciel établissement, calculé par élève actif et par mois. L'école ne paie pas par professeur, compte, utilisateur ou module. Les comptes du personnel autorisés et tous les modules logiciels CAMPUS237 sont inclus.
+🔒 Décision commerciale gelée V3.0.3 : un seul abonnement logiciel établissement, calculé par élève actif et par mois. L'école ne paie pas par professeur, compte, utilisateur ou module. Les comptes du personnel autorisés et tous les modules logiciels CAMPUS237 sont inclus.
 
 | Tranche marginale d'élèves actifs | Tarif par élève dans la tranche |
 |---|---:|
-| Du 1er au 1 000e | 60 FCFA / élève / mois |
-| Du 1 001e au 5 000e | 50 FCFA / élève / mois |
-| À partir du 5 001e | 40 FCFA / élève / mois |
+| Du 1er au 1 000e | 30 FCFA / élève / mois |
+| Du 1 001e au 5 000e | 20 FCFA / élève / mois |
+| À partir du 5 001e | 10 FCFA / élève / mois |
 
 Les tranches sont marginales : chaque taux ne s'applique qu'aux élèves compris dans sa tranche, et non à la totalité de l'effectif. Minimum de facturation : 15 000 FCFA par mois pour une école indépendante. Pour un groupe sous contrat consolidé, le minimum s'applique une seule fois au groupe.
 
 | Élèves actifs | Calcul | Mensuel |
 |---:|---|---:|
 | 200 | minimum contractuel | 15 000 FCFA |
-| 500 | 500 × 60 | 30 000 FCFA |
-| 800 | 800 × 60 | 48 000 FCFA |
-| 1 000 | 1 000 × 60 | 60 000 FCFA |
-| 2 500 | 1 000 × 60 + 1 500 × 50 | 135 000 FCFA |
-| 5 000 | 1 000 × 60 + 4 000 × 50 | 260 000 FCFA |
-| 10 000 | 1 000 × 60 + 4 000 × 50 + 5 000 × 40 | 460 000 FCFA |
+| 500 | 500 × 30 = 15 000 ; minimum contractuel applicable | 15 000 FCFA |
+| 800 | 800 × 30 | 24 000 FCFA |
+| 1 000 | 1 000 × 30 | 30 000 FCFA |
+| 2 500 | 1 000 × 30 + 1 500 × 20 | 60 000 FCFA |
+| 5 000 | 1 000 × 30 + 4 000 × 20 | 110 000 FCFA |
+| 10 000 | 1 000 × 30 + 4 000 × 20 + 5 000 × 10 | 160 000 FCFA |
 
 La licence inclut l'ensemble des modules logiciels : administration, finance, RH, Teacher Space, SMART GRADING, bulletins, Academic Radar, Family ACCESS, Community, Knowledge, School Finder, Opportunities et logiciels NAXA SECURITY. Aucun supplément par enseignant, compte ou module n'est appliqué.
 
@@ -1259,11 +1260,11 @@ La licence est facturée sur 12 mois pour couvrir hébergement, sauvegardes, mai
 
 🔒 Le prix multi-sites est déterminé selon le total d'élèves inscrits dans l'ensemble des établissements du promoteur, et non par application indépendante de la tranche à chaque école. L'architecture multi-sites est incluse dans le principe de l'offre.
 
-Pour un groupe, les effectifs actifs de toutes les écoles rattachées sont additionnés, puis les tranches marginales 60/50/40 sont appliquées au total. Une facture consolidée est émise et ventilée analytiquement par école. Le minimum de 15 000 FCFA s'applique une seule fois au groupe. Le comptage, les mouvements en cours d'année, les transferts et les doubles inscriptions temporaires sont tracés ; un élève est compté une seule fois à l'instant de facturation dans une même organisation.
+Pour un groupe, les effectifs actifs de toutes les écoles rattachées sont additionnés, puis les tranches marginales 30/20/10 sont appliquées au total. Une facture consolidée est émise et ventilée analytiquement par école. Le minimum de 15 000 FCFA s'applique une seule fois au groupe. Le comptage, les mouvements en cours d'année, les transferts et les doubles inscriptions temporaires sont tracés ; un élève est compté une seule fois à l'instant de facturation dans une même organisation.
 
 ## 23.3 Parents
 
-🔒 Décision V3.0.2 : compte familial unique. ACCESS est gratuit. PREMIUM est facultatif et dégressif selon le nombre d'enfants distincts rattachés, indépendamment du nombre d'écoles partenaires.
+🔒 Décision V3.0.3 confirmée : compte familial unique. ACCESS est gratuit. PREMIUM est facultatif et dégressif selon le nombre d'enfants distincts rattachés, indépendamment du nombre d'écoles partenaires.
 
 | Enfants distincts | Mensuel | Annuel |
 |---:|---:|---:|
@@ -1699,7 +1700,7 @@ Les décisions suivantes restent ouvertes. Elles doivent être traitées dans un
 
 | ID | Arbitrage | Donnée ou décision attendue |
 |---|---|---|
-| A-001 | Grille abonnement école | 🔒 RÉSOLU V3.0.2 : 60 FCFA sur les 1 000 premiers élèves, 50 FCFA du 1 001e au 5 000e, 40 FCFA dès le 5 001e ; progressif marginal, minimum 15 000 FCFA/mois |
+| A-001 | Grille abonnement école | 🔒 RÉSOLU V3.0.3 : 30 FCFA sur les 1 000 premiers élèves, 20 FCFA du 1 001e au 5 000e, 10 FCFA dès le 5 001e ; progressif marginal, minimum 15 000 FCFA/mois conservé |
 | A-002 | Seuils d'effectifs | Date de comptage, élèves actifs, inscriptions tardives et changements de tranche |
 | A-003 | Abonnement parent | 🔒 RÉSOLU V3.0.2 : ACCESS gratuit et PREMIUM familial progressif selon le nombre d'enfants, chapitre 23.3 |
 | A-004 | Multi-écoles parent | 🔒 RÉSOLU V3.0.2 : un seul compte et abonnement familial ; un enfant compté une fois quel que soit le nombre d'écoles partenaires |
@@ -2344,7 +2345,7 @@ Les exigences suivantes sont confirmées comme exigences produit par le porteur 
 50. Les évaluations diffusées alimentent ACADEMIC RADAR ; le parent peut consulter avant le bulletin le rang provisoire de son enfant et voir son évolution en temps réel.
 51. Les classements sont filtrables par groupe, école, section, cycle, niveau, série, classe, matière, période, année, évaluation et compétence.
 52. Le parent ne voit que le rang et les indicateurs de son enfant, jamais les noms ou notes nominatives des autres élèves.
-53. Licence école : 60 FCFA/élève pour les 1 000 premiers, 50 FCFA du 1 001e au 5 000e, 40 FCFA dès le 5 001e ; progressif marginal, minimum 15 000 FCFA/mois.
+53. Licence école : tarif initial remplacé par la décision V3.0.3 : 30 FCFA/élève pour les 1 000 premiers, 20 FCFA du 1 001e au 5 000e, 10 FCFA dès le 5 001e ; progressif marginal, minimum 15 000 FCFA/mois conservé.
 54. Licence école facturée sur 12 mois et incluant tous les modules logiciels et les comptes du personnel autorisés sans supplément par utilisateur ou module.
 55. Les groupes scolaires cumulent les effectifs pour les tranches marginales ; le minimum s'applique une seule fois au groupe.
 56. ACCESS parent est gratuit, avec sécurité, suivi des cours, notes diffusées, rang personnel, bulletins, convocations, reçus, communauté et livret.
@@ -2464,9 +2465,9 @@ Les nouvelles notes sont notifiées après diffusion par le professeur. Les chan
 ## 47.3 Licence unique établissement — modèle final
 
 🔒 Le modèle établissement est une **licence unique par élève actif**, avec tarif progressif marginal :
-- 60 FCFA par élève pour les 1 000 premiers ;
-- 50 FCFA par élève du 1 001e au 5 000e ;
-- 40 FCFA par élève à partir du 5 001e.
+- 30 FCFA par élève pour les 1 000 premiers ;
+- 20 FCFA par élève du 1 001e au 5 000e ;
+- 10 FCFA par élève à partir du 5 001e.
 
 Minimum de facturation : 15 000 FCFA par mois pour un établissement indépendant. Le minimum ne s'applique qu'une fois à un groupe scolaire sous contrat consolidé.
 
@@ -2477,15 +2478,15 @@ Aucun supplément de licence n'est facturé par enseignant, par personnel, par c
 ### 47.3.1 Calcul des tranches
 
 Les tranches sont marginales et progressives. Exemple à 2 500 élèves :
-- 1 000 × 60 = 60 000 FCFA ;
-- 1 500 × 50 = 75 000 FCFA ;
-- total mensuel = 135 000 FCFA.
+- 1 000 × 30 = 30 000 FCFA ;
+- 1 500 × 20 = 30 000 FCFA ;
+- total mensuel = 60 000 FCFA.
 
 Exemple à 10 000 élèves :
-- 1 000 × 60 = 60 000 FCFA ;
-- 4 000 × 50 = 200 000 FCFA ;
-- 5 000 × 40 = 200 000 FCFA ;
-- total mensuel = 460 000 FCFA.
+- 1 000 × 30 = 30 000 FCFA ;
+- 4 000 × 20 = 80 000 FCFA ;
+- 5 000 × 10 = 50 000 FCFA ;
+- total mensuel = 160 000 FCFA.
 
 Le minimum de 15 000 FCFA s'applique si le montant calculé est inférieur, à l'échelle de l'établissement indépendant ou du groupe consolidé.
 
@@ -2497,7 +2498,7 @@ Un élève ne peut être compté qu'une seule fois au même instant de facturati
 
 ## 47.4 ACCESS gratuit et PREMIUM familial
 
-🔒 Un parent possède un compte familial unique pour suivre plusieurs enfants dans plusieurs établissements partenaires. ACCESS est gratuit ; PREMIUM est facultatif, tarifé selon le nombre d'enfants distincts gérés.
+🔒 Décision parentale confirmée V3.0.3 : un parent possède un compte familial unique pour suivre plusieurs enfants dans plusieurs établissements partenaires. ACCESS est gratuit ; PREMIUM est facultatif, tarifé selon le nombre d'enfants distincts gérés conformément au barème confirmé au chapitre 23.3.
 
 ### 47.4.1 ACCESS gratuit
 
@@ -2698,7 +2699,7 @@ Les entités conceptuelles à intégrer au dictionnaire de données :
 
 Les noms sont conceptuels, pas une migration SQL déjà appliquée.
 
-## 47.15 Critères de recette V3.0.2
+## 47.15 Critères de recette V3.0.2 — amendés par V3.0.3
 
 ### Bulletin vivant et ACADEMIC RADAR
 1. Après validation, les notes alimentent le calcul pédagogique selon leurs statuts.
@@ -2712,7 +2713,7 @@ Les noms sont conceptuels, pas une migration SQL déjà appliquée.
 9. Un bulletin officiel demeure distinct du rang provisoire.
 
 ### Licence établissement et PREMIUM
-10. La facture établissement applique les tranches marginales 60/50/40.
+10. La facture établissement applique les tranches marginales 30/20/10.
 11. Le minimum de 15 000 FCFA est appliqué une seule fois à une école indépendante ou un groupe consolidé.
 12. Les modules et comptes du personnel ne génèrent aucun supplément de licence par siège ou module.
 13. Le calcul de groupe cumule les élèves actifs et ne compte pas deux fois le même élève dans l'organisation.
@@ -2754,7 +2755,7 @@ Les noms sont conceptuels, pas une migration SQL déjà appliquée.
 
 ## 47.16 Arbitrages résiduels après gel
 
-Les arbitrages A-001, A-003 et A-004 sont clôturés par les décisions V3.0.2.
+Les arbitrages A-001, A-003 et A-004 sont clôturés ou confirmés par les décisions V3.0.3.
 
 Restent ouverts :
 - A-002 : instantané des effectifs, mouvements, date et prorata ;
@@ -2773,3 +2774,52 @@ Restent ouverts :
 Ces arbitrages ne remettent pas en cause les décisions métier gelées ; ils précisent des paramètres d'exécution ou les gates de conformité.
 
 **Fin de l'addendum CAMPUS237 V3.0.2.**
+
+---
+
+# 48. ADDENDUM V3.0.3 — CORRECTION DU BARÈME ÉTABLISSEMENT ET CONFIRMATION DES TARIFS PARENTS
+
+Le présent addendum est approuvé par le porteur du projet le 22 novembre 2026. Il remplace les taux de licence établissement précédemment inscrits en V3.0.2 et confirme la grille parentale ACCESS/PREMIUM. Toutes les autres dispositions V3.0.2 non modifiées expressément demeurent applicables.
+
+## 48.1 Barème établissement corrigé — décision verrouillée
+
+🔒 Le tarif mensuel par élève actif est progressif et marginal :
+
+| Tranche d'effectif actif | Tarif par élève dans la tranche |
+|---|---:|
+| Du 1er au 1 000e | 30 FCFA / mois |
+| Du 1 001e au 5 000e | 20 FCFA / mois |
+| À partir du 5 001e | 10 FCFA / mois |
+
+Chaque taux ne s'applique qu'aux élèves de sa tranche. Le calcul se fait sur l'effectif cumulé d'un groupe scolaire sous contrat consolidé, sans recommencer les tranches par école. Le minimum de facturation de 15 000 FCFA par mois, déjà inscrit dans la baseline antérieure, est conservé dans cette mise à jour ; il s'applique une seule fois à une école indépendante ou à un groupe consolidé.
+
+| Effectif actif | Calcul marginal | Montant mensuel |
+|---:|---|---:|
+| 200 | 200 × 30 = 6 000 ; minimum applicable | 15 000 FCFA |
+| 500 | 500 × 30 = 15 000 | 15 000 FCFA |
+| 800 | 800 × 30 | 24 000 FCFA |
+| 1 000 | 1 000 × 30 | 30 000 FCFA |
+| 2 000 | 1 000 × 30 + 1 000 × 20 | 50 000 FCFA |
+| 2 500 | 1 000 × 30 + 1 500 × 20 | 60 000 FCFA |
+| 5 000 | 1 000 × 30 + 4 000 × 20 | 110 000 FCFA |
+| 10 000 | 1 000 × 30 + 4 000 × 20 + 5 000 × 10 | 160 000 FCFA |
+
+La facturation établissement reste annuelle sur 12 mois. Aucun changement n'est apporté à l'inclusion de tous les modules logiciels ni à l'absence de supplément par enseignant, utilisateur, compte ou module.
+
+## 48.2 Tarification parentale confirmée
+
+🔒 Le porteur du projet confirme la tarification parentale déjà inscrite au chapitre 23.3 et à l'addendum V3.0.2 :
+- ACCESS reste gratuit et inclut les fonctions essentielles de sécurité, de suivi scolaire et de communication définies dans le cahier ;
+- PREMIUM est facultatif, familial et calculé sur le nombre d'enfants distincts vérifiés ;
+- les montants mensuels restent de 600 FCFA pour 1 enfant, 900 FCFA pour 2, 1 150 FCFA pour 3, 1 350 FCFA pour 4, 1 550 FCFA pour 5, puis 200 FCFA supplémentaires par enfant au-delà du cinquième ;
+- le paiement annuel reste égal à sept mensualités ;
+- le même enfant n'est compté qu'une fois dans le compte familial, y compris en cas de scolarisation dans plusieurs écoles partenaires ou de transfert ;
+- les droits parentaux et les droits de garde restent indépendants du statut de payeur.
+
+Aucune modification n'est apportée à l'arbitrage A-005 relatif au partage 80/20 du Premium avec le fonds de l'école, qui demeure ouvert.
+
+## 48.3 Conséquences documentaires et recette
+
+Les anciens taux 60/50/40 sont obsolètes et ne doivent plus être utilisés dans les interfaces, devis, factures, simulations, tests ou supports commerciaux. Les critères de recette établissement doivent vérifier les taux 30/20/10, le caractère marginal des tranches, le minimum contractuel conservé et la consolidation multi-écoles. La grille parentale doit être testée selon les paliers confirmés au chapitre 23.3.
+
+**Fin de l'addendum CAMPUS237 V3.0.3.**
