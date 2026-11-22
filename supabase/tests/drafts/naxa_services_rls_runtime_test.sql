@@ -1149,6 +1149,181 @@ END
 $cash_session_direct_write_guard$;
 RESET ROLE;
 
+
+INSERT INTO public.ns_cash_registers(id,org_id,site_id,code,name,workstation_id,active)
+VALUES (
+  '9e000000-0000-4000-8000-000000000010',
+  '20000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  'CI-CAISSE-SALE','Caisse ventes N2',NULL,true
+);
+
+SET ROLE authenticated;
+DO $sale_sync$
+DECLARE
+  v_result jsonb;
+  v_replay jsonb;
+  v_sale_id uuid:='a2000000-0000-4000-8000-000000000001';
+  v_pending_sale_id uuid:='a2000000-0000-4000-8000-000000000002';
+  v_cash_session_id uuid:='9f000000-0000-4000-8000-000000000010';
+  v_sale_event uuid:='a3000000-0000-4000-8000-000000000001';
+  v_cancel_event uuid:='a3000000-0000-4000-8000-000000000003';
+  v_rejected boolean:=false;
+BEGIN
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a3000000-0000-4000-8000-000000000000'::uuid,90,
+    'cash_session','9f000000-0000-4000-8000-000000000010',
+    'cash_session.opened',
+    jsonb_build_object(
+      'cash_session_id',v_cash_session_id,
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'register_id','9e000000-0000-4000-8000-000000000010',
+      'register_name','Caisse ventes N2','opening_float_xaf',5000,'opened_at',now()
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'SALE_TEST_CASH_SESSION_NOT_OPENED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,v_sale_event,91,
+    'sale',v_sale_id::text,'sale.created',
+    jsonb_build_object(
+      'sale_id',v_sale_id,'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'cash_session_id',v_cash_session_id,'sale_number','CI-SALE-N2-001',
+      'description','Vente espèces stock CI','total_xaf',7000,
+      'payment_method','cash','status','confirmed',
+      'inventory_item_id','92000000-0000-4000-8000-000000000001',
+      'stock_quantity',2.0,'created_at',now()
+    )
+  );
+  IF v_result->>'status'<>'applied' OR v_result->'inventory_posting'->>'status'='awaiting_verified_provider_confirmation' THEN
+    RAISE EXCEPTION 'CASH_SALE_NOT_POSTED_ATOMICALLY: %',v_result;
+  END IF;
+
+  v_replay:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,v_sale_event,91,
+    'sale',v_sale_id::text,'sale.created',
+    jsonb_build_object(
+      'sale_id',v_sale_id,'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'cash_session_id',v_cash_session_id,'sale_number','CI-SALE-N2-001',
+      'description','Vente espèces stock CI','total_xaf',7000,
+      'payment_method','cash','status','confirmed',
+      'inventory_item_id','92000000-0000-4000-8000-000000000001',
+      'stock_quantity',2.0,'created_at',now()
+    )
+  );
+  IF coalesce((v_replay->>'idempotent')::boolean,false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'CASH_SALE_IDENTICAL_REPLAY_NOT_IDEMPOTENT: %',v_replay;
+  END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a3000000-0000-4000-8000-000000000002'::uuid,92,
+    'sale',v_pending_sale_id::text,'sale.created',
+    jsonb_build_object(
+      'sale_id',v_pending_sale_id,'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'cash_session_id',v_cash_session_id,'sale_number','CI-SALE-N2-002',
+      'description','Vente Mobile Money en attente','total_xaf',3000,
+      'payment_method','mobile_money','status','pending',
+      'inventory_item_id','92000000-0000-4000-8000-000000000001',
+      'stock_quantity',1.5,'created_at',now()
+    )
+  );
+  IF v_result->>'payment_status'<>'pending'
+     OR v_result->>'server_status'<>'draft'
+     OR v_result->'inventory_posting'->>'status'<>'awaiting_verified_provider_confirmation' THEN
+    RAISE EXCEPTION 'MOBILE_MONEY_SALE_WAS_NOT_LEFT_PENDING: %',v_result;
+  END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,v_cancel_event,93,
+    'sale',v_pending_sale_id::text,'sale.mobile_money_cancelled',
+    jsonb_build_object(
+      'sale_id',v_pending_sale_id,'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'expected_status','pending','reason','Annulation avant confirmation opérateur',
+      'cancelled_at',now()+interval '1 minute'
+    )
+  );
+  IF v_result->>'status'<>'applied' OR v_result->>'server_status'<>'voided'
+     OR v_result->>'payment_status'<>'failed'
+     OR coalesce((v_result->>'reservation_released')::boolean,false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'PENDING_MOBILE_MONEY_SALE_NOT_CANCELLED: %',v_result;
+  END IF;
+
+  BEGIN
+    PERFORM public.ns_cancel_pending_mobile_money_sale(
+      v_sale_id,'20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,'pending',
+      'Tentative de suppression après paiement confirmé',now()+interval '2 minutes'
+    );
+    RAISE EXCEPTION 'CONFIRMED_CASH_SALE_WAS_ALLOWED_TO_CANCEL';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM<>'NAXA_SALE_NOT_PENDING' THEN RAISE; END IF;
+  END;
+END
+$sale_sync$;
+RESET ROLE;
+
+DO $sale_assertions$
+DECLARE
+  v_sale_status text; v_payment_status text; v_quantity numeric(14,3);
+  v_cost bigint; v_movement_count integer; v_receipt_count integer;
+  v_pending_status text; v_pending_payment text;
+BEGIN
+  SELECT status,cost_of_goods_xaf INTO v_sale_status,v_cost
+  FROM public.ns_sales WHERE id='a2000000-0000-4000-8000-000000000001';
+  SELECT status INTO v_payment_status FROM public.ns_payments WHERE sale_id='a2000000-0000-4000-8000-000000000001';
+  SELECT quantity INTO v_quantity FROM public.ns_inventory_items
+  WHERE id='92000000-0000-4000-8000-000000000001';
+  SELECT count(*) INTO v_movement_count FROM public.ns_inventory_movements
+  WHERE idempotency_key='a3000000-0000-4000-8000-000000000001';
+  SELECT count(*) INTO v_receipt_count FROM public.ns_sync_receipts
+  WHERE client_event_id='a3000000-0000-4000-8000-000000000001';
+  SELECT status INTO v_pending_status FROM public.ns_sales
+  WHERE id='a2000000-0000-4000-8000-000000000002';
+  SELECT status INTO v_pending_payment FROM public.ns_payments
+  WHERE sale_id='a2000000-0000-4000-8000-000000000002';
+
+  IF v_sale_status<>'posted' OR v_payment_status<>'confirmed'
+     OR v_quantity<>10.5 OR v_cost<>3400 OR v_movement_count<>1 OR v_receipt_count<>1 THEN
+    RAISE EXCEPTION 'CASH_SALE_STOCK_PAYMENT_OR_ACCOUNTING_ASSERTION_FAILED';
+  END IF;
+  IF v_pending_status<>'voided' OR v_pending_payment<>'failed' THEN
+    RAISE EXCEPTION 'MOBILE_MONEY_CANCELLATION_FINAL_STATE_INVALID';
+  END IF;
+END
+$sale_assertions$;
+
+SET ROLE authenticated;
+DO $sale_direct_write_guard$
+BEGIN
+  IF has_table_privilege(current_user,'public.ns_sales','INSERT')
+     OR has_table_privilege(current_user,'public.ns_sales','UPDATE')
+     OR has_table_privilege(current_user,'public.ns_payments','INSERT')
+     OR has_table_privilege(current_user,'public.ns_payments','UPDATE')
+     OR has_table_privilege(current_user,'public.ns_sale_lines','INSERT')
+     OR has_table_privilege(current_user,'public.ns_sale_lines','UPDATE') THEN
+    RAISE EXCEPTION 'CLIENT_CAN_BYPASS_SALE_OR_PAYMENT_RPC';
+  END IF;
+END
+$sale_direct_write_guard$;
+RESET ROLE;
+
 UPDATE public.ns_devices SET revoked_at=now() WHERE id='80000000-0000-4000-8000-000000000001';
 SET ROLE authenticated;
 DO $revocation$
