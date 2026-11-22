@@ -156,6 +156,54 @@ data class LocalOutboxEvent(
     val remoteId: String? = null
 )
 
+@Entity(
+    tableName = "local_sync_checkpoints",
+    primaryKeys = ["orgId", "deviceId"]
+)
+data class LocalSyncCheckpoint(
+    val orgId: String,
+    val deviceId: String,
+    val cursor: Long,
+    val updatedAtEpochMs: Long
+)
+
+@Entity(
+    tableName = "local_remote_changes",
+    indices = [Index(value = ["orgId", "changeCursor"], unique = true)]
+)
+data class LocalRemoteChange(
+    @PrimaryKey val eventId: String,
+    val orgId: String,
+    val changeCursor: Long,
+    val sourceDeviceId: String,
+    val siteId: String?,
+    val workstationId: String?,
+    val aggregateType: String,
+    val aggregateId: String,
+    val actionCode: String,
+    val aggregateVersion: Long,
+    val projectionJson: String,
+    val recordedAt: String,
+    val receivedAtEpochMs: Long
+)
+
+@Entity(
+    tableName = "local_remote_aggregates",
+    primaryKeys = ["orgId", "aggregateType", "aggregateId"],
+    indices = [Index(value = ["orgId", "siteId", "aggregateType"])]
+)
+data class LocalRemoteAggregate(
+    val orgId: String,
+    val siteId: String?,
+    val aggregateType: String,
+    val aggregateId: String,
+    val aggregateVersion: Long,
+    val lastChangeCursor: Long,
+    val projectionJson: String,
+    val needsReview: Boolean = false,
+    val updatedAtEpochMs: Long
+)
+
 @Entity(tableName = "local_organization_profiles")
 data class LocalOrganizationProfile(
     @PrimaryKey val orgId: String,
@@ -744,6 +792,33 @@ interface NaxaServicesDao {
     @Query("SELECT COUNT(*) FROM local_outbox_events WHERE orgId = :orgId AND aggregateType = 'inventory_item' AND aggregateId = :itemId AND state = 'synced' AND remoteId = :itemId")
     suspend fun countSyncedInventoryItemMapping(orgId: String, itemId: String): Int
 
+    @Query("SELECT * FROM local_sync_checkpoints WHERE orgId = :orgId AND deviceId = :deviceId LIMIT 1")
+    suspend fun findSyncCheckpoint(orgId: String, deviceId: String): LocalSyncCheckpoint?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSyncCheckpoint(checkpoint: LocalSyncCheckpoint)
+
+    @Query("SELECT * FROM local_remote_changes WHERE eventId = :eventId LIMIT 1")
+    suspend fun findRemoteChange(eventId: String): LocalRemoteChange?
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertRemoteChange(change: LocalRemoteChange)
+
+    @Query("SELECT * FROM local_remote_aggregates WHERE orgId = :orgId AND aggregateType = :aggregateType AND aggregateId = :aggregateId LIMIT 1")
+    suspend fun findRemoteAggregate(orgId: String, aggregateType: String, aggregateId: String): LocalRemoteAggregate?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertRemoteAggregate(aggregate: LocalRemoteAggregate)
+
+    @Query("SELECT * FROM local_remote_aggregates WHERE orgId = :orgId AND siteId = :siteId AND aggregateType = :aggregateType ORDER BY lastChangeCursor DESC")
+    fun observeRemoteAggregates(orgId: String, siteId: String?, aggregateType: String): Flow<List<LocalRemoteAggregate>>
+
+    @Query("SELECT COUNT(*) FROM local_outbox_events WHERE orgId = :orgId AND aggregateType = :aggregateType AND aggregateId = :aggregateId AND state IN ('queued','retry_wait','blocked_dependency')")
+    suspend fun countPendingLocalMutations(orgId: String, aggregateType: String, aggregateId: String): Int
+
+    @Query("SELECT COUNT(*) FROM local_remote_changes WHERE orgId = :orgId")
+    suspend fun countRemoteChanges(orgId: String): Int
+
     @Query("SELECT * FROM local_organization_profiles WHERE orgId = :orgId LIMIT 1")
     fun observeOrganizationProfile(orgId: String): Flow<LocalOrganizationProfile?>
 
@@ -1065,6 +1140,9 @@ interface NaxaServicesDao {
         LocalSale::class,
         LocalExpense::class,
         LocalOutboxEvent::class,
+        LocalSyncCheckpoint::class,
+        LocalRemoteChange::class,
+        LocalRemoteAggregate::class,
         LocalOrganizationProfile::class,
         LocalSite::class,
         LocalWorkstation::class,
@@ -1089,7 +1167,7 @@ interface NaxaServicesDao {
         LocalSupplierPayment::class,
         LocalAccountingEntry::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -1308,8 +1386,156 @@ val NS_SERVICES_MIGRATION_13_14: Migration = object : Migration(13, 14) {
     }
 }
 
+val NS_SERVICES_MIGRATION_14_15: Migration = object : Migration(14, 15) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS local_sync_checkpoints (" +
+                "orgId TEXT NOT NULL, deviceId TEXT NOT NULL, cursor INTEGER NOT NULL, " +
+                "updatedAtEpochMs INTEGER NOT NULL, PRIMARY KEY(orgId, deviceId))"
+        )
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS local_remote_changes (" +
+                "eventId TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, changeCursor INTEGER NOT NULL, " +
+                "sourceDeviceId TEXT NOT NULL, siteId TEXT, workstationId TEXT, aggregateType TEXT NOT NULL, " +
+                "aggregateId TEXT NOT NULL, actionCode TEXT NOT NULL, aggregateVersion INTEGER NOT NULL, " +
+                "projectionJson TEXT NOT NULL, recordedAt TEXT NOT NULL, receivedAtEpochMs INTEGER NOT NULL)"
+        )
+        database.execSQL(
+            "CREATE UNIQUE INDEX IF NOT EXISTS index_local_remote_changes_orgId_changeCursor " +
+                "ON local_remote_changes(orgId, changeCursor)"
+        )
+        database.execSQL(
+            "CREATE TABLE IF NOT EXISTS local_remote_aggregates (" +
+                "orgId TEXT NOT NULL, siteId TEXT, aggregateType TEXT NOT NULL, aggregateId TEXT NOT NULL, " +
+                "aggregateVersion INTEGER NOT NULL, lastChangeCursor INTEGER NOT NULL, projectionJson TEXT NOT NULL, " +
+                "needsReview INTEGER NOT NULL DEFAULT 0, updatedAtEpochMs INTEGER NOT NULL, " +
+                "PRIMARY KEY(orgId, aggregateType, aggregateId))"
+        )
+        database.execSQL(
+            "CREATE INDEX IF NOT EXISTS index_local_remote_aggregates_orgId_siteId_aggregateType " +
+                "ON local_remote_aggregates(orgId, siteId, aggregateType)"
+        )
+    }
+}
+
 class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
     val dao: NaxaServicesDao = database.naxaServicesDao()
+
+    /**
+     * Persists an authenticated server page and its cursor atomically. Incoming
+     * peer changes are written only to the remote replica tables; this method
+     * never calls enqueue() and therefore cannot echo a remote mutation upstream.
+     */
+    suspend fun persistRemoteSyncPage(
+        orgId: String,
+        deviceId: String,
+        page: JSONObject,
+        receivedAtEpochMs: Long = System.currentTimeMillis()
+    ): Int = database.withTransaction {
+        require(orgId.isNotBlank() && deviceId.isNotBlank())
+        require(page.optString("device_id") == deviceId) { "SYNC_PULL_DEVICE_MISMATCH" }
+        val nextCursor = page.optLong("next_cursor", -1L)
+        require(nextCursor >= 0L) { "SYNC_PULL_CURSOR_INVALID" }
+        val changes = page.optJSONArray("changes") ?: throw IllegalArgumentException("SYNC_PULL_CHANGES_MISSING")
+        val previous = dao.findSyncCheckpoint(orgId, deviceId)?.cursor ?: 0L
+        require(nextCursor >= previous) { "SYNC_PULL_CURSOR_REGRESSION" }
+
+        var priorPageCursor = previous
+        var inserted = 0
+        for (index in 0 until changes.length()) {
+            val row = changes.optJSONObject(index) ?: throw IllegalArgumentException("SYNC_CHANGE_INVALID_ROW")
+            val eventId = row.optString("event_id")
+            val sourceDeviceId = row.optString("source_device_id")
+            val cursor = row.optLong("cursor", -1L)
+            val aggregateType = row.optString("aggregate_type")
+            val aggregateId = row.optString("aggregate_id")
+            val actionCode = row.optString("action_code")
+            val aggregateVersion = row.optLong("aggregate_version", 0L)
+            val projection = row.optJSONObject("payload") ?: throw IllegalArgumentException("SYNC_CHANGE_PAYLOAD_INVALID")
+            require(eventId.matches(Regex("^[0-9a-fA-F-]{36}$")) &&
+                sourceDeviceId.matches(Regex("^[0-9a-fA-F-]{36}$")) &&
+                sourceDeviceId != deviceId &&
+                cursor > priorPageCursor && cursor <= nextCursor &&
+                aggregateType.isNotBlank() && aggregateId.isNotBlank() && actionCode.isNotBlank() &&
+                aggregateVersion >= 0L
+            ) { "SYNC_CHANGE_ENVELOPE_INVALID" }
+            priorPageCursor = cursor
+
+            val projectionJson = projection.toString()
+            val existing = dao.findRemoteChange(eventId)
+            if (existing != null) {
+                require(existing.orgId == orgId && existing.changeCursor == cursor &&
+                    existing.sourceDeviceId == sourceDeviceId &&
+                    existing.aggregateType == aggregateType && existing.aggregateId == aggregateId &&
+                    existing.actionCode == actionCode && existing.projectionJson == projectionJson
+                ) { "SYNC_CHANGE_IDEMPOTENCY_CONFLICT" }
+                continue
+            }
+
+            val siteId = row.optString("site_id").takeUnless { it.isBlank() || it == "null" }
+            val workstationId = row.optString("workstation_id").takeUnless { it.isBlank() || it == "null" }
+            val recordedAt = row.optString("recorded_at")
+            dao.insertRemoteChange(
+                LocalRemoteChange(
+                    eventId = eventId,
+                    orgId = orgId,
+                    changeCursor = cursor,
+                    sourceDeviceId = sourceDeviceId,
+                    siteId = siteId,
+                    workstationId = workstationId,
+                    aggregateType = aggregateType,
+                    aggregateId = aggregateId,
+                    actionCode = actionCode,
+                    aggregateVersion = aggregateVersion,
+                    projectionJson = projectionJson,
+                    recordedAt = recordedAt,
+                    receivedAtEpochMs = receivedAtEpochMs
+                )
+            )
+            val current = dao.findRemoteAggregate(orgId, aggregateType, aggregateId)
+            val merged = JSONObject(current?.projectionJson ?: "{}")
+            val keys = projection.keys()
+            while (keys.hasNext()) {
+                val key = keys.next()
+                merged.put(key, projection.get(key))
+            }
+            when {
+                actionCode.endsWith(".status_changed") ->
+                    merged.put("status", projection.optString("to_status"))
+                actionCode.startsWith("pressing_order.status_changed:") ->
+                    merged.put("status", actionCode.substringAfter(':'))
+                actionCode == "cash_session.opened" -> merged.put("status", "open")
+                actionCode == "cash_session.closed" -> merged.put("status", "closed")
+                actionCode == "sale.mobile_money_cancelled" -> merged.put("status", "voided")
+            }
+            val pendingLocal = dao.countPendingLocalMutations(orgId, aggregateType, aggregateId) > 0
+            dao.upsertRemoteAggregate(
+                LocalRemoteAggregate(
+                    orgId = orgId,
+                    siteId = siteId ?: current?.siteId,
+                    aggregateType = aggregateType,
+                    aggregateId = aggregateId,
+                    aggregateVersion = maxOf(current?.aggregateVersion ?: 0L, aggregateVersion),
+                    lastChangeCursor = cursor,
+                    projectionJson = merged.toString(),
+                    needsReview = pendingLocal || (current?.needsReview ?: false),
+                    updatedAtEpochMs = receivedAtEpochMs
+                )
+            )
+            inserted++
+        }
+
+        require(nextCursor >= priorPageCursor) { "SYNC_PULL_CURSOR_BEFORE_LAST_CHANGE" }
+        dao.upsertSyncCheckpoint(
+            LocalSyncCheckpoint(
+                orgId = orgId,
+                deviceId = deviceId,
+                cursor = nextCursor,
+                updatedAtEpochMs = receivedAtEpochMs
+            )
+        )
+        inserted
+    }
 
 
     suspend fun saveSupplier(
