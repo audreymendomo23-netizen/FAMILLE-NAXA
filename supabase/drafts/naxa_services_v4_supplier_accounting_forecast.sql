@@ -2353,6 +2353,627 @@ grant execute on function public.ns_create_sale(uuid,uuid,uuid,uuid,uuid,text,te
 revoke all on function public.ns_cancel_pending_mobile_money_sale(uuid,uuid,uuid,text,text,timestamptz) from public, anon, authenticated;
 grant execute on function public.ns_cancel_pending_mobile_money_sale(uuid,uuid,uuid,text,text,timestamptz) to service_role;
 
+
+alter table public.ns_inventory_transfers
+  add constraint ns_inventory_transfers_management_record_fk
+  foreign key (id,source_site_id,org_id)
+  references public.ns_management_records(id,site_id,org_id) on delete restrict;
+
+create or replace function public.ns_update_customer(
+  p_customer_id uuid,p_org_id uuid,p_site_id uuid,
+  p_display_name text,p_phone_contact text,p_contact_consent boolean,
+  p_address_line text,p_neighborhood text,p_landmark text,
+  p_latitude numeric,p_longitude numeric,p_location_consent_at timestamptz,
+  p_notes_private text,p_expected_version integer
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_customer public.ns_customers%rowtype;
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_CUSTOMER_UPDATE_FORBIDDEN';
+  end if;
+  if p_customer_id is null or p_expected_version is null
+     or length(trim(coalesce(p_display_name,''))) not between 2 and 160
+     or length(coalesce(p_phone_contact,''))>32
+     or p_contact_consent is null
+     or length(coalesce(p_address_line,''))>240
+     or length(coalesce(p_neighborhood,''))>120
+     or length(coalesce(p_landmark,''))>160
+     or length(coalesce(p_notes_private,''))>2000 then
+    raise exception 'NAXA_CUSTOMER_UPDATE_INVALID';
+  end if;
+  if (p_latitude is null) <> (p_longitude is null)
+     or (p_latitude is not null and (p_latitude not between -90 and 90 or p_longitude not between -180 and 180)) then
+    raise exception 'NAXA_CUSTOMER_LOCATION_INVALID';
+  end if;
+  if (p_latitude is not null or p_longitude is not null) and p_location_consent_at is null then
+    raise exception 'NAXA_CUSTOMER_LOCATION_CONSENT_REQUIRED';
+  end if;
+  if coalesce(p_notes_private,'')<>'' and not public.ns_can_manage_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_CUSTOMER_PRIVATE_NOTES_FORBIDDEN';
+  end if;
+  select * into v_customer from public.ns_customers
+   where id=p_customer_id and org_id=p_org_id and site_id=p_site_id
+   for update;
+  if not found then raise exception 'NAXA_CUSTOMER_NOT_FOUND'; end if;
+  if v_customer.revision<>p_expected_version then
+    raise exception 'NAXA_CUSTOMER_VERSION_CONFLICT';
+  end if;
+  update public.ns_customers set
+    display_name=trim(p_display_name),
+    phone_contact=trim(coalesce(p_phone_contact,'')),
+    contact_consent=p_contact_consent,
+    address_line=trim(coalesce(p_address_line,'')),
+    neighborhood=trim(coalesce(p_neighborhood,'')),
+    landmark=trim(coalesce(p_landmark,'')),
+    latitude=p_latitude,
+    longitude=p_longitude,
+    location_consent_at=case when p_latitude is null then null else p_location_consent_at end,
+    notes_private=case when public.ns_can_manage_site(p_org_id,p_site_id) then trim(coalesce(p_notes_private,'')) else v_customer.notes_private end,
+    revision=revision+1,updated_at=now()
+  where id=p_customer_id and org_id=p_org_id and site_id=p_site_id
+  returning * into v_customer;
+  return jsonb_build_object('customer_id',v_customer.id,'revision',v_customer.revision,'updated',true);
+end;
+$naxa$;
+
+create or replace function public.ns_convert_waitlist_to_appointment(
+  p_appointment_id uuid,p_org_id uuid,p_site_id uuid,p_waitlist_record_id uuid,
+  p_workstation_id uuid,p_starts_at timestamptz,p_duration_minutes integer,
+  p_deposit_xaf bigint,p_reason text,p_assigned_member_id uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_waitlist public.ns_management_records%rowtype;
+  v_result jsonb;
+  v_appointment_end timestamptz;
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_WAITLIST_CONVERSION_FORBIDDEN';
+  end if;
+  if p_appointment_id is null or p_waitlist_record_id is null
+     or p_starts_at is null or p_duration_minutes is null or p_duration_minutes not between 5 and 600
+     or p_deposit_xaf is null or p_deposit_xaf<0
+     or length(trim(coalesce(p_reason,''))) not between 3 and 500 then
+    raise exception 'NAXA_WAITLIST_CONVERSION_INVALID';
+  end if;
+  select * into v_waitlist from public.ns_management_records
+   where id=p_waitlist_record_id and org_id=p_org_id and site_id=p_site_id
+   for update;
+  if not found or v_waitlist.record_type<>'appointment_waitlist'
+     or v_waitlist.status not in ('open','contacted') then
+    raise exception 'NAXA_WAITLIST_ENTRY_NOT_CONVERTIBLE';
+  end if;
+  v_appointment_end:=p_starts_at+make_interval(mins=>p_duration_minutes);
+  v_result:=public.ns_create_appointment(
+    p_appointment_id,p_org_id,p_site_id,p_workstation_id,
+    v_waitlist.counterparty,v_waitlist.title,p_assigned_member_id,
+    p_starts_at,v_appointment_end,p_deposit_xaf,'booked'
+  );
+  update public.ns_management_records
+    set status='booked',revision=revision+1,updated_at=now()
+    where id=p_waitlist_record_id and org_id=p_org_id and site_id=p_site_id;
+  insert into public.ns_management_record_events(
+    id,org_id,site_id,record_id,from_status,to_status,reason,actor_member_id,revision,occurred_at
+  ) values (
+    gen_random_uuid(),p_org_id,p_site_id,p_waitlist_record_id,v_waitlist.status,'booked',
+    trim(p_reason),v_member,v_waitlist.revision+1,now()
+  );
+  return v_result || jsonb_build_object('waitlist_record_id',p_waitlist_record_id,'waitlist_status','booked');
+end;
+$naxa$;
+
+create or replace function public.ns_record_staff_time_event(
+  p_time_event_id uuid,p_org_id uuid,p_site_id uuid,p_workstation_id uuid,
+  p_staff_member_id uuid,p_staff_name_snapshot text,p_event_type text,p_occurred_at timestamptz
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_actor uuid;
+  v_latest public.ns_staff_time_events%rowtype;
+  v_sequence bigint;
+  v_allowed boolean:=false;
+begin
+  v_actor:=public.ns_current_member_id(p_org_id);
+  if v_actor is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_STAFF_TIME_FORBIDDEN';
+  end if;
+  if p_time_event_id is null or p_staff_member_id is null
+     or length(trim(coalesce(p_staff_name_snapshot,''))) not between 2 and 120
+     or p_event_type not in ('staff_clock_in','staff_break_start','staff_break_end','staff_clock_out')
+     or p_occurred_at is null then
+    raise exception 'NAXA_STAFF_TIME_INVALID';
+  end if;
+  if p_workstation_id is not null and (
+    not exists(select 1 from public.ns_workstations w
+      where w.id=p_workstation_id and w.org_id=p_org_id and w.site_id=p_site_id and w.status='active')
+    or not public.ns_can_operate_workstation(p_org_id,p_site_id,p_workstation_id)
+  ) then raise exception 'NAXA_STAFF_TIME_WORKSTATION_FORBIDDEN'; end if;
+  if not exists (
+    select 1 from public.ns_members m
+    join public.ns_member_scopes ms on ms.member_id=m.id and ms.org_id=m.org_id
+    where m.id=p_staff_member_id and m.org_id=p_org_id and m.status='active'
+      and (ms.scope_type='organization' or ms.site_id=p_site_id)
+  ) then raise exception 'NAXA_STAFF_TIME_MEMBER_NOT_FOUND'; end if;
+
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_org_id::text||':'||p_site_id::text||':'||p_staff_member_id::text||':staff-time',0)
+  );
+  select * into v_latest from public.ns_staff_time_events
+   where org_id=p_org_id and site_id=p_site_id and staff_member_id=p_staff_member_id
+   order by sequence_no desc limit 1;
+  if not found then
+    v_allowed:=p_event_type='staff_clock_in';
+    v_sequence:=1;
+  else
+    v_allowed:=case p_event_type
+      when 'staff_clock_in' then v_latest.event_type='staff_clock_out'
+      when 'staff_break_start' then v_latest.event_type in ('staff_clock_in','staff_break_end')
+      when 'staff_break_end' then v_latest.event_type='staff_break_start'
+      when 'staff_clock_out' then v_latest.event_type in ('staff_clock_in','staff_break_end')
+      else false
+    end;
+    v_sequence:=v_latest.sequence_no+1;
+    if p_occurred_at<v_latest.occurred_at then
+      raise exception 'NAXA_STAFF_TIME_EVENT_OUT_OF_ORDER';
+    end if;
+  end if;
+  if not v_allowed then raise exception 'NAXA_STAFF_TIME_SEQUENCE_INVALID'; end if;
+  insert into public.ns_staff_time_events(
+    id,org_id,site_id,workstation_id,staff_member_id,staff_name_snapshot,
+    event_type,occurred_at,sequence_no,actor_member_id
+  ) values (
+    p_time_event_id,p_org_id,p_site_id,p_workstation_id,p_staff_member_id,
+    trim(p_staff_name_snapshot),p_event_type,p_occurred_at,v_sequence,v_actor
+  );
+  return jsonb_build_object('time_event_id',p_time_event_id,'event_type',p_event_type,
+    'staff_member_id',p_staff_member_id,'sequence_no',v_sequence,'occurred_at',p_occurred_at,'recorded',true);
+end;
+$naxa$;
+
+create or replace function public.ns_create_management_record(
+  p_record_id uuid,p_org_id uuid,p_site_id uuid,p_workstation_id uuid,
+  p_record_type text,p_reference text,p_title text,p_counterparty text,
+  p_amount_xaf bigint,p_paid_xaf bigint,p_due_at timestamptz,p_status text,
+  p_metadata_json jsonb
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare v_member uuid; v_record public.ns_management_records%rowtype;
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_MANAGEMENT_RECORD_FORBIDDEN';
+  end if;
+  if p_record_id is null
+     or p_record_type not in (
+       'quote','invoice','credit_note','refund_due','customer_receivable','purchase',
+       'supplier','tax_estimate','business_goal','subscription_request','support_chat',
+       'work_order','repair_order','service_order','appointment_waitlist',
+       'staff_clock_in','staff_clock_out','staff_break_start','staff_break_end',
+       'staff_commission','staff_advance','staff_bonus'
+     )
+     or length(trim(coalesce(p_reference,''))) not between 1 and 120
+     or length(trim(coalesce(p_title,''))) not between 1 and 180
+     or length(coalesce(p_counterparty,''))>180
+     or p_amount_xaf is null or p_amount_xaf<0
+     or p_paid_xaf is null or p_paid_xaf<0 or p_paid_xaf>p_amount_xaf
+     or p_status not in (
+       'draft','received','open','diagnostic','measurement','quote_pending',
+       'waiting_customer','awaiting_approval','contacted','approved','waiting_parts',
+       'fabrication','fitting','proof_ready','production','planning','shooting',
+       'post_production','on_site','installation','ordered','partially_received',
+       'in_progress','quality_check','ready','delivered','invoice_review','closed',
+       'partial','paid','cancelled','pending_review','rejected','booked'
+     )
+     or jsonb_typeof(coalesce(p_metadata_json,'{}'::jsonb))<>'object'
+     or octet_length(coalesce(p_metadata_json,'{}'::jsonb)::text)>4000 then
+    raise exception 'NAXA_MANAGEMENT_RECORD_INVALID';
+  end if;
+  if p_workstation_id is not null and (
+    not exists(select 1 from public.ns_workstations w
+      where w.id=p_workstation_id and w.org_id=p_org_id and w.site_id=p_site_id and w.status='active')
+    or not public.ns_can_operate_workstation(p_org_id,p_site_id,p_workstation_id)
+  ) then raise exception 'NAXA_MANAGEMENT_RECORD_WORKSTATION_FORBIDDEN'; end if;
+
+  if (p_record_type in ('invoice','refund_due','customer_receivable') and p_status not in ('open','draft'))
+     or (p_record_type='appointment_waitlist' and p_status not in ('open','contacted'))
+     or (p_record_type in ('staff_commission','staff_advance','staff_bonus') and p_status not in ('pending_review','draft'))
+     or (p_record_type in ('staff_clock_in','staff_clock_out','staff_break_start','staff_break_end') and p_status<>'open')
+     or (p_record_type='quote' and p_status not in ('draft','open'))
+     or (p_record_type='purchase' and p_status not in ('draft','open')) then
+    raise exception 'NAXA_MANAGEMENT_RECORD_INITIAL_STATUS_INVALID';
+  end if;
+
+  insert into public.ns_management_records(
+    id,org_id,site_id,workstation_id,record_type,reference,title,counterparty,
+    amount_xaf,paid_xaf,due_at,status,metadata_json,revision,created_by
+  ) values (
+    p_record_id,p_org_id,p_site_id,p_workstation_id,p_record_type,trim(p_reference),
+    trim(p_title),trim(coalesce(p_counterparty,'')),p_amount_xaf,p_paid_xaf,
+    p_due_at,p_status,coalesce(p_metadata_json,'{}'::jsonb),1,v_member
+  ) returning * into v_record;
+
+  insert into public.ns_management_record_events(
+    id,org_id,site_id,record_id,from_status,to_status,reason,actor_member_id,revision,occurred_at
+  ) values (
+    gen_random_uuid(),p_org_id,p_site_id,p_record_id,'',p_status,
+    'Création du dossier',v_member,1,now()
+  );
+  return jsonb_build_object('record_id',v_record.id,'record_type',v_record.record_type,
+    'status',v_record.status,'revision',v_record.revision,'created',true);
+end;
+$naxa$;
+
+create or replace function public.ns_transition_management_record(
+  p_record_id uuid,p_org_id uuid,p_site_id uuid,p_workstation_id uuid,
+  p_record_type text,p_from_status text,p_to_status text,p_reason text,
+  p_expected_version integer,p_metadata_json_delta jsonb,p_transitioned_at timestamptz
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid; v_record public.ns_management_records%rowtype;
+  v_allowed boolean:=false; v_metadata jsonb;
+  v_transfer public.ns_inventory_transfers%rowtype;
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_MANAGEMENT_TRANSITION_FORBIDDEN';
+  end if;
+  if p_record_id is null or p_expected_version is null or p_expected_version<1
+     or length(trim(coalesce(p_reason,''))) not between 3 and 500
+     or jsonb_typeof(coalesce(p_metadata_json_delta,'{}'::jsonb))<>'object' then
+    raise exception 'NAXA_MANAGEMENT_TRANSITION_INVALID';
+  end if;
+  select * into v_record from public.ns_management_records
+   where id=p_record_id and org_id=p_org_id and site_id=p_site_id
+   for update;
+  if not found or v_record.record_type<>p_record_type then
+    raise exception 'NAXA_MANAGEMENT_RECORD_NOT_FOUND';
+  end if;
+  if v_record.status=p_to_status and v_record.revision>=p_expected_version then
+    return jsonb_build_object('record_id',v_record.id,'status',v_record.status,
+      'revision',v_record.revision,'idempotent',true);
+  end if;
+  if v_record.revision<>p_expected_version or v_record.status<>p_from_status then
+    raise exception 'NAXA_MANAGEMENT_RECORD_VERSION_CONFLICT';
+  end if;
+
+  if p_record_type='inventory_transfer' then
+    select * into v_transfer from public.ns_inventory_transfers
+      where id=p_record_id and org_id=p_org_id and source_site_id=p_site_id for update;
+    if not found then raise exception 'NAXA_INVENTORY_TRANSFER_NOT_FOUND'; end if;
+    v_allowed:=(p_from_status='open' and p_to_status in ('approved','rejected'))
+      or (p_from_status='approved' and p_to_status='received' and v_transfer.status='received');
+    if p_to_status='received' and v_transfer.status<>'received' then
+      raise exception 'NAXA_INVENTORY_TRANSFER_RECEIVE_REQUIRES_COMPOSITE_ACTION';
+    end if;
+    if p_to_status in ('approved','rejected') and not public.ns_can_manage_org(p_org_id) then
+      raise exception 'NAXA_INVENTORY_TRANSFER_APPROVAL_FORBIDDEN';
+    end if;
+    if v_transfer.status<>p_from_status and not (p_to_status='received' and v_transfer.status='received') then
+      raise exception 'NAXA_INVENTORY_TRANSFER_VERSION_CONFLICT';
+    end if;
+    if v_transfer.status=p_to_status and p_to_status='received' then
+      v_allowed:=true;
+    else
+      update public.ns_inventory_transfers
+       set status=p_to_status,revision=revision+1,
+           approved_by=case when p_to_status='approved' then v_member else approved_by end,
+           approved_at=case when p_to_status='approved' then coalesce(p_transitioned_at,now()) else approved_at end,
+           reason=trim(p_reason)
+       where id=p_record_id and org_id=p_org_id and source_site_id=p_site_id
+       returning * into v_transfer;
+    end if;
+  else
+    v_allowed:=case p_record_type
+      when 'quote' then (p_from_status in ('draft','open') and p_to_status in ('approved','rejected','cancelled'))
+      when 'invoice' then (p_from_status in ('open','partial') and p_to_status in ('partial','paid','cancelled'))
+      when 'credit_note' then (p_from_status in ('draft','open','approved') and p_to_status in ('approved','rejected','cancelled','paid'))
+      when 'refund_due' then (p_from_status in ('open','partial') and p_to_status in ('partial','paid','cancelled'))
+      when 'customer_receivable' then (p_from_status in ('open','partial') and p_to_status in ('partial','paid','cancelled'))
+      when 'purchase' then (
+        (p_from_status in ('draft','open') and p_to_status in ('ordered','cancelled'))
+        or (p_from_status='ordered' and p_to_status in ('partially_received','received','cancelled'))
+        or (p_from_status='partially_received' and p_to_status='received')
+        or (p_from_status='received' and p_to_status='invoice_review')
+        or (p_from_status='invoice_review' and p_to_status='closed')
+      )
+      when 'supplier' then (p_from_status in ('open','draft') and p_to_status in ('approved','rejected','closed'))
+      when 'tax_estimate' then (p_from_status in ('draft','open','pending_review') and p_to_status in ('approved','rejected','cancelled','closed'))
+      when 'business_goal' then (p_from_status in ('draft','open','approved','in_progress') and p_to_status in ('approved','in_progress','closed','cancelled'))
+      when 'subscription_request' then (p_from_status in ('open','draft','pending_review') and p_to_status in ('approved','rejected','cancelled','closed'))
+      when 'support_chat' then (p_from_status in ('open','waiting_customer','in_progress') and p_to_status in ('waiting_customer','in_progress','closed','cancelled'))
+      when 'work_order' then (p_from_status in ('open','received','diagnostic','quote_pending','waiting_customer','awaiting_approval','approved','waiting_parts','in_progress','quality_check','ready','delivered') and p_to_status in ('diagnostic','quote_pending','waiting_customer','awaiting_approval','approved','waiting_parts','in_progress','quality_check','ready','delivered','closed','cancelled'))
+      when 'repair_order' then (p_from_status in ('open','received','diagnostic','quote_pending','waiting_customer','awaiting_approval','approved','waiting_parts','in_progress','quality_check','ready','delivered') and p_to_status in ('diagnostic','quote_pending','waiting_customer','awaiting_approval','approved','waiting_parts','in_progress','quality_check','ready','delivered','closed','cancelled'))
+      when 'service_order' then (p_from_status in ('open','received','diagnostic','quote_pending','waiting_customer','awaiting_approval','approved','waiting_parts','in_progress','quality_check','ready','delivered') and p_to_status in ('diagnostic','quote_pending','waiting_customer','awaiting_approval','approved','waiting_parts','in_progress','quality_check','ready','delivered','closed','cancelled'))
+      when 'appointment_waitlist' then (p_from_status in ('open','contacted') and p_to_status in ('contacted','booked','cancelled'))
+      when 'staff_clock_in' then (p_from_status='open' and p_to_status in ('closed','cancelled'))
+      when 'staff_clock_out' then (p_from_status='open' and p_to_status in ('closed','cancelled'))
+      when 'staff_break_start' then (p_from_status='open' and p_to_status in ('closed','cancelled'))
+      when 'staff_break_end' then (p_from_status='open' and p_to_status in ('closed','cancelled'))
+      when 'staff_commission' then (p_from_status in ('pending_review','draft','approved') and p_to_status in ('approved','rejected','paid'))
+      when 'staff_advance' then (p_from_status in ('pending_review','draft','approved') and p_to_status in ('approved','rejected','paid'))
+      when 'staff_bonus' then (p_from_status in ('pending_review','draft','approved') and p_to_status in ('approved','rejected','paid'))
+      else false
+    end;
+  end if;
+  if not v_allowed then raise exception 'NAXA_MANAGEMENT_TRANSITION_FORBIDDEN'; end if;
+
+  v_metadata:=v_record.metadata_json || coalesce(p_metadata_json_delta,'{}'::jsonb);
+  if p_to_status='received' and p_record_type='inventory_transfer' then
+    return jsonb_build_object('record_id',p_record_id,'status','received',
+      'revision',v_record.revision,'idempotent',true,'specialized_receipt_already_applied',true);
+  end if;
+  update public.ns_management_records
+    set status=p_to_status,metadata_json=v_metadata,revision=revision+1,updated_at=now()
+    where id=p_record_id and org_id=p_org_id and site_id=p_site_id
+    returning * into v_record;
+  insert into public.ns_management_record_events(
+    id,org_id,site_id,record_id,from_status,to_status,reason,actor_member_id,revision,occurred_at
+  ) values (
+    gen_random_uuid(),p_org_id,p_site_id,p_record_id,p_from_status,p_to_status,
+    trim(p_reason),v_member,v_record.revision,coalesce(p_transitioned_at,now())
+  );
+  return jsonb_build_object('record_id',p_record_id,'record_type',p_record_type,
+    'status',v_record.status,'revision',v_record.revision,'updated',true);
+end;
+$naxa$;
+
+create or replace function public.ns_create_inventory_transfer(
+  p_transfer_id uuid,p_org_id uuid,p_source_site_id uuid,p_destination_site_id uuid,
+  p_inventory_item_id uuid,p_sku_snapshot text,p_unit text,p_quantity numeric,
+  p_reference text,p_requested_at timestamptz
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid; v_source public.ns_sites%rowtype; v_destination public.ns_sites%rowtype;
+  v_item public.ns_inventory_items%rowtype; v_reserved numeric(14,3);
+  v_record public.ns_management_records%rowtype;
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_org(p_org_id) then
+    raise exception 'NAXA_INVENTORY_TRANSFER_REQUEST_FORBIDDEN';
+  end if;
+  if p_transfer_id is null or p_source_site_id is null or p_destination_site_id is null
+     or p_source_site_id=p_destination_site_id or p_inventory_item_id is null
+     or length(trim(coalesce(p_sku_snapshot,'')))<1
+     or length(trim(coalesce(p_reference,''))) not between 3 and 120
+     or length(trim(coalesce(p_unit,''))) not between 1 and 40
+     or p_quantity is null or p_quantity<=0 or p_requested_at is null then
+    raise exception 'NAXA_INVENTORY_TRANSFER_INVALID';
+  end if;
+  select * into v_source from public.ns_sites where id=p_source_site_id and org_id=p_org_id and status='active';
+  select * into v_destination from public.ns_sites where id=p_destination_site_id and org_id=p_org_id and status='active';
+  if not found or v_source.id is null or v_destination.id is null then
+    raise exception 'NAXA_INVENTORY_TRANSFER_SITE_INVALID';
+  end if;
+  select * into v_item from public.ns_inventory_items
+   where id=p_inventory_item_id and org_id=p_org_id and site_id=p_source_site_id and active
+   for update;
+  if not found or v_item.sku is distinct from p_sku_snapshot
+     or lower(trim(v_item.unit))<>lower(trim(p_unit)) then
+    raise exception 'NAXA_INVENTORY_TRANSFER_ITEM_MISMATCH';
+  end if;
+  select coalesce(sum(quantity),0)::numeric(14,3) into v_reserved
+   from public.ns_inventory_transfers
+   where org_id=p_org_id and source_site_id=p_source_site_id
+     and inventory_item_id=p_inventory_item_id and status in ('open','approved');
+  if v_item.quantity-v_reserved<p_quantity then
+    raise exception 'NAXA_INVENTORY_TRANSFER_STOCK_RESERVED_OR_INSUFFICIENT';
+  end if;
+  insert into public.ns_management_records(
+    id,org_id,site_id,record_type,reference,title,counterparty,
+    amount_xaf,paid_xaf,status,metadata_json,revision,created_by,created_at,updated_at
+  ) values (
+    p_transfer_id,p_org_id,p_source_site_id,'inventory_transfer',trim(p_reference),
+    v_item.name,v_destination.name,0,0,'open',
+    jsonb_build_object(
+      'transferVersion',1,'sourceSiteId',p_source_site_id,'destinationSiteId',p_destination_site_id,
+      'inventoryItemId',p_inventory_item_id,'sku',p_sku_snapshot,'itemName',v_item.name,
+      'unit',p_unit,'quantity',p_quantity,'requestedAtMillis',floor(extract(epoch from p_requested_at)*1000),
+      'requestedBy',v_member
+    ),1,v_member,p_requested_at,p_requested_at
+  ) returning * into v_record;
+  insert into public.ns_management_record_events(
+    id,org_id,site_id,record_id,from_status,to_status,reason,actor_member_id,revision,occurred_at
+  ) values (gen_random_uuid(),p_org_id,p_source_site_id,p_transfer_id,'','open',
+    'Demande de transfert créée',v_member,1,p_requested_at);
+  insert into public.ns_inventory_transfers(
+    id,org_id,source_site_id,destination_site_id,inventory_item_id,reference,
+    sku_snapshot,item_name_snapshot,unit,quantity,status,revision,requested_by,requested_at
+  ) values (
+    p_transfer_id,p_org_id,p_source_site_id,p_destination_site_id,p_inventory_item_id,
+    trim(p_reference),p_sku_snapshot,v_item.name,p_unit,p_quantity,'open',1,v_member,p_requested_at
+  );
+  return jsonb_build_object('transfer_id',p_transfer_id,'status','open','revision',1,'requested',true);
+end;
+$naxa$;
+
+create or replace function public.ns_receive_inventory_transfer(
+  p_transfer_id uuid,p_org_id uuid,p_source_site_id uuid,p_destination_site_id uuid,
+  p_inventory_item_id uuid,p_destination_inventory_item_id uuid,
+  p_sku_snapshot text,p_unit text,p_quantity numeric,p_expected_version integer,
+  p_reason text,p_received_at timestamptz
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid; v_transfer public.ns_inventory_transfers%rowtype;
+  v_source public.ns_sites%rowtype; v_destination public.ns_sites%rowtype;
+  v_source_item public.ns_inventory_items%rowtype;
+  v_destination_item public.ns_inventory_items%rowtype;
+  v_matches integer; v_reserved numeric(14,3);
+  v_destination_id uuid; v_source_movement uuid; v_destination_movement uuid;
+  v_source_sequence uuid; v_destination_sequence uuid;
+  v_record public.ns_management_records%rowtype;
+  v_receive_at timestamptz;
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_org(p_org_id) then
+    raise exception 'NAXA_INVENTORY_TRANSFER_RECEIVE_FORBIDDEN';
+  end if;
+  if p_transfer_id is null or p_source_site_id is null or p_destination_site_id is null
+     or p_inventory_item_id is null or p_expected_version is null or p_expected_version<1
+     or length(trim(coalesce(p_sku_snapshot,'')))<1
+     or length(trim(coalesce(p_unit,'')))<1 or p_quantity is null or p_quantity<=0
+     or length(trim(coalesce(p_reason,''))) not between 3 and 500 or p_received_at is null then
+    raise exception 'NAXA_INVENTORY_TRANSFER_RECEIVE_INVALID';
+  end if;
+  select * into v_transfer from public.ns_inventory_transfers
+   where id=p_transfer_id and org_id=p_org_id
+   for update;
+  if not found then raise exception 'NAXA_INVENTORY_TRANSFER_NOT_FOUND'; end if;
+  if v_transfer.status='received' then
+    if v_transfer.source_site_id=p_source_site_id and v_transfer.destination_site_id=p_destination_site_id
+       and v_transfer.inventory_item_id=p_inventory_item_id and v_transfer.sku_snapshot=p_sku_snapshot
+       and v_transfer.quantity=p_quantity then
+      return jsonb_build_object('transfer_id',p_transfer_id,'status','received',
+        'revision',v_transfer.revision,'destination_inventory_item_id',v_transfer.destination_inventory_item_id,
+        'idempotent',true);
+    end if;
+    raise exception 'NAXA_INVENTORY_TRANSFER_ALREADY_RECEIVED_CONFLICT';
+  end if;
+  if v_transfer.status<>'approved' or v_transfer.revision<>p_expected_version
+     or v_transfer.source_site_id<>p_source_site_id
+     or v_transfer.destination_site_id<>p_destination_site_id
+     or v_transfer.inventory_item_id<>p_inventory_item_id
+     or v_transfer.sku_snapshot<>p_sku_snapshot
+     or lower(trim(v_transfer.unit))<>lower(trim(p_unit))
+     or v_transfer.quantity<>p_quantity then
+    raise exception 'NAXA_INVENTORY_TRANSFER_VERSION_OR_PAYLOAD_CONFLICT';
+  end if;
+  select * into v_source from public.ns_sites where id=p_source_site_id and org_id=p_org_id and status='active';
+  select * into v_destination from public.ns_sites where id=p_destination_site_id and org_id=p_org_id and status='active';
+  if v_source.id is null or v_destination.id is null then raise exception 'NAXA_INVENTORY_TRANSFER_SITE_INVALID'; end if;
+
+  select * into v_source_item from public.ns_inventory_items
+   where id=p_inventory_item_id and org_id=p_org_id and site_id=p_source_site_id and active
+   for update;
+  if not found or v_source_item.sku is distinct from p_sku_snapshot
+     or lower(trim(v_source_item.unit))<>lower(trim(p_unit)) then
+    raise exception 'NAXA_INVENTORY_TRANSFER_SOURCE_ITEM_CHANGED';
+  end if;
+  select coalesce(sum(quantity),0)::numeric(14,3) into v_reserved
+   from public.ns_inventory_transfers
+   where org_id=p_org_id and source_site_id=p_source_site_id
+     and inventory_item_id=p_inventory_item_id and status in ('open','approved')
+     and id<>p_transfer_id;
+  if v_source_item.quantity-v_reserved<p_quantity then
+    raise exception 'NAXA_INVENTORY_TRANSFER_SOURCE_STOCK_INSUFFICIENT';
+  end if;
+
+  select count(*) into v_matches from public.ns_inventory_items
+   where org_id=p_org_id and site_id=p_destination_site_id and sku=p_sku_snapshot and active;
+  if v_matches>1 then raise exception 'NAXA_INVENTORY_TRANSFER_DESTINATION_SKU_DUPLICATE'; end if;
+  select * into v_destination_item from public.ns_inventory_items
+   where org_id=p_org_id and site_id=p_destination_site_id and sku=p_sku_snapshot and active
+   for update;
+  if found then
+    if lower(trim(v_destination_item.unit))<>lower(trim(p_unit)) then
+      raise exception 'NAXA_INVENTORY_TRANSFER_DESTINATION_UNIT_MISMATCH';
+    end if;
+    v_destination_id:=v_destination_item.id;
+  else
+    v_destination_id:=coalesce(p_destination_inventory_item_id,gen_random_uuid());
+    insert into public.ns_inventory_items(
+      id,org_id,site_id,sku,name,unit,quantity,reorder_level,active,created_at
+    ) values (
+      v_destination_id,p_org_id,p_destination_site_id,p_sku_snapshot,
+      v_source_item.name,p_unit,0,v_source_item.reorder_level,true,now()
+    );
+  end if;
+
+  update public.ns_inventory_items
+   set quantity=quantity-p_quantity
+   where id=p_inventory_item_id and org_id=p_org_id and site_id=p_source_site_id;
+  update public.ns_inventory_items
+   set quantity=quantity+p_quantity
+   where id=v_destination_id and org_id=p_org_id and site_id=p_destination_site_id;
+
+  v_source_movement:=gen_random_uuid();
+  v_destination_movement:=gen_random_uuid();
+  v_source_sequence:=md5(p_transfer_id::text||':source:'||p_expected_version::text)::uuid;
+  v_destination_sequence:=md5(p_transfer_id::text||':destination:'||p_expected_version::text)::uuid;
+  insert into public.ns_inventory_movements(
+    id,org_id,site_id,item_id,movement_type,quantity_delta,reason,idempotency_key,actor_member_id
+  ) values
+  (v_source_movement,p_org_id,p_source_site_id,p_inventory_item_id,'transfer_out',-p_quantity,
+    trim(p_reason)||' · '||p_transfer_id::text,v_source_sequence,v_member),
+  (v_destination_movement,p_org_id,p_destination_site_id,v_destination_id,'transfer_in',p_quantity,
+    trim(p_reason)||' · '||p_transfer_id::text,v_destination_sequence,v_member);
+
+  v_receive_at:=greatest(p_received_at,v_transfer.requested_at);
+  update public.ns_inventory_transfers
+   set status='received',revision=revision+1,destination_inventory_item_id=v_destination_id,
+       received_by=v_member,received_at=v_receive_at,reason=trim(p_reason)
+   where id=p_transfer_id and org_id=p_org_id returning * into v_transfer;
+  select * into v_record from public.ns_management_records
+   where id=p_transfer_id and org_id=p_org_id and site_id=p_source_site_id for update;
+  if not found or v_record.status<>'approved' then
+    raise exception 'NAXA_INVENTORY_TRANSFER_MANAGEMENT_RECORD_NOT_APPROVED';
+  end if;
+  update public.ns_management_records
+   set status='received',revision=revision+1,updated_at=now(),
+       metadata_json=metadata_json||jsonb_build_object(
+         'receivedAtMillis',floor(extract(epoch from v_receive_at)*1000),
+         'destinationInventoryItemId',v_destination_id,
+         'sourceMovementId',v_source_movement,'destinationMovementId',v_destination_movement
+       )
+   where id=p_transfer_id and org_id=p_org_id and site_id=p_source_site_id
+   returning * into v_record;
+  insert into public.ns_management_record_events(
+    id,org_id,site_id,record_id,from_status,to_status,reason,actor_member_id,revision,occurred_at
+  ) values (gen_random_uuid(),p_org_id,p_source_site_id,p_transfer_id,'approved','received',
+    trim(p_reason),v_member,v_record.revision,v_receive_at);
+  return jsonb_build_object(
+    'transfer_id',p_transfer_id,'status','received','revision',v_transfer.revision,
+    'destination_inventory_item_id',v_destination_id,
+    'source_movement_id',v_source_movement,'destination_movement_id',v_destination_movement,
+    'source_quantity',v_source_item.quantity-p_quantity,'received_at',v_receive_at,'idempotent',false
+  );
+end;
+$naxa$;
+
+revoke all on function public.ns_update_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text,integer) from public,anon,authenticated;
+grant execute on function public.ns_update_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text,integer) to service_role;
+revoke all on function public.ns_convert_waitlist_to_appointment(uuid,uuid,uuid,uuid,uuid,timestamptz,integer,bigint,text,uuid) from public,anon,authenticated;
+grant execute on function public.ns_convert_waitlist_to_appointment(uuid,uuid,uuid,uuid,uuid,timestamptz,integer,bigint,text,uuid) to service_role;
+revoke all on function public.ns_record_staff_time_event(uuid,uuid,uuid,uuid,uuid,text,text,timestamptz) from public,anon,authenticated;
+grant execute on function public.ns_record_staff_time_event(uuid,uuid,uuid,uuid,uuid,text,text,timestamptz) to service_role;
+revoke all on function public.ns_create_management_record(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz,text,jsonb) from public,anon,authenticated;
+grant execute on function public.ns_create_management_record(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz,text,jsonb) to service_role;
+revoke all on function public.ns_transition_management_record(uuid,uuid,uuid,uuid,text,text,text,text,integer,jsonb,timestamptz) from public,anon,authenticated;
+grant execute on function public.ns_transition_management_record(uuid,uuid,uuid,uuid,text,text,text,text,integer,jsonb,timestamptz) to service_role;
+revoke all on function public.ns_create_inventory_transfer(uuid,uuid,uuid,uuid,uuid,text,text,numeric,text,timestamptz) from public,anon,authenticated;
+grant execute on function public.ns_create_inventory_transfer(uuid,uuid,uuid,uuid,uuid,text,text,numeric,text,timestamptz) to service_role;
+revoke all on function public.ns_receive_inventory_transfer(uuid,uuid,uuid,uuid,uuid,uuid,text,text,numeric,integer,text,timestamptz) from public,anon,authenticated;
+grant execute on function public.ns_receive_inventory_transfer(uuid,uuid,uuid,uuid,uuid,uuid,text,text,numeric,integer,text,timestamptz) to service_role;
+
 create or replace function public.ns_apply_sync_event(
   p_org_id uuid,
   p_site_id uuid,
