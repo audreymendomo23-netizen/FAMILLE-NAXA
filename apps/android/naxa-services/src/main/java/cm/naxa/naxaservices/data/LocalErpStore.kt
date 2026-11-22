@@ -1,5 +1,7 @@
 package cm.naxa.naxaservices.data
 
+import cm.naxa.naxaservices.NaxaServicesPeerSyncApplier
+
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.ColumnInfo
