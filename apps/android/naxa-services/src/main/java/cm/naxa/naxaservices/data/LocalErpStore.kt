@@ -3598,6 +3598,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             .put("org_id", orgId)
             .put("site_id", siteId)
             .put("waitlist_record_id", waitlist.id)
+            .put("customer_reference_or_name", waitlist.counterparty)
+            .put("service_reference_or_name", waitlist.title)
             .put("workstation_id", appointment.workstationId)
             .put("starts_at", Instant.ofEpochMilli(appointment.startsAtMillis).toString())
             .put("duration_minutes", durationMinutes)
