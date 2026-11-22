@@ -1312,6 +1312,12 @@ $sale_assertions$;
 SET ROLE authenticated;
 DO $sale_direct_write_guard$
 BEGIN
+  IF has_function_privilege(current_user,
+       'public.ns_create_sale(uuid,uuid,uuid,uuid,uuid,text,text,bigint,text,text,uuid,numeric,timestamptz,uuid)','EXECUTE')
+     OR has_function_privilege(current_user,
+       'public.ns_cancel_pending_mobile_money_sale(uuid,uuid,uuid,text,text,timestamptz)','EXECUTE') THEN
+    RAISE EXCEPTION 'CLIENT_CAN_BYPASS_ATOMIC_SALE_RECEIPTS';
+  END IF;
   IF has_table_privilege(current_user,'public.ns_sales','INSERT')
      OR has_table_privilege(current_user,'public.ns_sales','UPDATE')
      OR has_table_privilege(current_user,'public.ns_payments','INSERT')
@@ -1323,6 +1329,17 @@ BEGIN
 END
 $sale_direct_write_guard$;
 RESET ROLE;
+
+DO $sale_server_execute_guard$
+BEGIN
+  IF NOT has_function_privilege('service_role',
+       'public.ns_create_sale(uuid,uuid,uuid,uuid,uuid,text,text,bigint,text,text,uuid,numeric,timestamptz,uuid)','EXECUTE')
+     OR NOT has_function_privilege('service_role',
+       'public.ns_cancel_pending_mobile_money_sale(uuid,uuid,uuid,text,text,timestamptz)','EXECUTE') THEN
+    RAISE EXCEPTION 'SERVICE_ROLE_CANNOT_EXECUTE_SALE_HANDLERS';
+  END IF;
+END
+$sale_server_execute_guard$;
 
 UPDATE public.ns_devices SET revoked_at=now() WHERE id='80000000-0000-4000-8000-000000000001';
 SET ROLE authenticated;
