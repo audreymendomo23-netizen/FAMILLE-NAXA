@@ -232,3 +232,37 @@ Deno.test("inventory sync RPCs preserve canonical IDs, tenant scope and replay-s
   assert(/grant\s+execute\s+on\s+function\s+public\.ns_record_inventory_movement\([^;]+\)\s+to\s+authenticated,\s*service_role/i.test(sql),
     "Inventory movement RPC must have explicit scoped grants");
 });
+
+
+Deno.test("N2 atomic sync gateway writes the server receipt in the business transaction", async () => {
+  const sql = await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  assert(/create\s+or\s+replace\s+function\s+public\.ns_apply_sync_event\s*\(/i.test(sql),
+    "Atomic sync dispatch RPC is required");
+  assert(/security\s+definer\s+set\s+search_path\s*=\s*''/i.test(sql),
+    "Sync dispatch must be SECURITY DEFINER with a pinned empty search_path");
+  assert(/pg_advisory_xact_lock/i.test(sql),
+    "Event idempotency must be serialized inside the transaction");
+  assert(/extensions\.digest\(convert_to\(p_payload::text,\s*'UTF8'\),\s*'sha256'\)/i.test(sql),
+    "The canonical payload digest must be calculated server-side");
+  assert(/insert\s+into\s+public\.ns_sync_receipts[\s\S]*?case\s+p_action_code[\s\S]*?update\s+public\.ns_sync_receipts[\s\S]*?status\s*=\s*'applied'/i.test(sql),
+    "Business dispatch and applied receipt must be enclosed in the same database function transaction");
+  assert(/where\s+d\.id\s*=\s*p_device_id[\s\S]{0,250}d\.account_id\s*=\s*v_account_id[\s\S]{0,250}d\.session_id\s*=\s*v_session_id[\s\S]{0,250}d\.revoked_at\s+is\s+null/i.test(sql),
+    "A sync event must be bound to the authenticated registered device and session");
+  assert(/revoke\s+all\s+on\s+function\s+public\.ns_apply_sync_event\([^;]+\)\s+from\s+public,\s*anon/i.test(sql),
+    "Sync dispatch must not be executable by public or anon");
+  assert(/grant\s+execute\s+on\s+function\s+public\.ns_apply_sync_event\([^;]+\)\s+to\s+authenticated,\s*service_role/i.test(sql),
+    "Sync dispatch must have explicit authenticated and service-role grants");
+  for (const action of [
+    "supplier.saved","inventory_item.created","inventory_item.imported",
+    "inventory_item.import_updated","inventory_item.supplier_whatsapp_updated",
+    "inventory_movement.created","inventory_movement.import_initial",
+    "inventory_movement.import_adjustment","purchase.ordered",
+    "purchase.receipt.confirmed","supplier.payment.recorded",
+    "recurring_charge.saved","recurring_charge.deactivated",
+    "recurring_charge.payment_recorded","loyalty_program.updated",
+    "loyalty_activity.recorded","loyalty_reward.redeemed"
+  ]) {
+    assert(sql.includes("'" + action + "'"),
+      "N2 sync dispatcher missing allowlisted action " + action);
+  }
+});
