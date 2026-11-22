@@ -955,4 +955,32 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 ## Limite de portée (N1 fermé, gates suivants inchangés)
 
 Ce registre clôt **l'inventaire et la qualification N1**. Il ne prétend pas que les 33 handlers encore contractuels, les coordinateurs Android universels, la parité Web/PWA ou les intégrations externes sont déjà implémentés. Ces réalisations relèvent de N2/N3/N4/N6 et ne sont pas reportées dans N1.
+---
 
+## N2 — première tranche des handlers serveur (22 novembre 2026)
+
+**État : PARTIEL — 17/44 mutations indépendantes disposent maintenant du dispatch serveur transactionnel testé.**
+
+Les call sites couverts sont : OBX-001 à OBX-004, OBX-006 à OBX-012, OBX-032, OBX-033, OBX-035 à OBX-037 et OBX-039. Le statut machine de ces lignes est IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED.
+
+Le lot ajoute :
+- ns_apply_sync_event, passerelle serveur typée pour les 17 action codes ci-dessous ;
+- une authentification serveur liée au compte, à la session et à l'appareil enregistré ;
+- une validation serveur des périmètres organisation/site/poste et du rôle exigé par chaque commande ;
+- le calcul serveur du SHA-256 sur le jsonb normalisé ;
+- une sérialisation transactionnelle par organisation + event_id ;
+- l'écriture du reçu applied dans la même transaction que la mutation ; une exception annule donc également le reçu ;
+- la répétition identique renvoie le reçu existant ; un rejeu divergent est rejeté ;
+- les handlers complémentaires ns_upsert_recurring_charge, ns_deactivate_recurring_charge et ns_upsert_loyalty_program.
+
+**Action codes couverts :** supplier.saved, purchase.ordered, purchase.receipt.confirmed, supplier.payment.recorded, inventory_item.supplier_whatsapp_updated, recurring_charge.saved, recurring_charge.payment_recorded, recurring_charge.deactivated, loyalty_program.updated, loyalty_activity.recorded, loyalty_reward.redeemed, inventory_item.created, inventory_movement.import_adjustment, inventory_item.import_updated, inventory_item.imported, inventory_movement.import_initial, inventory_movement.created.
+
+**Preuves CI :** run https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44969249875, commit du code 76fb1cb1fcad91c10ec4e764e4a25c9f1b34ab72. Les jobs NAXA SERVICES PostgreSQL 17 schema and runtime RLS tests, NAXA SERVICES draft SQL security boundary checks et NAXA SERVICES supplier accounting and forecast contracts ont atteint SUCCESS. Le test runtime démontre : mutation appliquée, reçu unique, replay identique idempotent, replay divergent rejeté, scope inter-site refusé et absence de reçu si la mutation échoue.
+
+### N2 — call sites restant à traiter
+
+Les 27 call sites REMOTE_MUTATION suivants demeurent contractuels sans handler serveur dans ce lot : OBX-013, OBX-014, OBX-015, OBX-016, OBX-018, OBX-019, OBX-022, OBX-023, OBX-027, OBX-028, OBX-029, OBX-030, OBX-031, OBX-034, OBX-038, OBX-040, OBX-041, OBX-042, OBX-043, OBX-044, OBX-045, OBX-047, OBX-048, OBX-049, OBX-053, OBX-054 et OBX-055. Leur code d'action est refusé par défaut par le dispatcher ; aucun faux reçu n'est créé.
+
+Les lots restants concernent notamment pressing, rendez-vous, caisse, ventes, dépenses, services, clients/CRM, valorisation du stock, support, pointages, documents de gestion, transferts multisites et transitions de gestion. Ils exigent leurs propres règles métier, dépendances, contraintes de concurrence et tests de rollback.
+
+**Limite de portée :** cette livraison ne modifie pas le coordinateur Android ni la file Web. La consommation de la nouvelle passerelle par les appareils, la stratégie automatique de reprise et la réplication multi-appareils restent N3. Aucun draft n'est appliqué sur un Supabase hébergé ; le projet historique NAXA/pharmacie reste interdit.
