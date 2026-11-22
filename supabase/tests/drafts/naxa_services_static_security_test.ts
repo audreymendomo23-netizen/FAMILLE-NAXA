@@ -323,9 +323,9 @@ Deno.test("N2 pressing and appointment RPCs enforce lifecycle versions and serve
     assert(new RegExp("create\\s+or\\s+replace\\s+function\\s+public\\."+fn+"\\s*\\(","i").test(sql),
       "Missing pressing/appointment handler "+fn);
   }
-  assert(/p_expected_version\s*<>\s*v_order\.revision/i.test(sql),
+  assert(/(?:p_expected_version\\s*<>\\s*v_order\\.revision|v_order\\.revision\\s*<>\\s*p_expected_version)/i.test(sql),
     "Pressing transitions require an expected revision");
-  assert(/p_expected_version\s*<>\s*v_appointment\.revision/i.test(sql),
+  assert(/(?:p_expected_version\\s*<>\\s*v_appointment\\.revision|v_appointment\\.revision\\s*<>\\s*p_expected_version)/i.test(sql),
     "Appointment transitions require an expected revision");
   assert(/pg_advisory_xact_lock[\s\S]{0,200}appointment-slots/i.test(sql),
     "Appointment slots must be serialized transactionally");
