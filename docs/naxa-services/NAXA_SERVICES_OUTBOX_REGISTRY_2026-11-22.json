@@ -9,9 +9,9 @@
   "source_callsite_count": 55,
   "classified_callsite_count": 55,
   "classification_counts": {
-    "REMOTE_MUTATION": 43,
+    "REMOTE_MUTATION": 44,
     "DERIVED_SERVER_LEDGER": 1,
-    "COMPOSITE_CHILD": 7,
+    "COMPOSITE_CHILD": 6,
     "SERVER_AUTHORITATIVE_MIRROR": 1,
     "API_DIRECT_MIRROR": 1,
     "LEGACY_LOCAL_HELPER": 2
@@ -2922,46 +2922,56 @@
       "action_codes": [
         "inventory_transfer.received_at_destination"
       ],
-      "classification": "COMPOSITE_CHILD",
-      "disposition": "DO_NOT_SEND_INDEPENDENTLY",
-      "implementation_status": "CONTRACTED_AS_CHILD_OF_PARENT_MUTATION",
-      "canonical_parent_action": "receive_inventory_transfer",
+      "classification": "REMOTE_MUTATION",
+      "disposition": "SEND_AS_CANONICAL_MUTATION",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
       "contract": {
         "version": 1,
-        "handler": "Included atomically in receive_inventory_transfer",
-        "source_of_truth": "Atomic receive command owns transfer state plus both source/destination movements; this event is a local projection marker.",
+        "handler": "receive_inventory_transfer",
+        "source_of_truth": "Approved inventory transfer aggregate plus source and destination inventory ledgers. Server applies the transfer status and both stock legs atomically.",
         "payload_fields": [
           "transfer_id",
+          "org_id",
           "source_site_id",
           "destination_site_id",
-          "destination_inventory_item_id",
-          "received_at",
+          "inventory_item_id",
+          "destination_inventory_item_id_if_created",
+          "sku_snapshot",
+          "unit",
+          "quantity",
+          "from_status",
+          "to_status",
+          "reason",
           "received_by",
-          "reason"
+          "received_at",
+          "expected_version"
         ],
         "dependencies": [
-          "transfer status approved",
-          "cross-site permissions validated",
-          "source stock and destination SKU/unit checks pass"
+          "transfer exists and is approved",
+          "source and destination sites are active and belong to the same org",
+          "source item SKU/unit and available quantity are revalidated",
+          "destination SKU is unique or a new item is created under same org/site"
         ],
         "scope": {
-          "org_id": "inherited from parent; server revalidates",
-          "site_id": "inherited from parent/explicit source+destination sites",
-          "workstation_id": "inherited where applicable"
+          "org_id": "required",
+          "site_id": "not a single site; source_site_id and destination_site_id both validated by server",
+          "workstation_id": "not applicable"
         },
-        "actor": "Inherited from the authenticated actor on the parent command; server records the actor for each resulting row.",
-        "device": "Inherits parent event/device sequence; no independent device operation.",
-        "idempotency": "Parent event_id is the only idempotency key; child row IDs are stable and unique within org.",
-        "receipt": "The parent transaction receipt lists child IDs and versions; no separate child receipt.",
-        "conflict": "Resolve at the parent aggregate. Child projections are created in the same transaction or none are.",
-        "retry": "Retry parent with same event_id; never retry the child as a standalone event.",
+        "actor": "Derived from authenticated session; role permission must include promoter/network transfer receipt.",
+        "device": "Resolve registered installation and sequence from the authenticated session.",
+        "idempotency": "Stable event_id; repeated transfer receipt returns original result; a different transfer/payload under same event ID is rejected.",
+        "receipt": "Atomic receipt records transfer revision, source/destination movement IDs, resulting item IDs and payload hash.",
+        "conflict": "APPEND_ONLY_STATE_MACHINE; server locks source stock/transfer and validates expected revision; no partial transfer.",
+        "retry": "Retry transient errors with same event_id; missing approval or stock dependency remains blocked; scope/validation errors terminal.",
         "tests": [
-          "parent and all children commit atomically",
-          "retry creates no duplicate child",
-          "failed parent leaves no child mutation",
-          "scope/dependency violation rejects the whole command"
-        ],
-        "qualification_note": "The specialized receipt is the canonical transfer receive command at the server. The local movement rows are child effects; this outbox entry is classified as the event marker for the same command."
+          "approved transfer received creates exactly one source deduction and one destination addition",
+          "retry does not double move stock",
+          "insufficient source stock rejected",
+          "cross-organization or inactive site denied",
+          "duplicate destination SKU/unit mismatch rejected",
+          "concurrent receive yields one winner",
+          "no generic duplicate inventory_transfer.status_changed replay for receive"
+        ]
       }
     },
     {
@@ -3098,5 +3108,12 @@
         ]
       }
     }
-  ]
+  ],
+  "current_transport_observations": {
+    "source_outbox_entity": "LocalOutboxEvent stores eventId, orgId, aggregateType, aggregateId, actionCode, payloadJson, deviceSequence, createdAtEpochMs, state, schemaVersion and retry/receipt state. It does not persist an actor ID or installation/device ID on each row; actor/device must be resolved from the authenticated server session and registered installation.",
+    "source_sequence": "NaxaServicesDao.nextOutboxSequence(orgId) calculates MAX(deviceSequence)+1 scoped to orgId in the local database. Since each Android installation has its own local Room database, ordering is local to that installation, but the envelope does not yet carry a device ID. N2/N3 must bind it to the authenticated installation and enforce per-device server uniqueness.",
+    "org_scope_event": "loyalty_program.updated is organization-scoped and intentionally has site_id=null. The bounded SupplierSyncCoordinator currently requires a nonblank site_id, so this organization-level event is not currently transported by that coordinator. Its scope is defined in the registry contract.",
+    "current_snapshot_coverage": "11 of the 55 outbox call sites use complete action snapshots and correspond exactly to the 11 action codes currently accepted by SupplierSyncCoordinator; the other 44 still use the generic aggregate_id/site_id fallback. Their classification is recorded per call site.",
+    "authority": "The server derives member identity and permissions from the access token. Client-supplied actor labels are descriptive audit payload, never an authorization source."
+  }
 }
