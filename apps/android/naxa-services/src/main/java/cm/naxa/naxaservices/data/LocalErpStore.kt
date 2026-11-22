@@ -909,6 +909,9 @@ interface NaxaServicesDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertInventoryMovement(movement: LocalInventoryMovement)
 
+    @Query("SELECT COUNT(*) FROM local_inventory_movements WHERE id = :movementId AND orgId = :orgId")
+    suspend fun countInventoryMovementById(orgId: String, movementId: String): Int
+
     @Query("SELECT * FROM local_inventory_movements WHERE orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis DESC LIMIT 100")
     fun observeInventoryMovements(orgId: String, siteId: String): Flow<List<LocalInventoryMovement>>
 
@@ -1135,6 +1138,9 @@ interface NaxaServicesDao {
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertLoyaltyEvent(event: LocalLoyaltyEvent)
+
+    @Query("SELECT * FROM local_loyalty_events WHERE id = :eventId AND orgId = :orgId LIMIT 1")
+    suspend fun findLoyaltyEventById(orgId: String, eventId: String): LocalLoyaltyEvent?
 
     @Query("UPDATE local_loyalty_events SET rewardStatus = 'redeemed' WHERE id = :eventId AND orgId = :orgId AND siteId = :siteId AND eventType = 'reward_earned' AND rewardStatus = 'available'")
     suspend fun redeemLoyaltyReward(eventId: String, orgId: String, siteId: String): Int
