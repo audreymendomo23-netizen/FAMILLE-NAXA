@@ -40,6 +40,12 @@ function splitArguments(input) {
   return result;
 }
 function normalize(value) { return value.replace(/\s+/g, " ").trim(); }
+function normalizeAggregateType(value) {
+  const normalized = normalize(value);
+  if (normalized.startsWith('"') && normalized.endsWith('"')) return JSON.parse(normalized);
+  if (normalized.startsWith("'") && normalized.endsWith("'")) return normalized.slice(1, -1);
+  return normalized;
+}
 
 const sourceLines = source.split(/\r?\n/);
 const discovered = [];
@@ -103,7 +109,9 @@ for (const call of discovered) {
 }
 for (const row of manifest.rows) {
   const rowKey = key({method:row.source.method,aggregateType:row.source.aggregateType,actionExpression:row.source.actionExpression});
-  assert.ok(discovered.some(call => key(call) === rowKey), "Stale registry row: " + row.id + " " + rowKey);
+  const sourceCall = discovered.find(call => key(call) === rowKey);
+  assert.ok(sourceCall, "Stale registry row: " + row.id + " " + rowKey);
+  assert.equal(sourceCall.line, row.source.line, "Source line changed; refresh registry row " + row.id);
 }
 
 const supportedBlock = coordinator.match(/private val supportedActions = setOf\(([\s\S]*?)\n    \)/);
