@@ -165,7 +165,7 @@ export type AtomicSyncEvent = {
   payload: Record<string, unknown>;
 };
 
-const ATOMIC_SYNC_ACTIONS: Record<string, { aggregate: string; idField: string; organizationScoped?: boolean }> = {
+const ATOMIC_SYNC_ACTIONS: Record<string, { aggregate: string; idField: string; organizationScoped?: boolean; siteOptional?: boolean }> = {
   "supplier.saved": { aggregate: "supplier", idField: "supplier_id" },
   "inventory_item.created": { aggregate: "inventory_item", idField: "inventory_item_id" },
   "inventory_item.imported": { aggregate: "inventory_item", idField: "inventory_item_id" },
@@ -189,7 +189,7 @@ const ATOMIC_SYNC_ACTIONS: Record<string, { aggregate: string; idField: string; 
   "customer.created": { aggregate: "customer", idField: "customer_id" },
   "customer_followup.created": { aggregate: "customer_followup", idField: "followup_id" },
   "customer_followup.completed": { aggregate: "customer_followup", idField: "followup_id" },
-  "support_request.created": { aggregate: "support_request", idField: "request_id" },
+  "support_request.created": { aggregate: "support_request", idField: "request_id", siteOptional: true },
 };
 
 export function normalizeAtomicSyncEvent(value: unknown): AtomicSyncEvent {
@@ -207,6 +207,14 @@ export function normalizeAtomicSyncEvent(value: unknown): AtomicSyncEvent {
   if (action.organizationScoped) {
     if (siteId !== null || workstationId !== null || payload.site_id != null) {
       throw new Error("SYNC_ORGANIZATION_SCOPE_INVALID");
+    }
+  } else if (action.siteOptional) {
+    if (siteId === null) {
+      if (workstationId !== null || payload.site_id != null) {
+        throw new Error("SYNC_ORGANIZATION_SCOPE_INVALID");
+      }
+    } else if (uuid(payload.site_id, "PAYLOAD_SITE_ID") !== siteId) {
+      throw new Error("SYNC_SITE_SCOPE_MISMATCH");
     }
   } else {
     if (siteId === null || uuid(payload.site_id, "PAYLOAD_SITE_ID") !== siteId) {
