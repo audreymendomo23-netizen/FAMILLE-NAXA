@@ -399,7 +399,8 @@ Deno.test("N2 domain mutation helpers cannot bypass the atomic sync receipt gate
     assert(grantStatement.endsWith("to service_role"),
       fn+" must only be directly executable by the server role");
   }
-  const gatewayGrant=sql.split("\\n").find((line)=>line.includes("grant execute on function public.ns_apply_sync_event("));
-  assert(Boolean(gatewayGrant && gatewayGrant.includes("to authenticated, service_role")),
+  const gatewayStart=sql.indexOf("grant execute on function public.ns_apply_sync_event(");
+  const gatewayGrant=sql.slice(gatewayStart,sql.indexOf(";",gatewayStart));
+  assert(gatewayStart>=0 && gatewayGrant.includes("to authenticated, service_role"),
     "Authenticated clients must enter mutations through the atomic sync gateway");
 });
