@@ -445,11 +445,11 @@ begin
 end;
 $naxa$;
 
-revoke all on function public.ns_record_charge_payment(uuid,uuid,uuid,bigint,uuid,text,text) from public, anon;
-grant execute on function public.ns_record_charge_payment(uuid,uuid,uuid,bigint,uuid,text,text) to authenticated, service_role;
-revoke all on function public.ns_record_loyalty_activity(uuid,uuid,uuid,uuid,bigint,uuid) from public, anon;
-grant execute on function public.ns_record_loyalty_activity(uuid,uuid,uuid,uuid,bigint,uuid) to authenticated, service_role;
-revoke all on function public.ns_redeem_loyalty_reward(uuid,uuid,uuid) from public, anon;
-grant execute on function public.ns_redeem_loyalty_reward(uuid,uuid,uuid) to authenticated, service_role;
+revoke all on function public.ns_record_charge_payment(uuid,uuid,uuid,bigint,uuid,text,text) from public, anon, authenticated;
+grant execute on function public.ns_record_charge_payment(uuid,uuid,uuid,bigint,uuid,text,text) to service_role;
+revoke all on function public.ns_record_loyalty_activity(uuid,uuid,uuid,uuid,bigint,uuid) from public, anon, authenticated;
+grant execute on function public.ns_record_loyalty_activity(uuid,uuid,uuid,uuid,bigint,uuid) to service_role;
+revoke all on function public.ns_redeem_loyalty_reward(uuid,uuid,uuid) from public, anon, authenticated;
+grant execute on function public.ns_redeem_loyalty_reward(uuid,uuid,uuid) to service_role;
 
 rollback;
