@@ -681,6 +681,8 @@ class AuthApi(private val context: Context) {
             val response = runCatching { JSONObject(responseText) }.getOrElse { JSONObject() }
             if (status !in 200..299) {
                 val message = response.optString("message").ifBlank {
+                    response.optString("error")
+                }.ifBlank {
                     if (status == 429) "Trop de tentatives. Réessaie plus tard."
                     else "Connexion indisponible. Vérifie le réseau ou contacte le responsable."
                 }

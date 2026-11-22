@@ -169,16 +169,26 @@ object SupplierSyncCoordinator {
                 applied++
             } catch (failure: Exception) {
                 val status = (failure as? AuthApiException)?.statusCode
+                val remoteCode = failure.message.orEmpty().uppercase()
+                val dependencyBlocked = remoteCode.contains("DEPENDENCY") ||
+                    remoteCode.contains("NOT_FOUND") ||
+                    remoteCode.contains("NOT_AVAILABLE") ||
+                    remoteCode.contains("NOT_READY")
                 val transient = status == null || status == 429 || status >= 500
                 val attempts = event.attemptCount + 1
                 val baseDelay = (30_000L * (1L shl attempts.coerceAtMost(6))).coerceAtMost(30L * 60L * 1000L)
                 val jitter = if (baseDelay > 4_000L) Random.nextLong(baseDelay / 4L + 1L) else 0L
                 val delay = baseDelay + jitter
                 val now = System.currentTimeMillis()
-                val state = if (transient) "retry_wait" else "rejected"
+                val state = when {
+                    transient -> "retry_wait"
+                    dependencyBlocked -> "blocked_dependency"
+                    else -> "rejected"
+                }
                 val errorCode = when {
                     status == 401 -> "AUTHENTICATION_REQUIRED"
                     status == 403 -> "REMOTE_SCOPE_FORBIDDEN"
+                    dependencyBlocked -> remoteCode.take(100).ifBlank { "REMOTE_DEPENDENCY_NOT_READY" }
                     status == 422 -> "REMOTE_VALIDATION_FAILED"
                     transient -> "REMOTE_TEMPORARY_FAILURE"
                     else -> "REMOTE_REQUEST_REJECTED"
@@ -188,7 +198,7 @@ object SupplierSyncCoordinator {
                     if (transient) now + delay else null,
                     errorCode
                 )
-                if (transient) retried++ else rejected++
+                if (transient) retried++ else if (dependencyBlocked) blocked++ else rejected++
                 break
             }
         }
