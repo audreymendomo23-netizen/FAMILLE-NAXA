@@ -33,6 +33,7 @@ import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import cm.naxa.naxaservices.data.NsServicesDatabase
 import kotlinx.coroutines.CancellationException
 import java.util.concurrent.TimeUnit
+import org.json.JSONObject
 
 object NaxaServicesSyncScheduler {
     private const val PERIODIC_WORK = "naxa-services-erp-sync-periodic"
@@ -81,7 +82,10 @@ object NaxaServicesSyncScheduler {
     }
 }
 
-internal fun shouldRetrySyncWorker(retriedCount: Int): Boolean = retriedCount > 0
+internal fun shouldRetrySyncWorker(retriedCount: Int, hasMoreChanges: Boolean = false): Boolean = retriedCount > 0 || hasMoreChanges
+
+private const val SYNC_PULL_PAGE_SIZE = 100
+private const val MAX_PULL_PAGES_PER_RUN = 10
 
 class NaxaServicesSyncWorker(
     appContext: Context,
@@ -135,7 +139,46 @@ class NaxaServicesSyncWorker(
         return try {
             val repository = NaxaServicesLocalRepository(database)
             val summary = SupplierSyncCoordinator.syncPending(repository, api, session)
-            if (shouldRetrySyncWorker(summary.retried)) Result.retry() else Result.success()
+
+            // Pull committed changes from peer installations only after the outgoing
+            // queue has had its chance to publish local mutations. Each Room page and
+            // its cursor are committed atomically before the next page is requested.
+            var cursor = repository.dao.findSyncCheckpoint(
+                session.account.organizationId, session.deviceId
+            )?.cursor ?: 0L
+            var hasMore = true
+            var pageCount = 0
+            while (hasMore && pageCount < MAX_PULL_PAGES_PER_RUN) {
+                val response = api.accountingRequest(
+                    session.accessToken,
+                    JSONObject()
+                        .put("action", "pull_sync_changes")
+                        .put("app_code", "naxa-services")
+                        .put("org_id", session.account.organizationId)
+                        .put("device_id", session.deviceId)
+                        .put("after_cursor", cursor)
+                        .put("limit", SYNC_PULL_PAGE_SIZE)
+                )
+                if (!response.optBoolean("ok", false)) {
+                    throw IllegalStateException("SYNC_PULL_NOT_CONFIRMED")
+                }
+                val page = response.optJSONObject("result")
+                    ?: throw IllegalStateException("SYNC_PULL_PAGE_MISSING")
+                val nextCursor = page.optLong("next_cursor", -1L)
+                if (nextCursor < cursor) throw IllegalStateException("SYNC_PULL_CURSOR_REGRESSION")
+                repository.persistRemoteSyncPage(
+                    session.account.organizationId, session.deviceId, page
+                )
+                val changes = page.optJSONArray("changes") ?: throw IllegalStateException("SYNC_PULL_CHANGES_MISSING")
+                hasMore = page.optBoolean("has_more", false)
+                if (hasMore && nextCursor == cursor && changes.length() == 0) {
+                    throw IllegalStateException("SYNC_PULL_CURSOR_STALLED")
+                }
+                cursor = nextCursor
+                pageCount++
+            }
+
+            if (shouldRetrySyncWorker(summary.retried, hasMore)) Result.retry() else Result.success()
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Exception) {
