@@ -819,7 +819,7 @@ BEGIN
       'workstation_id','40000000-0000-4000-8000-000000000001',
       'ticket_number','CI-PRESS-001','customer_name','Client Pressing CI',
       'customer_phone','690000010','items_summary','2 chemises, 1 pantalon',
-      'total_xaf',4500,'deposit_xaf',1500,'promised_at',now()+interval '2 days'
+      'total_xaf',4500,'deposit_xaf',0,'promised_at',now()+interval '2 days'
     )
   );
   IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'PRESSING_ORDER_CREATE_NOT_APPLIED: %',v_result; END IF;
