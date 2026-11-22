@@ -6,6 +6,9 @@ begin;
 
 
 -- N2: pressing ticket and appointment server aggregates.
+create unique index if not exists ns_cash_sessions_id_site_org_idx
+  on public.ns_cash_sessions(id,site_id,org_id);
+
 alter table public.ns_pressing_orders
   alter column customer_id drop not null,
   add column if not exists customer_name_snapshot text not null default '',
@@ -87,8 +90,6 @@ revoke insert,update,delete on public.ns_appointment_status_events from authenti
 
 
 -- N2: cash session lifecycle and expense ledger hardening.
-create unique index if not exists ns_cash_sessions_id_site_org_idx
-  on public.ns_cash_sessions(id,site_id,org_id);
 create unique index if not exists ns_cash_sessions_one_open_per_register_uidx
   on public.ns_cash_sessions(org_id,site_id,register_id) where status='open';
 alter table public.ns_expenses
