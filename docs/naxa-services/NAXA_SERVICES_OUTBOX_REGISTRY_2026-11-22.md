@@ -2,7 +2,7 @@
 
 **Version :** 1.1  
 **Date :** 22 novembre 2026  
-**HEAD applicatif audité :** `ada9bc2fe4986925a6afcc07238c0bbdc11f2073`  
+**HEAD applicatif audité :** `4e65eb7414ead3dcaedfdcd5e53bf59886a07621`  
 **Fichier source :** `apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt`
 
 ## Décision
@@ -1002,4 +1002,20 @@ Les neuf call sites supplémentaires couverts dans la dernière tranche sont : *
 Le runtime CI a validé les flux vente/Mobile Money, client/CRM, devis et transitions, conversion de liste d'attente, pointages RH et transfert Promoteur inter-sites avec double mouvement et rejeu sans double-stock. Le contrôle de sécurité exige la passerelle atomique ; les helpers métier ne sont pas directement exécutables par les clients.
 
 **N1 demeure VERT COMPLET et clôturé**, preuve historique run https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44964977570 et nouveau passage du contrôle N1 en succès sur le run 44983959405. main et les projets Supabase hébergés sont restés inchangés.
+
+---
+
+## Mise à jour N2 — 22 novembre 2026 : 44/44 VERT COMPLET
+
+Le bilan intermédiaire 43/44 ci-dessus est remplacé. **N2 est maintenant VERT COMPLET — 44/44 call sites REMOTE_MUTATION**, et les 92 codes d'action correspondants sont présents dans l'allowlist TypeScript et dans le dispatcher SQL.
+
+**OBX-023 cash_session.closed est clos.** La création d'un ticket pressing exige une méthode explicite dès qu'un acompte est positif. Un encaissement en espèces exige une session ouverte du même site ; il crée un paiement confirmed lié à cette session et une écriture débit CASH_REGISTER / crédit CUSTOMER_ADVANCES. Mobile Money et autre mode restent pending, sans rattachement à la caisse. La clôture serveur et locale ne comptent que les acomptes espèces confirmés liés à la session.
+
+**Test runtime PostgreSQL 17 :** fond 5 000 + acompte pressing cash 1 200 − dépense 1 000 = attendu 5 200 FCFA ; Mobile Money 800 reste pending et est exclu ; espèces sans session rejetées ; l'écriture d'avance client est unique. Migration Room 12 vers 13 et UI explicite sont intégrées.
+
+**Preuve CI :** run https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44986404760. N1 bijection, PostgreSQL 17 runtime/RLS, SQL statique, Web, Auth, paiements, notifications, referral, tarifs et accounting/forecast sont en SUCCESS. Au moment de la rédaction, le job Android debug APK restait en cours sur les tests unitaires ; Keystore/PIN, assemblage et upload APK n'étaient pas encore terminés.
+
+Le registre JSON porte le statut IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED pour les 44/44 lignes. Le champ historique implementation_status N1 n'a pas été altéré. Les 55 ancres de lignes source N1 ont été recalées sur les emplacements réels, sans changement des 55 appels.
+
+main n'a pas été modifiée. Aucun draft n'a été appliqué sur un Supabase hébergé, et le projet historique NAXA/pharmacie est resté hors périmètre.
 

@@ -1327,7 +1327,7 @@
           "crash/restart does not lose or double-apply"
         ]
       },
-      "n2_handler_status": "IMPLEMENTED_PENDING_COMPLETE_CASH_SOURCE_COVERAGE"
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-024",

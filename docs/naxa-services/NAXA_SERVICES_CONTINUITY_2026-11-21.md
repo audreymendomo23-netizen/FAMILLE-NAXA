@@ -411,3 +411,65 @@ Jusqu'à cette évolution, OBX-023 reste partiellement implémenté et N2 reste 
 
 Compléter le contrat local et serveur des acomptes pressing (session + moyen de paiement + confirmation), relier les encaissements cash à OBX-023, ajouter les cas runtime de rapprochement, puis exécuter le contrôle de clôture 44/44. N3 ne commence qu'après ce vert complet.
 
+---
+
+## 16. Clôture N2 — rapprochement des acomptes pressing (22 novembre 2026)
+
+**Cette section remplace le bilan 43/44 de la section 15 : N2 = VERT COMPLET, 44/44 mutations serveur vérifiées.**
+
+### 16.1 Décision
+
+- **N1 = VERT COMPLET, clôturé.** Les 55 call sites physiques sont toujours en bijection exacte avec les 55 lignes du registre ; les lignes sources ont été rafraîchies après les ajouts à LocalErpStore, sans ajout, suppression, doublon ni reclassification.
+- **N2 = VERT COMPLET, 44/44 REMOTE_MUTATION.**
+- Les 92 codes d'action portés par ces 44 call sites sont présents dans l'allowlist TypeScript et routés par le dispatcher SQL, sans doublon ni code oublié.
+- Les 44 lignes REMOTE_MUTATION du registre JSON portent désormais n2_handler_status=IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED. Le champ historique implementation_status de N1 a été préservé.
+
+### 16.2 OBX-023 — clôture de caisse universelle finalisée
+
+La création d'un ticket pressing exige maintenant un contrat explicite de paiement de l'acompte :
+
+- Acompte nul : aucune méthode ni session de paiement ne sont autorisées.
+- **Espèces :** méthode obligatoire cash, session de caisse ouverte du même site obligatoire, paiement créé confirmed et lié à cash_session_id.
+- **Mobile Money / autre mode :** session de caisse interdite et paiement créé pending. Ces montants ne sont jamais comptés dans le tiroir-caisse tant qu'ils ne sont pas confirmés comme encaissements cash par le système.
+- Espèces sans session, méthode absente ou session fermée : rejet serveur, pas de reçu applied.
+- L'encaissement espèces crée une écriture comptable idempotente : débit CASH_REGISTER, crédit CUSTOMER_ADVANCES. L'acompte reste une avance client et n'est pas traité comme chiffre d'affaires.
+
+ns_close_cash_session rapproche désormais, dans le même périmètre organisation/site/session :
+- fond d'ouverture ;
+- ventes cash confirmées ;
+- acomptes pressing cash confirmés et rattachés à cette session ;
+- dépenses et sorties fournisseurs cash.
+
+Le test PostgreSQL 17 vérifie concrètement : fond d'ouverture 5 000 FCFA + acompte pressing cash 1 200 FCFA − dépense 1 000 FCFA = solde attendu 5 200 FCFA ; le décompte à 5 200 FCFA donne un écart nul. Un acompte Mobile Money de 800 FCFA reste pending, sans session caisse, et n'est pas inclus. Une tentative d'acompte espèces sans session est rejetée. L'écriture d'avance client de 1 200 FCFA est unique et correctement orientée.
+
+### 16.3 Android local et migration
+
+- Le modèle Room LocalPressingOrder conserve méthode, session et statut de paiement de l'acompte.
+- Migration non destructive Room 12 vers 13, enregistrée dans le builder.
+- Création de ticket : sélection explicite espèces / Mobile Money / autre ; sélection obligatoire d'une session ouverte pour les espèces ; pas de validation locale par défaut d'un acompte sans méthode.
+- Les cartes de ticket affichent méthode et statut d'acompte ; l'écran caisse montre les acomptes espèces confirmés de la session.
+- Le calcul de clôture locale ajoute uniquement les acomptes pressing cash confirmés.
+- Des tests unitaires couvrent l'absence d'acompte, espèces avec session, espèces sans session, Mobile Money pending, autre mode pending et rejet des combinaisons incohérentes.
+
+### 16.4 Preuves CI et statut de l'APK
+
+**Run serveur et N1 :** https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44986404760
+
+Au dernier relevé lors de la rédaction de cette section :
+- Cross-application offline synchronization contract : SUCCESS, y compris la bijection exacte N1.
+- NAXA SERVICES PostgreSQL 17 schema and runtime RLS tests : SUCCESS, incluant OBX-023 et l'écriture d'avance client.
+- NAXA SERVICES draft SQL security boundary checks : SUCCESS.
+- Contrats Web, Auth, notifications, referrals, paiements, tarifs et accounting/forecast : SUCCESS.
+- Assemble NAXA SERVICES Android debug APK : le job restait in_progress, sur Run NAXA SERVICES accounting and performance unit tests. Les tests Keystore/PIN, l'assemblage APK et l'upload de l'artefact n'étaient donc pas encore déclarés terminés. Ne pas assimiler N2 serveur 44/44 à un APK livré.
+
+### 16.5 Frontières Git et déploiement
+
+- N1 ne doit pas être rouvert.
+- N2 est clos. Le coordinateur Android universel, les reprises automatiques, l'ordre global multi-appareils et la consommation effective de la passerelle restent N3 ; les opérations Web/PWA restent N4.
+- Les drafts SQL ont été exécutés uniquement sur PostgreSQL 17 jetable en CI. Aucun draft n'a été appliqué à un Supabase hébergé ; le Supabase historique NAXA/pharmacie reste hors périmètre.
+- Tous les changements sont restés sur work/naxa-services-completion-20261120. La branche main est restée inchangée.
+
+### 16.6 Prochaine étape
+
+Aucune mutation N2 ne reste à implémenter. Terminer le job Android du run de référence, puis seulement communiquer l'état final de l'APK. Le chantier fonctionnel N2 est fermé à 44/44.
+
