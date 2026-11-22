@@ -2790,18 +2790,35 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 dao.updateInventoryItem(updatedItem)
                 if (row.unitCostXaf != null || row.sellingPriceXaf != null) {
                     val oldValue = dao.findInventoryValuation(orgId, siteId, existing.id)
-                    dao.upsertInventoryValuation(
-                        LocalInventoryValuation(
-                            id = oldValue?.id ?: UUID.randomUUID().toString(),
-                            orgId = orgId,
-                            siteId = siteId,
-                            inventoryItemId = existing.id,
-                            unitCostXaf = row.unitCostXaf ?: oldValue?.unitCostXaf ?: 0L,
-                            sellingPriceXaf = row.sellingPriceXaf ?: oldValue?.sellingPriceXaf ?: 0L,
-                            updatedAtMillis = now
-                        )
+                    val updatedValuation = LocalInventoryValuation(
+                        id = oldValue?.id ?: UUID.randomUUID().toString(),
+                        orgId = orgId,
+                        siteId = siteId,
+                        inventoryItemId = existing.id,
+                        unitCostXaf = row.unitCostXaf ?: oldValue?.unitCostXaf ?: 0L,
+                        sellingPriceXaf = row.sellingPriceXaf ?: oldValue?.sellingPriceXaf ?: 0L,
+                        updatedAtMillis = now
                     )
-                    enqueue(orgId, "inventory_valuation", existing.id, "inventory_valuation.import_updated", siteId)
+                    dao.upsertInventoryValuation(updatedValuation)
+                    val priorEvents = dao.countOutboxActions(
+                        orgId, "inventory_valuation", existing.id,
+                        listOf("inventory_valuation.imported", "inventory_valuation.import_updated", "inventory_valuation.updated")
+                    )
+                    val expectedVersion = when {
+                        oldValue == null -> 0
+                        priorEvents > 0 -> priorEvents
+                        else -> -1
+                    }
+                    val payload = JSONObject()
+                        .put("valuation_id", updatedValuation.id)
+                        .put("inventory_item_id", existing.id)
+                        .put("org_id", orgId)
+                        .put("site_id", siteId)
+                        .put("unit_cost_xaf", updatedValuation.unitCostXaf)
+                        .put("selling_price_xaf", updatedValuation.sellingPriceXaf)
+                        .put("updated_at", Instant.ofEpochMilli(now).toString())
+                        .put("expected_version", expectedVersion)
+                    enqueue(orgId, "inventory_valuation", existing.id, "inventory_valuation.import_updated", siteId, payload.toString())
                 }
                 enqueue(orgId, "inventory_item", existing.id, "inventory_item.import_updated", siteId, inventoryItemSyncSnapshot(updatedItem))
                 updated += 1
@@ -3187,13 +3204,17 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         eventType: String,
         staffName: String,
         actorMemberId: String,
-        workstationId: String? = null
+        workstationId: String? = null,
+        staffMemberId: String? = null
     ): LocalManagementRecord = database.withTransaction {
         require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) {
             "Organisation, site et opérateur obligatoires."
         }
         val staff = staffName.trim()
         require(staff.length in 2..120) { "Nom ou identifiant de collaborateur invalide." }
+        require(staffMemberId == null || runCatching { UUID.fromString(staffMemberId) }.isSuccess) {
+            "L'identifiant stable du collaborateur doit être un UUID."
+        }
         require(eventType in setOf("staff_clock_in", "staff_break_start", "staff_break_end", "staff_clock_out")) {
             "Événement de pointage non pris en charge."
         }
@@ -3238,6 +3259,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 .put("event", eventType)
                 .put("recordedLocal", true)
                 .put("workstationId", normalizedWorkstation)
+                .put("staffMemberId", staffMemberId)
                 .toString(),
             actorMemberId = actorMemberId,
             createdAtMillis = now,
@@ -3258,7 +3280,15 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 createdAtMillis = now
             )
         )
-        enqueue(orgId, eventType, item.id, eventType + ".recorded", siteId)
+        val timeEventPayload = JSONObject()
+            .put("time_event_id", item.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("workstation_id", normalizedWorkstation)
+            .put("staff_member_id", staffMemberId)
+            .put("staff_name_snapshot", staff)
+            .put("occurred_at", Instant.ofEpochMilli(now).toString())
+        enqueue(orgId, eventType, item.id, eventType + ".recorded", siteId, timeEventPayload.toString())
         item
     }
 
@@ -3752,7 +3782,25 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             updatedAtMillis = System.currentTimeMillis()
         )
         dao.upsertInventoryValuation(valuation)
-        enqueue(orgId, "inventory_valuation", itemId, "inventory_valuation.updated", siteId)
+        val priorEvents = dao.countOutboxActions(
+            orgId, "inventory_valuation", itemId,
+            listOf("inventory_valuation.imported", "inventory_valuation.import_updated", "inventory_valuation.updated")
+        )
+        val expectedVersion = when {
+            current == null -> 0
+            priorEvents > 0 -> priorEvents
+            else -> -1
+        }
+        val payload = JSONObject()
+            .put("valuation_id", valuation.id)
+            .put("inventory_item_id", itemId)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("unit_cost_xaf", valuation.unitCostXaf)
+            .put("selling_price_xaf", valuation.sellingPriceXaf)
+            .put("updated_at", Instant.ofEpochMilli(valuation.updatedAtMillis).toString())
+            .put("expected_version", expectedVersion)
+        enqueue(orgId, "inventory_valuation", itemId, "inventory_valuation.updated", siteId, payload.toString())
         valuation
     }
 

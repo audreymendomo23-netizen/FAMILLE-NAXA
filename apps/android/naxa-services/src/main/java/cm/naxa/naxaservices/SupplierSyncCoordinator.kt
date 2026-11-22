@@ -66,7 +66,12 @@ object SupplierSyncCoordinator {
         "customer_followup.completed",
         "support_request.created",
         "inventory_valuation.imported",
+        "inventory_valuation.import_updated",
         "inventory_valuation.updated",
+        "staff_clock_in.recorded",
+        "staff_break_start.recorded",
+        "staff_break_end.recorded",
+        "staff_clock_out.recorded",
         "inventory_transfer.requested",
         "inventory_transfer.received_at_destination",
         "inventory_transfer.status_changed",
@@ -123,7 +128,7 @@ object SupplierSyncCoordinator {
         "pressing_order.status_changed:picked_up",
         "appointment.status_changed","appointment.rescheduled",
         "customer.updated","service.updated","service.configuration_updated",
-        "inventory_valuation.updated","inventory_transfer.received_at_destination",
+        "inventory_transfer.received_at_destination",
         "quote.status_changed",
         "invoice.status_changed",
         "credit_note.status_changed",
@@ -380,6 +385,7 @@ object SupplierSyncCoordinator {
             action == "customer.created" || action == "customer.updated" -> "customer_id"
             action == "support_request.created" -> "request_id"
             action.startsWith("inventory_valuation.") -> "inventory_item_id"
+            action.startsWith("staff_") && action.endsWith(".recorded") -> "time_event_id"
             action.startsWith("inventory_transfer.") -> if (action == "inventory_transfer.status_changed") "record_id" else "transfer_id"
             action.endsWith(".created") || action.endsWith(".status_changed") -> "record_id"
             else -> return false
@@ -466,10 +472,14 @@ object SupplierSyncCoordinator {
             "customer_followup.completed" -> payload.optString("completed_at").isNotBlank()
             "support_request.created" -> payload.optString("subject").isNotBlank() &&
                 payload.optString("description").length >= 10 && payload.optString("priority") in setOf("low","normal","high")
-            "inventory_valuation.imported","inventory_valuation.updated" ->
+            "inventory_valuation.imported","inventory_valuation.import_updated","inventory_valuation.updated" ->
                 payload.optString("valuation_id").isNotBlank() &&
                 payload.optLong("unit_cost_xaf",-1L) >= 0L && payload.optLong("selling_price_xaf",-1L) >= 0L &&
-                payload.has("expected_version")
+                payload.optInt("expected_version",-1) >= 0
+            "staff_clock_in.recorded","staff_break_start.recorded","staff_break_end.recorded","staff_clock_out.recorded" ->
+                Regex("^[a-f0-9-]{36}$", RegexOption.IGNORE_CASE).matches(payload.optString("staff_member_id")) &&
+                payload.optString("staff_name_snapshot").length in 2..120 &&
+                payload.optString("occurred_at").isNotBlank()
             "inventory_transfer.requested" -> payload.optString("source_site_id").isNotBlank() &&
                 payload.optString("destination_site_id").isNotBlank() && payload.optString("inventory_item_id").isNotBlank() &&
                 payload.optString("sku_snapshot").isNotBlank() && payload.optDouble("quantity",0.0) > 0.0
