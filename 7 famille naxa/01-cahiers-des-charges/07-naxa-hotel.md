@@ -794,3 +794,308 @@ Cahier des charges — NAXA Hotel · v1.0 · 31 octobre 2026                    
 
 
 Cahier des charges — NAXA Hotel · v1.0 · 31 octobre 2026                                             Page 12
+
+
+---
+
+# Addendum fonctionnel NAXA HOTEL — Version 2.0 proposée
+**Date : 22 novembre 2026**  
+**Portée :** complément au cahier v1.0 du 31 octobre 2026. Cet addendum conserve intégralement les exigences et modules antérieurs. En cas de contradiction, les décisions plus récentes explicitement approuvées dans cet addendum prévalent sur les anciennes propositions [P] du cahier v1.0. Les éléments tarifaires de la section 20 sont une proposition commerciale et ne deviennent pas des prix validés avant arbitrage.
+
+## 17. Référentiel fonctionnel hôtelier conservé et complété
+
+Les 18 domaines fonctionnels issus de la proposition d'évolution 360° sont maintenus sans suppression :
+
+1. Administration et organisation de l'établissement.
+2. PMS hébergement, chambres, réservations et réception.
+3. Commercial, groupes, séminaires et événements.
+4. Distribution, canaux et gestion des revenus.
+5. CRM et expérience client.
+6. Housekeeping, entretien et linge.
+7. Restauration, bar et room service, avec moteur métier ZIPPLE.
+8. Services et prestations, avec interconnexion NAXA SERVICES.
+9. Économat, achats et stocks.
+10. Maintenance et gestion du patrimoine.
+11. RH, personnels, équipes et plannings.
+12. Finance, comptabilité et contrôle de gestion.
+13. Caisse, paiements, facturation et rapprochements.
+14. Contrôle interne, conformité et audit.
+15. Sécurité intégrée à NAXA SECURITY.
+16. Portail de séjour à accès limité par QR code.
+17. Énergie, eau et environnement.
+18. Direction, BI, indicateurs et IA sous contrôle humain.
+
+Deux modules transversaux complètent ce périmètre, sans remplacer les domaines précédents :
+
+19. **Livechat et communication professionnelle** : échanges du promoteur et des employés avec les équipes de support, assistance produit et échanges internes selon permissions. Les canaux, l'historique, les statuts, les pièces autorisées, l'escalade et la traçabilité sont conservés. Le SLA, les horaires et les délais de réponse restent à contractualiser. Ce module ne crée pas une cinquième entrée dans le portail QR client.
+20. **Support client NAXA HOTEL** : helpdesk destiné au promoteur et aux utilisateurs professionnels de l'hôtel, avec tickets catégorisés (compte, abonnement, paiement, PMS, caisse, finance, synchronisation, intégration, sécurité, formation), priorité, affectation, réponse, escalade et historique. Mutualiser les services de support autorisés de FAMILLE-NAXA et NAXA SECURITY LIVECARE ; ne pas créer un helpdesk concurrent. Tout accès exceptionnel aux données d'un client doit être temporaire, limité, autorisé et journalisé.
+
+## 18. Portail de séjour client — QR code en chambre
+
+### 18.1 Principe impératif
+
+Le client hébergé **n'a pas à installer d'application NAXA HOTEL, ZIPPLE, NAXA SERVICES ou LOYABLE**. Il ne doit pas créer de compte applicatif, de mot de passe ou d'identité utilisateur FAMILLE-NAXA.
+
+Un QR code apposé dans chaque chambre ouvre une page Web responsive du portail de séjour. L'accès fonctionne avec le navigateur du téléphone du client. Le portail est un point d'accès public et limité ; il ne constitue pas un espace de gestion, une application mobile client, ni un compte client.
+
+Le portail expose exactement quatre entrées, et aucune autre navigation fonctionnelle :
+
+1. **Services de l'hôtel** : catalogue des services réellement proposés par l'établissement, leurs descriptions, conditions, horaires, prix et modalités de demande lorsqu'ils sont configurés dans NAXA HOTEL.
+2. **Autres services disponibles** : consultation des catalogues publics des utilisateurs professionnels ZIPPLE et NAXA SERVICES, uniquement pour les catégories de services que l'hôtel ne propose pas lui-même. Le portail doit éviter les doublons et afficher clairement que le prestataire est externe à l'hôtel. Une disponibilité ou un prix non confirmé doit être présenté comme tel.
+3. **Marketplace LOYABLE** : lien direct vers la page publique de la marketplace LOYABLE pour rechercher un hébergement et effectuer une demande de réservation.
+4. **Pharmacie NAXA** : lien direct vers la page publique NAXA (pharmacie) permettant uniquement de rechercher un médicament et de consulter sa disponibilité publiée.
+
+Aucune cinquième entrée n'est prévue. Ne pas ajouter au portail QR : chat, messagerie, fidélité, avis, promotions, vidéosurveillance, tableau de bord, compte client, paiement de séjour, contenu publicitaire, réseaux sociaux ou autres liens. Les modules Livechat et Support Client restent des fonctions professionnelles distinctes.
+
+### 18.2 QR de chambre, sécurité et données minimales
+
+- Générer un QR par chambre et par établissement, avec identifiant public opaque ou jeton non prédictible ; ne jamais encoder le nom du client, son téléphone, son numéro de réservation, son numéro de pièce, son folio, ses dates de séjour ou un identifiant interne directement exploitable.
+- Associer côté serveur le QR à l'organisation, au site hôtelier et à la chambre correspondante.
+- Permettre à l'établissement de désactiver, révoquer et régénérer un QR perdu, copié ou remplacé.
+- Appliquer des limites de débit, des protections anti-automatisation et une journalisation technique minimale, proportionnée.
+- Le portail ne révèle pas l'identité de l'occupant, les réservations, le solde du séjour, les coordonnées des autres clients ni les données internes de l'hôtel.
+- Toute demande adressée à un prestataire externe transmet seulement les informations nécessaires à cette demande, après action explicite du client. Le numéro de chambre et l'identité du client ne sont pas communiqués par défaut.
+- Un QR photographié ou partagé ne doit jamais suffire à autoriser une opération financière, un crédit au folio ou une action sensible.
+- Le portail affiche le statut et l'horodatage des informations de disponibilité lorsque celles-ci ne sont pas synchronisées en temps réel. Il ne promet pas une disponibilité garantie si la source ne l'a pas confirmée.
+
+### 18.3 Règle de sélection des services externes
+
+NAXA HOTEL maintient, par établissement, une matrice des catégories de services proposées en interne. Pour une catégorie absente, le portail peut interroger les catalogues autorisés de ZIPPLE et NAXA SERVICES.
+
+Le moteur doit :
+- vérifier que le prestataire a une organisation active, un catalogue publié et une catégorie compatible ;
+- respecter les zones, horaires, disponibilités et conditions réellement renseignés par le prestataire ;
+- distinguer clairement un service de l'hôtel d'une offre d'un prestataire externe ;
+- ne pas transformer une simple consultation de catalogue en commande acceptée ;
+- transmettre une demande au système propriétaire du catalogue, qui reste responsable de la confirmation, du prix définitif, de l'exécution et de l'encaissement ;
+- ne pas partager les dossiers de séjour, le folio ou les données de sécurité de l'hôtel avec ZIPPLE ou NAXA SERVICES.
+
+Les catalogues ZIPPLE et NAXA SERVICES restent la source de vérité de leurs prestataires et offres. NAXA HOTEL orchestre l'accès et le contexte hôtelier par contrat API ; aucune écriture directe dans les tables d'une autre application n'est autorisée.
+
+## 19. Commandes de restaurant et de bar par QR code — intégration ZIPPLE
+
+### 19.1 Principe
+
+Lorsqu'un hôtel exploite un restaurant, un bar, ou les deux, il doit pouvoir proposer la consultation des menus et la commande client par QR code, sans application client à installer.
+
+Le QR peut être affiché :
+- dans les chambres, depuis le portail de séjour, pour commander au room service lorsque cette prestation est activée ;
+- sur les tables du restaurant ;
+- dans les espaces ou tables du bar.
+
+Si l'hôtel possède à la fois un restaurant et un bar, les deux activités sont configurées distinctement, avec leurs menus, points de service, circuits de préparation et responsables. Aucun paiement, ticket, stock ou chiffre d'affaires du restaurant ne doit être mélangé avec celui du bar sans écriture et ventilation explicites.
+
+### 19.2 Parcours client
+
+1. Le client scanne le QR avec l'appareil photo de son téléphone.
+2. Une page Web légère présente le menu du point de service concerné (restaurant, bar ou room service).
+3. Il consulte les articles, descriptions, prix, variantes, suppléments, disponibilités et conditions.
+4. Il compose sa commande, vérifie le récapitulatif et soumet la demande.
+5. ZIPPLE crée une commande identifiée, rattachée au bon établissement et au bon point de service.
+6. Le personnel habilité accepte ou refuse la commande ; la cuisine ou le bar reçoit le ticket selon le routage configuré.
+7. Le client voit les seuls statuts utiles de sa commande : reçue, acceptée, en préparation, prête, servie/livrée, refusée ou annulée.
+8. La clôture et le paiement suivent les règles de caisse ZIPPLE et les règles d'imputation NAXA HOTEL lorsqu'une consommation doit être portée au folio.
+
+Le parcours est utilisable sans compte ni installation. Une référence temporaire de commande permet de retrouver le suivi sans exposer les commandes d'un autre client.
+
+### 19.3 Propriété des données et intégration
+
+- **ZIPPLE reste propriétaire** du catalogue de restauration, des prix, recettes, ingrédients, disponibilités, tickets, préparation, postes cuisine/bar, stock, caisse, paiements et rapports du point de vente.
+- **NAXA HOTEL reste propriétaire** des chambres, séjours, clients, folios, règles d'imputation sur chambre et opérations PMS.
+- L'intégration se fait par contrats API et événements idempotents. Aucun accès direct ou écriture croisée dans les tables des deux applications.
+- Chaque commande possède une référence unique, un établissement, un point de service, un canal source (hotel_room_qr, hotel_table_qr ou hotel_bar_qr), un instantané des lignes/prix et des états horodatés.
+- Les commandes restaurant et bar restent analytiquement séparées par point de service, même si elles peuvent être présentées sur un folio de séjour unique.
+- Le client ne peut pas modifier directement le stock, le prix, le ticket, la remise ou le statut financier.
+
+### 19.4 Imputation au folio hôtelier
+
+La commande peut être réglée par les moyens activés dans ZIPPLE ou, lorsque l'établissement l'autorise, être proposée à l'imputation au folio du séjour.
+
+L'imputation au folio exige :
+- un séjour ouvert et une chambre valide ;
+- une correspondance de QR et de point de service vérifiée côté serveur ;
+- une règle d'autorisation explicite de l'hôtel ;
+- une validation du personnel habilité ou un mécanisme de confirmation renforcé défini par l'hôtel ;
+- une référence de commande unique, un montant figé et une protection contre le double débit ;
+- un événement d'imputation accepté par NAXA HOTEL avant que ZIPPLE ne considère l'imputation comme réalisée.
+
+Un QR partagé ne permet pas de créditer automatiquement une chambre. Une commande refusée, annulée ou non confirmée ne génère aucune ligne payée dans le folio. Les paiements directs suivent les statuts de confirmation serveur de ZIPPLE ; une capture d'écran ou déclaration du client ne vaut pas preuve de paiement.
+
+### 19.5 Restaurant/bar absent
+
+Si l'hôtel ne possède ni restaurant ni bar, les fonctions POS/commande QR de ses propres points de vente sont désactivées. Le portail QR conserve uniquement les quatre entrées de la section 18. Les offres externes disponibles via les catalogues ZIPPLE et NAXA SERVICES restent consultables dans l'entrée « Autres services disponibles » lorsqu'une catégorie correspondante manque dans l'hôtel.
+
+## 20. Abonnements NAXA HOTEL — proposition tarifaire à arbitrer [P]
+
+### 20.1 Modèle de facturation inspiré de LOYABLE
+
+Recommander une souscription par organisation/promoteur hôtelier, calculée sur le nombre de chambres actives/en gestion dans le portefeuille couvert. Le calcul suit le principe LOYABLE : montant unitaire par chambre, quantité facturable affichée et historisée, sans créer une souscription indépendante pour chaque chambre.
+
+**Formule Essentiel proposée [P] :**
+- 800 FCFA par chambre active et par mois ;
+- minimum de facturation : 10 000 FCFA par organisation et par mois.
+
+**Formule Premium proposée [P] :**
+- 1 000 FCFA par chambre active et par mois ;
+- minimum de facturation : 18 000 FCFA par organisation et par mois.
+
+Formules :
+- Essentiel mensuel = max(10 000 FCFA, 800 FCFA × nombre de chambres actives facturables).
+- Premium mensuel = max(18 000 FCFA, 1 000 FCFA × nombre de chambres actives facturables).
+
+Le nombre de chambres facturables doit être un instantané daté de la quantité de chambres actives/en gestion rattachées à l'organisation. Les chambres archivées ou définitivement retirées de la gestion sont exclues. La règle exacte de traitement d'une chambre temporairement hors service (travaux, sinistre, rénovation) doit être affichée et arbitrée avant facturation automatisée.
+
+### 20.2 Périodicité annuelle proposée
+
+Conformément à FAM-020, les abonnements proposés sont mensuels ou annuels uniquement. Pour les deux formules NAXA HOTEL, recommander 12 mois de service pour 10 mensualités payées :
+
+- Annuel Essentiel = montant mensuel calculé × 10.
+- Annuel Premium = montant mensuel calculé × 10.
+- Aucun abonnement de 3 ou 6 mois.
+- Aucun cumul de promotions ne doit recréer 3 ou 6 mois gratuits.
+- Aucun tarif payé ne peut être révisé rétroactivement pendant la période couverte.
+
+### 20.3 Exemples de simulation (FCFA)
+
+| Chambres actives | Essentiel / mois | Essentiel / an (10 mois payés) | Premium / mois | Premium / an (10 mois payés) |
+|---:|---:|---:|---:|---:|
+| 10 | 10 000 | 100 000 | 18 000 | 180 000 |
+| 20 | 16 000 | 160 000 | 20 000 | 200 000 |
+| 30 | 24 000 | 240 000 | 30 000 | 300 000 |
+| 50 | 40 000 | 400 000 | 50 000 | 500 000 |
+| 80 | 64 000 | 640 000 | 80 000 | 800 000 |
+
+Ces montants sont des simulations commerciales, non des prix homologués. Le catalogue doit afficher le nombre de chambres, le prix unitaire, le minimum éventuel, la période, le tarif mensuel équivalent, le total annuel et les deux mensualités offertes.
+
+### 20.4 Comparaison publique indicative
+
+La grille a été construite après consultation, le 22 novembre 2026, de prix publics affichés par des solutions ciblant les marchés africains :
+- Hotelia affiche un plan Hébergement à partir de 16 200 FCFA/mois et une formule Tout-en-un hébergement + POS + cuisine à partir de 27 000 FCFA/mois : https://www.hotelia.cloud/
+- The African Hotelier affiche 25 000 FCFA/mois pour 1 à 20 chambres et 50 000 FCFA/mois pour 21 à 50 chambres : https://theafricanhotelier.com/pms-hotelier/
+- 1412 PMS affiche 29 000 FCFA/mois (Starter), 39 000 FCFA/mois (Business) et 69 000 FCFA/mois (Premium) : https://1412pms.com/
+- StayFlow affiche un cloud optionnel à 30 000 FCFA/mois pour Essentiel et 72 000 FCFA/mois pour Business, en plus d'une licence initiale : https://stayflow.pro/
+
+Ces pages sont des références de positionnement, pas une comparaison technique certifiée : les quotas, modules, frais de mise en service, matériels, support, fiscalité et conditions commerciales ne sont pas identiques. La proposition NAXA HOTEL vise un prix d'entrée accessible pour les petits établissements et un prix par chambre qui évolue avec la taille.
+
+### 20.5 Différenciation fonctionnelle proposée
+
+Les deux formules doivent préserver les fonctions nécessaires à l'exploitation quotidienne et à la sécurité ; ne pas désactiver une fonction métier essentielle afin de pousser artificiellement vers Premium.
+
+**Essentiel — un établissement hôtelier :**
+- PMS de base complet : chambres, tarifs, réservations, arrivées/départs, folio, caisse, facturation et paiements avec statuts confirmés ;
+- tâches de ménage, maintenance courante, équipe, rôles, passations et audit des opérations essentielles ;
+- catalogue hôtel, économat/achats/stocks de base, services et prestations ;
+- restaurant et bar lorsqu'ils existent, avec QR de menu et de commande client via ZIPPLE, room service par QR si activé, tickets séparés cuisine/bar et consultation du statut ;
+- NAXA SECURITY intégré : socle de sécurité du site, appareils compatibles, événements, alertes, incidents, droits et historique ; intégrations compatibles fumée/incendie dans les limites des dispositifs tiers ;
+- portail QR client limité aux quatre entrées de la section 18 ;
+- accès marketplace hôtel LOYABLE gratuit tant que l'abonnement NAXA HOTEL est actif et que l'hôtel respecte les règles de publication ;
+- support professionnel standard selon les canaux et horaires qui seront publiés.
+
+**Premium — établissement renforcé et groupes hôteliers :**
+- toutes les fonctions Essentiel ;
+- périmètre multi-hôtels/multi-sites au niveau de l'organisation, consolidation et délégation avancée ;
+- rapports avancés, contrôle de gestion, gestion commerciale approfondie, groupes et événements, revenue management et outils IA avancés soumis à validation humaine ;
+- fonctions avancées ZIPPLE pour les points de service, le routage cuisine/bar, le pilotage, les analyses et la consolidation selon entitlements ;
+- capacité étendue NAXA SECURITY : multi-zones/multi-sites, capacités et quotas supérieurs, analyses et corrélations avancées, rapports et options de supervision autorisées ;
+- support prioritaire selon engagement de service publié.
+
+Les quotas précis (utilisateurs, sites, chambres, appareils, caméras, capteurs, stockage, rétention, flux simultanés, QR/points de service et volumes) doivent être chiffrés selon les coûts et capacités réels avant publication. Aucun plafond numérique n'est inventé dans ce cahier.
+
+**Sécurité NAXA SECURITY dans les deux formules :** le socle de protection est inclus dans Essentiel comme dans Premium ; Premium augmente la portée et les capacités, mais ne supprime pas la protection de base d'Essentiel. NAXA fournit les logiciels, les intégrations, la configuration, la formation et le support prévus. NAXA ne fournit pas les caméras, centrales incendie, capteurs, câblages, serveurs, sirènes ni installation matérielle, et ne fournit pas de service humain de télésurveillance. Les systèmes locaux certifiés d'alarme et de protection incendie doivent rester autonomes et opérationnels sans dépendance au cloud NAXA.
+
+### 20.6 Règles de quantité et changements en cours de période [O]
+
+Reprendre le modèle LOYABLE :
+- une souscription par organisation/promoteur ;
+- affichage du nombre de chambres retenues et de son détail ;
+- journal de l'ancienne quantité, nouvelle quantité, auteur, date de constat, date d'effet et tarif appliqué ;
+- conservation d'un instantané de la quantité facturée pour chaque période ;
+- aucune hausse rétroactive et aucune mutation concurrente incohérente.
+
+**Point à arbitrer avant automatisation [O] :** ajout/retrait de chambres pendant une période payée : effet immédiat avec prorata ou effet au prochain renouvellement. Aucune proratisation automatique ne doit être codée avant décision.
+
+Les frais uniques d'installation logicielle, configuration, formation, migration ou déplacement, s'ils sont retenus, sont affichés séparément et ne constituent pas un abonnement trimestriel ou semestriel. Le matériel reste à la charge de l'hôtel ou de son installateur/intégrateur.
+
+### 20.7 Règles LOYABLE de publication hôtelière
+
+La marketplace publique LOYABLE doit disposer d'une catégorie spécifique **Hébergements et établissements hôteliers**, distincte des annonces de location résidentielle.
+
+Deux parcours sont retenus :
+
+**Hôtel utilisateur de NAXA HOTEL :**
+- publication et présence sur la marketplace LOYABLE gratuites ;
+- accès réservé à une organisation ayant un abonnement NAXA HOTEL actif ;
+- création/mise à jour de l'annonce à partir des données autorisées du PMS ;
+- sélection des types de chambres, photos, tarifs et conditions visibles ;
+- LOYABLE reste responsable de la publication publique et de l'affichage ;
+- NAXA HOTEL reste l'autorité pour les tarifs, stocks de chambres, disponibilités et confirmations de réservation ;
+- aucune demande issue de LOYABLE n'est présentée comme une réservation confirmée avant acceptation par NAXA HOTEL.
+
+**Hôtel n'utilisant pas NAXA HOTEL :**
+- abonnement de référencement/réservation LOYABLE proposé à **10 000 FCFA par mois** ;
+- intégration, vérification de l'établissement, création et administration de l'annonce par l'administration centrale de l'entreprise ;
+- aucune inscription autonome ni auto-publication par un hôtel externe dans ce circuit ;
+- les demandes de réservation sont transmises à l'établissement par le circuit administratif défini ; confirmation uniquement après réponse et vérification de disponibilité ;
+- en l'absence de PMS connecté, la disponibilité est déclarative ou administrée manuellement, horodatée et revalidée par l'établissement avant toute confirmation ;
+- le forfait est mensuel ; un tarif annuel et les SLA d'administration ne sont pas définis à ce stade.
+
+Ce service hôtelier est distinct de la tarification LOYABLE des bailleurs (1 000 FCFA × chambres actives/en gestion). Aucun double abonnement LOYABLE ne doit être appliqué à un hôtel utilisateur de NAXA HOTEL pour sa seule publication hôtelière.
+
+### 20.8 Contrats inter-applications et événements
+
+Prévoir des contrats versionnés, authentifiés, idempotents et audités. Les événements proposés comprennent :
+- hotel_listing.created, hotel_listing.updated, hotel_listing.withdrawn ;
+- naxa_hotel.tariff.updated, naxa_hotel.availability.updated ;
+- loyable.hotel_booking_request.created ;
+- naxa_hotel.booking_request.accepted, naxa_hotel.booking_request.rejected, naxa_hotel.reservation.confirmed, naxa_hotel.reservation.cancelled ;
+- zipple.order.created, zipple.order.accepted, zipple.order.preparing, zipple.order.ready, zipple.order.served, zipple.order.cancelled ;
+- naxa_hotel.folio_charge.requested, naxa_hotel.folio_charge.accepted, naxa_hotel.folio_charge.rejected.
+
+Chaque événement conserve au minimum event_id, idempotency_key, version de contrat, application source/destination, organisation, site, acteur/service, horodatage, référence métier, statut et motif d'échec. Pas de partage global de profils ou d'écritures directes dans les tables d'une autre application.
+
+## 21. Exigences supplémentaires de recette
+
+### Portail QR
+- Scanner le QR de deux chambres différentes affiche le bon établissement et le bon catalogue, sans révéler le séjour ou l'identité des occupants.
+- Un QR révoqué/refait ne permet plus l'accès avec l'ancien jeton.
+- Le portail présente exactement les quatre entrées prévues et aucune cinquième fonctionnalité.
+- Les offres internes de l'hôtel ne sont pas dupliquées dans la liste des services externes.
+- Un service absent de l'hôtel peut être recherché dans les catalogues ZIPPLE/NAXA SERVICES ; un catalogue indisponible ou non synchronisé est présenté comme tel.
+- Les liens LOYABLE et pharmacie NAXA ouvrent leurs pages publiques ; aucun espace professionnel n'est accessible.
+
+### Restaurant et bar QR / ZIPPLE
+- Les QR restaurant, bar et chambre ouvrent le bon point de service et le bon menu.
+- Un hôtel possédant restaurant et bar peut recevoir deux commandes indépendantes et les router vers les bonnes équipes.
+- Une commande ne crée qu'un seul ticket ; les retries et scans répétés ne produisent pas de doublons.
+- Une commande refusée ou annulée ne crée aucun paiement ni débit de folio.
+- L'imputation sur chambre exige séjour ouvert, référence unique, autorisation et confirmation NAXA HOTEL ; le débit n'est jamais exécuté deux fois.
+- Stock, recettes, prix, paiements et chiffre d'affaires restent dans le domaine ZIPPLE ; le PMS ne reçoit que les références et éléments autorisés nécessaires au folio.
+
+### Marketplace hôtel LOYABLE
+- Un hôtel NAXA HOTEL actif peut publier gratuitement ; abonnement échu, hôtel suspendu ou annonce rejetée masque les annonces selon les règles LOYABLE.
+- Un hôtel externe ne peut être créé/publié qu'après procédure administrative et paiement mensuel confirmé.
+- Une demande externe n'est jamais annoncée comme réservation confirmée avant vérification de la disponibilité.
+- Une panne d'intégration ne doit pas afficher une disponibilité temps réel fictive.
+
+### Abonnements et sécurité
+- Tester les calculs de quantité, minimum de facturation, annuel à dix mensualités, changement de chambres et absence de rétroactivité.
+- Tester que NAXA SECURITY est inclus dans les deux formules ; les entitlements Premium étendent les capacités sans retirer le socle Essentiel.
+- Tester les événements fumée/incendie compatibles, l'autonomie locale du système certifié tiers et les alertes NAXA, sans prétendre remplacer le contrôleur matériel ou les secours humains.
+
+## 22. Arbitrages restant nécessaires avant gel commercial
+
+1. Valider ou modifier les tarifs proposés : 800 FCFA/chambre/mois Essentiel (minimum 10 000 F) et 1 000 FCFA/chambre/mois Premium (minimum 18 000 F).
+2. Confirmer Premium multi-hôtels et le mode de calcul de la quantité à l'échelle du groupe.
+3. Arbitrer l'effet des variations de chambres en cours de période (prorata immédiat ou renouvellement suivant).
+4. Définir les quotas publiés : utilisateurs, appareils, sites, chambres, sécurité, stockage, rétention, QR/points de service et flux.
+5. Définir les SLA, horaires et délais du support standard et prioritaire.
+6. Définir les frais uniques de configuration/formation/déplacement, distincts de l'abonnement.
+7. Confirmer les SLA d'administration du référencement des hôtels externes LOYABLE et l'éventuel tarif annuel du forfait mensuel de 10 000 F.
+
+## 23. Statut et gouvernance de cette version
+
+- Les sections 17 à 19 reprennent les évolutions fonctionnelles demandées ; le périmètre client QR est strictement limité et les commandes QR restaurant/bar sont intégrées à ZIPPLE.
+- Les règles de publication hôtelière LOYABLE et d'intégration NAXA SECURITY reflètent les arbitrages communiqués.
+- Les montants proposés dans la section 20 sont **[P] — non validés comme prix définitifs**.
+- Les points de la section 22 restent **[O] — arbitrage nécessaire**.
+- Cet addendum ne certifie aucune implémentation, migration, connexion inter-app, disponibilité réelle, paiement opérationnel ou recette réussie. Les documents décrivent la cible à construire et à tester.
