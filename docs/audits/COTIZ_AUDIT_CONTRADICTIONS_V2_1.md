@@ -113,6 +113,8 @@ Les niveaux de gravité ci-dessous qualifient le risque si la contradiction rest
 | COT-A46 | Annonces dans le chat vs gouvernance officielle | Une annonce peut être confondue avec un règlement ou un procès-verbal adopté. | Publication informative dans Social ; les décisions officielles doivent être votées et archivées dans Governance. | Élevé |
 | COT-A47 | Fonction de support/admin vs confidentialité privée | Un agent de support pourrait voir les messages privés et le détail financier par commodité. | Accès au support limité aux éléments fournis et autorisés ; accès privilégié temporaire et journalisé, aucune lecture globale par défaut. | Critique |
 | COT-A48 | Migration documentaire vs réalisation technique | Le cahier complet pourrait être interprété comme preuve que l'application est opérationnelle. | État explicite : baseline documentaire seulement ; README seul dans apps/cotiz ; aucun code, migration, build, test ou déploiement livré. | Élevé |
+| COT-A49 | Sécurité des appareils vs accès partagé | V1 proposait un code d'accès local, biométrie, blocage après cinq tentatives, nouveaux appareils notifiés et jusqu'à deux appareils actifs ; si ces contrôles disparaissent, comptes et dossiers KYC sont exposés. | Les contrôles terminaux, sessions, Keystore, révocation et signatures APK sont repris dans V2.1. Le plafond initial de deux appareils et le seuil de cinq échecs restent à confirmer/tester avant implémentation. | Élevé |
+| COT-A50 | Synchronisation offline vs délai fixe V1 | Les tolérances de 7/14 jours étaient proposées pour les anciens plans ; les reprendre sans mesure pourrait créer une perte ou un verrouillage injustifié. | Pas de durée 7/14 jours codée par défaut. Cache, quotas et délais sont définis par domaine ; les opérations financières non synchronisées restent explicitement en attente et ne deviennent pas confirmées. | Élevé |
 
 # 4. Analyse par contradiction — causes racines
 
@@ -189,6 +191,9 @@ Le logiciel de registre n'est pas la même activité que recevoir, conserver ou 
 | Cautions/garanties | Section 11 | Documentaire, verrou juridique et consentement |
 | Caisse de solidarité | Section 12 | Conservée, accès sensible |
 | Clôture de cycles | Sections 4 et 9 | Étendue aux écarts, litiges et preuves |
+| Code d'accès, biométrie, sessions et contrôle APK | Section 29.3 | Repris avec seuils historiques à revalider |
+| Briefings matin/soir | Section 21 | Option configurable, sans notification excessive |
+| Comptabilité de gestion et référence SYSCOHADA | Section 24 | Aide à la lecture/export seulement, jamais une certification |
 | Rappels WhatsApp | Section 21 | Liens préparés ; API officielle seulement après validation |
 | IA/rapports | Section 22 | Assistant métier gouverné |
 | Offline/synchronisation | Section 30.4 | Conservé avec statuts explicites |
