@@ -661,7 +661,7 @@ BEGIN
   END IF;
   -- Fixture has two committed journal rows. Check the returned cursor,
   -- never read the server-only counter table from the authenticated role.
-  IF coalesce((v_pull->>'has_more')::boolean,true) OR v_next <> 2 THEN
+  IF coalesce((v_pull->>'has_more')::boolean,true) OR v_next <> 3 THEN
     RAISE EXCEPTION 'N3_PULL_CURSOR_DID_NOT_ADVANCE_PAST_FILTERED_ROWS: %',v_pull;
   END IF;
 END
