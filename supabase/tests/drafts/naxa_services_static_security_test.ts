@@ -211,8 +211,10 @@ Deno.test("supplier sync drafts preserve local supplier, purchase and line UUIDs
     "Purchase lines must accept explicit client UUIDs");
   assert(/select\s+x\.line_id\s*,\s*p_org_id\s*,\s*p_site_id\s*,\s*v_purchase_id/i.test(sql),
     "Purchase line UUIDs must be persisted rather than regenerated");
-  assert(/grant\s+execute\s+on\s+function\s+public\.ns_save_supplier\([^;]+\)\s+to\s+authenticated,\s*service_role/i.test(sql),
-    "Supplier identity RPC must have explicit execution grants");
+  assert(/revoke\s+all\s+on\s+function\s+public\.ns_save_supplier\([^;]+\)\s+from\s+public,\s*anon,\s*authenticated/i.test(sql),
+    "Supplier identity helper must not be directly callable by authenticated clients");
+  assert(/grant\s+execute\s+on\s+function\s+public\.ns_save_supplier\([^;]+\)\s+to\s+service_role/i.test(sql),
+    "Supplier identity helper must be restricted to the server role");
 });
 
 Deno.test("inventory sync RPCs preserve canonical IDs, tenant scope and replay-safe movement writes", async () => {
@@ -227,10 +229,14 @@ Deno.test("inventory sync RPCs preserve canonical IDs, tenant scope and replay-s
     "Changed payload under an existing movement ID must be rejected");
   assert(/v_next_quantity\s*<\s*0/i.test(sql),
     "A movement may not create negative stock");
-  assert(/grant\s+execute\s+on\s+function\s+public\.ns_save_inventory_item\([^;]+\)\s+to\s+authenticated,\s*service_role/i.test(sql),
-    "Inventory item RPC must have explicit scoped grants");
-  assert(/grant\s+execute\s+on\s+function\s+public\.ns_record_inventory_movement\([^;]+\)\s+to\s+authenticated,\s*service_role/i.test(sql),
-    "Inventory movement RPC must have explicit scoped grants");
+  assert(/revoke\s+all\s+on\s+function\s+public\.ns_save_inventory_item\([^;]+\)\s+from\s+public,\s*anon,\s*authenticated/i.test(sql),
+    "Inventory item helper must not be directly callable by authenticated clients");
+  assert(/grant\s+execute\s+on\s+function\s+public\.ns_save_inventory_item\([^;]+\)\s+to\s+service_role/i.test(sql),
+    "Inventory item helper must be restricted to the server role");
+  assert(/revoke\s+all\s+on\s+function\s+public\.ns_record_inventory_movement\([^;]+\)\s+from\s+public,\s*anon,\s*authenticated/i.test(sql),
+    "Inventory movement helper must not be directly callable by authenticated clients");
+  assert(/grant\s+execute\s+on\s+function\s+public\.ns_record_inventory_movement\([^;]+\)\s+to\s+service_role/i.test(sql),
+    "Inventory movement helper must be restricted to the server role");
 });
 
 
