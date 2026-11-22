@@ -2382,6 +2382,10 @@ private fun DashboardContent(
     }.collectAsState(initial = emptyList())
     val pendingOperations by localRepository.dao.observePendingOutboxCount(session.account.organizationId)
         .collectAsState(initial = 0)
+    val remoteReviewCount by localRepository.dao.observeRemoteReviewCount(session.account.organizationId)
+        .collectAsState(initial = 0)
+    val remoteChangesNeedingReview by localRepository.dao.observeRemoteChangesNeedingReview(session.account.organizationId)
+        .collectAsState(initial = emptyList())
     val lowStockCount = inventoryItems.count { it.quantity <= it.reorderLevel }
     val siteLabels = session.account.activeSites.associate {
         it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel)
@@ -2420,6 +2424,43 @@ private fun DashboardContent(
                     }
                     DashboardMetricRow(if (locale == "en") "Low-stock items" else "Articles sous seuil", lowStockCount.toString() + " / " + inventoryItems.size.toString())
                     DashboardMetricRow(if (locale == "en") "Pending local operations" else "Opérations locales en attente", pendingOperations.toString())
+                    DashboardMetricRow(if (locale == "en") "Peer changes to review" else "Changements reçus à examiner", remoteReviewCount.toString())
+                    if (remoteChangesNeedingReview.isNotEmpty()) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    if (locale == "en") "Synchronization review queue" else "File de revue de synchronisation",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                remoteChangesNeedingReview.forEach { change ->
+                                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                        Text(
+                                            change.actionCode + " · " + change.aggregateType + " / " + change.aggregateId.take(12),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            change.lastErrorCode ?: if (locale == "en") "Manual review required" else "Revue manuelle requise",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                                Text(
+                                    if (locale == "en") "These changes are retained locally and not silently discarded. Resolve the business conflict before relying on this device's view." else "Ces changements sont conservés localement et ne sont pas supprimés. Résous le conflit métier avant de te fier à la vue de cet appareil.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
                     Button(
                         onClick = {
                             syncScope.launch {
