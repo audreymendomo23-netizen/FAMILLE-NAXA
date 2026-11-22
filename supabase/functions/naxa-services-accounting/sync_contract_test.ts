@@ -368,3 +368,19 @@ Deno.test("atomic sync envelope validates cash session open/close and expense co
     if(normalized.aggregate_id!==id||normalized.action_code!==action)throw new Error("Cash action mismatch: "+action);
   }
 });
+
+
+Deno.test("atomic sync validates cash and pending Mobile Money sale commands", () => {
+  const sale="88888888-8888-4888-8888-888888888902";
+  for(const action of ["sale.created","sale.mobile_money_cancelled"]) {
+    const normalized=normalizeAtomicSyncEvent({
+      event_id:SYNC_EVENT,device_id:SYNC_DEVICE,device_sequence:80,
+      org_id:ORG_A,site_id:SITE_A,workstation_id:null,
+      aggregate_type:"sale",aggregate_id:sale,action_code:action,
+      payload:{sale_id:sale,org_id:ORG_A,site_id:SITE_A}
+    });
+    if(normalized.aggregate_id!==sale||normalized.action_code!==action) {
+      throw new Error("Sale action mismatch: "+action);
+    }
+  }
+});
