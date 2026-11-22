@@ -1752,7 +1752,7 @@ begin
       raise exception 'NAXA_PRESSING_DEPOSIT_TERMS_INVALID';
     end if;
   else
-    if v_method not in ('cash','mobile_money','other') then
+    if v_method is null or v_method not in ('cash','mobile_money','other') then
       raise exception 'NAXA_PRESSING_DEPOSIT_METHOD_REQUIRED';
     end if;
     if v_method='cash' then
