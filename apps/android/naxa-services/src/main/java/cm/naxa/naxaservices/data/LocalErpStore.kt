@@ -1132,6 +1132,9 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_loyalty_programs WHERE orgId = :orgId AND activityProfile = :activityProfile AND programCode = :programCode LIMIT 1")
     suspend fun findLoyaltyProgram(orgId: String, activityProfile: String, programCode: String): LocalLoyaltyProgram?
 
+    @Query("SELECT * FROM local_loyalty_programs WHERE orgId = :orgId AND id = :programId LIMIT 1")
+    suspend fun findLoyaltyProgramById(orgId: String, programId: String): LocalLoyaltyProgram?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertLoyaltyProgram(program: LocalLoyaltyProgram)
 
