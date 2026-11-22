@@ -2761,7 +2761,7 @@
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
         "line": 3188,
         "method": "transitionManagementRecord",
-        "aggregateType": "current.recordType",
+        "aggregateType": "inventory_movement",
         "actionExpression": "\"inventory_movement.purchase_received\""
       },
       "action_codes": [
@@ -2812,7 +2812,7 @@
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
         "line": 3274,
         "method": "transitionManagementRecord",
-        "aggregateType": "current.recordType",
+        "aggregateType": "inventory_movement",
         "actionExpression": "\"inventory_movement.transfer_out\""
       },
       "action_codes": [
@@ -2864,7 +2864,7 @@
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
         "line": 3275,
         "method": "transitionManagementRecord",
-        "aggregateType": "current.recordType",
+        "aggregateType": "inventory_movement",
         "actionExpression": "\"inventory_movement.transfer_in\""
       },
       "action_codes": [
@@ -2916,7 +2916,7 @@
         "file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
         "line": 3295,
         "method": "transitionManagementRecord",
-        "aggregateType": "current.recordType",
+        "aggregateType": "inventory_transfer",
         "actionExpression": "\"inventory_transfer.received_at_destination\""
       },
       "action_codes": [
