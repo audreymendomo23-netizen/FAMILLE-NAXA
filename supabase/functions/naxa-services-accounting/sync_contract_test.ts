@@ -131,3 +131,66 @@ Deno.test("inventory movement sync enforces signed quantity semantics",()=>{
   } catch { failed=true; }
   if(!failed) throw new Error("Positive consumption must be rejected");
 });
+
+
+import { normalizeAtomicSyncEvent } from "./sync_contract.ts";
+const SYNC_DEVICE = "88888888-8888-4888-8888-888888888885";
+const SYNC_EVENT = "88888888-8888-4888-8888-888888888886";
+const SYNC_SUPPLIER = "88888888-8888-4888-8888-888888888887";
+const atomicSupplierEvent = () => ({
+  event_id: SYNC_EVENT, device_id: SYNC_DEVICE, device_sequence: 1,
+  org_id: ORG_A, site_id: SITE_A, workstation_id: null,
+  aggregate_type: "supplier", aggregate_id: SYNC_SUPPLIER,
+  action_code: "supplier.saved",
+  payload: {
+    supplier_id: SYNC_SUPPLIER, org_id: ORG_A, site_id: SITE_A,
+    name: "Fournisseur test", phone: "", whatsapp: "", email: "",
+    address: "", payment_terms_days: 0, notes: ""
+  }
+});
+Deno.test("atomic sync envelope validates scoped aggregate and stable identifiers", () => {
+  const normalized = normalizeAtomicSyncEvent(atomicSupplierEvent());
+  if (normalized.event_id !== SYNC_EVENT || normalized.aggregate_id !== SYNC_SUPPLIER ||
+      normalized.action_code !== "supplier.saved" || normalized.device_sequence !== 1) {
+    throw new Error("Atomic sync event was not normalized");
+  }
+});
+Deno.test("atomic sync envelope rejects unsupported actions and aggregate spoofing", () => {
+  let unsupported = false;
+  try { normalizeAtomicSyncEvent({ ...atomicSupplierEvent(), action_code: "sale.created" }); }
+  catch { unsupported = true; }
+  if (!unsupported) throw new Error("Unsupported action must be rejected");
+  let aggregate = false;
+  try { normalizeAtomicSyncEvent({ ...atomicSupplierEvent(), aggregate_type: "customer" }); }
+  catch { aggregate = true; }
+  if (!aggregate) throw new Error("Aggregate/action mismatch must be rejected");
+});
+Deno.test("atomic sync envelope rejects cross-site and cross-organization payloads", () => {
+  let site = false;
+  try {
+    const body = atomicSupplierEvent();
+    normalizeAtomicSyncEvent({ ...body, site_id: "88888888-8888-4888-8888-888888888888" });
+  } catch { site = true; }
+  if (!site) throw new Error("Payload site mismatch must be rejected");
+  let org = false;
+  try {
+    const body = atomicSupplierEvent();
+    normalizeAtomicSyncEvent({ ...body, payload: { ...body.payload, org_id: "88888888-8888-4888-8888-888888888888" } });
+  } catch { org = true; }
+  if (!org) throw new Error("Payload organization mismatch must be rejected");
+});
+Deno.test("organization-scoped loyalty program event cannot carry a site or workstation", () => {
+  const value = {
+    event_id: SYNC_EVENT, device_id: SYNC_DEVICE, device_sequence: 2,
+    org_id: ORG_A, site_id: null, workstation_id: null,
+    aggregate_type: "loyalty_program", aggregate_id: SYNC_SUPPLIER,
+    action_code: "loyalty_program.updated",
+    payload: { program_id: SYNC_SUPPLIER, org_id: ORG_A, activity_profile: "pressing" }
+  };
+  const normalized = normalizeAtomicSyncEvent(value);
+  if (normalized.site_id !== null) throw new Error("Loyalty program must be organization-scoped");
+  let rejected = false;
+  try { normalizeAtomicSyncEvent({ ...value, site_id: SITE_A }); }
+  catch { rejected = true; }
+  if (!rejected) throw new Error("Organization-scoped action must reject site IDs");
+});
