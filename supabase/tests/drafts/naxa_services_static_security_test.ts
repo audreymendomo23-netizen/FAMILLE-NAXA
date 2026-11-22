@@ -299,6 +299,7 @@ Deno.test("N2 service, customer, CRM and support handlers are scoped and server-
 });
 
 
+
 Deno.test("N2 inventory valuation handler is versioned, scoped and server-write-only", async () => {
   const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
   assert(/create\s+or\s+replace\s+function\s+public\.ns_upsert_inventory_valuation\s*\(/i.test(sql),
@@ -306,8 +307,8 @@ Deno.test("N2 inventory valuation handler is versioned, scoped and server-write-
   assert(/p_expected_version\s*<>\s*v_existing\.revision/i.test(sql),
     "Inventory valuation updates must reject stale revisions");
   assert(/update\s+public\.ns_inventory_items[\s\S]{0,250}average_unit_cost_xaf=p_unit_cost_xaf[\s\S]{0,250}selling_price_xaf=p_selling_price_xaf/i.test(sql),
-    "The inventory item reporting projection must update with its valuation ledger");
-  assert(/revoke\s+all\s+on\s+public\.ns_inventory_valuations\s+from\s+public,\s*anon,\s*authenticated/i.test(sql),
+    "Inventory item reporting projection must update with valuation ledger");
+  assert(/revoke\s+all\s+on\s+public\.ns_inventory_valuations\s+from\s+public,anon,authenticated/i.test(sql),
     "Inventory valuation ledger must remain server-only");
   assert(/grant\s+all\s+on\s+public\.ns_inventory_valuations\s+to\s+service_role/i.test(sql),
     "Inventory valuation ledger must be writable by service_role");
@@ -315,28 +316,6 @@ Deno.test("N2 inventory valuation handler is versioned, scoped and server-write-
     assert(sql.includes("'" + action + "'"),"Missing inventory valuation action " + action);
   }
 });
-
-
-Deno.test("N2 pressing and appointment RPCs validate states, versions and atomic slot conflicts", async () => {
-  const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
-  for(const fn of ["ns_create_pressing_order","ns_transition_pressing_order","ns_create_appointment","ns_transition_appointment","ns_reschedule_appointment"]) {
-    assert(new RegExp("create\\s+or\\s+replace\\s+function\\s+public\\."+fn+"\\s*\\(","i").test(sql),
-      "Missing pressing/appointment handler "+fn);
-  }
-  assert(/p_expected_version\s*<>\s*v_order\.revision/i.test(sql),
-    "Pressing status changes must enforce expected revision");
-  assert(/p_expected_version\s*<>\s*v_appointment\.revision/i.test(sql),
-    "Appointment status changes must enforce expected revision");
-  assert(/pg_advisory_xact_lock[\s\S]{0,200}appointment-slots/i.test(sql),
-    "Appointment create/reschedule must serialize slot conflict checks");
-  assert(/a\.starts_at<p_ends_at\s+and\s+a\.ends_at>p_starts_at/i.test(sql),
-    "Appointment overlap must be checked on the server");
-  assert(/revoke\s+insert,update,delete\s+on\s+public\.ns_pressing_orders,public\.ns_appointments\s+from\s+public,anon,authenticated/i.test(sql),
-    "Pressing and appointment writes must use their server RPCs");
-  assert(/revoke\s+insert,update,delete\s+on\s+public\.ns_pressing_status_events,public\.ns_appointment_status_events\s+from\s+public,anon,authenticated/i.test(sql),
-    "Status event ledgers must be append-only server writes");
-});
-
 
 Deno.test("N2 pressing and appointment RPCs enforce lifecycle versions and server-side slot locks", async () => {
   const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
@@ -355,11 +334,10 @@ Deno.test("N2 pressing and appointment RPCs enforce lifecycle versions and serve
   assert(/revoke\s+insert,update,delete\s+on\s+public\.ns_pressing_orders,public\.ns_appointments\s+from\s+public,anon,authenticated/i.test(sql),
     "Pressing/appointment client writes must be RPC-only");
   assert(/revoke\s+insert,update,delete\s+on\s+public\.ns_pressing_status_events,public\.ns_appointment_status_events\s+from\s+public,anon,authenticated/i.test(sql),
-    "Pressing and appointment status ledgers must be append-only server writes");
+    "Pressing/appointment status ledgers must be append-only server writes");
 });
 
-
-Deno.test("N2 cash session and expense handlers calculate balances server-side", async () => {
+Deno.test("N2 cash session and expense handlers are scoped and compute close balances on server", async () => {
   const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
   for(const fn of ["ns_open_cash_session","ns_record_expense","ns_close_cash_session"]) {
     assert(new RegExp("create\\s+or\\s+replace\\s+function\\s+public\\."+fn+"\\s*\\(","i").test(sql),
@@ -367,31 +345,14 @@ Deno.test("N2 cash session and expense handlers calculate balances server-side",
   }
   assert(/ns_cash_sessions_one_open_per_register_uidx/i.test(sql),
     "Only one open cash session per register is allowed");
-  assert(/sum\\(p\\.amount_xaf\\)[\\s\\S]{0,300}payment_method='cash'[\\s\\S]{0,200}status='confirmed'/i.test(sql),
+  assert(/pg_advisory_xact_lock[\s\S]{0,180}cash-open/i.test(sql),
+    "Register opening must be serialized");
+  assert(/sum\(p\.amount_xaf\)[\s\S]{0,300}payment_method='cash'[\s\S]{0,200}status='confirmed'/i.test(sql),
     "Cash close must total confirmed cash payments only");
-  assert(/v_expected:=v_session\\.opening_float_xaf\\+v_cash_in-v_expenses-v_supplier_out/i.test(sql),
+  assert(/v_expected:=v_session\.opening_float_xaf\+v_cash_in-v_expenses-v_supplier_out/i.test(sql),
     "Cash close balance must be computed server-side");
   assert(/v_variance:=p_counted_close_xaf-v_expected/i.test(sql),
     "Cash variance must be computed server-side");
-  assert(/revoke\\s+insert,update,delete\\s+on\\s+public\\.ns_cash_sessions,public\\.ns_expenses\\s+from\\s+public,anon,authenticated/i.test(sql),
-    "Cash sessions and expenses must be mutated only by RPC");
-});
-
-
-Deno.test("N2 cash session and expense handlers are scoped, idempotent and compute close balance on server", async () => {
-  const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
-  for(const fn of ["ns_open_cash_session","ns_record_expense","ns_close_cash_session"]) {
-    assert(new RegExp("create\\s+or\\s+replace\\s+function\\s+public\\."+fn+"\\s*\\(","i").test(sql),
-      "Missing cash handler "+fn);
-  }
-  assert(/ns_cash_sessions_one_open_per_register_uidx/i.test(sql),
-    "Only one open cash session per register is allowed");
-  assert(/pg_advisory_xact_lock[\\s\\S]{0,180}cash-open/i.test(sql),
-    "Register opening must be serialized");
-  assert(/v_expected:=v_session\\.opening_float_xaf\\+v_cash_in-v_expenses-v_supplier_out/i.test(sql),
-    "Cash close balance must be server-computed");
-  assert(/v_variance:=p_counted_close_xaf-v_expected/i.test(sql),
-    "Cash variance must be server-computed");
-  assert(/revoke\\s+insert,update,delete\\s+on\\s+public\\.ns_cash_sessions,public\\.ns_expenses\\s+from\\s+public,anon,authenticated/i.test(sql),
+  assert(/revoke\s+insert,update,delete\s+on\s+public\.ns_cash_sessions,public\.ns_expenses\s+from\s+public,anon,authenticated/i.test(sql),
     "Cash sessions and expenses must be mutated only by RPC");
 });
