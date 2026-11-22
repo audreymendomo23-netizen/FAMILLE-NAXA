@@ -308,6 +308,9 @@ jobs:
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Run NAXA SERVICES accounting and performance unit tests
         run: gradle --no-daemon --stacktrace --info :naxa-services:testDebugUnitTest
+      - name: Compile and package NAXA SERVICES
+        id: assemble_debug_apk
+        run: gradle --no-daemon :naxa-services:assembleDebug
       - name: Run Android Keystore and local PIN integration tests
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -323,9 +326,8 @@ jobs:
           disable-linux-hw-accel: false
           disable-animations: true
           script: gradle --no-daemon :naxa-services:connectedDebugAndroidTest
-      - name: Compile and package NAXA SERVICES
-        run: gradle --no-daemon :naxa-services:assembleDebug
       - name: Upload debug APK for technical review
+        if: ${{ always() && steps.assemble_debug_apk.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
           name: naxa-services-debug-apk
