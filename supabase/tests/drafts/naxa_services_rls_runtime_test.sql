@@ -722,6 +722,22 @@ BEGIN
     RAISE EXCEPTION 'RLS_ALLOWED_CLIENT_PROVIDER_EVENT_READ';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
+  IF has_table_privilege(current_user,'public.ns_services','INSERT')
+     OR has_table_privilege(current_user,'public.ns_services','UPDATE')
+     OR has_table_privilege(current_user,'public.ns_services','DELETE') THEN
+    RAISE EXCEPTION 'CLIENT_CAN_BYPASS_SERVICE_DOMAIN_RPC';
+  END IF;
+  IF has_table_privilege(current_user,'public.ns_customers','INSERT')
+     OR has_table_privilege(current_user,'public.ns_customers','UPDATE')
+     OR has_table_privilege(current_user,'public.ns_customers','DELETE') THEN
+    RAISE EXCEPTION 'CLIENT_CAN_BYPASS_CUSTOMER_DOMAIN_RPC';
+  END IF;
+  IF has_table_privilege(current_user,'public.ns_customer_followups','INSERT')
+     OR has_table_privilege(current_user,'public.ns_customer_followups','UPDATE')
+     OR has_table_privilege(current_user,'public.ns_customer_followup_events','INSERT')
+     OR has_table_privilege(current_user,'public.ns_support_requests','INSERT') THEN
+    RAISE EXCEPTION 'CLIENT_CAN_BYPASS_CRM_OR_SUPPORT_DOMAIN_RPC';
+  END IF;
 END
 $financial_server_write_guard$;
 RESET ROLE;
