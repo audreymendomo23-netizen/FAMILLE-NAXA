@@ -143,6 +143,9 @@ create table if not exists public.ns_staff_time_events (
 create index if not exists ns_staff_time_latest_idx
   on public.ns_staff_time_events(org_id,site_id,staff_member_id,sequence_no desc);
 
+create unique index if not exists ns_inventory_items_id_site_org_idx
+  on public.ns_inventory_items(id,site_id,org_id);
+
 create table if not exists public.ns_inventory_transfers (
   id uuid primary key,
   org_id uuid not null,
@@ -320,8 +323,6 @@ revoke insert, update, delete on public.ns_customer_followups, public.ns_custome
 
 
 -- Versioned valuation ledger; the item columns remain a reporting projection only.
-create unique index if not exists ns_inventory_items_id_site_org_idx
-  on public.ns_inventory_items(id,site_id,org_id);
 create table if not exists public.ns_inventory_valuations (
   id uuid primary key,
   org_id uuid not null,
