@@ -98,13 +98,15 @@ export async function listSyncChanges(appId:string,deviceId:string):Promise<WebS
   const db=await openDb();try{return await new Promise<WebSyncChange[]>((resolve,reject)=>{const r=db.transaction(CHANGES).objectStore(CHANGES).getAll();r.onsuccess=()=>resolve((r.result as (WebSyncChange&{appId:string;deviceId:string})[]).filter(c=>c.appId===appId&&c.deviceId===deviceId).sort((a,b)=>a.cursor-b.cursor));r.onerror=()=>reject(r.error);});}finally{db.close();}
 }
 
-export async function listQueued(appId?: string): Promise<QueueItem[]> {
+export async function listQueued(appId?: string, deviceId?: string): Promise<QueueItem[]> {
   const db = await openDb();
   try {
     return await new Promise<QueueItem[]>((resolve, reject) => {
       const request = db.transaction(STORE).objectStore(STORE).getAll();
       request.onsuccess = () => resolve((request.result as QueueItem[])
-        .filter((item) => (appId == null || item.appId === appId) && (item.state === "queued" || item.state === "retry_wait"))
+        .filter((item) => (appId == null || item.appId === appId) &&
+          (deviceId == null || item.deviceId === deviceId) &&
+          (item.state === "queued" || item.state === "retry_wait"))
         .sort((a, b) => a.createdAt - b.createdAt));
       request.onerror = () => reject(request.error);
     });
@@ -112,7 +114,7 @@ export async function listQueued(appId?: string): Promise<QueueItem[]> {
 }
 
 /** Atomically leases a batch so two open tabs do not upload the same queue rows. */
-export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60_000, appId?: string): Promise<QueueItem[]> {
+export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60_000, appId?: string, deviceId?: string): Promise<QueueItem[]> {
   const take = normalizeQueueBatchLimit(limit);
   if (!Number.isFinite(now) || !Number.isSafeInteger(leaseMs) || leaseMs < 5_000) throw new RangeError("INVALID_QUEUE_LEASE");
   const db = await openDb();
@@ -124,14 +126,17 @@ export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60
       let acquired: QueueItem[] = [];
       request.onsuccess = () => {
         const due = (request.result as QueueItem[])
-          .filter((item) => (appId == null || item.appId === appId) && (item.state === "queued" || item.state === "retry_wait" ||
+          .filter((item) => (appId == null || item.appId === appId) &&
+            (deviceId == null || item.deviceId === deviceId) &&
+            (item.state === "queued" || item.state === "retry_wait" ||
             (item.state === "sending" && (item.leaseUntil ?? 0) <= now)) &&
             (item.nextAttemptAt == null || item.nextAttemptAt <= now) &&
             (item.attemptCount ?? 0) < MAX_QUEUE_ATTEMPTS)
           .sort((a, b) => a.createdAt - b.createdAt)
           .slice(0, take);
         const exhausted = (request.result as QueueItem[]).filter((item) =>
-          (appId == null || item.appId === appId) && item.state === "sending" && (item.leaseUntil ?? 0) <= now &&
+          (appId == null || item.appId === appId) && (deviceId == null || item.deviceId === deviceId) &&
+          item.state === "sending" && (item.leaseUntil ?? 0) <= now &&
           (item.attemptCount ?? 0) >= MAX_QUEUE_ATTEMPTS
         );
         for (const item of exhausted) {
