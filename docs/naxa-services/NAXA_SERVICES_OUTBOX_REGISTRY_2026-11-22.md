@@ -24,61 +24,61 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 | ID | Ligne source | Méthode | Agrégat | Expression action | Variantes concrètes | Qualification | Routage |
 |---|---:|---|---|---|---|---|---|
-| OBX-001 | 1295 | `saveSupplier` | `supplier` | `"supplier.saved"` | supplier.saved | **REMOTE_MUTATION** | `save_supplier` |
-| OBX-002 | 1374 | `createSupplierPurchase` | `purchase` | `"purchase.ordered"` | purchase.ordered | **REMOTE_MUTATION** | `create_supplier_purchase` |
-| OBX-003 | 1489 | `receiveSupplierPurchaseLine` | `purchase_receipt` | `"purchase.receipt.confirmed"` | purchase.receipt.confirmed | **REMOTE_MUTATION** | `receive_supplier_purchase_line` |
-| OBX-004 | 1554 | `recordSupplierPayment` | `supplier_payment` | `"supplier.payment.recorded"` | supplier.payment.recorded | **REMOTE_MUTATION** | `record_supplier_payment` |
-| OBX-005 | 1592 | `postAccountingEntry` | `accounting_entry` | `"accounting.entry.posted"` | accounting.entry.posted | **DERIVED_SERVER_LEDGER** | Server-side ledger posting inside the canonical parent RPC; no accounting.entry.posted RPC. |
-| OBX-006 | 1601 | `saveSupplierWhatsApp` | `inventory_item` | `"inventory_item.supplier_whatsapp_updated"` | inventory_item.supplier_whatsapp_updated | **REMOTE_MUTATION** | `save_inventory_item` |
-| OBX-007 | 1621 | `saveRecurringCharge` | `recurring_charge` | `"recurring_charge.saved"` | recurring_charge.saved | **REMOTE_MUTATION** | `upsert_recurring_charge` |
-| OBX-008 | 1654 | `recordRecurringChargePayment` | `recurring_charge` | `"recurring_charge.payment_recorded"` | recurring_charge.payment_recorded | **REMOTE_MUTATION** | `record_recurring_charge_payment` |
-| OBX-009 | 1668 | `deactivateRecurringCharge` | `recurring_charge` | `"recurring_charge.deactivated"` | recurring_charge.deactivated | **REMOTE_MUTATION** | `deactivate_recurring_charge` |
-| OBX-010 | 1720 | `saveLoyaltyProgram` | `loyalty_program` | `"loyalty_program.updated"` | loyalty_program.updated | **REMOTE_MUTATION** | `upsert_loyalty_program` |
-| OBX-011 | 1764 | `recordLoyaltyActivity` | `loyalty_activity` | `"loyalty_activity.recorded"` | loyalty_activity.recorded | **REMOTE_MUTATION** | `record_loyalty_activity` |
-| OBX-012 | 1771 | `redeemLoyaltyReward` | `loyalty_reward` | `"loyalty_reward.redeemed"` | loyalty_reward.redeemed | **REMOTE_MUTATION** | `redeem_loyalty_reward` |
-| OBX-013 | 1814 | `createPressingOrder` | `pressing_order` | `"pressing_order.created"` | pressing_order.created | **REMOTE_MUTATION** | `create_pressing_order` |
-| OBX-014 | 1843 | `advancePressingOrder` | `pressing_order` | `"pressing_order.status_changed:" + next` | pressing_order.status_changed | **REMOTE_MUTATION** | `transition_pressing_order` |
-| OBX-015 | 1886 | `createAppointment` | `appointment` | `"appointment.created"` | appointment.created | **REMOTE_MUTATION** | `create_appointment` |
-| OBX-016 | 1912 | `openCashSession` | `cash_session` | `"cash_session.opened"` | cash_session.opened | **REMOTE_MUTATION** | `open_cash_session` |
-| OBX-017 | 1984 | `recordSale` | `inventory_movement` | `"inventory_movement.sale_out"` | inventory_movement.sale_out | **COMPOSITE_CHILD** | Enfant de `sale.created` |
-| OBX-018 | 1987 | `recordSale` | `sale` | `"sale.created"` | sale.created | **REMOTE_MUTATION** | `record_sale` |
-| OBX-019 | 2028 | `cancelPendingMobileMoneySale` | `sale` | `"sale.mobile_money_cancelled"` | sale.mobile_money_cancelled | **REMOTE_MUTATION** | `cancel_pending_mobile_money_sale` |
-| OBX-020 | 2072 | `applyServerConfirmedMobileMoneySale` | `inventory_movement` | `"inventory_movement.mobile_money_sale_out"` | inventory_movement.mobile_money_sale_out | **COMPOSITE_CHILD** | Enfant de `sale.payment_confirmed_server` |
-| OBX-021 | 2091 | `applyServerConfirmedMobileMoneySale` | `sale` | `"sale.payment_confirmed_server"` | sale.payment_confirmed_server | **SERVER_AUTHORITATIVE_MIRROR** | Mobile Money webhook/Edge confirmation owns this transition; Android only mirrors the confirmed state. |
-| OBX-022 | 2124 | `addExpense` | `expense` | `"expense.created"` | expense.created | **REMOTE_MUTATION** | `record_expense` |
-| OBX-023 | 2152 | `closeCashSession` | `cash_session` | `"cash_session.closed"` | cash_session.closed | **REMOTE_MUTATION** | `close_cash_session` |
-| OBX-024 | 2166 | `saveOrganizationProfile` | `organization` | `"organization.profile_saved"` | organization.profile_saved | **API_DIRECT_MIRROR** | AuthApi.updateOrganizationProfile (existing direct endpoint) |
-| OBX-025 | 2173 | `createLocalSite` | `site` | `"site.created"` | site.created | **LEGACY_LOCAL_HELPER** | AuthApi.createSite (existing direct endpoint) |
-| OBX-026 | 2227 | `createLocalWorkstation` | `workstation` | `"workstation.created"` | workstation.created | **LEGACY_LOCAL_HELPER** | AuthApi.createWorkstation (existing direct endpoint) |
-| OBX-027 | 2269 | `createLocalService` | `service` | `"service.created"` | service.created | **REMOTE_MUTATION** | `create_service` |
-| OBX-028 | 2318 | `createLocalCustomer` | `customer` | `"customer.created"` | customer.created | **REMOTE_MUTATION** | `upsert_customer` |
-| OBX-029 | 2369 | `updateLocalCustomer` | `customer` | `"customer.updated"` | customer.updated | **REMOTE_MUTATION** | `upsert_customer` |
-| OBX-030 | 2418 | `createCustomerFollowUp` | `customer_followup` | `"customer_followup.created"` | customer_followup.created | **REMOTE_MUTATION** | `create_customer_followup` |
-| OBX-031 | 2447 | `completeCustomerFollowUp` | `customer_followup` | `"customer_followup.completed"` | customer_followup.completed | **REMOTE_MUTATION** | `complete_customer_followup` |
-| OBX-032 | 2458 | `createInventoryItem` | `inventory_item` | `"inventory_item.created"` | inventory_item.created | **REMOTE_MUTATION** | `save_inventory_item` |
-| OBX-033 | 2517 | `importInventoryBatch` | `inventory_movement` | `"inventory_movement.import_adjustment"` | inventory_movement.import_adjustment | **REMOTE_MUTATION** | `record_inventory_movement` |
-| OBX-034 | 2534 | `importInventoryBatch` | `inventory_valuation` | `"inventory_valuation.import_updated"` | inventory_valuation.import_updated | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
-| OBX-035 | 2536 | `importInventoryBatch` | `inventory_item` | `"inventory_item.import_updated"` | inventory_item.import_updated | **REMOTE_MUTATION** | `save_inventory_item` |
-| OBX-036 | 2552 | `importInventoryBatch` | `inventory_item` | `"inventory_item.imported"` | inventory_item.imported | **REMOTE_MUTATION** | `save_inventory_item` |
-| OBX-037 | 2567 | `importInventoryBatch` | `inventory_movement` | `"inventory_movement.import_initial"` | inventory_movement.import_initial | **REMOTE_MUTATION** | `record_inventory_movement` |
-| OBX-038 | 2581 | `importInventoryBatch` | `inventory_valuation` | `"inventory_valuation.imported"` | inventory_valuation.imported | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
-| OBX-039 | 2612 | `recordInventoryMovement` | `inventory_movement` | `"inventory_movement.created"` | inventory_movement.created | **REMOTE_MUTATION** | `record_inventory_movement` |
-| OBX-040 | 2621 | `createSupportRequest` | `support_request` | `"support_request.created"` | support_request.created | **REMOTE_MUTATION** | `create_support_request` |
-| OBX-041 | 2655 | `transitionAppointmentStatus` | `appointment` | `"appointment.status_changed"` | appointment.status_changed | **REMOTE_MUTATION** | `transition_appointment` |
-| OBX-042 | 2689 | `rescheduleAppointment` | `appointment` | `"appointment.rescheduled"` | appointment.rescheduled | **REMOTE_MUTATION** | `reschedule_appointment` |
-| OBX-043 | 2729 | `updateServiceCatalogItem` | `service` | `"service.updated"` | service.updated | **REMOTE_MUTATION** | `update_service` |
-| OBX-044 | 2761 | `saveServiceConfiguration` | `service` | `"service.configuration_updated"` | service.configuration_updated | **REMOTE_MUTATION** | `update_service_configuration` |
-| OBX-045 | 2825 | `convertWaitlistToAppointment` | `appointment` | `"appointment.created_from_waitlist"` | appointment.created_from_waitlist | **REMOTE_MUTATION** | `convert_waitlist_to_appointment` |
-| OBX-046 | 2826 | `convertWaitlistToAppointment` | `appointment_waitlist` | `"appointment_waitlist.converted"` | appointment_waitlist.converted | **COMPOSITE_CHILD** | Enfant de `appointment.created_from_waitlist` |
-| OBX-047 | 2907 | `recordStaffTimeEvent` | `eventType` | `eventType + ".recorded"` | staff_clock_in.recorded, staff_break_start.recorded, staff_break_end.recorded, staff_clock_out.recorded | **REMOTE_MUTATION** | `record_staff_time_event` |
-| OBX-048 | 2947 | `createManagementRecord` | `recordType` | `recordType + ".created"` | quote.created, invoice.created, credit_note.created, refund_due.created, customer_receivable.created, purchase.created, supplier.created, tax_estimate.created, business_goal.created, subscription_request.created, support_chat.created, work_order.created, repair_order.created, service_order.created, appointment_waitlist.created, staff_clock_in.created, staff_clock_out.created, staff_break_start.created, staff_break_end.created, staff_commission.created, staff_advance.created, staff_bonus.created | **REMOTE_MUTATION** | `create_management_record` |
-| OBX-049 | 3023 | `createInventoryTransfer` | `inventory_transfer` | `"inventory_transfer.requested"` | inventory_transfer.requested | **REMOTE_MUTATION** | `create_inventory_transfer` |
-| OBX-050 | 3188 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.purchase_received"` | inventory_movement.purchase_received | **COMPOSITE_CHILD** | Enfant de `management_record.status_changed` |
-| OBX-051 | 3274 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_out"` | inventory_movement.transfer_out | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
-| OBX-052 | 3275 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_in"` | inventory_movement.transfer_in | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
-| OBX-053 | 3295 | `transitionManagementRecord` | `inventory_transfer` | `"inventory_transfer.received_at_destination"` | inventory_transfer.received_at_destination | **REMOTE_MUTATION** | `receive_inventory_transfer` |
-| OBX-054 | 3313 | `transitionManagementRecord` | `current.recordType` | `current.recordType + ".status_changed"` | quote.status_changed, invoice.status_changed, credit_note.status_changed, refund_due.status_changed, customer_receivable.status_changed, purchase.status_changed, supplier.status_changed, tax_estimate.status_changed, business_goal.status_changed, subscription_request.status_changed, support_chat.status_changed, work_order.status_changed, repair_order.status_changed, service_order.status_changed, appointment_waitlist.status_changed, staff_clock_in.status_changed, staff_clock_out.status_changed, staff_break_start.status_changed, staff_break_end.status_changed, staff_commission.status_changed, staff_advance.status_changed, staff_bonus.status_changed, inventory_transfer.status_changed | **REMOTE_MUTATION** | `transition_management_record` |
-| OBX-055 | 3334 | `saveInventoryValuation` | `inventory_valuation` | `"inventory_valuation.updated"` | inventory_valuation.updated | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
+| OBX-001 | 1316 | `saveSupplier` | `supplier` | `"supplier.saved"` | supplier.saved | **REMOTE_MUTATION** | `save_supplier` |
+| OBX-002 | 1395 | `createSupplierPurchase` | `purchase` | `"purchase.ordered"` | purchase.ordered | **REMOTE_MUTATION** | `create_supplier_purchase` |
+| OBX-003 | 1510 | `receiveSupplierPurchaseLine` | `purchase_receipt` | `"purchase.receipt.confirmed"` | purchase.receipt.confirmed | **REMOTE_MUTATION** | `receive_supplier_purchase_line` |
+| OBX-004 | 1575 | `recordSupplierPayment` | `supplier_payment` | `"supplier.payment.recorded"` | supplier.payment.recorded | **REMOTE_MUTATION** | `record_supplier_payment` |
+| OBX-005 | 1613 | `postAccountingEntry` | `accounting_entry` | `"accounting.entry.posted"` | accounting.entry.posted | **DERIVED_SERVER_LEDGER** | Server-side ledger posting inside the canonical parent RPC; no accounting.entry.posted RPC. |
+| OBX-006 | 1622 | `saveSupplierWhatsApp` | `inventory_item` | `"inventory_item.supplier_whatsapp_updated"` | inventory_item.supplier_whatsapp_updated | **REMOTE_MUTATION** | `save_inventory_item` |
+| OBX-007 | 1642 | `saveRecurringCharge` | `recurring_charge` | `"recurring_charge.saved"` | recurring_charge.saved | **REMOTE_MUTATION** | `upsert_recurring_charge` |
+| OBX-008 | 1675 | `recordRecurringChargePayment` | `recurring_charge` | `"recurring_charge.payment_recorded"` | recurring_charge.payment_recorded | **REMOTE_MUTATION** | `record_recurring_charge_payment` |
+| OBX-009 | 1689 | `deactivateRecurringCharge` | `recurring_charge` | `"recurring_charge.deactivated"` | recurring_charge.deactivated | **REMOTE_MUTATION** | `deactivate_recurring_charge` |
+| OBX-010 | 1741 | `saveLoyaltyProgram` | `loyalty_program` | `"loyalty_program.updated"` | loyalty_program.updated | **REMOTE_MUTATION** | `upsert_loyalty_program` |
+| OBX-011 | 1785 | `recordLoyaltyActivity` | `loyalty_activity` | `"loyalty_activity.recorded"` | loyalty_activity.recorded | **REMOTE_MUTATION** | `record_loyalty_activity` |
+| OBX-012 | 1792 | `redeemLoyaltyReward` | `loyalty_reward` | `"loyalty_reward.redeemed"` | loyalty_reward.redeemed | **REMOTE_MUTATION** | `redeem_loyalty_reward` |
+| OBX-013 | 1863 | `createPressingOrder` | `pressing_order` | `"pressing_order.created"` | pressing_order.created | **REMOTE_MUTATION** | `create_pressing_order` |
+| OBX-014 | 1892 | `advancePressingOrder` | `pressing_order` | `"pressing_order.status_changed:" + next` | pressing_order.status_changed | **REMOTE_MUTATION** | `transition_pressing_order` |
+| OBX-015 | 1935 | `createAppointment` | `appointment` | `"appointment.created"` | appointment.created | **REMOTE_MUTATION** | `create_appointment` |
+| OBX-016 | 1961 | `openCashSession` | `cash_session` | `"cash_session.opened"` | cash_session.opened | **REMOTE_MUTATION** | `open_cash_session` |
+| OBX-017 | 2033 | `recordSale` | `inventory_movement` | `"inventory_movement.sale_out"` | inventory_movement.sale_out | **COMPOSITE_CHILD** | Enfant de `sale.created` |
+| OBX-018 | 2036 | `recordSale` | `sale` | `"sale.created"` | sale.created | **REMOTE_MUTATION** | `record_sale` |
+| OBX-019 | 2077 | `cancelPendingMobileMoneySale` | `sale` | `"sale.mobile_money_cancelled"` | sale.mobile_money_cancelled | **REMOTE_MUTATION** | `cancel_pending_mobile_money_sale` |
+| OBX-020 | 2121 | `applyServerConfirmedMobileMoneySale` | `inventory_movement` | `"inventory_movement.mobile_money_sale_out"` | inventory_movement.mobile_money_sale_out | **COMPOSITE_CHILD** | Enfant de `sale.payment_confirmed_server` |
+| OBX-021 | 2140 | `applyServerConfirmedMobileMoneySale` | `sale` | `"sale.payment_confirmed_server"` | sale.payment_confirmed_server | **SERVER_AUTHORITATIVE_MIRROR** | Mobile Money webhook/Edge confirmation owns this transition; Android only mirrors the confirmed state. |
+| OBX-022 | 2173 | `addExpense` | `expense` | `"expense.created"` | expense.created | **REMOTE_MUTATION** | `record_expense` |
+| OBX-023 | 2202 | `closeCashSession` | `cash_session` | `"cash_session.closed"` | cash_session.closed | **REMOTE_MUTATION** | `close_cash_session` |
+| OBX-024 | 2216 | `saveOrganizationProfile` | `organization` | `"organization.profile_saved"` | organization.profile_saved | **API_DIRECT_MIRROR** | AuthApi.updateOrganizationProfile (existing direct endpoint) |
+| OBX-025 | 2223 | `createLocalSite` | `site` | `"site.created"` | site.created | **LEGACY_LOCAL_HELPER** | AuthApi.createSite (existing direct endpoint) |
+| OBX-026 | 2277 | `createLocalWorkstation` | `workstation` | `"workstation.created"` | workstation.created | **LEGACY_LOCAL_HELPER** | AuthApi.createWorkstation (existing direct endpoint) |
+| OBX-027 | 2319 | `createLocalService` | `service` | `"service.created"` | service.created | **REMOTE_MUTATION** | `create_service` |
+| OBX-028 | 2368 | `createLocalCustomer` | `customer` | `"customer.created"` | customer.created | **REMOTE_MUTATION** | `upsert_customer` |
+| OBX-029 | 2419 | `updateLocalCustomer` | `customer` | `"customer.updated"` | customer.updated | **REMOTE_MUTATION** | `upsert_customer` |
+| OBX-030 | 2468 | `createCustomerFollowUp` | `customer_followup` | `"customer_followup.created"` | customer_followup.created | **REMOTE_MUTATION** | `create_customer_followup` |
+| OBX-031 | 2497 | `completeCustomerFollowUp` | `customer_followup` | `"customer_followup.completed"` | customer_followup.completed | **REMOTE_MUTATION** | `complete_customer_followup` |
+| OBX-032 | 2508 | `createInventoryItem` | `inventory_item` | `"inventory_item.created"` | inventory_item.created | **REMOTE_MUTATION** | `save_inventory_item` |
+| OBX-033 | 2567 | `importInventoryBatch` | `inventory_movement` | `"inventory_movement.import_adjustment"` | inventory_movement.import_adjustment | **REMOTE_MUTATION** | `record_inventory_movement` |
+| OBX-034 | 2584 | `importInventoryBatch` | `inventory_valuation` | `"inventory_valuation.import_updated"` | inventory_valuation.import_updated | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
+| OBX-035 | 2586 | `importInventoryBatch` | `inventory_item` | `"inventory_item.import_updated"` | inventory_item.import_updated | **REMOTE_MUTATION** | `save_inventory_item` |
+| OBX-036 | 2602 | `importInventoryBatch` | `inventory_item` | `"inventory_item.imported"` | inventory_item.imported | **REMOTE_MUTATION** | `save_inventory_item` |
+| OBX-037 | 2617 | `importInventoryBatch` | `inventory_movement` | `"inventory_movement.import_initial"` | inventory_movement.import_initial | **REMOTE_MUTATION** | `record_inventory_movement` |
+| OBX-038 | 2631 | `importInventoryBatch` | `inventory_valuation` | `"inventory_valuation.imported"` | inventory_valuation.imported | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
+| OBX-039 | 2662 | `recordInventoryMovement` | `inventory_movement` | `"inventory_movement.created"` | inventory_movement.created | **REMOTE_MUTATION** | `record_inventory_movement` |
+| OBX-040 | 2671 | `createSupportRequest` | `support_request` | `"support_request.created"` | support_request.created | **REMOTE_MUTATION** | `create_support_request` |
+| OBX-041 | 2705 | `transitionAppointmentStatus` | `appointment` | `"appointment.status_changed"` | appointment.status_changed | **REMOTE_MUTATION** | `transition_appointment` |
+| OBX-042 | 2739 | `rescheduleAppointment` | `appointment` | `"appointment.rescheduled"` | appointment.rescheduled | **REMOTE_MUTATION** | `reschedule_appointment` |
+| OBX-043 | 2779 | `updateServiceCatalogItem` | `service` | `"service.updated"` | service.updated | **REMOTE_MUTATION** | `update_service` |
+| OBX-044 | 2811 | `saveServiceConfiguration` | `service` | `"service.configuration_updated"` | service.configuration_updated | **REMOTE_MUTATION** | `update_service_configuration` |
+| OBX-045 | 2875 | `convertWaitlistToAppointment` | `appointment` | `"appointment.created_from_waitlist"` | appointment.created_from_waitlist | **REMOTE_MUTATION** | `convert_waitlist_to_appointment` |
+| OBX-046 | 2876 | `convertWaitlistToAppointment` | `appointment_waitlist` | `"appointment_waitlist.converted"` | appointment_waitlist.converted | **COMPOSITE_CHILD** | Enfant de `appointment.created_from_waitlist` |
+| OBX-047 | 2957 | `recordStaffTimeEvent` | `eventType` | `eventType + ".recorded"` | staff_clock_in.recorded, staff_break_start.recorded, staff_break_end.recorded, staff_clock_out.recorded | **REMOTE_MUTATION** | `record_staff_time_event` |
+| OBX-048 | 2997 | `createManagementRecord` | `recordType` | `recordType + ".created"` | quote.created, invoice.created, credit_note.created, refund_due.created, customer_receivable.created, purchase.created, supplier.created, tax_estimate.created, business_goal.created, subscription_request.created, support_chat.created, work_order.created, repair_order.created, service_order.created, appointment_waitlist.created, staff_clock_in.created, staff_clock_out.created, staff_break_start.created, staff_break_end.created, staff_commission.created, staff_advance.created, staff_bonus.created | **REMOTE_MUTATION** | `create_management_record` |
+| OBX-049 | 3073 | `createInventoryTransfer` | `inventory_transfer` | `"inventory_transfer.requested"` | inventory_transfer.requested | **REMOTE_MUTATION** | `create_inventory_transfer` |
+| OBX-050 | 3238 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.purchase_received"` | inventory_movement.purchase_received | **COMPOSITE_CHILD** | Enfant de `management_record.status_changed` |
+| OBX-051 | 3324 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_out"` | inventory_movement.transfer_out | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
+| OBX-052 | 3325 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_in"` | inventory_movement.transfer_in | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
+| OBX-053 | 3345 | `transitionManagementRecord` | `inventory_transfer` | `"inventory_transfer.received_at_destination"` | inventory_transfer.received_at_destination | **REMOTE_MUTATION** | `receive_inventory_transfer` |
+| OBX-054 | 3363 | `transitionManagementRecord` | `current.recordType` | `current.recordType + ".status_changed"` | quote.status_changed, invoice.status_changed, credit_note.status_changed, refund_due.status_changed, customer_receivable.status_changed, purchase.status_changed, supplier.status_changed, tax_estimate.status_changed, business_goal.status_changed, subscription_request.status_changed, support_chat.status_changed, work_order.status_changed, repair_order.status_changed, service_order.status_changed, appointment_waitlist.status_changed, staff_clock_in.status_changed, staff_clock_out.status_changed, staff_break_start.status_changed, staff_break_end.status_changed, staff_commission.status_changed, staff_advance.status_changed, staff_bonus.status_changed, inventory_transfer.status_changed | **REMOTE_MUTATION** | `transition_management_record` |
+| OBX-055 | 3384 | `saveInventoryValuation` | `inventory_valuation` | `"inventory_valuation.updated"` | inventory_valuation.updated | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
 
 
 ## Décompte des routes
