@@ -345,6 +345,10 @@ internal object NaxaServicesPeerSyncApplier {
             "inventory_transfer.requested","inventory_transfer.received_at_destination","inventory_transfer.status_changed" -> {
                 val tid=p.sText("transfer_id",p.sText("record_id",id));if(tid.isBlank())return false
                 val sourceSite=p.sText("source_site_id",site.orEmpty());val destinationSite=p.sText("destination_site_id")
+                val visibleSites=p.optJSONArray("_naxa_visible_site_ids")?.let { array ->
+                    (0 until array.length()).mapNotNull { array.optString(it).takeIf(String::isNotBlank) }.toSet()
+                } ?: setOfNotNull(site)
+                if(site==null||site !in visibleSites)return false
                 val old=dao.findManagementRecordAcrossSites(org,tid)
                 var sourceItem: LocalInventoryItem? = null
                 var destinationItem: LocalInventoryItem? = null
@@ -353,25 +357,31 @@ internal object NaxaServicesPeerSyncApplier {
                 if(change.actionCode=="inventory_transfer.received_at_destination"){
                     val iid=p.sText("inventory_item_id");val sku=p.sText("sku_snapshot")
                     if(iid.isBlank()||!transferQty.isFinite()||transferQty<=0||destinationSite.isBlank())return false
-                    sourceItem=dao.findInventoryItem(iid,org,sourceSite)?:return false
-                    val matches=dao.findInventoryItemsBySku(org,destinationSite,sku)
-                    if(matches.size>1||sourceItem.quantity<transferQty)return false
-                    destinationItem=matches.singleOrNull()
-                    destinationNewId=p.sText("destination_inventory_item_id_if_created")
-                    if(destinationItem==null&&destinationNewId.isBlank())return false
+                    if(sourceSite in visibleSites){
+                        sourceItem=dao.findInventoryItem(iid,org,sourceSite)?:return false
+                        if(sourceItem.quantity<transferQty)return false
+                    }
+                    if(destinationSite in visibleSites){
+                        val matches=dao.findInventoryItemsBySku(org,destinationSite,sku)
+                        if(matches.size>1)return false
+                        destinationItem=matches.singleOrNull()
+                        destinationNewId=p.sText("destination_inventory_item_id_if_created")
+                        if(destinationItem==null&&destinationNewId.isBlank())return false
+                    }
+                    if(sourceItem==null&&destinationItem==null&&destinationNewId.isBlank())return false
                 }
                 val status=when(change.actionCode){"inventory_transfer.received_at_destination"->"received";"inventory_transfer.status_changed"->p.sText("to_status",old?.status?:"open");else->p.sText("status","open")}
                 val meta=JSONObject(old?.metadataJson?:"{}");val it=p.keys();while(it.hasNext()){val k=it.next();meta.put(k,p.get(k))}
                 dao.upsertRemoteManagementRecord(LocalManagementRecord(
-                    tid,org,old?.siteId?:sourceSite,"inventory_transfer",p.sText("reference",old?.reference?:tid),
+                    tid,org,site,"inventory_transfer",p.sText("reference",old?.reference?:tid),
                     p.sText("title",old?.title?:p.sText("item_name_snapshot",p.sText("sku_snapshot","Transfert"))),
                     p.sText("counterparty",old?.counterparty?:destinationSite),old?.amountXaf?:0L,old?.paidXaf?:0L,old?.dueAtMillis,
                     status,meta.toString(),actor.ifBlank{old?.actorMemberId.orEmpty()},old?.createdAtMillis?:now,null
                 ))
-                if(sourceItem!=null){
-                    dao.upsertRemoteInventoryItem(sourceItem.copy(quantity=sourceItem.quantity-transferQty))
-                    if(destinationItem!=null) dao.upsertRemoteInventoryItem(destinationItem.copy(quantity=destinationItem.quantity+transferQty))
-                    else dao.upsertRemoteInventoryItem(LocalInventoryItem(destinationNewId,org,destinationSite,p.sText("sku_snapshot"),p.sText("item_name_snapshot",p.sText("sku_snapshot")),p.sText("unit","unité"),transferQty,p.sDouble("reorder_level_snapshot"),true,now))
+                if(sourceItem!=null) dao.upsertRemoteInventoryItem(sourceItem.copy(quantity=sourceItem.quantity-transferQty))
+                if(destinationItem!=null) dao.upsertRemoteInventoryItem(destinationItem.copy(quantity=destinationItem.quantity+transferQty))
+                else if(destinationSite in visibleSites&&destinationNewId.isNotBlank()){
+                    dao.upsertRemoteInventoryItem(LocalInventoryItem(destinationNewId,org,destinationSite,p.sText("sku_snapshot"),p.sText("item_name_snapshot",p.sText("sku_snapshot")),p.sText("unit","unité"),transferQty,p.sDouble("reorder_level_snapshot"),true,now))
                 }
                 return true
             }
