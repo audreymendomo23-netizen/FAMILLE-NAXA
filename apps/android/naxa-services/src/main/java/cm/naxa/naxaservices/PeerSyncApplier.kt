@@ -288,6 +288,8 @@ internal object NaxaServicesPeerSyncApplier {
                 val rec=kotlin.math.floor(purchase.recoverableTaxXaf.toDouble()*receivedBase/purchase.subtotalXaf+0.5).toLong()
                 val nrDelta=(nr-purchase.recognizedNonRecoverableXaf).coerceAtLeast(0L);val recDelta=(rec-purchase.recognizedRecoverableTaxXaf).coerceAtLeast(0L)
                 val receivedTotal=purchase.receivedTotalXaf+base+nrDelta+recDelta
+                val stockItem = if (line.itemType=="stock" && line.inventoryItemId!=null)
+                    dao.findInventoryItem(line.inventoryItemId,org,site) ?: return false else null
                 dao.upsertRemotePurchaseLine(line.copy(quantityReceived=line.quantityReceived+qty))
                 val complete=dao.countPurchaseLinesNotFullyReceived(org,site,pid)==0
                 dao.upsertRemotePurchaseDocument(purchase.copy(
@@ -297,12 +299,11 @@ internal object NaxaServicesPeerSyncApplier {
                 dao.upsertRemotePurchaseReceipt(LocalPurchaseReceipt(
                     receiptId,org,site,pid,lid,qty,base,nrDelta,recDelta,actor,p.sMillis("received_at",now),key
                 ))
-                if(line.itemType=="stock"&&line.inventoryItemId!=null){
-                    val item=dao.findInventoryItem(line.inventoryItemId,org,site)?:return false
+                if(stockItem!=null){
                     val movementId=result.sText("inventory_movement_id",receiptId)
                     if(dao.countInventoryMovementById(org,movementId)==0){
-                        dao.upsertRemoteInventoryItem(item.copy(quantity=item.quantity+qty))
-                        dao.upsertRemoteInventoryMovement(LocalInventoryMovement(movementId,org,site,item.id,"in",qty,"Réception fournisseur "+purchase.reference,actor,now))
+                        dao.upsertRemoteInventoryItem(stockItem.copy(quantity=stockItem.quantity+qty))
+                        dao.upsertRemoteInventoryMovement(LocalInventoryMovement(movementId,org,site,stockItem.id,"in",qty,"Réception fournisseur "+purchase.reference,actor,now))
                     }
                 }
                 return true
@@ -322,6 +323,20 @@ internal object NaxaServicesPeerSyncApplier {
                 val tid=p.sText("transfer_id",p.sText("record_id",id));if(tid.isBlank())return false
                 val sourceSite=p.sText("source_site_id",site.orEmpty());val destinationSite=p.sText("destination_site_id")
                 val old=dao.findManagementRecordAcrossSites(org,tid)
+                var sourceItem: LocalInventoryItem? = null
+                var destinationItem: LocalInventoryItem? = null
+                var destinationNewId = ""
+                val transferQty = if(change.actionCode=="inventory_transfer.received_at_destination") p.sDouble("quantity",Double.NaN) else 0.0
+                if(change.actionCode=="inventory_transfer.received_at_destination"){
+                    val iid=p.sText("inventory_item_id");val sku=p.sText("sku_snapshot")
+                    if(iid.isBlank()||!transferQty.isFinite()||transferQty<=0||destinationSite.isBlank())return false
+                    sourceItem=dao.findInventoryItem(iid,org,sourceSite)?:return false
+                    val matches=dao.findInventoryItemsBySku(org,destinationSite,sku)
+                    if(matches.size>1||sourceItem.quantity<transferQty)return false
+                    destinationItem=matches.singleOrNull()
+                    destinationNewId=p.sText("destination_inventory_item_id_if_created")
+                    if(destinationItem==null&&destinationNewId.isBlank())return false
+                }
                 val status=when(change.actionCode){"inventory_transfer.received_at_destination"->"received";"inventory_transfer.status_changed"->p.sText("to_status",old?.status?:"open");else->p.sText("status","open")}
                 val meta=JSONObject(old?.metadataJson?:"{}");val it=p.keys();while(it.hasNext()){val k=it.next();meta.put(k,p.get(k))}
                 dao.upsertRemoteManagementRecord(LocalManagementRecord(
@@ -330,17 +345,12 @@ internal object NaxaServicesPeerSyncApplier {
                     p.sText("counterparty",old?.counterparty?:destinationSite),old?.amountXaf?:0L,old?.paidXaf?:0L,old?.dueAtMillis,
                     status,meta.toString(),actor.ifBlank{old?.actorMemberId.orEmpty()},old?.createdAtMillis?:now,null
                 ))
-                if(change.actionCode=="inventory_transfer.received_at_destination"){
-                    val iid=p.sText("inventory_item_id");val qty=p.sDouble("quantity",Double.NaN);val sku=p.sText("sku_snapshot")
-                    if(iid.isBlank()||!qty.isFinite()||qty<=0||destinationSite.isBlank())return false
-                    val source=dao.findInventoryItem(iid,org,sourceSite)?:return false
-                    val matches=dao.findInventoryItemsBySku(org,destinationSite,sku);if(matches.size>1||source.quantity<qty)return false
-                    val dest=matches.singleOrNull();val destId=p.sText("destination_inventory_item_id_if_created")
-                    if(dest==null&&destId.isBlank())return false
-                    dao.upsertRemoteInventoryItem(source.copy(quantity=source.quantity-qty))
-                    if(dest!=null)dao.upsertRemoteInventoryItem(dest.copy(quantity=dest.quantity+qty))
-                    else dao.upsertRemoteInventoryItem(LocalInventoryItem(destId,org,destinationSite,sku,p.sText("item_name_snapshot",sku),p.sText("unit","unité"),qty,p.sDouble("reorder_level_snapshot"),true,now))
-                };return true
+                if(sourceItem!=null){
+                    dao.upsertRemoteInventoryItem(sourceItem.copy(quantity=sourceItem.quantity-transferQty))
+                    if(destinationItem!=null) dao.upsertRemoteInventoryItem(destinationItem.copy(quantity=destinationItem.quantity+transferQty))
+                    else dao.upsertRemoteInventoryItem(LocalInventoryItem(destinationNewId,org,destinationSite,p.sText("sku_snapshot"),p.sText("item_name_snapshot",p.sText("sku_snapshot")),p.sText("unit","unité"),transferQty,p.sDouble("reorder_level_snapshot"),true,now))
+                }
+                return true
             }
             else -> {
                 val staff=change.actionCode.startsWith("staff_")&&change.actionCode.endsWith(".recorded")
