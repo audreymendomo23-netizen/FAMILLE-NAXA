@@ -104,6 +104,7 @@ class OutboxMigrationAndOrderingInstrumentedTest {
                     .put("supplier_id", supplierId)
                     .put("org_id", orgId)
                     .put("site_id", "site-1")
+                    .put("actor_member_id", "dddddddd-0000-4000-8000-000000000004")
                     .put("name", "Grossiste A"))
                 .put("recorded_at", "2026-11-22T10:00:00Z")
             val second = JSONObject()
@@ -120,6 +121,7 @@ class OutboxMigrationAndOrderingInstrumentedTest {
                     .put("supplier_id", supplierId)
                     .put("org_id", orgId)
                     .put("site_id", "site-1")
+                    .put("actor_member_id", "dddddddd-0000-4000-8000-000000000004")
                     .put("name", "Grossiste A actualisé")
                     .put("phone", "690000000"))
                 .put("recorded_at", "2026-11-22T10:01:00Z")
@@ -139,6 +141,9 @@ class OutboxMigrationAndOrderingInstrumentedTest {
             assertEquals("Grossiste A actualisé", JSONObject(projection!!.projectionJson).optString("name"))
             assertEquals("690000000", JSONObject(projection.projectionJson).optString("phone"))
             assertEquals(2L, projection.lastChangeCursor)
+            val typedSupplier = repository.dao.findSupplier(supplierId, orgId, "site-1")
+            assertEquals("Grossiste A actualisé", typedSupplier?.name)
+            assertEquals("applied", repository.dao.findRemoteChange(eventId)?.applicationStatus)
 
             assertEquals(0, repository.dao.countOutboxActions(
                 orgId, "supplier", supplierId, listOf("supplier.saved")
