@@ -1099,3 +1099,119 @@ Chaque événement conserve au minimum event_id, idempotency_key, version de con
 - Les montants proposés dans la section 20 sont **[P] — non validés comme prix définitifs**.
 - Les points de la section 22 restent **[O] — arbitrage nécessaire**.
 - Cet addendum ne certifie aucune implémentation, migration, connexion inter-app, disponibilité réelle, paiement opérationnel ou recette réussie. Les documents décrivent la cible à construire et à tester.
+
+
+---
+
+## 24. Addendum commercial v2.1 — abonnement unique et tarification dynamique NAXA HOTEL
+
+**Date de décision : 22 novembre 2026**  
+**Statut : [V] proposition tarifaire acceptée par l'utilisateur ; cible commerciale à mettre en œuvre.**  
+**Portée :** remplace les propositions de prix Essentiel/Premium de la section 20 et les arbitrages tarifaires correspondants des sections 22 et 23. Les autres dispositions fonctionnelles des sections précédentes restent applicables.
+
+### 24.1. Décision commerciale
+
+NAXA HOTEL commercialise **un seul abonnement par établissement ou organisation contractante**, facturé **mensuellement uniquement**.
+
+- Aucun plan commercial Essentiel/Premium distinct.
+- Aucun paiement annuel, trimestriel ou semestriel.
+- Aucun abonnement additionnel pour le portail QR de séjour, les commandes QR restaurant/bar, les fonctions de base NAXA SECURITY ou l'intégration LOYABLE prévue pour les clients NAXA HOTEL.
+- Le prix mensuel est déterminé par le nombre de chambres actives/gérées et par l'exploitation effective d'un service de restauration.
+- À partir de 50 chambres, l'établissement relève d'une offre négociée sur devis. Aucun montant fixe ou calcul automatique n'est affiché pour cette tranche.
+- Un groupe multi-hôtels relève également d'un devis négocié, même si chaque établissement pris isolément compte moins de 50 chambres. Le devis reste un abonnement mensuel consolidé, et non une addition d'abonnements par module.
+
+Cette décision constitue une exception spécifique à la règle générale FAM-020 : **NAXA HOTEL n'offre pas de paiement annuel**.
+
+### 24.2. Définition des chambres et du service de restauration
+
+**Chambres facturables :** nombre de chambres actives et gérées dans le PMS au début de chaque cycle mensuel, hors chambres définitivement retirées de l'inventaire ou archivées. Une chambre temporairement hors service pour maintenance reste comptée lorsqu'elle demeure gérée dans NAXA HOTEL.
+
+**Établissement avec restauration :** établissement exploitant au moins un point de restauration actif géré dans ZIPPLE : restaurant, espace de restauration, snack ou bar avec carte/menu, prise de commandes et caisse. Un minibar simple ou un petit-déjeuner inclus sans prise de commande ni exploitation de point de vente ne déclenche pas à lui seul le tarif restauration.
+
+Le statut « avec restauration » sélectionne le barème correspondant ; il ne crée pas un deuxième abonnement ni une ligne d'abonnement ZIPPLE distincte.
+
+### 24.3. Barème public — hôtel sans restaurant
+
+Soit **N** le nombre de chambres facturables.
+
+| Nombre de chambres | Calcul du prix mensuel |
+|---|---:|
+| 1 à 10 | 1 500 FCFA × N |
+| 11 à 20 | max(15 000 FCFA ; 1 000 FCFA × N) |
+| 21 à 30 | max(20 000 FCFA ; 800 FCFA × N) |
+| 31 à 49 | max(24 000 FCFA ; 500 FCFA × N) |
+| 50 et plus | Devis mensuel négocié |
+
+### 24.4. Barème public — hôtel avec service de restauration
+
+Soit **N** le nombre de chambres facturables.
+
+| Nombre de chambres | Calcul du prix mensuel |
+|---|---:|
+| 1 à 10 | 2 000 FCFA × N |
+| 11 à 20 | min(24 000 FCFA ; max(20 000 FCFA ; 1 500 FCFA × N)) |
+| 21 à 30 | min(25 000 FCFA ; max(24 000 FCFA ; 1 000 FCFA × N)) |
+| 31 à 49 | Forfait fixe de 26 000 FCFA |
+| 50 et plus | Devis mensuel négocié |
+
+Les planchers et plafonds sont intentionnels : ils empêchent une baisse de facture lorsqu'un établissement change de tranche et maintiennent le prix de la formule restauration sous le repère public de 27 000 FCFA/mois relevé pour une offre hôtelière tout-en-un concurrente. Ils priment sur la multiplication brute du tarif unitaire lorsqu'un plancher ou un plafond est atteint.
+
+### 24.5. Exemples de facturation mensuelle
+
+| Chambres | Sans restaurant | Avec restauration |
+|---:|---:|---:|
+| 5 | 7 500 FCFA | 10 000 FCFA |
+| 10 | 15 000 FCFA | 20 000 FCFA |
+| 11 | 15 000 FCFA | 20 000 FCFA |
+| 14 | 15 000 FCFA | 21 000 FCFA |
+| 16 | 16 000 FCFA | 24 000 FCFA |
+| 20 | 20 000 FCFA | 24 000 FCFA |
+| 21 | 20 000 FCFA | 24 000 FCFA |
+| 25 | 20 000 FCFA | 25 000 FCFA |
+| 26 | 20 800 FCFA | 25 000 FCFA |
+| 30 | 24 000 FCFA | 25 000 FCFA |
+| 31 | 24 000 FCFA | 26 000 FCFA |
+| 40 | 24 000 FCFA | 26 000 FCFA |
+| 49 | 24 500 FCFA | 26 000 FCFA |
+| 50 et plus | Devis | Devis |
+
+### 24.6. Règles de facturation et évolutions de capacité
+
+1. La quantité facturable est photographiée au début de chaque période mensuelle payée.
+2. Les ajouts, retraits ou changements durables de chambres sont pris en compte au renouvellement mensuel suivant ; aucune régularisation rétroactive n'est appliquée.
+3. La facture précise le nombre de chambres retenu, le statut restauration et le barème appliqué.
+4. La date d'effet, la quantité de référence et le montant facturé sont conservés dans l'historique d'abonnement.
+5. À partir de 50 chambres, le montant résulte d'un devis accepté par le client et enregistré dans le système ; aucun algorithme ne doit inventer un forfait de 30 000 ou 40 000 FCFA.
+6. Toute réduction commerciale exceptionnelle est autorisée par l'administration habilitée, datée, motivée et journalisée. Aucune modification rétroactive d'une facture payée.
+
+### 24.7. Périmètre inclus dans l'abonnement unique
+
+Le prix couvre le socle fonctionnel NAXA HOTEL décrit dans le présent cahier, selon les capacités contractuelles convenues : PMS, réception, séjour/folio, housekeeping, maintenance, gestion d'équipe, stocks/économat, finance et pilotage, portail Web QR à quatre entrées, commandes QR restaurant/bar via ZIPPLE lorsque les points de vente existent, intégration LOYABLE prévue pour les clients NAXA HOTEL et fonctions de base NAXA SECURITY.
+
+Les capacités additionnelles ou besoins hors périmètre peuvent faire l'objet d'un devis spécifique, notamment pour les grands établissements, groupes multi-hôtels ou extensions de capacité. Ce devis ne doit pas réintroduire une tarification par module pour les fonctions standard. Les équipements physiques, câblages, travaux d'installation, prestations sur site, migration exceptionnelle ou formation supplémentaire peuvent être chiffrés séparément une seule fois ; ils ne sont pas compris implicitement dans l'abonnement mensuel.
+
+### 24.8. Positionnement concurrentiel — vérification publique du 22 novembre 2026
+
+Repères tarifaires publiés consultés :
+
+| Offre publique observée | Prix affiché |
+|---|---:|
+| Hotelia — hébergement seul | À partir de 16 200 FCFA/mois |
+| Hotelia — hôtel tout-en-un avec restaurant/bar | À partir de 27 000 FCFA/mois |
+| The African Hotelier — 1 à 20 chambres | 25 000 FCFA/mois |
+| The African Hotelier — 21 à 50 chambres | 50 000 FCFA/mois |
+| 1412 PMS — Starter / Business / Premium | 29 000 / 39 000 / 69 000 FCFA/mois |
+
+Sources consultées : https://www.hotelia.cloud/ ; https://theafricanhotelier.com/pms-hotelier/ ; https://1412pms.com/.
+
+**Lecture commerciale :** le barème NAXA HOTEL avec restauration plafonne à 26 000 FCFA jusqu'à 49 chambres, sous le prix d'entrée tout-en-un Hotelia affiché à 27 000 FCFA et sous les offres 1412 PMS et The African Hotelier dans les tranches comparables citées. Le barème sans restaurant reste à 24 500 FCFA au maximum avant devis. Hotelia affiche aussi un prix d'entrée inférieur pour son offre hébergement seul (16 200 FCFA) : NAXA HOTEL ne prétend donc pas être systématiquement le tarif le plus bas de chaque catégorie. Les périmètres, quotas, frais d'installation, services, limites d'utilisateurs et niveaux de support ne sont pas identiques ; ces prix sont des repères publics, pas une preuve d'équivalence fonctionnelle.
+
+### 24.9. Gouvernance, contrôles et statut de réalisation
+
+- Les anciens prix Essentiel 800 FCFA/chambre (minimum 10 000 FCFA) et Premium 1 000 FCFA/chambre (minimum 18 000 FCFA), ainsi que leur paiement annuel proposé, sont **retirés et supersédés** pour NAXA HOTEL.
+- Le socle NAXA SECURITY demeure inclus dans l'abonnement unique ; il ne dépend plus d'une formule Essentiel/Premium. Les capacités au-delà du socle contractuel sont chiffrées au besoin.
+- Le portail QR de séjour, limité aux quatre entrées déjà définies, et les commandes QR restaurant/bar via ZIPPLE restent inclus sans supplément QR.
+- La publication hôtelière LOYABLE reste gratuite pour un client NAXA HOTEL dont l'abonnement mensuel est actif, conformément à FAM-022.
+- Les quotas précis de comptes, appareils, sites, chambres, caméras, capteurs, stockage, rétention et volumes d'événements doivent être fixés à partir des coûts et capacités techniques réels ; aucun quota fictif n'est autorisé.
+- Un contrôle de marge/coût de service doit être conduit avant la mise en vente générale, à partir des coûts réels d'hébergement cloud, support, stockage, sécurité et intégrations.
+- Cette mise à jour est documentaire. Elle ne prouve pas que la facturation dynamique, les entitlements, le calcul automatique, les paiements, les contrats inter-applications, le portail QR ou les modules NAXA HOTEL soient implémentés, testés ou déployés.
