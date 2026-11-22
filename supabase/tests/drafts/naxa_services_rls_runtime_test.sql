@@ -28,6 +28,9 @@ INSERT INTO public.ns_member_scopes(id,org_id,member_id,scope_type,scope_id,site
 VALUES ('70000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000002','organization','20000000-0000-4000-8000-000000000001',NULL,NULL,true,true,true);
 INSERT INTO public.ns_devices(id,account_id,installation_id,platform,label,remember_device,session_id)
 VALUES ('80000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','ci-installation-a','android','Disposable CI device',true,'ci-session-a');
+-- A second installation of the same authenticated account exercises peer pull.
+INSERT INTO public.ns_devices(id,account_id,installation_id,platform,label,remember_device,session_id)
+VALUES ('80000000-0000-4000-8000-000000000003','50000000-0000-4000-8000-000000000001','ci-installation-b','android','Disposable CI peer device',true,'ci-session-b');
 INSERT INTO public.ns_devices(id,account_id,installation_id,platform,label,remember_device,session_id)
 VALUES ('80000000-0000-4000-8000-000000000002','50000000-0000-4000-8000-000000000002','ci-installation-promoter','android','Disposable CI promoter device',true,'ci-session-promoter');
 INSERT INTO public.ns_customers(id,org_id,site_id,display_name,phone_contact) VALUES
@@ -433,7 +436,7 @@ BEGIN
     'org_id','20000000-0000-4000-8000-000000000001',
     'site_id','30000000-0000-4000-8000-000000000001',
     'name','Fournisseur atomique CI','phone','','whatsapp','',
-    'email','','address','','payment_terms_days',0,'notes',''
+    'email','','address','','payment_terms_days',0,'notes','','notes_private','DO_NOT_DISTRIBUTE'
   );
   v_first := public.ns_apply_sync_event(
     '20000000-0000-4000-8000-000000000001'::uuid,
@@ -586,6 +589,115 @@ BEGIN
 END
 $atomic_sync_receipt_assertions$;
 
+-- N3 peer-pull contract: a second device on the same account gets the committed
+-- event, redacted fields stay private, inaccessible site rows are skipped while
+-- the opaque cursor advances, and the source device never receives its own event.
+DO $seed_invisible_sync_change$
+DECLARE
+  v_cursor bigint;
+BEGIN
+  INSERT INTO public.ns_sync_counters(org_id,last_change_cursor)
+  VALUES ('20000000-0000-4000-8000-000000000001',0)
+  ON CONFLICT (org_id) DO NOTHING;
+  UPDATE public.ns_sync_counters
+     SET last_change_cursor=last_change_cursor+1
+   WHERE org_id='20000000-0000-4000-8000-000000000001'
+   RETURNING last_change_cursor INTO v_cursor;
+  INSERT INTO public.ns_sync_changes(
+    org_id,change_cursor,source_event_id,source_device_id,site_id,target_site_ids,
+    aggregate_type,aggregate_id,action_code,aggregate_version,projection_json
+  ) VALUES (
+    '20000000-0000-4000-8000-000000000001',v_cursor,
+    '95000000-0000-4000-8000-000000000099',
+    '80000000-0000-4000-8000-000000000002',
+    '30000000-0000-4000-8000-000000000002',
+    ARRAY['30000000-0000-4000-8000-000000000002'::uuid],
+    'supplier','94000000-0000-4000-8000-000000000099','supplier.saved',1,
+    '{"supplier_id":"94000000-0000-4000-8000-000000000099","name":"Invisible Site A2"}'::jsonb
+  );
+END
+$seed_invisible_sync_change$;
+
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-b"}',false);
+DO $n3_peer_pull$
+DECLARE
+  v_pull jsonb;
+  v_events jsonb;
+  v_next bigint;
+BEGIN
+  v_pull:=public.ns_pull_sync_changes(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '80000000-0000-4000-8000-000000000003'::uuid,
+    0,100
+  );
+  v_events:=coalesce(v_pull->'changes','[]'::jsonb);
+  v_next:=(v_pull->>'next_cursor')::bigint;
+  IF NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_events) e
+    WHERE e->>'event_id'='95000000-0000-4000-8000-000000000001'
+  ) THEN
+    RAISE EXCEPTION 'N3_PEER_DEVICE_DID_NOT_RECEIVE_COMMITTED_EVENT: %',v_pull;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_events) e
+    WHERE e->>'event_id'='95000000-0000-4000-8000-000000000099'
+  ) THEN
+    RAISE EXCEPTION 'N3_PULL_LEAKED_INACCESSIBLE_SITE_CHANGE';
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_events) e
+    WHERE e->>'event_id'='95000000-0000-4000-8000-000000000001'
+      AND ((e->'payload') ? 'notes_private' OR (e->'payload') ? 'password')
+  ) THEN
+    RAISE EXCEPTION 'N3_PULL_DID_NOT_REDACT_PRIVATE_FIELDS';
+  END IF;
+  IF coalesce((v_pull->>'has_more')::boolean,true) OR v_next <> (
+    SELECT last_change_cursor FROM public.ns_sync_counters
+    WHERE org_id='20000000-0000-4000-8000-000000000001'
+  ) THEN
+    RAISE EXCEPTION 'N3_PULL_CURSOR_DID_NOT_ADVANCE_PAST_FILTERED_ROWS: %',v_pull;
+  END IF;
+END
+$n3_peer_pull$;
+
+-- The source installation must not replay its own local mutation.
+SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-a"}',false);
+DO $n3_no_echo$
+DECLARE v_pull jsonb;
+BEGIN
+  v_pull:=public.ns_pull_sync_changes(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    0,100
+  );
+  IF jsonb_array_length(v_pull->'changes')<>0 THEN
+    RAISE EXCEPTION 'N3_SOURCE_DEVICE_RECEIVED_OWN_EVENT: %',v_pull;
+  END IF;
+END
+$n3_no_echo$;
+RESET ROLE;
+
+-- A revoked peer installation cannot continue pulling from an old session.
+UPDATE public.ns_devices SET revoked_at=now()
+WHERE id='80000000-0000-4000-8000-000000000003';
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-b"}',false);
+DO $n3_revoked_device$
+BEGIN
+  BEGIN
+    PERFORM public.ns_pull_sync_changes(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '80000000-0000-4000-8000-000000000003'::uuid,0,100
+    );
+    RAISE EXCEPTION 'N3_REVOKED_DEVICE_PULL_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM<>'NAXA_SYNC_DEVICE_NOT_REGISTERED' THEN RAISE; END IF;
+  END;
+END
+$n3_revoked_device$;
+RESET ROLE;
 
 SET ROLE authenticated;
 DO $service_crm_sync$
