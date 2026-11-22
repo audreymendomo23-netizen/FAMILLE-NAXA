@@ -729,8 +729,8 @@ interface NaxaServicesDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertOutboxEvent(event: LocalOutboxEvent)
 
-    @Query("SELECT * FROM local_outbox_events WHERE orgId = :orgId AND actionCode IN (:actions) AND state IN ('queued','retry_wait','blocked_dependency') AND (nextAttemptAtEpochMs IS NULL OR nextAttemptAtEpochMs <= :now) ORDER BY deviceSequence ASC LIMIT :limit")
-    suspend fun loadRetryableOutboxEvents(orgId: String, actions: List<String>, now: Long, limit: Int = 100): List<LocalOutboxEvent>
+    @Query("SELECT * FROM local_outbox_events WHERE orgId = :orgId AND state IN ('queued','retry_wait','blocked_dependency') AND (nextAttemptAtEpochMs IS NULL OR nextAttemptAtEpochMs <= :now) ORDER BY deviceSequence ASC LIMIT :limit")
+    suspend fun loadRetryableOutboxEvents(orgId: String, now: Long, limit: Int = 100): List<LocalOutboxEvent>
 
     @Query("UPDATE local_outbox_events SET state = 'queued', nextAttemptAtEpochMs = NULL, lastErrorCode = NULL WHERE eventId = :eventId AND orgId = :orgId AND state = 'blocked_dependency'")
     suspend fun requeueBlockedOutboxEvent(eventId: String, orgId: String): Int
@@ -1407,6 +1407,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         quantityToReceive: Double, idempotencyKey: String, actorMemberId: String
     ): LocalPurchaseReceipt = database.withTransaction {
         require(quantityToReceive.isFinite() && quantityToReceive > 0.0 && actorMemberId.isNotBlank() && idempotencyKey.isNotBlank())
+        require(runCatching { UUID.fromString(idempotencyKey) }.isSuccess) { "La clé d'idempotence de réception doit être un UUID." }
         dao.findPurchaseReceiptByKey(orgId, idempotencyKey)?.let { existing ->
             require(existing.siteId == siteId && existing.purchaseId == purchaseId &&
                 existing.purchaseLineId == lineId &&
@@ -1432,7 +1433,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         val newRecoverable = allocate(purchase.recoverableTaxXaf, nextReceivedBase)
         val recoverableDelta = (newRecoverable - purchase.recognizedRecoverableTaxXaf).coerceAtLeast(0L)
         val now = System.currentTimeMillis()
-        val receiptId = UUID.randomUUID().toString()
+        val receiptId = UUID.fromString(idempotencyKey).toString()
         val receipt = LocalPurchaseReceipt(
             receiptId, orgId, siteId, purchaseId, line.id, quantityToReceive, base,
             nonRecoverableDelta, recoverableDelta, actorMemberId, now, idempotencyKey
@@ -1523,6 +1524,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         cashSessionId: String?, paymentReference: String, idempotencyKey: String, actorMemberId: String
     ): LocalSupplierPayment = database.withTransaction {
         require(amountXaf > 0L && actorMemberId.isNotBlank() && idempotencyKey.isNotBlank())
+        require(runCatching { UUID.fromString(idempotencyKey) }.isSuccess) { "La clé d'idempotence du règlement doit être un UUID." }
         require(paymentMethod in setOf("cash", "bank", "mobile_money", "other"))
         dao.findSupplierPaymentByKey(orgId, idempotencyKey)?.let { existing ->
             require(existing.siteId == siteId && existing.purchaseId == purchaseId && existing.amountXaf == amountXaf &&
@@ -1543,7 +1545,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         } else require(cashSessionId.isNullOrBlank()) { "Ne lie pas un règlement bancaire à une session de caisse espèces." }
         val now = System.currentTimeMillis()
         val payment = LocalSupplierPayment(
-            UUID.randomUUID().toString(), orgId, siteId, purchase.id, purchase.supplierId,
+            UUID.fromString(idempotencyKey).toString(), orgId, siteId, purchase.id, purchase.supplierId,
             cashSessionId, amountXaf, paymentMethod, paymentReference.trim(), idempotencyKey,
             actorMemberId, now
         )
@@ -1931,6 +1933,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             .put("deposit_payment_method", order.depositPaymentMethod)
             .put("cash_session_id", order.depositCashSessionId)
             .put("promised_at", Instant.ofEpochMilli(order.promisedAtMillis).toString())
+            .put("status", order.status)
+            .put("created_at", Instant.ofEpochMilli(order.createdAtMillis).toString())
             .toString()
         enqueue(orgId, "pressing_order", order.id, "pressing_order.created", siteId, payload)
         order
@@ -3708,10 +3712,12 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             )
         )
         if (!(current.recordType == "inventory_transfer" && nextStatus == "received")) {
-            val priorEvents = dao.countOutboxActions(
-                orgId, current.recordType, current.id,
+            val versionActions = if (current.recordType == "inventory_transfer") {
+                listOf("inventory_transfer.requested", "inventory_transfer.status_changed")
+            } else {
                 listOf(current.recordType + ".created", current.recordType + ".status_changed")
-            )
+            }
+            val priorEvents = dao.countOutboxActions(orgId, current.recordType, current.id, versionActions)
             val payload = JSONObject()
                 .put("record_id", current.id)
                 .put("org_id", orgId)

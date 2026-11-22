@@ -174,8 +174,7 @@ object SupplierSyncCoordinator {
 
         val dao = repository.dao
         val orgId = session.account.organizationId
-        val events = dao.loadRetryableOutboxEvents(orgId, supportedActions.toList(), System.currentTimeMillis(), 250)
-            .filter { it.actionCode in supportedActions }
+        val events = dao.loadRetryableOutboxEvents(orgId, System.currentTimeMillis(), 250)
             .sortedBy { it.deviceSequence }
         var applied = 0
         var retried = 0
@@ -183,6 +182,14 @@ object SupplierSyncCoordinator {
         var rejected = 0
 
         for (event in events) {
+            if (event.actionCode !in supportedActions) {
+                dao.updateOutboxAttempt(
+                    event.eventId, orgId, "blocked_dependency", System.currentTimeMillis(), null,
+                    "SYNC_ACTION_NOT_YET_SUPPORTED"
+                )
+                blocked++
+                break
+            }
             val payload = runCatching { JSONObject(event.payloadJson) }.getOrNull()
             if (payload == null || !hasRequiredSnapshot(event, payload)) {
                 dao.updateOutboxAttempt(
@@ -190,7 +197,7 @@ object SupplierSyncCoordinator {
                     "OUTBOX_SNAPSHOT_OR_VERSION_NOT_READY"
                 )
                 blocked++
-                continue
+                break
             }
             if (payload.optString("org_id") != orgId) {
                 dao.updateOutboxAttempt(
@@ -213,7 +220,7 @@ object SupplierSyncCoordinator {
                     "ACTIVE_MEMBER_SITE_SCOPE_NOT_AVAILABLE"
                 )
                 blocked++
-                continue
+                break
             }
 
             if (session.deviceId.isBlank()) {
@@ -222,7 +229,7 @@ object SupplierSyncCoordinator {
                     "REGISTERED_DEVICE_ID_REQUIRED"
                 )
                 blocked++
-                continue
+                break
             }
 
             if (event.actionCode == "purchase.ordered" && hasStockLineWithoutRemoteMapping(payload, dao, orgId)) {
@@ -231,7 +238,7 @@ object SupplierSyncCoordinator {
                     "STOCK_LINE_SERVER_MAPPING_REQUIRED"
                 )
                 blocked++
-                continue
+                break
             }
             val siteId = eventSiteId
             val workstationId = payload.optString("workstation_id").takeIf { it.isNotBlank() && it != "null" }
@@ -395,11 +402,11 @@ object SupplierSyncCoordinator {
             "purchase.receipt.confirmed" -> payload.optString("purchase_id").isNotBlank() &&
                 payload.optString("line_id").isNotBlank() &&
                 payload.optString("idempotency_key") == event.aggregateId &&
-                payload.optString("receipt_id").isNotBlank() &&
+                payload.optString("receipt_id") == event.aggregateId &&
                 payload.optDouble("quantity", 0.0) > 0.0
             "supplier.payment.recorded" -> payload.optString("purchase_id").isNotBlank() &&
                 payload.optString("idempotency_key") == event.aggregateId &&
-                payload.optString("payment_id").isNotBlank() && payload.optLong("amount_xaf", 0L) > 0L
+                payload.optString("payment_id") == event.aggregateId && payload.optLong("amount_xaf", 0L) > 0L
             "recurring_charge.saved" -> payload.optString("name").isNotBlank() &&
                 payload.optString("category").isNotBlank() && payload.optLong("amount_xaf", 0L) > 0L &&
                 payload.optString("next_due_at").isNotBlank()
@@ -413,7 +420,8 @@ object SupplierSyncCoordinator {
             "loyalty_reward.redeemed" -> payload.optString("program_id").isNotBlank() &&
                 payload.optString("customer_id").isNotBlank() && payload.optString("redemption_status") == "redeemed"
             "pressing_order.created" -> payload.optString("ticket_number").isNotBlank() &&
-                payload.optString("customer_name").isNotBlank() && payload.optLong("total_xaf",0L) > 0L
+                payload.optString("customer_name").isNotBlank() && payload.optLong("total_xaf",0L) > 0L &&
+                payload.optString("status").isNotBlank() && payload.optString("created_at").isNotBlank()
             "pressing_order.status_changed:in_progress","pressing_order.status_changed:ready","pressing_order.status_changed:picked_up" ->
                 payload.optString("from_status").isNotBlank() && payload.optString("reason").isNotBlank()
             "appointment.created" -> payload.optString("customer_reference_or_name").isNotBlank() &&
