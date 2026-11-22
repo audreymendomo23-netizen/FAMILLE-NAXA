@@ -4460,7 +4460,12 @@ begin
         'cursor',c.change_cursor,
         'event_id',c.source_event_id,
         'source_device_id',c.source_device_id,
-        'site_id',c.site_id,
+        'origin_site_id',c.site_id,
+        'site_id',case
+          when c.site_id = any(visible.visible_site_ids) then c.site_id
+          else visible.visible_site_ids[1]
+        end,
+        'visible_site_ids',to_jsonb(visible.visible_site_ids),
         'workstation_id',c.workstation_id,
         'aggregate_type',c.aggregate_type,
         'aggregate_id',c.aggregate_id,
@@ -4473,6 +4478,18 @@ begin
     '[]'::jsonb
   ) into v_changes
   from public.ns_sync_changes c
+  cross join lateral (
+    select coalesce(array_agg(target.site_id order by target.site_id), '{}'::uuid[]) as visible_site_ids
+    from unnest(c.target_site_ids) as target(site_id)
+    where (
+      c.workstation_id is not null
+      and target.site_id=c.site_id
+      and public.ns_can_access_workstation(p_org_id,target.site_id,c.workstation_id)
+    ) or (
+      (c.workstation_id is null or target.site_id<>c.site_id)
+      and public.ns_can_access_site(p_org_id,target.site_id)
+    )
+  ) visible
   where c.org_id = p_org_id
     and c.change_cursor > p_after_cursor
     and c.change_cursor <= v_next_cursor
@@ -4491,15 +4508,7 @@ begin
       )
       or (
         cardinality(c.target_site_ids)>0
-        and not exists (
-          select 1 from unnest(c.target_site_ids) as target(site_id)
-          where not (
-            case when c.workstation_id is not null and target.site_id=c.site_id
-              then public.ns_can_access_workstation(p_org_id,target.site_id,c.workstation_id)
-              else public.ns_can_access_site(p_org_id,target.site_id)
-            end
-          )
-        )
+        and cardinality(visible.visible_site_ids)>0
       )
     );
 
