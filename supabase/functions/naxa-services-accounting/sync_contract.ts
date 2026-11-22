@@ -201,6 +201,9 @@ const ATOMIC_SYNC_ACTIONS: Record<string, { aggregate: string; idField: string; 
   "appointment.created": { aggregate: "appointment", idField: "appointment_id" },
   "appointment.status_changed": { aggregate: "appointment", idField: "appointment_id" },
   "appointment.rescheduled": { aggregate: "appointment", idField: "appointment_id" },
+  "cash_session.opened": { aggregate: "cash_session", idField: "cash_session_id" },
+  "cash_session.closed": { aggregate: "cash_session", idField: "cash_session_id" },
+  "expense.created": { aggregate: "expense", idField: "expense_id" },
 };
 
 export function normalizeAtomicSyncEvent(value: unknown): AtomicSyncEvent {
