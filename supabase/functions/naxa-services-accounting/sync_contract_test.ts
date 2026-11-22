@@ -194,3 +194,54 @@ Deno.test("organization-scoped loyalty program event cannot carry a site or work
   catch { rejected = true; }
   if (!rejected) throw new Error("Organization-scoped action must reject site IDs");
 });
+
+
+Deno.test("atomic sync envelope covers service catalogue versioned mutations", () => {
+  const org = ORG_A;
+  const site = SITE_A;
+  const service = "88888888-8888-4888-8888-888888888889";
+  const base = {
+    event_id: "88888888-8888-4888-8888-888888888890",
+    device_id: SYNC_DEVICE, device_sequence: 10,
+    org_id: org, site_id: site, workstation_id: null,
+    aggregate_type: "service", aggregate_id: service,
+    action_code: "service.updated",
+    payload: {
+      service_id: service, org_id: org, site_id: site,
+      code: "SRV-CI", activity: "pressing", name: "Pressing CI",
+      duration_minutes: 30, price_xaf: 1500, active: true, expected_version: 1
+    }
+  };
+  if (normalizeAtomicSyncEvent(base).aggregate_id !== service) throw new Error("Service update not accepted");
+  const config = {
+    ...base, action_code: "service.configuration_updated",
+    payload: {
+      service_id: service, org_id: org, site_id: site,
+      category: "pressing", description: "", provider_member_ids: [],
+      required_workstation_kinds: [], package_sessions: null, expected_version: 2
+    }
+  };
+  if (normalizeAtomicSyncEvent(config).action_code !== "service.configuration_updated") {
+    throw new Error("Service configuration update not accepted");
+  }
+});
+Deno.test("atomic sync envelope covers customer, CRM follow-up and support mutations", () => {
+  const org = ORG_A, site = SITE_A;
+  const cases = [
+    ["customer.created","customer","88888888-8888-4888-8888-888888888891","customer_id"],
+    ["customer_followup.created","customer_followup","88888888-8888-4888-8888-888888888892","followup_id"],
+    ["customer_followup.completed","customer_followup","88888888-8888-4888-8888-888888888892","followup_id"],
+    ["support_request.created","support_request","88888888-8888-4888-8888-888888888893","request_id"]
+  ] as const;
+  for (let index=0; index<cases.length; index++) {
+    const [action,aggregate,id,idField]=cases[index];
+    const normalized=normalizeAtomicSyncEvent({
+      event_id:"88888888-8888-4888-8888-888888888894",
+      device_id:SYNC_DEVICE,device_sequence:20+index,
+      org_id:org,site_id:site,workstation_id:null,
+      aggregate_type:aggregate,aggregate_id:id,action_code:action,
+      payload:{[idField]:id,org_id:org,site_id:site}
+    });
+    if(normalized.action_code!==action) throw new Error("Mutation type not accepted: "+action);
+  }
+});
