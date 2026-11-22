@@ -1744,7 +1744,7 @@ begin
         coalesce(p_payload->>'category',''),coalesce(p_payload->>'description',''),
         coalesce(p_payload->'provider_member_ids','[]'::jsonb),
         coalesce(p_payload->'required_workstation_kinds','[]'::jsonb),
-        coalesce(p_payload->'package_sessions','[]'::jsonb),
+        nullif(p_payload->>'package_sessions','')::integer,
         (p_payload->>'expected_version')::integer
       );
     when 'customer.created' then
@@ -1915,7 +1915,7 @@ $naxa$;
 create or replace function public.ns_update_service_configuration(
   p_service_id uuid, p_org_id uuid, p_site_id uuid, p_category text,
   p_description text, p_provider_member_ids jsonb,
-  p_required_workstation_kinds jsonb, p_package_sessions jsonb,
+  p_required_workstation_kinds jsonb, p_package_sessions integer,
   p_expected_version integer
 ) returns jsonb
 language plpgsql
@@ -1940,7 +1940,7 @@ begin
   if length(coalesce(p_category,'')) > 80 or length(coalesce(p_description,'')) > 2000
      or jsonb_typeof(coalesce(p_provider_member_ids,'[]'::jsonb)) <> 'array'
      or jsonb_typeof(coalesce(p_required_workstation_kinds,'[]'::jsonb)) <> 'array'
-     or jsonb_typeof(coalesce(p_package_sessions,'[]'::jsonb)) <> 'array' then
+     or (p_package_sessions is not null and p_package_sessions not between 1 and 100) then
     raise exception 'NAXA_SERVICE_CONFIGURATION_INVALID';
   end if;
   if exists (
@@ -2160,11 +2160,11 @@ end;
 $naxa$;
 
 revoke all on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,integer) from public, anon;
-grant execute on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,jsonb) to authenticated, service_role;
+grant execute on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,integer) to authenticated, service_role;
 revoke all on function public.ns_update_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,integer) from public, anon;
 grant execute on function public.ns_update_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,integer) to authenticated, service_role;
 revoke all on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,integer,integer) from public, anon;
-grant execute on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,jsonb,integer) to authenticated, service_role;
+grant execute on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,integer,integer) to authenticated, service_role;
 revoke all on function public.ns_create_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text) from public, anon;
 grant execute on function public.ns_create_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text) to authenticated, service_role;
 revoke all on function public.ns_create_customer_followup(uuid,uuid,uuid,uuid,text,text,text,text,timestamptz,text) from public, anon;
