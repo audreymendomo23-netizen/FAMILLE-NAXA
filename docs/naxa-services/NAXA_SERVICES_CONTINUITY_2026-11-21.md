@@ -1,6 +1,6 @@
 # NAXA SERVICES — document de continuité dédié
 
-**Version :** 1.2  
+**Version :** 1.3  
 **Date de mise à jour :** 22 novembre 2026  
 **Dépôt :** `audreymendomo23-netizen/FAMILLE-NAXA`  
 **Branche de travail :** `work/naxa-services-completion-20261120`  
@@ -536,6 +536,8 @@ Cette section prévaut sur les mentions antérieures du gate 3 dans la section 1
 
 ### 18.3 Plan d’exécution N3
 
+Conception dédiée N3-B : [NAXA_SERVICES_N3_BIDIRECTIONAL_SYNC_DESIGN_2026-11-22.md](NAXA_SERVICES_N3_BIDIRECTIONAL_SYNC_DESIGN_2026-11-22.md). Cette note est une proposition technique à valider ; elle n'ajoute aucun endpoint ni aucune migration.
+
 | Sous-lot | Travail attendu | Preuve de sortie |
 |---|---|---|
 | N3-A — sécuriser le push | Fermer les écarts entre les 92 actions enregistrées et les snapshots effectivement produits ; vérifier la séquence par installation, les dépendances, l’activation, le lancement manuel et les reprises WorkManager. Conserver tout événement non acquitté. | Tests unitaires et Room : ordre, redémarrage, retry, événement bloqué en tête, reprise après changement de session/appareil, aucune transition `synced` sans reçu valide. |
@@ -553,5 +555,5 @@ Cette section prévaut sur les mentions antérieures du gate 3 dans la section 1
 5. Ne pas appliquer de draft au Supabase NAXA pharmacie, ne pas modifier `main`, ne pas déployer d’Edge Function et ne pas distribuer d’APK sans autorisation distincte.
 6. N3 ne sera déclaré **VERT** qu’après les preuves N3-A à N3-D sur deux appareils distincts ; une compilation, un push vers serveur ou un run CI générique 12/12 ne suffisent pas.
 
-**Prochaine action concrète :** concevoir N3-B autour d’un journal de changements contrôlé et d’un curseur de pull par appareil, puis réaliser le premier vertical slice serveur + Room + test de rejeu sur deux appareils. N4 (raccordement et parité Web/PWA) reste séparé et n’est pas inclus dans cette clôture N3.
+**Prochaine action concrète :** instruire la matrice des droits de lecture et l’option projection/invalidation décrites dans la note N3-B, puis seulement écrire le draft du journal et du curseur de pull, son test d’isolation PostgreSQL et le premier vertical slice serveur + Room sur deux appareils. N4 (raccordement et parité Web/PWA) reste séparé et n’est pas inclus dans cette clôture N3.
 
