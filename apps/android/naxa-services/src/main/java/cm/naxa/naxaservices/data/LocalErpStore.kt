@@ -17,10 +17,15 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import java.util.Calendar
 import java.util.UUID
+import java.time.Instant
 import org.json.JSONArray
 import org.json.JSONObject
 
-@Entity(tableName = "local_pressing_orders", indices = [Index(value = ["siteId"]), Index(value = ["ticketNumber"], unique = true)])
+@Entity(tableName = "local_pressing_orders", indices = [
+    Index(value = ["siteId"]),
+    Index(value = ["ticketNumber"], unique = true),
+    Index(value = ["orgId", "siteId", "depositCashSessionId", "depositPaymentStatus"])
+])
 data class LocalPressingOrder(
     @PrimaryKey val id: String,
     val orgId: String,
@@ -34,6 +39,9 @@ data class LocalPressingOrder(
     val depositXaf: Long,
     val promisedAtMillis: Long,
     val status: String = "received",
+    val depositPaymentMethod: String? = null,
+    val depositCashSessionId: String? = null,
+    @ColumnInfo(defaultValue = "'none'") val depositPaymentStatus: String = "none",
     val actorMemberId: String,
     val createdAtMillis: Long,
     val updatedAtMillis: Long
@@ -690,6 +698,10 @@ interface NaxaServicesDao {
     @Query("SELECT COALESCE(SUM(amountXaf), 0) FROM local_expenses WHERE orgId = :orgId AND siteId = :siteId AND cashSessionId = :sessionId")
     suspend fun sessionExpensesTotal(orgId: String, siteId: String, sessionId: String): Long
 
+    @Query("SELECT COALESCE(SUM(depositXaf), 0) FROM local_pressing_orders WHERE orgId = :orgId AND siteId = :siteId AND depositCashSessionId = :sessionId AND depositPaymentMethod = 'cash' AND depositPaymentStatus = 'confirmed'")
+    suspend fun confirmedPressingCashDepositsTotal(orgId: String, siteId: String, sessionId: String): Long
+
+
     @Query("SELECT COALESCE(SUM(stockQuantity), 0) FROM local_sales WHERE orgId = :orgId AND siteId = :siteId AND inventoryItemId = :itemId AND status = 'pending'")
     suspend fun pendingInventoryReservations(orgId: String, siteId: String, itemId: String): Double
 
@@ -1071,7 +1083,7 @@ interface NaxaServicesDao {
         LocalSupplierPayment::class,
         LocalAccountingEntry::class
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -1251,6 +1263,15 @@ val NS_SERVICES_MIGRATION_11_12: Migration = object : Migration(11, 12) {
         database.execSQL("ALTER TABLE local_outbox_events ADD COLUMN nextAttemptAtEpochMs INTEGER")
         database.execSQL("ALTER TABLE local_outbox_events ADD COLUMN lastErrorCode TEXT")
         database.execSQL("ALTER TABLE local_outbox_events ADD COLUMN remoteId TEXT")
+    }
+}
+
+val NS_SERVICES_MIGRATION_12_13: Migration = object : Migration(12, 13) {
+    override fun migrate(database: SupportSQLiteDatabase) {
+        database.execSQL("ALTER TABLE local_pressing_orders ADD COLUMN depositPaymentMethod TEXT")
+        database.execSQL("ALTER TABLE local_pressing_orders ADD COLUMN depositCashSessionId TEXT")
+        database.execSQL("ALTER TABLE local_pressing_orders ADD COLUMN depositPaymentStatus TEXT NOT NULL DEFAULT 'none'")
+        database.execSQL("CREATE INDEX IF NOT EXISTS index_local_pressing_orders_orgId_siteId_depositCashSessionId_depositPaymentStatus ON local_pressing_orders(orgId, siteId, depositCashSessionId, depositPaymentStatus)")
     }
 }
 
@@ -1782,7 +1803,9 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         totalXaf: Long,
         depositXaf: Long,
         promisedAtMillis: Long,
-        actorMemberId: String
+        actorMemberId: String,
+        depositPaymentMethod: String? = null,
+        depositCashSessionId: String? = null
     ): LocalPressingOrder = database.withTransaction {
         val now = System.currentTimeMillis()
         require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) { "Organisation, point de vente ou opérateur manquant." }
@@ -1794,6 +1817,30 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 "L'emplacement sélectionné n'existe pas dans ce point de vente."
             }
         }
+
+        val paymentMethod = depositPaymentMethod?.trim()?.lowercase(java.util.Locale.ROOT)?.takeIf(String::isNotBlank)
+        val cashSessionId = depositCashSessionId?.trim()?.takeIf(String::isNotBlank)
+        val depositPaymentStatus = when {
+            depositXaf == 0L -> {
+                require(paymentMethod == null && cashSessionId == null) {
+                    "Un acompte nul ne doit pas porter de moyen ou de session de paiement."
+                }
+                "none"
+            }
+            paymentMethod == "cash" -> {
+                require(cashSessionId != null) { "Sélectionne une session de caisse ouverte pour encaisser l'acompte en espèces." }
+                val cashSession = dao.findCashSession(cashSessionId, orgId, siteId)
+                    ?: throw IllegalArgumentException("Session de caisse introuvable pour ce point de vente.")
+                require(cashSession.status == "open") { "La session sélectionnée est déjà clôturée." }
+                "confirmed"
+            }
+            paymentMethod in setOf("mobile_money", "other") -> {
+                require(cashSessionId == null) { "Un paiement non espèces ne peut pas être rattaché à une session de caisse." }
+                "pending"
+            }
+            else -> throw IllegalArgumentException("Choisis explicitement le mode d'encaissement de l'acompte.")
+        }
+
         val order = LocalPressingOrder(
             id = UUID.randomUUID().toString(),
             orgId = orgId,
@@ -1808,10 +1855,27 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             promisedAtMillis = promisedAtMillis,
             actorMemberId = actorMemberId,
             createdAtMillis = now,
-            updatedAtMillis = now
+            updatedAtMillis = now,
+            depositPaymentMethod = paymentMethod,
+            depositCashSessionId = if (paymentMethod == "cash") cashSessionId else null,
+            depositPaymentStatus = depositPaymentStatus
         )
         dao.insertPressingOrder(order)
-        enqueue(orgId, "pressing_order", order.id, "pressing_order.created", siteId)
+        val payload = JSONObject()
+            .put("order_id", order.id)
+            .put("site_id", order.siteId)
+            .put("workstation_id", order.workstationId)
+            .put("ticket_number", order.ticketNumber)
+            .put("customer_name", order.customerName)
+            .put("customer_phone", order.customerPhone)
+            .put("items_summary", order.itemsSummary)
+            .put("total_xaf", order.totalXaf)
+            .put("deposit_xaf", order.depositXaf)
+            .put("deposit_payment_method", order.depositPaymentMethod)
+            .put("cash_session_id", order.depositCashSessionId)
+            .put("promised_at", Instant.ofEpochMilli(order.promisedAtMillis).toString())
+            .toString()
+        enqueue(orgId, "pressing_order", order.id, "pressing_order.created", siteId, payload)
         order
     }
 
@@ -2136,7 +2200,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         val current = dao.findCashSession(sessionId, orgId, siteId) ?: throw IllegalStateException("Session de caisse introuvable.")
         require(current.status == "open" && countedCloseXaf >= 0 && actorMemberId.isNotBlank()) { "Clôture de caisse invalide." }
         val expected = current.openingFloatXaf +
-            dao.confirmedCashSalesTotal(orgId, siteId, sessionId) -
+            dao.confirmedCashSalesTotal(orgId, siteId, sessionId) +
+            dao.confirmedPressingCashDepositsTotal(orgId, siteId, sessionId) -
             dao.sessionExpensesTotal(orgId, siteId, sessionId)
         val variance = countedCloseXaf - expected
         require(variance == 0L || varianceReason.trim().length >= 8) { "Justifie tout écart de caisse avec au moins 8 caractères." }
