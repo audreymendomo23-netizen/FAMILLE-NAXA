@@ -1623,7 +1623,8 @@ Le projet est construit par jalons testables, sans pilote public si la décision
 | E11 | KNOWLEDGE : bibliothèque, encyclopédie, vidéos, annales et licences |
 | E12 | OPPORTUNITIES, partenaires, annonces hebdomadaires et affiliation |
 | E13 | Annuaire, transferts, passeport scolaire, BI, IA et recette complète |
-| E13.1 | CAMPUS237 CONNECT : programme prestataires, API versionnée, sandbox, contrats, synchronisation externe, association vérifiée des parents et recette des connecteurs |\n| E14 | Préparation de mise en service, formation, support, surveillance et plan de reprise |
+| E13.1 | CAMPUS237 CONNECT : programme prestataires, API versionnée, sandbox, contrats, synchronisation externe, association vérifiée des parents et recette des connecteurs |
+| E14 | Préparation de mise en service, formation, support, surveillance et plan de reprise |
 
 ---
 
