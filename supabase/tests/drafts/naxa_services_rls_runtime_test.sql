@@ -1005,6 +1005,150 @@ END
 $pressing_appointment_direct_write_guard$;
 RESET ROLE;
 
+
+INSERT INTO public.ns_cash_registers(id,org_id,site_id,code,name,workstation_id,active)
+VALUES (
+  '9e000000-0000-4000-8000-000000000001',
+  '20000000-0000-4000-8000-000000000001',
+  '30000000-0000-4000-8000-000000000001',
+  'CI-CAISSE-001','Caisse CI',
+  '40000000-0000-4000-8000-000000000001',true
+);
+
+SET ROLE authenticated;
+DO $cash_session_expense_sync$
+DECLARE v_result jsonb; v_rejected boolean:=false;
+BEGIN
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9d000000-0000-4000-8000-000000000001'::uuid,70,
+    'cash_session','9f000000-0000-4000-8000-000000000001',
+    'cash_session.opened',
+    jsonb_build_object(
+      'cash_session_id','9f000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'register_id','9e000000-0000-4000-8000-000000000001',
+      'register_name','Caisse CI','opening_float_xaf',5000,'opened_at',now()
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'CASH_SESSION_OPEN_NOT_APPLIED: %',v_result; END IF;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      '9d000000-0000-4000-8000-000000000002'::uuid,71,
+      'cash_session','9f000000-0000-4000-8000-000000000002',
+      'cash_session.opened',
+      jsonb_build_object(
+        'cash_session_id','9f000000-0000-4000-8000-000000000002',
+        'org_id','20000000-0000-4000-8000-000000000001',
+        'site_id','30000000-0000-4000-8000-000000000001',
+        'register_id','9e000000-0000-4000-8000-000000000001',
+        'register_name','Caisse CI','opening_float_xaf',1000,'opened_at',now()
+      )
+    );
+    RAISE EXCEPTION 'SECOND_OPEN_CASH_SESSION_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM<>'NAXA_CASH_SESSION_ALREADY_OPEN' THEN RAISE; END IF;
+  END;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9d000000-0000-4000-8000-000000000003'::uuid,72,
+    'expense','a1000000-0000-4000-8000-000000000001',
+    'expense.created',
+    jsonb_build_object(
+      'expense_id','a1000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'cash_session_id','9f000000-0000-4000-8000-000000000001',
+      'category','Fournitures','description','Achat de consommables',
+      'amount_xaf',1000,'occurred_at',now()
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'CASH_EXPENSE_NOT_APPLIED: %',v_result; END IF;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      '9d000000-0000-4000-8000-000000000004'::uuid,73,
+      'cash_session','9f000000-0000-4000-8000-000000000001',
+      'cash_session.closed',
+      jsonb_build_object(
+        'cash_session_id','9f000000-0000-4000-8000-000000000001',
+        'org_id','20000000-0000-4000-8000-000000000001',
+        'site_id','30000000-0000-4000-8000-000000000001',
+        'counted_close_xaf',3900,'variance_reason','','closed_at',now()+interval '1 minute'
+      )
+    );
+    RAISE EXCEPTION 'CASH_CLOSE_WITH_UNJUSTIFIED_VARIANCE_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM<>'NAXA_CASH_VARIANCE_REASON_REQUIRED' THEN RAISE; END IF;
+  END;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9d000000-0000-4000-8000-000000000004'::uuid,73,
+    'cash_session','9f000000-0000-4000-8000-000000000001',
+    'cash_session.closed',
+    jsonb_build_object(
+      'cash_session_id','9f000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'counted_close_xaf',4000,'variance_reason','','closed_at',now()+interval '1 minute'
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'CASH_SESSION_CLOSE_NOT_APPLIED: %',v_result; END IF;
+  IF (v_result->>'expected_close_xaf')::bigint<>4000
+     OR (v_result->>'variance_xaf')::bigint<>0 THEN
+    RAISE EXCEPTION 'CASH_SESSION_BALANCE_NOT_COMPUTED_FROM_SERVER_LEDGER: %',v_result;
+  END IF;
+END
+$cash_session_expense_sync$;
+RESET ROLE;
+
+DO $cash_session_assertions$
+DECLARE v_status text; v_expected bigint; v_expenses bigint; v_receipts integer;
+BEGIN
+  SELECT status,expected_close_xaf INTO v_status,v_expected
+    FROM public.ns_cash_sessions WHERE id='9f000000-0000-4000-8000-000000000001';
+  SELECT sum(amount_xaf) INTO v_expenses FROM public.ns_expenses
+    WHERE cash_session_id='9f000000-0000-4000-8000-000000000001';
+  SELECT count(*) INTO v_receipts FROM public.ns_sync_receipts
+    WHERE client_event_id='9d000000-0000-4000-8000-000000000004';
+  IF v_status<>'closed' OR v_expected<>4000 OR v_expenses<>1000 OR v_receipts<>1 THEN
+    RAISE EXCEPTION 'CASH_SESSION_SERVER_BALANCE_OR_RECEIPT_ASSERTION_FAILED';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.ns_sync_receipts WHERE client_event_id='9d000000-0000-4000-8000-000000000002') THEN
+    RAISE EXCEPTION 'DUPLICATE_REGISTER_OPEN_LEFT_RECEIPT';
+  END IF;
+END
+$cash_session_assertions$;
+
+SET ROLE authenticated;
+DO $cash_session_direct_write_guard$
+BEGIN
+  IF has_table_privilege(current_user,'public.ns_cash_sessions','INSERT')
+     OR has_table_privilege(current_user,'public.ns_cash_sessions','UPDATE')
+     OR has_table_privilege(current_user,'public.ns_expenses','INSERT')
+     OR has_table_privilege(current_user,'public.ns_expenses','UPDATE') THEN
+    RAISE EXCEPTION 'CLIENT_CAN_BYPASS_CASH_SESSION_OR_EXPENSE_RPC';
+  END IF;
+END
+$cash_session_direct_write_guard$;
+RESET ROLE;
+
 UPDATE public.ns_devices SET revoked_at=now() WHERE id='80000000-0000-4000-8000-000000000001';
 SET ROLE authenticated;
 DO $revocation$
