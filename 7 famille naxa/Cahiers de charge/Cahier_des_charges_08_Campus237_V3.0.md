@@ -7,7 +7,7 @@
 **Dépôt :** Famille NAXA  
 **Document précédent :** Cahier_des_charges_08_Campus237.pdf — V2.0 du 5 novembre 2026  
 **Nature :** spécification fonctionnelle, métier, opérationnelle, économique, technique et de conformité  
-**Statut :** baseline V3.0 consolidée, amendée par l'addendum V3.0.1 du 22 novembre 2026 ; les éléments explicitement validés sont verrouillés, les arbitrages non résolus restent signalés et ne doivent pas être inventés.
+**Statut :** baseline V3.0 consolidée et amendée par les addenda V3.0.1 et V3.0.2 du 22 novembre 2026 ; les décisions approuvées sont verrouillées et les seuls arbitrages résiduels sont identifiés.
 
 ---
 
@@ -28,7 +28,7 @@ Le présent document est le cahier des charges maître de CAMPUS237. Il consolid
 - CAMPUS237 KNOWLEDGE et CAMPUS237 OPPORTUNITIES ;
 - les exigences métier, financières, techniques, de sécurité, de conformité, de recette et d'exploitation.
 
-La V2.0 demeure conservée comme document historique. La V3.0 devient le document de référence pour les nouvelles spécifications, sous réserve des arbitrages explicitement indiqués dans ce document. La V3.0 ne signifie pas que le logiciel est déjà développé, testé, certifié ou mis en production.
+La V2.0 demeure conservée comme document historique. La V3.0.2 devient le document de référence pour les nouvelles spécifications, sous réserve des arbitrages explicitement indiqués dans ce document. La V3.0 ne signifie pas que le logiciel est déjà développé, testé, certifié ou mis en production.
 
 ## 0.2 Légende des statuts
 
@@ -60,6 +60,7 @@ La V2.0 demeure conservée comme document historique. La V3.0 devient le documen
 | V2.0 | 05/11/2026 | Cahier initial de 13 pages : ERP scolaire, paiements, gestion parent, sécurité, bibliothèque, RH, finance, IA et jalons |
 | V3.0 | 22/11/2026 | Consolidation maître : SMART ENROLL, SMART GRADING, TEACHER SPACE, cours réels et préparations filmées, QR d'arrivée/sortie, NAXA SECURITY avec détection IA d'événements dangereux, COMMUNITY, KNOWLEDGE, OPPORTUNITIES et clarification des arbitrages |
 | V3.0.1 | 22/11/2026 | Addendum : compte APE et réunions/visioconférences, convocations scolaires hybrides, livret scolaire unique portable et non modifiable en place, offres de rentrée et recherche conversationnelle d'établissements avec rendez-vous en présentiel |
+| V3.0.2 | 22/11/2026 | Bulletin vivant, ACADEMIC RADAR et rang parental avant bulletin, modèle de licence établissement par élève, ACCESS gratuit et PREMIUM familial, continuité pédagogique, compétences, remédiation, tableau familial, réunification, GPS bus et menus cantine |
 
 ---
 
@@ -2766,7 +2767,7 @@ Restent ouverts :
 - A-031 : fournisseurs GPS compatibles, fréquence de position, précision, coûts SIM/data et durées de conservation ;
 - A-032 : heure exacte de publication du menu la veille, définie par établissement ;
 - A-033 : méthode et seuils de comparabilité des classements inter-établissements ;
-- A-034 : calendrier, formule et règles de normalisation des classements ;
+- A-034 : règle de départage des ex æquo, seuils de couverture et fréquence de recalcul/actualisation des rangs ;
 - A-035 : limites d'usage, quotas et coûts des services IA à forte consommation.
 
 Ces arbitrages ne remettent pas en cause les décisions métier gelées ; ils précisent des paramètres d'exécution ou les gates de conformité.
