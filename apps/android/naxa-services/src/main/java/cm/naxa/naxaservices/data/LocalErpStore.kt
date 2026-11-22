@@ -729,8 +729,8 @@ interface NaxaServicesDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertOutboxEvent(event: LocalOutboxEvent)
 
-    @Query("SELECT * FROM local_outbox_events WHERE orgId = :orgId AND state IN ('queued','retry_wait','blocked_dependency') AND (nextAttemptAtEpochMs IS NULL OR nextAttemptAtEpochMs <= :now) ORDER BY deviceSequence ASC LIMIT :limit")
-    suspend fun loadRetryableOutboxEvents(orgId: String, now: Long, limit: Int = 100): List<LocalOutboxEvent>
+    @Query("SELECT * FROM local_outbox_events WHERE orgId = :orgId AND state IN ('queued','retry_wait','blocked_dependency') ORDER BY deviceSequence ASC LIMIT :limit")
+    suspend fun loadRetryableOutboxEvents(orgId: String, limit: Int = 100): List<LocalOutboxEvent>
 
     @Query("UPDATE local_outbox_events SET state = 'queued', nextAttemptAtEpochMs = NULL, lastErrorCode = NULL WHERE eventId = :eventId AND orgId = :orgId AND state = 'blocked_dependency'")
     suspend fun requeueBlockedOutboxEvent(eventId: String, orgId: String): Int

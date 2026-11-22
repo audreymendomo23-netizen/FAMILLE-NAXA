@@ -116,6 +116,15 @@ class SupplierSyncCoordinatorTest {
     }
 
     @Test
+    fun futureRetryDelayKeepsTheEarlierEventAtTheQueueHead() {
+        val item = event("supplier.saved", "supplier", "supplier-1").copy(
+            nextAttemptAtEpochMs = 500L
+        )
+        assertTrue(SupplierSyncCoordinator.isRetryDelayPending(item, 499L))
+        assertFalse(SupplierSyncCoordinator.isRetryDelayPending(item, 500L))
+    }
+
+    @Test
     fun unknownActionCannotBeMarkedAsAValidSnapshot() {
         val id = UUID.randomUUID().toString()
         val item = event("unknown.mutation", "unknown", id)

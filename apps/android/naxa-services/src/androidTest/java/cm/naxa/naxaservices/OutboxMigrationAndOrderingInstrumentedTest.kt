@@ -133,10 +133,43 @@ class OutboxMigrationAndOrderingInstrumentedTest {
                     state = "not_applicable"
                 )
             )
-            val pending = dao.loadRetryableOutboxEvents(orgId, System.currentTimeMillis(), 20)
+            val pending = dao.loadRetryableOutboxEvents(orgId, 20)
             assertEquals(listOf("earlier-unsupported", "later-supported"), pending.map { it.eventId })
             assertEquals(1L, pending.first().deviceSequence)
             assertEquals(11L, dao.nextOutboxSequence())
+
+            val futureOrg = "future-retry-org-${UUID.randomUUID()}"
+            val now = System.currentTimeMillis()
+            dao.insertOutboxEvent(
+                LocalOutboxEvent(
+                    eventId = "future-retry-head",
+                    orgId = futureOrg,
+                    aggregateType = "supplier",
+                    aggregateId = "supplier-retry",
+                    actionCode = "supplier.saved",
+                    payloadJson = "{}",
+                    deviceSequence = 1,
+                    createdAtEpochMs = now,
+                    nextAttemptAtEpochMs = now + 60_000,
+                    state = "retry_wait"
+                )
+            )
+            dao.insertOutboxEvent(
+                LocalOutboxEvent(
+                    eventId = "later-event-after-retry",
+                    orgId = futureOrg,
+                    aggregateType = "supplier",
+                    aggregateId = "supplier-later",
+                    actionCode = "supplier.saved",
+                    payloadJson = "{}",
+                    deviceSequence = 2,
+                    createdAtEpochMs = now + 1,
+                    state = "queued"
+                )
+            )
+            val retryQueue = dao.loadRetryableOutboxEvents(futureOrg, 20)
+            assertEquals(listOf("future-retry-head", "later-event-after-retry"), retryQueue.map { it.eventId })
+            assertTrue(SupplierSyncCoordinator.isRetryDelayPending(retryQueue.first(), now))
         } finally {
             database.close()
         }

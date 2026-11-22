@@ -201,7 +201,7 @@ object SupplierSyncCoordinator {
 
         val dao = repository.dao
         val orgId = session.account.organizationId
-        val events = dao.loadRetryableOutboxEvents(orgId, System.currentTimeMillis(), 250)
+        val events = dao.loadRetryableOutboxEvents(orgId, 250)
             .sortedBy { it.deviceSequence }
         var applied = 0
         var retried = 0
@@ -209,6 +209,10 @@ object SupplierSyncCoordinator {
         var rejected = 0
 
         for (event in events) {
+            if (isRetryDelayPending(event, System.currentTimeMillis())) {
+                retried++
+                break
+            }
             if (event.actionCode !in supportedActions) {
                 dao.updateOutboxAttempt(
                     event.eventId, orgId, "blocked_dependency", System.currentTimeMillis(), null,
@@ -378,6 +382,9 @@ object SupplierSyncCoordinator {
         }
         return false
     }
+
+    internal fun isRetryDelayPending(event: LocalOutboxEvent, nowEpochMs: Long): Boolean =
+        event.nextAttemptAtEpochMs?.let { it > nowEpochMs } == true
 
     internal fun hasRequiredSnapshot(event: LocalOutboxEvent, payload: JSONObject): Boolean {
         val action = event.actionCode
