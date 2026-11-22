@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, listAppEvents, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
 import { normalizeInventoryItemDraft } from "./erp/inventory";
 import { parseWebSession, type WebAuthSession } from "./auth/session";
@@ -162,6 +162,15 @@ function App() {
       return next;
     });
   }
+
+  useEffect(() => {
+    if (!authSession) return;
+    const handleOnline = () => {
+      void syncWebOutbox(authSession).catch((error) => setAuthMessage(error instanceof Error ? error.message : "Reprise réseau impossible."));
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [authSession]);
 
   async function signIn(event: React.FormEvent) {
     event.preventDefault();
@@ -672,7 +681,10 @@ function App() {
             <div><span className="eyebrow">{moduleCopy[active].eyebrow}</span><h1>{moduleCopy[active].headline}</h1><p>{moduleCopy[active].helper}</p></div>
             <div className="heading-actions">
               {active !== "overview" && <button className="btn secondary" onClick={() => setActive("overview")}>Vue d'ensemble</button>}
-              {active === "stock" && authSession && pendingSyncCount > 0 && <button className="btn secondary" disabled={busy} onClick={() => { void syncWebOutbox(authSession).catch((error) => setAuthMessage(error instanceof Error ? error.message : "Synchronisation impossible.")); }}>Synchroniser ({pendingSyncCount})</button>}
+              {authSession && <button className="btn secondary" disabled={busy} onClick={() => {
+                const operation = pendingSyncCount > 0 ? syncWebOutbox(authSession) : syncWebPullChanges(authSession);
+                void operation.catch((error) => setAuthMessage(error instanceof Error ? error.message : "Synchronisation impossible."));
+              }}>{pendingSyncCount > 0 ? "Synchroniser (" + pendingSyncCount + ")" : "Actualiser depuis le serveur"}</button>}
               <button className="btn primary" disabled={busy || (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active))} title={!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active) ? "Connecteur métier Web non livré." : undefined} onClick={() => {
                 if (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)) { setAuthMessage("Connecteur métier Web non livré pour ce module."); return; }
                 setDraftTitle(active==="team"&&authSession?authSession.account.display_name:"");setDraftDetail("");setDraftSku("");setDraftUnit("pièce");setDraftReorderLevel("0");setDraftSupplierWhatsApp("");setDraftPhone("");setDraftAmount("0");setDraftDate("");setDraftEndDate("");setDraftPriority("normal");setDraftActivity("general");setDraftContactConsent(false);setDialogOpen(true);
