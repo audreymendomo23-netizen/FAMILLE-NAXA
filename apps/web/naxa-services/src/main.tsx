@@ -14,6 +14,7 @@ type ModuleId =
 type BusinessMode = "solo" | "single_site_multi_workstation" | "multi_site_network";
 const OFFLINE_APP_ID = "naxa-services-web";
 type Entry = { id: string; title: string; detail: string; state: string; createdAt: string };
+type WebWorkstation = { id: string; site_id: string; code: string; name: string; kind: string; capacity: number; status: string };
 
 const modules: { id: ModuleId; title: string; description: string; group: string; action: string }[] = [
   { id: "overview", title: "Vue d'ensemble", description: "Activité, alertes et briefings de l'établissement.", group: "Pilotage", action: "Actualiser la vue" },
@@ -100,6 +101,8 @@ function App() {
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [remoteChanges, setRemoteChanges] = useState<WebSyncChange[]>([]);
   const [search, setSearch] = useState("");
+  const [workstations, setWorkstations] = useState<WebWorkstation[]>([]);
+  const [workstationSiteId, setWorkstationSiteId] = useState("");
 
   const selected = modules.find((m) => m.id === active)!;
   const grouped = useMemo(() => {
@@ -175,6 +178,9 @@ function App() {
       const nextSession = parseWebSession(data);
       setAuthSession(nextSession);
       setActiveSiteId(nextSession.account.active_site_ids[0] ?? "");
+      setMode(nextSession.account.business_mode ?? "solo");
+      setSiteName(nextSession.account.organization_name || nextSession.account.active_sites[0]?.name || "Point de vente principal");
+      setWorkstationSiteId(nextSession.account.active_site_ids[0] ?? "");
       void hydrateWebRecords(nextSession).catch((error)=>setAuthMessage(error instanceof Error?error.message:"Historique local indisponible."));
       setAuthenticated(true);
       void syncWebPullChanges(nextSession).then((result) => { if(result.morePending)setAuthMessage("Synchronisation entrante partielle : d'autres pages restent à charger."); }).catch((error) => setAuthMessage(error instanceof Error?error.message:"Lecture du journal serveur impossible."));
@@ -221,6 +227,72 @@ function App() {
   async function ensureFreshSession(activeSession: WebAuthSession): Promise<WebAuthSession> {
     if (activeSession.expiresAt > Date.now() + 60_000) return activeSession;
     return await refreshWebSession(activeSession);
+  }
+
+  async function saveWebOrganizationProfile(displayName: string, businessMode: BusinessMode, locale: "fr" | "en" | "ff-CM") {
+    if (!authSession) throw new Error("AUTHENTICATION_REQUIRED");
+    const fresh = await ensureFreshSession(authSession);
+    const data = await authRequest({
+      action: "update_organization_profile",
+      display_name: displayName,
+      business_mode: businessMode,
+      default_locale: locale,
+    }, fresh.accessToken);
+    if (data.saved !== true) throw new Error("ORGANIZATION_PROFILE_NOT_SAVED");
+    const account = { ...fresh.account, organization_name: displayName, business_mode: businessMode, default_locale: locale };
+    const updated = { ...fresh, account };
+    setAuthSession(updated);
+    setMode(businessMode);
+    setSiteName(displayName);
+    setAuthMessage("Profil d'organisation enregistré par Auth et journalisé côté serveur.");
+  }
+
+  async function createWebSite(input: { code: string; name: string; address_label: string; phone_contact: string }) {
+    if (!authSession) throw new Error("AUTHENTICATION_REQUIRED");
+    const fresh = await ensureFreshSession(authSession);
+    const data = await authRequest({ action: "create_site", ...input }, fresh.accessToken);
+    const site = data.site as { id?: string; code?: string; name?: string; address_label?: string; phone_contact?: string } | undefined;
+    if (data.saved !== true || !site || typeof site.id !== "string") throw new Error("SITE_CREATE_NOT_CONFIRMED");
+    const activeSite = {
+      id: site.id, code: site.code ?? input.code, name: site.name ?? input.name,
+      address_label: site.address_label ?? input.address_label, phone_contact: site.phone_contact ?? input.phone_contact,
+    };
+    setAuthSession(previous => previous ? {
+      ...previous,
+      account: {
+        ...previous.account,
+        active_site_ids: previous.account.active_site_ids.includes(activeSite.id)
+          ? previous.account.active_site_ids : [...previous.account.active_site_ids, activeSite.id],
+        active_sites: [...previous.account.active_sites.filter(item => item.id !== activeSite.id), activeSite],
+      },
+    } : previous);
+    setActiveSiteId(activeSite.id);
+    setAuthMessage("Point de vente créé par Auth : " + activeSite.name);
+    return activeSite;
+  }
+
+  async function loadWebWorkstations(siteId: string) {
+    if (!authSession) throw new Error("AUTHENTICATION_REQUIRED");
+    if (!authSession.account.active_site_ids.includes(siteId)) throw new Error("SITE_SCOPE_FORBIDDEN");
+    const fresh = await ensureFreshSession(authSession);
+    const data = await authRequest({ action: "list_workstations", site_id: siteId }, fresh.accessToken);
+    if (!Array.isArray(data.workstations)) throw new Error("WORKSTATION_LIST_INVALID");
+    setWorkstations(data.workstations as WebWorkstation[]);
+    setWorkstationSiteId(siteId);
+    return data.workstations as WebWorkstation[];
+  }
+
+  async function createWebWorkstation(input: { site_id: string; code: string; name: string; kind: string; capacity: number }) {
+    if (!authSession) throw new Error("AUTHENTICATION_REQUIRED");
+    if (!authSession.account.active_site_ids.includes(input.site_id)) throw new Error("SITE_SCOPE_FORBIDDEN");
+    const fresh = await ensureFreshSession(authSession);
+    const data = await authRequest({ action: "create_workstation", ...input }, fresh.accessToken);
+    const workstation = data.workstation as WebWorkstation | undefined;
+    if (data.saved !== true || !workstation || typeof workstation.id !== "string") throw new Error("WORKSTATION_CREATE_NOT_CONFIRMED");
+    setWorkstations(previous => [...previous.filter(item => item.id !== workstation.id), workstation]);
+    setWorkstationSiteId(input.site_id);
+    setAuthMessage("Emplacement créé par Auth : " + workstation.name);
+    return workstation;
   }
 
   async function changeWebPassword(event: React.FormEvent) {
@@ -609,9 +681,9 @@ function App() {
           </div>
 
           {active === "overview" ? <Overview entries={entries} onNavigate={setActive} mode={mode} /> :
-            active === "organization" ? <OrganizationPage mode={mode} setMode={setMode} siteName={siteName} setSiteName={setSiteName} editable={preview} /> :
-            active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} entries={entries.network ?? []} /> :
-            active === "workstations" ? <WorkstationsPage mode={mode} /> :
+            active === "organization" ? <OrganizationPage mode={mode} setMode={setMode} siteName={siteName} setSiteName={setSiteName} editable={preview || authSession?.account.role_code === "promoter"} onSave={saveWebOrganizationProfile} locale={authSession?.account.default_locale ?? "fr"} /> :
+            active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
+            active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
             active === "agenda" ? <AgendaPage entries={entries.agenda ?? []} /> :
             active === "pressing" ? <PressingPage entries={entries.pressing ?? []} canPreviewEdit={preview} onAdvance={(id) => setEntries((prev) => ({ ...prev, pressing: (prev.pressing ?? []).map((x) => x.id === id ? { ...x, state: nextPressingState(x.state) } : x) }))} /> :
             active === "cash" ? <CashPage entries={entries.cash ?? []} /> :
@@ -755,18 +827,112 @@ function PressingPage({ entries, onAdvance, canPreviewEdit }: { entries: Entry[]
 function CashPage({ entries }: { entries: Entry[] }) {
   return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">SESSION CAISSE</span><h2>Registre non ouvert</h2></div><span className="status-tag pending">À connecter</span></div><div className="cash-summary"><div><small>Fonds d'ouverture</small><strong>—</strong></div><div><small>Encaissements</small><strong>—</strong></div><div><small>Écart</small><strong>—</strong></div></div><div className="notice">Les montants ne sont pas calculés dans cet aperçu. Une session réelle sera ouverte sur le serveur et rattachée à une caisse et un opérateur.</div></div><div className="module-main-card"><h2>Ventes de cette session</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucune vente locale. Aucun paiement n'a été confirmé." />}</div></div>;
 }
-function OrganizationPage({ mode, setMode, siteName, setSiteName, editable }: { mode: BusinessMode; setMode: (mode: BusinessMode) => void; siteName: string; setSiteName: (s: string) => void; editable: boolean }) {
-  return <div className="structure-grid"><div className="module-main-card"><span className="eyebrow">ARCHITECTURE DE GESTION</span><h2>Modèle d'exploitation</h2><div className="mode-options">
-    <button disabled={!editable} className={mode==="solo"?"mode-option selected":"mode-option"} onClick={()=>setMode("solo")}><b>01 · PME autonome</b><strong>Un établissement indépendant</strong><small>Un point de vente, une organisation et ses propres opérations.</small></button>
-    <button disabled={!editable} className={mode==="single_site_multi_workstation"?"mode-option selected":"mode-option"} onClick={()=>setMode("single_site_multi_workstation")}><b>02 · Responsable multi-emplacements</b><strong>Plusieurs postes dans un même lieu</strong><small>Planning et affectations par poste ; caisse et stock partagés par établissement par défaut.</small></button>
-    <button disabled={!editable} className={mode==="multi_site_network"?"mode-option selected":"mode-option"} onClick={()=>setMode("multi_site_network")}><b>03 · Promoteur multi-sites</b><strong>Plusieurs points de vente autonomes</strong><small>Consolidation réseau, mais caisses, stocks, équipes et opérations distincts.</small></button>
-  </div></div><div className="module-main-card"><span className="eyebrow">ÉTABLISSEMENT PRINCIPAL</span><h2>Profil de l'entreprise</h2><label>Nom du point de vente<input disabled={!editable} value={siteName} onChange={e=>setSiteName(e.target.value)} /></label><div className="notice">{editable?"Ces paramètres sont modifiés en aperçu local uniquement.":"Les paramètres d'organisation doivent être chargés/enregistrés via Auth/ERP ; lecture seule ici."}</div></div></div>;
+function OrganizationPage({
+  mode, setMode, siteName, setSiteName, editable, onSave, locale,
+}: {
+  mode: BusinessMode; setMode: (mode: BusinessMode) => void; siteName: string; setSiteName: (s: string) => void;
+  editable: boolean; onSave: (name: string, mode: BusinessMode, locale: "fr" | "en" | "ff-CM") => Promise<void>;
+  locale: "fr" | "en" | "ff-CM";
+}) {
+  const [selectedLocale, setSelectedLocale] = useState<"fr" | "en" | "ff-CM">(locale);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  async function save() {
+    setSaving(true); setError("");
+    try { await onSave(siteName.trim(), mode, selectedLocale); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Enregistrement refusé par Auth."); }
+    finally { setSaving(false); }
+  }
+  return <div className="structure-grid">
+    <div className="module-main-card">
+      <span className="eyebrow">ARCHITECTURE DE GESTION</span><h2>Modèle d'exploitation</h2>
+      <div className="mode-options">
+        <button disabled={!editable || saving} className={mode==="solo"?"mode-option selected":"mode-option"} onClick={()=>setMode("solo")}><b>01 · PME autonome</b><strong>Un établissement indépendant</strong><small>Un point de vente, une organisation et ses opérations.</small></button>
+        <button disabled={!editable || saving} className={mode==="single_site_multi_workstation"?"mode-option selected":"mode-option"} onClick={()=>setMode("single_site_multi_workstation")}><b>02 · Responsable multi-emplacements</b><strong>Plusieurs postes dans un même lieu</strong><small>Plusieurs ressources dans un point de vente.</small></button>
+        <button disabled={!editable || saving} className={mode==="multi_site_network"?"mode-option selected":"mode-option"} onClick={()=>setMode("multi_site_network")}><b>03 · Promoteur multi-sites</b><strong>Plusieurs points de vente autonomes</strong><small>Consolidation réseau, opérations isolées.</small></button>
+      </div>
+    </div>
+    <div className="module-main-card">
+      <span className="eyebrow">PROFIL DE L'ORGANISATION</span><h2>Identité & langue</h2>
+      <label>Nom de l'organisation<input disabled={!editable || saving} value={siteName} onChange={e=>setSiteName(e.target.value)} /></label>
+      <label>Langue par défaut<select disabled={!editable || saving} value={selectedLocale} onChange={e=>setSelectedLocale(e.target.value as "fr"|"en"|"ff-CM")}><option value="fr">Français</option><option value="en">English</option><option value="ff-CM">Fulfulde</option></select></label>
+      {editable && !saving && <button className="btn primary" onClick={()=>void save()}>Enregistrer le profil Auth</button>}
+      {saving && <div className="notice">Enregistrement côté serveur…</div>}
+      {error && <div className="notice">{error}</div>}
+      {!editable && <div className="notice">Lecture seule : seul le Promoteur ayant le périmètre Organisation peut enregistrer ces réglages.</div>}
+    </div>
+  </div>;
 }
-function SitesPage({ mode, siteName, entries }: { mode: BusinessMode; siteName: string; entries: Entry[] }) {
-  return <div className="module-layout"><div className="module-main-card"><span className="eyebrow">PÉRIMÈTRE RÉSEAU</span><h2>Points de vente sous contrôle</h2><div className="site-list"><div className="site-row"><span className="site-dot" /><div><strong>{siteName}</strong><small>Point principal · données non synchronisées</small></div><span className="status-tag local">Actuel</span></div>{entries.map((e) => <Record key={e.id} entry={e} />)}</div><p className="muted">Mode actif : {modeLabel(mode)}. Les sites supplémentaires ne sont pas inventés ; ils doivent être créés par un responsable autorisé.</p></div><div className="module-main-card"><h2>Principes d'autonomie</h2><ul className="brief-list"><li>Une caisse et des clôtures propres à chaque site.</li><li>Un stock et un historique de mouvements par site.</li><li>Une équipe et des affectations distinctes.</li><li>Une consolidation réseau sans mutation cross-site implicite.</li></ul></div></div>;
+
+function SitesPage({
+  mode, siteName, sites, canCreate, onCreateSite, entries,
+}: {
+  mode: BusinessMode; siteName: string; sites: {id:string;code:string;name:string;address_label:string;phone_contact:string}[];
+  canCreate: boolean; onCreateSite: (site:{code:string;name:string;address_label:string;phone_contact:string})=>Promise<unknown>; entries: Entry[];
+}) {
+  const [code,setCode]=useState(""); const [name,setName]=useState(""); const [address,setAddress]=useState(""); const [phone,setPhone]=useState("");
+  const [saving,setSaving]=useState(false); const [error,setError]=useState("");
+  async function submit(e:React.FormEvent) {
+    e.preventDefault();setSaving(true);setError("");
+    try { await onCreateSite({code,name,address_label:address,phone_contact:phone});setCode("");setName("");setAddress("");setPhone(""); }
+    catch(cause){setError(cause instanceof Error?cause.message:"Création refusée par Auth.");}
+    finally{setSaving(false);}
+  }
+  return <div className="module-layout">
+    <div className="module-main-card"><span className="eyebrow">PÉRIMÈTRE RÉSEAU</span><h2>Points de vente sous contrôle</h2>
+      <div className="site-list">
+        {sites.length ? sites.map(site=><div className="site-row" key={site.id}><span className="site-dot"/><div><strong>{site.name||site.code}</strong><small>{site.code} · {site.address_label||"Adresse non renseignée"} · {site.id}</small></div><span className="status-tag local">Autorisé</span></div>)
+          : <Empty text="Aucun site n'est inclus dans le périmètre actif de cette session."/>}
+      </div>
+      <p className="muted">Organisation : {siteName}. Mode : {modeLabel(mode)}. Les sites sont affichés uniquement lorsqu'Auth les inclut dans le périmètre de session.</p>
+    </div>
+    <div className="module-main-card"><h2>Créer un point de vente</h2>
+      {mode!=="multi_site_network" && <div className="notice">Le modèle multi-sites doit d'abord être activé par le Promoteur dans le profil d'organisation.</div>}
+      {canCreate && mode==="multi_site_network" ? <form onSubmit={submit}>
+        <label>Code du site<input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} required minLength={2} maxLength={20}/></label>
+        <label>Nom du site<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120}/></label>
+        <label>Adresse / repère<input value={address} onChange={e=>setAddress(e.target.value)} maxLength={200}/></label>
+        <label>Téléphone<input value={phone} onChange={e=>setPhone(e.target.value)} maxLength={32}/></label>
+        <button className="btn primary" disabled={saving}>Créer le site avec Auth</button>
+      </form> : <div className="notice">La création requiert le rôle Promoteur, le périmètre Organisation et le mode multi-sites.</div>}
+      {error&&<div className="notice">{error}</div>}
+      <h3>Principes d'autonomie</h3><ul className="brief-list"><li>Caisse et clôture propres à chaque site.</li><li>Stock et historique distincts.</li><li>Équipe et affectations séparées.</li><li>Consolidation réseau sans mutation cross-site implicite.</li></ul>
+      {entries.map(e=><Record key={e.id} entry={e}/>)}
+    </div>
+  </div>;
 }
-function WorkstationsPage({ mode }: { mode: BusinessMode }) {
-  return <div className="module-layout"><div className="module-main-card"><span className="eyebrow">POSTES & RESSOURCES</span><h2>Emplacements d'un même établissement</h2><div className="workstation-grid">{["Fauteuil coiffure", "Atelier pressing", "Comptoir réception", "Caisse"].map((w, i) => <div className="workstation-card" key={w}><span>0{i + 1}</span><strong>{w}</strong><small>À configurer</small></div>)}</div><p className="muted">Ces cartes représentent des types d'emplacements disponibles, pas des ressources déjà créées.</p></div><div className="module-main-card"><h2>Règle de périmètre</h2><p>Un responsable d'emplacements peut gérer plusieurs postes dans le même point de vente, sans obtenir un accès automatique aux autres sites du réseau.</p><span className="status-tag local">{modeLabel(mode)}</span></div></div>;
+
+function WorkstationsPage({
+  mode, sites, selectedSiteId, workstations, onLoad, onCreate, canCreate,
+}: {
+  mode:BusinessMode; sites:{id:string;code:string;name:string}[]; selectedSiteId:string; workstations:WebWorkstation[];
+  onLoad:(siteId:string)=>Promise<unknown>; onCreate:(input:{site_id:string;code:string;name:string;kind:string;capacity:number})=>Promise<unknown>;
+  canCreate:boolean;
+}) {
+  const [siteId,setSiteId]=useState(selectedSiteId||sites[0]?.id||"");
+  const [code,setCode]=useState("");const [name,setName]=useState("");const [kind,setKind]=useState("other");const [capacity,setCapacity]=useState("1");
+  const [loading,setLoading]=useState(false);const [saving,setSaving]=useState(false);const [error,setError]=useState("");
+  async function load(){if(!siteId){setError("Choisis un site autorisé.");return;}setLoading(true);setError("");try{await onLoad(siteId);}catch(cause){setError(cause instanceof Error?cause.message:"Lecture des postes refusée.");}finally{setLoading(false);}}
+  async function create(e:React.FormEvent){e.preventDefault();setSaving(true);setError("");try{await onCreate({site_id:siteId,code,name,kind,capacity:Number(capacity)});setCode("");setName("");setCapacity("1");}catch(cause){setError(cause instanceof Error?cause.message:"Création du poste refusée.");}finally{setSaving(false);}}
+  return <div className="module-layout">
+    <div className="module-main-card"><span className="eyebrow">POSTES & RESSOURCES</span><h2>Emplacements d'un même établissement</h2>
+      <label>Point de vente<select value={siteId} onChange={e=>setSiteId(e.target.value)}>{sites.map(site=><option key={site.id} value={site.id}>{site.name||site.code}</option>)}</select></label>
+      <button className="btn secondary" disabled={loading||!siteId} onClick={()=>void load()}>{loading?"Chargement…":"Charger les postes Auth"}</button>
+      <div className="workstation-grid">{workstations.filter(item=>item.site_id===siteId).map((item,i)=><div className="workstation-card" key={item.id}><span>{String(i+1).padStart(2,"0")}</span><strong>{item.name}</strong><small>{item.code} · {item.kind} · capacité {item.capacity}</small></div>)}</div>
+      {!workstations.some(item=>item.site_id===siteId)&&<Empty text="Aucun emplacement chargé pour ce point de vente."/>}
+    </div>
+    <div className="module-main-card"><h2>Créer un emplacement</h2>
+      {canCreate&&siteId?<form onSubmit={create}>
+        <label>Code<input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} required minLength={2} maxLength={20}/></label>
+        <label>Nom<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120}/></label>
+        <label>Type<select value={kind} onChange={e=>setKind(e.target.value)}>{["hair_chair","pressing_counter","pressing_workshop","reception","cashier","other"].map(value=><option key={value} value={value}>{value}</option>)}</select></label>
+        <label>Capacité<input type="number" min="1" max="100" step="1" value={capacity} onChange={e=>setCapacity(e.target.value)}/></label>
+        <button className="btn primary" disabled={saving}>Créer le poste avec Auth</button>
+      </form>:<div className="notice">Seuls Promoteur, Network Manager ou Site Manager peuvent tenter la création ; Auth contrôle le périmètre du site.</div>}
+      <p className="muted">Mode : {modeLabel(mode)}. Les droits d'un poste ne sont pas élargis au site entier.</p>
+      {error&&<div className="notice">{error}</div>}
+    </div>
+  </div>;
 }
 function Empty({ text }: { text: string }) { return <div className="empty-state"><span className="empty-glyph">◌</span><strong>Tout est prêt pour commencer</strong><p>{text}</p></div>; }
 function Record({ entry }: { entry: Entry }) { return <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail || entry.createdAt}</small></div><span className="status-tag local">{entry.state}</span></div>; }
