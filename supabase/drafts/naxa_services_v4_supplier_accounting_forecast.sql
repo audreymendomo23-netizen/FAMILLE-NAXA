@@ -3824,7 +3824,7 @@ begin
     p_action_code,
     coalesce(nullif(v_result->>'server_version','')::bigint,
              nullif(p_payload->>'expected_version','')::bigint + 1, 1),
-    public.ns_sync_redact_payload(p_payload)
+    public.ns_sync_redact_payload(p_payload || jsonb_build_object('actor_member_id', v_member_id))
   );
 
   v_response := jsonb_build_object(
