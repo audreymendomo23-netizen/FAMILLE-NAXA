@@ -21,6 +21,7 @@ import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_10_11
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_11_12
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_12_13
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_13_14
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_14_15
 import cm.naxa.naxaservices.data.LocalPressingOrder
 import cm.naxa.naxaservices.data.LocalPressingStatusEvent
 import cm.naxa.naxaservices.data.LocalAppointment
@@ -166,7 +167,7 @@ private fun NaxaServicesRoot(
     val lockGenerationValue by lockGeneration.collectAsState()
     val localDatabase = remember {
         Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db")
-            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7, NS_SERVICES_MIGRATION_7_8, NS_SERVICES_MIGRATION_8_9, NS_SERVICES_MIGRATION_9_10, NS_SERVICES_MIGRATION_10_11, NS_SERVICES_MIGRATION_11_12, NS_SERVICES_MIGRATION_12_13, NS_SERVICES_MIGRATION_13_14)
+            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7, NS_SERVICES_MIGRATION_7_8, NS_SERVICES_MIGRATION_8_9, NS_SERVICES_MIGRATION_9_10, NS_SERVICES_MIGRATION_10_11, NS_SERVICES_MIGRATION_11_12, NS_SERVICES_MIGRATION_12_13, NS_SERVICES_MIGRATION_13_14, NS_SERVICES_MIGRATION_14_15)
             .build()
     }
     val localRepository = remember { NaxaServicesLocalRepository(localDatabase) }
