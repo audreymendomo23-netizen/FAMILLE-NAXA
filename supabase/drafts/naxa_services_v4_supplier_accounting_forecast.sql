@@ -62,6 +62,152 @@ alter table public.ns_expenses
 create unique index if not exists ns_expenses_idempotency_uidx
   on public.ns_expenses(org_id,idempotency_key) where idempotency_key is not null;
 
+
+-- N2 management document register, staff time ledger and inter-site transfer aggregate.
+create table if not exists public.ns_management_records (
+  id uuid primary key,
+  org_id uuid not null,
+  site_id uuid not null,
+  workstation_id uuid,
+  record_type text not null check (record_type in (
+    'quote','invoice','credit_note','refund_due','customer_receivable','purchase',
+    'supplier','tax_estimate','business_goal','subscription_request','support_chat',
+    'work_order','repair_order','service_order','appointment_waitlist',
+    'staff_clock_in','staff_clock_out','staff_break_start','staff_break_end',
+    'staff_commission','staff_advance','staff_bonus','inventory_transfer'
+  )),
+  reference text not null check (length(trim(reference)) between 1 and 120),
+  title text not null check (length(trim(title)) between 1 and 180),
+  counterparty text not null default '',
+  amount_xaf bigint not null default 0 check (amount_xaf >= 0),
+  paid_xaf bigint not null default 0 check (paid_xaf >= 0 and paid_xaf <= amount_xaf),
+  due_at timestamptz,
+  status text not null check (status in (
+    'draft','received','open','diagnostic','measurement','quote_pending',
+    'waiting_customer','awaiting_approval','contacted','approved','waiting_parts',
+    'fabrication','fitting','proof_ready','production','planning','shooting',
+    'post_production','on_site','installation','ordered','partially_received',
+    'in_progress','quality_check','ready','delivered','invoice_review','closed',
+    'partial','paid','cancelled','pending_review','rejected','booked'
+  )),
+  metadata_json jsonb not null default '{}'::jsonb check (jsonb_typeof(metadata_json)='object'),
+  revision integer not null default 1 check (revision > 0),
+  created_by uuid not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  foreign key (site_id,org_id) references public.ns_sites(id,org_id) on delete restrict,
+  foreign key (workstation_id,site_id,org_id) references public.ns_workstations(id,site_id,org_id) on delete restrict,
+  foreign key (created_by,org_id) references public.ns_members(id,org_id) on delete restrict,
+  unique (id,site_id,org_id),
+  unique (org_id,site_id,record_type,reference)
+);
+create index if not exists ns_management_records_scope_idx
+  on public.ns_management_records(org_id,site_id,record_type,status,created_at desc);
+create table if not exists public.ns_management_record_events (
+  id uuid primary key,
+  org_id uuid not null,
+  site_id uuid not null,
+  record_id uuid not null,
+  from_status text not null default '',
+  to_status text not null,
+  reason text not null default '',
+  actor_member_id uuid not null,
+  revision integer not null check (revision > 0),
+  occurred_at timestamptz not null default now(),
+  foreign key (record_id,site_id,org_id)
+    references public.ns_management_records(id,site_id,org_id) on delete restrict,
+  foreign key (site_id,org_id) references public.ns_sites(id,org_id) on delete restrict,
+  foreign key (actor_member_id,org_id) references public.ns_members(id,org_id) on delete restrict,
+  unique (org_id,record_id,revision)
+);
+create table if not exists public.ns_staff_time_events (
+  id uuid primary key,
+  org_id uuid not null,
+  site_id uuid not null,
+  workstation_id uuid,
+  staff_member_id uuid not null,
+  staff_name_snapshot text not null check (length(trim(staff_name_snapshot)) between 2 and 120),
+  event_type text not null check (event_type in (
+    'staff_clock_in','staff_break_start','staff_break_end','staff_clock_out'
+  )),
+  occurred_at timestamptz not null,
+  sequence_no bigint not null check (sequence_no > 0),
+  actor_member_id uuid not null,
+  created_at timestamptz not null default now(),
+  foreign key (site_id,org_id) references public.ns_sites(id,org_id) on delete restrict,
+  foreign key (workstation_id,site_id,org_id) references public.ns_workstations(id,site_id,org_id) on delete restrict,
+  foreign key (staff_member_id,org_id) references public.ns_members(id,org_id) on delete restrict,
+  foreign key (actor_member_id,org_id) references public.ns_members(id,org_id) on delete restrict,
+  unique (org_id,site_id,staff_member_id,sequence_no)
+);
+create index if not exists ns_staff_time_latest_idx
+  on public.ns_staff_time_events(org_id,site_id,staff_member_id,sequence_no desc);
+
+create table if not exists public.ns_inventory_transfers (
+  id uuid primary key,
+  org_id uuid not null,
+  source_site_id uuid not null,
+  destination_site_id uuid not null,
+  inventory_item_id uuid not null,
+  destination_inventory_item_id uuid,
+  reference text not null,
+  sku_snapshot text not null,
+  item_name_snapshot text not null,
+  unit text not null,
+  quantity numeric(14,3) not null check (quantity > 0),
+  status text not null default 'open' check (status in ('open','approved','received','rejected')),
+  revision integer not null default 1 check (revision > 0),
+  requested_by uuid not null,
+  requested_at timestamptz not null,
+  approved_by uuid,
+  approved_at timestamptz,
+  received_by uuid,
+  received_at timestamptz,
+  reason text not null default '',
+  foreign key (source_site_id,org_id) references public.ns_sites(id,org_id) on delete restrict,
+  foreign key (destination_site_id,org_id) references public.ns_sites(id,org_id) on delete restrict,
+  foreign key (inventory_item_id,source_site_id,org_id)
+    references public.ns_inventory_items(id,site_id,org_id) on delete restrict,
+  foreign key (destination_inventory_item_id,destination_site_id,org_id)
+    references public.ns_inventory_items(id,site_id,org_id) on delete restrict,
+  foreign key (requested_by,org_id) references public.ns_members(id,org_id) on delete restrict,
+  foreign key (approved_by,org_id) references public.ns_members(id,org_id) on delete restrict,
+  foreign key (received_by,org_id) references public.ns_members(id,org_id) on delete restrict,
+  unique (org_id,reference),
+  unique (id,org_id)
+);
+create index if not exists ns_inventory_transfers_pending_source_idx
+  on public.ns_inventory_transfers(org_id,source_site_id,inventory_item_id,status)
+  where status in ('open','approved');
+create index if not exists ns_inventory_transfers_destination_idx
+  on public.ns_inventory_transfers(org_id,destination_site_id,status);
+
+alter table public.ns_management_records enable row level security;
+alter table public.ns_management_record_events enable row level security;
+alter table public.ns_staff_time_events enable row level security;
+alter table public.ns_inventory_transfers enable row level security;
+drop policy if exists ns_management_records_select on public.ns_management_records;
+create policy ns_management_records_select on public.ns_management_records
+  for select to authenticated using (public.ns_can_access_site(org_id,site_id));
+drop policy if exists ns_management_record_events_select on public.ns_management_record_events;
+create policy ns_management_record_events_select on public.ns_management_record_events
+  for select to authenticated using (public.ns_can_access_site(org_id,site_id));
+drop policy if exists ns_staff_time_events_select on public.ns_staff_time_events;
+create policy ns_staff_time_events_select on public.ns_staff_time_events
+  for select to authenticated using (public.ns_can_access_site(org_id,site_id));
+drop policy if exists ns_inventory_transfers_select on public.ns_inventory_transfers;
+create policy ns_inventory_transfers_select on public.ns_inventory_transfers
+  for select to authenticated using (
+    public.ns_can_access_site(org_id,source_site_id)
+    or public.ns_can_access_site(org_id,destination_site_id)
+  );
+revoke all on public.ns_management_records,public.ns_management_record_events,
+  public.ns_staff_time_events,public.ns_inventory_transfers from public,anon,authenticated;
+grant select on public.ns_management_records,public.ns_management_record_events,
+  public.ns_staff_time_events,public.ns_inventory_transfers to authenticated;
+grant all on public.ns_management_records,public.ns_management_record_events,
+  public.ns_staff_time_events,public.ns_inventory_transfers to service_role;
+
 -- N2 domain tables and versioned catalogue/CRM/support fields.
 alter table public.ns_services
   drop constraint if exists ns_services_activity_check;
