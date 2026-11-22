@@ -3,6 +3,108 @@
 -- NAXA SERVICES staging project after schema diff, RLS review, provider and rollback plan.
 begin;
 
+
+-- N2 domain tables and versioned catalogue/CRM/support fields.
+alter table public.ns_services
+  add column if not exists category text not null default '',
+  add column if not exists description text not null default '',
+  add column if not exists provider_member_ids jsonb not null default '[]'::jsonb,
+  add column if not exists required_workstation_kinds jsonb not null default '[]'::jsonb,
+  add column if not exists package_sessions jsonb not null default '[]'::jsonb,
+  add column if not exists revision integer not null default 1 check (revision > 0);
+alter table public.ns_customers
+  add column if not exists address_line text not null default '',
+  add column if not exists neighborhood text not null default '',
+  add column if not exists landmark text not null default '',
+  add column if not exists latitude numeric(10,7),
+  add column if not exists longitude numeric(10,7),
+  add column if not exists location_consent_at timestamptz,
+  add column if not exists revision integer not null default 1 check (revision > 0),
+  add column if not exists updated_at timestamptz not null default now();
+create index if not exists ns_customers_phone_scope_idx
+  on public.ns_customers(org_id, site_id, phone_contact);
+
+create table if not exists public.ns_customer_followups (
+  id uuid primary key,
+  org_id uuid not null,
+  site_id uuid not null,
+  customer_id uuid not null,
+  title text not null check (length(trim(title)) between 1 and 160),
+  frequency text not null check (length(trim(frequency)) between 1 and 40),
+  channel text not null check (length(trim(channel)) between 1 and 32),
+  notes text not null default '',
+  next_due_at timestamptz not null,
+  status text not null default 'active' check (status in ('active','completed','cancelled')),
+  revision integer not null default 1 check (revision > 0),
+  created_by uuid not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  last_completed_at timestamptz,
+  foreign key (customer_id, site_id, org_id) references public.ns_customers(id, site_id, org_id) on delete restrict,
+  foreign key (site_id, org_id) references public.ns_sites(id, org_id) on delete restrict,
+  foreign key (created_by, org_id) references public.ns_members(id, org_id) on delete restrict,
+  unique (id, site_id, org_id)
+);
+create index if not exists ns_customer_followups_due_idx
+  on public.ns_customer_followups(org_id, site_id, next_due_at) where status = 'active';
+
+create table if not exists public.ns_customer_followup_events (
+  id uuid primary key,
+  org_id uuid not null,
+  site_id uuid not null,
+  followup_id uuid not null,
+  event_type text not null check (event_type = 'completed'),
+  occurred_at timestamptz not null,
+  next_due_at timestamptz,
+  completion_note text not null default '',
+  actor_member_id uuid not null,
+  idempotency_key uuid not null,
+  created_at timestamptz not null default now(),
+  foreign key (followup_id, site_id, org_id)
+    references public.ns_customer_followups(id, site_id, org_id) on delete restrict,
+  foreign key (actor_member_id, org_id) references public.ns_members(id, org_id) on delete restrict,
+  unique (org_id, idempotency_key)
+);
+
+create table if not exists public.ns_support_requests (
+  id uuid primary key,
+  org_id uuid not null,
+  site_id uuid,
+  subject text not null check (length(trim(subject)) between 3 and 180),
+  description text not null check (length(trim(description)) between 3 and 5000),
+  priority text not null check (priority in ('low','normal','high','urgent')),
+  status text not null default 'open' check (status in ('open','in_progress','waiting_customer','resolved','closed')),
+  created_by uuid not null,
+  created_at timestamptz not null default now(),
+  foreign key (site_id, org_id) references public.ns_sites(id, org_id) on delete restrict,
+  foreign key (created_by, org_id) references public.ns_members(id, org_id) on delete restrict,
+  unique (id, org_id)
+);
+
+alter table public.ns_customer_followups enable row level security;
+alter table public.ns_customer_followup_events enable row level security;
+alter table public.ns_support_requests enable row level security;
+drop policy if exists ns_customer_followups_select on public.ns_customer_followups;
+create policy ns_customer_followups_select on public.ns_customer_followups
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_customer_followup_events_select on public.ns_customer_followup_events;
+create policy ns_customer_followup_events_select on public.ns_customer_followup_events
+  for select to authenticated using (public.ns_can_access_site(org_id, site_id));
+drop policy if exists ns_support_requests_select on public.ns_support_requests;
+create policy ns_support_requests_select on public.ns_support_requests
+  for select to authenticated using (
+    (site_id is null and public.ns_is_org_member(org_id))
+    or (site_id is not null and public.ns_can_access_site(org_id, site_id))
+  );
+revoke all on public.ns_customer_followups, public.ns_customer_followup_events, public.ns_support_requests
+  from public, anon;
+grant select on public.ns_customer_followups, public.ns_customer_followup_events, public.ns_support_requests
+  to authenticated;
+grant all on public.ns_customer_followups, public.ns_customer_followup_events, public.ns_support_requests
+  to service_role;
+revoke insert, update, delete on public.ns_customer_followups, public.ns_customer_followup_events, public.ns_support_requests
+  from authenticated;
+
 alter table public.ns_inventory_items
   add column if not exists average_unit_cost_xaf bigint not null default 0 check (average_unit_cost_xaf >= 0),
   add column if not exists selling_price_xaf bigint not null default 0 check (selling_price_xaf >= 0);
@@ -1425,6 +1527,10 @@ begin
     when p_action_code = 'loyalty_program.updated' then 'loyalty_program'
     when p_action_code = 'loyalty_activity.recorded' then 'loyalty_activity'
     when p_action_code = 'loyalty_reward.redeemed' then 'loyalty_reward'
+    when p_action_code like 'service.%' then 'service'
+    when p_action_code = 'customer.created' then 'customer'
+    when p_action_code like 'customer_followup.%' then 'customer_followup'
+    when p_action_code = 'support_request.created' then 'support_request'
     else null
   end;
   if v_expected_aggregate is null then
@@ -1445,6 +1551,10 @@ begin
     when p_action_code = 'loyalty_program.updated' then p_payload->>'program_id'
     when p_action_code = 'loyalty_activity.recorded' then p_payload->>'activity_event_id'
     when p_action_code = 'loyalty_reward.redeemed' then p_payload->>'reward_event_id'
+    when p_action_code like 'service.%' then p_payload->>'service_id'
+    when p_action_code = 'customer.created' then p_payload->>'customer_id'
+    when p_action_code like 'customer_followup.%' then p_payload->>'followup_id'
+    when p_action_code = 'support_request.created' then p_payload->>'request_id'
     else null
   end;
   if v_payload_aggregate is not null and v_payload_aggregate <> p_aggregate_id then
@@ -1603,6 +1713,67 @@ begin
         (p_payload->>'customer_id')::uuid, (p_payload->>'amount_xaf')::bigint,
         (p_payload->>'activity_event_id')::uuid
       );
+    when 'service.created' then
+      v_result := public.ns_create_service(
+        (p_payload->>'service_id')::uuid,p_org_id,p_site_id,
+        p_payload->>'code',p_payload->>'activity',p_payload->>'name',
+        nullif(p_payload->>'duration_minutes','')::integer,
+        (p_payload->>'price_xaf')::bigint,
+        coalesce((p_payload->>'active')::boolean,true),
+        coalesce(p_payload->>'category',''),coalesce(p_payload->>'description',''),
+        coalesce(p_payload->'provider_member_ids','[]'::jsonb),
+        coalesce(p_payload->'required_workstation_kinds','[]'::jsonb),
+        coalesce(p_payload->'package_sessions','[]'::jsonb)
+      );
+    when 'service.updated' then
+      v_result := public.ns_update_service(
+        (p_payload->>'service_id')::uuid,p_org_id,p_site_id,
+        p_payload->>'code',p_payload->>'activity',p_payload->>'name',
+        nullif(p_payload->>'duration_minutes','')::integer,
+        (p_payload->>'price_xaf')::bigint,
+        coalesce((p_payload->>'active')::boolean,true),
+        (p_payload->>'expected_version')::integer
+      );
+    when 'service.configuration_updated' then
+      v_result := public.ns_update_service_configuration(
+        (p_payload->>'service_id')::uuid,p_org_id,p_site_id,
+        coalesce(p_payload->>'category',''),coalesce(p_payload->>'description',''),
+        coalesce(p_payload->'provider_member_ids','[]'::jsonb),
+        coalesce(p_payload->'required_workstation_kinds','[]'::jsonb),
+        coalesce(p_payload->'package_sessions','[]'::jsonb),
+        (p_payload->>'expected_version')::integer
+      );
+    when 'customer.created' then
+      v_result := public.ns_create_customer(
+        (p_payload->>'customer_id')::uuid,p_org_id,p_site_id,
+        p_payload->>'display_name',coalesce(p_payload->>'phone_contact',''),
+        coalesce((p_payload->>'contact_consent')::boolean,false),
+        coalesce(p_payload->>'address_line',''),coalesce(p_payload->>'neighborhood',''),
+        coalesce(p_payload->>'landmark',''),
+        nullif(p_payload->>'latitude','')::numeric,
+        nullif(p_payload->>'longitude','')::numeric,
+        nullif(p_payload->>'location_consent_at','')::timestamptz,
+        coalesce(p_payload->>'notes_private','')
+      );
+    when 'customer_followup.created' then
+      v_result := public.ns_create_customer_followup(
+        (p_payload->>'followup_id')::uuid,p_org_id,p_site_id,
+        (p_payload->>'customer_id')::uuid,p_payload->>'title',
+        p_payload->>'frequency',p_payload->>'channel',coalesce(p_payload->>'notes',''),
+        (p_payload->>'next_due_at')::timestamptz,coalesce(p_payload->>'status','active')
+      );
+    when 'customer_followup.completed' then
+      v_result := public.ns_complete_customer_followup(
+        (p_payload->>'followup_id')::uuid,p_org_id,p_site_id,p_event_id,
+        (p_payload->>'completed_at')::timestamptz,
+        nullif(p_payload->>'next_due_at_if_repeating','')::timestamptz,
+        coalesce(p_payload->>'completion_note','')
+      );
+    when 'support_request.created' then
+      v_result := public.ns_create_support_request(
+        (p_payload->>'request_id')::uuid,p_org_id,p_site_id,
+        p_payload->>'subject',p_payload->>'description',p_payload->>'priority'
+      );
     when 'loyalty_reward.redeemed' then
       if not public.ns_redeem_loyalty_reward(
         p_org_id, p_site_id, (p_payload->>'reward_event_id')::uuid
@@ -1628,6 +1799,366 @@ begin
   return v_response;
 end;
 $naxa$;
+
+
+create or replace function public.ns_create_service(
+  p_service_id uuid, p_org_id uuid, p_site_id uuid, p_code text,
+  p_activity text, p_name text, p_duration_minutes integer,
+  p_price_xaf bigint, p_active boolean, p_category text,
+  p_description text, p_provider_member_ids jsonb,
+  p_required_workstation_kinds jsonb, p_package_sessions jsonb
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_service public.ns_services%rowtype;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_SERVICE_CREATE_FORBIDDEN';
+  end if;
+  if p_service_id is null
+     or length(trim(coalesce(p_code,''))) not between 1 and 80
+     or p_activity not in ('pressing','hair','retail')
+     or length(trim(coalesce(p_name,''))) not between 2 and 160
+     or (p_duration_minutes is not null and p_duration_minutes <= 0)
+     or p_price_xaf is null or p_price_xaf < 0
+     or p_active is null
+     or length(coalesce(p_category,'')) > 80
+     or length(coalesce(p_description,'')) > 2000
+     or jsonb_typeof(coalesce(p_provider_member_ids,'[]'::jsonb)) <> 'array'
+     or jsonb_typeof(coalesce(p_required_workstation_kinds,'[]'::jsonb)) <> 'array'
+     or jsonb_typeof(coalesce(p_package_sessions,'[]'::jsonb)) <> 'array' then
+    raise exception 'NAXA_SERVICE_CREATE_INVALID';
+  end if;
+  if exists (
+    select 1
+    from jsonb_array_elements_text(coalesce(p_provider_member_ids,'[]'::jsonb)) x(member_id)
+    where not exists (
+      select 1 from public.ns_members m
+      where m.id::text = x.member_id and m.org_id = p_org_id and m.status = 'active'
+    )
+  ) then raise exception 'NAXA_SERVICE_PROVIDER_SCOPE_INVALID'; end if;
+  if exists (
+    select 1
+    from jsonb_array_elements_text(coalesce(p_required_workstation_kinds,'[]'::jsonb)) x(kind)
+    where x.kind not in ('hair_chair','pressing_counter','pressing_workshop','reception','cashier','other')
+  ) then raise exception 'NAXA_SERVICE_WORKSTATION_KIND_INVALID'; end if;
+
+  insert into public.ns_services(
+    id,org_id,site_id,code,activity,name,duration_minutes,price_xaf,active,
+    category,description,provider_member_ids,required_workstation_kinds,package_sessions,revision
+  ) values (
+    p_service_id,p_org_id,p_site_id,trim(p_code),p_activity,trim(p_name),
+    p_duration_minutes,p_price_xaf,p_active,trim(coalesce(p_category,'')),
+    coalesce(p_description,''),coalesce(p_provider_member_ids,'[]'::jsonb),
+    coalesce(p_required_workstation_kinds,'[]'::jsonb),
+    coalesce(p_package_sessions,'[]'::jsonb),1
+  ) returning * into v_service;
+  return jsonb_build_object('service_id',v_service.id,'revision',v_service.revision,'created',true);
+end;
+$naxa$;
+
+create or replace function public.ns_update_service(
+  p_service_id uuid, p_org_id uuid, p_site_id uuid, p_code text,
+  p_activity text, p_name text, p_duration_minutes integer,
+  p_price_xaf bigint, p_active boolean, p_expected_version integer
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_service public.ns_services%rowtype;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_SERVICE_UPDATE_FORBIDDEN';
+  end if;
+  select * into v_service from public.ns_services
+   where id=p_service_id and org_id=p_org_id and site_id=p_site_id
+   for update;
+  if not found then raise exception 'NAXA_SERVICE_NOT_FOUND'; end if;
+  if p_expected_version is null or p_expected_version <> v_service.revision then
+    raise exception 'NAXA_SERVICE_VERSION_CONFLICT';
+  end if;
+  if length(trim(coalesce(p_code,''))) not between 1 and 80
+     or p_activity not in ('pressing','hair','retail')
+     or length(trim(coalesce(p_name,''))) not between 2 and 160
+     or (p_duration_minutes is not null and p_duration_minutes <= 0)
+     or p_price_xaf is null or p_price_xaf < 0 or p_active is null then
+    raise exception 'NAXA_SERVICE_UPDATE_INVALID';
+  end if;
+  update public.ns_services
+    set code=trim(p_code),activity=p_activity,name=trim(p_name),
+        duration_minutes=p_duration_minutes,price_xaf=p_price_xaf,
+        active=p_active,revision=revision+1
+    where id=p_service_id and org_id=p_org_id and site_id=p_site_id
+    returning * into v_service;
+  return jsonb_build_object('service_id',v_service.id,'revision',v_service.revision,'updated',true);
+end;
+$naxa$;
+
+create or replace function public.ns_update_service_configuration(
+  p_service_id uuid, p_org_id uuid, p_site_id uuid, p_category text,
+  p_description text, p_provider_member_ids jsonb,
+  p_required_workstation_kinds jsonb, p_package_sessions jsonb,
+  p_expected_version integer
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_service public.ns_services%rowtype;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_SERVICE_CONFIGURATION_FORBIDDEN';
+  end if;
+  select * into v_service from public.ns_services
+   where id=p_service_id and org_id=p_org_id and site_id=p_site_id
+   for update;
+  if not found then raise exception 'NAXA_SERVICE_NOT_FOUND'; end if;
+  if p_expected_version is null or p_expected_version <> v_service.revision then
+    raise exception 'NAXA_SERVICE_VERSION_CONFLICT';
+  end if;
+  if length(coalesce(p_category,'')) > 80 or length(coalesce(p_description,'')) > 2000
+     or jsonb_typeof(coalesce(p_provider_member_ids,'[]'::jsonb)) <> 'array'
+     or jsonb_typeof(coalesce(p_required_workstation_kinds,'[]'::jsonb)) <> 'array'
+     or jsonb_typeof(coalesce(p_package_sessions,'[]'::jsonb)) <> 'array' then
+    raise exception 'NAXA_SERVICE_CONFIGURATION_INVALID';
+  end if;
+  if exists (
+    select 1
+    from jsonb_array_elements_text(coalesce(p_provider_member_ids,'[]'::jsonb)) x(member_id)
+    where not exists (
+      select 1 from public.ns_members m
+      where m.id::text = x.member_id and m.org_id = p_org_id and m.status = 'active'
+    )
+  ) then raise exception 'NAXA_SERVICE_PROVIDER_SCOPE_INVALID'; end if;
+  if exists (
+    select 1
+    from jsonb_array_elements_text(coalesce(p_required_workstation_kinds,'[]'::jsonb)) x(kind)
+    where x.kind not in ('hair_chair','pressing_counter','pressing_workshop','reception','cashier','other')
+  ) then raise exception 'NAXA_SERVICE_WORKSTATION_KIND_INVALID'; end if;
+  update public.ns_services
+    set category=coalesce(p_category,''),description=coalesce(p_description,''),
+        provider_member_ids=coalesce(p_provider_member_ids,'[]'::jsonb),
+        required_workstation_kinds=coalesce(p_required_workstation_kinds,'[]'::jsonb),
+        package_sessions=coalesce(p_package_sessions,'[]'::jsonb),
+        revision=revision+1
+    where id=p_service_id and org_id=p_org_id and site_id=p_site_id
+    returning * into v_service;
+  return jsonb_build_object('service_id',v_service.id,'revision',v_service.revision,'updated',true);
+end;
+$naxa$;
+
+create or replace function public.ns_create_customer(
+  p_customer_id uuid, p_org_id uuid, p_site_id uuid, p_display_name text,
+  p_phone_contact text, p_contact_consent boolean, p_address_line text,
+  p_neighborhood text, p_landmark text, p_latitude numeric,
+  p_longitude numeric, p_location_consent_at timestamptz,
+  p_notes_private text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_customer public.ns_customers%rowtype;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_CUSTOMER_CREATE_FORBIDDEN';
+  end if;
+  if p_customer_id is null
+     or length(trim(coalesce(p_display_name,''))) not between 2 and 160
+     or length(coalesce(p_phone_contact,'')) > 32
+     or p_contact_consent is null
+     or length(coalesce(p_address_line,'')) > 240
+     or length(coalesce(p_neighborhood,'')) > 120
+     or length(coalesce(p_landmark,'')) > 160
+     or length(coalesce(p_notes_private,'')) > 2000 then
+    raise exception 'NAXA_CUSTOMER_CREATE_INVALID';
+  end if;
+  if (p_latitude is not null or p_longitude is not null) and p_location_consent_at is null then
+    raise exception 'NAXA_CUSTOMER_LOCATION_CONSENT_REQUIRED';
+  end if;
+  if (p_latitude is null) <> (p_longitude is null)
+     or (p_latitude is not null and (p_latitude not between -90 and 90 or p_longitude not between -180 and 180)) then
+    raise exception 'NAXA_CUSTOMER_LOCATION_INVALID';
+  end if;
+  if coalesce(p_notes_private,'') <> '' and not public.ns_can_manage_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_CUSTOMER_PRIVATE_NOTES_FORBIDDEN';
+  end if;
+  insert into public.ns_customers(
+    id,org_id,site_id,display_name,phone_contact,contact_consent,
+    address_line,neighborhood,landmark,latitude,longitude,location_consent_at,
+    notes_private,revision,updated_at
+  ) values (
+    p_customer_id,p_org_id,p_site_id,trim(p_display_name),trim(coalesce(p_phone_contact,'')),
+    p_contact_consent,trim(coalesce(p_address_line,'')),trim(coalesce(p_neighborhood,'')),
+    trim(coalesce(p_landmark,'')),p_latitude,p_longitude,p_location_consent_at,
+    case when public.ns_can_manage_site(p_org_id,p_site_id) then coalesce(p_notes_private,'') else '' end,
+    1,now()
+  ) returning * into v_customer;
+  return jsonb_build_object('customer_id',v_customer.id,'revision',v_customer.revision,'created',true);
+end;
+$naxa$;
+
+create or replace function public.ns_create_customer_followup(
+  p_followup_id uuid, p_org_id uuid, p_site_id uuid, p_customer_id uuid,
+  p_title text, p_frequency text, p_channel text, p_notes text,
+  p_next_due_at timestamptz, p_status text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_followup public.ns_customer_followups%rowtype;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_CUSTOMER_FOLLOWUP_FORBIDDEN';
+  end if;
+  if p_followup_id is null or p_customer_id is null
+     or length(trim(coalesce(p_title,''))) not between 1 and 160
+     or length(trim(coalesce(p_frequency,''))) not between 1 and 40
+     or length(trim(coalesce(p_channel,''))) not between 1 and 32
+     or length(coalesce(p_notes,'')) > 2000
+     or p_next_due_at is null or coalesce(p_status,'active') <> 'active' then
+    raise exception 'NAXA_CUSTOMER_FOLLOWUP_INVALID';
+  end if;
+  if not exists (
+    select 1 from public.ns_customers c
+    where c.id=p_customer_id and c.org_id=p_org_id and c.site_id=p_site_id
+  ) then raise exception 'NAXA_CUSTOMER_FOLLOWUP_CUSTOMER_NOT_FOUND'; end if;
+  insert into public.ns_customer_followups(
+    id,org_id,site_id,customer_id,title,frequency,channel,notes,
+    next_due_at,status,created_by
+  ) values (
+    p_followup_id,p_org_id,p_site_id,p_customer_id,trim(p_title),trim(p_frequency),
+    trim(p_channel),coalesce(p_notes,''),p_next_due_at,'active',v_member
+  ) returning * into v_followup;
+  return jsonb_build_object('followup_id',v_followup.id,'revision',v_followup.revision,'status',v_followup.status);
+end;
+$naxa$;
+
+create or replace function public.ns_complete_customer_followup(
+  p_followup_id uuid, p_org_id uuid, p_site_id uuid, p_event_id uuid,
+  p_completed_at timestamptz, p_next_due_at timestamptz, p_completion_note text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_followup public.ns_customer_followups%rowtype;
+  v_existing public.ns_customer_followup_events%rowtype;
+  v_next timestamptz;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_CUSTOMER_FOLLOWUP_FORBIDDEN';
+  end if;
+  if p_followup_id is null or p_event_id is null or p_completed_at is null
+     or length(coalesce(p_completion_note,'')) > 1000 then
+    raise exception 'NAXA_CUSTOMER_FOLLOWUP_COMPLETION_INVALID';
+  end if;
+  select * into v_existing from public.ns_customer_followup_events
+   where org_id=p_org_id and idempotency_key=p_event_id;
+  if found then
+    if v_existing.followup_id=p_followup_id and v_existing.site_id=p_site_id then
+      return jsonb_build_object('followup_id',p_followup_id,'idempotent',true);
+    end if;
+    raise exception 'NAXA_CUSTOMER_FOLLOWUP_IDEMPOTENCY_CONFLICT';
+  end if;
+  select * into v_followup from public.ns_customer_followups
+   where id=p_followup_id and org_id=p_org_id and site_id=p_site_id
+   for update;
+  if not found or v_followup.status <> 'active' then
+    raise exception 'NAXA_CUSTOMER_FOLLOWUP_NOT_ACTIVE';
+  end if;
+  v_next := p_next_due_at;
+  if v_next is not null and v_next <= p_completed_at then
+    raise exception 'NAXA_CUSTOMER_FOLLOWUP_NEXT_DATE_INVALID';
+  end if;
+  insert into public.ns_customer_followup_events(
+    id,org_id,site_id,followup_id,event_type,occurred_at,next_due_at,
+    completion_note,actor_member_id,idempotency_key
+  ) values (
+    p_event_id,p_org_id,p_site_id,p_followup_id,'completed',p_completed_at,
+    v_next,coalesce(p_completion_note,''),v_member,p_event_id
+  );
+  update public.ns_customer_followups
+   set status=case when v_next is null then 'completed' else 'active' end,
+       next_due_at=coalesce(v_next,next_due_at),revision=revision+1,
+       updated_at=now(),last_completed_at=p_completed_at
+   where id=p_followup_id and org_id=p_org_id and site_id=p_site_id
+   returning * into v_followup;
+  return jsonb_build_object('followup_id',v_followup.id,'status',v_followup.status,
+    'revision',v_followup.revision,'idempotent',false);
+end;
+$naxa$;
+
+create or replace function public.ns_create_support_request(
+  p_request_id uuid, p_org_id uuid, p_site_id uuid, p_subject text,
+  p_description text, p_priority text
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_request public.ns_support_requests%rowtype;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null then raise exception 'NAXA_SUPPORT_REQUEST_FORBIDDEN'; end if;
+  if p_site_id is null then
+    if not public.ns_is_org_member(p_org_id) then raise exception 'NAXA_SUPPORT_REQUEST_FORBIDDEN'; end if;
+  elsif not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_SUPPORT_REQUEST_FORBIDDEN';
+  end if;
+  if p_request_id is null
+     or length(trim(coalesce(p_subject,''))) not between 3 and 180
+     or length(trim(coalesce(p_description,''))) not between 3 and 5000
+     or p_priority not in ('low','normal','high','urgent') then
+    raise exception 'NAXA_SUPPORT_REQUEST_INVALID';
+  end if;
+  insert into public.ns_support_requests(
+    id,org_id,site_id,subject,description,priority,created_by
+  ) values (
+    p_request_id,p_org_id,p_site_id,trim(p_subject),trim(p_description),p_priority,v_member
+  ) returning * into v_request;
+  return jsonb_build_object('request_id',v_request.id,'status',v_request.status,'created',true);
+end;
+$naxa$;
+
+revoke all on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,jsonb) from public, anon;
+grant execute on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,jsonb) to authenticated, service_role;
+revoke all on function public.ns_update_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,integer) from public, anon;
+grant execute on function public.ns_update_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,integer) to authenticated, service_role;
+revoke all on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,jsonb,integer) from public, anon;
+grant execute on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,jsonb,integer) to authenticated, service_role;
+revoke all on function public.ns_create_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text) from public, anon;
+grant execute on function public.ns_create_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text) to authenticated, service_role;
+revoke all on function public.ns_create_customer_followup(uuid,uuid,uuid,uuid,text,text,text,text,timestamptz,text) from public, anon;
+grant execute on function public.ns_create_customer_followup(uuid,uuid,uuid,uuid,text,text,text,text,timestamptz,text) to authenticated, service_role;
+revoke all on function public.ns_complete_customer_followup(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text) from public, anon;
+grant execute on function public.ns_complete_customer_followup(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text) to authenticated, service_role;
+revoke all on function public.ns_create_support_request(uuid,uuid,uuid,text,text,text) from public, anon;
+grant execute on function public.ns_create_support_request(uuid,uuid,uuid,text,text,text) to authenticated, service_role;
 
 revoke all on function public.ns_upsert_recurring_charge(uuid,uuid,uuid,text,text,bigint,text,timestamptz,integer,boolean) from public, anon;
 grant execute on function public.ns_upsert_recurring_charge(uuid,uuid,uuid,text,text,bigint,text,timestamptz,integer,boolean) to authenticated, service_role;
