@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BOOTIK</string>
+    <string name="setup_subtitle">ERP commercial pour détaillants et distributeurs. La construction commence par les détaillants.</string>
+    <string name="universe_retailer">Univers Détaillants</string>
+    <string name="universe_retailer_desc">Première phase — 14 profils métier avec des catalogues et des règles de stock adaptés.</string>
+    <string name="universe_distributor">Univers Distributeurs</string>
+    <string name="universe_distributor_next">Deuxième phase — ERP et CRM B2B complets, préparés dans l'architecture mais non activés dans ce premier écran.</string>
+    <string name="setup_workspace_title">Préparer mon activité</string>
+    <string name="business_name">Nom de l'entreprise</string>
+    <string name="site_name">Nom du premier point de vente</string>
+    <string name="profile_selection_title">Choisir le profil métier principal</string>
+    <string name="save_local_draft">Enregistrer un brouillon sur cet appareil</string>
+    <string name="local_only_warning">Ce brouillon reste sur cet appareil. Il ne crée pas encore de compte, d'abonnement, de site serveur ni de connexion à un distributeur. L'activation réelle nécessitera un accès administrateur Famille NAXA.</string>
+    <string name="local_draft_saved">Brouillon local enregistré. Aucune donnée n'a été transmise au serveur.</string>
+    <string name="local_draft_error">Impossible d'enregistrer ce brouillon sur cet appareil. Réessaie.</string>
+    <string name="local_drafts_title">Brouillons locaux</string>
+    <string name="no_local_drafts">Aucun brouillon local pour le moment.</string>
+    <string name="local_draft_state">Brouillon local · non synchronisé</string>
+
+    <string name="profile_boutique">Boutique</string>
+    <string name="profile_boutique_desc">Caisse rapide, prix détail et gros, ardoise, fournisseurs et ventes journalières.</string>
+    <string name="profile_superette">Supérette</string>
+    <string name="profile_superette_desc">Codes-barres, rayons, lots, péremptions, plusieurs caisses et inventaires rapides.</string>
+    <string name="profile_poissonnerie">Poissonnerie</string>
+    <string name="profile_poissonnerie_desc">Espèces, poids réel, arrivages, fraîcheur, conservation, pertes et prix du jour.</string>
+    <string name="profile_boulangerie">Boulangerie</string>
+    <string name="profile_boulangerie_desc">Matières premières, recettes, fournées, production, invendus et pertes.</string>
+    <string name="profile_shopping">Shopping — vêtements, chaussures, sacs et bijoux</string>
+    <string name="profile_shopping_desc">Tailles, couleurs, collections, variantes, sacs, bijoux, promotions et échanges.</string>
+    <string name="profile_alimentation">Alimentation</string>
+    <string name="profile_alimentation_desc">Vrac, kilogrammes, sacs, litres, conversions, lots et prix par volume.</string>
+    <string name="profile_cave">Cave</string>
+    <string name="profile_cave_desc">Boissons, bouteilles, cartons, casiers, fûts, consignes et retours.</string>
+    <string name="profile_quincaillerie">Quincaillerie</string>
+    <string name="profile_quincaillerie_desc">Références techniques, dimensions, unités multiples, conversions et devis.</string>
+    <string name="profile_parfumerie">Parfumerie</string>
+    <string name="profile_parfumerie_desc">Marques, formats, lots, coffrets, testeurs et produits de valeur.</string>
+    <string name="profile_boucherie">Boucherie</string>
+    <string name="profile_boucherie_desc">Morceaux, poids, découpe, rendement, pertes, origine et conservation.</string>
+    <string name="profile_ferme">Ferme</string>
+    <string name="profile_ferme_desc">Récoltes, œufs, lait, lots, dates de collecte, quantités et pertes.</string>
+    <string name="profile_depot_gaz">Dépôt de gaz</string>
+    <string name="profile_depot_gaz_desc">Bouteilles par marque et capacité, pleines, vides, consignes, retours et livraisons.</string>
+    <string name="profile_supermarche">Supermarché</string>
+    <string name="profile_supermarche_desc">Départements, rayons, multiples caisses, entrepôts et inventaires tournants.</string>
+    <string name="profile_brocante">Brocante</string>
+    <string name="profile_brocante_desc">Articles uniques ou d'occasion, état, provenance, photos, estimation et prix négociable.</string>
+</resources>

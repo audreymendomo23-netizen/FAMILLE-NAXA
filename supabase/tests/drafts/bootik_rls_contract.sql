@@ -1,0 +1,38 @@
+-- BOOTIK RLS / isolation acceptance contract.
+-- TEST SPECIFICATION ONLY: not executable until BOOTIK policies/server APIs are reviewed.
+-- Run only in an isolated PostgreSQL 17 database after prerequisite Famille Core setup.
+-- This file does not contact Supabase Replay or Production.
+--
+-- Required schema boundaries:
+-- 1. BOOTIK domain tables live in schema bootik with bk_* names and app_code=bootik.
+-- 2. No public.ns_* table, NAXA Services object, or NAXA Pharmacy object is altered or accessed.
+-- 3. The schema bootik is not exposed through Supabase Data API by default.
+-- 4. anon/authenticated have no direct table grants until reviewed RPC/Edge Functions and RLS pass.
+--
+-- Required RLS negative tests:
+-- 5. Anonymous access to every bootik table is denied.
+-- 6. A BOOTIK Retailer cannot read another organization's Retailer data.
+-- 7. A BOOTIK Distributor cannot read another Distributor's catalogue, stock,
+--    prices, CRM, customers or orders.
+-- 8. A Retailer sees only catalogue items explicitly exposed by its active trade link.
+-- 9. A Retailer cannot read the Distributor's internal costs, margins or other customers.
+-- 10. A Distributor sees only the linked Retailer account/site/order data required to serve it.
+-- 11. NAXA Services identities, ns_* tables, pressing/appointments and CRM cannot be read from BOOTIK.
+-- 12. NAXA Pharmacy profiles, prescriptions, medicine marketplace and pharmacy stock cannot be read.
+-- 13. Activity/site boundaries are enforced even within one organization.
+--
+-- Required workflow tests:
+-- 14. Only compatible Retailer -> Distributor activity pairs can be connected.
+-- 15. Inactive/expired/revoked compatibility rules cannot create new trade links.
+-- 16. One stock alert key creates at most one reorder event per policy.
+-- 17. Auto-submitted stock requests remain waiting_supplier_approval until a human distributor approval.
+-- 18. A Distributor price/quantity/substitution/date change requires explicit Retailer confirmation
+--     before the order is marked confirmed.
+-- 19. An unchanged order cannot become confirmed without recorded Distributor approval.
+-- 20. Offline order drafts are never shown as transmitted before server acknowledgement.
+-- 21. Replayed sync events and duplicate idempotency keys never create duplicate orders.
+-- 22. A retailer cannot alter seller prices or set supplier_approved_by.
+-- 23. A distributor cannot set buyer_confirmed_by.
+--
+-- NOT EXECUTED: candidate schema has no policies/grants; no isolated test DB was provisioned.
+select 'NOT_EXECUTED: BOOTIK RLS contract awaiting isolated test setup' as status;
