@@ -1085,12 +1085,81 @@ BEGIN
   );
   IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'CASH_EXPENSE_NOT_APPLIED: %',v_result; END IF;
 
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9d000000-0000-4000-8000-000000000005'::uuid,73,
+    'pressing_order','a8000000-0000-4000-8000-000000000001','pressing_order.created',
+    jsonb_build_object(
+      'order_id','a8000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'ticket_number','PRS-CI-CASH-001','customer_name','Client pressing espèces',
+      'customer_phone','690000101','items_summary','Deux chemises',
+      'total_xaf',6000,'deposit_xaf',1200,'deposit_payment_method','cash',
+      'cash_session_id','9f000000-0000-4000-8000-000000000001',
+      'promised_at',now()+interval '1 day'
+    )
+  );
+  IF v_result->>'status'<>'applied'
+     OR v_result->'result'->>'deposit_payment_status'<>'confirmed'
+     OR v_result->'result'->>'deposit_payment_method'<>'cash'
+     OR v_result->'result'->>'cash_session_id'<>'9f000000-0000-4000-8000-000000000001' THEN
+    RAISE EXCEPTION 'PRESSING_CASH_DEPOSIT_NOT_CONFIRMED_AND_LINKED: %',v_result;
+  END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9d000000-0000-4000-8000-000000000006'::uuid,74,
+    'pressing_order','a8000000-0000-4000-8000-000000000002','pressing_order.created',
+    jsonb_build_object(
+      'order_id','a8000000-0000-4000-8000-000000000002',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'ticket_number','PRS-CI-MOMO-001','customer_name','Client pressing Mobile Money',
+      'customer_phone','690000102','items_summary','Un costume',
+      'total_xaf',9000,'deposit_xaf',800,'deposit_payment_method','mobile_money',
+      'cash_session_id',null,'promised_at',now()+interval '1 day'
+    )
+  );
+  IF v_result->>'status'<>'applied'
+     OR v_result->'result'->>'deposit_payment_status'<>'pending'
+     OR v_result->'result'->>'deposit_payment_method'<>'mobile_money'
+     OR v_result->'result'->>'cash_session_id' is not null THEN
+    RAISE EXCEPTION 'PRESSING_MOBILE_MONEY_DEPOSIT_MUST_REMAIN_PENDING: %',v_result;
+  END IF;
+
   BEGIN
     PERFORM public.ns_apply_sync_event(
       '20000000-0000-4000-8000-000000000001'::uuid,
       '30000000-0000-4000-8000-000000000001'::uuid,null,
       '80000000-0000-4000-8000-000000000001'::uuid,
-      '9d000000-0000-4000-8000-000000000004'::uuid,73,
+      '9d000000-0000-4000-8000-000000000007'::uuid,75,
+      'pressing_order','a8000000-0000-4000-8000-000000000003','pressing_order.created',
+      jsonb_build_object(
+        'order_id','a8000000-0000-4000-8000-000000000003',
+        'org_id','20000000-0000-4000-8000-000000000001',
+        'site_id','30000000-0000-4000-8000-000000000001',
+        'ticket_number','PRS-CI-INVALID-001','customer_name','Client sans caisse',
+        'customer_phone','690000103','items_summary','Un pantalon',
+        'total_xaf',3000,'deposit_xaf',500,'deposit_payment_method','cash',
+        'cash_session_id',null,'promised_at',now()+interval '1 day'
+      )
+    );
+    RAISE EXCEPTION 'PRESSING_CASH_DEPOSIT_WITHOUT_SESSION_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM<>'NAXA_PRESSING_DEPOSIT_CASH_SESSION_REQUIRED' THEN RAISE; END IF;
+  END;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      '9d000000-0000-4000-8000-000000000008'::uuid,76,
       'cash_session','9f000000-0000-4000-8000-000000000001',
       'cash_session.closed',
       jsonb_build_object(
@@ -1116,11 +1185,12 @@ BEGIN
       'cash_session_id','9f000000-0000-4000-8000-000000000001',
       'org_id','20000000-0000-4000-8000-000000000001',
       'site_id','30000000-0000-4000-8000-000000000001',
-      'counted_close_xaf',4000,'variance_reason','','closed_at',now()+interval '1 minute'
+      'counted_close_xaf',5200,'variance_reason','','closed_at',now()+interval '1 minute'
     )
   );
   IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'CASH_SESSION_CLOSE_NOT_APPLIED: %',v_result; END IF;
-  IF (v_result->>'expected_close_xaf')::bigint<>4000
+  IF (v_result->>'expected_close_xaf')::bigint<>5200
+     OR (v_result->>'pressing_deposits_cash_xaf')::bigint<>1200
      OR (v_result->>'variance_xaf')::bigint<>0 THEN
     RAISE EXCEPTION 'CASH_SESSION_BALANCE_NOT_COMPUTED_FROM_SERVER_LEDGER: %',v_result;
   END IF;
@@ -1129,15 +1199,25 @@ $cash_session_expense_sync$;
 RESET ROLE;
 
 DO $cash_session_assertions$
-DECLARE v_status text; v_expected bigint; v_expenses bigint; v_receipts integer;
+DECLARE
+  v_status text; v_expected bigint; v_expenses bigint; v_receipts integer;
+  v_pressing_cash_status text; v_pressing_momo_status text;
+  v_pressing_cash_session uuid; v_pressing_momo_session uuid;
 BEGIN
   SELECT status,expected_close_xaf INTO v_status,v_expected
     FROM public.ns_cash_sessions WHERE id='9f000000-0000-4000-8000-000000000001';
   SELECT sum(amount_xaf) INTO v_expenses FROM public.ns_expenses
     WHERE cash_session_id='9f000000-0000-4000-8000-000000000001';
   SELECT count(*) INTO v_receipts FROM public.ns_sync_receipts
-    WHERE client_event_id='9d000000-0000-4000-8000-000000000004';
-  IF v_status<>'closed' OR v_expected<>4000 OR v_expenses<>1000 OR v_receipts<>1 THEN
+    WHERE client_event_id='9d000000-0000-4000-8000-000000000008';
+  SELECT status,cash_session_id INTO v_pressing_cash_status,v_pressing_cash_session
+    FROM public.ns_payments WHERE pressing_order_id='a8000000-0000-4000-8000-000000000001';
+  SELECT status,cash_session_id INTO v_pressing_momo_status,v_pressing_momo_session
+    FROM public.ns_payments WHERE pressing_order_id='a8000000-0000-4000-8000-000000000002';
+  IF v_status<>'closed' OR v_expected<>5200 OR v_expenses<>1000 OR v_receipts<>1
+     OR v_pressing_cash_status<>'confirmed'
+     OR v_pressing_cash_session<>'9f000000-0000-4000-8000-000000000001'
+     OR v_pressing_momo_status<>'pending' OR v_pressing_momo_session is not null THEN
     RAISE EXCEPTION 'CASH_SESSION_SERVER_BALANCE_OR_RECEIPT_ASSERTION_FAILED';
   END IF;
   IF EXISTS (SELECT 1 FROM public.ns_sync_receipts WHERE client_event_id='9d000000-0000-4000-8000-000000000002') THEN
