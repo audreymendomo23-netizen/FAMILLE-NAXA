@@ -740,6 +740,56 @@ END
 $n3_no_echo$;
 RESET ROLE;
 
+-- Bidirectional contract: peer B emits a real mutation, then source device A pulls it.
+SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-b"}',false);
+DO $n3_reverse_push$
+DECLARE v_result jsonb;
+BEGIN
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    null,
+    '80000000-0000-4000-8000-000000000003'::uuid,
+    '95000000-0000-4000-8000-000000000096'::uuid,
+    1,'supplier','94000000-0000-4000-8000-000000000096',
+    'supplier.saved',
+    jsonb_build_object(
+      'supplier_id','94000000-0000-4000-8000-000000000096',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'name','Supplier from peer B','phone','','whatsapp','',
+      'email','','address','','payment_terms_days',0,'notes',''
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN
+    RAISE EXCEPTION 'N3_PEER_B_OUTBOUND_MUTATION_FAILED: %',v_result;
+  END IF;
+END
+$n3_reverse_push$;
+
+SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-a"}',false);
+DO $n3_reverse_pull$
+DECLARE v_pull jsonb;
+BEGIN
+  v_pull:=public.ns_pull_sync_changes(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    0,100
+  );
+  IF NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(coalesce(v_pull->'changes','[]'::jsonb)) e
+    WHERE e->>'event_id'='95000000-0000-4000-8000-000000000096'
+      AND e->>'source_device_id'='80000000-0000-4000-8000-000000000003'
+  ) THEN
+    RAISE EXCEPTION 'N3_DEVICE_A_DID_NOT_PULL_PEER_B_MUTATION: %',v_pull;
+  END IF;
+END
+$n3_reverse_pull$;
+RESET ROLE;
+
 -- A revoked peer installation cannot continue pulling from an old session.
 UPDATE public.ns_devices SET revoked_at=now()
 WHERE id='80000000-0000-4000-8000-000000000003';
