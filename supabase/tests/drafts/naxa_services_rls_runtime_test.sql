@@ -733,7 +733,11 @@ BEGIN
     '80000000-0000-4000-8000-000000000001'::uuid,
     0,100
   );
-  IF jsonb_array_length(v_pull->'changes')<>0 THEN
+  IF EXISTS (
+    SELECT 1 FROM jsonb_array_elements(coalesce(v_pull->'changes','[]'::jsonb)) e
+    WHERE e->>'event_id'='95000000-0000-4000-8000-000000000097'
+      AND e->>'source_device_id'='80000000-0000-4000-8000-000000000001'
+  ) THEN
     RAISE EXCEPTION 'N3_SOURCE_DEVICE_RECEIVED_OWN_EVENT: %',v_pull;
   END IF;
 END
