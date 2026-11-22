@@ -22,6 +22,10 @@
 | FAM-018 | Identités utilisateurs distinctes par plateforme : un compte Auth utilisateur ordinaire ne peut être rattaché qu'à une seule application ; l'Administrateur central dispose d'un compte dédié hors memberships applicatifs | VALIDÉ |
 | FAM-019 | L'Administrateur central peut effectuer les opérations d'administration autorisées ; toute mutation doit être journalisée de façon append-only avec acteur, application, organisation/lieu si applicable, action, cible et horodatage | VALIDÉ |
 | FAM-020 | Pour toutes les solutions du portefeuille, les abonnements sont proposés au mois ou à l'année uniquement ; l'annuel donne 12 mois de service contre 10 mensualités payées (2 mois offerts) ; aucune offre ni formule de 3 ou 6 mois | VALIDÉ — 21/11/2026 |
+| FAM-021 | NAXA HOTEL : les clients hébergés accèdent sans application ni compte à un portail Web de séjour par QR de chambre, limité au catalogue hôtel, aux catalogues ZIPPLE/NAXA SERVICES pour les services absents de l'hôtel, au lien Marketplace LOYABLE et au lien pharmacie publique NAXA | VALIDÉ — 22/11/2026 |
+| FAM-022 | LOYABLE : publication et accès à la réservation hôtelière gratuits pour un hôtel utilisateur NAXA HOTEL avec abonnement actif ; hôtel externe facturé 10 000 FCFA/mois et intégré/administré par l'administration centrale | VALIDÉ — 22/11/2026 |
+| FAM-023 | NAXA HOTEL : lorsqu'un établissement exploite un restaurant et/ou un bar, les commandes client par QR sans application sont gérées via ZIPPLE ; commandes, caisses, stocks et domaines restent séparés, imputation au folio soumise à validation | VALIDÉ — 22/11/2026 |
+| FAM-024 | NAXA HOTEL : les offres Essentiel et Premium intègrent le socle NAXA SECURITY ; Premium étend capacités et périmètres sans retirer le socle de sécurité Essentiel ; aucun matériel ni service humain de télésurveillance fourni par NAXA | VALIDÉ — 22/11/2026 |
 
 
 ## Décisions GRILLAD consolidées — 21 novembre 2026
