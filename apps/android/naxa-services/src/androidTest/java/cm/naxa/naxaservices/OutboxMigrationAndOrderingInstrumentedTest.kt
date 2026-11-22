@@ -145,6 +145,7 @@ class OutboxMigrationAndOrderingInstrumentedTest {
             ))
 
             val divergent = JSONObject(first.toString())
+                .put("cursor", 4)
                 .put("payload", JSONObject(first.getJSONObject("payload").toString()).put("name", "Payload divergent"))
             val invalidPage = JSONObject()
                 .put("device_id", deviceId)
@@ -161,7 +162,7 @@ class OutboxMigrationAndOrderingInstrumentedTest {
                         .put("payload", JSONObject().put("supplier_id", supplierId).put("name", "Must rollback"))
                         .put("recorded_at", "2026-11-22T10:02:00Z")
                 ).put(divergent))
-                .put("next_cursor", 3)
+                .put("next_cursor", 4)
                 .put("has_more", false)
             var rejected = false
             try {
