@@ -174,14 +174,14 @@ Le drill de sauvegarde/restauration prouve la sauvegarde chiffrée, le contrôle
 
 L'audit de `apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt` retrouve **55 points d'émission** d'événements outbox.
 
-The coordinateur `SupplierSyncCoordinator` accepte actuellement 11 codes d'action avec snapshots et handlers correspondants :
+Le coordinateur `SupplierSyncCoordinator` accepte actuellement 11 codes d'action avec snapshots et handlers correspondants :
 
 - fournisseur : `supplier.saved` ;
 - article : `inventory_item.created`, `inventory_item.imported`, `inventory_item.import_updated`, `inventory_item.supplier_whatsapp_updated` ;
 - mouvement : `inventory_movement.created`, `inventory_movement.import_initial`, `inventory_movement.import_adjustment` ;
 - achats : `purchase.ordered`, `purchase.receipt.confirmed`, `supplier.payment.recorded`.
 
-Le registre N1 `NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md` qualifie les 55 points d'émission en **44 mutations indépendantes**, **6 enfants composites**, **1 ledger dérivé**, **1 miroir de confirmation serveur**, **1 miroir d'API directe** et **2 anciens helpers locaux sans appelant**. Ce comptage ne signifie ni 55 handlers à créer ni 44 fonctionnalités absentes. Les 33 contrats de mutation sans handler actuel relèvent du N2 ; les sept modules locaux et les chemins API directs sont décrits avec leur vraie source de vérité dans le registre.
+Le registre N1 `NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md` qualifie les 55 points d'émission en **44 mutations indépendantes**, **6 enfants composites**, **1 ledger dérivé**, **1 miroir de confirmation serveur**, **1 miroir d'API directe** et **2 anciens helpers locaux sans appelant**. Ce comptage ne signifie ni 55 handlers à créer ni 44 fonctionnalités absentes. Les 33 contrats de mutation sans handler actuel relèvent du N2 ; les parcours locaux Room et les chemins API directs sont décrits avec leur vraie source de vérité dans le registre.
 
 Le coordinateur fournisseur reste manuel et explicitement opt-in. Deux dépendances sont bloquées de façon fail-closed : article de stock non mappé dans la base distante et paiement fournisseur espèces sans session de caisse distante correspondante. La variable d'activation reste désactivée par défaut et exige une référence de projet Famille dédiée concordante.
 
