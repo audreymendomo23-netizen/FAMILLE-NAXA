@@ -146,7 +146,34 @@ internal object NaxaServicesPeerSyncApplier {
                     actor,old?.createdAtMillis?:now
                 ));return true
             }
-            "appointment.created_from_waitlist" -> return false
+            "appointment.created_from_waitlist" -> {
+                if(site==null||actor.isBlank())return false
+                val appointmentId=p.sText("appointment_id",id)
+                val waitlistId=p.sText("waitlist_record_id")
+                val customer=p.sText("customer_reference_or_name")
+                val service=p.sText("service_reference_or_name")
+                val assigned=p.sText("assigned_member_id")
+                val start=p.sMillis("starts_at",0L)
+                val duration=p.optInt("duration_minutes",0)
+                if(appointmentId.isBlank()||waitlistId.isBlank()||customer.isBlank()||service.isBlank()||
+                    assigned.isBlank()||start<=0L||duration !in 5..600)return false
+                val waitlist=dao.findManagementRecord(org,site,waitlistId)?:return false
+                if(waitlist.recordType!="appointment_waitlist"||waitlist.status !in setOf("open","contacted"))return false
+                val end=start+duration*60_000L
+                if(end<=start)return false
+                val old=dao.findAppointment(org,site,appointmentId)
+                dao.upsertRemoteAppointment(LocalAppointment(
+                    appointmentId,org,site,p.sOptional("workstation_id"),customer,service,assigned,start,end,
+                    p.sLong("deposit_xaf",old?.depositXaf?:0L),p.sText("status","booked"),
+                    actor,old?.createdAtMillis?:now
+                ))
+                dao.updateManagementRecord(waitlist.copy(status="booked"))
+                dao.upsertRemoteWorkflowEvent(LocalWorkflowEvent(
+                    change.eventId+":waitlist",org,site,"appointment_waitlist",waitlistId,
+                    waitlist.status,"booked",p.sText("reason"),actor,now
+                ))
+                return true
+            }
             "appointment.status_changed","appointment.rescheduled" -> {
                 if(site==null)return false
                 val old=dao.findAppointment(org,site,p.sText("appointment_id",id))?:return false
