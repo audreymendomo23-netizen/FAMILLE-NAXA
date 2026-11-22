@@ -334,3 +334,46 @@ Les deux formules préservent les fonctions essentielles à l'activité et à la
 ### 8. Statut de réalisation
 
 Cette mise à jour est documentaire. Elle ne prouve pas que le portail QR, les contrats d'API, le catalogue de prestataires, les commandes ZIPPLE, les liaisons LOYABLE, les entitlements, NAXA SECURITY ou les écrans NAXA HOTEL sont implémentés, compilés, testés ou déployés. Les applications Android/Web NAXA HOTEL restent à auditer et à construire selon les preuves techniques du dépôt. Aucune migration Supabase, publication APK ou mise en production n'est autorisée par ce document.
+
+
+---
+
+## Addendum de continuité — arbitrage tarifaire NAXA HOTEL v2.1
+**Date : 22 novembre 2026**  
+**Source de vérité :** `7 famille naxa/01-cahiers-des-charges/07-naxa-hotel.md`, section 24.  
+**Statut :** grille tarifaire acceptée ; intégration documentaire effectuée ; aucune implémentation technique certifiée.
+
+### 1. Décision retenue
+
+NAXA HOTEL passe à **un abonnement unique mensuel**, sans formule Essentiel/Premium et sans paiement annuel. Cette règle est une exception propre à NAXA HOTEL par rapport à FAM-020. Les barèmes sont choisis selon le nombre de chambres actives/gérées et la présence d'un service de restauration exploité.
+
+**Sans restaurant :**
+- 1–10 : 1 500 FCFA × chambres ;
+- 11–20 : max(15 000 ; 1 000 × chambres) ;
+- 21–30 : max(20 000 ; 800 × chambres) ;
+- 31–49 : max(24 000 ; 500 × chambres) ;
+- 50 et plus : devis mensuel négocié.
+
+**Avec restaurant/service de restauration exploité :**
+- 1–10 : 2 000 FCFA × chambres ;
+- 11–20 : min(24 000 ; max(20 000 ; 1 500 × chambres)) ;
+- 21–30 : min(25 000 ; max(24 000 ; 1 000 × chambres)) ;
+- 31–49 : forfait mensuel fixe de 26 000 FCFA ;
+- 50 et plus : devis mensuel négocié.
+
+Les montants sont en FCFA. Les planchers et plafonds empêchent une baisse de facture au changement de tranche. À partir de 50 chambres, aucun tarif automatique de 30 000 ou 40 000 FCFA ne subsiste. Les groupes multi-hôtels sont également traités sur devis mensuel consolidé.
+
+### 2. Règles d'application
+
+- La restauration est considérée active si l'hôtel exploite un restaurant, espace de restauration, snack ou bar avec menu/carte, commandes et caisse gérés via ZIPPLE. Un minibar simple ou un petit-déjeuner inclus sans point de vente ne suffit pas à déclencher le barème restauration.
+- La quantité de chambres est déterminée au début du cycle mensuel. Les changements durables prennent effet au renouvellement suivant, sans rétroactivité.
+- Le devis 50+ reste un abonnement mensuel unique ; les capacités hors standard peuvent être chiffrées séparément.
+- Le socle fonctionnel, les QR client et restaurant/bar, les fonctions de base NAXA SECURITY et les conditions LOYABLE déjà définies sont conservés dans cet abonnement unique.
+
+### 3. Références marché
+
+Le benchmark public consulté le 22 novembre 2026 indique notamment Hotelia à partir de 16 200 FCFA/mois pour l'hébergement et 27 000 FCFA/mois pour le tout-en-un ; The African Hotelier à 25 000 FCFA/mois pour 1–20 chambres et 50 000 FCFA/mois pour 21–50 ; 1412 PMS à 29 000, 39 000 et 69 000 FCFA/mois. Sources : https://www.hotelia.cloud/ ; https://theafricanhotelier.com/pms-hotelier/ ; https://1412pms.com/. Ces offres ne sont pas strictement équivalentes ; ne pas présenter NAXA HOTEL comme systématiquement le moins cher de chaque catégorie. Le barème restauration NAXA (maximum 26 000 FCFA avant le devis 50+) se place sous les prix tout-en-un comparables cités.
+
+### 4. Éléments toujours non réalisés ou à vérifier
+
+La grille est une décision documentaire, pas une preuve de développement. Le calcul de facture, la photographie des chambres, l'application de l'abonnement mensuel, les paiements, les entitlements et les contrôles d'administration restent à implémenter et tester. La marge réelle et le coût de service doivent être vérifiés avant commercialisation générale. Les quotas techniques, SLA, frais de mise en service et tarifs des extensions restent à formaliser.
