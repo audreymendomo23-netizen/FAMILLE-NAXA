@@ -1156,6 +1156,9 @@ interface NaxaServicesDao {
     @Query("DELETE FROM local_loyalty_events WHERE orgId = :orgId AND siteId = :siteId AND relatedEventId = :activityEventId AND eventType = 'reward_earned'")
     suspend fun deleteLoyaltyRewardsForActivity(orgId: String, siteId: String, activityEventId: String): Int
 
+    @Query("SELECT COUNT(*) FROM local_loyalty_events WHERE orgId = :orgId AND siteId = :siteId AND relatedEventId = :activityEventId AND eventType = 'reward_earned'")
+    suspend fun countLoyaltyRewardsForActivity(orgId: String, siteId: String, activityEventId: String): Int
+
     @Query("UPDATE local_loyalty_events SET rewardStatus = 'redeemed' WHERE id = :eventId AND orgId = :orgId AND siteId = :siteId AND eventType = 'reward_earned' AND rewardStatus = 'available'")
     suspend fun redeemLoyaltyReward(eventId: String, orgId: String, siteId: String): Int
 
