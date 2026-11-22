@@ -389,11 +389,17 @@ Deno.test("N2 domain mutation helpers cannot bypass the atomic sync receipt gate
     "ns_upsert_inventory_valuation","ns_upsert_recurring_charge",
     "ns_deactivate_recurring_charge","ns_upsert_loyalty_program"
   ]) {
-    assert(new RegExp("revoke\\\\s+all\\\\s+on\\\\s+function\\\\s+public\\\\."+fn+"\\\\s*\\\\([^;]+\\\\)\\\\s+from\\\\s+public,\\\\s*anon,\\\\s*authenticated","i").test(sql),
-      fn + " must revoke direct client execution");
-    assert(new RegExp("grant\\\\s+execute\\\\s+on\\\\s+function\\\\s+public\\\\."+fn+"\\\\s*\\\\([^;]+\\\\)\\\\s+to\\\\s+service_role","i").test(sql),
-      fn + " must only be directly executable by the server role");
+    const revokeStart=sql.indexOf("revoke all on function public."+fn+"(");
+    const grantStart=sql.indexOf("grant execute on function public."+fn+"(");
+    assert(revokeStart>=0 && grantStart>=0,fn+" must have explicit execute privileges");
+    const revokeStatement=sql.slice(revokeStart,sql.indexOf(";",revokeStart));
+    const grantStatement=sql.slice(grantStart,sql.indexOf(";",grantStart));
+    assert(revokeStatement.endsWith("from public, anon, authenticated"),
+      fn+" must revoke direct client execution");
+    assert(grantStatement.endsWith("to service_role"),
+      fn+" must only be directly executable by the server role");
   }
-  assert(/grant\\s+execute\\s+on\\s+function\\s+public\\.ns_apply_sync_event\\([^;]+\\)\\s+to\\s+authenticated,\\s*service_role/i.test(sql),
+  const gatewayGrant=sql.split("\\n").find((line)=>line.includes("grant execute on function public.ns_apply_sync_event("));
+  assert(Boolean(gatewayGrant && gatewayGrant.includes("to authenticated, service_role")),
     "Authenticated clients must enter mutations through the atomic sync gateway");
 });
