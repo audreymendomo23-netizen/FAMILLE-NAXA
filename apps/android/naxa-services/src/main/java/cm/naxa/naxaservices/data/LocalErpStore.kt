@@ -969,6 +969,15 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_management_records WHERE id = :recordId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
     suspend fun findManagementRecord(orgId: String, siteId: String, recordId: String): LocalManagementRecord?
 
+    @Query("SELECT * FROM local_management_records WHERE id = :recordId AND orgId = :orgId LIMIT 1")
+    suspend fun findManagementRecordAcrossSites(orgId: String, recordId: String): LocalManagementRecord?
+
+    @Query("SELECT * FROM local_purchase_lines WHERE orgId = :orgId AND siteId = :siteId AND purchaseId = :purchaseId")
+    suspend fun loadPurchaseLines(orgId: String, siteId: String, purchaseId: String): List<LocalPurchaseLine>
+
+    @Query("SELECT COUNT(*) FROM local_purchase_lines WHERE orgId = :orgId AND siteId = :siteId AND purchaseId = :purchaseId AND quantityReceived + 0.000001 < quantityOrdered")
+    suspend fun countPurchaseLinesNotFullyReceived(orgId: String, siteId: String, purchaseId: String): Int
+
     @Update
     suspend fun updateManagementRecord(record: LocalManagementRecord)
 
