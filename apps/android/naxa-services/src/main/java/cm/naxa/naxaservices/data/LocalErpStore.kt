@@ -1408,7 +1408,7 @@ val NS_SERVICES_MIGRATION_14_15: Migration = object : Migration(14, 15) {
             "CREATE TABLE IF NOT EXISTS local_remote_aggregates (" +
                 "orgId TEXT NOT NULL, siteId TEXT, aggregateType TEXT NOT NULL, aggregateId TEXT NOT NULL, " +
                 "aggregateVersion INTEGER NOT NULL, lastChangeCursor INTEGER NOT NULL, projectionJson TEXT NOT NULL, " +
-                "needsReview INTEGER NOT NULL DEFAULT 0, updatedAtEpochMs INTEGER NOT NULL, " +
+                "needsReview INTEGER NOT NULL, updatedAtEpochMs INTEGER NOT NULL, " +
                 "PRIMARY KEY(orgId, aggregateType, aggregateId))"
         )
         database.execSQL(
