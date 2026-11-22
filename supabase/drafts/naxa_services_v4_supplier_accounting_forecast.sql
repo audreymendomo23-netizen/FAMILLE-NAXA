@@ -2596,6 +2596,8 @@ rollback;
       or lower(s.name)=lower(p_service_reference_or_name))
   order by case when s.site_id=p_site_id then 0 else 1 end
   limit 1;
+  v_customer_name:=coalesce(v_customer_name,trim(p_customer_reference_or_name));
+  v_service_name:=coalesce(v_service_name,trim(p_service_reference_or_name));
 
   perform pg_catalog.pg_advisory_xact_lock(
     pg_catalog.hashtextextended(p_org_id::text||':'||p_site_id::text||':appointment-slots',0)
@@ -2741,6 +2743,7 @@ end;
 $naxa$;
 
 revoke insert,update,delete on public.ns_pressing_orders,public.ns_appointments from public,anon,authenticated;
+revoke insert,update,delete on public.ns_pressing_status_events,public.ns_appointment_status_events from public,anon,authenticated;
 grant select on public.ns_pressing_orders,public.ns_appointments to authenticated;
 grant all on public.ns_pressing_orders,public.ns_appointments to service_role;
 
