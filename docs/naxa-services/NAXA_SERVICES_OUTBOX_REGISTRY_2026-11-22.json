@@ -61,7 +61,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "save_supplier",
@@ -99,7 +99,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-002",
@@ -115,7 +116,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "create_supplier_purchase",
@@ -160,7 +161,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-003",
@@ -176,7 +178,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "receive_supplier_purchase_line",
@@ -214,7 +216,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-004",
@@ -230,7 +233,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "record_supplier_payment",
@@ -270,7 +273,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-005",
@@ -335,7 +339,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "save_inventory_item",
@@ -373,7 +377,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-007",
@@ -389,7 +394,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
       "contract": {
         "version": 1,
         "handler": "upsert_recurring_charge",
@@ -430,7 +435,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-008",
@@ -446,7 +452,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
       "contract": {
         "version": 1,
         "handler": "record_recurring_charge_payment",
@@ -484,7 +490,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-009",
@@ -500,7 +507,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
       "contract": {
         "version": 1,
         "handler": "deactivate_recurring_charge",
@@ -535,7 +542,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-010",
@@ -551,7 +559,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
       "contract": {
         "version": 1,
         "handler": "upsert_loyalty_program",
@@ -592,7 +600,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-011",
@@ -608,7 +617,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
       "contract": {
         "version": 1,
         "handler": "record_loyalty_activity",
@@ -647,7 +656,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-012",
@@ -663,7 +673,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
       "canonical_parent_action": "redeem_loyalty_reward",
       "contract": {
         "version": 1,
@@ -701,7 +711,8 @@
           "cross-tenant/site denied",
           "concurrent redemption yields exactly one winner"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-013",
@@ -1503,7 +1514,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-028",
@@ -1562,7 +1574,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-029",
@@ -1678,7 +1691,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-031",
@@ -1730,7 +1744,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-032",
@@ -1746,7 +1761,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "save_inventory_item",
@@ -1785,7 +1800,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-033",
@@ -1801,7 +1817,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "record_inventory_movement",
@@ -1840,7 +1856,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-034",
@@ -1910,7 +1927,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "save_inventory_item",
@@ -1948,7 +1965,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-036",
@@ -1964,7 +1982,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "save_inventory_item",
@@ -2002,7 +2020,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-037",
@@ -2018,7 +2037,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "record_inventory_movement",
@@ -2057,7 +2076,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-038",
@@ -2127,7 +2147,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
+      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
       "contract": {
         "version": 1,
         "handler": "record_inventory_movement",
@@ -2167,7 +2187,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-040",
@@ -2221,7 +2242,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-041",
@@ -2388,7 +2410,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-044",
@@ -2444,7 +2467,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-045",
