@@ -293,6 +293,7 @@ private fun NaxaServicesRoot(
             SupplierSyncCoordinator.isConfigured()
         ) {
             NaxaServicesSyncScheduler.schedule(context)
+            NaxaServicesSyncScheduler.enqueueNow(context)
         } else {
             NaxaServicesSyncScheduler.cancel(context)
         }
@@ -2424,11 +2425,11 @@ private fun DashboardContent(
                                 syncBusy = true
                                 syncMessage = null
                                 try {
-                                    val summary = SupplierSyncCoordinator.syncPending(localRepository, syncApi, session)
+                                    val summary = runNaxaServicesSyncCycle(localRepository, syncApi, session)
                                     syncMessage = if (locale == "en") {
-                                        "Applied: ${summary.applied} · Blocked: ${summary.blocked} · Rejected: ${summary.rejected} · Remaining: ${summary.remaining}"
+                                        "Sent: ${summary.outgoing.applied} · Received from peers: ${summary.incomingApplied} · Blocked: ${summary.outgoing.blocked} · Rejected: ${summary.outgoing.rejected} · Remaining: ${summary.outgoing.remaining}"
                                     } else {
-                                        "Envoyées : ${summary.applied} · Bloquées : ${summary.blocked} · Rejetées : ${summary.rejected} · Restantes : ${summary.remaining}"
+                                        "Envoyées : ${summary.outgoing.applied} · Reçues des autres appareils : ${summary.incomingApplied} · Bloquées : ${summary.outgoing.blocked} · Rejetées : ${summary.outgoing.rejected} · Restantes : ${summary.outgoing.remaining}"
                                     }
                                 } catch (cancelled: CancellationException) {
                                     throw cancelled
@@ -2439,7 +2440,7 @@ private fun DashboardContent(
                                 }
                             }
                         },
-                        enabled = syncEnabled && !syncBusy && pendingOperations > 0,
+                        enabled = syncEnabled && !syncBusy,
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(if (syncBusy) (if (locale == "en") "Synchronizing…" else "Synchronisation…") else (if (locale == "en") "Synchronize now" else "Synchroniser maintenant"))
