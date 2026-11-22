@@ -49,3 +49,35 @@
 | GRD-014 | Tarification annuelle différenciée : ACCÈS = 12 mensualités pour 12 mois sans mois offert ; PREMIUM = 10 mensualités pour 12 mois avec 2 mois offerts. Cette règle est une exception GRILLAD au mécanisme annuel générique et doit être encodée au niveau du plan. | VALIDÉ — 21/11/2026 |
 
 **Note de gouvernance GRILLAD :** les trois configurations Manager de FAM-009 (Manager seul ; Manager + un vendeur ; Manager et plusieurs vendeurs sur plusieurs lieux) sont conservées. Elles décrivent l'organisation humaine et opérationnelle, distincte des deux modes de gestion des données de GRD-004 (indépendant / centralisé). Les cinq arbitrages GRD-001 à GRD-005 sont retrouvés dans les échanges récents ; les points GRD-009 restent explicitement à reconfirmer. Les statuts validés concernent les décisions produit, pas l'état d'implémentation logicielle.
+
+
+## Décisions COTIZ 360° — baseline fonctionnelle V2.1 du 22 novembre 2026
+
+| ID | Décision | État |
+|---|---|---|
+| COT-001 | Un compte personnel COTIZ unique par personne, réutilisable dans plusieurs tontines et communautés COTIZ ; pas de fusion automatique avec les identités des autres applications Famille NAXA | VALIDÉ |
+| COT-002 | Inscription personnelle gratuite ; compte non vérifié limité à Discover, fiches publiques et statuts publics ; aucune adhésion, cotisation, conversation privée ou création | VALIDÉ |
+| COT-003 | Vérification COTIZ ID gratuite par NAXA, avec dossier CNI, photo, plan et localisation ; documents et GPS strictement privés, nécessité/proportionnalité et rétention à valider juridiquement | VALIDÉ SOUS RÉSERVE JURIDIQUE |
+| COT-004 | Coche bleue = identité contrôlée, sans garantie de solvabilité ou de comportement | VALIDÉ |
+| COT-005 | Seul un utilisateur vérifié peut soumettre une création ; chaque tontine nécessite une approbation NAXA distincte avant activation | VALIDÉ |
+| COT-006 | Associations, GIC, groupes d'initiatives et communautés institutionnelles intégrés par NAXA après validation du partenariat et des représentants | VALIDÉ |
+| COT-007 | Invitation, adhésion et attribution d'un rôle sont séparées ; le membre accepte explicitement son poste et ses permissions | VALIDÉ |
+| COT-008 | Les membres d'une tontine peuvent utiliser une messagerie sociale ; les conversations ne remplacent jamais le ledger, les votes ou les décisions métier | VALIDÉ |
+| COT-009 | Les statuts éphémères sont réservés aux tontines et organisations autorisées, visibles aux utilisateurs COTIZ, photos/vidéos, expiration publique après 24 heures | VALIDÉ |
+| COT-010 | Recherche publique par nom, ville et proximité ; aucune exposition de l'adresse ou des coordonnées GPS exactes du domicile | VALIDÉ |
+| COT-011 | Statistiques de vues et visiteurs uniques ; cartes populaires animées avec contrôle des animations ; popularité séparée de Trust | VALIDÉ |
+| COT-012 | COTIZ Boost facultatif, publicité étiquetée ; les paiements publicitaires n'altèrent pas la réputation ni le classement organique | VALIDÉ |
+| COT-013 | Appels audio de groupe et visioconférences de groupe prévus ; fournisseur, quotas, coûts et règles d'enregistrement à valider | VALIDÉ POUR LA CIBLE |
+| COT-014 | Français et anglais pour l'interface initiale ; Fulfulde prioritaire pour la voix puis extension progressive aux autres langues camerounaises après tests natifs | VALIDÉ |
+| COT-015 | Double réputation : score personnel COTIZ partageable avec consentement et score interne par groupe ; formule exacte à versionner et à arbitrer avant production | VALIDÉ POUR LE PRINCIPE |
+| COT-016 | Cinq modes de détermination des tours : ordre fixe, tirage auditable, vote, ordre négocié et ordre conditionnel | VALIDÉ |
+| COT-017 | Suivi documentaire des cotisations, trésoreries, objectifs, prêts, garanties et solidarité ; aucune détention/transmission de fonds par défaut | VALIDÉ |
+| COT-018 | Collecte d'épargne, crédit, intérêts, cautions, garanties et services de paiement restent conditionnels à un avis juridique écrit et aux autorisations/partenariats nécessaires | CONDITIONNEL |
+| COT-019 | Abonnement standard par groupe et effectif ; membre non facturé individuellement ; grilles Découverte à Fédération définies dans le cahier V2.1 | VALIDÉ COMME BASELINE COMMERCIALE DE TRAVAIL |
+| COT-020 | Remise annuelle COTIZ de 15 %, exception explicite à FAM-020 (10 mensualités pour 12 mois) | VALIDÉ COMME EXCEPTION PRODUIT |
+| COT-021 | Parrainage membres, groupes et partenaires, récompense liée à une activation réelle et contrôles antifraude | VALIDÉ POUR LE PRINCIPE |
+| COT-022 | Fédération conçue dès le départ, avec facturation centralisée possible et autonomie/permissions propres aux tontines filles | VALIDÉ |
+| COT-023 | COTIZ Android natif Kotlin/Compose et Web/PWA séparée ; réutilisation des composants NAXA Family uniquement après audit de compatibilité, données et permissions | VALIDÉ COMME CIBLE |
+| COT-024 | Aucun changement code, migration Supabase Production, déploiement ou publication APK sans autorisation explicite distincte | VALIDÉ — RÈGLE DE DÉPÔT |
+
+Les détails, états, critères d'acceptation et réserves sont définis dans `docs/cahiers-des-charges/COTIZ_360_V2_1.md` et `docs/audits/COTIZ_AUDIT_CONTRADICTIONS_V2_1.md`. Les statuts VALIDÉ concernent les orientations produit, pas leur implémentation technique ni la conformité réglementaire.
