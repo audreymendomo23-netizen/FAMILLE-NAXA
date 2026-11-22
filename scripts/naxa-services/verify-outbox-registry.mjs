@@ -69,7 +69,7 @@ for (let i = 0; i < sourceLines.length; i++) {
   discovered.push({
     line: i + 1,
     method,
-    aggregateType: normalize(args[1]),
+    aggregateType: normalizeAggregateType(args[1]),
     actionExpression: normalize(args[3]),
   });
 }
