@@ -204,6 +204,8 @@ const ATOMIC_SYNC_ACTIONS: Record<string, { aggregate: string; idField: string; 
   "cash_session.opened": { aggregate: "cash_session", idField: "cash_session_id" },
   "cash_session.closed": { aggregate: "cash_session", idField: "cash_session_id" },
   "expense.created": { aggregate: "expense", idField: "expense_id" },
+  "sale.created": { aggregate: "sale", idField: "sale_id" },
+  "sale.mobile_money_cancelled": { aggregate: "sale", idField: "sale_id" },
 };
 
 export function normalizeAtomicSyncEvent(value: unknown): AtomicSyncEvent {
