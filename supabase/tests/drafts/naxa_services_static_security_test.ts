@@ -375,3 +375,25 @@ Deno.test("N2 sale handlers post cash sale inventory once and keep Mobile Money 
   assert(/revoke\s+insert,update,delete\s+on\s+public\.ns_sales,public\.ns_payments,public\.ns_sale_lines\s+from\s+public,anon,authenticated/i.test(sql),
     "Sale, payment and line writes must be RPC-only");
 });
+
+
+Deno.test("N2 domain mutation helpers cannot bypass the atomic sync receipt gateway", async () => {
+  const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  for(const fn of [
+    "ns_create_pressing_order","ns_transition_pressing_order","ns_create_appointment",
+    "ns_transition_appointment","ns_reschedule_appointment","ns_open_cash_session",
+    "ns_record_expense","ns_close_cash_session","ns_create_sale",
+    "ns_cancel_pending_mobile_money_sale","ns_create_service","ns_update_service",
+    "ns_update_service_configuration","ns_create_customer","ns_create_customer_followup",
+    "ns_complete_customer_followup","ns_create_support_request",
+    "ns_upsert_inventory_valuation","ns_upsert_recurring_charge",
+    "ns_deactivate_recurring_charge","ns_upsert_loyalty_program"
+  ]) {
+    assert(new RegExp("revoke\\\\s+all\\\\s+on\\\\s+function\\\\s+public\\\\."+fn+"\\\\s*\\\\([^;]+\\\\)\\\\s+from\\\\s+public,\\\\s*anon,\\\\s*authenticated","i").test(sql),
+      fn + " must revoke direct client execution");
+    assert(new RegExp("grant\\\\s+execute\\\\s+on\\\\s+function\\\\s+public\\\\."+fn+"\\\\s*\\\\([^;]+\\\\)\\\\s+to\\\\s+service_role","i").test(sql),
+      fn + " must only be directly executable by the server role");
+  }
+  assert(/grant\\s+execute\\s+on\\s+function\\s+public\\.ns_apply_sync_event\\([^;]+\\)\\s+to\\s+authenticated,\\s*service_role/i.test(sql),
+    "Authenticated clients must enter mutations through the atomic sync gateway");
+});
