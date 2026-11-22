@@ -343,6 +343,9 @@ object SupplierSyncCoordinator {
                     throw IllegalStateException("SYNC_RECEIPT_MISMATCH")
                 }
                 val result = receipt.optJSONObject("result") ?: JSONObject()
+                if (!repository.applyCanonicalServerEffects(event, payload, result)) {
+                    throw IllegalStateException("SERVER_SIDE_EFFECT_RECONCILIATION_FAILED")
+                }
                 val remoteId = when (event.actionCode) {
                     "supplier.saved" -> result.optString("supplier_id")
                     "inventory_item.created",
