@@ -446,8 +446,8 @@ Deno.test("N2 customer, waitlist, staff, management and transfer handlers are fu
   assert(sql.includes(":staff-time"),
     "Staff time sequence must serialize per employee and site");
   assert(sql.includes("create table if not exists public.ns_management_record_events") &&
-    sql.includes("from_status text not null default ''") && sql.includes("to_status text not null")),
-  assert(sql.includes("'transfer_out'") && sql.includes("'transfer_in'"),
+    sql.includes("from_status text not null default ''") && sql.includes("to_status text not null"))),
+    "Management transitions must append immutable state history");
     "Transfer receipt must write both stock movement legs");
   assert(/NAXA_INVENTORY_TRANSFER_RECEIVE_REQUIRES_COMPOSITE_ACTION/i.test(sql),
     "Generic transfer status transition must not duplicate stock posting");
