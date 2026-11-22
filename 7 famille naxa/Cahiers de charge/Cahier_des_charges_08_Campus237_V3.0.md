@@ -723,11 +723,11 @@ Protection : limitation des tentatives, alertes de nouvelle connexion, gestion d
 
 ## 10.3 Abonnement parent et gratuité de sécurité
 
-L'offre de base gratuite doit conserver au minimum les fonctions de sécurité, paiements et reçus définies dans le modèle. Les fonctions de sécurité de l'enfant ne sont jamais réservées à un abonnement payant.
+🔒 CAMPUS237 ACCESS est gratuit pour tout parent/tuteur autorisé et inclus dans la licence établissement par élève. Il comprend les fonctions essentielles : compte familial multi-enfants/multi-écoles, sécurité et événements arrivée/sortie, informations de bus lorsqu'elles sont disponibles, absences et changements de cours, programme du jour, statut du professeur et remplaçant confirmé, capsules de préparation publiées, notes diffusées, rang provisoire de son enfant, bulletins, convocations, rendez-vous, reçus, communauté, livret scolaire et ressources KNOWLEDGE autorisées.
 
-L'abonnement Premium comprend, selon la V2.0 : suivi scolaire complet en temps réel, bulletins et carnet, messagerie et appels, communauté, bibliothèque numérique, résumé hebdomadaire et assistant parent.
+🔒 CAMPUS237 PREMIUM est facultatif et rattaché au compte familial. Il comprend assistant IA familial, résumés hebdomadaires écrits/audio, analyses avancées, parcours de révision recommandés, calendrier familial consolidé, détection de conflits d'agenda, recommandations de ressources, historique comparatif et préparation assistée des rendez-vous.
 
-La portée exacte du Premium pour KNOWLEDGE et OPPORTUNITIES est précisée dans les chapitres dédiés : le contenu Knowledge gratuit ne doit pas être verrouillé par défaut derrière l'abonnement.
+Le barème, les mensualités pendant neuf mois scolaires et les prix annuels égaux à sept mensualités sont définis au chapitre 23.3. Un enfant rattaché à deux écoles partenaires n'est compté qu'une fois. Le paiement ne modifie jamais les droits légaux des tuteurs.
 
 ---
 
@@ -1226,19 +1226,22 @@ Pour un groupe, les effectifs actifs de toutes les écoles rattachées sont addi
 
 ## 23.3 Parents
 
-La V2.0 établit :
-- offre de base gratuite ;
-- abonnement Premium à 600 FCFA par mois pendant les neuf mois scolaires ;
-- gratuité pendant les vacances ;
-- formule annuelle communiquée de 4 200 FCFA ;
-- essai envisagé de deux semaines.
+🔒 Décision V3.0.2 : compte familial unique. ACCESS est gratuit. PREMIUM est facultatif et dégressif selon le nombre d'enfants distincts rattachés, indépendamment du nombre d'écoles partenaires.
 
-Calcul à conserver explicitement :
-- 600 × 9 mois = 5 400 FCFA ;
-- 4 200 FCFA annuels équivalent à sept mensualités de 600 FCFA pour neuf mois de service ;
-- la formule annuelle offre donc une réduction de 1 200 FCFA par rapport à neuf mensualités.
+| Enfants distincts | Mensuel | Annuel |
+|---:|---:|---:|
+| 1 | 600 FCFA | 4 200 FCFA |
+| 2 | 900 FCFA | 6 300 FCFA |
+| 3 | 1 150 FCFA | 8 050 FCFA |
+| 4 | 1 350 FCFA | 9 450 FCFA |
+| 5 | 1 550 FCFA | 10 850 FCFA |
+| 6 et plus | 1 550 FCFA + 200 FCFA par enfant au-delà du 5e | Mensuel × 7 |
 
-⚠️ La tarification par enfant ou par famille reste à arbitrer. Le compte parent multi-enfants et multi-écoles est une exigence fonctionnelle, mais ne signifie pas que le prix familial est déjà défini.
+La mensualité est facturée pendant les neuf mois scolaires ; l'abonnement annuel équivaut à sept mensualités. Exemple : deux enfants dans deux écoles partenaires représentent un seul Premium familial de 900 FCFA par mois ou 6 300 FCFA à l'année. Un enfant n'est jamais recompté parce qu'il fréquente plusieurs écoles ou change d'école.
+
+ACCESS comprend la sécurité, les arrivées/sorties, le suivi des cours, les notes diffusées, le rang de son enfant, les bulletins, les convocations, les reçus, COMMUNITY et le livret scolaire. PREMIUM comprend assistant IA familial, résumés écrits/audio, analyses avancées, révisions recommandées, calendrier consolidé, détection de conflits et fonctions d'accompagnement avancées.
+
+Les droits légaux des tuteurs restent indépendants du rôle de payeur. Les fonctions ACCESS essentielles ne sont jamais suspendues pour défaut de souscription Premium.
 
 ## 23.4 Partage 80/20
 
