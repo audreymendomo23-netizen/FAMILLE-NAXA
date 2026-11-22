@@ -50,6 +50,18 @@ grant select on public.ns_appointment_status_events to authenticated;
 grant all on public.ns_appointment_status_events to service_role;
 revoke insert,update,delete on public.ns_appointment_status_events from authenticated;
 
+
+-- N2: cash session lifecycle and expense ledger hardening.
+create unique index if not exists ns_cash_sessions_id_site_org_idx
+  on public.ns_cash_sessions(id,site_id,org_id);
+create unique index if not exists ns_cash_sessions_one_open_per_register_uidx
+  on public.ns_cash_sessions(org_id,site_id,register_id) where status='open';
+alter table public.ns_expenses
+  add column if not exists occurred_at timestamptz not null default now(),
+  add column if not exists idempotency_key uuid;
+create unique index if not exists ns_expenses_idempotency_uidx
+  on public.ns_expenses(org_id,idempotency_key) where idempotency_key is not null;
+
 -- N2 domain tables and versioned catalogue/CRM/support fields.
 alter table public.ns_services
   drop constraint if exists ns_services_activity_check;
@@ -1758,6 +1770,8 @@ begin
     when p_action_code = 'pressing_order.created' then 'pressing_order'
     when p_action_code like 'pressing_order.status_changed:%' then 'pressing_order'
     when p_action_code like 'appointment.%' then 'appointment'
+    when p_action_code like 'cash_session.%' then 'cash_session'
+    when p_action_code = 'expense.created' then 'expense'
     when p_action_code like 'inventory_valuation.%' then 'inventory_valuation'
     else null
   end;
@@ -1785,6 +1799,8 @@ begin
     when p_action_code = 'support_request.created' then p_payload->>'request_id'
     when p_action_code like 'pressing_order.%' then p_payload->>'order_id'
     when p_action_code like 'appointment.%' then p_payload->>'appointment_id'
+    when p_action_code like 'cash_session.%' then p_payload->>'cash_session_id'
+    when p_action_code = 'expense.created' then p_payload->>'expense_id'
     when p_action_code like 'inventory_valuation.%' then p_payload->>'inventory_item_id'
     else null
   end;
@@ -2084,6 +2100,28 @@ begin
         (p_payload->>'starts_at')::timestamptz,(p_payload->>'ends_at')::timestamptz,
         nullif(p_payload->>'assigned_member_id','')::uuid,
         (p_payload->>'expected_version')::integer,p_payload->>'reason'
+      );
+    when 'cash_session.opened' then
+      v_result := public.ns_open_cash_session(
+        (p_payload->>'cash_session_id')::uuid,p_org_id,p_site_id,
+        (p_payload->>'register_id')::uuid,p_payload->>'register_name',
+        (p_payload->>'opening_float_xaf')::bigint,
+        (p_payload->>'opened_at')::timestamptz
+      );
+    when 'expense.created' then
+      v_result := public.ns_record_expense(
+        (p_payload->>'expense_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'cash_session_id','')::uuid,p_payload->>'category',
+        p_payload->>'description',(p_payload->>'amount_xaf')::bigint,
+        (p_payload->>'occurred_at')::timestamptz,
+        coalesce((p_payload->>'idempotency_key')::uuid,p_event_id)
+      );
+    when 'cash_session.closed' then
+      v_result := public.ns_close_cash_session(
+        (p_payload->>'cash_session_id')::uuid,p_org_id,p_site_id,
+        (p_payload->>'counted_close_xaf')::bigint,
+        coalesce(p_payload->>'variance_reason',''),
+        (p_payload->>'closed_at')::timestamptz
       );
     when 'loyalty_reward.redeemed' then
       if not public.ns_redeem_loyalty_reward(
@@ -2757,6 +2795,174 @@ revoke all on function public.ns_transition_appointment(uuid,uuid,uuid,text,text
 grant execute on function public.ns_transition_appointment(uuid,uuid,uuid,text,text,text,integer,timestamptz) to authenticated,service_role;
 revoke all on function public.ns_reschedule_appointment(uuid,uuid,uuid,uuid,timestamptz,timestamptz,uuid,integer,text) from public,anon;
 grant execute on function public.ns_reschedule_appointment(uuid,uuid,uuid,uuid,timestamptz,timestamptz,uuid,integer,text) to authenticated,service_role;
+
+
+create or replace function public.ns_open_cash_session(
+  p_cash_session_id uuid,p_org_id uuid,p_site_id uuid,p_register_id uuid,
+  p_register_name text,p_opening_float_xaf bigint,p_opened_at timestamptz
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare v_member uuid; v_register public.ns_cash_registers%rowtype; v_session public.ns_cash_sessions%rowtype;
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_CASH_SESSION_FORBIDDEN';
+  end if;
+  if p_cash_session_id is null or p_register_id is null
+     or p_opening_float_xaf is null or p_opening_float_xaf<0
+     or length(trim(coalesce(p_register_name,''))) not between 1 and 120
+     or p_opened_at is null then
+    raise exception 'NAXA_CASH_SESSION_OPEN_INVALID';
+  end if;
+  select * into v_register from public.ns_cash_registers
+    where id=p_register_id and org_id=p_org_id and site_id=p_site_id and active
+    for share;
+  if not found then raise exception 'NAXA_CASH_REGISTER_NOT_FOUND'; end if;
+  if v_register.workstation_id is not null
+     and not public.ns_can_operate_workstation(p_org_id,p_site_id,v_register.workstation_id) then
+    raise exception 'NAXA_CASH_REGISTER_WORKSTATION_FORBIDDEN';
+  end if;
+  if exists(select 1 from public.ns_cash_sessions s
+    where s.org_id=p_org_id and s.site_id=p_site_id
+      and s.register_id=p_register_id and s.status='open') then
+    raise exception 'NAXA_CASH_SESSION_ALREADY_OPEN';
+  end if;
+  insert into public.ns_cash_sessions(
+    id,org_id,site_id,register_id,opened_by,opening_float_xaf,
+    status,opened_at,closed_at
+  ) values (
+    p_cash_session_id,p_org_id,p_site_id,p_register_id,v_member,p_opening_float_xaf,
+    'open',p_opened_at,null
+  ) returning * into v_session;
+  return jsonb_build_object('cash_session_id',v_session.id,'status',v_session.status,
+    'opening_float_xaf',v_session.opening_float_xaf,'register_name',v_register.name,'opened_at',v_session.opened_at);
+end;
+$naxa$;
+
+create or replace function public.ns_record_expense(
+  p_expense_id uuid,p_org_id uuid,p_site_id uuid,p_cash_session_id uuid,
+  p_category text,p_description text,p_amount_xaf bigint,p_occurred_at timestamptz,
+  p_idempotency_key uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare v_member uuid; v_existing public.ns_expenses%rowtype; v_session public.ns_cash_sessions%rowtype;
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_EXPENSE_FORBIDDEN';
+  end if;
+  if p_expense_id is null or p_idempotency_key is null
+     or length(trim(coalesce(p_category,''))) not between 1 and 80
+     or length(trim(coalesce(p_description,''))) not between 2 and 500
+     or p_amount_xaf is null or p_amount_xaf<=0 or p_occurred_at is null then
+    raise exception 'NAXA_EXPENSE_INVALID';
+  end if;
+  select * into v_existing from public.ns_expenses
+   where org_id=p_org_id and idempotency_key=p_idempotency_key;
+  if found then
+    if v_existing.id=p_expense_id and v_existing.site_id=p_site_id
+       and v_existing.cash_session_id is not distinct from p_cash_session_id
+       and v_existing.category=trim(p_category)
+       and v_existing.description=trim(p_description)
+       and v_existing.amount_xaf=p_amount_xaf then
+      return jsonb_build_object('expense_id',v_existing.id,'idempotent',true);
+    end if;
+    raise exception 'NAXA_EXPENSE_IDEMPOTENCY_CONFLICT';
+  end if;
+  if p_cash_session_id is not null then
+    select * into v_session from public.ns_cash_sessions
+     where id=p_cash_session_id and org_id=p_org_id and site_id=p_site_id
+     for update;
+    if not found or v_session.status<>'open' then raise exception 'NAXA_EXPENSE_CASH_SESSION_NOT_OPEN'; end if;
+  end if;
+  insert into public.ns_expenses(
+    id,org_id,site_id,cash_session_id,category,description,amount_xaf,
+    reason,created_by,created_at,occurred_at,idempotency_key
+  ) values (
+    p_expense_id,p_org_id,p_site_id,p_cash_session_id,trim(p_category),
+    trim(p_description),p_amount_xaf,null,v_member,now(),p_occurred_at,p_idempotency_key
+  );
+  return jsonb_build_object('expense_id',p_expense_id,'amount_xaf',p_amount_xaf,'idempotent',false);
+end;
+$naxa$;
+
+create or replace function public.ns_close_cash_session(
+  p_cash_session_id uuid,p_org_id uuid,p_site_id uuid,p_counted_close_xaf bigint,
+  p_variance_reason text,p_closed_at timestamptz
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid; v_session public.ns_cash_sessions%rowtype;
+  v_cash_in bigint; v_expenses bigint; v_supplier_out bigint;
+  v_expected bigint; v_variance bigint; v_closed_at timestamptz;
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_CASH_SESSION_CLOSE_FORBIDDEN';
+  end if;
+  if p_counted_close_xaf is null or p_counted_close_xaf<0 or p_closed_at is null then
+    raise exception 'NAXA_CASH_SESSION_CLOSE_INVALID';
+  end if;
+  select * into v_session from public.ns_cash_sessions
+   where id=p_cash_session_id and org_id=p_org_id and site_id=p_site_id
+   for update;
+  if not found or v_session.status<>'open' then raise exception 'NAXA_CASH_SESSION_NOT_OPEN'; end if;
+
+  select coalesce(sum(p.amount_xaf),0)::bigint into v_cash_in
+  from public.ns_payments p
+  join public.ns_sales s on s.id=p.sale_id and s.org_id=p.org_id and s.site_id=p.site_id
+  where s.cash_session_id=p_cash_session_id and p.org_id=p_org_id and p.site_id=p_site_id
+    and p.payment_method='cash' and p.status='confirmed';
+
+  select coalesce(sum(e.amount_xaf),0)::bigint into v_expenses
+  from public.ns_expenses e
+  where e.cash_session_id=p_cash_session_id and e.org_id=p_org_id and e.site_id=p_site_id;
+
+  select coalesce(sum(sp.amount_xaf),0)::bigint into v_supplier_out
+  from public.ns_supplier_payments sp
+  where sp.cash_session_id=p_cash_session_id and sp.org_id=p_org_id and sp.site_id=p_site_id
+    and sp.payment_method='cash';
+
+  v_expected:=v_session.opening_float_xaf+v_cash_in-v_expenses-v_supplier_out;
+  if v_expected<0 then raise exception 'NAXA_CASH_SESSION_EXPECTED_BALANCE_NEGATIVE'; end if;
+  v_variance:=p_counted_close_xaf-v_expected;
+  if v_variance<>0 and length(trim(coalesce(p_variance_reason,'')))<3 then
+    raise exception 'NAXA_CASH_VARIANCE_REASON_REQUIRED';
+  end if;
+  v_closed_at:=greatest(p_closed_at,v_session.opened_at);
+  update public.ns_cash_sessions
+    set status='closed',closed_by=v_member,closed_at=v_closed_at,
+        expected_close_xaf=v_expected,counted_close_xaf=p_counted_close_xaf,
+        variance_xaf=v_variance,variance_reason=nullif(trim(coalesce(p_variance_reason,'')),'')
+    where id=p_cash_session_id and org_id=p_org_id and site_id=p_site_id
+    returning * into v_session;
+  return jsonb_build_object(
+    'cash_session_id',v_session.id,'status',v_session.status,
+    'expected_close_xaf',v_expected,'counted_close_xaf',p_counted_close_xaf,
+    'variance_xaf',v_variance,'closed_at',v_session.closed_at
+  );
+end;
+$naxa$;
+
+revoke insert,update,delete on public.ns_cash_sessions,public.ns_expenses from public,anon,authenticated;
+grant select on public.ns_cash_sessions,public.ns_expenses to authenticated;
+grant all on public.ns_cash_sessions,public.ns_expenses to service_role;
+
+revoke all on function public.ns_open_cash_session(uuid,uuid,uuid,uuid,text,bigint,timestamptz) from public,anon;
+grant execute on function public.ns_open_cash_session(uuid,uuid,uuid,uuid,text,bigint,timestamptz) to authenticated,service_role;
+revoke all on function public.ns_record_expense(uuid,uuid,uuid,uuid,text,text,bigint,timestamptz,uuid) from public,anon;
+grant execute on function public.ns_record_expense(uuid,uuid,uuid,uuid,text,text,bigint,timestamptz,uuid) to authenticated,service_role;
+revoke all on function public.ns_close_cash_session(uuid,uuid,uuid,bigint,text,timestamptz) from public,anon;
+grant execute on function public.ns_close_cash_session(uuid,uuid,uuid,bigint,text,timestamptz) to authenticated,service_role;
 
 create or replace function public.ns_apply_sync_event(
   p_org_id uuid,
