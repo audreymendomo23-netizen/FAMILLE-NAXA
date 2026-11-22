@@ -1491,6 +1491,9 @@ val NS_SERVICES_MIGRATION_15_16: Migration = object : Migration(15, 16) {
 class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
     val dao: NaxaServicesDao = database.naxaServicesDao()
 
+    private fun siteIdFromRow(row: JSONObject): String? =
+        row.optString("site_id").takeUnless { it.isBlank() || it == "null" }
+
     /**
      * Persists an authenticated server page and its cursor atomically. Incoming
      * peer changes are written only to the remote replica tables; this method
@@ -1531,6 +1534,10 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             ) { "SYNC_CHANGE_ENVELOPE_INVALID" }
             priorPageCursor = cursor
 
+            val visibleSiteIds = row.optJSONArray("visible_site_ids") ?: JSONArray().apply {
+                siteIdFromRow(row)?.let { put(it) }
+            }
+            projection.put("_naxa_visible_site_ids", visibleSiteIds)
             val projectionJson = projection.toString()
             val existing = dao.findRemoteChange(eventId)
             if (existing != null) {
