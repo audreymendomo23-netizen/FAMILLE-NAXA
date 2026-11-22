@@ -5,6 +5,9 @@ import java.util.UUID
 import org.json.JSONObject
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.junit.Test
 
 class SupplierSyncCoordinatorTest {
@@ -75,6 +78,40 @@ class SupplierSyncCoordinatorTest {
 
         payload.put("expected_version", 1)
         assertTrue(SupplierSyncCoordinator.hasRequiredSnapshot(item, payload))
+    }
+
+
+    @Test
+    fun manualAndWorkerSyncCallsShareOneExclusiveLock() = runBlocking {
+        val active = java.util.concurrent.atomic.AtomicInteger(0)
+        val maximum = java.util.concurrent.atomic.AtomicInteger(0)
+        kotlinx.coroutines.coroutineScope {
+            repeat(2) {
+                launch {
+                    SupplierSyncCoordinator.withSyncLock {
+                        val current = active.incrementAndGet()
+                        maximum.updateAndGet { previous -> maxOf(previous, current) }
+                        delay(40)
+                        active.decrementAndGet()
+                    }
+                }
+            }
+        }
+        assertEquals(1, maximum.get())
+        assertEquals(0, active.get())
+    }
+
+    @Test
+    fun cancellationIsPropagatedThroughSharedSyncLock() = runBlocking {
+        var propagated = false
+        try {
+            SupplierSyncCoordinator.withSyncLock {
+                throw kotlinx.coroutines.CancellationException("test cancellation")
+            }
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            propagated = true
+        }
+        assertTrue(propagated)
     }
 
     @Test

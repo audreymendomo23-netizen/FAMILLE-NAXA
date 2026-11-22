@@ -5,7 +5,9 @@ import cm.naxa.naxaservices.auth.AuthApiException
 import cm.naxa.naxaservices.auth.AuthSession
 import cm.naxa.naxaservices.data.LocalOutboxEvent
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
 import kotlin.random.Random
 import java.util.UUID
 import org.json.JSONObject
@@ -168,7 +170,26 @@ object SupplierSyncCoordinator {
             familyRef != EXISTING_NAXA_PROJECT_REF
     }
 
+    private val syncMutex = Mutex()
+
+    internal suspend fun <T> withSyncLock(block: suspend () -> T): T {
+        syncMutex.lock()
+        return try {
+            block()
+        } finally {
+            syncMutex.unlock()
+        }
+    }
+
     suspend fun syncPending(
+        repository: NaxaServicesLocalRepository,
+        api: AuthApi,
+        session: AuthSession
+    ): SupplierSyncSummary = withSyncLock {
+        syncPendingLocked(repository, api, session)
+    }
+
+    private suspend fun syncPendingLocked(
         repository: NaxaServicesLocalRepository,
         api: AuthApi,
         session: AuthSession
@@ -302,6 +323,8 @@ object SupplierSyncCoordinator {
                 val updated = dao.markOutboxEventSynced(event.eventId, orgId, remoteId)
                 if (updated == 0) throw IllegalStateException("OUTBOX_STATE_UPDATE_FAILED")
                 applied++
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (failure: Exception) {
                 val status = (failure as? AuthApiException)?.statusCode
                 val remoteCode = failure.message.orEmpty().uppercase()

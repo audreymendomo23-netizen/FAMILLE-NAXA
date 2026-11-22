@@ -30,6 +30,7 @@ import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_12_13
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_13_14
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import cm.naxa.naxaservices.data.NsServicesDatabase
+import kotlinx.coroutines.CancellationException
 import java.util.concurrent.TimeUnit
 
 object NaxaServicesSyncScheduler {
@@ -91,6 +92,8 @@ class NaxaServicesSyncWorker(
         val api = AuthApi(applicationContext)
         val session = try {
             api.refresh(refreshToken, rememberDevice = true)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (failure: AuthApiException) {
             if (failure.statusCode == 401 || failure.statusCode == 403) {
                 vault.clear()
@@ -128,7 +131,9 @@ class NaxaServicesSyncWorker(
         return try {
             val repository = NaxaServicesLocalRepository(database)
             val summary = SupplierSyncCoordinator.syncPending(repository, api, session)
-            if (summary.retried > 0 && summary.applied == 0) Result.retry() else Result.success()
+            if (summary.retried > 0) Result.retry() else Result.success()
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Exception) {
             Result.retry()
         } finally {

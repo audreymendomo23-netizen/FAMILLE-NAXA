@@ -100,6 +100,7 @@ import cm.naxa.naxaservices.auth.ProvisionScope
 import cm.naxa.naxaservices.auth.RecoveryRequestItem
 import cm.naxa.naxaservices.auth.RecoveryReset
 import cm.naxa.naxaservices.auth.SessionVault
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -2420,18 +2421,20 @@ private fun DashboardContent(
                             syncScope.launch {
                                 syncBusy = true
                                 syncMessage = null
-                                runCatching {
-                                    SupplierSyncCoordinator.syncPending(localRepository, syncApi, session)
-                                }.onSuccess { summary ->
+                                try {
+                                    val summary = SupplierSyncCoordinator.syncPending(localRepository, syncApi, session)
                                     syncMessage = if (locale == "en") {
                                         "Applied: ${summary.applied} · Blocked: ${summary.blocked} · Rejected: ${summary.rejected} · Remaining: ${summary.remaining}"
                                     } else {
                                         "Envoyées : ${summary.applied} · Bloquées : ${summary.blocked} · Rejetées : ${summary.rejected} · Restantes : ${summary.remaining}"
                                     }
-                                }.onFailure {
-                                    syncMessage = it.message ?: if (locale == "en") "Synchronization failed." else "Échec de la synchronisation."
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (failure: Exception) {
+                                    syncMessage = failure.message ?: if (locale == "en") "Synchronization failed." else "Échec de la synchronisation."
+                                } finally {
+                                    syncBusy = false
                                 }
-                                syncBusy = false
                             }
                         },
                         enabled = syncEnabled && !syncBusy && pendingOperations > 0,

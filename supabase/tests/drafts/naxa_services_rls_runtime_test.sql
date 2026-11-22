@@ -1752,7 +1752,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000001'::uuid,
     '30000000-0000-4000-8000-000000000001'::uuid,null,
     '80000000-0000-4000-8000-000000000002'::uuid,
-    'a7000000-0000-4000-8000-000000000001'::uuid,200,
+    'a7000000-0000-4000-8000-000000000001'::uuid,1,
     'inventory_transfer',v_transfer::text,'inventory_transfer.requested',
     jsonb_build_object(
       'transfer_id',v_transfer,'org_id','20000000-0000-4000-8000-000000000001',
@@ -1770,7 +1770,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000001'::uuid,
     '30000000-0000-4000-8000-000000000001'::uuid,null,
     '80000000-0000-4000-8000-000000000002'::uuid,
-    'a7000000-0000-4000-8000-000000000002'::uuid,201,
+    'a7000000-0000-4000-8000-000000000002'::uuid,2,
     'inventory_transfer',v_transfer::text,'inventory_transfer.status_changed',
     jsonb_build_object(
       'record_id',v_transfer,'transfer_id',v_transfer,
@@ -1790,7 +1790,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000001'::uuid,
     '30000000-0000-4000-8000-000000000002'::uuid,null,
     '80000000-0000-4000-8000-000000000002'::uuid,
-    'a7000000-0000-4000-8000-000000000003'::uuid,202,
+    'a7000000-0000-4000-8000-000000000003'::uuid,3,
     'inventory_transfer',v_transfer::text,'inventory_transfer.received_at_destination',
     jsonb_build_object(
       'transfer_id',v_transfer,'org_id','20000000-0000-4000-8000-000000000001',
@@ -1811,7 +1811,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000001'::uuid,
     '30000000-0000-4000-8000-000000000002'::uuid,null,
     '80000000-0000-4000-8000-000000000002'::uuid,
-    'a7000000-0000-4000-8000-000000000004'::uuid,203,
+    'a7000000-0000-4000-8000-000000000004'::uuid,4,
     'inventory_transfer',v_transfer::text,'inventory_transfer.received_at_destination',
     jsonb_build_object(
       'transfer_id',v_transfer,'org_id','20000000-0000-4000-8000-000000000001',
@@ -1832,7 +1832,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000001'::uuid,
     '30000000-0000-4000-8000-000000000001'::uuid,null,
     '80000000-0000-4000-8000-000000000002'::uuid,
-    'a7000000-0000-4000-8000-000000000005'::uuid,204,
+    'a7000000-0000-4000-8000-000000000005'::uuid,5,
     'inventory_transfer',v_transfer::text,'inventory_transfer.status_changed',
     jsonb_build_object(
       'record_id',v_transfer,'transfer_id',v_transfer,
