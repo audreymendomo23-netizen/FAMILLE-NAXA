@@ -341,6 +341,19 @@ Deno.test("N2 pressing and appointment RPCs enforce lifecycle versions and serve
     "Pressing/appointment client writes must be RPC-only");
   assert(/revoke\s+insert,update,delete\s+on\s+public\.ns_pressing_status_events,public\.ns_appointment_status_events\s+from\s+public,anon,authenticated/i.test(sql),
     "Pressing/appointment status ledgers must be append-only server writes");
+  assert(sql.includes("drop function if exists public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz)"),
+    "Legacy pressing create signature must be retired");
+  assert(sql.includes("p_deposit_payment_method text,p_cash_session_id uuid"),
+    "Pressing deposits must accept explicit payment method and cash session");
+  assert(sql.includes("if v_method is null or v_method not in ('cash','mobile_money','other')"),
+    "A positive pressing deposit must have an explicit supported payment method");
+  assert(sql.includes("NAXA_PRESSING_DEPOSIT_CASH_SESSION_REQUIRED") &&
+    sql.includes("NAXA_PRESSING_DEPOSIT_CASH_SESSION_NOT_OPEN"),
+    "A cash pressing deposit must require a valid open cash session");
+  assert(sql.includes("v_payment_status:=case when v_method='cash' then 'confirmed' else 'pending' end"),
+    "Non-cash pressing deposits must remain pending until provider confirmation");
+  assert(sql.includes("'CUSTOMER_ADVANCES'") && sql.includes("'cash_deposit_received'"),
+    "Pressing cash deposits must post to customer advances, not revenue");
 });
 
 Deno.test("N2 cash session and expense handlers are scoped and compute close balances on server", async () => {
@@ -355,8 +368,16 @@ Deno.test("N2 cash session and expense handlers are scoped and compute close bal
     "Register opening must be serialized");
   assert(/sum\(p\.amount_xaf\)[\s\S]{0,300}payment_method='cash'[\s\S]{0,200}status='confirmed'/i.test(sql),
     "Cash close must total confirmed cash payments only");
-  assert(/v_expected:=v_session\.opening_float_xaf\+v_cash_in-v_expenses-v_supplier_out/i.test(sql),
-    "Cash close balance must be computed server-side");
+  assert(sql.includes("v_pressing_cash_in bigint"),
+    "Cash close must separately total confirmed pressing cash deposits");
+  assert(sql.includes("p.pressing_order_id is not null") &&
+    sql.includes("p.cash_session_id=p_cash_session_id") &&
+    sql.includes("p.payment_method='cash' and p.status='confirmed'"),
+    "Only confirmed pressing cash deposits linked to this session may enter the cash balance");
+  assert(sql.includes("v_expected:=v_session.opening_float_xaf+v_cash_in+v_pressing_cash_in-v_expenses-v_supplier_out"),
+    "Cash close must add confirmed pressing deposits exactly once");
+  assert(sql.includes("'pressing_deposits_cash_xaf',v_pressing_cash_in"),
+    "Cash close result must expose the reconciled pressing deposit amount");
   assert(/v_variance:=p_counted_close_xaf-v_expected/i.test(sql),
     "Cash variance must be computed server-side");
   assert(/revoke\s+insert,update,delete\s+on\s+public\.ns_cash_sessions,public\.ns_expenses\s+from\s+public,anon,authenticated/i.test(sql),
