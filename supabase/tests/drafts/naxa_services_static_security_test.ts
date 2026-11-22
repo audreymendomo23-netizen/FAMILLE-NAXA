@@ -404,3 +404,72 @@ Deno.test("N2 domain mutation helpers cannot bypass the atomic sync receipt gate
   assert(gatewayStart>=0 && gatewayGrant.includes("to authenticated, service_role"),
     "Authenticated clients must enter mutations through the atomic sync gateway");
 });
+
+
+Deno.test("N2 customer, waitlist, staff, management and transfer handlers are fully server-gated", async () => {
+  const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  const required=[
+    "ns_update_customer","ns_convert_waitlist_to_appointment","ns_record_staff_time_event",
+    "ns_create_management_record","ns_transition_management_record",
+    "ns_create_inventory_transfer","ns_receive_inventory_transfer"
+  ];
+  for(const fn of required) {
+    assert(sql.includes("create or replace function public."+fn+"("),"Missing N2 handler "+fn);
+    const revokeStart=sql.indexOf("revoke all on function public."+fn+"(");
+    const grantStart=sql.indexOf("grant execute on function public."+fn+"(");
+    assert(revokeStart>=0&&grantStart>=0,fn+" must define execute privileges");
+    const revokeStatement=sql.slice(revokeStart,sql.indexOf(";",revokeStart));
+    const grantStatement=sql.slice(grantStart,sql.indexOf(";",grantStart));
+    assert(revokeStatement.endsWith("from public,anon,authenticated") ||
+      revokeStatement.endsWith("from public, anon, authenticated"),
+      fn+" must revoke direct client execution");
+    assert(grantStatement.endsWith("to service_role"),
+      fn+" must only be directly executable by the server role");
+  }
+  for(const table of [
+    "ns_management_records","ns_management_record_events","ns_staff_time_events","ns_inventory_transfers"
+  ]) {
+    assert(new RegExp("alter table public\\."+table+" enable row level security","i").test(sql),
+      table+" must enable RLS");
+    assert(sql.includes("revoke all on public.ns_management_records,public.ns_management_record_events,") ||
+      sql.includes("revoke all on public.ns_management_records, public.ns_management_record_events,"),
+      "Management and HR ledgers must be server-write-only");
+  }
+  assert(/p_expected_version\\s+is\\s+null/i.test(sql),
+    "Versioned management/customer mutations must require a revision");
+  assert(/pg_advisory_xact_lock[\\s\\S]{0,150}:staff-time/i.test(sql),
+    "Staff time sequence must serialize per employee and site");
+  assert(/ns_management_record_events[\\s\\S]{0,250}from_status[\\s\\S]{0,200}to_status/i.test(sql),
+    "Management transitions must append immutable state history");
+  assert(/ns_inventory_movements[\\s\\S]{0,800}transfer_out[\\s\\S]{0,400}transfer_in/i.test(sql),
+    "Transfer receipt must write both stock movement legs");
+  assert(/NAXA_INVENTORY_TRANSFER_RECEIVE_REQUIRES_COMPOSITE_ACTION/i.test(sql),
+    "Generic transfer status transition must not duplicate stock posting");
+});
+
+Deno.test("N2 atomic dispatcher exposes all newly implemented event codes fail-closed", async () => {
+  const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  const actions=[
+    "customer.updated","appointment.created_from_waitlist",
+    "staff_clock_in.recorded","staff_break_start.recorded","staff_break_end.recorded","staff_clock_out.recorded",
+    "quote.created","invoice.created","credit_note.created","refund_due.created",
+    "customer_receivable.created","purchase.created","supplier.created","tax_estimate.created",
+    "business_goal.created","subscription_request.created","support_chat.created","work_order.created",
+    "repair_order.created","service_order.created","appointment_waitlist.created",
+    "staff_clock_in.created","staff_clock_out.created","staff_break_start.created","staff_break_end.created",
+    "staff_commission.created","staff_advance.created","staff_bonus.created",
+    "quote.status_changed","invoice.status_changed","credit_note.status_changed","refund_due.status_changed",
+    "customer_receivable.status_changed","purchase.status_changed","supplier.status_changed",
+    "tax_estimate.status_changed","business_goal.status_changed","subscription_request.status_changed",
+    "support_chat.status_changed","work_order.status_changed","repair_order.status_changed",
+    "service_order.status_changed","appointment_waitlist.status_changed","staff_clock_in.status_changed",
+    "staff_clock_out.status_changed","staff_break_start.status_changed","staff_break_end.status_changed",
+    "staff_commission.status_changed","staff_advance.status_changed","staff_bonus.status_changed",
+    "inventory_transfer.requested","inventory_transfer.received_at_destination","inventory_transfer.status_changed"
+  ];
+  for(const action of actions) {
+    assert(sql.includes("'"+action+"'"),"Atomic SQL dispatcher missing "+action);
+  }
+  assert(/else\\s+raise\\s+exception\\s+'NAXA_SYNC_ACTION_NOT_SUPPORTED'/i.test(sql),
+    "Unmapped actions must stay rejected by default");
+});
