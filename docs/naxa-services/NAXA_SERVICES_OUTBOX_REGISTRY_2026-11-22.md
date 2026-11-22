@@ -2,7 +2,7 @@
 
 **Version :** 1.1  
 **Date :** 22 novembre 2026  
-**HEAD applicatif audité :** `4e65eb7414ead3dcaedfdcd5e53bf59886a07621`  
+**HEAD applicatif audité :** `6644e78d1f7651265b233ba5d4f463a58b8932c4`  
 **Fichier source :** `apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt`
 
 ## Décision
