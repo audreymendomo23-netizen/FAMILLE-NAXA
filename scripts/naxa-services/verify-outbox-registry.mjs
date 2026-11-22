@@ -121,7 +121,12 @@ const registeredSupported = manifest.rows
   .filter(row => row.implementation_status === "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR")
   .flatMap(row => row.action_codes).sort();
 assert.deepEqual(actualSupported, registeredSupported, "Registry coordinator coverage differs from code.");
-assert.equal(actualSupported.length, 11, "The bounded coordinator must currently expose exactly 11 action codes.");
+assert.deepEqual(
+  actualSupported,
+  [...(manifest.current_coordinator_supported_action_codes ?? [])].sort(),
+  "Registry coordinator summary differs from code."
+);
+assert.ok(actualSupported.length > 0 && actualSupported.length <= 92, "Coordinator action coverage is outside the registry contract.");
 
 function findKotlinFiles(dir) {
   const out = [];
