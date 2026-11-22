@@ -114,6 +114,32 @@ grant all on public.ns_customer_followups, public.ns_customer_followup_events, p
 revoke insert, update, delete on public.ns_customer_followups, public.ns_customer_followup_events, public.ns_support_requests
   from authenticated;
 
+
+-- Versioned valuation ledger; the item columns remain a reporting projection only.
+create unique index if not exists ns_inventory_items_id_site_org_idx
+  on public.ns_inventory_items(id,site_id,org_id);
+create table if not exists public.ns_inventory_valuations (
+  id uuid primary key,
+  org_id uuid not null,
+  site_id uuid not null,
+  inventory_item_id uuid not null,
+  unit_cost_xaf bigint not null check (unit_cost_xaf >= 0),
+  selling_price_xaf bigint not null check (selling_price_xaf >= 0),
+  revision integer not null default 1 check (revision > 0),
+  updated_by uuid not null,
+  updated_at timestamptz not null default now(),
+  foreign key (inventory_item_id,site_id,org_id)
+    references public.ns_inventory_items(id,site_id,org_id) on delete restrict,
+  foreign key (site_id,org_id)
+    references public.ns_sites(id,org_id) on delete restrict,
+  foreign key (updated_by,org_id)
+    references public.ns_members(id,org_id) on delete restrict,
+  unique (org_id,site_id,inventory_item_id)
+);
+alter table public.ns_inventory_valuations enable row level security;
+revoke all on public.ns_inventory_valuations from public,anon,authenticated;
+grant all on public.ns_inventory_valuations to service_role;
+
 alter table public.ns_inventory_items
   add column if not exists average_unit_cost_xaf bigint not null default 0 check (average_unit_cost_xaf >= 0),
   add column if not exists selling_price_xaf bigint not null default 0 check (selling_price_xaf >= 0);
@@ -1545,6 +1571,7 @@ begin
     when p_action_code = 'customer.created' then 'customer'
     when p_action_code like 'customer_followup.%' then 'customer_followup'
     when p_action_code = 'support_request.created' then 'support_request'
+    when p_action_code like 'inventory_valuation.%' then 'inventory_valuation'
     else null
   end;
   if v_expected_aggregate is null then
@@ -1569,6 +1596,7 @@ begin
     when p_action_code = 'customer.created' then p_payload->>'customer_id'
     when p_action_code like 'customer_followup.%' then p_payload->>'followup_id'
     when p_action_code = 'support_request.created' then p_payload->>'request_id'
+    when p_action_code like 'inventory_valuation.%' then p_payload->>'inventory_item_id'
     else null
   end;
   if v_payload_aggregate is not null and v_payload_aggregate <> p_aggregate_id then
@@ -1787,6 +1815,30 @@ begin
       v_result := public.ns_create_support_request(
         (p_payload->>'request_id')::uuid,p_org_id,p_site_id,
         p_payload->>'subject',p_payload->>'description',p_payload->>'priority'
+      );
+    when 'inventory_valuation.imported' then
+      v_result := public.ns_upsert_inventory_valuation(
+        (p_payload->>'valuation_id')::uuid,p_org_id,p_site_id,
+        (p_payload->>'inventory_item_id')::uuid,
+        (p_payload->>'unit_cost_xaf')::bigint,
+        (p_payload->>'selling_price_xaf')::bigint,
+        coalesce((p_payload->>'expected_version')::integer,0)
+      );
+    when 'inventory_valuation.import_updated' then
+      v_result := public.ns_upsert_inventory_valuation(
+        (p_payload->>'valuation_id')::uuid,p_org_id,p_site_id,
+        (p_payload->>'inventory_item_id')::uuid,
+        (p_payload->>'unit_cost_xaf')::bigint,
+        (p_payload->>'selling_price_xaf')::bigint,
+        (p_payload->>'expected_version')::integer
+      );
+    when 'inventory_valuation.updated' then
+      v_result := public.ns_upsert_inventory_valuation(
+        (p_payload->>'valuation_id')::uuid,p_org_id,p_site_id,
+        (p_payload->>'inventory_item_id')::uuid,
+        (p_payload->>'unit_cost_xaf')::bigint,
+        (p_payload->>'selling_price_xaf')::bigint,
+        (p_payload->>'expected_version')::integer
       );
     when 'loyalty_reward.redeemed' then
       if not public.ns_redeem_loyalty_reward(
@@ -2183,6 +2235,84 @@ revoke all on function public.ns_complete_customer_followup(uuid,uuid,uuid,uuid,
 grant execute on function public.ns_complete_customer_followup(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text) to authenticated, service_role;
 revoke all on function public.ns_create_support_request(uuid,uuid,uuid,text,text,text) from public, anon;
 grant execute on function public.ns_create_support_request(uuid,uuid,uuid,text,text,text) to authenticated, service_role;
+
+
+create or replace function public.ns_upsert_inventory_valuation(
+  p_valuation_id uuid, p_org_id uuid, p_site_id uuid,
+  p_inventory_item_id uuid, p_unit_cost_xaf bigint,
+  p_selling_price_xaf bigint, p_expected_version integer
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_item public.ns_inventory_items%rowtype;
+  v_existing public.ns_inventory_valuations%rowtype;
+  v_result public.ns_inventory_valuations%rowtype;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_INVENTORY_VALUATION_FORBIDDEN';
+  end if;
+  if p_valuation_id is null or p_inventory_item_id is null
+     or p_unit_cost_xaf is null or p_unit_cost_xaf < 0
+     or p_selling_price_xaf is null or p_selling_price_xaf < 0
+     or p_expected_version is null or p_expected_version < 0 then
+    raise exception 'NAXA_INVENTORY_VALUATION_INVALID';
+  end if;
+  select * into v_item from public.ns_inventory_items
+   where id=p_inventory_item_id and org_id=p_org_id and site_id=p_site_id and active
+   for update;
+  if not found then raise exception 'NAXA_INVENTORY_VALUATION_ITEM_NOT_FOUND'; end if;
+
+  select * into v_existing from public.ns_inventory_valuations
+   where org_id=p_org_id and site_id=p_site_id and inventory_item_id=p_inventory_item_id
+   for update;
+  if found then
+    if v_existing.id<>p_valuation_id then
+      raise exception 'NAXA_INVENTORY_VALUATION_ID_CONFLICT';
+    end if;
+    if p_expected_version<>v_existing.revision then
+      raise exception 'NAXA_INVENTORY_VALUATION_VERSION_CONFLICT';
+    end if;
+    update public.ns_inventory_valuations
+      set unit_cost_xaf=p_unit_cost_xaf,
+          selling_price_xaf=p_selling_price_xaf,
+          revision=revision+1,
+          updated_by=v_member,
+          updated_at=now()
+      where id=p_valuation_id and org_id=p_org_id and site_id=p_site_id
+      returning * into v_result;
+  else
+    if p_expected_version<>0 then
+      raise exception 'NAXA_INVENTORY_VALUATION_VERSION_CONFLICT';
+    end if;
+    insert into public.ns_inventory_valuations(
+      id,org_id,site_id,inventory_item_id,unit_cost_xaf,selling_price_xaf,
+      revision,updated_by,updated_at
+    ) values (
+      p_valuation_id,p_org_id,p_site_id,p_inventory_item_id,
+      p_unit_cost_xaf,p_selling_price_xaf,1,v_member,now()
+    ) returning * into v_result;
+  end if;
+
+  update public.ns_inventory_items
+    set average_unit_cost_xaf=p_unit_cost_xaf,
+        selling_price_xaf=p_selling_price_xaf
+    where id=p_inventory_item_id and org_id=p_org_id and site_id=p_site_id;
+
+  return jsonb_build_object(
+    'valuation_id',v_result.id,'inventory_item_id',v_result.inventory_item_id,
+    'revision',v_result.revision,'unit_cost_xaf',v_result.unit_cost_xaf,
+    'selling_price_xaf',v_result.selling_price_xaf,'updated_at',v_result.updated_at
+  );
+end;
+$naxa$;
+
+revoke all on function public.ns_upsert_inventory_valuation(uuid,uuid,uuid,uuid,bigint,bigint,integer) from public,anon;
+grant execute on function public.ns_upsert_inventory_valuation(uuid,uuid,uuid,uuid,bigint,bigint,integer) to authenticated,service_role;
 
 revoke all on function public.ns_upsert_recurring_charge(uuid,uuid,uuid,text,text,bigint,text,timestamptz,integer,boolean) from public, anon;
 grant execute on function public.ns_upsert_recurring_charge(uuid,uuid,uuid,text,text,bigint,text,timestamptz,integer,boolean) to authenticated, service_role;
