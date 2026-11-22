@@ -1149,6 +1149,8 @@ Restent également : RLS réel appliqué et testé, API/synchronisation/idempote
 
 ## 6.17.23 — Clôture N2 et validation complète de la chaîne CI NAXA SERVICES (22 novembre 2026)
 
+> Note de chronologie : l'état N3 décrit dans ce point correspond au lancement du chantier immédiatement après N2. Son avancement plus récent et son statut actuel sont consignés dans la section 6.17.24, qui prévaut pour la reprise.
+
 Cette section actualise la section 6.17.22 à partir des preuves GitHub Actions du 22 novembre. Elle clôt le lot N2 et la construction Android Debug, mais **ne qualifie pas NAXA SERVICES VERT GLOBAL ni prêt pour la production**.
 
 ### N1 et N2 — statuts figés
