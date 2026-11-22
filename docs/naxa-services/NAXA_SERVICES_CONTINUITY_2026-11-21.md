@@ -495,7 +495,7 @@ Aucune mutation N2 ne reste à implémenter. Terminer le job Android du run de r
 ### 17.3 Périmètre Git et sécurité
 
 - HEAD de la branche de travail vérifié : `c9883a31fbabe32a294eb42515841080847b3508`.
-- HEAD de `main` vérifié séparément : `0eb79951d2701264ebbb9ae81a01fb25ae7d3931`. Aucun changement `main`, merge ou déploiement n’a été effectué dans cette mise à jour.
+- Au premier contrôle de cette séquence, `main` pointait sur `0eb79951d2701264ebbb9ae81a01fb25ae7d3931`. Au contrôle final, son HEAD était `f602f03e0ce434c47f85a78d7032da4300b7d027` (deux commits plus loin), dont le dernier commit vérifié corrige le tableau de jalons CAMPUS237 dans `7 famille naxa/Cahiers de charge/Cahier_des_charges_08_Campus237_V3.0.md`. Ce déplacement de `main` est distinct de la présente mise à jour, qui a été commitée uniquement sur `work/naxa-services-completion-20261120` ; aucun merge, push sur `main` ou déploiement n’a été effectué par cette opération.
 - La présente opération n’a exécuté aucune migration, aucun DDL/DML, aucune configuration ni aucun déploiement Supabase. Le projet NAXA pharmacie reste explicitement hors périmètre.
 - **Limite de qualification :** le succès du run #385 clôt la recette technique Android ciblée ; il ne clôt pas N3 et ne démontre pas la réplication multi-appareils.
 
