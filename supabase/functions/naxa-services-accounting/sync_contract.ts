@@ -312,3 +312,29 @@ export function normalizeAtomicSyncEvent(value: unknown): AtomicSyncEvent {
     payload,
   };
 }
+
+
+export type SyncPullRequest = {
+  org_id: string;
+  device_id: string;
+  after_cursor: number;
+  limit: number;
+};
+
+export function normalizeSyncPullRequest(value: unknown): SyncPullRequest {
+  const body = record(value, "SYNC_PULL_BODY");
+  const afterCursor = body.after_cursor ?? 0;
+  const limit = body.limit ?? 100;
+  if (typeof afterCursor !== "number" || !Number.isSafeInteger(afterCursor) || afterCursor < 0) {
+    throw new Error("INVALID_SYNC_PULL_CURSOR");
+  }
+  if (typeof limit !== "number" || !Number.isSafeInteger(limit) || limit < 1 || limit > 200) {
+    throw new Error("INVALID_SYNC_PULL_LIMIT");
+  }
+  return {
+    org_id: uuid(body.org_id, "SYNC_PULL_ORG_ID"),
+    device_id: uuid(body.device_id, "SYNC_PULL_DEVICE_ID"),
+    after_cursor: afterCursor,
+    limit,
+  };
+}
