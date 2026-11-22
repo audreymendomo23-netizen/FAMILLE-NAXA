@@ -1847,6 +1847,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         dao.insertPressingOrder(order)
         val payload = JSONObject()
             .put("order_id", order.id)
+            .put("org_id", order.orgId)
             .put("site_id", order.siteId)
             .put("workstation_id", order.workstationId)
             .put("ticket_number", order.ticketNumber)
