@@ -1828,16 +1828,16 @@ revoke insert,update,delete on public.ns_pressing_status_events,public.ns_appoin
 grant select on public.ns_pressing_orders,public.ns_appointments to authenticated;
 grant all on public.ns_pressing_orders,public.ns_appointments to service_role;
 
-revoke all on function public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz) from public,anon;
-grant execute on function public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz) to authenticated,service_role;
-revoke all on function public.ns_transition_pressing_order(uuid,uuid,uuid,text,text,text,integer,timestamptz) from public,anon;
-grant execute on function public.ns_transition_pressing_order(uuid,uuid,uuid,text,text,text,integer,timestamptz) to authenticated,service_role;
-revoke all on function public.ns_create_appointment(uuid,uuid,uuid,uuid,text,text,uuid,timestamptz,timestamptz,bigint,text) from public,anon;
-grant execute on function public.ns_create_appointment(uuid,uuid,uuid,uuid,text,text,uuid,timestamptz,timestamptz,bigint,text) to authenticated,service_role;
-revoke all on function public.ns_transition_appointment(uuid,uuid,uuid,text,text,text,integer,timestamptz) from public,anon;
-grant execute on function public.ns_transition_appointment(uuid,uuid,uuid,text,text,text,integer,timestamptz) to authenticated,service_role;
-revoke all on function public.ns_reschedule_appointment(uuid,uuid,uuid,uuid,timestamptz,timestamptz,uuid,integer,text) from public,anon;
-grant execute on function public.ns_reschedule_appointment(uuid,uuid,uuid,uuid,timestamptz,timestamptz,uuid,integer,text) to authenticated,service_role;
+revoke all on function public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz) from public, anon, authenticated;
+grant execute on function public.ns_create_pressing_order(uuid,uuid,uuid,uuid,text,text,text,text,bigint,bigint,timestamptz) to service_role;
+revoke all on function public.ns_transition_pressing_order(uuid,uuid,uuid,text,text,text,integer,timestamptz) from public, anon, authenticated;
+grant execute on function public.ns_transition_pressing_order(uuid,uuid,uuid,text,text,text,integer,timestamptz) to service_role;
+revoke all on function public.ns_create_appointment(uuid,uuid,uuid,uuid,text,text,uuid,timestamptz,timestamptz,bigint,text) from public, anon, authenticated;
+grant execute on function public.ns_create_appointment(uuid,uuid,uuid,uuid,text,text,uuid,timestamptz,timestamptz,bigint,text) to service_role;
+revoke all on function public.ns_transition_appointment(uuid,uuid,uuid,text,text,text,integer,timestamptz) from public, anon, authenticated;
+grant execute on function public.ns_transition_appointment(uuid,uuid,uuid,text,text,text,integer,timestamptz) to service_role;
+revoke all on function public.ns_reschedule_appointment(uuid,uuid,uuid,uuid,timestamptz,timestamptz,uuid,integer,text) from public, anon, authenticated;
+grant execute on function public.ns_reschedule_appointment(uuid,uuid,uuid,uuid,timestamptz,timestamptz,uuid,integer,text) to service_role;
 
 
 create or replace function public.ns_open_cash_session(
@@ -2003,12 +2003,12 @@ revoke insert,update,delete on public.ns_cash_sessions,public.ns_expenses from p
 grant select on public.ns_cash_sessions,public.ns_expenses to authenticated;
 grant all on public.ns_cash_sessions,public.ns_expenses to service_role;
 
-revoke all on function public.ns_open_cash_session(uuid,uuid,uuid,uuid,text,bigint,timestamptz) from public,anon;
-grant execute on function public.ns_open_cash_session(uuid,uuid,uuid,uuid,text,bigint,timestamptz) to authenticated,service_role;
-revoke all on function public.ns_record_expense(uuid,uuid,uuid,uuid,text,text,bigint,timestamptz,uuid) from public,anon;
-grant execute on function public.ns_record_expense(uuid,uuid,uuid,uuid,text,text,bigint,timestamptz,uuid) to authenticated,service_role;
-revoke all on function public.ns_close_cash_session(uuid,uuid,uuid,bigint,text,timestamptz) from public,anon;
-grant execute on function public.ns_close_cash_session(uuid,uuid,uuid,bigint,text,timestamptz) to authenticated,service_role;
+revoke all on function public.ns_open_cash_session(uuid,uuid,uuid,uuid,text,bigint,timestamptz) from public, anon, authenticated;
+grant execute on function public.ns_open_cash_session(uuid,uuid,uuid,uuid,text,bigint,timestamptz) to service_role;
+revoke all on function public.ns_record_expense(uuid,uuid,uuid,uuid,text,text,bigint,timestamptz,uuid) from public, anon, authenticated;
+grant execute on function public.ns_record_expense(uuid,uuid,uuid,uuid,text,text,bigint,timestamptz,uuid) to service_role;
+revoke all on function public.ns_close_cash_session(uuid,uuid,uuid,bigint,text,timestamptz) from public, anon, authenticated;
+grant execute on function public.ns_close_cash_session(uuid,uuid,uuid,bigint,text,timestamptz) to service_role;
 
 
 create or replace function public.ns_create_sale(
@@ -2202,10 +2202,10 @@ revoke insert,update,delete on public.ns_sales,public.ns_payments,public.ns_sale
 grant select on public.ns_sales,public.ns_payments,public.ns_sale_lines to authenticated;
 grant all on public.ns_sales,public.ns_payments,public.ns_sale_lines to service_role;
 
-revoke all on function public.ns_create_sale(uuid,uuid,uuid,uuid,uuid,text,text,bigint,text,text,uuid,numeric,timestamptz,uuid) from public,anon;
-grant execute on function public.ns_create_sale(uuid,uuid,uuid,uuid,uuid,text,text,bigint,text,text,uuid,numeric,timestamptz,uuid) to authenticated,service_role;
-revoke all on function public.ns_cancel_pending_mobile_money_sale(uuid,uuid,uuid,text,text,timestamptz) from public,anon;
-grant execute on function public.ns_cancel_pending_mobile_money_sale(uuid,uuid,uuid,text,text,timestamptz) to authenticated,service_role;
+revoke all on function public.ns_create_sale(uuid,uuid,uuid,uuid,uuid,text,text,bigint,text,text,uuid,numeric,timestamptz,uuid) from public, anon, authenticated;
+grant execute on function public.ns_create_sale(uuid,uuid,uuid,uuid,uuid,text,text,bigint,text,text,uuid,numeric,timestamptz,uuid) to service_role;
+revoke all on function public.ns_cancel_pending_mobile_money_sale(uuid,uuid,uuid,text,text,timestamptz) from public, anon, authenticated;
+grant execute on function public.ns_cancel_pending_mobile_money_sale(uuid,uuid,uuid,text,text,timestamptz) to service_role;
 
 create or replace function public.ns_apply_sync_event(
   p_org_id uuid,
@@ -3065,20 +3065,20 @@ begin
 end;
 $naxa$;
 
-revoke all on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,integer) from public, anon;
-grant execute on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,integer) to authenticated, service_role;
-revoke all on function public.ns_update_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,integer) from public, anon;
-grant execute on function public.ns_update_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,integer) to authenticated, service_role;
-revoke all on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,integer,integer) from public, anon;
-grant execute on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,integer,integer) to authenticated, service_role;
-revoke all on function public.ns_create_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text) from public, anon;
-grant execute on function public.ns_create_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text) to authenticated, service_role;
-revoke all on function public.ns_create_customer_followup(uuid,uuid,uuid,uuid,text,text,text,text,timestamptz,text) from public, anon;
-grant execute on function public.ns_create_customer_followup(uuid,uuid,uuid,uuid,text,text,text,text,timestamptz,text) to authenticated, service_role;
-revoke all on function public.ns_complete_customer_followup(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text) from public, anon;
-grant execute on function public.ns_complete_customer_followup(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text) to authenticated, service_role;
-revoke all on function public.ns_create_support_request(uuid,uuid,uuid,text,text,text) from public, anon;
-grant execute on function public.ns_create_support_request(uuid,uuid,uuid,text,text,text) to authenticated, service_role;
+revoke all on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,integer) from public, anon, authenticated;
+grant execute on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,integer) to service_role;
+revoke all on function public.ns_update_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,integer) from public, anon, authenticated;
+grant execute on function public.ns_update_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,integer) to service_role;
+revoke all on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,integer,integer) from public, anon, authenticated;
+grant execute on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,integer,integer) to service_role;
+revoke all on function public.ns_create_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text) from public, anon, authenticated;
+grant execute on function public.ns_create_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text) to service_role;
+revoke all on function public.ns_create_customer_followup(uuid,uuid,uuid,uuid,text,text,text,text,timestamptz,text) from public, anon, authenticated;
+grant execute on function public.ns_create_customer_followup(uuid,uuid,uuid,uuid,text,text,text,text,timestamptz,text) to service_role;
+revoke all on function public.ns_complete_customer_followup(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text) from public, anon, authenticated;
+grant execute on function public.ns_complete_customer_followup(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text) to service_role;
+revoke all on function public.ns_create_support_request(uuid,uuid,uuid,text,text,text) from public, anon, authenticated;
+grant execute on function public.ns_create_support_request(uuid,uuid,uuid,text,text,text) to service_role;
 
 
 create or replace function public.ns_upsert_inventory_valuation(
@@ -3155,15 +3155,15 @@ begin
 end;
 $naxa$;
 
-revoke all on function public.ns_upsert_inventory_valuation(uuid,uuid,uuid,uuid,bigint,bigint,integer) from public,anon;
-grant execute on function public.ns_upsert_inventory_valuation(uuid,uuid,uuid,uuid,bigint,bigint,integer) to authenticated,service_role;
+revoke all on function public.ns_upsert_inventory_valuation(uuid,uuid,uuid,uuid,bigint,bigint,integer) from public, anon, authenticated;
+grant execute on function public.ns_upsert_inventory_valuation(uuid,uuid,uuid,uuid,bigint,bigint,integer) to service_role;
 
-revoke all on function public.ns_upsert_recurring_charge(uuid,uuid,uuid,text,text,bigint,text,timestamptz,integer,boolean) from public, anon;
-grant execute on function public.ns_upsert_recurring_charge(uuid,uuid,uuid,text,text,bigint,text,timestamptz,integer,boolean) to authenticated, service_role;
-revoke all on function public.ns_deactivate_recurring_charge(uuid,uuid,uuid) from public, anon;
-grant execute on function public.ns_deactivate_recurring_charge(uuid,uuid,uuid) to authenticated, service_role;
-revoke all on function public.ns_upsert_loyalty_program(uuid,uuid,text,text,text,text,text,bigint,bigint,text,integer,boolean) from public, anon;
-grant execute on function public.ns_upsert_loyalty_program(uuid,uuid,text,text,text,text,text,bigint,bigint,text,integer,boolean) to authenticated, service_role;
+revoke all on function public.ns_upsert_recurring_charge(uuid,uuid,uuid,text,text,bigint,text,timestamptz,integer,boolean) from public, anon, authenticated;
+grant execute on function public.ns_upsert_recurring_charge(uuid,uuid,uuid,text,text,bigint,text,timestamptz,integer,boolean) to service_role;
+revoke all on function public.ns_deactivate_recurring_charge(uuid,uuid,uuid) from public, anon, authenticated;
+grant execute on function public.ns_deactivate_recurring_charge(uuid,uuid,uuid) to service_role;
+revoke all on function public.ns_upsert_loyalty_program(uuid,uuid,text,text,text,text,text,bigint,bigint,text,integer,boolean) from public, anon, authenticated;
+grant execute on function public.ns_upsert_loyalty_program(uuid,uuid,text,text,text,text,text,bigint,bigint,text,integer,boolean) to service_role;
 revoke all on function public.ns_apply_sync_event(uuid,uuid,uuid,uuid,uuid,bigint,text,text,text,jsonb) from public, anon;
 grant execute on function public.ns_apply_sync_event(uuid,uuid,uuid,uuid,uuid,bigint,text,text,text,jsonb) to authenticated, service_role;
 
