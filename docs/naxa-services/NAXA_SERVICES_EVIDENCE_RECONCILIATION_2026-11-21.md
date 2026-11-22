@@ -207,3 +207,14 @@ Cette confrontation ne rend pas globalement vert le produit ; elle évite de ré
 Les éléments explicitement bloqués par comptes, secrets, contrats et visas ne peuvent pas être rendus verts par des mocks. Les éléments de code réalisables doivent être traités comme des lots fonctionnels et prouvés par handlers / UI / tests concrets.
 
 Aucune création de projet Supabase et aucune migration sur le projet pharmacie ne sont autorisées par cet audit.
+
+
+---
+
+## 7. Addendum — qualification exhaustive N1 (22 novembre 2026)
+
+Le registre dédié `NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md` établit une bijection **55/55** entre les appels `enqueue()` et les fiches de qualification : 44 mutations indépendantes, 6 effets composites, 1 ledger dérivé, 1 miroir serveur, 1 miroir Auth direct et 2 helpers locaux legacy non appelés. Le coordinateur borné accepte 11 codes d'action fournisseur/articles/mouvements, sans être un synchroniseur universel.
+
+Le garde-fou `scripts/naxa-services/verify-outbox-registry.mjs` compare méthode, agrégat, expression d'action et ligne source, vérifie l'absence de doublon/événement orphelin, recalcule le sous-ensemble des 11 actions, et contrôle que les créations site/poste actives restent servies par AuthApi. Il est branché au workflow technique.
+
+**N1 : VERT COMPLET — inventaire/qualification 55/55.** Les 33 handlers de mutation restants et la synchronisation Android universelle restent des travaux N2/N3 et ne sont pas réputés implémentés par le présent audit.
