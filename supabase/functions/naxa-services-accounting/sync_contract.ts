@@ -190,6 +190,9 @@ const ATOMIC_SYNC_ACTIONS: Record<string, { aggregate: string; idField: string; 
   "customer_followup.created": { aggregate: "customer_followup", idField: "followup_id" },
   "customer_followup.completed": { aggregate: "customer_followup", idField: "followup_id" },
   "support_request.created": { aggregate: "support_request", idField: "request_id", siteOptional: true },
+  "inventory_valuation.imported": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
+  "inventory_valuation.import_updated": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
+  "inventory_valuation.updated": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
 };
 
 export function normalizeAtomicSyncEvent(value: unknown): AtomicSyncEvent {
