@@ -1211,50 +1211,53 @@ Le coordinateur `SupplierSyncCoordinator` reste borné au cycle fournisseur, man
  
 ## 6.17.24 — N3 : orchestration Android universelle, lot en cours (22 novembre 2026)
 
-**Statut N3 : EN COURS — NON VERT.** Cette section ne modifie pas les statuts déjà acquis : N1 reste vert à 55/55 callsites et N2 reste vert à 44/44 mutations distantes.
+**Statut N3 : EN COURS — NON VERT.** N1 reste vert à 55/55 callsites et N2 reste vert à 44/44 mutations distantes. Le lot N3 vise l'orchestration Android fiable de l'outbox et la maîtrise de l'ordre multi-device.
 
-### Réalisations sur la branche de travail
+### Réalisations implémentées sur la branche de travail
 
-Branche : `work/naxa-services-completion-20261120` — dépôt `audreymendomo23-netizen/FAMILLE-NAXA`.
+Dépôt : `audreymendomo23-netizen/FAMILLE-NAXA` — branche : `work/naxa-services-completion-20261120` — HEAD audité : `45e1ab2eaaf111165297fa9063a97a5cd342eaa5`.
 
-Le lot N3 a apporté les éléments suivants :
-
-- Liaison du `device_id` à la session Auth enregistrée côté serveur ; le client ne peut pas imposer librement un identifiant de device.
+- Liaison du `device_id` à la session Auth enregistrée côté serveur ; l'identifiant ne peut pas être librement imposé par le client.
 - Conservation chiffrée de l'identifiant d'appareil dans le coffre Android.
-- Coordinateur commun Android raccordé aux 92 codes d'action distants du registre. Chaque événement doit néanmoins passer les contrôles de snapshot, organisation, site, agrégat et version ; un événement incomplet reste bloqué et n'est jamais marqué `synced`.
-- Exclusion explicite des 11 événements dérivés/composites qui ne doivent pas être envoyés comme mutations autonomes.
-- File locale chargée dans l'ordre croissant du `device_sequence`, sans filtrer les événements inconnus ; le coordinateur s'arrête au premier événement non pris en charge ou bloqué afin qu'un événement ultérieur ne dépasse pas son prédécesseur.
-- Synchronisation manuelle et worker WorkManager périodique, soumis au réseau et désactivés tant que le projet Famille NAXA dédié n'est pas configuré.
-- Reçu serveur contrôlé avant passage à `synced` : statut, identifiant d'événement, action, agrégat et empreinte SHA-256.
-- Retry exponentiel avec jitter ; les dépendances non résolues restent bloquées.
-- Migration Room 13→14 : les anciennes lignes non synchronisées correspondant aux effets dérivés/composites sont requalifiées `not_applicable`, sans modifier les lignes déjà synchronisées.
-- Garde-fou séquence côté PostgreSQL : verrouillage de la ligne device, conservation de `last_sync_sequence`, acceptation des rejeux identiques déjà reçus et rejet des nouveaux événements dont la séquence n'est pas strictement croissante.
+- Coordinateur Android raccordé aux 92 codes d'action distants du registre ; chaque événement passe des contrôles de snapshot, organisation, site, agrégat et version. Un snapshot incomplet reste bloqué et n'est jamais marqué `synced`.
+- Exclusion explicite des 11 événements dérivés/composites. La migration Room 13→14 requalifie les anciennes lignes non envoyées de ces actions en `not_applicable`, sans toucher aux événements déjà synchronisés.
+- File persistante ordonnée par `device_sequence`, incluant les événements inconnus, bloqués et les retries dont l'échéance est future. Le coordinateur s'arrête à la tête de file et ne laisse pas passer les événements plus récents.
+- Compteur Room global à l'installation, cohérent avec le compteur `last_sync_sequence` par device côté PostgreSQL.
+- Sérialisation du bouton de synchronisation manuel et du worker WorkManager par un `Mutex` partagé ; propagation des annulations de coroutine.
+- Retry exponentiel avec jitter ; les erreurs réseau/timeouts/429/5xx sont classées comme temporaires, les dépendances absentes restent bloquées, les erreurs métier non transitoires sont rejetées. Le worker réclame `Result.retry()` dès qu'un événement a besoin d'une nouvelle tentative.
+- Validation du reçu serveur avant passage à `synced` : statut, identifiant d'événement, action, agrégat et empreinte SHA-256.
+- Garde-fou transactionnel PostgreSQL : verrouillage de la ligne device, stockage de `last_sync_sequence`, acceptation des rejeux identiques déjà reçus, rejet d'une nouvelle séquence non croissante ; le test utilise une séquence 9 puis 8 pour le même device et une séquence 1 pour un second device.
+- WorkManager périodique soumis au réseau et désactivé tant que l'environnement Famille NAXA dédié n'est pas configuré ; le drapeau de synchronisation reste faux par défaut.
 
-### Preuves et CI
+### Tests ajoutés dans le lot
 
-- Le registre source conserve 55/55 points d'émission et 44/44 mutations distantes ; les 92 codes d'action du périmètre distant sont raccordés au coordinateur.
-- Le test PostgreSQL 17 ajoute un cas de séquence : événement de séquence 9 accepté, nouvel événement de séquence 8 rejeté.
-- Les tests unitaires de snapshots couvrent les identifiants RH stables, les versions de valorisation, les transitions versionnées et les actions inconnues.
-- Run de validation après ajout de la dépendance JSON JVM : [GitHub Actions #367 — 45002091084](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45002091084). Au moment de cette mise à jour, ce run est encore en cours ; son résultat final Android et son résultat global ne sont donc pas acquis.
-- Le run précédent #366 a confirmé le succès du contrôle PostgreSQL 17 avec le nouveau garde-fou de séquence, mais sa validation Android n'était pas clôturée.
+- JUnit : snapshots RH avec UUID de membre stable ; version de valorisation ; transitions versionnées ; action inconnue ; exclusion mutuelle Worker/UI ; propagation de l'annulation ; classification des erreurs temporaires/dépendances/erreurs métier ; décision de retry Worker ; respect du délai de retry à la tête de file.
+- Android instrumenté : migration Room 13→14 ; conservation de l'ordre des actions bloquées/inconnues ; persistance de la file après fermeture et réouverture de la base ; compteur de séquence partagé entre organisations sur la même installation ; un événement en `retry_wait` futur reste devant les événements plus récents.
+- PostgreSQL 17 Runtime RLS : séquence strictement croissante par device, rejet du nouvel événement désordonné et indépendance du compteur entre deux devices.
+- Les scénarios déjà verts de N1/N2 restent séparés et ne sont pas rouverts par le lot N3.
 
-### Critères N3 restant à satisfaire avant passage au vert
+### État de la CI
 
-1. Obtenir une CI globale en succès, notamment tests unitaires, PIN/Keystore sur émulateur, compilation et assemblage APK.
-2. Ajouter et réussir les tests instrumentés Room couvrant la migration 13→14 et la conservation de l'ordre d'une file contenant des événements bloqués/non pris en charge.
-3. Sérialiser les appels simultanés du bouton manuel et du worker ; propager correctement les annulations sans les convertir en succès ou en erreur métier.
-4. Démontrer l'indépendance des compteurs de séquence entre deux devices distincts, tout en rejetant les événements désordonnés pour un même device.
-5. Ajouter des preuves d'intégration sur réseau instable, reprise après arrêt/crash, dépendances inter-agrégats et rejeu idempotent côté client/serveur.
-6. Vérifier les périmètres organisation/site/poste sur les scénarios de synchronisation Android instrumentés.
+- CI la plus récente sur ce commit : run #373 (45003285244), statut `in_progress`, conclusion `en attente`. [Ouvrir le workflow](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45003285244).
+- Job Android : `in_progress/en attente`; étapes actives : Run NAXA SERVICES accounting and performance unit tests.
+- Aucun job en échec déclaré à la dernière lecture.
 
-**Règle de clôture :** le raccordement statique de 92 codes ne vaut pas preuve que 92 parcours métier ont tous été exécutés avec succès. N3 ne sera déclaré vert qu'après réussite des critères ci-dessus et conservation des traces CI correspondantes. N4 ne doit pas être ouvert avant cette clôture.
+### Conditions restantes avant passage au vert
 
-### Limites de sécurité et de déploiement conservées
+1. Obtenir un run CI complet en succès sur le HEAD de cette section : contrats, SQL statique, PostgreSQL 17 Runtime RLS, tests unitaires Android, tests instrumentés PIN/Keystore et Room, compilation et assemblage APK.
+2. Confirmer que le test instrumenté Room 13→14 et le test de reprise de la file après réouverture passent sur l'émulateur.
+3. Confirmer l'exécution instrumentée du flux PIN/Keystore, puis la génération et le téléversement de l'APK.
+4. Confirmer les périmètres organisation/site/poste côté serveur et client sur les scénarios de synchronisation concernés.
+5. Conserver les traces CI et le reçu serveur d'un rejeu idempotent sur un appareil réel ou un émulateur avec deux sessions enregistrées.
+
+**Règle de clôture :** 92 codes raccordés au coordinateur ne signifient pas que 92 parcours ont tous été validés de bout en bout. N3 reste non vert jusqu'au succès de la CI sur le HEAD courant et à la satisfaction des conditions ci-dessus. N4 ne doit pas être ouvert avant cette clôture.
+
+### Limites de sécurité et de déploiement
 
 - Aucun code applicatif n'a été fusionné dans `main`.
 - Aucun draft SQL n'a été appliqué à un projet Supabase hébergé.
-- Le drapeau de synchronisation reste désactivé par défaut ; aucune synchronisation de production n'est déclarée.
-- L'artefact Android précédent demeure un APK Debug, pas une Release de distribution signée.
+- Aucun déploiement de production ni activation de la synchronisation de production n'est déclaré.
+- L'artefact produit dans la chaîne précédente est un APK Debug, pas une Release signée destinée à la distribution.
 
 ---
 
