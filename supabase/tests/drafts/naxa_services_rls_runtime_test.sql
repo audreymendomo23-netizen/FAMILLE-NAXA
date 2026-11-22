@@ -409,6 +409,128 @@ BEGIN
 END
 $inventory_sync$;
 
+
+SET ROLE authenticated;
+DO $atomic_sync$
+DECLARE
+  v_payload jsonb;
+  v_first jsonb;
+  v_replay jsonb;
+  v_rejected boolean := false;
+BEGIN
+  v_payload := jsonb_build_object(
+    'supplier_id','94000000-0000-4000-8000-000000000001',
+    'org_id','20000000-0000-4000-8000-000000000001',
+    'site_id','30000000-0000-4000-8000-000000000001',
+    'name','Fournisseur atomique CI','phone','','whatsapp','',
+    'email','','address','','payment_terms_days',0,'notes',''
+  );
+  v_first := public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '95000000-0000-4000-8000-000000000001'::uuid,
+    1,'supplier','94000000-0000-4000-8000-000000000001',
+    'supplier.saved',v_payload
+  );
+  IF v_first->>'status' <> 'applied' OR coalesce((v_first->>'idempotent')::boolean,true) THEN
+    RAISE EXCEPTION 'ATOMIC_SYNC_FIRST_MUTATION_NOT_APPLIED: %',v_first;
+  END IF;
+
+  v_replay := public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '95000000-0000-4000-8000-000000000001'::uuid,
+    1,'supplier','94000000-0000-4000-8000-000000000001',
+    'supplier.saved',v_payload
+  );
+  IF v_replay->>'status' <> 'applied' OR coalesce((v_replay->>'idempotent')::boolean,false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'ATOMIC_SYNC_IDENTICAL_REPLAY_NOT_IDEMPOTENT: %',v_replay;
+  END IF;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,
+      null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      '95000000-0000-4000-8000-000000000001'::uuid,
+      1,'supplier','94000000-0000-4000-8000-000000000001',
+      'supplier.saved',v_payload || jsonb_build_object('name','Fournisseur divergent')
+    );
+    RAISE EXCEPTION 'ATOMIC_SYNC_DIVERGENT_REPLAY_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'NAXA_SYNC_EVENT_IDEMPOTENCY_CONFLICT' THEN RAISE; END IF;
+  END;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000002'::uuid,
+      null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      '95000000-0000-4000-8000-000000000002'::uuid,
+      2,'supplier','94000000-0000-4000-8000-000000000002',
+      'supplier.saved',
+      v_payload || jsonb_build_object(
+        'supplier_id','94000000-0000-4000-8000-000000000002',
+        'site_id','30000000-0000-4000-8000-000000000002'
+      )
+    );
+    RAISE EXCEPTION 'ATOMIC_SYNC_CROSS_SITE_WRITE_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'NAXA_SYNC_SCOPE_FORBIDDEN' THEN RAISE; END IF;
+  END;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,
+      null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      '95000000-0000-4000-8000-000000000003'::uuid,
+      3,'supplier','94000000-0000-4000-8000-000000000003',
+      'supplier.saved',
+      v_payload || jsonb_build_object(
+        'supplier_id','94000000-0000-4000-8000-000000000003','name','x'
+      )
+    );
+    RAISE EXCEPTION 'ATOMIC_SYNC_INVALID_MUTATION_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM <> 'NAXA_SUPPLIER_SAVE_INVALID' THEN RAISE; END IF;
+  END;
+END
+$atomic_sync$;
+RESET ROLE;
+
+DO $atomic_sync_receipt_assertions$
+DECLARE v_receipts integer; v_suppliers integer;
+BEGIN
+  SELECT count(*) INTO v_receipts FROM public.ns_sync_receipts
+   WHERE org_id='20000000-0000-4000-8000-000000000001'
+     AND client_event_id='95000000-0000-4000-8000-000000000001';
+  SELECT count(*) INTO v_suppliers FROM public.ns_suppliers
+   WHERE id='94000000-0000-4000-8000-000000000001'
+     AND org_id='20000000-0000-4000-8000-000000000001'
+     AND site_id='30000000-0000-4000-8000-000000000001';
+  IF v_receipts <> 1 OR v_suppliers <> 1 THEN
+    RAISE EXCEPTION 'ATOMIC_SYNC_RECEIPT_OR_MUTATION_COUNT_INVALID: receipts %, suppliers %',v_receipts,v_suppliers;
+  END IF;
+  IF EXISTS (
+    SELECT 1 FROM public.ns_sync_receipts
+    WHERE client_event_id IN (
+      '95000000-0000-4000-8000-000000000002',
+      '95000000-0000-4000-8000-000000000003'
+    )
+  ) THEN
+    RAISE EXCEPTION 'ATOMIC_SYNC_FAILED_MUTATION_LEFT_RECEIPT';
+  END IF;
+END
+$atomic_sync_receipt_assertions$;
+
 UPDATE public.ns_devices SET revoked_at=now() WHERE id='80000000-0000-4000-8000-000000000001';
 SET ROLE authenticated;
 DO $revocation$
