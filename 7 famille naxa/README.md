@@ -1,6 +1,6 @@
 # Famille NAXA — documentation Markdown
 
-Ce dossier rassemble les documents de référence de la **famille des sept applications** : Kiosko, Bootik, Zipple, NAXA Services, CotiZ, Loyable et NAXA Hotel.
+Ce dossier rassemble les documents de référence de la **famille des sept applications historiques** : Kiosko, Bootik, Zipple, NAXA Services, CotiZ, Loyable et NAXA Hotel. Le cahier KIOSKO 2.0 constitue désormais la référence cible KIOSKO ; le cahier KIOSKO v1.0 est conservé comme archive documentaire.
 
 ## Structure
 
@@ -22,7 +22,8 @@ Campus237 et NAXA Security sont exclus de ce dossier : ils sont documentés comm
 
 ### Cahiers des charges
 
-1. [Kiosko](01-cahiers-des-charges/01-kiosko.md)
+1. **Kiosko 2.0 — ERP Callbox 360° (référence cible)** : [cahier des charges](01-cahiers-des-charges/01-kiosko-360.md)  
+   - Archive de référence historique : [Kiosko v1.0 du 31 octobre 2026](01-cahiers-des-charges/01-kiosko.md)
 2. [Bootik](01-cahiers-des-charges/02-bootik.md)
 3. [Zipple](01-cahiers-des-charges/03-zipple.md)
 4. [NAXA Services](01-cahiers-des-charges/04-naxa-services.md)
