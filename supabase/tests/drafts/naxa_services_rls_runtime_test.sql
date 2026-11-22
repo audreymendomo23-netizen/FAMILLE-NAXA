@@ -785,6 +785,226 @@ END
 $inventory_valuation_direct_write_guard$;
 RESET ROLE;
 
+
+SET ROLE authenticated;
+DO $pressing_appointment_sync$
+DECLARE
+  v_result jsonb;
+  v_start timestamptz:=now()+interval '4 hours';
+  v_end timestamptz:=now()+interval '5 hours';
+  v_rejected boolean:=false;
+BEGIN
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    '40000000-0000-4000-8000-000000000001'::uuid,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9a000000-0000-4000-8000-000000000001'::uuid,60,
+    'pressing_order','9b000000-0000-4000-8000-000000000001',
+    'pressing_order.created',
+    jsonb_build_object(
+      'order_id','9b000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'workstation_id','40000000-0000-4000-8000-000000000001',
+      'ticket_number','CI-PRESS-001','customer_name','Client Pressing CI',
+      'customer_phone','690000010','items_summary','2 chemises, 1 pantalon',
+      'total_xaf',4500,'deposit_xaf',1500,'promised_at',now()+interval '2 days'
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'PRESSING_ORDER_CREATE_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9a000000-0000-4000-8000-000000000002'::uuid,61,
+    'pressing_order','9b000000-0000-4000-8000-000000000001',
+    'pressing_order.status_changed:in_progress',
+    jsonb_build_object(
+      'order_id','9b000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'from_status','received','reason','Début du traitement',
+      'expected_version',1,'transitioned_at',now()
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'PRESSING_TO_PROGRESS_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9a000000-0000-4000-8000-000000000003'::uuid,62,
+    'pressing_order','9b000000-0000-4000-8000-000000000001',
+    'pressing_order.status_changed:ready',
+    jsonb_build_object(
+      'order_id','9b000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'from_status','in_progress','reason','Traitement terminé',
+      'expected_version',2,'transitioned_at',now()
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'PRESSING_TO_READY_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9a000000-0000-4000-8000-000000000004'::uuid,63,
+    'pressing_order','9b000000-0000-4000-8000-000000000001',
+    'pressing_order.status_changed:picked_up',
+    jsonb_build_object(
+      'order_id','9b000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'from_status','ready','reason','Client servi',
+      'expected_version',3,'transitioned_at',now()
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'PRESSING_TO_PICKED_UP_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    '40000000-0000-4000-8000-000000000001'::uuid,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9a000000-0000-4000-8000-000000000005'::uuid,64,
+    'appointment','9c000000-0000-4000-8000-000000000001',
+    'appointment.created',
+    jsonb_build_object(
+      'appointment_id','9c000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'workstation_id','40000000-0000-4000-8000-000000000001',
+      'customer_reference_or_name','Client rendez-vous CI',
+      'service_reference_or_name','Pressing standard',
+      'assigned_member_id','60000000-0000-4000-8000-000000000001',
+      'starts_at',v_start,'ends_at',v_end,'deposit_xaf',1000,'status','booked'
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'APPOINTMENT_CREATE_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9a000000-0000-4000-8000-000000000006'::uuid,65,
+    'appointment','9c000000-0000-4000-8000-000000000001',
+    'appointment.status_changed',
+    jsonb_build_object(
+      'appointment_id','9c000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'from_status','booked','to_status','confirmed',
+      'reason','Confirmation du client','expected_version',1,'transitioned_at',now()
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'APPOINTMENT_STATUS_NOT_APPLIED: %',v_result; END IF;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '9a000000-0000-4000-8000-000000000007'::uuid,66,
+    'appointment','9c000000-0000-4000-8000-000000000001',
+    'appointment.rescheduled',
+    jsonb_build_object(
+      'appointment_id','9c000000-0000-4000-8000-000000000001',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'workstation_id','40000000-0000-4000-8000-000000000001',
+      'assigned_member_id','60000000-0000-4000-8000-000000000001',
+      'starts_at',v_start+interval '2 hours','ends_at',v_end+interval '2 hours',
+      'expected_version',2,'reason','Décalage horaire demandé'
+    )
+  );
+  IF v_result->>'status'<>'applied' THEN RAISE EXCEPTION 'APPOINTMENT_RESCHEDULE_NOT_APPLIED: %',v_result; END IF;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      '9a000000-0000-4000-8000-000000000008'::uuid,67,
+      'appointment','9c000000-0000-4000-8000-000000000002',
+      'appointment.created',
+      jsonb_build_object(
+        'appointment_id','9c000000-0000-4000-8000-000000000002',
+        'org_id','20000000-0000-4000-8000-000000000001',
+        'site_id','30000000-0000-4000-8000-000000000001',
+        'workstation_id','40000000-0000-4000-8000-000000000001',
+        'customer_reference_or_name','Second client',
+        'service_reference_or_name','Pressing standard',
+        'assigned_member_id','60000000-0000-4000-8000-000000000001',
+        'starts_at',v_start+interval '2 hours','ends_at',v_end+interval '2 hours',
+        'deposit_xaf',0,'status','booked'
+      )
+    );
+    RAISE EXCEPTION 'APPOINTMENT_OVERLAPPING_CREATE_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM<>'NAXA_APPOINTMENT_SLOT_CONFLICT' THEN RAISE; END IF;
+  END;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      '9a000000-0000-4000-8000-000000000009'::uuid,68,
+      'appointment','9c000000-0000-4000-8000-000000000001',
+      'appointment.status_changed',
+      jsonb_build_object(
+        'appointment_id','9c000000-0000-4000-8000-000000000001',
+        'org_id','20000000-0000-4000-8000-000000000001',
+        'site_id','30000000-0000-4000-8000-000000000001',
+        'from_status','confirmed','to_status','completed',
+        'reason','Clôture de rendez-vous','expected_version',2,'transitioned_at',now()
+      )
+    );
+    RAISE EXCEPTION 'STALE_APPOINTMENT_STATUS_UPDATE_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM<>'NAXA_APPOINTMENT_VERSION_CONFLICT' THEN RAISE; END IF;
+  END;
+END
+$pressing_appointment_sync$;
+RESET ROLE;
+
+DO $pressing_appointment_assertions$
+DECLARE v_pressing_status text; v_pressing_revision integer; v_pressing_events integer;
+        v_appointment_status text; v_appointment_revision integer; v_appointment_events integer;
+BEGIN
+  SELECT status,revision INTO v_pressing_status,v_pressing_revision
+    FROM public.ns_pressing_orders WHERE id='9b000000-0000-4000-8000-000000000001';
+  SELECT count(*) INTO v_pressing_events FROM public.ns_pressing_status_events
+    WHERE order_id='9b000000-0000-4000-8000-000000000001';
+  IF v_pressing_status<>'picked_up' OR v_pressing_revision<>4 OR v_pressing_events<>4 THEN
+    RAISE EXCEPTION 'PRESSING_ORDER_LIFECYCLE_INVALID';
+  END IF;
+  SELECT status,revision INTO v_appointment_status,v_appointment_revision
+    FROM public.ns_appointments WHERE id='9c000000-0000-4000-8000-000000000001';
+  SELECT count(*) INTO v_appointment_events FROM public.ns_appointment_status_events
+    WHERE appointment_id='9c000000-0000-4000-8000-000000000001';
+  IF v_appointment_status<>'confirmed' OR v_appointment_revision<>3 OR v_appointment_events<>3 THEN
+    RAISE EXCEPTION 'APPOINTMENT_LIFECYCLE_OR_REVISION_INVALID';
+  END IF;
+END
+$pressing_appointment_assertions$;
+
+SET ROLE authenticated;
+DO $pressing_appointment_direct_write_guard$
+BEGIN
+  IF has_table_privilege(current_user,'public.ns_pressing_orders','INSERT')
+     OR has_table_privilege(current_user,'public.ns_pressing_orders','UPDATE')
+     OR has_table_privilege(current_user,'public.ns_appointments','INSERT')
+     OR has_table_privilege(current_user,'public.ns_appointments','UPDATE') THEN
+    RAISE EXCEPTION 'CLIENT_CAN_BYPASS_PRESSING_OR_APPOINTMENT_RPC';
+  END IF;
+END
+$pressing_appointment_direct_write_guard$;
+RESET ROLE;
+
 UPDATE public.ns_devices SET revoked_at=now() WHERE id='80000000-0000-4000-8000-000000000001';
 SET ROLE authenticated;
 DO $revocation$
