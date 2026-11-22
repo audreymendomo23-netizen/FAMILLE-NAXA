@@ -183,6 +183,13 @@ const ATOMIC_SYNC_ACTIONS: Record<string, { aggregate: string; idField: string; 
   "loyalty_program.updated": { aggregate: "loyalty_program", idField: "program_id", organizationScoped: true },
   "loyalty_activity.recorded": { aggregate: "loyalty_activity", idField: "activity_event_id" },
   "loyalty_reward.redeemed": { aggregate: "loyalty_reward", idField: "reward_event_id" },
+  "service.created": { aggregate: "service", idField: "service_id" },
+  "service.updated": { aggregate: "service", idField: "service_id" },
+  "service.configuration_updated": { aggregate: "service", idField: "service_id" },
+  "customer.created": { aggregate: "customer", idField: "customer_id" },
+  "customer_followup.created": { aggregate: "customer_followup", idField: "followup_id" },
+  "customer_followup.completed": { aggregate: "customer_followup", idField: "followup_id" },
+  "support_request.created": { aggregate: "support_request", idField: "request_id" },
 };
 
 export function normalizeAtomicSyncEvent(value: unknown): AtomicSyncEvent {
