@@ -129,6 +129,8 @@ class SupplierSyncCoordinatorTest {
     fun workManagerRetriesWhenAnyEventNeedsTransientRetry() {
         assertTrue(shouldRetrySyncWorker(1))
         assertFalse(shouldRetrySyncWorker(0))
+        assertTrue(shouldRetrySyncWorker(0, hasMoreChanges = true))
+        assertTrue(shouldRetrySyncWorker(1, hasMoreChanges = true))
     }
 
     @Test
