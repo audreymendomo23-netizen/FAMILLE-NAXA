@@ -1818,27 +1818,11 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             }
         }
 
-        val paymentMethod = depositPaymentMethod?.trim()?.lowercase(java.util.Locale.ROOT)?.takeIf(String::isNotBlank)
-        val cashSessionId = depositCashSessionId?.trim()?.takeIf(String::isNotBlank)
-        val depositPaymentStatus = when {
-            depositXaf == 0L -> {
-                require(paymentMethod == null && cashSessionId == null) {
-                    "Un acompte nul ne doit pas porter de moyen ou de session de paiement."
-                }
-                "none"
-            }
-            paymentMethod == "cash" -> {
-                require(cashSessionId != null) { "Sélectionne une session de caisse ouverte pour encaisser l'acompte en espèces." }
-                val cashSession = dao.findCashSession(cashSessionId, orgId, siteId)
-                    ?: throw IllegalArgumentException("Session de caisse introuvable pour ce point de vente.")
-                require(cashSession.status == "open") { "La session sélectionnée est déjà clôturée." }
-                "confirmed"
-            }
-            paymentMethod in setOf("mobile_money", "other") -> {
-                require(cashSessionId == null) { "Un paiement non espèces ne peut pas être rattaché à une session de caisse." }
-                "pending"
-            }
-            else -> throw IllegalArgumentException("Choisis explicitement le mode d'encaissement de l'acompte.")
+        val depositTerms = PressingDepositPolicy.resolve(depositXaf, depositPaymentMethod, depositCashSessionId)
+        if (depositTerms.paymentMethod == "cash") {
+            val cashSession = dao.findCashSession(depositTerms.cashSessionId!!, orgId, siteId)
+                ?: throw IllegalArgumentException("Session de caisse introuvable pour ce point de vente.")
+            require(cashSession.status == "open") { "La session sélectionnée est déjà clôturée." }
         }
 
         val order = LocalPressingOrder(
@@ -1856,9 +1840,9 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             actorMemberId = actorMemberId,
             createdAtMillis = now,
             updatedAtMillis = now,
-            depositPaymentMethod = paymentMethod,
-            depositCashSessionId = if (paymentMethod == "cash") cashSessionId else null,
-            depositPaymentStatus = depositPaymentStatus
+            depositPaymentMethod = depositTerms.paymentMethod,
+            depositCashSessionId = depositTerms.cashSessionId,
+            depositPaymentStatus = depositTerms.status
         )
         dao.insertPressingOrder(order)
         val payload = JSONObject()
