@@ -809,6 +809,12 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_remote_changes WHERE orgId = :orgId AND applicationStatus <> 'applied' ORDER BY changeCursor ASC LIMIT :limit")
     suspend fun loadRemoteChangesNeedingApplication(orgId: String, limit: Int = 250): List<LocalRemoteChange>
 
+    @Query("SELECT COUNT(*) FROM local_remote_changes WHERE orgId = :orgId AND applicationStatus = 'needs_review'")
+    fun observeRemoteReviewCount(orgId: String): Flow<Int>
+
+    @Query("SELECT * FROM local_remote_changes WHERE orgId = :orgId AND applicationStatus = 'needs_review' ORDER BY changeCursor DESC LIMIT 20")
+    fun observeRemoteChangesNeedingReview(orgId: String): Flow<List<LocalRemoteChange>>
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertRemoteChange(change: LocalRemoteChange)
 
