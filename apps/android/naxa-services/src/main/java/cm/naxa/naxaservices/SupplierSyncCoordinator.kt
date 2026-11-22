@@ -6,6 +6,7 @@ import cm.naxa.naxaservices.auth.AuthSession
 import cm.naxa.naxaservices.data.LocalOutboxEvent
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import kotlinx.coroutines.flow.first
+import kotlin.random.Random
 import org.json.JSONObject
 
 data class SupplierSyncSummary(
@@ -17,9 +18,11 @@ data class SupplierSyncSummary(
 )
 
 /**
- * Manual, opt-in synchronization for inventory prerequisites and supplier-cycle events.
- * This is a bounded slice, not a universal ERP synchronizer.
- * The build flag is false by default; no automatic worker is scheduled.
+ * Shared transport for the currently snapshot-complete inventory/supplier event slice.
+ * WorkManager supplies automatic retries when an explicitly remembered session is available;
+ * the dashboard action remains available while a session is active. This is not yet universal:
+ * the other outbox call sites stay queued until their full versioned snapshots are implemented.
+ * The build flag is false by default.
  */
 object SupplierSyncCoordinator {
     private const val EXISTING_NAXA_PROJECT_REF = "ykgjfindlgseegmznaog"
@@ -168,7 +171,9 @@ object SupplierSyncCoordinator {
                 val status = (failure as? AuthApiException)?.statusCode
                 val transient = status == null || status == 429 || status >= 500
                 val attempts = event.attemptCount + 1
-                val delay = (30_000L * (1L shl attempts.coerceAtMost(6))).coerceAtMost(30L * 60L * 1000L)
+                val baseDelay = (30_000L * (1L shl attempts.coerceAtMost(6))).coerceAtMost(30L * 60L * 1000L)
+                val jitter = if (baseDelay > 4_000L) Random.nextLong(baseDelay / 4L + 1L) else 0L
+                val delay = baseDelay + jitter
                 val now = System.currentTimeMillis()
                 val state = if (transient) "retry_wait" else "rejected"
                 val errorCode = when {

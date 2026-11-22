@@ -2330,7 +2330,8 @@ private fun DashboardContent(
     onTourNext: () -> Unit,
     onTourSkip: () -> Unit
 ) {
-    val syncApi = remember { AuthApi(androidx.compose.ui.platform.LocalContext.current) }
+    val dashboardContext = androidx.compose.ui.platform.LocalContext.current
+    val syncApi = remember(dashboardContext) { AuthApi(dashboardContext) }
     val syncScope = rememberCoroutineScope()
     var syncBusy by remember { mutableStateOf(false) }
     var syncMessage by remember { mutableStateOf<String?>(null) }

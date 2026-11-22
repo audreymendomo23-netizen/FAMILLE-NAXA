@@ -585,7 +585,7 @@ class AuthApi(private val context: Context) {
                 .put("refresh_token", session.refreshToken)
                 .put("device", devicePayload()),
             session.accessToken
-        )
+        ).copy(deviceId = session.deviceId)
 
     suspend fun logout(accessToken: String) {
         request(

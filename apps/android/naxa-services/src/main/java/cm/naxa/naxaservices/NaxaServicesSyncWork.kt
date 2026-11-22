@@ -125,8 +125,8 @@ class NaxaServicesSyncWorker(
 
         return try {
             val repository = NaxaServicesLocalRepository(database)
-            SupplierSyncCoordinator.syncPending(repository, api, session)
-            Result.success()
+            val summary = SupplierSyncCoordinator.syncPending(repository, api, session)
+            if (summary.retried > 0 && summary.applied == 0) Result.retry() else Result.success()
         } catch (_: Exception) {
             Result.retry()
         } finally {
