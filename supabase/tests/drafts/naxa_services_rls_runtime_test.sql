@@ -120,7 +120,13 @@ BEGIN
   IF public.ns_can_manage_org('20000000-0000-4000-8000-000000000001'::uuid) THEN RAISE EXCEPTION 'SITE_MANAGER_ESCALATED_TO_ORGANIZATION_MANAGER'; END IF;
   IF has_table_privilege(current_user,'public.ns_payments','UPDATE') THEN RAISE EXCEPTION 'CLIENT_CAN_UPDATE_PAYMENT_STATUS'; END IF;
   IF has_table_privilege(current_user,'public.ns_referrals','SELECT') OR has_table_privilege(current_user,'public.ns_referrals','INSERT') OR has_table_privilege(current_user,'public.ns_referral_rewards','UPDATE') THEN RAISE EXCEPTION 'CLIENT_HAS_DIRECT_REFERRAL_TABLE_ACCESS'; END IF;
-  IF has_table_privilege(current_user,'public.ns_sync_receipts','SELECT') OR has_table_privilege(current_user,'public.ns_sync_conflicts','INSERT') OR has_table_privilege(current_user,'public.ns_notification_outbox','SELECT') THEN RAISE EXCEPTION 'CLIENT_HAS_SERVER_ONLY_SYNC_OR_NOTIFICATION_ACCESS'; END IF;
+  IF has_table_privilege(current_user,'public.ns_sync_receipts','SELECT')
+     OR has_table_privilege(current_user,'public.ns_sync_conflicts','INSERT')
+     OR has_table_privilege(current_user,'public.ns_notification_outbox','SELECT')
+     OR has_table_privilege(current_user,'public.ns_sync_counters','SELECT')
+     OR has_table_privilege(current_user,'public.ns_sync_changes','SELECT') THEN
+    RAISE EXCEPTION 'CLIENT_HAS_SERVER_ONLY_SYNC_OR_NOTIFICATION_ACCESS';
+  END IF;
   IF has_table_privilege(current_user,'public.ns_customer_referral_campaigns','SELECT')
      OR has_table_privilege(current_user,'public.ns_customer_referral_codes','INSERT')
      OR has_table_privilege(current_user,'public.ns_customer_referral_rewards','UPDATE')
@@ -653,10 +659,9 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'N3_PULL_DID_NOT_REDACT_PRIVATE_FIELDS';
   END IF;
-  IF coalesce((v_pull->>'has_more')::boolean,true) OR v_next <> (
-    SELECT last_change_cursor FROM public.ns_sync_counters
-    WHERE org_id='20000000-0000-4000-8000-000000000001'
-  ) THEN
+  -- Fixture has two committed journal rows. Check the returned cursor,
+  -- never read the server-only counter table from the authenticated role.
+  IF coalesce((v_pull->>'has_more')::boolean,true) OR v_next <> 2 THEN
     RAISE EXCEPTION 'N3_PULL_CURSOR_DID_NOT_ADVANCE_PAST_FILTERED_ROWS: %',v_pull;
   END IF;
 END
