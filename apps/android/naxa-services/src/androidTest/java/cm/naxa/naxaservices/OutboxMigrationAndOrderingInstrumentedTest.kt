@@ -9,6 +9,9 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import cm.naxa.naxaservices.data.LocalOutboxEvent
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_13_14
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_15_16
+import cm.naxa.naxaservices.data.LocalLoyaltyEvent
+import cm.naxa.naxaservices.data.LocalOutboxEvent
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import cm.naxa.naxaservices.data.NsServicesDatabase
 import java.util.UUID
@@ -24,6 +27,51 @@ import org.junit.runner.RunWith
 class OutboxMigrationAndOrderingInstrumentedTest {
     private val context: Context
         get() = ApplicationProvider.getApplicationContext()
+
+
+    @Test
+    fun roomMigration15To16AddsPendingApplicationStateWithoutLosingRemoteChange() {
+        val databaseName = "remote-change-migration-${UUID.randomUUID()}.db"
+        val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
+            .name(databaseName)
+            .callback(object : SupportSQLiteOpenHelper.Callback(15) {
+                override fun onCreate(db: SupportSQLiteDatabase) {
+                    db.execSQL(
+                        "CREATE TABLE local_remote_changes (" +
+                            "eventId TEXT NOT NULL PRIMARY KEY, orgId TEXT NOT NULL, changeCursor INTEGER NOT NULL, " +
+                            "sourceDeviceId TEXT NOT NULL, siteId TEXT, workstationId TEXT, " +
+                            "aggregateType TEXT NOT NULL, aggregateId TEXT NOT NULL, actionCode TEXT NOT NULL, " +
+                            "aggregateVersion INTEGER NOT NULL, projectionJson TEXT NOT NULL, recordedAt TEXT NOT NULL, " +
+                            "receivedAtEpochMs INTEGER NOT NULL)"
+                    )
+                    db.execSQL(
+                        "INSERT INTO local_remote_changes VALUES (" +
+                            "'aaaaaaaa-0000-4000-8000-000000000001','org-1',7," +
+                            "'bbbbbbbb-0000-4000-8000-000000000002','site-1',NULL," +
+                            "'supplier','supplier-1','supplier.saved',1,'{}','2026-11-22T10:00:00Z',100)"
+                    )
+                }
+                override fun onUpgrade(db: SupportSQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+            })
+            .build()
+        val helper = FrameworkSQLiteOpenHelperFactory().create(configuration)
+        try {
+            val db = helper.writableDatabase
+            NS_SERVICES_MIGRATION_15_16.migrate(db)
+            val cursor = db.query(
+                "SELECT applicationStatus,lastErrorCode,changeCursor FROM local_remote_changes WHERE eventId='aaaaaaaa-0000-4000-8000-000000000001'"
+            )
+            cursor.use {
+                assertTrue(it.moveToFirst())
+                assertEquals("pending", it.getString(0))
+                assertTrue(it.isNull(1))
+                assertEquals(7L, it.getLong(2))
+            }
+        } finally {
+            helper.close()
+            context.deleteDatabase(databaseName)
+        }
+    }
 
     @Test
     fun roomMigration13To14OnlyReclassifiesUnsentDerivedEvents() {
@@ -180,6 +228,77 @@ class OutboxMigrationAndOrderingInstrumentedTest {
             assertEquals(2L, repository.dao.findSyncCheckpoint(orgId, deviceId)?.cursor)
             assertEquals("Grossiste A actualisé",
                 JSONObject(repository.dao.findRemoteAggregate(orgId, "supplier", supplierId)!!.projectionJson).optString("name"))
+        } finally {
+            database.close()
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+
+    @Test
+    fun sourceDeviceReconcilesCanonicalServerRewardIdsWithoutDuplicateLedgerRows() = runBlocking<Unit> {
+        val orgId = "org-${UUID.randomUUID()}"
+        val siteId = "site-${UUID.randomUUID()}"
+        val activityId = UUID.randomUUID().toString()
+        val programId = UUID.randomUUID().toString()
+        val customerId = UUID.randomUUID().toString()
+        val localRewardId = UUID.randomUUID().toString()
+        val serverRewardId = UUID.randomUUID().toString()
+        val databaseName = "canonical-reward-${UUID.randomUUID()}.db"
+        val database = Room.databaseBuilder(context, NsServicesDatabase::class.java, databaseName).build()
+        try {
+            val repository = NaxaServicesLocalRepository(database)
+            val dao = repository.dao
+            dao.insertLoyaltyEvent(
+                LocalLoyaltyEvent(
+                    activityId, orgId, siteId, programId, customerId,
+                    "activity", 2500L, 1L, null, null, null,
+                    "Achat validé", "member-1", 100L
+                )
+            )
+            dao.insertLoyaltyEvent(
+                LocalLoyaltyEvent(
+                    localRewardId, orgId, siteId, programId, customerId,
+                    "reward_earned", 0L, 0L, 1, activityId, "available",
+                    "Récompense locale provisoire", "member-1", 100L
+                )
+            )
+            val event = LocalOutboxEvent(
+                eventId = activityId,
+                orgId = orgId,
+                aggregateType = "loyalty_activity",
+                aggregateId = activityId,
+                actionCode = "loyalty_activity.recorded",
+                payloadJson = """{"activity_event_id":"$activityId"}""",
+                deviceSequence = 1L,
+                createdAtEpochMs = 100L
+            )
+            val payload = JSONObject()
+                .put("activity_event_id", activityId)
+                .put("org_id", orgId)
+                .put("site_id", siteId)
+                .put("program_id", programId)
+                .put("customer_id", customerId)
+            val result = JSONObject()
+                .put("metric_delta", 3)
+                .put("rewards_earned", 1)
+                .put("reward_events", JSONArray().put(
+                    JSONObject()
+                        .put("event_id", serverRewardId)
+                        .put("wave_number", 1)
+                        .put("reward_status", "available")
+                        .put("description", "Récompense serveur")
+                ))
+
+            assertTrue(repository.applyCanonicalServerEffects(event, payload, result))
+            assertEquals(3L, dao.findLoyaltyEventById(orgId, activityId)?.metricDelta)
+            assertEquals(null, dao.findLoyaltyEventById(orgId, localRewardId))
+            assertEquals("Récompense serveur", dao.findLoyaltyEventById(orgId, serverRewardId)?.description)
+            assertEquals(1, dao.countLoyaltyRewardsForActivity(orgId, siteId, activityId))
+
+            // A repeated accepted receipt must replace, not duplicate, canonical reward rows.
+            assertTrue(repository.applyCanonicalServerEffects(event, payload, result))
+            assertEquals(1, dao.countLoyaltyRewardsForActivity(orgId, siteId, activityId))
         } finally {
             database.close()
             context.deleteDatabase(databaseName)
