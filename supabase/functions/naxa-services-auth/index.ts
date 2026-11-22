@@ -141,7 +141,16 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
   const acceptedLegalDocuments = (legalRows ?? []).map((item) =>
     String(item.document_type) + ":" + String(item.document_version)
   );
+  const sessionId = jwtClaim(String(authData.access_token ?? ""), "session_id");
+  const deviceRows = sessionId ? await rest(
+    "ns_devices?select=id&account_id=eq." + encodeURIComponent(String(account.id)) +
+      "&session_id=eq." + encodeURIComponent(sessionId) + "&revoked_at=is.null&limit=1",
+    { headers: serviceHeaders() },
+  ) as Record<string, unknown>[] : [];
+  const deviceId = String(deviceRows?.[0]?.id ?? "");
+  if (!deviceId) throw new Error("DEVICE_SESSION_BINDING_REQUIRED");
   return {
+    device_id: deviceId,
     access_token: authData.access_token,
     refresh_token: authData.refresh_token,
     expires_in: authData.expires_in ?? 3600,

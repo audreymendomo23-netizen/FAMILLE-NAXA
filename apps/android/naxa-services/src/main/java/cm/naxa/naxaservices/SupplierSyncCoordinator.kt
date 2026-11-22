@@ -99,65 +99,54 @@ object SupplierSyncCoordinator {
                 continue
             }
 
-            val action = when (event.actionCode) {
-                "supplier.saved" -> "save_supplier"
-                "inventory_item.created",
-                "inventory_item.imported",
-                "inventory_item.import_updated",
-                "inventory_item.supplier_whatsapp_updated" -> "save_inventory_item"
-                "inventory_movement.created",
-                "inventory_movement.import_initial",
-                "inventory_movement.import_adjustment" -> "record_inventory_movement"
-                "purchase.ordered" -> "create_supplier_purchase"
-                "purchase.receipt.confirmed" -> "receive_supplier_purchase_line"
-                "supplier.payment.recorded" -> "record_supplier_payment"
-                else -> continue
-            }
-
-            // A stock purchase may reference an item only after its stable UUID was acknowledged remotely.
-            if (event.actionCode == "purchase.ordered" && hasStockLineWithoutRemoteMapping(payload, dao, orgId)) {
+            if (session.deviceId.isBlank()) {
                 dao.updateOutboxAttempt(
                     event.eventId, orgId, "blocked_dependency", System.currentTimeMillis(), null,
-                    "SERVER_INVENTORY_ITEM_MAPPING_REQUIRED"
+                    "REGISTERED_DEVICE_ID_REQUIRED"
                 )
                 blocked++
                 continue
             }
 
-            if (event.actionCode in setOf(
-                    "inventory_movement.created",
-                    "inventory_movement.import_initial",
-                    "inventory_movement.import_adjustment"
-                )) {
-                val itemId = payload.optString("inventory_item_id")
-                if (itemId.isBlank() || dao.countSyncedInventoryItemMapping(orgId, itemId) == 0) {
-                    dao.updateOutboxAttempt(
-                        event.eventId, orgId, "blocked_dependency", System.currentTimeMillis(), null,
-                        "SERVER_INVENTORY_ITEM_MAPPING_REQUIRED"
-                    )
-                    blocked++
-                    continue
-                }
-            }
+            val siteId = payload.optString("site_id").takeIf { it.isNotBlank() && it != "null" }
+            val workstationId = payload.optString("workstation_id").takeIf { it.isNotBlank() && it != "null" }
+            val envelope = JSONObject()
+                .put("event_id", event.eventId)
+                .put("device_id", session.deviceId)
+                .put("device_sequence", event.deviceSequence)
+                .put("org_id", orgId)
+                .put("site_id", siteId)
+                .put("workstation_id", workstationId)
+                .put("aggregate_type", event.aggregateType)
+                .put("aggregate_id", event.aggregateId)
+                .put("action_code", event.actionCode)
+                .put("payload", payload)
 
-            // Cash payments require a server-side cash session with the exact same ID.
-            // Until the register/session replication contract exists, never send a local-only cash session ID.
-            if (event.actionCode == "supplier.payment.recorded" &&
-                payload.optString("payment_method") == "cash") {
-                dao.updateOutboxAttempt(
-                    event.eventId, orgId, "blocked_dependency", System.currentTimeMillis(), null,
-                    "SERVER_CASH_SESSION_MAPPING_REQUIRED"
-                )
-                blocked++
-                continue
-            }
-
-            payload.put("action", action).put("app_code", "naxa-services")
             try {
-                val response = api.accountingRequest(session.accessToken, payload)
-                if (!response.optBoolean("ok", false)) throw IllegalStateException("ACCOUNTING_RESPONSE_NOT_CONFIRMED")
-                val result = response.optJSONObject("result")
-                    ?: throw IllegalStateException("ACCOUNTING_RESULT_MISSING")
+                val response = api.accountingRequest(
+                    session.accessToken,
+                    JSONObject()
+                        .put("action", "apply_sync_event")
+                        .put("app_code", "naxa-services")
+                        .put("event", envelope)
+                )
+                if (!response.optBoolean("ok", false)) {
+                    throw IllegalStateException("ACCOUNTING_RESPONSE_NOT_CONFIRMED")
+                }
+                val receipt = response.optJSONObject("result")
+                    ?: throw IllegalStateException("SYNC_RECEIPT_MISSING")
+                val receiptHash = receipt.optString("payload_sha256")
+                if (
+                    receipt.optString("status") != "applied" ||
+                    receipt.optString("event_id") != event.eventId ||
+                    receipt.optString("action_code") != event.actionCode ||
+                    receipt.optString("aggregate_type") != event.aggregateType ||
+                    receipt.optString("aggregate_id") != event.aggregateId ||
+                    !Regex("^[a-f0-9]{64}$", RegexOption.IGNORE_CASE).matches(receiptHash)
+                ) {
+                    throw IllegalStateException("SYNC_RECEIPT_MISMATCH")
+                }
+                val result = receipt.optJSONObject("result") ?: JSONObject()
                 val remoteId = when (event.actionCode) {
                     "supplier.saved" -> result.optString("supplier_id")
                     "inventory_item.created",
@@ -171,8 +160,7 @@ object SupplierSyncCoordinator {
                     "purchase.receipt.confirmed" -> result.optString("receipt_id")
                     "supplier.payment.recorded" -> result.optString("payment_id")
                     else -> ""
-                }.takeIf { it.isNotBlank() && it != "null" }
-                    ?: throw IllegalStateException("ACCOUNTING_REMOTE_ID_MISSING")
+                }.takeIf { it.isNotBlank() && it != "null" } ?: event.aggregateId
                 val updated = dao.markOutboxEventSynced(event.eventId, orgId, remoteId)
                 if (updated == 0) throw IllegalStateException("OUTBOX_STATE_UPDATE_FAILED")
                 applied++

@@ -23,12 +23,15 @@ class SessionVault(context: Context) {
             .putString("access", encrypt(session.accessToken))
             .putString("refresh", encrypt(session.refreshToken))
             .putString("member_id", session.account.memberId)
+            .putString("device_id", encrypt(session.deviceId))
             .apply()
     }
 
     fun loadRefreshToken(): String? = preferences.getString("refresh", null)?.let(::decrypt)
 
     fun loadAccessToken(): String? = preferences.getString("access", null)?.let(::decrypt)
+
+    fun loadDeviceId(): String? = preferences.getString("device_id", null)?.let(::decrypt)
 
     fun clear() {
         preferences.edit().clear().apply()

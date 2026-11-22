@@ -53,7 +53,8 @@ data class AuthSession(
     val refreshToken: String,
     val expiresIn: Long,
     val requirePasswordChange: Boolean,
-    val account: AuthAccount
+    val account: AuthAccount,
+    val deviceId: String = ""
 )
 
 data class ProvisionScope(
@@ -630,6 +631,7 @@ class AuthApi(private val context: Context) {
             refreshToken = json.optString("refresh_token"),
             expiresIn = json.optLong("expires_in", 3600L),
             requirePasswordChange = json.optBoolean("require_password_change", false),
+            deviceId = json.optString("device_id"),
             account = AuthAccount(
                 memberId = account.optString("member_id"),
                 displayName = account.optString("display_name"),

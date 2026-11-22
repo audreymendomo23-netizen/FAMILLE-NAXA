@@ -280,6 +280,20 @@ private fun NaxaServicesRoot(
         }
     }
 
+    LaunchedEffect(session?.deviceId, rememberSession) {
+        val activeSession = session
+        if (
+            rememberSession &&
+            activeSession != null &&
+            activeSession.deviceId.isNotBlank() &&
+            SupplierSyncCoordinator.isConfigured()
+        ) {
+            NaxaServicesSyncScheduler.schedule(context)
+        } else {
+            NaxaServicesSyncScheduler.cancel(context)
+        }
+    }
+
     LaunchedEffect(Unit) {
         NotificationChannels.create(context)
         val notificationIcon = R.drawable.naxa_services_monogram
@@ -552,6 +566,7 @@ private fun NaxaServicesRoot(
                                             androidx.work.WorkManager.getInstance(context).cancelUniqueWork(
                                                 "naxa-services-charge-reminders-" + current.account.organizationId
                                             )
+                                            NaxaServicesSyncScheduler.cancel(context)
                                             runCatching { api.revokeCurrentDevicePushTokens(current.accessToken) }
                                             PushTokenRegistry.disable(context)
                                             runCatching { api.logout(current.accessToken) }
@@ -2315,6 +2330,11 @@ private fun DashboardContent(
     onTourNext: () -> Unit,
     onTourSkip: () -> Unit
 ) {
+    val syncApi = remember { AuthApi(androidx.compose.ui.platform.LocalContext.current) }
+    val syncScope = rememberCoroutineScope()
+    var syncBusy by remember { mutableStateOf(false) }
+    var syncMessage by remember { mutableStateOf<String?>(null) }
+    val syncEnabled = SupplierSyncCoordinator.isConfigured() && session.deviceId.isNotBlank()
     var hour by remember { mutableIntStateOf(Calendar.getInstance(java.util.TimeZone.getTimeZone("Africa/Douala")).get(Calendar.HOUR_OF_DAY)) }
     var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -2393,6 +2413,40 @@ private fun DashboardContent(
                     }
                     DashboardMetricRow(if (locale == "en") "Low-stock items" else "Articles sous seuil", lowStockCount.toString() + " / " + inventoryItems.size.toString())
                     DashboardMetricRow(if (locale == "en") "Pending local operations" else "Opérations locales en attente", pendingOperations.toString())
+                    Button(
+                        onClick = {
+                            syncScope.launch {
+                                syncBusy = true
+                                syncMessage = null
+                                runCatching {
+                                    SupplierSyncCoordinator.syncPending(localRepository, syncApi, session)
+                                }.onSuccess { summary ->
+                                    syncMessage = if (locale == "en") {
+                                        "Applied: ${summary.applied} · Blocked: ${summary.blocked} · Rejected: ${summary.rejected} · Remaining: ${summary.remaining}"
+                                    } else {
+                                        "Envoyées : ${summary.applied} · Bloquées : ${summary.blocked} · Rejetées : ${summary.rejected} · Restantes : ${summary.remaining}"
+                                    }
+                                }.onFailure {
+                                    syncMessage = it.message ?: if (locale == "en") "Synchronization failed." else "Échec de la synchronisation."
+                                }
+                                syncBusy = false
+                            }
+                        },
+                        enabled = syncEnabled && !syncBusy && pendingOperations > 0,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(if (syncBusy) (if (locale == "en") "Synchronizing…" else "Synchronisation…") else (if (locale == "en") "Synchronize now" else "Synchroniser maintenant"))
+                    }
+                    if (syncMessage != null) {
+                        Text(syncMessage!!, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (!syncEnabled) {
+                        Text(
+                            if (locale == "en") "ERP sync remains disabled until the dedicated Famille NAXA endpoint and registered device are configured." else "La synchronisation ERP reste désactivée tant que la passerelle dédiée Famille NAXA et l’appareil enregistré ne sont pas configurés.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                     Text(
                         if (locale == "en")
                             "On-device figures for this location. They may include unsynchronized entries and are not a network-wide or server-confirmed report."
