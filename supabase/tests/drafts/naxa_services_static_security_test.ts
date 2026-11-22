@@ -43,8 +43,8 @@ const DRAFTS: DraftSpec[] = [
   },
   {
     file: "naxa_services_v4_supplier_accounting_forecast.sql",
-    tablesWithoutPolicy: ["ns_inventory_valuations"],
-    restrictedTables: ["ns_inventory_valuations"],
+    tablesWithoutPolicy: ["ns_inventory_valuations", "ns_sync_counters", "ns_sync_changes"],
+    restrictedTables: ["ns_inventory_valuations", "ns_sync_counters", "ns_sync_changes"],
   },
   {
     file: "naxa_services_v5_customer_referrals_promotions.sql",
