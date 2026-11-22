@@ -1,4 +1,4 @@
-import { normalizeAtomicSyncEvent, normalizeInventoryItemSyncPayload, normalizeInventoryMovementSyncPayload, normalizeSupplierPurchaseSyncPayload, normalizeSupplierSyncPayload } from "./sync_contract.ts";
+import { normalizeAtomicSyncEvent, normalizeSyncPullRequest, normalizeInventoryItemSyncPayload, normalizeInventoryMovementSyncPayload, normalizeSupplierPurchaseSyncPayload, normalizeSupplierSyncPayload } from "./sync_contract.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -145,6 +145,27 @@ export async function handleAccountingRequest(
     let result: unknown;
 
     switch (action) {
+      case "pull_sync_changes": {
+        const pull = normalizeSyncPullRequest(body);
+        result = await postRpc(baseUrl, env.anonKey, token, "ns_pull_sync_changes", {
+          p_org_id: pull.org_id,
+          p_device_id: pull.device_id,
+          p_after_cursor: pull.after_cursor,
+          p_limit: pull.limit,
+        });
+        if (!result || typeof result !== "object" || Array.isArray(result)) {
+          throw new Error("ERP_SYNC_PULL_INVALID_RESPONSE");
+        }
+        const page = result as JsonObject;
+        if (!Array.isArray(page.changes) ||
+            typeof page.next_cursor !== "number" ||
+            !Number.isSafeInteger(page.next_cursor) ||
+            typeof page.has_more !== "boolean" ||
+            page.next_cursor < pull.after_cursor) {
+          throw new Error("ERP_SYNC_PULL_INVALID_PAGE");
+        }
+        break;
+      }
       case "apply_sync_event": {
         const event = normalizeAtomicSyncEvent(body.event);
         result = await postRpc(baseUrl, env.anonKey, token, "ns_apply_sync_event", {
