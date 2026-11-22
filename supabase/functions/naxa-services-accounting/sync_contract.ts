@@ -150,3 +150,81 @@ export function normalizeInventoryMovementSyncPayload(value:unknown):InventoryMo
     reason:text(body.reason,"INVENTORY_MOVEMENT_REASON",3,240)
   };
 }
+
+
+export type AtomicSyncEvent = {
+  event_id: string;
+  device_id: string;
+  device_sequence: number;
+  org_id: string;
+  site_id: string | null;
+  workstation_id: string | null;
+  aggregate_type: string;
+  aggregate_id: string;
+  action_code: string;
+  payload: Record<string, unknown>;
+};
+
+const ATOMIC_SYNC_ACTIONS: Record<string, { aggregate: string; idField: string; organizationScoped?: boolean }> = {
+  "supplier.saved": { aggregate: "supplier", idField: "supplier_id" },
+  "inventory_item.created": { aggregate: "inventory_item", idField: "inventory_item_id" },
+  "inventory_item.imported": { aggregate: "inventory_item", idField: "inventory_item_id" },
+  "inventory_item.import_updated": { aggregate: "inventory_item", idField: "inventory_item_id" },
+  "inventory_item.supplier_whatsapp_updated": { aggregate: "inventory_item", idField: "inventory_item_id" },
+  "inventory_movement.created": { aggregate: "inventory_movement", idField: "movement_id" },
+  "inventory_movement.import_initial": { aggregate: "inventory_movement", idField: "movement_id" },
+  "inventory_movement.import_adjustment": { aggregate: "inventory_movement", idField: "movement_id" },
+  "purchase.ordered": { aggregate: "purchase", idField: "purchase_id" },
+  "purchase.receipt.confirmed": { aggregate: "purchase_receipt", idField: "idempotency_key" },
+  "supplier.payment.recorded": { aggregate: "supplier_payment", idField: "idempotency_key" },
+  "recurring_charge.saved": { aggregate: "recurring_charge", idField: "charge_id" },
+  "recurring_charge.deactivated": { aggregate: "recurring_charge", idField: "charge_id" },
+  "recurring_charge.payment_recorded": { aggregate: "recurring_charge", idField: "charge_id" },
+  "loyalty_program.updated": { aggregate: "loyalty_program", idField: "program_id", organizationScoped: true },
+  "loyalty_activity.recorded": { aggregate: "loyalty_activity", idField: "activity_event_id" },
+  "loyalty_reward.redeemed": { aggregate: "loyalty_reward", idField: "reward_event_id" },
+};
+
+export function normalizeAtomicSyncEvent(value: unknown): AtomicSyncEvent {
+  const event = record(value, "SYNC_EVENT");
+  const actionCode = text(event.action_code, "SYNC_ACTION_CODE", 3, 100);
+  const action = ATOMIC_SYNC_ACTIONS[actionCode];
+  if (!action) throw new Error("UNSUPPORTED_SYNC_ACTION");
+  const payload = record(event.payload, "SYNC_PAYLOAD");
+  const orgId = uuid(event.org_id, "ORG_ID");
+  if (uuid(payload.org_id, "PAYLOAD_ORG_ID") !== orgId) {
+    throw new Error("SYNC_ORGANIZATION_MISMATCH");
+  }
+  const siteId = event.site_id == null ? null : uuid(event.site_id, "SITE_ID");
+  const workstationId = event.workstation_id == null ? null : uuid(event.workstation_id, "WORKSTATION_ID");
+  if (action.organizationScoped) {
+    if (siteId !== null || workstationId !== null || payload.site_id != null) {
+      throw new Error("SYNC_ORGANIZATION_SCOPE_INVALID");
+    }
+  } else {
+    if (siteId === null || uuid(payload.site_id, "PAYLOAD_SITE_ID") !== siteId) {
+      throw new Error("SYNC_SITE_SCOPE_MISMATCH");
+    }
+  }
+  const aggregateType = text(event.aggregate_type, "AGGREGATE_TYPE", 1, 80);
+  if (aggregateType !== action.aggregate) throw new Error("SYNC_AGGREGATE_TYPE_MISMATCH");
+  const aggregateId = uuid(event.aggregate_id, "AGGREGATE_ID");
+  const payloadAggregateId = uuid(payload[action.idField], "PAYLOAD_AGGREGATE_ID");
+  if (payloadAggregateId !== aggregateId) throw new Error("SYNC_AGGREGATE_ID_MISMATCH");
+  const deviceSequence = event.device_sequence;
+  if (typeof deviceSequence !== "number" || !Number.isSafeInteger(deviceSequence) || deviceSequence <= 0) {
+    throw new Error("INVALID_DEVICE_SEQUENCE");
+  }
+  return {
+    event_id: uuid(event.event_id, "EVENT_ID"),
+    device_id: uuid(event.device_id, "DEVICE_ID"),
+    device_sequence: deviceSequence,
+    org_id: orgId,
+    site_id: siteId,
+    workstation_id: workstationId,
+    aggregate_type: aggregateType,
+    aggregate_id: aggregateId,
+    action_code: actionCode,
+    payload,
+  };
+}
