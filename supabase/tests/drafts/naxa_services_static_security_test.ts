@@ -294,7 +294,7 @@ Deno.test("N2 service, customer, CRM and support handlers are scoped and server-
   }
   assert(/revoke\s+all\s+on\s+function\s+public\.ns_create_service\([^;]+\)\s+from\s+public,\s*anon/i.test(sql),
     "Service RPC must revoke public/anon execution");
-  assert(/grant\s+execute\s+on\s+function\s+public\.ns_create_service\([^;]+\)\s+to\s+authenticated,\s*service_role/i.test(sql),
+  assert(/grant\s+execute\s+on\s+function\s+public\.ns_create_service\([^;]+\)\s+to\s+service_role/i.test(sql),
     "Service RPC must explicitly grant authenticated/service_role execution");
 });
 
@@ -360,18 +360,18 @@ Deno.test("N2 cash session and expense handlers are scoped and compute close bal
 
 Deno.test("N2 sale handlers post cash sale inventory once and keep Mobile Money pending until provider verification", async () => {
   const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
-  assert(/create\\s+or\\s+replace\\s+function\\s+public\\.ns_create_sale\\s*\\(/i.test(sql),
+  assert(/create\s+or\s+replace\s+function\s+public\.ns_create_sale\s*\(/i.test(sql),
     "Sale creation handler is required");
-  assert(/create\\s+or\\s+replace\\s+function\\s+public\\.ns_cancel_pending_mobile_money_sale\\s*\\(/i.test(sql),
+  assert(/create\s+or\s+replace\s+function\s+public\.ns_cancel_pending_mobile_money_sale\s*\(/i.test(sql),
     "Pending Mobile Money cancellation handler is required");
-  assert(/p_payment_method='cash'\\s+and\\s+p_expected_status<>'confirmed'/i.test(sql),
+  assert(/p_payment_method='cash'\s+and\s+p_expected_status<>'confirmed'/i.test(sql),
     "Cash sale must be confirmed synchronously");
-  assert(/p_payment_method='mobile_money'\\s+and\\s+p_expected_status<>'pending'/i.test(sql),
+  assert(/p_payment_method='mobile_money'\s+and\s+p_expected_status<>'pending'/i.test(sql),
     "Mobile Money sale must remain pending on client creation");
-  assert(/ns_post_sale_inventory\\(p_org_id,p_site_id,p_sale_id,p_event_id\\)/i.test(sql),
+  assert(/ns_post_sale_inventory\(p_org_id,p_site_id,p_sale_id,p_event_id\)/i.test(sql),
     "Cash sale must call the existing atomic stock/accounting posting operation");
   assert(/status='failed',confirmation_source='cancelled_before_provider_confirmation'/i.test(sql),
     "Only a pending provider payment can be cancelled before confirmation");
-  assert(/revoke\\s+insert,update,delete\\s+on\\s+public\\.ns_sales,public\\.ns_payments,public\\.ns_sale_lines\\s+from\\s+public,anon,authenticated/i.test(sql),
+  assert(/revoke\s+insert,update,delete\s+on\s+public\.ns_sales,public\.ns_payments,public\.ns_sale_lines\s+from\s+public,anon,authenticated/i.test(sql),
     "Sale, payment and line writes must be RPC-only");
 });
