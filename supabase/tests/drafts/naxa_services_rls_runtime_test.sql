@@ -643,6 +643,23 @@ BEGIN
     'inventory_transfer.received_at_destination',2,
     '{"transfer_id":"94000000-0000-4000-8000-000000000098","org_id":"20000000-0000-4000-8000-000000000001","site_id":"30000000-0000-4000-8000-000000000002","source_site_id":"30000000-0000-4000-8000-000000000002","destination_site_id":"30000000-0000-4000-8000-000000000001","inventory_item_id":"92000000-0000-4000-8000-000000000001","sku_snapshot":"CI-TRANSFER","item_name_snapshot":"Article transferé","unit":"unité","quantity":1,"destination_inventory_item_id_if_created":"92000000-0000-4000-8000-000000000099"}'::jsonb
   );
+  UPDATE public.ns_sync_counters
+     SET last_change_cursor=last_change_cursor+1
+   WHERE org_id='20000000-0000-4000-8000-000000000001'
+   RETURNING last_change_cursor INTO v_cursor;
+  INSERT INTO public.ns_sync_changes(
+    org_id,change_cursor,source_event_id,source_device_id,site_id,target_site_ids,workstation_id,
+    aggregate_type,aggregate_id,action_code,aggregate_version,projection_json
+  ) VALUES (
+    '20000000-0000-4000-8000-000000000001',v_cursor,
+    '95000000-0000-4000-8000-000000000097',
+    '80000000-0000-4000-8000-000000000001',
+    '30000000-0000-4000-8000-000000000001',
+    ARRAY['30000000-0000-4000-8000-000000000001'::uuid],
+    '40000000-0000-4000-8000-000000000001',
+    'supplier','94000000-0000-4000-8000-000000000097','supplier.saved',1,
+    '{"supplier_id":"94000000-0000-4000-8000-000000000097","org_id":"20000000-0000-4000-8000-000000000001","site_id":"30000000-0000-4000-8000-000000000001","name":"Poste site A1"}'::jsonb
+  );
 END
 $seed_invisible_sync_change$;
 
@@ -683,6 +700,14 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'N3_DESTINATION_ONLY_MEMBER_DID_NOT_RECEIVE_TRANSFER: %',v_pull;
   END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM jsonb_array_elements(v_events) e
+    WHERE e->>'event_id'='95000000-0000-4000-8000-000000000097'
+      AND e->>'site_id'='30000000-0000-4000-8000-000000000001'
+      AND e->'visible_site_ids' @> '["30000000-0000-4000-8000-000000000001"]'::jsonb
+  ) THEN
+    RAISE EXCEPTION 'N3_SITE_READER_DID_NOT_RECEIVE_WORKSTATION_CHANGE: %',v_pull;
+  END IF;
   IF EXISTS (
     SELECT 1 FROM jsonb_array_elements(v_events) e
     WHERE e->>'event_id'='95000000-0000-4000-8000-000000000001'
@@ -692,7 +717,7 @@ BEGIN
   END IF;
   -- Fixture has two committed journal rows. Check the returned cursor,
   -- never read the server-only counter table from the authenticated role.
-  IF coalesce((v_pull->>'has_more')::boolean,true) OR v_next <> 4 THEN
+  IF coalesce((v_pull->>'has_more')::boolean,true) OR v_next <> 5 THEN
     RAISE EXCEPTION 'N3_PULL_CURSOR_DID_NOT_ADVANCE_PAST_FILTERED_ROWS: %',v_pull;
   END IF;
 END
