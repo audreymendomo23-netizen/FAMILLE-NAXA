@@ -229,7 +229,7 @@ internal object NaxaServicesPeerSyncApplier {
                 if(actor.isBlank())return false
                 val pid=p.sText("program_id",id);val profile=p.sText("activity_profile");val code=p.sText("program_code");val name=p.sText("name")
                 if(pid.isBlank()||profile.isBlank()||code.isBlank()||name.isBlank())return false
-                val old=dao.findLoyaltyProgram(org,profile,code)
+                val old=dao.findLoyaltyProgramById(org,pid) ?: dao.findLoyaltyProgram(org,profile,code)
                 dao.upsertLoyaltyProgram(LocalLoyaltyProgram(
                     pid,org,profile,code,name,p.sText("description"),p.sText("metric_code"),p.sLong("unit_amount_xaf"),
                     p.sLong("target_value"),p.sText("reward_description"),p.optInt("window_days"),p.optBoolean("active",true),
@@ -240,16 +240,39 @@ internal object NaxaServicesPeerSyncApplier {
                 if(site==null||actor.isBlank())return false
                 val eid=p.sText("activity_event_id",id);val program=p.sText("program_id");val customer=p.sText("customer_id")
                 val delta=result.optLong("metric_delta",p.optLong("metric_delta",-1))
-                if(eid.isBlank()||program.isBlank()||customer.isBlank()||delta<0)return false
+                if(eid.isBlank()||program.isBlank()||customer.isBlank()||delta<0||
+                    dao.findCustomer(customer,org,site)==null||dao.findLoyaltyProgramById(org,program)==null)return false
                 dao.upsertRemoteLoyaltyEvent(LocalLoyaltyEvent(
                     eid,org,site,program,customer,"activity",p.sLong("amount_xaf"),delta,null,null,null,
                     p.sText("description","Activité synchronisée"),actor,p.sMillis("occurred_at",now)
-                ));return true
+                ))
+                val rewardEvents=result.optJSONArray("reward_events")?:return true
+                for(index in 0 until rewardEvents.length()){
+                    val reward=rewardEvents.optJSONObject(index)?:return false
+                    val rewardId=reward.sText("event_id")
+                    val wave=reward.optInt("wave_number",0)
+                    if(rewardId.isBlank()||wave<=0)return false
+                    dao.upsertRemoteLoyaltyEvent(LocalLoyaltyEvent(
+                        rewardId,org,site,program,customer,"reward_earned",0L,0L,wave,eid,
+                        reward.sText("reward_status","available"),reward.sText("description"),actor,now
+                    ))
+                }
+                return true
             }
             "loyalty_reward.redeemed" -> {
                 if(site==null)return false
-                val old=dao.findLoyaltyEventById(org,p.sText("reward_event_id",id))?:return false
-                dao.upsertRemoteLoyaltyEvent(old.copy(rewardStatus="redeemed"));return true
+                val rewardId=p.sText("reward_event_id",id)
+                val old=dao.findLoyaltyEventById(org,rewardId)
+                if(old!=null) dao.upsertRemoteLoyaltyEvent(old.copy(rewardStatus="redeemed"))
+                else {
+                    val program=p.sText("program_id");val customer=p.sText("customer_id");val wave=p.optInt("wave_number",0)
+                    if(program.isBlank()||customer.isBlank()||wave<=0||dao.findCustomer(customer,org,site)==null)return false
+                    dao.upsertRemoteLoyaltyEvent(LocalLoyaltyEvent(
+                        rewardId,org,site,program,customer,"reward_earned",0L,0L,wave,
+                        p.sOptional("related_event_id"),"redeemed",p.sText("description"),actor,now
+                    ))
+                }
+                return true
             }
             "purchase.ordered" -> {
                 if(site==null||actor.isBlank())return false
