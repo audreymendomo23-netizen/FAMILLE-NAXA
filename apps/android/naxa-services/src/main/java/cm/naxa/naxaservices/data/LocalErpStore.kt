@@ -717,11 +717,14 @@ interface NaxaServicesDao {
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertExpense(expense: LocalExpense)
 
-    @Query("SELECT COUNT(*) FROM local_outbox_events WHERE orgId = :orgId AND state <> 'synced'")
+    @Query("SELECT COUNT(*) FROM local_outbox_events WHERE orgId = :orgId AND state IN ('queued','retry_wait','blocked_dependency')")
     fun observePendingOutboxCount(orgId: String): Flow<Int>
 
     @Query("SELECT COALESCE(MAX(deviceSequence), 0) + 1 FROM local_outbox_events WHERE orgId = :orgId")
     suspend fun nextOutboxSequence(orgId: String): Long
+
+    @Query("SELECT COUNT(*) FROM local_outbox_events WHERE orgId = :orgId AND aggregateType = :aggregateType AND aggregateId = :aggregateId AND actionCode IN (:actions)")
+    suspend fun countOutboxActions(orgId: String, aggregateType: String, aggregateId: String, actions: List<String>): Int
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertOutboxEvent(event: LocalOutboxEvent)
@@ -806,6 +809,9 @@ interface NaxaServicesDao {
 
     @Query("SELECT * FROM local_customer_contact_events WHERE orgId = :orgId AND siteId = :siteId ORDER BY happenedAtMillis DESC LIMIT 100")
     fun observeCustomerContactEvents(orgId: String, siteId: String): Flow<List<LocalCustomerContactEvent>>
+
+    @Query("SELECT * FROM local_customer_contact_events WHERE followUpId = :followUpId AND orgId = :orgId AND siteId = :siteId AND eventType = 'completed' ORDER BY happenedAtMillis DESC LIMIT 1")
+    suspend fun findLatestFollowUpCompletion(followUpId: String, orgId: String, siteId: String): LocalCustomerContactEvent?
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertCustomerContactEvent(event: LocalCustomerContactEvent)
@@ -1507,7 +1513,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             .put("line_id", line.id)
             .put("quantity", quantityToReceive)
             .put("idempotency_key", idempotencyKey)
-        enqueue(orgId, "purchase_receipt", receiptId, "purchase.receipt.confirmed", siteId, receiptPayload.toString())
+        enqueue(orgId, "purchase_receipt", idempotencyKey, "purchase.receipt.confirmed", siteId,
+            receiptPayload.put("receipt_id", receiptId).toString())
         receipt
     }
 
@@ -1572,7 +1579,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             .put("cash_session_id", cashSessionId)
             .put("payment_reference", paymentReference.trim())
             .put("idempotency_key", idempotencyKey)
-        enqueue(orgId, "supplier_payment", payment.id, "supplier.payment.recorded", siteId, paymentPayload.toString())
+        enqueue(orgId, "supplier_payment", idempotencyKey, "supplier.payment.recorded", siteId, paymentPayload.toString())
         payment
     }
 
@@ -1639,7 +1646,21 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 nextDueAtMillis = nextDueAtMillis, reminderDays = reminderDays, active = true,
                 updatedAtMillis = now, lastReminderAtMillis = null).also { dao.updateRecurringCharge(it) }
         }
-        enqueue(orgId, "recurring_charge", charge.id, "recurring_charge.saved", siteId)
+        val payload = JSONObject()
+            .put("charge_id", charge.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("name", charge.name)
+            .put("category", charge.category)
+            .put("amount_xaf", charge.amountXaf)
+            .put("recurrence", charge.recurrence)
+            .put("next_due_at", Instant.ofEpochMilli(charge.nextDueAtMillis).toString())
+            .put("reminder_days", charge.reminderDays)
+            .put("active", charge.active)
+            .put("created_by_member_id", charge.createdByMemberId)
+            .put("created_at", Instant.ofEpochMilli(charge.createdAtMillis).toString())
+            .put("updated_at", Instant.ofEpochMilli(charge.updatedAtMillis).toString())
+        enqueue(orgId, "recurring_charge", charge.id, "recurring_charge.saved", siteId, payload.toString())
         charge
     }
 
@@ -1672,7 +1693,17 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 dao.updateRecurringCharge(charge.copy(nextDueAtMillis = calendar.timeInMillis, updatedAtMillis = now, lastReminderAtMillis = null))
             }
         }
-        enqueue(orgId, "recurring_charge", charge.id, "recurring_charge.payment_recorded", siteId)
+        val paymentPayload = JSONObject()
+            .put("charge_id", charge.id)
+            .put("payment_id", payment.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("reference_due_at", Instant.ofEpochMilli(payment.referenceDueAtMillis).toString())
+            .put("paid_at", Instant.ofEpochMilli(payment.paidAtMillis).toString())
+            .put("amount_xaf", payment.amountXaf)
+            .put("payment_method", "manual")
+            .put("payment_reference", "")
+        enqueue(orgId, "recurring_charge", charge.id, "recurring_charge.payment_recorded", siteId, paymentPayload.toString())
         payment
     }
 
@@ -1685,8 +1716,15 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         val charge = dao.findRecurringCharge(chargeId, orgId, siteId) ?: return@withTransaction false
         if (!charge.active) return@withTransaction false
         val now = System.currentTimeMillis()
-        dao.updateRecurringCharge(charge.copy(active = false, updatedAtMillis = now, lastReminderAtMillis = null))
-        enqueue(orgId, "recurring_charge", charge.id, "recurring_charge.deactivated", siteId)
+        val deactivated = charge.copy(active = false, updatedAtMillis = now, lastReminderAtMillis = null)
+        dao.updateRecurringCharge(deactivated)
+        val payload = JSONObject()
+            .put("charge_id", charge.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("deactivated_at", Instant.ofEpochMilli(now).toString())
+            .put("reason_or_actor_context", actorMemberId)
+        enqueue(orgId, "recurring_charge", charge.id, "recurring_charge.deactivated", siteId, payload.toString())
         true
     }
 
@@ -1738,7 +1776,21 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         require(program.rewardDescription.isNotBlank() && program.rewardDescription.length <= 240)
         program.copy(updatedAtMillis = System.currentTimeMillis()).also {
             dao.upsertLoyaltyProgram(it)
-            enqueue(program.orgId, "loyalty_program", program.id, "loyalty_program.updated", null)
+            val payload = JSONObject()
+                .put("program_id", it.id)
+                .put("org_id", it.orgId)
+                .put("activity_profile", it.activityProfile)
+                .put("program_code", it.programCode)
+                .put("name", it.name)
+                .put("description", it.description)
+                .put("metric_code", it.metricCode)
+                .put("unit_amount_xaf", it.unitAmountXaf)
+                .put("target_value", it.targetValue)
+                .put("reward_description", it.rewardDescription)
+                .put("window_days", it.windowDays)
+                .put("active", it.active)
+                .put("updated_at", Instant.ofEpochMilli(it.updatedAtMillis).toString())
+            enqueue(it.orgId, "loyalty_program", it.id, "loyalty_program.updated", null, payload.toString())
         }
     }
 
@@ -1782,14 +1834,34 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 result.add(reward)
             }
         }
-        enqueue(program.orgId, "loyalty_activity", activityEvent.id, "loyalty_activity.recorded", siteId)
+        val activityPayload = JSONObject()
+            .put("activity_event_id", activityEvent.id)
+            .put("org_id", program.orgId)
+            .put("site_id", siteId)
+            .put("program_id", program.id)
+            .put("customer_id", customer.id)
+            .put("amount_xaf", amountXaf)
+            .put("occurred_at", Instant.ofEpochMilli(now).toString())
+        enqueue(program.orgId, "loyalty_activity", activityEvent.id, "loyalty_activity.recorded", siteId, activityPayload.toString())
         result
     }
 
     suspend fun redeemLoyaltyReward(event: LocalLoyaltyEvent, actorMemberId: String): Boolean = database.withTransaction {
         require(actorMemberId.isNotBlank())
         val changed = dao.redeemLoyaltyReward(event.id, event.orgId, event.siteId)
-        if (changed > 0) enqueue(event.orgId, "loyalty_reward", event.id, "loyalty_reward.redeemed", event.siteId)
+        if (changed > 0) {
+            val payload = JSONObject()
+                .put("reward_event_id", event.id)
+                .put("org_id", event.orgId)
+                .put("site_id", event.siteId)
+                .put("program_id", event.programId)
+                .put("customer_id", event.customerId)
+                .put("wave_number", event.waveNumber)
+                .put("related_event_id", event.relatedEventId)
+                .put("redemption_status", "redeemed")
+                .put("redeemed_at", Instant.ofEpochMilli(System.currentTimeMillis()).toString())
+            enqueue(event.orgId, "loyalty_reward", event.id, "loyalty_reward.redeemed", event.siteId, payload.toString())
+        }
         changed > 0
     }
 
@@ -1889,7 +1961,20 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 reason = reason.trim()
             )
         )
-        enqueue(current.orgId, "pressing_order", current.id, "pressing_order.status_changed:" + next, current.siteId)
+        val priorTransitions = dao.countOutboxActions(
+            current.orgId, "pressing_order", current.id,
+            listOf("pressing_order.status_changed:in_progress", "pressing_order.status_changed:ready", "pressing_order.status_changed:picked_up")
+        )
+        val payload = JSONObject()
+            .put("order_id", current.id)
+            .put("org_id", current.orgId)
+            .put("site_id", current.siteId)
+            .put("from_status", current.status)
+            .put("to_status", next)
+            .put("reason", reason.trim())
+            .put("expected_version", priorTransitions + 1)
+            .put("transitioned_at", Instant.ofEpochMilli(changedAt).toString())
+        enqueue(current.orgId, "pressing_order", current.id, "pressing_order.status_changed:" + next, current.siteId, payload.toString())
     }
 
     suspend fun createAppointment(
@@ -1932,7 +2017,19 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             createdAtMillis = now
         )
         dao.insertAppointment(appointment)
-        enqueue(orgId, "appointment", appointment.id, "appointment.created", siteId)
+        val payload = JSONObject()
+            .put("appointment_id", appointment.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("workstation_id", appointment.workstationId)
+            .put("customer_reference_or_name", appointment.customerName)
+            .put("service_reference_or_name", appointment.serviceName)
+            .put("assigned_member_id", appointment.assignedMemberId)
+            .put("starts_at", Instant.ofEpochMilli(appointment.startsAtMillis).toString())
+            .put("ends_at", Instant.ofEpochMilli(appointment.endsAtMillis).toString())
+            .put("deposit_xaf", appointment.depositXaf)
+            .put("status", appointment.status)
+        enqueue(orgId, "appointment", appointment.id, "appointment.created", siteId, payload.toString())
         appointment
     }
 
@@ -1958,7 +2055,16 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             openedAtMillis = System.currentTimeMillis()
         )
         dao.insertCashSession(session)
-        enqueue(orgId, "cash_session", session.id, "cash_session.opened", siteId)
+        val payload = JSONObject()
+            .put("cash_session_id", session.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("register_id", session.registerId)
+            .put("register_name", session.registerName)
+            .put("opening_float_xaf", session.openingFloatXaf)
+            .put("opened_by_member_id", session.openedByMemberId)
+            .put("opened_at", Instant.ofEpochMilli(session.openedAtMillis).toString())
+        enqueue(orgId, "cash_session", session.id, "cash_session.opened", siteId, payload.toString())
         session
     }
 
@@ -2033,7 +2139,23 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.sale_out", siteId)
         }
         if (sale.status == "confirmed") postSaleAccounting(sale)
-        val event = enqueue(cashSession.orgId, "sale", sale.id, "sale.created", siteId)
+        val salePayload = JSONObject()
+            .put("sale_id", sale.id)
+            .put("org_id", sale.orgId)
+            .put("site_id", sale.siteId)
+            .put("cash_session_id", sale.cashSessionId)
+            .put("sale_number", sale.saleNumber)
+            .put("description", sale.description)
+            .put("total_xaf", sale.totalXaf)
+            .put("payment_method", sale.paymentMethod)
+            .put("status", sale.status)
+            .put("inventory_item_id", sale.inventoryItemId)
+            .put("stock_quantity", sale.stockQuantity)
+            .put("unit_cost_at_sale_xaf", sale.unitCostAtSaleXaf)
+            .put("cost_of_goods_xaf", sale.costOfGoodsXaf)
+            .put("cost_snapshot_complete", sale.costSnapshotComplete)
+            .put("created_at", Instant.ofEpochMilli(sale.createdAtMillis).toString())
+        val event = enqueue(cashSession.orgId, "sale", sale.id, "sale.created", siteId, salePayload.toString())
         sale to event
     }
 
@@ -2074,7 +2196,14 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         )
         // The pendingInventoryReservations query ignores cancelled rows, so
         // this operation releases the local stock reservation atomically.
-        enqueue(orgId, "sale", current.id, "sale.mobile_money_cancelled", siteId)
+        val cancellationPayload = JSONObject()
+            .put("sale_id", current.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("cancelled_at", Instant.ofEpochMilli(now).toString())
+            .put("reason", reason.trim())
+            .put("expected_status", "pending")
+        enqueue(orgId, "sale", current.id, "sale.mobile_money_cancelled", siteId, cancellationPayload.toString())
         cancelled
     }
 
@@ -2170,7 +2299,17 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             "OPERATING_EXPENSE:" + category.trim().uppercase(java.util.Locale.ROOT),
             "CASH_REGISTER", amountXaf, description.trim(), actorMemberId, expense.createdAtMillis
         )
-        enqueue(session.orgId, "expense", expense.id, "expense.created", siteId)
+        val payload = JSONObject()
+            .put("expense_id", expense.id)
+            .put("org_id", expense.orgId)
+            .put("site_id", expense.siteId)
+            .put("cash_session_id", expense.cashSessionId)
+            .put("category", expense.category)
+            .put("description", expense.description)
+            .put("amount_xaf", expense.amountXaf)
+            .put("occurred_at", Instant.ofEpochMilli(expense.createdAtMillis).toString())
+            .put("idempotency_key", expense.id)
+        enqueue(session.orgId, "expense", expense.id, "expense.created", siteId, payload.toString())
         expense
     }
 
@@ -2199,7 +2338,16 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             varianceReason = varianceReason.trim().takeIf(String::isNotBlank)
         )
         dao.updateCashSession(closed)
-        enqueue(current.orgId, "cash_session", closed.id, "cash_session.closed", closed.siteId)
+        val closePayload = JSONObject()
+            .put("cash_session_id", closed.id)
+            .put("org_id", closed.orgId)
+            .put("site_id", closed.siteId)
+            .put("closed_by_member_id", closed.closedByMemberId)
+            .put("closed_at", Instant.ofEpochMilli(closed.closedAtMillis ?: System.currentTimeMillis()).toString())
+            .put("counted_close_xaf", closed.countedCloseXaf)
+            .put("variance_xaf", closed.varianceXaf)
+            .put("variance_reason", closed.varianceReason)
+        enqueue(current.orgId, "cash_session", closed.id, "cash_session.closed", closed.siteId, closePayload.toString())
         closed
     }
 
@@ -2316,7 +2464,22 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             packageSessions = packageSessions
         )
         dao.insertService(service)
-        enqueue(orgId, "service", service.id, "service.created", siteId)
+        val payload = JSONObject()
+            .put("service_id", service.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("code", service.code)
+            .put("activity", service.activity)
+            .put("name", service.name)
+            .put("duration_minutes", service.durationMinutes)
+            .put("price_xaf", service.priceXaf)
+            .put("active", service.active)
+            .put("category", service.category)
+            .put("description", service.description)
+            .put("provider_member_ids", JSONArray(service.providerMemberIdsJson))
+            .put("required_workstation_kinds", JSONArray(service.requiredWorkstationKindsJson))
+            .put("package_sessions", service.packageSessions)
+        enqueue(orgId, "service", service.id, "service.created", siteId, payload.toString())
         service
     }
 
@@ -2365,7 +2528,21 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             locationConsentAtMillis = if (locationConsent) now else null
         )
         dao.insertCustomer(customer)
-        enqueue(orgId, "customer", customer.id, "customer.created", siteId)
+        val payload = JSONObject()
+            .put("customer_id", customer.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("display_name", customer.displayName)
+            .put("phone_contact", customer.phoneContact)
+            .put("contact_consent", customer.contactConsent)
+            .put("address_line", customer.addressLine)
+            .put("neighborhood", customer.neighborhood)
+            .put("landmark", customer.landmark)
+            .put("latitude", if (customer.locationConsentAtMillis != null) customer.latitude else null)
+            .put("longitude", if (customer.locationConsentAtMillis != null) customer.longitude else null)
+            .put("location_consent_at", customer.locationConsentAtMillis?.let { Instant.ofEpochMilli(it).toString() })
+            .put("notes_private", customer.notesPrivate)
+        enqueue(orgId, "customer", customer.id, "customer.created", siteId, payload.toString())
         customer
     }
 
@@ -2416,7 +2593,26 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             locationConsentAtMillis = if (locationConsent) current.locationConsentAtMillis ?: now else null
         )
         dao.updateCustomer(updated)
-        enqueue(orgId, "customer", customerId, "customer.updated", siteId)
+        val priorEvents = dao.countOutboxActions(
+            orgId, "customer", customerId,
+            listOf("customer.created", "customer.updated")
+        )
+        val payload = JSONObject()
+            .put("customer_id", updated.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("display_name", updated.displayName)
+            .put("phone_contact", updated.phoneContact)
+            .put("contact_consent", updated.contactConsent)
+            .put("address_line", updated.addressLine)
+            .put("neighborhood", updated.neighborhood)
+            .put("landmark", updated.landmark)
+            .put("latitude", if (updated.locationConsentAtMillis != null) updated.latitude else null)
+            .put("longitude", if (updated.locationConsentAtMillis != null) updated.longitude else null)
+            .put("location_consent_at", updated.locationConsentAtMillis?.let { Instant.ofEpochMilli(it).toString() })
+            .put("notes_private", updated.notesPrivate)
+            .put("expected_version", priorEvents)
+        enqueue(orgId, "customer", customerId, "customer.updated", siteId, payload.toString())
         updated
     }
 
@@ -2465,7 +2661,19 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 outcome = "pending", notes = notes.trim(), actorMemberId = actorMemberId, happenedAtMillis = now
             )
         )
-        enqueue(orgId, "customer_followup", followUp.id, "customer_followup.created", siteId)
+        val payload = JSONObject()
+            .put("followup_id", followUp.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("customer_id", followUp.customerId)
+            .put("title", followUp.title)
+            .put("frequency", followUp.frequency)
+            .put("channel", followUp.channel)
+            .put("notes", followUp.notes)
+            .put("next_due_at", Instant.ofEpochMilli(followUp.nextDueAtMillis).toString())
+            .put("status", followUp.status)
+            .put("created_at", Instant.ofEpochMilli(followUp.createdAtMillis).toString())
+        enqueue(orgId, "customer_followup", followUp.id, "customer_followup.created", siteId, payload.toString())
         followUp
     }
 
@@ -2494,7 +2702,15 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 outcome = outcome, notes = notes.trim(), actorMemberId = actorMemberId, happenedAtMillis = now
             )
         )
-        enqueue(orgId, "customer_followup", current.id, "customer_followup.completed", siteId)
+        val completion = dao.findLatestFollowUpCompletion(current.id, orgId, siteId)
+        val payload = JSONObject()
+            .put("followup_id", current.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("completed_at", Instant.ofEpochMilli(now).toString())
+            .put("next_due_at_if_repeating", Instant.ofEpochMilli(updated.nextDueAtMillis).toString())
+            .put("completion_note", completion?.notes.orEmpty())
+        enqueue(orgId, "customer_followup", current.id, "customer_followup.completed", siteId, payload.toString())
         updated
     }
 
@@ -2628,7 +2844,16 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                             updatedAtMillis = now
                         )
                     )
-                    enqueue(orgId, "inventory_valuation", item.id, "inventory_valuation.imported", siteId)
+                    val payload = JSONObject()
+                        .put("valuation_id", dao.findInventoryValuation(orgId, siteId, item.id)?.id)
+                        .put("inventory_item_id", item.id)
+                        .put("org_id", orgId)
+                        .put("site_id", siteId)
+                        .put("unit_cost_xaf", row.unitCostXaf ?: 0L)
+                        .put("selling_price_xaf", row.sellingPriceXaf ?: 0L)
+                        .put("updated_at", Instant.ofEpochMilli(now).toString())
+                        .put("expected_version", 0)
+                    enqueue(orgId, "inventory_valuation", item.id, "inventory_valuation.imported", siteId, payload.toString())
                 }
                 created += 1
             }
@@ -2668,7 +2893,15 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         require(priority in setOf("low", "normal", "high")) { "Priorité invalide." }
         val item = LocalSupportRequest(UUID.randomUUID().toString(), orgId, siteId, subject.trim(), description.trim(), priority, createdAtMillis = System.currentTimeMillis())
         dao.insertSupportRequest(item)
-        enqueue(orgId, "support_request", item.id, "support_request.created", siteId)
+        val payload = JSONObject()
+            .put("request_id", item.id)
+            .put("org_id", orgId)
+            .put("site_id", item.siteId)
+            .put("subject", item.subject)
+            .put("description", item.description)
+            .put("priority", item.priority)
+            .put("created_at", Instant.ofEpochMilli(item.createdAtMillis).toString())
+        enqueue(orgId, "support_request", item.id, "support_request.created", siteId, payload.toString())
         item
     }
 
@@ -2702,7 +2935,20 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 actorMemberId = actorMemberId, createdAtMillis = System.currentTimeMillis()
             )
         )
-        enqueue(orgId, "appointment", current.id, "appointment.status_changed", siteId)
+        val priorEvents = dao.countOutboxActions(
+            orgId, "appointment", current.id,
+            listOf("appointment.created", "appointment.created_from_waitlist", "appointment.status_changed", "appointment.rescheduled")
+        )
+        val payload = JSONObject()
+            .put("appointment_id", current.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("from_status", current.status)
+            .put("to_status", nextStatus)
+            .put("reason", reason.trim())
+            .put("expected_version", priorEvents)
+            .put("transitioned_at", Instant.ofEpochMilli(System.currentTimeMillis()).toString())
+        enqueue(orgId, "appointment", current.id, "appointment.status_changed", siteId, payload.toString())
         updated
     }
 
@@ -2736,7 +2982,21 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 createdAtMillis = System.currentTimeMillis()
             )
         )
-        enqueue(orgId, "appointment", current.id, "appointment.rescheduled", siteId)
+        val priorEvents = dao.countOutboxActions(
+            orgId, "appointment", current.id,
+            listOf("appointment.created", "appointment.created_from_waitlist", "appointment.status_changed", "appointment.rescheduled")
+        )
+        val payload = JSONObject()
+            .put("appointment_id", current.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("workstation_id", current.workstationId)
+            .put("starts_at", Instant.ofEpochMilli(newStartAtMillis).toString())
+            .put("ends_at", Instant.ofEpochMilli(newEndAtMillis).toString())
+            .put("assigned_member_id", current.assignedMemberId)
+            .put("expected_version", priorEvents)
+            .put("reason", reason.trim())
+        enqueue(orgId, "appointment", current.id, "appointment.rescheduled", siteId, payload.toString())
         updated
     }
 
@@ -2776,7 +3036,22 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             packageSessions = packageSessions
         )
         dao.updateService(updated)
-        enqueue(orgId, "service", serviceId, "service.updated", siteId)
+        val priorEvents = dao.countOutboxActions(
+            orgId, "service", serviceId,
+            listOf("service.created", "service.updated", "service.configuration_updated")
+        )
+        val payload = JSONObject()
+            .put("service_id", updated.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("code", updated.code)
+            .put("activity", updated.activity)
+            .put("name", updated.name)
+            .put("duration_minutes", updated.durationMinutes)
+            .put("price_xaf", updated.priceXaf)
+            .put("active", updated.active)
+            .put("expected_version", priorEvents)
+        enqueue(orgId, "service", serviceId, "service.updated", siteId, payload.toString())
         updated
     }
 
@@ -2808,7 +3083,21 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             packageSessions = packageSessions
         )
         dao.updateService(updated)
-        enqueue(orgId, "service", serviceId, "service.configuration_updated", siteId)
+        val priorEvents = dao.countOutboxActions(
+            orgId, "service", serviceId,
+            listOf("service.created", "service.updated", "service.configuration_updated")
+        )
+        val payload = JSONObject()
+            .put("service_id", updated.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("category", updated.category)
+            .put("description", updated.description)
+            .put("provider_member_ids", JSONArray(updated.providerMemberIdsJson))
+            .put("required_workstation_kinds", JSONArray(updated.requiredWorkstationKindsJson))
+            .put("package_sessions", updated.packageSessions)
+            .put("expected_version", priorEvents)
+        enqueue(orgId, "service", serviceId, "service.configuration_updated", siteId, payload.toString())
         updated
     }
 
@@ -2872,7 +3161,18 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 reason = reason.trim(), actorMemberId = actorMemberId, createdAtMillis = now
             )
         )
-        enqueue(orgId, "appointment", appointment.id, "appointment.created_from_waitlist", siteId)
+        val conversionPayload = JSONObject()
+            .put("appointment_id", appointment.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("waitlist_record_id", waitlist.id)
+            .put("workstation_id", appointment.workstationId)
+            .put("starts_at", Instant.ofEpochMilli(appointment.startsAtMillis).toString())
+            .put("duration_minutes", durationMinutes)
+            .put("deposit_xaf", appointment.depositXaf)
+            .put("reason", reason.trim())
+            .put("assigned_member_id", appointment.assignedMemberId)
+        enqueue(orgId, "appointment", appointment.id, "appointment.created_from_waitlist", siteId, conversionPayload.toString())
         enqueue(orgId, "appointment_waitlist", waitlist.id, "appointment_waitlist.converted", siteId)
         appointment
     }
@@ -2994,7 +3294,22 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             workstationId = normalizedWorkstationId
         )
         dao.insertManagementRecord(item)
-        enqueue(orgId, recordType, item.id, recordType + ".created", siteId)
+        val payload = JSONObject()
+            .put("record_id", item.id)
+            .put("org_id", orgId)
+            .put("site_id", siteId)
+            .put("workstation_id", normalizedWorkstationId)
+            .put("record_type", item.recordType)
+            .put("reference", item.reference)
+            .put("title", item.title)
+            .put("counterparty", item.counterparty)
+            .put("amount_xaf", item.amountXaf)
+            .put("paid_xaf", item.paidXaf)
+            .put("due_at", item.dueAtMillis?.let { Instant.ofEpochMilli(it).toString() })
+            .put("status", item.status)
+            .put("metadata_json", runCatching { JSONObject(item.metadataJson) }.getOrElse { JSONObject() })
+            .put("created_at", Instant.ofEpochMilli(item.createdAtMillis).toString())
+        enqueue(orgId, recordType, item.id, recordType + ".created", siteId, payload.toString())
         item
     }
 
@@ -3070,7 +3385,21 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             createdAtMillis = now
         )
         dao.insertManagementRecord(transfer)
-        enqueue(orgId, "inventory_transfer", transfer.id, "inventory_transfer.requested", sourceSiteId)
+        val payload = JSONObject()
+            .put("transfer_id", transfer.id)
+            .put("org_id", orgId)
+            .put("site_id", sourceSiteId)
+            .put("source_site_id", sourceSiteId)
+            .put("destination_site_id", destinationSiteId)
+            .put("inventory_item_id", item.id)
+            .put("sku_snapshot", item.sku)
+            .put("unit", item.unit)
+            .put("quantity", quantity)
+            .put("requested_by", actorMemberId)
+            .put("requested_at", Instant.ofEpochMilli(now).toString())
+            .put("reference", reference)
+            .put("status", "open")
+        enqueue(orgId, "inventory_transfer", transfer.id, "inventory_transfer.requested", sourceSiteId, payload.toString())
         transfer
     }
 
@@ -3342,7 +3671,25 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                     createdAtMillis = now
                 )
             )
-            enqueue(orgId, "inventory_transfer", current.id, "inventory_transfer.received_at_destination", destinationSiteId)
+            val priorEvents = dao.countOutboxActions(
+                orgId, "inventory_transfer", current.id,
+                listOf("inventory_transfer.requested", "inventory_transfer.status_changed")
+            )
+            val payload = JSONObject()
+                .put("transfer_id", current.id)
+                .put("org_id", orgId)
+                .put("site_id", destinationSiteId)
+                .put("source_site_id", sourceSiteId)
+                .put("destination_site_id", destinationSiteId)
+                .put("inventory_item_id", inventoryItemId)
+                .put("destination_inventory_item_id_if_created", receivedItem.id.takeIf { it != sourceItem.id })
+                .put("sku_snapshot", expectedSku)
+                .put("unit", sourceItem.unit)
+                .put("quantity", quantity)
+                .put("expected_version", priorEvents)
+                .put("reason", reason.trim())
+                .put("received_at", Instant.ofEpochMilli(now).toString())
+            enqueue(orgId, "inventory_transfer", current.id, "inventory_transfer.received_at_destination", destinationSiteId, payload.toString())
         }
         val updated = current.copy(status = nextStatus, metadataJson = updatedMetadataJson)
         dao.updateManagementRecord(updated)
@@ -3360,7 +3707,25 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 createdAtMillis = now
             )
         )
-        enqueue(orgId, current.recordType, current.id, current.recordType + ".status_changed", siteId)
+        if (!(current.recordType == "inventory_transfer" && nextStatus == "received")) {
+            val priorEvents = dao.countOutboxActions(
+                orgId, current.recordType, current.id,
+                listOf(current.recordType + ".created", current.recordType + ".status_changed")
+            )
+            val payload = JSONObject()
+                .put("record_id", current.id)
+                .put("org_id", orgId)
+                .put("site_id", siteId)
+                .put("workstation_id", current.workstationId)
+                .put("record_type", current.recordType)
+                .put("from_status", current.status)
+                .put("to_status", nextStatus)
+                .put("reason", reason.trim())
+                .put("expected_version", priorEvents)
+                .put("metadata_json_delta", runCatching { JSONObject(updatedMetadataJson) }.getOrElse { JSONObject() })
+                .put("transitioned_at", Instant.ofEpochMilli(now).toString())
+            enqueue(orgId, current.recordType, current.id, current.recordType + ".status_changed", siteId, payload.toString())
+        }
         updated
     }
 
@@ -3419,6 +3784,19 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             .put("aggregate_id", aggregateId)
             .put("site_id", siteId)
             .toString()
+        val notApplicableActions = setOf(
+            "accounting.entry.posted",
+            "inventory_movement.sale_out",
+            "inventory_movement.mobile_money_sale_out",
+            "sale.payment_confirmed_server",
+            "organization.profile_saved",
+            "site.created",
+            "workstation.created",
+            "appointment_waitlist.converted",
+            "inventory_movement.purchase_received",
+            "inventory_movement.transfer_out",
+            "inventory_movement.transfer_in"
+        )
         val event = LocalOutboxEvent(
             eventId = UUID.randomUUID().toString(),
             orgId = orgId,
@@ -3428,6 +3806,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             payloadJson = payloadJson ?: fallbackPayload,
             deviceSequence = dao.nextOutboxSequence(orgId),
             createdAtEpochMs = System.currentTimeMillis(),
+            state = if (action in notApplicableActions) "not_applicable" else "queued",
             schemaVersion = 1
         )
         dao.insertOutboxEvent(event)
