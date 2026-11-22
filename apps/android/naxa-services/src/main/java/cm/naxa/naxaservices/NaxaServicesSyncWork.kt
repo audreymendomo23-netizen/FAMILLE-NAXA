@@ -14,6 +14,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import cm.naxa.naxaservices.auth.AuthApi
 import cm.naxa.naxaservices.auth.AuthApiException
+import cm.naxa.naxaservices.auth.AuthSession
 import cm.naxa.naxaservices.auth.SessionVault
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_1_2
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_2_3
