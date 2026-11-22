@@ -1,13 +1,13 @@
 # CAHIER DES CHARGES MAÎTRE — CAMPUS237
 ## ERP scolaire, plateforme familiale, protection des élèves et écosystème éducatif à 360°
 
-**Version :** 3.0 — document maître consolidé  
+**Version :** 3.0.1 — document maître consolidé avec addendum fonctionnel  
 **Date de référence :** 22 novembre 2026  
 **Produit :** Campus237  
 **Dépôt :** Famille NAXA  
 **Document précédent :** Cahier_des_charges_08_Campus237.pdf — V2.0 du 5 novembre 2026  
 **Nature :** spécification fonctionnelle, métier, opérationnelle, économique, technique et de conformité  
-**Statut :** baseline V3.0 consolidée ; les éléments explicitement validés sont verrouillés, les arbitrages non résolus restent signalés et ne doivent pas être inventés.
+**Statut :** baseline V3.0 consolidée, amendée par l'addendum V3.0.1 du 22 novembre 2026 ; les éléments explicitement validés sont verrouillés, les arbitrages non résolus restent signalés et ne doivent pas être inventés.
 
 ---
 
@@ -59,6 +59,7 @@ La V2.0 demeure conservée comme document historique. La V3.0 devient le documen
 |---|---|---|
 | V2.0 | 05/11/2026 | Cahier initial de 13 pages : ERP scolaire, paiements, gestion parent, sécurité, bibliothèque, RH, finance, IA et jalons |
 | V3.0 | 22/11/2026 | Consolidation maître : SMART ENROLL, SMART GRADING, TEACHER SPACE, cours réels et préparations filmées, QR d'arrivée/sortie, NAXA SECURITY avec détection IA d'événements dangereux, COMMUNITY, KNOWLEDGE, OPPORTUNITIES et clarification des arbitrages |
+| V3.0.1 | 22/11/2026 | Addendum : compte APE et réunions/visioconférences, convocations scolaires hybrides, livret scolaire unique portable et non modifiable en place, offres de rentrée et recherche conversationnelle d'établissements avec rendez-vous en présentiel |
 
 ---
 
@@ -1763,4 +1764,559 @@ La V3.0 est la référence de spécification. Elle sera considérée prête pour
 - chaque module aura une matrice de droits, des parcours, des règles et des critères de recette ;
 - la recette complète aura été préparée et les responsabilités de mise en service attribuées.
 
-**Fin du cahier des charges maître CAMPUS237 V3.0.**
+**Fin du cahier des charges maître CAMPUS237 V3.0.1.**
+
+
+---
+
+# 38. ADDENDUM V3.0.1 — APE, RÉUNIONS, VISIOCONFÉRENCES ET CONVOCATIONS
+
+Cet addendum complète les chapitres 2, 10, 14, 15, 19, 25, 27, 29, 31, 32, 34 et 35. En cas de contradiction, les exigences spécifiques du présent addendum prévalent pour les fonctionnalités qu'il introduit.
+
+## 38.1 Compte institutionnel APE / APEE
+
+🔒 Chaque établissement peut disposer d'un compte institutionnel propre à son association de parents d'élèves, désignée APE ou APEE selon le nom officiel retenu par l'établissement.
+
+Ce compte n'est pas un compte parent ordinaire et n'est pas automatiquement attribué à tous les parents. Il est associé à une association identifiée, à un établissement, à un mandat et à des membres autorisés.
+
+Le compte APE/APE doit permettre :
+- de disposer d'une page institutionnelle propre à l'association dans l'application ;
+- d'identifier les membres du bureau et leurs fonctions ;
+- de gérer les mandats, dates de début et de fin, renouvellements et remplacements ;
+- de publier les communications officielles de l'association ;
+- de convoquer les parents à des réunions ;
+- d'organiser des réunions physiques, des visioconférences et des réunions hybrides ;
+- de partager les ordres du jour et documents préparatoires ;
+- de gérer les confirmations de présence ;
+- de faire l'appel et d'établir la liste des participants ;
+- de rédiger et publier les procès-verbaux selon les droits ;
+- d'enregistrer les résolutions et les actions à réaliser ;
+- de suivre les échéances et responsables ;
+- de consulter les rapports associatifs autorisés ;
+- de gérer, si l'école l'autorise et si les règles applicables le permettent, les appels de cotisations, reçus et états du fonds APE.
+
+## 38.2 Rôles APE
+
+| Rôle | Permissions |
+|---|---|
+| Président(e) APE | Gestion du compte institutionnel, convocations, réunions et validations selon mandat |
+| Secrétaire APE | Ordres du jour, invitations, présences, procès-verbaux et résolutions |
+| Trésorier(ère) APE | États financiers associatifs, cotisations et reçus selon mandat |
+| Membre du bureau | Accès limité aux fonctions explicitement déléguées |
+| Parent membre | Consultation des informations diffusées à l'ensemble ou à son groupe |
+| Direction de l'école | Coordination institutionnelle et consultation des éléments relevant de sa responsabilité, sans prise de contrôle arbitraire de l'association |
+| Administration plateforme | Support technique et sécurité ; aucune gestion de fond ou décision associative à la place de l'APE |
+
+Le chef d'établissement vérifie le rattachement de l'association et les personnes habilitées au moyen des pièces ou décisions appropriées. Le remplacement d'un membre du bureau entraîne la mise à jour des rôles et la révocation des accès qui ne sont plus justifiés.
+
+Le compte APE ne donne pas automatiquement accès aux notes, à la santé, aux paiements individuels, aux dossiers disciplinaires ou aux messages privés d'un élève.
+
+## 38.3 Gestion de bout en bout des réunions
+
+CAMPUS237 doit permettre à l'APE comme à l'école d'organiser une réunion sans sortir du parcours de gestion.
+
+Types de réunion :
+- assemblée générale de l'APE ;
+- réunion ordinaire ou extraordinaire de parents ;
+- réunion de parents d'une classe ;
+- réunion d'information de l'établissement ;
+- réunion parents-professeurs ;
+- réunion de conseil ou commission lorsque les personnes ont qualité pour y participer ;
+- réunion d'organisation d'un événement scolaire ;
+- réunion de suivi d'une situation individuelle, avec accès restreint.
+
+Chaque réunion possède :
+- un organisateur et un responsable ;
+- un établissement et éventuellement une classe ;
+- un type et un niveau de confidentialité ;
+- un objet et un ordre du jour ;
+- une date, une heure de début et de fin ;
+- un mode : présentiel, visioconférence ou hybride ;
+- une salle physique ou un lien sécurisé ;
+- une liste de personnes invitées ou groupes ciblés ;
+- des documents préparatoires ;
+- un délai de réponse ;
+- des rappels ;
+- un statut : brouillon, programmée, invitations envoyées, confirmée, en cours, terminée, annulée ou reportée.
+
+Le système envoie les notifications aux bons destinataires et suit les accusés de réception lorsque le canal le permet. L'organisateur peut relancer les personnes qui n'ont pas répondu.
+
+## 38.4 Visioconférence intégrée
+
+🔒 Les réunions et convocations peuvent se dérouler par visioconférence.
+
+🔵 La visioconférence doit être accessible depuis CAMPUS237 FAMILY et les espaces autorisés de CAMPUS237 SCHOOL/DIRECTION, par un lien sécurisé ou une intégration de service compatible.
+
+Fonctions attendues :
+- création d'une salle pour une réunion donnée ;
+- lien d'accès unique ou contrôlé ;
+- salle d'attente ;
+- authentification ou vérification des invités ;
+- contrôle de l'organisateur ;
+- admission et exclusion d'un participant par l'hôte ;
+- désactivation du micro ou de la caméra par l'utilisateur ;
+- partage d'écran et présentation des documents lorsque nécessaire ;
+- modération et prise de parole ;
+- indication de connexion faible ;
+- reconnexion après coupure ;
+- feuille de présence issue des connexions et validée par l'organisateur ;
+- fermeture de la salle et archivage des éléments autorisés.
+
+Aucun participant ne doit rejoindre une réunion confidentielle simplement parce qu'il a reçu un lien transféré. Les droits d'accès sont contrôlés côté serveur. Les liens expirent après la réunion ou selon la politique retenue.
+
+L'enregistrement audio/vidéo est désactivé par défaut. Il ne peut être activé qu'après information préalable des participants, base juridique et autorisations requises, avec indication claire de l'enregistrement et des règles de conservation. Un procès-verbal écrit peut être produit sans enregistrer la réunion. Les transcriptions automatiques ou résumés IA ne sont pas activés par défaut ; ils nécessitent la même analyse de conformité et un contrôle humain.
+
+Pour les réunions concernant un enfant ou une situation familiale, le système n'invite que les responsables concernés et les personnels habilités. Aucun contenu confidentiel n'est partagé dans la communauté générale.
+
+## 38.5 Procès-verbaux, résolutions et suivi
+
+À la fin de la réunion, le secrétaire ou l'organisateur peut :
+- établir le procès-verbal ;
+- joindre les documents approuvés ;
+- enregistrer les décisions prises ;
+- identifier les responsables ;
+- attribuer des échéances ;
+- demander validation ou signature selon les règles de l'association/école ;
+- diffuser le compte rendu aux seuls participants ou groupes autorisés ;
+- suivre l'état des actions jusqu'à clôture.
+
+Les versions successives d'un procès-verbal sont conservées. Une modification après validation crée une nouvelle version avec motif et auteur ; elle ne remplace pas silencieusement la version déjà approuvée.
+
+Pour l'APE, le système conserve les règles de quorum, de vote, de procuration et de majorité uniquement lorsqu'elles sont définies dans les statuts ou règlements applicables. CAMPUS237 ne doit pas inventer la validité juridique d'un vote électronique.
+
+## 38.6 Cotisations et fonds associatif
+
+L'APE peut publier un appel de cotisation ou de contribution, si ses statuts et l'accord de l'école l'autorisent. Les flux associatifs doivent être séparés des frais réglementaires de scolarité et de la comptabilité de l'établissement.
+
+Chaque contribution possède un appel, un bénéficiaire associatif, un motif, un montant, un paiement, un justificatif et une trace de rapprochement. Le trésorier et les personnes autorisées consultent les états globaux. Les contributions individuelles ne sont pas exposées dans la communauté générale.
+
+Les flux APE ne sont pas automatiquement fusionnés avec le partage 80/20 des abonnements parentaux : ils relèvent de conventions et de comptes distincts.
+
+---
+
+# 39. CONVOCATIONS SCOLAIRES ET RENDEZ-VOUS EN VISIOCONFÉRENCE
+
+## 39.1 Convocation par l'établissement
+
+🔒 L'école doit pouvoir convoquer un parent ou tuteur via CAMPUS237. Une convocation peut être organisée en présentiel, par visioconférence ou en format hybride.
+
+La convocation peut concerner :
+- entretien pédagogique ;
+- suivi d'absences ou de retards ;
+- rencontre avec le professeur principal ;
+- échange avec un enseignant ;
+- réunion avec la direction ;
+- situation de discipline ou conseil, selon les droits et règles applicables ;
+- accompagnement ou orientation ;
+- demande de pièces ou régularisation administrative ;
+- urgence ou situation de protection de l'élève.
+
+## 39.2 Contenu de la convocation
+
+Chaque convocation contient :
+- référence unique ;
+- établissement ;
+- parent/tuteur destinataire ;
+- enfant concerné lorsque nécessaire ;
+- service ou personne convoquante ;
+- objet et motif communiqué ;
+- niveau de confidentialité ;
+- date et plage horaire ;
+- mode présentiel, visioconférence ou hybride ;
+- adresse ou lien d'accès ;
+- liste des participants habilités ;
+- documents à apporter ou préparer ;
+- délai de réponse ;
+- possibilité de confirmer, demander un autre créneau ou signaler une impossibilité.
+
+Le motif doit être rédigé avec mesure et ne doit pas exposer dans une notification verrouillée des détails sensibles de discipline, santé ou situation familiale.
+
+## 39.3 Cycle de vie
+
+1. L'acteur habilité crée et signe/valide la convocation selon la délégation.
+2. Le parent reçoit la notification dans CAMPUS237 FAMILY.
+3. Le parent accuse réception, confirme, demande un autre créneau ou sollicite un autre mode autorisé.
+4. L'école confirme le rendez-vous et génère l'accès sécurisé s'il s'agit d'une visioconférence.
+5. Les rappels sont envoyés selon une fréquence paramétrée.
+6. À la réunion, la présence est enregistrée.
+7. Le compte rendu, les décisions, engagements et dates de suivi sont rattachés à la convocation.
+8. La convocation est clôturée ou maintenue ouverte avec action de suivi.
+
+L'école voit les convocations en attente, confirmées, reportées, non honorées et clôturées. Le parent voit son propre historique et les actions qui le concernent.
+
+## 39.4 Confidentialité et droits
+
+Une convocation individuelle ne doit jamais être visible par les autres parents. Une convocation disciplinaire n'est accessible qu'aux personnes qui ont qualité pour la traiter. L'APE n'accède pas à une convocation individuelle sans mandat et base juridique spécifique.
+
+Une convocation concernant un mineur est adressée au(x) tuteur(s) qui disposent des droits appropriés. Les différends de garde suivent les règles documentées par l'école et les décisions légales applicables.
+
+---
+
+# 40. LIVRET SCOLAIRE UNIQUE — PASSEPORT SCOLAIRE PERMANENT ET TRANSFÉRABLE
+
+## 40.1 Principe obligatoire
+
+🔒 CAMPUS237 doit gérer un livret scolaire unique qui accompagne l'élève tout au long de son cursus et qui peut être transféré d'une école partenaire à une autre via l'application.
+
+Le livret est rattaché à un identifiant élève transversal CAMPUS237 distinct :
+- du matricule national officiel ;
+- du matricule local de chaque établissement ;
+- du compte parent ;
+- du compte de l'école.
+
+Il accompagne l'élève de la maternelle, du primaire, du secondaire et, lorsque le cadre le permet, de la formation professionnelle.
+
+Le livret conserve l'historique de chaque établissement et chaque année. Une école d'accueil ne peut pas réécrire les données émises par une école d'origine.
+
+## 40.2 Sens de « non modifiable »
+
+Le livret est **non modifiable en place** par un établissement, un parent ou un utilisateur. Les informations déjà émises sont conservées avec leur provenance, leur auteur institutionnel, leur date et leur preuve d'intégrité.
+
+Une erreur ne peut pas être corrigée par écrasement silencieux. Elle fait l'objet d'une procédure de rectification :
+- demande motivée ;
+- vérification de l'émetteur ou de l'autorité compétente ;
+- pièce justificative si nécessaire ;
+- ajout d'un acte rectificatif signé ;
+- lien entre la valeur initiale et la correction ;
+- horodatage, auteur et motif ;
+- journal d'audit.
+
+Ce mécanisme d'historique append-only ne supprime pas les droits légaux de rectification, d'opposition, de limitation ou d'effacement applicables aux données personnelles. Lorsqu'une obligation légale impose la rectification, restriction ou suppression, la plateforme applique la mesure requise tout en préservant uniquement les traces dont la conservation est légalement justifiée.
+
+Le terme « immuable » décrit l'intégrité de l'historique et l'impossibilité d'une réécriture unilatérale, pas une conservation illimitée contraire à la loi.
+
+## 40.3 Contenu du livret
+
+Contenu principal proposé :
+- identifiant transversal CAMPUS237 ;
+- identité et identifiants officiels applicables ;
+- chronologie des inscriptions et établissements ;
+- sections, cycles, classes et filières ;
+- programmes/référentiels suivis ;
+- résultats, notes, moyennes et bulletins officiels émis ;
+- compétences et évaluations par compétences ;
+- examens, attestations et certifications ;
+- décisions de passage, redoublement ou orientation ;
+- assiduité sous forme et niveau de détail autorisés ;
+- activités scolaires ou réalisations validées lorsque pertinentes ;
+- documents officiels numérisés et références de vérification ;
+- provenance, émetteur, signatures, dates et versions.
+
+Les données de santé ne font pas partie du livret portable standard. Les dossiers financiers des familles, coordonnées privées, messages, données de communauté et images de vidéosurveillance en sont exclus.
+
+Les dossiers disciplinaires détaillés ne sont pas transférés par défaut. Toute information disciplinaire transmissible doit faire l'objet d'une règle distincte, nécessaire, proportionnée, légalement validée et explicitement portée à la connaissance du responsable concerné.
+
+## 40.4 Émission et signature institutionnelle
+
+Chaque établissement émet uniquement les événements et documents relevant de sa compétence. Le livret conserve :
+- établissement émetteur ;
+- responsable habilité ;
+- date d'émission ;
+- période scolaire ;
+- référence de document ;
+- version ;
+- signature ou sceau électronique adapté ;
+- empreinte d'intégrité ;
+- statut de validité ;
+- éventuel acte rectificatif.
+
+Un QR ou code de vérification permet de contrôler l'authenticité et l'intégrité du document, sans exposer les notes ou les données personnelles à une personne non autorisée.
+
+La signature électronique et la force probante des documents doivent être validées juridiquement ; une signature dessinée à l'écran n'est pas présentée automatiquement comme une signature électronique qualifiée ou un diplôme officiel.
+
+## 40.5 Transfert d'école à école
+
+Parcours :
+1. Le parent ou représentant habilité demande le transfert depuis CAMPUS237 FAMILY.
+2. Le système vérifie le lien avec l'élève et les droits du demandeur.
+3. L'école d'accueil est sélectionnée.
+4. L'établissement d'origine est notifié uniquement lorsque la demande de transfert est effectivement initiée, pas lors d'une simple recherche d'école.
+5. Les conditions officielles de transfert et l'identifiant national applicable sont contrôlés.
+6. L'établissement d'origine prépare le dossier portable.
+7. Les pièces et événements transférables sont vérifiés, signés et scellés.
+8. Le parent autorise le transfert selon la base légale applicable.
+9. Le dossier est transmis par canal sécurisé à l'école d'accueil.
+10. L'école d'accueil vérifie la provenance, l'intégrité, les signatures et le contenu.
+11. L'école d'accueil accepte ou retourne le dossier avec motif.
+12. Le transfert est confirmé ; la nouvelle inscription est créée sans effacer l'historique antérieur.
+13. Un reçu de transfert et un journal des accès sont conservés.
+
+Les dossiers d'origine restent attribués à leur émetteur. L'école d'accueil peut ajouter ses propres événements et documents, mais ne peut pas modifier les documents émis par l'école précédente.
+
+## 40.6 Droits d'accès au livret
+
+Le parent/tuteur habilité consulte le livret de l'enfant selon ses droits. L'élève peut disposer d'une vue adaptée à son âge. L'école d'origine voit ses propres données émises et les demandes de transfert la concernant. L'école d'accueil consulte les éléments transférés après autorisation et validation. Le promoteur ne reçoit que les droits explicitement définis. Les auditeurs ont un accès temporaire et limité.
+
+Une école ne peut pas rechercher ou consulter librement les livrets d'élèves qui ne lui sont pas rattachés.
+
+## 40.7 Distinction avec les identifiants officiels et dossiers officiels
+
+Le livret unique CAMPUS237 est un dossier numérique de continuité scolaire. Il ne remplace pas les registres et documents officiels imposés par l'État, le matricule national CarteScolaire ni les procédures de transfert réglementaires. Les documents officiels restent émis ou reconnus par les autorités compétentes.
+
+---
+
+# 41. CAMPUS237 SCHOOL FINDER — OFFRES DE RENTRÉE, RECHERCHE ET VISITES
+
+## 41.1 Objectif
+
+🔒 Les écoles partenaires doivent pouvoir publier dans CAMPUS237 leurs offres et informations d'admission, particulièrement à l'approche de la rentrée scolaire.
+
+Un parent qui recherche une nouvelle école pour son enfant peut interroger le volet SCHOOL FINDER, exprimer ses critères, comparer les établissements qui correspondent et prendre un rendez-vous en présentiel pour visiter l'école et obtenir des informations complémentaires.
+
+Ce parcours de recherche reste privé. L'école actuellement fréquentée par l'enfant n'est pas avertie de la recherche ou de la comparaison.
+
+## 41.2 Profil public d'un établissement partenaire
+
+Chaque établissement partenaire dispose d'une fiche vérifiée comprenant, selon les données fournies :
+- nom officiel et nom d'usage ;
+- statut public/privé/confessionnel ;
+- autorisations ou agréments, avec éléments de vérification lorsque requis ;
+- adresse, quartier, ville et zone desservie ;
+- sections et langues ;
+- cycles, niveaux, séries et filières ;
+- classes ouvertes pour la prochaine rentrée ;
+- capacités et places déclarées ;
+- frais détaillés et conditions d'admission ;
+- dates de préinscription et d'inscription ;
+- bourses, réductions ou conditions spécifiques, si elles existent ;
+- cantine, transport, internat et autres services ;
+- équipements et activités ;
+- dispositifs d'accompagnement et accessibilité ;
+- photos et médias autorisés ;
+- journées portes ouvertes ;
+- coordonnées institutionnelles ;
+- date de dernière mise à jour et période de validité des informations.
+
+Les caractéristiques et chiffres publiés doivent être déclarés par l'école, contrôlés selon leur importance et datés. Une information non vérifiée est identifiée comme déclarative et ne doit pas être présentée comme certifiée.
+
+## 41.3 Campagnes et offres de rentrée
+
+Chaque école peut créer une campagne liée à une année scolaire :
+- rentrée et admissions ;
+- préinscription ;
+- nouvelles classes ou nouvelles filières ;
+- places disponibles ;
+- journées portes ouvertes ;
+- bourses ou aides annoncées ;
+- frais et échéanciers ;
+- activités, services et options ;
+- dates limites et conditions d'admission.
+
+Chaque offre a une période de validité, un niveau concerné, des critères, un nombre de places déclaré le cas échéant, un contact responsable et un statut de modération.
+
+Le système désactive ou archive automatiquement une offre expirée. L'établissement est responsable de l'exactitude et de la mise à jour de ses informations.
+
+Les offres des établissements scolaires dans SCHOOL FINDER sont distinctes des annonces commerciales OPPORTUNITIES (stages, formations, tutorat, etc.). Aucun tarif de publication des offres scolaires n'est fixé dans cet addendum : la gratuité, l'inclusion ou une éventuelle facturation doit faire l'objet d'un arbitrage commercial séparé.
+
+## 41.4 Recherche guidée et conversationnelle par critères
+
+Le parent peut lancer une recherche classique par filtres ou interroger le volet comme un assistant conversationnel.
+
+Exemples de critères :
+- localisation, quartier, ville et temps de trajet souhaité ;
+- cycle, niveau et classe recherchés ;
+- section francophone, anglophone, bilingue ou autre ;
+- établissement public ou privé ;
+- budget et détail des frais ;
+- langue d'enseignement ;
+- disponibilité de places ;
+- transport, cantine ou internat ;
+- horaires ;
+- activités ou options ;
+- besoins d'accessibilité et d'accompagnement ;
+- calendrier d'admission ;
+- distance maximale ;
+- visite possible à des dates précises.
+
+L'assistant reformule les critères, demande une précision lorsque nécessaire et lance une recherche exclusivement à partir des fiches et offres publiées par les établissements. Il ne fabrique pas de caractéristiques, tarifs, places, résultats ou accréditations.
+
+Chaque résultat explique les critères correspondants, les critères non renseignés et les éventuels écarts. Les filtres et raisons de classement sont visibles et modifiables par le parent.
+
+## 41.5 Comparaison transparente
+
+Le parent peut comparer plusieurs établissements sur des informations homogènes :
+- frais connus ;
+- niveau disponible ;
+- section ;
+- services ;
+- distance ou zone ;
+- conditions d'admission ;
+- disponibilité déclarée ;
+- dates de rentrée et de visite ;
+- éléments vérifiés ou simplement déclarés.
+
+Aucun établissement ne peut acheter un meilleur rang dans les résultats. Les annonces sponsorisées, si elles sont un jour autorisées, sont séparées et clairement étiquetées ; elles ne modifient pas le classement organique par critères.
+
+L'absence d'une information est affichée « non renseignée », jamais remplacée par une estimation IA.
+
+## 41.6 Rendez-vous en présentiel
+
+🔒 Le parent peut réserver un rendez-vous physique avec un établissement de son choix pour découvrir l'école, rencontrer un responsable, visiter les locaux et obtenir des précisions.
+
+L'école publie ses créneaux de visite :
+- journées portes ouvertes ;
+- créneaux individuels ;
+- rendez-vous avec le responsable des admissions ;
+- visite des infrastructures ;
+- réunion d'information ;
+- échange sur une classe, filière ou besoin précis.
+
+Parcours :
+1. le parent sélectionne l'école ;
+2. consulte les créneaux disponibles ;
+3. indique le cycle/niveau recherché et le motif ;
+4. choisit un créneau ;
+5. envoie la demande ;
+6. l'école confirme, propose un autre créneau ou refuse avec motif approprié ;
+7. parent et école reçoivent confirmation et rappel ;
+8. le parent se présente, l'école enregistre la visite ;
+9. le parent peut demander une préinscription ou un dossier d'admission après la visite.
+
+Un rendez-vous de visite n'est pas une admission garantie. Il n'entraîne pas de transfert automatique du livret scolaire ni de communication à l'école actuelle.
+
+## 41.7 Confidentialité des recherches
+
+Les recherches et comparaisons du parent restent privées. Aucun établissement consulté n'est averti avant une demande de rendez-vous ou de candidature initiée par le parent. L'école actuelle n'est jamais informée automatiquement d'une recherche d'alternative.
+
+Le parent choisit les informations qu'il transmet à l'école visitée. Les données du livret scolaire et les documents de l'enfant ne sont pas transmis pour une simple recherche. Leur transmission exige une démarche distincte avec contrôle des droits et autorisation applicable.
+
+## 41.8 Modération et gouvernance de l'annuaire
+
+L'administration CAMPUS237 vérifie l'identité de l'établissement et les éléments requis pour le profil. Les mises à jour sensibles (agrément, tarif, adresse, places) sont historisées. Les établissements peuvent demander correction de leur fiche.
+
+Les comparaisons ne doivent pas devenir des notes ou classements payants. Les avis parentaux, s'ils sont activés, nécessitent règles, modération, droit de réponse et protection contre la divulgation d'informations sur les enfants.
+
+---
+
+# 42. MODÈLE DE DONNÉES — AJOUTS V3.0.1
+
+Les entités suivantes complètent le chapitre 29. Elles sont conceptuelles et nécessitent dictionnaire, relations, index, politiques d'accès et migrations après validation technique.
+
+## 42.1 APE et réunions
+
+ape_associations, ape_accounts, ape_members, ape_mandates, ape_roles, ape_meetings, meeting_agendas, meeting_invites, meeting_attendance, meeting_rooms, meeting_video_sessions, meeting_documents, meeting_minutes, meeting_minute_versions, meeting_resolutions, meeting_action_items, meeting_votes, meeting_proxies, meeting_recording_consents, meeting_access_logs.
+
+## 42.2 Convocations et rendez-vous
+
+parent_convocations, convocation_recipients, convocation_acks, convocation_reschedules, convocation_attendance, convocation_minutes, convocation_followups, appointment_slots, appointment_bookings, appointment_participants, appointment_reminders, appointment_outcomes.
+
+## 42.3 Livret unique et transfert
+
+student_portfolios, portfolio_identifiers, portfolio_events, portfolio_documents, portfolio_issuers, portfolio_signatures, portfolio_integrity_hashes, portfolio_versions, portfolio_correction_requests, portfolio_correction_events, portfolio_access_grants, portfolio_transfer_requests, portfolio_transfer_packages, portfolio_transfer_items, portfolio_transfer_signatures, portfolio_transfer_receipts, portfolio_access_logs, portfolio_retention_actions.
+
+## 42.4 SCHOOL FINDER
+
+school_public_profiles, school_verifications, school_admission_campaigns, school_offers, school_offer_levels, school_capacity_snapshots, school_fee_schedules, school_services, school_open_days, school_visit_slots, school_visit_bookings, school_visit_attendees, school_visit_outcomes, parent_school_searches, school_search_criteria, school_comparison_sets, school_listing_moderation, school_listing_change_logs.
+
+---
+
+# 43. CRITÈRES DE RECETTE ADDITIONNELS V3.0.1
+
+## 43.1 APE et réunions
+
+1. Une association APE possède un compte institutionnel rattaché à une école.
+2. Un parent ordinaire ne peut pas agir avec les permissions du bureau APE.
+3. Un mandat expiré entraîne la révocation ou suspension des droits correspondants.
+4. Le président ou membre autorisé crée une réunion physique, vidéo ou hybride.
+5. Les invitations ne sont envoyées qu'aux groupes sélectionnés.
+6. Un parent peut confirmer, décliner ou demander un autre créneau.
+7. Une personne non invitée ne peut pas entrer dans une visioconférence confidentielle avec un lien transféré.
+8. La salle d'attente et le contrôle d'accès sont opérationnels.
+9. La feuille de présence conserve la distinction entre connexion technique et présence confirmée.
+10. L'enregistrement est désactivé par défaut.
+11. Un compte rendu validé ne peut pas être modifié silencieusement.
+12. Une résolution peut générer des actions, responsables et échéances.
+13. Un parent ne voit aucune convocation individuelle d'une autre famille.
+14. L'APE ne consulte pas les dossiers individuels d'élèves par défaut.
+
+## 43.2 Convocations scolaires
+
+15. Une convocation est adressée uniquement au tuteur habilité.
+16. Elle peut être présentielle, vidéo ou hybride.
+17. Le parent reçoit les informations d'accès et peut confirmer ou demander un report.
+18. Le lien vidéo expiré ou utilisé hors droits est refusé.
+19. Les rappels et accusés sont historisés.
+20. Le compte rendu reste visible seulement aux personnes autorisées.
+21. L'école suit les convocations en attente, tenues, reportées et clôturées.
+
+## 43.3 Livret scolaire unique
+
+22. L'élève conserve le même identifiant transversal CAMPUS237 au fil de son cursus, si son attribution et son usage sont légalement validés.
+23. Le matricule national et les références locales restent séparés.
+24. Une école ne peut pas écraser ou supprimer l'événement scolaire émis par une autre école.
+25. Toute rectification est un événement complémentaire traçable et lié à l'original.
+26. L'intégrité du livret peut être vérifiée.
+27. Un parent autorisé peut demander un transfert.
+28. Une école d'accueil ne reçoit aucun document avant autorisation et déclenchement effectif du transfert.
+29. L'école d'accueil vérifie la provenance et les signatures.
+30. Le transfert conserve l'historique et n'efface pas les données de l'école d'origine.
+31. Les informations médicales, vidéosurveillance et messages communautaires ne sont pas inclus dans le livret.
+32. Une demande légale de rectification, limitation ou effacement est traitée malgré le principe d'historique non modifiable en place.
+33. Un QR de vérification ne révèle pas les notes à un utilisateur non autorisé.
+
+## 43.4 SCHOOL FINDER
+
+34. Une école partenaire publie son profil et une campagne de rentrée.
+35. Chaque offre possède une date de validité et un historique.
+36. Une annonce expirée n'est plus présentée comme active.
+37. Le parent recherche selon ses critères et peut poser une question conversationnelle.
+38. L'IA ne crée aucun tarif, place, agrément ou service qui n'existe pas dans la fiche.
+39. Les critères de comparaison sont visibles.
+40. Un classement ne peut pas être acheté.
+41. Le parent peut comparer plusieurs écoles.
+42. Il peut réserver une visite présentielle.
+43. L'école confirme, refuse ou propose un autre créneau.
+44. La visite est enregistrée et peut être suivie d'une préinscription.
+45. Une simple recherche ne notifie pas l'école actuelle.
+46. Une simple recherche ne transmet pas le livret scolaire.
+47. Une visite ne vaut pas admission.
+48. Le transfert du livret exige une démarche distincte et autorisée.
+
+---
+
+# 44. REGISTRE DES DÉCISIONS AJOUTÉES — V3.0.1
+
+Les exigences suivantes sont confirmées comme exigences produit par le porteur du projet :
+
+39. L'APE/APEÉ doit pouvoir disposer d'un compte institutionnel dans CAMPUS237.
+40. L'APE doit pouvoir organiser des visioconférences et réunions de parents depuis l'application.
+41. L'école doit pouvoir convoquer les parents et tenir les convocations en visioconférence.
+42. CAMPUS237 doit gérer les invitations, confirmations, accès, présences et suites de réunion de bout en bout.
+43. L'élève doit disposer d'un livret scolaire unique qui suit son cursus.
+44. Le livret ne doit pas être modifiable en place par une école ou un utilisateur.
+45. Le livret doit pouvoir être transféré d'une école partenaire à une autre via CAMPUS237, avec traçabilité.
+46. Les écoles partenaires peuvent publier des offres et informations d'admission, notamment à l'approche de la rentrée.
+47. Le parent doit pouvoir interroger le volet de recherche pour trouver une école selon ses critères.
+48. Le parent doit pouvoir comparer les écoles et prendre un rendez-vous en présentiel pour mieux les connaître.
+
+Les règles de sécurité, de signature, de correction, de réunion, de visite et de transfert décrites dans cet addendum sont des spécifications de mise en œuvre proposées pour rendre ces décisions sûres et testables. Les montants, frais, modalités juridiques et formalités restent soumis aux arbitrages correspondants.
+
+---
+
+# 45. SOURCES ET RÉFÉRENCES COMPLÉMENTAIRES V3.0.1
+
+- Loi camerounaise n° 2024/017 du 23 décembre 2024 relative à la protection des données personnelles — texte publié par la Présidence de la République : https://www.prc.cm/fr/actualites/actes/lois/7588
+- Texte et articles de la loi 2024/017, notamment principes de consentement, exactitude et durée de conservation : https://www.soso.legal/soso/legal_text/735
+- Loi camerounaise n° 2010/021 du 21 décembre 2010 régissant le commerce électronique — document de référence : https://art.cm/sites/default/files/documents/Loi-commerce-electronique-N-2010-021-du-21-12-2010.pdf
+- MINESEC / CarteScolaire — portail officiel : https://cartescolaire.cm/minesec
+- CarteScolaire — FAQ : https://www.cartescolaire.cm/faq
+
+La conservation du livret, la valeur des signatures ou sceaux électroniques, le transfert trans-écoles, les convocations numériques, les assemblées et votes APE, les enregistrements de visioconférence et les traitements de données de mineurs doivent être validés par un juriste camerounais au regard des textes en vigueur et des statuts des associations concernées.
+
+---
+
+# 46. CONDITION DE VALIDATION DE L'ADDENDUM V3.0.1
+
+L'addendum est considéré correctement spécifié lorsque :
+- le compte APE et les mandats sont définis ;
+- les rôles et droits des réunions sont testés ;
+- les visioconférences peuvent être gérées sans exposition de réunions privées ;
+- les convocations scolaires disposent d'un cycle de vie complet ;
+- le principe d'un livret unique, non modifiable en place et rectifiable par acte contrôlé est validé juridiquement ;
+- le format de transfert et la signature des documents sont définis ;
+- le volet SCHOOL FINDER propose des profils vérifiés, offres de rentrée, recherche multicritère et conversationnelle, comparaison transparente et réservation de visites ;
+- les recherches parentales restent confidentielles ;
+- les conditions commerciales de publication des offres scolaires, si une facturation est envisagée, sont arbitrées séparément ;
+- les critères de recette du chapitre 43 sont couverts.
+
+**Fin de l'addendum CAMPUS237 V3.0.1.**
