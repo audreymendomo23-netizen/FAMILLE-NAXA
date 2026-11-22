@@ -61,7 +61,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "save_supplier",
@@ -115,7 +115,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "create_supplier_purchase",
@@ -176,7 +176,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "receive_supplier_purchase_line",
@@ -230,7 +230,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "record_supplier_payment",
@@ -335,7 +335,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "save_inventory_item",
@@ -389,7 +389,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "upsert_recurring_charge",
@@ -446,7 +446,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "record_recurring_charge_payment",
@@ -500,7 +500,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "deactivate_recurring_charge",
@@ -551,7 +551,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "upsert_loyalty_program",
@@ -608,7 +608,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "record_loyalty_activity",
@@ -663,7 +663,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "canonical_parent_action": "redeem_loyalty_reward",
       "contract": {
         "version": 1,
@@ -1746,7 +1746,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "save_inventory_item",
@@ -1801,7 +1801,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "record_inventory_movement",
@@ -1910,7 +1910,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "save_inventory_item",
@@ -1964,7 +1964,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "save_inventory_item",
@@ -2018,7 +2018,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "record_inventory_movement",
@@ -2127,7 +2127,7 @@
       ],
       "classification": "REMOTE_MUTATION",
       "disposition": "SEND_AS_CANONICAL_MUTATION",
-      "implementation_status": "CURRENTLY_SUPPORTED_BY_BOUNDED_COORDINATOR",
+      "implementation_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED",
       "contract": {
         "version": 1,
         "handler": "record_inventory_movement",
