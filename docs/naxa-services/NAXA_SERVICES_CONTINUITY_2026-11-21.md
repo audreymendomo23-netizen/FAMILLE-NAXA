@@ -340,3 +340,74 @@ Traiter les 27 call sites restants par groupes de domaines, tout en conservant l
 6. tests transactionnels inter-domaines, revue des grants et gate de clôture 44/44.
 
 Ne pas engager le N3 tant que le dispatcher N2 n'a pas un handler et un test transactionnel pour chacun des 44 call sites indépendants.
+ 
+---
+
+## 15. Point de contrôle N2 — mise à jour après intégration serveur (22 novembre 2026)
+
+**Cette section remplace le bilan intermédiaire 17/44 de la section 14.3 et la liste provisoire 27 call sites de la section 14.4.** Le N1 reste fermé ; aucun travail N2 n'a rouvert son inventaire.
+
+### 15.1 Décision N1 — VERT COMPLET maintenu
+
+- **N1 = VERT COMPLET, clôturé.**
+- Référence de preuve : run CI https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44964977570, job Cross-application offline synchronization contract : 55 appels source, 55 lignes de registre, bijection exacte, aucun orphelin, doublon ou entrée injustifiée.
+- Sur le run courant https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44983959405, le même contrôle N1 a encore réussi. Le registre conserve ses valeurs historiques implementation_status ; le suivi N2 est porté par un champ distinct n2_handler_status.
+
+### 15.2 Bilan N2 mis à jour
+
+**PARTIEL — 43/44 mutations indépendantes**
+
+- Les 44 lignes REMOTE_MUTATION sont maintenant reliées à 92 codes d'action.
+- Les 92 codes sont présents dans l'allowlist TypeScript ATOMIC_SYNC_ACTIONS, sans doublon ni code manquant, et chacun est routé par le dispatcher SQL ns_apply_sync_event.
+- 43/44 call sites ont un handler serveur concret, des privilèges contrôlés et une preuve runtime/CI.
+- 1/44 reste conditionnel : OBX-023 cash_session.closed. Son handler et sa logique de calcul existent, mais la clôture ne peut pas encore être déclarée complète pour tous les flux métier.
+
+### 15.3 Call sites N2 nouvellement couverts dans la tranche finale
+
+Les identifiants suivants ont été ajoutés au statut IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED dans le registre JSON :
+
+- **Ventes :** OBX-018 sale.created et OBX-019 sale.mobile_money_cancelled. Le runtime vérifie la vente cash, la sortie de stock et les écritures comptables, le maintien d'une vente Mobile Money en attente, puis son annulation avant confirmation opérateur.
+- **Client et rendez-vous :** OBX-029 customer.updated avec contrôle de révision ; OBX-045 appointment.created_from_waitlist avec conversion transactionnelle de la liste d'attente.
+- **RH :** OBX-047 staff_clock_in, pause début/fin et sortie avec séquencement serveur et refus d'une séquence invalide.
+- **Dossiers de gestion :** OBX-048, création des devis, factures, avoirs, créances, achats, fournisseurs, ordres de service, dossiers RH et autres types autorisés.
+- **Transferts multisites :** OBX-049 demande, OBX-053 réception destination, OBX-054 transitions de gestion et transfert. La réception crée la sortie source et l'entrée destination dans une même transaction ; un rejeu ne double pas le stock.
+
+Le registre conserve OBX-023 sous IMPLEMENTED_PENDING_COMPLETE_CASH_SOURCE_COVERAGE.
+
+### 15.4 Conditions de passage N2 effectivement testées
+
+- Authentification membre, session et appareil actif/non révoqué ; scopes organisation, site et poste vérifiés côté serveur.
+- Mutations et reçus persistés dans une seule transaction ; digest SHA-256 et sérialisation transactionnelle par event_id.
+- Rejeu identique idempotent ; rejeu divergent rejeté ; action non reconnue refusée par défaut.
+- Contrôle des versions sur client, catalogue, rendez-vous, pressing, dossiers de gestion et valorisation.
+- Interdiction d'appeler directement les helpers métier depuis authenticated : le client doit passer par la passerelle atomique ; les helpers sont réservés au rôle serveur.
+- Tests PostgreSQL 17 runtime/RLS couvrant ventes, Mobile Money, rendez-vous, pressing, caisse/dépenses, client/CRM, waitlist, RH et transferts multisites.
+- Contrôle statique des grants, RLS, SECURITY DEFINER et dispatcher ; contrats Deno et contrôle de bijection N1.
+
+**Preuve de la tranche finale :** run https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44983959405. Les jobs Cross-application offline synchronization contract, NAXA SERVICES PostgreSQL 17 schema and runtime RLS tests, NAXA SERVICES draft SQL security boundary checks, NAXA SERVICES supplier accounting and forecast contracts, NAXA SERVICES Web build, ainsi que les contrôles Auth, notifications, referrals, tarifs et paiements ont réussi.
+
+**Limite de qualification :** le workflow global demeure in_progress au dernier relevé, car le job Assemble NAXA SERVICES Android debug APK est encore sur les tests Android accounting/performance. Les étapes Keystore/PIN, compilation APK et publication de l'artefact n'étaient pas terminées. Ne pas présenter le workflow total comme un PASS global ni comme 12/12.
+
+### 15.5 Unique réserve restante — OBX-023 clôture complète de caisse
+
+ns_close_cash_session calcule actuellement le solde serveur à partir du fond d'ouverture, des ventes cash confirmées, des dépenses et des paiements fournisseurs cash attachés à la session. La partie à fermer est le rattachement explicite des acomptes pressing à une session de caisse et à leur mode de paiement. Le modèle local pressing expose le montant de l'acompte, mais ne fournit pas encore le couple session/moyen de paiement nécessaire pour distinguer espèces, Mobile Money et autre mode.
+
+Aucun mode cash ne doit être supposé à partir du seul montant d'acompte. La clôture complète N2 exige :
+1. un cash_session_id explicite lorsque l'acompte pressing est encaissé en espèces ;
+2. un moyen de paiement explicite et une confirmation serveur appropriée pour les autres moyens ;
+3. la prise en compte des seuls encaissements pressing cash confirmés dans le calcul de la clôture ;
+4. des tests de rapprochement et de non-double-comptabilisation du dépôt pressing.
+
+Jusqu'à cette évolution, OBX-023 reste partiellement implémenté et N2 reste PARTIEL — 43/44. Ne pas engager la clôture finale N2 ni qualifier la caisse universelle de complète.
+
+### 15.6 Frontières et état Git
+
+- N1 est clos ; ne pas refaire le chantier.
+- Le coordinateur Android universel, les reprises automatiques, l'ordre global multi-appareils et la consommation effective de la passerelle par les clients restent N3. Les opérations Web/PWA restent N4.
+- Les drafts ont été exécutés uniquement sur PostgreSQL 17 jetable en CI. Aucun draft n'a été appliqué à un projet Supabase hébergé, en particulier pas au projet historique NAXA/pharmacie.
+- Le travail est resté sur work/naxa-services-completion-20261120. La branche main n'a pas été modifiée.
+
+### 15.7 Prochaine action N2
+
+Compléter le contrat local et serveur des acomptes pressing (session + moyen de paiement + confirmation), relier les encaissements cash à OBX-023, ajouter les cas runtime de rapprochement, puis exécuter le contrôle de clôture 44/44. N3 ne commence qu'après ce vert complet.
+

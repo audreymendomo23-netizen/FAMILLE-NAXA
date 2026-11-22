@@ -984,3 +984,22 @@ Les 27 call sites REMOTE_MUTATION suivants demeurent contractuels sans handler s
 Les lots restants concernent notamment pressing, rendez-vous, caisse, ventes, dépenses, services, clients/CRM, valorisation du stock, support, pointages, documents de gestion, transferts multisites et transitions de gestion. Ils exigent leurs propres règles métier, dépendances, contraintes de concurrence et tests de rollback.
 
 **Limite de portée :** cette livraison ne modifie pas le coordinateur Android ni la file Web. La consommation de la nouvelle passerelle par les appareils, la stratégie automatique de reprise et la réplication multi-appareils restent N3. Aucun draft n'est appliqué sur un Supabase hébergé ; le projet historique NAXA/pharmacie reste interdit.
+
+---
+
+## Mise à jour N2 — 22 novembre 2026 (bilan courant)
+
+**État : PARTIEL — 43/44 mutations indépendantes, 92/92 codes d'action routés.**
+
+Le premier relevé 17/44 ci-dessus est historique et est remplacé par cette mise à jour. Le registre JSON suit désormais N2 dans n2_handler_status sans modifier implementation_status, qui demeure la qualification historique utilisée par le garde-fou N1.
+
+Les neuf call sites supplémentaires couverts dans la dernière tranche sont : **OBX-018, OBX-019, OBX-029, OBX-045, OBX-047, OBX-048, OBX-049, OBX-053 et OBX-054**. Ils couvrent vente cash, annulation Mobile Money avant confirmation, mise à jour client versionnée, conversion waitlist→rendez-vous, séquence de pointage RH, création/transition des dossiers métier et transferts multisites.
+
+**CI :** run https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44983959405. Les jobs de bijection N1, PostgreSQL 17 runtime/RLS, sécurité statique SQL, contrats accounting/sync et build Web sont en SUCCESS. Le workflow global reste in_progress au dernier relevé, le job Android debug APK n'ayant pas encore terminé ses tests/build.
+
+**Seul call site restant conditionnel : OBX-023 cash_session.closed.** Le calcul serveur connaît les ventes cash confirmées, dépenses et règlements fournisseurs cash. Les acomptes pressing n'ont pas encore de rattachement explicite à une session et un moyen de paiement. Ne pas supposer qu'un acompte est encaissé en espèces ; il faut compléter son contrat, son rattachement et les tests de rapprochement avant de déclarer N2 vert.
+
+Le runtime CI a validé les flux vente/Mobile Money, client/CRM, devis et transitions, conversion de liste d'attente, pointages RH et transfert Promoteur inter-sites avec double mouvement et rejeu sans double-stock. Le contrôle de sécurité exige la passerelle atomique ; les helpers métier ne sont pas directement exécutables par les clients.
+
+**N1 demeure VERT COMPLET et clôturé**, preuve historique run https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44964977570 et nouveau passage du contrôle N1 en succès sur le run 44983959405. main et les projets Supabase hébergés sont restés inchangés.
+

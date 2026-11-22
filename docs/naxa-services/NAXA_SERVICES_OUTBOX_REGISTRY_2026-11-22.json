@@ -1063,7 +1063,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-019",
@@ -1115,7 +1116,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-020",
@@ -1642,7 +1644,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-030",
@@ -2541,7 +2544,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-046",
@@ -2650,7 +2654,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-048",
@@ -2733,7 +2738,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-049",
@@ -2792,7 +2798,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-050",
@@ -3011,7 +3018,8 @@
           "concurrent receive yields one winner",
           "no generic duplicate inventory_transfer.status_changed replay for receive"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-054",
@@ -3092,7 +3100,8 @@
           "offline retry preserves event ID and ordering",
           "crash/restart does not lose or double-apply"
         ]
-      }
+      },
+      "n2_handler_status": "IMPLEMENTED_ATOMIC_SYNC_GATEWAY_CI_VERIFIED"
     },
     {
       "id": "OBX-055",
