@@ -608,3 +608,10 @@ L'Edge Accounting expose actuellement les actions `pull_sync_changes`, `apply_sy
 Ordre de fermeture : N4-A handlers serveur réellement disponibles (dépendance N2), N4-B couche de données Web et pull entrant, N4-C raccordement écran par écran, N4-D recette navigateur/PostgreSQL et convergence Web↔Android. Les actions sans handler restent fail-closed ; aucun événement générique ne remplace un contrat métier absent.
 
 Garde-fous inchangés : branche de travail uniquement, aucun changement de `main`, aucun déploiement, aucune migration sur le Supabase historique NAXA/pharmacie, aucun secret dans Git. Le rapport est un audit documentaire, pas une validation CI ni une clôture fonctionnelle N4.
+
+
+## 21. N4 — raccordement du socle Web Sync — 22 novembre 2026
+
+Le Web récupère maintenant le `device_id` de l'Edge Auth, crée des séquences outbox monotones persistées par appareil, pousse les événements via `apply_sync_event` avec contrôle du reçu SQL `event_id` et statut final, et consomme `pull_sync_changes` avec persistance atomique des pages et curseurs. Les changements serveur sont visibles sans echo dans l'outbox.
+
+Les faux parcours locaux (formulaires génériques, transitions pressing, réglages organisation non connectés) sont bloqués en session réelle ; l'aperçu local reste identifié. N4-C et N4-D restent ouverts tant que les formulaires/projections métier par module et les tests navigateur bout en bout ne sont pas livrés. Aucun déploiement hébergé ; main et Supabase NAXA/pharmacie historique restent intacts.

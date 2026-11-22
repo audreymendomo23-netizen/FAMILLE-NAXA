@@ -1,21 +1,29 @@
 import {
   assertSameEventPayload, assertReceiptMatchesEvent, nextRetryAt, classifySyncReceipt,
-  canRetrySyncFailure, normalizeQueueBatchLimit, MAX_QUEUE_ATTEMPTS,
+  canRetrySyncFailure, normalizeQueueBatchLimit, nextDeviceSequence, MAX_QUEUE_ATTEMPTS,
 } from "./queue-policy.js";
 
 export type QueueState = "queued" | "sending" | "awaiting_receipt" | "acknowledged" | "retry_wait" | "conflict" | "rejected";
 export interface QueueItem {
   appId?: string; eventId: string; payload: string; state: QueueState; createdAt: number;
+  deviceId?: string; deviceSequence?: number;
   attemptCount?: number; nextAttemptAt?: number | null; leaseUntil?: number | null;
   lastErrorCode?: string | null; serverReceipt?: unknown;
 }
 
 const DB = "famille-naxa-offline";
 const STORE = "events";
+const META = "meta";
+const CHANGES = "changes";
+export interface WebSyncChange {
+  cursor:number; event_id:string; source_device_id:string; origin_site_id:string|null; site_id:string|null;
+  visible_site_ids:string[]; workstation_id:string|null; aggregate_type:string; aggregate_id:string;
+  action_code:string; aggregate_version:number; payload:Record<string,unknown>; recorded_at:string;
+}
 
 function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB, 2);
+    const request = indexedDB.open(DB, 3);
     request.onupgradeneeded = () => {
       const db = request.result;
       const store = db.objectStoreNames.contains(STORE)
@@ -24,6 +32,8 @@ function openDb(): Promise<IDBDatabase> {
       if (!store.indexNames.contains("state_createdAt")) {
         store.createIndex("state_createdAt", ["state", "createdAt"], { unique: false });
       }
+      if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: "key" });
+      if (!db.objectStoreNames.contains(CHANGES)) db.createObjectStore(CHANGES, { keyPath: "key" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -32,26 +42,52 @@ function openDb(): Promise<IDBDatabase> {
 
 export async function enqueue(item: QueueItem): Promise<void> {
   if (!item?.eventId || typeof item.payload !== "string" || !item.payload) throw new TypeError("INVALID_QUEUE_EVENT");
+  if (item.deviceId !== undefined && (typeof item.deviceId !== "string" || !item.deviceId.trim())) throw new TypeError("INVALID_QUEUE_DEVICE_ID");
   const db = await openDb();
   try {
     await new Promise<void>((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
-      const store = tx.objectStore(STORE);
+      const tx = db.transaction([STORE, META], "readwrite"), store = tx.objectStore(STORE), meta = tx.objectStore(META);
       const get = store.get(item.eventId);
       get.onsuccess = () => {
         const existing = get.result as QueueItem | undefined;
-        if (existing) {
-          try { assertSameEventPayload(existing, item); }
-          catch (error) { tx.abort(); reject(error); return; }
-        } else {
-          store.add({ ...item, appId: item.appId ?? "default", state: "queued", attemptCount: 0, nextAttemptAt: null, leaseUntil: null });
-        }
+        if (existing) { try { assertSameEventPayload(existing,item); } catch(e) { tx.abort(); reject(e); } return; }
+        const appId = item.appId ?? "default";
+        const base = { ...item, appId, state:"queued" as const, attemptCount:0, nextAttemptAt:null, leaseUntil:null };
+        if (!item.deviceId) { store.add(base); return; }
+        const key = appId + ":" + item.deviceId, current = meta.get(key);
+        current.onsuccess = () => {
+          try { const sequence = nextDeviceSequence(Number(current.result?.value ?? 0)); meta.put({key,value:sequence}); store.add({...base,deviceSequence:sequence}); }
+          catch(e) { tx.abort(); reject(e); }
+        };
+        current.onerror = () => { tx.abort(); reject(current.error ?? new Error("QUEUE_SEQUENCE_READ_FAILED")); };
       };
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-      tx.onabort = () => reject(tx.error ?? new Error("QUEUE_TRANSACTION_ABORTED"));
+      get.onerror = () => { tx.abort(); reject(get.error ?? new Error("QUEUE_EVENT_READ_FAILED")); };
+      tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error ?? new Error("QUEUE_TRANSACTION_ABORTED"));
     });
   } finally { db.close(); }
+}
+function cursorKey(appId:string,deviceId:string):string {
+  if (!appId.trim() || !deviceId.trim()) throw new TypeError("INVALID_SYNC_IDENTITY");
+  return appId+":"+deviceId+":cursor";
+}
+export async function applySyncPage(appId:string,deviceId:string,page:{changes:WebSyncChange[];next_cursor:number;has_more:boolean}):Promise<void> {
+  if (!Array.isArray(page?.changes) || !Number.isSafeInteger(page.next_cursor) || page.next_cursor<0 || typeof page.has_more!=="boolean") throw new TypeError("INVALID_SYNC_PAGE");
+  for (const c of page.changes) if (!Number.isSafeInteger(c.cursor)||c.cursor<1||c.cursor>page.next_cursor||typeof c.event_id!=="string"||typeof c.action_code!=="string"||typeof c.aggregate_type!=="string"||!c.payload||typeof c.payload!=="object"||Array.isArray(c.payload)) throw new TypeError("INVALID_SYNC_CHANGE");
+  const db=await openDb();
+  try { await new Promise<void>((resolve,reject)=>{
+    const tx=db.transaction([META,CHANGES],"readwrite"),meta=tx.objectStore(META),store=tx.objectStore(CHANGES),key=cursorKey(appId,deviceId),read=meta.get(key);
+    read.onsuccess=()=>{if(page.next_cursor<Number(read.result?.value??0)){tx.abort();reject(new Error("SYNC_CURSOR_REGRESSION"));return;}
+      for(const c of page.changes)store.put({...c,appId,deviceId,key:appId+":"+deviceId+":"+c.cursor});
+      meta.put({key,value:page.next_cursor});};
+    read.onerror=()=>{tx.abort();reject(read.error??new Error("SYNC_CURSOR_READ_FAILED"));};
+    tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error??new Error("SYNC_PAGE_APPLY_ABORTED"));
+  });} finally {db.close();}
+}
+export async function getSyncCursor(appId:string,deviceId:string):Promise<number>{
+  const db=await openDb();try{return await new Promise<number>((resolve,reject)=>{const r=db.transaction(META).objectStore(META).get(cursorKey(appId,deviceId));r.onsuccess=()=>resolve(Number(r.result?.value??0));r.onerror=()=>reject(r.error);});}finally{db.close();}
+}
+export async function listSyncChanges(appId:string,deviceId:string):Promise<WebSyncChange[]>{
+  const db=await openDb();try{return await new Promise<WebSyncChange[]>((resolve,reject)=>{const r=db.transaction(CHANGES).objectStore(CHANGES).getAll();r.onsuccess=()=>resolve((r.result as (WebSyncChange&{appId:string;deviceId:string})[]).filter(c=>c.appId===appId&&c.deviceId===deviceId).sort((a,b)=>a.cursor-b.cursor));r.onerror=()=>reject(r.error);});}finally{db.close();}
 }
 
 export async function listQueued(appId?: string): Promise<QueueItem[]> {

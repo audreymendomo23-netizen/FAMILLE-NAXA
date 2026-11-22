@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { parseWebSession } from "./session";
 
 const valid = {
+  device_id: "70000000-0000-4000-8000-000000000001",
   access_token: "access-token-with-at-least-twenty-characters",
   refresh_token: "refresh-token-with-at-least-twenty-characters",
   expires_in: 1800,
@@ -19,6 +20,7 @@ const valid = {
 describe("Web authentication session", () => {
   it("accepts a complete server session and derives the expiry", () => {
     const session = parseWebSession(valid, 1000);
+    expect(session.deviceId).toBe(valid.device_id);
     expect(session.accessToken).toBe(valid.access_token);
     expect(session.refreshToken).toBe(valid.refresh_token);
     expect(session.expiresAt).toBe(1_801_000);
@@ -26,6 +28,7 @@ describe("Web authentication session", () => {
   });
 
   it("rejects missing tokens, account scope and malformed site IDs", () => {
+    expect(() => parseWebSession({ ...valid, device_id:"invalid" })).toThrow();
     expect(() => parseWebSession({ ...valid, refresh_token: "" })).toThrow();
     expect(() => parseWebSession({ ...valid, account: { ...valid.account, organization_id: "bad" } })).toThrow();
     expect(() => parseWebSession({ ...valid, account: { ...valid.account, active_site_ids: ["bad"] } })).toThrow();

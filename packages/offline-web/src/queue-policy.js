@@ -5,6 +5,7 @@ export const MAX_RETRY_DELAY_MS = 30 * 60 * 1000;
 export function assertSameEventPayload(existing, incoming) {
   if (!existing || existing.eventId !== incoming?.eventId) throw new TypeError("INVALID_QUEUE_EVENT");
   if (existing.appId && incoming.appId && existing.appId !== incoming.appId) throw new Error("QUEUE_APP_SCOPE_MISMATCH");
+  if ((existing.deviceId || incoming.deviceId) && existing.deviceId !== incoming.deviceId) throw new Error("QUEUE_DEVICE_SCOPE_MISMATCH");
   if (existing.payload !== incoming.payload) throw new Error("IDEMPOTENCY_KEY_REUSED_WITH_DIFFERENT_PAYLOAD");
   return true;
 }
@@ -18,10 +19,13 @@ export function nextRetryAt(attemptCount, now = Date.now(), random = Math.random
 }
 
 export function assertReceiptMatchesEvent(eventId, receipt) {
-  if (typeof eventId !== "string" || !eventId || !receipt || typeof receipt !== "object" || receipt.eventId !== eventId) {
-    throw new Error("SERVER_RECEIPT_EVENT_MISMATCH");
-  }
+  const receivedId = receipt && typeof receipt === "object" ? (receipt.eventId ?? receipt.event_id) : undefined;
+  if (typeof eventId !== "string" || !eventId || typeof receivedId !== "string" || receivedId !== eventId) throw new Error("SERVER_RECEIPT_EVENT_MISMATCH");
   return true;
+}
+export function nextDeviceSequence(current = 0) {
+  if (!Number.isSafeInteger(current) || current < 0 || current >= Number.MAX_SAFE_INTEGER) throw new RangeError("INVALID_DEVICE_SEQUENCE_COUNTER");
+  return current + 1;
 }
 
 export function classifySyncReceipt(receipt) {

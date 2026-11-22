@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  assertSameEventPayload, assertReceiptMatchesEvent, nextRetryAt, classifySyncReceipt,
+  assertSameEventPayload, assertReceiptMatchesEvent, nextRetryAt, nextDeviceSequence, classifySyncReceipt,
   canRetrySyncFailure, normalizeQueueBatchLimit,
 } from "../src/queue-policy.js";
 
@@ -9,6 +9,7 @@ test("same event ID with same payload is idempotent, changed payload is rejected
   const item = { eventId: "event-1", payload: "{\"amount\":10}" };
   assert.equal(assertSameEventPayload(item, item), true);
   assert.throws(() => assertSameEventPayload(item, { ...item, payload: "{\"amount\":11}" }), /IDEMPOTENCY_KEY_REUSED/);
+  assert.throws(() => assertSameEventPayload({ ...item, deviceId:"a" }, { ...item, deviceId:"b" }), /QUEUE_DEVICE_SCOPE_MISMATCH/);
 });
 test("only an applied server receipt acknowledges an event", () => {
   assert.equal(classifySyncReceipt({ status: "applied" }), "acknowledged");
@@ -20,6 +21,14 @@ test("only an applied server receipt acknowledges an event", () => {
 test("a receipt must be tied to the exact event it acknowledges", () => {
   assert.equal(assertReceiptMatchesEvent("event-1", { eventId: "event-1", status: "applied" }), true);
   assert.throws(() => assertReceiptMatchesEvent("event-1", { eventId: "event-2", status: "applied" }), /SERVER_RECEIPT_EVENT_MISMATCH/);
+  assert.equal(assertReceiptMatchesEvent("event-1", { event_id:"event-1", status:"applied" }), true);
+  assert.throws(() => assertReceiptMatchesEvent("event-1", { event_id:"event-2", status:"applied" }), /SERVER_RECEIPT_EVENT_MISMATCH/);
+});
+test("device sequence is monotonic and bounded", () => {
+  assert.equal(nextDeviceSequence(0),1);
+  assert.equal(nextDeviceSequence(41),42);
+  assert.throws(() => nextDeviceSequence(-1), /INVALID_DEVICE_SEQUENCE_COUNTER/);
+  assert.throws(() => nextDeviceSequence(Number.MAX_SAFE_INTEGER), /INVALID_DEVICE_SEQUENCE_COUNTER/);
 });
 test("retry schedule is bounded and deterministic with injected jitter", () => {
   assert.equal(nextRetryAt(1, 1000, () => 0), 3000);

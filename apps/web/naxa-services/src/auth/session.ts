@@ -8,6 +8,7 @@ export interface WebAuthAccount {
 }
 
 export interface WebAuthSession {
+  deviceId: string;
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
@@ -30,6 +31,7 @@ export function parseWebSession(value: unknown, now = Date.now()): WebAuthSessio
   const rawAccount = account as Record<string, unknown>;
   const activeSites = rawAccount.active_site_ids;
   if (
+    typeof data.device_id !== "string" || !UUID.test(data.device_id) ||
     typeof data.access_token !== "string" || data.access_token.length < 20 ||
     typeof data.refresh_token !== "string" || data.refresh_token.length < 20 ||
     typeof rawAccount.member_id !== "string" || !UUID.test(rawAccount.member_id) ||
@@ -41,6 +43,7 @@ export function parseWebSession(value: unknown, now = Date.now()): WebAuthSessio
   const requestedLifetime = Number(data.expires_in);
   const lifetimeSeconds = Math.min(86_400, Math.max(60, Number.isFinite(requestedLifetime) && requestedLifetime > 0 ? requestedLifetime : 3600));
   return Object.freeze({
+    deviceId: data.device_id,
     accessToken: data.access_token,
     refreshToken: data.refresh_token,
     expiresAt: now + lifetimeSeconds * 1000,

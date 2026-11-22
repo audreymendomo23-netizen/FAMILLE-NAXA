@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued } from "@famille/offline-web";
+import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
 import { normalizeInventoryItemDraft } from "./erp/inventory";
 import { parseWebSession, type WebAuthSession } from "./auth/session";
 import { createRoot } from "react-dom/client";
@@ -91,6 +91,7 @@ function App() {
   const [draftSupplierWhatsApp, setDraftSupplierWhatsApp] = useState("");
   const [activeSiteId, setActiveSiteId] = useState("");
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [remoteChanges, setRemoteChanges] = useState<WebSyncChange[]>([]);
   const [search, setSearch] = useState("");
 
   const selected = modules.find((m) => m.id === active)!;
@@ -147,6 +148,7 @@ function App() {
       setActiveSiteId(nextSession.account.active_site_ids[0] ?? "");
       void listQueued(OFFLINE_APP_ID).then((items) => setPendingSyncCount(items.length)).catch(() => setPendingSyncCount(0));
       setAuthenticated(true);
+      void syncWebPullChanges(nextSession).then((result) => { if(result.morePending)setAuthMessage("Synchronisation entrante partielle : d'autres pages restent à charger."); }).catch((error) => setAuthMessage(error instanceof Error?error.message:"Lecture du journal serveur impossible."));
       setPreview(false);
       setPassword("");
       setAuthMessage(nextSession.requirePasswordChange
@@ -258,57 +260,54 @@ function App() {
 
 
   async function syncWebOutbox(activeSession: WebAuthSession) {
-    if (!accountingEndpoint || !anonKey) throw new Error("Le connecteur comptable Web n’est pas configuré.");
+    if (!accountingEndpoint || !anonKey) throw new Error("Le connecteur de synchronisation Web n’est pas configuré.");
     const freshSession = await ensureFreshSession(activeSession);
     const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID);
-    let acknowledged = 0;
-    let retrying = 0;
-    let rejected = 0;
+    let acknowledged=0,retrying=0,rejected=0;
     for (const queued of batch) {
-      let status: number | null = null;
-      let errorCode = "NETWORK_UNAVAILABLE";
-      let payload: Record<string, unknown> = {};
+      let status:number|null=null,errorCode="NETWORK_UNAVAILABLE",command:Record<string,unknown>={};
       try {
-        payload = JSON.parse(queued.payload) as Record<string, unknown>;
-        const response = await fetch(accountingEndpoint, {
-          method: "POST",
-          credentials: "omit",
-          headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: "Bearer " + freshSession.accessToken },
-          body: JSON.stringify(payload),
-        });
-        status = response.status;
-        const data = await response.json().catch(() => ({})) as Record<string, unknown>;
-        if (!response.ok || data.ok !== true) {
-          errorCode = typeof data.error === "string" ? data.error : "REMOTE_REQUEST_FAILED";
-          throw new Error(errorCode);
-        }
-        if (!data.receipt) { errorCode = "SERVER_RECEIPT_MISSING"; throw new Error(errorCode); }
-        const state = await applyServerReceipt(queued.eventId, data.receipt, OFFLINE_APP_ID);
-        if (state === "acknowledged") {
-          acknowledged++;
-          const itemId = typeof payload.inventory_item_id === "string" ? payload.inventory_item_id : "";
-          if (itemId) setEntries((previous) => ({
-            ...previous,
-            stock: (previous.stock ?? []).map((entry) => entry.id === itemId ? { ...entry, state: "Synchronisé serveur" } : entry),
-          }));
-        } else if (state === "rejected") rejected++;
-      } catch {
-        const willRetry = await scheduleRetry(queued.eventId, { status, errorCode }, Date.now(), OFFLINE_APP_ID).catch(() => false);
-        if (willRetry) retrying++; else rejected++;
-        const itemId = typeof payload.inventory_item_id === "string" ? payload.inventory_item_id : "";
-        if (itemId && !willRetry) setEntries((previous) => ({
-          ...previous,
-          stock: (previous.stock ?? []).map((entry) => entry.id === itemId ? { ...entry, state: "Rejeté — vérifier le dossier" } : entry),
-        }));
+        command=JSON.parse(queued.payload) as Record<string,unknown>;
+        if(queued.deviceId!==freshSession.deviceId||!Number.isSafeInteger(queued.deviceSequence)||(queued.deviceSequence??0)<=0){status=422;errorCode="LEGACY_QUEUE_EVENT_REQUIRES_REENQUEUE";throw new Error(errorCode);}
+        const payload=command.payload;
+        if(!payload||typeof payload!=="object"||Array.isArray(payload)||command.org_id!==freshSession.account.organization_id||typeof command.aggregate_type!=="string"||typeof command.aggregate_id!=="string"||typeof command.action_code!=="string"){status=422;errorCode="INVALID_QUEUED_DOMAIN_EVENT";throw new Error(errorCode);}
+        const event={event_id:queued.eventId,device_id:freshSession.deviceId,device_sequence:queued.deviceSequence,org_id:command.org_id,site_id:typeof command.site_id==="string"?command.site_id:null,workstation_id:typeof command.workstation_id==="string"?command.workstation_id:null,aggregate_type:command.aggregate_type,aggregate_id:command.aggregate_id,action_code:command.action_code,payload};
+        const response=await fetch(accountingEndpoint,{method:"POST",credentials:"omit",headers:{"Content-Type":"application/json",apikey:anonKey,Authorization:"Bearer "+freshSession.accessToken},body:JSON.stringify({action:"apply_sync_event",app_code:"naxa-services",event})});
+        status=response.status;
+        const data=await response.json().catch(()=>({})) as Record<string,unknown>;
+        if(!response.ok||data.ok!==true){errorCode=typeof data.error==="string"?data.error:"REMOTE_REQUEST_FAILED";throw new Error(errorCode);}
+        if(!data.result||typeof data.result!=="object"||Array.isArray(data.result)){errorCode="SERVER_RECEIPT_MISSING";throw new Error(errorCode);}
+        const queueState=await applyServerReceipt(queued.eventId,data.result,OFFLINE_APP_ID);
+        if(queueState==="acknowledged"){acknowledged++;const p=payload as Record<string,unknown>,id=typeof p.inventory_item_id==="string"?p.inventory_item_id:"";if(id)setEntries(prev=>({...prev,stock:(prev.stock??[]).map(x=>x.id===id?{...x,state:"Confirmé par le serveur"}:x)}));}
+        else if(queueState==="rejected"||queueState==="conflict")rejected++;
+      }catch{
+        const willRetry=await scheduleRetry(queued.eventId,{status,errorCode},Date.now(),OFFLINE_APP_ID).catch(()=>false);
+        if(willRetry)retrying++;else rejected++;
       }
     }
-    const remaining = await listQueued(OFFLINE_APP_ID);
-    setPendingSyncCount(remaining.length);
-    if (acknowledged > 0) setAuthMessage(acknowledged + " article(s) confirmé(s) par le serveur.");
-    else if (retrying > 0) setAuthMessage(retrying + " opération(s) en attente de reprise réseau.");
-    else if (rejected > 0) setAuthMessage(rejected + " opération(s) rejetée(s) : vérifier les droits, le site ou les données.");
-    else if (batch.length === 0) setAuthMessage("Aucune opération NAXA Services en attente.");
-    return { acknowledged, retrying, rejected, remaining: remaining.length };
+    const remaining=await listQueued(OFFLINE_APP_ID);setPendingSyncCount(remaining.length);
+    await syncWebPullChanges(freshSession).catch(()=>undefined);
+    if(acknowledged)setAuthMessage(acknowledged+" opération(s) confirmée(s) par le journal serveur.");
+    else if(retrying)setAuthMessage(retrying+" opération(s) en attente de reprise réseau.");
+    else if(rejected)setAuthMessage(rejected+" opération(s) rejetée(s) ou anciennes à ré-enregistrer ; aucun reçu n'a été fabriqué.");
+    else if(!batch.length)setAuthMessage("Aucune opération Web en attente.");
+    return{acknowledged,retrying,rejected,remaining:remaining.length};
+  }
+  async function syncWebPullChanges(activeSession: WebAuthSession) {
+    if(!accountingEndpoint||!anonKey)throw new Error("Le connecteur de synchronisation Web n’est pas configuré.");
+    const fresh=await ensureFreshSession(activeSession);
+    let cursor=await getSyncCursor(OFFLINE_APP_ID,fresh.deviceId),pages=0,received=0,more=true;
+    while(more&&pages<20){
+      const response=await fetch(accountingEndpoint,{method:"POST",credentials:"omit",headers:{"Content-Type":"application/json",apikey:anonKey,Authorization:"Bearer "+fresh.accessToken},body:JSON.stringify({action:"pull_sync_changes",org_id:fresh.account.organization_id,device_id:fresh.deviceId,after_cursor:cursor,limit:200})});
+      const data=await response.json().catch(()=>({})) as Record<string,unknown>;
+      if(!response.ok||data.ok!==true||!data.result||typeof data.result!=="object")throw new Error(typeof data.error==="string"?data.error:"WEB_SYNC_PULL_FAILED");
+      const page=data.result as {changes?:WebSyncChange[];next_cursor?:number;has_more?:boolean};
+      if(!Array.isArray(page.changes)||!Number.isSafeInteger(page.next_cursor)||typeof page.has_more!=="boolean"||page.next_cursor<cursor)throw new Error("WEB_SYNC_PULL_INVALID_PAGE");
+      await applySyncPage(OFFLINE_APP_ID,fresh.deviceId,{changes:page.changes,next_cursor:page.next_cursor,has_more:page.has_more});
+      received+=page.changes.length;cursor=page.next_cursor;more=page.has_more;pages++;
+    }
+    setRemoteChanges(await listSyncChanges(OFFLINE_APP_ID,fresh.deviceId));
+    return{received,cursor,morePending:more};
   }
 
   async function submitStockItem() {
@@ -324,16 +323,8 @@ function App() {
       });
       const inventoryItemId = crypto.randomUUID();
       const eventId = crypto.randomUUID();
-      const payload = {
-        action: "save_inventory_item", event_id: eventId, app_code: "naxa-services",
-        inventory_item_id: inventoryItemId, org_id: activeSession.account.organization_id,
-        site_id: siteId, sku: item.sku, name: item.name, unit: item.unit,
-        reorder_level: item.reorderLevel, supplier_whatsapp: item.supplierWhatsApp,
-      };
-      await enqueueOfflineEvent({
-        appId: OFFLINE_APP_ID, eventId, payload: JSON.stringify(payload),
-        state: "queued", createdAt: Date.now(),
-      });
+      const payload={action_code:"inventory_item.created",aggregate_type:"inventory_item",aggregate_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,payload:{inventory_item_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,sku:item.sku,name:item.name,unit:item.unit,reorder_level:item.reorderLevel,supplier_whatsapp:item.supplierWhatsApp}};
+      await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:activeSession.deviceId,payload:JSON.stringify(payload),state:"queued",createdAt:Date.now()});
       setEntries((previous) => ({
         ...previous,
         stock: [...(previous.stock ?? []), {
@@ -353,6 +344,7 @@ function App() {
   }
 
   function addLocalEntry() {
+    if (!preview) { setAuthMessage("Ce module est en aperçu uniquement tant que son parcours métier serveur n'est pas livré. Aucune donnée n'a été enregistrée."); setDialogOpen(false); return; }
     const title = draftTitle.trim();
     if (!title) return;
     const item: Entry = { id: crypto.randomUUID(), title, detail: draftDetail.trim(), state: "Brouillon local", createdAt: new Date().toLocaleString("fr-FR") };
@@ -469,25 +461,29 @@ function App() {
         </header>
         <section className="content-area">
           {authSession && authMessage && <div className="notice">{authMessage}</div>}
+          {authSession && <div className="module-main-card" style={{marginBottom:18}}>
+            <div className="module-card-head"><div><span className="eyebrow">JOURNAL SERVEUR</span><h2>Changements reçus</h2></div><span className="status-tag local">{remoteChanges.length}</span></div>
+            {remoteChanges.length===0?<Empty text="Aucun changement entrant chargé pour cet appareil."/>:<div className="record-list">{remoteChanges.slice(-12).reverse().map(c=><div className="record" key={c.cursor}><div><strong>{c.action_code}</strong><small>{c.aggregate_type} · {c.aggregate_id} · curseur {c.cursor}</small></div><span className="status-tag local">Serveur</span></div>)}</div>}
+          </div>}
           <div className="page-heading">
             <div><span className="eyebrow">{moduleCopy[active].eyebrow}</span><h1>{moduleCopy[active].headline}</h1><p>{moduleCopy[active].helper}</p></div>
             <div className="heading-actions">
               {active !== "overview" && <button className="btn secondary" onClick={() => setActive("overview")}>Vue d'ensemble</button>}
               {active === "stock" && authSession && pendingSyncCount > 0 && <button className="btn secondary" disabled={busy} onClick={() => { void syncWebOutbox(authSession).catch((error) => setAuthMessage(error instanceof Error ? error.message : "Synchronisation impossible.")); }}>Synchroniser ({pendingSyncCount})</button>}
-              <button className="btn primary" onClick={() => { setDraftTitle(""); setDraftDetail(""); setDraftSku(""); setDraftUnit("pièce"); setDraftReorderLevel("0"); setDraftSupplierWhatsApp(""); setDialogOpen(true); }}>{selected.action}</button>
+              <button className="btn primary" disabled={busy || (!preview && active !== "stock")} title={!preview && active !== "stock" ? "Connecteur métier Web non livré." : undefined} onClick={() => { if(!preview&&active!=="stock"){setAuthMessage("Connecteur métier Web non livré pour ce module ; aucune donnée ne sera enregistrée localement.");return;} setDraftTitle("");setDraftDetail("");setDraftSku("");setDraftUnit("pièce");setDraftReorderLevel("0");setDraftSupplierWhatsApp("");setDialogOpen(true); }}>{!preview&&active!=="stock"?"Connecteur à livrer":selected.action}</button>
             </div>
           </div>
 
           {active === "overview" ? <Overview entries={entries} onNavigate={setActive} mode={mode} /> :
-            active === "organization" ? <OrganizationPage mode={mode} setMode={setMode} siteName={siteName} setSiteName={setSiteName} /> :
+            active === "organization" ? <OrganizationPage mode={mode} setMode={setMode} siteName={siteName} setSiteName={setSiteName} editable={preview} /> :
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} /> :
             active === "agenda" ? <AgendaPage entries={entries.agenda ?? []} /> :
-            active === "pressing" ? <PressingPage entries={entries.pressing ?? []} onAdvance={(id) => setEntries((prev) => ({ ...prev, pressing: (prev.pressing ?? []).map((x) => x.id === id ? { ...x, state: nextPressingState(x.state) } : x) }))} /> :
+            active === "pressing" ? <PressingPage entries={entries.pressing ?? []} canPreviewEdit={preview} onAdvance={(id) => setEntries((prev) => ({ ...prev, pressing: (prev.pressing ?? []).map((x) => x.id === id ? { ...x, state: nextPressingState(x.state) } : x) }))} /> :
             active === "cash" ? <CashPage entries={entries.cash ?? []} /> :
-            <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} />}
+            <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} />}
 
-          <div className="page-footnote"><span>ⓘ</span> {preview ? "Les créations sont gardées en mémoire dans cette session uniquement." : authSession ? "Identité et session authentifiées ; les opérations affichées restent des brouillons locaux et ne sont pas envoyées au serveur." : "Aucun accès opérationnel n'est accordé avant authentification et synchronisation côté serveur."}</div>
+          <div className="page-footnote"><span>ⓘ</span> {preview ? "Les créations sont gardées en mémoire dans cette session uniquement." : authSession ? "Session authentifiée. Stock utilise le journal serveur ; les autres actions restent désactivées tant que leurs parcours métier Web ne sont pas livrés." : "Aucun accès opérationnel n'est accordé avant authentification et synchronisation côté serveur."}</div>
         </section>
         <nav className="mobile-tabs">
           {(["overview", "agenda", "pressing", "cash", "services"] as ModuleId[]).map((id) => <button key={id} className={active === id ? "selected" : ""} onClick={() => setActive(id)}><span>{iconFor(id)}</span>{modules.find((m) => m.id === id)?.title.split(" ")[0]}</button>)}
@@ -496,7 +492,7 @@ function App() {
       {dialogOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
           <div className="modal-head"><div><span className="eyebrow">NOUVELLE OPÉRATION · APERÇU</span><h2 id="modal-title">{selected.action}</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)}>×</button></div>
-          <form onSubmit={(e) => { e.preventDefault(); if (active === "stock" && authSession) void submitStockItem(); else addLocalEntry(); }}>
+          <form onSubmit={(e) => {e.preventDefault();if(active==="stock"&&authSession)void submitStockItem();else if(preview)addLocalEntry();else{setAuthMessage("Connecteur métier non disponible : aucune opération n'a été enregistrée.");setDialogOpen(false);}}}>
             <label>Nom / référence<input autoFocus value={draftTitle} onChange={(e) => setDraftTitle(e.target.value)} required placeholder="Ex. Lessive professionnelle" /></label>
             {active === "stock" && authSession ? <>
               <label>Point de vente<select value={activeSiteId} onChange={(e) => setActiveSiteId(e.target.value)} required>{authSession.account.active_site_ids.map((siteId) => <option key={siteId} value={siteId}>{siteId}</option>)}</select></label>
@@ -504,7 +500,7 @@ function App() {
               <label>Unité<input value={draftUnit} onChange={(e) => setDraftUnit(e.target.value)} required maxLength={40} /></label>
               <label>Seuil d'alerte<input type="number" min="0" step="0.001" value={draftReorderLevel} onChange={(e) => setDraftReorderLevel(e.target.value)} required /></label>
               <label>WhatsApp fournisseur<input value={draftSupplierWhatsApp} onChange={(e) => setDraftSupplierWhatsApp(e.target.value)} maxLength={32} placeholder="+237 6xx xx xx xx" /></label>
-              <div className="notice">La fiche article est envoyée au RPC sécurisé ; les mouvements de quantité restent séparés et audités.</div>
+              <div className="notice">La fiche article rejoint l'outbox avec un identifiant et une séquence liés à cet appareil. Elle n'est confirmée qu'après le reçu du journal serveur.</div>
             </> : <>
               <label>Détails<textarea rows={3} value={draftDetail} onChange={(e) => setDraftDetail(e.target.value)} placeholder="Informations complémentaires" /></label>
               <div className="notice">Brouillon local : aucun encaissement, ticket ou rendez-vous réel n'est créé.</div>
@@ -561,31 +557,32 @@ function Overview({ entries, onNavigate, mode }: { entries: Record<ModuleId, Ent
 function Metric({ label, value, meta }: { label: string; value: string; meta: string }) {
   return <div className="metric-card"><span>{label}</span><strong>{value}</strong><small>{meta}</small></div>;
 }
-function GenericPage({ active, entries, copy }: { active: ModuleId; entries: Entry[]; copy: typeof moduleCopy[ModuleId] }) {
+function GenericPage({ active, entries, copy, preview }: { active: ModuleId; entries: Entry[]; copy: typeof moduleCopy[ModuleId]; preview: boolean }) {
   return <div className="module-layout">
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PÉRIMÈTRE FONCTIONNEL</span><h2>Fonctions prévues</h2></div><span className="status-tag pending">À connecter</span></div>
-      <div className="feature-list">{copy.features.map((feature, i) => <div className="feature-row" key={feature}><span className="feature-number">{String(i + 1).padStart(2, "0")}</span><span>{feature}</span><span className="feature-check">◇</span></div>)}</div>
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PÉRIMÈTRE FONCTIONNEL</span><h2>Fonctions prévues</h2></div><span className="status-tag pending">{preview?"Aperçu fonctionnel":"Connecteur non livré"}</span></div>
+      <div className="feature-list">{copy.features.map((feature,i)=><div className="feature-row" key={feature}><span className="feature-number">{String(i+1).padStart(2,"0")}</span><span>{feature}</span><span className="feature-check">◇</span></div>)}</div>
+      {!preview&&<div className="notice">Les écritures sont désactivées en session réelle jusqu'à livraison du formulaire et de la projection métier.</div>}
     </div>
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">SESSION EN COURS</span><h2>Brouillons locaux</h2></div><span className="status-tag local">Local</span></div>
-      {entries.length === 0 ? <Empty text={copy.empty} /> : <div className="record-list">{entries.map((entry) => <Record key={entry.id} entry={entry} />)}</div>}
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{preview?"SESSION EN COURS":"DONNÉES MÉTIER"}</span><h2>{preview?"Brouillons locaux":"Projection non livrée"}</h2></div><span className="status-tag local">{preview?"Local":"Non projeté"}</span></div>
+      {entries.length===0?<Empty text={preview?copy.empty:"Le journal entrant reste visible dans la zone globale ; la projection métier de ce module n'est pas encore livrée."}/>:<div className="record-list">{entries.map(entry=><Record key={entry.id} entry={entry}/>)}</div>}
     </div>
   </div>;
 }
 function AgendaPage({ entries }: { entries: Entry[] }) {
   return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue des créneaux</h2></div><span className="status-tag pending">Planning non synchronisé</span></div><div className="calendar-strip">{["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d, i) => <div key={d} className={i === 2 ? "today" : ""}><small>{d}</small><strong>{String(i + 20).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Aucun créneau chargé</strong><p>Les horaires, absences, postes et rendez-vous apparaîtront après synchronisation.</p></div></div><div className="module-main-card"><h2>Demandes de rendez-vous locales</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucune demande créée dans cette session." />}</div></div>;
 }
-function PressingPage({ entries, onAdvance }: { entries: Entry[]; onAdvance: (id: string) => void }) {
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">SUIVI DES TICKETS</span><h2>Étapes de traitement</h2></div><span className="status-tag pending">Données locales</span></div><div className="pressing-steps">{["Reçu", "En cours", "Prêt", "Retiré"].map((step, i) => <div key={step}><span>{i + 1}</span><strong>{step}</strong></div>)}</div><p className="muted">Une transition réelle exigera le contrôle des permissions et l'ajout d'un événement d'historique.</p></div><div className="module-main-card"><h2>Tickets de cette session</h2>{entries.length ? entries.map((e) => <div className="record-row" key={e.id}><Record entry={e} /><button className="btn secondary" onClick={() => onAdvance(e.id)} disabled={e.state === "Retiré"}>Avancer l'aperçu</button></div>) : <Empty text="Aucun ticket local. Créez un brouillon depuis le bouton principal." />}</div></div>;
+function PressingPage({ entries, onAdvance, canPreviewEdit }: { entries: Entry[]; onAdvance: (id: string) => void; canPreviewEdit: boolean }) {
+  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">SUIVI DES TICKETS</span><h2>Étapes de traitement</h2></div><span className="status-tag pending">{canPreviewEdit?"Aperçu local":"Connecteur non livré"}</span></div><div className="pressing-steps">{["Reçu","En cours","Prêt","Retiré"].map((step,i)=><div key={step}><span>{i+1}</span><strong>{step}</strong></div>)}</div><p className="muted">Les transitions réelles exigent un handler pressing et un reçu serveur ; elles ne sont pas simulées.</p></div><div className="module-main-card"><h2>Tickets de cette session</h2>{entries.length?entries.map(e=><div className="record-row" key={e.id}><Record entry={e}/>{canPreviewEdit&&<button className="btn secondary" onClick={()=>onAdvance(e.id)} disabled={e.state==="Retiré"}>Avancer l'aperçu</button>}</div>):<Empty text="Aucun ticket disponible dans cette vue."/>}</div></div>;
 }
 function CashPage({ entries }: { entries: Entry[] }) {
   return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">SESSION CAISSE</span><h2>Registre non ouvert</h2></div><span className="status-tag pending">À connecter</span></div><div className="cash-summary"><div><small>Fonds d'ouverture</small><strong>—</strong></div><div><small>Encaissements</small><strong>—</strong></div><div><small>Écart</small><strong>—</strong></div></div><div className="notice">Les montants ne sont pas calculés dans cet aperçu. Une session réelle sera ouverte sur le serveur et rattachée à une caisse et un opérateur.</div></div><div className="module-main-card"><h2>Ventes de cette session</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucune vente locale. Aucun paiement n'a été confirmé." />}</div></div>;
 }
-function OrganizationPage({ mode, setMode, siteName, setSiteName }: { mode: BusinessMode; setMode: (mode: BusinessMode) => void; siteName: string; setSiteName: (s: string) => void }) {
-  return <div className="structure-grid"><div className="module-main-card"><span className="eyebrow">ARCHITECTURE DE GESTION</span><h2>Choisir le modèle de votre entreprise</h2><div className="mode-options">
-    <button className={mode === "solo" ? "mode-option selected" : "mode-option"} onClick={() => setMode("solo")}><b>01 · PME autonome</b><strong>Un établissement indépendant</strong><small>Un point de vente, une organisation et ses propres opérations.</small></button>
-    <button className={mode === "single_site_multi_workstation" ? "mode-option selected" : "mode-option"} onClick={() => setMode("single_site_multi_workstation")}><b>02 · Responsable multi-emplacements</b><strong>Plusieurs postes dans un même lieu</strong><small>Planning et affectations par poste ; caisse et stock partagés par établissement par défaut.</small></button>
-    <button className={mode === "multi_site_network" ? "mode-option selected" : "mode-option"} onClick={() => setMode("multi_site_network")}><b>03 · Promoteur multi-sites</b><strong>Plusieurs points de vente autonomes</strong><small>Consolidation réseau, mais caisses, stocks, équipes et opérations distincts.</small></button>
-  </div></div><div className="module-main-card"><span className="eyebrow">ÉTABLISSEMENT PRINCIPAL</span><h2>Profil de l'entreprise</h2><label>Nom du point de vente<input value={siteName} onChange={(e) => setSiteName(e.target.value)} /></label><div className="notice">Cette modification reste locale à la session d'aperçu. La fiche légale et l'enregistrement serveur ne sont pas raccordés.</div></div></div>;
+function OrganizationPage({ mode, setMode, siteName, setSiteName, editable }: { mode: BusinessMode; setMode: (mode: BusinessMode) => void; siteName: string; setSiteName: (s: string) => void; editable: boolean }) {
+  return <div className="structure-grid"><div className="module-main-card"><span className="eyebrow">ARCHITECTURE DE GESTION</span><h2>Modèle d'exploitation</h2><div className="mode-options">
+    <button disabled={!editable} className={mode==="solo"?"mode-option selected":"mode-option"} onClick={()=>setMode("solo")}><b>01 · PME autonome</b><strong>Un établissement indépendant</strong><small>Un point de vente, une organisation et ses propres opérations.</small></button>
+    <button disabled={!editable} className={mode==="single_site_multi_workstation"?"mode-option selected":"mode-option"} onClick={()=>setMode("single_site_multi_workstation")}><b>02 · Responsable multi-emplacements</b><strong>Plusieurs postes dans un même lieu</strong><small>Planning et affectations par poste ; caisse et stock partagés par établissement par défaut.</small></button>
+    <button disabled={!editable} className={mode==="multi_site_network"?"mode-option selected":"mode-option"} onClick={()=>setMode("multi_site_network")}><b>03 · Promoteur multi-sites</b><strong>Plusieurs points de vente autonomes</strong><small>Consolidation réseau, mais caisses, stocks, équipes et opérations distincts.</small></button>
+  </div></div><div className="module-main-card"><span className="eyebrow">ÉTABLISSEMENT PRINCIPAL</span><h2>Profil de l'entreprise</h2><label>Nom du point de vente<input disabled={!editable} value={siteName} onChange={e=>setSiteName(e.target.value)} /></label><div className="notice">{editable?"Ces paramètres sont modifiés en aperçu local uniquement.":"Les paramètres d'organisation doivent être chargés/enregistrés via Auth/ERP ; lecture seule ici."}</div></div></div>;
 }
 function SitesPage({ mode, siteName, entries }: { mode: BusinessMode; siteName: string; entries: Entry[] }) {
   return <div className="module-layout"><div className="module-main-card"><span className="eyebrow">PÉRIMÈTRE RÉSEAU</span><h2>Points de vente sous contrôle</h2><div className="site-list"><div className="site-row"><span className="site-dot" /><div><strong>{siteName}</strong><small>Point principal · données non synchronisées</small></div><span className="status-tag local">Actuel</span></div>{entries.map((e) => <Record key={e.id} entry={e} />)}</div><p className="muted">Mode actif : {modeLabel(mode)}. Les sites supplémentaires ne sont pas inventés ; ils doivent être créés par un responsable autorisé.</p></div><div className="module-main-card"><h2>Principes d'autonomie</h2><ul className="brief-list"><li>Une caisse et des clôtures propres à chaque site.</li><li>Un stock et un historique de mouvements par site.</li><li>Une équipe et des affectations distinctes.</li><li>Une consolidation réseau sans mutation cross-site implicite.</li></ul></div></div>;
