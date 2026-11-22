@@ -45,10 +45,14 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
 
     const deviceA = await listAppEvents(APP, DEVICE_A);
     const deviceB = await listAppEvents(APP, DEVICE_B);
+    const pendingA = await listQueued(APP, DEVICE_A);
+    const pendingB = await listQueued(APP, DEVICE_B);
     expect(deviceA.map((item) => item.deviceSequence)).toEqual([1, 2]);
     expect(deviceA).toHaveLength(2);
     expect(deviceB.map((item) => item.deviceSequence)).toEqual([1]);
     expect(deviceA[0].eventId).toBe("event-device-a-1");
+    expect(pendingA.map(item => item.deviceId)).toEqual([DEVICE_A, DEVICE_A]);
+    expect(pendingB.map(item => item.deviceId)).toEqual([DEVICE_B]);
   });
 
   it("leases concurrent batches without returning the same outbox row twice", async () => {
@@ -59,13 +63,16 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
       });
     }
     const [left, right] = await Promise.all([
-      acquireDueBatch(3, 10_000, 60_000, APP),
-      acquireDueBatch(3, 10_000, 60_000, APP),
+      acquireDueBatch(3, 10_000, 60_000, APP, DEVICE_A),
+      acquireDueBatch(3, 10_000, 60_000, APP, DEVICE_A),
     ]);
     const all = [...left, ...right];
     expect(all).toHaveLength(4);
     expect(new Set(all.map((item) => item.eventId)).size).toBe(4);
-    expect(all.every((item) => item.state === "sending")).toBe(true);
+    expect(all.every((item) => item.state === "sending" && item.deviceId === DEVICE_A)).toBe(true);
+    const otherDeviceBatch = await acquireDueBatch(10, 10_000, 60_000, APP, DEVICE_B);
+    expect(otherDeviceBatch).toHaveLength(1);
+    expect(otherDeviceBatch[0].deviceId).toBe(DEVICE_B);
   });
 
   it("stores an inbound page and its cursor atomically and replays it idempotently", async () => {

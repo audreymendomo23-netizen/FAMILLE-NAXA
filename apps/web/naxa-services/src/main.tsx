@@ -146,7 +146,7 @@ function App() {
   }
 
   async function hydrateWebRecords(activeSession: WebAuthSession) {
-    const [allEvents,pending]=await Promise.all([listAppEvents(OFFLINE_APP_ID,activeSession.deviceId),listQueued(OFFLINE_APP_ID)]);
+    const [allEvents,pending]=await Promise.all([listAppEvents(OFFLINE_APP_ID,activeSession.deviceId),listQueued(OFFLINE_APP_ID, activeSession.deviceId)]);
     setPendingSyncCount(pending.length);
     setEntries(previous=>{
       const next={...previous};
@@ -413,7 +413,7 @@ function App() {
   async function syncWebOutbox(activeSession: WebAuthSession) {
     if (!accountingEndpoint || !anonKey) throw new Error("Le connecteur de synchronisation Web n’est pas configuré.");
     const freshSession = await ensureFreshSession(activeSession);
-    const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID);
+    const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID, freshSession.deviceId);
     let acknowledged=0,retrying=0,rejected=0;
     for (const queued of batch) {
       let status:number|null=null,errorCode="NETWORK_UNAVAILABLE",command:Record<string,unknown>={};
@@ -436,7 +436,7 @@ function App() {
         if(willRetry)retrying++;else rejected++;
       }
     }
-    const remaining=await listQueued(OFFLINE_APP_ID);setPendingSyncCount(remaining.length);
+    const remaining=await listQueued(OFFLINE_APP_ID,freshSession.deviceId);setPendingSyncCount(remaining.length);
     await syncWebPullChanges(freshSession).catch(()=>undefined);
     if(acknowledged)setAuthMessage(acknowledged+" opération(s) confirmée(s) par le journal serveur.");
     else if(retrying)setAuthMessage(retrying+" opération(s) en attente de reprise réseau.");
