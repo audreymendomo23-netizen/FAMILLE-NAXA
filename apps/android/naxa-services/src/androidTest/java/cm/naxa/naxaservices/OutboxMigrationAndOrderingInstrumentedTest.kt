@@ -109,6 +109,19 @@ class OutboxMigrationAndOrderingInstrumentedTest {
             )
             dao.insertOutboxEvent(
                 LocalOutboxEvent(
+                    eventId = "other-organization-higher-sequence",
+                    orgId = "another-org",
+                    aggregateType = "device",
+                    aggregateId = "device-global-sequence",
+                    actionCode = "old.event",
+                    payloadJson = "{}",
+                    deviceSequence = 10,
+                    createdAtEpochMs = 10,
+                    state = "synced"
+                )
+            )
+            dao.insertOutboxEvent(
+                LocalOutboxEvent(
                     eventId = "not-applicable",
                     orgId = orgId,
                     aggregateType = "ledger",
@@ -123,6 +136,7 @@ class OutboxMigrationAndOrderingInstrumentedTest {
             val pending = dao.loadRetryableOutboxEvents(orgId, System.currentTimeMillis(), 20)
             assertEquals(listOf("earlier-unsupported", "later-supported"), pending.map { it.eventId })
             assertEquals(1L, pending.first().deviceSequence)
+            assertEquals(11L, dao.nextOutboxSequence())
         } finally {
             database.close()
         }

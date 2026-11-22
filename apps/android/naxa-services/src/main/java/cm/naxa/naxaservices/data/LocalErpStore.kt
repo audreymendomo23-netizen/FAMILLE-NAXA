@@ -720,8 +720,8 @@ interface NaxaServicesDao {
     @Query("SELECT COUNT(*) FROM local_outbox_events WHERE orgId = :orgId AND state IN ('queued','retry_wait','blocked_dependency')")
     fun observePendingOutboxCount(orgId: String): Flow<Int>
 
-    @Query("SELECT COALESCE(MAX(deviceSequence), 0) + 1 FROM local_outbox_events WHERE orgId = :orgId")
-    suspend fun nextOutboxSequence(orgId: String): Long
+    @Query("SELECT COALESCE(MAX(deviceSequence), 0) + 1 FROM local_outbox_events")
+    suspend fun nextOutboxSequence(): Long
 
     @Query("SELECT COUNT(*) FROM local_outbox_events WHERE orgId = :orgId AND aggregateType = :aggregateType AND aggregateId = :aggregateId AND actionCode IN (:actions)")
     suspend fun countOutboxActions(orgId: String, aggregateType: String, aggregateId: String, actions: List<String>): Int
@@ -3885,7 +3885,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             aggregateId = aggregateId,
             actionCode = action,
             payloadJson = payloadJson ?: fallbackPayload,
-            deviceSequence = dao.nextOutboxSequence(orgId),
+            deviceSequence = dao.nextOutboxSequence(),
             createdAtEpochMs = System.currentTimeMillis(),
             state = if (action in notApplicableActions) "not_applicable" else "queued",
             schemaVersion = 1
