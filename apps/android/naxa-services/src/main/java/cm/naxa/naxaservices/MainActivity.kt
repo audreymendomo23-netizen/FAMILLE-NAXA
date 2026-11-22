@@ -1299,6 +1299,24 @@ private fun PressingOrderCard(
             Text((if (fr) "Retrait promis : " else "Promised pickup: ") + promised, style = MaterialTheme.typography.bodySmall)
             order.workstationId?.let { Text((if (fr) "Poste : " else "Workstation: ") + it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
             Text(stringResource(R.string.pressing_total_and_deposit, order.totalXaf, order.depositXaf), style = MaterialTheme.typography.bodySmall)
+            if (order.depositXaf > 0) {
+                val methodLabel = when (order.depositPaymentMethod) {
+                    "cash" -> if (fr) "espèces" else "cash"
+                    "mobile_money" -> "Mobile Money"
+                    "other" -> if (fr) "virement / autre" else "bank transfer / other"
+                    else -> if (fr) "mode non renseigné" else "method not recorded"
+                }
+                val paymentState = when (order.depositPaymentStatus) {
+                    "confirmed" -> if (fr) "encaissé · session liée" else "received · session linked"
+                    "pending" -> if (fr) "en attente de confirmation" else "awaiting confirmation"
+                    else -> if (fr) "non rapproché" else "not reconciled"
+                }
+                Text(
+                    (if (fr) "Acompte : " else "Deposit: ") + methodLabel + " · " + paymentState,
+                    color = if (order.depositPaymentStatus == "confirmed") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
             if (order.status != "picked_up") {
                 OutlinedTextField(
                     reason,
