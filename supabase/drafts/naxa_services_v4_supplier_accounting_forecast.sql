@@ -1158,6 +1158,487 @@ grant execute on function public.ns_record_inventory_movement(uuid,uuid,uuid,uui
 revoke all on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) from public, anon;
 grant execute on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) to authenticated, service_role;
 
+
+
+-- N2 addendum: typed sync mutation gateway and transactional receipts.
+-- The receipt and the business mutation are part of this single PostgreSQL transaction.
+-- Only the explicitly allowlisted actions below are executable through this gateway.
+
+create or replace function public.ns_upsert_recurring_charge(
+  p_charge_id uuid, p_org_id uuid, p_site_id uuid, p_name text, p_category text,
+  p_amount_xaf bigint, p_recurrence text, p_next_due_at timestamptz,
+  p_reminder_days integer, p_active boolean
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_existing public.ns_recurring_charges%rowtype;
+  v_result public.ns_recurring_charges%rowtype;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_site(p_org_id, p_site_id) then
+    raise exception 'NAXA_RECURRING_CHARGE_FORBIDDEN';
+  end if;
+  if p_charge_id is null
+     or length(trim(coalesce(p_name,''))) not between 2 and 120
+     or length(trim(coalesce(p_category,''))) not between 1 and 80
+     or p_amount_xaf is null or p_amount_xaf <= 0
+     or p_recurrence not in ('monthly','quarterly','annual','one_time')
+     or p_next_due_at is null
+     or p_reminder_days is null or p_reminder_days not between 0 and 30
+     or p_active is null then
+    raise exception 'NAXA_RECURRING_CHARGE_INVALID';
+  end if;
+
+  select * into v_existing
+  from public.ns_recurring_charges
+  where id = p_charge_id
+  for update;
+  if found then
+    if v_existing.org_id <> p_org_id or v_existing.site_id <> p_site_id then
+      raise exception 'NAXA_RECURRING_CHARGE_ID_SCOPE_CONFLICT';
+    end if;
+    update public.ns_recurring_charges
+      set name = trim(p_name), category = trim(p_category),
+          amount_xaf = p_amount_xaf, recurrence = p_recurrence,
+          next_due_at = p_next_due_at, reminder_days = p_reminder_days,
+          active = p_active, updated_by = v_member, updated_at = now(),
+          last_reminder_at = null
+      where id = p_charge_id
+      returning * into v_result;
+  else
+    insert into public.ns_recurring_charges(
+      id, org_id, site_id, name, category, amount_xaf, recurrence,
+      next_due_at, reminder_days, active, created_by, updated_by
+    ) values (
+      p_charge_id, p_org_id, p_site_id, trim(p_name), trim(p_category),
+      p_amount_xaf, p_recurrence, p_next_due_at, p_reminder_days,
+      p_active, v_member, v_member
+    ) returning * into v_result;
+  end if;
+  return jsonb_build_object(
+    'charge_id', v_result.id, 'org_id', v_result.org_id,
+    'site_id', v_result.site_id, 'active', v_result.active,
+    'updated_at', v_result.updated_at
+  );
+end;
+$naxa$;
+
+create or replace function public.ns_deactivate_recurring_charge(
+  p_charge_id uuid, p_org_id uuid, p_site_id uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_charge public.ns_recurring_charges%rowtype;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_site(p_org_id, p_site_id) then
+    raise exception 'NAXA_RECURRING_CHARGE_FORBIDDEN';
+  end if;
+  select * into v_charge
+  from public.ns_recurring_charges
+  where id = p_charge_id and org_id = p_org_id and site_id = p_site_id
+  for update;
+  if not found then raise exception 'NAXA_RECURRING_CHARGE_NOT_FOUND'; end if;
+  if v_charge.active then
+    update public.ns_recurring_charges
+      set active = false, updated_by = v_member, updated_at = now(),
+          last_reminder_at = null
+      where id = p_charge_id and org_id = p_org_id and site_id = p_site_id;
+  end if;
+  return jsonb_build_object('charge_id', p_charge_id, 'active', false, 'idempotent', not v_charge.active);
+end;
+$naxa$;
+
+create or replace function public.ns_upsert_loyalty_program(
+  p_program_id uuid, p_org_id uuid, p_activity_profile text, p_program_code text,
+  p_name text, p_description text, p_metric_code text, p_unit_amount_xaf bigint,
+  p_target_value bigint, p_reward_description text, p_window_days integer,
+  p_active boolean
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_existing public.ns_loyalty_programs%rowtype;
+  v_result public.ns_loyalty_programs%rowtype;
+begin
+  v_member := public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_org(p_org_id) then
+    raise exception 'NAXA_LOYALTY_PROGRAM_FORBIDDEN';
+  end if;
+  if p_program_id is null
+     or p_activity_profile not in (
+       'pressing','coiffure','couture','beaute','parfumerie','reparation','menuiserie',
+       'garage','nettoyage','domicile','impression','photo_evenementiel','autre'
+     )
+     or p_program_code not in ('points','visits','spend','frequency')
+     or length(trim(coalesce(p_name,''))) not between 2 and 80
+     or length(coalesce(p_description,'')) > 1000
+     or p_metric_code not in ('points','visits','spend')
+     or p_unit_amount_xaf is null or p_unit_amount_xaf <= 0
+     or p_target_value is null or p_target_value <= 0
+     or length(trim(coalesce(p_reward_description,''))) not between 2 and 240
+     or p_window_days is null or p_window_days not between 0 and 365
+     or p_active is null then
+    raise exception 'NAXA_LOYALTY_PROGRAM_INVALID';
+  end if;
+
+  select * into v_existing
+  from public.ns_loyalty_programs
+  where id = p_program_id
+  for update;
+  if found then
+    if v_existing.org_id <> p_org_id then
+      raise exception 'NAXA_LOYALTY_PROGRAM_ID_SCOPE_CONFLICT';
+    end if;
+    update public.ns_loyalty_programs
+      set activity_profile = p_activity_profile, program_code = p_program_code,
+          name = trim(p_name), description = coalesce(p_description,''),
+          metric_code = p_metric_code, unit_amount_xaf = p_unit_amount_xaf,
+          target_value = p_target_value, reward_description = trim(p_reward_description),
+          window_days = p_window_days, active = p_active,
+          updated_by = v_member, updated_at = now()
+      where id = p_program_id
+      returning * into v_result;
+  else
+    insert into public.ns_loyalty_programs(
+      id, org_id, activity_profile, program_code, name, description, metric_code,
+      unit_amount_xaf, target_value, reward_description, window_days,
+      active, created_by, updated_by
+    ) values (
+      p_program_id, p_org_id, p_activity_profile, p_program_code, trim(p_name),
+      coalesce(p_description,''), p_metric_code, p_unit_amount_xaf,
+      p_target_value, trim(p_reward_description), p_window_days,
+      p_active, v_member, v_member
+    ) returning * into v_result;
+  end if;
+  return jsonb_build_object(
+    'program_id', v_result.id, 'org_id', v_result.org_id,
+    'activity_profile', v_result.activity_profile,
+    'program_code', v_result.program_code, 'active', v_result.active,
+    'updated_at', v_result.updated_at
+  );
+end;
+$naxa$;
+
+create or replace function public.ns_apply_sync_event(
+  p_org_id uuid,
+  p_site_id uuid,
+  p_workstation_id uuid,
+  p_device_id uuid,
+  p_event_id uuid,
+  p_device_sequence bigint,
+  p_aggregate_type text,
+  p_aggregate_id text,
+  p_action_code text,
+  p_payload jsonb
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_account_id uuid;
+  v_member_id uuid;
+  v_session_id text;
+  v_device public.ns_devices%rowtype;
+  v_existing public.ns_sync_receipts%rowtype;
+  v_payload_hash text;
+  v_expected_aggregate text;
+  v_payload_aggregate text;
+  v_result jsonb;
+  v_response jsonb;
+begin
+  if p_org_id is null or p_device_id is null or p_event_id is null
+     or p_device_sequence is null or p_device_sequence <= 0
+     or length(trim(coalesce(p_aggregate_type,''))) not between 1 and 80
+     or length(trim(coalesce(p_aggregate_id,''))) not between 1 and 180
+     or length(trim(coalesce(p_action_code,''))) not between 1 and 100
+     or p_payload is null or jsonb_typeof(p_payload) <> 'object' then
+    raise exception 'NAXA_SYNC_ENVELOPE_INVALID';
+  end if;
+  if (p_payload->>'org_id') is distinct from p_org_id::text then
+    raise exception 'NAXA_SYNC_ORGANIZATION_PAYLOAD_MISMATCH';
+  end if;
+
+  v_account_id := public.ns_current_account_id();
+  v_member_id := public.ns_current_member_id(p_org_id);
+  v_session_id := auth.jwt() ->> 'session_id';
+  if v_account_id is null or v_member_id is null or v_session_id is null then
+    raise exception 'NAXA_SYNC_AUTH_REQUIRED';
+  end if;
+
+  select * into v_device
+  from public.ns_devices d
+  where d.id = p_device_id
+    and d.account_id = v_account_id
+    and d.session_id = v_session_id
+    and d.revoked_at is null
+  for share;
+  if not found then raise exception 'NAXA_SYNC_DEVICE_NOT_REGISTERED'; end if;
+
+  if p_action_code = 'loyalty_program.updated' then
+    if p_site_id is not null or p_workstation_id is not null
+       or not public.ns_can_manage_org(p_org_id) then
+      raise exception 'NAXA_SYNC_SCOPE_FORBIDDEN';
+    end if;
+  else
+    if p_site_id is null
+       or (p_payload->>'site_id') is distinct from p_site_id::text
+       or not exists (
+         select 1 from public.ns_sites s
+         where s.id = p_site_id and s.org_id = p_org_id and s.status = 'active'
+       )
+       or not public.ns_can_operate_site(p_org_id, p_site_id) then
+      raise exception 'NAXA_SYNC_SCOPE_FORBIDDEN';
+    end if;
+    if p_workstation_id is not null and (
+      not exists (
+        select 1 from public.ns_workstations w
+        where w.id = p_workstation_id and w.org_id = p_org_id
+          and w.site_id = p_site_id and w.status = 'active'
+      )
+      or not public.ns_can_operate_workstation(p_org_id, p_site_id, p_workstation_id)
+    ) then
+      raise exception 'NAXA_SYNC_WORKSTATION_SCOPE_FORBIDDEN';
+    end if;
+  end if;
+
+  v_expected_aggregate := case
+    when p_action_code = 'supplier.saved' then 'supplier'
+    when p_action_code like 'inventory_item.%' then 'inventory_item'
+    when p_action_code like 'inventory_movement.%' then 'inventory_movement'
+    when p_action_code = 'purchase.ordered' then 'purchase'
+    when p_action_code = 'purchase.receipt.confirmed' then 'purchase_receipt'
+    when p_action_code = 'supplier.payment.recorded' then 'supplier_payment'
+    when p_action_code like 'recurring_charge.%' then 'recurring_charge'
+    when p_action_code = 'loyalty_program.updated' then 'loyalty_program'
+    when p_action_code = 'loyalty_activity.recorded' then 'loyalty_activity'
+    when p_action_code = 'loyalty_reward.redeemed' then 'loyalty_reward'
+    else null
+  end;
+  if v_expected_aggregate is null then
+    raise exception 'NAXA_SYNC_ACTION_NOT_SUPPORTED';
+  end if;
+  if p_aggregate_type <> v_expected_aggregate then
+    raise exception 'NAXA_SYNC_AGGREGATE_ACTION_MISMATCH';
+  end if;
+
+  v_payload_aggregate := case
+    when p_action_code = 'supplier.saved' then p_payload->>'supplier_id'
+    when p_action_code like 'inventory_item.%' then p_payload->>'inventory_item_id'
+    when p_action_code like 'inventory_movement.%' then p_payload->>'movement_id'
+    when p_action_code = 'purchase.ordered' then p_payload->>'purchase_id'
+    when p_action_code = 'purchase.receipt.confirmed' then coalesce(p_payload->>'receipt_id', p_payload->>'idempotency_key')
+    when p_action_code = 'supplier.payment.recorded' then coalesce(p_payload->>'payment_id', p_payload->>'idempotency_key')
+    when p_action_code like 'recurring_charge.%' then p_payload->>'charge_id'
+    when p_action_code = 'loyalty_program.updated' then p_payload->>'program_id'
+    when p_action_code = 'loyalty_activity.recorded' then p_payload->>'activity_event_id'
+    when p_action_code = 'loyalty_reward.redeemed' then p_payload->>'reward_event_id'
+    else null
+  end;
+  if v_payload_aggregate is not null and v_payload_aggregate <> p_aggregate_id then
+    raise exception 'NAXA_SYNC_AGGREGATE_ID_MISMATCH';
+  end if;
+
+  v_payload_hash := encode(extensions.digest(convert_to(p_payload::text, 'UTF8'), 'sha256'), 'hex');
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_org_id::text || ':' || p_event_id::text, 0)
+  );
+
+  select * into v_existing
+  from public.ns_sync_receipts r
+  where r.org_id = p_org_id and r.client_event_id = p_event_id
+  for update;
+  if found then
+    if v_existing.device_id <> p_device_id
+       or v_existing.device_sequence <> p_device_sequence
+       or v_existing.action_code <> p_action_code
+       or v_existing.aggregate_type <> p_aggregate_type
+       or v_existing.aggregate_id <> p_aggregate_id
+       or v_existing.site_id is distinct from p_site_id
+       or v_existing.workstation_id is distinct from p_workstation_id
+       or v_existing.payload_sha256 <> v_payload_hash then
+      raise exception 'NAXA_SYNC_EVENT_IDEMPOTENCY_CONFLICT';
+    end if;
+    if v_existing.status <> 'applied' then
+      raise exception 'NAXA_SYNC_EVENT_NOT_FINAL';
+    end if;
+    return v_existing.response_json || jsonb_build_object('idempotent', true);
+  end if;
+
+  insert into public.ns_sync_receipts(
+    org_id, site_id, workstation_id, device_id, member_id,
+    client_event_id, device_sequence, aggregate_type, aggregate_id,
+    action_code, payload_sha256, status, response_json
+  ) values (
+    p_org_id, p_site_id, p_workstation_id, p_device_id, v_member_id,
+    p_event_id, p_device_sequence, p_aggregate_type, p_aggregate_id,
+    p_action_code, v_payload_hash, 'accepted',
+    jsonb_build_object('status','accepted')
+  );
+
+  case p_action_code
+    when 'supplier.saved' then
+      v_result := public.ns_save_supplier(
+        (p_payload->>'supplier_id')::uuid, p_org_id, p_site_id,
+        p_payload->>'name', coalesce(p_payload->>'phone',''),
+        coalesce(p_payload->>'whatsapp',''), coalesce(p_payload->>'email',''),
+        coalesce(p_payload->>'address',''), coalesce((p_payload->>'payment_terms_days')::integer,0),
+        coalesce(p_payload->>'notes','')
+      );
+    when 'inventory_item.created' then
+      v_result := public.ns_save_inventory_item(
+        (p_payload->>'inventory_item_id')::uuid, p_org_id, p_site_id,
+        coalesce(p_payload->>'sku',''), p_payload->>'name', p_payload->>'unit',
+        (p_payload->>'reorder_level')::numeric, coalesce(p_payload->>'supplier_whatsapp','')
+      );
+    when 'inventory_item.imported' then
+      v_result := public.ns_save_inventory_item(
+        (p_payload->>'inventory_item_id')::uuid, p_org_id, p_site_id,
+        coalesce(p_payload->>'sku',''), p_payload->>'name', p_payload->>'unit',
+        (p_payload->>'reorder_level')::numeric, coalesce(p_payload->>'supplier_whatsapp','')
+      );
+    when 'inventory_item.import_updated' then
+      v_result := public.ns_save_inventory_item(
+        (p_payload->>'inventory_item_id')::uuid, p_org_id, p_site_id,
+        coalesce(p_payload->>'sku',''), p_payload->>'name', p_payload->>'unit',
+        (p_payload->>'reorder_level')::numeric, coalesce(p_payload->>'supplier_whatsapp','')
+      );
+    when 'inventory_item.supplier_whatsapp_updated' then
+      v_result := public.ns_save_inventory_item(
+        (p_payload->>'inventory_item_id')::uuid, p_org_id, p_site_id,
+        coalesce(p_payload->>'sku',''), p_payload->>'name', p_payload->>'unit',
+        (p_payload->>'reorder_level')::numeric, coalesce(p_payload->>'supplier_whatsapp','')
+      );
+    when 'inventory_movement.created' then
+      v_result := public.ns_record_inventory_movement(
+        (p_payload->>'movement_id')::uuid, p_org_id, p_site_id,
+        (p_payload->>'inventory_item_id')::uuid, p_payload->>'movement_type',
+        (p_payload->>'quantity_delta')::numeric, p_payload->>'reason'
+      );
+    when 'inventory_movement.import_initial' then
+      v_result := public.ns_record_inventory_movement(
+        (p_payload->>'movement_id')::uuid, p_org_id, p_site_id,
+        (p_payload->>'inventory_item_id')::uuid, p_payload->>'movement_type',
+        (p_payload->>'quantity_delta')::numeric, p_payload->>'reason'
+      );
+    when 'inventory_movement.import_adjustment' then
+      v_result := public.ns_record_inventory_movement(
+        (p_payload->>'movement_id')::uuid, p_org_id, p_site_id,
+        (p_payload->>'inventory_item_id')::uuid, p_payload->>'movement_type',
+        (p_payload->>'quantity_delta')::numeric, p_payload->>'reason'
+      );
+    when 'purchase.ordered' then
+      v_result := public.ns_create_supplier_purchase(
+        p_org_id, p_site_id, (p_payload->>'supplier_id')::uuid,
+        p_payload->>'reference', coalesce(p_payload->>'supplier_invoice_number',''),
+        coalesce((p_payload->>'idempotency_key')::uuid, (p_payload->>'purchase_id')::uuid),
+        v_payload_hash, coalesce(p_payload->'lines','[]'::jsonb),
+        coalesce((p_payload->>'recoverable_tax_xaf')::bigint,0),
+        coalesce((p_payload->>'non_recoverable_tax_xaf')::bigint,0),
+        coalesce((p_payload->>'shipping_xaf')::bigint,0),
+        coalesce((p_payload->>'other_fees_xaf')::bigint,0),
+        nullif(p_payload->>'due_at','')::timestamptz,
+        coalesce(p_payload->>'notes','')
+      );
+    when 'purchase.receipt.confirmed' then
+      v_result := public.ns_receive_supplier_purchase_line(
+        p_org_id, p_site_id, (p_payload->>'purchase_id')::uuid,
+        (p_payload->>'line_id')::uuid, (p_payload->>'quantity')::numeric,
+        (p_payload->>'idempotency_key')::uuid, v_payload_hash
+      );
+    when 'supplier.payment.recorded' then
+      v_result := public.ns_record_supplier_payment(
+        p_org_id, p_site_id, (p_payload->>'purchase_id')::uuid,
+        (p_payload->>'amount_xaf')::bigint, p_payload->>'payment_method',
+        nullif(p_payload->>'cash_session_id','')::uuid,
+        coalesce(p_payload->>'payment_reference',''),
+        (p_payload->>'idempotency_key')::uuid, v_payload_hash
+      );
+    when 'recurring_charge.saved' then
+      v_result := public.ns_upsert_recurring_charge(
+        (p_payload->>'charge_id')::uuid, p_org_id, p_site_id,
+        p_payload->>'name', p_payload->>'category',
+        (p_payload->>'amount_xaf')::bigint, p_payload->>'recurrence',
+        (p_payload->>'next_due_at')::timestamptz,
+        coalesce((p_payload->>'reminder_days')::integer,3),
+        coalesce((p_payload->>'active')::boolean,true)
+      );
+    when 'recurring_charge.deactivated' then
+      v_result := public.ns_deactivate_recurring_charge(
+        (p_payload->>'charge_id')::uuid, p_org_id, p_site_id
+      );
+    when 'recurring_charge.payment_recorded' then
+      v_result := public.ns_record_charge_payment(
+        p_org_id, p_site_id, (p_payload->>'charge_id')::uuid,
+        (p_payload->>'amount_xaf')::bigint,
+        coalesce((p_payload->>'payment_id')::uuid, p_event_id),
+        coalesce(p_payload->>'payment_method','manual'),
+        nullif(p_payload->>'payment_reference','')
+      );
+    when 'loyalty_program.updated' then
+      v_result := public.ns_upsert_loyalty_program(
+        (p_payload->>'program_id')::uuid, p_org_id,
+        p_payload->>'activity_profile', p_payload->>'program_code',
+        p_payload->>'name', coalesce(p_payload->>'description',''),
+        p_payload->>'metric_code', (p_payload->>'unit_amount_xaf')::bigint,
+        (p_payload->>'target_value')::bigint, p_payload->>'reward_description',
+        coalesce((p_payload->>'window_days')::integer,0),
+        coalesce((p_payload->>'active')::boolean,true)
+      );
+    when 'loyalty_activity.recorded' then
+      v_result := public.ns_record_loyalty_activity(
+        p_org_id, p_site_id, (p_payload->>'program_id')::uuid,
+        (p_payload->>'customer_id')::uuid, (p_payload->>'amount_xaf')::bigint,
+        (p_payload->>'activity_event_id')::uuid
+      );
+    when 'loyalty_reward.redeemed' then
+      if not public.ns_redeem_loyalty_reward(
+        p_org_id, p_site_id, (p_payload->>'reward_event_id')::uuid
+      ) then
+        raise exception 'NAXA_LOYALTY_REWARD_NOT_AVAILABLE';
+      end if;
+      v_result := jsonb_build_object(
+        'reward_event_id', p_payload->>'reward_event_id', 'redeemed', true
+      );
+    else
+      raise exception 'NAXA_SYNC_ACTION_NOT_SUPPORTED';
+  end case;
+
+  v_response := jsonb_build_object(
+    'status','applied', 'event_id',p_event_id,
+    'action_code',p_action_code, 'aggregate_type',p_aggregate_type,
+    'aggregate_id',p_aggregate_id, 'payload_sha256',v_payload_hash,
+    'result',coalesce(v_result,'{}'::jsonb), 'idempotent',false
+  );
+  update public.ns_sync_receipts
+    set status = 'applied', response_json = v_response, applied_at = now()
+    where org_id = p_org_id and client_event_id = p_event_id;
+  return v_response;
+end;
+$naxa$;
+
+revoke all on function public.ns_upsert_recurring_charge(uuid,uuid,uuid,text,text,bigint,text,timestamptz,integer,boolean) from public, anon;
+grant execute on function public.ns_upsert_recurring_charge(uuid,uuid,uuid,text,text,bigint,text,timestamptz,integer,boolean) to authenticated, service_role;
+revoke all on function public.ns_deactivate_recurring_charge(uuid,uuid,uuid) from public, anon;
+grant execute on function public.ns_deactivate_recurring_charge(uuid,uuid,uuid) to authenticated, service_role;
+revoke all on function public.ns_upsert_loyalty_program(uuid,uuid,text,text,text,text,text,bigint,bigint,text,integer,boolean) from public, anon;
+grant execute on function public.ns_upsert_loyalty_program(uuid,uuid,text,text,text,text,text,bigint,bigint,text,integer,boolean) to authenticated, service_role;
+revoke all on function public.ns_apply_sync_event(uuid,uuid,uuid,uuid,uuid,bigint,text,text,text,jsonb) from public, anon;
+grant execute on function public.ns_apply_sync_event(uuid,uuid,uuid,uuid,uuid,bigint,text,text,text,jsonb) to authenticated, service_role;
+
+
 revoke all on function public.ns_save_supplier(uuid,uuid,uuid,text,text,text,text,text,integer,text) from public, anon;
 grant execute on function public.ns_save_supplier(uuid,uuid,uuid,text,text,text,text,text,integer,text) to authenticated, service_role;
 revoke all on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,uuid,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) from public, anon;
