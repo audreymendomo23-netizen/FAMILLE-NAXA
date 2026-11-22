@@ -184,7 +184,8 @@ object SupplierSyncCoordinator {
             normalized.contains("NOT_AVAILABLE") ||
             normalized.contains("NOT_READY")
         val transient = statusCode == null ||
-            statusCode in setOf(401, 408, 425, 429) ||
+            statusCode == 401 || statusCode == 408 ||
+            statusCode == 425 || statusCode == 429 ||
             (statusCode != null && statusCode >= 500)
         val state = when {
             transient -> "retry_wait"
