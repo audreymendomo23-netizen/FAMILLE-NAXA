@@ -37,7 +37,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 | OBX-011 | 1764 | `recordLoyaltyActivity` | `loyalty_activity` | `"loyalty_activity.recorded"` | loyalty_activity.recorded | **REMOTE_MUTATION** | `record_loyalty_activity` |
 | OBX-012 | 1771 | `redeemLoyaltyReward` | `loyalty_reward` | `"loyalty_reward.redeemed"` | loyalty_reward.redeemed | **REMOTE_MUTATION** | `redeem_loyalty_reward` |
 | OBX-013 | 1814 | `createPressingOrder` | `pressing_order` | `"pressing_order.created"` | pressing_order.created | **REMOTE_MUTATION** | `create_pressing_order` |
-| OBX-014 | 1843 | `advancePressingOrder` | `pressing_order` | `"pressing_order.status_changed:" + next` | pressing_order.status_changed | **REMOTE_MUTATION** | `transition_pressing_order` |
+| OBX-014 | 1844 | `advancePressingOrder` | `pressing_order` | `"pressing_order.status_changed:" + next` | pressing_order.status_changed | **REMOTE_MUTATION** | `transition_pressing_order` |
 | OBX-015 | 1886 | `createAppointment` | `appointment` | `"appointment.created"` | appointment.created | **REMOTE_MUTATION** | `create_appointment` |
 | OBX-016 | 1912 | `openCashSession` | `cash_session` | `"cash_session.opened"` | cash_session.opened | **REMOTE_MUTATION** | `open_cash_session` |
 | OBX-017 | 1984 | `recordSale` | `inventory_movement` | `"inventory_movement.sale_out"` | inventory_movement.sale_out | **COMPOSITE_CHILD** | Enfant de `sale.created` |
@@ -84,7 +84,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 | Qualification | Nombre | Traitement |
 |---|---:|---|
-| REMOTE_MUTATION | 43 | Envoi indépendant avec contrat versionné et reçu idempotent. 11 codes sont déjà couverts par le coordinateur borné ; le reste est contrat N1 pour les gates de réalisation suivants. |
+| REMOTE_MUTATION | 44 | Envoi indépendant avec contrat versionné et reçu idempotent. 11 codes sont déjà couverts par le coordinateur borné ; le reste est contrat N1 pour les gates de réalisation suivants. |
 | COMPOSITE_CHILD | 7 | Pas d'envoi indépendant ; effet enfant inclus atomiquement dans la commande parente. |
 | DERIVED_SERVER_LEDGER | 1 | Pas de replay ERP générique ; API directe, projection dérivée, miroir serveur ou helper local obsolète selon le détail JSON. |
 | SERVER_AUTHORITATIVE_MIRROR | 1 | Pas de replay ERP générique ; API directe, projection dérivée, miroir serveur ou helper local obsolète selon le détail JSON. |
@@ -837,3 +837,11 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 ## Limite de portée (non bloquante pour N1)
 
 Ce registre clôt **l'inventaire et la qualification N1**. Il ne prétend pas que tous les handlers N2, les coordinateurs Android N3, la parité Web N4 ou les intégrations N6 sont déjà implémentés. Les handlers marqués `CONTRACT_DEFINED_HANDLER_NOT_YET_IMPLEMENTED` demeurent explicitement attribués à leur gate de réalisation, sans extension du périmètre de N1.
+
+
+## Observations techniques du transport source (à préserver pour N2/N3)
+
+- `LocalOutboxEvent` conserve un identifiant d'événement, organisation, agrégat, action, payload, séquence locale, date, version et états/reprises ; la ligne ne porte pas directement un `actor_member_id` ni un `device_id`. Le serveur doit tirer l'acteur et l'installation depuis la session authentifiée.
+- `nextOutboxSequence(orgId)` calcule la séquence dans la base Room locale pour l'organisation. Le contrat de transport doit associer la séquence à l'installation enregistrée côté serveur et empêcher les doublons par appareil.
+- `loyalty_program.updated` est une mutation à portée organisation avec `site_id=null`. Le coordinateur borné exige aujourd'hui un site non vide et ne la transporte pas ; cette limite est consignée, sans la transformer en faux statut vert de synchronisation.
+- La qualification N1 porte sur 55/55 call sites et leurs décisions de routage. Elle n'affirme pas que les 44 mutations indépendantes (11 supportées actuellement + 33 contrats non encore implémentés après ajout de la réception de transfert) sont toutes déployées.
