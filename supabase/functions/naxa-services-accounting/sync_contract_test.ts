@@ -279,3 +279,18 @@ Deno.test("atomic sync envelope validates versioned inventory valuation events",
     }
   }
 });
+
+Deno.test("atomic sync envelope accepts versioned inventory valuation lifecycle commands", () => {
+  const item="88888888-8888-4888-8888-888888888896";
+  const valuation="88888888-8888-4888-8888-888888888897";
+  for(const action of ["inventory_valuation.imported","inventory_valuation.import_updated","inventory_valuation.updated"]) {
+    const normalized=normalizeAtomicSyncEvent({
+      event_id:SYNC_EVENT,device_id:SYNC_DEVICE,device_sequence:41,
+      org_id:ORG_A,site_id:SITE_A,workstation_id:null,
+      aggregate_type:"inventory_valuation",aggregate_id:item,action_code:action,
+      payload:{valuation_id:valuation,inventory_item_id:item,org_id:ORG_A,site_id:SITE_A,
+        unit_cost_xaf:1500,selling_price_xaf:3000,expected_version:0}
+    });
+    if(normalized.aggregate_id!==item)throw new Error("Valuation aggregate must follow the item identity from the event source");
+  }
+});
