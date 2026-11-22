@@ -1160,31 +1160,67 @@ Reconnaissance faciale, émotion, profilage de comportement, score de dangerosit
 
 ---
 
-# 22. PILOTAGE, TABLEAUX DE BORD ET CLASSEMENTS
+# 22. PILOTAGE, ACADEMIC RADAR, TABLEAUX DE BORD ET CLASSEMENTS
 
-Tableaux de bord par rôle : direction, censeur, économat, promoteur, RH, services, sécurité, professeur et parent.
+## 22.1 Pilotage global
 
-Indicateurs :
-- effectifs et évolution ;
-- inscriptions et réinscriptions ;
-- paiements, recouvrement et impayés ;
-- budget et trésorerie ;
-- présence et retards ;
-- progression des programmes ;
-- notes et résultats ;
-- couverture des notes publiées ;
-- absentéisme du personnel et continuité des cours ;
-- incidents et délais de traitement ;
-- repas et transport ;
-- activité de la communauté ;
-- ressources Knowledge ;
-- annonces et candidatures Opportunities.
+Tableaux de bord par rôle : direction, censeur, économat, promoteur, RH, services, sécurité, professeur, parent, APE selon ses droits et administration plateforme.
 
-Classements possibles par classe, matière, série, école, période et année, selon les droits et décisions de publication de l'école. Aucun classement public nominatif d'enfants.
+Indicateurs : effectifs, inscriptions, paiements, recouvrement, trésorerie, présence, retards, progression des programmes, notes, publication des évaluations, bulletins, continuité des cours, heures non dispensées et rattrapées, incidents, repas, transports, communauté, Knowledge et Opportunities.
 
-Les tableaux d'honneur et classements visibles aux parents sont décidés par l'établissement, avec information des familles. La progression et l'effort doivent être valorisés, pas uniquement la meilleure note.
+## 22.2 ACADEMIC RADAR — classement dynamique
 
-Exports PDF et Excel mis en forme. Les filtres favoris peuvent être enregistrés.
+🔒 Le système doit calculer et actualiser les classements à mesure que les enseignants valident et diffusent les notes, sans attendre la remise ou la clôture du bulletin trimestriel ou annuel.
+
+Lorsqu'un professeur valide les notes puis clique sur DIFFUSER, les résultats de cette évaluation alimentent immédiatement le moteur de calcul des moyennes et classements provisoires. Les autres matières et évaluations alimentent ensuite le classement dès leur diffusion. Les mises à jour sont recalculées et propagées en temps réel lorsque la connexion le permet.
+
+Le parent peut interroger le classement de son propre enfant avant la remise du bulletin et voir son rang évoluer au fur et à mesure des nouvelles notes diffusées. Le classement provisoire porte :
+- la mention « provisoire / en cours de période » ;
+- la période et le filtre sélectionnés ;
+- le nombre d'évaluations et matières pris en compte ;
+- le taux de couverture des notes disponibles ;
+- la date et l'heure de dernière actualisation ;
+- la règle de calcul et les limites de comparabilité.
+
+Le parent ne voit que le rang, le percentile ou la tendance de son propre enfant et des informations agrégées sur le groupe de comparaison. Il ne voit ni les noms ni les notes individuelles des autres élèves. Aucun classement nominatif public d'enfants n'est publié dans COMMUNITY ou dans l'espace public.
+
+## 22.3 Filtres ACADEMIC RADAR
+
+Filtres combinables :
+- organisation et groupe scolaire ;
+- établissement et campus ;
+- section et sous-système ;
+- cycle ;
+- niveau ;
+- série et filière ;
+- classe ;
+- matière ;
+- année scolaire ;
+- trimestre, séquence, term ou semestre ;
+- type d'évaluation ;
+- compétence ou chapitre ;
+- indicateur : meilleure moyenne, rang, percentile, progression, régularité, maîtrise ou évolution.
+
+Le système distingue les classements bruts et les comparaisons normalisées. Il ne compare pas directement des classes, niveaux ou programmes non comparables. Un classement inter-niveaux ou inter-écoles n'est activé que si les barèmes, objectifs et évaluations sont comparables ou si un indicateur normalisé documenté est utilisé.
+
+Les rangs ex æquo suivent une règle constante et documentée. Les notes manquantes, absences, dispenses, évaluations non diffusées et changements de barème sont gérés explicitement.
+
+## 22.4 Deux palmarès complémentaires
+
+- PALMARÈS PERFORMANCE : résultats, moyennes, maîtrise et réussite.
+- PALMARÈS PROGRESSION : évolution, effort, régularité, compétences renforcées et rattrapage des lacunes.
+
+La direction peut identifier le meilleur élève en mathématiques d'un niveau, d'une section ou d'un établissement sur des données comparables. Une requête « meilleur élève en mathématiques du collège » doit être précisée par niveau/période ou utiliser un indicateur normalisé ; les moyennes brutes de 6e et de 3e ne sont pas comparables par défaut.
+
+## 22.5 SCHOOL INTELLIGENCE
+
+Un assistant de pilotage permet aux directeurs et promoteurs de poser des questions en langage naturel : meilleurs résultats par matière, retards de programme, cours non rattrapés, notes non publiées, progression des classes, absentéisme, effectifs, recouvrement et incidents non clôturés.
+
+Toute réponse affiche les filtres, la période, la source, l'heure de mise à jour, le périmètre et la définition de l'indicateur. L'assistant ne fabrique pas de chiffres et respecte les droits de l'utilisateur. Les réponses transversales du promoteur sont agrégées sauf permission individuelle expresse.
+
+## 22.6 Exports et confidentialité
+
+Exports PDF et Excel mis en forme et filtres favoris enregistrés. Les rapports nominatifs sont réservés aux personnels habilités. Le parent voit uniquement les informations de ses enfants. Aucun classement nominatif d'enfant n'est diffusé publiquement.
 
 ---
 
