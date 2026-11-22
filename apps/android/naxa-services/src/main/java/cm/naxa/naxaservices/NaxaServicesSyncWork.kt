@@ -73,7 +73,7 @@ object NaxaServicesSyncScheduler {
 
     fun cancel(context: Context) {
         val manager = WorkManager.getInstance(context.applicationContext)
-        manager.cancelUniquePeriodicWork(PERIODIC_WORK)
+        manager.cancelUniqueWork(PERIODIC_WORK)
         manager.cancelUniqueWork(IMMEDIATE_WORK)
     }
 }

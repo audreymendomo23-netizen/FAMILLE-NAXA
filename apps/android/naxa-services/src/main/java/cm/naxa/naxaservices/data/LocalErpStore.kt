@@ -1513,8 +1513,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             .put("line_id", line.id)
             .put("quantity", quantityToReceive)
             .put("idempotency_key", idempotencyKey)
-        enqueue(orgId, "purchase_receipt", idempotencyKey, "purchase.receipt.confirmed", siteId,
-            receiptPayload.put("receipt_id", receiptId).toString())
+        receiptPayload.put("receipt_id", receiptId)
+        enqueue(orgId, "purchase_receipt", idempotencyKey, "purchase.receipt.confirmed", siteId, receiptPayload.toString())
         receipt
     }
 
