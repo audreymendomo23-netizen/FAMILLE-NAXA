@@ -97,6 +97,7 @@ const INVENTORY_ITEM_A="88888888-8888-4888-8888-888888888881";
 const INVENTORY_MOVE_A="88888888-8888-4888-8888-888888888882";
 const ORG_A="88888888-8888-4888-8888-888888888883";
 const SITE_A="88888888-8888-4888-8888-888888888884";
+const SITE_B="88888888-8888-4888-8888-888888888883";
 Deno.test("inventory item sync validates stable UUID and metadata",()=>{
   const item=normalizeInventoryItemSyncPayload({
     inventory_item_id:INVENTORY_ITEM_A,org_id:ORG_A,site_id:SITE_A,
