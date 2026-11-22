@@ -43,8 +43,8 @@ const DRAFTS: DraftSpec[] = [
   },
   {
     file: "naxa_services_v4_supplier_accounting_forecast.sql",
-    tablesWithoutPolicy: [],
-    restrictedTables: [],
+    tablesWithoutPolicy: ["ns_inventory_valuations"],
+    restrictedTables: ["ns_inventory_valuations"],
   },
   {
     file: "naxa_services_v5_customer_referrals_promotions.sql",
@@ -296,4 +296,22 @@ Deno.test("N2 service, customer, CRM and support handlers are scoped and server-
     "Service RPC must revoke public/anon execution");
   assert(/grant\s+execute\s+on\s+function\s+public\.ns_create_service\([^;]+\)\s+to\s+authenticated,\s*service_role/i.test(sql),
     "Service RPC must explicitly grant authenticated/service_role execution");
+});
+
+
+Deno.test("N2 inventory valuation handler is versioned, scoped and server-write-only", async () => {
+  const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
+  assert(/create\\s+or\\s+replace\\s+function\\s+public\\.ns_upsert_inventory_valuation\\s*\\(/i.test(sql),
+    "Inventory valuation handler is required");
+  assert(/p_expected_version\\s*<>\\s*v_existing\\.revision/i.test(sql),
+    "Inventory valuation updates must reject stale revisions");
+  assert(/update\\s+public\\.ns_inventory_items[\\s\\S]{0,250}average_unit_cost_xaf=p_unit_cost_xaf[\\s\\S]{0,250}selling_price_xaf=p_selling_price_xaf/i.test(sql),
+    "The inventory item reporting projection must update with its valuation ledger");
+  assert(/revoke\\s+all\\s+on\\s+public\\.ns_inventory_valuations\\s+from\\s+public,\\s*anon,\\s*authenticated/i.test(sql),
+    "Inventory valuation ledger must remain server-only");
+  assert(/grant\\s+all\\s+on\\s+public\\.ns_inventory_valuations\\s+to\\s+service_role/i.test(sql),
+    "Inventory valuation ledger must be writable by service_role");
+  for(const action of ["inventory_valuation.imported","inventory_valuation.import_updated","inventory_valuation.updated"]) {
+    assert(sql.includes("'" + action + "'"),"Missing inventory valuation action " + action);
+  }
 });
