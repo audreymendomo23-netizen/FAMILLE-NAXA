@@ -258,6 +258,7 @@ Un niveau inférieur ne doit jamais être présenté comme un niveau supérieur.
 ## 13. Fermeture du point de contrôle N1 — 22 novembre 2026
 
 - **Résultat : VERT N1 — 55/55 call sites qualifiés.**
+- **Preuve CI N1 :** le job `Cross-application offline synchronization contract` du run [44964977570](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/44964977570) est **SUCCESS** sur le commit `b34cd4b9301be1fafa9691ba4ed513057b2581fc`. Sortie vérifiée : `status=PASS`, `source_call_sites=55`, `registry_rows=55`, `current_bounded_coordinator_actions=11`, `exact_callsite_bijection=true`; répartition 44/6/1/1/1/2.
 - Matrice lisible : `docs/naxa-services/NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.md`.
 - Registre machine : `docs/naxa-services/NAXA_SERVICES_OUTBOX_REGISTRY_2026-11-22.json`.
 - Contrôle bloquant : `scripts/naxa-services/verify-outbox-registry.mjs`, appelé par le job `Cross-application offline synchronization contract` dans le workflow technique.
