@@ -4,7 +4,7 @@
   "date": "2026-11-22",
   "repository": "audreymendomo23-netizen/FAMILLE-NAXA",
   "branch": "work/naxa-services-completion-20261120",
-  "audited_application_head": "5141f329a8f2d62a4e33b0727ec159f8a8719e91",
+  "audited_application_head": "6644e78d1f7651265b233ba5d4f463a58b8932c4",
   "source_file": "apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt",
   "source_callsite_count": 55,
   "classified_callsite_count": 55,
