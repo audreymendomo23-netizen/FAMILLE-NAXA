@@ -334,6 +334,8 @@ declare
   v_wave bigint;
   v_since timestamptz;
   v_rewards integer := 0;
+  v_reward_event_id uuid;
+  v_reward_events jsonb := '[]'::jsonb;
   v_member uuid;
 begin
   if p_org_id is null or p_site_id is null or p_program_id is null or p_customer_id is null
@@ -413,11 +415,17 @@ begin
       ) values (
         p_org_id, p_site_id, p_program_id, p_customer_id, 'reward_earned', 0, v_wave::integer,
         v_activity_id, 'available', v_program.reward_description, v_member
-      );
+      ) returning id into v_reward_event_id;
+      v_reward_events := v_reward_events || jsonb_build_array(jsonb_build_object(
+        'event_id',v_reward_event_id,
+        'wave_number',v_wave,
+        'reward_status','available',
+        'description',v_program.reward_description
+      ));
       v_rewards := v_rewards + 1;
     end loop;
   end if;
-  return jsonb_build_object('idempotent', false, 'activity_id', v_activity_id, 'metric_delta', v_delta, 'rewards_earned', v_rewards);
+  return jsonb_build_object('idempotent', false, 'activity_id', v_activity_id, 'metric_delta', v_delta, 'rewards_earned', v_rewards, 'reward_events', v_reward_events);
 end;
 $naxa$;
 
