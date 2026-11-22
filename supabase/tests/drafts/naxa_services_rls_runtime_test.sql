@@ -1203,6 +1203,8 @@ DECLARE
   v_status text; v_expected bigint; v_expenses bigint; v_receipts integer;
   v_pressing_cash_status text; v_pressing_momo_status text;
   v_pressing_cash_session uuid; v_pressing_momo_session uuid;
+  v_advance_entry_count integer; v_advance_entry_amount bigint;
+  v_advance_debit text; v_advance_credit text;
 BEGIN
   SELECT status,expected_close_xaf INTO v_status,v_expected
     FROM public.ns_cash_sessions WHERE id='9f000000-0000-4000-8000-000000000001';
@@ -1214,11 +1216,19 @@ BEGIN
     FROM public.ns_payments WHERE pressing_order_id='a8000000-0000-4000-8000-000000000001';
   SELECT status,cash_session_id INTO v_pressing_momo_status,v_pressing_momo_session
     FROM public.ns_payments WHERE pressing_order_id='a8000000-0000-4000-8000-000000000002';
+  SELECT count(*),coalesce(sum(amount_xaf),0)::bigint,
+         min(debit_account),min(credit_account)
+    INTO v_advance_entry_count,v_advance_entry_amount,v_advance_debit,v_advance_credit
+    FROM public.ns_accounting_entries
+    WHERE source_type='pressing_payment' AND event_code='cash_deposit_received'
+      AND source_id=(SELECT id FROM public.ns_payments WHERE pressing_order_id='a8000000-0000-4000-8000-000000000001');
   IF v_status<>'closed' OR v_expected<>5200 OR v_expenses<>1000 OR v_receipts<>1
      OR v_pressing_cash_status<>'confirmed'
      OR v_pressing_cash_session<>'9f000000-0000-4000-8000-000000000001'
-     OR v_pressing_momo_status<>'pending' OR v_pressing_momo_session is not null THEN
-    RAISE EXCEPTION 'CASH_SESSION_SERVER_BALANCE_OR_RECEIPT_ASSERTION_FAILED';
+     OR v_pressing_momo_status<>'pending' OR v_pressing_momo_session is not null
+     OR v_advance_entry_count<>1 OR v_advance_entry_amount<>1200
+     OR v_advance_debit<>'CASH_REGISTER' OR v_advance_credit<>'CUSTOMER_ADVANCES' THEN
+    RAISE EXCEPTION 'CASH_SESSION_SERVER_BALANCE_PAYMENT_OR_ADVANCE_LEDGER_ASSERTION_FAILED';
   END IF;
   IF EXISTS (SELECT 1 FROM public.ns_sync_receipts WHERE client_event_id='9d000000-0000-4000-8000-000000000002') THEN
     RAISE EXCEPTION 'DUPLICATE_REGISTER_OPEN_LEFT_RECEIPT';
