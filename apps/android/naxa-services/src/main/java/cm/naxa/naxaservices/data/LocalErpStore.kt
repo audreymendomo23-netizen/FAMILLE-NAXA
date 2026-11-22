@@ -1608,7 +1608,6 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
 
         val stillUnresolved = dao.loadRemoteChangesNeedingApplication(orgId, 500)
             .map { it.aggregateType + "::" + it.aggregateId }.toSet()
-        val shadows = dao.observeRemoteAggregates // keep the update scoped to the aggregates changed in this page
         val changedAggregates = changes.let { array ->
             (0 until array.length()).mapNotNull { array.optJSONObject(it) }
                 .map { row -> row.optString("aggregate_type") + "::" + row.optString("aggregate_id") }
