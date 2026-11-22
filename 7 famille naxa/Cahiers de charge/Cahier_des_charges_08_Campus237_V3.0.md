@@ -1,13 +1,13 @@
 # CAHIER DES CHARGES MAÎTRE — CAMPUS237
 ## ERP scolaire, plateforme familiale, protection des élèves et écosystème éducatif à 360°
 
-**Version :** 3.0.3 — baseline consolidée, barème établissement corrigé et tarifs parents confirmés  
+**Version :** 3.0.4 — interopérabilité avec les prestataires scolaires tiers et intégration des données dans CAMPUS237 FAMILY  
 **Date de référence :** 22 novembre 2026  
 **Produit :** Campus237  
 **Dépôt :** Famille NAXA  
 **Document précédent :** Cahier_des_charges_08_Campus237.pdf — V2.0 du 5 novembre 2026  
 **Nature :** spécification fonctionnelle, métier, opérationnelle, économique, technique et de conformité  
-**Statut :** baseline V3.0 consolidée et amendée par les addenda V3.0.1, V3.0.2 et V3.0.3 du 22 novembre 2026 ; les décisions approuvées sont verrouillées et les seuls arbitrages résiduels sont identifiés.
+**Statut :** baseline V3.0 consolidée et amendée par les addenda V3.0.1, V3.0.2, V3.0.3 et V3.0.4 du 22 novembre 2026 ; les décisions approuvées sont verrouillées et les seuls arbitrages résiduels sont identifiés.
 
 ---
 
@@ -28,7 +28,7 @@ Le présent document est le cahier des charges maître de CAMPUS237. Il consolid
 - CAMPUS237 KNOWLEDGE et CAMPUS237 OPPORTUNITIES ;
 - les exigences métier, financières, techniques, de sécurité, de conformité, de recette et d'exploitation.
 
-La V2.0 demeure conservée comme document historique. La V3.0.3 devient le document de référence pour les nouvelles spécifications, sous réserve des arbitrages explicitement indiqués dans ce document. La V3.0 ne signifie pas que le logiciel est déjà développé, testé, certifié ou mis en production.
+La V2.0 demeure conservée comme document historique. La V3.0.4 devient le document de référence pour les nouvelles spécifications, sous réserve des arbitrages explicitement indiqués dans ce document. La V3.0 ne signifie pas que le logiciel est déjà développé, testé, certifié ou mis en production.
 
 ## 0.2 Légende des statuts
 
@@ -62,6 +62,7 @@ La V2.0 demeure conservée comme document historique. La V3.0.3 devient le docum
 | V3.0.1 | 22/11/2026 | Addendum : compte APE et réunions/visioconférences, convocations scolaires hybrides, livret scolaire unique portable et non modifiable en place, offres de rentrée et recherche conversationnelle d'établissements avec rendez-vous en présentiel |
 | V3.0.2 | 22/11/2026 | Bulletin vivant, ACADEMIC RADAR et rang parental avant bulletin, modèle de licence établissement par élève, ACCESS gratuit et PREMIUM familial, continuité pédagogique, compétences, remédiation, tableau familial, réunification, GPS bus et menus cantine |
 | V3.0.3 | 22/11/2026 | Correction du tarif établissement à 30/20/10 FCFA par élève selon tranches marginales ; confirmation de la grille ACCESS/PREMIUM familiale ; mise à jour des calculs, arbitrages et critères de recette |
+| V3.0.4 | 22/11/2026 | Ouverture de CAMPUS237 FAMILY aux données d'établissements utilisant des logiciels tiers via API partenaires sécurisées ; gouvernance des accès parentaux, synchronisation, provenance, sécurité et recette des intégrations |
 
 ---
 
@@ -101,6 +102,10 @@ CAMPUS237 doit devenir une infrastructure numérique qui relie :
 
 🔒 Les parents ne créent pas librement un accès complet à un dossier élève : leur lien avec l'enfant est établi et vérifié par l'établissement.
 
+🔒 CAMPUS237 FAMILY peut également agréger, avec leur accord et dans un cadre contractuel sécurisé, les données scolaires provenant d'établissements qui utilisent un logiciel tiers compatible. Le prestataire tiers conserve son propre système ; les données ne sont visibles dans CAMPUS237 FAMILY qu'après vérification du lien parent-enfant et des habilitations.
+
+🔒 Une intégration API ne donne jamais au prestataire tiers, à l'établissement ou à CAMPUS237 un droit d'accès plus large que les finalités et permissions accordées. La provenance et la date de mise à jour de chaque information externe doivent rester visibles.
+
 🔒 Les écoles ne fournissent pas nécessairement de matériel informatique ou de caméras via CAMPUS237. Les intégrations matérielles utilisent les équipements compatibles de l'école ou de ses prestataires.
 
 ## 1.3 Périmètre produit
@@ -113,11 +118,13 @@ La plateforme comprend les surfaces suivantes :
 | CAMPUS237 FAMILY | Parents et tuteurs | Application Android parent légère, multi-enfants et multi-écoles |
 | CAMPUS237 DIRECTION | Directeurs et promoteurs | Espace web responsive de direction, administration et consolidation |
 | CAMPUS237 PLATFORM ADMIN | Équipe d'administration CAMPUS237 | Création des établissements, comptes, abonnements, support et paramètres globaux |
-| CAMPUS237 PARTNERS | Entreprises, centres de formation, tuteurs et partenaires | Espace partenaire et publication d'opportunités |
+| CAMPUS237 PARTNERS | Entreprises, centres de formation, tuteurs, éditeurs et prestataires de logiciels scolaires | Espace partenaire : publication d'opportunités, gestion des intégrations, documentation API, clés et autorisations de connecteur, état de synchronisation et suivi des incidents |
 | CAMPUS237 KNOWLEDGE | Parents et élèves selon les droits | Bibliothèque, encyclopédie, vidéos et annales |
 | CAMPUS237 COMMUNITY | Parents vérifiés et représentants de l'école | Communauté privée propre à chaque établissement |
 
 Le professeur utilise le compte enseignant dans CAMPUS237 SCHOOL. Il n'est pas nécessaire de créer une application enseignante indépendante pour la V1, sauf arbitrage ultérieur.
+
+Les établissements qui utilisent une solution tierce peuvent conserver celle-ci et connecter les données autorisées à CAMPUS237 FAMILY au moyen de CAMPUS237 CONNECT / PARTNER API. Ils ne doivent pas migrer vers CAMPUS237 SCHOOL pour offrir aux parents un accès dans l'application CAMPUS237 FAMILY.
 
 ## 1.4 Public et secteurs couverts
 
@@ -177,6 +184,8 @@ Les différences entre établissements publics et privés, notamment les droits 
 Le parent ou tuteur accède uniquement aux enfants qui lui sont légalement et administrativement rattachés.
 
 Les droits d'un second tuteur, d'un parent séparé ou d'une personne disposant d'une garde ou délégation doivent être déterminés par l'école sur la base de pièces et d'une décision documentée. Un parent ne peut pas retirer à lui seul les droits d'un autre responsable légal.
+
+Pour un établissement connecté par un prestataire tiers, le prestataire peut transmettre une proposition de rattachement parent-enfant, un identifiant parent ou un code d'activation ; cela ne vaut pas validation juridique automatique. CAMPUS237 doit vérifier le rattachement auprès d'une source habilitée et appliquer les restrictions de garde, les autorisations et les éventuels refus documentés. Le matricule, le nom ou la date de naissance seuls ne permettent jamais d'accorder un accès parent.
 
 L'accès élève est facultatif et paramétré selon son âge, le type d'établissement et les règles de l'école. Il ne donne jamais accès aux dossiers financiers, médicaux ou disciplinaires confidentiels d'autres personnes.
 
@@ -697,7 +706,11 @@ Les notifications sont regroupées lorsque plusieurs enfants ou matières sont c
 
 ## 10.1 Compte familial
 
-🔵 Le parent utilise un seul compte pour plusieurs enfants et plusieurs établissements partenaires. L'accueil regroupe les enfants mais chaque dossier reste cloisonné.
+🔒 Le parent utilise un seul compte CAMPUS237 FAMILY pour plusieurs enfants et plusieurs établissements, qu'ils utilisent CAMPUS237 SCHOOL ou un logiciel tiers connecté. L'accueil regroupe les enfants mais chaque dossier reste cloisonné par établissement, enfant, source de données et droits de consultation.
+
+Pour un établissement connecté par API, l'application présente les informations reçues du logiciel tiers dans les mêmes parcours parentaux que les données CAMPUS237, lorsque les modules correspondants sont disponibles. Chaque fiche ou information externe indique l'établissement émetteur, le prestataire source, la date et l'heure de dernière synchronisation et, si nécessaire, un statut de fraîcheur ou de retard.
+
+Une donnée reçue d'un prestataire tiers est affichée comme information transmise par ce système source ; CAMPUS237 ne la présente pas comme ayant été produite ou vérifiée par CAMPUS237 lorsque ce n'est pas le cas.
 
 Chaque enfant présente :
 - résumé de la journée ;
@@ -719,11 +732,25 @@ Le matricule seul ne suffit jamais à ouvrir les données confidentielles.
 
 Niveau restreint : opérations qui peuvent être réalisées sans accès aux données scolaires personnelles, selon le mécanisme autorisé.
 
-Niveau complet : matricule ou identifiant associé à un code parent sécurisé, compte authentifié, lien tuteur vérifié et appareils/sessions contrôlés.
+Niveau complet : matricule ou identifiant associé à un code parent sécurisé, compte authentifié, lien tuteur vérifié et appareils/sessions contrôlés. Pour un prestataire tiers, le lien est vérifié par le processus d'association décrit au chapitre 49 ; le jeton ou code reçu du prestataire ne remplace pas cette vérification.
 
 Protection : limitation des tentatives, alertes de nouvelle connexion, gestion des appareils, révocation et déconnexion à distance. Après cinq échecs, blocage temporaire et alerte au tuteur, selon les tests anti-abus.
 
-## 10.3 Abonnement parent et gratuité de sécurité
+## 10.3 Vue multi-prestataires dans CAMPUS237 FAMILY
+
+Le parent retrouve dans son compte unique les enfants scolarisés dans des établissements équipés de CAMPUS237 ou d'un logiciel tiers compatible et connecté. L'accueil familial peut mélanger des sources différentes sans fusionner les dossiers : chaque enfant reste rattaché à un établissement, chaque donnée à un fournisseur source, et chaque accès est contrôlé individuellement.
+
+Pour un établissement tiers connecté, le parcours parent permet :
+- d'identifier l'établissement et le prestataire à l'origine du dossier ;
+- de rattacher le parent à l'enfant par invitation, QR ou code d'activation sécurisé, puis vérification ;
+- de consulter les données scolaires que l'établissement a autorisées et que le contrat d'intégration permet de partager ;
+- de recevoir les mises à jour et notifications prises en charge par le connecteur ;
+- de visualiser l'heure de dernière synchronisation et de signaler une donnée manquante ou incohérente ;
+- de consulter les autorisations et, lorsque le droit applicable le permet, demander la révocation du partage ou la correction d'une information.
+
+Les éléments provenant d'un système tiers sont identifiés « transmis par [prestataire] pour [établissement] ». Ils ne sont pas fusionnés silencieusement avec une information CAMPUS237 contradictoire. Un conflit est affiché ou mis en vérification selon son impact. L'application peut présenter une expérience unifiée, mais ne doit pas masquer l'origine ni la fiabilité temporelle des données.
+
+## 10.4 Abonnement parent et gratuité de sécurité
 
 🔒 CAMPUS237 ACCESS est gratuit pour tout parent/tuteur autorisé et inclus dans la licence établissement par élève. Il comprend les fonctions essentielles : compte familial multi-enfants/multi-écoles, sécurité et événements arrivée/sortie, informations de bus lorsqu'elles sont disponibles, absences et changements de cours, programme du jour, statut du professeur et remplaçant confirmé, capsules de préparation publiées, notes diffusées, rang provisoire de son enfant, bulletins, convocations, rendez-vous, reçus, communauté, livret scolaire et ressources KNOWLEDGE autorisées.
 
@@ -1482,7 +1509,7 @@ sections, cycles, levels, series, tracks, classes, rooms, subjects, curricula, c
 
 ## 29.3 Élèves et familles
 
-students, student_identifiers, national_matricules, local_student_references, guardians, family_accounts, student_guardians, guardian_permissions, custody_rules, authorized_pickups, student_photos, student_cards, card_versions, card_revocations, enrollments, admissions, transfers, student_documents.
+students, student_identifiers, national_matricules, local_student_references, guardians, family_accounts, student_guardians, guardian_permissions, custody_rules, authorized_pickups, student_photos, student_cards, card_versions, card_revocations, enrollments, admissions, transfers, student_documents, external_student_references, external_guardian_references, verified_student_identity_links.
 
 ## 29.4 Inscriptions et paiements
 
@@ -1514,7 +1541,7 @@ knowledge_items, knowledge_articles, video_resources, exam_archives, content_sou
 
 ## 29.11 Conformité et plateforme
 
-processing_register, consent_records, privacy_requests, retention_policies, data_incidents, processor_contracts, data_transfer_records, devices, sessions, offline_operations, sync_conflicts, idempotency_keys, subscriptions, subscription_entitlements, revenue_shares, school_fund_ledger, payouts, support_tickets.
+processing_register, consent_records, privacy_requests, retention_policies, data_incidents, processor_contracts, data_transfer_records, devices, sessions, offline_operations, sync_conflicts, idempotency_keys, subscriptions, subscription_entitlements, revenue_shares, school_fund_ledger, payouts, support_tickets, external_education_providers, provider_organizations, provider_connections, provider_api_clients, provider_api_credentials, provider_scopes, provider_contracts, provider_data_sharing_authorizations, provider_student_mappings, provider_guardian_mappings, provider_sync_jobs, provider_sync_events, provider_sync_cursors, provider_webhook_deliveries, provider_data_provenance, provider_access_logs, integration_incidents.
 
 ---
 
@@ -1534,7 +1561,45 @@ La réutilisation porte sur les modules métier, composants et contrats d'API pe
 | ZIPPLE | commandes, ventes, achats, approvisionnements et stocks de cantine/fournitures |
 | NAXA SECURITY | caméras compatibles, contrôle d'accès logiciel, événements, détection IA et alertes |
 
-Les données restent séparées par domaine, établissement et finalité. Les intégrations utilisent des API versionnées et des permissions minimales.
+Les données restent séparées par domaine, établissement et finalité. Les intégrations internes comme externes utilisent des API versionnées et des permissions minimales.
+
+## 30.1 CAMPUS237 CONNECT — interopérabilité avec les logiciels scolaires tiers
+
+CAMPUS237 doit exposer un programme d'intégration destiné aux éditeurs, intégrateurs et prestataires qui fournissent déjà aux établissements des logiciels de gestion scolaire, de notes, de présence, de facturation ou de communication avec les familles.
+
+Le prestataire conserve son logiciel et son référentiel opérationnel. CAMPUS237 fournit une passerelle API documentée pour permettre à ce prestataire de transmettre à CAMPUS237 les données scolaires qu'il est autorisé à partager. Les parents concernés retrouvent ensuite ces informations dans CAMPUS237 FAMILY, sans devoir utiliser une deuxième application parentale pour les consulter.
+
+Les flux peuvent être réalisés par API serveur-à-serveur, événements/webhooks signés ou synchronisation planifiée incrémentale. Les contrats d'API sont versionnés, documentés, testables dans un environnement sandbox et assortis de règles de quotas, de reprise et de surveillance. L'intégration ne doit jamais demander au prestataire de placer des secrets API dans l'application mobile du parent.
+
+Le prestataire est identifié, vérifié et lié aux établissements qui l'autorisent. Chaque connexion dispose d'identifiants techniques dédiés, de permissions (scopes) limitées, d'une date d'expiration ou de rotation, d'un statut révocable et d'un journal d'utilisation. Les échanges utilisent un canal chiffré. Les notifications serveur-à-serveur sont authentifiées et protégées contre les rejeux et les doublons.
+
+Les données sont reçues dans une zone d'intégration, validées selon le schéma et le contrat, reliées aux identifiants externes, puis mises à disposition du modèle parent seulement après validation des liens parent-enfant et des autorisations. Les noms, matricules locaux ou dates de naissance ne peuvent pas être utilisés seuls pour fusionner automatiquement deux dossiers. Tout rapprochement incertain est placé en file de vérification.
+
+Les informations externes conservent leur source, leur établissement émetteur, leur identifiant externe, leur date d'émission, leur date de synchronisation, leur version et leur statut de validité. Les données source ne sont pas modifiées dans le logiciel tiers par CAMPUS237. La synchronisation ne crée aucun droit de modification ou d'écriture en retour, sauf contrat, API et périmètre séparément autorisés.
+
+Les établissements et prestataires choisissent explicitement les catégories partagées. Les familles ne voient que les informations relevant du lien de responsabilité vérifié et du périmètre autorisé. La mise à disposition d'une donnée d'un autre fournisseur ne contourne jamais les restrictions de garde, les droits des autres tuteurs, les règles de confidentialité ou les droits de l'enfant.
+
+Les catégories susceptibles d'être intégrées comprennent notamment : identité scolaire et classe, inscription et statut de scolarité, emploi du temps, présence et absence, devoirs, notes validées et diffusées, bulletins publiés, annonces officielles, échéances et reçus de frais, ainsi que les informations de transport ou de cantine lorsqu'elles sont effectivement gérées par le système source et autorisées.
+
+Les données de santé détaillées, notes internes, dossiers disciplinaires confidentiels, messages privés, données RH, informations concernant d'autres élèves, images de vidéosurveillance et éléments de garde ou de situation familiale ne sont pas transmis par défaut. Toute catégorie particulièrement sensible requiert une analyse spécifique, une autorisation distincte et un gate juridique et sécurité avant activation.
+
+Le parent identifie clairement la source des données dans CAMPUS237 FAMILY. En cas de panne du prestataire ou d'échec de synchronisation, l'application affiche la date de dernière mise à jour et un état « synchronisation en retard » ou équivalent ; elle ne présente jamais une donnée ancienne comme une donnée temps réel.
+
+En cas de fin de contrat, de retrait d'autorisation ou de révocation d'un connecteur, les nouveaux flux sont immédiatement suspendus. Les données déjà reçues sont traitées selon le contrat, les demandes des personnes, les durées de conservation et les obligations légales ; elles ne sont ni effacées arbitrairement ni conservées sans base et sans durée définie.
+
+## 30.2 Parcours d'activation d'un prestataire
+
+1. Le prestataire demande l'accès au programme CAMPUS237 CONNECT et fournit son identité juridique, ses coordonnées, le descriptif de sa solution et les établissements concernés.
+2. CAMPUS237 vérifie le prestataire, sa capacité à partager les données et les rôles respectifs des parties.
+3. Un contrat d'intégration et de traitement des données est conclu ; il précise les finalités, catégories, responsabilités, sécurité, sous-traitants, conservation, assistance, incidents, retrait et réversibilité.
+4. L'établissement autorise explicitement la connexion et choisit les modules et catégories de données à partager.
+5. CAMPUS237 crée un client API dédié, limité à cet établissement et aux scopes approuvés.
+6. Le prestataire effectue l'intégration et les tests en sandbox, puis soumet le connecteur à une recette de sécurité, de cohérence, d'identité et de droits.
+7. Après validation, la connexion de production est activée et surveillée.
+8. Les parents rattachent leur compte à l'enfant avec un parcours d'activation sécurisé ; les droits sont vérifiés avant l'ouverture des données.
+9. Les synchronisations, incidents, changements de périmètre et révocations restent auditables.
+
+La participation au programme ne donne pas au prestataire une licence pour accéder aux données des parents, des élèves ou des écoles en dehors de l'intégration convenue. CAMPUS237 ne garantit pas automatiquement l'exactitude du système tiers : la source et sa date sont toujours identifiables.
 
 ---
 
@@ -1558,7 +1623,7 @@ Le projet est construit par jalons testables, sans pilote public si la décision
 | E11 | KNOWLEDGE : bibliothèque, encyclopédie, vidéos, annales et licences |
 | E12 | OPPORTUNITIES, partenaires, annonces hebdomadaires et affiliation |
 | E13 | Annuaire, transferts, passeport scolaire, BI, IA et recette complète |
-| E14 | Préparation de mise en service, formation, support, surveillance et plan de reprise |
+| E13.1 | CAMPUS237 CONNECT : programme prestataires, API versionnée, sandbox, contrats, synchronisation externe, association vérifiée des parents et recette des connecteurs |\n| E14 | Préparation de mise en service, formation, support, surveillance et plan de reprise |
 
 ---
 
@@ -1668,6 +1733,22 @@ Le projet est construit par jalons testables, sans pilote public si la décision
 - Les journaux et les exports respectent les règles de conservation.
 - Les coûts et limites d'hébergement sont mesurés avant montée en charge.
 
+## 32.9 CAMPUS237 CONNECT et prestataires tiers
+
+- Un prestataire ne peut pas activer une connexion sans vérification, contrat et autorisation explicite de l'établissement concerné.
+- Chaque identifiant API est dédié à un prestataire et à un périmètre d'établissement ; les scopes sont testés en autorisation et en refus.
+- Aucun secret API n'est embarqué dans l'application mobile parent ou transmis au terminal de l'élève.
+- Un événement de synchronisation invalide, non authentifié, dupliqué ou rejoué est rejeté ou traité de façon idempotente.
+- Une mise à jour reçue conserve la source, l'identifiant externe, la date d'émission, la date de réception et l'historique de version.
+- Le rapprochement élève ne peut pas s'appuyer uniquement sur le nom, la date de naissance ou un matricule non vérifié.
+- Un parent ne voit les données du système tiers qu'après authentification, association vérifiée et contrôle des droits de garde.
+- Un parent ne peut consulter que les catégories partagées par l'établissement et autorisées pour son lien avec l'enfant.
+- Les données d'un autre élève, d'une autre famille ou d'un autre établissement ne sont jamais accessibles par changement d'identifiant ou manipulation d'API.
+- Les données tierces affichent leur établissement source, leur prestataire et leur dernière date de synchronisation.
+- Une défaillance ou un retard de synchronisation est visible et n'est pas présenté comme une information en temps réel.
+- La révocation d'un connecteur coupe les nouveaux accès et flux ; le traitement des données déjà reçues suit la politique de conservation et les obligations applicables.
+- La fin d'un contrat, un incident sécurité ou une demande de retrait est traçable et déclenche les procédures prévues.
+
 ---
 
 # 33. RISQUES MAJEURS ET MESURES DE MAÎTRISE
@@ -1688,6 +1769,9 @@ Le projet est construit par jalons testables, sans pilote public si la décision
 | Fuite de données de mineurs | RLS, chiffrement, journalisation, minimisation et tests d'intrusion |
 | Contenu numérique sans licence | Registre de droits, liens seulement si besoin, retrait rapide |
 | Partenaire frauduleux | Vérification et modération |
+| Rattachement erroné d'un parent à un élève d'un système tiers | Vérification du responsable légal, preuve d'association, double contrôle des cas ambigus et journal d'audit |
+| API tierce compromise ou données falsifiées | Identifiants techniques dédiés, scopes minimaux, signature des événements, limites d'usage, validation de schéma, surveillance et révocation rapide |
+| Données tierces obsolètes, incomplètes ou contradictoires | Affichage de la provenance et de la fraîcheur, synchronisation traçable, quarantaine et signalement des conflits sans écrasement silencieux |
 | Adoption faible | Simplicité, formation, mode assisté et supports |
 | Coût des médias et de l'IA | Quotas, compression, stockage séparé et suivi de coût |
 | Écarts tarifaires | Arbitrage obligatoire avant facturation automatique |
@@ -1730,6 +1814,7 @@ Les décisions suivantes restent ouvertes. Elles doivent être traitées dans un
 | A-028 | SMS SIM école | Modalité conforme à Android/Google Play et réglementation télécom |
 | A-029 | Stockage vidéo | Quotas, résolution, durée et coût |
 | A-030 | Capsules enseignants | Durée, fréquence, publication et conservation des vidéos de préparation |
+| A-036 | CAMPUS237 CONNECT | Grille commerciale éventuelle, quotas, SLA, formats d'échange, fréquence de synchronisation, catalogue final des champs, fournisseurs pilotes/partenaires, modalités contractuelles et politique de conservation |
 
 ---
 
@@ -1775,6 +1860,7 @@ Cette section rassemble les décisions explicitement validées ou formulées dir
 36. Le tarif établissement selon effectif a été communiqué, avec chevauchement et plages manquantes à résoudre avant facturation.
 37. Aucun PIN ni OTP n'est lu ou stocké.
 38. La vie privée, la sécurité et les données des mineurs ont priorité sur la commodité.
+39. CAMPUS237 doit permettre aux éditeurs et prestataires de logiciels scolaires tiers de connecter leurs solutions via des API partenaires sécurisées, afin que les données scolaires autorisées de leurs établissements clients puissent être consultées par les parents concernés dans CAMPUS237 FAMILY, après vérification du lien parent-enfant et des permissions.
 
 ---
 
@@ -2769,7 +2855,8 @@ Restent ouverts :
 - A-032 : heure exacte de publication du menu la veille, définie par établissement ;
 - A-033 : méthode et seuils de comparabilité des classements inter-établissements ;
 - A-034 : règle de départage des ex æquo, seuils de couverture et fréquence de recalcul/actualisation des rangs ;
-- A-035 : limites d'usage, quotas et coûts des services IA à forte consommation.
+- A-035 : limites d'usage, quotas et coûts des services IA à forte consommation ;
+- A-036 : paramètres commerciaux, techniques et contractuels de CAMPUS237 CONNECT listés au chapitre 34 et à l'addendum V3.0.4.
 
 Ces arbitrages ne remettent pas en cause les décisions métier gelées ; ils précisent des paramètres d'exécution ou les gates de conformité.
 
@@ -2823,3 +2910,157 @@ Aucune modification n'est apportée à l'arbitrage A-005 relatif au partage 80/2
 Les anciens taux 60/50/40 sont obsolètes et ne doivent plus être utilisés dans les interfaces, devis, factures, simulations, tests ou supports commerciaux. Les critères de recette établissement doivent vérifier les taux 30/20/10, le caractère marginal des tranches, le minimum contractuel conservé et la consolidation multi-écoles. La grille parentale doit être testée selon les paliers confirmés au chapitre 23.3.
 
 **Fin de l'addendum CAMPUS237 V3.0.3.**
+
+
+---
+
+# 49. ADDENDUM V3.0.4 — CAMPUS237 CONNECT ET OUVERTURE DE CAMPUS237 FAMILY AUX LOGICIELS SCOLAIRES TIERS
+
+Le présent addendum formalise la décision du porteur du projet d'ouvrir CAMPUS237 FAMILY aux données scolaires produites par les logiciels d'autres prestataires. Il complète les chapitres 1, 2, 10, 29, 30, 31, 32, 33, 34 et 35. Il ne remet pas en cause la tarification de la licence CAMPUS237 ni celle des parents arrêtées en V3.0.3.
+
+## 49.1 Décision produit
+
+🔒 CAMPUS237 doit permettre à des éditeurs, intégrateurs et prestataires tiers de logiciels scolaires d'intégrer les API de CAMPUS237 à leurs solutions afin que les informations scolaires de leurs établissements clients puissent être consultées par les parents dans CAMPUS237 FAMILY.
+
+L'objectif est de faire de CAMPUS237 FAMILY un point d'accès familial multi-écoles et multi-prestataires. Un parent peut y suivre ses enfants même si l'un fréquente un établissement équipé de CAMPUS237 et l'autre un établissement qui utilise le logiciel d'un fournisseur partenaire.
+
+L'établissement n'est pas obligé de remplacer son logiciel existant par CAMPUS237 SCHOOL. Le fournisseur tiers conserve son outil et son rôle de système source pour les opérations qu'il gère. CAMPUS237 fournit la couche d'interopérabilité, d'association parent-enfant, de contrôle d'accès et de restitution parentale.
+
+## 49.2 Produit et surfaces concernés
+
+Le dispositif comprend :
+
+- **CAMPUS237 CONNECT** : programme B2B d'intégration, documentation technique, espace d'enregistrement et de gestion des prestataires, sandbox, credentials, scopes, quotas, suivi des flux et assistance intégration.
+- **CAMPUS237 PARTNER API** : API versionnée que les prestataires intègrent à leurs solutions pour transmettre les informations autorisées et les événements utiles.
+- **CAMPUS237 FAMILY** : application parent qui consolide les informations des établissements CAMPUS237 et des établissements tiers connectés dans une seule expérience.
+- **CAMPUS237 PLATFORM ADMIN** : outils internes de vérification des prestataires, activation/révocation des connexions, supervision, audit et traitement des incidents.
+
+## 49.3 Informations pouvant être intégrées
+
+Le catalogue des données est configuré par établissement et par connecteur. Les catégories possibles comprennent :
+
+| Domaine | Informations pouvant être transmises |
+|---|---|
+| Identité scolaire | Identifiant externe de l'élève, établissement, année scolaire, cycle, niveau, classe et statut d'inscription |
+| Vie scolaire | Présences, absences, retards et justifications dont la diffusion au parent est autorisée |
+| Pédagogie | Emploi du temps, cours, devoirs, évaluations, notes validées et diffusées, bulletins publiés et progression autorisée |
+| Communication | Circulaires, annonces institutionnelles, convocations, rendez-vous et notifications destinées aux tuteurs |
+| Finance scolaire | Rubriques, échéances, statut de paiement et reçus internes ou officiels selon leur origine et leur nature ; les preuves de paiement restent distinctes d'un encaissement confirmé |
+| Services | Menu de cantine, transport, arrêts, statut du bus ou événements de montée/descente si le prestataire source gère ces fonctions et si le partage est autorisé |
+
+Le tableau ci-dessus est un catalogue fonctionnel de possibilités, pas une activation automatique de tous les champs. Chaque établissement active les catégories utiles, et chaque parent voit uniquement les informations de ses enfants auxquelles il a droit.
+
+Par défaut, ne sont pas transmis : dossiers médicaux détaillés, informations de santé non nécessaires, notes internes non destinées aux familles, dossiers disciplinaires confidentiels, échanges privés, données RH, données d'autres enfants, images de surveillance, informations de garde confidentielles ou toute donnée sensible sans finalité, base et autorisation spécifiques. Un traitement sensible supplémentaire ne peut être activé qu'après revue juridique, sécurité et protection des mineurs.
+
+## 49.4 Association d'un parent et d'un enfant externe
+
+Le système doit distinguer l'existence d'un compte parent de la preuve que ce parent est habilité à consulter le dossier d'un enfant.
+
+1. L'établissement ou son prestataire source émet une invitation, un QR ou un code d'association à usage limité.
+2. Le parent se connecte à CAMPUS237 FAMILY ou crée son compte.
+3. Il saisit ou scanne le code et confirme l'établissement et l'enfant concernés par un écran de vérification adapté.
+4. CAMPUS237 vérifie la correspondance auprès de la source autorisée et requiert les preuves supplémentaires définies par la politique de l'établissement.
+5. Le lien parent-enfant est créé avec un statut : proposé, en vérification, vérifié, suspendu ou révoqué.
+6. Les droits de chaque tuteur sont appliqués séparément ; un parent ne peut pas supprimer un droit de garde ou un accès légal appartenant à un autre responsable.
+7. Après validation, les données autorisées deviennent visibles dans CAMPUS237 FAMILY.
+8. En cas de doute, de conflit d'identité, de séparation ou de décision de garde, l'accès reste bloqué ou limité jusqu'à examen par l'acteur habilité.
+
+Un nom, un numéro de téléphone, une date de naissance ou un matricule local ne suffisent pas isolément à donner accès au dossier. Le prestataire ne peut pas décider seul des droits parentaux lorsque l'établissement doit vérifier la situation. La vérification du lien doit être traçable et révisable.
+
+## 49.5 API, événements et synchronisation
+
+Les interfaces doivent être documentées et versionnées. Les échanges s'effectuent de serveur à serveur sur un canal chiffré, au moyen de credentials dédiés et de permissions minimales.
+
+Les modes d'échange acceptés peuvent inclure :
+- API REST/JSON pour création, mise à jour, consultation de statuts et synchronisation incrémentale ;
+- webhooks ou événements signés pour notifier les changements importants, notamment publication d'une note, disponibilité d'un bulletin, nouvelle absence, changement d'emploi du temps ou nouvelle communication ;
+- synchronisation planifiée pour les prestataires ne disposant pas d'événements en temps réel ;
+- import initial contrôlé pour l'activation d'un établissement.
+
+Les contrats techniques doivent prévoir : version d'API, identifiants externes stables, pagination, filtres, horodatages, curseurs de synchronisation, idempotence, gestion des doublons, validation de schéma, codes d'erreur, reprise après incident, quotas, limitation de débit, rotation/révocation des secrets et journalisation.
+
+Les webhooks sont authentifiés et protégés contre les répétitions malveillantes. Une notification peut être livrée plusieurs fois sans créer plusieurs événements métier. Les données reçues sont validées avant publication dans l'espace parent. Les opérations d'écriture en retour dans le logiciel tiers ne sont pas activées par défaut ; elles nécessitent un contrat d'interface et des scopes distincts, ainsi qu'une recette dédiée.
+
+Les API ne doivent jamais exposer une clé secrète ou un jeton privilégié dans le code Android, dans l'application parent ou dans le terminal de l'élève. Les secrets sont stockés et renouvelés côté serveur.
+
+## 49.6 Provenance, cohérence et gestion des conflits
+
+Chaque enregistrement externe conserve au minimum :
+- le prestataire et l'établissement émetteurs ;
+- l'identifiant externe de la donnée et les références externes de l'élève ;
+- le type de donnée et la catégorie autorisée ;
+- la date de création ou d'émission à la source ;
+- la date de réception et de dernière synchronisation ;
+- le numéro de version ou la référence d'événement source ;
+- le statut de validation, de publication ou de correction connu ;
+- l'historique de synchronisation et les erreurs éventuelles.
+
+Le prestataire source reste responsable de la correction métier de sa donnée. Une correction reçue doit être rattachée à la version précédente et ne pas écraser silencieusement l'historique consultable ou auditable.
+
+CAMPUS237 ne fusionne pas automatiquement deux élèves sur la seule base d'informations textuelles approximatives. Les correspondances incertaines sont mises en file de vérification. Une contradiction entre sources est marquée comme telle ; une priorité de source n'est pas inventée. L'établissement et les prestataires définissent la source faisant autorité pour chaque catégorie dans le contrat et la configuration.
+
+La vue parentale identifie le prestataire, l'établissement et la fraîcheur de la donnée. Une donnée ancienne, une synchronisation en échec ou un service indisponible doit être signalé. Aucune donnée périmée ne doit être présentée comme « temps réel ».
+
+## 49.7 Confidentialité, sécurité et gouvernance
+
+Avant l'activation d'une intégration, les conditions suivantes sont obligatoires :
+
+- vérification du prestataire, de son représentant et de sa capacité à fournir les données ;
+- autorisation contractuelle de l'établissement concerné ;
+- détermination des rôles et responsabilités de chaque partie dans le traitement ;
+- définition de la finalité, des catégories, de la durée, des destinataires et des modalités de suppression ou de restitution ;
+- validation du lien parent-enfant par une source habilitée ;
+- séparation des établissements, des prestataires, des familles et des enfants ;
+- permissions limitées par organisation, établissement, catégorie et opération ;
+- chiffrement des échanges, gestion sécurisée des credentials, journaux d'accès et surveillance des anomalies ;
+- procédure de correction, opposition, limitation ou retrait selon les droits applicables ;
+- plan d'incident, notification et coopération entre les parties ;
+- test négatif démontrant qu'un prestataire ne peut consulter les données d'un autre établissement ou parent.
+
+Les contrats précisent qui est responsable de la qualité des données à la source, qui héberge les données reçues, qui répond aux demandes des parents, comment les incidents sont gérés et comment l'intégration prend fin. Un avis juridique compétent doit valider les rôles, les bases de traitement, les informations destinées aux familles et les transferts éventuels avant production.
+
+## 49.8 Fin de partenariat, suspension et révocation
+
+CAMPUS237 doit pouvoir suspendre un connecteur en cas d'incident, d'abus, de défaut de contrat, de compromission des credentials ou de demande justifiée de l'établissement.
+
+La révocation coupe les nouveaux appels, webhooks et synchronisations. Les accès du prestataire sont retirés et les credentials invalidés. Le traitement des données déjà reçues suit le contrat, la politique de conservation, les demandes recevables des personnes et les obligations légales ; les données ne sont ni effacées arbitrairement ni conservées indéfiniment sans justification.
+
+Le parent et l'établissement doivent pouvoir identifier la source des données et connaître le statut d'une connexion lorsqu'il affecte la disponibilité des informations. Le retrait d'un prestataire n'efface pas un document scolaire officiel qui doit être conservé légalement, mais n'autorise pas non plus une conservation sans finalité.
+
+## 49.9 Critères de recette obligatoires
+
+1. Un prestataire tiers vérifié peut obtenir un accès sandbox et intégrer l'API selon la documentation.
+2. Une connexion de production exige un contrat valide et l'autorisation de l'établissement concerné.
+3. Le même compte parent CAMPUS237 FAMILY peut regrouper un enfant provenant de CAMPUS237 SCHOOL et un autre enfant provenant d'un logiciel tiers connecté.
+4. Un parent ne voit jamais les données d'un enfant simplement parce qu'il connaît son nom, son matricule ou son numéro.
+5. Le lien parent-enfant provenant d'un système tiers doit être vérifié avant l'ouverture des données.
+6. Les restrictions de garde et les habilitations de chaque tuteur s'appliquent également aux données tierces.
+7. Un établissement peut autoriser certaines catégories de données et en refuser d'autres.
+8. Chaque donnée externe visible indique sa source, son établissement émetteur et sa dernière date de synchronisation.
+9. Une absence, une note ou un bulletin non publié à la source ne devient pas visible comme donnée publiée.
+10. Un webhook non authentifié, expiré, rejoué ou mal formé est rejeté ou mis en quarantaine.
+11. La répétition d'un même événement n'entraîne aucun doublon.
+12. Un retard de synchronisation est signalé au parent et dans l'espace d'administration.
+13. Un conflit d'identité ne fusionne pas automatiquement deux dossiers d'élèves.
+14. Un parent ou un établissement ne peut pas accéder aux données d'un autre tenant en modifiant une référence d'API.
+15. La révocation d'un connecteur stoppe les nouveaux flux et invalide ses credentials.
+16. Les accès, exportations, erreurs et révocations sont enregistrés dans le journal d'audit.
+17. Aucune donnée médicale détaillée, discipline confidentielle, message privé ou image de surveillance n'est partagée par défaut.
+18. Le système fonctionne avec une synchronisation incrémentale et reprend après interruption sans perte ni doublon.
+19. La donnée source et la donnée affichée peuvent être rapprochées à partir de leurs identifiants et de leur historique.
+20. Les fonctions parentales essentielles restent accessibles selon la grille ACCESS/PREMIUM ; l'arrivée d'un connecteur externe ne modifie pas les droits légaux du parent ni les tarifs décidés en V3.0.3.
+
+## 49.10 Arbitrages encore ouverts
+
+L'orientation fonctionnelle et le principe d'interopérabilité sont validés. Restent à spécifier avant ouverture commerciale et mise en production :
+- tarification éventuelle des connecteurs et des volumes API ;
+- quotas, SLA, fréquence de synchronisation et limites de charge ;
+- catalogue définitif des champs et formats d'échange ;
+- critères techniques de certification et processus de mise à jour des versions API ;
+- règles contractuelles détaillées de responsabilité, assistance et réversibilité ;
+- durée de conservation par catégorie et politique de retrait ;
+- sélection des premiers prestataires partenaires et calendrier d'intégration.
+
+Ces paramètres sont inscrits sous A-036 et ne remettent pas en cause la décision produit d'ouverture aux logiciels scolaires tiers.
+
+**Fin de l'addendum CAMPUS237 V3.0.4.**
