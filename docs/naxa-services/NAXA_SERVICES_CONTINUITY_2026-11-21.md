@@ -595,3 +595,16 @@ Cette clôture remplace le verdict d'entrée PARTIEL de la section 18 et confirm
 - `main` n'a pas été modifiée par cette passe. Son HEAD observé après les avancées indépendantes est `a229f62b41ddffbf4dc923fe4a90d36edbcca927`.
 - Le passage de N3 logiciel/CI vert à l'activation d'un environnement NAXA Services dédié constitue une étape de déploiement séparée, pas un défaut du gate N3.
 
+
+
+## 20. Lancement et audit N4 Web/PWA — 22 novembre 2026
+
+Le gate N4 est ouvert en audit sur `work/naxa-services-completion-20261120`. Le rapport détaillé est `docs/naxa-services/NAXA_SERVICES_N4_WEB_PWA_AUDIT_2026-11-22.md`.
+
+**Verdict : N4 PARTIEL — non fermé.** Le contrôle du code confirme l'authentification Web et un vertical slice de création d'article de stock avec IndexedDB, action serveur `save_inventory_item` et reçu vérifié. En revanche, agenda, pressing, caisse, services, CRM, équipe, organisation/sites/postes et une grande partie des rapports restent en aperçu local ou sans raccordement métier démontré. `addLocalEntry()` ne fait qu'ajouter à l'état React ; les transitions pressing et plusieurs réglages sont locaux.
+
+L'Edge Accounting expose actuellement les actions `pull_sync_changes`, `apply_sync_event`, `save_inventory_item`, `record_inventory_movement`, `save_supplier`, `create_supplier_purchase`, `receive_supplier_purchase_line`, `record_supplier_payment`, `post_sale_inventory`, `create_performance_objective` et `performance`. Cette liste ne constitue pas une couverture des 44 mutations du registre N1. La définition de sortie du gate N2 reste PARTIEL tant que chaque handler transactionnel, reçu atomique, idempotence, scopes et tests négatifs n'est pas prouvé. La parité des 92 codes d'action Android/Edge ne doit pas être confondue avec 92 handlers métier.
+
+Ordre de fermeture : N4-A handlers serveur réellement disponibles (dépendance N2), N4-B couche de données Web et pull entrant, N4-C raccordement écran par écran, N4-D recette navigateur/PostgreSQL et convergence Web↔Android. Les actions sans handler restent fail-closed ; aucun événement générique ne remplace un contrat métier absent.
+
+Garde-fous inchangés : branche de travail uniquement, aucun changement de `main`, aucun déploiement, aucune migration sur le Supabase historique NAXA/pharmacie, aucun secret dans Git. Le rapport est un audit documentaire, pas une validation CI ni une clôture fonctionnelle N4.
