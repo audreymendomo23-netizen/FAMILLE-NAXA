@@ -1153,6 +1153,9 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_loyalty_events WHERE id = :eventId AND orgId = :orgId LIMIT 1")
     suspend fun findLoyaltyEventById(orgId: String, eventId: String): LocalLoyaltyEvent?
 
+    @Query("DELETE FROM local_loyalty_events WHERE orgId = :orgId AND siteId = :siteId AND relatedEventId = :activityEventId AND eventType = 'reward_earned'")
+    suspend fun deleteLoyaltyRewardsForActivity(orgId: String, siteId: String, activityEventId: String): Int
+
     @Query("UPDATE local_loyalty_events SET rewardStatus = 'redeemed' WHERE id = :eventId AND orgId = :orgId AND siteId = :siteId AND eventType = 'reward_earned' AND rewardStatus = 'available'")
     suspend fun redeemLoyaltyReward(eventId: String, orgId: String, siteId: String): Int
 
@@ -1631,6 +1634,51 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         inserted
     }
 
+
+    /**
+     * Reconciles server-generated side effects on the originating device without replaying
+     * the already-applied business mutation. Required for canonical IDs created by the server.
+     */
+    suspend fun applyCanonicalServerEffects(
+        event: LocalOutboxEvent,
+        payload: JSONObject,
+        result: JSONObject
+    ): Boolean = database.withTransaction {
+        if (event.actionCode != "loyalty_activity.recorded") return@withTransaction true
+        val activityId = payload.optString("activity_event_id").takeIf { it.isNotBlank() } ?: event.aggregateId
+        val activity = dao.findLoyaltyEventById(event.orgId, activityId) ?: return@withTransaction false
+        if (activity.eventType != "activity") return@withTransaction false
+        val rewards = result.optJSONArray("reward_events") ?: return@withTransaction false
+        dao.upsertRemoteLoyaltyEvent(
+            activity.copy(metricDelta = result.optLong("metric_delta", activity.metricDelta))
+        )
+        dao.deleteLoyaltyRewardsForActivity(event.orgId, activity.siteId, activityId)
+        for (index in 0 until rewards.length()) {
+            val reward = rewards.optJSONObject(index) ?: return@withTransaction false
+            val rewardId = reward.optString("event_id")
+            val wave = reward.optInt("wave_number", 0)
+            if (rewardId.isBlank() || wave <= 0) return@withTransaction false
+            dao.upsertRemoteLoyaltyEvent(
+                LocalLoyaltyEvent(
+                    id = rewardId,
+                    orgId = event.orgId,
+                    siteId = activity.siteId,
+                    programId = activity.programId,
+                    customerId = activity.customerId,
+                    eventType = "reward_earned",
+                    amountXaf = 0L,
+                    metricDelta = 0L,
+                    waveNumber = wave,
+                    relatedEventId = activityId,
+                    rewardStatus = reward.optString("reward_status", "available"),
+                    description = reward.optString("description"),
+                    actorMemberId = activity.actorMemberId,
+                    createdAtMillis = System.currentTimeMillis()
+                )
+            )
+        }
+        true
+    }
 
     suspend fun saveSupplier(
         orgId: String, siteId: String, name: String, phone: String, whatsapp: String,
