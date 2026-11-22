@@ -1491,13 +1491,13 @@ group by org_id, site_id, date_trunc('year', performance_day)::date;
 
 grant select on public.ns_performance_daily, public.ns_performance_monthly, public.ns_performance_annual to authenticated, service_role;
 
-revoke all on function public.ns_save_inventory_item(uuid,uuid,uuid,text,text,text,numeric,text) from public,anon;
-grant execute on function public.ns_save_inventory_item(uuid,uuid,uuid,text,text,text,numeric,text) to authenticated,service_role;
-revoke all on function public.ns_record_inventory_movement(uuid,uuid,uuid,uuid,text,numeric,text) from public,anon;
-grant execute on function public.ns_record_inventory_movement(uuid,uuid,uuid,uuid,text,numeric,text) to authenticated,service_role;
+revoke all on function public.ns_save_inventory_item(uuid,uuid,uuid,text,text,text,numeric,text) from public, anon, authenticated;
+grant execute on function public.ns_save_inventory_item(uuid,uuid,uuid,text,text,text,numeric,text) to service_role;
+revoke all on function public.ns_record_inventory_movement(uuid,uuid,uuid,uuid,text,numeric,text) from public, anon, authenticated;
+grant execute on function public.ns_record_inventory_movement(uuid,uuid,uuid,uuid,text,numeric,text) to service_role;
 
-revoke all on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) from public, anon;
-grant execute on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) to authenticated, service_role;
+revoke all on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) from public, anon, authenticated;
+grant execute on function public.ns_post_sale_inventory(uuid,uuid,uuid,uuid) to service_role;
 
 
 
@@ -4124,16 +4124,16 @@ revoke all on function public.ns_apply_sync_event(uuid,uuid,uuid,uuid,uuid,bigin
 grant execute on function public.ns_apply_sync_event(uuid,uuid,uuid,uuid,uuid,bigint,text,text,text,jsonb) to authenticated, service_role;
 
 
-revoke all on function public.ns_save_supplier(uuid,uuid,uuid,text,text,text,text,text,integer,text) from public, anon;
-grant execute on function public.ns_save_supplier(uuid,uuid,uuid,text,text,text,text,text,integer,text) to authenticated, service_role;
-revoke all on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,uuid,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) from public, anon;
-grant execute on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,uuid,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) to authenticated, service_role;
+revoke all on function public.ns_save_supplier(uuid,uuid,uuid,text,text,text,text,text,integer,text) from public, anon, authenticated;
+grant execute on function public.ns_save_supplier(uuid,uuid,uuid,text,text,text,text,text,integer,text) to service_role;
+revoke all on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,uuid,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) from public, anon, authenticated;
+grant execute on function public.ns_create_supplier_purchase(uuid,uuid,uuid,text,text,uuid,text,jsonb,bigint,bigint,bigint,bigint,timestamptz,text) to service_role;
 revoke all on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) from public, anon, authenticated;
 grant execute on function public.ns_post_accounting_entry(uuid,uuid,text,uuid,text,text,text,bigint,text) to service_role;
-revoke all on function public.ns_receive_supplier_purchase_line(uuid,uuid,uuid,uuid,numeric,uuid,text) from public, anon;
-grant execute on function public.ns_receive_supplier_purchase_line(uuid,uuid,uuid,uuid,numeric,uuid,text) to authenticated, service_role;
-revoke all on function public.ns_record_supplier_payment(uuid,uuid,uuid,bigint,text,uuid,text,uuid,text) from public, anon;
-grant execute on function public.ns_record_supplier_payment(uuid,uuid,uuid,bigint,text,uuid,text,uuid,text) to authenticated, service_role;
+revoke all on function public.ns_receive_supplier_purchase_line(uuid,uuid,uuid,uuid,numeric,uuid,text) from public, anon, authenticated;
+grant execute on function public.ns_receive_supplier_purchase_line(uuid,uuid,uuid,uuid,numeric,uuid,text) to service_role;
+revoke all on function public.ns_record_supplier_payment(uuid,uuid,uuid,bigint,text,uuid,text,uuid,text) from public, anon, authenticated;
+grant execute on function public.ns_record_supplier_payment(uuid,uuid,uuid,bigint,text,uuid,text,uuid,text) to service_role;
 revoke all on function public.ns_create_performance_objective(uuid,uuid,text,date,date,bigint,text) from public, anon;
 grant execute on function public.ns_create_performance_objective(uuid,uuid,text,date,date,bigint,text) to authenticated, service_role;
 
