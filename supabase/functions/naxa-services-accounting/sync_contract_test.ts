@@ -348,3 +348,23 @@ Deno.test("atomic sync validates appointment create, status and reschedule comma
     if(normalized.aggregate_id!==id||normalized.action_code!==action)throw new Error("Appointment action mismatch");
   }
 });
+
+
+Deno.test("atomic sync envelope validates cash session open/close and expense commands", () => {
+  const cash="88888888-8888-4888-8888-888888888900";
+  const expense="88888888-8888-4888-8888-888888888901";
+  const actions=[
+    ["cash_session.opened","cash_session",cash,"cash_session_id"],
+    ["expense.created","expense",expense,"expense_id"],
+    ["cash_session.closed","cash_session",cash,"cash_session_id"]
+  ] as const;
+  for(const [action,aggregate,id,idField] of actions){
+    const normalized=normalizeAtomicSyncEvent({
+      event_id:SYNC_EVENT,device_id:SYNC_DEVICE,device_sequence:70,
+      org_id:ORG_A,site_id:SITE_A,workstation_id:null,
+      aggregate_type:aggregate,aggregate_id:id,action_code:action,
+      payload:{[idField]:id,org_id:ORG_A,site_id:SITE_A}
+    });
+    if(normalized.aggregate_id!==id||normalized.action_code!==action)throw new Error("Cash action mismatch: "+action);
+  }
+});
