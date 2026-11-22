@@ -512,6 +512,51 @@ BEGIN
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM <> 'NAXA_SUPPLIER_SAVE_INVALID' THEN RAISE; END IF;
   END;
+
+  -- Device sequence is monotonic across successful events, independently per registered device.
+  v_first := public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,
+    null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    '95000000-0000-4000-8000-000000000004'::uuid,
+    9,'supplier','94000000-0000-4000-8000-000000000004',
+    'supplier.saved',
+    v_payload || jsonb_build_object(
+      'supplier_id','94000000-0000-4000-8000-000000000004',
+      'name','Fournisseur séquence CI'
+    )
+  );
+  IF v_first->>'status' <> 'applied' THEN
+    RAISE EXCEPTION 'ATOMIC_SYNC_SEQUENCE_FORWARD_NOT_APPLIED: %',v_first;
+  END IF;
+
+  v_rejected:=false;
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,
+      null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      '95000000-0000-4000-8000-000000000005'::uuid,
+      8,'supplier','94000000-0000-4000-8000-000000000005',
+      'supplier.saved',
+      v_payload || jsonb_build_object(
+        'supplier_id','94000000-0000-4000-8000-000000000005',
+        'name','Fournisseur séquence inversée'
+      )
+    );
+    RAISE EXCEPTION 'ATOMIC_SYNC_OUT_OF_ORDER_DEVICE_EVENT_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM='NAXA_SYNC_DEVICE_SEQUENCE_NOT_MONOTONIC' THEN
+      v_rejected:=true;
+    ELSE
+      RAISE;
+    END IF;
+  END;
+  IF NOT v_rejected THEN
+    RAISE EXCEPTION 'ATOMIC_SYNC_OUT_OF_ORDER_DEVICE_EVENT_NOT_REJECTED';
+  END IF;
 END
 $atomic_sync$;
 RESET ROLE;

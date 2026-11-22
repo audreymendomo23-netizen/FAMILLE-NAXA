@@ -3101,6 +3101,12 @@ grant execute on function public.ns_create_inventory_transfer(uuid,uuid,uuid,uui
 revoke all on function public.ns_receive_inventory_transfer(uuid,uuid,uuid,uuid,uuid,uuid,text,text,numeric,integer,text,timestamptz) from public,anon,authenticated;
 grant execute on function public.ns_receive_inventory_transfer(uuid,uuid,uuid,uuid,uuid,uuid,text,text,numeric,integer,text,timestamptz) to service_role;
 
+-- Per-device sequence is server-enforced under a row lock; gaps are allowed because
+-- local derived/composite events are intentionally not transmitted.
+alter table public.ns_devices
+  add column if not exists last_sync_sequence bigint not null default 0
+  check (last_sync_sequence >= 0);
+
 create or replace function public.ns_apply_sync_event(
   p_org_id uuid,
   p_site_id uuid,
@@ -3154,7 +3160,7 @@ begin
     and d.account_id = v_account_id
     and d.session_id = v_session_id
     and d.revoked_at is null
-  for share;
+  for update;
   if not found then raise exception 'NAXA_SYNC_DEVICE_NOT_REGISTERED'; end if;
 
   if p_action_code = 'loyalty_program.updated' then
@@ -3339,6 +3345,18 @@ begin
     end if;
     return v_existing.response_json || jsonb_build_object('idempotent', true);
   end if;
+
+  if p_device_sequence <= coalesce(v_device.last_sync_sequence, 0) then
+    raise exception 'NAXA_SYNC_DEVICE_SEQUENCE_NOT_MONOTONIC';
+  end if;
+
+  update public.ns_devices
+     set last_sync_sequence = p_device_sequence
+   where id = p_device_id
+     and account_id = v_account_id
+     and session_id = v_session_id
+     and revoked_at is null;
+  if not found then raise exception 'NAXA_SYNC_DEVICE_NOT_REGISTERED'; end if;
 
   insert into public.ns_sync_receipts(
     org_id, site_id, workstation_id, device_id, member_id,
