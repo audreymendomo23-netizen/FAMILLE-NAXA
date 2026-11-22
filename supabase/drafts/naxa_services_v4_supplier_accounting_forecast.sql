@@ -2010,6 +2010,195 @@ grant execute on function public.ns_record_expense(uuid,uuid,uuid,uuid,text,text
 revoke all on function public.ns_close_cash_session(uuid,uuid,uuid,bigint,text,timestamptz) from public,anon;
 grant execute on function public.ns_close_cash_session(uuid,uuid,uuid,bigint,text,timestamptz) to authenticated,service_role;
 
+
+create or replace function public.ns_create_sale(
+  p_sale_id uuid,p_org_id uuid,p_site_id uuid,p_workstation_id uuid,
+  p_cash_session_id uuid,p_sale_number text,p_description text,p_total_xaf bigint,
+  p_payment_method text,p_expected_status text,p_inventory_item_id uuid,
+  p_stock_quantity numeric,p_created_at timestamptz,p_event_id uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_cash_session public.ns_cash_sessions%rowtype;
+  v_item public.ns_inventory_items%rowtype;
+  v_reserved numeric(14,3);
+  v_sale_status text;
+  v_payment_status text;
+  v_payment_id uuid;
+  v_posting jsonb;
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_SALE_FORBIDDEN';
+  end if;
+  if p_sale_id is null or p_event_id is null
+     or length(trim(coalesce(p_sale_number,''))) not between 3 and 100
+     or length(trim(coalesce(p_description,''))) not between 2 and 500
+     or p_total_xaf is null or p_total_xaf<=0 or p_created_at is null
+     or p_payment_method not in ('cash','mobile_money')
+     or p_expected_status not in ('confirmed','pending')
+     or (p_payment_method='cash' and p_expected_status<>'confirmed')
+     or (p_payment_method='mobile_money' and p_expected_status<>'pending')
+     or ((p_inventory_item_id is null) <> (p_stock_quantity is null))
+     or (p_stock_quantity is not null and p_stock_quantity<=0) then
+    raise exception 'NAXA_SALE_INVALID';
+  end if;
+
+  select * into v_cash_session
+  from public.ns_cash_sessions
+  where id=p_cash_session_id and org_id=p_org_id and site_id=p_site_id
+  for update;
+  if not found or v_cash_session.status<>'open' then
+    raise exception 'NAXA_SALE_CASH_SESSION_NOT_OPEN';
+  end if;
+
+  if p_workstation_id is not null and (
+    not exists(select 1 from public.ns_workstations w
+      where w.id=p_workstation_id and w.org_id=p_org_id
+        and w.site_id=p_site_id and w.status='active')
+    or not public.ns_can_operate_workstation(p_org_id,p_site_id,p_workstation_id)
+  ) then raise exception 'NAXA_SALE_WORKSTATION_FORBIDDEN'; end if;
+
+  if p_inventory_item_id is not null then
+    select * into v_item from public.ns_inventory_items
+     where id=p_inventory_item_id and org_id=p_org_id and site_id=p_site_id and active
+     for update;
+    if not found then raise exception 'NAXA_SALE_INVENTORY_ITEM_NOT_FOUND'; end if;
+
+    select coalesce(sum(sl.quantity),0)::numeric(14,3) into v_reserved
+    from public.ns_sale_lines sl
+    join public.ns_sales s on s.id=sl.sale_id
+      and s.org_id=sl.org_id and s.site_id=sl.site_id
+    where sl.org_id=p_org_id and sl.site_id=p_site_id
+      and sl.inventory_item_id=p_inventory_item_id
+      and sl.item_type='stock' and s.status='draft';
+    if v_item.quantity-v_reserved<p_stock_quantity then
+      raise exception 'NAXA_SALE_STOCK_RESERVED_OR_INSUFFICIENT';
+    end if;
+  end if;
+
+  v_sale_status:=case when p_payment_method='cash' then 'posted' else 'draft' end;
+  v_payment_status:=case when p_payment_method='cash' then 'confirmed' else 'pending' end;
+  insert into public.ns_sales(
+    id,org_id,site_id,workstation_id,customer_id,cash_session_id,sale_number,
+    subtotal_xaf,discount_xaf,total_xaf,status,created_by,created_at
+  ) values (
+    p_sale_id,p_org_id,p_site_id,p_workstation_id,null,p_cash_session_id,
+    trim(p_sale_number),p_total_xaf,0,p_total_xaf,v_sale_status,v_member,p_created_at
+  );
+
+  insert into public.ns_sale_lines(
+    id,org_id,site_id,sale_id,item_type,inventory_item_id,description,
+    quantity,unit_price_xaf,discount_xaf,idempotency_key
+  ) values (
+    gen_random_uuid(),p_org_id,p_site_id,p_sale_id,
+    case when p_inventory_item_id is null then 'service' else 'stock' end,
+    p_inventory_item_id,trim(p_description),
+    coalesce(p_stock_quantity,1),p_total_xaf,0,p_event_id
+  );
+
+  v_payment_id:=gen_random_uuid();
+  insert into public.ns_payments(
+    id,org_id,site_id,sale_id,pressing_order_id,payment_method,
+    provider_reference,amount_xaf,status,confirmation_source,
+    confirmed_by,confirmed_at,idempotency_key,created_at
+  ) values (
+    v_payment_id,p_org_id,p_site_id,p_sale_id,null,p_payment_method,
+    null,p_total_xaf,v_payment_status,
+    case when p_payment_method='cash' then 'cash_register' else null end,
+    case when p_payment_method='cash' then v_member else null end,
+    case when p_payment_method='cash' then p_created_at else null end,
+    p_event_id,p_created_at
+  );
+
+  if p_payment_method='cash' then
+    v_posting:=public.ns_post_sale_inventory(p_org_id,p_site_id,p_sale_id,p_event_id);
+  else
+    v_posting:=jsonb_build_object('status','awaiting_verified_provider_confirmation',
+      'sale_id',p_sale_id,'payment_id',v_payment_id);
+  end if;
+
+  return jsonb_build_object(
+    'sale_id',p_sale_id,'sale_number',p_sale_number,'status',p_expected_status,
+    'server_status',v_sale_status,'payment_id',v_payment_id,
+    'payment_status',v_payment_status,'inventory_posting',v_posting,'created',true
+  );
+end;
+$naxa$;
+
+create or replace function public.ns_cancel_pending_mobile_money_sale(
+  p_sale_id uuid,p_org_id uuid,p_site_id uuid,p_expected_status text,
+  p_reason text,p_cancelled_at timestamptz
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_sale public.ns_sales%rowtype;
+  v_payment public.ns_payments%rowtype;
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_SALE_CANCEL_FORBIDDEN';
+  end if;
+  if p_sale_id is null or p_expected_status<>'pending'
+     or length(trim(coalesce(p_reason,''))) not between 3 and 500
+     or p_cancelled_at is null then
+    raise exception 'NAXA_SALE_CANCEL_INVALID';
+  end if;
+  select * into v_sale from public.ns_sales
+   where id=p_sale_id and org_id=p_org_id and site_id=p_site_id
+   for update;
+  if not found then raise exception 'NAXA_SALE_NOT_FOUND'; end if;
+  if v_sale.status<>'draft' then raise exception 'NAXA_SALE_NOT_PENDING'; end if;
+
+  select * into v_payment from public.ns_payments
+   where sale_id=p_sale_id and org_id=p_org_id and site_id=p_site_id
+   order by created_at desc,id desc limit 1 for update;
+  if not found or v_payment.payment_method<>'mobile_money' or v_payment.status<>'pending' then
+    raise exception 'NAXA_SALE_PAYMENT_ALREADY_FINAL';
+  end if;
+
+  update public.ns_payments
+   set status='failed',confirmation_source='cancelled_before_provider_confirmation'
+   where id=v_payment.id and org_id=p_org_id and site_id=p_site_id;
+  update public.ns_sales
+   set status='voided'
+   where id=p_sale_id and org_id=p_org_id and site_id=p_site_id;
+
+  insert into public.ns_audit_events(
+    id,org_id,site_id,actor_auth_user_id,actor_member_id,
+    action_code,object_type,object_id,reason,metadata_redacted,occurred_at
+  ) values (
+    gen_random_uuid(),p_org_id,p_site_id,auth.uid(),v_member,
+    'sale.mobile_money_cancelled','sale',p_sale_id,trim(p_reason),
+    jsonb_build_object('payment_id',v_payment.id,'payment_status_from','pending','sale_status_to','voided'),
+    greatest(p_cancelled_at,v_sale.created_at)
+  );
+
+  return jsonb_build_object(
+    'sale_id',p_sale_id,'status','cancelled','server_status','voided',
+    'payment_id',v_payment.id,'payment_status','failed','reservation_released',true
+  );
+end;
+$naxa$;
+
+revoke insert,update,delete on public.ns_sales,public.ns_payments,public.ns_sale_lines
+  from public,anon,authenticated;
+grant select on public.ns_sales,public.ns_payments,public.ns_sale_lines to authenticated;
+grant all on public.ns_sales,public.ns_payments,public.ns_sale_lines to service_role;
+
+revoke all on function public.ns_create_sale(uuid,uuid,uuid,uuid,uuid,text,text,bigint,text,text,uuid,numeric,timestamptz,uuid) from public,anon;
+grant execute on function public.ns_create_sale(uuid,uuid,uuid,uuid,uuid,text,text,bigint,text,text,uuid,numeric,timestamptz,uuid) to authenticated,service_role;
+revoke all on function public.ns_cancel_pending_mobile_money_sale(uuid,uuid,uuid,text,text,timestamptz) from public,anon;
+grant execute on function public.ns_cancel_pending_mobile_money_sale(uuid,uuid,uuid,text,text,timestamptz) to authenticated,service_role;
+
 create or replace function public.ns_apply_sync_event(
   p_org_id uuid,
   p_site_id uuid,
@@ -2113,6 +2302,12 @@ begin
     when p_action_code = 'customer.created' then 'customer'
     when p_action_code like 'customer_followup.%' then 'customer_followup'
     when p_action_code = 'support_request.created' then 'support_request'
+    when p_action_code = 'pressing_order.created' then 'pressing_order'
+    when p_action_code like 'pressing_order.status_changed:%' then 'pressing_order'
+    when p_action_code like 'appointment.%' then 'appointment'
+    when p_action_code like 'cash_session.%' then 'cash_session'
+    when p_action_code = 'expense.created' then 'expense'
+    when p_action_code in ('sale.created','sale.mobile_money_cancelled') then 'sale'
     when p_action_code like 'inventory_valuation.%' then 'inventory_valuation'
     else null
   end;
@@ -2138,6 +2333,11 @@ begin
     when p_action_code = 'customer.created' then p_payload->>'customer_id'
     when p_action_code like 'customer_followup.%' then p_payload->>'followup_id'
     when p_action_code = 'support_request.created' then p_payload->>'request_id'
+    when p_action_code like 'pressing_order.%' then p_payload->>'order_id'
+    when p_action_code like 'appointment.%' then p_payload->>'appointment_id'
+    when p_action_code like 'cash_session.%' then p_payload->>'cash_session_id'
+    when p_action_code = 'expense.created' then p_payload->>'expense_id'
+    when p_action_code in ('sale.created','sale.mobile_money_cancelled') then p_payload->>'sale_id'
     when p_action_code like 'inventory_valuation.%' then p_payload->>'inventory_item_id'
     else null
   end;
@@ -2381,6 +2581,100 @@ begin
         (p_payload->>'unit_cost_xaf')::bigint,
         (p_payload->>'selling_price_xaf')::bigint,
         (p_payload->>'expected_version')::integer
+      );
+    when 'pressing_order.created' then
+      v_result := public.ns_create_pressing_order(
+        (p_payload->>'order_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'workstation_id','')::uuid,
+        p_payload->>'ticket_number',p_payload->>'customer_name',
+        coalesce(p_payload->>'customer_phone',''),p_payload->>'items_summary',
+        (p_payload->>'total_xaf')::bigint,(p_payload->>'deposit_xaf')::bigint,
+        nullif(p_payload->>'promised_at','')::timestamptz
+      );
+    when 'pressing_order.status_changed:in_progress' then
+      v_result := public.ns_transition_pressing_order(
+        (p_payload->>'order_id')::uuid,p_org_id,p_site_id,
+        p_payload->>'from_status','in_progress',p_payload->>'reason',
+        (p_payload->>'expected_version')::integer,
+        nullif(p_payload->>'transitioned_at','')::timestamptz
+      );
+    when 'pressing_order.status_changed:ready' then
+      v_result := public.ns_transition_pressing_order(
+        (p_payload->>'order_id')::uuid,p_org_id,p_site_id,
+        p_payload->>'from_status','ready',p_payload->>'reason',
+        (p_payload->>'expected_version')::integer,
+        nullif(p_payload->>'transitioned_at','')::timestamptz
+      );
+    when 'pressing_order.status_changed:picked_up' then
+      v_result := public.ns_transition_pressing_order(
+        (p_payload->>'order_id')::uuid,p_org_id,p_site_id,
+        p_payload->>'from_status','picked_up',p_payload->>'reason',
+        (p_payload->>'expected_version')::integer,
+        nullif(p_payload->>'transitioned_at','')::timestamptz
+      );
+    when 'appointment.created' then
+      v_result := public.ns_create_appointment(
+        (p_payload->>'appointment_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'workstation_id','')::uuid,
+        p_payload->>'customer_reference_or_name',
+        p_payload->>'service_reference_or_name',
+        (p_payload->>'assigned_member_id')::uuid,
+        (p_payload->>'starts_at')::timestamptz,(p_payload->>'ends_at')::timestamptz,
+        coalesce((p_payload->>'deposit_xaf')::bigint,0),
+        coalesce(p_payload->>'status','booked')
+      );
+    when 'appointment.status_changed' then
+      v_result := public.ns_transition_appointment(
+        (p_payload->>'appointment_id')::uuid,p_org_id,p_site_id,
+        p_payload->>'from_status',p_payload->>'to_status',p_payload->>'reason',
+        (p_payload->>'expected_version')::integer,
+        nullif(p_payload->>'transitioned_at','')::timestamptz
+      );
+    when 'appointment.rescheduled' then
+      v_result := public.ns_reschedule_appointment(
+        (p_payload->>'appointment_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'workstation_id','')::uuid,
+        (p_payload->>'starts_at')::timestamptz,(p_payload->>'ends_at')::timestamptz,
+        nullif(p_payload->>'assigned_member_id','')::uuid,
+        (p_payload->>'expected_version')::integer,p_payload->>'reason'
+      );
+    when 'cash_session.opened' then
+      v_result := public.ns_open_cash_session(
+        (p_payload->>'cash_session_id')::uuid,p_org_id,p_site_id,
+        (p_payload->>'register_id')::uuid,p_payload->>'register_name',
+        (p_payload->>'opening_float_xaf')::bigint,
+        (p_payload->>'opened_at')::timestamptz
+      );
+    when 'expense.created' then
+      v_result := public.ns_record_expense(
+        (p_payload->>'expense_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'cash_session_id','')::uuid,p_payload->>'category',
+        p_payload->>'description',(p_payload->>'amount_xaf')::bigint,
+        (p_payload->>'occurred_at')::timestamptz,
+        coalesce((p_payload->>'idempotency_key')::uuid,p_event_id)
+      );
+    when 'cash_session.closed' then
+      v_result := public.ns_close_cash_session(
+        (p_payload->>'cash_session_id')::uuid,p_org_id,p_site_id,
+        (p_payload->>'counted_close_xaf')::bigint,
+        coalesce(p_payload->>'variance_reason',''),
+        (p_payload->>'closed_at')::timestamptz
+      );
+    when 'sale.created' then
+      v_result := public.ns_create_sale(
+        (p_payload->>'sale_id')::uuid,p_org_id,p_site_id,p_workstation_id,
+        (p_payload->>'cash_session_id')::uuid,p_payload->>'sale_number',
+        p_payload->>'description',(p_payload->>'total_xaf')::bigint,
+        p_payload->>'payment_method',p_payload->>'status',
+        nullif(p_payload->>'inventory_item_id','')::uuid,
+        nullif(p_payload->>'stock_quantity','')::numeric,
+        (p_payload->>'created_at')::timestamptz,p_event_id
+      );
+    when 'sale.mobile_money_cancelled' then
+      v_result := public.ns_cancel_pending_mobile_money_sale(
+        (p_payload->>'sale_id')::uuid,p_org_id,p_site_id,
+        coalesce(p_payload->>'expected_status','pending'),
+        p_payload->>'reason',(p_payload->>'cancelled_at')::timestamptz
       );
     when 'loyalty_reward.redeemed' then
       if not public.ns_redeem_loyalty_reward(
