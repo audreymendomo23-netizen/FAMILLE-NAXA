@@ -130,9 +130,9 @@ assert.deepEqual(
 );
 assert.ok(actualSupported.length > 0 && actualSupported.length <= 92, "Coordinator action coverage is outside the registry contract.");
 
-const edgeActionsBlock = edgeContract.match(/const ATOMIC_SYNC_ACTIONS:[\\s\\S]*?=\\s*\\{([\\s\\S]*?)\\n\\};/);
+const edgeActionsBlock = edgeContract.match(/const ATOMIC_SYNC_ACTIONS:[\s\S]*?=\s*\{([\s\S]*?)\n\};/);
 assert.ok(edgeActionsBlock, "Cannot read the Edge atomic sync action allowlist.");
-const edgeSupported = [...edgeActionsBlock[1].matchAll(/^\\s*"([^"]+)":\\s*\\{/gm)]
+const edgeSupported = [...edgeActionsBlock[1].matchAll(/^\s*"([^"]+)":\s*\{/gm)]
   .map(match => match[1]).sort();
 assert.deepEqual(
   actualSupported,
