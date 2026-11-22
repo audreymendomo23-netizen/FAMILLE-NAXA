@@ -379,17 +379,13 @@ async function changePassword(body: Record<string, unknown>, token: string) {
     headers: serviceHeaders({ Prefer: "return=minimal" }),
     body: JSON.stringify({ password_change_required: false }),
   });
-  return {
-    status: 200,
-    body: {
-      access_token: token,
-      refresh_token: body.refresh_token,
-      expires_in: 1800,
-      token_type: "bearer",
-      require_password_change: false,
-      account: await accountSummary(account),
-    },
-  };
+  const refreshedSession = await sessionPayload({
+    access_token: token,
+    refresh_token: body.refresh_token,
+    expires_in: 1800,
+    token_type: "bearer",
+  }, { ...account, password_change_required: false });
+  return { status: 200, body: { ...refreshedSession, require_password_change: false } };
 }
 
 async function accountSummary(account: Record<string, unknown>) {

@@ -302,7 +302,7 @@ function App() {
       const data=await response.json().catch(()=>({})) as Record<string,unknown>;
       if(!response.ok||data.ok!==true||!data.result||typeof data.result!=="object")throw new Error(typeof data.error==="string"?data.error:"WEB_SYNC_PULL_FAILED");
       const page=data.result as {changes?:WebSyncChange[];next_cursor?:number;has_more?:boolean};
-      if(!Array.isArray(page.changes)||!Number.isSafeInteger(page.next_cursor)||typeof page.has_more!=="boolean"||page.next_cursor<cursor)throw new Error("WEB_SYNC_PULL_INVALID_PAGE");
+      if(!Array.isArray(page.changes)||typeof page.next_cursor!=="number"||!Number.isSafeInteger(page.next_cursor)||typeof page.has_more!=="boolean"||page.next_cursor<cursor)throw new Error("WEB_SYNC_PULL_INVALID_PAGE");
       await applySyncPage(OFFLINE_APP_ID,fresh.deviceId,{changes:page.changes,next_cursor:page.next_cursor,has_more:page.has_more});
       received+=page.changes.length;cursor=page.next_cursor;more=page.has_more;pages++;
     }
