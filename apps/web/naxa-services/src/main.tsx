@@ -103,6 +103,10 @@ function App() {
   const [search, setSearch] = useState("");
   const [workstations, setWorkstations] = useState<WebWorkstation[]>([]);
   const [workstationSiteId, setWorkstationSiteId] = useState("");
+  const [performanceData, setPerformanceData] = useState<{daily: Record<string,unknown>[];monthly:Record<string,unknown>[];annual:Record<string,unknown>[]} | null>(null);
+  const [performanceFromDate, setPerformanceFromDate] = useState(new Date().toISOString().slice(0,10));
+  const [performanceBusy, setPerformanceBusy] = useState(false);
+  const [performanceError, setPerformanceError] = useState("");
 
   const selected = modules.find((m) => m.id === active)!;
   const grouped = useMemo(() => {
@@ -171,6 +175,43 @@ function App() {
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
   }, [authSession]);
+
+  async function loadPerformanceReport() {
+    if (!authSession) throw new Error("AUTHENTICATION_REQUIRED");
+    if (!accountingEndpoint || !anonKey) throw new Error("Le connecteur comptable Web n’est pas configuré.");
+    const siteIds = authSession.account.active_site_ids;
+    if (!siteIds.length) throw new Error("Aucun site de lecture n'est autorisé pour cette session.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(performanceFromDate) || !Number.isFinite(new Date(performanceFromDate).getTime())) {
+      throw new Error("Date de début invalide.");
+    }
+    setPerformanceBusy(true);
+    setPerformanceError("");
+    try {
+      const fresh = await ensureFreshSession(authSession);
+      const response = await fetch(accountingEndpoint, {
+        method: "POST", credentials: "omit",
+        headers: { "Content-Type": "application/json", apikey: anonKey, Authorization: "Bearer " + fresh.accessToken },
+        body: JSON.stringify({
+          action: "performance",
+          org_id: fresh.account.organization_id,
+          site_ids: siteIds,
+          from_date: performanceFromDate,
+        }),
+      });
+      const data = await response.json().catch(() => ({})) as Record<string, unknown>;
+      if (!response.ok || data.ok !== true || !data.result || typeof data.result !== "object") {
+        throw new Error(typeof data.error === "string" ? data.error : "Rapport indisponible ou accès refusé.");
+      }
+      const result = data.result as Record<string, unknown>;
+      const daily = Array.isArray(result.daily) ? result.daily as Record<string,unknown>[] : [];
+      const monthly = Array.isArray(result.monthly) ? result.monthly as Record<string,unknown>[] : [];
+      const annual = Array.isArray(result.annual) ? result.annual as Record<string,unknown>[] : [];
+      setPerformanceData({ daily, monthly, annual });
+      setAuthMessage("Rapport chargé depuis les vues serveur avec le périmètre de sites de votre session.");
+    } finally {
+      setPerformanceBusy(false);
+    }
+  }
 
   async function signIn(event: React.FormEvent) {
     event.preventDefault();
@@ -696,6 +737,7 @@ function App() {
             active === "organization" ? <OrganizationPage mode={mode} setMode={setMode} siteName={siteName} setSiteName={setSiteName} editable={preview || authSession?.account.role_code === "promoter"} onSave={saveWebOrganizationProfile} locale={authSession?.account.default_locale ?? "fr"} /> :
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
+            active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={setPerformanceFromDate} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport().catch(error => setPerformanceError(error instanceof Error ? error.message : "Chargement du rapport impossible.")); }} authenticated={Boolean(authSession)} /> :
             active === "agenda" ? <AgendaPage entries={entries.agenda ?? []} /> :
             active === "pressing" ? <PressingPage entries={entries.pressing ?? []} canPreviewEdit={preview} onAdvance={(id) => setEntries((prev) => ({ ...prev, pressing: (prev.pressing ?? []).map((x) => x.id === id ? { ...x, state: nextPressingState(x.state) } : x) }))} /> :
             active === "cash" ? <CashPage entries={entries.cash ?? []} /> :
@@ -838,6 +880,28 @@ function PressingPage({ entries, onAdvance, canPreviewEdit }: { entries: Entry[]
 }
 function CashPage({ entries }: { entries: Entry[] }) {
   return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">SESSION CAISSE</span><h2>Registre non ouvert</h2></div><span className="status-tag pending">À connecter</span></div><div className="cash-summary"><div><small>Fonds d'ouverture</small><strong>—</strong></div><div><small>Encaissements</small><strong>—</strong></div><div><small>Écart</small><strong>—</strong></div></div><div className="notice">Les montants ne sont pas calculés dans cet aperçu. Une session réelle sera ouverte sur le serveur et rattachée à une caisse et un opérateur.</div></div><div className="module-main-card"><h2>Ventes de cette session</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucune vente locale. Aucun paiement n'a été confirmé." />}</div></div>;
+}
+function PerformancePage({
+  data, fromDate, setFromDate, loading, error, onLoad, authenticated,
+}: {
+  data: {daily:Record<string,unknown>[];monthly:Record<string,unknown>[];annual:Record<string,unknown>[]} | null;
+  fromDate:string;setFromDate:(value:string)=>void;loading:boolean;error:string;onLoad:()=>void;authenticated:boolean;
+}) {
+  const fmt=(value:unknown)=>typeof value==="number"?new Intl.NumberFormat("fr-FR").format(value)+" FCFA":value==null?"—":String(value);
+  const rows=(values:Record<string,unknown>[],key:string)=>values.length===0?<Empty text="Aucune donnée serveur dans cette période pour le périmètre de sites autorisé."/>:
+    <div style={{overflowX:"auto"}}><table className="data-table"><thead><tr><th>Période</th><th>Recettes confirmées</th><th>Coût connu</th><th>Marge brute</th><th>Ventes confirmées</th><th>Coût manquant</th></tr></thead><tbody>
+      {values.map((row,index)=><tr key={String(row[key]??index)}><td>{String(row[key]??"—")}</td><td>{fmt(row.revenue_xaf)}</td><td>{fmt(row.cost_of_goods_xaf??row.known_cost_of_goods_xaf)}</td><td>{fmt(row.gross_profit_xaf)}</td><td>{fmt(row.confirmed_sales_count)}</td><td>{fmt(row.uncosted_sales_count)}</td></tr>)}
+    </tbody></table></div>;
+  return <div className="module-layout">
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">ANALYTIQUE SERVEUR</span><h2>Performances financières confirmées</h2></div><span className="status-tag pending">{data?"Données serveur":"À charger"}</span></div>
+      {authenticated?<><label>À partir du<input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} max={new Date().toISOString().slice(0,10)}/></label><button className="btn primary" disabled={loading} onClick={onLoad}>{loading?"Chargement…":"Charger les rapports"}</button></>:<div className="notice">Les rapports réels exigent une session Auth.</div>}
+      {error&&<div className="notice">{error}</div>}
+      <p className="muted">Seules les ventes dont le paiement est confirmé par le serveur sont comptées. Une marge inconnue reste affichée comme indisponible, sans estimation inventée.</p>
+    </div>
+    <div className="module-main-card"><h2>Journalier</h2>{rows(data?.daily??[],"performance_day")}</div>
+    <div className="module-main-card"><h2>Mensuel</h2>{rows(data?.monthly??[],"performance_month")}</div>
+    <div className="module-main-card"><h2>Annuel</h2>{rows(data?.annual??[],"performance_year")}</div>
+  </div>;
 }
 function OrganizationPage({
   mode, setMode, siteName, setSiteName, editable, onSave, locale,
