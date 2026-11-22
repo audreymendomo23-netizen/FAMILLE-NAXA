@@ -688,6 +688,7 @@ RESET ROLE;
 UPDATE public.ns_devices SET revoked_at=now()
 WHERE id='80000000-0000-4000-8000-000000000003';
 SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-b"}',false);
 DO $n3_revoked_device$
 BEGIN
