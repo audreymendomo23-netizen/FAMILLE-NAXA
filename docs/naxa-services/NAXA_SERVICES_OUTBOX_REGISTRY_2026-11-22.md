@@ -73,10 +73,10 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 | OBX-047 | 2907 | `recordStaffTimeEvent` | `eventType` | `eventType + ".recorded"` | staff_clock_in.recorded, staff_break_start.recorded, staff_break_end.recorded, staff_clock_out.recorded | **REMOTE_MUTATION** | `record_staff_time_event` |
 | OBX-048 | 2947 | `createManagementRecord` | `recordType` | `recordType + ".created"` | quote.created, invoice.created, credit_note.created, refund_due.created, customer_receivable.created, purchase.created, supplier.created, tax_estimate.created, business_goal.created, subscription_request.created, support_chat.created, work_order.created, repair_order.created, service_order.created, appointment_waitlist.created, staff_clock_in.created, staff_clock_out.created, staff_break_start.created, staff_break_end.created, staff_commission.created, staff_advance.created, staff_bonus.created | **REMOTE_MUTATION** | `create_management_record` |
 | OBX-049 | 3023 | `createInventoryTransfer` | `inventory_transfer` | `"inventory_transfer.requested"` | inventory_transfer.requested | **REMOTE_MUTATION** | `create_inventory_transfer` |
-| OBX-050 | 3188 | `transitionManagementRecord` | `current.recordType` | `"inventory_movement.purchase_received"` | inventory_movement.purchase_received | **COMPOSITE_CHILD** | Enfant de `management_record.status_changed` |
-| OBX-051 | 3274 | `transitionManagementRecord` | `current.recordType` | `"inventory_movement.transfer_out"` | inventory_movement.transfer_out | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
-| OBX-052 | 3275 | `transitionManagementRecord` | `current.recordType` | `"inventory_movement.transfer_in"` | inventory_movement.transfer_in | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
-| OBX-053 | 3295 | `transitionManagementRecord` | `current.recordType` | `"inventory_transfer.received_at_destination"` | inventory_transfer.received_at_destination | **REMOTE_MUTATION** | `receive_inventory_transfer` |
+| OBX-050 | 3188 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.purchase_received"` | inventory_movement.purchase_received | **COMPOSITE_CHILD** | Enfant de `management_record.status_changed` |
+| OBX-051 | 3274 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_out"` | inventory_movement.transfer_out | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
+| OBX-052 | 3275 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_in"` | inventory_movement.transfer_in | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
+| OBX-053 | 3295 | `transitionManagementRecord` | `inventory_transfer` | `"inventory_transfer.received_at_destination"` | inventory_transfer.received_at_destination | **REMOTE_MUTATION** | `receive_inventory_transfer` |
 | OBX-054 | 3313 | `transitionManagementRecord` | `current.recordType` | `current.recordType + ".status_changed"` | quote.status_changed, invoice.status_changed, credit_note.status_changed, refund_due.status_changed, customer_receivable.status_changed, purchase.status_changed, supplier.status_changed, tax_estimate.status_changed, business_goal.status_changed, subscription_request.status_changed, support_chat.status_changed, work_order.status_changed, repair_order.status_changed, service_order.status_changed, appointment_waitlist.status_changed, staff_clock_in.status_changed, staff_clock_out.status_changed, staff_break_start.status_changed, staff_break_end.status_changed, staff_commission.status_changed, staff_advance.status_changed, staff_bonus.status_changed, inventory_transfer.status_changed | **REMOTE_MUTATION** | `transition_management_record` |
 | OBX-055 | 3334 | `saveInventoryValuation` | `inventory_valuation` | `"inventory_valuation.updated"` | inventory_valuation.updated | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
 
@@ -843,7 +843,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-050 — inventory_movement.purchase_received
 
-- Source : ligne 3188, `transitionManagementRecord`, agrégat `current.recordType`, expression `"inventory_movement.purchase_received"`.
+- Source : ligne 3188, `transitionManagementRecord`, agrégat `inventory_movement`, expression `"inventory_movement.purchase_received"`.
 - Classe : **COMPOSITE_CHILD** ; disposition : `DO_NOT_SEND_INDEPENDENTLY`.
 - Commande parente : `management_record.status_changed`.
 - Source de vérité : Stock movement created by receiving a legacy management_record purchase; include the movement as part of the parent transition transaction.
@@ -860,7 +860,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-051 — inventory_movement.transfer_out
 
-- Source : ligne 3274, `transitionManagementRecord`, agrégat `current.recordType`, expression `"inventory_movement.transfer_out"`.
+- Source : ligne 3274, `transitionManagementRecord`, agrégat `inventory_movement`, expression `"inventory_movement.transfer_out"`.
 - Classe : **COMPOSITE_CHILD** ; disposition : `DO_NOT_SEND_INDEPENDENTLY`.
 - Commande parente : `inventory_transfer.received_at_destination`.
 - Source de vérité : Source-site deduction movement created atomically when a transfer is received.
@@ -877,7 +877,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-052 — inventory_movement.transfer_in
 
-- Source : ligne 3275, `transitionManagementRecord`, agrégat `current.recordType`, expression `"inventory_movement.transfer_in"`.
+- Source : ligne 3275, `transitionManagementRecord`, agrégat `inventory_movement`, expression `"inventory_movement.transfer_in"`.
 - Classe : **COMPOSITE_CHILD** ; disposition : `DO_NOT_SEND_INDEPENDENTLY`.
 - Commande parente : `inventory_transfer.received_at_destination`.
 - Source de vérité : Destination-site addition movement created atomically when a transfer is received.
@@ -894,7 +894,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-053 — inventory_transfer.received_at_destination
 
-- Source : ligne 3295, `transitionManagementRecord`, agrégat `current.recordType`, expression `"inventory_transfer.received_at_destination"`.
+- Source : ligne 3295, `transitionManagementRecord`, agrégat `inventory_transfer`, expression `"inventory_transfer.received_at_destination"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Approved inventory transfer aggregate plus source and destination inventory ledgers. Server applies the transfer status and both stock legs atomically.
 - Handler / route : `receive_inventory_transfer`.
