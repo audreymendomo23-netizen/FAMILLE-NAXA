@@ -2030,6 +2030,10 @@ declare
   v_payment_status text;
   v_payment_id uuid;
   v_posting jsonb;
+  v_line_quantity numeric(14,3);
+  v_unit_price_xaf bigint;
+  v_subtotal_xaf bigint;
+  v_discount_xaf bigint;
 begin
   v_member:=public.ns_current_member_id(p_org_id);
   if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
@@ -2083,12 +2087,16 @@ begin
 
   v_sale_status:=case when p_payment_method='cash' then 'posted' else 'draft' end;
   v_payment_status:=case when p_payment_method='cash' then 'confirmed' else 'pending' end;
+  v_line_quantity:=coalesce(p_stock_quantity,1);
+  v_unit_price_xaf:=ceil(p_total_xaf::numeric/v_line_quantity)::bigint;
+  v_subtotal_xaf:=round(v_unit_price_xaf::numeric*v_line_quantity)::bigint;
+  v_discount_xaf:=v_subtotal_xaf-p_total_xaf;
   insert into public.ns_sales(
     id,org_id,site_id,workstation_id,customer_id,cash_session_id,sale_number,
     subtotal_xaf,discount_xaf,total_xaf,status,created_by,created_at
   ) values (
     p_sale_id,p_org_id,p_site_id,p_workstation_id,null,p_cash_session_id,
-    trim(p_sale_number),p_total_xaf,0,p_total_xaf,v_sale_status,v_member,p_created_at
+    trim(p_sale_number),v_subtotal_xaf,v_discount_xaf,p_total_xaf,v_sale_status,v_member,p_created_at
   );
 
   insert into public.ns_sale_lines(
@@ -2098,7 +2106,7 @@ begin
     gen_random_uuid(),p_org_id,p_site_id,p_sale_id,
     case when p_inventory_item_id is null then 'service' else 'stock' end,
     p_inventory_item_id,trim(p_description),
-    coalesce(p_stock_quantity,1),p_total_xaf,0,p_event_id
+    v_line_quantity,v_unit_price_xaf,v_discount_xaf,p_event_id
   );
 
   v_payment_id:=gen_random_uuid();
