@@ -1,12 +1,10 @@
 package cm.naxa.naxaservices
 
-import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
-import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
@@ -20,30 +18,21 @@ class LoginScreenUiInstrumentedTest {
 
     @Test
     fun loginScreenRequiresBothCredentialsBeforeEnablingSubmit() {
-        // The screen applies the saved app locale through LocalConfiguration.
-        // Match the same FR/EN copy so the test is independent of emulator locale.
-        val labels = if (NaxaServicesPreferences(composeRule.activity).locale() == "en") {
-            listOf("Welcome", "NAXA Services ID", "Password", "Sign in")
-        } else {
-            listOf("Bienvenue", "Identifiant NAXA Services", "Mot de passe", "Se connecter")
-        }
-        val (title, identifierLabel, passwordLabel, signInLabel) = labels
+        // Stable test tags keep this interaction test independent of device
+        // locale and of Material3's merged text semantics.
+        val identifier = composeRule.onNodeWithTag("login-identifier")
+        val password = composeRule.onNodeWithTag("login-password")
+        val submit = composeRule.onNodeWithTag("login-submit")
 
-        // Material3 TextField labels are merged with their editable field by default.
-        // Inspect the unmerged tree for the visible labels; keep field interactions
-        // on the normal merged tree below.
-        composeRule.onAllNodesWithText(title, useUnmergedTree = true).assertCountEquals(1)
-        composeRule.onAllNodesWithText(identifierLabel, useUnmergedTree = true).assertCountEquals(1)
-        composeRule.onAllNodesWithText(passwordLabel, useUnmergedTree = true).assertCountEquals(1)
+        identifier.assertIsDisplayed()
+        password.assertIsDisplayed()
+        submit.assertIsDisplayed()
+        submit.assertIsNotEnabled()
 
-        val credentialFields = composeRule.onAllNodes(hasSetTextAction())
-        credentialFields.assertCountEquals(2)
-        composeRule.onNodeWithText(signInLabel).assertIsNotEnabled()
+        identifier.performTextInput("ns-000001")
+        submit.assertIsNotEnabled()
 
-        credentialFields[0].performTextInput("ns-000001")
-        composeRule.onNodeWithText(signInLabel).assertIsNotEnabled()
-
-        credentialFields[1].performTextInput("ui-test-only-invalid-password")
-        composeRule.onNodeWithText(signInLabel).assertIsEnabled()
+        password.performTextInput("ui-test-only-invalid-password")
+        submit.assertIsEnabled()
     }
 }

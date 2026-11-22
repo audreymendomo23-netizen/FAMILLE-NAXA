@@ -81,6 +81,7 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -720,13 +721,13 @@ private fun LoginScreen(
         Spacer(Modifier.height(26.dp))
         OutlinedTextField(
             value = identifier, onValueChange = { identifier = it.uppercase() },
-            modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.login_identifier)) },
+            modifier = Modifier.fillMaxWidth().testTag("login-identifier"), label = { Text(stringResource(R.string.login_identifier)) },
             placeholder = { Text("NS-000000") }, singleLine = true
         )
         Spacer(Modifier.height(12.dp))
         OutlinedTextField(
             value = password, onValueChange = { password = it },
-            modifier = Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.password)) },
+            modifier = Modifier.fillMaxWidth().testTag("login-password"), label = { Text(stringResource(R.string.password)) },
             visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) stringResource(R.string.hide) else stringResource(R.string.show)) } },
             singleLine = true
@@ -741,7 +742,7 @@ private fun LoginScreen(
         Button(
             onClick = { onLogin(identifier, password, rememberMe) },
             enabled = !busy && identifier.isNotBlank() && password.isNotBlank(),
-            modifier = Modifier.fillMaxWidth().height(54.dp)
+            modifier = Modifier.fillMaxWidth().height(54.dp).testTag("login-submit")
         ) {
             if (busy) CircularProgressIndicator(Modifier.size(20.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
             else Text(stringResource(R.string.sign_in))
