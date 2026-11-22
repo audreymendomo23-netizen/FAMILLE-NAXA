@@ -3035,6 +3035,25 @@ begin
        or not public.ns_can_manage_org(p_org_id) then
       raise exception 'NAXA_SYNC_SCOPE_FORBIDDEN';
     end if;
+  elsif p_action_code like 'inventory_transfer.%' then
+    if p_site_id is null
+       or (p_payload->>'site_id') is distinct from p_site_id::text
+       or p_workstation_id is not null
+       or not public.ns_can_manage_org(p_org_id)
+       or not exists (
+         select 1 from public.ns_sites s
+         where s.id=p_site_id and s.org_id=p_org_id and s.status='active'
+       ) then
+      raise exception 'NAXA_SYNC_TRANSFER_SCOPE_FORBIDDEN';
+    end if;
+    if p_action_code='inventory_transfer.received_at_destination'
+       and (p_payload->>'destination_site_id') is distinct from p_site_id::text then
+      raise exception 'NAXA_SYNC_TRANSFER_DESTINATION_SCOPE_MISMATCH';
+    end if;
+    if p_action_code in ('inventory_transfer.requested','inventory_transfer.status_changed')
+       and (p_payload->>'source_site_id') is distinct from p_site_id::text then
+      raise exception 'NAXA_SYNC_TRANSFER_SOURCE_SCOPE_MISMATCH';
+    end if;
   elsif p_action_code = 'support_request.created' and p_site_id is null then
     if p_payload->>'site_id' is not null or p_workstation_id is not null
        or not public.ns_is_org_member(p_org_id) then
@@ -3075,6 +3094,31 @@ begin
     when p_action_code = 'loyalty_reward.redeemed' then 'loyalty_reward'
     when p_action_code like 'service.%' then 'service'
     when p_action_code = 'customer.created' then 'customer'
+    when p_action_code = 'customer.updated' then 'customer'
+    when p_action_code = 'appointment.created_from_waitlist' then 'appointment'
+    when p_action_code in (
+      'staff_clock_in.recorded','staff_break_start.recorded',
+      'staff_break_end.recorded','staff_clock_out.recorded'
+    ) then split_part(p_action_code,'.',1)
+    when p_action_code in (
+      'quote.created','invoice.created','credit_note.created','refund_due.created',
+      'customer_receivable.created','purchase.created','supplier.created','tax_estimate.created',
+      'business_goal.created','subscription_request.created','support_chat.created',
+      'work_order.created','repair_order.created','service_order.created','appointment_waitlist.created',
+      'staff_clock_in.created','staff_clock_out.created','staff_break_start.created','staff_break_end.created',
+      'staff_commission.created','staff_advance.created','staff_bonus.created'
+    ) then split_part(p_action_code,'.',1)
+    when p_action_code in (
+      'quote.status_changed','invoice.status_changed','credit_note.status_changed',
+      'refund_due.status_changed','customer_receivable.status_changed','purchase.status_changed',
+      'supplier.status_changed','tax_estimate.status_changed','business_goal.status_changed',
+      'subscription_request.status_changed','support_chat.status_changed','work_order.status_changed',
+      'repair_order.status_changed','service_order.status_changed','appointment_waitlist.status_changed',
+      'staff_clock_in.status_changed','staff_clock_out.status_changed','staff_break_start.status_changed',
+      'staff_break_end.status_changed','staff_commission.status_changed','staff_advance.status_changed',
+      'staff_bonus.status_changed'
+    ) then split_part(p_action_code,'.',1)
+    when p_action_code like 'inventory_transfer.%' then 'inventory_transfer'
     when p_action_code like 'customer_followup.%' then 'customer_followup'
     when p_action_code = 'support_request.created' then 'support_request'
     when p_action_code = 'pressing_order.created' then 'pressing_order'
@@ -3106,6 +3150,29 @@ begin
     when p_action_code = 'loyalty_reward.redeemed' then p_payload->>'reward_event_id'
     when p_action_code like 'service.%' then p_payload->>'service_id'
     when p_action_code = 'customer.created' then p_payload->>'customer_id'
+    when p_action_code = 'customer.updated' then p_payload->>'customer_id'
+    when p_action_code = 'appointment.created_from_waitlist' then p_payload->>'appointment_id'
+    when p_action_code in (
+      'staff_clock_in.recorded','staff_break_start.recorded',
+      'staff_break_end.recorded','staff_clock_out.recorded'
+    ) then p_payload->>'time_event_id'
+    when p_action_code in (
+      'quote.created','invoice.created','credit_note.created','refund_due.created',
+      'customer_receivable.created','purchase.created','supplier.created','tax_estimate.created',
+      'business_goal.created','subscription_request.created','support_chat.created',
+      'work_order.created','repair_order.created','service_order.created','appointment_waitlist.created',
+      'staff_clock_in.created','staff_clock_out.created','staff_break_start.created','staff_break_end.created',
+      'staff_commission.created','staff_advance.created','staff_bonus.created',
+      'quote.status_changed','invoice.status_changed','credit_note.status_changed',
+      'refund_due.status_changed','customer_receivable.status_changed','purchase.status_changed',
+      'supplier.status_changed','tax_estimate.status_changed','business_goal.status_changed',
+      'subscription_request.status_changed','support_chat.status_changed','work_order.status_changed',
+      'repair_order.status_changed','service_order.status_changed','appointment_waitlist.status_changed',
+      'staff_clock_in.status_changed','staff_clock_out.status_changed','staff_break_start.status_changed',
+      'staff_break_end.status_changed','staff_commission.status_changed','staff_advance.status_changed',
+      'staff_bonus.status_changed'
+    ) then p_payload->>'record_id'
+    when p_action_code like 'inventory_transfer.%' then coalesce(p_payload->>'transfer_id',p_payload->>'record_id')
     when p_action_code like 'customer_followup.%' then p_payload->>'followup_id'
     when p_action_code = 'support_request.created' then p_payload->>'request_id'
     when p_action_code like 'pressing_order.%' then p_payload->>'order_id'
@@ -3450,6 +3517,119 @@ begin
         (p_payload->>'sale_id')::uuid,p_org_id,p_site_id,
         coalesce(p_payload->>'expected_status','pending'),
         p_payload->>'reason',(p_payload->>'cancelled_at')::timestamptz
+      );
+    when 'customer.updated' then
+      v_result := public.ns_update_customer(
+        (p_payload->>'customer_id')::uuid,p_org_id,p_site_id,
+        p_payload->>'display_name',coalesce(p_payload->>'phone_contact',''),
+        coalesce((p_payload->>'contact_consent')::boolean,false),
+        coalesce(p_payload->>'address_line',''),coalesce(p_payload->>'neighborhood',''),
+        coalesce(p_payload->>'landmark',''),
+        nullif(p_payload->>'latitude','')::numeric,
+        nullif(p_payload->>'longitude','')::numeric,
+        nullif(p_payload->>'location_consent_at','')::timestamptz,
+        coalesce(p_payload->>'notes_private',''),
+        (p_payload->>'expected_version')::integer
+      );
+    when 'appointment.created_from_waitlist' then
+      v_result := public.ns_convert_waitlist_to_appointment(
+        (p_payload->>'appointment_id')::uuid,p_org_id,p_site_id,
+        (p_payload->>'waitlist_record_id')::uuid,
+        nullif(p_payload->>'workstation_id','')::uuid,
+        (p_payload->>'starts_at')::timestamptz,
+        (p_payload->>'duration_minutes')::integer,
+        coalesce((p_payload->>'deposit_xaf')::bigint,0),
+        p_payload->>'reason',(p_payload->>'assigned_member_id')::uuid
+      );
+    when 'staff_clock_in.recorded' then
+      v_result := public.ns_record_staff_time_event(
+        (p_payload->>'time_event_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'workstation_id','')::uuid,(p_payload->>'staff_member_id')::uuid,
+        p_payload->>'staff_name_snapshot','staff_clock_in',(p_payload->>'occurred_at')::timestamptz
+      );
+    when 'staff_break_start.recorded' then
+      v_result := public.ns_record_staff_time_event(
+        (p_payload->>'time_event_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'workstation_id','')::uuid,(p_payload->>'staff_member_id')::uuid,
+        p_payload->>'staff_name_snapshot','staff_break_start',(p_payload->>'occurred_at')::timestamptz
+      );
+    when 'staff_break_end.recorded' then
+      v_result := public.ns_record_staff_time_event(
+        (p_payload->>'time_event_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'workstation_id','')::uuid,(p_payload->>'staff_member_id')::uuid,
+        p_payload->>'staff_name_snapshot','staff_break_end',(p_payload->>'occurred_at')::timestamptz
+      );
+    when 'staff_clock_out.recorded' then
+      v_result := public.ns_record_staff_time_event(
+        (p_payload->>'time_event_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'workstation_id','')::uuid,(p_payload->>'staff_member_id')::uuid,
+        p_payload->>'staff_name_snapshot','staff_clock_out',(p_payload->>'occurred_at')::timestamptz
+      );
+    when 'quote.created','invoice.created','credit_note.created','refund_due.created',
+         'customer_receivable.created','purchase.created','supplier.created','tax_estimate.created',
+         'business_goal.created','subscription_request.created','support_chat.created',
+         'work_order.created','repair_order.created','service_order.created','appointment_waitlist.created',
+         'staff_clock_in.created','staff_clock_out.created','staff_break_start.created','staff_break_end.created',
+         'staff_commission.created','staff_advance.created','staff_bonus.created' then
+      v_result := public.ns_create_management_record(
+        (p_payload->>'record_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'workstation_id','')::uuid,split_part(p_action_code,'.',1),
+        p_payload->>'reference',p_payload->>'title',coalesce(p_payload->>'counterparty',''),
+        coalesce((p_payload->>'amount_xaf')::bigint,0),coalesce((p_payload->>'paid_xaf')::bigint,0),
+        nullif(p_payload->>'due_at','')::timestamptz,
+        coalesce(p_payload->>'status',case
+          when split_part(p_action_code,'.',1) in ('invoice','refund_due','customer_receivable','subscription_request','support_chat','appointment_waitlist','supplier','work_order','repair_order','service_order') then 'open'
+          when split_part(p_action_code,'.',1) in ('staff_commission','staff_advance','staff_bonus') then 'pending_review'
+          else 'draft'
+        end),
+        case
+          when jsonb_typeof(p_payload->'metadata_json')='object' then p_payload->'metadata_json'
+          when jsonb_typeof(p_payload->'metadata_json')='string' then coalesce(nullif(p_payload->>'metadata_json','')::jsonb,'{}'::jsonb)
+          else '{}'::jsonb
+        end
+      );
+    when 'quote.status_changed','invoice.status_changed','credit_note.status_changed',
+         'refund_due.status_changed','customer_receivable.status_changed','purchase.status_changed',
+         'supplier.status_changed','tax_estimate.status_changed','business_goal.status_changed',
+         'subscription_request.status_changed','support_chat.status_changed','work_order.status_changed',
+         'repair_order.status_changed','service_order.status_changed','appointment_waitlist.status_changed',
+         'staff_clock_in.status_changed','staff_clock_out.status_changed','staff_break_start.status_changed',
+         'staff_break_end.status_changed','staff_commission.status_changed','staff_advance.status_changed',
+         'staff_bonus.status_changed' then
+      v_result := public.ns_transition_management_record(
+        (p_payload->>'record_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'workstation_id','')::uuid,split_part(p_action_code,'.',1),
+        p_payload->>'from_status',p_payload->>'to_status',p_payload->>'reason',
+        (p_payload->>'expected_version')::integer,
+        coalesce(p_payload->'metadata_json_delta','{}'::jsonb),
+        nullif(p_payload->>'transitioned_at','')::timestamptz
+      );
+    when 'inventory_transfer.requested' then
+      v_result := public.ns_create_inventory_transfer(
+        (p_payload->>'transfer_id')::uuid,p_org_id,
+        (p_payload->>'source_site_id')::uuid,(p_payload->>'destination_site_id')::uuid,
+        (p_payload->>'inventory_item_id')::uuid,p_payload->>'sku_snapshot',
+        p_payload->>'unit',(p_payload->>'quantity')::numeric,p_payload->>'reference',
+        (p_payload->>'requested_at')::timestamptz
+      );
+    when 'inventory_transfer.received_at_destination' then
+      v_result := public.ns_receive_inventory_transfer(
+        (p_payload->>'transfer_id')::uuid,p_org_id,
+        (p_payload->>'source_site_id')::uuid,(p_payload->>'destination_site_id')::uuid,
+        (p_payload->>'inventory_item_id')::uuid,
+        nullif(p_payload->>'destination_inventory_item_id_if_created','')::uuid,
+        p_payload->>'sku_snapshot',p_payload->>'unit',(p_payload->>'quantity')::numeric,
+        (p_payload->>'expected_version')::integer,p_payload->>'reason',
+        (p_payload->>'received_at')::timestamptz
+      );
+    when 'inventory_transfer.status_changed' then
+      v_result := public.ns_transition_management_record(
+        (p_payload->>'record_id')::uuid,p_org_id,p_site_id,
+        nullif(p_payload->>'workstation_id','')::uuid,'inventory_transfer',
+        p_payload->>'from_status',p_payload->>'to_status',p_payload->>'reason',
+        (p_payload->>'expected_version')::integer,
+        coalesce(p_payload->'metadata_json_delta','{}'::jsonb),
+        nullif(p_payload->>'transitioned_at','')::timestamptz
       );
     when 'loyalty_reward.redeemed' then
       if not public.ns_redeem_loyalty_reward(
