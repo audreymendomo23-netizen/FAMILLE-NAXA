@@ -1620,10 +1620,18 @@ private fun CashLocalContent(
     var siteId by rememberSaveable { mutableStateOf(session.account.activeSiteIds.firstOrNull().orEmpty()) }
     val sessions by remember(siteId) { repository.dao.observeCashSessions(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     val sales by remember(siteId) { repository.dao.observeSales(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
+    val pressingOrders by remember(siteId) { repository.dao.observePressingOrders(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     val stockItems by remember(siteId) { repository.dao.observeInventoryItems(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     val stockValuations by remember(siteId) { repository.dao.observeInventoryValuations(session.account.organizationId, siteId) }.collectAsState(initial = emptyList())
     val pendingOutbox by repository.dao.observePendingOutboxCount(session.account.organizationId).collectAsState(initial = 0)
     val openSession = sessions.firstOrNull { it.status == "open" }
+    val pressingCashDepositsForOpenSession = openSession?.let { active ->
+        pressingOrders.filter {
+            it.depositCashSessionId == active.id &&
+                it.depositPaymentMethod == "cash" &&
+                it.depositPaymentStatus == "confirmed"
+        }.sumOf { it.depositXaf }
+    } ?: 0L
 
     var selectedStockItemId by rememberSaveable { mutableStateOf("") }
     var saleStockQuantity by rememberSaveable { mutableStateOf("1") }
@@ -1689,6 +1697,12 @@ private fun CashLocalContent(
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(stringResource(R.string.cash_session_open, openSession.registerName), fontWeight = FontWeight.Bold)
                         Text(stringResource(R.string.cash_opening_amount_xaf, openSession.openingFloatXaf))
+                        Text(
+                            (if (session.account.defaultLocale == "en") "Confirmed pressing cash deposits in this session: " else "Acomptes pressing espèces confirmés sur cette session : ") +
+                                pressingCashDepositsForOpenSession.toString() + " F",
+                            color = MaterialTheme.colorScheme.secondary,
+                            style = MaterialTheme.typography.bodySmall
+                        )
                         Text("Vente libre ou article lié au stock", fontWeight = FontWeight.SemiBold)
                         OutlinedButton(
                             onClick = {
