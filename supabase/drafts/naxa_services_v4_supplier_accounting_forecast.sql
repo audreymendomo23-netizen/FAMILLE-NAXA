@@ -6,11 +6,15 @@ begin;
 
 -- N2 domain tables and versioned catalogue/CRM/support fields.
 alter table public.ns_services
+  drop constraint if exists ns_services_activity_check;
+alter table public.ns_services
+  add constraint ns_services_activity_check check (activity in ('pressing','hair','beauty','treatment','tailoring','perfume','repair','part','manufacturing','vehicle','cleaning','contract','home','printing','event','package','material','service','retail','general'));
+alter table public.ns_services
   add column if not exists category text not null default '',
   add column if not exists description text not null default '',
   add column if not exists provider_member_ids jsonb not null default '[]'::jsonb,
   add column if not exists required_workstation_kinds jsonb not null default '[]'::jsonb,
-  add column if not exists package_sessions jsonb not null default '[]'::jsonb,
+  add column if not exists package_sessions integer,
   add column if not exists revision integer not null default 1 check (revision > 0);
 alter table public.ns_customers
   add column if not exists address_line text not null default '',
@@ -1723,7 +1727,7 @@ begin
         coalesce(p_payload->>'category',''),coalesce(p_payload->>'description',''),
         coalesce(p_payload->'provider_member_ids','[]'::jsonb),
         coalesce(p_payload->'required_workstation_kinds','[]'::jsonb),
-        coalesce(p_payload->'package_sessions','[]'::jsonb)
+        nullif(p_payload->>'package_sessions','')::integer
       );
     when 'service.updated' then
       v_result := public.ns_update_service(
@@ -1806,7 +1810,7 @@ create or replace function public.ns_create_service(
   p_activity text, p_name text, p_duration_minutes integer,
   p_price_xaf bigint, p_active boolean, p_category text,
   p_description text, p_provider_member_ids jsonb,
-  p_required_workstation_kinds jsonb, p_package_sessions jsonb
+  p_required_workstation_kinds jsonb, p_package_sessions integer
 ) returns jsonb
 language plpgsql
 security definer
@@ -1822,7 +1826,7 @@ begin
   end if;
   if p_service_id is null
      or length(trim(coalesce(p_code,''))) not between 1 and 80
-     or p_activity not in ('pressing','hair','retail')
+     or p_activity not in ('pressing','hair','beauty','treatment','tailoring','perfume','repair','part','manufacturing','vehicle','cleaning','contract','home','printing','event','package','material','service','retail','general')
      or length(trim(coalesce(p_name,''))) not between 2 and 160
      or (p_duration_minutes is not null and p_duration_minutes <= 0)
      or p_price_xaf is null or p_price_xaf < 0
@@ -1831,7 +1835,7 @@ begin
      or length(coalesce(p_description,'')) > 2000
      or jsonb_typeof(coalesce(p_provider_member_ids,'[]'::jsonb)) <> 'array'
      or jsonb_typeof(coalesce(p_required_workstation_kinds,'[]'::jsonb)) <> 'array'
-     or jsonb_typeof(coalesce(p_package_sessions,'[]'::jsonb)) <> 'array' then
+     or (p_package_sessions is not null and p_package_sessions not between 1 and 100) then
     raise exception 'NAXA_SERVICE_CREATE_INVALID';
   end if;
   if exists (
@@ -1839,13 +1843,18 @@ begin
     from jsonb_array_elements_text(coalesce(p_provider_member_ids,'[]'::jsonb)) x(member_id)
     where not exists (
       select 1 from public.ns_members m
-      where m.id::text = x.member_id and m.org_id = p_org_id and m.status = 'active'
+      join public.ns_member_scopes ms on ms.member_id=m.id and ms.org_id=m.org_id
+      where m.id::text=x.member_id and m.org_id=p_org_id and m.status='active'
+        and (ms.scope_type='organization' or ms.site_id=p_site_id)
     )
   ) then raise exception 'NAXA_SERVICE_PROVIDER_SCOPE_INVALID'; end if;
   if exists (
     select 1
     from jsonb_array_elements_text(coalesce(p_required_workstation_kinds,'[]'::jsonb)) x(kind)
-    where x.kind not in ('hair_chair','pressing_counter','pressing_workshop','reception','cashier','other')
+    where not exists (
+      select 1 from public.ns_workstations w
+      where w.org_id=p_org_id and w.site_id=p_site_id and w.kind=x.kind and w.status='active'
+    )
   ) then raise exception 'NAXA_SERVICE_WORKSTATION_KIND_INVALID'; end if;
 
   insert into public.ns_services(
@@ -1856,7 +1865,7 @@ begin
     p_duration_minutes,p_price_xaf,p_active,trim(coalesce(p_category,'')),
     coalesce(p_description,''),coalesce(p_provider_member_ids,'[]'::jsonb),
     coalesce(p_required_workstation_kinds,'[]'::jsonb),
-    coalesce(p_package_sessions,'[]'::jsonb),1
+    p_package_sessions,1
   ) returning * into v_service;
   return jsonb_build_object('service_id',v_service.id,'revision',v_service.revision,'created',true);
 end;
@@ -1939,19 +1948,24 @@ begin
     from jsonb_array_elements_text(coalesce(p_provider_member_ids,'[]'::jsonb)) x(member_id)
     where not exists (
       select 1 from public.ns_members m
-      where m.id::text = x.member_id and m.org_id = p_org_id and m.status = 'active'
+      join public.ns_member_scopes ms on ms.member_id=m.id and ms.org_id=m.org_id
+      where m.id::text=x.member_id and m.org_id=p_org_id and m.status='active'
+        and (ms.scope_type='organization' or ms.site_id=p_site_id)
     )
   ) then raise exception 'NAXA_SERVICE_PROVIDER_SCOPE_INVALID'; end if;
   if exists (
     select 1
     from jsonb_array_elements_text(coalesce(p_required_workstation_kinds,'[]'::jsonb)) x(kind)
-    where x.kind not in ('hair_chair','pressing_counter','pressing_workshop','reception','cashier','other')
+    where not exists (
+      select 1 from public.ns_workstations w
+      where w.org_id=p_org_id and w.site_id=p_site_id and w.kind=x.kind and w.status='active'
+    )
   ) then raise exception 'NAXA_SERVICE_WORKSTATION_KIND_INVALID'; end if;
   update public.ns_services
     set category=coalesce(p_category,''),description=coalesce(p_description,''),
         provider_member_ids=coalesce(p_provider_member_ids,'[]'::jsonb),
         required_workstation_kinds=coalesce(p_required_workstation_kinds,'[]'::jsonb),
-        package_sessions=coalesce(p_package_sessions,'[]'::jsonb),
+        package_sessions=p_package_sessions,
         revision=revision+1
     where id=p_service_id and org_id=p_org_id and site_id=p_site_id
     returning * into v_service;
@@ -2145,11 +2159,11 @@ begin
 end;
 $naxa$;
 
-revoke all on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,jsonb) from public, anon;
+revoke all on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,integer) from public, anon;
 grant execute on function public.ns_create_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,text,text,jsonb,jsonb,jsonb) to authenticated, service_role;
 revoke all on function public.ns_update_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,integer) from public, anon;
 grant execute on function public.ns_update_service(uuid,uuid,uuid,text,text,text,integer,bigint,boolean,integer) to authenticated, service_role;
-revoke all on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,jsonb,integer) from public, anon;
+revoke all on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,integer,integer) from public, anon;
 grant execute on function public.ns_update_service_configuration(uuid,uuid,uuid,text,text,jsonb,jsonb,jsonb,integer) to authenticated, service_role;
 revoke all on function public.ns_create_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text) from public, anon;
 grant execute on function public.ns_create_customer(uuid,uuid,uuid,text,text,boolean,text,text,text,numeric,numeric,timestamptz,text) to authenticated, service_role;
