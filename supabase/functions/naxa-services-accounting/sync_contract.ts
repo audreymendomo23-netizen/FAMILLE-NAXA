@@ -193,9 +193,6 @@ const ATOMIC_SYNC_ACTIONS: Record<string, { aggregate: string; idField: string; 
   "inventory_valuation.imported": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
   "inventory_valuation.import_updated": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
   "inventory_valuation.updated": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
-  "inventory_valuation.imported": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
-  "inventory_valuation.import_updated": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
-  "inventory_valuation.updated": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
 };
 
 export function normalizeAtomicSyncEvent(value: unknown): AtomicSyncEvent {
