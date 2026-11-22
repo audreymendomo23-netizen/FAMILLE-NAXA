@@ -19,6 +19,7 @@ import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_8_9
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_9_10
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_10_11
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_11_12
+import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_12_13
 import cm.naxa.naxaservices.data.LocalPressingOrder
 import cm.naxa.naxaservices.data.LocalPressingStatusEvent
 import cm.naxa.naxaservices.data.LocalAppointment
@@ -162,7 +163,7 @@ private fun NaxaServicesRoot(
     val lockGenerationValue by lockGeneration.collectAsState()
     val localDatabase = remember {
         Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db")
-            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7, NS_SERVICES_MIGRATION_7_8, NS_SERVICES_MIGRATION_8_9, NS_SERVICES_MIGRATION_9_10, NS_SERVICES_MIGRATION_10_11, NS_SERVICES_MIGRATION_11_12)
+            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7, NS_SERVICES_MIGRATION_7_8, NS_SERVICES_MIGRATION_8_9, NS_SERVICES_MIGRATION_9_10, NS_SERVICES_MIGRATION_10_11, NS_SERVICES_MIGRATION_11_12, NS_SERVICES_MIGRATION_12_13)
             .build()
     }
     val localRepository = remember { NaxaServicesLocalRepository(localDatabase) }
@@ -1054,6 +1055,8 @@ private fun PressingLocalContent(
     var garments by rememberSaveable { mutableStateOf("") }
     var total by rememberSaveable { mutableStateOf("") }
     var deposit by rememberSaveable { mutableStateOf("0") }
+    var depositPaymentMethod by rememberSaveable { mutableStateOf("") }
+    var depositCashSessionId by rememberSaveable { mutableStateOf("") }
     var promisedPickup by rememberSaveable {
         mutableStateOf(SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(System.currentTimeMillis() + 24L * 60L * 60L * 1000L)))
     }
@@ -1067,6 +1070,15 @@ private fun PressingLocalContent(
     val workstations by remember(siteId) {
         repository.dao.observeWorkstations(session.account.organizationId, siteId)
     }.collectAsState(initial = emptyList())
+    val cashSessions by remember(siteId) {
+        repository.dao.observeCashSessions(session.account.organizationId, siteId)
+    }.collectAsState(initial = emptyList())
+    val openCashSessions = cashSessions.filter { it.status == "open" }
+    val depositXafValue = deposit.toLongOrNull() ?: 0L
+    val depositPaymentReady = depositXafValue == 0L ||
+        (depositPaymentMethod in setOf("cash", "mobile_money", "other") &&
+            (depositPaymentMethod != "cash" ||
+                openCashSessions.any { it.id == depositCashSessionId }))
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item {
@@ -1079,7 +1091,7 @@ private fun PressingLocalContent(
                 session.account.activeSiteIds,
                 siteId,
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
-            ) { siteId = it; workstationId = "" }
+            ) { siteId = it; workstationId = ""; depositCashSessionId = "" }
             LocalOnlyNotice(if (fr) "Tickets et historique locaux, en attente de synchronisation. L'alerte automatique WhatsApp/FCM « linge prêt » attend la passerelle serveur." else "Local tickets and history await synchronization. Automatic WhatsApp/FCM ready-for-pickup alerts require the server gateway.")
         }
         item {
@@ -1100,6 +1112,67 @@ private fun PressingLocalContent(
                     OutlinedTextField(garments, { garments = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Pièces (type, couleur, marque, état/taches et traitement demandé)" else "Garments (type, color, brand, condition/stains and requested treatment)") }, minLines = 3)
                     OutlinedTextField(total, { total = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.total_amount_xaf)) }, singleLine = true)
                     OutlinedTextField(deposit, { deposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.deposit_amount_xaf)) }, singleLine = true)
+                    if (depositXafValue > 0) {
+                        Text(if (fr) "Encaissement de l'acompte" else "Deposit collection method", fontWeight = FontWeight.SemiBold)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(
+                                onClick = { depositPaymentMethod = "cash"; depositCashSessionId = "" },
+                                modifier = Modifier.weight(1f)
+                            ) { Text((if (depositPaymentMethod == "cash") "✓ " else "") + if (fr) "Espèces" else "Cash") }
+                            OutlinedButton(
+                                onClick = { depositPaymentMethod = "mobile_money"; depositCashSessionId = "" },
+                                modifier = Modifier.weight(1f)
+                            ) { Text((if (depositPaymentMethod == "mobile_money") "✓ " else "") + "Mobile Money") }
+                        }
+                        OutlinedButton(
+                            onClick = { depositPaymentMethod = "other"; depositCashSessionId = "" },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text((if (depositPaymentMethod == "other") "✓ " else "") + if (fr) "Virement / autre — à confirmer" else "Bank transfer / other — pending confirmation") }
+                        if (depositPaymentMethod == "cash") {
+                            Text(
+                                if (fr) "Choisis la session de caisse qui reçoit réellement les espèces." else "Select the cash session that actually receives the cash.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            if (openCashSessions.isEmpty()) {
+                                Text(
+                                    if (fr) "Aucune session ouverte sur ce point de vente. Ouvre une caisse avant d'enregistrer cet acompte en espèces." else "No open cash session at this site. Open a register before recording this cash deposit.",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            openCashSessions.forEach { cashSession ->
+                                OutlinedButton(
+                                    onClick = { depositCashSessionId = cashSession.id },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        (if (depositCashSessionId == cashSession.id) "✓ " else "") +
+                                            cashSession.registerName + " · " +
+                                            SimpleDateFormat("dd/MM HH:mm", Locale.getDefault()).format(Date(cashSession.openedAtMillis))
+                                    )
+                                }
+                            }
+                        } else if (depositPaymentMethod in setOf("mobile_money", "other")) {
+                            Text(
+                                if (fr) "L'acompte reste en attente : il ne sera pas ajouté à la caisse avant confirmation du paiement." else "The deposit remains pending and is excluded from the cash balance until payment confirmation.",
+                                color = MaterialTheme.colorScheme.secondary,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        } else {
+                            Text(
+                                if (fr) "Sélectionne le mode d'encaissement ; aucun paiement ne sera supposé." else "Select how the deposit is collected; no payment method is assumed.",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    } else {
+                        Text(
+                            if (fr) "Aucun acompte à encaisser à la création du ticket." else "No deposit collected when this ticket is created.",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                     OutlinedTextField(
                         promisedPickup,
                         { promisedPickup = it },
@@ -1131,17 +1204,27 @@ private fun PressingLocalContent(
                                         totalXaf = total.toLong(),
                                         depositXaf = deposit.toLongOrNull() ?: 0L,
                                         promisedAtMillis = promisedAt,
-                                        actorMemberId = session.account.memberId
+                                        actorMemberId = session.account.memberId,
+                                        depositPaymentMethod = depositPaymentMethod.takeIf { depositXafValue > 0 },
+                                        depositCashSessionId = depositCashSessionId.takeIf { depositPaymentMethod == "cash" && depositXafValue > 0 }
                                     )
                                 }.onSuccess { newOrder ->
                                     customer = ""; phone = ""; garments = ""; total = ""; deposit = "0"
-                                    notice = if (fr) "Ticket créé : " + newOrder.ticketNumber + " · statut reçu." else "Ticket created: " + newOrder.ticketNumber + " · received."
+                                    depositPaymentMethod = ""; depositCashSessionId = ""
+                                    notice = if (fr) {
+                                        "Ticket créé : " + newOrder.ticketNumber + " · acompte " +
+                                            (if (newOrder.depositPaymentStatus == "confirmed") "encaissé en espèces" else if (newOrder.depositPaymentStatus == "pending") "en attente de confirmation" else "non encaissé")
+                                    } else {
+                                        "Ticket created: " + newOrder.ticketNumber + " · deposit " +
+                                            (if (newOrder.depositPaymentStatus == "confirmed") "received in cash" else if (newOrder.depositPaymentStatus == "pending") "awaiting confirmation" else "not collected")
+                                    }
                                     error = null
                                 }.onFailure { error = it.message ?: if (fr) "Création du ticket impossible." else "Unable to create ticket." }
                                 busy = false
                             }
                         },
-                        enabled = !busy && siteId.isNotBlank() && customer.isNotBlank() && garments.isNotBlank() && (total.toLongOrNull() ?: 0L) > 0,
+                        enabled = !busy && siteId.isNotBlank() && customer.isNotBlank() && garments.isNotBlank() &&
+                            (total.toLongOrNull() ?: 0L) > 0 && depositPaymentReady,
                         modifier = Modifier.fillMaxWidth()
                     ) { if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary) else Text(stringResource(R.string.create_pressing_ticket)) }
                     if (!notice.isNullOrBlank()) Text(notice!!, color = MaterialTheme.colorScheme.primary)
