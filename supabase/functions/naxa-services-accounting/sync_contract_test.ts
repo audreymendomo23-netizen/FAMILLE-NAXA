@@ -294,3 +294,30 @@ Deno.test("atomic sync envelope accepts versioned inventory valuation lifecycle 
     if(normalized.aggregate_id!==item)throw new Error("Valuation aggregate must follow the item identity from the event source");
   }
 });
+
+
+Deno.test("atomic sync envelope validates pressing order lifecycle actions", () => {
+  const id="88888888-8888-4888-8888-888888888898";
+  for(const action of ["pressing_order.created","pressing_order.status_changed:in_progress",
+    "pressing_order.status_changed:ready","pressing_order.status_changed:picked_up"]) {
+    const normalized=normalizeAtomicSyncEvent({
+      event_id:SYNC_EVENT,device_id:SYNC_DEVICE,device_sequence:50,
+      org_id:ORG_A,site_id:SITE_A,workstation_id:null,
+      aggregate_type:"pressing_order",aggregate_id:id,action_code:action,
+      payload:{order_id:id,org_id:ORG_A,site_id:SITE_A}
+    });
+    if(normalized.aggregate_id!==id||normalized.action_code!==action)throw new Error("Pressing action mismatch: "+action);
+  }
+});
+Deno.test("atomic sync envelope validates appointment create, transition and reschedule actions", () => {
+  const id="88888888-8888-4888-8888-888888888899";
+  for(const action of ["appointment.created","appointment.status_changed","appointment.rescheduled"]) {
+    const normalized=normalizeAtomicSyncEvent({
+      event_id:SYNC_EVENT,device_id:SYNC_DEVICE,device_sequence:51,
+      org_id:ORG_A,site_id:SITE_A,workstation_id:null,
+      aggregate_type:"appointment",aggregate_id:id,action_code:action,
+      payload:{appointment_id:id,org_id:ORG_A,site_id:SITE_A}
+    });
+    if(normalized.aggregate_id!==id||normalized.action_code!==action)throw new Error("Appointment action mismatch: "+action);
+  }
+});
