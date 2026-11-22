@@ -83,6 +83,14 @@ export async function applySyncPage(appId:string,deviceId:string,page:{changes:W
     tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error??new Error("SYNC_PAGE_APPLY_ABORTED"));
   });} finally {db.close();}
 }
+export async function listAppEvents(appId:string,deviceId:string):Promise<QueueItem[]>{
+  const db=await openDb();
+  try{return await new Promise<QueueItem[]>((resolve,reject)=>{
+    const r=db.transaction(STORE).objectStore(STORE).getAll();
+    r.onsuccess=()=>resolve((r.result as QueueItem[]).filter(item=>item.appId===appId&&item.deviceId===deviceId).sort((x,y)=>x.createdAt-y.createdAt));
+    r.onerror=()=>reject(r.error);
+  });}finally{db.close();}
+}
 export async function getSyncCursor(appId:string,deviceId:string):Promise<number>{
   const db=await openDb();try{return await new Promise<number>((resolve,reject)=>{const r=db.transaction(META).objectStore(META).get(cursorKey(appId,deviceId));r.onsuccess=()=>resolve(Number(r.result?.value??0));r.onerror=()=>reject(r.error);});}finally{db.close();}
 }

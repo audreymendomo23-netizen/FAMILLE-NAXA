@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
+import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, listAppEvents, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
 import { normalizeInventoryItemDraft } from "./erp/inventory";
 import { parseWebSession, type WebAuthSession } from "./auth/session";
 import { createRoot } from "react-dom/client";
@@ -138,6 +138,28 @@ function App() {
     return data;
   }
 
+  async function hydrateWebRecords(activeSession: WebAuthSession) {
+    const [allEvents,pending]=await Promise.all([listAppEvents(OFFLINE_APP_ID,activeSession.deviceId),listQueued(OFFLINE_APP_ID)]);
+    setPendingSyncCount(pending.length);
+    setEntries(previous=>{
+      const next={...previous};
+      for(const item of allEvents){
+        let command:Record<string,unknown>={};
+        try{command=JSON.parse(item.payload) as Record<string,unknown>;}catch{continue;}
+        const moduleId=typeof command.module_id==="string"?command.module_id as ModuleId:"stock";
+        if(!modules.some(module=>module.id===moduleId))continue;
+        const id=typeof command.aggregate_id==="string"?command.aggregate_id:item.eventId;
+        const title=typeof command.display_title==="string"?command.display_title:id;
+        const detail=typeof command.display_detail==="string"?command.display_detail:"";
+        const state=item.state==="acknowledged"?"Confirmé par le serveur":item.state==="rejected"?"Rejeté — vérifier le dossier":item.state==="conflict"?"Conflit — résolution nécessaire":"En attente de synchronisation";
+        const rows=next[moduleId]??[],existing=rows.findIndex(entry=>entry.id===id);
+        const record:Entry={id,title,detail,state,createdAt:new Date(item.createdAt).toLocaleString("fr-FR")};
+        next[moduleId]=existing>=0?rows.map((entry,index)=>index===existing?record:entry):[...rows,record];
+      }
+      return next;
+    });
+  }
+
   async function signIn(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
@@ -153,7 +175,7 @@ function App() {
       const nextSession = parseWebSession(data);
       setAuthSession(nextSession);
       setActiveSiteId(nextSession.account.active_site_ids[0] ?? "");
-      void listQueued(OFFLINE_APP_ID).then((items) => setPendingSyncCount(items.length)).catch(() => setPendingSyncCount(0));
+      void hydrateWebRecords(nextSession).catch((error)=>setAuthMessage(error instanceof Error?error.message:"Historique local indisponible."));
       setAuthenticated(true);
       void syncWebPullChanges(nextSession).then((result) => { if(result.morePending)setAuthMessage("Synchronisation entrante partielle : d'autres pages restent à charger."); }).catch((error) => setAuthMessage(error instanceof Error?error.message:"Lecture du journal serveur impossible."));
       setPreview(false);
@@ -313,7 +335,22 @@ function App() {
       await applySyncPage(OFFLINE_APP_ID,fresh.deviceId,{changes:page.changes,next_cursor:page.next_cursor,has_more:page.has_more});
       received+=page.changes.length;cursor=page.next_cursor;more=page.has_more;pages++;
     }
-    setRemoteChanges(await listSyncChanges(OFFLINE_APP_ID,fresh.deviceId));
+    const stored=await listSyncChanges(OFFLINE_APP_ID,fresh.deviceId);
+    setRemoteChanges(stored);
+    setEntries(previous=>{
+      const next={...previous};
+      for(const change of stored){
+        const moduleId=moduleForSyncAction(change.action_code);
+        if(!moduleId)continue;
+        const payload=change.payload;
+        const title=changeText(payload,["display_name","name","ticket_number","customer_name","customer_reference_or_name","subject","category","staff_name_snapshot","sku"],change.aggregate_id);
+        const detail=changeText(payload,["description","items_summary","service_reference_or_name","phone_contact","unit"],change.action_code);
+        const rows=next[moduleId]??[],existing=rows.findIndex(entry=>entry.id===change.aggregate_id);
+        const record:Entry={id:change.aggregate_id,title,detail,state:"Reçu du serveur · autre appareil",createdAt:new Date(change.recorded_at).toLocaleString("fr-FR")};
+        next[moduleId]=existing>=0?rows.map((entry,index)=>index===existing?record:entry):[...rows,record];
+      }
+      return next;
+    });
     return{received,cursor,morePending:more};
   }
 
@@ -330,7 +367,7 @@ function App() {
       });
       const inventoryItemId = crypto.randomUUID();
       const eventId = crypto.randomUUID();
-      const payload={action_code:"inventory_item.created",aggregate_type:"inventory_item",aggregate_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,payload:{inventory_item_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,sku:item.sku,name:item.name,unit:item.unit,reorder_level:item.reorderLevel,supplier_whatsapp:item.supplierWhatsApp}};
+      const payload={module_id:"stock",display_title:item.name,display_detail:item.sku||item.unit,action_code:"inventory_item.created",aggregate_type:"inventory_item",aggregate_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,payload:{inventory_item_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,sku:item.sku,name:item.name,unit:item.unit,reorder_level:item.reorderLevel,supplier_whatsapp:item.supplierWhatsApp}};
       await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:activeSession.deviceId,payload:JSON.stringify(payload),state:"queued",createdAt:Date.now()});
       setEntries((previous) => ({
         ...previous,
@@ -359,7 +396,8 @@ function App() {
     if (!session.account.active_site_ids.includes(siteId)) throw new Error("SITE_SCOPE_FORBIDDEN");
     const eventId = crypto.randomUUID();
     const command = {
-      module_id: moduleId, action_code: actionCode, aggregate_type: aggregateType,
+      module_id: moduleId, display_title: title, display_detail: detail,
+      action_code: actionCode, aggregate_type: aggregateType,
       aggregate_id: aggregateId, org_id: session.account.organization_id, site_id: siteId,
       payload: { ...payload, org_id: session.account.organization_id, site_id: siteId },
     };
@@ -638,6 +676,21 @@ function App() {
   );
 }
 
+function moduleForSyncAction(action: string): ModuleId | null {
+  if(action.startsWith("inventory_item.")||action.startsWith("inventory_movement.")||action.startsWith("supplier.")||action.startsWith("purchase."))return "stock";
+  if(action.startsWith("service."))return "services";
+  if(action.startsWith("customer."))return "customers";
+  if(action.startsWith("pressing_order."))return "pressing";
+  if(action.startsWith("appointment."))return "agenda";
+  if(action.startsWith("expense.")||action.startsWith("sale.")||action.startsWith("cash_session."))return "cash";
+  if(action.startsWith("staff_"))return "team";
+  if(action==="support_request.created")return "help";
+  return null;
+}
+function changeText(payload:Record<string,unknown>,keys:string[],fallback:string):string {
+  for(const key of keys)if(typeof payload[key]==="string"&&(payload[key] as string).trim())return (payload[key] as string).trim();
+  return fallback;
+}
 function modeLabel(mode: BusinessMode) {
   if (mode === "single_site_multi_workstation") return "Responsable · plusieurs emplacements";
   if (mode === "multi_site_network") return "Promoteur · réseau multi-sites";
