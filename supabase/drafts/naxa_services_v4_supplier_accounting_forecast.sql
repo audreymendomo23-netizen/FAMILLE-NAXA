@@ -1498,6 +1498,11 @@ begin
        or not public.ns_can_manage_org(p_org_id) then
       raise exception 'NAXA_SYNC_SCOPE_FORBIDDEN';
     end if;
+  elsif p_action_code = 'support_request.created' and p_site_id is null then
+    if p_payload->>'site_id' is not null or p_workstation_id is not null
+       or not public.ns_is_org_member(p_org_id) then
+      raise exception 'NAXA_SYNC_SCOPE_FORBIDDEN';
+    end if;
   else
     if p_site_id is null
        or (p_payload->>'site_id') is distinct from p_site_id::text
