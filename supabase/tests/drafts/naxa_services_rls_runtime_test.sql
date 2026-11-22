@@ -1,7 +1,9 @@
 -- Runtime RLS tests for disposable PostgreSQL CI only; uses synthetic fixtures.
 \set ON_ERROR_STOP on
 BEGIN;
-INSERT INTO auth.users(id) VALUES ('10000000-0000-4000-8000-000000000001');
+INSERT INTO auth.users(id) VALUES
+ ('10000000-0000-4000-8000-000000000001'),
+ ('10000000-0000-4000-8000-000000000002');
 INSERT INTO public.ns_organizations(id,display_name,business_mode,status,default_locale) VALUES
  ('20000000-0000-4000-8000-000000000001','Fixture organisation A','multi_site_network','active','fr'),
  ('20000000-0000-4000-8000-000000000002','Fixture organisation B','solo','active','fr');
@@ -13,13 +15,21 @@ INSERT INTO public.ns_workstations(id,org_id,site_id,code,name,kind,status) VALU
  ('40000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','A1-C1','Workstation A1-C1','hair_chair','active'),
  ('40000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','A1-C2','Workstation A1-C2','hair_chair','active');
 INSERT INTO public.ns_accounts(id,auth_user_id,login_id,auth_alias,status,password_change_required)
-VALUES ('50000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','CI-USER-A','ci-user-a@example.invalid','active',false);
+VALUES
+ ('50000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','CI-USER-A','ci-user-a@example.invalid','active',false),
+ ('50000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000002','CI-PROMOTER-A','ci-promoter-a@example.invalid','active',false);
 INSERT INTO public.ns_members(id,org_id,account_id,display_name,role_code,status)
-VALUES ('60000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','Fixture Site Manager','site_manager','active');
+VALUES
+ ('60000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','Fixture Site Manager','site_manager','active'),
+ ('60000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000002','Fixture Network Promoter','promoter','active');
 INSERT INTO public.ns_member_scopes(id,org_id,member_id,scope_type,scope_id,site_id,workstation_id,can_read,can_operate,can_manage)
 VALUES ('70000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000001','site','30000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001',NULL,true,true,true);
+INSERT INTO public.ns_member_scopes(id,org_id,member_id,scope_type,scope_id,site_id,workstation_id,can_read,can_operate,can_manage)
+VALUES ('70000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','60000000-0000-4000-8000-000000000002','organization','20000000-0000-4000-8000-000000000001',NULL,NULL,true,true,true);
 INSERT INTO public.ns_devices(id,account_id,installation_id,platform,label,remember_device,session_id)
 VALUES ('80000000-0000-4000-8000-000000000001','50000000-0000-4000-8000-000000000001','ci-installation-a','android','Disposable CI device',true,'ci-session-a');
+INSERT INTO public.ns_devices(id,account_id,installation_id,platform,label,remember_device,session_id)
+VALUES ('80000000-0000-4000-8000-000000000002','50000000-0000-4000-8000-000000000002','ci-installation-promoter','android','Disposable CI promoter device',true,'ci-session-promoter');
 INSERT INTO public.ns_customers(id,org_id,site_id,display_name,phone_contact) VALUES
  ('90000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','Customer A1','690000001'),
  ('90000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000002','Customer A2','690000002'),
