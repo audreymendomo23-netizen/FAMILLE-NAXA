@@ -4481,14 +4481,12 @@ begin
   cross join lateral (
     select coalesce(array_agg(target.site_id order by target.site_id), '{}'::uuid[]) as visible_site_ids
     from unnest(c.target_site_ids) as target(site_id)
-    where (
-      c.workstation_id is not null
-      and target.site_id=c.site_id
-      and public.ns_can_access_workstation(p_org_id,target.site_id,c.workstation_id)
-    ) or (
-      (c.workstation_id is null or target.site_id<>c.site_id)
-      and public.ns_can_access_site(p_org_id,target.site_id)
-    )
+    where public.ns_can_access_site(p_org_id,target.site_id)
+       or (
+         c.workstation_id is not null
+         and target.site_id=c.site_id
+         and public.ns_can_access_workstation(p_org_id,target.site_id,c.workstation_id)
+       )
   ) visible
   where c.org_id = p_org_id
     and c.change_cursor > p_after_cursor
