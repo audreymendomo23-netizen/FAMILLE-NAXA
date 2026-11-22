@@ -98,7 +98,7 @@ Les tests finance.test.js vérifient ces invariants.
 
 ### 3.1 Synchronisation Android
 
-SupplierSyncCoordinator.kt se décrit explicitement comme un coordinateur manuel et opt-in, « supplier-cycle events only ». Son set supportedActions contient exactement quatre actions : supplier.saved, purchase.ordered, purchase.receipt.confirmed et supplier.payment.recorded. Il lit uniquement ces actions dans l'outbox. Il bloque les achats avec article de stock non mappé et les paiements fournisseurs espèces sans session de caisse distante.
+Au premier audit, SupplierSyncCoordinator.kt était décrit comme limité au seul cycle fournisseur et à quatre actions. **État courant au 22 novembre 2026 :** le coordinateur manuel/opt-in accepte 11 codes d'action avec snapshots : `supplier.saved`, `purchase.ordered`, `purchase.receipt.confirmed`, `supplier.payment.recorded`, quatre variantes `inventory_item.*` et trois variantes `inventory_movement.*`. Il bloque toujours les achats sans mapping d'article distant, les mouvements sans article distant et les règlements fournisseurs espèces sans session de caisse distante.
 
 Le gate de contrat commun confirme le format des enveloppes et politiques de conflit ; il ne prouve pas un handler universel pour tous les modules.
 
