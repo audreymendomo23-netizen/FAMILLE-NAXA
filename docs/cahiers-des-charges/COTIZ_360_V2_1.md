@@ -1203,7 +1203,7 @@ Règles :
 - statut d'envoi, de livraison et de lecture uniquement si techniquement confirmé ;
 - pas de promesse de livraison si le canal ne fournit pas de preuve.
 
-WhatsApp préparé n'est pas un envoi automatique. L'utilisateur conserve le contrôle lorsqu'un lien ouvre WhatsApp.
+WhatsApp préparé n'est pas un envoi automatique. L'utilisateur conserve le contrôle lorsqu'un lien ouvre WhatsApp. Des briefings du matin et du soir, hérités de la V1, peuvent être proposés en option, à horaires et destinataires configurables ; ils ne doivent pas transmettre des données hors des droits du destinataire ni produire de notifications excessives.
 
 # 22. COTIZ Intelligence — Assistant IA et prévention des risques
 
@@ -1334,7 +1334,7 @@ Formats : PDF, XLSX et CSV, avec :
 - statut de synchronisation ;
 - distinction des montants déclarés et confirmés.
 
-Le « grand livre » COTIZ est un registre de gestion communautaire, pas une comptabilité certifiée ou réglementaire. La structure comptable est un outil de suivi, à faire confirmer par un professionnel pour chaque activité concernée.
+Le « grand livre » COTIZ est un registre de gestion communautaire, pas une comptabilité certifiée ou réglementaire. La structure comptable est un outil de suivi, à faire confirmer par un professionnel pour chaque activité concernée. Un plan de comptes de gestion configurable et une correspondance SYSCOHADA peuvent être étudiés comme aide à l'export et à la lecture par un comptable ; ils ne doivent jamais être présentés comme certification comptable, conformité fiscale ou validation de déclarations.
 
 Un expert-comptable peut recevoir un lien de consultation temporaire, limité à un groupe, une période et un périmètre, révocable et sans droit de modification.
 
@@ -1638,6 +1638,16 @@ Avant commercialisation, analyser séparément :
 - stratégie de réponse aux fuites.
 
 Aucune clé Supabase `service_role`, aucun secret de paiement, clé de signature ou jeton privilégié ne doit être inclus dans l'application ou le dépôt public.
+
+### Compléments de sécurité issus du socle V1
+
+- Déverrouillage local par code d'accès applicatif distinct du mot de passe, ou biométrie système lorsque disponible ; une valeur de quatre chiffres était proposée dans la V1 et doit être confirmée par test de risque et d'ergonomie.
+- Limitation des tentatives de connexion/déverrouillage ; V1 proposait un blocage temporaire après cinq échecs. La durée et le mécanisme de reprise doivent être définis et testés.
+- Gestion des appareils de confiance : notification d'un nouvel appareil, consultation des sessions et déconnexion à distance. Un plafond initial de deux appareils actifs par compte peut être évalué, avec procédure d'approbation et révocation ; il ne doit pas bloquer un utilisateur sans mécanisme de récupération sûr.
+- Stockage local des données sensibles chiffré ; clés protégées par Android Keystore ; biométrie traitée par le système et non stockée par COTIZ.
+- Protection de l'APK : signature officielle, contrôle de version minimale et mécanismes d'intégrité côté serveur lorsque techniquement pertinents. La protection anti-copie reste dissuasive et ne remplace pas l'autorisation serveur.
+- Récupération de compte fondée sur une vérification sécurisée ; aucun mot de passe, PIN, OTP ou code secret Mobile Money ne doit être demandé par un agent via WhatsApp.
+- Pas de seuil fixe de 7/14 jours hors connexion repris automatiquement de V1 : la durée/quantité de cache et le risque de synchronisation sont définis par domaine, stockage et essais. Les opérations financières en attente ne sont pas effacées par simple dépassement de durée.
 
 ## 29.4 Prévention des fraudes
 
@@ -1946,6 +1956,8 @@ La recette doit couvrir les scénarios suivants au minimum. Une fonctionnalité 
 - **SEC-08** : les fonctions financières conditionnelles restent désactivées tant que le go juridique n'est pas accordé.
 - **SEC-09** : les droits de modération sont limités et audités.
 - **SEC-10** : les actions sensibles nécessitent confirmation et preuve.
+- **SEC-11** : nouvel appareil, révocation de session, limitation de tentatives et déverrouillage local sont testés.
+- **SEC-12** : l'APK non signée par la clé officielle ou une version serveur interdite ne peut pas accéder aux données sensibles.
 
 # 34. Indicateurs de pilotage
 
