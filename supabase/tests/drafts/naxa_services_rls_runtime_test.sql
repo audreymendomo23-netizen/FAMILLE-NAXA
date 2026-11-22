@@ -818,6 +818,8 @@ $n3_revoked_device$;
 RESET ROLE;
 
 SET ROLE authenticated;
+SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-a"}',false);
 DO $service_crm_sync$
 DECLARE
   v_result jsonb;
