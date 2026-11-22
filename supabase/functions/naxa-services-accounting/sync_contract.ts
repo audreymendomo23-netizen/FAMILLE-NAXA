@@ -193,6 +193,14 @@ const ATOMIC_SYNC_ACTIONS: Record<string, { aggregate: string; idField: string; 
   "inventory_valuation.imported": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
   "inventory_valuation.import_updated": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
   "inventory_valuation.updated": { aggregate: "inventory_valuation", idField: "inventory_item_id" },
+
+  "pressing_order.created": { aggregate: "pressing_order", idField: "order_id" },
+  "pressing_order.status_changed:in_progress": { aggregate: "pressing_order", idField: "order_id" },
+  "pressing_order.status_changed:ready": { aggregate: "pressing_order", idField: "order_id" },
+  "pressing_order.status_changed:picked_up": { aggregate: "pressing_order", idField: "order_id" },
+  "appointment.created": { aggregate: "appointment", idField: "appointment_id" },
+  "appointment.status_changed": { aggregate: "appointment", idField: "appointment_id" },
+  "appointment.rescheduled": { aggregate: "appointment", idField: "appointment_id" },
 };
 
 export function normalizeAtomicSyncEvent(value: unknown): AtomicSyncEvent {
