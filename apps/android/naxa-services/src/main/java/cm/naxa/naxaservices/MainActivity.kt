@@ -864,9 +864,13 @@ private fun activityVisibleRoutes(activity: String?): Set<AppRoute> {
         AppRoute.ORGANIZATION, AppRoute.NETWORK, AppRoute.SITES, AppRoute.WORKSTATIONS
     )
     return when (activity) {
+        // Pressing keeps its itemized deposit/ticket state machine.
         "pressing" -> shared + setOf(AppRoute.PRESSING, AppRoute.AGENDA, AppRoute.SERVICES)
-        "coiffure", "beaute" -> shared + setOf(AppRoute.AGENDA, AppRoute.SERVICES)
-        "parfumerie" -> shared + setOf(AppRoute.SERVICES)
+        // Hair and beauty require both appointment booking and a service dossier lifecycle.
+        "coiffure", "beaute" -> shared + setOf(AppRoute.WORK_ORDERS, AppRoute.AGENDA, AppRoute.SERVICES)
+        // Perfume retail uses catalog, inventory, purchasing and cash; WORK_ORDERS is
+        // reserved for customer reservations/special orders, never ordinary checkout.
+        "parfumerie" -> shared + setOf(AppRoute.WORK_ORDERS, AppRoute.SERVICES)
         "couture", "reparation", "menuiserie", "garage", "nettoyage", "domicile", "impression", "photo_evenementiel" ->
             shared + setOf(AppRoute.WORK_ORDERS, AppRoute.AGENDA, AppRoute.SERVICES)
         else -> shared + setOf(AppRoute.PRESSING, AppRoute.AGENDA, AppRoute.SERVICES, AppRoute.WORK_ORDERS)
