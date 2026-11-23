@@ -143,6 +143,17 @@ class ActivityWorkflowCatalogTest {
     }
 
     @Test
+    fun legacyOpenStatusUsesTheSameReceivedTransitions() {
+        assertEquals(
+            ActivityWorkflows.nextStatusCodes("garage", "received"),
+            ActivityWorkflows.nextStatusCodes("garage", "open")
+        )
+        assertEquals(
+            ActivityWorkflows.get("couture").nextStages("received").map { it.code },
+            ActivityWorkflows.get("couture").nextStages("open").map { it.code }
+        )
+    }
+
     fun unknownProfilesFallBackToConfigurableOtherActivity() {
         assertEquals("autre", ActivityWorkflows.get("not-a-sector").profile)
         assertEquals("autre", ActivityWorkflows.get(null).profile)
