@@ -199,8 +199,9 @@ function App() {
           id,title,detail,state,createdAt:new Date(item.createdAt).toLocaleString("fr-FR"),
           recordType: command.aggregate_type === "work_order" || command.aggregate_type === "repair_order" || command.aggregate_type === "service_order"
             ? command.aggregate_type : existingEntry?.recordType,
-          status: typeof serverRecord.status === "string" ? serverRecord.status
-            : (item.state === "acknowledged" && existingEntry?.status && !hasLocalStatus) ? existingEntry.status
+          status: item.state === "acknowledged" && typeof existingEntry?.revision === "number"
+            ? existingEntry.status
+            : typeof serverRecord.status === "string" ? serverRecord.status
             : typeof payload.to_status === "string" ? payload.to_status
             : typeof payload.status === "string" ? payload.status
             : existingEntry?.status,
