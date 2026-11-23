@@ -105,6 +105,19 @@ jobs:
         run: npm test --workspace @famille/naxa-services-web
       - name: Build NAXA SERVICES Web
         run: npm run build --workspace @famille/naxa-services-web
+      - name: Install Chromium browser test runner
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Run NAXA SERVICES Web and PWA browser E2E
+        run: npx playwright test --config apps/web/naxa-services/playwright.config.ts
+      - name: Upload NAXA SERVICES browser traces
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: naxa-services-web-browser-e2e
+          path: apps/web/naxa-services/test-results/
+          if-no-files-found: ignore
 
   sync-contract:
     name: Cross-application offline synchronization contract
