@@ -13,6 +13,7 @@ const valid = {
     organization_name: "NAXA Services CI",
     display_name: "Test member",
     role_code: "site_manager",
+    activity_profile: "garage",
     business_mode: "multi_site_network",
     default_locale: "en",
     active_site_ids: ["30000000-0000-4000-8000-000000000001"],
@@ -37,6 +38,7 @@ describe("Web authentication session", () => {
     expect(session.account.active_sites[0].name).toBe("Douala principal");
     expect(session.account.business_mode).toBe("multi_site_network");
     expect(session.account.default_locale).toBe("en");
+    expect(session.account.activity_profile).toBe("garage");
     expect(Object.isFrozen(session.account.active_sites)).toBe(true);
   });
 
@@ -49,6 +51,12 @@ describe("Web authentication session", () => {
       ...valid,
       account: { ...valid.account, active_sites: [{ ...valid.account.active_sites[0], id: "40000000-0000-4000-8000-000000000001" }] },
     })).toThrow(/WEB_AUTH_SITE_SCOPE_MISMATCH/);
+  });
+
+  it("normalizes a missing or unknown activity profile to the configurable profile", () => {
+    const { activity_profile: _ignored, ...accountWithoutProfile } = valid.account;
+    expect(parseWebSession({ ...valid, account: accountWithoutProfile }).account.activity_profile).toBe("autre");
+    expect(parseWebSession({ ...valid, account: { ...valid.account, activity_profile: "unknown" } }).account.activity_profile).toBe("autre");
   });
 
   it("bounds untrusted expiry to one minute minimum and one day maximum", () => {
