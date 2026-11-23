@@ -62,6 +62,10 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
         payload: JSON.stringify({ sequence: index }), state: "queued", createdAt: index,
       });
     }
+    await enqueue({
+      appId: APP, eventId: "lease-event-device-b", deviceId: DEVICE_B,
+      payload: JSON.stringify({ sequence: 1 }), state: "queued", createdAt: 5,
+    });
     const [left, right] = await Promise.all([
       acquireDueBatch(3, 10_000, 60_000, APP, DEVICE_A),
       acquireDueBatch(3, 10_000, 60_000, APP, DEVICE_A),
