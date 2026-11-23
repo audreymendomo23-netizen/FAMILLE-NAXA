@@ -70,7 +70,10 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
     const request = route.request().postDataJSON() as Record<string, unknown>;
     if (request.action === "pull_sync_changes") {
       const afterCursor = Number(request.after_cursor ?? 0);
-      const changes = incomingChanges.filter((change) => Number(change.cursor) > afterCursor);
+      const changes = incomingChanges.filter((change) => {
+        const payload = change.payload as Record<string, unknown> | undefined;
+        return Number(change.cursor) > afterCursor && payload?.org_id === request.org_id;
+      });
       const nextCursor = changes.length
         ? Math.max(...changes.map((change) => Number(change.cursor)))
         : afterCursor;
