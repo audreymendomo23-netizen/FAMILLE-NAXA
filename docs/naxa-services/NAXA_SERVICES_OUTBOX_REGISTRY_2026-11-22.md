@@ -1,8 +1,8 @@
 # NAXA SERVICES — registre exhaustif de l'outbox (N1)
 
-**Version :** 1.1  
-**Date :** 22 novembre 2026  
-**HEAD applicatif audité :** `fd39c37ab5284338c0920333a435f31a3186863f`  
+**Version :** 1.4  
+**Date :** 23 novembre 2026  
+**HEAD applicatif audité :** `e700adad156bb8aa9279dfcd20584ed791b2fa96`  
 **Fichier source :** `apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/LocalErpStore.kt`
 
 ## Décision
@@ -24,61 +24,61 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 | ID | Ligne source | Méthode | Agrégat | Expression action | Variantes concrètes | Qualification | Routage |
 |---|---:|---|---|---|---|---|---|
-| OBX-001 | 1316 | `saveSupplier` | `supplier` | `"supplier.saved"` | supplier.saved | **REMOTE_MUTATION** | `save_supplier` |
-| OBX-002 | 1395 | `createSupplierPurchase` | `purchase` | `"purchase.ordered"` | purchase.ordered | **REMOTE_MUTATION** | `create_supplier_purchase` |
-| OBX-003 | 1510 | `receiveSupplierPurchaseLine` | `purchase_receipt` | `"purchase.receipt.confirmed"` | purchase.receipt.confirmed | **REMOTE_MUTATION** | `receive_supplier_purchase_line` |
-| OBX-004 | 1575 | `recordSupplierPayment` | `supplier_payment` | `"supplier.payment.recorded"` | supplier.payment.recorded | **REMOTE_MUTATION** | `record_supplier_payment` |
-| OBX-005 | 1613 | `postAccountingEntry` | `accounting_entry` | `"accounting.entry.posted"` | accounting.entry.posted | **DERIVED_SERVER_LEDGER** | Server-side ledger posting inside the canonical parent RPC; no accounting.entry.posted RPC. |
-| OBX-006 | 1622 | `saveSupplierWhatsApp` | `inventory_item` | `"inventory_item.supplier_whatsapp_updated"` | inventory_item.supplier_whatsapp_updated | **REMOTE_MUTATION** | `save_inventory_item` |
-| OBX-007 | 1642 | `saveRecurringCharge` | `recurring_charge` | `"recurring_charge.saved"` | recurring_charge.saved | **REMOTE_MUTATION** | `upsert_recurring_charge` |
-| OBX-008 | 1675 | `recordRecurringChargePayment` | `recurring_charge` | `"recurring_charge.payment_recorded"` | recurring_charge.payment_recorded | **REMOTE_MUTATION** | `record_recurring_charge_payment` |
-| OBX-009 | 1689 | `deactivateRecurringCharge` | `recurring_charge` | `"recurring_charge.deactivated"` | recurring_charge.deactivated | **REMOTE_MUTATION** | `deactivate_recurring_charge` |
-| OBX-010 | 1741 | `saveLoyaltyProgram` | `loyalty_program` | `"loyalty_program.updated"` | loyalty_program.updated | **REMOTE_MUTATION** | `upsert_loyalty_program` |
-| OBX-011 | 1785 | `recordLoyaltyActivity` | `loyalty_activity` | `"loyalty_activity.recorded"` | loyalty_activity.recorded | **REMOTE_MUTATION** | `record_loyalty_activity` |
-| OBX-012 | 1792 | `redeemLoyaltyReward` | `loyalty_reward` | `"loyalty_reward.redeemed"` | loyalty_reward.redeemed | **REMOTE_MUTATION** | `redeem_loyalty_reward` |
-| OBX-013 | 1863 | `createPressingOrder` | `pressing_order` | `"pressing_order.created"` | pressing_order.created | **REMOTE_MUTATION** | `create_pressing_order` |
-| OBX-014 | 1892 | `advancePressingOrder` | `pressing_order` | `"pressing_order.status_changed:" + next` | pressing_order.status_changed | **REMOTE_MUTATION** | `transition_pressing_order` |
-| OBX-015 | 1935 | `createAppointment` | `appointment` | `"appointment.created"` | appointment.created | **REMOTE_MUTATION** | `create_appointment` |
-| OBX-016 | 1961 | `openCashSession` | `cash_session` | `"cash_session.opened"` | cash_session.opened | **REMOTE_MUTATION** | `open_cash_session` |
-| OBX-017 | 2033 | `recordSale` | `inventory_movement` | `"inventory_movement.sale_out"` | inventory_movement.sale_out | **COMPOSITE_CHILD** | Enfant de `sale.created` |
-| OBX-018 | 2036 | `recordSale` | `sale` | `"sale.created"` | sale.created | **REMOTE_MUTATION** | `record_sale` |
-| OBX-019 | 2077 | `cancelPendingMobileMoneySale` | `sale` | `"sale.mobile_money_cancelled"` | sale.mobile_money_cancelled | **REMOTE_MUTATION** | `cancel_pending_mobile_money_sale` |
-| OBX-020 | 2121 | `applyServerConfirmedMobileMoneySale` | `inventory_movement` | `"inventory_movement.mobile_money_sale_out"` | inventory_movement.mobile_money_sale_out | **COMPOSITE_CHILD** | Enfant de `sale.payment_confirmed_server` |
-| OBX-021 | 2140 | `applyServerConfirmedMobileMoneySale` | `sale` | `"sale.payment_confirmed_server"` | sale.payment_confirmed_server | **SERVER_AUTHORITATIVE_MIRROR** | Mobile Money webhook/Edge confirmation owns this transition; Android only mirrors the confirmed state. |
-| OBX-022 | 2173 | `addExpense` | `expense` | `"expense.created"` | expense.created | **REMOTE_MUTATION** | `record_expense` |
-| OBX-023 | 2202 | `closeCashSession` | `cash_session` | `"cash_session.closed"` | cash_session.closed | **REMOTE_MUTATION** | `close_cash_session` |
-| OBX-024 | 2216 | `saveOrganizationProfile` | `organization` | `"organization.profile_saved"` | organization.profile_saved | **API_DIRECT_MIRROR** | AuthApi.updateOrganizationProfile (existing direct endpoint) |
-| OBX-025 | 2223 | `createLocalSite` | `site` | `"site.created"` | site.created | **LEGACY_LOCAL_HELPER** | AuthApi.createSite (existing direct endpoint) |
-| OBX-026 | 2277 | `createLocalWorkstation` | `workstation` | `"workstation.created"` | workstation.created | **LEGACY_LOCAL_HELPER** | AuthApi.createWorkstation (existing direct endpoint) |
-| OBX-027 | 2319 | `createLocalService` | `service` | `"service.created"` | service.created | **REMOTE_MUTATION** | `create_service` |
-| OBX-028 | 2368 | `createLocalCustomer` | `customer` | `"customer.created"` | customer.created | **REMOTE_MUTATION** | `upsert_customer` |
-| OBX-029 | 2419 | `updateLocalCustomer` | `customer` | `"customer.updated"` | customer.updated | **REMOTE_MUTATION** | `upsert_customer` |
-| OBX-030 | 2468 | `createCustomerFollowUp` | `customer_followup` | `"customer_followup.created"` | customer_followup.created | **REMOTE_MUTATION** | `create_customer_followup` |
-| OBX-031 | 2497 | `completeCustomerFollowUp` | `customer_followup` | `"customer_followup.completed"` | customer_followup.completed | **REMOTE_MUTATION** | `complete_customer_followup` |
-| OBX-032 | 2508 | `createInventoryItem` | `inventory_item` | `"inventory_item.created"` | inventory_item.created | **REMOTE_MUTATION** | `save_inventory_item` |
-| OBX-033 | 2567 | `importInventoryBatch` | `inventory_movement` | `"inventory_movement.import_adjustment"` | inventory_movement.import_adjustment | **REMOTE_MUTATION** | `record_inventory_movement` |
-| OBX-034 | 2584 | `importInventoryBatch` | `inventory_valuation` | `"inventory_valuation.import_updated"` | inventory_valuation.import_updated | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
-| OBX-035 | 2586 | `importInventoryBatch` | `inventory_item` | `"inventory_item.import_updated"` | inventory_item.import_updated | **REMOTE_MUTATION** | `save_inventory_item` |
-| OBX-036 | 2602 | `importInventoryBatch` | `inventory_item` | `"inventory_item.imported"` | inventory_item.imported | **REMOTE_MUTATION** | `save_inventory_item` |
-| OBX-037 | 2617 | `importInventoryBatch` | `inventory_movement` | `"inventory_movement.import_initial"` | inventory_movement.import_initial | **REMOTE_MUTATION** | `record_inventory_movement` |
-| OBX-038 | 2631 | `importInventoryBatch` | `inventory_valuation` | `"inventory_valuation.imported"` | inventory_valuation.imported | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
-| OBX-039 | 2662 | `recordInventoryMovement` | `inventory_movement` | `"inventory_movement.created"` | inventory_movement.created | **REMOTE_MUTATION** | `record_inventory_movement` |
-| OBX-040 | 2671 | `createSupportRequest` | `support_request` | `"support_request.created"` | support_request.created | **REMOTE_MUTATION** | `create_support_request` |
-| OBX-041 | 2705 | `transitionAppointmentStatus` | `appointment` | `"appointment.status_changed"` | appointment.status_changed | **REMOTE_MUTATION** | `transition_appointment` |
-| OBX-042 | 2739 | `rescheduleAppointment` | `appointment` | `"appointment.rescheduled"` | appointment.rescheduled | **REMOTE_MUTATION** | `reschedule_appointment` |
-| OBX-043 | 2779 | `updateServiceCatalogItem` | `service` | `"service.updated"` | service.updated | **REMOTE_MUTATION** | `update_service` |
-| OBX-044 | 2811 | `saveServiceConfiguration` | `service` | `"service.configuration_updated"` | service.configuration_updated | **REMOTE_MUTATION** | `update_service_configuration` |
-| OBX-045 | 2875 | `convertWaitlistToAppointment` | `appointment` | `"appointment.created_from_waitlist"` | appointment.created_from_waitlist | **REMOTE_MUTATION** | `convert_waitlist_to_appointment` |
-| OBX-046 | 2876 | `convertWaitlistToAppointment` | `appointment_waitlist` | `"appointment_waitlist.converted"` | appointment_waitlist.converted | **COMPOSITE_CHILD** | Enfant de `appointment.created_from_waitlist` |
-| OBX-047 | 2957 | `recordStaffTimeEvent` | `eventType` | `eventType + ".recorded"` | staff_clock_in.recorded, staff_break_start.recorded, staff_break_end.recorded, staff_clock_out.recorded | **REMOTE_MUTATION** | `record_staff_time_event` |
-| OBX-048 | 2997 | `createManagementRecord` | `recordType` | `recordType + ".created"` | quote.created, invoice.created, credit_note.created, refund_due.created, customer_receivable.created, purchase.created, supplier.created, tax_estimate.created, business_goal.created, subscription_request.created, support_chat.created, work_order.created, repair_order.created, service_order.created, appointment_waitlist.created, staff_clock_in.created, staff_clock_out.created, staff_break_start.created, staff_break_end.created, staff_commission.created, staff_advance.created, staff_bonus.created | **REMOTE_MUTATION** | `create_management_record` |
-| OBX-049 | 3073 | `createInventoryTransfer` | `inventory_transfer` | `"inventory_transfer.requested"` | inventory_transfer.requested | **REMOTE_MUTATION** | `create_inventory_transfer` |
-| OBX-050 | 3238 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.purchase_received"` | inventory_movement.purchase_received | **COMPOSITE_CHILD** | Enfant de `management_record.status_changed` |
-| OBX-051 | 3324 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_out"` | inventory_movement.transfer_out | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
-| OBX-052 | 3325 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_in"` | inventory_movement.transfer_in | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
-| OBX-053 | 3345 | `transitionManagementRecord` | `inventory_transfer` | `"inventory_transfer.received_at_destination"` | inventory_transfer.received_at_destination | **REMOTE_MUTATION** | `receive_inventory_transfer` |
-| OBX-054 | 3363 | `transitionManagementRecord` | `current.recordType` | `current.recordType + ".status_changed"` | quote.status_changed, invoice.status_changed, credit_note.status_changed, refund_due.status_changed, customer_receivable.status_changed, purchase.status_changed, supplier.status_changed, tax_estimate.status_changed, business_goal.status_changed, subscription_request.status_changed, support_chat.status_changed, work_order.status_changed, repair_order.status_changed, service_order.status_changed, appointment_waitlist.status_changed, staff_clock_in.status_changed, staff_clock_out.status_changed, staff_break_start.status_changed, staff_break_end.status_changed, staff_commission.status_changed, staff_advance.status_changed, staff_bonus.status_changed, inventory_transfer.status_changed | **REMOTE_MUTATION** | `transition_management_record` |
-| OBX-055 | 3384 | `saveInventoryValuation` | `inventory_valuation` | `"inventory_valuation.updated"` | inventory_valuation.updated | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
+| OBX-001 | 1739 | `saveSupplier` | `supplier` | `"supplier.saved"` | supplier.saved | **REMOTE_MUTATION** | `save_supplier` |
+| OBX-002 | 1818 | `createSupplierPurchase` | `purchase` | `"purchase.ordered"` | purchase.ordered | **REMOTE_MUTATION** | `create_supplier_purchase` |
+| OBX-003 | 1935 | `receiveSupplierPurchaseLine` | `purchase_receipt` | `"purchase.receipt.confirmed"` | purchase.receipt.confirmed | **REMOTE_MUTATION** | `receive_supplier_purchase_line` |
+| OBX-004 | 2001 | `recordSupplierPayment` | `supplier_payment` | `"supplier.payment.recorded"` | supplier.payment.recorded | **REMOTE_MUTATION** | `record_supplier_payment` |
+| OBX-005 | 2039 | `postAccountingEntry` | `accounting_entry` | `"accounting.entry.posted"` | accounting.entry.posted | **DERIVED_SERVER_LEDGER** | Server-side ledger posting inside the canonical parent RPC; no accounting.entry.posted RPC. |
+| OBX-006 | 2048 | `saveSupplierWhatsApp` | `inventory_item` | `"inventory_item.supplier_whatsapp_updated"` | inventory_item.supplier_whatsapp_updated | **REMOTE_MUTATION** | `save_inventory_item` |
+| OBX-007 | 2082 | `saveRecurringCharge` | `recurring_charge` | `"recurring_charge.saved"` | recurring_charge.saved | **REMOTE_MUTATION** | `upsert_recurring_charge` |
+| OBX-008 | 2125 | `recordRecurringChargePayment` | `recurring_charge` | `"recurring_charge.payment_recorded"` | recurring_charge.payment_recorded | **REMOTE_MUTATION** | `record_recurring_charge_payment` |
+| OBX-009 | 2146 | `deactivateRecurringCharge` | `recurring_charge` | `"recurring_charge.deactivated"` | recurring_charge.deactivated | **REMOTE_MUTATION** | `deactivate_recurring_charge` |
+| OBX-010 | 2212 | `saveLoyaltyProgram` | `loyalty_program` | `"loyalty_program.updated"` | loyalty_program.updated | **REMOTE_MUTATION** | `upsert_loyalty_program` |
+| OBX-011 | 2264 | `recordLoyaltyActivity` | `loyalty_activity` | `"loyalty_activity.recorded"` | loyalty_activity.recorded | **REMOTE_MUTATION** | `record_loyalty_activity` |
+| OBX-012 | 2282 | `redeemLoyaltyReward` | `loyalty_reward` | `"loyalty_reward.redeemed"` | loyalty_reward.redeemed | **REMOTE_MUTATION** | `redeem_loyalty_reward` |
+| OBX-013 | 2356 | `createPressingOrder` | `pressing_order` | `"pressing_order.created"` | pressing_order.created | **REMOTE_MUTATION** | `create_pressing_order` |
+| OBX-014 | 2398 | `advancePressingOrder` | `pressing_order` | `"pressing_order.status_changed:" + next` | pressing_order.status_changed | **REMOTE_MUTATION** | `transition_pressing_order` |
+| OBX-015 | 2453 | `createAppointment` | `appointment` | `"appointment.created"` | appointment.created | **REMOTE_MUTATION** | `create_appointment` |
+| OBX-016 | 2488 | `openCashSession` | `cash_session` | `"cash_session.opened"` | cash_session.opened | **REMOTE_MUTATION** | `open_cash_session` |
+| OBX-017 | 2560 | `recordSale` | `inventory_movement` | `"inventory_movement.sale_out"` | inventory_movement.sale_out | **COMPOSITE_CHILD** | Enfant de `sale.created` |
+| OBX-018 | 2579 | `recordSale` | `sale` | `"sale.created"` | sale.created | **REMOTE_MUTATION** | `record_sale` |
+| OBX-019 | 2627 | `cancelPendingMobileMoneySale` | `sale` | `"sale.mobile_money_cancelled"` | sale.mobile_money_cancelled | **REMOTE_MUTATION** | `cancel_pending_mobile_money_sale` |
+| OBX-020 | 2671 | `applyServerConfirmedMobileMoneySale` | `inventory_movement` | `"inventory_movement.mobile_money_sale_out"` | inventory_movement.mobile_money_sale_out | **COMPOSITE_CHILD** | Enfant de `sale.payment_confirmed_server` |
+| OBX-021 | 2690 | `applyServerConfirmedMobileMoneySale` | `sale` | `"sale.payment_confirmed_server"` | sale.payment_confirmed_server | **SERVER_AUTHORITATIVE_MIRROR** | Mobile Money webhook/Edge confirmation owns this transition; Android only mirrors the confirmed state. |
+| OBX-022 | 2733 | `addExpense` | `expense` | `"expense.created"` | expense.created | **REMOTE_MUTATION** | `record_expense` |
+| OBX-023 | 2771 | `closeCashSession` | `cash_session` | `"cash_session.closed"` | cash_session.closed | **REMOTE_MUTATION** | `close_cash_session` |
+| OBX-024 | 2785 | `saveOrganizationProfile` | `organization` | `"organization.profile_saved"` | organization.profile_saved | **API_DIRECT_MIRROR** | AuthApi.updateOrganizationProfile (existing direct endpoint) |
+| OBX-025 | 2792 | `createLocalSite` | `site` | `"site.created"` | site.created | **LEGACY_LOCAL_HELPER** | AuthApi.createSite (existing direct endpoint) |
+| OBX-026 | 2846 | `createLocalWorkstation` | `workstation` | `"workstation.created"` | workstation.created | **LEGACY_LOCAL_HELPER** | AuthApi.createWorkstation (existing direct endpoint) |
+| OBX-027 | 2903 | `createLocalService` | `service` | `"service.created"` | service.created | **REMOTE_MUTATION** | `create_service` |
+| OBX-028 | 2966 | `createLocalCustomer` | `customer` | `"customer.created"` | customer.created | **REMOTE_MUTATION** | `upsert_customer` |
+| OBX-029 | 3036 | `updateLocalCustomer` | `customer` | `"customer.updated"` | customer.updated | **REMOTE_MUTATION** | `upsert_customer` |
+| OBX-030 | 3097 | `createCustomerFollowUp` | `customer_followup` | `"customer_followup.created"` | customer_followup.created | **REMOTE_MUTATION** | `create_customer_followup` |
+| OBX-031 | 3134 | `completeCustomerFollowUp` | `customer_followup` | `"customer_followup.completed"` | customer_followup.completed | **REMOTE_MUTATION** | `complete_customer_followup` |
+| OBX-032 | 3145 | `createInventoryItem` | `inventory_item` | `"inventory_item.created"` | inventory_item.created | **REMOTE_MUTATION** | `save_inventory_item` |
+| OBX-033 | 3204 | `importInventoryBatch` | `inventory_movement` | `"inventory_movement.import_adjustment"` | inventory_movement.import_adjustment | **REMOTE_MUTATION** | `record_inventory_movement` |
+| OBX-034 | 3238 | `importInventoryBatch` | `inventory_valuation` | `"inventory_valuation.import_updated"` | inventory_valuation.import_updated | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
+| OBX-035 | 3240 | `importInventoryBatch` | `inventory_item` | `"inventory_item.import_updated"` | inventory_item.import_updated | **REMOTE_MUTATION** | `save_inventory_item` |
+| OBX-036 | 3256 | `importInventoryBatch` | `inventory_item` | `"inventory_item.imported"` | inventory_item.imported | **REMOTE_MUTATION** | `save_inventory_item` |
+| OBX-037 | 3271 | `importInventoryBatch` | `inventory_movement` | `"inventory_movement.import_initial"` | inventory_movement.import_initial | **REMOTE_MUTATION** | `record_inventory_movement` |
+| OBX-038 | 3294 | `importInventoryBatch` | `inventory_valuation` | `"inventory_valuation.imported"` | inventory_valuation.imported | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
+| OBX-039 | 3325 | `recordInventoryMovement` | `inventory_movement` | `"inventory_movement.created"` | inventory_movement.created | **REMOTE_MUTATION** | `record_inventory_movement` |
+| OBX-040 | 3342 | `createSupportRequest` | `support_request` | `"support_request.created"` | support_request.created | **REMOTE_MUTATION** | `create_support_request` |
+| OBX-041 | 3389 | `transitionAppointmentStatus` | `appointment` | `"appointment.status_changed"` | appointment.status_changed | **REMOTE_MUTATION** | `transition_appointment` |
+| OBX-042 | 3437 | `rescheduleAppointment` | `appointment` | `"appointment.rescheduled"` | appointment.rescheduled | **REMOTE_MUTATION** | `reschedule_appointment` |
+| OBX-043 | 3492 | `updateServiceCatalogItem` | `service` | `"service.updated"` | service.updated | **REMOTE_MUTATION** | `update_service` |
+| OBX-044 | 3538 | `saveServiceConfiguration` | `service` | `"service.configuration_updated"` | service.configuration_updated | **REMOTE_MUTATION** | `update_service_configuration` |
+| OBX-045 | 3615 | `convertWaitlistToAppointment` | `appointment` | `"appointment.created_from_waitlist"` | appointment.created_from_waitlist | **REMOTE_MUTATION** | `convert_waitlist_to_appointment` |
+| OBX-046 | 3616 | `convertWaitlistToAppointment` | `appointment_waitlist` | `"appointment_waitlist.converted"` | appointment_waitlist.converted | **COMPOSITE_CHILD** | Enfant de `appointment.created_from_waitlist` |
+| OBX-047 | 3710 | `recordStaffTimeEvent` | `eventType` | `eventType + ".recorded"` | staff_clock_in.recorded, staff_break_start.recorded, staff_break_end.recorded, staff_clock_out.recorded | **REMOTE_MUTATION** | `record_staff_time_event` |
+| OBX-048 | 3765 | `createManagementRecord` | `recordType` | `recordType + ".created"` | quote.created, invoice.created, credit_note.created, refund_due.created, customer_receivable.created, purchase.created, supplier.created, tax_estimate.created, business_goal.created, subscription_request.created, support_chat.created, work_order.created, repair_order.created, service_order.created, appointment_waitlist.created, staff_clock_in.created, staff_clock_out.created, staff_break_start.created, staff_break_end.created, staff_commission.created, staff_advance.created, staff_bonus.created | **REMOTE_MUTATION** | `create_management_record` |
+| OBX-049 | 3855 | `createInventoryTransfer` | `inventory_transfer` | `"inventory_transfer.requested"` | inventory_transfer.requested | **REMOTE_MUTATION** | `create_inventory_transfer` |
+| OBX-050 | 3952 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.purchase_received"` | inventory_movement.purchase_received | **COMPOSITE_CHILD** | Enfant de `management_record.status_changed` |
+| OBX-051 | 4038 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_out"` | inventory_movement.transfer_out | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
+| OBX-052 | 4039 | `transitionManagementRecord` | `inventory_movement` | `"inventory_movement.transfer_in"` | inventory_movement.transfer_in | **COMPOSITE_CHILD** | Enfant de `inventory_transfer.received_at_destination` |
+| OBX-053 | 4077 | `transitionManagementRecord` | `inventory_transfer` | `"inventory_transfer.received_at_destination"` | inventory_transfer.received_at_destination | **REMOTE_MUTATION** | `receive_inventory_transfer` |
+| OBX-054 | 4114 | `transitionManagementRecord` | `current.recordType` | `current.recordType + ".status_changed"` | quote.status_changed, invoice.status_changed, credit_note.status_changed, refund_due.status_changed, customer_receivable.status_changed, purchase.status_changed, supplier.status_changed, tax_estimate.status_changed, business_goal.status_changed, subscription_request.status_changed, support_chat.status_changed, work_order.status_changed, repair_order.status_changed, service_order.status_changed, appointment_waitlist.status_changed, staff_clock_in.status_changed, staff_clock_out.status_changed, staff_break_start.status_changed, staff_break_end.status_changed, staff_commission.status_changed, staff_advance.status_changed, staff_bonus.status_changed, inventory_transfer.status_changed | **REMOTE_MUTATION** | `transition_management_record` |
+| OBX-055 | 4154 | `saveInventoryValuation` | `inventory_valuation` | `"inventory_valuation.updated"` | inventory_valuation.updated | **REMOTE_MUTATION** | `upsert_inventory_valuation` |
 
 
 ## Décompte des routes
@@ -96,7 +96,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-001 — supplier.saved
 
-- Source : ligne 1295, `saveSupplier`, agrégat `supplier`, expression `"supplier.saved"`.
+- Source : ligne 143411739, `saveSupplier`, agrégat `supplier`, expression `"supplier.saved"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Supplier master data (one organisation/site); UUID supplier.id shared local/server.
 - Handler / route : `save_supplier`.
@@ -111,7 +111,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-002 — purchase.ordered
 
-- Source : ligne 1374, `createSupplierPurchase`, agrégat `purchase`, expression `"purchase.ordered"`.
+- Source : ligne 158831818, `createSupplierPurchase`, agrégat `purchase`, expression `"purchase.ordered"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Supplier purchase document and its ordered lines.
 - Handler / route : `create_supplier_purchase`.
@@ -126,7 +126,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-003 — purchase.receipt.confirmed
 
-- Source : ligne 1489, `receiveSupplierPurchaseLine`, agrégat `purchase_receipt`, expression `"purchase.receipt.confirmed"`.
+- Source : ligne 176781935, `receiveSupplierPurchaseLine`, agrégat `purchase_receipt`, expression `"purchase.receipt.confirmed"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Supplier receipt event; server purchase/line balances and accounting are authoritative after receipt.
 - Handler / route : `receive_supplier_purchase_line`.
@@ -141,7 +141,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-004 — supplier.payment.recorded
 
-- Source : ligne 1554, `recordSupplierPayment`, agrégat `supplier_payment`, expression `"supplier.payment.recorded"`.
+- Source : ligne 193692001, `recordSupplierPayment`, agrégat `supplier_payment`, expression `"supplier.payment.recorded"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Supplier payment ledger linked to supplier purchase and treasury session.
 - Handler / route : `record_supplier_payment`.
@@ -156,7 +156,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-005 — accounting.entry.posted
 
-- Source : ligne 1592, `postAccountingEntry`, agrégat `accounting_entry`, expression `"accounting.entry.posted"`.
+- Source : ligne 210352039, `postAccountingEntry`, agrégat `accounting_entry`, expression `"accounting.entry.posted"`.
 - Classe : **DERIVED_SERVER_LEDGER** ; disposition : `DO_NOT_SEND`.
 - Source de vérité : Local derived accounting journal projection; server must derive its own ledger from accepted source transactions, not trust client-selected account labels.
 - Handler / route : `Server-side ledger posting inside the canonical parent RPC; no accounting.entry.posted RPC.`.
@@ -172,7 +172,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-006 — inventory_item.supplier_whatsapp_updated
 
-- Source : ligne 1601, `saveSupplierWhatsApp`, agrégat `inventory_item`, expression `"inventory_item.supplier_whatsapp_updated"`.
+- Source : ligne 227752048, `saveSupplierWhatsApp`, agrégat `inventory_item`, expression `"inventory_item.supplier_whatsapp_updated"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Inventory item master record; WhatsApp contact is item/supplier metadata, not an automated message instruction.
 - Handler / route : `save_inventory_item`.
@@ -187,7 +187,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-007 — recurring_charge.saved
 
-- Source : ligne 1621, `saveRecurringCharge`, agrégat `recurring_charge`, expression `"recurring_charge.saved"`.
+- Source : ligne 244882082, `saveRecurringCharge`, agrégat `recurring_charge`, expression `"recurring_charge.saved"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Recurring charge schedule and its current state.
 - Handler / route : `upsert_recurring_charge`.
@@ -202,7 +202,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-008 — recurring_charge.payment_recorded
 
-- Source : ligne 1654, `recordRecurringChargePayment`, agrégat `recurring_charge`, expression `"recurring_charge.payment_recorded"`.
+- Source : ligne 260772125, `recordRecurringChargePayment`, agrégat `recurring_charge`, expression `"recurring_charge.payment_recorded"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Charge payment ledger; each partial/full payment is immutable; charge next due date is server-derived.
 - Handler / route : `record_recurring_charge_payment`.
@@ -217,7 +217,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-009 — recurring_charge.deactivated
 
-- Source : ligne 1668, `deactivateRecurringCharge`, agrégat `recurring_charge`, expression `"recurring_charge.deactivated"`.
+- Source : ligne 277852146, `deactivateRecurringCharge`, agrégat `recurring_charge`, expression `"recurring_charge.deactivated"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Recurring charge schedule and versioned active state.
 - Handler / route : `deactivate_recurring_charge`.
@@ -232,7 +232,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-010 — loyalty_program.updated
 
-- Source : ligne 1720, `saveLoyaltyProgram`, agrégat `loyalty_program`, expression `"loyalty_program.updated"`.
+- Source : ligne 293092212, `saveLoyaltyProgram`, agrégat `loyalty_program`, expression `"loyalty_program.updated"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Organisation-level activity loyalty policy; site_id is intentionally null.
 - Handler / route : `upsert_loyalty_program`.
@@ -247,7 +247,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-011 — loyalty_activity.recorded
 
-- Source : ligne 1764, `recordLoyaltyActivity`, agrégat `loyalty_activity`, expression `"loyalty_activity.recorded"`.
+- Source : ligne 309142264, `recordLoyaltyActivity`, agrégat `loyalty_activity`, expression `"loyalty_activity.recorded"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Loyalty activity ledger; server recomputes metric delta and reward waves from approved program and confirmed qualifying activity.
 - Handler / route : `record_loyalty_activity`.
@@ -262,7 +262,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-012 — loyalty_reward.redeemed
 
-- Source : ligne 1771, `redeemLoyaltyReward`, agrégat `loyalty_reward`, expression `"loyalty_reward.redeemed"`.
+- Source : ligne 326522282, `redeemLoyaltyReward`, agrégat `loyalty_reward`, expression `"loyalty_reward.redeemed"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Commande parente : `redeem_loyalty_reward`.
 - Source de vérité : Loyalty reward ledger and redemption state.
@@ -278,7 +278,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-013 — pressing_order.created
 
-- Source : ligne 1814, `createPressingOrder`, agrégat `pressing_order`, expression `"pressing_order.created"`.
+- Source : ligne 339072356, `createPressingOrder`, agrégat `pressing_order`, expression `"pressing_order.created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Pressing ticket/order table and its status history.
 - Handler / route : `create_pressing_order`.
@@ -293,7 +293,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-014 — pressing_order.status_changed
 
-- Source : ligne 1843, `advancePressingOrder`, agrégat `pressing_order`, expression `"pressing_order.status_changed:" + next`.
+- Source : ligne 356102398, `advancePressingOrder`, agrégat `pressing_order`, expression `"pressing_order.status_changed:" + next`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Pressing order and append-only LocalPressingStatusEvent history.
 - Handler / route : `transition_pressing_order`.
@@ -308,7 +308,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-015 — appointment.created
 
-- Source : ligne 1886, `createAppointment`, agrégat `appointment`, expression `"appointment.created"`.
+- Source : ligne 372252453, `createAppointment`, agrégat `appointment`, expression `"appointment.created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Appointment schedule.
 - Handler / route : `create_appointment`.
@@ -323,7 +323,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-016 — cash_session.opened
 
-- Source : ligne 1912, `openCashSession`, agrégat `cash_session`, expression `"cash_session.opened"`.
+- Source : ligne 388792488, `openCashSession`, agrégat `cash_session`, expression `"cash_session.opened"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Cash register session and authoritative opening float.
 - Handler / route : `open_cash_session`.
@@ -338,7 +338,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-017 — inventory_movement.sale_out
 
-- Source : ligne 1984, `recordSale`, agrégat `inventory_movement`, expression `"inventory_movement.sale_out"`.
+- Source : ligne 404442560, `recordSale`, agrégat `inventory_movement`, expression `"inventory_movement.sale_out"`.
 - Classe : **COMPOSITE_CHILD** ; disposition : `DO_NOT_SEND_INDEPENDENTLY`.
 - Commande parente : `sale.created`.
 - Source de vérité : Server sale posting derives its inventory movement from the sale lines and cost snapshot.
@@ -355,7 +355,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-018 — sale.created
 
-- Source : ligne 1987, `recordSale`, agrégat `sale`, expression `"sale.created"`.
+- Source : ligne 420182579, `recordSale`, agrégat `sale`, expression `"sale.created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Sale record, tender state and associated line/cost snapshot.
 - Handler / route : `record_sale`.
@@ -370,7 +370,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-019 — sale.mobile_money_cancelled
 
-- Source : ligne 2028, `cancelPendingMobileMoneySale`, agrégat `sale`, expression `"sale.mobile_money_cancelled"`.
+- Source : ligne 437382627, `cancelPendingMobileMoneySale`, agrégat `sale`, expression `"sale.mobile_money_cancelled"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Pending sale state; no money received until provider confirmation is verified.
 - Handler / route : `cancel_pending_mobile_money_sale`.
@@ -385,7 +385,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-020 — inventory_movement.mobile_money_sale_out
 
-- Source : ligne 2072, `applyServerConfirmedMobileMoneySale`, agrégat `inventory_movement`, expression `"inventory_movement.mobile_money_sale_out"`.
+- Source : ligne 453362671, `applyServerConfirmedMobileMoneySale`, agrégat `inventory_movement`, expression `"inventory_movement.mobile_money_sale_out"`.
 - Classe : **COMPOSITE_CHILD** ; disposition : `DO_NOT_SEND_INDEPENDENTLY`.
 - Commande parente : `sale.payment_confirmed_server`.
 - Source de vérité : Server-confirmed Mobile Money sale; movement is a server-side consequence.
@@ -402,7 +402,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-021 — sale.payment_confirmed_server
 
-- Source : ligne 2091, `applyServerConfirmedMobileMoneySale`, agrégat `sale`, expression `"sale.payment_confirmed_server"`.
+- Source : ligne 470012690, `applyServerConfirmedMobileMoneySale`, agrégat `sale`, expression `"sale.payment_confirmed_server"`.
 - Classe : **SERVER_AUTHORITATIVE_MIRROR** ; disposition : `DO_NOT_ECHO_TO_SERVER`.
 - Source de vérité : Server-side signed Mobile Money confirmation and sale ledger; the Android method receives/applies this authoritative result locally.
 - Handler / route : `Mobile Money webhook/Edge confirmation owns this transition; Android only mirrors the confirmed state.`.
@@ -418,7 +418,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-022 — expense.created
 
-- Source : ligne 2124, `addExpense`, agrégat `expense`, expression `"expense.created"`.
+- Source : ligne 486002733, `addExpense`, agrégat `expense`, expression `"expense.created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Expense ledger linked to a cash session or an explicitly supported non-cash treasury account.
 - Handler / route : `record_expense`.
@@ -433,7 +433,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-023 — cash_session.closed
 
-- Source : ligne 2152, `closeCashSession`, agrégat `cash_session`, expression `"cash_session.closed"`.
+- Source : ligne 501882771, `closeCashSession`, agrégat `cash_session`, expression `"cash_session.closed"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Cash session close count, variance and close audit.
 - Handler / route : `close_cash_session`.
@@ -448,7 +448,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-024 — organization.profile_saved
 
-- Source : ligne 2166, `saveOrganizationProfile`, agrégat `organization`, expression `"organization.profile_saved"`.
+- Source : ligne 517812785, `saveOrganizationProfile`, agrégat `organization`, expression `"organization.profile_saved"`.
 - Classe : **API_DIRECT_MIRROR** ; disposition : `DO_NOT_SEND`.
 - Source de vérité : Auth/organization profile is authoritative through AuthApi.updateOrganizationProfile; LocalOrganizationProfile is a UI cache and offline draft.
 - Handler / route : `AuthApi.updateOrganizationProfile (existing direct endpoint)`.
@@ -464,7 +464,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-025 — site.created
 
-- Source : ligne 2173, `createLocalSite`, agrégat `site`, expression `"site.created"`.
+- Source : ligne 532862792, `createLocalSite`, agrégat `site`, expression `"site.created"`.
 - Classe : **LEGACY_LOCAL_HELPER** ; disposition : `DO_NOT_SEND`.
 - Source de vérité : Server-managed site directory via AuthApi.createSite; LocalSite legacy cache helper has no active UI caller.
 - Handler / route : `AuthApi.createSite (existing direct endpoint)`.
@@ -480,7 +480,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-026 — workstation.created
 
-- Source : ligne 2227, `createLocalWorkstation`, agrégat `workstation`, expression `"workstation.created"`.
+- Source : ligne 547372846, `createLocalWorkstation`, agrégat `workstation`, expression `"workstation.created"`.
 - Classe : **LEGACY_LOCAL_HELPER** ; disposition : `DO_NOT_SEND`.
 - Source de vérité : Server-managed workstation directory via AuthApi.createWorkstation; LocalWorkstation local draft helper has no active UI caller.
 - Handler / route : `AuthApi.createWorkstation (existing direct endpoint)`.
@@ -496,7 +496,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-027 — service.created
 
-- Source : ligne 2269, `createLocalService`, agrégat `service`, expression `"service.created"`.
+- Source : ligne 562232903, `createLocalService`, agrégat `service`, expression `"service.created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Service catalogue entry and activity configuration.
 - Handler / route : `create_service`.
@@ -511,7 +511,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-028 — customer.created
 
-- Source : ligne 2318, `createLocalCustomer`, agrégat `customer`, expression `"customer.created"`.
+- Source : ligne 578422966, `createLocalCustomer`, agrégat `customer`, expression `"customer.created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Customer master and consent record.
 - Handler / route : `upsert_customer`.
@@ -526,7 +526,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-029 — customer.updated
 
-- Source : ligne 2369, `updateLocalCustomer`, agrégat `customer`, expression `"customer.updated"`.
+- Source : ligne 594993036, `updateLocalCustomer`, agrégat `customer`, expression `"customer.updated"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Customer master and consent record.
 - Handler / route : `upsert_customer`.
@@ -541,7 +541,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-030 — customer_followup.created
 
-- Source : ligne 2418, `createCustomerFollowUp`, agrégat `customer_followup`, expression `"customer_followup.created"`.
+- Source : ligne 611343097, `createCustomerFollowUp`, agrégat `customer_followup`, expression `"customer_followup.created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : CRM follow-up schedule; no message is sent by this operation.
 - Handler / route : `create_customer_followup`.
@@ -556,7 +556,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-031 — customer_followup.completed
 
-- Source : ligne 2447, `completeCustomerFollowUp`, agrégat `customer_followup`, expression `"customer_followup.completed"`.
+- Source : ligne 628023134, `completeCustomerFollowUp`, agrégat `customer_followup`, expression `"customer_followup.completed"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : CRM follow-up schedule and completion ledger.
 - Handler / route : `complete_customer_followup`.
@@ -571,7 +571,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-032 — inventory_item.created
 
-- Source : ligne 2458, `createInventoryItem`, agrégat `inventory_item`, expression `"inventory_item.created"`.
+- Source : ligne 643433145, `createInventoryItem`, agrégat `inventory_item`, expression `"inventory_item.created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Inventory item master (quantity on hand comes from movement ledger, not master snapshot).
 - Handler / route : `save_inventory_item`.
@@ -586,7 +586,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-033 — inventory_movement.import_adjustment
 
-- Source : ligne 2517, `importInventoryBatch`, agrégat `inventory_movement`, expression `"inventory_movement.import_adjustment"`.
+- Source : ligne 659973204, `importInventoryBatch`, agrégat `inventory_movement`, expression `"inventory_movement.import_adjustment"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Imported adjustment movement; never overwrite historical movements.
 - Handler / route : `record_inventory_movement`.
@@ -601,7 +601,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-034 — inventory_valuation.import_updated
 
-- Source : ligne 2534, `importInventoryBatch`, agrégat `inventory_valuation`, expression `"inventory_valuation.import_updated"`.
+- Source : ligne 676243238, `importInventoryBatch`, agrégat `inventory_valuation`, expression `"inventory_valuation.import_updated"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Inventory valuation is a distinct value entity (unit cost and selling price); not represented by inventory_item snapshot.
 - Handler / route : `upsert_inventory_valuation`.
@@ -616,7 +616,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-035 — inventory_item.import_updated
 
-- Source : ligne 2536, `importInventoryBatch`, agrégat `inventory_item`, expression `"inventory_item.import_updated"`.
+- Source : ligne 692813240, `importInventoryBatch`, agrégat `inventory_item`, expression `"inventory_item.import_updated"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Inventory item master metadata.
 - Handler / route : `save_inventory_item`.
@@ -631,7 +631,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-036 — inventory_item.imported
 
-- Source : ligne 2552, `importInventoryBatch`, agrégat `inventory_item`, expression `"inventory_item.imported"`.
+- Source : ligne 708733256, `importInventoryBatch`, agrégat `inventory_item`, expression `"inventory_item.imported"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Inventory item master metadata.
 - Handler / route : `save_inventory_item`.
@@ -646,7 +646,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-037 — inventory_movement.import_initial
 
-- Source : ligne 2567, `importInventoryBatch`, agrégat `inventory_movement`, expression `"inventory_movement.import_initial"`.
+- Source : ligne 724683271, `importInventoryBatch`, agrégat `inventory_movement`, expression `"inventory_movement.import_initial"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Opening stock quantity as immutable initial movement.
 - Handler / route : `record_inventory_movement`.
@@ -661,7 +661,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-038 — inventory_valuation.imported
 
-- Source : ligne 2581, `importInventoryBatch`, agrégat `inventory_valuation`, expression `"inventory_valuation.imported"`.
+- Source : ligne 740493294, `importInventoryBatch`, agrégat `inventory_valuation`, expression `"inventory_valuation.imported"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Inventory valuation created by stock import.
 - Handler / route : `upsert_inventory_valuation`.
@@ -676,7 +676,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-039 — inventory_movement.created
 
-- Source : ligne 2612, `recordInventoryMovement`, agrégat `inventory_movement`, expression `"inventory_movement.created"`.
+- Source : ligne 755733325, `recordInventoryMovement`, agrégat `inventory_movement`, expression `"inventory_movement.created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Inventory movement ledger; stock on hand is derived by summing accepted movements.
 - Handler / route : `record_inventory_movement`.
@@ -691,7 +691,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-040 — support_request.created
 
-- Source : ligne 2621, `createSupportRequest`, agrégat `support_request`, expression `"support_request.created"`.
+- Source : ligne 772263342, `createSupportRequest`, agrégat `support_request`, expression `"support_request.created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Support inbox case; local draft remains unsubmitted until remote receipt.
 - Handler / route : `create_support_request`.
@@ -706,7 +706,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-041 — appointment.status_changed
 
-- Source : ligne 2655, `transitionAppointmentStatus`, agrégat `appointment`, expression `"appointment.status_changed"`.
+- Source : ligne 788093389, `transitionAppointmentStatus`, agrégat `appointment`, expression `"appointment.status_changed"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Appointment state and immutable status transition log.
 - Handler / route : `transition_appointment`.
@@ -721,7 +721,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-042 — appointment.rescheduled
 
-- Source : ligne 2689, `rescheduleAppointment`, agrégat `appointment`, expression `"appointment.rescheduled"`.
+- Source : ligne 803963437, `rescheduleAppointment`, agrégat `appointment`, expression `"appointment.rescheduled"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Appointment schedule and resource reservation.
 - Handler / route : `reschedule_appointment`.
@@ -736,7 +736,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-043 — service.updated
 
-- Source : ligne 2729, `updateServiceCatalogItem`, agrégat `service`, expression `"service.updated"`.
+- Source : ligne 819883492, `updateServiceCatalogItem`, agrégat `service`, expression `"service.updated"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Service catalogue entry.
 - Handler / route : `update_service`.
@@ -751,7 +751,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-044 — service.configuration_updated
 
-- Source : ligne 2761, `saveServiceConfiguration`, agrégat `service`, expression `"service.configuration_updated"`.
+- Source : ligne 834353538, `saveServiceConfiguration`, agrégat `service`, expression `"service.configuration_updated"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Service catalogue provider/workstation/package configuration.
 - Handler / route : `update_service_configuration`.
@@ -766,7 +766,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-045 — appointment.created_from_waitlist
 
-- Source : ligne 2825, `convertWaitlistToAppointment`, agrégat `appointment`, expression `"appointment.created_from_waitlist"`.
+- Source : ligne 850233615, `convertWaitlistToAppointment`, agrégat `appointment`, expression `"appointment.created_from_waitlist"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Atomic conversion of one waitlist record into one appointment.
 - Handler / route : `convert_waitlist_to_appointment`.
@@ -781,7 +781,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-046 — appointment_waitlist.converted
 
-- Source : ligne 2826, `convertWaitlistToAppointment`, agrégat `appointment_waitlist`, expression `"appointment_waitlist.converted"`.
+- Source : ligne 867333616, `convertWaitlistToAppointment`, agrégat `appointment_waitlist`, expression `"appointment_waitlist.converted"`.
 - Classe : **COMPOSITE_CHILD** ; disposition : `DO_NOT_SEND_INDEPENDENTLY`.
 - Commande parente : `appointment.created_from_waitlist`.
 - Source de vérité : Waitlist record state is changed to booked/converted by the same conversion transaction.
@@ -798,7 +798,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-047 — staff_clock_in.recorded / staff_break_start.recorded / staff_break_end.recorded / staff_clock_out.recorded
 
-- Source : ligne 2907, `recordStaffTimeEvent`, agrégat `eventType`, expression `eventType + ".recorded"`.
+- Source : ligne 883333710, `recordStaffTimeEvent`, agrégat `eventType`, expression `eventType + ".recorded"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Staff timekeeping event ledger; staff identity must be a stable organisation-scoped staff UUID, not display name alone.
 - Handler / route : `record_staff_time_event`.
@@ -813,7 +813,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-048 — quote.created / invoice.created / credit_note.created / refund_due.created / customer_receivable.created / purchase.created / supplier.created / tax_estimate.created / business_goal.created / subscription_request.created / support_chat.created / work_order.created / repair_order.created / service_order.created / appointment_waitlist.created / staff_clock_in.created / staff_clock_out.created / staff_break_start.created / staff_break_end.created / staff_commission.created / staff_advance.created / staff_bonus.created
 
-- Source : ligne 2947, `createManagementRecord`, agrégat `recordType`, expression `recordType + ".created"`.
+- Source : ligne 901313765, `createManagementRecord`, agrégat `recordType`, expression `recordType + ".created"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Polymorphic management register for documents/work orders/HR variables and drafts; exact record_type is validated against the allowlist.
 - Handler / route : `create_management_record`.
@@ -828,7 +828,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-049 — inventory_transfer.requested
 
-- Source : ligne 3023, `createInventoryTransfer`, agrégat `inventory_transfer`, expression `"inventory_transfer.requested"`.
+- Source : ligne 924183855, `createInventoryTransfer`, agrégat `inventory_transfer`, expression `"inventory_transfer.requested"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Inventory transfer between two sites; this command creates the transfer request only.
 - Handler / route : `create_inventory_transfer`.
@@ -843,7 +843,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-050 — inventory_movement.purchase_received
 
-- Source : ligne 3188, `transitionManagementRecord`, agrégat `inventory_movement`, expression `"inventory_movement.purchase_received"`.
+- Source : ligne 941053952, `transitionManagementRecord`, agrégat `inventory_movement`, expression `"inventory_movement.purchase_received"`.
 - Classe : **COMPOSITE_CHILD** ; disposition : `DO_NOT_SEND_INDEPENDENTLY`.
 - Commande parente : `management_record.status_changed`.
 - Source de vérité : Stock movement created by receiving a legacy management_record purchase; include the movement as part of the parent transition transaction.
@@ -860,7 +860,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-051 — inventory_movement.transfer_out
 
-- Source : ligne 3274, `transitionManagementRecord`, agrégat `inventory_movement`, expression `"inventory_movement.transfer_out"`.
+- Source : ligne 958854038, `transitionManagementRecord`, agrégat `inventory_movement`, expression `"inventory_movement.transfer_out"`.
 - Classe : **COMPOSITE_CHILD** ; disposition : `DO_NOT_SEND_INDEPENDENTLY`.
 - Commande parente : `inventory_transfer.received_at_destination`.
 - Source de vérité : Source-site deduction movement created atomically when a transfer is received.
@@ -877,7 +877,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-052 — inventory_movement.transfer_in
 
-- Source : ligne 3275, `transitionManagementRecord`, agrégat `inventory_movement`, expression `"inventory_movement.transfer_in"`.
+- Source : ligne 974534039, `transitionManagementRecord`, agrégat `inventory_movement`, expression `"inventory_movement.transfer_in"`.
 - Classe : **COMPOSITE_CHILD** ; disposition : `DO_NOT_SEND_INDEPENDENTLY`.
 - Commande parente : `inventory_transfer.received_at_destination`.
 - Source de vérité : Destination-site addition movement created atomically when a transfer is received.
@@ -894,7 +894,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-053 — inventory_transfer.received_at_destination
 
-- Source : ligne 3295, `transitionManagementRecord`, agrégat `inventory_transfer`, expression `"inventory_transfer.received_at_destination"`.
+- Source : ligne 990544077, `transitionManagementRecord`, agrégat `inventory_transfer`, expression `"inventory_transfer.received_at_destination"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Approved inventory transfer aggregate plus source and destination inventory ledgers. Server applies the transfer status and both stock legs atomically.
 - Handler / route : `receive_inventory_transfer`.
@@ -909,7 +909,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-054 — quote.status_changed / invoice.status_changed / credit_note.status_changed / refund_due.status_changed / customer_receivable.status_changed / purchase.status_changed / supplier.status_changed / tax_estimate.status_changed / business_goal.status_changed / subscription_request.status_changed / support_chat.status_changed / work_order.status_changed / repair_order.status_changed / service_order.status_changed / appointment_waitlist.status_changed / staff_clock_in.status_changed / staff_clock_out.status_changed / staff_break_start.status_changed / staff_break_end.status_changed / staff_commission.status_changed / staff_advance.status_changed / staff_bonus.status_changed / inventory_transfer.status_changed
 
-- Source : ligne 3313, `transitionManagementRecord`, agrégat `current.recordType`, expression `current.recordType + ".status_changed"`.
+- Source : ligne 1011314114, `transitionManagementRecord`, agrégat `current.recordType`, expression `current.recordType + ".status_changed"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Management record lifecycle and append-only workflow history. For inventory_transfer, dispatch the specialised receive command and suppress the generic duplicate transition event.
 - Handler / route : `transition_management_record`.
@@ -924,7 +924,7 @@ Ce registre est l'inventaire canonique de N1. Il qualifie un appel physique à `
 
 ### OBX-055 — inventory_valuation.updated
 
-- Source : ligne 3334, `saveInventoryValuation`, agrégat `inventory_valuation`, expression `"inventory_valuation.updated"`.
+- Source : ligne 1037444154, `saveInventoryValuation`, agrégat `inventory_valuation`, expression `"inventory_valuation.updated"`.
 - Classe : **REMOTE_MUTATION** ; disposition : `SEND_AS_CANONICAL_MUTATION`.
 - Source de vérité : Inventory valuation record distinct from item master and movement ledger.
 - Handler / route : `upsert_inventory_valuation`.
