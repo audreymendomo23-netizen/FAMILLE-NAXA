@@ -85,8 +85,9 @@ export const ACTIVITY_WORKFLOWS: Readonly<Record<ActivityProfile, ActivityWorkfl
       { key: "delivery", label: "Date de livraison souhaitée", required: false },
     ],
     stages: [
-      stage("received", "Commande reçue", "diagnostic", "cancelled"),
-      stage("diagnostic", "Prise des mesures / étude", "quote_pending", "cancelled"),
+      stage("received", "Commande reçue", "measurement", "diagnostic", "cancelled"),
+      stage("measurement", "Prise des mensurations", "quote_pending", "fitting", "cancelled"),
+      stage("diagnostic", "Étude du modèle / retouche", "quote_pending", "cancelled"),
       stage("quote_pending", "Devis à établir", "waiting_customer", "approved", "cancelled"),
       stage("waiting_customer", "Accord client attendu", "approved", "cancelled"),
       stage("approved", "Commande validée", "waiting_parts", "in_progress"),
