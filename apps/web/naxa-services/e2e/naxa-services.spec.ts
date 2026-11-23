@@ -1,4 +1,5 @@
 import { expect, test, type BrowserContext, type Page, type Route } from "@playwright/test";
+import { ACTIVITY_WORKFLOWS, type ActivityProfile } from "../src/erp/activity-workflows";
 
 const AUTH_URL = "https://naxa-services-e2e.invalid/functions/v1/naxa-services-auth";
 const ACCOUNTING_URL = "https://naxa-services-e2e.invalid/functions/v1/naxa-services-accounting";
@@ -121,6 +122,23 @@ async function createCustomer(page: Page, name: string) {
 }
 
 
+function activityCompletionPath(profile: ActivityProfile): string[] {
+  const workflow = ACTIVITY_WORKFLOWS[profile];
+  const destination = profile === "pressing" ? "picked_up" : "closed";
+  const queue: Array<{ code: string; path: string[] }> = [{ code: "received", path: ["received"] }];
+  const visited = new Set<string>(["received"]);
+  while (queue.length) {
+    const current = queue.shift()!;
+    if (current.code === destination) return current.path;
+    const stage = workflow.stages.find((item) => item.code === current.code);
+    for (const next of stage?.next ?? []) {
+      if (visited.has(next)) continue;
+      visited.add(next);
+      queue.push({ code: next, path: [...current.path, next] });
+    }
+  }
+  throw new Error("No complete path from received to " + destination + " for " + profile);
+}
 const ACTIVITY_RECIPES = [
   { profile: "coiffure", aggregate: "service_order", fields: { style: "tresses", technique: "Tresses protectrices, longueur épaules" } },
   { profile: "couture", aggregate: "work_order", fields: { garment: "Robe sur mesure", measurements: "Poitrine 92 cm; taille 76 cm; hanches 100 cm" } },
@@ -136,9 +154,11 @@ const ACTIVITY_RECIPES = [
   { profile: "autre", aggregate: "work_order", fields: { service: "Prestation personnalisée", specifications: "Description métier configurable à valider avec le client" } },
 ] as const;
 
-test("Web: every non-Pressing activity creates its own server-backed métier dossier with typed required fields", async ({ context }) => {
+test("Web: every non-Pressing activity completes its own server-backed métier journey", async ({ context }) => {
+  test.setTimeout(120_000);
   const appliedEvents = await installBackend(context);
-  for (const [index, recipe] of ACTIVITY_RECIPES.entries()) {
+  let expectedEventCount = 0;
+  for (const recipe of ACTIVITY_RECIPES) {
     const page = await context.newPage();
     await signIn(page, "NS-ACT-" + recipe.profile.toUpperCase());
     await page.getByRole("button", { name: "Dossiers métier" }).click();
@@ -154,12 +174,35 @@ test("Web: every non-Pressing activity creates its own server-backed métier dos
       expect(type === "number" || tag === "select" || tag === "textarea" || type === "date" || type === "text").toBe(true);
     }
     await page.getByRole("button", { name: "Créer et synchroniser le dossier" }).click();
-    await expect.poll(() => appliedEvents.length).toBe(index + 1);
-    const event = appliedEvents[index];
+    expectedEventCount += 1;
+    await expect.poll(() => appliedEvents.length).toBe(expectedEventCount);
+    const event = appliedEvents[expectedEventCount - 1];
     expect(event.aggregate_type).toBe(recipe.aggregate);
     expect(event.action_code).toBe(recipe.aggregate + ".created");
     expect((event.payload as Record<string, unknown>).status).toBe("received");
     expect(((event.payload as Record<string, unknown>).metadata_json as Record<string, unknown>).activity).toBe(recipe.profile);
+    const workflow = ACTIVITY_WORKFLOWS[recipe.profile];
+    const path = activityCompletionPath(recipe.profile);
+    let currentStatus = "received";
+    let expectedRevision = 1;
+    for (const nextStatus of path.slice(1)) {
+      const nextStage = workflow.stages.find((stage) => stage.code === nextStatus);
+      expect(nextStage, recipe.profile + " missing stage " + nextStatus).toBeTruthy();
+      await page.getByLabel("Motif du changement d'étape").fill("Recette métier — " + nextStatus);
+      await page.getByRole("button", { name: nextStage!.label, exact: true }).click();
+      expectedEventCount += 1;
+      await expect.poll(() => appliedEvents.length).toBe(expectedEventCount);
+      const transition = appliedEvents[expectedEventCount - 1];
+      expect(transition.aggregate_type).toBe(recipe.aggregate);
+      expect(transition.action_code).toBe(recipe.aggregate + ".status_changed");
+      const transitionPayload = transition.payload as Record<string, unknown>;
+      expect(transitionPayload.from_status).toBe(currentStatus);
+      expect(transitionPayload.to_status).toBe(nextStatus);
+      expect(transitionPayload.expected_version).toBe(expectedRevision);
+      currentStatus = nextStatus;
+      expectedRevision += 1;
+    }
+    expect(currentStatus).toBe("closed");
     await page.close();
   }
 });
@@ -168,7 +211,7 @@ test("Web: Pressing keeps its dedicated ticket journey and waits for a server re
   const appliedEvents = await installBackend(context);
   const page = await context.newPage();
   await signIn(page, "NS-ACT-PRESSING");
-  await page.getByRole("button", { name: "Pressing", exact: true }).click();
+  await page.locator(".side-nav button.nav-item").filter({ hasText: "Pressing" }).click();
   await page.getByRole("button", { name: "Créer un ticket" }).click();
   await page.getByLabel("Nom du client").fill("Client pressing test");
   await page.getByLabel("Téléphone client").fill("+237699000111");
@@ -239,8 +282,8 @@ test("Web: offline outbox survives tab closure, keeps tenant data isolated and c
   await expect.poll(() => appliedEvents.length).toBe(1);
   expect(appliedEvents[0].action_code).toBe("customer.created");
   expect(appliedEvents[0].org_id).toBe(ORG_A);
-  await expect(page.getByText("Confirmé par le serveur")).toBeVisible();
   await page.getByRole("button", { name: /Clients & fidélité/ }).first().click();
+  await expect(page.getByText("Confirmé par le serveur")).toBeVisible();
   await expect(page.getByText("Client distant Android")).toBeVisible();
   await expect(page.getByText("Client privé organisation A")).toBeVisible();
   await page.close();
