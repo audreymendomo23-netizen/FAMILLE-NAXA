@@ -438,6 +438,7 @@ function App() {
     }
     const remaining=await listQueued(OFFLINE_APP_ID,freshSession.deviceId,freshSession.account.organization_id);setPendingSyncCount(remaining.length);
     await syncWebPullChanges(freshSession).catch(()=>undefined);
+    await hydrateWebRecords(freshSession);
     if(acknowledged)setAuthMessage(acknowledged+" opération(s) confirmée(s) par le journal serveur.");
     else if(retrying)setAuthMessage(retrying+" opération(s) en attente de reprise réseau.");
     else if(rejected)setAuthMessage(rejected+" opération(s) rejetée(s) ou anciennes à ré-enregistrer ; aucun reçu n'a été fabriqué.");
