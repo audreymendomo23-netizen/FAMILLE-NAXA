@@ -490,3 +490,120 @@ Deno.test("sync pull request rejects invalid cursor, limit and identifiers", () 
     if (!rejected) throw new Error("Invalid sync pull request must be rejected");
   }
 });
+
+
+Deno.test("atomic sync accepts all generic activity work-order aggregate families", () => {
+  const cases = [
+    ["work_order", "work_order.created"],
+    ["repair_order", "repair_order.created"],
+    ["service_order", "service_order.created"],
+  ] as const;
+  for (let index = 0; index < cases.length; index++) {
+    const [aggregate, action] = cases[index];
+    const recordId = `88888888-8888-4888-8888-8888888890${index}`;
+    const event = normalizeAtomicSyncEvent({
+      event_id: "88888888-8888-4888-8888-888888889099",
+      device_id: SYNC_DEVICE,
+      device_sequence: 80 + index,
+      org_id: ORG_A,
+      site_id: SITE_A,
+      workstation_id: null,
+      aggregate_type: aggregate,
+      aggregate_id: recordId,
+      action_code: action,
+      payload: {
+        record_id: recordId,
+        org_id: ORG_A,
+        site_id: SITE_A,
+        record_type: aggregate,
+        reference: "TEST-001",
+        title: "Dossier métier de test",
+        counterparty: "Client test",
+        amount_xaf: 1000,
+        paid_xaf: 0,
+        status: "received",
+        metadata_json: { activity: "garage", workflow_version: 1 },
+      },
+    });
+    if (event.aggregate_type !== aggregate || event.action_code !== action || event.aggregate_id !== recordId) {
+      throw new Error("Generic activity create action mismatch: " + action);
+    }
+  }
+});
+
+Deno.test("atomic sync accepts versioned status changes for every generic work-order family", () => {
+  const cases = [
+    ["work_order", "work_order.status_changed"],
+    ["repair_order", "repair_order.status_changed"],
+    ["service_order", "service_order.status_changed"],
+  ] as const;
+  for (let index = 0; index < cases.length; index++) {
+    const [aggregate, action] = cases[index];
+    const recordId = `88888888-8888-4888-8888-8888888891${index}`;
+    const event = normalizeAtomicSyncEvent({
+      event_id: "88888888-8888-4888-8888-888888889199",
+      device_id: SYNC_DEVICE,
+      device_sequence: 90 + index,
+      org_id: ORG_A,
+      site_id: SITE_A,
+      workstation_id: null,
+      aggregate_type: aggregate,
+      aggregate_id: recordId,
+      action_code: action,
+      payload: {
+        record_id: recordId,
+        org_id: ORG_A,
+        site_id: SITE_A,
+        from_status: "received",
+        to_status: "diagnostic",
+        expected_version: 1,
+        reason: "Diagnostic commencé",
+        metadata_json_delta: {},
+      },
+    });
+    if (event.aggregate_type !== aggregate || event.action_code !== action || event.aggregate_id !== recordId) {
+      throw new Error("Generic activity transition action mismatch: " + action);
+    }
+  }
+});
+
+Deno.test("generic activity work-order events reject aggregate ID spoofing and cross-site payloads", () => {
+  const recordId = "88888888-8888-4888-8888-888888889199";
+  const base = {
+    event_id: SYNC_EVENT,
+    device_id: SYNC_DEVICE,
+    device_sequence: 100,
+    org_id: ORG_A,
+    site_id: SITE_A,
+    workstation_id: null,
+    aggregate_type: "repair_order",
+    aggregate_id: recordId,
+    action_code: "repair_order.created",
+    payload: {
+      record_id: recordId,
+      org_id: ORG_A,
+      site_id: SITE_A,
+      record_type: "repair_order",
+      reference: "REP-001",
+      title: "Réparation de test",
+      counterparty: "Client test",
+      amount_xaf: 5000,
+      paid_xaf: 0,
+      status: "received",
+      metadata_json: { activity: "garage" },
+    },
+  };
+  let aggregateRejected = false;
+  try {
+    normalizeAtomicSyncEvent({ ...base, aggregate_id: "88888888-8888-4888-8888-888888889198" });
+  } catch { aggregateRejected = true; }
+  if (!aggregateRejected) throw new Error("Generic work-order aggregate ID spoofing must be rejected");
+  let siteRejected = false;
+  try {
+    normalizeAtomicSyncEvent({
+      ...base,
+      payload: { ...base.payload, site_id: "88888888-8888-4888-8888-888888889197" },
+    });
+  } catch { siteRejected = true; }
+  if (!siteRejected) throw new Error("Generic work-order site mismatch must be rejected");
+});
