@@ -1450,30 +1450,15 @@ fun WorkOrdersContent(
     activityProfile: String?
 ) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val sites = session.account.activeSiteIds
     val fr = session.account.defaultLocale != "en"
+    val workflow = ActivityWorkflows.get(activityProfile)
+    val profile = workflow.profile
+    // Parfumerie is a retail journey. This register is only for special orders/reservations;
+    // ordinary product sales remain in catalogue, inventory and POS.
+    val recordType = if (workflow.recordType == "retail") "work_order" else workflow.recordType
     var siteId by rememberSaveable { mutableStateOf(sites.firstOrNull().orEmpty()) }
-    val profile = activityProfile ?: "autre"
-    val profileTitle = when (profile) {
-        "pressing" -> if (fr) "Pressing" else "Laundry"
-        "coiffure" -> if (fr) "Coiffure" else "Hair salon"
-        "couture" -> if (fr) "Couture" else "Tailoring"
-        "beaute" -> if (fr) "Beauté / soins" else "Beauty / treatments"
-        "parfumerie" -> if (fr) "Parfumerie" else "Perfume retail"
-        "reparation" -> if (fr) "Réparation" else "Repair"
-        "menuiserie" -> if (fr) "Menuiserie" else "Carpentry"
-        "garage" -> if (fr) "Garage" else "Garage"
-        "nettoyage" -> if (fr) "Nettoyage" else "Cleaning"
-        "domicile" -> if (fr) "Services à domicile" else "Home services"
-        "impression" -> if (fr) "Imprimerie" else "Printing"
-        "photo_evenementiel" -> if (fr) "Photo / événementiel" else "Photography / events"
-        else -> if (fr) "Services" else "Services"
-    }
-    val recordType = when (profile) {
-        "reparation", "garage" -> "repair_order"
-        "coiffure", "beaute", "domicile", "nettoyage" -> "service_order"
-        else -> "work_order"
-    }
     val records by remember(siteId, recordType) {
         repository.dao.observeManagementRecordsByType(session.account.organizationId, siteId, recordType)
     }.collectAsState(initial = emptyList())
@@ -1481,233 +1466,87 @@ fun WorkOrdersContent(
         repository.dao.observeWorkstations(session.account.organizationId, siteId)
     }.collectAsState(initial = emptyList())
 
-    val labels = when (profile) {
-        "couture" -> listOf(
-            if (fr) "Vêtement / retouche / commande" else "Garment / alteration / order",
-            if (fr) "Mensurations, tissu et essayage" else "Measurements, fabric and fitting",
-            if (fr) "Tissu, fournitures et accessoires" else "Fabric, supplies and accessories",
-            if (fr) "Date d'essayage ou de livraison" else "Fitting or delivery date"
-        )
-        "beaute" -> listOf(
-            if (fr) "Soin / formule / cabine" else "Treatment / package / room",
-            if (fr) "Produits, protocole et consignes" else "Products, procedure and instructions",
-            if (fr) "Produits et consommables" else "Products and consumables",
-            if (fr) "Date de prestation" else "Service date"
-        )
-        "coiffure" -> listOf(
-            if (fr) "Style / prestation / fauteuil" else "Style / service / chair",
-            if (fr) "Technique, longueur et consignes" else "Technique, length and instructions",
-            if (fr) "Produits et accessoires" else "Products and accessories",
-            if (fr) "Date de prestation" else "Service date"
-        )
-        "parfumerie" -> listOf(
-            if (fr) "Produit / format / coffret" else "Product / size / gift set",
-            if (fr) "Référence fournisseur, lot ou conditionnement" else "Supplier reference, batch or packaging",
-            if (fr) "Approvisionnement ou présentation" else "Supply or display details",
-            if (fr) "Date attendue" else "Expected date"
-        )
-        "reparation" -> listOf(
-            if (fr) "Appareil / marque / modèle / série" else "Device / make / model / serial",
-            if (fr) "Panne constatée et diagnostic" else "Reported fault and diagnosis",
-            if (fr) "Pièces et composants nécessaires" else "Required parts and components",
-            if (fr) "Date de restitution" else "Return date"
-        )
-        "menuiserie" -> listOf(
-            if (fr) "Meuble / ouvrage / chantier" else "Furniture / workpiece / project",
-            if (fr) "Dimensions, plan et finition" else "Dimensions, plan and finish",
-            if (fr) "Bois, panneaux et quincaillerie" else "Timber, panels and hardware",
-            if (fr) "Date de pose ou livraison" else "Installation or delivery date"
-        )
-        "garage" -> listOf(
-            if (fr) "Véhicule / marque / modèle / immatriculation" else "Vehicle / make / model / registration",
-            if (fr) "Intervention, panne ou travaux" else "Repair, fault or work requested",
-            if (fr) "Pièces et consommables" else "Parts and consumables",
-            if (fr) "Date de restitution" else "Return date"
-        )
-        "nettoyage" -> listOf(
-            if (fr) "Site du contrat / zone à nettoyer" else "Contract site / cleaning zone",
-            if (fr) "Tâches, fréquence et niveau de service" else "Tasks, frequency and service level",
-            if (fr) "Produits, matériel et équipe" else "Products, equipment and team",
-            if (fr) "Date ou prochaine intervention" else "Date or next intervention"
-        )
-        "domicile" -> listOf(
-            if (fr) "Adresse d'intervention / quartier" else "Service address / neighborhood",
-            if (fr) "Prestation, accès et consignes" else "Service, access and instructions",
-            if (fr) "Matériel et technicien demandé" else "Equipment and requested technician",
-            if (fr) "Date de visite" else "Visit date"
-        )
-        "impression" -> listOf(
-            if (fr) "Format / support / quantité" else "Format / media / quantity",
-            if (fr) "Couleurs, finition et épreuve" else "Colors, finishing and proof",
-            if (fr) "Papier, encre et consommables" else "Paper, ink and consumables",
-            if (fr) "Date de retrait" else "Pickup date"
-        )
-        "photo_evenementiel" -> listOf(
-            if (fr) "Événement / lieu / organisateur" else "Event / venue / organizer",
-            if (fr) "Forfait, livrables et durée" else "Package, deliverables and duration",
-            if (fr) "Matériel et équipe" else "Equipment and crew",
-            if (fr) "Date de l'événement" else "Event date"
-        )
-        "pressing" -> listOf(
-            if (fr) "Lot textile / type de vêtement" else "Laundry batch / garment type",
-            if (fr) "Détail des pièces, traitement et précautions" else "Items, treatment and care instructions",
-            if (fr) "Lessive, détachant et consommables" else "Detergent, stain remover and consumables",
-            if (fr) "Date promise de retrait" else "Promised pickup date"
-        )
-        else -> listOf(
-            if (fr) "Prestation / commande / référence" else "Service / order / reference",
-            if (fr) "Description et spécifications" else "Description and specifications",
-            if (fr) "Matériel ou consommables nécessaires" else "Required equipment or consumables",
-            if (fr) "Date d'échéance" else "Due date"
-        )
-    }
-
     var workstationId by rememberSaveable { mutableStateOf("") }
     var customer by rememberSaveable { mutableStateOf("") }
     var title by rememberSaveable { mutableStateOf("") }
-    var specificPrimary by rememberSaveable { mutableStateOf("") }
-    var specifications by rememberSaveable { mutableStateOf("") }
-    var materials by rememberSaveable { mutableStateOf("") }
-    var assignedStaff by rememberSaveable { mutableStateOf("") }
-    var estimate by rememberSaveable { mutableStateOf("") }
-    var deposit by rememberSaveable { mutableStateOf("0") }
+    var fieldValues = remember(profile, session.account.memberId) { mutableStateMapOf<String, String>() }
+    var estimate by rememberSaveable { mutableStateOf("0") }
+    var requestedDeposit by rememberSaveable { mutableStateOf("0") }
     var dueDays by rememberSaveable { mutableStateOf("3") }
-    var transitionReason by rememberSaveable { mutableStateOf("") }
     var message by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
-    val requiredProfileFieldsValid = when (profile) {
-        "autre" -> specificPrimary.isNotBlank() && specifications.isNotBlank()
-        "pressing" -> specificPrimary.isNotBlank() && specifications.isNotBlank()
-        "coiffure", "beaute", "couture", "reparation", "garage", "menuiserie", "nettoyage", "domicile", "impression", "photo_evenementiel", "parfumerie" ->
-            specificPrimary.isNotBlank() && specifications.isNotBlank()
-        else -> false
+    val requiredErrors = ActivityWorkflows.validate(profile, fieldValues)
+    val primaryDetail = workflow.fields.firstNotNullOfOrNull { field ->
+        fieldValues[field.key]?.trim()?.takeIf { it.isNotEmpty() }
+    }.orEmpty()
+
+    fun showDatePicker(key: String) {
+        val existing = fieldValues[key].orEmpty()
+        val parsed = runCatching { java.time.LocalDate.parse(existing) }.getOrNull()
+        val calendar = Calendar.getInstance()
+        if (parsed != null) {
+            calendar.set(parsed.year, parsed.monthValue - 1, parsed.dayOfMonth)
+        }
+        android.app.DatePickerDialog(
+            context,
+            { _, year, month, day ->
+                fieldValues[key] = "%04d-%02d-%02d".format(java.util.Locale.ROOT, year, month + 1, day)
+            },
+            calendar.get(Calendar.YEAR),
+            calendar.get(Calendar.MONTH),
+            calendar.get(Calendar.DAY_OF_MONTH)
+        ).show()
     }
 
-    fun transitions(status: String): List<Pair<String, String>> {
-        val stages: Map<String, Set<String>> = when (profile) {
-            "coiffure", "beaute" -> mapOf(
-                "received" to setOf("approved", "cancelled"), "open" to setOf("approved", "cancelled"),
-                "approved" to setOf("in_progress"), "in_progress" to setOf("quality_check"),
-                "quality_check" to setOf("in_progress", "ready"), "ready" to setOf("delivered"),
-                "delivered" to setOf("closed")
-            )
-            "parfumerie" -> mapOf(
-                "received" to setOf("quote_pending", "cancelled"), "open" to setOf("quote_pending", "cancelled"),
-                "quote_pending" to setOf("waiting_customer", "approved", "cancelled"),
-                "waiting_customer" to setOf("approved", "cancelled"),
-                "approved" to setOf("waiting_parts", "in_progress"), "waiting_parts" to setOf("in_progress"),
-                "in_progress" to setOf("quality_check"), "quality_check" to setOf("ready"),
-                "ready" to setOf("delivered"), "delivered" to setOf("closed")
-            )
-            "reparation", "garage" -> mapOf(
-                "received" to setOf("diagnostic", "cancelled"), "open" to setOf("diagnostic", "cancelled"),
-                "diagnostic" to setOf("quote_pending", "awaiting_approval", "in_progress", "cancelled"),
-                "quote_pending" to setOf("waiting_customer", "awaiting_approval", "approved", "cancelled"),
-                "waiting_customer" to setOf("approved", "cancelled"), "awaiting_approval" to setOf("approved", "cancelled"),
-                "approved" to setOf("waiting_parts", "in_progress"), "waiting_parts" to setOf("in_progress"),
-                "in_progress" to setOf("quality_check"), "quality_check" to setOf("in_progress", "ready"),
-                "ready" to setOf("delivered"), "delivered" to setOf("closed")
-            )
-            "couture" -> mapOf(
-                "received" to setOf("measurement", "diagnostic"), "open" to setOf("measurement", "diagnostic"),
-                "measurement" to setOf("quote_pending"), "diagnostic" to setOf("quote_pending"),
-                "quote_pending" to setOf("waiting_customer", "approved"),
-                "waiting_customer" to setOf("approved"), "approved" to setOf("waiting_parts", "in_progress"),
-                "waiting_parts" to setOf("in_progress"), "in_progress" to setOf("fitting", "quality_check"),
-                "fitting" to setOf("in_progress", "quality_check"), "quality_check" to setOf("fitting", "ready"),
-                "ready" to setOf("delivered"), "delivered" to setOf("closed")
-            )
-            "menuiserie" -> mapOf(
-                "received" to setOf("diagnostic", "quote_pending"), "open" to setOf("diagnostic", "quote_pending"),
-                "diagnostic" to setOf("quote_pending"), "quote_pending" to setOf("waiting_customer", "approved"),
-                "waiting_customer" to setOf("approved"), "approved" to setOf("waiting_parts", "fabrication"),
-                "waiting_parts" to setOf("fabrication"), "fabrication" to setOf("quality_check"),
-                "quality_check" to setOf("fabrication", "installation", "ready"),
-                "installation" to setOf("ready"), "ready" to setOf("delivered"), "delivered" to setOf("closed")
-            )
-            "impression" -> mapOf(
-                "received" to setOf("quote_pending", "proof_ready"), "open" to setOf("quote_pending", "proof_ready"),
-                "quote_pending" to setOf("waiting_customer", "proof_ready"),
-                "waiting_customer" to setOf("approved"), "proof_ready" to setOf("approved", "production"),
-                "approved" to setOf("production"), "production" to setOf("quality_check"),
-                "quality_check" to setOf("production", "ready"), "ready" to setOf("delivered"), "delivered" to setOf("closed")
-            )
-            "domicile", "nettoyage" -> mapOf(
-                "received" to setOf("quote_pending", "approved"), "open" to setOf("quote_pending", "approved"),
-                "quote_pending" to setOf("waiting_customer", "approved"), "waiting_customer" to setOf("approved"),
-                "approved" to setOf("planning", "on_site"), "planning" to setOf("on_site"),
-                "on_site" to setOf("in_progress"), "in_progress" to setOf("quality_check"),
-                "quality_check" to setOf("in_progress", "ready"), "ready" to setOf("delivered"), "delivered" to setOf("closed")
-            )
-            "photo_evenementiel" -> mapOf(
-                "received" to setOf("quote_pending", "planning"), "open" to setOf("quote_pending", "planning"),
-                "quote_pending" to setOf("waiting_customer", "approved"), "waiting_customer" to setOf("approved"),
-                "approved" to setOf("planning"), "planning" to setOf("shooting"),
-                "shooting" to setOf("post_production"), "post_production" to setOf("quality_check"),
-                "quality_check" to setOf("post_production", "ready"), "ready" to setOf("delivered"), "delivered" to setOf("closed")
-            )
-            else -> emptyMap()
-        }
-        val statuses = stages[status] ?: when (status) {
-            "received", "open" -> setOf("diagnostic", "quote_pending", "in_progress", "cancelled")
-            "diagnostic" -> setOf("quote_pending", "awaiting_approval", "in_progress", "cancelled")
-            "quote_pending" -> setOf("waiting_customer", "approved", "cancelled")
-            "waiting_customer", "awaiting_approval" -> setOf("approved", "cancelled")
-            "approved" -> setOf("waiting_parts", "in_progress")
-            "waiting_parts" -> setOf("in_progress")
-            "in_progress" -> setOf("quality_check", "ready")
-            "quality_check" -> setOf("in_progress", "ready")
-            "ready" -> setOf("delivered")
-            "delivered" -> setOf("closed")
-            else -> emptySet()
-        }
-        val label = mapOf(
-            "measurement" to if (fr) "Prendre les mensurations" else "Measure",
-            "diagnostic" to if (fr) "Diagnostiquer" else "Diagnose",
-            "quote_pending" to if (fr) "Préparer le devis" else "Prepare quote",
-            "waiting_customer" to if (fr) "Attendre le client" else "Await customer",
-            "approved" to if (fr) "Accord reçu" else "Approval received",
-            "waiting_parts" to if (fr) "Attendre les pièces" else "Await parts",
-            "fabrication" to if (fr) "Lancer la fabrication" else "Start fabrication",
-            "fitting" to if (fr) "Essayage" else "Fitting",
-            "proof_ready" to if (fr) "Épreuve prête" else "Proof ready",
-            "production" to if (fr) "Démarrer la production" else "Start production",
-            "planning" to if (fr) "Planifier l'intervention" else "Plan intervention",
-            "on_site" to if (fr) "Équipe sur site" else "Team on site",
-            "shooting" to if (fr) "Prise de vue" else "Photo / video session",
-            "post_production" to if (fr) "Post-production" else "Post-production",
-            "in_progress" to if (fr) "Démarrer / reprendre" else "Start / resume",
-            "quality_check" to if (fr) "Contrôle qualité" else "Quality check",
-            "ready" to if (fr) "Valider prêt" else "Approve ready",
-            "installation" to if (fr) "Installer / poser" else "Install",
-            "delivered" to if (fr) "Remis au client" else "Delivered",
-            "closed" to if (fr) "Clôturer" else "Close",
-            "cancelled" to if (fr) "Annuler" else "Cancel",
-            "awaiting_approval" to if (fr) "Attendre accord client" else "Await approval"
-        )
-        return statuses.map { it to (label[it] ?: it) }
+    fun labelForField(field: ActivityFieldDefinition): String =
+        if (fr) field.labelFr else field.labelEn
+
+    fun stageLabel(status: String): String {
+        val stage = workflow.stage(if (status == "open") "received" else status)
+        return if (fr) stage?.labelFr ?: status else stage?.labelEn ?: status
     }
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle(
-                (if (fr) "Ordres de travail — " else "Work orders — ") + profileTitle,
-                if (fr) "Dossiers métier, devis, affectations, étapes de production et remise client. Chaque dossier reste rattaché à son site d'origine." else "Activity-specific jobs, quotes, assignments, production stages and handover. Each job remains bound to its source site."
+                (if (fr) "Parcours métier — " else "Business journey — ") + if (fr) workflow.titleFr else workflow.titleEn,
+                if (fr) workflow.purposeFr else workflow.purposeEn
             )
             AuthorizedSitePicker(
                 sites, siteId,
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
             ) { siteId = it; workstationId = "" }
-            LocalOnlyNotice(if (fr) "Dossiers locaux en attente de synchronisation. Les encaissements et décisions fiscales ne sont jamais validés par cette fiche." else "Local records pending synchronization. Cash receipts and tax decisions are never approved by this form.")
+            LocalOnlyNotice(
+                if (fr) "Dossiers enregistrés localement puis synchronisés selon le journal serveur. Cette fiche ne valide jamais un encaissement ; le paiement doit passer par la caisse." 
+                else "Records are saved locally then synchronized through the server journal. This form never confirms a payment; payment must go through cash."
+            )
+            workflow.notesFr.forEach { note ->
+                Text("• " + note, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+            }
+            if (profile == "beaute" && fr) {
+                Text("Ne saisis aucune donnée médicale, aucun diagnostic ni antécédent dans ce dossier.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+            }
+            if (workflow.journey == "retail") {
+                Text(
+                    if (fr) "Parcours spécial : commande ou réservation uniquement. Une vente réelle doit être créée dans le Point de vente, avec son stock et son paiement distincts."
+                    else "Special-order flow only. A real sale must be created in POS, with separate inventory and payment records.",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (fr) "Nouveau dossier" else "New work order", fontWeight = FontWeight.Bold)
-                    Text(if (fr) "Emplacement / poste (facultatif — le registre reste consolidé au niveau du site)" else "Workstation (optional — site ledger remains consolidated)", fontWeight = FontWeight.SemiBold)
+                    Text(if (fr) "Nouveau dossier" else "New record", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (fr) "Emplacement / poste (facultatif — le registre reste consolidé au niveau du site)"
+                        else "Workstation (optional — the ledger remains consolidated at site level)",
+                        fontWeight = FontWeight.SemiBold
+                    )
                     OutlinedButton(onClick = { workstationId = "" }, modifier = Modifier.fillMaxWidth()) {
                         Text(if (workstationId.isBlank()) (if (fr) "✓ Aucun poste dédié" else "✓ No dedicated workstation") else if (fr) "Aucun poste dédié" else "No dedicated workstation")
                     }
@@ -1716,66 +1555,205 @@ fun WorkOrdersContent(
                             Text((if (workstationId == workstation.id) "✓ " else "") + workstation.name + " · " + workstation.kind)
                         }
                     }
-                    OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Client" else "Customer") }, singleLine = true)
-                    OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Titre du dossier" else "Work order title") }, singleLine = true)
-                    OutlinedTextField(specificPrimary, { specificPrimary = it }, Modifier.fillMaxWidth(), label = { Text(labels[0]) }, singleLine = true)
-                    OutlinedTextField(specifications, { specifications = it }, Modifier.fillMaxWidth(), label = { Text(labels[1]) }, minLines = 2)
-                    OutlinedTextField(materials, { materials = it }, Modifier.fillMaxWidth(), label = { Text(labels[2]) }, minLines = 2)
-                    OutlinedTextField(assignedStaff, { assignedStaff = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Prestataire souhaité (indicatif, non affecté)" else "Preferred provider (indicative, not assigned)") }, singleLine = true)
-                    OutlinedTextField(estimate, { estimate = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Devis estimatif (FCFA)" else "Estimated quote (XAF)") }, singleLine = true)
-                    OutlinedTextField(deposit, { deposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Acompte demandé (FCFA)" else "Deposit requested (XAF)") }, singleLine = true)
-                    OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Délai estimé en jours" else "Estimated days") }, singleLine = true)
+                    OutlinedTextField(
+                        customer, { customer = it },
+                        Modifier.fillMaxWidth(),
+                        label = { Text(if (fr) "Client / donneur d'ordre" else "Customer / requester") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        title, { title = it },
+                        Modifier.fillMaxWidth(),
+                        label = { Text(if (fr) "Intitulé du dossier" else "Record title") },
+                        singleLine = true
+                    )
+
+                    workflow.fields.forEach { field ->
+                        val value = fieldValues[field.key].orEmpty()
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            when (field.kind) {
+                                ActivityFieldKind.SELECT -> {
+                                    Text(labelForField(field) + if (field.required) " *" else "", fontWeight = FontWeight.Medium)
+                                    field.options.forEach { option ->
+                                        OutlinedButton(
+                                            onClick = { fieldValues[field.key] = option.value },
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            val optionLabel = if (fr) option.labelFr else option.labelEn
+                                            Text((if (value == option.value) "✓ " else "") + optionLabel)
+                                        }
+                                    }
+                                }
+                                ActivityFieldKind.DATE -> {
+                                    Text(labelForField(field) + if (field.required) " *" else "", fontWeight = FontWeight.Medium)
+                                    OutlinedButton(onClick = { showDatePicker(field.key) }, modifier = Modifier.fillMaxWidth()) {
+                                        Text(if (value.isBlank()) {
+                                            if (fr) "Choisir une date" else "Choose a date"
+                                        } else value)
+                                    }
+                                }
+                                ActivityFieldKind.NUMBER -> OutlinedTextField(
+                                    value = value,
+                                    onValueChange = { next -> fieldValues[field.key] = next.filter(Char::isDigit).take(18) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text(labelForField(field) + if (field.required) " *" else "") },
+                                    singleLine = true
+                                )
+                                ActivityFieldKind.TEXTAREA -> OutlinedTextField(
+                                    value = value,
+                                    onValueChange = { next -> fieldValues[field.key] = next.take(field.maxLength) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text(labelForField(field) + if (field.required) " *" else "") },
+                                    minLines = 3
+                                )
+                                ActivityFieldKind.TEXT -> OutlinedTextField(
+                                    value = value,
+                                    onValueChange = { next -> fieldValues[field.key] = next.take(field.maxLength) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    label = { Text(labelForField(field) + if (field.required) " *" else "") },
+                                    singleLine = true
+                                )
+                            }
+                            field.helpFr?.takeIf { fr }?.let {
+                                Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                    }
+
+                    OutlinedTextField(
+                        estimate,
+                        { estimate = it.filter(Char::isDigit).take(18) },
+                        Modifier.fillMaxWidth(),
+                        label = { Text(if (fr) "Montant estimatif / devis (FCFA)" else "Estimated amount / quote (XAF)") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        requestedDeposit,
+                        { requestedDeposit = it.filter(Char::isDigit).take(18) },
+                        Modifier.fillMaxWidth(),
+                        label = { Text(if (fr) "Acompte demandé (non encaissé ici) (FCFA)" else "Requested deposit (not collected here) (XAF)") },
+                        singleLine = true
+                    )
+                    OutlinedTextField(
+                        dueDays,
+                        { dueDays = it.filter(Char::isDigit).take(3) },
+                        Modifier.fillMaxWidth(),
+                        label = { Text(if (fr) "Délai estimé en jours" else "Estimated lead time in days") },
+                        singleLine = true
+                    )
                     Button(
                         onClick = {
-                            val amount = estimate.toLongOrNull() ?: 0L
-                            val paid = deposit.toLongOrNull() ?: 0L
-                            if (customer.isBlank() || title.isBlank() || amount <= 0 || paid > amount || !requiredProfileFieldsValid) {
-                                error = if (fr) "Client, titre, devis positif, acompte demandé inférieur ou égal au devis et champs obligatoires du métier requis." else "Customer, title, positive quote, requested deposit at or below quote, and required activity fields are mandatory."
+                            val amount = estimate.toLongOrNull()
+                            val deposit = requestedDeposit.toLongOrNull() ?: 0L
+                            val delay = dueDays.toLongOrNull()
+                            val fieldErrors = ActivityWorkflows.validate(profile, fieldValues)
+                            if (customer.trim().length < 2 || title.trim().length < 2 || amount == null || amount < 0L ||
+                                deposit < 0L || (amount > 0L && deposit > amount) || delay == null || delay !in 0L..365L ||
+                                fieldErrors.isNotEmpty()
+                            ) {
+                                val missingLabels = fieldErrors.mapNotNull { key -> workflow.fields.firstOrNull { it.key == key }?.let(::labelForField) }
+                                error = if (fr) {
+                                    buildString {
+                                        append("Vérifie le client, l'intitulé, les montants, le délai (0 à 365 jours)")
+                                        if (missingLabels.isNotEmpty()) append(" et les champs : " + missingLabels.joinToString(", "))
+                                        append(".")
+                                    }
+                                } else {
+                                    "Check customer, title, amounts, lead time (0–365 days) and required activity fields: " + missingLabels.joinToString(", ")
+                                }
                             } else scope.launch {
                                 busy = true
                                 runCatching {
+                                    val fieldsJson = JSONObject()
+                                    fieldValues.forEach { (key, value) ->
+                                        if (value.isNotBlank()) fieldsJson.put(key, value.trim())
+                                    }
+                                    val compatibilityPrimary = primaryDetail.ifBlank { title.trim() }
+                                    val compatibilitySpecifications = workflow.fields.drop(1)
+                                        .firstNotNullOfOrNull { field -> fieldValues[field.key]?.trim()?.takeIf { it.isNotEmpty() } }
+                                        .orEmpty()
+                                    val materialsValue = fieldValues["materials"] ?: fieldValues["fabric"] ?:
+                                        fieldValues["products"] ?: fieldValues["equipment"].orEmpty()
                                     val metadata = JSONObject()
                                         .put("activity", profile)
-                                        .put("primaryDetail", specificPrimary.trim())
-                                        .put("specifications", specifications.trim())
-                                        .put("materials", materials.trim())
-                                        .put("assignedStaffLabel", assignedStaff.trim())
-                                        .put("depositRequestedXaf", paid)
-                                        .put("workflowVersion", 1)
+                                        .put("activity_profile", profile)
+                                        .put("journey", workflow.journey)
+                                        .put("workflow_version", 2)
+                                        .put("workflowVersion", 2)
+                                        .put("fields", fieldsJson)
+                                        .put("primaryDetail", compatibilityPrimary)
+                                        .put("specifications", compatibilitySpecifications)
+                                        .put("materials", materialsValue)
+                                        .put("assignedStaffLabel", fieldValues["provider"] ?: fieldValues["team"].orEmpty())
+                                        .put("depositRequestedXaf", deposit)
                                         .toString()
+                                    val referencePrefix = when (recordType) {
+                                        "repair_order" -> "REP-"
+                                        "service_order" -> "SRV-"
+                                        else -> "WO-"
+                                    }
                                     repository.createManagementRecord(
-                                        session.account.organizationId, siteId, recordType,
-                                        (if (recordType == "repair_order") "REP-" else if (recordType == "service_order") "SRV-" else "WO-") + System.currentTimeMillis(),
-                                        title.trim(), customer.trim(), amount, 0L,
-                                        System.currentTimeMillis() + (dueDays.toLongOrNull() ?: 3L).coerceIn(1L, 365L) * 86_400_000L,
-                                        "received", metadata, session.account.memberId,
+                                        session.account.organizationId,
+                                        siteId,
+                                        recordType,
+                                        referencePrefix + System.currentTimeMillis(),
+                                        title.trim(),
+                                        customer.trim(),
+                                        amount,
+                                        0L,
+                                        System.currentTimeMillis() + delay * 86_400_000L,
+                                        "received",
+                                        metadata,
+                                        session.account.memberId,
                                         workstationId.takeIf { it.isNotBlank() }
                                     )
                                 }.onSuccess {
-                                    customer = ""; title = ""; specificPrimary = ""; specifications = ""
-                                    materials = ""; assignedStaff = ""; estimate = ""; deposit = "0"
+                                    customer = ""
+                                    title = ""
+                                    fieldValues.clear()
+                                    estimate = "0"
+                                    requestedDeposit = "0"
+                                    dueDays = "3"
                                     error = null
-                                    message = if (fr) "Dossier enregistré. Statut initial : reçu." else "Work order saved. Initial status: received."
-                                }.onFailure { error = it.message ?: if (fr) "Création impossible." else "Unable to create work order." }
+                                    message = if (fr) "Dossier enregistré. Statut initial : reçu. Aucun encaissement n'a été créé." else "Record saved. Initial status: received. No payment was recorded."
+                                }.onFailure {
+                                    error = it.message ?: if (fr) "Création impossible." else "Unable to create record."
+                                }
                                 busy = false
                             }
                         },
-                        enabled = !busy && siteId.isNotBlank() && customer.isNotBlank() && title.isNotBlank() &&
-                            (estimate.toLongOrNull() ?: 0L) > 0 && requiredProfileFieldsValid,
+                        enabled = !busy && siteId.isNotBlank() && customer.trim().length >= 2 &&
+                            title.trim().length >= 2 && (estimate.toLongOrNull() ?: -1L) >= 0L &&
+                            requestedDeposit.toLongOrNull()?.let { it >= 0L && (estimate.toLongOrNull()?.let { amount -> amount == 0L || it <= amount } == true) } == true &&
+                            dueDays.toLongOrNull()?.let { it in 0L..365L } == true && requiredErrors.isEmpty(),
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (busy) if (fr) "Enregistrement…" else "Saving…" else if (fr) "Créer le dossier" else "Create work order") }
+                    ) {
+                        Text(if (busy) {
+                            if (fr) "Enregistrement…" else "Saving…"
+                        } else {
+                            if (fr) "Créer le dossier" else "Create record"
+                        })
+                    }
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                     if (message != null) Text(message!!, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
-        item { Text(if (fr) "Dossiers du point de vente" else "Site work orders", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (records.isEmpty()) item { Text(if (fr) "Aucun dossier enregistré." else "No work orders yet.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text(if (fr) "Dossiers du point de vente" else "Site records", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (records.isEmpty()) {
+            item { Text(if (fr) "Aucun dossier enregistré." else "No records yet.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
         items(records) { item ->
             val events by remember(item.id, siteId) {
                 repository.dao.observeWorkflowEvents(session.account.organizationId, siteId, item.recordType, item.id)
             }.collectAsState(initial = emptyList())
             var reason by rememberSaveable(item.id) { mutableStateOf("") }
+            val metadata = remember(item.id, item.metadataJson) {
+                runCatching { JSONObject(item.metadataJson) }.getOrElse { JSONObject() }
+            }
+            val storedFields = remember(item.id, item.metadataJson) {
+                runCatching { metadata.optJSONObject("fields") }.getOrNull()
+            }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(item.reference + " · " + item.title, fontWeight = FontWeight.Bold)
@@ -1783,30 +1761,62 @@ fun WorkOrdersContent(
                     item.workstationId?.let { id ->
                         Text(workstations.firstOrNull { it.id == id }?.name ?: id, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     }
-                    Text(labels[0] + " : " + (runCatching { JSONObject(item.metadataJson).optString("primaryDetail") }.getOrDefault("")))
+                    if (storedFields != null) {
+                        workflow.fields.forEach { field ->
+                            val value = storedFields.optString(field.key)
+                            if (value.isNotBlank()) {
+                                Text(
+                                    (if (fr) field.labelFr else field.labelEn) + " : " + value,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    } else {
+                        val legacyDetail = metadata.optString("primaryDetail")
+                        val legacySpecification = metadata.optString("specifications")
+                        if (legacyDetail.isNotBlank()) Text(legacyDetail)
+                        if (legacySpecification.isNotBlank()) Text(legacySpecification, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     Text(
-                        (if (fr) "Devis estimatif" else "Estimated quote") + " : " + xaf(item.amountXaf) +
+                        (if (fr) "Montant estimatif" else "Estimated amount") + " : " + xaf(item.amountXaf) +
                             " · " + (if (fr) "Acompte demandé" else "Deposit requested") + " : " +
-                            xaf(runCatching { JSONObject(item.metadataJson).optLong("depositRequestedXaf", 0L) }.getOrDefault(0L)) +
-                            " · " + (if (fr) "Acompte réellement encaissé" else "Deposit actually paid") + " : " + xaf(item.paidXaf)
+                            xaf(metadata.optLong("depositRequestedXaf", 0L)) +
+                            " · " + (if (fr) "Acompte réellement encaissé" else "Deposit actually collected") + " : " + xaf(item.paidXaf)
                     )
-                    Text((if (fr) "Statut" else "Status") + " : " + item.status, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    Text((if (fr) "Statut" else "Status") + " : " + stageLabel(item.status), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                     Text((if (fr) "Échéance" else "Due") + " : " + (item.dueAtMillis?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) } ?: "—"))
                     if (item.status !in setOf("closed", "cancelled")) {
-                        OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Motif obligatoire pour changer l'étape" else "Reason required for status change") }, minLines = 1)
-                        transitions(item.status).forEach { (status, label) ->
+                        OutlinedTextField(
+                            reason,
+                            { reason = it.take(500) },
+                            Modifier.fillMaxWidth(),
+                            label = { Text(if (fr) "Motif obligatoire pour changer l'étape" else "Reason required for status change") },
+                            minLines = 1
+                        )
+                        workflow.nextStages(item.status).forEach { nextStage ->
                             OutlinedButton(
                                 onClick = {
                                     scope.launch {
                                         runCatching {
-                                            repository.transitionManagementRecord(session.account.organizationId, siteId, item.id, status, reason, session.account.memberId)
-                                        }.onSuccess { reason = ""; message = if (fr) "Étape mise à jour et journalisée." else "Workflow stage updated and audited." }
-                                            .onFailure { error = it.message ?: if (fr) "Transition impossible." else "Transition failed." }
+                                            repository.transitionManagementRecord(
+                                                session.account.organizationId, siteId, item.id, nextStage.code, reason,
+                                                session.account.memberId
+                                            )
+                                        }.onSuccess {
+                                            reason = ""
+                                            error = null
+                                            message = if (fr) "Étape mise à jour et journalisée." else "Workflow stage updated and audited."
+                                        }.onFailure {
+                                            error = it.message ?: if (fr) "Transition impossible." else "Transition failed."
+                                        }
                                     }
                                 },
-                                enabled = reason.trim().length >= 3,
+                                enabled = reason.trim().length in 3..500,
                                 modifier = Modifier.fillMaxWidth()
-                            ) { Text(label) }
+                            ) {
+                                Text(if (fr) nextStage.labelFr else nextStage.labelEn)
+                            }
                         }
                     }
                     if (events.isNotEmpty()) {
