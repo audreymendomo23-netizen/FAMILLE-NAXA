@@ -500,7 +500,7 @@ Deno.test("atomic sync accepts all generic activity work-order aggregate familie
   ] as const;
   for (let index = 0; index < cases.length; index++) {
     const [aggregate, action] = cases[index];
-    const recordId = `88888888-8888-4888-8888-8888888890${index}`;
+    const recordId = `88888888-8888-4888-8888-88888888900${index}`;
     const event = normalizeAtomicSyncEvent({
       event_id: "88888888-8888-4888-8888-888888889099",
       device_id: SYNC_DEVICE,
@@ -539,7 +539,7 @@ Deno.test("atomic sync accepts versioned status changes for every generic work-o
   ] as const;
   for (let index = 0; index < cases.length; index++) {
     const [aggregate, action] = cases[index];
-    const recordId = `88888888-8888-4888-8888-8888888891${index}`;
+    const recordId = `88888888-8888-4888-8888-88888888910${index}`;
     const event = normalizeAtomicSyncEvent({
       event_id: "88888888-8888-4888-8888-888888889199",
       device_id: SYNC_DEVICE,
