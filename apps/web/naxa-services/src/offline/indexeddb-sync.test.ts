@@ -91,6 +91,10 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
   });
 
   it("leases only events belonging to the authenticated organization", async () => {
+    await expect(enqueue({
+      appId: APP, eventId: "mismatched-org-event", deviceId: DEVICE_A, organizationId: ORG,
+      payload: JSON.stringify({ org_id: OTHER_ORG, action_code: "customer.created" }), state: "queued", createdAt: 0,
+    })).rejects.toThrow("QUEUE_ORGANIZATION_MISMATCH");
     await enqueue({
       appId: APP, eventId: "org-a-event", deviceId: DEVICE_A, organizationId: ORG,
       payload: JSON.stringify({ org_id: ORG, action_code: "customer.created" }), state: "queued", createdAt: 1,
