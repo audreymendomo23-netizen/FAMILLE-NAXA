@@ -11,9 +11,9 @@
       listAppEvents: (appId, deviceId, organizationId) => listAppEvents(appId, deviceId, organizationId),
       listQueued: (appId, deviceId, organizationId) => listQueued(appId, deviceId, organizationId),
       acquire: (appId, deviceId, organizationId) => acquireDueBatch(10, Date.now(), 60_000, appId, deviceId, organizationId),
-      applyPage: (appId, deviceId, page) => applySyncPage(appId, deviceId, page),
-      cursor: (appId, deviceId) => getSyncCursor(appId, deviceId),
-      changes: (appId, deviceId) => listSyncChanges(appId, deviceId),
+      applyPage: (appId, deviceId, page, organizationId) => applySyncPage(appId, deviceId, page, organizationId),
+      cursor: (appId, deviceId, organizationId) => getSyncCursor(appId, deviceId, organizationId),
+      changes: (appId, deviceId, organizationId) => listSyncChanges(appId, deviceId, organizationId),
     });
     document.querySelector("#ready").textContent = "ready";
   </script>
