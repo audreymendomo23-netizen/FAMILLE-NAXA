@@ -124,13 +124,13 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
     };
     const page = { changes: [change], next_cursor: 1, has_more: false };
     await applySyncPage(APP, DEVICE_A, page, ORG);
-    await applySyncPage(APP, DEVICE_A, page);
+    await applySyncPage(APP, DEVICE_A, page, ORG);
 
     expect(await getSyncCursor(APP, DEVICE_A, ORG)).toBe(1);
     expect(await listSyncChanges(APP, DEVICE_A, ORG)).toHaveLength(1);
     await expect(applySyncPage(APP, DEVICE_A, { changes: [], next_cursor: 0, has_more: false }, ORG))
       .rejects.toThrow("SYNC_CURSOR_REGRESSION");
-    expect(await getSyncCursor(APP, DEVICE_A)).toBe(1);
+    expect(await getSyncCursor(APP, DEVICE_A, ORG)).toBe(1);
     expect(await listSyncChanges(APP, DEVICE_B, ORG)).toHaveLength(0);
   });
 
