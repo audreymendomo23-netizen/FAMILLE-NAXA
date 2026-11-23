@@ -239,3 +239,34 @@ test("IndexedDB real browser: tenant partitions, atomic two-tab leases and indep
   expect(visibleB.map((change: { aggregate_id: string }) => change.aggregate_id)).toEqual(["inbound-org-b"]);
   await Promise.all([pageA.close(), pageB.close()]);
 });
+
+test("PWA: production service worker keeps the app shell available after offline navigation", async ({ context }) => {
+  const page = await context.newPage();
+  await page.goto("http://127.0.0.1:4174/");
+  await expect(page).toHaveTitle(/NAXA Services/);
+  await page.evaluate(async () => {
+    if (!("serviceWorker" in navigator)) throw new Error("SERVICE_WORKER_UNSUPPORTED");
+    await navigator.serviceWorker.ready;
+  });
+  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+  await page.reload();
+  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+  const manifest = await page.evaluate(async () => {
+    const response = await fetch("/manifest.webmanifest");
+    if (!response.ok) throw new Error("MANIFEST_NOT_AVAILABLE");
+    return response.json();
+  });
+  expect(manifest.name).toBe("NAXA Services");
+  expect(manifest.icons).toEqual(expect.arrayContaining([
+    expect.objectContaining({ src: "/naxa-services-icon.svg" }),
+  ]));
+
+  await context.setOffline(true);
+  await page.close();
+  const offlinePage = await context.newPage();
+  await offlinePage.goto("http://127.0.0.1:4174/");
+  await expect(offlinePage).toHaveTitle(/NAXA Services/);
+  await expect(offlinePage.getByLabel("Identifiant NAXA Services")).toBeVisible();
+  await expect(offlinePage.getByLabel("Mot de passe")).toBeVisible();
+  await offlinePage.close();
+});
