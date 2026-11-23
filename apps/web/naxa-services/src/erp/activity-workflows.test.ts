@@ -52,7 +52,7 @@ describe("NAXA Services sector workflows", () => {
     expect(canTransitionActivity("impression", "proof_ready", "approved")).toBe(true);
     expect(canTransitionActivity("photo_evenementiel", "shooting", "post_production")).toBe(true);
     expect(canTransitionActivity("nettoyage", "planning", "on_site")).toBe(true);
-    expect(canTransitionActivity("garage", "diagnostic", "awaiting_approval")).toBe(false);
+    expect(canTransitionActivity("garage", "diagnostic", "awaiting_approval")).toBe(true);
     expect(canTransitionActivity("garage", "diagnostic", "quote_pending")).toBe(true);
     expect(canTransitionActivity("coiffure", "in_progress", "post_production")).toBe(false);
   });
