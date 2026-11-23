@@ -1,0 +1,20 @@
+{
+  "id": "/",
+  "name": "NAXA Services",
+  "short_name": "NAXA",
+  "description": "Gestion de votre établissement et de vos prestations",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#111111",
+  "theme_color": "#174c3c",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/naxa-services-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
