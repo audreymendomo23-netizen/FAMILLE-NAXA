@@ -123,15 +123,40 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
       recorded_at: "2026-11-22T10:00:00.000Z",
     };
     const page = { changes: [change], next_cursor: 1, has_more: false };
-    await applySyncPage(APP, DEVICE_A, page);
+    await applySyncPage(APP, DEVICE_A, page, ORG);
     await applySyncPage(APP, DEVICE_A, page);
 
-    expect(await getSyncCursor(APP, DEVICE_A)).toBe(1);
-    expect(await listSyncChanges(APP, DEVICE_A)).toHaveLength(1);
-    await expect(applySyncPage(APP, DEVICE_A, { changes: [], next_cursor: 0, has_more: false }))
+    expect(await getSyncCursor(APP, DEVICE_A, ORG)).toBe(1);
+    expect(await listSyncChanges(APP, DEVICE_A, ORG)).toHaveLength(1);
+    await expect(applySyncPage(APP, DEVICE_A, { changes: [], next_cursor: 0, has_more: false }, ORG))
       .rejects.toThrow("SYNC_CURSOR_REGRESSION");
     expect(await getSyncCursor(APP, DEVICE_A)).toBe(1);
-    expect(await listSyncChanges(APP, DEVICE_B)).toHaveLength(0);
+    expect(await listSyncChanges(APP, DEVICE_B, ORG)).toHaveLength(0);
+  });
+
+  it("partitions inbound cursors and projections by organization on the same device", async () => {
+    const change = (eventId: string, aggregateId: string, organizationId: string) => ({
+      cursor: 1,
+      event_id: eventId,
+      source_device_id: DEVICE_B,
+      origin_site_id: SITE,
+      site_id: SITE,
+      visible_site_ids: [SITE],
+      workstation_id: null,
+      aggregate_type: "customer",
+      aggregate_id: aggregateId,
+      action_code: "customer.created",
+      aggregate_version: 1,
+      payload: { customer_id: aggregateId, display_name: aggregateId, org_id: organizationId, site_id: SITE },
+      recorded_at: "2026-11-23T09:00:00.000Z",
+    });
+    await applySyncPage(APP, DEVICE_A, { changes: [change("org-a-change", "org-a-customer", ORG)], next_cursor: 1, has_more: false }, ORG);
+    await applySyncPage(APP, DEVICE_A, { changes: [change("org-b-change", "org-b-customer", OTHER_ORG)], next_cursor: 1, has_more: false }, OTHER_ORG);
+
+    expect(await getSyncCursor(APP, DEVICE_A, ORG)).toBe(1);
+    expect(await getSyncCursor(APP, DEVICE_A, OTHER_ORG)).toBe(1);
+    expect((await listSyncChanges(APP, DEVICE_A, ORG)).map(item => item.aggregate_id)).toEqual(["org-a-customer"]);
+    expect((await listSyncChanges(APP, DEVICE_A, OTHER_ORG)).map(item => item.aggregate_id)).toEqual(["org-b-customer"]);
   });
 
   it("rejects an inbound change outside its page cursor", async () => {
@@ -143,7 +168,7 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
         aggregate_version: 1, payload: { customer_id: "customer-2" }, recorded_at: "2026-11-22T10:00:00.000Z",
       }],
       next_cursor: 1, has_more: false,
-    })).rejects.toThrow("INVALID_SYNC_CHANGE");
-    expect(await getSyncCursor(APP, DEVICE_A)).toBe(0);
+    }, ORG)).rejects.toThrow("INVALID_SYNC_CHANGE");
+    expect(await getSyncCursor(APP, DEVICE_A, ORG)).toBe(0);
   });
 });
