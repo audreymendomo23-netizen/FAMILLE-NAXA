@@ -1729,8 +1729,8 @@ fun WorkOrdersContent(
                         onClick = {
                             val amount = estimate.toLongOrNull() ?: 0L
                             val paid = deposit.toLongOrNull() ?: 0L
-                            if (customer.isBlank() || title.isBlank() || amount <= 0 || !requiredProfileFieldsValid) {
-                                error = if (fr) "Client, titre, devis positif et champs obligatoires du métier requis." else "Customer, title, positive quote and required activity fields are mandatory."
+                            if (customer.isBlank() || title.isBlank() || amount <= 0 || paid > amount || !requiredProfileFieldsValid) {
+                                error = if (fr) "Client, titre, devis positif, acompte demandé inférieur ou égal au devis et champs obligatoires du métier requis." else "Customer, title, positive quote, requested deposit at or below quote, and required activity fields are mandatory."
                             } else scope.launch {
                                 busy = true
                                 runCatching {
