@@ -92,7 +92,9 @@ jobs:
 
   naxa-services-web-build:
     name: NAXA SERVICES Web build
-    runs-on: ubuntu-latest
+    # Playwright 1.56.1 does not support Ubuntu 26.04 yet; pin this browser job
+    # to the supported 24.04 image. Other native/contract jobs keep ubuntu-latest.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - name: Set up Node.js 22
