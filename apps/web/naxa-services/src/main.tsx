@@ -197,7 +197,7 @@ function App() {
         const record:Entry={
           ...existingEntry,
           id,title,detail,state,createdAt:new Date(item.createdAt).toLocaleString("fr-FR"),
-          recordType: command.aggregate_type === "work_order" || command.aggregate_type === "repair_order" || command.aggregate_type === "service_order"
+          recordType: command.aggregate_type === "work_order" || command.aggregate_type === "repair_order" || command.aggregate_type === "service_order" || command.aggregate_type === "pressing_order"
             ? command.aggregate_type : existingEntry?.recordType,
           status: item.state === "acknowledged" && typeof existingEntry?.revision === "number"
             ? existingEntry.status
@@ -207,7 +207,8 @@ function App() {
             : existingEntry?.status,
           revision: typeof serverRecord.revision === "number" ? serverRecord.revision : existingEntry?.revision,
           siteId: typeof command.site_id === "string" ? command.site_id : existingEntry?.siteId,
-          activityProfile: typeof rawProfile === "string" ? getActivityWorkflow(rawProfile).profile : existingEntry?.activityProfile,
+          activityProfile: typeof rawProfile === "string" ? getActivityWorkflow(rawProfile).profile
+            : command.aggregate_type === "pressing_order" ? "pressing" : existingEntry?.activityProfile,
           metadata: Object.keys(extraFields).length ? extraFields : existingEntry?.metadata,
         };
         next[moduleId]=existing>=0?rows.map((entry,index)=>index===existing?record:entry):[...rows,record];
@@ -539,11 +540,12 @@ function App() {
         const profileValue = metadata.activity ?? metadata.activity_profile;
         const record:Entry={
           id:change.aggregate_id,title,detail,state:"Reçu du serveur · autre appareil",createdAt:new Date(change.recorded_at).toLocaleString("fr-FR"),
-          recordType: change.aggregate_type === "work_order" || change.aggregate_type === "repair_order" || change.aggregate_type === "service_order" ? change.aggregate_type : undefined,
+          recordType: change.aggregate_type === "work_order" || change.aggregate_type === "repair_order" || change.aggregate_type === "service_order" || change.aggregate_type === "pressing_order" ? change.aggregate_type : undefined,
           status: typeof payload.to_status === "string" ? payload.to_status : typeof payload.status === "string" ? payload.status : undefined,
           revision: typeof serverRecord.revision === "number" ? serverRecord.revision : undefined,
           siteId: change.site_id ?? undefined,
-          activityProfile: typeof profileValue === "string" ? getActivityWorkflow(profileValue).profile : undefined,
+          activityProfile: typeof profileValue === "string" ? getActivityWorkflow(profileValue).profile
+            : change.aggregate_type === "pressing_order" ? "pressing" : undefined,
           metadata: extraFields,
         };
         next[moduleId]=existing>=0?rows.map((entry,index)=>index===existing?record:entry):[...rows,record];
@@ -601,10 +603,19 @@ function App() {
       payload: { ...payload, org_id: session.account.organization_id, site_id: siteId },
     };
     await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:session.deviceId,organizationId:session.account.organization_id,payload:JSON.stringify(command),state:"queued",createdAt:Date.now()});
-    setEntries(previous => ({...previous,[moduleId]:[...(previous[moduleId]??[]),{
-      id:aggregateId,title,detail,state:navigator.onLine?"En attente de confirmation serveur":"En attente de connexion",
-      createdAt:new Date().toLocaleString("fr-FR"), ...extra,
-    }]}));
+    setEntries(previous => {
+      const rows=previous[moduleId]??[];
+      const index=rows.findIndex(entry=>entry.id===aggregateId);
+      const existing=index>=0?rows[index]:undefined;
+      const next:Entry={
+        ...existing,
+        id:aggregateId,title,detail,
+        state:navigator.onLine?"En attente de confirmation serveur":"En attente de connexion",
+        createdAt:existing?.createdAt??new Date().toLocaleString("fr-FR"),
+        ...extra,
+      };
+      return {...previous,[moduleId]:index>=0?rows.map((entry,rowIndex)=>rowIndex===index?next:entry):[...rows,next]};
+    });
     setPendingSyncCount(count=>count+1);
     setDialogOpen(false);
     setDraftTitle("");setDraftDetail("");setDraftSku("");setDraftPhone("");setDraftAmount("0");
@@ -641,7 +652,9 @@ function App() {
           order_id:id,ticket_number:"PS-"+id.slice(0,8).toUpperCase(),customer_name:title,customer_phone:draftPhone.trim(),
           items_summary:detail,total_xaf:amount,deposit_xaf:0,deposit_payment_method:null,cash_session_id:null,
           promised_at:toIso(draftDate,"date promise"),workstation_id:null,
-        },siteId,"PS-"+id.slice(0,8).toUpperCase()+" · "+title,amount.toLocaleString("fr-FR")+" FCFA · sans acompte");return;
+        },siteId,"PS-"+id.slice(0,8).toUpperCase()+" · "+title,amount.toLocaleString("fr-FR")+" FCFA · sans acompte",{
+          recordType:"pressing_order",status:"received",siteId,activityProfile:"pressing",
+        });return;
       case "agenda":{
         if(title.length<2||detail.length<2)throw new Error("Client et prestation obligatoires.");
         const starts=toIso(draftDate,"début"),ends=toIso(draftEndDate,"fin");
@@ -720,6 +733,23 @@ function App() {
         activityProfile: workflow.profile,
         metadata: input.fields,
       },
+    );
+  }
+
+  async function transitionWebPressing(entry: Entry, nextStatus: string, reason: string) {
+    const session=authSession;
+    const allowed:Record<string,string[]>={received:["in_progress"],in_progress:["ready"],ready:["picked_up"]};
+    if(!session||entry.recordType!=="pressing_order"||!entry.siteId||!entry.status||
+      !Number.isSafeInteger(entry.revision)||(entry.revision??0)<1) {
+      throw new Error("Le reçu serveur et la révision sont nécessaires avant le changement d'étape.");
+    }
+    if(!allowed[entry.status]?.includes(nextStatus)) throw new Error("Transition Pressing interdite.");
+    if(reason.trim().length<3||reason.trim().length>500) throw new Error("Un motif de trois à 500 caractères est obligatoire.");
+    await submitWebBusinessEvent(
+      "pressing","pressing_order.status_changed:"+nextStatus,"pressing_order",entry.id,
+      {order_id:entry.id,from_status:entry.status,reason:reason.trim(),expected_version:entry.revision,transitioned_at:new Date().toISOString()},
+      entry.siteId,entry.title,entry.detail+" · "+entry.status+" → "+nextStatus,
+      {...entry,status:nextStatus,state:"Transition en attente du serveur"},
     );
   }
 
@@ -886,7 +916,12 @@ function App() {
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
             active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={setPerformanceFromDate} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport().catch(error => setPerformanceError(error instanceof Error ? error.message : "Chargement du rapport impossible.")); }} authenticated={Boolean(authSession)} /> :
             active === "agenda" ? <AgendaPage entries={entries.agenda ?? []} authenticated={Boolean(authSession)} /> :
-            active === "pressing" ? <PressingPage entries={entries.pressing ?? []} canPreviewEdit={preview} authenticated={Boolean(authSession)} onAdvance={(id) => setEntries((prev) => ({ ...prev, pressing: (prev.pressing ?? []).map((x) => x.id === id ? { ...x, state: nextPressingState(x.state) } : x) }))} /> :
+            active === "pressing" ? <PressingPage
+              entries={entries.pressing ?? []} canPreviewEdit={preview}
+              authenticated={Boolean(authSession && !preview)} busy={busy}
+              onAdvance={(id) => setEntries((prev) => ({ ...prev, pressing: (prev.pressing ?? []).map((x) => x.id === id ? { ...x, state: nextPressingState(x.state) } : x) }))}
+              onTransition={transitionWebPressing}
+            /> :
             active === "workOrders" ? <WorkOrdersPage
               workflow={getActivityWorkflow(authSession?.account.activity_profile)}
               entries={entries.workOrders ?? []}
@@ -1041,8 +1076,39 @@ function AgendaPage({ entries, authenticated }: { entries: Entry[]; authenticate
   });
   return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue de la semaine</h2></div><span className="status-tag pending">{authenticated?"Création connectée · calendrier à compléter":"Aperçu local"}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Créneaux détaillés non projetés</strong><p>Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.</p></div></div><div className="module-main-card"><h2>Rendez-vous du journal serveur</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucun rendez-vous dans le périmètre chargé." />}</div></div>;
 }
-function PressingPage({ entries, onAdvance, canPreviewEdit, authenticated }: { entries: Entry[]; onAdvance: (id: string) => void; canPreviewEdit: boolean; authenticated: boolean }) {
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">SUIVI DES TICKETS</span><h2>Étapes de traitement</h2></div><span className="status-tag pending">{canPreviewEdit?"Aperçu local":authenticated?"Création connectée · transitions à compléter":"Lecture seule"}</span></div><div className="pressing-steps">{["Reçu","En cours","Prêt","Retiré"].map((step,i)=><div key={step}><span>{i+1}</span><strong>{step}</strong></div>)}</div><p className="muted">La création de ticket est transmise au journal serveur. Les transitions de cycle de vie restent à raccorder à l'interface ; aucune transition n'est simulée en session authentifiée.</p></div><div className="module-main-card"><h2>Tickets du journal serveur</h2>{entries.length?entries.map(e=><div className="record-row" key={e.id}><Record entry={e}/>{canPreviewEdit&&<button className="btn secondary" onClick={()=>onAdvance(e.id)} disabled={e.state==="Retiré"}>Avancer l'aperçu</button>}</div>):<Empty text="Aucun ticket disponible dans le périmètre chargé."/>}</div></div>;
+function PressingPage({
+  entries,onAdvance,onTransition,canPreviewEdit,authenticated,busy,
+}:{
+  entries:Entry[];onAdvance:(id:string)=>void;onTransition:(entry:Entry,nextStatus:string,reason:string)=>Promise<void>;
+  canPreviewEdit:boolean;authenticated:boolean;busy:boolean;
+}) {
+  const [reasons,setReasons]=useState<Record<string,string>>({});
+  const [error,setError]=useState("");
+  const nextStatus:Record<string,string>={received:"in_progress",in_progress:"ready",ready:"picked_up"};
+  const statusLabels:Record<string,string>={received:"Reçu",in_progress:"En cours",ready:"Prêt",picked_up:"Retiré"};
+  return <div className="module-layout">
+    <div className="module-main-card">
+      <div className="module-card-head"><div><span className="eyebrow">SUIVI DES TICKETS</span><h2>Étapes de traitement</h2></div><span className="status-tag pending">{canPreviewEdit?"Aperçu local":authenticated?"Transitions via journal serveur":"Lecture seule"}</span></div>
+      <div className="pressing-steps">{["Reçu","En cours","Prêt","Retiré"].map((step,i)=><div key={step}><span>{i+1}</span><strong>{step}</strong></div>)}</div>
+      <p className="muted">Chaque changement exige un reçu serveur, une révision attendue et un motif ; les tickets restent séparés des autres dossiers métier.</p>
+    </div>
+    <div className="module-main-card">
+      <h2>Tickets du journal serveur</h2>
+      {error&&<div className="notice">{error}</div>}
+      {entries.length?entries.map(entry=>{
+        const status=entry.status??"received";
+        const next=nextStatus[status];
+        return <div className="activity-record" key={entry.id}>
+          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail}</small><small>{entry.id} · {entry.revision? "révision "+entry.revision : "reçu serveur en attente"}</small></div><span className="status-tag local">{statusLabels[status]??entry.state}</span></div>
+          {canPreviewEdit&&<button className="btn secondary" onClick={()=>onAdvance(entry.id)} disabled={status==="picked_up"}>Avancer l'aperçu</button>}
+          {authenticated&&next&&entry.recordType==="pressing_order"&&entry.siteId&&entry.revision?<div className="activity-transition">
+            <label>Motif du changement d'étape<input value={reasons[entry.id]??""} onChange={e=>setReasons(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500}/></label>
+            <button className="btn secondary" disabled={busy||(reasons[entry.id]??"").trim().length<3} onClick={()=>void onTransition(entry,next,reasons[entry.id]??"").then(()=>setReasons(previous=>({...previous,[entry.id]:""})).catch(cause=>setError(cause instanceof Error?cause.message:"Transition refusée.")))}>{busy?"Envoi…":"Passer à "+statusLabels[next]}</button>
+          </div>:authenticated&&next&&<p className="muted">En attente du reçu de création et de sa révision serveur avant d'autoriser l'étape suivante.</p>}
+        </div>;
+      }):<Empty text="Aucun ticket disponible dans le périmètre chargé."/>}
+    </div>
+  </div>;
 }
 
 function WorkOrdersPage({
