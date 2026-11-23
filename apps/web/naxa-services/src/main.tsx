@@ -1171,7 +1171,7 @@ function WorkOrdersPage({
           const value=fields[field.key]??"";
           const update=(nextValue:string)=>setFields(previous=>({...previous,[field.key]:nextValue}));
           const kind=field.kind??"text";
-          return <label key={field.key}>{field.label}{field.required?" *":""}
+          return <label key={field.key} data-activity-field={field.key}>{field.label}{field.required?" *":""}
             {kind==="textarea"
               ? <textarea value={value} onChange={e=>update(e.target.value)} maxLength={field.maxLength??1200} rows={3} required={field.required}/>
               : kind==="select"
