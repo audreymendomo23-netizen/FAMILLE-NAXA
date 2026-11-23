@@ -740,12 +740,11 @@ function App() {
 
   async function transitionWebPressing(entry: Entry, nextStatus: string, reason: string) {
     const session=authSession;
-    const allowed:Record<string,string[]>={received:["in_progress"],in_progress:["ready"],ready:["picked_up"]};
     if(!session||entry.recordType!=="pressing_order"||!entry.siteId||!entry.status||
       !Number.isSafeInteger(entry.revision)||(entry.revision??0)<1) {
       throw new Error("Le reçu serveur et la révision sont nécessaires avant le changement d'étape.");
     }
-    if(!allowed[entry.status]?.includes(nextStatus)) throw new Error("Transition Pressing interdite.");
+    if(!canTransitionActivity("pressing",entry.status,nextStatus)) throw new Error("Transition Pressing interdite.");
     if(reason.trim().length<3||reason.trim().length>500) throw new Error("Un motif de trois à 500 caractères est obligatoire.");
     await submitWebBusinessEvent(
       "pressing","pressing_order.status_changed:"+nextStatus,"pressing_order",entry.id,
