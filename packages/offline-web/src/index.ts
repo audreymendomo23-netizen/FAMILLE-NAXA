@@ -6,7 +6,7 @@ import {
 export type QueueState = "queued" | "sending" | "awaiting_receipt" | "acknowledged" | "retry_wait" | "conflict" | "rejected";
 export interface QueueItem {
   appId?: string; eventId: string; payload: string; state: QueueState; createdAt: number;
-  deviceId?: string; deviceSequence?: number;
+  deviceId?: string; deviceSequence?: number; organizationId?: string;
   attemptCount?: number; nextAttemptAt?: number | null; leaseUntil?: number | null;
   lastErrorCode?: string | null; serverReceipt?: unknown;
 }
@@ -19,6 +19,21 @@ export interface WebSyncChange {
   cursor:number; event_id:string; source_device_id:string; origin_site_id:string|null; site_id:string|null;
   visible_site_ids:string[]; workstation_id:string|null; aggregate_type:string; aggregate_id:string;
   action_code:string; aggregate_version:number; payload:Record<string,unknown>; recorded_at:string;
+}
+
+/** Keep local queue reads and leases inside the authenticated organization scope. */
+function queueItemBelongsToOrganization(item: QueueItem, organizationId?: string): boolean {
+  if (organizationId == null) return true;
+  if (typeof item.organizationId === "string" && item.organizationId) {
+    return item.organizationId === organizationId;
+  }
+  // Backward compatibility for queue rows created before organizationId was stored separately.
+  try {
+    const command = JSON.parse(item.payload) as Record<string, unknown>;
+    return command.org_id === organizationId;
+  } catch {
+    return false;
+  }
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -43,6 +58,7 @@ function openDb(): Promise<IDBDatabase> {
 export async function enqueue(item: QueueItem): Promise<void> {
   if (!item?.eventId || typeof item.payload !== "string" || !item.payload) throw new TypeError("INVALID_QUEUE_EVENT");
   if (item.deviceId !== undefined && (typeof item.deviceId !== "string" || !item.deviceId.trim())) throw new TypeError("INVALID_QUEUE_DEVICE_ID");
+  if (item.organizationId !== undefined && (typeof item.organizationId !== "string" || !item.organizationId.trim())) throw new TypeError("INVALID_QUEUE_ORGANIZATION_ID");
   const db = await openDb();
   try {
     await new Promise<void>((resolve, reject) => {
@@ -83,11 +99,11 @@ export async function applySyncPage(appId:string,deviceId:string,page:{changes:W
     tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error??new Error("SYNC_PAGE_APPLY_ABORTED"));
   });} finally {db.close();}
 }
-export async function listAppEvents(appId:string,deviceId:string):Promise<QueueItem[]>{
+export async function listAppEvents(appId:string,deviceId:string,organizationId?:string):Promise<QueueItem[]>{
   const db=await openDb();
   try{return await new Promise<QueueItem[]>((resolve,reject)=>{
     const r=db.transaction(STORE).objectStore(STORE).getAll();
-    r.onsuccess=()=>resolve((r.result as QueueItem[]).filter(item=>item.appId===appId&&item.deviceId===deviceId).sort((x,y)=>x.createdAt-y.createdAt));
+    r.onsuccess=()=>resolve((r.result as QueueItem[]).filter(item=>item.appId===appId&&item.deviceId===deviceId&&queueItemBelongsToOrganization(item,organizationId)).sort((x,y)=>x.createdAt-y.createdAt));
     r.onerror=()=>reject(r.error);
   });}finally{db.close();}
 }
@@ -98,7 +114,7 @@ export async function listSyncChanges(appId:string,deviceId:string):Promise<WebS
   const db=await openDb();try{return await new Promise<WebSyncChange[]>((resolve,reject)=>{const r=db.transaction(CHANGES).objectStore(CHANGES).getAll();r.onsuccess=()=>resolve((r.result as (WebSyncChange&{appId:string;deviceId:string})[]).filter(c=>c.appId===appId&&c.deviceId===deviceId).sort((a,b)=>a.cursor-b.cursor));r.onerror=()=>reject(r.error);});}finally{db.close();}
 }
 
-export async function listQueued(appId?: string, deviceId?: string): Promise<QueueItem[]> {
+export async function listQueued(appId?: string, deviceId?: string, organizationId?: string): Promise<QueueItem[]> {
   const db = await openDb();
   try {
     return await new Promise<QueueItem[]>((resolve, reject) => {
@@ -106,6 +122,7 @@ export async function listQueued(appId?: string, deviceId?: string): Promise<Que
       request.onsuccess = () => resolve((request.result as QueueItem[])
         .filter((item) => (appId == null || item.appId === appId) &&
           (deviceId == null || item.deviceId === deviceId) &&
+          queueItemBelongsToOrganization(item, organizationId) &&
           (item.state === "queued" || item.state === "retry_wait"))
         .sort((a, b) => a.createdAt - b.createdAt));
       request.onerror = () => reject(request.error);
@@ -114,7 +131,7 @@ export async function listQueued(appId?: string, deviceId?: string): Promise<Que
 }
 
 /** Atomically leases a batch so two open tabs do not upload the same queue rows. */
-export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60_000, appId?: string, deviceId?: string): Promise<QueueItem[]> {
+export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60_000, appId?: string, deviceId?: string, organizationId?: string): Promise<QueueItem[]> {
   const take = normalizeQueueBatchLimit(limit);
   if (!Number.isFinite(now) || !Number.isSafeInteger(leaseMs) || leaseMs < 5_000) throw new RangeError("INVALID_QUEUE_LEASE");
   const db = await openDb();
@@ -128,6 +145,7 @@ export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60
         const due = (request.result as QueueItem[])
           .filter((item) => (appId == null || item.appId === appId) &&
             (deviceId == null || item.deviceId === deviceId) &&
+            queueItemBelongsToOrganization(item, organizationId) &&
             (item.state === "queued" || item.state === "retry_wait" ||
             (item.state === "sending" && (item.leaseUntil ?? 0) <= now)) &&
             (item.nextAttemptAt == null || item.nextAttemptAt <= now) &&
@@ -136,6 +154,7 @@ export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60
           .slice(0, take);
         const exhausted = (request.result as QueueItem[]).filter((item) =>
           (appId == null || item.appId === appId) && (deviceId == null || item.deviceId === deviceId) &&
+          queueItemBelongsToOrganization(item, organizationId) &&
           item.state === "sending" && (item.leaseUntil ?? 0) <= now &&
           (item.attemptCount ?? 0) >= MAX_QUEUE_ATTEMPTS
         );
