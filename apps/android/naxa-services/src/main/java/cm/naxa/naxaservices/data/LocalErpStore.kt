@@ -3871,6 +3871,40 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             ?: throw IllegalArgumentException("Dossier introuvable sur ce point de vente.")
         val workActivity = runCatching { org.json.JSONObject(current.metadataJson).optString("activity", "autre") }.getOrDefault("autre")
         val activityLifecycle: Map<String, Set<String>> = when (workActivity) {
+            "coiffure", "beaute" -> mapOf(
+                "received" to setOf("approved", "cancelled"),
+                "open" to setOf("approved", "cancelled"),
+                "approved" to setOf("in_progress"),
+                "in_progress" to setOf("quality_check"),
+                "quality_check" to setOf("in_progress", "ready"),
+                "ready" to setOf("delivered"),
+                "delivered" to setOf("closed")
+            )
+            "parfumerie" -> mapOf(
+                "received" to setOf("quote_pending", "cancelled"),
+                "open" to setOf("quote_pending", "cancelled"),
+                "quote_pending" to setOf("waiting_customer", "approved", "cancelled"),
+                "waiting_customer" to setOf("approved", "cancelled"),
+                "approved" to setOf("waiting_parts", "in_progress"),
+                "waiting_parts" to setOf("in_progress"),
+                "in_progress" to setOf("quality_check"),
+                "quality_check" to setOf("ready"),
+                "ready" to setOf("delivered"),
+                "delivered" to setOf("closed")
+            )
+            "reparation", "garage" -> mapOf(
+                "received" to setOf("diagnostic", "cancelled"),
+                "open" to setOf("diagnostic", "cancelled"),
+                "diagnostic" to setOf("quote_pending", "awaiting_approval", "in_progress", "cancelled"),
+                "quote_pending" to setOf("waiting_customer", "awaiting_approval", "approved", "cancelled"),
+                "waiting_customer", "awaiting_approval" to setOf("approved", "cancelled"),
+                "approved" to setOf("waiting_parts", "in_progress"),
+                "waiting_parts" to setOf("in_progress"),
+                "in_progress" to setOf("quality_check"),
+                "quality_check" to setOf("in_progress", "ready"),
+                "ready" to setOf("delivered"),
+                "delivered" to setOf("closed")
+            )
             "couture" -> mapOf(
                 "received" to setOf("measurement", "diagnostic", "cancelled"),
                 "open" to setOf("measurement", "diagnostic", "cancelled"),
