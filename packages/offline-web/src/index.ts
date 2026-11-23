@@ -27,10 +27,11 @@ function queueItemBelongsToOrganization(item: QueueItem, organizationId?: string
   if (typeof item.organizationId === "string" && item.organizationId) {
     return item.organizationId === organizationId;
   }
-  // Backward compatibility for queue rows created before organizationId was stored separately.
+  // The payload is authoritative too; never trust a mismatched local metadata label.
   try {
     const command = JSON.parse(item.payload) as Record<string, unknown>;
-    return command.org_id === organizationId;
+    return command.org_id === organizationId &&
+      (item.organizationId === undefined || item.organizationId === organizationId);
   } catch {
     return false;
   }
@@ -59,6 +60,12 @@ export async function enqueue(item: QueueItem): Promise<void> {
   if (!item?.eventId || typeof item.payload !== "string" || !item.payload) throw new TypeError("INVALID_QUEUE_EVENT");
   if (item.deviceId !== undefined && (typeof item.deviceId !== "string" || !item.deviceId.trim())) throw new TypeError("INVALID_QUEUE_DEVICE_ID");
   if (item.organizationId !== undefined && (typeof item.organizationId !== "string" || !item.organizationId.trim())) throw new TypeError("INVALID_QUEUE_ORGANIZATION_ID");
+  if (item.organizationId !== undefined) {
+    let command: Record<string, unknown>;
+    try { command = JSON.parse(item.payload) as Record<string, unknown>; }
+    catch { throw new TypeError("INVALID_QUEUE_ORGANIZATION_PAYLOAD"); }
+    if (command.org_id !== item.organizationId) throw new Error("QUEUE_ORGANIZATION_MISMATCH");
+  }
   const db = await openDb();
   try {
     await new Promise<void>((resolve, reject) => {
