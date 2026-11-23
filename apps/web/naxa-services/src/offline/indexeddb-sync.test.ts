@@ -8,6 +8,7 @@ const APP = "naxa-services-web";
 const DEVICE_A = "70000000-0000-4000-8000-000000000001";
 const DEVICE_B = "70000000-0000-4000-8000-000000000002";
 const ORG = "20000000-0000-4000-8000-000000000001";
+const OTHER_ORG = "20000000-0000-4000-8000-000000000002";
 const SITE = "30000000-0000-4000-8000-000000000001";
 
 async function clearDatabase() {
@@ -26,33 +27,43 @@ beforeEach(async () => {
 describe("NAXA Services Web IndexedDB sync storage", () => {
   it("assigns a monotone sequence per device and keeps duplicate event IDs idempotent", async () => {
     const event1 = {
-      appId: APP, eventId: "event-device-a-1", deviceId: DEVICE_A,
-      payload: JSON.stringify({ action_code: "customer.created", customer_id: "customer-1" }),
+      appId: APP, eventId: "event-device-a-1", deviceId: DEVICE_A, organizationId: ORG,
+      payload: JSON.stringify({ org_id: ORG, action_code: "customer.created", customer_id: "customer-1" }),
       state: "queued" as const, createdAt: 100,
     };
     await enqueue(event1);
     await enqueue({ ...event1, createdAt: 200 });
     await enqueue({
-      appId: APP, eventId: "event-device-a-2", deviceId: DEVICE_A,
-      payload: JSON.stringify({ action_code: "service.created", service_id: "service-1" }),
+      appId: APP, eventId: "event-device-a-2", deviceId: DEVICE_A, organizationId: ORG,
+      payload: JSON.stringify({ org_id: ORG, action_code: "service.created", service_id: "service-1" }),
       state: "queued", createdAt: 300,
     });
     await enqueue({
-      appId: APP, eventId: "event-device-b-1", deviceId: DEVICE_B,
-      payload: JSON.stringify({ action_code: "customer.created", customer_id: "customer-b" }),
+      appId: APP, eventId: "event-device-b-1", deviceId: DEVICE_B, organizationId: ORG,
+      payload: JSON.stringify({ org_id: ORG, action_code: "customer.created", customer_id: "customer-b" }),
       state: "queued", createdAt: 400,
     });
 
-    const deviceA = await listAppEvents(APP, DEVICE_A);
-    const deviceB = await listAppEvents(APP, DEVICE_B);
-    const pendingA = await listQueued(APP, DEVICE_A);
-    const pendingB = await listQueued(APP, DEVICE_B);
+    await enqueue({
+      appId: APP, eventId: "event-device-a-other-org", deviceId: DEVICE_A, organizationId: OTHER_ORG,
+      payload: JSON.stringify({ org_id: OTHER_ORG, action_code: "customer.created", customer_id: "private-to-other-org" }),
+      state: "queued", createdAt: 500,
+    });
+    const deviceA = await listAppEvents(APP, DEVICE_A, ORG);
+    const deviceB = await listAppEvents(APP, DEVICE_B, ORG);
+    const otherOrgEvents = await listAppEvents(APP, DEVICE_A, OTHER_ORG);
+    const pendingA = await listQueued(APP, DEVICE_A, ORG);
+    const pendingB = await listQueued(APP, DEVICE_B, ORG);
+    const pendingOtherOrg = await listQueued(APP, DEVICE_A, OTHER_ORG);
     expect(deviceA.map((item) => item.deviceSequence)).toEqual([1, 2]);
     expect(deviceA).toHaveLength(2);
     expect(deviceB.map((item) => item.deviceSequence)).toEqual([1]);
     expect(deviceA[0].eventId).toBe("event-device-a-1");
+    expect(otherOrgEvents).toHaveLength(1);
+    expect(otherOrgEvents[0].eventId).toBe("event-device-a-other-org");
     expect(pendingA.map(item => item.deviceId)).toEqual([DEVICE_A, DEVICE_A]);
     expect(pendingB.map(item => item.deviceId)).toEqual([DEVICE_B]);
+    expect(pendingOtherOrg).toHaveLength(1);
   });
 
   it("leases concurrent batches without returning the same outbox row twice", async () => {
@@ -77,6 +88,22 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
     const otherDeviceBatch = await acquireDueBatch(10, 10_000, 60_000, APP, DEVICE_B);
     expect(otherDeviceBatch).toHaveLength(1);
     expect(otherDeviceBatch[0].deviceId).toBe(DEVICE_B);
+  });
+
+  it("leases only events belonging to the authenticated organization", async () => {
+    await enqueue({
+      appId: APP, eventId: "org-a-event", deviceId: DEVICE_A, organizationId: ORG,
+      payload: JSON.stringify({ org_id: ORG, action_code: "customer.created" }), state: "queued", createdAt: 1,
+    });
+    await enqueue({
+      appId: APP, eventId: "org-b-event", deviceId: DEVICE_A, organizationId: OTHER_ORG,
+      payload: JSON.stringify({ org_id: OTHER_ORG, action_code: "customer.created" }), state: "queued", createdAt: 2,
+    });
+
+    const orgABatch = await acquireDueBatch(10, 10_000, 60_000, APP, DEVICE_A, ORG);
+    expect(orgABatch.map(item => item.eventId)).toEqual(["org-a-event"]);
+    const orgBBatch = await acquireDueBatch(10, 10_000, 60_000, APP, DEVICE_A, OTHER_ORG);
+    expect(orgBBatch.map(item => item.eventId)).toEqual(["org-b-event"]);
   });
 
   it("stores an inbound page and its cursor atomically and replays it idempotently", async () => {
