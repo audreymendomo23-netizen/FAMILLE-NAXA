@@ -228,6 +228,18 @@ test("Web: Pressing keeps its dedicated ticket journey and waits for a server re
   await expect.poll(() => appliedEvents.length).toBe(2);
   expect(appliedEvents[1].action_code).toBe("pressing_order.status_changed:in_progress");
   expect((appliedEvents[1].payload as Record<string, unknown>).expected_version).toBe(1);
+  const pressingSteps = [
+    { label: "Passer à Prêt", action: "pressing_order.status_changed:ready", status: "ready", revision: 2 },
+    { label: "Passer à Retiré", action: "pressing_order.status_changed:picked_up", status: "picked_up", revision: 3 },
+  ];
+  for (const step of pressingSteps) {
+    await page.getByLabel("Motif du changement d'étape").fill("Recette pressing — " + step.status);
+    await page.getByRole("button", { name: step.label, exact: true }).click();
+    await expect.poll(() => appliedEvents.length).toBe(step.revision + 1);
+    const transition = appliedEvents[step.revision];
+    expect(transition.action_code).toBe(step.action);
+    expect((transition.payload as Record<string, unknown>).expected_version).toBe(step.revision);
+  }
   await page.close();
 });
 
