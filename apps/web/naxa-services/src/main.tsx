@@ -750,7 +750,7 @@ function App() {
       "pressing","pressing_order.status_changed:"+nextStatus,"pressing_order",entry.id,
       {order_id:entry.id,from_status:entry.status,reason:reason.trim(),expected_version:entry.revision,transitioned_at:new Date().toISOString()},
       entry.siteId,entry.title,entry.detail+" · "+entry.status+" → "+nextStatus,
-      {...entry,status:nextStatus,state:"Transition en attente du serveur"},
+      {...entry,status:nextStatus,revision:undefined,state:"Transition en attente du serveur"},
     );
   }
 
@@ -770,7 +770,7 @@ function App() {
         metadata_json_delta: {}, transitioned_at: new Date().toISOString(), workstation_id: null,
       },
       entry.siteId, entry.title, entry.detail + " · " + entry.status + " → " + nextStatus,
-      { ...entry, status: nextStatus, state: "Transition en attente du serveur" },
+      { ...entry, status: nextStatus, revision: undefined, state: "Transition en attente du serveur" },
     );
   }
 
