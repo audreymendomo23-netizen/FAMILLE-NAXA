@@ -1167,13 +1167,31 @@ function WorkOrdersPage({
       {authenticated ? <form onSubmit={create}>
         <label>Client / donneur d'ordre<input value={customer} onChange={e=>setCustomer(e.target.value)} minLength={2} maxLength={180} required /></label>
         <label>Intitulé du dossier<input value={title} onChange={e=>setTitle(e.target.value)} minLength={2} maxLength={180} required /></label>
-        {workflow.fields.map(field=><label key={field.key}>{field.label}{field.required?" *":""}<input
-          type={/^(date|promised_at|delivery|visit)$/.test(field.key)?"date":"text"}
-          value={fields[field.key]??""}
-          onChange={e=>setFields(previous=>({...previous,[field.key]:e.target.value}))}
-          maxLength={500}
-          required={field.required}
-        />{field.help&&<small className="muted">{field.help}</small>}</label>)}
+        {workflow.fields.map(field=>{
+          const value=fields[field.key]??"";
+          const update=(nextValue:string)=>setFields(previous=>({...previous,[field.key]:nextValue}));
+          const kind=field.kind??"text";
+          return <label key={field.key}>{field.label}{field.required?" *":""}
+            {kind==="textarea"
+              ? <textarea value={value} onChange={e=>update(e.target.value)} maxLength={field.maxLength??1200} rows={3} required={field.required}/>
+              : kind==="select"
+                ? <select value={value} onChange={e=>update(e.target.value)} required={field.required}>
+                    <option value="">Sélectionner…</option>
+                    {(field.options??[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
+                  </select>
+                : <input
+                    type={kind==="date"?"date":kind==="number"?"number":"text"}
+                    value={value}
+                    onChange={e=>update(e.target.value)}
+                    maxLength={kind==="text"?(field.maxLength??500):undefined}
+                    min={field.min}
+                    max={field.max}
+                    step={kind==="number"?1:undefined}
+                    required={field.required}
+                  />}
+            {field.help&&<small className="muted">{field.help}</small>}
+          </label>;
+        })}
         <label>Montant estimatif (FCFA)<input type="number" min="0" step="1" value={amount} onChange={e=>setAmount(e.target.value)} required /></label>
         <label>Date d'échéance globale (facultatif)<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} /></label>
         <button className="btn primary" disabled={saving||busy}>{saving||busy?"Enregistrement…":"Créer et synchroniser le dossier"}</button>
