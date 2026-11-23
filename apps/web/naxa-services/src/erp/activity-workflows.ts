@@ -402,7 +402,7 @@ export function validateActivityFields(profile: unknown, values: Record<string, 
           (field.max !== undefined && number > field.max);
       }
       if (field.kind === "date") {
-        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(value)) return true;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return true;
         const parsed = new Date(value + "T00:00:00.000Z");
         return !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value;
       }
