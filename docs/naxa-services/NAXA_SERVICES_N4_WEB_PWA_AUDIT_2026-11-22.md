@@ -61,3 +61,31 @@ Le projet Supabase NAXA Services dédié n'est pas disponible pour tests héberg
 | FCM/Mobile Money réels | Bloqué externe | Secrets, comptes marchands, webhooks et projet Firebase absents |
 
 **Décision :** les corrections de code et scénarios reproductibles accessibles sans secrets sont engagés dans la branche de travail. N4 n'est pas globalement clôturé. Aucun commit sur `main`, aucune fusion, aucun déploiement et aucune migration sur le projet Supabase historique NAXA/pharmacie n'ont été réalisés.
+
+---
+
+## Addendum — N4-C : parcours métier multisecteur — 23 novembre 2026
+
+La reprise N4 a été effectuée sans recommencer le socle N3. Le traitement du Pressing comme parcours prioritaire unique a été corrigé : les 13 profils Auth de NAXA Services ont maintenant un registre métier dédié dans `apps/web/naxa-services/src/erp/activity-workflows.ts`, avec ses champs, validations, objets de dossier, étapes et transitions. La matrice détaillée est publiée dans `NAXA_SERVICES_ACTIVITY_PARITY_MATRIX_2026-11-23.md`.
+
+### Changements réalisés sur la branche de travail
+- Auth Web conserve le profil métier de l'organisation ; les valeurs absentes/inconnues sont traitées comme `autre`.
+- Nouveau module « Dossiers métier » Web, piloté par le profil, avec création outbox/serveur des dossiers `work_order`, `repair_order` et `service_order`, transition versionnée et projection des changements entrants.
+- Android expose les dossiers métier pour coiffure, beauté et parfumerie ; les familles de types sont alignées. Photo/événementiel est bien une production `work_order`, et non un `service_order`, afin d'autoriser les étapes shooting/post-production.
+- Les créations Android contrôlent les principaux champs métier. L'acompte demandé est enregistré dans les métadonnées et ne gonfle plus le montant `paid_xaf`.
+- SQL v4 candidat : matrice transactionnelle des transitions génériques élargie pour supporter les cycles couture, menuiserie, impression, événementiel, réparation, coiffure/beauté et interventions.
+- Tests de contrat Deno ajoutés pour les créations/transitions des trois objets génériques et leurs cas négatifs de spoofing/scope ; tests Vitest ajoutés pour les profils, leurs champs et cycles.
+
+### État de preuve
+Les changements ont été poussés uniquement sur `work/naxa-services-completion-20261120`. Les runs observés pendant cette passe :
+- Run #511 — [45154162146](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45154162146), SHA `74bcd433ad41f2cb4682b109b503398b3130ee0d`, statut `pending` au dernier contrôle.
+- Run #510 — [45154138961](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45154138961), SHA `fef997446eab99db0303d4561bd53a7741b1c95c`, statut `in_progress` au dernier contrôle.
+- Dernier SHA de code après les corrections Android : `fcf8d9d6099be65e5680942a5853a2c87d0ea5ce`.
+
+**Aucun de ces statuts pending/in_progress ne constitue un PASS.** La compilation, les tests automatisés, la recette Playwright et la recette Android de cette nouvelle passe restent à confirmer. Les formulaires métier ne démontrent pas la parité complète des modules partagés : agenda et disponibilités, caisse/ventes/paiements/reçus, stock/achats/fournisseurs, CRM/fidélité, RH/commissions, rapports et réseau conservent leurs propres points de fermeture.
+
+La parfumerie est un commerce de détail : ses ventes doivent transiter par le POS/stock/paiements. Le nouveau parcours de dossier ne couvre que les réservations et commandes spéciales, jamais une vente encaissée. Le pressing garde son flux de tickets dédié. Les montants demandés ne sont pas assimilés à des paiements confirmés.
+
+**Verdict N4 maintenu : PARTIEL — non clôturé.** N4-C est engagé pour les profils multisecteurs ; N4-D doit démontrer les builds, tests, projections et échanges réels A↔B. Le SQL v4 reste un brouillon ; aucun environnement hébergé n'a été modifié.
+
+**Garde-fous :** aucune fusion, aucun commit sur `main`, aucun déploiement et aucune migration sur le Supabase historique NAXA/pharmacie.
