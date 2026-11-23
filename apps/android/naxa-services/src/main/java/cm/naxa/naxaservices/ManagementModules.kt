@@ -1471,7 +1471,7 @@ fun WorkOrdersContent(
     }
     val recordType = when (profile) {
         "reparation", "garage" -> "repair_order"
-        "coiffure", "beaute", "domicile", "nettoyage", "photo_evenementiel" -> "service_order"
+        "coiffure", "beaute", "domicile", "nettoyage" -> "service_order"
         else -> "work_order"
     }
     val records by remember(siteId, recordType) {
