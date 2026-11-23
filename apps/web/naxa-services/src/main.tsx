@@ -191,21 +191,27 @@ function App() {
           ? metadata.fields as Record<string,unknown> : {};
         const extraFields = Object.fromEntries(Object.entries(rawFields).filter((entry): entry is [string,string] => typeof entry[1] === "string"));
         const rawProfile = metadata.activity ?? metadata.activity_profile;
-        const serverRecord = payload.server_result && typeof payload.server_result === "object" && !Array.isArray(payload.server_result)
-          ? payload.server_result as Record<string,unknown> : {};
-        const hasLocalStatus = typeof payload.to_status === "string" || typeof payload.status === "string";
+        const storedReceipt = item.serverReceipt && typeof item.serverReceipt === "object" && !Array.isArray(item.serverReceipt)
+          ? item.serverReceipt as Record<string,unknown> : {};
+        const receiptResult = storedReceipt.result && typeof storedReceipt.result === "object" && !Array.isArray(storedReceipt.result)
+          ? storedReceipt.result as Record<string,unknown> : {};
+        const serverRecord = Object.keys(receiptResult).length ? receiptResult
+          : payload.server_result && typeof payload.server_result === "object" && !Array.isArray(payload.server_result)
+            ? payload.server_result as Record<string,unknown> : {};
+        const incomingRevision = typeof serverRecord.revision === "number" && Number.isSafeInteger(serverRecord.revision)
+          ? serverRecord.revision : null;
+        const existingRevision = typeof existingEntry?.revision === "number" ? existingEntry.revision : 0;
+        const receiptIsNewer = incomingRevision !== null && incomingRevision >= existingRevision;
         const record:Entry={
           ...existingEntry,
           id,title,detail,state,createdAt:new Date(item.createdAt).toLocaleString("fr-FR"),
           recordType: command.aggregate_type === "work_order" || command.aggregate_type === "repair_order" || command.aggregate_type === "service_order" || command.aggregate_type === "pressing_order"
             ? command.aggregate_type : existingEntry?.recordType,
-          status: item.state === "acknowledged" && typeof existingEntry?.revision === "number"
-            ? existingEntry.status
-            : typeof serverRecord.status === "string" ? serverRecord.status
+          status: receiptIsNewer && typeof serverRecord.status === "string" ? serverRecord.status
             : typeof payload.to_status === "string" ? payload.to_status
             : typeof payload.status === "string" ? payload.status
             : existingEntry?.status,
-          revision: typeof serverRecord.revision === "number" ? serverRecord.revision : existingEntry?.revision,
+          revision: receiptIsNewer ? incomingRevision! : existingEntry?.revision,
           siteId: typeof command.site_id === "string" ? command.site_id : existingEntry?.siteId,
           activityProfile: typeof rawProfile === "string" ? getActivityWorkflow(rawProfile).profile
             : command.aggregate_type === "pressing_order" ? "pressing" : existingEntry?.activityProfile,
