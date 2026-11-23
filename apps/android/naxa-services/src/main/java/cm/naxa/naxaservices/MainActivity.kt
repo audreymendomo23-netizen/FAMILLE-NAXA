@@ -1051,6 +1051,8 @@ private fun ErpScreen(
             TeamPerformanceContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.AI_INSIGHTS) {
             AiInsightsContent(Modifier.padding(padding), localRepository, activeSession)
+        } else if (route == AppRoute.WORK_ORDERS && activityProfile == "pressing") {
+            PressingLocalContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.WORK_ORDERS) {
             WorkOrdersContent(Modifier.padding(padding), localRepository, activeSession, activityProfile)
         } else if (route == AppRoute.SETTINGS) {
