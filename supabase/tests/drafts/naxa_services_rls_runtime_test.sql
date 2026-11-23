@@ -2098,6 +2098,95 @@ RESET ROLE;
 SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
 SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-a"}',false);
 
+SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-a"}',false);
+SET ROLE authenticated;
+DO $activity_workflow_atomic_sync$
+DECLARE
+  v_result jsonb;
+  v_status text;
+  v_revision integer;
+BEGIN
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a4000000-0000-4000-8000-00000000000c'::uuid,171,
+    'repair_order','a5000000-0000-4000-8000-000000000010',
+    'repair_order.created',
+    jsonb_build_object(
+      'record_id','a5000000-0000-4000-8000-000000000010',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'record_type','repair_order','reference','REP-ACT-CI-001',
+      'title','Réparation Toyota Yaris','counterparty','Client activité CI',
+      'amount_xaf',25000,'paid_xaf',0,'status','received',
+      'metadata_json',jsonb_build_object(
+        'activity','garage','activity_profile','garage','workflow_version',2,
+        'fields',jsonb_build_object(
+          'vehicle','Toyota Yaris','odometer','120000','fault','Freinage',
+          'diagnosis','','parts','','handover',''
+        )
+      )
+    )
+  );
+  IF v_result->>'status'<>'applied' OR v_result->'result'->>'status'<>'received' THEN
+    RAISE EXCEPTION 'ACTIVITY_ORDER_CREATE_NOT_APPLIED: %',v_result;
+  END IF;
+
+  BEGIN
+    PERFORM public.ns_apply_sync_event(
+      '20000000-0000-4000-8000-000000000001'::uuid,
+      '30000000-0000-4000-8000-000000000001'::uuid,null,
+      '80000000-0000-4000-8000-000000000001'::uuid,
+      'a4000000-0000-4000-8000-00000000000d'::uuid,172,
+      'repair_order','a5000000-0000-4000-8000-000000000010',
+      'repair_order.status_changed',
+      jsonb_build_object(
+        'record_id','a5000000-0000-4000-8000-000000000010',
+        'org_id','20000000-0000-4000-8000-000000000001',
+        'site_id','30000000-0000-4000-8000-000000000001',
+        'from_status','received','to_status','approved',
+        'reason','Tentative de saut du diagnostic','expected_version',1,
+        'metadata_json_delta','{}'::jsonb
+      )
+    );
+    RAISE EXCEPTION 'ACTIVITY_FORBIDDEN_SKIP_WAS_ACCEPTED';
+  EXCEPTION WHEN raise_exception THEN
+    IF SQLERRM<>'NAXA_MANAGEMENT_TRANSITION_FORBIDDEN' THEN RAISE; END IF;
+  END;
+
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001'::uuid,
+    '30000000-0000-4000-8000-000000000001'::uuid,null,
+    '80000000-0000-4000-8000-000000000001'::uuid,
+    'a4000000-0000-4000-8000-00000000000e'::uuid,172,
+    'repair_order','a5000000-0000-4000-8000-000000000010',
+    'repair_order.status_changed',
+    jsonb_build_object(
+      'record_id','a5000000-0000-4000-8000-000000000010',
+      'org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001',
+      'from_status','received','to_status','diagnostic',
+      'reason','Diagnostic technique commencé','expected_version',1,
+      'metadata_json_delta','{}'::jsonb
+    )
+  );
+  IF v_result->>'status'<>'applied' OR v_result->'result'->>'status'<>'diagnostic'
+     OR (v_result->'result'->>'revision')::integer<>2 THEN
+    RAISE EXCEPTION 'ACTIVITY_VALID_TRANSITION_NOT_APPLIED: %',v_result;
+  END IF;
+
+  SELECT status,revision INTO v_status,v_revision
+  FROM public.ns_management_records
+  WHERE id='a5000000-0000-4000-8000-000000000010';
+  IF v_status<>'diagnostic' OR v_revision<>2 THEN
+    RAISE EXCEPTION 'ACTIVITY_SERVER_STATE_NOT_COMMITTED: %, %',v_status,v_revision;
+  END IF;
+END
+$activity_workflow_atomic_sync$;
+RESET ROLE;
+
 UPDATE public.ns_devices SET revoked_at=now() WHERE id='80000000-0000-4000-8000-000000000001';
 SET ROLE authenticated;
 DO $revocation$
@@ -2265,93 +2354,6 @@ END
 $activity_workflow_server_contract$;
 
 
-SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
-SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-a"}',false);
-SET ROLE authenticated;
-DO $activity_workflow_atomic_sync$
-DECLARE
-  v_result jsonb;
-  v_status text;
-  v_revision integer;
-BEGIN
-  v_result:=public.ns_apply_sync_event(
-    '20000000-0000-4000-8000-000000000001'::uuid,
-    '30000000-0000-4000-8000-000000000001'::uuid,null,
-    '80000000-0000-4000-8000-000000000001'::uuid,
-    'a4000000-0000-4000-8000-00000000000c'::uuid,171,
-    'repair_order','a5000000-0000-4000-8000-000000000010',
-    'repair_order.created',
-    jsonb_build_object(
-      'record_id','a5000000-0000-4000-8000-000000000010',
-      'org_id','20000000-0000-4000-8000-000000000001',
-      'site_id','30000000-0000-4000-8000-000000000001',
-      'record_type','repair_order','reference','REP-ACT-CI-001',
-      'title','Réparation Toyota Yaris','counterparty','Client activité CI',
-      'amount_xaf',25000,'paid_xaf',0,'status','received',
-      'metadata_json',jsonb_build_object(
-        'activity','garage','activity_profile','garage','workflow_version',2,
-        'fields',jsonb_build_object(
-          'vehicle','Toyota Yaris','odometer','120000','fault','Freinage',
-          'diagnosis','','parts','','handover',''
-        )
-      )
-    )
-  );
-  IF v_result->>'status'<>'applied' OR v_result->'result'->>'status'<>'received' THEN
-    RAISE EXCEPTION 'ACTIVITY_ORDER_CREATE_NOT_APPLIED: %',v_result;
-  END IF;
 
-  BEGIN
-    PERFORM public.ns_apply_sync_event(
-      '20000000-0000-4000-8000-000000000001'::uuid,
-      '30000000-0000-4000-8000-000000000001'::uuid,null,
-      '80000000-0000-4000-8000-000000000001'::uuid,
-      'a4000000-0000-4000-8000-00000000000d'::uuid,172,
-      'repair_order','a5000000-0000-4000-8000-000000000010',
-      'repair_order.status_changed',
-      jsonb_build_object(
-        'record_id','a5000000-0000-4000-8000-000000000010',
-        'org_id','20000000-0000-4000-8000-000000000001',
-        'site_id','30000000-0000-4000-8000-000000000001',
-        'from_status','received','to_status','approved',
-        'reason','Tentative de saut du diagnostic','expected_version',1,
-        'metadata_json_delta','{}'::jsonb
-      )
-    );
-    RAISE EXCEPTION 'ACTIVITY_FORBIDDEN_SKIP_WAS_ACCEPTED';
-  EXCEPTION WHEN raise_exception THEN
-    IF SQLERRM<>'NAXA_MANAGEMENT_TRANSITION_FORBIDDEN' THEN RAISE; END IF;
-  END;
-
-  v_result:=public.ns_apply_sync_event(
-    '20000000-0000-4000-8000-000000000001'::uuid,
-    '30000000-0000-4000-8000-000000000001'::uuid,null,
-    '80000000-0000-4000-8000-000000000001'::uuid,
-    'a4000000-0000-4000-8000-00000000000e'::uuid,172,
-    'repair_order','a5000000-0000-4000-8000-000000000010',
-    'repair_order.status_changed',
-    jsonb_build_object(
-      'record_id','a5000000-0000-4000-8000-000000000010',
-      'org_id','20000000-0000-4000-8000-000000000001',
-      'site_id','30000000-0000-4000-8000-000000000001',
-      'from_status','received','to_status','diagnostic',
-      'reason','Diagnostic technique commencé','expected_version',1,
-      'metadata_json_delta','{}'::jsonb
-    )
-  );
-  IF v_result->>'status'<>'applied' OR v_result->'result'->>'status'<>'diagnostic'
-     OR (v_result->'result'->>'revision')::integer<>2 THEN
-    RAISE EXCEPTION 'ACTIVITY_VALID_TRANSITION_NOT_APPLIED: %',v_result;
-  END IF;
-
-  SELECT status,revision INTO v_status,v_revision
-  FROM public.ns_management_records
-  WHERE id='a5000000-0000-4000-8000-000000000010';
-  IF v_status<>'diagnostic' OR v_revision<>2 THEN
-    RAISE EXCEPTION 'ACTIVITY_SERVER_STATE_NOT_COMMITTED: %, %',v_status,v_revision;
-  END IF;
-END
-$activity_workflow_atomic_sync$;
-RESET ROLE;
 
 ROLLBACK;
