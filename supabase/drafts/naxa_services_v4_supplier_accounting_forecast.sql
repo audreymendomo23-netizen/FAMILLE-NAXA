@@ -6573,7 +6573,7 @@ rollback;
   return true;
 exception when others then
   return false;
-end
+end;
 $naxa$;
 
 create or replace function public.ns_activity_workflow_transition_allowed(
