@@ -2265,6 +2265,8 @@ END
 $activity_workflow_server_contract$;
 
 
+SELECT set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000001',false);
+SELECT set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000001","session_id":"ci-session-a"}',false);
 SET ROLE authenticated;
 DO $activity_workflow_atomic_sync$
 DECLARE
@@ -2276,7 +2278,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000001'::uuid,
     '30000000-0000-4000-8000-000000000001'::uuid,null,
     '80000000-0000-4000-8000-000000000001'::uuid,
-    'a4000000-0000-4000-8000-000000000008'::uuid,167,
+    'a4000000-0000-4000-8000-00000000000c'::uuid,167,
     'repair_order','a5000000-0000-4000-8000-000000000010',
     'repair_order.created',
     jsonb_build_object(
@@ -2304,7 +2306,7 @@ BEGIN
       '20000000-0000-4000-8000-000000000001'::uuid,
       '30000000-0000-4000-8000-000000000001'::uuid,null,
       '80000000-0000-4000-8000-000000000001'::uuid,
-      'a4000000-0000-4000-8000-000000000009'::uuid,168,
+      'a4000000-0000-4000-8000-00000000000d'::uuid,172,
       'repair_order','a5000000-0000-4000-8000-000000000010',
       'repair_order.status_changed',
       jsonb_build_object(
@@ -2325,7 +2327,7 @@ BEGIN
     '20000000-0000-4000-8000-000000000001'::uuid,
     '30000000-0000-4000-8000-000000000001'::uuid,null,
     '80000000-0000-4000-8000-000000000001'::uuid,
-    'a4000000-0000-4000-8000-000000000010'::uuid,169,
+    'a4000000-0000-4000-8000-00000000000e'::uuid,172,
     'repair_order','a5000000-0000-4000-8000-000000000010',
     'repair_order.status_changed',
     jsonb_build_object(
