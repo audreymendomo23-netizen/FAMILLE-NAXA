@@ -20,7 +20,7 @@ const modules: { id: ModuleId; title: string; description: string; group: string
   { id: "overview", title: "Vue d'ensemble", description: "Activité, alertes et briefings de l'établissement.", group: "Pilotage", action: "Actualiser la vue" },
   { id: "agenda", title: "Agenda & rendez-vous", description: "Créneaux par prestataire, poste, date et point de vente.", group: "Opérations", action: "Nouveau rendez-vous" },
   { id: "pressing", title: "Pressing", description: "Tickets, pièces, étapes de traitement et retraits.", group: "Opérations", action: "Créer un ticket" },
-  { id: "cash", title: "Caisse & ventes", description: "Ventes, paiements, reçus, dépenses et clôtures.", group: "Finance", action: "Nouvelle vente" },
+  { id: "cash", title: "Caisse & ventes", description: "Ventes, paiements, reçus, dépenses et clôtures.", group: "Finance", action: "Nouvelle dépense" },
   { id: "services", title: "Catalogue de prestations", description: "Tarifs, durées, habilitations, forfaits et produits comptoir.", group: "Référentiels", action: "Ajouter une prestation" },
   { id: "customers", title: "Clients & fidélité", description: "Fiches, historique, préférences, points et consentements.", group: "Relation client", action: "Créer une fiche client" },
   { id: "team", title: "Équipe & commissions", description: "Comptes individuels, affectations, présence et commissions.", group: "Ressources", action: "Ajouter un membre" },
@@ -238,7 +238,7 @@ function App() {
       setPassword("");
       setAuthMessage(nextSession.requirePasswordChange
         ? "Connexion réussie. Le mot de passe initial doit être remplacé avant les opérations."
-        : "Session authentifiée. Les modules métier Web restent en brouillons locaux tant que leurs connecteurs ERP ne sont pas raccordés.");
+        : "Session authentifiée. Les parcours Web disponibles écrivent dans la file isolée de l'organisation et attendent un reçu serveur ; les autres restent en lecture seule.");
     } catch (error) {
       setAuthSession(null);
       setAuthenticated(false);
@@ -707,7 +707,7 @@ function App() {
         <header className="topbar">
           <div className="crumb"><span>NAXA SERVICES</span><b>/</b>{selected.title}</div>
           <div className="top-actions">
-            <span className="sync-pill"><i /> {preview ? "Données locales" : authSession ? (authSession.requirePasswordChange ? "Changement du mot de passe requis" : "Session authentifiée · modules locaux") : "Connexion en attente"}</span>
+            <span className="sync-pill"><i /> {preview ? "Données locales" : authSession ? (authSession.requirePasswordChange ? "Changement du mot de passe requis" : "Session authentifiée · reçus serveur") : "Connexion en attente"}</span>
             <button className="icon-button" title="Aide" onClick={() => setActive("help")}>?</button>
             <div className="avatar">NS</div>
           </div>
@@ -738,12 +738,12 @@ function App() {
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
             active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={setPerformanceFromDate} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport().catch(error => setPerformanceError(error instanceof Error ? error.message : "Chargement du rapport impossible.")); }} authenticated={Boolean(authSession)} /> :
-            active === "agenda" ? <AgendaPage entries={entries.agenda ?? []} /> :
-            active === "pressing" ? <PressingPage entries={entries.pressing ?? []} canPreviewEdit={preview} onAdvance={(id) => setEntries((prev) => ({ ...prev, pressing: (prev.pressing ?? []).map((x) => x.id === id ? { ...x, state: nextPressingState(x.state) } : x) }))} /> :
+            active === "agenda" ? <AgendaPage entries={entries.agenda ?? []} authenticated={Boolean(authSession)} /> :
+            active === "pressing" ? <PressingPage entries={entries.pressing ?? []} canPreviewEdit={preview} authenticated={Boolean(authSession)} onAdvance={(id) => setEntries((prev) => ({ ...prev, pressing: (prev.pressing ?? []).map((x) => x.id === id ? { ...x, state: nextPressingState(x.state) } : x) }))} /> :
             active === "cash" ? <CashPage entries={entries.cash ?? []} /> :
-            <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} />}
+            <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} authenticated={Boolean(authSession && !preview)} />}
 
-          <div className="page-footnote"><span>ⓘ</span> {preview ? "Les créations sont gardées en mémoire dans cette session uniquement." : authSession ? "Session authentifiée. Stock utilise le journal serveur ; les autres actions restent désactivées tant que leurs parcours métier Web ne sont pas livrés." : "Aucun accès opérationnel n'est accordé avant authentification et synchronisation côté serveur."}</div>
+          <div className="page-footnote"><span>ⓘ</span> {preview ? "Les créations sont gardées en mémoire dans cette session uniquement." : authSession ? "Les parcours disponibles utilisent le journal serveur et un reçu idempotent. Les fonctions non raccordées restent en lecture seule ou en aperçu." : "Aucun accès opérationnel n'est accordé avant authentification et synchronisation côté serveur."}</div>
         </section>
         <nav className="mobile-tabs">
           {(["overview", "agenda", "pressing", "cash", "services"] as ModuleId[]).map((id) => <button key={id} className={active === id ? "selected" : ""} onClick={() => setActive(id)}><span>{iconFor(id)}</span>{modules.find((m) => m.id === id)?.title.split(" ")[0]}</button>)}
@@ -854,32 +854,41 @@ function Overview({ entries, onNavigate, mode }: { entries: Record<ModuleId, Ent
     <aside className="overview-side">
       <div className="side-card"><div className="section-title"><div><span className="eyebrow">STRUCTURE</span><h3>Mode d'exploitation</h3></div></div><strong className="mode-name">{modeLabel(mode)}</strong><p>Les données restent isolées par organisation, site et poste selon les droits attribués.</p><button className="text-action" onClick={() => onNavigate("organization")}>Configurer la structure →</button></div>
       <div className="side-card"><span className="eyebrow">BRIEFING DU MATIN</span><h3>À préparer</h3><ul className="brief-list"><li>Vérifier les rendez-vous et les créneaux.</li><li>Contrôler les tickets dont la date promise approche.</li><li>Ouvrir les caisses de chaque poste autorisé.</li><li>Consulter les alertes de consommables.</li></ul></div>
-      <div className="side-card alert-card"><span className="eyebrow">SYNCHRONISATION</span><h3>Backend non connecté</h3><p>Aucun chiffre n'est inventé. Les pages sont en aperçu tant que les contrats et l'authentification ne sont pas validés.</p></div>
+      <div className="side-card alert-card"><span className="eyebrow">SYNCHRONISATION</span><h3>Indicateurs non chargés</h3><p>Aucun chiffre n'est inventé. Les indicateurs restent vides tant qu'une lecture des vues serveur n'a pas été effectuée.</p></div>
     </aside>
   </div>;
 }
 function Metric({ label, value, meta }: { label: string; value: string; meta: string }) {
   return <div className="metric-card"><span>{label}</span><strong>{value}</strong><small>{meta}</small></div>;
 }
-function GenericPage({ active, entries, copy, preview }: { active: ModuleId; entries: Entry[]; copy: typeof moduleCopy[ModuleId]; preview: boolean }) {
+function GenericPage({ active, entries, copy, preview, authenticated }: { active: ModuleId; entries: Entry[]; copy: typeof moduleCopy[ModuleId]; preview: boolean; authenticated: boolean }) {
+  const serverWriteAvailable = authenticated && ["stock", "services", "customers", "team", "help"].includes(active);
   return <div className="module-layout">
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PÉRIMÈTRE FONCTIONNEL</span><h2>Fonctions prévues</h2></div><span className="status-tag pending">{preview?"Aperçu fonctionnel":"Connecteur non livré"}</span></div>
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PÉRIMÈTRE FONCTIONNEL</span><h2>Fonctions prévues</h2></div><span className="status-tag pending">{preview?"Aperçu fonctionnel":serverWriteAvailable?"Création via journal serveur":"Connecteur à livrer"}</span></div>
       <div className="feature-list">{copy.features.map((feature,i)=><div className="feature-row" key={feature}><span className="feature-number">{String(i+1).padStart(2,"0")}</span><span>{feature}</span><span className="feature-check">◇</span></div>)}</div>
-      {!preview&&<div className="notice">Les écritures sont désactivées en session réelle jusqu'à livraison du formulaire et de la projection métier.</div>}
+      {!preview&&!serverWriteAvailable&&<div className="notice">Les écritures sont désactivées en session réelle jusqu'à livraison du parcours métier correspondant.</div>}
     </div>
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{preview?"SESSION EN COURS":"DONNÉES MÉTIER"}</span><h2>{preview?"Brouillons locaux":"Projection non livrée"}</h2></div><span className="status-tag local">{preview?"Local":"Non projeté"}</span></div>
-      {entries.length===0?<Empty text={preview?copy.empty:"Le journal entrant reste visible dans la zone globale ; la projection métier de ce module n'est pas encore livrée."}/>:<div className="record-list">{entries.map(entry=><Record key={entry.id} entry={entry}/>)}</div>}
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{preview?"SESSION EN COURS":"JOURNAL MÉTIER"}</span><h2>{preview?"Brouillons locaux":"Événements reçus et émis"}</h2></div><span className="status-tag local">{preview?"Local":serverWriteAvailable?"File + reçu serveur":"Projection à compléter"}</span></div>
+      {entries.length===0?<Empty text={preview?copy.empty:serverWriteAvailable?"Aucun événement métier pour cette organisation et cet appareil.":"Le journal serveur reste visible dans la zone globale ; la projection métier de ce module est à compléter."}/>:<div className="record-list">{entries.map(entry=><Record key={entry.id} entry={entry}/>)}</div>}
     </div>
   </div>;
 }
-function AgendaPage({ entries }: { entries: Entry[] }) {
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue des créneaux</h2></div><span className="status-tag pending">Planning non synchronisé</span></div><div className="calendar-strip">{["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((d, i) => <div key={d} className={i === 2 ? "today" : ""}><small>{d}</small><strong>{String(i + 20).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Aucun créneau chargé</strong><p>Les horaires, absences, postes et rendez-vous apparaîtront après synchronisation.</p></div></div><div className="module-main-card"><h2>Demandes de rendez-vous locales</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucune demande créée dans cette session." />}</div></div>;
+function AgendaPage({ entries, authenticated }: { entries: Entry[]; authenticated: boolean }) {
+  const today = new Date();
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  const days = Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    return { label: date.toLocaleDateString("fr-FR", { weekday: "short" }), day: date.getDate(), isToday: date.toDateString() === today.toDateString() };
+  });
+  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue de la semaine</h2></div><span className="status-tag pending">{authenticated?"Création connectée · calendrier à compléter":"Aperçu local"}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Créneaux détaillés non projetés</strong><p>Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.</p></div></div><div className="module-main-card"><h2>Rendez-vous du journal serveur</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucun rendez-vous dans le périmètre chargé." />}</div></div>;
 }
-function PressingPage({ entries, onAdvance, canPreviewEdit }: { entries: Entry[]; onAdvance: (id: string) => void; canPreviewEdit: boolean }) {
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">SUIVI DES TICKETS</span><h2>Étapes de traitement</h2></div><span className="status-tag pending">{canPreviewEdit?"Aperçu local":"Connecteur non livré"}</span></div><div className="pressing-steps">{["Reçu","En cours","Prêt","Retiré"].map((step,i)=><div key={step}><span>{i+1}</span><strong>{step}</strong></div>)}</div><p className="muted">Les transitions réelles exigent un handler pressing et un reçu serveur ; elles ne sont pas simulées.</p></div><div className="module-main-card"><h2>Tickets de cette session</h2>{entries.length?entries.map(e=><div className="record-row" key={e.id}><Record entry={e}/>{canPreviewEdit&&<button className="btn secondary" onClick={()=>onAdvance(e.id)} disabled={e.state==="Retiré"}>Avancer l'aperçu</button>}</div>):<Empty text="Aucun ticket disponible dans cette vue."/>}</div></div>;
+function PressingPage({ entries, onAdvance, canPreviewEdit, authenticated }: { entries: Entry[]; onAdvance: (id: string) => void; canPreviewEdit: boolean; authenticated: boolean }) {
+  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">SUIVI DES TICKETS</span><h2>Étapes de traitement</h2></div><span className="status-tag pending">{canPreviewEdit?"Aperçu local":authenticated?"Création connectée · transitions à compléter":"Lecture seule"}</span></div><div className="pressing-steps">{["Reçu","En cours","Prêt","Retiré"].map((step,i)=><div key={step}><span>{i+1}</span><strong>{step}</strong></div>)}</div><p className="muted">La création de ticket est transmise au journal serveur. Les transitions de cycle de vie restent à raccorder à l'interface ; aucune transition n'est simulée en session authentifiée.</p></div><div className="module-main-card"><h2>Tickets du journal serveur</h2>{entries.length?entries.map(e=><div className="record-row" key={e.id}><Record entry={e}/>{canPreviewEdit&&<button className="btn secondary" onClick={()=>onAdvance(e.id)} disabled={e.state==="Retiré"}>Avancer l'aperçu</button>}</div>):<Empty text="Aucun ticket disponible dans le périmètre chargé."/>}</div></div>;
 }
 function CashPage({ entries }: { entries: Entry[] }) {
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">SESSION CAISSE</span><h2>Registre non ouvert</h2></div><span className="status-tag pending">À connecter</span></div><div className="cash-summary"><div><small>Fonds d'ouverture</small><strong>—</strong></div><div><small>Encaissements</small><strong>—</strong></div><div><small>Écart</small><strong>—</strong></div></div><div className="notice">Les montants ne sont pas calculés dans cet aperçu. Une session réelle sera ouverte sur le serveur et rattachée à une caisse et un opérateur.</div></div><div className="module-main-card"><h2>Ventes de cette session</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucune vente locale. Aucun paiement n'a été confirmé." />}</div></div>;
+  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">TRÉSORERIE</span><h2>Sessions de caisse</h2></div><span className="status-tag pending">Dépenses connectées · caisse à compléter</span></div><div className="cash-summary"><div><small>Fonds d'ouverture</small><strong>—</strong></div><div><small>Encaissements confirmés</small><strong>—</strong></div><div><small>Écart de clôture</small><strong>—</strong></div></div><div className="notice">Ce formulaire enregistre une dépense, pas une vente ni un paiement client. Les ouvertures/clôtures, encaissements et reçus ne sont pas encore raccordés à cette vue.</div></div><div className="module-main-card"><h2>Dépenses du journal serveur</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucune dépense dans le périmètre chargé." />}</div></div>;
 }
 function PerformancePage({
   data, fromDate, setFromDate, loading, error, onLoad, authenticated,
