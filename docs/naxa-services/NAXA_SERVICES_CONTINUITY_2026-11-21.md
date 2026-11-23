@@ -671,3 +671,23 @@ Le socle N3 et ses preuves historiques ne sont pas à refaire. Le chantier repre
 **Points d'attention avant activation :** les valeurs métier qui n'ont pas été validées (tarification, fiscalité, garantie, conservation, annulation/remboursement, commissions, frais de déplacement et règles contractuelles) restent configurables et ne doivent pas être inventées. Les données sensibles ou confidentielles de dossiers doivent faire l'objet d'un contrôle d'accès et de conservation avant d'être exposées à d'autres rôles ou sites.
 
 **Garde-fous inchangés :** branche `work/naxa-services-completion-20261120` uniquement ; aucun commit sur `main`, aucune fusion, aucun déploiement, aucune migration hébergée ; aucun accès ni changement au Supabase historique NAXA/pharmacie.
+
+
+### 22.5. Corrections de gate après lecture des logs — 23 novembre 2026
+
+Le premier gate qui a effectivement démarré a mis au jour quatre incohérences :
+1. le test de parité demandait `measurement → quote_pending` pour la couture, alors que le registre Web n'avait pas encore l'étape `measurement` ; l'étape « Prise des mensurations » a été ajoutée, raccordée à `received`, avec les transitions prévues par Android et le SQL candidat ;
+2. les deux nouvelles fixtures Deno utilisaient des UUID dont le dernier groupe était trop court ; les identifiants de test ont été corrigés ;
+3. `OBX-050` du registre N1 pointait la ligne 4019, alors que l'ajout des contrôles métier avait déplacé l'appel source à la ligne 4053 ; le JSON de référence a été rafraîchi ;
+4. les contrôles Android de dossier séparent désormais explicitement l'acompte demandé de `paid_xaf` : la demande est dans `metadata_json`, le payé reste nul tant qu'un événement de paiement confirmé n'existe pas. Le prestataire indiqué dans le formulaire n'est pas une affectation RH.
+
+Commits de correction : `9106577` (étape couture), `a609a62` (fixtures Deno), `aba1fc4` (registre OBX-050). Code Android correspondant : `35182f7` et `fcf8d9d`.
+
+**Résultat d'exécution constaté :** le run #511 (`45154162146`, SHA `74bcd43`) a terminé ses jobs avec trois échecs identifiés :
+- Web build job : test Vitest de parité couture, corrigé ensuite ;
+- contrat comptable fournisseur : deux fixtures Deno `INVALID_AGGREGATE_ID`, corrigées ensuite ;
+- contrat de synchronisation hors ligne : vérification du registre N1 `OBX-050`, corrigée ensuite.
+
+Le run #510 (`45154138961`) a été annulé par les commits suivants. Le run #512 (`45154704480`, SHA `a609a62`) était encore `in_progress` au dernier contrôle et le run #513 (`45154731735`, SHA `aba1fc4`) était `pending` sans jobs exposés. Leurs résultats ne sont donc pas considérés comme PASS.
+
+**État de travail :** les causes précises identifiées ont des corrections commitées. Il reste à obtenir un run complet sur le dernier SHA de branche, vérifier le build Web/Android et corriger les erreurs qui resteraient. Ne pas reprendre un autre chantier N4 tant que les jobs métier n'ont pas fourni de preuve.
