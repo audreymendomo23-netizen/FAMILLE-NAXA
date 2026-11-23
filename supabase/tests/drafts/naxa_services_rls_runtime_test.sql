@@ -2183,4 +2183,85 @@ END
 $financial_server_write_guard$;
 RESET ROLE;
 
+
+DO $activity_workflow_server_contract$
+DECLARE
+  v_case record;
+  v_valid boolean;
+  v_count integer:=0;
+BEGIN
+  FOR v_case IN
+    SELECT * FROM (VALUES
+      ('coiffure', '{"style":"tresses","technique":"Nattes longues"}'::jsonb, 'approved'),
+      ('couture', '{"garment":"Robe","measurements":"Tour poitrine 92 cm"}'::jsonb, 'measurement'),
+      ('beaute', '{"treatment":"soin_visage","protocol":"Protocole esthétique non médical"}'::jsonb, 'approved'),
+      ('parfumerie', '{"product":"Parfum","format":"50ml","family":"floral"}'::jsonb, 'quote_pending'),
+      ('reparation', '{"device":"Téléphone","fault":"Écran fissuré"}'::jsonb, 'diagnostic'),
+      ('menuiserie', '{"piece":"Table","dimensions":"120 x 80 x 75 cm"}'::jsonb, 'diagnostic'),
+      ('garage', '{"vehicle":"Toyota Yaris","odometer":"120000","fault":"Freinage"}'::jsonb, 'diagnostic'),
+      ('nettoyage', '{"site":"Bureau client","tasks":"Nettoyage quotidien"}'::jsonb, 'quote_pending'),
+      ('domicile', '{"address":"Quartier Bonapriso","service":"Réparation plomberie"}'::jsonb, 'approved'),
+      ('impression', '{"format":"A4","quantity":"100"}'::jsonb, 'quote_pending'),
+      ('photo_evenementiel', '{"event":"Cérémonie","date":"2026-11-24","deliverables":"Album et galerie numérique"}'::jsonb, 'planning'),
+      ('autre', '{"service":"Prestation personnalisée","specifications":"Périmètre défini avec le client"}'::jsonb, 'quote_pending')
+    ) AS items(profile,fields,first_transition)
+  LOOP
+    v_valid:=public.ns_activity_workflow_fields_valid(v_case.profile,v_case.fields);
+    IF v_valid IS NOT TRUE THEN
+      RAISE EXCEPTION 'ACTIVITY_FIELDS_REJECTED_VALID_PROFILE: %',v_case.profile;
+    END IF;
+    IF public.ns_activity_workflow_transition_allowed(
+      v_case.profile,'received',v_case.first_transition
+    ) IS NOT TRUE THEN
+      RAISE EXCEPTION 'ACTIVITY_INITIAL_TRANSITION_MISSING: % -> %',v_case.profile,v_case.first_transition;
+    END IF;
+    IF public.ns_activity_workflow_transition_allowed(
+      v_case.profile,'received','closed'
+    ) IS TRUE THEN
+      RAISE EXCEPTION 'ACTIVITY_ALLOWED_SKIP_TO_CLOSED: %',v_case.profile;
+    END IF;
+    IF public.ns_activity_workflow_transition_allowed(
+      v_case.profile,'received','cancelled'
+    ) IS NOT TRUE THEN
+      RAISE EXCEPTION 'ACTIVITY_INITIAL_CANCELLATION_MISSING: %',v_case.profile;
+    END IF;
+    v_count:=v_count+1;
+  END LOOP;
+
+  IF v_count<>12 THEN RAISE EXCEPTION 'ACTIVITY_PROFILE_COUNT_INVALID: %',v_count; END IF;
+
+  IF public.ns_activity_workflow_fields_valid('garage',
+      '{"vehicle":"Toyota","odometer":"5000001","fault":"Frein"}'::jsonb) IS TRUE THEN
+    RAISE EXCEPTION 'GARAGE_ODOMETER_UPPER_BOUND_IGNORED';
+  END IF;
+  IF public.ns_activity_workflow_fields_valid('impression',
+      '{"format":"A4","quantity":"0"}'::jsonb) IS TRUE THEN
+    RAISE EXCEPTION 'PRINT_QUANTITY_LOWER_BOUND_IGNORED';
+  END IF;
+  IF public.ns_activity_workflow_fields_valid('coiffure',
+      '{"style":"unknown","technique":"Nattes"}'::jsonb) IS TRUE THEN
+    RAISE EXCEPTION 'HAIR_STYLE_ENUM_NOT_ENFORCED';
+  END IF;
+  IF public.ns_activity_workflow_fields_valid('beaute',
+      '{"treatment":"soin_visage","protocol":""}'::jsonb) IS TRUE THEN
+    RAISE EXCEPTION 'BEAUTY_PROTOCOL_REQUIRED_NOT_ENFORCED';
+  END IF;
+  IF public.ns_activity_workflow_fields_valid('photo_evenementiel',
+      '{"event":"Mariage","date":"2026-02-31","deliverables":"Album"}'::jsonb) IS TRUE THEN
+    RAISE EXCEPTION 'EVENT_DATE_INVALID_ACCEPTED';
+  END IF;
+  IF public.ns_activity_workflow_fields_valid('unknown',
+      '{"service":"X","specifications":"Y"}'::jsonb) IS TRUE THEN
+    RAISE EXCEPTION 'UNKNOWN_ACTIVITY_PROFILE_ACCEPTED';
+  END IF;
+
+  IF public.ns_activity_workflow_transition_allowed('garage','received','approved') IS TRUE
+     OR public.ns_activity_workflow_transition_allowed('coiffure','received','in_progress') IS TRUE
+     OR public.ns_activity_workflow_transition_allowed('couture','delivered','in_progress') IS TRUE
+     OR public.ns_activity_workflow_transition_allowed('pressing','received','cancelled') IS TRUE THEN
+    RAISE EXCEPTION 'ACTIVITY_WORKFLOW_FORBIDDEN_TRANSITION_ACCEPTED';
+  END IF;
+END
+$activity_workflow_server_contract$;
+
 ROLLBACK;
