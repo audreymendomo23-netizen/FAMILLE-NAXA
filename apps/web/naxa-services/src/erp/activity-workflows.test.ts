@@ -43,7 +43,7 @@ describe("NAXA Services sector workflows", () => {
   it("validates profile-specific required fields", () => {
     expect(validateActivityFields("garage", { vehicle: "Toyota Yaris" })).toEqual(["fault"]);
     expect(validateActivityFields("couture", { garment: "Robe" })).toEqual(["measurements"]);
-    expect(validateActivityFields("coiffure", { style: "Tresses", technique: "Nattes" })).toEqual([]);
+    expect(validateActivityFields("coiffure", { style: "tresses", technique: "Nattes" })).toEqual([]);
     expect(validateActivityFields("parfumerie", { product: "Eau de parfum" })).toEqual(["format"]);
   });
 
@@ -62,6 +62,7 @@ describe("NAXA Services sector workflows", () => {
       ["coiffure", "approved", "in_progress"],
       ["beaute", "in_progress", "quality_check"],
       ["couture", "measurement", "quote_pending"],
+      ["parfumerie", "approved", "in_progress"],
       ["parfumerie", "waiting_parts", "in_progress"],
       ["parfumerie", "in_progress", "quality_check"],
       ["reparation", "diagnostic", "quote_pending"],
@@ -78,6 +79,37 @@ describe("NAXA Services sector workflows", () => {
       expect(canTransitionActivity(profile, from, to), profile + ": " + from + " -> " + to).toBe(true);
     }
     expect(canTransitionActivity("parfumerie", "approved", "ready")).toBe(false);
+  });
+
+
+  it("enforces typed controls, choices, numeric bounds, dates and length limits", () => {
+    expect(validateActivityFields("garage", {
+      vehicle: "Toyota Yaris", fault: "Bruit moteur", odometer: "-4",
+    })).toEqual(["odometer"]);
+    expect(validateActivityFields("impression", {
+      format: "A4", quantity: "0",
+    })).toEqual(["quantity"]);
+    expect(validateActivityFields("impression", {
+      format: "custom-unknown", quantity: "100",
+    })).toEqual(["format"]);
+    expect(validateActivityFields("photo_evenementiel", {
+      event: "Mariage", date: "2026-02-31", deliverables: "Album + 200 photos",
+    })).toEqual(["date"]);
+    expect(validateActivityFields("coiffure", {
+      style: "non-listed-style", technique: "Tresses",
+    })).toEqual(["style"]);
+    const longProtocol = "x".repeat(1001);
+    expect(validateActivityFields("beaute", {
+      treatment: "soin_visage", protocol: longProtocol,
+    })).toEqual(["protocol"]);
+  });
+
+  it("uses distinct métier controls where business risk requires them", () => {
+    expect(getActivityWorkflow("coiffure").fields.find((field) => field.key === "style")?.kind).toBe("select");
+    expect(getActivityWorkflow("couture").fields.find((field) => field.key === "measurements")?.kind).toBe("textarea");
+    expect(getActivityWorkflow("garage").fields.find((field) => field.key === "odometer")?.kind).toBe("number");
+    expect(getActivityWorkflow("impression").fields.find((field) => field.key === "quantity")?.min).toBe(1);
+    expect(getActivityWorkflow("photo_evenementiel").fields.find((field) => field.key === "date")?.kind).toBe("date");
   });
 
 });
