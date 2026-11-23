@@ -6721,7 +6721,7 @@ language plpgsql
 security definer
 set search_path = ''
 as $naxa$
-declare v_member uuid; v_record public.ns_management_records%rowtype;
+declare v_member uuid; v_record public.ns_management_records%rowtype; v_activity text; v_expected_record_type text;
 begin
   v_member:=public.ns_current_member_id(p_org_id);
   if v_member is null or not public.ns_can_operate_site(p_org_id,p_site_id) then
@@ -6757,6 +6757,26 @@ begin
       where w.id=p_workstation_id and w.org_id=p_org_id and w.site_id=p_site_id and w.status='active')
     or not public.ns_can_operate_workstation(p_org_id,p_site_id,p_workstation_id)
   ) then raise exception 'NAXA_MANAGEMENT_RECORD_WORKSTATION_FORBIDDEN'; end if;
+  v_activity:=coalesce(nullif(p_metadata_json->>'activity_profile',''),nullif(p_metadata_json->>'activity',''));
+  if nullif(p_metadata_json->>'activity_profile','') is not null
+     and nullif(p_metadata_json->>'activity','') is not null
+     and p_metadata_json->>'activity_profile'<>p_metadata_json->>'activity' then
+    raise exception 'NAXA_ACTIVITY_WORKFLOW_PROFILE_MISMATCH';
+  end if;
+  if p_metadata_json ? 'fields' then
+    v_expected_record_type:=case
+      when v_activity in ('coiffure','beaute','nettoyage','domicile') then 'service_order'
+      when v_activity in ('reparation','garage') then 'repair_order'
+      when v_activity in ('couture','parfumerie','menuiserie','impression','photo_evenementiel','autre') then 'work_order'
+      else null
+    end;
+    if v_expected_record_type is null or p_record_type<>v_expected_record_type
+       or p_status<>'received'
+       or not public.ns_activity_workflow_fields_valid(v_activity,p_metadata_json->'fields') then
+      raise exception 'NAXA_ACTIVITY_WORKFLOW_CREATE_INVALID';
+    end if;
+  end if;
+
 
   if (p_record_type in ('invoice','refund_due','customer_receivable') and p_status not in ('open','draft'))
      or (p_record_type='appointment_waitlist' and p_status not in ('open','contacted'))
@@ -6798,7 +6818,7 @@ set search_path = ''
 as $naxa$
 declare
   v_member uuid; v_record public.ns_management_records%rowtype;
-  v_allowed boolean:=false; v_metadata jsonb;
+  v_allowed boolean:=false; v_metadata jsonb; v_activity text; v_profiled_activity boolean:=false;
   v_transfer public.ns_inventory_transfers%rowtype;
 begin
   v_member:=public.ns_current_member_id(p_org_id);
@@ -6823,6 +6843,12 @@ begin
   if v_record.revision<>p_expected_version or v_record.status<>p_from_status then
     raise exception 'NAXA_MANAGEMENT_RECORD_VERSION_CONFLICT';
   end if;
+  v_activity:=coalesce(nullif(v_record.metadata_json->>'activity_profile',''),nullif(v_record.metadata_json->>'activity',''));
+  v_profiled_activity:=v_activity in (
+    'pressing','coiffure','couture','beaute','parfumerie','reparation','menuiserie',
+    'garage','nettoyage','domicile','impression','photo_evenementiel','autre'
+  );
+
 
   if p_record_type='inventory_transfer' then
     select * into v_transfer from public.ns_inventory_transfers
@@ -6851,6 +6877,17 @@ begin
        returning * into v_transfer;
     end if;
   else
+    if v_profiled_activity then
+      v_allowed:=case
+        when p_record_type='service_order' and v_activity in ('coiffure','beaute','nettoyage','domicile')
+          then public.ns_activity_workflow_transition_allowed(v_activity,p_from_status,p_to_status)
+        when p_record_type='repair_order' and v_activity in ('reparation','garage')
+          then public.ns_activity_workflow_transition_allowed(v_activity,p_from_status,p_to_status)
+        when p_record_type='work_order' and v_activity in ('couture','parfumerie','menuiserie','impression','photo_evenementiel','autre')
+          then public.ns_activity_workflow_transition_allowed(v_activity,p_from_status,p_to_status)
+        else false
+      end;
+    else
     v_allowed:=case p_record_type
       when 'quote' then (p_from_status in ('draft','open') and p_to_status in ('approved','rejected','cancelled'))
       when 'invoice' then (p_from_status in ('open','partial') and p_to_status in ('partial','paid','cancelled'))
@@ -6928,6 +6965,7 @@ begin
       when 'staff_bonus' then (p_from_status in ('pending_review','draft','approved') and p_to_status in ('approved','rejected','paid'))
       else false
     end;
+    end if;
   end if;
   if not v_allowed then raise exception 'NAXA_MANAGEMENT_TRANSITION_FORBIDDEN'; end if;
 
