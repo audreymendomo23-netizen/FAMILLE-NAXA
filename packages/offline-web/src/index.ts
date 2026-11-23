@@ -82,18 +82,24 @@ export async function enqueue(item: QueueItem): Promise<void> {
     });
   } finally { db.close(); }
 }
-function cursorKey(appId:string,deviceId:string):string {
-  if (!appId.trim() || !deviceId.trim()) throw new TypeError("INVALID_SYNC_IDENTITY");
-  return appId+":"+deviceId+":cursor";
+function cursorKey(appId:string,deviceId:string,organizationId?:string):string {
+  if (!appId.trim() || !deviceId.trim() || (organizationId !== undefined && !organizationId.trim())) throw new TypeError("INVALID_SYNC_IDENTITY");
+  return organizationId === undefined ? appId+":"+deviceId+":cursor" : appId+":"+deviceId+":"+organizationId+":cursor";
 }
-export async function applySyncPage(appId:string,deviceId:string,page:{changes:WebSyncChange[];next_cursor:number;has_more:boolean}):Promise<void> {
+function changeKey(appId:string,deviceId:string,organizationId:string|undefined,cursor:number):string {
+  return organizationId === undefined
+    ? appId+":"+deviceId+":"+cursor
+    : appId+":"+deviceId+":"+organizationId+":"+cursor;
+}
+export async function applySyncPage(appId:string,deviceId:string,page:{changes:WebSyncChange[];next_cursor:number;has_more:boolean},organizationId?:string):Promise<void> {
   if (!Array.isArray(page?.changes) || !Number.isSafeInteger(page.next_cursor) || page.next_cursor<0 || typeof page.has_more!=="boolean") throw new TypeError("INVALID_SYNC_PAGE");
+  if (organizationId !== undefined && !organizationId.trim()) throw new TypeError("INVALID_SYNC_IDENTITY");
   for (const c of page.changes) if (!Number.isSafeInteger(c.cursor)||c.cursor<1||c.cursor>page.next_cursor||typeof c.event_id!=="string"||typeof c.action_code!=="string"||typeof c.aggregate_type!=="string"||!c.payload||typeof c.payload!=="object"||Array.isArray(c.payload)) throw new TypeError("INVALID_SYNC_CHANGE");
   const db=await openDb();
   try { await new Promise<void>((resolve,reject)=>{
-    const tx=db.transaction([META,CHANGES],"readwrite"),meta=tx.objectStore(META),store=tx.objectStore(CHANGES),key=cursorKey(appId,deviceId),read=meta.get(key);
+    const tx=db.transaction([META,CHANGES],"readwrite"),meta=tx.objectStore(META),store=tx.objectStore(CHANGES),key=cursorKey(appId,deviceId,organizationId),read=meta.get(key);
     read.onsuccess=()=>{if(page.next_cursor<Number(read.result?.value??0)){tx.abort();reject(new Error("SYNC_CURSOR_REGRESSION"));return;}
-      for(const c of page.changes)store.put({...c,appId,deviceId,key:appId+":"+deviceId+":"+c.cursor});
+      for(const c of page.changes)store.put({...c,appId,deviceId,organizationId,key:changeKey(appId,deviceId,organizationId,c.cursor)});
       meta.put({key,value:page.next_cursor});};
     read.onerror=()=>{tx.abort();reject(read.error??new Error("SYNC_CURSOR_READ_FAILED"));};
     tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error??new Error("SYNC_PAGE_APPLY_ABORTED"));
@@ -107,11 +113,11 @@ export async function listAppEvents(appId:string,deviceId:string,organizationId?
     r.onerror=()=>reject(r.error);
   });}finally{db.close();}
 }
-export async function getSyncCursor(appId:string,deviceId:string):Promise<number>{
-  const db=await openDb();try{return await new Promise<number>((resolve,reject)=>{const r=db.transaction(META).objectStore(META).get(cursorKey(appId,deviceId));r.onsuccess=()=>resolve(Number(r.result?.value??0));r.onerror=()=>reject(r.error);});}finally{db.close();}
+export async function getSyncCursor(appId:string,deviceId:string,organizationId?:string):Promise<number>{
+  const db=await openDb();try{return await new Promise<number>((resolve,reject)=>{const r=db.transaction(META).objectStore(META).get(cursorKey(appId,deviceId,organizationId));r.onsuccess=()=>resolve(Number(r.result?.value??0));r.onerror=()=>reject(r.error);});}finally{db.close();}
 }
-export async function listSyncChanges(appId:string,deviceId:string):Promise<WebSyncChange[]>{
-  const db=await openDb();try{return await new Promise<WebSyncChange[]>((resolve,reject)=>{const r=db.transaction(CHANGES).objectStore(CHANGES).getAll();r.onsuccess=()=>resolve((r.result as (WebSyncChange&{appId:string;deviceId:string})[]).filter(c=>c.appId===appId&&c.deviceId===deviceId).sort((a,b)=>a.cursor-b.cursor));r.onerror=()=>reject(r.error);});}finally{db.close();}
+export async function listSyncChanges(appId:string,deviceId:string,organizationId?:string):Promise<WebSyncChange[]>{
+  const db=await openDb();try{return await new Promise<WebSyncChange[]>((resolve,reject)=>{const r=db.transaction(CHANGES).objectStore(CHANGES).getAll();r.onsuccess=()=>resolve((r.result as (WebSyncChange&{appId:string;deviceId:string;organizationId?:string})[]).filter(c=>c.appId===appId&&c.deviceId===deviceId&&(organizationId===undefined||c.organizationId===organizationId)).sort((a,b)=>a.cursor-b.cursor));r.onerror=()=>reject(r.error);});}finally{db.close();}
 }
 
 export async function listQueued(appId?: string, deviceId?: string, organizationId?: string): Promise<QueueItem[]> {
