@@ -615,3 +615,59 @@ Garde-fous inchangés : branche de travail uniquement, aucun changement de `main
 Le Web récupère maintenant le `device_id` de l'Edge Auth, crée des séquences outbox monotones persistées par appareil, pousse les événements via `apply_sync_event` avec contrôle du reçu SQL `event_id` et statut final, et consomme `pull_sync_changes` avec persistance atomique des pages et curseurs. Les changements serveur sont visibles sans echo dans l'outbox.
 
 Les faux parcours locaux (formulaires génériques, transitions pressing, réglages organisation non connectés) sont bloqués en session réelle ; l'aperçu local reste identifié. N4-C et N4-D restent ouverts tant que les formulaires/projections métier par module et les tests navigateur bout en bout ne sont pas livrés. Aucun déploiement hébergé ; main et Supabase NAXA/pharmacie historique restent intacts.
+
+
+## 22. N4-C — couverture multisecteur des parcours métiers — 23 novembre 2026
+
+Cette section complète et prévaut sur toute lecture qui ferait du Pressing le parcours fonctionnel de référence de NAXA SERVICES. NAXA SERVICES est un ERP multisecteur : **les parcours métiers doivent avancer ensemble sur un socle partagé**. Le Pressing reste un parcours dédié parmi les 13 profils, pas le modèle à étendre aux autres activités.
+
+### 22.1 Périmètre couvert
+
+Les 13 profils présents dans le contrat Auth sont :
+`pressing`, `coiffure`, `couture`, `beaute`, `parfumerie`, `reparation`, `menuiserie`, `garage`, `nettoyage`, `domicile`, `impression`, `photo_evenementiel`, `autre`.
+
+Matrice détaillée : [NAXA_SERVICES_ACTIVITY_PARITY_MATRIX_2026-11-23.md](NAXA_SERVICES_ACTIVITY_PARITY_MATRIX_2026-11-23.md).
+
+Le référentiel Web `apps/web/naxa-services/src/erp/activity-workflows.ts` décrit pour chaque profil son objet métier, son parcours, ses champs spécifiques requis, ses transitions et ses modules partagés. Le profil provenant d'Auth est conservé par la session Web. Un profil manquant ou inconnu retombe sur `autre`, jamais automatiquement sur Pressing.
+
+### 22.2 Code ajouté / corrigé pendant cette passe
+
+- Référentiel et fonctions de validation des 13 parcours Web ; tests Vitest couvrant l'exhaustivité, le fallback, les champs requis et les transitions sectorielles.
+- Nouveau module Web « Dossiers métier » qui charge le profil d'activité de l'organisation, expose les champs propres à ce profil et crée les dossiers via l'outbox N3 et le contrat serveur.
+- Types de registre : `work_order` (production/commandes), `repair_order` (garage/réparation), `service_order` (coiffure/beauté/interventions). Le Pressing conserve `pressing_order`.
+- Transitions Web versionnées avec motif obligatoire, `expected_version` et exigence d'un reçu serveur avant l'étape suivante ; projection des dossiers reçus d'un autre appareil.
+- La parfumerie utilise le catalogue/stock/fournisseurs/POS pour les ventes normales ; le nouveau dossier ne concerne que les commandes spéciales et réservations. Le dossier ne confirme aucun paiement.
+- Android : routes de dossiers ouvertes pour coiffure, beauté et parfumerie ; profils coiffure/beauté raccordés à `service_order`, réparation/garage à `repair_order`, photo/événementiel à `work_order`. Champs principaux et spécifications obligatoires avant création ; prestataire indiqué comme souhaité et non comme affectation RH validée.
+- Android : un acompte demandé n'est plus écrit dans `paid_xaf`. Seul un paiement métier confirmé pourra alimenter le montant réellement encaissé.
+- SQL candidat v4 : matrice de transitions de `work_order`, `repair_order` et `service_order` alignée sur les étapes spécialisées ; tests de contrat Deno ajoutés pour création, transition, spoofing d'identifiant et écart de site.
+- Aucun changement sur la matrice des 92 actions N1/N2 ni sur le verdict de clôture N3.
+
+Commits de cette passe : `88fa2ff`, `120e54d`, `edd0f4a`, `c4f4170`, `7c170b8`, `25d7136`, `c0461ac`, `b59e62a`, `8b1e55c`, `3c842c3`, `b9057a5`, `dbae18c`, `f5e754b`, `347e38c`, `fef9974`, `74bcd43`, `35182f7`, `fcf8d9d` et la matrice documentaire `14c5e9d`, tous sur la branche de travail.
+
+### 22.3 Qualification honnête — ce qui est fait et ce qui n'est pas encore vert
+
+| Point | Qualification au moment de l'écriture |
+|---|---|
+| Inventaire des 13 profils | Code et matrice documentaire ajoutés |
+| Champs et cycles spécialisés Web | Référentiel et écran ajoutés ; gate de build/tests encore en cours |
+| Dossiers Web via outbox et journal N3 | Code raccordé au contrat candidat ; validation CI et serveur à prouver |
+| Champs et cycles Android | Couverture locale enrichie et routes alignées ; recette Android de cette passe à exécuter |
+| Matrice SQL v4 | Brouillon corrigé et non déployé |
+| Tests de profil Vitest / contrat Deno | Écrits ; résultats d'exécution non encore confirmés au moment de cette note |
+| E2E Web ↔ Android pour les 13 profils | Non démontré |
+| Parité complète de tous les modules partagés | Partielle ; l'agenda, la caisse complète, ventes/paiements/reçus, CRM/fidélité, achats, RH/commissions, projections et rapports restent des chantiers séparés |
+
+**Run CI observé pendant la passe :** run #511 `45154162146`, SHA `74bcd433ad41f2cb4682b109b503398b3130ee0d`, statut `pending` au dernier instantané lu ; run #510 `45154138961`, SHA `fef997446eab99db0303d4561bd53a7741b1c95c`, statut `in_progress`. Ces statuts ne sont pas des PASS. Le dernier SHA de code avant cette mise à jour documentaire est `fcf8d9d6099be65e5680942a5853a2c87d0ea5ce`; le commit de la matrice est `14c5e9dcc75e77f2dbbf8f630fc79ab7c9b4fab5`.
+
+### 22.4 Reprise N4 à partir du point d'arrêt
+
+Le socle N3 et ses preuves historiques ne sont pas à refaire. Le chantier reprend sur N4-C/N4-D :
+1. finaliser le parcours métier générique Web et ses projections, puis faire fonctionner et tester les cycles spécialisés des 13 profils ;
+2. compléter les modules partagés Web : agenda (disponibilités, modifications, annulations), caisse/ventes/paiements/reçus, catalogue/stock/achats/fournisseurs, CRM/fidélité, équipe/commissions, rapports et réseau ;
+3. aligner ces opérations sur Android et vérifier les mêmes états métier, identifiants stables et règles de version ;
+4. exécuter le build, Vitest, Deno, Kotlin/Room, PostgreSQL 17 jetable et Playwright ; puis démontrer la réplication A↔B et les tests négatifs de scopes ;
+5. clôturer chaque lot avec une preuve CI et une matrice de résultats. Un code présent, un formulaire ou un run pending ne vaut jamais VERT.
+
+**Points d'attention avant activation :** les valeurs métier qui n'ont pas été validées (tarification, fiscalité, garantie, conservation, annulation/remboursement, commissions, frais de déplacement et règles contractuelles) restent configurables et ne doivent pas être inventées. Les données sensibles ou confidentielles de dossiers doivent faire l'objet d'un contrôle d'accès et de conservation avant d'être exposées à d'autres rôles ou sites.
+
+**Garde-fous inchangés :** branche `work/naxa-services-completion-20261120` uniquement ; aucun commit sur `main`, aucune fusion, aucun déploiement, aucune migration hébergée ; aucun accès ni changement au Supabase historique NAXA/pharmacie.
