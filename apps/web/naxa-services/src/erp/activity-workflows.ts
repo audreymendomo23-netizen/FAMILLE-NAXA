@@ -161,7 +161,7 @@ export const ACTIVITY_WORKFLOWS: Readonly<Record<ActivityProfile, ActivityWorkfl
     ],
     stages: [
       stage("received", "Appareil reçu", "diagnostic", "cancelled"),
-      stage("diagnostic", "Diagnostic", "quote_pending", "cancelled"),
+      stage("diagnostic", "Diagnostic", "quote_pending", "awaiting_approval", "cancelled"),
       stage("quote_pending", "Devis à établir", "awaiting_approval", "approved", "cancelled"),
       stage("awaiting_approval", "Accord client attendu", "approved", "cancelled"),
       stage("approved", "Réparation autorisée", "waiting_parts", "in_progress"),
@@ -215,7 +215,7 @@ export const ACTIVITY_WORKFLOWS: Readonly<Record<ActivityProfile, ActivityWorkfl
     ],
     stages: [
       stage("received", "Véhicule reçu", "diagnostic", "cancelled"),
-      stage("diagnostic", "Diagnostic mécanique", "quote_pending", "cancelled"),
+      stage("diagnostic", "Diagnostic mécanique", "quote_pending", "awaiting_approval", "cancelled"),
       stage("quote_pending", "Devis à établir", "awaiting_approval", "approved", "cancelled"),
       stage("awaiting_approval", "Accord client attendu", "approved", "cancelled"),
       stage("approved", "Travaux autorisés", "waiting_parts", "in_progress"),
