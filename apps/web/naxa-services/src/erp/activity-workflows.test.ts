@@ -56,4 +56,28 @@ describe("NAXA Services sector workflows", () => {
     expect(canTransitionActivity("garage", "diagnostic", "quote_pending")).toBe(true);
     expect(canTransitionActivity("coiffure", "in_progress", "post_production")).toBe(false);
   });
+
+  it("keeps every métier lifecycle compatible with the server management-record transition contract", () => {
+    const allowed: Array<[string, string, string]> = [
+      ["coiffure", "approved", "in_progress"],
+      ["beaute", "in_progress", "quality_check"],
+      ["couture", "measurement", "quote_pending"],
+      ["parfumerie", "waiting_parts", "in_progress"],
+      ["parfumerie", "in_progress", "quality_check"],
+      ["reparation", "diagnostic", "quote_pending"],
+      ["garage", "diagnostic", "awaiting_approval"],
+      ["menuiserie", "fabrication", "quality_check"],
+      ["menuiserie", "quality_check", "installation"],
+      ["nettoyage", "planning", "on_site"],
+      ["domicile", "planning", "on_site"],
+      ["impression", "proof_ready", "production"],
+      ["photo_evenementiel", "shooting", "post_production"],
+      ["autre", "approved", "in_progress"],
+    ];
+    for (const [profile, from, to] of allowed) {
+      expect(canTransitionActivity(profile, from, to), profile + ": " + from + " -> " + to).toBe(true);
+    }
+    expect(canTransitionActivity("parfumerie", "approved", "ready")).toBe(false);
+  });
+
 });
