@@ -1577,6 +1577,14 @@ fun WorkOrdersContent(
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
 
+    val requiredProfileFieldsValid = when (profile) {
+        "autre" -> specificPrimary.isNotBlank() && specifications.isNotBlank()
+        "pressing" -> specificPrimary.isNotBlank() && specifications.isNotBlank()
+        "coiffure", "beaute", "couture", "reparation", "garage", "menuiserie", "nettoyage", "domicile", "impression", "photo_evenementiel", "parfumerie" ->
+            specificPrimary.isNotBlank() && specifications.isNotBlank()
+        else -> false
+    }
+
     fun transitions(status: String): List<Pair<String, String>> {
         val stages: Map<String, Set<String>> = when (profile) {
             "coiffure", "beaute" -> mapOf(
@@ -1713,7 +1721,7 @@ fun WorkOrdersContent(
                     OutlinedTextField(specificPrimary, { specificPrimary = it }, Modifier.fillMaxWidth(), label = { Text(labels[0]) }, singleLine = true)
                     OutlinedTextField(specifications, { specifications = it }, Modifier.fillMaxWidth(), label = { Text(labels[1]) }, minLines = 2)
                     OutlinedTextField(materials, { materials = it }, Modifier.fillMaxWidth(), label = { Text(labels[2]) }, minLines = 2)
-                    OutlinedTextField(assignedStaff, { assignedStaff = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Collaborateur / prestataire affecté" else "Assigned staff / provider") }, singleLine = true)
+                    OutlinedTextField(assignedStaff, { assignedStaff = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Prestataire souhaité (indicatif, non affecté)" else "Preferred provider (indicative, not assigned)") }, singleLine = true)
                     OutlinedTextField(estimate, { estimate = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Devis estimatif (FCFA)" else "Estimated quote (XAF)") }, singleLine = true)
                     OutlinedTextField(deposit, { deposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Acompte demandé (FCFA)" else "Deposit requested (XAF)") }, singleLine = true)
                     OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Délai estimé en jours" else "Estimated days") }, singleLine = true)
@@ -1721,8 +1729,8 @@ fun WorkOrdersContent(
                         onClick = {
                             val amount = estimate.toLongOrNull() ?: 0L
                             val paid = deposit.toLongOrNull() ?: 0L
-                            if (customer.isBlank() || title.isBlank() || amount <= 0 || paid > amount) {
-                                error = if (fr) "Client, titre et devis positif requis. L'acompte ne peut pas dépasser le devis." else "Customer, title and positive quote are required. Deposit cannot exceed quote."
+                            if (customer.isBlank() || title.isBlank() || amount <= 0 || !requiredProfileFieldsValid) {
+                                error = if (fr) "Client, titre, devis positif et champs obligatoires du métier requis." else "Customer, title, positive quote and required activity fields are mandatory."
                             } else scope.launch {
                                 busy = true
                                 runCatching {
@@ -1732,13 +1740,13 @@ fun WorkOrdersContent(
                                         .put("specifications", specifications.trim())
                                         .put("materials", materials.trim())
                                         .put("assignedStaffLabel", assignedStaff.trim())
-                                        .put("depositXaf", paid)
+                                        .put("depositRequestedXaf", paid)
                                         .put("workflowVersion", 1)
                                         .toString()
                                     repository.createManagementRecord(
                                         session.account.organizationId, siteId, recordType,
                                         (if (recordType == "repair_order") "REP-" else if (recordType == "service_order") "SRV-" else "WO-") + System.currentTimeMillis(),
-                                        title.trim(), customer.trim(), amount, paid,
+                                        title.trim(), customer.trim(), amount, 0L,
                                         System.currentTimeMillis() + (dueDays.toLongOrNull() ?: 3L).coerceIn(1L, 365L) * 86_400_000L,
                                         "received", metadata, session.account.memberId,
                                         workstationId.takeIf { it.isNotBlank() }
@@ -1752,7 +1760,8 @@ fun WorkOrdersContent(
                                 busy = false
                             }
                         },
-                        enabled = !busy && siteId.isNotBlank() && customer.isNotBlank() && title.isNotBlank() && (estimate.toLongOrNull() ?: 0L) > 0,
+                        enabled = !busy && siteId.isNotBlank() && customer.isNotBlank() && title.isNotBlank() &&
+                            (estimate.toLongOrNull() ?: 0L) > 0 && requiredProfileFieldsValid,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(if (busy) if (fr) "Enregistrement…" else "Saving…" else if (fr) "Créer le dossier" else "Create work order") }
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
@@ -1775,7 +1784,12 @@ fun WorkOrdersContent(
                         Text(workstations.firstOrNull { it.id == id }?.name ?: id, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     }
                     Text(labels[0] + " : " + (runCatching { JSONObject(item.metadataJson).optString("primaryDetail") }.getOrDefault("")))
-                    Text((if (fr) "Devis" else "Quote") + " : " + xaf(item.amountXaf) + " · " + (if (fr) "Acompte" else "Deposit") + " : " + xaf(item.paidXaf))
+                    Text(
+                        (if (fr) "Devis estimatif" else "Estimated quote") + " : " + xaf(item.amountXaf) +
+                            " · " + (if (fr) "Acompte demandé" else "Deposit requested") + " : " +
+                            xaf(runCatching { JSONObject(item.metadataJson).optLong("depositRequestedXaf", 0L) }.getOrDefault(0L)) +
+                            " · " + (if (fr) "Acompte réellement encaissé" else "Deposit actually paid") + " : " + xaf(item.paidXaf)
+                    )
                     Text((if (fr) "Statut" else "Status") + " : " + item.status, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
                     Text((if (fr) "Échéance" else "Due") + " : " + (item.dueAtMillis?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) } ?: "—"))
                     if (item.status !in setOf("closed", "cancelled")) {
