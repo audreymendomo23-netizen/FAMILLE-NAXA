@@ -685,8 +685,10 @@ function App() {
       workflow_version: 1,
       journey: workflow.journey,
       fields: input.fields,
-      workflow_notes: workflow.notes,
     };
+    if (new TextEncoder().encode(JSON.stringify(metadata)).byteLength > 3800) {
+      throw new Error("Les informations du dossier sont trop volumineuses. Réduis les notes avant de réessayer.");
+    }
     const displayDetail = workflow.profile === "parfumerie"
       ? "Commande spéciale · " + Object.values(input.fields).filter(Boolean).join(" · ")
       : Object.values(input.fields).filter(Boolean).join(" · ");
@@ -1084,7 +1086,7 @@ function WorkOrdersPage({
         <label>Client / donneur d'ordre<input value={customer} onChange={e=>setCustomer(e.target.value)} minLength={2} maxLength={180} required /></label>
         <label>Intitulé du dossier<input value={title} onChange={e=>setTitle(e.target.value)} minLength={2} maxLength={180} required /></label>
         {workflow.fields.map(field=><label key={field.key}>{field.label}{field.required?" *":""}<input
-          type={/^(date|promised_at|delivery|visit|fitting)$/.test(field.key)?"date":"text"}
+          type={/^(date|promised_at|delivery|visit)$/.test(field.key)?"date":"text"}
           value={fields[field.key]??""}
           onChange={e=>setFields(previous=>({...previous,[field.key]:e.target.value}))}
           maxLength={500}
