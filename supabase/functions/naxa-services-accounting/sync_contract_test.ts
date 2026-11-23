@@ -555,7 +555,7 @@ Deno.test("atomic sync accepts versioned status changes for every generic work-o
         org_id: ORG_A,
         site_id: SITE_A,
         from_status: "received",
-        to_status: "diagnostic",
+        to_status: aggregate === "service_order" ? "approved" : "diagnostic",
         expected_version: 1,
         reason: "Diagnostic commencé",
         metadata_json_delta: {},
