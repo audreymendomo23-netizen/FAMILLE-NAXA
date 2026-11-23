@@ -473,7 +473,7 @@ internal object ActivityWorkflows {
         byProfile[profile] ?: byProfile.getValue("autre")
 
     fun nextStatusCodes(profile: String?, status: String): List<String> =
-        get(profile).stage(status)?.next.orEmpty()
+        get(profile).stage(if (status == "open") "received" else status)?.next.orEmpty()
 
     fun canTransition(profile: String?, from: String, to: String): Boolean =
         to in nextStatusCodes(profile, from)
