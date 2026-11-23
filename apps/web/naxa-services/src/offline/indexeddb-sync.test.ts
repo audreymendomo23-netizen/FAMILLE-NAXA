@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  enqueue, listAppEvents, acquireDueBatch, applySyncPage, getSyncCursor, listSyncChanges,
+  enqueue, listAppEvents, listQueued, acquireDueBatch, applySyncPage, getSyncCursor, listSyncChanges,
 } from "@famille/offline-web";
 
 const APP = "naxa-services-web";
