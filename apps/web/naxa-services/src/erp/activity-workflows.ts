@@ -137,7 +137,7 @@ export const ACTIVITY_WORKFLOWS: Readonly<Record<ActivityProfile, ActivityWorkfl
       stage("received", "Demande / réservation reçue", "quote_pending", "cancelled"),
       stage("quote_pending", "Disponibilité / prix à confirmer", "waiting_customer", "approved", "cancelled"),
       stage("waiting_customer", "Confirmation client attendue", "approved", "cancelled"),
-      stage("approved", "Réservation confirmée", "waiting_parts", "ready"),
+      stage("approved", "Réservation confirmée", "waiting_parts"),
       stage("waiting_parts", "Réapprovisionnement attendu", "in_progress"),
       stage("in_progress", "Réception et préparation de la commande", "quality_check"),
       stage("quality_check", "Disponibilité vérifiée", "ready"),
