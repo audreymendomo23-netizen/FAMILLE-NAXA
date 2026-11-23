@@ -1471,7 +1471,7 @@ fun WorkOrdersContent(
     }
     val recordType = when (profile) {
         "reparation", "garage" -> "repair_order"
-        "domicile", "nettoyage", "photo_evenementiel" -> "service_order"
+        "coiffure", "beaute", "domicile", "nettoyage", "photo_evenementiel" -> "service_order"
         else -> "work_order"
     }
     val records by remember(siteId, recordType) {
@@ -1579,6 +1579,29 @@ fun WorkOrdersContent(
 
     fun transitions(status: String): List<Pair<String, String>> {
         val stages: Map<String, Set<String>> = when (profile) {
+            "coiffure", "beaute" -> mapOf(
+                "received" to setOf("approved", "cancelled"), "open" to setOf("approved", "cancelled"),
+                "approved" to setOf("in_progress"), "in_progress" to setOf("quality_check"),
+                "quality_check" to setOf("in_progress", "ready"), "ready" to setOf("delivered"),
+                "delivered" to setOf("closed")
+            )
+            "parfumerie" -> mapOf(
+                "received" to setOf("quote_pending", "cancelled"), "open" to setOf("quote_pending", "cancelled"),
+                "quote_pending" to setOf("waiting_customer", "approved", "cancelled"),
+                "waiting_customer" to setOf("approved", "cancelled"),
+                "approved" to setOf("waiting_parts", "in_progress"), "waiting_parts" to setOf("in_progress"),
+                "in_progress" to setOf("quality_check"), "quality_check" to setOf("ready"),
+                "ready" to setOf("delivered"), "delivered" to setOf("closed")
+            )
+            "reparation", "garage" -> mapOf(
+                "received" to setOf("diagnostic", "cancelled"), "open" to setOf("diagnostic", "cancelled"),
+                "diagnostic" to setOf("quote_pending", "awaiting_approval", "in_progress", "cancelled"),
+                "quote_pending" to setOf("waiting_customer", "awaiting_approval", "approved", "cancelled"),
+                "waiting_customer" to setOf("approved", "cancelled"), "awaiting_approval" to setOf("approved", "cancelled"),
+                "approved" to setOf("waiting_parts", "in_progress"), "waiting_parts" to setOf("in_progress"),
+                "in_progress" to setOf("quality_check"), "quality_check" to setOf("in_progress", "ready"),
+                "ready" to setOf("delivered"), "delivered" to setOf("closed")
+            )
             "couture" -> mapOf(
                 "received" to setOf("measurement", "diagnostic"), "open" to setOf("measurement", "diagnostic"),
                 "measurement" to setOf("quote_pending"), "diagnostic" to setOf("quote_pending"),
@@ -1599,7 +1622,7 @@ fun WorkOrdersContent(
             "impression" -> mapOf(
                 "received" to setOf("quote_pending", "proof_ready"), "open" to setOf("quote_pending", "proof_ready"),
                 "quote_pending" to setOf("waiting_customer", "proof_ready"),
-                "waiting_customer" to setOf("approved"), "proof_ready" to setOf("approved", "in_progress"),
+                "waiting_customer" to setOf("approved"), "proof_ready" to setOf("approved", "production"),
                 "approved" to setOf("production"), "production" to setOf("quality_check"),
                 "quality_check" to setOf("production", "ready"), "ready" to setOf("delivered"), "delivered" to setOf("closed")
             )
