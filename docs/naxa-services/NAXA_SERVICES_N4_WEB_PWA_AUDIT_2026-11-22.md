@@ -89,3 +89,18 @@ La parfumerie est un commerce de détail : ses ventes doivent transiter par le P
 **Verdict N4 maintenu : PARTIEL — non clôturé.** N4-C est engagé pour les profils multisecteurs ; N4-D doit démontrer les builds, tests, projections et échanges réels A↔B. Le SQL v4 reste un brouillon ; aucun environnement hébergé n'a été modifié.
 
 **Garde-fous :** aucune fusion, aucun commit sur `main`, aucun déploiement et aucune migration sur le Supabase historique NAXA/pharmacie.
+
+
+### Addendum — corrections après exécution des premiers jobs — 23 novembre 2026
+
+Le run #511 `45154162146` (SHA `74bcd43`) a fourni les premières erreurs reproductibles :
+- Vitest : la couture ne contenait pas l'étape `measurement` attendue par le test de parité ; étape ajoutée dans le registre Web.
+- Deno : les deux nouvelles fixtures create/status-change avaient des UUID invalides ; leurs derniers groupes ont été corrigés.
+- vérification N1 : `OBX-050` était décalé de 34 lignes dans le manifeste ; la référence est actualisée à la ligne source 4053.
+- Android : le contrôle d'entrée impose maintenant les données principales du métier et n'écrit plus l'acompte demandé comme somme payée.
+
+Commits correctifs : `91065774967701da2c58f01e0c67dc34dbb5f7e3`, `a609a62059a9cce034abcf871721bb8c19135cec`, `aba1fc497976ef9b7eafb975be66e65e26003316`.
+
+Le run #511 a donc **échoué** sur les trois jobs ci-dessus avant les corrections ; ses autres jobs ont été annulés par les pushes successifs. Le run #512 `45154704480` (SHA `a609a62`) était encore `in_progress` mais n'exposait pas de journaux complets au dernier contrôle. Le run #513 `45154731735` (SHA `aba1fc4`) était `pending` sans jobs visibles. Il n'existe donc pas encore de preuve CI complète et verte pour ces corrections.
+
+**Verdict N4 inchangé : PARTIEL — non clôturé.** La matrice multisecteur et les corrections de sources sont enregistrées ; la compilation, les tests, la recette Playwright, l'APK Android et les tests PostgreSQL doivent encore sortir avec une conclusion explicite sur un SHA unique. Aucun déploiement, aucune migration hébergée, aucune fusion et aucun changement de `main`.
