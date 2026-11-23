@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>NAXA Services IndexedDB browser harness</title></head>
+<body>
+  <main><h1>IndexedDB queue test harness</h1><p id="ready">Loading</p></main>
+  <script type="module">
+    import { enqueue, listAppEvents, listQueued, acquireDueBatch, applySyncPage, getSyncCursor, listSyncChanges } from "@famille/offline-web";
+
+    window.__naxaQueueHarness = Object.freeze({
+      enqueue: (item) => enqueue(item),
+      listAppEvents: (appId, deviceId, organizationId) => listAppEvents(appId, deviceId, organizationId),
+      listQueued: (appId, deviceId, organizationId) => listQueued(appId, deviceId, organizationId),
+      acquire: (appId, deviceId, organizationId) => acquireDueBatch(10, Date.now(), 60_000, appId, deviceId, organizationId),
+      applyPage: (appId, deviceId, page) => applySyncPage(appId, deviceId, page),
+      cursor: (appId, deviceId) => getSyncCursor(appId, deviceId),
+      changes: (appId, deviceId) => listSyncChanges(appId, deviceId),
+    });
+    document.querySelector("#ready").textContent = "ready";
+  </script>
+</body>
+</html>
