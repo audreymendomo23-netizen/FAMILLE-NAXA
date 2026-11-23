@@ -3940,7 +3940,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 "open" to setOf("quote_pending", "proof_ready", "cancelled"),
                 "quote_pending" to setOf("waiting_customer", "proof_ready", "cancelled"),
                 "waiting_customer" to setOf("approved", "cancelled"),
-                "proof_ready" to setOf("approved", "in_progress", "cancelled"),
+                "proof_ready" to setOf("approved", "production", "cancelled"),
                 "approved" to setOf("production"),
                 "production" to setOf("quality_check"),
                 "quality_check" to setOf("production", "ready"),
