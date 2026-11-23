@@ -41,7 +41,7 @@ internal data class ActivityWorkflowDefinition(
 ) {
     fun stage(code: String): ActivityStageDefinition? = stages.firstOrNull { it.code == code }
     fun nextStages(code: String): List<ActivityStageDefinition> =
-        stage(code)?.next.orEmpty().mapNotNull(::stage)
+        stage(if (code == "open") "received" else code)?.next.orEmpty().mapNotNull(::stage)
     fun terminalStatus(): String = if (profile == "pressing") "picked_up" else "closed"
 }
 
