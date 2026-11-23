@@ -183,6 +183,7 @@ function App() {
         const detail=typeof command.display_detail==="string"?command.display_detail:"";
         const state=item.state==="acknowledged"?"Confirmé par le serveur":item.state==="rejected"?"Rejeté — vérifier le dossier":item.state==="conflict"?"Conflit — résolution nécessaire":"En attente de synchronisation";
         const rows=next[moduleId]??[],existing=rows.findIndex(entry=>entry.id===id);
+        const existingEntry=existing>=0?rows[existing]:undefined;
         const payload = command.payload && typeof command.payload === "object" ? command.payload as Record<string,unknown> : {};
         const metadata = payload.metadata_json && typeof payload.metadata_json === "object" && !Array.isArray(payload.metadata_json)
           ? payload.metadata_json as Record<string,unknown> : {};
@@ -190,13 +191,23 @@ function App() {
           ? metadata.fields as Record<string,unknown> : {};
         const extraFields = Object.fromEntries(Object.entries(rawFields).filter((entry): entry is [string,string] => typeof entry[1] === "string"));
         const rawProfile = metadata.activity ?? metadata.activity_profile;
+        const serverRecord = payload.server_result && typeof payload.server_result === "object" && !Array.isArray(payload.server_result)
+          ? payload.server_result as Record<string,unknown> : {};
+        const hasLocalStatus = typeof payload.to_status === "string" || typeof payload.status === "string";
         const record:Entry={
+          ...existingEntry,
           id,title,detail,state,createdAt:new Date(item.createdAt).toLocaleString("fr-FR"),
-          recordType: command.aggregate_type === "work_order" || command.aggregate_type === "repair_order" || command.aggregate_type === "service_order" ? command.aggregate_type : undefined,
-          status: typeof payload.status === "string" ? payload.status : typeof payload.to_status === "string" ? payload.to_status : undefined,
-          siteId: typeof command.site_id === "string" ? command.site_id : undefined,
-          activityProfile: typeof rawProfile === "string" ? getActivityWorkflow(rawProfile).profile : undefined,
-          metadata: extraFields,
+          recordType: command.aggregate_type === "work_order" || command.aggregate_type === "repair_order" || command.aggregate_type === "service_order"
+            ? command.aggregate_type : existingEntry?.recordType,
+          status: typeof serverRecord.status === "string" ? serverRecord.status
+            : (item.state === "acknowledged" && existingEntry?.status && !hasLocalStatus) ? existingEntry.status
+            : typeof payload.to_status === "string" ? payload.to_status
+            : typeof payload.status === "string" ? payload.status
+            : existingEntry?.status,
+          revision: typeof serverRecord.revision === "number" ? serverRecord.revision : existingEntry?.revision,
+          siteId: typeof command.site_id === "string" ? command.site_id : existingEntry?.siteId,
+          activityProfile: typeof rawProfile === "string" ? getActivityWorkflow(rawProfile).profile : existingEntry?.activityProfile,
+          metadata: Object.keys(extraFields).length ? extraFields : existingEntry?.metadata,
         };
         next[moduleId]=existing>=0?rows.map((entry,index)=>index===existing?record:entry):[...rows,record];
       }
