@@ -146,7 +146,7 @@ function App() {
   }
 
   async function hydrateWebRecords(activeSession: WebAuthSession) {
-    const [allEvents,pending]=await Promise.all([listAppEvents(OFFLINE_APP_ID,activeSession.deviceId),listQueued(OFFLINE_APP_ID, activeSession.deviceId)]);
+    const [allEvents,pending]=await Promise.all([listAppEvents(OFFLINE_APP_ID,activeSession.deviceId,activeSession.account.organization_id),listQueued(OFFLINE_APP_ID,activeSession.deviceId,activeSession.account.organization_id)]);
     setPendingSyncCount(pending.length);
     setEntries(previous=>{
       const next={...previous};
@@ -413,7 +413,7 @@ function App() {
   async function syncWebOutbox(activeSession: WebAuthSession) {
     if (!accountingEndpoint || !anonKey) throw new Error("Le connecteur de synchronisation Web n’est pas configuré.");
     const freshSession = await ensureFreshSession(activeSession);
-    const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID, freshSession.deviceId);
+    const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID, freshSession.deviceId, freshSession.account.organization_id);
     let acknowledged=0,retrying=0,rejected=0;
     for (const queued of batch) {
       let status:number|null=null,errorCode="NETWORK_UNAVAILABLE",command:Record<string,unknown>={};
@@ -436,7 +436,7 @@ function App() {
         if(willRetry)retrying++;else rejected++;
       }
     }
-    const remaining=await listQueued(OFFLINE_APP_ID,freshSession.deviceId);setPendingSyncCount(remaining.length);
+    const remaining=await listQueued(OFFLINE_APP_ID,freshSession.deviceId,freshSession.account.organization_id);setPendingSyncCount(remaining.length);
     await syncWebPullChanges(freshSession).catch(()=>undefined);
     if(acknowledged)setAuthMessage(acknowledged+" opération(s) confirmée(s) par le journal serveur.");
     else if(retrying)setAuthMessage(retrying+" opération(s) en attente de reprise réseau.");
@@ -490,7 +490,7 @@ function App() {
       const inventoryItemId = crypto.randomUUID();
       const eventId = crypto.randomUUID();
       const payload={module_id:"stock",display_title:item.name,display_detail:item.sku||item.unit,action_code:"inventory_item.created",aggregate_type:"inventory_item",aggregate_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,payload:{inventory_item_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,sku:item.sku,name:item.name,unit:item.unit,reorder_level:item.reorderLevel,supplier_whatsapp:item.supplierWhatsApp}};
-      await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:activeSession.deviceId,payload:JSON.stringify(payload),state:"queued",createdAt:Date.now()});
+      await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:activeSession.deviceId,organizationId:activeSession.account.organization_id,payload:JSON.stringify(payload),state:"queued",createdAt:Date.now()});
       setEntries((previous) => ({
         ...previous,
         stock: [...(previous.stock ?? []), {
@@ -523,7 +523,7 @@ function App() {
       aggregate_id: aggregateId, org_id: session.account.organization_id, site_id: siteId,
       payload: { ...payload, org_id: session.account.organization_id, site_id: siteId },
     };
-    await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:session.deviceId,payload:JSON.stringify(command),state:"queued",createdAt:Date.now()});
+    await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:session.deviceId,organizationId:session.account.organization_id,payload:JSON.stringify(command),state:"queued",createdAt:Date.now()});
     setEntries(previous => ({...previous,[moduleId]:[...(previous[moduleId]??[]),{
       id:aggregateId,title,detail,state:navigator.onLine?"En attente de confirmation serveur":"En attente de connexion",
       createdAt:new Date().toLocaleString("fr-FR"),
