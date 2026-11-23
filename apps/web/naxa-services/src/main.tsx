@@ -115,10 +115,22 @@ function App() {
     return Array.from(groups.entries());
   }, []);
 
-  const env = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
+  const env = (import.meta as unknown as {
+    env?: {
+      PROD?: boolean;
+      VITE_NAXA_SERVICES_AUTH_URL?: string;
+      VITE_NAXA_SERVICES_ACCOUNTING_URL?: string;
+      VITE_SUPABASE_ANON_KEY?: string;
+    };
+  }).env ?? {};
   const authEndpoint = env.VITE_NAXA_SERVICES_AUTH_URL ?? "";
   const accountingEndpoint = env.VITE_NAXA_SERVICES_ACCOUNTING_URL ?? authEndpoint.replace(/naxa-services-auth(?=\/?$)/, "naxa-services-accounting");
   const anonKey = env.VITE_SUPABASE_ANON_KEY ?? "";
+
+  useEffect(() => {
+    if (!env.PROD || !("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => undefined);
+  }, []);
 
   function webDevicePayload() {
     return {
