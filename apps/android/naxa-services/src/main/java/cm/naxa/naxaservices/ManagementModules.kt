@@ -1469,7 +1469,7 @@ fun WorkOrdersContent(
     var workstationId by rememberSaveable { mutableStateOf("") }
     var customer by rememberSaveable { mutableStateOf("") }
     var title by rememberSaveable { mutableStateOf("") }
-    var fieldValues = remember(profile, session.account.memberId) { mutableStateMapOf<String, String>() }
+    val fieldValues = remember(profile, session.account.memberId) { mutableStateMapOf<String, String>() }
     var estimate by rememberSaveable { mutableStateOf("0") }
     var requestedDeposit by rememberSaveable { mutableStateOf("0") }
     var dueDays by rememberSaveable { mutableStateOf("3") }
@@ -1648,7 +1648,7 @@ fun WorkOrdersContent(
                             val delay = dueDays.toLongOrNull()
                             val fieldErrors = ActivityWorkflows.validate(profile, fieldValues)
                             if (customer.trim().length < 2 || title.trim().length < 2 || amount == null || amount < 0L ||
-                                deposit < 0L || (amount > 0L && deposit > amount) || delay == null || delay !in 0L..365L ||
+                                deposit < 0L || deposit > amount || delay == null || delay !in 0L..365L ||
                                 fieldErrors.isNotEmpty()
                             ) {
                                 val missingLabels = fieldErrors.mapNotNull { key -> workflow.fields.firstOrNull { it.key == key }?.let(::labelForField) }
@@ -1724,7 +1724,7 @@ fun WorkOrdersContent(
                         },
                         enabled = !busy && siteId.isNotBlank() && customer.trim().length >= 2 &&
                             title.trim().length >= 2 && (estimate.toLongOrNull() ?: -1L) >= 0L &&
-                            requestedDeposit.toLongOrNull()?.let { it >= 0L && (estimate.toLongOrNull()?.let { amount -> amount == 0L || it <= amount } == true) } == true &&
+                            requestedDeposit.toLongOrNull()?.let { it >= 0L && estimate.toLongOrNull()?.let { amount -> it <= amount } == true } == true &&
                             dueDays.toLongOrNull()?.let { it in 0L..365L } == true && requiredErrors.isEmpty(),
                         modifier = Modifier.fillMaxWidth()
                     ) {
