@@ -1,3 +1,4 @@
+import { normalizeActivityProfile, type ActivityProfile } from "../erp/activity-workflows";
 export type WebBusinessMode = "solo" | "single_site_multi_workstation" | "multi_site_network";
 export type WebLocale = "fr" | "en" | "ff-CM";
 
@@ -13,6 +14,7 @@ export interface WebAuthAccount {
   member_id: string;
   display_name: string;
   role_code: string;
+  activity_profile: ActivityProfile;
   organization_id: string;
   organization_name: string;
   business_mode: WebBusinessMode;
@@ -96,6 +98,7 @@ export function parseWebSession(value: unknown, now = Date.now()): WebAuthSessio
       member_id: rawAccount.member_id,
       display_name: displayName,
       role_code: typeof rawAccount.role_code === "string" ? rawAccount.role_code : "",
+      activity_profile: normalizeActivityProfile(rawAccount.activity_profile),
       organization_id: rawAccount.organization_id,
       organization_name: typeof rawAccount.organization_name === "string" ? rawAccount.organization_name : "",
       business_mode: BUSINESS_MODES.has(requestedMode as WebBusinessMode) ? requestedMode as WebBusinessMode : "solo",
