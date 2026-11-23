@@ -112,4 +112,49 @@ describe("NAXA Services sector workflows", () => {
     expect(getActivityWorkflow("photo_evenementiel").fields.find((field) => field.key === "date")?.kind).toBe("date");
   });
 
+
+  it("keeps every activity lifecycle complete, reachable and free of dangling transitions", () => {
+    for (const workflow of Object.values(ACTIVITY_WORKFLOWS)) {
+      const stageCodes = workflow.stages.map((stage) => stage.code);
+      expect(new Set(stageCodes).size, workflow.profile + " duplicate stage").toBe(stageCodes.length);
+      for (const stage of workflow.stages) {
+        expect(new Set(stage.next).size, workflow.profile + " duplicate next stage in " + stage.code).toBe(stage.next.length);
+        for (const next of stage.next) {
+          expect(stageCodes, workflow.profile + " dangling transition " + stage.code + " -> " + next).toContain(next);
+        }
+      }
+
+      const reachable = new Set<string>(["received"]);
+      const queue = ["received"];
+      while (queue.length) {
+        const code = queue.shift()!;
+        const stage = workflow.stages.find((item) => item.code === code);
+        for (const next of stage?.next ?? []) {
+          if (!reachable.has(next)) {
+            reachable.add(next);
+            queue.push(next);
+          }
+        }
+      }
+      expect([...reachable].sort(), workflow.profile + " reachable lifecycle").toEqual([...stageCodes].sort());
+
+      const terminal = workflow.profile === "pressing" ? "picked_up" : "closed";
+      const terminalStage = workflow.stages.find((stage) => stage.code === terminal);
+      expect(terminalStage, workflow.profile + " terminal stage missing").toBeTruthy();
+      expect(terminalStage!.next, workflow.profile + " terminal stage must not transition further").toEqual([]);
+      expect(reachable.has(terminal), workflow.profile + " completion must be reachable").toBe(true);
+
+      const fieldKeys = workflow.fields.map((field) => field.key);
+      expect(new Set(fieldKeys).size, workflow.profile + " duplicate field key").toBe(fieldKeys.length);
+      for (const field of workflow.fields) {
+        if (field.kind === "select") {
+          const values = (field.options ?? []).map((option) => option.value);
+          expect(new Set(values).size, workflow.profile + " duplicate option in " + field.key).toBe(values.length);
+        }
+      }
+      expect(validateActivityFields(workflow.profile, {}), workflow.profile + " required field coverage")
+        .toEqual(workflow.fields.filter((field) => field.required).map((field) => field.key));
+    }
+  });
+
 });
