@@ -21,7 +21,7 @@ async function json(route: Route, value: unknown, status = 200) {
   await route.fulfill({ status, headers: CORS_HEADERS, body: JSON.stringify(value) });
 }
 
-function authSession(organizationId: string) {
+function authSession(organizationId: string, activityProfile = "autre") {
   const other = organizationId === ORG_B;
   return {
     device_id: DEVICE_ID,
@@ -34,6 +34,7 @@ function authSession(organizationId: string) {
       member_id: other ? MEMBER_B : MEMBER_A,
       display_name: other ? "Membre organisation B" : "Membre organisation A",
       role_code: "site_manager",
+      activity_profile: activityProfile,
       organization_id: organizationId,
       organization_name: other ? "Organisation B" : "Organisation A",
       business_mode: "solo",
@@ -57,7 +58,9 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
     const request = route.request().postDataJSON() as Record<string, unknown>;
     if (request.action === "login") {
       const organizationId = request.identifier === "NS-OTHER" ? ORG_B : ORG_A;
-      return json(route, authSession(organizationId));
+      const identifier = typeof request.identifier === "string" ? request.identifier : "";
+      const activityProfile = identifier.startsWith("NS-ACT-") ? identifier.slice("NS-ACT-".length).toLowerCase() : "autre";
+      return json(route, authSession(organizationId, activityProfile));
     }
     if (request.action === "logout") return json(route, { ok: true });
     if (request.action === "refresh") return json(route, authSession(ORG_A));
@@ -81,10 +84,16 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
     }
     if (request.action === "apply_sync_event") {
       const event = request.event as Record<string, unknown>;
+      const payload = event.payload as Record<string, unknown>;
       appliedEvents.push(event);
+      const revision = typeof payload.expected_version === "number" ? payload.expected_version + 1 : 1;
+      const status = typeof payload.to_status === "string" ? payload.to_status : typeof payload.status === "string" ? payload.status : "received";
       return json(route, {
         ok: true,
-        result: { event_id: event.event_id, status: "applied", recorded_at: "2026-11-23T09:00:00.000Z" },
+        result: {
+          event_id: event.event_id, status: "applied", recorded_at: "2026-11-23T09:00:00.000Z",
+          result: { record_id: event.aggregate_id, status, revision },
+        },
       });
     }
     if (request.action === "performance") {
@@ -110,6 +119,74 @@ async function createCustomer(page: Page, name: string) {
   await page.getByLabel("Téléphone facultatif").fill("+237699000111");
   await page.getByRole("button", { name: "Mettre en file & synchroniser" }).click();
 }
+
+
+const ACTIVITY_RECIPES = [
+  { profile: "coiffure", aggregate: "service_order", fields: { style: "tresses", technique: "Tresses protectrices, longueur épaules" } },
+  { profile: "couture", aggregate: "work_order", fields: { garment: "Robe sur mesure", measurements: "Poitrine 92 cm; taille 76 cm; hanches 100 cm" } },
+  { profile: "beaute", aggregate: "service_order", fields: { treatment: "soin_visage", protocol: "Nettoyage et hydratation non médicaux" } },
+  { profile: "parfumerie", aggregate: "work_order", fields: { product: "Eau de parfum test", format: "50ml" } },
+  { profile: "reparation", aggregate: "repair_order", fields: { device: "Ordinateur portable, série TEST-001", fault: "Ne démarre plus" } },
+  { profile: "menuiserie", aggregate: "work_order", fields: { piece: "Armoire 3 portes", dimensions: "180 × 120 × 55 cm, plan client version 1" } },
+  { profile: "garage", aggregate: "repair_order", fields: { vehicle: "Toyota Corolla, immatriculation TEST-237", fault: "Révision et bruit au freinage" } },
+  { profile: "nettoyage", aggregate: "service_order", fields: { site: "Bureau test, Bonamoussadi", tasks: "Sols, sanitaires, vitres et déchets" } },
+  { profile: "domicile", aggregate: "service_order", fields: { address: "Douala, Bonapriso, repère test", service: "Installation d'un ventilateur au domicile" } },
+  { profile: "impression", aggregate: "work_order", fields: { format: "A4", quantity: "250" } },
+  { profile: "photo_evenementiel", aggregate: "work_order", fields: { event: "Cérémonie familiale test", date: "2026-11-28", deliverables: "1 album photo et 150 fichiers numériques" } },
+  { profile: "autre", aggregate: "work_order", fields: { service: "Prestation personnalisée", specifications: "Description métier configurable à valider avec le client" } },
+] as const;
+
+test("Web: every non-Pressing activity creates its own server-backed métier dossier with typed required fields", async ({ context }) => {
+  const appliedEvents = await installBackend(context);
+  for (const [index, recipe] of ACTIVITY_RECIPES.entries()) {
+    const page = await context.newPage();
+    await signIn(page, "NS-ACT-" + recipe.profile.toUpperCase());
+    await page.getByRole("button", { name: "Dossiers métier" }).click();
+    await expect(page.getByText("PARCOURS MÉTIER · " + recipe.profile.toUpperCase(), { exact: true })).toBeVisible();
+    await page.getByLabel("Client / donneur d'ordre").fill("Client recette " + recipe.profile);
+    await page.getByLabel("Intitulé du dossier").fill("Dossier " + recipe.profile);
+    for (const [key, value] of Object.entries(recipe.fields)) {
+      const control = page.locator('[data-activity-field="' + key + '"]').locator("input,textarea,select");
+      const tag = await control.evaluate((element) => element.tagName.toLowerCase());
+      const type = await control.getAttribute("type");
+      if (tag === "select") await control.selectOption(value);
+      else await control.fill(value);
+      expect(type === "number" || tag === "select" || tag === "textarea" || type === "date" || type === "text").toBe(true);
+    }
+    await page.getByRole("button", { name: "Créer et synchroniser le dossier" }).click();
+    await expect.poll(() => appliedEvents.length).toBe(index + 1);
+    const event = appliedEvents[index];
+    expect(event.aggregate_type).toBe(recipe.aggregate);
+    expect(event.action_code).toBe(recipe.aggregate + ".created");
+    expect((event.payload as Record<string, unknown>).status).toBe("received");
+    expect(((event.payload as Record<string, unknown>).metadata_json as Record<string, unknown>).activity).toBe(recipe.profile);
+    await page.close();
+  }
+});
+
+test("Web: Pressing keeps its dedicated ticket journey and waits for a server receipt before status transition", async ({ context }) => {
+  const appliedEvents = await installBackend(context);
+  const page = await context.newPage();
+  await signIn(page, "NS-ACT-PRESSING");
+  await page.getByRole("button", { name: "Pressing", exact: true }).click();
+  await page.getByRole("button", { name: "Créer un ticket" }).click();
+  await page.getByLabel("Nom du client").fill("Client pressing test");
+  await page.getByLabel("Téléphone client").fill("+237699000111");
+  await page.getByLabel("Articles déposés").fill("2 chemises — lavage et repassage; 1 costume — nettoyage à sec");
+  await page.getByLabel("Montant total FCFA").fill("3500");
+  await page.getByLabel("Date promise").fill("2026-11-25T17:00");
+  await page.getByRole("button", { name: "Mettre en file & synchroniser" }).click();
+  await expect.poll(() => appliedEvents.length).toBe(1);
+  expect(appliedEvents[0].action_code).toBe("pressing_order.created");
+  expect(appliedEvents[0].aggregate_type).toBe("pressing_order");
+  await expect(page.getByText("Client pressing test")).toBeVisible();
+  await page.getByLabel("Motif du changement d'étape").fill("Tri et traitement démarrés");
+  await page.getByRole("button", { name: "Passer à En cours" }).click();
+  await expect.poll(() => appliedEvents.length).toBe(2);
+  expect(appliedEvents[1].action_code).toBe("pressing_order.status_changed:in_progress");
+  expect((appliedEvents[1].payload as Record<string, unknown>).expected_version).toBe(1);
+  await page.close();
+});
 
 test("Web: offline outbox survives tab closure, keeps tenant data isolated and converges after server receipt", async ({ context }) => {
   const incoming = [{
