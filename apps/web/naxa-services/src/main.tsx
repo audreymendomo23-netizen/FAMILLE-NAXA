@@ -541,7 +541,9 @@ function App() {
         const record:Entry={
           id:change.aggregate_id,title,detail,state:"Reçu du serveur · autre appareil",createdAt:new Date(change.recorded_at).toLocaleString("fr-FR"),
           recordType: change.aggregate_type === "work_order" || change.aggregate_type === "repair_order" || change.aggregate_type === "service_order" || change.aggregate_type === "pressing_order" ? change.aggregate_type : undefined,
-          status: typeof payload.to_status === "string" ? payload.to_status : typeof payload.status === "string" ? payload.status : undefined,
+          status: typeof serverRecord.status === "string" ? serverRecord.status
+            : typeof payload.to_status === "string" ? payload.to_status
+            : typeof payload.status === "string" ? payload.status : undefined,
           revision: typeof serverRecord.revision === "number" ? serverRecord.revision : undefined,
           siteId: change.site_id ?? undefined,
           activityProfile: typeof profileValue === "string" ? getActivityWorkflow(profileValue).profile
@@ -1103,7 +1105,10 @@ function PressingPage({
           {canPreviewEdit&&<button className="btn secondary" onClick={()=>onAdvance(entry.id)} disabled={status==="picked_up"}>Avancer l'aperçu</button>}
           {authenticated&&next&&entry.recordType==="pressing_order"&&entry.siteId&&entry.revision?<div className="activity-transition">
             <label>Motif du changement d'étape<input value={reasons[entry.id]??""} onChange={e=>setReasons(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500}/></label>
-            <button className="btn secondary" disabled={busy||(reasons[entry.id]??"").trim().length<3} onClick={()=>void onTransition(entry,next,reasons[entry.id]??"").then(()=>setReasons(previous=>({...previous,[entry.id]:""})).catch(cause=>setError(cause instanceof Error?cause.message:"Transition refusée.")))}>{busy?"Envoi…":"Passer à "+statusLabels[next]}</button>
+            <button className="btn secondary" disabled={busy||(reasons[entry.id]??"").trim().length<3} onClick={()=>void onTransition(entry,next,reasons[entry.id]??"").then(
+              ()=>setReasons(previous=>({...previous,[entry.id]:""})),
+              cause=>setError(cause instanceof Error?cause.message:"Transition refusée.")
+            )}>{busy?"Envoi…":"Passer à "+statusLabels[next]}</button>
           </div>:authenticated&&next&&<p className="muted">En attente du reçu de création et de sa révision serveur avant d'autoriser l'étape suivante.</p>}
         </div>;
       }):<Empty text="Aucun ticket disponible dans le périmètre chargé."/>}
