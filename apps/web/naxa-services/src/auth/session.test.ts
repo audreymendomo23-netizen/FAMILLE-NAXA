@@ -13,7 +13,16 @@ const valid = {
     organization_name: "NAXA Services CI",
     display_name: "Test member",
     role_code: "site_manager",
+    business_mode: "multi_site_network",
+    default_locale: "en",
     active_site_ids: ["30000000-0000-4000-8000-000000000001"],
+    active_sites: [{
+      id: "30000000-0000-4000-8000-000000000001",
+      code: "DOU-01",
+      name: "Douala principal",
+      address_label: "Bonanjo",
+      phone_contact: "+237600000000",
+    }],
   },
 };
 
@@ -25,6 +34,10 @@ describe("Web authentication session", () => {
     expect(session.refreshToken).toBe(valid.refresh_token);
     expect(session.expiresAt).toBe(1_801_000);
     expect(session.account.active_site_ids).toHaveLength(1);
+    expect(session.account.active_sites[0].name).toBe("Douala principal");
+    expect(session.account.business_mode).toBe("multi_site_network");
+    expect(session.account.default_locale).toBe("en");
+    expect(Object.isFrozen(session.account.active_sites)).toBe(true);
   });
 
   it("rejects missing tokens, account scope and malformed site IDs", () => {
@@ -32,6 +45,10 @@ describe("Web authentication session", () => {
     expect(() => parseWebSession({ ...valid, refresh_token: "" })).toThrow();
     expect(() => parseWebSession({ ...valid, account: { ...valid.account, organization_id: "bad" } })).toThrow();
     expect(() => parseWebSession({ ...valid, account: { ...valid.account, active_site_ids: ["bad"] } })).toThrow();
+    expect(() => parseWebSession({
+      ...valid,
+      account: { ...valid.account, active_sites: [{ ...valid.account.active_sites[0], id: "40000000-0000-4000-8000-000000000001" }] },
+    })).toThrow(/WEB_AUTH_SITE_SCOPE_MISMATCH/);
   });
 
   it("bounds untrusted expiry to one minute minimum and one day maximum", () => {
