@@ -462,10 +462,17 @@ test("Web N4-C: cash register, cash session, cash sale and close require server 
 });
 
 test("Web N4-C: staff presence transitions follow the server-controlled sequence", async ({ context }) => {
-  const appliedEvents = await installBackend(context);
+  const appliedEvents = await installBackend(context, [{
+    cursor: 1, event_id: "colleague-arrival", source_device_id: REMOTE_DEVICE_ID,
+    origin_site_id: SITE_ID, site_id: SITE_ID, visible_site_ids: [SITE_ID], workstation_id: null,
+    aggregate_type: "staff_clock_in", aggregate_id: "colleague-clock", aggregate_version: 1,
+    action_code: "staff_clock_in.recorded", recorded_at: "2026-11-25T11:00:00.000Z",
+    payload: { org_id: ORG_A, site_id: SITE_ID, staff_member_id: MEMBER_B, staff_name_snapshot: "Collègue de recette" },
+  }]);
   const page = await context.newPage();
   await signIn(page);
   await page.locator(".side-nav button.nav-item").filter({ hasText: "Équipe & commissions" }).click();
+  await expect(page.getByText("Collègue de recette", { exact: true })).toBeVisible();
   const actions = [
     ["Pointer mon arrivée", "staff_clock_in.recorded"],
     ["Commencer une pause", "staff_break_start.recorded"],
@@ -482,4 +489,30 @@ test("Web N4-C: staff presence transitions follow the server-controlled sequence
     await expect(page.locator(".module-main-card .activity-transition-buttons").first().getByRole("button", { name: nextActionLabel })).toBeEnabled();
   }
   await page.close();
+});
+
+test("Web: a peer transition preserves the original job and its activity fields", async ({ context }) => {
+  const job = "a5000000-0000-4000-8000-000000000077";
+  const change = {
+    source_device_id: REMOTE_DEVICE_ID, origin_site_id: SITE_ID, site_id: SITE_ID,
+    visible_site_ids: [SITE_ID], workstation_id: null, aggregate_type: "repair_order",
+    aggregate_id: job, recorded_at: "2026-11-25T10:00:00.000Z",
+  };
+  const scope = { org_id: ORG_A, site_id: SITE_ID, record_id: job };
+  await installBackend(context, [
+    { ...change, cursor: 1, event_id: "peer-create", action_code: "repair_order.created", aggregate_version: 1,
+      payload: { ...scope, title: "Entretien véhicule atelier", counterparty: "Client de recette",
+        metadata_json: { activity_profile: "garage", fields: { vehicle: "Véhicule de recette" } },
+        server_result: { status: "received", revision: 1 } } },
+    { ...change, cursor: 2, event_id: "peer-transition", action_code: "repair_order.status_changed", aggregate_version: 2,
+      payload: { ...scope, from_status: "received", to_status: "diagnostic", server_result: { status: "diagnostic", revision: 2 } } },
+  ]);
+  const page = await context.newPage();
+  await signIn(page, "NS-ACT-GARAGE");
+  await page.getByRole("button", { name: "Dossiers métier" }).click();
+  const record = page.locator(".activity-record").filter({ hasText: "Entretien véhicule atelier" });
+  await expect(record).toContainText("révision 2");
+  await expect(record).toContainText("Véhicule de recette");
+  await expect(record).toContainText("Client de recette");
+  await expect(record.locator(".status-tag")).toHaveText(ACTIVITY_WORKFLOWS.garage.stages.find(s => s.code === "diagnostic")!.label);
 });

@@ -206,6 +206,7 @@ function App() {
         const incomingRevision = typeof serverRecord.revision === "number" && Number.isSafeInteger(serverRecord.revision)
           ? serverRecord.revision : null;
         const existingRevision = typeof existingEntry?.revision === "number" ? existingEntry.revision : 0;
+        if (incomingRevision !== null && incomingRevision < existingRevision) continue;
         const receiptIsNewer = incomingRevision !== null && incomingRevision >= existingRevision;
         const record:Entry={
           ...existingEntry,
@@ -546,9 +547,10 @@ function App() {
         const moduleId=moduleForSyncAction(change.action_code);
         if(!moduleId)continue;
         const payload=change.payload;
-        const title=changeText(payload,["display_name","name","ticket_number","customer_name","customer_reference_or_name","subject","category","staff_name_snapshot","sku"],change.aggregate_id);
-        const detail=changeText(payload,["description","items_summary","service_reference_or_name","phone_contact","unit"],change.action_code);
         const rows=next[moduleId]??[],existing=rows.findIndex(entry=>entry.id===change.aggregate_id);
+        const prior=rows[existing];
+        const title=changeText(payload,["title","display_name","name","ticket_number","customer_name","customer_reference_or_name","subject","category","staff_name_snapshot","sku"],prior?.title??change.aggregate_id);
+        const detail=changeText(payload,["description","counterparty","items_summary","service_reference_or_name","phone_contact","unit"],prior?.detail??change.action_code);
         const metadata = payload.metadata_json && typeof payload.metadata_json === "object" && !Array.isArray(payload.metadata_json)
           ? payload.metadata_json as Record<string,unknown> : {};
         const rawFields = metadata.fields && typeof metadata.fields === "object" && !Array.isArray(metadata.fields)
@@ -557,20 +559,22 @@ function App() {
         const serverRecord = payload.server_result && typeof payload.server_result === "object" && !Array.isArray(payload.server_result)
           ? payload.server_result as Record<string,unknown> : {};
         const profileValue = metadata.activity ?? metadata.activity_profile;
+        const revision=typeof serverRecord.revision==="number"?serverRecord.revision:undefined;
+        if(revision!==undefined && prior?.revision!==undefined && revision<prior.revision)continue;
         const record:Entry={
           id:change.aggregate_id,title,detail,state:"Reçu du serveur · autre appareil",createdAt:new Date(change.recorded_at).toLocaleString("fr-FR"),
           recordType: change.aggregate_type === "work_order" || change.aggregate_type === "repair_order" || change.aggregate_type === "service_order" || change.aggregate_type === "pressing_order" ? change.aggregate_type : undefined,
           aggregateType: change.aggregate_type,
           actionCode: change.action_code,
-          data: { ...payload, server_result: serverRecord, server_recorded_at: change.recorded_at },
+          data: { ...prior?.data, ...payload, server_result: serverRecord, server_recorded_at: change.recorded_at },
           status: typeof serverRecord.status === "string" ? serverRecord.status
             : typeof payload.to_status === "string" ? payload.to_status
-            : typeof payload.status === "string" ? payload.status : undefined,
-          revision: typeof serverRecord.revision === "number" ? serverRecord.revision : undefined,
+            : typeof payload.status === "string" ? payload.status : prior?.status,
+          revision: revision ?? prior?.revision,
           siteId: change.site_id ?? undefined,
           activityProfile: typeof profileValue === "string" ? getActivityWorkflow(profileValue).profile
-            : change.aggregate_type === "pressing_order" ? "pressing" : undefined,
-          metadata: extraFields,
+            : change.aggregate_type === "pressing_order" ? "pressing" : prior?.activityProfile,
+          metadata: { ...prior?.metadata, ...extraFields },
         };
         next[moduleId]=existing>=0?rows.map((entry,index)=>index===existing?record:entry):[...rows,record];
       }
@@ -1106,7 +1110,7 @@ function App() {
               busy={busy} onCreateSupplier={createSupplier} onMovement={createInventoryMovement}
               onPurchase={createSupplierPurchase} onReceive={receiveSupplierPurchase} onPay={paySupplier}
             /> :
-            active === "team" ? <TeamOperationsPage entries={(entries.team ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} /> :
+            active === "team" ? <TeamOperationsPage memberId={authSession?.account.member_id} entries={(entries.team ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} /> :
             active === "customers" ? <CustomerFollowupsPage entries={(entries.customers ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onCreate={createCustomerFollowup} /> :
             <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} authenticated={Boolean(authSession && !preview)} />}
 

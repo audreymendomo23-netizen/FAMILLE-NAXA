@@ -2185,6 +2185,7 @@ BEGIN
   END IF;
 END
 $activity_workflow_atomic_sync$;
+\ir naxa_services_activity_completion.sql
 RESET ROLE;
 
 UPDATE public.ns_devices SET revoked_at=now() WHERE id='80000000-0000-4000-8000-000000000001';

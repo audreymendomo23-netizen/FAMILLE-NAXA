@@ -691,3 +691,13 @@ Commits de correction : `9106577` (étape couture), `a609a62` (fixtures Deno), `
 Le run #510 (`45154138961`) a été annulé par les commits suivants. Le run #512 (`45154704480`, SHA `a609a62`) était encore `in_progress` au dernier contrôle et le run #513 (`45154731735`, SHA `aba1fc4`) était `pending` sans jobs exposés. Leurs résultats ne sont donc pas considérés comme PASS.
 
 **État de travail :** les causes précises identifiées ont des corrections commitées. Il reste à obtenir un run complet sur le dernier SHA de branche, vérifier le build Web/Android et corriger les erreurs qui resteraient. Ne pas reprendre un autre chantier N4 tant que les jobs métier n'ont pas fourni de preuve.
+
+### 22.6 — Recette des dossiers entre installations et pointage Web, 25 novembre 2026
+
+Le [run #586](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45581399138) a validé les 12 jobs du commit `1f972df`, après l’annulation du #585.
+
+La nouvelle recette PostgreSQL 17 exerce les douze activités à dossier générique avec deux sessions et deux identifiants d’installation. Le premier appareil crée le dossier et le mène à la livraison. Le second lit sa révision par le journal et le clôture. Le premier reçoit la clôture avec la même révision que la ligne métier. La suite SQL locale a réussi sur une base jetable. Le Pressing conserve sa recette transactionnelle dédiée jusqu’au retrait.
+
+Le Web conserve désormais le titre, le client et les champs sectoriels lors de la réception d’une transition et protège la révision affichée contre un reçu plus ancien. Le pointage personnel tient compte du membre connecté et de ses événements en attente. Les tests Chromium utilisent une API simulée. La recette PostgreSQL utilise les fonctions de synchronisation réelles. Une recette réunissant les deux applications sur le même backend reste à démontrer.
+
+La qualification des paiements marchands, des notifications FCM et de la distribution Android signée reste distincte. Une validation sur service hébergé exige un environnement NAXA SERVICES identifié et une autorisation de déploiement séparée.
