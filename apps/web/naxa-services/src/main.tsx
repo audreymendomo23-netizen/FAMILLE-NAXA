@@ -214,7 +214,7 @@ function App() {
             ? command.aggregate_type : existingEntry?.recordType,
           aggregateType: typeof command.aggregate_type === "string" ? command.aggregate_type : existingEntry?.aggregateType,
           actionCode: typeof command.action_code === "string" ? command.action_code : existingEntry?.actionCode,
-          data: { ...(existingEntry?.data ?? {}), ...payload, server_result: serverRecord },
+          data: { ...(existingEntry?.data ?? {}), ...payload, server_result: serverRecord, server_recorded_at: typeof storedReceipt.recorded_at === "string" ? storedReceipt.recorded_at : typeof payload.server_recorded_at === "string" ? payload.server_recorded_at : undefined },
           status: receiptIsNewer && typeof serverRecord.status === "string" ? serverRecord.status
             : typeof payload.to_status === "string" ? payload.to_status
             : typeof payload.status === "string" ? payload.status
@@ -505,7 +505,7 @@ function App() {
             aggregateType:typeof command.aggregate_type==="string"?command.aggregate_type:x.aggregateType,
             actionCode:typeof command.action_code==="string"?command.action_code:x.actionCode,
             siteId:typeof command.site_id==="string"?command.site_id:x.siteId,
-            data:{...(x.data??{}),...eventPayload,server_result:serverRecord},
+            data:{...(x.data??{}),...eventPayload,server_result:serverRecord,server_recorded_at:typeof receipt.recorded_at==="string"?receipt.recorded_at:x.data?.server_recorded_at},
             revision:typeof serverRecord.revision==="number"?serverRecord.revision:x.revision,
             status:typeof serverRecord.status==="string"?serverRecord.status:x.status,
           }:x)}));
@@ -562,7 +562,7 @@ function App() {
           recordType: change.aggregate_type === "work_order" || change.aggregate_type === "repair_order" || change.aggregate_type === "service_order" || change.aggregate_type === "pressing_order" ? change.aggregate_type : undefined,
           aggregateType: change.aggregate_type,
           actionCode: change.action_code,
-          data: { ...payload, server_result: serverRecord },
+          data: { ...payload, server_result: serverRecord, server_recorded_at: change.recorded_at },
           status: typeof serverRecord.status === "string" ? serverRecord.status
             : typeof payload.to_status === "string" ? payload.to_status
             : typeof payload.status === "string" ? payload.status : undefined,

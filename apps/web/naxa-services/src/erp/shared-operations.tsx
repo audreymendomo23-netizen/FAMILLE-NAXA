@@ -101,7 +101,16 @@ export function StockOperationsPage({entries,authenticated,canManage,busy,onCrea
 }
 
 export function TeamOperationsPage({entries,authenticated,busy,onTimeEvent}:{entries:SharedEntry[];authenticated:boolean;busy:boolean;onTimeEvent:(eventType:"staff_clock_in"|"staff_break_start"|"staff_break_end"|"staff_clock_out")=>Promise<void>;}){
- const [error,setError]=useState(""),[saving,setSaving]=useState(false),latest=[...entries].filter(e=>e.actionCode?.endsWith(".recorded")).sort((a,b)=>b.createdAt.localeCompare(a.createdAt))[0],latestType=latest?.actionCode?.replace(".recorded",""),canProceed=!latest||confirmed(latest);
+ const [error,setError]=useState(""),[saving,setSaving]=useState(false);
+ const timestamp=(value:unknown)=>{if(typeof value!=="string")return Number.NEGATIVE_INFINITY;const parsed=Date.parse(value);return Number.isFinite(parsed)?parsed:Number.NEGATIVE_INFINITY;};
+ const latest=entries.filter(e=>e.actionCode?.endsWith(".recorded")).reduce((current,candidate)=>{
+  if(!current)return candidate;
+  const currentServer=timestamp(current.data?.server_recorded_at),candidateServer=timestamp(candidate.data?.server_recorded_at);
+  if(candidateServer!==currentServer)return candidateServer>currentServer?candidate:current;
+  const currentEvent=timestamp(current.data?.occurred_at),candidateEvent=timestamp(candidate.data?.occurred_at);
+  return candidateEvent>=currentEvent?candidate:current;
+ },undefined as SharedEntry|undefined);
+ const latestType=latest?.actionCode?.replace(".recorded",""),canProceed=!latest||confirmed(latest);
  const allowed:Record<string,Array<"staff_clock_in"|"staff_break_start"|"staff_break_end"|"staff_clock_out">>={"":["staff_clock_in"],staff_clock_out:["staff_clock_in"],staff_clock_in:["staff_break_start","staff_clock_out"],staff_break_start:["staff_break_end"],staff_break_end:["staff_break_start","staff_clock_out"]};
  const labels={staff_clock_in:"Pointer mon arrivée",staff_break_start:"Commencer une pause",staff_break_end:"Terminer la pause",staff_clock_out:"Pointer mon départ"};
  async function run(type:"staff_clock_in"|"staff_break_start"|"staff_break_end"|"staff_clock_out"){setSaving(true);setError("");try{await onTimeEvent(type);}catch(cause){setError(cause instanceof Error?cause.message:"Pointage refusé par le serveur.");}finally{setSaving(false);}}

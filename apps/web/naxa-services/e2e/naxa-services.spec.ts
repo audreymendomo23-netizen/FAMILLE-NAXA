@@ -191,6 +191,8 @@ test("Web: every non-Pressing activity completes its own server-backed métier j
     expect(((event.payload as Record<string, unknown>).metadata_json as Record<string, unknown>).activity).toBe(recipe.profile);
     const workflow = ACTIVITY_WORKFLOWS[recipe.profile];
     const path = activityCompletionPath(recipe.profile);
+    const currentRecord = page.locator(".activity-record").filter({ hasText: "Dossier " + recipe.profile });
+    await expect(currentRecord.locator(".status-tag")).toHaveText(workflow.stages.find((stage) => stage.code === "received")!.label);
     let currentStatus = "received";
     let expectedRevision = 1;
     for (const nextStatus of path.slice(1)) {
@@ -207,6 +209,8 @@ test("Web: every non-Pressing activity completes its own server-backed métier j
       expect(transitionPayload.from_status).toBe(currentStatus);
       expect(transitionPayload.to_status).toBe(nextStatus);
       expect(transitionPayload.expected_version).toBe(expectedRevision);
+      await expect(currentRecord.locator(".status-tag")).toHaveText(nextStage!.label);
+      await expect(currentRecord.locator(".activity-transition input")).toHaveValue("");
       currentStatus = nextStatus;
       expectedRevision += 1;
     }
@@ -308,7 +312,7 @@ test("Web: offline outbox survives tab closure, keeps tenant data isolated and c
   await page.getByRole("button", { name: /Clients & fidélité/ }).first().click();
   await expect(page.getByText("Confirmé par le serveur")).toBeVisible();
   await expect(page.locator(".module-layout .module-main-card").last().locator(".record").filter({ hasText: "Client distant Android" })).toBeVisible();
-  await expect(page.getByText("Client privé organisation A")).toBeVisible();
+  await expect(page.locator(".module-layout .module-main-card").last().locator(".record").filter({ hasText: "Client privé organisation A" })).toBeVisible();
   await page.close();
 });
 
@@ -470,6 +474,8 @@ test("Web N4-C: staff presence transitions follow the server-controlled sequence
     await expect.poll(() => appliedEvents.length).toBe(index + 1);
     expect(appliedEvents[index].action_code).toBe(actionCode);
     expect(appliedEvents[index].aggregate_type).toBe(actionCode.replace(".recorded", ""));
+    const nextActionLabel = actions[(index + 1) % actions.length][0];
+    await expect(page.locator(".module-main-card .activity-transition-buttons").first().getByRole("button", { name: nextActionLabel })).toBeEnabled();
   }
   await page.close();
 });
