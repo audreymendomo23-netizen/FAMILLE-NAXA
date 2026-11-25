@@ -603,7 +603,7 @@ function App() {
         stock: [...(previous.stock ?? []), {
           id: inventoryItemId, title: item.name, detail: item.sku || item.unit,
           state: navigator.onLine ? "En attente de confirmation serveur" : "En attente de connexion",
-          createdAt: new Date().toLocaleString("fr-FR"),
+          createdAt: new Date().toLocaleString("fr-FR"), siteId,
         }],
       }));
       setDraftTitle(""); setDraftDetail(""); setDraftSku(""); setDraftUnit("pièce");
@@ -909,6 +909,7 @@ function App() {
       !Number.isSafeInteger(entry.revision)||(entry.revision??0)<1) {
       throw new Error("Le reçu serveur et la révision sont nécessaires avant le changement d'étape.");
     }
+    if(entry.siteId !== (activeSiteId || session.account.active_site_ids[0])) throw new Error("Sélectionne le point de vente du ticket avant sa transition.");
     if(!canTransitionActivity("pressing",entry.status,nextStatus)) throw new Error("Transition Pressing interdite.");
     if(reason.trim().length<3||reason.trim().length>500) throw new Error("Un motif de trois à 500 caractères est obligatoire.");
     await submitWebBusinessEvent(
@@ -924,6 +925,7 @@ function App() {
     if (!session || !entry.recordType || !entry.siteId || !entry.status || !Number.isSafeInteger(entry.revision) || (entry.revision ?? 0) < 1) {
       throw new Error("Le reçu serveur et sa révision sont nécessaires avant toute transition.");
     }
+    if(entry.siteId !== (activeSiteId || session.account.active_site_ids[0])) throw new Error("Sélectionne le point de vente du dossier avant sa transition.");
     const profile = entry.activityProfile ?? session.account.activity_profile;
     if (!canTransitionActivity(profile, entry.status, nextStatus)) throw new Error("Transition interdite pour ce parcours métier.");
     if (reason.trim().length < 3 || reason.trim().length > 500) throw new Error("Un motif de trois à 500 caractères est obligatoire.");
@@ -1033,7 +1035,7 @@ function App() {
       <aside className="sidebar">
         <div className="side-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
         <div className="workspace-label">ESPACE DE TRAVAIL</div>
-        <div className="site-select"><span className="site-dot" /> <div><strong>{siteName}</strong><small>{modeLabel(mode)}</small></div><span className="chevron">⌄</span></div>
+        <div className="site-select"><span className="site-dot" /> <div>{authSession && !preview ? <label>Point de vente actif<select aria-label="Point de vente actif" value={activeSiteId || authSession.account.active_site_ids[0] || ""} onChange={event => setActiveSiteId(event.target.value)} disabled={busy}>{authSession.account.active_sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label> : <strong>{siteName}</strong>}<small>{modeLabel(mode)}</small></div></div>
         <nav className="side-nav">
           {grouped.map(([group, groupModules]) => <div className="nav-group" key={group}>
             <div className="nav-heading">{group}</div>
@@ -1083,14 +1085,14 @@ function App() {
             active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={setPerformanceFromDate} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport().catch(error => setPerformanceError(error instanceof Error ? error.message : "Chargement du rapport impossible.")); }} authenticated={Boolean(authSession)} /> :
             active === "agenda" ? <AgendaOperationsPage entries={(entries.agenda ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTransition={transitionWebAppointment} onReschedule={rescheduleWebAppointment} /> :
             active === "pressing" ? <PressingPage
-              entries={entries.pressing ?? []} canPreviewEdit={preview}
+              entries={(entries.pressing ?? []).filter(entry => preview || entry.siteId === (activeSiteId || authSession?.account.active_site_ids[0]))} canPreviewEdit={preview}
               authenticated={Boolean(authSession && !preview)} busy={busy}
               onAdvance={(id) => setEntries((prev) => ({ ...prev, pressing: (prev.pressing ?? []).map((x) => x.id === id ? { ...x, state: nextPressingState(x.state) } : x) }))}
               onTransition={transitionWebPressing}
             /> :
             active === "workOrders" ? <WorkOrdersPage
               workflow={getActivityWorkflow(authSession?.account.activity_profile)}
-              entries={entries.workOrders ?? []}
+              entries={(entries.workOrders ?? []).filter(entry => preview || entry.siteId === (activeSiteId || authSession?.account.active_site_ids[0]))}
               authenticated={Boolean(authSession && !preview)}
               busy={busy}
               siteName={authSession?.account.active_sites.find(site=>site.id===activeSiteId)?.name ?? siteName}

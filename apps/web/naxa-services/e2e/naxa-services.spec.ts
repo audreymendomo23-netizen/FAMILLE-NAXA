@@ -8,6 +8,7 @@ const REMOTE_DEVICE_ID = "70000000-0000-4000-8000-000000000002";
 const ORG_A = "20000000-0000-4000-8000-000000000001";
 const ORG_B = "20000000-0000-4000-8000-000000000002";
 const SITE_ID = "30000000-0000-4000-8000-000000000001";
+const SECOND_SITE_ID = "30000000-0000-4000-8000-000000000002";
 const MEMBER_A = "60000000-0000-4000-8000-000000000001";
 const MEMBER_B = "60000000-0000-4000-8000-000000000002";
 
@@ -22,7 +23,7 @@ async function json(route: Route, value: unknown, status = 200) {
   await route.fulfill({ status, headers: CORS_HEADERS, body: JSON.stringify(value) });
 }
 
-function authSession(organizationId: string, activityProfile = "autre") {
+function authSession(organizationId: string, activityProfile = "autre", multiSite = false) {
   const other = organizationId === ORG_B;
   return {
     device_id: DEVICE_ID,
@@ -38,16 +39,16 @@ function authSession(organizationId: string, activityProfile = "autre") {
       activity_profile: activityProfile,
       organization_id: organizationId,
       organization_name: other ? "Organisation B" : "Organisation A",
-      business_mode: "solo",
+      business_mode: multiSite ? "multi_site_network" : "solo",
       default_locale: "fr",
-      active_site_ids: [SITE_ID],
+      active_site_ids: multiSite ? [SITE_ID, SECOND_SITE_ID] : [SITE_ID],
       active_sites: [{
         id: SITE_ID,
         code: "SITE-01",
         name: other ? "Site organisation B" : "Site organisation A",
         address_label: "Site de recette",
         phone_contact: "",
-      }],
+      }, ...(multiSite ? [{ id: SECOND_SITE_ID, code: "SITE-02", name: "Site de recette B", address_label: "Deuxième site de recette", phone_contact: "" }] : [])],
     },
   };
 }
@@ -61,7 +62,7 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
       const organizationId = request.identifier === "NS-OTHER" ? ORG_B : ORG_A;
       const identifier = typeof request.identifier === "string" ? request.identifier : "";
       const activityProfile = identifier.startsWith("NS-ACT-") ? identifier.slice("NS-ACT-".length).toLowerCase() : "autre";
-      return json(route, authSession(organizationId, activityProfile));
+      return json(route, authSession(organizationId, activityProfile, identifier === "NS-MULTISITE"));
     }
     if (request.action === "logout") return json(route, { ok: true });
     if (request.action === "refresh") return json(route, authSession(ORG_A));
@@ -515,4 +516,40 @@ test("Web: a peer transition preserves the original job and its activity fields"
   await expect(record).toContainText("Véhicule de recette");
   await expect(record).toContainText("Client de recette");
   await expect(record.locator(".status-tag")).toHaveText(ACTIVITY_WORKFLOWS.garage.stages.find(s => s.code === "diagnostic")!.label);
+});
+
+
+test("Web: métier and Pressing registers follow the selected site", async ({ context }) => {
+  const scenarios = [
+    { site: SITE_ID, name: "Atelier A", kind: "work_order", id: "a5000000-0000-4000-8000-000000000081" },
+    { site: SECOND_SITE_ID, name: "Atelier B", kind: "work_order", id: "a5000000-0000-4000-8000-000000000082" },
+    { site: SITE_ID, name: "Ticket site A", kind: "pressing_order", id: "a5000000-0000-4000-8000-000000000083" },
+    { site: SECOND_SITE_ID, name: "Ticket site B", kind: "pressing_order", id: "a5000000-0000-4000-8000-000000000084" },
+  ];
+  await installBackend(context, scenarios.map((scenario, index) => ({
+    source_device_id: REMOTE_DEVICE_ID, origin_site_id: scenario.site, site_id: scenario.site,
+    visible_site_ids: [scenario.site], workstation_id: null, aggregate_type: scenario.kind,
+    aggregate_id: scenario.id, recorded_at: "2026-11-25T10:00:00.000Z",
+    cursor: index + 1, event_id: "multisite-" + index, action_code: scenario.kind + ".created",
+    aggregate_version: 1, payload: {
+      org_id: ORG_A, site_id: scenario.site, title: scenario.name,
+      ticket_number: scenario.name, customer_name: "Client de recette",
+      metadata_json: { activity_profile: scenario.kind === "pressing_order" ? "pressing" : "autre", fields: {} },
+      server_result: { status: "received", revision: 1 },
+    },
+  })));
+  const page = await context.newPage();
+  await signIn(page, "NS-MULTISITE");
+  await page.getByRole("button", { name: "Dossiers métier" }).click();
+  await expect(page.locator(".activity-record").filter({ hasText: "Atelier A" })).toBeVisible();
+  await expect(page.locator(".activity-record").filter({ hasText: "Atelier B" })).toHaveCount(0);
+  await page.getByLabel("Point de vente actif").selectOption(SECOND_SITE_ID);
+  await expect(page.locator(".activity-record").filter({ hasText: "Atelier B" })).toBeVisible();
+  await expect(page.locator(".activity-record").filter({ hasText: "Atelier A" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Pressing", exact: true }).click();
+  await expect(page.locator(".activity-record").filter({ hasText: "Ticket site B" })).toBeVisible();
+  await expect(page.locator(".activity-record").filter({ hasText: "Ticket site A" })).toHaveCount(0);
+  await page.getByLabel("Point de vente actif").selectOption(SITE_ID);
+  await expect(page.locator(".activity-record").filter({ hasText: "Ticket site A" })).toBeVisible();
+  await expect(page.locator(".activity-record").filter({ hasText: "Ticket site B" })).toHaveCount(0);
 });
