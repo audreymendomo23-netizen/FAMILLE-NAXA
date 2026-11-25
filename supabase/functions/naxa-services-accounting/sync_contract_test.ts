@@ -607,3 +607,33 @@ Deno.test("generic activity work-order events reject aggregate ID spoofing and c
   } catch { siteRejected = true; }
   if (!siteRejected) throw new Error("Generic work-order site mismatch must be rejected");
 });
+
+
+Deno.test("atomic sync envelope accepts scoped cash register creation", () => {
+  const register = "88888888-8888-4888-8888-888888888898";
+  const event = normalizeAtomicSyncEvent({
+    event_id: "88888888-8888-4888-8888-888888888899",
+    device_id: SYNC_DEVICE, device_sequence: 50,
+    org_id: ORG_A, site_id: SITE_A, workstation_id: null,
+    aggregate_type: "cash_register", aggregate_id: register,
+    action_code: "cash_register.created",
+    payload: {
+      register_id: register, org_id: ORG_A, site_id: SITE_A,
+      code: "PRINCIPALE", name: "Caisse principale", workstation_id: null
+    }
+  });
+  if (event.aggregate_type !== "cash_register" || event.aggregate_id !== register ||
+      event.action_code !== "cash_register.created") {
+    throw new Error("Cash register aggregate identity mismatch");
+  }
+  let mismatch = false;
+  try { normalizeAtomicSyncEvent({ ...{
+    event_id: "88888888-8888-4888-8888-888888888899",
+    device_id: SYNC_DEVICE, device_sequence: 51,
+    org_id: ORG_A, site_id: SITE_A, workstation_id: null,
+    aggregate_type: "cash_session", aggregate_id: register,
+    action_code: "cash_register.created",
+    payload: { register_id: register, org_id: ORG_A, site_id: SITE_A }
+  }}); } catch { mismatch = true; }
+  if (!mismatch) throw new Error("Cash register action must reject a mismatched aggregate");
+});
