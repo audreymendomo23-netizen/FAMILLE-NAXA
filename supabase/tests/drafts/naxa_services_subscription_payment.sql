@@ -74,4 +74,34 @@ reset role;
 do $f$ begin
  if not exists(select 1 from public.ns_subscription_credit_candidates where transaction_reference='RENEWALTX71' and status='matched') then raise exception 'CREDIT_CANDIDATE_NOT_CONSUMED'; end if;
 end $f$;
+-- Entitlement status is derived from dates, not a mutable client flag.
+set local role authenticated;
+do $f$ declare v jsonb; begin
+ v:=public.ns_subscription_access_state('20000000-0000-4000-8000-000000000071');
+ if v->>'state' is distinct from 'active' or v->>'paid_access' is distinct from 'true' then raise exception 'PAID_ACCESS_MISSING'; end if;
+ begin perform public.ns_subscription_access_state('20000000-0000-4000-8000-000000000001'); raise exception 'CROSS_TENANT_ACCESS_STATE'; exception when insufficient_privilege then null; end;
+ if has_function_privilege(current_user,'public.ns_subscription_review_reject(uuid,uuid,text,uuid,text)','EXECUTE') or has_table_privilege(current_user,'public.ns_subscription_review_audit','SELECT') then raise exception 'PAYER_REVIEW_PRIVILEGE'; end if;
+end $f$;
+reset role;
+-- A mismatching credit is held for review and cannot activate or modify a paid period.
+set local role authenticated;
+do $f$ declare i jsonb; begin
+ i:=public.ns_subscription_create('20000000-0000-4000-8000-000000000071','ACCESS',1,'mtn_momo');
+ perform public.ns_subscription_declare_sms((i->>'id')::uuid,'Your payment of '||(i->>'amount_xaf')||' XAF to CI ONLY (237690000072) was completed at '||to_char(now() at time zone 'Africa/Douala','YYYY-MM-DD HH24:MI:SS')||'. Financial transaction id: REVIEWTX71','690000071',null);
+end $f$;
+reset role;
+do $f$ declare i public.ns_subscription_intents%rowtype; c public.ns_subscription_credit_candidates%rowtype; v jsonb; v2 jsonb; before_end date; begin
+ select period_end_exclusive into before_end from public.ns_subscriptions where org_id='20000000-0000-4000-8000-000000000071';
+ select * into i from public.ns_subscription_intents where org_id='20000000-0000-4000-8000-000000000071' and status='submitted';
+ v:=public.ns_subscription_ingest_credit('80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','admin-ci','mtn_momo','REVIEWTX71','237690000072',i.amount_xaf+1,'690000071',now(),now(),repeat('d',64),'MobileMoney');
+ if v->>'status' is distinct from 'review' then raise exception 'MISMATCH_NOT_REVIEWED'; end if;
+ select * into c from public.ns_subscription_credit_candidates where transaction_reference='REVIEWTX71';
+ v:=public.ns_subscription_review_list('80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','admin-ci');
+ if not exists(select 1 from jsonb_array_elements(v) item where item->>'id'=c.id::text and item->>'payer_tail'='0071' and not (item ? 'payer_number')) then raise exception 'REVIEW_LIST_MISSING_OR_UNREDACTED'; end if;
+ begin perform public.ns_subscription_review_reject('80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000071','admin-ci',c.id,'wrong_amount'); raise exception 'PAYER_REJECTED'; exception when insufficient_privilege then null; end;
+ v:=public.ns_subscription_review_reject('80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','admin-ci',c.id,'wrong_amount');
+ v2:=public.ns_subscription_review_reject('80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','admin-ci',c.id,'wrong_amount');
+ if v->>'status' is distinct from 'rejected' or v<>v2 or (select count(*) from public.ns_subscription_review_audit where candidate_id=c.id)<>1 then raise exception 'REVIEW_AUDIT_FAILED'; end if;
+ if (select status from public.ns_subscription_intents where id=i.id)<>'submitted' or (select period_end_exclusive from public.ns_subscriptions where org_id=i.org_id)<>before_end then raise exception 'REVIEW_ALTERED_ACCESS'; end if;
+end $f$;
 rollback;

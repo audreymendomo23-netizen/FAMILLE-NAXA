@@ -1139,6 +1139,26 @@ async function subscriptionAdminCapture(body:Record<string,unknown>,token:string
   }catch{return {status:409,body:{message:"Capture non acceptée ; rapprochement manuel nécessaire."}};}
 }
 
+async function subscriptionAdminReview(action:string,body:Record<string,unknown>,token:string) {
+  const auth=await authCall("user",{method:"GET"},token);
+  const sessionId=verifiedTokenSessionId(token);
+  const id=String(body.device_id??"");
+  const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if(!auth.ok||!auth.data.id||!sessionId||!uuid.test(id))return {status:403,body:{message:"Appareil administrateur non autorisé."}};
+  const reject=action==="subscription_admin_review_reject";
+  if(reject&&(!uuid.test(String(body.candidate_id??""))||!["wrong_amount","wrong_payer","wrong_destination","ambiguous_reference","outside_window","other"].includes(String(body.reason_code??""))))return {status:422,body:{message:"Motif et référence de revue requis."}};
+  try{
+    const payload={p_device:id,p_admin:auth.data.id,p_session:sessionId,...(reject?{p_candidate:body.candidate_id,p_reason:body.reason_code}:{})};
+    const data=await rest("rpc/"+(reject?"ns_subscription_review_reject":"ns_subscription_review_list"),{method:"POST",headers:serviceHeaders(),body:JSON.stringify(payload)});
+    return {status:200,body:{review_result:data}};
+  }catch{return {status:403,body:{message:"Revue refusée ou preuve non admissible."}};}
+}
+async function subscriptionAccess(token:string) {
+  const actor=await actorContext(token);
+  if(!actor)return {status:403,body:{message:"Session non autorisée."}};
+  const data=await rest("rpc/ns_subscription_access_state",{method:"POST",headers:{...anonHeaders(),Authorization:"Bearer "+token},body:JSON.stringify({p_org:actor.member.org_id})});
+  return {status:200,body:{subscription_access:data}};
+}
 async function subscriptionAction(action:string,body:Record<string,unknown>,token:string) {
   const actor=await actorContext(token);
   if(!actor || actor.member.role_code!=="promoter") return {status:403,body:{message:"Gestionnaire de l’organisation requis."}};
@@ -1187,6 +1207,8 @@ Deno.serve(async (request: Request) => {
     else if (action === "revoke_device") result = await revokeDevice(body, bearer);
     else if (["subscription_list","subscription_create","subscription_declare","subscription_cancel"].includes(action)) result = await subscriptionAction(action,body,bearer);
     else if (action === "subscription_admin_capture") result = await subscriptionAdminCapture(body,bearer);
+    else if (["subscription_admin_review_list","subscription_admin_review_reject"].includes(action)) result = await subscriptionAdminReview(action,body,bearer);
+    else if (action === "subscription_access") result = await subscriptionAccess(bearer);
     else result = { status: 400, body: { message: "Action non reconnue." } };
 
     return response(result.status, result.body, origin);

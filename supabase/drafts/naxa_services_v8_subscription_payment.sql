@@ -63,7 +63,7 @@ create table public.ns_subscription_credit_candidates (
  payer_number text not null check(payer_number ~ '^6[0-9]{8}$'),
  occurred_at timestamptz not null, captured_at timestamptz not null,
  payload_sha256 text not null unique check(payload_sha256 ~ '^[0-9a-f]{64}$'),
- status text not null default 'pending' check(status in ('pending','matched','review')),
+ status text not null default 'pending' check(status in ('pending','matched','review','rejected')),
  intent_id uuid references public.ns_subscription_intents(id),
  unique(channel,transaction_reference)
 );
@@ -241,7 +241,7 @@ begin
   update public.ns_subscription_credit_candidates set status='matched',intent_id=i.id where id=c.id;
   return v_result;
  exception when raise_exception or insufficient_privilege or unique_violation then
-  update public.ns_subscription_credit_candidates set status='review' where id=c.id and status='pending';
+  update public.ns_subscription_credit_candidates set status='review',intent_id=i.id where id=c.id and status='pending';
   return public.ns_subscription_public_intent(i.id);
  end;
 end $f$;
@@ -267,4 +267,61 @@ revoke all on function public.ns_subscription_amount(text,integer,date),public.n
 grant execute on function public.ns_subscription_list(uuid),public.ns_subscription_create(uuid,text,integer,text),public.ns_subscription_declare_sms(uuid,text,text,timestamptz) to authenticated;
 revoke all on function public.ns_subscription_declare_sms(uuid,text,text,timestamptz) from public,anon;
 grant execute on function public.ns_subscription_confirm_credit(uuid,uuid,uuid,text,text,text,text,bigint,text,timestamptz,timestamptz,text,text) to service_role;
+-- Administrative review never changes the proof fields or confirms a subscription.
+create table public.ns_subscription_review_audit (
+ id uuid primary key default gen_random_uuid(),
+ candidate_id uuid not null unique references public.ns_subscription_credit_candidates(id),
+ admin_device_id uuid not null references public.ns_subscription_admin_devices(id),
+ actor_auth_user uuid not null references auth.users(id),
+ reason_code text not null check(reason_code in ('wrong_amount','wrong_payer','wrong_destination','ambiguous_reference','outside_window','other')),
+ reviewed_at timestamptz not null default now()
+);
+alter table public.ns_subscription_review_audit enable row level security;
+revoke all on public.ns_subscription_review_audit from public,anon,authenticated,service_role;
+grant select,insert on public.ns_subscription_review_audit to service_role;
+create function public.ns_subscription_review_list(p_device uuid,p_admin uuid,p_session text) returns jsonb
+language plpgsql security definer set search_path='' as $f$
+declare d public.ns_subscription_admin_devices%rowtype;
+begin
+ select * into d from public.ns_subscription_admin_devices where id=p_device and auth_user_id=p_admin and session_id=p_session and active and sms_capture_allowed;
+ if not found then raise exception 'NS_CENTRAL_REVIEW_FORBIDDEN' using errcode='42501'; end if;
+ return coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'channel',c.channel,'transaction_reference',c.transaction_reference,'amount_xaf',c.amount_xaf,'payer_tail',right(c.payer_number,4),'captured_at',c.captured_at,'status',c.status,'intent_id',c.intent_id) order by c.captured_at desc) from
+ (select * from public.ns_subscription_credit_candidates where channel=d.channel and destination_reference=d.destination_reference and status in ('pending','review') order by captured_at desc limit 100) c),'[]'::jsonb);
+end $f$;
+create function public.ns_subscription_review_reject(p_device uuid,p_admin uuid,p_session text,p_candidate uuid,p_reason text) returns jsonb
+language plpgsql security definer set search_path='' as $f$
+declare d public.ns_subscription_admin_devices%rowtype; c public.ns_subscription_credit_candidates%rowtype;
+begin
+ select * into d from public.ns_subscription_admin_devices where id=p_device and auth_user_id=p_admin and session_id=p_session and active and sms_capture_allowed for share;
+ if not found then raise exception 'NS_CENTRAL_REVIEW_FORBIDDEN' using errcode='42501'; end if;
+ select * into c from public.ns_subscription_credit_candidates where id=p_candidate and channel=d.channel and destination_reference=d.destination_reference for update;
+ if not found then raise exception 'NS_CENTRAL_REVIEW_FORBIDDEN' using errcode='42501'; end if;
+ if p_reason is null or p_reason not in ('wrong_amount','wrong_payer','wrong_destination','ambiguous_reference','outside_window','other') then raise exception 'NS_REVIEW_REASON_REQUIRED'; end if;
+ if c.status='rejected' and exists(select 1 from public.ns_subscription_review_audit a where a.candidate_id=c.id and a.actor_auth_user=p_admin and a.admin_device_id=d.id and a.reason_code=p_reason) then return jsonb_build_object('id',c.id,'status','rejected'); end if;
+ if c.status<>'review' then raise exception 'NS_CANDIDATE_NOT_IN_REVIEW'; end if;
+ insert into public.ns_subscription_review_audit(candidate_id,admin_device_id,actor_auth_user,reason_code) values(c.id,d.id,p_admin,p_reason);
+ update public.ns_subscription_credit_candidates set status='rejected' where id=c.id;
+ return jsonb_build_object('id',c.id,'status','rejected');
+end $f$;
+revoke all on function public.ns_subscription_review_list(uuid,uuid,text),public.ns_subscription_review_reject(uuid,uuid,text,uuid,text) from public,anon,authenticated;
+grant execute on function public.ns_subscription_review_list(uuid,uuid,text),public.ns_subscription_review_reject(uuid,uuid,text,uuid,text) to service_role;
+
+-- Read-only entitlement snapshot. An unconfigured initial/trial policy is not treated
+-- as either a paid entitlement or a mandate to erase or lock local ERP records.
+create function public.ns_subscription_access_state(p_org uuid) returns jsonb
+language plpgsql stable security definer set search_path='' as $f$
+declare s public.ns_subscriptions%rowtype; today date:=(now() at time zone 'Africa/Douala')::date; state text;
+begin
+ if auth.uid() is null or public.ns_current_member_id(p_org) is null then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
+ select * into s from public.ns_subscriptions where org_id=p_org;
+ if not found then state:='unconfigured';
+ elsif s.status='cancelled' then state:='cancelled';
+ elsif s.period_start>today then state:='not_started';
+ elsif s.period_end_exclusive<=today then state:='expired';
+ else state:='active'; end if;
+ return jsonb_build_object('state',state,'paid_access',state='active','plan_code',s.plan_code,'period_start',s.period_start,'period_end_exclusive',s.period_end_exclusive);
+end $f$;
+revoke all on function public.ns_subscription_access_state(uuid) from public,anon,authenticated;
+grant execute on function public.ns_subscription_access_state(uuid) to authenticated;
+
 rollback;
