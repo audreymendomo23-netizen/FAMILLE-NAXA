@@ -88,7 +88,7 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
       const event = request.event as Record<string, unknown>;
       const payload = event.payload as Record<string, unknown>;
       appliedEvents.push(event);
-      const revision = typeof payload.expected_version === "number" ? payload.expected_version + 1 : 1;
+      const revision = event.aggregate_type === "customer_followup" ? appliedEvents.filter(item=>item.aggregate_id===event.aggregate_id).length : typeof payload.expected_version === "number" ? payload.expected_version + 1 : 1;
       const actionCode = typeof event.action_code === "string" ? event.action_code : "";
       // Pressing transitions encode the target status in the action suffix, like ns_apply_sync_event.
       const pressingStatus = actionCode.startsWith("pressing_order.status_changed:")
@@ -651,7 +651,10 @@ test("Web CRM: create a follow-up, reschedule it with a confirmed completion and
   await createCustomer(page,"Client suivi ERP");
   await expect.poll(()=>events.length).toBe(1);
   const customerId=String(events[0].aggregate_id);
-  await page.getByLabel("Client",{exact:true}).selectOption(customerId);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const customerSelect=page.getByRole("combobox",{name:"Client du suivi",exact:true});
+  await expect(customerSelect.locator("option",{hasText:"Client suivi ERP"})).toHaveAttribute("value",customerId);
+  await customerSelect.selectOption(customerId);
   await page.getByLabel("Objet du suivi").fill("Contrôle satisfaction");
   await page.getByLabel("Prochaine échéance",{exact:true}).fill("2030-01-01T10:00");
   await page.getByRole("button",{name:"Créer le suivi client"}).click();
@@ -672,5 +675,6 @@ test("Web CRM: create a follow-up, reschedule it with a confirmed completion and
   expect(events[3].aggregate_id).toBe(followupId);
   expect((events[3].payload as Record<string,unknown>).next_due_at_if_repeating).toBeNull();
   await expect(record.locator(".status-tag")).toHaveText("completed");
+  await expect(record).toContainText("Confirmé par le serveur");
   await expect(record.getByRole("button",{name:"Clôturer le suivi"})).toHaveCount(0);
 });
