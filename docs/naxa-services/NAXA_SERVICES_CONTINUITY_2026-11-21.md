@@ -703,3 +703,20 @@ Le Web conserve désormais le titre, le client et les champs sectoriels lors de 
 La qualification des paiements marchands, des notifications FCM et de la distribution Android signée reste distincte. Une validation sur service hébergé exige un environnement NAXA SERVICES identifié et une autorisation de déploiement séparée.
 
 La vérification du client Android a révélé deux écarts supplémentaires. La transition Web d’un dossier arrive avec son type dans l’enveloppe, alors que le client Android exigeait aussi ce type dans le contenu. Ensuite, Android comptait uniquement ses propres écritures pour préparer la révision attendue. La correction applique la transition distante au dossier Room et reprend sa dernière version effectivement appliquée, y compris quand des étapes locales se succèdent. Le test instrumenté reproduit un dossier Garage passé au diagnostic côté Web et vérifie les révisions 2 puis 3 des deux commandes Android suivantes.
+
+
+### 22.7 — Cloisonnement Web multisite, protection des sessions et suivi CRM — 25 novembre 2026
+
+Branche inchangée : `work/naxa-services-completion-20261120`. Aucun déploiement, aucune fusion dans main, aucune migration sur NAXA pharmacie.
+
+| Écart confirmé | Correction | Preuve observée |
+|---|---|---|
+| Dossiers métier/Pressing non filtrés par point de vente actif | Sélecteur de site et contrôle des transitions (`dcc64ea`) | Recette multisite réussie dans le run #592 après correction du sélecteur de test (`5fd789f`) |
+| APK signé potentiellement sans configuration backend/Firebase | Validation de configuration dédiée, refus des clés privilégiées, activation du sync Release (`bfd8494`) | Contrat de configuration réussi dans le run #590 ; aucune signature réelle réalisée |
+| Réponses asynchrones d'une ancienne connexion pouvant réinjecter des données | Garde par génération de session, nettoyage à la déconnexion (`b75bb4c`) | Test ajouté ; #592 a expiré car la seconde connexion naviguait et annulait la requête ; correction `7ebbeb7`, revalidation attendue |
+| Auth et parrainage ne contrôlant pas la révocation dans toutes les actions authentifiées | Vérification de la liaison compte/session/appareil actif après validation Auth, liste des appareils propres au compte et révocation confirmée (`abcb8b3`) | Contrats Auth/parrainage réussis sur #594 ; recette Web en cours |
+| Suivi CRM sans clôture/reprogrammation Web | Raccordement à `customer_followup.completed` et recette création → reprogrammation → clôture (`2927983`) | Test écrit, exécution non confirmée |
+
+Dernier gate de code déclenché : [#595](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45663189559), SHA `2927983f8ec0581fb7fc98183c17758296ec8b8e`. Il n'est pas déclaré vert tant que les douze résultats n'ont pas été vérifiés. Les exécutions intermédiaires #590–594 ont été interrompues ou remplacées selon la concurrence du workflow ; elles ne constituent pas un PASS complet. Le dernier gate 12/12 intégralement terminé avant ces changements reste #588.
+
+Restent à démontrer : recette des applications Web et Android sur un backend commun, parité exhaustive des opérations ERP partagées, intégrations marchandes et FCM réelles, conformité/recette physique, signature Release et environnement NAXA SERVICES dédié. Ne pas confondre les tests simulés et les transactions réelles ni inventer de nouveaux secrets ou de nouvelles règles financières.
