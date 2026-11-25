@@ -546,7 +546,7 @@ test("Web: métier and Pressing registers follow the selected site", async ({ co
   await page.getByLabel("Point de vente actif").selectOption(SECOND_SITE_ID);
   await expect(page.locator(".activity-record").filter({ hasText: "Atelier B" })).toBeVisible();
   await expect(page.locator(".activity-record").filter({ hasText: "Atelier A" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Pressing", exact: true }).click();
+  await page.locator(".side-nav button.nav-item").filter({ hasText: "Pressing" }).click();
   await expect(page.locator(".activity-record").filter({ hasText: "Ticket site B" })).toBeVisible();
   await expect(page.locator(".activity-record").filter({ hasText: "Ticket site A" })).toHaveCount(0);
   await page.getByLabel("Point de vente actif").selectOption(SITE_ID);
@@ -587,6 +587,13 @@ test("Web: delayed tenant A pull cannot repaint tenant B after logout", async ({
       response.request().method()==="POST" && response.request().postDataJSON().org_id===ORG_A);
     releaseA();
     await oldResponse;
+    const harness = await context.newPage();
+    await harness.goto("/e2e/queue-harness.html");
+    await harness.waitForFunction(() => document.querySelector("#ready")?.textContent === "ready");
+    await expect.poll(() => harness.evaluate(({deviceId,orgId}) =>
+      (window as any).__naxaQueueHarness.cursor("naxa-services-web",deviceId,orgId),
+      {deviceId:DEVICE_ID,orgId:ORG_A})).toBe(1);
+    await harness.close();
     await page.getByRole("button", { name: /Clients & fidélité/ }).first().click();
     await expect(page.getByText("Client confidentiel A")).toHaveCount(0);
     await expect(page.getByText("customer.created", {exact:true})).toHaveCount(0);
