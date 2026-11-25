@@ -553,3 +553,43 @@ test("Web: métier and Pressing registers follow the selected site", async ({ co
   await expect(page.locator(".activity-record").filter({ hasText: "Ticket site A" })).toBeVisible();
   await expect(page.locator(".activity-record").filter({ hasText: "Ticket site B" })).toHaveCount(0);
 });
+
+
+test("Web: delayed tenant A pull cannot repaint tenant B after logout", async ({ context }) => {
+  await installBackend(context);
+  let releaseA!: () => void;
+  let receivedA!: () => void;
+  const blocked = new Promise<void>(resolve => { releaseA = resolve; });
+  const started = new Promise<void>(resolve => { receivedA = resolve; });
+  await context.route(ACCOUNTING_URL, async route => {
+    if (route.request().method() === "OPTIONS") return route.fallback();
+    const request = route.request().postDataJSON() as Record<string, unknown>;
+    if (request.action !== "pull_sync_changes" || request.org_id !== ORG_A) return route.fallback();
+    receivedA();
+    await blocked;
+    return json(route, { ok: true, result: { changes: [{
+      cursor: 1, source_device_id: REMOTE_DEVICE_ID, origin_site_id: SITE_ID, site_id: SITE_ID,
+      visible_site_ids: [SITE_ID], workstation_id: null, aggregate_type: "customer",
+      aggregate_id: "a5000000-0000-4000-8000-000000000099",
+      recorded_at: "2026-11-25T10:00:00.000Z", event_id: "late-tenant-a",
+      action_code: "customer.created", aggregate_version: 1,
+      payload: { org_id: ORG_A, site_id: SITE_ID, display_name: "Client confidentiel A" }
+    }], next_cursor: 1, has_more: false } });
+  });
+  const page = await context.newPage();
+  try {
+    await signIn(page);
+    await started;
+    await page.getByRole("button", { name: "Déconnexion" }).click();
+    await expect(page.getByLabel("Identifiant NAXA Services")).toBeVisible();
+    await signIn(page, "NS-OTHER");
+    const oldResponse = page.waitForResponse(response => response.url()===ACCOUNTING_URL &&
+      response.request().method()==="POST" && response.request().postDataJSON().org_id===ORG_A);
+    releaseA();
+    await oldResponse;
+    await page.getByRole("button", { name: /Clients & fidélité/ }).first().click();
+    await expect(page.getByText("Client confidentiel A")).toHaveCount(0);
+    await expect(page.getByText("customer.created", {exact:true})).toHaveCount(0);
+    await expect(page.getByText("Aucune fiche client dans le site actif.")).toBeVisible();
+  } finally { releaseA(); }
+});

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, listAppEvents, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
 import { normalizeInventoryItemDraft } from "./erp/inventory";
 import {
@@ -73,6 +73,17 @@ const moduleCopy: Record<ModuleId, { eyebrow: string; headline: string; helper: 
 function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [authSession, setAuthSession] = useState<WebAuthSession | null>(null);
+  // A generation belongs to a login, not just an organization or a device.
+  // Late responses may persist in their own tenant partition but must never repaint a new login.
+  const sessionFence = useRef<{generation:number; scope:string}>({generation:0,scope:""});
+  function scopeOf(session:WebAuthSession) {
+    return [session.account.organization_id,session.account.member_id,session.deviceId].join(":");
+  }
+  function captureSession(session:WebAuthSession) {
+    const {generation,scope}=sessionFence.current;
+    if(!scope || scope!==scopeOf(session)) throw new Error("WEB_SESSION_CHANGED");
+    return () => sessionFence.current.generation===generation && sessionFence.current.scope===scope;
+  }
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -174,9 +185,12 @@ function App() {
   }
 
   async function hydrateWebRecords(activeSession: WebAuthSession) {
+    const isCurrent=captureSession(activeSession);
     const [allEvents,pending]=await Promise.all([listAppEvents(OFFLINE_APP_ID,activeSession.deviceId,activeSession.account.organization_id),listQueued(OFFLINE_APP_ID,activeSession.deviceId,activeSession.account.organization_id)]);
+    if(!isCurrent())return;
     setPendingSyncCount(pending.length);
     setEntries(previous=>{
+      if(!isCurrent())return previous;
       const next={...previous};
       for(const item of allEvents){
         let command:Record<string,unknown>={};
@@ -249,6 +263,7 @@ function App() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(performanceFromDate) || !Number.isFinite(new Date(performanceFromDate).getTime())) {
       throw new Error("Date de début invalide.");
     }
+    const isCurrent=captureSession(authSession);
     setPerformanceBusy(true);
     setPerformanceError("");
     try {
@@ -271,10 +286,11 @@ function App() {
       const daily = Array.isArray(result.daily) ? result.daily as Record<string,unknown>[] : [];
       const monthly = Array.isArray(result.monthly) ? result.monthly as Record<string,unknown>[] : [];
       const annual = Array.isArray(result.annual) ? result.annual as Record<string,unknown>[] : [];
+      if(!isCurrent())return;
       setPerformanceData({ daily, monthly, annual });
       setAuthMessage("Rapport chargé depuis les vues serveur avec le périmètre de sites de votre session.");
     } finally {
-      setPerformanceBusy(false);
+      if(isCurrent())setPerformanceBusy(false);
     }
   }
 
@@ -291,6 +307,7 @@ function App() {
         device: webDevicePayload(),
       }, anonKey);
       const nextSession = parseWebSession(data);
+      sessionFence.current={generation:sessionFence.current.generation+1,scope:scopeOf(nextSession)};
       setAuthSession(nextSession);
       setActiveSiteId(nextSession.account.active_site_ids[0] ?? "");
       setMode(nextSession.account.business_mode ?? "solo");
@@ -328,6 +345,7 @@ function App() {
   }
 
   async function refreshWebSession(activeSession: WebAuthSession): Promise<WebAuthSession> {
+    const isCurrent=captureSession(activeSession);
     const data = await authRequest({
       action: "refresh",
       refresh_token: activeSession.refreshToken,
@@ -335,17 +353,20 @@ function App() {
       device: webDevicePayload(),
     }, anonKey);
     const refreshed = parseWebSession(data);
+    if(!isCurrent() || scopeOf(refreshed)!==scopeOf(activeSession))throw new Error("WEB_SESSION_CHANGED");
     setAuthSession(refreshed);
     return refreshed;
   }
 
   async function ensureFreshSession(activeSession: WebAuthSession): Promise<WebAuthSession> {
+    captureSession(activeSession);
     if (activeSession.expiresAt > Date.now() + 60_000) return activeSession;
     return await refreshWebSession(activeSession);
   }
 
   async function saveWebOrganizationProfile(displayName: string, businessMode: BusinessMode, locale: "fr" | "en" | "ff-CM") {
     if (!authSession) throw new Error("AUTHENTICATION_REQUIRED");
+    const isCurrent=captureSession(authSession);
     const fresh = await ensureFreshSession(authSession);
     const data = await authRequest({
       action: "update_organization_profile",
@@ -353,6 +374,7 @@ function App() {
       business_mode: businessMode,
       default_locale: locale,
     }, fresh.accessToken);
+    if(!isCurrent())throw new Error("WEB_SESSION_CHANGED");
     if (data.saved !== true) throw new Error("ORGANIZATION_PROFILE_NOT_SAVED");
     const account = { ...fresh.account, organization_name: displayName, business_mode: businessMode, default_locale: locale };
     const updated = { ...fresh, account };
@@ -364,8 +386,10 @@ function App() {
 
   async function createWebSite(input: { code: string; name: string; address_label: string; phone_contact: string }) {
     if (!authSession) throw new Error("AUTHENTICATION_REQUIRED");
+    const isCurrent=captureSession(authSession);
     const fresh = await ensureFreshSession(authSession);
     const data = await authRequest({ action: "create_site", ...input }, fresh.accessToken);
+    if(!isCurrent())throw new Error("WEB_SESSION_CHANGED");
     const site = data.site as { id?: string; code?: string; name?: string; address_label?: string; phone_contact?: string } | undefined;
     if (data.saved !== true || !site || typeof site.id !== "string") throw new Error("SITE_CREATE_NOT_CONFIRMED");
     const activeSite = {
@@ -388,9 +412,11 @@ function App() {
 
   async function loadWebWorkstations(siteId: string) {
     if (!authSession) throw new Error("AUTHENTICATION_REQUIRED");
+    const isCurrent=captureSession(authSession);
     if (!authSession.account.active_site_ids.includes(siteId)) throw new Error("SITE_SCOPE_FORBIDDEN");
     const fresh = await ensureFreshSession(authSession);
     const data = await authRequest({ action: "list_workstations", site_id: siteId }, fresh.accessToken);
+    if(!isCurrent())throw new Error("WEB_SESSION_CHANGED");
     if (!Array.isArray(data.workstations)) throw new Error("WORKSTATION_LIST_INVALID");
     setWorkstations(data.workstations as WebWorkstation[]);
     setWorkstationSiteId(siteId);
@@ -399,9 +425,11 @@ function App() {
 
   async function createWebWorkstation(input: { site_id: string; code: string; name: string; kind: string; capacity: number }) {
     if (!authSession) throw new Error("AUTHENTICATION_REQUIRED");
+    const isCurrent=captureSession(authSession);
     if (!authSession.account.active_site_ids.includes(input.site_id)) throw new Error("SITE_SCOPE_FORBIDDEN");
     const fresh = await ensureFreshSession(authSession);
     const data = await authRequest({ action: "create_workstation", ...input }, fresh.accessToken);
+    if(!isCurrent())throw new Error("WEB_SESSION_CHANGED");
     const workstation = data.workstation as WebWorkstation | undefined;
     if (data.saved !== true || !workstation || typeof workstation.id !== "string") throw new Error("WORKSTATION_CREATE_NOT_CONFIRMED");
     setWorkstations(previous => [...previous.filter(item => item.id !== workstation.id), workstation]);
@@ -458,6 +486,7 @@ function App() {
     } catch {
       serverRevoked = false;
     } finally {
+      sessionFence.current={generation:sessionFence.current.generation+1,scope:""};
       setAuthSession(null);
       setAuthenticated(false);
       setPreview(false);
@@ -466,6 +495,15 @@ function App() {
       setNewPassword("");
       setConfirmPassword("");
       setEntries({} as Record<ModuleId, Entry[]>);
+      setRemoteChanges([]);
+      setPendingSyncCount(0);
+      setWorkstations([]);
+      setWorkstationSiteId("");
+      setActiveSiteId("");
+      setPerformanceData(null);
+      setPerformanceError("");
+      setPerformanceBusy(false);
+      setDialogOpen(false);
       setActive("overview");
       setBusy(false);
       setAuthMessage(serverRevoked || !activeSession
@@ -476,6 +514,7 @@ function App() {
 
 
   async function syncWebOutbox(activeSession: WebAuthSession) {
+    const isCurrent=captureSession(activeSession);
     if (!accountingEndpoint || !anonKey) throw new Error("Le connecteur de synchronisation Web n’est pas configuré.");
     const freshSession = await ensureFreshSession(activeSession);
     const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID, freshSession.deviceId, freshSession.account.organization_id);
@@ -501,7 +540,7 @@ function App() {
           const receipt=data.result as Record<string,unknown>;
           const serverRecord=receipt.result&&typeof receipt.result==="object"&&!Array.isArray(receipt.result)?receipt.result as Record<string,unknown>:{};
           const eventPayload=command.payload&&typeof command.payload==="object"&&!Array.isArray(command.payload)?command.payload as Record<string,unknown>:{};
-          if(id)setEntries(prev=>({...prev,[moduleId]:(prev[moduleId]??[]).map(x=>x.id===id?{
+          if(id&&isCurrent())setEntries(prev=>!isCurrent()?prev:({...prev,[moduleId]:(prev[moduleId]??[]).map(x=>x.id===id?{
             ...x,state:"Confirmé par le serveur",
             aggregateType:typeof command.aggregate_type==="string"?command.aggregate_type:x.aggregateType,
             actionCode:typeof command.action_code==="string"?command.action_code:x.actionCode,
@@ -517,9 +556,13 @@ function App() {
         if(willRetry)retrying++;else rejected++;
       }
     }
-    const remaining=await listQueued(OFFLINE_APP_ID,freshSession.deviceId,freshSession.account.organization_id);setPendingSyncCount(remaining.length);
+    const remaining=await listQueued(OFFLINE_APP_ID,freshSession.deviceId,freshSession.account.organization_id);
+    if(!isCurrent())return{acknowledged,retrying,rejected,remaining:remaining.length};
+    setPendingSyncCount(remaining.length);
     await syncWebPullChanges(freshSession).catch(()=>undefined);
+    if(!isCurrent())return{acknowledged,retrying,rejected,remaining:remaining.length};
     await hydrateWebRecords(freshSession);
+    if(!isCurrent())return{acknowledged,retrying,rejected,remaining:remaining.length};
     if(acknowledged)setAuthMessage(acknowledged+" opération(s) confirmée(s) par le journal serveur.");
     else if(retrying)setAuthMessage(retrying+" opération(s) en attente de reprise réseau.");
     else if(rejected)setAuthMessage(rejected+" opération(s) rejetée(s) ou anciennes à ré-enregistrer ; aucun reçu n'a été fabriqué.");
@@ -527,10 +570,11 @@ function App() {
     return{acknowledged,retrying,rejected,remaining:remaining.length};
   }
   async function syncWebPullChanges(activeSession: WebAuthSession) {
+    const isCurrent=captureSession(activeSession);
     if(!accountingEndpoint||!anonKey)throw new Error("Le connecteur de synchronisation Web n’est pas configuré.");
     const fresh=await ensureFreshSession(activeSession);
     let cursor=await getSyncCursor(OFFLINE_APP_ID,fresh.deviceId,fresh.account.organization_id),pages=0,received=0,more=true;
-    while(more&&pages<20){
+    while(more&&pages<20&&isCurrent()){
       const response=await fetch(accountingEndpoint,{method:"POST",credentials:"omit",headers:{"Content-Type":"application/json",apikey:anonKey,Authorization:"Bearer "+fresh.accessToken},body:JSON.stringify({action:"pull_sync_changes",org_id:fresh.account.organization_id,device_id:fresh.deviceId,after_cursor:cursor,limit:200})});
       const data=await response.json().catch(()=>({})) as Record<string,unknown>;
       if(!response.ok||data.ok!==true||!data.result||typeof data.result!=="object")throw new Error(typeof data.error==="string"?data.error:"WEB_SYNC_PULL_FAILED");
@@ -540,8 +584,10 @@ function App() {
       received+=page.changes.length;cursor=page.next_cursor;more=page.has_more;pages++;
     }
     const stored=await listSyncChanges(OFFLINE_APP_ID,fresh.deviceId,fresh.account.organization_id);
+    if(!isCurrent())return{received,cursor,morePending:more};
     setRemoteChanges(stored);
     setEntries(previous=>{
+      if(!isCurrent())return previous;
       const next={...previous};
       for(const change of stored){
         const moduleId=moduleForSyncAction(change.action_code);
@@ -586,6 +632,7 @@ function App() {
   async function submitStockItem() {
     const activeSession = authSession;
     if (!activeSession) { addLocalEntry(); return; }
+    const isCurrent=captureSession(activeSession);
     setBusy(true);
     try {
       const siteId = activeSiteId || activeSession.account.active_site_ids[0] || "";
@@ -598,7 +645,8 @@ function App() {
       const eventId = crypto.randomUUID();
       const payload={module_id:"stock",display_title:item.name,display_detail:item.sku||item.unit,action_code:"inventory_item.created",aggregate_type:"inventory_item",aggregate_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,payload:{inventory_item_id:inventoryItemId,org_id:activeSession.account.organization_id,site_id:siteId,sku:item.sku,name:item.name,unit:item.unit,reorder_level:item.reorderLevel,supplier_whatsapp:item.supplierWhatsApp}};
       await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:activeSession.deviceId,organizationId:activeSession.account.organization_id,payload:JSON.stringify(payload),state:"queued",createdAt:Date.now()});
-      setEntries((previous) => ({
+      if(!isCurrent())return;
+      setEntries((previous) => !isCurrent()?previous:({
         ...previous,
         stock: [...(previous.stock ?? []), {
           id: inventoryItemId, title: item.name, detail: item.sku || item.unit,
@@ -622,6 +670,7 @@ function App() {
   ) {
     const session = authSession;
     if (!session) throw new Error("AUTHENTICATION_REQUIRED");
+    const isCurrent=captureSession(session);
     if (!session.account.active_site_ids.includes(siteId)) throw new Error("SITE_SCOPE_FORBIDDEN");
     const eventId = crypto.randomUUID();
     const command = {
@@ -631,7 +680,9 @@ function App() {
       payload: { ...payload, org_id: session.account.organization_id, site_id: siteId },
     };
     await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:session.deviceId,organizationId:session.account.organization_id,payload:JSON.stringify(command),state:"queued",createdAt:Date.now()});
+    if(!isCurrent())return;
     setEntries(previous => {
+      if(!isCurrent())return previous;
       const rows=previous[moduleId]??[];
       const index=rows.findIndex(entry=>entry.id===aggregateId);
       const existing=index>=0?rows[index]:undefined;
