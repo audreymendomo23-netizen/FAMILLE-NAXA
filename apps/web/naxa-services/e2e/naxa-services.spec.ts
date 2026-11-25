@@ -210,7 +210,11 @@ test("Web: every non-Pressing activity completes its own server-backed métier j
       expect(transitionPayload.to_status).toBe(nextStatus);
       expect(transitionPayload.expected_version).toBe(expectedRevision);
       await expect(currentRecord.locator(".status-tag")).toHaveText(nextStage!.label);
-      await expect(currentRecord.locator(".activity-transition input")).toHaveValue("");
+      if (nextStage!.next.length > 0) {
+        await expect(currentRecord.locator(".activity-transition input")).toHaveValue("");
+      } else {
+        await expect(currentRecord.locator(".activity-transition")).toHaveCount(0);
+      }
       currentStatus = nextStatus;
       expectedRevision += 1;
     }
