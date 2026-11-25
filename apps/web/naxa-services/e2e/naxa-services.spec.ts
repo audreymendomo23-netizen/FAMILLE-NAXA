@@ -93,7 +93,8 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
       // Pressing transitions encode the target status in the action suffix, like ns_apply_sync_event.
       const pressingStatus = actionCode.startsWith("pressing_order.status_changed:")
         ? actionCode.slice("pressing_order.status_changed:".length) : null;
-      const status = actionCode === "cash_session.opened" ? "open"
+      const status = actionCode === "customer_followup.completed" ? (payload.next_due_at_if_repeating ? "active" : "completed")
+        : actionCode === "cash_session.opened" ? "open"
         : actionCode === "cash_session.closed" ? "closed"
         : typeof payload.to_status === "string" ? payload.to_status
         : typeof payload.status === "string" ? payload.status
@@ -640,4 +641,36 @@ test("Web security: list only own devices and revoke another device after explic
   await page.getByRole("button",{name:"Confirmer la révocation"}).click();
   await expect(otherRow).toContainText("Révoqué");
   expect(revocations).toBe(1);
+});
+
+
+test("Web CRM: create a follow-up, reschedule it with a confirmed completion and close it", async ({context}) => {
+  const events=await installBackend(context);
+  const page=await context.newPage();
+  await signIn(page);
+  await createCustomer(page,"Client suivi ERP");
+  await expect.poll(()=>events.length).toBe(1);
+  const customerId=String(events[0].aggregate_id);
+  await page.getByLabel("Client",{exact:true}).selectOption(customerId);
+  await page.getByLabel("Objet du suivi").fill("Contrôle satisfaction");
+  await page.getByLabel("Prochaine échéance",{exact:true}).fill("2030-01-01T10:00");
+  await page.getByRole("button",{name:"Créer le suivi client"}).click();
+  await expect.poll(()=>events.length).toBe(2);
+  expect(events[1].action_code).toBe("customer_followup.created");
+  const followupId=events[1].aggregate_id;
+  const record=page.locator(".activity-record").filter({hasText:"Contrôle satisfaction"});
+  await record.getByLabel("Note de réalisation").fill("Premier contact effectué");
+  await record.getByLabel("Prochaine échéance (facultative, suivi récurrent)").fill("2030-02-01T10:00");
+  await record.getByRole("button",{name:"Terminer et reprogrammer"}).click();
+  await expect.poll(()=>events.length).toBe(3);
+  expect(events[2].aggregate_id).toBe(followupId);
+  expect(events[2].action_code).toBe("customer_followup.completed");
+  expect((events[2].payload as Record<string,unknown>).next_due_at_if_repeating).toBeTruthy();
+  await expect(record.getByRole("button",{name:"Clôturer le suivi"})).toBeEnabled();
+  await record.getByRole("button",{name:"Clôturer le suivi"}).click();
+  await expect.poll(()=>events.length).toBe(4);
+  expect(events[3].aggregate_id).toBe(followupId);
+  expect((events[3].payload as Record<string,unknown>).next_due_at_if_repeating).toBeNull();
+  await expect(record.locator(".status-tag")).toHaveText("completed");
+  await expect(record.getByRole("button",{name:"Clôturer le suivi"})).toHaveCount(0);
 });

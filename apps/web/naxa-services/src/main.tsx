@@ -921,6 +921,16 @@ function App() {
     },siteId,input.title.trim(),input.customer.title+" · "+due.toLocaleDateString("fr-FR"));
   }
 
+  async function completeCustomerFollowup(input:{followup:Entry;note:string;nextDue:string}) {
+    const siteId=sharedOperationSiteId(),now=new Date(),nextDue=input.nextDue?new Date(input.nextDue):null;
+    if(input.followup.aggregateType!=="customer_followup"||input.followup.siteId!==siteId||input.followup.status!=="active"||
+      !(input.followup.state.includes("Confirmé par le serveur")||input.followup.state.startsWith("Reçu du serveur")))throw new Error("Suivi actif et confirmé du site requis.");
+    if(input.note.length>1000||(nextDue&&(!Number.isFinite(nextDue.getTime())||nextDue<=now)))throw new Error("Note ou nouvelle échéance invalide.");
+    await submitWebBusinessEvent("customers","customer_followup.completed","customer_followup",input.followup.id,{
+      followup_id:input.followup.id,completed_at:now.toISOString(),next_due_at_if_repeating:nextDue?.toISOString()??null,completion_note:input.note.trim(),
+    },siteId,input.followup.title,input.followup.detail,{status:input.followup.status});
+  }
+
   function moneyLabel(value:number):string{return Number.isFinite(value)?Math.round(value).toLocaleString("fr-FR")+" FCFA":"Montant invalide";}
 
   async function createWebWorkOrder(input: {
@@ -1183,7 +1193,7 @@ function App() {
               onPurchase={createSupplierPurchase} onReceive={receiveSupplierPurchase} onPay={paySupplier}
             /> :
             active === "team" ? <TeamOperationsPage memberId={authSession?.account.member_id} entries={(entries.team ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} /> :
-            active === "customers" ? <CustomerFollowupsPage entries={(entries.customers ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onCreate={createCustomerFollowup} /> :
+            active === "customers" ? <CustomerFollowupsPage entries={(entries.customers ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onCreate={createCustomerFollowup} onComplete={completeCustomerFollowup} /> :
             <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} authenticated={Boolean(authSession && !preview)} />}
 
           <div className="page-footnote"><span>ⓘ</span> {preview ? "Les créations sont gardées en mémoire dans cette session uniquement." : authSession ? "Les parcours disponibles utilisent le journal serveur et un reçu idempotent. Les fonctions non raccordées restent en lecture seule ou en aperçu." : "Aucun accès opérationnel n'est accordé avant authentification et synchronisation côté serveur."}</div>
