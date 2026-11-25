@@ -720,3 +720,14 @@ Branche inchangée : `work/naxa-services-completion-20261120`. Aucun déploiemen
 Dernier gate de code déclenché : [#595](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45663189559), SHA `2927983f8ec0581fb7fc98183c17758296ec8b8e`. Il n'est pas déclaré vert tant que les douze résultats n'ont pas été vérifiés. Les exécutions intermédiaires #590–594 ont été interrompues ou remplacées selon la concurrence du workflow ; elles ne constituent pas un PASS complet. Le dernier gate 12/12 intégralement terminé avant ces changements reste #588.
 
 Restent à démontrer : recette des applications Web et Android sur un backend commun, parité exhaustive des opérations ERP partagées, intégrations marchandes et FCM réelles, conformité/recette physique, signature Release et environnement NAXA SERVICES dédié. Ne pas confondre les tests simulés et les transactions réelles ni inventer de nouveaux secrets ou de nouvelles règles financières.
+
+
+### 22.8 — Correction de la dernière recette Web rouge, 25 novembre 2026
+
+Le run #595 a terminé à 11/12 jobs verts : Android (APK et tests instrumentés), PostgreSQL 17/RLS, politique financière et tous les autres contrats ont réussi. L'unique job rouge était le Web, avec 11 scénarios Playwright réussis sur 12. Le scénario CRM échouait sur le sélecteur exact du champ client, avant la création du suivi.
+
+Le correctif `192111fc21e2ed965c826011d4e64fd4657b0507` attribue au champ un nom accessible explicite, attend la présence de l'option client issue du reçu et vérifie le statut confirmé lors de la clôture. Le mock de recette incrémente les révisions des suivis CRM comme le contrat transactionnel. Aucune recette supprimée ou désactivée.
+
+**Preuve :** [run #596](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45676579558), [job Web](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45676579558/job/139425616194), journal `12 passed (45.1s)`. Au moment de cette note, 11 jobs du run #596 ont réussi, Android est encore en cours ; aucun échec observé. La comparaison entre les SHA de #595 et #596 ne contient que deux fichiers Web et ce document, donc le code Android précédemment validé n'a pas changé. Le PASS du nouveau job Android et la conclusion globale du run restent à constater.
+
+Aucun changement de main ni déploiement. Les gates de recette intégrée sur backend commun, parité exhaustive et activation réelle restent distincts de ce correctif CI.
