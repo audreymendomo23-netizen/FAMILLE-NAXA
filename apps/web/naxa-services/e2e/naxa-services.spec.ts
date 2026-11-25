@@ -284,7 +284,7 @@ test("Web: offline outbox survives tab closure, keeps tenant data isolated and c
   await context.setOffline(true);
   await createCustomer(page, "Client privé organisation A");
   await expect(page.getByText(/mise en file hors ligne/i)).toBeVisible();
-  await expect(page.getByText("Client privé organisation A")).toBeVisible();
+  await expect(page.locator(".module-layout .module-main-card").last().locator(".record").filter({ hasText: "Client privé organisation A" })).toBeVisible();
   await page.close();
 
   // Re-authenticate as a different organization on the same browser/device ID.
