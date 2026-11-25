@@ -466,7 +466,7 @@ test("Web N4-C: staff presence transitions follow the server-controlled sequence
   ] as const;
   for (let index = 0; index < actions.length; index++) {
     const [label, actionCode] = actions[index];
-    await page.getByRole("button", { name: label }).click();
+    await page.getByRole("button", { name: label }).first().click();
     await expect.poll(() => appliedEvents.length).toBe(index + 1);
     expect(appliedEvents[index].action_code).toBe(actionCode);
     expect(appliedEvents[index].aggregate_type).toBe(actionCode.replace(".recorded", ""));
