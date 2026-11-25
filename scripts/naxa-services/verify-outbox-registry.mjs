@@ -134,10 +134,17 @@ const edgeActionsBlock = edgeContract.match(/const ATOMIC_SYNC_ACTIONS:[\s\S]*?=
 assert.ok(edgeActionsBlock, "Cannot read the Edge atomic sync action allowlist.");
 const edgeSupported = [...edgeActionsBlock[1].matchAll(/^\s*"([^"]+)":\s*\{/gm)]
   .map(match => match[1]).sort();
+// The Web N4-C cash-register bootstrap is a Web-only atomic action.
+// Android's bounded coordinator remains exactly aligned for every shared action.
+const webOnlyActions = ["cash_register.created"];
+for (const action of webOnlyActions) {
+  assert.ok(edgeSupported.includes(action), "Missing Web-only atomic action in Edge allowlist: " + action);
+  assert.ok(!actualSupported.includes(action), "Web-only action must not silently expand Android coordinator: " + action);
+}
 assert.deepEqual(
   actualSupported,
-  edgeSupported,
-  "Android sync action coverage differs from the Edge allowlist."
+  edgeSupported.filter(action => !webOnlyActions.includes(action)),
+  "Shared Android/Edge sync action coverage differs."
 );
 
 function findKotlinFiles(dir) {
