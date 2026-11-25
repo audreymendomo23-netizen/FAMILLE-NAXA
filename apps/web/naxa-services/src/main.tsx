@@ -822,7 +822,7 @@ function App() {
       siteId,"Session · "+input.register.title,"Fonds d'ouverture "+input.openingFloat.toLocaleString("fr-FR")+" FCFA");
   }
 
-  async function createCashSale(input:{session:Entry;description:string;amount:number;itemId:string;quantity:number}) {
+  async function createCashSale(input:{session:Entry;description:string;amount:number;itemId:string;quantity:number;paymentMethod:string}) {
     const session=authSession;if(!session)throw new Error("AUTHENTICATION_REQUIRED");
     const siteId=sharedOperationSiteId(),id=crypto.randomUUID();
     if(input.session.status!=="open"||(!input.session.state.includes("Confirmé par le serveur")&&!input.session.state.startsWith("Reçu du serveur")))throw new Error("La session doit être ouverte et confirmée par le serveur.");
@@ -830,10 +830,10 @@ function App() {
     if(input.itemId&&(!Number.isFinite(input.quantity)||input.quantity<=0))throw new Error("Quantité de sortie stock invalide.");
     await submitWebBusinessEvent("cash","sale.created","sale",id,{
       sale_id:id,cash_session_id:input.session.id,sale_number:"VS-"+id.slice(0,8).toUpperCase(),
-      description:input.description.trim(),total_xaf:input.amount,payment_method:"cash",status:"confirmed",
+      description:input.description.trim(),total_xaf:input.amount,payment_method:input.paymentMethod,status:"confirmed",
       inventory_item_id:input.itemId||null,stock_quantity:input.itemId?input.quantity:null,
       created_at:new Date().toISOString(),
-    },siteId,"Vente · "+input.description.trim(),input.amount.toLocaleString("fr-FR")+" FCFA · espèces",{status:"pending"});
+    },siteId,"Vente · "+input.description.trim(),input.amount.toLocaleString("fr-FR")+" FCFA · "+(input.paymentMethod==="cash"?"espèces":"Mobile Money externe"),{status:"pending"});
   }
 
   async function closeCashSession(input:{session:Entry;countedClose:number;reason:string}) {

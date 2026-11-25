@@ -1798,7 +1798,7 @@ begin
 
   if p_deposit_xaf>0 then
     v_payment_id:=gen_random_uuid();
-    v_payment_status:=case when v_method='cash' then 'confirmed' else 'pending' end;
+    v_payment_status:='confirmed';
     insert into public.ns_payments(
       id,org_id,site_id,sale_id,pressing_order_id,cash_session_id,
       payment_method,provider_reference,amount_xaf,status,confirmation_source,
@@ -1807,19 +1807,18 @@ begin
       v_payment_id,p_org_id,p_site_id,null,p_order_id,
       case when v_method='cash' then p_cash_session_id else null end,
       v_method,null,p_deposit_xaf,v_payment_status,
-      case when v_method='cash' then 'cash_register' else null end,
-      case when v_method='cash' then v_member else null end,
-      case when v_method='cash' then now() else null end,
+      case when v_method='cash' then 'cash_register' else 'manual_external' end,
+      v_member,
+      now(),
       p_event_id,now()
     );
 
-    if v_method='cash' then
-      v_accounting_entry_id:=public.ns_post_accounting_entry(
-        p_org_id,p_site_id,'pressing_payment',v_payment_id,'cash_deposit_received',
-        'CASH_REGISTER','CUSTOMER_ADVANCES',p_deposit_xaf,
-        'Acompte espèces ticket pressing '||trim(p_ticket_number)
-      );
-    end if;
+    v_accounting_entry_id:=public.ns_post_accounting_entry(
+      p_org_id,p_site_id,'pressing_payment',v_payment_id,
+      case when v_method='cash' then 'cash_deposit_received' else 'external_deposit_recorded' end,
+      case when v_method='cash' then 'CASH_REGISTER' when v_method='mobile_money' then 'MOBILE_MONEY_CLEARING' else 'OTHER_TREASURY' end,
+      'CUSTOMER_ADVANCES',p_deposit_xaf,'Acompte reçu ticket pressing '||trim(p_ticket_number)
+    );
   end if;
 
   return jsonb_build_object(
@@ -2372,7 +2371,6 @@ begin
      or p_payment_method not in ('cash','mobile_money')
      or p_expected_status not in ('confirmed','pending')
      or (p_payment_method='cash' and p_expected_status<>'confirmed')
-     or (p_payment_method='mobile_money' and p_expected_status<>'pending')
      or ((p_inventory_item_id is null) <> (p_stock_quantity is null))
      or (p_stock_quantity is not null and p_stock_quantity<=0) then
     raise exception 'NAXA_SALE_INVALID';
@@ -2417,8 +2415,8 @@ begin
     end if;
   end if;
 
-  v_sale_status:=case when p_payment_method='cash' then 'posted' else 'draft' end;
-  v_payment_status:=case when p_payment_method='cash' then 'confirmed' else 'pending' end;
+  v_sale_status:=case when p_expected_status='confirmed' then 'posted' else 'draft' end;
+  v_payment_status:=p_expected_status;
   v_line_quantity:=coalesce(p_stock_quantity,1);
   v_unit_price_xaf:=ceil(p_total_xaf::numeric/v_line_quantity)::bigint;
   v_subtotal_xaf:=round(v_unit_price_xaf::numeric*v_line_quantity)::bigint;
@@ -2449,13 +2447,13 @@ begin
   ) values (
     v_payment_id,p_org_id,p_site_id,p_sale_id,null,p_payment_method,
     null,p_total_xaf,v_payment_status,
-    case when p_payment_method='cash' then 'cash_register' else null end,
-    case when p_payment_method='cash' then v_member else null end,
-    case when p_payment_method='cash' then p_created_at else null end,
+    case when p_payment_method='cash' then 'cash_register' when p_expected_status='confirmed' then 'manual_external' else null end,
+    case when p_expected_status='confirmed' then v_member else null end,
+    case when p_expected_status='confirmed' then p_created_at else null end,
     p_event_id,p_created_at
   );
 
-  if p_payment_method='cash' then
+  if p_expected_status='confirmed' then
     v_posting:=public.ns_post_sale_inventory(p_org_id,p_site_id,p_sale_id,p_event_id);
   else
     v_posting:=jsonb_build_object('status','awaiting_verified_provider_confirmation',

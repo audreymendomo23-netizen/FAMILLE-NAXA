@@ -2542,7 +2542,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             description = description.trim(),
             totalXaf = totalXaf,
             paymentMethod = paymentMethod,
-            status = if (paymentMethod == "cash") "confirmed" else "pending",
+            status = "confirmed",
             actorMemberId = actorMemberId,
             createdAtMillis = now,
             inventoryItemId = linkedStockItem?.id,
@@ -2552,7 +2552,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             costSnapshotComplete = hasReliableCostSnapshot
         )
         dao.insertSale(sale)
-        if (linkedStockItem != null && paymentMethod == "cash") {
+        if (linkedStockItem != null) {
             val updatedItem = linkedStockItem.copy(quantity = linkedStockItem.quantity - (stockQuantity ?: 0.0))
             dao.updateInventoryItem(updatedItem)
             val movement = LocalInventoryMovement(
@@ -2562,7 +2562,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 itemId = linkedStockItem.id,
                 movementType = "out",
                 quantityDelta = -(stockQuantity ?: 0.0),
-                reason = "Vente espèces " + sale.saleNumber,
+                reason = "Vente encaissée " + sale.saleNumber,
                 actorMemberId = actorMemberId,
                 createdAtMillis = now
             )

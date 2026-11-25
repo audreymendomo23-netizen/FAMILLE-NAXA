@@ -1182,7 +1182,7 @@ private fun PressingLocalContent(
                             }
                         } else if (depositPaymentMethod in setOf("mobile_money", "other")) {
                             Text(
-                                if (fr) "L'acompte reste en attente : il ne sera pas ajouté à la caisse avant confirmation du paiement." else "The deposit remains pending and is excluded from the cash balance until payment confirmation.",
+                                if (fr) "Saisis uniquement l'acompte déjà reçu hors application ; il n'entre pas dans le solde des espèces." else "Record only a deposit already received outside the app; it is excluded from physical cash.",
                                 color = MaterialTheme.colorScheme.secondary,
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -1772,7 +1772,7 @@ private fun CashLocalContent(
                             if (selectedStockValuation == null || linkedStockPrice <= 0L) {
                                 Text("Aucun prix de vente configuré pour cet article. Enregistre sa valorisation dans le module Stock.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                             }
-                            Text("Les ventes espèces sortent immédiatement le stock. Les ventes Mobile Money le réservent jusqu'à confirmation vérifiée côté serveur.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Saisis uniquement les paiements déjà reçus hors application. La vente et la sortie de stock sont enregistrées ensemble.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         OutlinedTextField(saleDescription, { saleDescription = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.sale_description)) }, singleLine = true)
                         OutlinedTextField(
@@ -1813,7 +1813,7 @@ private fun CashLocalContent(
                                             if (pair.first.inventoryItemId != null) {
                                                 "Encaissement enregistré ; sortie de stock et mouvement d'inventaire créés dans la même transaction."
                                             } else {
-                                                "Encaissement espèces enregistré localement. Le reçu est prêt."
+                                                "Encaissement reçu hors application enregistré localement. Le reçu ERP est prêt."
                                             }
                                         }
                                     }.onFailure { error = it.message ?: "Vente impossible." }

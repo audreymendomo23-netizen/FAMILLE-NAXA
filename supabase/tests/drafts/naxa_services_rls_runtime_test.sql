@@ -1403,7 +1403,7 @@ BEGIN
     )
   );
   IF v_result->>'status'<>'applied'
-     OR v_result->'result'->>'deposit_payment_status'<>'pending'
+     OR v_result->'result'->>'deposit_payment_status'<>'confirmed'
      OR v_result->'result'->>'deposit_payment_method'<>'mobile_money'
      OR v_result->'result'->>'cash_session_id' is not null THEN
     RAISE EXCEPTION 'PRESSING_MOBILE_MONEY_DEPOSIT_MUST_REMAIN_PENDING: %',v_result;
@@ -1502,7 +1502,7 @@ BEGIN
   IF v_status<>'closed' OR v_expected<>5200 OR v_expenses<>1000 OR v_receipts<>1
      OR v_pressing_cash_status<>'confirmed'
      OR v_pressing_cash_session<>'9f000000-0000-4000-8000-000000000001'
-     OR v_pressing_momo_status<>'pending' OR v_pressing_momo_session is not null
+     OR v_pressing_momo_status<>'confirmed' OR v_pressing_momo_session is not null
      OR v_advance_entry_count<>1 OR v_advance_entry_amount<>1200
      OR v_advance_debit<>'CASH_REGISTER' OR v_advance_credit<>'CUSTOMER_ADVANCES' THEN
     RAISE EXCEPTION 'CASH_SESSION_SERVER_BALANCE_PAYMENT_OR_ADVANCE_LEDGER_ASSERTION_FAILED';

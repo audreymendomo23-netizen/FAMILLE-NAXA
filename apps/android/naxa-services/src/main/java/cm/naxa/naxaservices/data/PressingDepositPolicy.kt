@@ -39,7 +39,7 @@ internal object PressingDepositPolicy {
                 require(sessionId == null) {
                     "Un paiement non espèces ne peut pas être rattaché à une session de caisse."
                 }
-                PressingDepositTerms(method, null, "pending")
+                PressingDepositTerms(method, null, "confirmed")
             }
             else -> throw IllegalArgumentException("Choisis explicitement le mode d'encaissement de l'acompte.")
         }

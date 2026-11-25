@@ -31,22 +31,22 @@ class PressingDepositPolicyTest {
     }
 
     @Test
-    fun mobileMoneyDepositRemainsPendingAndCannotUseCashSession() {
+    fun mobileMoneyDepositRecordedManuallyAndCannotUseCashSession() {
         val terms = PressingDepositPolicy.resolve(2500L, "mobile_money", null)
         assertEquals("mobile_money", terms.paymentMethod)
         assertNull(terms.cashSessionId)
-        assertEquals("pending", terms.status)
+        assertEquals("confirmed", terms.status)
         assertThrows(IllegalArgumentException::class.java) {
             PressingDepositPolicy.resolve(2500L, "mobile_money", "session-01")
         }
     }
 
     @Test
-    fun otherNonCashDepositRemainsPending() {
+    fun otherNonCashDepositRecordedManually() {
         val terms = PressingDepositPolicy.resolve(1000L, "other", null)
         assertEquals("other", terms.paymentMethod)
         assertNull(terms.cashSessionId)
-        assertEquals("pending", terms.status)
+        assertEquals("confirmed", terms.status)
     }
 
     @Test

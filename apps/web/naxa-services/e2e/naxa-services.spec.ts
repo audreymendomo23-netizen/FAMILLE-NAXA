@@ -454,11 +454,18 @@ test("Web N4-C: cash register, cash session, cash sale and close require server 
   expect((appliedEvents[2].payload as Record<string, unknown>).payment_method).toBe("cash");
   expect((appliedEvents[2].payload as Record<string, unknown>).status).toBe("confirmed");
 
+  await page.getByLabel("Désignation vendue").fill("Prestation Mobile Money externe");
+  await page.getByRole("combobox",{name:"Mode d’encaissement reçu"}).selectOption("mobile_money");
+  await page.getByLabel("Total encaissé (FCFA)").fill("1000");
+  await page.getByRole("button",{name:"Enregistrer la vente comptant"}).click();
+  await expect.poll(()=>appliedEvents.length).toBe(4);
+  expect((appliedEvents[3].payload as Record<string,unknown>).payment_method).toBe("mobile_money");
+  expect((appliedEvents[3].payload as Record<string,unknown>).status).toBe("confirmed");
   await page.getByLabel("Montant compté à la clôture (FCFA)").fill("7500");
   await page.getByRole("button", { name: "Clôturer et calculer l'écart serveur" }).click();
-  await expect.poll(() => appliedEvents.length).toBe(4);
-  expect(appliedEvents[3].action_code).toBe("cash_session.closed");
-  expect((appliedEvents[3].payload as Record<string, unknown>).counted_close_xaf).toBe(7500);
+  await expect.poll(() => appliedEvents.length).toBe(5);
+  expect(appliedEvents[4].action_code).toBe("cash_session.closed");
+  expect((appliedEvents[4].payload as Record<string, unknown>).counted_close_xaf).toBe(7500);
   await expect(page.getByText(/opération\(s\) confirmée/)).toBeVisible();
   await page.close();
 });
