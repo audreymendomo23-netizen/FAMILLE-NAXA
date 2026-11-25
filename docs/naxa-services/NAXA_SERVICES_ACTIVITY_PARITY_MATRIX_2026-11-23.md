@@ -1,8 +1,8 @@
 # NAXA SERVICES — matrice de couverture des activités métiers
 
-**Date : 23 novembre 2026**  
+**Date initiale : 23 novembre 2026 — dernière preuve : 25 novembre 2026**  
 **Branche :** `work/naxa-services-completion-20261120`  
-**Statut :** socle multisecteur ajouté et raccordements verticaux engagés ; validation CI en cours, parité ERP totale non encore acquise.
+**Statut :** VERT pour le cœur des 13 parcours de dossiers métiers et leurs contrôles CI Web / Android / PostgreSQL ; PARTIEL pour la couverture complète des modules ERP partagés et les intégrations hébergées.
 
 ## 1. Règle d'architecture
 
@@ -69,37 +69,48 @@ Le registre Web de référence est `apps/web/naxa-services/src/erp/activity-work
 - Le contrat de synchronisation a reçu des tests create/status-change pour `work_order`, `repair_order` et `service_order`, ainsi que des cas de spoofing d'identifiant et d'écart de site.
 - **Ce SQL est un brouillon non déployé.** Aucun environnement Supabase n'a été modifié.
 
-## 4. Matrice de statut réelle
+## 4. Matrice de statut réelle — mise à jour du 25 novembre 2026
 
-| Couche | État après cette passe | Ce que cela signifie |
+| Couche | État | Preuve et portée exacte |
 |---|---|---|
-| Inventaire des 13 profils | Code décrit | 13 profils couverts par le registre |
-| Champs et cycles spécialisés Web | Implémentés dans le nouveau module | Contrat métier et interface, pas encore une recette E2E verte |
-| Création/transition générique Web | Raccordement au journal N3 | Dépend de l'exécution CI et d'un test sur environnement serveur autorisé |
-| Écrans métier Android | Champs et transitions existants/alignés | Données locales + outbox ; recette Android de cette passe encore requise |
-| Matrice SQL candidate | Brouillon aligné | Pas appliqué, pas d'intégration hébergée |
-| Agenda, caisse, ventes, paiement, stock, achats, CRM, RH, fidélité et rapports | Partiel selon module | Les dossiers métier ne livrent pas à eux seuls tous ces cycles partagés |
-| Parité complète Web ↔ Android | Non démontrée | Les deux applications doivent réussir les mêmes scénarios sur deux installations |
-| Déploiement NAXA Services dédié | Bloqué externe | Aucun projet Supabase dédié connecté n'est disponible dans la connexion actuelle |
+| Inventaire des activités | VERT | 13 profils présents dans le registre Web et le catalogue Android ; profils comparés : 13/13 identiques. |
+| Formulaires et champs Web | VERT | Champs typés, obligatoires, listes contrôlées, nombres, dates et zones de texte. Les 12 profils génériques et le Pressing dédié sont exercés dans la recette Chromium. |
+| Cycles Web des dossiers métier | VERT | E2E : les 12 parcours génériques sont créés puis suivis jusqu'à leur état terminal closed ; le Pressing est créé puis avancé jusqu'à picked_up. Chaque transition attend le reçu serveur simulé et vérifie l'état affiché. |
+| Web / PWA | VERT | Build de production, tests Auth et 5/5 scénarios Chromium réussis : parcours métiers, reprise offline, isolation organisation, IndexedDB multi-onglets et shell PWA hors ligne. |
+| Catalogue et validations Android | VERT | Catalogue Kotlin des 13 profils ; tests unitaires des champs, enums, bornes, dates, graphes de transitions, états terminaux et compatibilité des anciens dossiers. |
+| Android Debug / émulateur | VERT | Tests unitaires, compilation APK Debug et 11 tests instrumentés sur émulateur API 35 (Keystore/PIN, login, Room/outbox et registre Push) réussis. APK téléversé comme artefact CI. |
+| Contrat SQL candidat | VERT CI jetable | Drafts appliqués à PostgreSQL 17 jetable ; validations des champs et transitions, création Garage synchronisée, rejet d'un saut d'étape, acceptation de diagnostic et contrôle de la révision/état serveur. RLS/runtime réussi. |
+| Contrats transversaux | VERT CI | Auth, synchronisation hors ligne, parrainage, tarifs, comptabilité/fournisseurs, sécurité statique, notifications, paiements, commissions, fiscalité et promotions réussis. |
+| Modules ERP partagés | PARTIEL | Les cycles complets agenda/disponibilités, caisse/POS/paiements/reçus, achats/réception/fournisseurs, consommation de stock, CRM/fidélité, RH/commissions et rapports détaillés ne sont pas tous raccordés de bout en bout pour chaque secteur. |
+| Parité ERP totale Web ↔ Android | PARTIEL | Les registres métier, champs et cycles d'étapes sont alignés ; la preuve ne couvre pas encore chaque transaction des modules partagés sur deux applications physiques et un backend hébergé commun. |
+| Environnement Supabase NAXA Services dédié | BLOQUÉ EXTERNE | Aucun projet dédié n'est déployé par cette passe. Le SQL candidat a été exécuté uniquement sur PostgreSQL 17 jetable ; le Supabase historique NAXA/pharmacie n'a pas été modifié. |
 
-## 5. Scénarios de recette à exécuter
+## 5. Scénarios exécutés et scénarios encore ouverts
 
-Pour chacun des 13 profils :
-1. créer une organisation de test avec ce profil, puis vérifier le profil retourné par Auth ;
-2. créer un dossier avec les seuls champs obligatoires, rejeter le dossier si un champ requis manque ;
-3. vérifier le type de registre, le site source, l'auteur, le montant et les métadonnées ;
-4. franchir chaque transition permise et refuser chaque transition interdite ; vérifier motif, révision, idempotence et historique ;
-5. synchroniser appareil A → serveur → appareil B puis B → A, sans doublon ni echo ;
-6. tester isolation organisation/site, profil absent/inconnu, accès interdit et session/appareil révoqué ;
-7. vérifier que les modules partagés (agenda, caisse/paiements, stock, achats, RH, fidélité, rapports) sont appelés via leurs propres transactions et non simulés par le dossier.
+### Preuves exécutées
 
-Scénarios supplémentaires :
-- Pressing : dépôt multi-pièces, tache/défaut, ticket, date promise, retrait et vêtement non retiré.
-- Parfumerie : SKU/variante, entrée fournisseur, vente POS, stock décrémenté et paiement confirmé ; réservation spéciale distincte de la vente.
-- Coiffure/beauté : disponibilité du prestataire et du poste, rendez-vous, durée, annulation et commission uniquement sur vente réglée.
-- Garage/réparation : état du bien au dépôt, devis accepté/refusé, pièce consommée, test, garantie configurée et restitution.
-- Nettoyage/domicile : récurrence/contrat ou créneau, adresse, équipe, checklist et preuve de passage.
-- Imprimerie/photo/production : preuve/épreuve, accord, ressources, production, contrôle, livrables et réception.
+1. **13 profils** : les 12 profils génériques sont créés avec leurs champs obligatoires et conduits par le graphe Web jusqu'à closed ; le Pressing suit son parcours distinct jusqu'à picked_up.
+2. **Validation des données** : tests unitaires Kotlin et validations PostgreSQL des champs requis, valeurs d'énumération, dates et bornes numériques ; cas invalides rejetés.
+3. **Transitions et synchronisation serveur** : le runtime PostgreSQL teste la création d'un ordre Garage, refuse le saut received → approved, accepte received → diagnostic avec révision 2 et vérifie l'état stocké.
+4. **Web / PWA** : 5/5 tests Playwright réussis, dont outbox après fermeture d'onglet, cloisonnement multi-organisation, deux onglets concurrents, curseurs entrants et navigation PWA hors ligne.
+5. **Android** : tests unitaires, APK Debug et 11 tests instrumentés Keystore/PIN, login, migrations/outbox et Push réussis sur émulateur API 35.
+6. **Sécurité serveur** : schémas, droits, isolation organisation/site et RLS runtime exécutés sur une base PostgreSQL 17 jetable.
+
+### Limites non couvertes par ces preuves
+
+- Le simulateur backend de l'E2E Chromium valide le contrat navigateur et les reçus attendus ; il ne remplace pas une recette hébergée contre le projet Supabase NAXA Services.
+- Le scénario serveur métier positif de cette passe porte sur Garage ; les validateurs et transitions des 12 profils sont testés directement, mais toutes les combinaisons de transitions et tous les agrégats ne font pas encore l'objet d'une recette transactionnelle serveur exhaustive.
+- La synchronisation fournisseur Android entre deux bases Room est couverte par un test instrumenté, mais la réplication croisée de chacun des 13 parcours métiers entre Android, Web et Supabase hébergé reste à réaliser.
+- Les 13 parcours de dossiers ne remplacent pas les cycles de réservation/agenda, caisse, ventes, paiements, factures, approvisionnement, stock, fidélité, paie, commissions et reporting. Ces modules doivent rester pilotés par leurs objets et transactions dédiés.
+
+### Scénarios métier complémentaires à fermer
+
+- Pressing : dépôt multi-pièces avec défauts/taches, retrait, conservation et relance des pièces non retirées.
+- Parfumerie : SKU/variantes, réception fournisseur, vente POS, décrément de stock et paiement confirmé ; réservation distincte de la vente.
+- Coiffure/beauté : disponibilité du prestataire et du poste, rendez-vous, durée, collision, annulation et commission sur vente réglée.
+- Garage/réparation : état et accessoires au dépôt, devis accepté/refusé, sortie de pièces, test, garantie paramétrée et restitution.
+- Nettoyage/domicile : contrat ou récurrence, créneau, adresse, équipe affectée, checklist et preuve de passage.
+- Imprimerie/photo/production : épreuve ou preuve, accord, ressources, consommation, production, contrôle, livrables et réception.
 
 ## 6. Points non résolus / décisions à ne pas inventer
 
@@ -107,12 +118,24 @@ Les valeurs suivantes restent configurables ou à arbitrer avant leur automatisa
 
 La présente matrice n'autorise aucune collecte de données disproportionnée. Le cloisonnement par rôle/site, la politique d'export et la conservation des dossiers, plans, mensurations et preuves doivent être testés avec les permissions du serveur.
 
-## 7. Reprise N4
+## 7. Reprise N4 — ordre des travaux restant
 
-Reprendre au point N4-C puis N4-D sans recommencer le socle N3 :
-- N4-C : compléter séparément les modules partagés Web manquants (disponibilité/transition d'agenda, caisse complète, ventes/paiements/reçus, fournisseurs-achats-réception, CRM/fidélité, équipe/commissions, stock et projections détaillées) ;
-- N4-D : build Web et Android, tests Vitest/Deno/Kotlin, tests PostgreSQL 17 du SQL candidat, Playwright sur Chromium, puis tests multi-appareils et tests de chaque profil ;
-- garder les mutations sans handler en fail-closed ;
-- aucun run pending n'est PASS ; aucun environnement réel ne doit être supposé.
+- **N4-C — modules partagés** : poursuivre séparément les disponibilités/transitions d'agenda, la caisse complète, les ventes/paiements/reçus, les fournisseurs/achats/réceptions, le CRM/fidélité, l'équipe/commissions, les mouvements de stock et les projections détaillées.
+- **N4-D — activité métier** : les gates CI Web/Chromium, Android Debug/API 35 et PostgreSQL 17 du cœur des dossiers métiers sont VERTS sur le SHA indiqué ci-dessous. Ne pas rouvrir ces points sans changement de code ; toute modification ultérieure doit relancer le gate complet.
+- Garder les mutations sans handler serveur fail-closed.
+- Aucun run pending ou in_progress ne vaut PASS ; aucun environnement réel, secret marchand ou compte Firebase ne doit être supposé.
 
-**Garde-fous inchangés :** travail sur `work/naxa-services-completion-20261120` uniquement ; aucun changement de `main`, aucune fusion, aucun déploiement, aucune migration hébergée et aucune modification du Supabase NAXA pharmacie historique.
+**Garde-fous inchangés :** travail sur work/naxa-services-completion-20261120 uniquement ; aucun changement de main, aucune fusion, aucun déploiement, aucune migration hébergée et aucune modification du Supabase NAXA pharmacie historique.
+
+## 8. Addendum de preuve — 25 novembre 2026
+
+**Exécution GitHub Actions :** [run #567 — succès complet](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45530039938)  
+**SHA validé :** cd0a4eaae76d5da44aabd88c363d9ab2fd1541ff  
+**Résultat :** 12/12 jobs terminés avec success.
+
+- **Web/PWA** : tests Auth 24/24 ; build Vite réussi ; Playwright/Chromium 5/5 ; scénario métier couvrant les 12 profils génériques et le Pressing dédié ; offline/IndexedDB multi-onglets et shell PWA hors ligne réussis.
+- **Android** : tests unitaires réussis ; APK Debug construit ; 11/11 tests instrumentés sur émulateur API 35 réussis ; artefact [naxa-services-debug-apk](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45530039938/artifacts/14985375669) téléversé (13 718 905 octets).
+- **PostgreSQL** : drafts candidats appliqués à une base de test PostgreSQL 17 jetable ; tests runtime/RLS, validations des profils et synchronisation Garage réussis.
+- **Contrats complémentaires** : Auth, sync inter-applications, parrainage, tarifs, comptabilité/fournisseurs, sécurité SQL statique, notifications, paiements/commissions/fiscalité et promotions réussis.
+
+**Périmètre du vert :** le cœur des dossiers métiers est vert en CI. Cela ne transforme pas en vert les modules ERP partagés non encore livrés intégralement, l'intégration sur un projet Supabase hébergé, les webhooks Mobile Money réels, le push FCM réel, une Release Android signée ni les validations comptables, fiscales, juridiques et physiques qui requièrent des paramètres ou accès externes. Aucun déploiement et aucune migration sur le Supabase NAXA pharmacie n'ont été effectués.
