@@ -7,7 +7,7 @@ insert into public.ns_members(id,org_id,account_id,display_name,role_code,status
 insert into public.ns_member_scopes(org_id,member_id,scope_type,scope_id,can_read,can_operate,can_manage) values ('20000000-0000-4000-8000-000000000071','60000000-0000-4000-8000-000000000071','organization','20000000-0000-4000-8000-000000000071',true,true,true);
 insert into public.ns_devices(account_id,installation_id,platform,label,remember_device,session_id) values ('50000000-0000-4000-8000-000000000071','sub-ci','android','CI payer',true,'sub-ci-session');
 insert into public.ns_subscription_destinations values ('mtn_momo','123456','CI ONLY','237690000072',true);
-insert into public.ns_subscription_admin_devices(id,auth_user_id,channel,session_id,active) values ('80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','mtn_momo','admin-ci',true);
+insert into public.ns_subscription_admin_devices(id,auth_user_id,channel,session_id,destination_reference,sms_capture_allowed,active) values ('80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','mtn_momo','admin-ci','237690000072',true,true);
 do $f$ begin
  if public.ns_subscription_amount('ACCESS',1,date '2027-04-30')<>3000 or public.ns_subscription_amount('PREMIUM',12,date '2027-05-01')<>150000 then raise exception 'TARIFF_BOUNDARY'; end if;
 end $f$;
@@ -37,5 +37,27 @@ declare i public.ns_subscription_intents%rowtype; r jsonb; r2 jsonb; begin
  r2:=public.ns_subscription_confirm_credit(i.id,'80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','admin-ci','mtn_momo','FIXTURETX71','237690000072',i.amount_xaf,'690000071',now(),now(),repeat('b',64),'MobileMoney');
  if r->>'status'<>'confirmed' or r->>'receipt_number' is null or r<>r2 or (select count(*) from public.ns_subscription_credit_proofs where intent_id=i.id)<>1 then raise exception 'CONFIRMATION_OR_IDEMPOTENCE_FAILED'; end if;
  if exists(select 1 from public.ns_payments where org_id=i.org_id) then raise exception 'SUBSCRIPTION_LEAKED_INTO_TENANT_CASH'; end if;
+end $f$;
+-- Credit may arrive first; it must remain pending without a debit declaration.
+set local role authenticated;
+do $f$ declare j jsonb; begin
+ j:=public.ns_subscription_create('20000000-0000-4000-8000-000000000071','ACCESS',1,'mtn_momo');
+ if j->>'status'<>'pending' then raise exception 'RENEWAL_INTENT_NOT_PENDING'; end if;
+end $f$;
+reset role;
+do $f$ declare i public.ns_subscription_intents%rowtype; v jsonb; begin
+ select * into i from public.ns_subscription_intents where org_id='20000000-0000-4000-8000-000000000071' and status='pending';
+ v:=public.ns_subscription_ingest_credit('80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','admin-ci','mtn_momo','RENEWALTX71','237690000072',i.amount_xaf,'690000071',now(),now(),repeat('c',64),'MobileMoney');
+ if v->>'capture_status'<>'pending' then raise exception 'CREDIT_ONLY_ACTIVATED'; end if;
+end $f$;
+set local role authenticated;
+do $f$ declare i jsonb; v jsonb; begin
+ select item into i from jsonb_array_elements(public.ns_subscription_list('20000000-0000-4000-8000-000000000071')->'intents') item where item->>'status'='pending';
+ v:=public.ns_subscription_declare_sms((i->>'id')::uuid,'Your payment of '||(i->>'amount_xaf')||' XAF to CI ONLY (237690000072) was completed at '||to_char(now() at time zone 'Africa/Douala','YYYY-MM-DD HH24:MI:SS')||'. Financial transaction id: RENEWALTX71','690000071',null);
+ if v->>'status'<>'confirmed' then raise exception 'CREDIT_FIRST_MATCH_FAILED: %',v; end if;
+end $f$;
+reset role;
+do $f$ begin
+ if not exists(select 1 from public.ns_subscription_credit_candidates where transaction_reference='RENEWALTX71' and status='matched') then raise exception 'CREDIT_CANDIDATE_NOT_CONSUMED'; end if;
 end $f$;
 rollback;

@@ -1,4 +1,5 @@
-import { hasActiveDeviceSession } from "../_shared/naxa-services-device-session.ts";
+import { hasActiveDeviceSession, verifiedTokenSessionId } from "../_shared/naxa-services-device-session.ts";
+import { parseSubscriptionCredit } from "./subscription_credit_contract.ts";
 import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, isNaxaSiteCode, isNaxaWorkstationCode, isNaxaWorkstationKind, nativeSiteIdsForScopes } from "./scope_contract.ts";
 // NAXA SERVICES authentication gateway — source only, NOT deployed.
 // Required server-side secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
@@ -1116,6 +1117,28 @@ async function revokeDevice(body: Record<string, unknown>, token: string) {
   return { status: 200, body: { revoked: true } };
 }
 
+// Restricted to a central beneficiary device explicitly enrolled out of band.
+async function subscriptionAdminCapture(body:Record<string,unknown>,token:string) {
+  const auth=await authCall("user",{method:"GET"},token);
+  const sessionId=verifiedTokenSessionId(token);
+  if(!auth.ok||!auth.data.id||!sessionId||body.capture_source!=="sms_receiver")return {status:403,body:{message:"Capture SMS bénéficiaire autorisée uniquement."}};
+  const id=String(body.device_id??"");
+  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))return {status:403,body:{message:"Appareil non autorisé."}};
+  const rows=await rest("ns_subscription_admin_devices?select=id,auth_user_id,channel,session_id,destination_reference&id=eq."+encodeURIComponent(id)+"&auth_user_id=eq."+encodeURIComponent(String(auth.data.id))+"&session_id=eq."+encodeURIComponent(sessionId)+"&active=eq.true&sms_capture_allowed=eq.true&limit=2",{headers:serviceHeaders()}) as Record<string,unknown>[];
+  if(!Array.isArray(rows)||rows.length!==1)return {status:403,body:{message:"Appareil non autorisé."}};
+  const device=rows[0],channel=device.channel;
+  if(channel!=="mtn_momo"&&channel!=="orange_money")return {status:403,body:{message:"Canal non autorisé."}};
+  const sender=channel==="mtn_momo"?"MobileMoney":"OrangeMoney";
+  const captured=typeof body.captured_at==="string"?new Date(body.captured_at):new Date(NaN);
+  if(body.sender_origin_id!==sender||!Number.isFinite(captured.getTime())||captured.getTime()>Date.now()+300000||captured.getTime()<Date.now()-86400000)return {status:422,body:{message:"Capture hors fenêtre ou origine non reconnue ; revue requise."}};
+  const proof=parseSubscriptionCredit(body.sms,channel,String(device.destination_reference),captured.toISOString());
+  if(!proof)return {status:422,body:{message:"SMS crédit incomplet ou non reconnu ; revue requise."}};
+  try {
+    const data=await rest("rpc/ns_subscription_ingest_credit",{method:"POST",headers:serviceHeaders(),body:JSON.stringify({p_device:id,p_admin:auth.data.id,p_session:sessionId,p_channel:channel,p_ref:proof.ref,p_destination:proof.destination,p_amount:proof.amount,p_payer:proof.payer,p_occurred:proof.occurredAt,p_captured:captured.toISOString(),p_sha:await sha256(String(body.sms)),p_sender:sender})});
+    return {status:200,body:{capture_result:data}};
+  }catch{return {status:409,body:{message:"Capture non acceptée ; rapprochement manuel nécessaire."}};}
+}
+
 async function subscriptionAction(action:string,body:Record<string,unknown>,token:string) {
   const actor=await actorContext(token);
   if(!actor || actor.member.role_code!=="promoter") return {status:403,body:{message:"Gestionnaire de l’organisation requis."}};
@@ -1162,6 +1185,7 @@ Deno.serve(async (request: Request) => {
     else if (action === "list_own_devices") result = await listOwnDevices(bearer);
     else if (action === "revoke_device") result = await revokeDevice(body, bearer);
     else if (["subscription_list","subscription_create","subscription_declare"].includes(action)) result = await subscriptionAction(action,body,bearer);
+    else if (action === "subscription_admin_capture") result = await subscriptionAdminCapture(body,bearer);
     else result = { status: 400, body: { message: "Action non reconnue." } };
 
     return response(result.status, result.body, origin);
