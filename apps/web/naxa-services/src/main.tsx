@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { SubscriptionPage } from "./erp/subscription";
 import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, listAppEvents, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
 import { normalizeInventoryItemDraft } from "./erp/inventory";
 import {
@@ -185,6 +186,15 @@ function App() {
     return data;
   }
 
+  async function requestSubscription(payload:Record<string,unknown>) {
+    if(!authSession)throw new Error("Connexion requise.");
+    const current=captureSession(authSession);
+    const fresh=await ensureFreshSession(authSession);
+    if(!current())throw new Error("Session expirée.");
+    const result=await authRequest(payload,fresh.accessToken);
+    if(!current())throw new Error("Session expirée.");
+    return result.subscription_result;
+  }
   async function hydrateWebRecords(activeSession: WebAuthSession) {
     const isCurrent=captureSession(activeSession);
     const [allEvents,pending]=await Promise.all([listAppEvents(OFFLINE_APP_ID,activeSession.deviceId,activeSession.account.organization_id),listQueued(OFFLINE_APP_ID,activeSession.deviceId,activeSession.account.organization_id)]);
@@ -1158,7 +1168,7 @@ function App() {
           </div>
 
           {active === "overview" ? <Overview entries={entries} onNavigate={setActive} mode={mode} /> :
-            active === "organization" ? <OrganizationPage mode={mode} setMode={setMode} siteName={siteName} setSiteName={setSiteName} editable={preview || authSession?.account.role_code === "promoter"} onSave={saveWebOrganizationProfile} locale={authSession?.account.default_locale ?? "fr"} /> :
+            active === "organization" ? <><OrganizationPage mode={mode} setMode={setMode} siteName={siteName} setSiteName={setSiteName} editable={preview || authSession?.account.role_code === "promoter"} onSave={saveWebOrganizationProfile} locale={authSession?.account.default_locale ?? "fr"} /><SubscriptionPage key={authSession?.account.organization_id+":"+authSession?.deviceId} enabled={Boolean(authSession&&!preview&&authSession.account.role_code==="promoter")} request={requestSubscription}/></> :
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
             active === "security" ? <DeviceSecurityPage key={authSession?.deviceId??"preview"} authenticated={Boolean(authSession&&!preview)} onLoad={loadOwnDevices} onRevoke={revokeOwnDevice} /> :

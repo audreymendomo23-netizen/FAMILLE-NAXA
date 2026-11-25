@@ -1116,6 +1116,20 @@ async function revokeDevice(body: Record<string, unknown>, token: string) {
   return { status: 200, body: { revoked: true } };
 }
 
+async function subscriptionAction(action:string,body:Record<string,unknown>,token:string) {
+  const actor=await actorContext(token);
+  if(!actor || actor.member.role_code!=="promoter") return {status:403,body:{message:"Gestionnaire de l’organisation requis."}};
+  const org=String(actor.member.org_id);
+  let rpc:string; let payload:Record<string,unknown>;
+  if(action==="subscription_list"){rpc="ns_subscription_list";payload={p_org:org};}
+  else if(action==="subscription_create"){rpc="ns_subscription_create";payload={p_org:org,p_plan:body.plan_code,p_months:body.months,p_channel:body.channel};}
+  else {rpc="ns_subscription_declare_sms";payload={p_id:body.intent_id,p_sms:body.sms,p_payer:body.payer_number,p_occurred:body.occurred_at??null};}
+  try {
+    const data=await rest("rpc/"+rpc,{method:"POST",headers:{...anonHeaders(),Authorization:"Bearer "+token},body:JSON.stringify(payload)});
+    return {status:200,body:{subscription_result:data}};
+  } catch {return {status:409,body:{message:"Paiement non accepté. Vérifiez le SMS, le montant et la destination, ou contactez le support. Aucun abonnement activé sur cette demande."}};}
+}
+
 Deno.serve(async (request: Request) => {
   const origin = request.headers.get("origin");
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: { "Access-Control-Allow-Origin": origin && (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes("*")) ? origin : "null", "Access-Control-Allow-Headers": "authorization, apikey, content-type", "Access-Control-Allow-Methods": "POST, OPTIONS", "Vary": "Origin" } });
@@ -1147,6 +1161,7 @@ Deno.serve(async (request: Request) => {
     else if (action === "complete_recovery") result = await completeRecovery(body, bearer);
     else if (action === "list_own_devices") result = await listOwnDevices(bearer);
     else if (action === "revoke_device") result = await revokeDevice(body, bearer);
+    else if (["subscription_list","subscription_create","subscription_declare"].includes(action)) result = await subscriptionAction(action,body,bearer);
     else result = { status: 400, body: { message: "Action non reconnue." } };
 
     return response(result.status, result.body, origin);

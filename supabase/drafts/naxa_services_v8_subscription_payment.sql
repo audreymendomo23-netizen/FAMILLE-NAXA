@@ -118,6 +118,33 @@ begin
  return public.ns_subscription_public_intent(i.id);
 end $f$;
 
+
+-- The payer submits the actual debit SMS voluntarily, not a client-supplied hash.
+-- Only recognised debit formats are accepted; unmatched formats require support review.
+create function public.ns_subscription_declare_sms(p_id uuid,p_sms text,p_payer text,p_occurred timestamptz default null) returns jsonb
+language plpgsql security definer set search_path='' as $f$
+declare i public.ns_subscription_intents%rowtype; t text; a text[]; r text[]; v_ref text; v_occurred timestamptz; v_amount bigint;
+begin
+ select * into i from public.ns_subscription_intents where id=p_id;
+ if not found or auth.uid() is null or i.payer_auth_user<>auth.uid() or not public.ns_can_manage_org(i.org_id) then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
+ if p_sms is null or length(p_sms) not between 12 and 8000 then raise exception 'NS_SMS_REVIEW_REQUIRED'; end if;
+ t:=lower(translate(p_sms,'ÉÈÊËÀÂÄÎÏÔÖÙÛÜÇéèêëàâäîïôöùûüç','EEEEAAAIIOOUUUCeeeeaaaiioouuuc'));
+ t:=regexp_replace(t,'[[:space:]]+',' ','g');
+ if i.channel='mtn_momo' then
+  a:=regexp_match(t,'(?:votre paiement|your payment) (?:de |of )?([0-9][0-9 .,]*)[ ]*(?:xaf|fcfa) (?:a|to) .+?\(([0-9]{8,15})\) (?:a ete finalise a|was (?:successfully )?completed at|was successful at) ([0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2})');
+  r:=regexp_match(t,'(?:identifiant de transaction financiere|financial transaction id)[ ]*:[ ]*([a-z0-9-]+)');
+  if a is null or r is null or right(a[2],9)<>right(i.destination_reference,9) then raise exception 'NS_SMS_REVIEW_REQUIRED'; end if;
+  v_amount:=regexp_replace(a[1],'[^0-9]','','g')::bigint; v_ref:=r[1]; v_occurred:=a[3]::timestamp at time zone 'Africa/Douala';
+ elsif i.channel='orange_money' then
+  a:=regexp_match(t,'paiement de (.+?) reussi par ([0-9]{8,15}) .+?id transaction:[ ]*([a-z0-9.]+),[ ]*montant:[ ]*([0-9][0-9 .,]*)[ ]*fcfa');
+  if a is null or right(a[2],9)<>right(regexp_replace(coalesce(p_payer,''),'[^0-9]','','g'),9) or regexp_replace(a[1],'[^a-z0-9]','','g')<>regexp_replace(lower(i.beneficiary),'[^a-z0-9]','','g') or p_occurred is null then raise exception 'NS_SMS_REVIEW_REQUIRED'; end if;
+  v_amount:=regexp_replace(a[4],'[^0-9]','','g')::bigint; v_ref:=a[3]; v_occurred:=p_occurred;
+ else raise exception 'NS_SMS_REVIEW_REQUIRED';
+ end if;
+ if v_amount is distinct from i.amount_xaf then raise exception 'NS_SMS_AMOUNT_MISMATCH'; end if;
+ return public.ns_subscription_declare(p_id,v_ref,p_payer,v_occurred,encode(extensions.digest(convert_to(p_sms,'UTF8'),'sha256'),'hex'));
+end $f$;
+
 -- Server-only ingress for the dedicated NAXA beneficiary SMS capture adapter.
 -- A caller must first authenticate the enrolled central admin device and validate the raw
 -- SMS origin/credit/success fields. Do not expose this service-role RPC to clients.
@@ -148,6 +175,7 @@ begin
  return public.ns_subscription_public_intent(i.id);
 end $f$;
 revoke all on function public.ns_subscription_amount(text,integer,date),public.ns_subscription_public_intent(uuid),public.ns_subscription_list(uuid),public.ns_subscription_create(uuid,text,integer,text),public.ns_subscription_declare(uuid,text,text,timestamptz,text),public.ns_subscription_confirm_credit(uuid,uuid,uuid,text,text,text,text,bigint,text,timestamptz,timestamptz,text,text) from public,anon,authenticated;
-grant execute on function public.ns_subscription_list(uuid),public.ns_subscription_create(uuid,text,integer,text),public.ns_subscription_declare(uuid,text,text,timestamptz,text) to authenticated;
+grant execute on function public.ns_subscription_list(uuid),public.ns_subscription_create(uuid,text,integer,text),public.ns_subscription_declare_sms(uuid,text,text,timestamptz) to authenticated;
+revoke all on function public.ns_subscription_declare_sms(uuid,text,text,timestamptz) from public,anon;
 grant execute on function public.ns_subscription_confirm_credit(uuid,uuid,uuid,text,text,text,text,bigint,text,timestamptz,timestamptz,text,text) to service_role;
 rollback;
