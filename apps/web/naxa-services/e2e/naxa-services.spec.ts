@@ -582,7 +582,11 @@ test("Web: delayed tenant A pull cannot repaint tenant B after logout", async ({
     await started;
     await page.getByRole("button", { name: "Déconnexion" }).click();
     await expect(page.getByLabel("Identifiant NAXA Services")).toBeVisible();
-    await signIn(page, "NS-OTHER");
+    // Stay in the same document: a navigation would cancel the delayed request.
+    await page.getByLabel("Identifiant NAXA Services").fill("NS-OTHER");
+    await page.getByLabel("Mot de passe").fill("E2E-Password-Only-For-Test");
+    await page.getByRole("button", {name:"Se connecter"}).click();
+    await expect(page.getByRole("heading", {name:"Une journée bien organisée commence ici."})).toBeVisible();
     const oldResponse = page.waitForResponse(response => response.url()===ACCOUNTING_URL &&
       response.request().method()==="POST" && response.request().postDataJSON().org_id===ORG_A);
     releaseA();
