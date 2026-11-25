@@ -27,6 +27,27 @@ jobs:
           test -n "$RELEASE_STORE_PASSWORD" || { echo "::error::Missing NAXA_SERVICES_RELEASE_STORE_PASSWORD"; exit 1; }
           test -n "$RELEASE_KEY_ALIAS" || { echo "::error::Missing NAXA_SERVICES_RELEASE_KEY_ALIAS"; exit 1; }
           test -n "$RELEASE_KEY_PASSWORD" || { echo "::error::Missing NAXA_SERVICES_RELEASE_KEY_PASSWORD"; exit 1; }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Validate and export dedicated application configuration
+        env:
+          NS_PROJECT_REF: ${{ vars.NAXA_SERVICES_SUPABASE_PROJECT_REF }}
+          NS_ANON_KEY: ${{ secrets.NAXA_SERVICES_SUPABASE_ANON_KEY }}
+          NS_FIREBASE_API_KEY: ${{ vars.NAXA_SERVICES_FIREBASE_API_KEY }}
+          NS_FIREBASE_APP_ID: ${{ vars.NAXA_SERVICES_FIREBASE_APP_ID }}
+          NS_FIREBASE_PROJECT_ID: ${{ vars.NAXA_SERVICES_FIREBASE_PROJECT_ID }}
+          NS_FIREBASE_SENDER_ID: ${{ vars.NAXA_SERVICES_FIREBASE_SENDER_ID }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { appendFileSync } from 'node:fs';
+          import { validateReleaseConfig } from './scripts/naxa-services/release-config.mjs';
+          const config = validateReleaseConfig(process.env);
+          for (const [name, value] of Object.entries(config)) {
+            if (/[\r\n]/.test(value)) throw new Error('Invalid multiline configuration: ' + name);
+            appendFileSync(process.env.GITHUB_ENV, 'ORG_GRADLE_PROJECT_' + name + '=' + value + '\n');
+          }
+          NODE
       - name: Decode signing key into runner temporary storage
         env:
           RELEASE_KEYSTORE: ${{ secrets.NAXA_SERVICES_RELEASE_KEYSTORE_BASE64 }}

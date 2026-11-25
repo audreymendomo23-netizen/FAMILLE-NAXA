@@ -132,6 +132,8 @@ jobs:
           node-version: "22"
       - name: Install workspace dependencies
         run: npm install --no-audit --no-fund
+      - name: Verify NAXA SERVICES release configuration fails closed
+        run: node --test scripts/naxa-services/release-config.test.mjs
       - name: Validate cross-application sync envelope and conflict policies
         run: npm run test:contracts
       - name: Verify exact NAXA SERVICES outbox classification (N1)
