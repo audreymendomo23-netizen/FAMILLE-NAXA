@@ -1146,6 +1146,7 @@ async function subscriptionAction(action:string,body:Record<string,unknown>,toke
   let rpc:string; let payload:Record<string,unknown>;
   if(action==="subscription_list"){rpc="ns_subscription_list";payload={p_org:org};}
   else if(action==="subscription_create"){rpc="ns_subscription_create";payload={p_org:org,p_plan:body.plan_code,p_months:body.months,p_channel:body.channel};}
+  else if(action==="subscription_cancel"){rpc="ns_subscription_cancel";payload={p_id:body.intent_id,p_not_paid:body.not_paid===true};}
   else {rpc="ns_subscription_declare_sms";payload={p_id:body.intent_id,p_sms:body.sms,p_payer:body.payer_number,p_occurred:body.occurred_at??null};}
   try {
     const data=await rest("rpc/"+rpc,{method:"POST",headers:{...anonHeaders(),Authorization:"Bearer "+token},body:JSON.stringify(payload)});
@@ -1184,7 +1185,7 @@ Deno.serve(async (request: Request) => {
     else if (action === "complete_recovery") result = await completeRecovery(body, bearer);
     else if (action === "list_own_devices") result = await listOwnDevices(bearer);
     else if (action === "revoke_device") result = await revokeDevice(body, bearer);
-    else if (["subscription_list","subscription_create","subscription_declare"].includes(action)) result = await subscriptionAction(action,body,bearer);
+    else if (["subscription_list","subscription_create","subscription_declare","subscription_cancel"].includes(action)) result = await subscriptionAction(action,body,bearer);
     else if (action === "subscription_admin_capture") result = await subscriptionAdminCapture(body,bearer);
     else result = { status: 400, body: { message: "Action non reconnue." } };
 

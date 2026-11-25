@@ -19,15 +19,29 @@ declare i jsonb; j jsonb; begin
  if has_table_privilege(current_user,'public.ns_subscription_credit_proofs','INSERT') or has_function_privilege(current_user,'public.ns_subscription_confirm_credit(uuid,uuid,uuid,text,text,text,text,bigint,text,timestamptz,timestamptz,text,text)','EXECUTE') then raise exception 'PAYER_CAN_CONFIRM'; end if;
  begin perform public.ns_subscription_list('20000000-0000-4000-8000-000000000001'); raise exception 'CROSS_TENANT_ALLOWED'; exception when insufficient_privilege then null; end;
  i:=public.ns_subscription_create('20000000-0000-4000-8000-000000000071','ACCESS',1,'mtn_momo');
- if i->>'status'<>'pending' then raise exception 'INVALID_INTENT'; end if;
+ if i->>'status' is distinct from 'pending' then raise exception 'INVALID_INTENT'; end if;
+ begin
+  perform public.ns_subscription_cancel((i->>'id')::uuid,false);
+  raise exception 'CANCEL_WITHOUT_ATTESTATION';
+ exception when raise_exception then if sqlerrm<>'NS_NO_PAYMENT_CONFIRMATION_REQUIRED' then raise; end if; end;
+ j:=public.ns_subscription_cancel((i->>'id')::uuid,true);
+ if j->>'status' is distinct from 'cancelled' then raise exception 'CANCEL_NOT_RECORDED'; end if;
+ j:=public.ns_subscription_cancel((i->>'id')::uuid,true);
+ if j->>'status' is distinct from 'cancelled' then raise exception 'CANCEL_NOT_IDEMPOTENT'; end if;
+ i:=public.ns_subscription_create('20000000-0000-4000-8000-000000000071','ACCESS',1,'mtn_momo');
+ if i->>'status' is distinct from 'pending' then raise exception 'NEW_INTENT_NOT_CREATED'; end if;
  if has_function_privilege(current_user,'public.ns_subscription_declare(uuid,text,text,timestamptz,text)','EXECUTE') then raise exception 'CLIENT_CAN_FABRICATE_HASH'; end if;
  j:=public.ns_subscription_declare_sms((i->>'id')::uuid,'Your payment of '||(i->>'amount_xaf')||' XAF to CI ONLY (237690000072) was completed at '||to_char(now() at time zone 'Africa/Douala','YYYY-MM-DD HH24:MI:SS')||'. Financial transaction id: FIXTURETX71','690000071',null);
- if j->>'status'<>'submitted' or j->>'receipt_number' is not null then raise exception 'SINGLE_PROOF_CONFIRMED'; end if;
+ if j->>'status' is distinct from 'submitted' or j->>'receipt_number' is not null then raise exception 'SINGLE_PROOF_CONFIRMED'; end if;
+ begin
+  perform public.ns_subscription_cancel((i->>'id')::uuid,true);
+  raise exception 'DECLARED_PAYMENT_CANCELLED';
+ exception when raise_exception then if sqlerrm<>'NS_PAYMENT_ALREADY_DECLARED' then raise; end if; end;
 end $f$;
 reset role;
 do $f$
 declare i public.ns_subscription_intents%rowtype; r jsonb; r2 jsonb; begin
- select * into i from public.ns_subscription_intents where org_id='20000000-0000-4000-8000-000000000071';
+ select * into i from public.ns_subscription_intents where org_id='20000000-0000-4000-8000-000000000071' and status='submitted';
  if exists(select 1 from public.ns_subscriptions where org_id=i.org_id) then raise exception 'PREMATURE_SUBSCRIPTION'; end if;
  begin
   perform public.ns_subscription_confirm_credit(i.id,'80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','admin-ci','mtn_momo','FIXTURETX71','237690000072',i.amount_xaf+1,'690000071',now(),now(),repeat('b',64),'MobileMoney');
@@ -35,26 +49,26 @@ declare i public.ns_subscription_intents%rowtype; r jsonb; r2 jsonb; begin
  exception when raise_exception then if sqlerrm<>'NS_CREDIT_PROOF_MISMATCH' then raise; end if; end;
  r:=public.ns_subscription_confirm_credit(i.id,'80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','admin-ci','mtn_momo','FIXTURETX71','237690000072',i.amount_xaf,'690000071',now(),now(),repeat('b',64),'MobileMoney');
  r2:=public.ns_subscription_confirm_credit(i.id,'80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','admin-ci','mtn_momo','FIXTURETX71','237690000072',i.amount_xaf,'690000071',now(),now(),repeat('b',64),'MobileMoney');
- if r->>'status'<>'confirmed' or r->>'receipt_number' is null or r<>r2 or (select count(*) from public.ns_subscription_credit_proofs where intent_id=i.id)<>1 then raise exception 'CONFIRMATION_OR_IDEMPOTENCE_FAILED'; end if;
+ if r->>'status' is distinct from 'confirmed' or r->>'receipt_number' is null or r<>r2 or (select count(*) from public.ns_subscription_credit_proofs where intent_id=i.id)<>1 then raise exception 'CONFIRMATION_OR_IDEMPOTENCE_FAILED'; end if;
  if exists(select 1 from public.ns_payments where org_id=i.org_id) then raise exception 'SUBSCRIPTION_LEAKED_INTO_TENANT_CASH'; end if;
 end $f$;
 -- Credit may arrive first; it must remain pending without a debit declaration.
 set local role authenticated;
 do $f$ declare j jsonb; begin
  j:=public.ns_subscription_create('20000000-0000-4000-8000-000000000071','ACCESS',1,'mtn_momo');
- if j->>'status'<>'pending' then raise exception 'RENEWAL_INTENT_NOT_PENDING'; end if;
+ if j->>'status' is distinct from 'pending' then raise exception 'RENEWAL_INTENT_NOT_PENDING'; end if;
 end $f$;
 reset role;
 do $f$ declare i public.ns_subscription_intents%rowtype; v jsonb; begin
  select * into i from public.ns_subscription_intents where org_id='20000000-0000-4000-8000-000000000071' and status='pending';
  v:=public.ns_subscription_ingest_credit('80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','admin-ci','mtn_momo','RENEWALTX71','237690000072',i.amount_xaf,'690000071',now(),now(),repeat('c',64),'MobileMoney');
- if v->>'capture_status'<>'pending' then raise exception 'CREDIT_ONLY_ACTIVATED'; end if;
+ if v->>'status' is distinct from 'pending' then raise exception 'CREDIT_ONLY_ACTIVATED'; end if;
 end $f$;
 set local role authenticated;
 do $f$ declare i jsonb; v jsonb; begin
  select item into i from jsonb_array_elements(public.ns_subscription_list('20000000-0000-4000-8000-000000000071')->'intents') item where item->>'status'='pending';
  v:=public.ns_subscription_declare_sms((i->>'id')::uuid,'Your payment of '||(i->>'amount_xaf')||' XAF to CI ONLY (237690000072) was completed at '||to_char(now() at time zone 'Africa/Douala','YYYY-MM-DD HH24:MI:SS')||'. Financial transaction id: RENEWALTX71','690000071',null);
- if v->>'status'<>'confirmed' then raise exception 'CREDIT_FIRST_MATCH_FAILED: %',v; end if;
+ if v->>'status' is distinct from 'confirmed' then raise exception 'CREDIT_FIRST_MATCH_FAILED: %',v; end if;
 end $f$;
 reset role;
 do $f$ begin

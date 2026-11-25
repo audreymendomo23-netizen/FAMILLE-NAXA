@@ -36,7 +36,7 @@ create table public.ns_subscription_intents (
  amount_xaf bigint not null check(amount_xaf>0),
  quoted_period_start date not null,
  created_at timestamptz not null default now(), expires_at timestamptz not null,
- status text not null default 'pending' check(status in ('pending','submitted','confirmed','expired')),
+ status text not null default 'pending' check(status in ('pending','submitted','confirmed','expired','cancelled')),
  transaction_reference text, payer_number text, payer_occurred_at timestamptz,
  payer_sha256 text, submitted_at timestamptz, confirmed_at timestamptz,
  period_start date, period_end_exclusive date, receipt_number text unique,
@@ -91,10 +91,20 @@ language sql stable set search_path='' as $f$
  select jsonb_build_object('id',i.id,'status',i.status,'plan_code',i.plan_code,'months',i.months,'channel',i.channel,'amount_xaf',i.amount_xaf,'beneficiary',i.beneficiary,'merchant_code',i.merchant_code,'expires_at',i.expires_at,'period_start',i.period_start,'period_end_exclusive',i.period_end_exclusive,'receipt_number',i.receipt_number)
  from public.ns_subscription_intents i where i.id=p_id
 $f$;
+-- The SQL RPC applies the same promoter-only restriction as the Edge gateway.
+create function public.ns_subscription_can_manage(p_org uuid) returns boolean
+language sql stable security definer set search_path='' as $f$
+ select coalesce(public.ns_can_manage_org(p_org),false) and exists(
+  select 1 from public.ns_members m where m.id=public.ns_current_member_id(p_org)
+  and m.org_id=p_org and m.status='active' and m.role_code='promoter'
+ )
+$f$;
+revoke all on function public.ns_subscription_can_manage(uuid) from public,anon,authenticated;
 create function public.ns_subscription_list(p_org uuid) returns jsonb
 language plpgsql security definer set search_path='' as $f$
 begin
- if auth.uid() is null or not public.ns_can_manage_org(p_org) then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
+ if auth.uid() is null or not public.ns_subscription_can_manage(p_org) then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
+ update public.ns_subscription_intents set status='expired' where org_id=p_org and status='pending' and expires_at<now();
  perform public.ns_subscription_try_match(i.id) from public.ns_subscription_intents i where i.org_id=p_org and i.status='submitted';
  return jsonb_build_object('subscription',(select to_jsonb(s) from public.ns_subscriptions s where s.org_id=p_org),
  'destinations',coalesce((select jsonb_agg(jsonb_build_object('channel',d.channel)) from public.ns_subscription_destinations d where d.active),'[]'::jsonb),
@@ -104,7 +114,7 @@ create function public.ns_subscription_create(p_org uuid,p_plan text,p_months in
 language plpgsql security definer set search_path='' as $f$
 declare d public.ns_subscription_destinations%rowtype; s public.ns_subscriptions%rowtype; i public.ns_subscription_intents%rowtype; v_start date; v_amount bigint;
 begin
- if auth.uid() is null or not public.ns_can_manage_org(p_org) then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
+ if auth.uid() is null or not public.ns_subscription_can_manage(p_org) then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
  perform 1 from public.ns_organizations where id=p_org and status='active' for update;
  if not found then raise exception 'NS_ORGANIZATION_INACTIVE'; end if;
  select * into d from public.ns_subscription_destinations where channel=p_channel and active;
@@ -125,12 +135,29 @@ begin
  values(p_org,auth.uid(),p_plan,p_months,p_channel,d.merchant_code,d.beneficiary,d.destination_reference,v_amount,v_start,now()+interval '24 hours') returning * into i;
  return public.ns_subscription_public_intent(i.id);
 end $f$;
+-- A payer can abandon only an undeclared intent, after explicitly saying no payment was made.
+create function public.ns_subscription_cancel(p_id uuid,p_not_paid boolean) returns jsonb
+language plpgsql security definer set search_path='' as $f$
+declare i public.ns_subscription_intents%rowtype;
+begin
+ select * into i from public.ns_subscription_intents where id=p_id;
+ if not found or auth.uid() is null or i.payer_auth_user<>auth.uid() or not public.ns_subscription_can_manage(i.org_id) then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
+ perform 1 from public.ns_organizations where id=i.org_id for update;
+ select * into i from public.ns_subscription_intents where id=p_id for update;
+ if p_not_paid is distinct from true then raise exception 'NS_NO_PAYMENT_CONFIRMATION_REQUIRED'; end if;
+ if i.status='cancelled' then return public.ns_subscription_public_intent(i.id); end if;
+ if i.status<>'pending' or i.transaction_reference is not null or i.payer_sha256 is not null then raise exception 'NS_PAYMENT_ALREADY_DECLARED'; end if;
+ update public.ns_subscription_intents set status='cancelled' where id=i.id;
+ return public.ns_subscription_public_intent(i.id);
+end $f$;
+revoke all on function public.ns_subscription_cancel(uuid,boolean) from public,anon,authenticated;
+grant execute on function public.ns_subscription_cancel(uuid,boolean) to authenticated;
 create function public.ns_subscription_declare(p_id uuid,p_ref text,p_payer text,p_occurred timestamptz,p_sha text) returns jsonb
 language plpgsql security definer set search_path='' as $f$
 declare i public.ns_subscription_intents%rowtype; v_ref text:=upper(regexp_replace(coalesce(p_ref,''),'[^A-Za-z0-9]','','g')); v_number text:=right(regexp_replace(coalesce(p_payer,''),'[^0-9]','','g'),9);
 begin
  select * into i from public.ns_subscription_intents where id=p_id;
- if not found or auth.uid() is null or i.payer_auth_user<>auth.uid() or not public.ns_can_manage_org(i.org_id) then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
+ if not found or auth.uid() is null or i.payer_auth_user<>auth.uid() or not public.ns_subscription_can_manage(i.org_id) then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
  perform 1 from public.ns_organizations where id=i.org_id and status='active' for update;
  if not found then raise exception 'NS_ORGANIZATION_INACTIVE'; end if;
  select * into i from public.ns_subscription_intents where id=p_id for update;
@@ -148,7 +175,7 @@ language plpgsql security definer set search_path='' as $f$
 declare i public.ns_subscription_intents%rowtype; t text; a text[]; r text[]; v_ref text; v_occurred timestamptz; v_amount bigint;
 begin
  select * into i from public.ns_subscription_intents where id=p_id;
- if not found or auth.uid() is null or i.payer_auth_user<>auth.uid() or not public.ns_can_manage_org(i.org_id) then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
+ if not found or auth.uid() is null or i.payer_auth_user<>auth.uid() or not public.ns_subscription_can_manage(i.org_id) then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
  if p_sms is null or length(p_sms) not between 12 and 8000 then raise exception 'NS_SMS_REVIEW_REQUIRED'; end if;
  t:=lower(translate(p_sms,'ÉÈÊËÀÂÄÎÏÔÖÙÛÜÇéèêëàâäîïôöùûüç','EEEEAAAIIOOUUUCeeeeaaaiioouuuc'));
  t:=regexp_replace(t,'[[:space:]]+',' ','g');

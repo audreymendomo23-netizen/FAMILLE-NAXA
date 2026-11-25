@@ -208,11 +208,13 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
     var payer by remember(org, session.deviceId) { mutableStateOf("") }
     var sms by remember(org, session.deviceId) { mutableStateOf("") }
     var date by remember(org, session.deviceId) { mutableStateOf("") }
+    var notPaid by remember(org, session.deviceId) { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     fun arrayObjects(value: org.json.JSONArray?): List<JSONObject> =
         (0 until (value?.length() ?: 0)).mapNotNull { value?.optJSONObject(it) }
     suspend fun load() {
+        notPaid = false
         val result = api.subscriptionRequest(session.accessToken, JSONObject().put("action", "subscription_list"))
         snapshot = result
         intent = arrayObjects(result.optJSONArray("intents")).firstOrNull { it.optString("status") in setOf("pending","submitted") }
@@ -300,6 +302,16 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
                                 sms = ""; payer = ""; date = ""; load()
                             }
                         }) { Text(if (fr) "Déclarer le paiement" else "Declare payment") }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.Checkbox(checked = notPaid, onCheckedChange = { notPaid = it }, enabled = !busy)
+                            Text(if (fr) "Je confirme n’avoir effectué aucun paiement." else "I confirm no payment was made.")
+                        }
+                        OutlinedButton(enabled = !busy && notPaid, onClick = {
+                            runAction {
+                                api.subscriptionRequest(session.accessToken, JSONObject().put("action","subscription_cancel").put("intent_id",current.optString("id")).put("not_paid",true))
+                                sms = ""; payer = ""; date = ""; load()
+                            }
+                        }) { Text(if (fr) "Abandonner la demande non payée" else "Cancel unpaid request") }
                     } else Text(if (fr) "Déclaration reçue. En attente du crédit NAXA ; aucun droit activé par une preuve seule." else "Declaration received. Waiting for NAXA credit proof; one proof does not activate access.")
                 }
             }
