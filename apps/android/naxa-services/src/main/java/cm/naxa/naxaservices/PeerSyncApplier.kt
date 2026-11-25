@@ -415,7 +415,9 @@ internal object NaxaServicesPeerSyncApplier {
             else -> {
                 val staff=change.actionCode.startsWith("staff_")&&change.actionCode.endsWith(".recorded")
                 val created=change.actionCode.endsWith(".created")&&p.has("record_type")
-                val transitioned=change.actionCode.endsWith(".status_changed")&&p.has("record_type")
+                val sectorTransition = change.aggregateType in setOf("work_order", "service_order", "repair_order") &&
+                    change.actionCode == change.aggregateType + ".status_changed"
+                val transitioned = change.actionCode.endsWith(".status_changed") && (p.has("record_type") || sectorTransition)
                 if(site==null||actor.isBlank())return false
                 if(staff){
                     val tid=p.sText("time_event_id",id);val type=change.actionCode.removeSuffix(".recorded");val name=p.sText("staff_name_snapshot")
@@ -435,6 +437,7 @@ internal object NaxaServicesPeerSyncApplier {
                 }
                 if(transitioned){
                     val rid=p.sText("record_id",id);val old=dao.findManagementRecord(org,site,rid)?:return false
+                    if (sectorTransition && old.recordType != change.aggregateType) return false
                     val meta=JSONObject(old.metadataJson);val delta=p.optJSONObject("metadata_json_delta")
                     if(delta!=null){val it=delta.keys();while(it.hasNext()){val k=it.next();meta.put(k,delta.get(k))}}
                     val next=p.sText("to_status",old.status)

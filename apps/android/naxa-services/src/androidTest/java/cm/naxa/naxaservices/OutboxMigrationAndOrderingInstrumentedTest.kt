@@ -128,6 +128,44 @@ class OutboxMigrationAndOrderingInstrumentedTest {
 
 
     @Test
+    fun androidContinuesPeerJobAtTheReceivedRevision() = runBlocking<Unit> {
+        val database = Room.inMemoryDatabaseBuilder(context, NsServicesDatabase::class.java).build()
+        try {
+            val repository = NaxaServicesLocalRepository(database)
+            val org = UUID.randomUUID().toString()
+            val site = UUID.randomUUID().toString()
+            val job = UUID.randomUUID().toString()
+            val android = UUID.randomUUID().toString()
+            val web = UUID.randomUUID().toString()
+            val member = UUID.randomUUID().toString()
+            fun change(revision: Int, action: String, payload: JSONObject) = JSONObject()
+                .put("cursor", revision).put("aggregate_version", revision)
+                .put("event_id", UUID.randomUUID().toString()).put("source_device_id", web)
+                .put("site_id", site).put("visible_site_ids", JSONArray().put(site))
+                .put("aggregate_type", "repair_order").put("aggregate_id", job)
+                .put("action_code", "repair_order." + action).put("recorded_at", "2026-11-25T10:00:00Z")
+                .put("payload", payload.put("record_id", job).put("org_id", org)
+                    .put("site_id", site).put("actor_member_id", member))
+            val creation = change(1, "created", JSONObject().put("record_type", "repair_order")
+                .put("title", "Réparation").put("status", "received")
+                .put("metadata_json", JSONObject().put("activity_profile", "garage")))
+            val diagnostic = change(2, "status_changed", JSONObject().put("from_status", "received")
+                .put("to_status", "diagnostic").put("expected_version", 1).put("reason", "Diagnostic atelier"))
+            val page = JSONObject().put("device_id", android).put("next_cursor", 2).put("has_more", false)
+                .put("changes", JSONArray().put(creation).put(diagnostic))
+            assertEquals(2, repository.persistRemoteSyncPage(org, android, page, 100L))
+            assertEquals("diagnostic", repository.dao.findManagementRecord(org, site, job)?.status)
+            for (status in listOf("quote_pending", "approved")) {
+                repository.transitionManagementRecord(org, site, job, status, "Validation atelier", member)
+            }
+            val events = repository.dao.loadRetryableOutboxEvents(org).filter { it.aggregateId == job }
+            assertEquals(listOf(2L, 3L), events.map { JSONObject(it.payloadJson).getLong("expected_version") })
+        } finally {
+            database.close()
+        }
+    }
+
+    @Test
     fun twoIndependentAndroidInstallationsReplicatePeerMutationsBothDirectionsWithoutEcho() = runBlocking<Unit> {
         val orgId = UUID.randomUUID().toString()
         val siteId = UUID.randomUUID().toString()

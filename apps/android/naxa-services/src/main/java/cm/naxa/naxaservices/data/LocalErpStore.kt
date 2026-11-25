@@ -779,6 +779,16 @@ interface NaxaServicesDao {
     @Query("SELECT COUNT(*) FROM local_outbox_events WHERE orgId = :orgId AND aggregateType = :aggregateType AND aggregateId = :aggregateId AND actionCode IN (:actions)")
     suspend fun countOutboxActions(orgId: String, aggregateType: String, aggregateId: String, actions: List<String>): Int
 
+    @Query("""SELECT MAX(aggregateVersion) FROM local_remote_changes
+        WHERE orgId = :orgId AND aggregateType = :type AND aggregateId = :id AND applicationStatus = 'applied'""")
+    suspend fun lastAppliedPeerVersion(orgId: String, type: String, id: String): Long?
+
+    @Query("""SELECT payloadJson FROM local_outbox_events
+        WHERE orgId = :orgId AND aggregateType = :type AND aggregateId = :id
+          AND actionCode = :action AND state IN ('synced','queued','retry_wait','blocked_dependency')
+        ORDER BY deviceSequence DESC LIMIT 1""")
+    suspend fun latestTransitionPayload(orgId: String, type: String, id: String, action: String): String?
+
     @Insert(onConflict = OnConflictStrategy.ABORT)
     suspend fun insertOutboxEvent(event: LocalOutboxEvent)
 
@@ -4099,6 +4109,12 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 listOf(current.recordType + ".created", current.recordType + ".status_changed")
             }
             val priorEvents = dao.countOutboxActions(orgId, current.recordType, current.id, versionActions)
+            val peerVersion = dao.lastAppliedPeerVersion(orgId, current.recordType, current.id)
+            val expectedVersion = if (peerVersion != null && current.recordType in setOf("work_order", "service_order", "repair_order")) {
+                val prior = dao.latestTransitionPayload(orgId, current.recordType, current.id, current.recordType + ".status_changed")
+                val localRevision = prior?.let { JSONObject(it).getLong("expected_version") + 1 } ?: 0L
+                maxOf(peerVersion, localRevision)
+            } else priorEvents.toLong()
             val payload = JSONObject()
                 .put("record_id", current.id)
                 .put("org_id", orgId)
@@ -4108,7 +4124,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 .put("from_status", current.status)
                 .put("to_status", nextStatus)
                 .put("reason", reason.trim())
-                .put("expected_version", priorEvents)
+                .put("expected_version", expectedVersion)
                 .put("metadata_json_delta", runCatching { JSONObject(updatedMetadataJson) }.getOrElse { JSONObject() })
                 .put("transitioned_at", Instant.ofEpochMilli(now).toString())
             enqueue(orgId, current.recordType, current.id, current.recordType + ".status_changed", siteId, payload.toString())
