@@ -30,6 +30,7 @@ on:
       - "supabase/drafts/naxa_services_v5_customer_referrals_promotions.sql"
       - "supabase/drafts/naxa_services_v6_notifications.sql"
       - "supabase/drafts/naxa_services_v7_financial_controls.sql"
+      - "supabase/drafts/naxa_services_v8_subscription_payment.sql"
       - "supabase/tests/drafts/**"
       - "supabase/functions/naxa-services-accounting/**"
       - "supabase/config.toml"
@@ -279,13 +280,16 @@ jobs:
             supabase/drafts/naxa_services_referrals_v1.sql \
             supabase/drafts/naxa_services_v5_customer_referrals_promotions.sql \
             supabase/drafts/naxa_services_v6_notifications.sql \
-            supabase/drafts/naxa_services_v7_financial_controls.sql; do
+            supabase/drafts/naxa_services_v7_financial_controls.sql \
+            supabase/drafts/naxa_services_v8_subscription_payment.sql; do
             echo "Applying disposable test copy of $draft"
             # The repository candidate files remain ROLLBACK-by-default.
             sed -E '$s/rollback;/commit/' "$draft" | psql -v ON_ERROR_STOP=1
           done
       - name: Execute tenant, site, device, payment and server-only RLS tests
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_rls_runtime_test.sql
+      - name: Verify isolated subscription payment, paired proofs and replay
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_subscription_payment.sql
 
   android-debug:
     name: Assemble NAXA SERVICES Android debug APK
