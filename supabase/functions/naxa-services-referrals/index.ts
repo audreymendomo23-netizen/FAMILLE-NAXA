@@ -1,3 +1,4 @@
+import { hasActiveDeviceSession } from "../_shared/naxa-services-device-session.ts";
 import { isValidReferralCode, normalizeReferralCode } from "./referral_contract.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -43,6 +44,7 @@ async function actorContext(token: string) {
   const accounts = await rest("ns_accounts?select=id,status&auth_user_id=eq." + encodeURIComponent(String(auth.id)) + "&limit=1") as Record<string, unknown>[];
   const account = accounts?.[0];
   if (!account || account.status !== "active") return null;
+  if (!await hasActiveDeviceSession(token, String(account.id), path => rest(path))) return null;
   const members = await rest("ns_members?select=id,org_id,display_name,role_code,status&account_id=eq." + encodeURIComponent(String(account.id)) + "&status=eq.active&limit=2") as Record<string, unknown>[];
   if (!members || members.length !== 1) return null;
   const member = members[0];

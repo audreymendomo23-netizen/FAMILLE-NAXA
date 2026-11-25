@@ -1,3 +1,4 @@
+import { hasActiveDeviceSession, verifiedTokenSessionId } from "../_shared/naxa-services-device-session.ts";
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, isNaxaSiteCode, isNaxaWorkstationCode, isNaxaWorkstationKind, nativeSiteIdsForScopes } from "./scope_contract.ts";
 
@@ -88,4 +89,18 @@ Deno.test("NAXA workstation kinds match the database enum", () => {
     assertEquals(isNaxaWorkstationKind(kind), true);
   }
   assertEquals(isNaxaWorkstationKind("warehouse"), false);
+});
+
+Deno.test("Auth and referral gateways require an active device bound to the verified account and JWT session", async () => {
+  const jwt = "header." + btoa(JSON.stringify({session_id:"session-a"})) + ".signature";
+  const row = {id:"device-a",account_id:"account-a",session_id:"session-a",revoked_at:null};
+  assertEquals(verifiedTokenSessionId(jwt),"session-a");
+  assertEquals(await hasActiveDeviceSession(jwt,"account-a",async path => {
+    assertEquals(path,"ns_devices?select=id,account_id,session_id,revoked_at&account_id=eq.account-a&session_id=eq.session-a&revoked_at=is.null&limit=2");
+    return [row];
+  }),true);
+  for (const result of [[],[row,row],[{...row,account_id:"other"}],[{...row,session_id:"other"}],[{...row,revoked_at:"2026-11-25"}],null]) {
+    assertEquals(await hasActiveDeviceSession(jwt,"account-a",async()=>result),false);
+  }
+  assertEquals(await hasActiveDeviceSession("invalid","account-a",async()=>{throw new Error("must not query");}),false);
 });

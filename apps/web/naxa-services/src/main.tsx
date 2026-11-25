@@ -28,6 +28,7 @@ type Entry = {
   status?: string; revision?: number; siteId?: string; activityProfile?: ActivityProfile;
   metadata?: Record<string, string>;
 };
+type WebDevice = {id:string;installation_id:string;platform:string;label:string|null;last_seen_at:string;revoked_at:string|null;current:boolean};
 type WebWorkstation = { id: string; site_id: string; code: string; name: string; kind: string; capacity: number; status: string };
 
 const modules: { id: ModuleId; title: string; description: string; group: string; action: string }[] = [
@@ -438,6 +439,23 @@ function App() {
     return workstation;
   }
 
+  async function loadOwnDevices():Promise<WebDevice[]> {
+    if(!authSession)throw new Error("AUTHENTICATION_REQUIRED");
+    const isCurrent=captureSession(authSession);
+    const fresh=await ensureFreshSession(authSession);
+    const data=await authRequest({action:"list_own_devices"},fresh.accessToken);
+    if(!isCurrent())throw new Error("WEB_SESSION_CHANGED");
+    if(!Array.isArray(data.devices))throw new Error("DEVICE_LIST_INVALID");
+    return data.devices as WebDevice[];
+  }
+  async function revokeOwnDevice(device:WebDevice) {
+    if(!authSession||device.current||device.revoked_at)throw new Error("Utilise la déconnexion pour fermer cet appareil.");
+    const isCurrent=captureSession(authSession);
+    const fresh=await ensureFreshSession(authSession);
+    const data=await authRequest({action:"revoke_device",installation_id:device.installation_id},fresh.accessToken);
+    if(!isCurrent())throw new Error("WEB_SESSION_CHANGED");
+    if(data.revoked!==true)throw new Error("DEVICE_REVOCATION_NOT_CONFIRMED");
+  }
   async function changeWebPassword(event: React.FormEvent) {
     event.preventDefault();
     const activeSession = authSession;
@@ -1133,6 +1151,7 @@ function App() {
             active === "organization" ? <OrganizationPage mode={mode} setMode={setMode} siteName={siteName} setSiteName={setSiteName} editable={preview || authSession?.account.role_code === "promoter"} onSave={saveWebOrganizationProfile} locale={authSession?.account.default_locale ?? "fr"} /> :
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
+            active === "security" ? <DeviceSecurityPage key={authSession?.deviceId??"preview"} authenticated={Boolean(authSession&&!preview)} onLoad={loadOwnDevices} onRevoke={revokeOwnDevice} /> :
             active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={setPerformanceFromDate} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport().catch(error => setPerformanceError(error instanceof Error ? error.message : "Chargement du rapport impossible.")); }} authenticated={Boolean(authSession)} /> :
             active === "agenda" ? <AgendaOperationsPage entries={(entries.agenda ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTransition={transitionWebAppointment} onReschedule={rescheduleWebAppointment} /> :
             active === "pressing" ? <PressingPage
@@ -1286,6 +1305,22 @@ function Overview({ entries, onNavigate, mode }: { entries: Record<ModuleId, Ent
 }
 function Metric({ label, value, meta }: { label: string; value: string; meta: string }) {
   return <div className="metric-card"><span>{label}</span><strong>{value}</strong><small>{meta}</small></div>;
+}
+function DeviceSecurityPage({authenticated,onLoad,onRevoke}:{authenticated:boolean;onLoad:()=>Promise<WebDevice[]>;onRevoke:(device:WebDevice)=>Promise<void>}) {
+  const [devices,setDevices]=useState<WebDevice[]>([]);
+  const [loading,setLoading]=useState(false),[loaded,setLoaded]=useState(false);
+  const [selected,setSelected]=useState<WebDevice|null>(null),[error,setError]=useState("");
+  async function load(){setLoading(true);setError("");try{setDevices(await onLoad());setLoaded(true);}catch(cause){setError(cause instanceof Error?cause.message:"Lecture impossible.");}finally{setLoading(false);}}
+  async function revoke(){if(!selected)return;setLoading(true);setError("");try{await onRevoke(selected);setSelected(null);setDevices(await onLoad());setLoaded(true);}catch(cause){setError(cause instanceof Error?cause.message:"Révocation impossible.");}finally{setLoading(false);}}
+  return <div className="module-layout"><div className="module-main-card">
+    <span className="eyebrow">SÉCURITÉ DU COMPTE</span><h2>Mes appareils et sessions</h2>
+    <p className="muted">Seuls les appareils de ton compte sont listés. Révoquer un appareil interdit ses prochains accès serveur ; il devra se reconnecter.</p>
+    <button className="btn primary" disabled={!authenticated||loading} onClick={()=>void load()}>Charger mes appareils</button>
+    {error&&<div role="alert" className="notice">{error}</div>}
+    {loaded&&!devices.length&&<p>Aucun appareil enregistré.</p>}
+    {devices.map(device=><div className="record" key={device.id}><div><strong>{device.label||device.platform}</strong><small>{device.platform} · {device.current?"Cet appareil":device.revoked_at?"Révoqué":"Actif"}</small><small>Dernière activité : {device.last_seen_at?new Date(device.last_seen_at).toLocaleString("fr-FR"):"—"}</small></div>{!device.current&&!device.revoked_at&&<button className="btn secondary" disabled={loading} onClick={()=>setSelected(device)}>Révoquer</button>}</div>)}
+    {selected&&<div className="notice"><p>Révoquer l’appareil {selected.label||selected.platform} ?</p><button className="btn secondary" disabled={loading} onClick={()=>setSelected(null)}>Annuler</button><button className="btn primary" disabled={loading} onClick={()=>void revoke()}>Confirmer la révocation</button></div>}
+  </div><div className="module-main-card"><h2>Protection des accès</h2><p>Le mot de passe et les jetons ne sont jamais affichés dans ce registre. Pour fermer la session de cet appareil, utilise Déconnexion.</p></div></div>;
 }
 function GenericPage({ active, entries, copy, preview, authenticated }: { active: ModuleId; entries: Entry[]; copy: typeof moduleCopy[ModuleId]; preview: boolean; authenticated: boolean }) {
   const serverWriteAvailable = authenticated && ["stock", "services", "customers", "team", "help"].includes(active);

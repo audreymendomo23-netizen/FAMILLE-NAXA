@@ -1,3 +1,4 @@
+import { hasActiveDeviceSession } from "../_shared/naxa-services-device-session.ts";
 import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, isNaxaSiteCode, isNaxaWorkstationCode, isNaxaWorkstationKind, nativeSiteIdsForScopes } from "./scope_contract.ts";
 // NAXA SERVICES authentication gateway — source only, NOT deployed.
 // Required server-side secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
@@ -366,6 +367,10 @@ async function changePassword(body: Record<string, unknown>, token: string) {
   const account = await accountByAuthUser(String(user.data.id));
   if (!account || account.status !== "active") return { status: 403, body: { message: "Accès suspendu." } };
 
+  if (!await hasActiveDeviceSession(token, String(account.id), path => rest(path, { headers: serviceHeaders() }))) {
+    return { status: 401, body: { message: "Cet appareil ou cette session a été révoqué." } };
+  }
+
   // Re-check the current/temporary password without revealing the technical alias.
   const aliasRows = await rest("ns_accounts?select=auth_alias&id=eq." + encodeURIComponent(String(account.id)) + "&limit=1", { headers: serviceHeaders() }) as Record<string, unknown>[];
   const alias = String(aliasRows?.[0]?.auth_alias ?? "");
@@ -448,6 +453,7 @@ async function actorContext(token: string) {
   if (!auth.ok || !auth.data.id) return null;
   const account = await accountByAuthUser(String(auth.data.id));
   if (!account || account.status !== "active") return null;
+  if (!await hasActiveDeviceSession(token, String(account.id), path => rest(path, { headers: serviceHeaders() }))) return null;
   const member = await activeMember(String(account.id));
   if (!member) return null;
   const scopes = await rest(
@@ -1067,6 +1073,21 @@ async function completeRecovery(body: Record<string, unknown>, token: string) {
   return { status: 200, body: { login_id: account.login_id, temporary_password: tempPassword, password_change_required: true, revoked_devices: true } };
 }
 
+async function listOwnDevices(token: string) {
+  const actor = await actorContext(token);
+  if (!actor) return { status: 401, body: { message: "Session expirée." } };
+  const rows = await rest("ns_devices?select=id,installation_id,platform,label,last_seen_at,revoked_at,session_id&account_id=eq." +
+    encodeURIComponent(String(actor.account.id)) + "&order=last_seen_at.desc&limit=100",
+    { headers: serviceHeaders() }) as Record<string, unknown>[];
+  const currentSessionId = jwtClaim(token, "session_id");
+  const devices = (rows ?? []).map(device => ({
+    id: device.id, installation_id: device.installation_id, platform: device.platform, label: device.label,
+    last_seen_at: device.last_seen_at, revoked_at: device.revoked_at,
+    current: device.session_id === currentSessionId && device.revoked_at === null,
+  }));
+  return { status: 200, body: { devices } };
+}
+
 async function revokeDevice(body: Record<string, unknown>, token: string) {
   const actor = await actorContext(token);
   if (!actor) return { status: 401, body: { message: "Session expirée." } };
@@ -1085,11 +1106,12 @@ async function revokeDevice(body: Record<string, unknown>, token: string) {
       if (!allowed) return { status: 403, body: { message: "Périmètre de révocation non autorisé." } };
     }
   }
-  await rest("ns_devices?account_id=eq." + encodeURIComponent(targetAccountId) + "&installation_id=eq." + encodeURIComponent(installationId), {
+  const revoked = await rest("ns_devices?select=id&account_id=eq." + encodeURIComponent(targetAccountId) + "&installation_id=eq." + encodeURIComponent(installationId) + "&revoked_at=is.null", {
     method: "PATCH",
-    headers: serviceHeaders({ Prefer: "return=minimal" }),
+    headers: serviceHeaders({ Prefer: "return=representation" }),
     body: JSON.stringify({ revoked_at: new Date().toISOString(), remember_device: false }),
-  });
+  }) as Record<string, unknown>[];
+  if (!revoked?.length) return { status: 404, body: { message: "Appareil introuvable ou déjà révoqué." } };
   await auditAction(String(actor.member.org_id), actor.authUserId, String(actor.member.id), "device.revoked", "device", targetAccountId, "Révocation d'un appareil");
   return { status: 200, body: { revoked: true } };
 }
@@ -1123,6 +1145,7 @@ Deno.serve(async (request: Request) => {
     else if (action === "accept_legal_document") result = await acceptLegalDocument(body, bearer);
     else if (action === "complete_onboarding_step") result = await completeOnboardingStep(body, bearer);
     else if (action === "complete_recovery") result = await completeRecovery(body, bearer);
+    else if (action === "list_own_devices") result = await listOwnDevices(bearer);
     else if (action === "revoke_device") result = await revokeDevice(body, bearer);
     else result = { status: 400, body: { message: "Action non reconnue." } };
 

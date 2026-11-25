@@ -600,3 +600,40 @@ test("Web: delayed tenant A pull cannot repaint tenant B after logout", async ({
     await expect(page.getByText("Aucune fiche client dans le site actif.")).toBeVisible();
   } finally { releaseA(); }
 });
+
+
+test("Web security: list only own devices and revoke another device after explicit confirmation", async ({context}) => {
+  await installBackend(context);
+  const current={id:DEVICE_ID,installation_id:"current-fixture",platform:"web",label:"Navigateur courant",last_seen_at:"2026-11-25T10:00:00Z",revoked_at:null,current:true};
+  const other={id:REMOTE_DEVICE_ID,installation_id:"other-fixture",platform:"android",label:"Téléphone de recette",last_seen_at:"2026-11-25T10:00:00Z",revoked_at:null as string|null,current:false};
+  let revocations=0;
+  await context.route(AUTH_URL,async route=>{
+    if(route.request().method()==="OPTIONS")return route.fallback();
+    const request=route.request().postDataJSON() as Record<string,unknown>;
+    if(request.action==="list_own_devices"){
+      expect(request.account_id).toBeUndefined();
+      return json(route,{devices:[current,other]});
+    }
+    if(request.action==="revoke_device"){
+      expect(request.installation_id).toBe(other.installation_id);
+      expect(request.account_id).toBeUndefined();
+      revocations++;
+      other.revoked_at="2026-11-25T10:01:00Z";
+      return json(route,{revoked:true});
+    }
+    return route.fallback();
+  });
+  const page=await context.newPage();
+  await signIn(page);
+  await page.locator(".side-nav button.nav-item").filter({hasText:"Sécurité & appareils"}).click();
+  await page.getByRole("button",{name:"Charger mes appareils"}).click();
+  const currentRow=page.locator(".record").filter({hasText:"Navigateur courant"});
+  const otherRow=page.locator(".record").filter({hasText:"Téléphone de recette"});
+  await expect(currentRow).toContainText("Cet appareil");
+  await expect(currentRow.getByRole("button",{name:"Révoquer"})).toHaveCount(0);
+  await otherRow.getByRole("button",{name:"Révoquer"}).click();
+  expect(revocations).toBe(0);
+  await page.getByRole("button",{name:"Confirmer la révocation"}).click();
+  await expect(otherRow).toContainText("Révoqué");
+  expect(revocations).toBe(1);
+});
