@@ -166,6 +166,7 @@ export type AtomicSyncEvent = {
 };
 
 const ATOMIC_SYNC_ACTIONS: Record<string, { aggregate: string; idField: string; organizationScoped?: boolean; siteOptional?: boolean }> = {
+  "cash_register.created": { aggregate: "cash_register", idField: "register_id" },
   "supplier.saved": { aggregate: "supplier", idField: "supplier_id" },
   "inventory_item.created": { aggregate: "inventory_item", idField: "inventory_item_id" },
   "inventory_item.imported": { aggregate: "inventory_item", idField: "inventory_item_id" },
