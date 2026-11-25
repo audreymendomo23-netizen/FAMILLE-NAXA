@@ -2,6 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, listAppEvents, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
 import { normalizeInventoryItemDraft } from "./erp/inventory";
 import {
+  AgendaOperationsPage, CashOperationsPage, StockOperationsPage,
+  TeamOperationsPage, CustomerFollowupsPage,
+} from "./erp/shared-operations";
+import {
   canTransitionActivity, getActivityStage, getActivityWorkflow,
   validateActivityFields, type ActivityProfile,
 } from "./erp/activity-workflows";
@@ -20,6 +24,7 @@ const OFFLINE_APP_ID = "naxa-services-web";
 type Entry = {
   id: string; title: string; detail: string; state: string; createdAt: string;
   recordType?: "work_order" | "repair_order" | "service_order" | "pressing_order";
+  aggregateType?: string; actionCode?: string; data?: Record<string, unknown>;
   status?: string; revision?: number; siteId?: string; activityProfile?: ActivityProfile;
   metadata?: Record<string, string>;
 };
@@ -207,6 +212,9 @@ function App() {
           id,title,detail,state,createdAt:new Date(item.createdAt).toLocaleString("fr-FR"),
           recordType: command.aggregate_type === "work_order" || command.aggregate_type === "repair_order" || command.aggregate_type === "service_order" || command.aggregate_type === "pressing_order"
             ? command.aggregate_type : existingEntry?.recordType,
+          aggregateType: typeof command.aggregate_type === "string" ? command.aggregate_type : existingEntry?.aggregateType,
+          actionCode: typeof command.action_code === "string" ? command.action_code : existingEntry?.actionCode,
+          data: { ...(existingEntry?.data ?? {}), ...payload, server_result: serverRecord },
           status: receiptIsNewer && typeof serverRecord.status === "string" ? serverRecord.status
             : typeof payload.to_status === "string" ? payload.to_status
             : typeof payload.status === "string" ? payload.status
@@ -491,8 +499,13 @@ function App() {
           const id=typeof command.aggregate_id==="string"?command.aggregate_id:"";
           const receipt=data.result as Record<string,unknown>;
           const serverRecord=receipt.result&&typeof receipt.result==="object"&&!Array.isArray(receipt.result)?receipt.result as Record<string,unknown>:{};
+          const eventPayload=command.payload&&typeof command.payload==="object"&&!Array.isArray(command.payload)?command.payload as Record<string,unknown>:{};
           if(id)setEntries(prev=>({...prev,[moduleId]:(prev[moduleId]??[]).map(x=>x.id===id?{
             ...x,state:"Confirmé par le serveur",
+            aggregateType:typeof command.aggregate_type==="string"?command.aggregate_type:x.aggregateType,
+            actionCode:typeof command.action_code==="string"?command.action_code:x.actionCode,
+            siteId:typeof command.site_id==="string"?command.site_id:x.siteId,
+            data:{...(x.data??{}),...eventPayload,server_result:serverRecord},
             revision:typeof serverRecord.revision==="number"?serverRecord.revision:x.revision,
             status:typeof serverRecord.status==="string"?serverRecord.status:x.status,
           }:x)}));
@@ -547,6 +560,9 @@ function App() {
         const record:Entry={
           id:change.aggregate_id,title,detail,state:"Reçu du serveur · autre appareil",createdAt:new Date(change.recorded_at).toLocaleString("fr-FR"),
           recordType: change.aggregate_type === "work_order" || change.aggregate_type === "repair_order" || change.aggregate_type === "service_order" || change.aggregate_type === "pressing_order" ? change.aggregate_type : undefined,
+          aggregateType: change.aggregate_type,
+          actionCode: change.action_code,
+          data: { ...payload, server_result: serverRecord },
           status: typeof serverRecord.status === "string" ? serverRecord.status
             : typeof payload.to_status === "string" ? payload.to_status
             : typeof payload.status === "string" ? payload.status : undefined,
@@ -620,6 +636,8 @@ function App() {
         id:aggregateId,title,detail,
         state:navigator.onLine?"En attente de confirmation serveur":"En attente de connexion",
         createdAt:existing?.createdAt??new Date().toLocaleString("fr-FR"),
+        aggregateType, actionCode, siteId,
+        data:{...(existing?.data??{}),...payload},
         ...extra,
       };
       return {...previous,[moduleId]:index>=0?rows.map((entry,rowIndex)=>rowIndex===index?next:entry):[...rows,next]};
@@ -694,6 +712,143 @@ function App() {
     }
   }
 
+
+  function sharedOperationSiteId(): string {
+    const session=authSession;
+    if(!session)throw new Error("AUTHENTICATION_REQUIRED");
+    const siteId=activeSiteId||session.account.active_site_ids[0]||"";
+    if(!siteId||!session.account.active_site_ids.includes(siteId))throw new Error("Choisis un point de vente autorisé.");
+    return siteId;
+  }
+
+  async function createCashRegister(input:{code:string;name:string}) {
+    const id=crypto.randomUUID(),siteId=sharedOperationSiteId();
+    const code=input.code.trim().toUpperCase(),name=input.name.trim();
+    if(!/^[A-Z0-9][A-Z0-9_-]{1,19}$/.test(code)||name.length<1)throw new Error("Code ou nom du registre invalide.");
+    await submitWebBusinessEvent("cash","cash_register.created","cash_register",id,
+      {register_id:id,code,name,workstation_id:null},siteId,name,"Registre "+code);
+  }
+
+  async function openCashSession(input:{register:Entry;openingFloat:number}) {
+    const id=crypto.randomUUID(),siteId=sharedOperationSiteId();
+    if(!Number.isSafeInteger(input.openingFloat)||input.openingFloat<0)throw new Error("Fonds d'ouverture invalide.");
+    if(!input.register.state.includes("Confirmé par le serveur")&&!input.register.state.startsWith("Reçu du serveur"))throw new Error("Le registre doit être confirmé par le serveur.");
+    await submitWebBusinessEvent("cash","cash_session.opened","cash_session",id,
+      {cash_session_id:id,register_id:input.register.id,register_name:String(input.register.data?.name??input.register.title),
+       opening_float_xaf:input.openingFloat,opened_at:new Date().toISOString()},
+      siteId,"Session · "+input.register.title,"Fonds d'ouverture "+input.openingFloat.toLocaleString("fr-FR")+" FCFA");
+  }
+
+  async function createCashSale(input:{session:Entry;description:string;amount:number;itemId:string;quantity:number}) {
+    const session=authSession;if(!session)throw new Error("AUTHENTICATION_REQUIRED");
+    const siteId=sharedOperationSiteId(),id=crypto.randomUUID();
+    if(input.session.status!=="open"||(!input.session.state.includes("Confirmé par le serveur")&&!input.session.state.startsWith("Reçu du serveur")))throw new Error("La session doit être ouverte et confirmée par le serveur.");
+    if(input.description.trim().length<2||!Number.isSafeInteger(input.amount)||input.amount<=0)throw new Error("Désignation et montant entier positif obligatoires.");
+    if(input.itemId&&(!Number.isFinite(input.quantity)||input.quantity<=0))throw new Error("Quantité de sortie stock invalide.");
+    await submitWebBusinessEvent("cash","sale.created","sale",id,{
+      sale_id:id,cash_session_id:input.session.id,sale_number:"VS-"+id.slice(0,8).toUpperCase(),
+      description:input.description.trim(),total_xaf:input.amount,payment_method:"cash",status:"confirmed",
+      inventory_item_id:input.itemId||null,stock_quantity:input.itemId?input.quantity:null,
+      created_at:new Date().toISOString(),
+    },siteId,"Vente · "+input.description.trim(),input.amount.toLocaleString("fr-FR")+" FCFA · espèces",{status:"pending"});
+  }
+
+  async function closeCashSession(input:{session:Entry;countedClose:number;reason:string}) {
+    const siteId=sharedOperationSiteId();
+    if(input.session.status!=="open"||!Number.isSafeInteger(input.countedClose)||input.countedClose<0)throw new Error("Session ou montant compté invalide.");
+    await submitWebBusinessEvent("cash","cash_session.closed","cash_session",input.session.id,{
+      cash_session_id:input.session.id,counted_close_xaf:input.countedClose,variance_reason:input.reason.trim(),closed_at:new Date().toISOString(),
+    },siteId,"Clôture · "+input.session.title,"Montant compté "+input.countedClose.toLocaleString("fr-FR")+" FCFA",{status:"closing"});
+  }
+
+  async function transitionWebAppointment(entry:Entry,nextStatus:string,reason:string) {
+    if(entry.aggregateType!=="appointment"||!entry.siteId||!entry.revision||!entry.status)throw new Error("Rendez-vous sans révision serveur exploitable.");
+    const allowed:Record<string,string[]>={booked:["confirmed","cancelled","no_show"],confirmed:["cancelled","no_show","completed"]};
+    if(!(allowed[entry.status]??[]).includes(nextStatus)||reason.trim().length<3)throw new Error("Transition ou motif invalide.");
+    const payload={appointment_id:entry.id,from_status:entry.status,to_status:nextStatus,reason:reason.trim(),expected_version:entry.revision,transitioned_at:new Date().toISOString()};
+    await submitWebBusinessEvent("agenda","appointment.status_changed","appointment",entry.id,payload,entry.siteId,entry.title,"Statut : "+nextStatus,{status:nextStatus});
+  }
+
+  async function rescheduleWebAppointment(entry:Entry,startsAt:string,endsAt:string,reason:string) {
+    if(entry.aggregateType!=="appointment"||!entry.siteId||!entry.revision||!["booked","confirmed"].includes(entry.status??""))throw new Error("Rendez-vous non reportable ou révision manquante.");
+    const starts=new Date(startsAt),ends=new Date(endsAt);
+    if(!startsAt||!endsAt||!Number.isFinite(starts.getTime())||!Number.isFinite(ends.getTime())||ends<=starts||reason.trim().length<3)throw new Error("Dates ou motif de report invalides.");
+    await submitWebBusinessEvent("agenda","appointment.rescheduled","appointment",entry.id,{
+      appointment_id:entry.id,starts_at:starts.toISOString(),ends_at:ends.toISOString(),
+      workstation_id:null,assigned_member_id:null,expected_version:entry.revision,reason:reason.trim(),
+    },entry.siteId,entry.title,"Report · "+starts.toLocaleString("fr-FR"),{data:{...(entry.data??{}),starts_at:starts.toISOString(),ends_at:ends.toISOString()}});
+  }
+
+  async function createInventoryMovement(input:{itemId:string;type:string;quantity:number;reason:string}) {
+    const siteId=sharedOperationSiteId(),id=crypto.randomUUID();
+    if(!["in","consumption","loss","adjustment"].includes(input.type)||!Number.isFinite(input.quantity)||input.quantity<=0||input.reason.trim().length<3)throw new Error("Mouvement de stock invalide.");
+    const delta=input.type==="in"?input.quantity:input.type==="adjustment"?input.quantity:-input.quantity;
+    await submitWebBusinessEvent("stock","inventory_movement.created","inventory_movement",id,{
+      movement_id:id,inventory_item_id:input.itemId,movement_type:input.type,quantity_delta:delta,reason:input.reason.trim(),
+    },siteId,"Mouvement de stock",input.type+" · "+delta);
+  }
+
+  async function createSupplier(input:{name:string;phone:string;whatsapp:string;email:string;address:string;paymentTermsDays:number}) {
+    const siteId=sharedOperationSiteId(),id=crypto.randomUUID();
+    if(input.name.trim().length<2||!Number.isInteger(input.paymentTermsDays)||input.paymentTermsDays<0||input.paymentTermsDays>365)throw new Error("Fiche fournisseur invalide.");
+    await submitWebBusinessEvent("stock","supplier.saved","supplier",id,{
+      supplier_id:id,name:input.name.trim(),phone:input.phone.trim(),whatsapp:input.whatsapp.trim(),
+      email:input.email.trim(),address:input.address.trim(),payment_terms_days:input.paymentTermsDays,notes:"",
+    },siteId,input.name.trim(),"Fiche fournisseur");
+  }
+
+  async function createSupplierPurchase(input:{supplier:Entry;item:Entry;reference:string;quantity:number;unitCost:number}) {
+    const siteId=sharedOperationSiteId(),id=crypto.randomUUID(),lineId=crypto.randomUUID();
+    if(input.reference.trim().length<3||!Number.isFinite(input.quantity)||input.quantity<=0||!Number.isSafeInteger(input.unitCost)||input.unitCost<=0)throw new Error("Ligne de commande fournisseur invalide.");
+    const unit=typeof input.item.data?.unit==="string"?input.item.data.unit:"unité";
+    const payload={
+      purchase_id:id,idempotency_key:id,supplier_id:input.supplier.id,reference:input.reference.trim(),
+      supplier_invoice_number:"",recoverable_tax_xaf:0,non_recoverable_tax_xaf:0,shipping_xaf:0,other_fees_xaf:0,due_at:null,notes:"",
+      lines:[{line_id:lineId,inventory_item_id:input.item.id,description:input.item.title,item_type:"stock",unit,quantity_ordered:input.quantity,unit_cost_xaf:input.unitCost}],
+    };
+    await submitWebBusinessEvent("stock","purchase.ordered","purchase",id,payload,siteId,"Achat "+input.reference.trim(),
+      moneyLabel(input.quantity*input.unitCost)+" · "+input.supplier.title);
+  }
+
+  async function receiveSupplierPurchase(input:{purchase:Entry;quantity:number}) {
+    const siteId=sharedOperationSiteId(),key=crypto.randomUUID(),lines=input.purchase.data?.lines as Record<string,unknown>[]|undefined,lineId=lines?.[0]?.line_id;
+    if(typeof lineId!=="string"||!Number.isFinite(input.quantity)||input.quantity<=0)throw new Error("Réception fournisseur sans ligne valide.");
+    await submitWebBusinessEvent("stock","purchase.receipt.confirmed","purchase_receipt",key,{
+      receipt_id:key,idempotency_key:key,purchase_id:input.purchase.id,line_id:lineId,quantity:input.quantity,
+    },siteId,"Réception · "+input.purchase.title,input.quantity+" unité(s)");
+  }
+
+  async function paySupplier(input:{purchase:Entry;amount:number;reference:string}) {
+    const siteId=sharedOperationSiteId(),key=crypto.randomUUID();
+    if(!Number.isSafeInteger(input.amount)||input.amount<=0)throw new Error("Montant de règlement bancaire invalide.");
+    const receipts=entries.stock??[];
+    if(!receipts.some(x=>x.actionCode==="purchase.receipt.confirmed"&&x.data?.purchase_id===input.purchase.id&&
+      (x.state.includes("Confirmé par le serveur")||x.state.startsWith("Reçu du serveur"))))throw new Error("Un reçu de réception confirmé est requis avant règlement.");
+    await submitWebBusinessEvent("stock","supplier.payment.recorded","supplier_payment",key,{
+      payment_id:key,idempotency_key:key,purchase_id:input.purchase.id,amount_xaf:input.amount,payment_method:"bank",
+      cash_session_id:null,payment_reference:input.reference.trim(),
+    },siteId,"Règlement fournisseur","Virement · "+input.amount.toLocaleString("fr-FR")+" FCFA");
+  }
+
+  async function recordStaffTimeEvent(eventType:"staff_clock_in"|"staff_break_start"|"staff_break_end"|"staff_clock_out") {
+    const session=authSession;if(!session)throw new Error("AUTHENTICATION_REQUIRED");
+    const siteId=sharedOperationSiteId(),id=crypto.randomUUID();
+    await submitWebBusinessEvent("team",eventType+".recorded",eventType,id,{
+      time_event_id:id,staff_member_id:session.account.member_id,staff_name_snapshot:session.account.display_name,
+      occurred_at:new Date().toISOString(),workstation_id:null,
+    },siteId,session.account.display_name,eventType.replaceAll("_"," "));
+  }
+
+  async function createCustomerFollowup(input:{customer:Entry;title:string;frequency:string;channel:string;notes:string;nextDue:string}) {
+    const siteId=sharedOperationSiteId(),id=crypto.randomUUID(),due=new Date(input.nextDue);
+    if(!Number.isFinite(due.getTime())||input.title.trim().length<1||input.frequency.trim().length<1||input.channel.trim().length<1)throw new Error("Données de suivi client invalides.");
+    await submitWebBusinessEvent("customers","customer_followup.created","customer_followup",id,{
+      followup_id:id,customer_id:input.customer.id,title:input.title.trim(),frequency:input.frequency.trim(),
+      channel:input.channel.trim(),notes:input.notes,next_due_at:due.toISOString(),status:"active",
+    },siteId,input.title.trim(),input.customer.title+" · "+due.toLocaleDateString("fr-FR"));
+  }
+
+  function moneyLabel(value:number):string{return Number.isFinite(value)?Math.round(value).toLocaleString("fr-FR")+" FCFA":"Montant invalide";}
 
   async function createWebWorkOrder(input: {
     customer: string; title: string; amountXaf: number; dueDate: string; fields: Record<string,string>;
@@ -922,7 +1077,7 @@ function App() {
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
             active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={setPerformanceFromDate} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport().catch(error => setPerformanceError(error instanceof Error ? error.message : "Chargement du rapport impossible.")); }} authenticated={Boolean(authSession)} /> :
-            active === "agenda" ? <AgendaPage entries={entries.agenda ?? []} authenticated={Boolean(authSession)} /> :
+            active === "agenda" ? <AgendaOperationsPage entries={entries.agenda ?? []} authenticated={Boolean(authSession && !preview)} busy={busy} onTransition={transitionWebAppointment} onReschedule={rescheduleWebAppointment} /> :
             active === "pressing" ? <PressingPage
               entries={entries.pressing ?? []} canPreviewEdit={preview}
               authenticated={Boolean(authSession && !preview)} busy={busy}
@@ -938,7 +1093,21 @@ function App() {
               onCreate={createWebWorkOrder}
               onTransition={transitionWebWorkOrder}
             /> :
-            active === "cash" ? <CashPage entries={entries.cash ?? []} /> :
+            active === "cash" ? <CashOperationsPage
+              entries={entries.cash ?? []} stockEntries={entries.stock ?? []}
+              authenticated={Boolean(authSession && !preview)}
+              canManage={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))}
+              busy={busy} onCreateRegister={createCashRegister} onOpenSession={openCashSession}
+              onCreateSale={createCashSale} onCloseSession={closeCashSession}
+            /> :
+            active === "stock" ? <StockOperationsPage
+              entries={entries.stock ?? []} authenticated={Boolean(authSession && !preview)}
+              canManage={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))}
+              busy={busy} onCreateSupplier={createSupplier} onMovement={createInventoryMovement}
+              onPurchase={createSupplierPurchase} onReceive={receiveSupplierPurchase} onPay={paySupplier}
+            /> :
+            active === "team" ? <TeamOperationsPage entries={entries.team ?? []} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} /> :
+            active === "customers" ? <CustomerFollowupsPage entries={entries.customers ?? []} authenticated={Boolean(authSession && !preview)} busy={busy} onCreate={createCustomerFollowup} /> :
             <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} authenticated={Boolean(authSession && !preview)} />}
 
           <div className="page-footnote"><span>ⓘ</span> {preview ? "Les créations sont gardées en mémoire dans cette session uniquement." : authSession ? "Les parcours disponibles utilisent le journal serveur et un reçu idempotent. Les fonctions non raccordées restent en lecture seule ou en aperçu." : "Aucun accès opérationnel n'est accordé avant authentification et synchronisation côté serveur."}</div>
@@ -1002,12 +1171,14 @@ function App() {
 
 function moduleForSyncAction(action: string): ModuleId | null {
   if(action.startsWith("inventory_item.")||action.startsWith("inventory_movement.")||action.startsWith("supplier.")||action.startsWith("purchase."))return "stock";
+  if(action.startsWith("cash_register.")||action.startsWith("cash_session.")||action.startsWith("sale.")||action.startsWith("expense."))return "cash";
+  if(action.startsWith("customer_followup.")||action.startsWith("loyalty_"))return "customers";
   if(action.startsWith("service."))return "services";
   if(action.startsWith("customer."))return "customers";
   if(action.startsWith("pressing_order."))return "pressing";
   if(action.startsWith("work_order.")||action.startsWith("repair_order.")||action.startsWith("service_order."))return "workOrders";
   if(action.startsWith("appointment."))return "agenda";
-  if(action.startsWith("expense.")||action.startsWith("sale.")||action.startsWith("cash_session."))return "cash";
+  if(action.startsWith("expense.")||action.startsWith("sale.")||action.startsWith("cash_session.")||action.startsWith("cash_register."))return "cash";
   if(action.startsWith("staff_"))return "team";
   if(action==="support_request.created")return "help";
   return null;
