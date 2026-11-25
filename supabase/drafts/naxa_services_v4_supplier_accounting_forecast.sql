@@ -2095,6 +2095,68 @@ revoke all on function public.ns_reschedule_appointment(uuid,uuid,uuid,uuid,time
 grant execute on function public.ns_reschedule_appointment(uuid,uuid,uuid,uuid,timestamptz,timestamptz,uuid,integer,text) to service_role;
 
 
+create or replace function public.ns_create_cash_register(
+  p_register_id uuid,p_org_id uuid,p_site_id uuid,p_code text,p_name text,p_workstation_id uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $naxa$
+declare
+  v_member uuid;
+  v_existing public.ns_cash_registers%rowtype;
+  v_register public.ns_cash_registers%rowtype;
+  v_code text:=upper(trim(coalesce(p_code,'')));
+  v_name text:=trim(coalesce(p_name,''));
+begin
+  v_member:=public.ns_current_member_id(p_org_id);
+  if v_member is null or not public.ns_can_manage_site(p_org_id,p_site_id) then
+    raise exception 'NAXA_CASH_REGISTER_CREATE_FORBIDDEN';
+  end if;
+  if p_register_id is null
+     or v_code !~ '^[A-Z0-9][A-Z0-9_-]{1,19}$'
+     or length(v_name) not between 1 and 120 then
+    raise exception 'NAXA_CASH_REGISTER_INVALID';
+  end if;
+  if p_workstation_id is not null and (
+    not exists(select 1 from public.ns_workstations w
+      where w.id=p_workstation_id and w.org_id=p_org_id
+        and w.site_id=p_site_id and w.status='active')
+    or not public.ns_can_operate_workstation(p_org_id,p_site_id,p_workstation_id)
+  ) then raise exception 'NAXA_CASH_REGISTER_WORKSTATION_FORBIDDEN'; end if;
+
+  select * into v_existing from public.ns_cash_registers
+   where id=p_register_id or (org_id=p_org_id and site_id=p_site_id and code=v_code)
+   for update;
+  if found then
+    if v_existing.id=p_register_id and v_existing.org_id=p_org_id
+       and v_existing.site_id=p_site_id and v_existing.code=v_code
+       and v_existing.name=v_name
+       and v_existing.workstation_id is not distinct from p_workstation_id
+       and v_existing.active then
+      return jsonb_build_object('register_id',v_existing.id,'code',v_existing.code,
+        'name',v_existing.name,'workstation_id',v_existing.workstation_id,
+        'active',v_existing.active,'idempotent',true);
+    end if;
+    raise exception 'NAXA_CASH_REGISTER_IDEMPOTENCY_CONFLICT';
+  end if;
+
+  insert into public.ns_cash_registers(
+    id,org_id,site_id,code,name,workstation_id,active
+  ) values (
+    p_register_id,p_org_id,p_site_id,v_code,v_name,p_workstation_id,true
+  ) returning * into v_register;
+  return jsonb_build_object('register_id',v_register.id,'code',v_register.code,
+    'name',v_register.name,'workstation_id',v_register.workstation_id,
+    'active',v_register.active,'idempotent',false);
+exception when unique_violation then
+  raise exception 'NAXA_CASH_REGISTER_CODE_ALREADY_EXISTS';
+end;
+$naxa$;
+
+revoke all on function public.ns_create_cash_register(uuid,uuid,uuid,text,text,uuid) from public,anon,authenticated;
+grant execute on function public.ns_create_cash_register(uuid,uuid,uuid,text,text,uuid) to service_role;
+
 create or replace function public.ns_open_cash_session(
   p_cash_session_id uuid,p_org_id uuid,p_site_id uuid,p_register_id uuid,
   p_register_name text,p_opening_float_xaf bigint,p_opened_at timestamptz
@@ -3311,6 +3373,7 @@ begin
 
   v_expected_aggregate := case
     when p_action_code = 'supplier.saved' then 'supplier'
+    when p_action_code = 'cash_register.created' then 'cash_register'
     when p_action_code like 'inventory_item.%' then 'inventory_item'
     when p_action_code like 'inventory_movement.%' then 'inventory_movement'
     when p_action_code = 'purchase.ordered' then 'purchase'
@@ -3367,6 +3430,7 @@ begin
 
   v_payload_aggregate := case
     when p_action_code = 'supplier.saved' then p_payload->>'supplier_id'
+    when p_action_code = 'cash_register.created' then p_payload->>'register_id'
     when p_action_code like 'inventory_item.%' then p_payload->>'inventory_item_id'
     when p_action_code like 'inventory_movement.%' then p_payload->>'movement_id'
     when p_action_code = 'purchase.ordered' then p_payload->>'purchase_id'
@@ -3465,6 +3529,12 @@ begin
   );
 
   case p_action_code
+    when 'cash_register.created' then
+      v_result := public.ns_create_cash_register(
+        (p_payload->>'register_id')::uuid,p_org_id,p_site_id,
+        p_payload->>'code',p_payload->>'name',
+        nullif(p_payload->>'workstation_id','')::uuid
+      );
     when 'supplier.saved' then
       v_result := public.ns_save_supplier(
         (p_payload->>'supplier_id')::uuid, p_org_id, p_site_id,
