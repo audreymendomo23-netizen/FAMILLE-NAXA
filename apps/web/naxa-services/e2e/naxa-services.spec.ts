@@ -234,7 +234,8 @@ test("Web: Pressing keeps its dedicated ticket journey and waits for a server re
   await expect.poll(() => appliedEvents.length).toBe(2);
   expect(appliedEvents[1].action_code).toBe("pressing_order.status_changed:in_progress");
   expect((appliedEvents[1].payload as Record<string, unknown>).expected_version).toBe(1);
-  await expect(page.getByText("En cours", { exact: true })).toBeVisible();
+  const pressingStatusBadge = page.locator(".activity-record .record .status-tag");
+  await expect(pressingStatusBadge).toHaveText("En cours");
   const pressingSteps = [
     { label: "Passer à Prêt", action: "pressing_order.status_changed:ready", status: "ready", revision: 2 },
     { label: "Passer à Retiré", action: "pressing_order.status_changed:picked_up", status: "picked_up", revision: 3 },
@@ -246,7 +247,7 @@ test("Web: Pressing keeps its dedicated ticket journey and waits for a server re
     const transition = appliedEvents[step.revision];
     expect(transition.action_code).toBe(step.action);
     expect((transition.payload as Record<string, unknown>).expected_version).toBe(step.revision);
-    await expect(page.getByText(step.status === "ready" ? "Prêt" : "Retiré", { exact: true })).toBeVisible();
+    await expect(pressingStatusBadge).toHaveText(step.status === "ready" ? "Prêt" : "Retiré");
   }
   await page.close();
 });
