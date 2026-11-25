@@ -92,7 +92,9 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
       // Pressing transitions encode the target status in the action suffix, like ns_apply_sync_event.
       const pressingStatus = actionCode.startsWith("pressing_order.status_changed:")
         ? actionCode.slice("pressing_order.status_changed:".length) : null;
-      const status = typeof payload.to_status === "string" ? payload.to_status
+      const status = actionCode === "cash_session.opened" ? "open"
+        : actionCode === "cash_session.closed" ? "closed"
+        : typeof payload.to_status === "string" ? payload.to_status
         : typeof payload.status === "string" ? payload.status
         : pressingStatus ?? "received";
       return json(route, {
@@ -410,4 +412,64 @@ test("PWA: production service worker keeps the app shell available after offline
   await expect(offlinePage.getByLabel("Identifiant NAXA Services")).toBeVisible();
   await expect(offlinePage.getByLabel("Mot de passe")).toBeVisible();
   await offlinePage.close();
+});
+
+
+test("Web N4-C: cash register, cash session, cash sale and close require server receipts", async ({ context }) => {
+  const appliedEvents = await installBackend(context);
+  const page = await context.newPage();
+  await signIn(page);
+  await page.locator(".side-nav button.nav-item").filter({ hasText: "Caisse & ventes" }).click();
+
+  await page.getByLabel("Code unique").fill("E2E-CAISSE");
+  await page.getByLabel("Nom du registre").fill("Caisse recette");
+  await page.getByRole("button", { name: "Créer le registre avec reçu serveur" }).click();
+  await expect.poll(() => appliedEvents.length).toBe(1);
+  expect(appliedEvents[0].action_code).toBe("cash_register.created");
+  expect(appliedEvents[0].aggregate_type).toBe("cash_register");
+  await expect(page.getByRole("heading", { name: "Ouvrir une session" })).toBeVisible();
+
+  await page.getByLabel("Fonds d'ouverture (FCFA)").fill("5000");
+  await page.getByRole("button", { name: "Ouvrir la caisse" }).click();
+  await expect.poll(() => appliedEvents.length).toBe(2);
+  expect(appliedEvents[1].action_code).toBe("cash_session.opened");
+  expect((appliedEvents[1].payload as Record<string, unknown>).opening_float_xaf).toBe(5000);
+  await expect(page.getByRole("heading", { name: "Session actuellement ouverte" })).toBeVisible();
+
+  await page.getByLabel("Désignation vendue").fill("Prestation recette");
+  await page.getByLabel("Total encaissé (FCFA)").fill("2500");
+  await page.getByRole("button", { name: "Enregistrer la vente comptant" }).click();
+  await expect.poll(() => appliedEvents.length).toBe(3);
+  expect(appliedEvents[2].action_code).toBe("sale.created");
+  expect((appliedEvents[2].payload as Record<string, unknown>).payment_method).toBe("cash");
+  expect((appliedEvents[2].payload as Record<string, unknown>).status).toBe("confirmed");
+
+  await page.getByLabel("Montant compté à la clôture (FCFA)").fill("7500");
+  await page.getByRole("button", { name: "Clôturer et calculer l'écart serveur" }).click();
+  await expect.poll(() => appliedEvents.length).toBe(4);
+  expect(appliedEvents[3].action_code).toBe("cash_session.closed");
+  expect((appliedEvents[3].payload as Record<string, unknown>).counted_close_xaf).toBe(7500);
+  await expect(page.getByText(/opération\(s\) confirmée/)).toBeVisible();
+  await page.close();
+});
+
+test("Web N4-C: staff presence transitions follow the server-controlled sequence", async ({ context }) => {
+  const appliedEvents = await installBackend(context);
+  const page = await context.newPage();
+  await signIn(page);
+  await page.locator(".side-nav button.nav-item").filter({ hasText: "Équipe & commissions" }).click();
+  const actions = [
+    ["Pointer mon arrivée", "staff_clock_in.recorded"],
+    ["Commencer une pause", "staff_break_start.recorded"],
+    ["Terminer la pause", "staff_break_end.recorded"],
+    ["Pointer mon départ", "staff_clock_out.recorded"],
+  ] as const;
+  for (let index = 0; index < actions.length; index++) {
+    const [label, actionCode] = actions[index];
+    await page.getByRole("button", { name: label }).click();
+    await expect.poll(() => appliedEvents.length).toBe(index + 1);
+    expect(appliedEvents[index].action_code).toBe(actionCode);
+    expect(appliedEvents[index].aggregate_type).toBe(actionCode.replace(".recorded", ""));
+  }
+  await page.close();
 });
