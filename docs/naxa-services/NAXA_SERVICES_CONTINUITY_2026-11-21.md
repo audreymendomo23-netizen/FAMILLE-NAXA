@@ -731,3 +731,8 @@ Le correctif `192111fc21e2ed965c826011d4e64fd4657b0507` attribue au champ un nom
 **Preuve :** [run #596](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45676579558), [job Web](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45676579558/job/139425616194), journal `12 passed (45.1s)`. Au moment de cette note, 11 jobs du run #596 ont réussi, Android est encore en cours ; aucun échec observé. La comparaison entre les SHA de #595 et #596 ne contient que deux fichiers Web et ce document, donc le code Android précédemment validé n'a pas changé. Le PASS du nouveau job Android et la conclusion globale du run restent à constater.
 
 Aucun changement de main ni déploiement. Les gates de recette intégrée sur backend commun, parité exhaustive et activation réelle restent distincts de ce correctif CI.
+
+
+### 22.9 — Clôture du gate technique #596, 25 novembre 2026
+
+**VERT 12/12.** GitHub Actions confirme la conclusion `success` du [run #596](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45676579558) sur le commit de code `192111fc21e2ed965c826011d4e64fd4657b0507`. Les douze jobs sont terminés avec succès, y compris le dernier job Android : tests unitaires, compilation APK, tests instrumentés sur émulateur et upload APK Debug. Les douze scénarios Web E2E ont également réussi. Le précédent commit documentaire ne change aucun fichier de code. Aucun nouveau correctif nécessaire pour ce gate. Les validations intégrées sur backend commun, parité exhaustive et activation de production restent distinctes ; ce PASS ne constitue pas un déploiement ni une signature Release.
