@@ -763,3 +763,12 @@ Le [run #602](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/ru
 ### 22.12 — Revue administrative et état des droits payés
 
 Le run #603 a validé les contrats Auth, PostgreSQL/RLS et les recettes Web ; le dernier job Android était encore en cours à la lecture. Ce lot ajoute une file de revue des crédits ambigus, limitée au canal et à la destination de l'appareil administrateur enrôlé et à sa session Auth. Le rejet motivé est idempotent et journalisé ; aucun administrateur ne peut transformer un rejet en confirmation ni modifier les preuves par ces RPC. La déclaration du payeur reste en attente. L'état serveur des droits payés est consultable par un membre actif de l'organisation : active, expired, cancelled, not_started ou unconfigured (calendrier Africa/Douala). Aucune règle d'essai ou de grâce inventée et aucun verrou ERP activé sans arbitrage de politique. Les tests couvrent l'isolation, le crédit incohérent, le refus d'action du payeur, le rejet et le maintien de la période payée. L'interface administrative de capture physique, la résolution des déclarations bloquées, la politique d'essai/expiration et la recette SIM restent à compléter. Aucun déploiement.
+
+
+### 22.13 — Contrôle contradictoire du gate #604 et abandon Android
+
+Le [run #604](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45713479110) a terminé avec 12/12 jobs réussis sur `0d77b19defac9992b33cefe8adabb3f8cd1f0b56`. Le run #603 a finalement été annulé par le suivant ; ses résultats intermédiaires ne valent pas gate complet.
+
+Malgré ce PASS, l'audit source a établi un défaut d'exécution : ManagementModules appelle subscription_cancel, mais AuthApi.subscriptionRequest rejetait cette action avant tout appel réseau. La liste des quatre actions payeur est désormais commune à la validation de la requête et à un nouveau test unitaire positif/négatif. Les actions administratives restent exclues et le serveur conserve les contrôles d'abandon avant déclaration et d'attestation de non-paiement. Le nouveau gate reste à constater.
+
+L'état des droits payés est calculé côté serveur mais aucun verrou métier n'est déclaré actif. Ne pas inventer une durée d'essai, de grâce ni une politique d'accès en cas d'expiration ; la capture bénéficiaire physique et les recettes dédiées restent ouvertes. Aucun déploiement ni modification de main ou du Supabase pharmacie.

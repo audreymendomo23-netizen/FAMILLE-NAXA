@@ -120,6 +120,13 @@ data class NotificationInboxItem(
     val actionedAt: String?
 )
 
+// Keep this payer-only allowlist aligned with the subscription_result actions in the Auth Edge.
+internal fun requireSubscriptionPayerAction(action: String) {
+    require(action in setOf("subscription_list", "subscription_create", "subscription_declare", "subscription_cancel")) {
+        "Action abonnement invalide."
+    }
+}
+
 class AuthApi(private val context: Context) {
     private val endpoint: String get() = BuildConfig.AUTH_FUNCTION_URL.trim()
     private val anonKey: String get() = BuildConfig.SUPABASE_ANON_KEY.trim()
@@ -206,7 +213,7 @@ class AuthApi(private val context: Context) {
 
     suspend fun subscriptionRequest(accessToken: String, body: JSONObject): JSONObject {
         val action = body.optString("action")
-        require(action in setOf("subscription_list", "subscription_create", "subscription_declare")) { "Action abonnement invalide." }
+        requireSubscriptionPayerAction(action)
         val result = request(JSONObject(body.toString()).put("app_code", "naxa-services"), accessToken)
         return result.optJSONObject("subscription_result") ?: throw AuthApiException("Réponse d'abonnement incomplète.")
     }
