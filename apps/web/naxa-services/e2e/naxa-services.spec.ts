@@ -88,7 +88,13 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
       const payload = event.payload as Record<string, unknown>;
       appliedEvents.push(event);
       const revision = typeof payload.expected_version === "number" ? payload.expected_version + 1 : 1;
-      const status = typeof payload.to_status === "string" ? payload.to_status : typeof payload.status === "string" ? payload.status : "received";
+      const actionCode = typeof event.action_code === "string" ? event.action_code : "";
+      // Pressing transitions encode the target status in the action suffix, like ns_apply_sync_event.
+      const pressingStatus = actionCode.startsWith("pressing_order.status_changed:")
+        ? actionCode.slice("pressing_order.status_changed:".length) : null;
+      const status = typeof payload.to_status === "string" ? payload.to_status
+        : typeof payload.status === "string" ? payload.status
+        : pressingStatus ?? "received";
       return json(route, {
         ok: true,
         result: {
@@ -228,6 +234,7 @@ test("Web: Pressing keeps its dedicated ticket journey and waits for a server re
   await expect.poll(() => appliedEvents.length).toBe(2);
   expect(appliedEvents[1].action_code).toBe("pressing_order.status_changed:in_progress");
   expect((appliedEvents[1].payload as Record<string, unknown>).expected_version).toBe(1);
+  await expect(page.getByText("En cours", { exact: true })).toBeVisible();
   const pressingSteps = [
     { label: "Passer à Prêt", action: "pressing_order.status_changed:ready", status: "ready", revision: 2 },
     { label: "Passer à Retiré", action: "pressing_order.status_changed:picked_up", status: "picked_up", revision: 3 },
@@ -239,6 +246,7 @@ test("Web: Pressing keeps its dedicated ticket journey and waits for a server re
     const transition = appliedEvents[step.revision];
     expect(transition.action_code).toBe(step.action);
     expect((transition.payload as Record<string, unknown>).expected_version).toBe(step.revision);
+    await expect(page.getByText(step.status === "ready" ? "Prêt" : "Retiré", { exact: true })).toBeVisible();
   }
   await page.close();
 });
