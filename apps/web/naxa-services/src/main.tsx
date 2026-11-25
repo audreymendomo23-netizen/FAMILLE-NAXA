@@ -781,8 +781,8 @@ function App() {
 
   async function createInventoryMovement(input:{itemId:string;type:string;quantity:number;reason:string}) {
     const siteId=sharedOperationSiteId(),id=crypto.randomUUID();
-    if(!["in","consumption","loss","adjustment"].includes(input.type)||!Number.isFinite(input.quantity)||input.quantity<=0||input.reason.trim().length<3)throw new Error("Mouvement de stock invalide.");
-    const delta=input.type==="in"?input.quantity:input.type==="adjustment"?input.quantity:-input.quantity;
+    if(!["in","consumption","loss","adjustment"].includes(input.type)||!Number.isFinite(input.quantity)||input.quantity===0||(input.type!=="adjustment"&&input.quantity<0)||input.reason.trim().length<3)throw new Error("Mouvement de stock invalide.");
+    const delta=input.type==="in"?Math.abs(input.quantity):input.type==="adjustment"?input.quantity:-Math.abs(input.quantity);
     await submitWebBusinessEvent("stock","inventory_movement.created","inventory_movement",id,{
       movement_id:id,inventory_item_id:input.itemId,movement_type:input.type,quantity_delta:delta,reason:input.reason.trim(),
     },siteId,"Mouvement de stock",input.type+" · "+delta);
@@ -1077,7 +1077,7 @@ function App() {
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
             active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={setPerformanceFromDate} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport().catch(error => setPerformanceError(error instanceof Error ? error.message : "Chargement du rapport impossible.")); }} authenticated={Boolean(authSession)} /> :
-            active === "agenda" ? <AgendaOperationsPage entries={entries.agenda ?? []} authenticated={Boolean(authSession && !preview)} busy={busy} onTransition={transitionWebAppointment} onReschedule={rescheduleWebAppointment} /> :
+            active === "agenda" ? <AgendaOperationsPage entries={(entries.agenda ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTransition={transitionWebAppointment} onReschedule={rescheduleWebAppointment} /> :
             active === "pressing" ? <PressingPage
               entries={entries.pressing ?? []} canPreviewEdit={preview}
               authenticated={Boolean(authSession && !preview)} busy={busy}
@@ -1094,20 +1094,20 @@ function App() {
               onTransition={transitionWebWorkOrder}
             /> :
             active === "cash" ? <CashOperationsPage
-              entries={entries.cash ?? []} stockEntries={entries.stock ?? []}
+              entries={(entries.cash ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} stockEntries={(entries.stock ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))}
               authenticated={Boolean(authSession && !preview)}
               canManage={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))}
               busy={busy} onCreateRegister={createCashRegister} onOpenSession={openCashSession}
               onCreateSale={createCashSale} onCloseSession={closeCashSession}
             /> :
             active === "stock" ? <StockOperationsPage
-              entries={entries.stock ?? []} authenticated={Boolean(authSession && !preview)}
+              entries={(entries.stock ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)}
               canManage={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))}
               busy={busy} onCreateSupplier={createSupplier} onMovement={createInventoryMovement}
               onPurchase={createSupplierPurchase} onReceive={receiveSupplierPurchase} onPay={paySupplier}
             /> :
-            active === "team" ? <TeamOperationsPage entries={entries.team ?? []} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} /> :
-            active === "customers" ? <CustomerFollowupsPage entries={entries.customers ?? []} authenticated={Boolean(authSession && !preview)} busy={busy} onCreate={createCustomerFollowup} /> :
+            active === "team" ? <TeamOperationsPage entries={(entries.team ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} /> :
+            active === "customers" ? <CustomerFollowupsPage entries={(entries.customers ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onCreate={createCustomerFollowup} /> :
             <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} authenticated={Boolean(authSession && !preview)} />}
 
           <div className="page-footnote"><span>ⓘ</span> {preview ? "Les créations sont gardées en mémoire dans cette session uniquement." : authSession ? "Les parcours disponibles utilisent le journal serveur et un reçu idempotent. Les fonctions non raccordées restent en lecture seule ou en aperçu." : "Aucun accès opérationnel n'est accordé avant authentification et synchronisation côté serveur."}</div>
@@ -1178,7 +1178,6 @@ function moduleForSyncAction(action: string): ModuleId | null {
   if(action.startsWith("pressing_order."))return "pressing";
   if(action.startsWith("work_order.")||action.startsWith("repair_order.")||action.startsWith("service_order."))return "workOrders";
   if(action.startsWith("appointment."))return "agenda";
-  if(action.startsWith("expense.")||action.startsWith("sale.")||action.startsWith("cash_session.")||action.startsWith("cash_register."))return "cash";
   if(action.startsWith("staff_"))return "team";
   if(action==="support_request.created")return "help";
   return null;
