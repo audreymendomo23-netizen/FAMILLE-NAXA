@@ -878,7 +878,7 @@ private fun activityVisibleRoutes(activity: String?): Set<AppRoute> {
 }
 
 private fun canAccessRoute(route: AppRoute, roleCode: String): Boolean {
-    if (route == AppRoute.CUSTOMER_PROMOTIONS && roleCode != "promoter") return false
+    if (route in setOf(AppRoute.CUSTOMER_PROMOTIONS, AppRoute.SUBSCRIPTIONS) && roleCode != "promoter") return false
     val common = commonRoutes + setOf(AppRoute.DASHBOARD, AppRoute.MENU)
     val allowed = when (roleCode) {
         "promoter", "network_manager" -> AppRoute.values().toSet()
@@ -1038,7 +1038,7 @@ private fun ErpScreen(
         } else if (route == AppRoute.BILLING) {
             BillingContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.SUBSCRIPTIONS) {
-            SubscriptionsContent(Modifier.padding(padding), localRepository, activeSession)
+            SubscriptionsContent(Modifier.padding(padding), authApi, activeSession)
         } else if (route == AppRoute.PURCHASES) {
             PurchasesContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.TAXES) {

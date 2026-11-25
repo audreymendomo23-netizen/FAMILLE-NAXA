@@ -1662,6 +1662,18 @@ BEGIN
   EXCEPTION WHEN raise_exception THEN
     IF SQLERRM<>'NAXA_SALE_NOT_PENDING' THEN RAISE; END IF;
   END;
+  -- New sales paid outside the ERP are recorded as confirmed; no provider API.
+  v_result:=public.ns_apply_sync_event(
+    '20000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001',null,
+    '80000000-0000-4000-8000-000000000001','a3000000-0000-4000-8000-000000000005',95,
+    'sale','a2000000-0000-4000-8000-000000000003','sale.created',
+    jsonb_build_object('sale_id','a2000000-0000-4000-8000-000000000003','org_id','20000000-0000-4000-8000-000000000001',
+      'site_id','30000000-0000-4000-8000-000000000001','cash_session_id',v_cash_session_id,'sale_number','CI-MANUAL-MOMO',
+      'description','Prestation encaissée hors application','total_xaf',1000,'payment_method','mobile_money','status','confirmed','created_at',now())
+  );
+  IF v_result->>'status'<>'applied' OR v_result->>'payment_status'<>'confirmed' OR v_result->>'server_status'<>'posted' THEN
+    RAISE EXCEPTION 'EXTERNAL_SALE_NOT_POSTED: %',v_result;
+  END IF;
 END
 $sale_sync$;
 RESET ROLE;
@@ -1693,6 +1705,7 @@ BEGIN
   IF v_pending_status<>'voided' OR v_pending_payment<>'failed' THEN
     RAISE EXCEPTION 'MOBILE_MONEY_CANCELLATION_FINAL_STATE_INVALID';
   END IF;
+  IF NOT EXISTS(SELECT 1 FROM public.ns_payments WHERE sale_id='a2000000-0000-4000-8000-000000000003' AND status='confirmed' AND confirmation_source='manual_external' AND amount_xaf=1000) THEN RAISE EXCEPTION 'MANUAL_MOMO_PAYMENT_NOT_RECORDED'; END IF;
 END
 $sale_assertions$;
 

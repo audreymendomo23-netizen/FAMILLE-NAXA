@@ -204,6 +204,13 @@ class AuthApi(private val context: Context) {
         return request(JSONObject(body.toString()), accessToken, customerPromotionsEndpoint)
     }
 
+    suspend fun subscriptionRequest(accessToken: String, body: JSONObject): JSONObject {
+        val action = body.optString("action")
+        require(action in setOf("subscription_list", "subscription_create", "subscription_declare")) { "Action abonnement invalide." }
+        val result = request(JSONObject(body.toString()).put("app_code", "naxa-services"), accessToken)
+        return result.optJSONObject("subscription_result") ?: throw AuthApiException("Réponse d'abonnement incomplète.")
+    }
+
     suspend fun accountingRequest(accessToken: String, body: JSONObject): JSONObject {
         if (accountingEndpoint.isBlank()) {
             throw AuthApiException("La passerelle comptable NAXA Services n'est pas configurée.")

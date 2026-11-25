@@ -195,155 +195,121 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
 }
 
 @Composable
-fun SubscriptionsContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {
+fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession) {
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
     val fr = session.account.defaultLocale != "en"
-    val records by remember(session.account.organizationId) {
-        repository.dao.observeOrganizationManagementRecordsByType(session.account.organizationId, "subscription_request")
-    }.collectAsState(initial = emptyList())
-    var plan by rememberSaveable { mutableStateOf("ACCESS") }
-    var period by rememberSaveable { mutableStateOf("monthly") }
-    var paymentReference by rememberSaveable { mutableStateOf("") }
-    var message by remember { mutableStateOf<String?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val org = session.account.organizationId
+    var snapshot by remember(org, session.deviceId) { mutableStateOf<JSONObject?>(null) }
+    var intent by remember(org, session.deviceId) { mutableStateOf<JSONObject?>(null) }
+    var plan by remember(org) { mutableStateOf("ACCESS") }
+    var months by remember(org) { mutableStateOf(1) }
+    var channel by remember(org) { mutableStateOf("") }
+    var payer by remember(org, session.deviceId) { mutableStateOf("") }
+    var sms by remember(org, session.deviceId) { mutableStateOf("") }
+    var date by remember(org, session.deviceId) { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
-    val monthlyPrice = if (plan == "ACCESS") 3000L else 10000L
-    val matureMonthlyPrice = if (plan == "ACCESS") 5000L else 15000L
-    val amountDue = monthlyPrice * if (period == "annual") 10L else 1L
-    val matureAmount = matureMonthlyPrice * if (period == "annual") 10L else 1L
-    val priceLabel = if (fr) "FCFA" else "XAF"
-
+    var error by remember { mutableStateOf<String?>(null) }
+    fun arrayObjects(value: org.json.JSONArray?): List<JSONObject> =
+        (0 until (value?.length() ?: 0)).mapNotNull { value?.optJSONObject(it) }
+    suspend fun load() {
+        val result = api.subscriptionRequest(session.accessToken, JSONObject().put("action", "subscription_list"))
+        snapshot = result
+        intent = arrayObjects(result.optJSONArray("intents")).firstOrNull { it.optString("status") in setOf("pending","submitted") }
+        val available = arrayObjects(result.optJSONArray("destinations")).map { it.optString("channel") }
+        if (channel !in available) channel = available.firstOrNull().orEmpty()
+    }
+    fun runAction(action: suspend () -> Unit) {
+        scope.launch {
+            busy = true
+            error = null
+            runCatching { action() }.onFailure { error = it.message ?: if (fr) "Opération impossible." else "Operation failed." }
+            busy = false
+        }
+    }
+    val current = intent
+    val destinations = arrayObjects(snapshot?.optJSONArray("destinations"))
+    val ussd = current?.let {
+        val code = it.optString("merchant_code")
+        val amount = it.optLong("amount_xaf", 0L)
+        if (!code.matches(Regex("^[0-9]{6}$")) || amount <= 0) "" else when(it.optString("channel")) {
+            "mtn_momo" -> "*126*4*" + code + "*" + amount + "#"
+            "orange_money" -> "#150*47#"
+            else -> ""
+        }
+    }.orEmpty()
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
             Text(if (fr) "Abonnement NAXA SERVICES" else "NAXA SERVICES subscription", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text(
-                if (fr) "Une souscription Promoteur par organisation couvre les points de vente et postes autorisés. Aucun site supplémentaire ne crée un second abonnement." else "One Promoter subscription per organization covers its authorized sites and workstations. Adding a site does not create a second subscription.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            LocalOnlyNotice(if (fr) "Le paiement, les renouvellements et les droits seront confirmés par le serveur. Cette page ne valide aucun paiement ni entitlement." else "Payments, renewals and entitlements must be confirmed by the server. This screen does not activate any payment or entitlement.")
-        }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (fr) "Choisir une formule" else "Choose a plan", fontWeight = FontWeight.Bold)
-                    listOf(
-                        "ACCESS" to (if (fr) "ACCÈS" else "ACCESS"),
-                        "PREMIUM" to "PREMIUM"
-                    ).forEach { (code, label) ->
-                        val amount = if (code == "ACCESS") 3000 else 10000
-                        val mature = if (code == "ACCESS") 5000 else 15000
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (plan == code) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                Text(label, fontWeight = FontWeight.Bold)
-                                Text(if (fr) "Aujourd'hui : " + xaf(amount.toLong()) + " / mois" else "Today: " + xaf(amount.toLong()) + " / month")
-                                Text(if (fr) "À partir du 1er mai 2027 : " + xaf(mature.toLong()) + " / mois" else "From 1 May 2027: " + xaf(mature.toLong()) + " / month")
-                                Text(
-                                    if (code == "ACCESS") {
-                                        if (fr) "Compte unique, prestations, agenda, caisse, clients, stocks et pilotage de base." else "Single account, services, calendar, cash, customers, inventory and core management."
-                                    } else {
-                                        if (fr) "Inclut tous les droits ACCÈS, avec organisation multiniveau, délégation, supervision et consolidation." else "Includes all ACCESS rights, plus multi-level organization, delegation, supervision and consolidation."
-                                    },
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                OutlinedButton(onClick = { plan = code }, modifier = Modifier.fillMaxWidth()) {
-                                    Text(if (plan == code) if (fr) "✓ Formule sélectionnée" else "✓ Selected plan" else if (fr) "Choisir cette formule" else "Choose this plan")
-                                }
-                            }
-                        }
-                    }
-                    Text(if (fr) "Périodicité" else "Billing period", fontWeight = FontWeight.SemiBold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { period = "monthly" }, enabled = period != "monthly", modifier = Modifier.weight(1f)) {
-                            Text(if (fr) "Mensuel" else "Monthly")
-                        }
-                        OutlinedButton(onClick = { period = "annual" }, enabled = period != "annual", modifier = Modifier.weight(1f)) {
-                            Text(if (fr) "Annuel — 2 mois offerts" else "Annual — 2 months free")
-                        }
-                    }
-                    Text(
-                        if (fr) "Montant aujourd'hui : " + xaf(amountDue) + " pour " + (if (period == "annual") "12 mois" else "1 mois") else "Amount today: " + xaf(amountDue) + " for " + (if (period == "annual") "12 months" else "1 month"),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        if (fr) "Montant au renouvellement à partir du 1er mai 2027 : " + xaf(matureAmount) + (if (period == "annual") " pour 12 mois" else " / mois") else "Renewal amount from 1 May 2027: " + xaf(matureAmount) + (if (period == "annual") " for 12 months" else " / month"),
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                    Text(
-                        if (fr) "La grille maturité est programmée au 1er mai 2027 pour les dix applications NAXA FAMILY. Elle s'applique aux nouvelles périodes de service commençant à cette date ou après ; une période déjà payée n'est pas recalculée." else "The maturity catalogue is scheduled for 1 May 2027 across all ten NAXA FAMILY apps. It applies to new service periods starting on or after that date; an already-paid period is not repriced.",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Text(if (fr) "Essai initial : 72 heures, une seule fois par organisation et application." else "Initial trial: 72 hours, once per organization and app.", style = MaterialTheme.typography.bodySmall)
+            Text(if (fr) "Un abonnement par organisation. Les encaissements de votre entreprise sont réalisés hors application." else "One subscription per organization. Your business collects payments outside the app.")
+            if (session.account.roleCode != "promoter") {
+                Text(if (fr) "Réservé au Promoteur." else "Promoter access only.")
+            } else {
+                OutlinedButton(enabled = !busy, onClick = { runAction { load() } }) { Text(if (fr) "Consulter / actualiser" else "Load / refresh") }
+                snapshot?.optJSONObject("subscription")?.let { sub ->
+                    Text(sub.optString("plan_code") + " · " + sub.optString("status") + " · " + (if (fr) "Échéance (exclusive) : " else "End date (exclusive): ") + sub.optString("period_end_exclusive"))
                 }
             }
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
+        if (session.account.roleCode == "promoter" && snapshot != null && current == null) item {
+            Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (fr) "Demande de souscription / renouvellement" else "Subscription / renewal request", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(paymentReference, { paymentReference = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Référence de paiement (facultative)" else "Payment reference (optional)") }, singleLine = true)
-                    Button(
-                        onClick = {
-                            scope.launch {
-                                busy = true
-                                runCatching {
-                                    val metadata = JSONObject()
-                                        .put("catalogAppId", "NAXA_SERVICES")
-                                        .put("planCode", plan)
-                                        .put("billingPeriod", period)
-                                        .put("launchMonthlyAmountXaf", monthlyPrice)
-                                        .put("scheduledMatureMonthlyAmountXaf", matureMonthlyPrice)
-                                        .put("maturityEffectiveDate", "2027-05-01")
-                                        .put("paymentReference", paymentReference.take(100))
-                                        .put("annualFactor", if (period == "annual") 10 else 1)
-                                        .toString()
-                                    repository.createManagementRecord(
-                                        session.account.organizationId, "ORG_SCOPE", "subscription_request",
-                                        "SUB-" + System.currentTimeMillis(),
-                                        "NAXA SERVICES " + plan + " " + period,
-                                        session.account.organizationName,
-                                        amountDue, 0, null, "pending_review", metadata,
-                                        session.account.memberId
-                                    )
-                                }.onSuccess {
-                                    paymentReference = ""
-                                    message = if (fr) "Demande enregistrée localement. Aucun droit n'est activé avant confirmation du paiement côté serveur." else "Request saved locally. No entitlement is activated before server-side payment confirmation."
-                                    error = null
-                                }.onFailure { error = it.message ?: "Subscription request failed." }
-                                busy = false
+                    Text(if (fr) "Choisir une formule" else "Choose plan", fontWeight = FontWeight.Bold)
+                    listOf("ACCESS","PREMIUM").forEach { value ->
+                        OutlinedButton(onClick = { plan = value }, enabled = !busy) { Text((if (plan == value) "✓ " else "") + value) }
+                    }
+                    listOf(1,12).forEach { value ->
+                        OutlinedButton(onClick = { months = value }, enabled = !busy) { Text((if (months == value) "✓ " else "") + if (value == 1) (if (fr) "Mensuel" else "Monthly") else (if (fr) "Annuel" else "Annual")) }
+                    }
+                    destinations.forEach { d ->
+                        val value = d.optString("channel")
+                        OutlinedButton(onClick = { channel = value }, enabled = !busy) { Text((if (channel == value) "✓ " else "") + if (value == "mtn_momo") "MTN MoMo" else "Orange Money") }
+                    }
+                    if (destinations.isEmpty()) Text(if (fr) "Aucune destination NAXA activée. Ne payez pas sur un autre compte." else "No NAXA payment destination is enabled.")
+                    Button(enabled = !busy && destinations.any { it.optString("channel") == channel }, onClick = {
+                        runAction {
+                            intent = api.subscriptionRequest(session.accessToken, JSONObject().put("action","subscription_create").put("plan_code",plan).put("months",months).put("channel",channel))
+                        }
+                    }) { Text(if (fr) "Obtenir le montant et la destination" else "Get amount and destination") }
+                }
+            }
+        }
+        if (session.account.roleCode == "promoter" && current != null) item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(xaf(current.optLong("amount_xaf")) + " · " + current.optString("plan_code"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text((if (fr) "Bénéficiaire : " else "Beneficiary: ") + current.optString("beneficiary") + " · " + current.optString("merchant_code"))
+                    if (current.optString("status") == "pending") {
+                        Text(if (fr) "Vérifiez le bénéficiaire et le montant chez l'opérateur. Ne communiquez jamais votre PIN." else "Check the merchant and amount with the operator. Never share your PIN.")
+                        if (ussd.isNotEmpty()) {
+                            Text(ussd)
+                            OutlinedButton(enabled = !busy, onClick = {
+                                runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel",ussd,null))) }.onFailure { error = it.message }
+                            }) { Text(if (fr) "Ouvrir le composeur" else "Open dialer") }
+                        }
+                        OutlinedTextField(payer, { payer = it.take(20) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Numéro du payeur" else "Payer phone") }, singleLine = true)
+                        if (current.optString("channel") == "orange_money") OutlinedTextField(date, { date = it.take(16) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Date et heure Cameroun (AAAA-MM-JJ HH:mm)" else "Cameroon time (YYYY-MM-DD HH:mm)") }, singleLine = true)
+                        OutlinedTextField(sms, { sms = it.take(8000) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "SMS de débit de cette transaction" else "Debit SMS for this transaction") })
+                        Button(enabled = !busy && payer.isNotBlank() && sms.isNotBlank() && (current.optString("channel") != "orange_money" || date.length == 16), onClick = {
+                            runAction {
+                                val payload = JSONObject().put("action","subscription_declare").put("intent_id",current.optString("id")).put("sms",sms).put("payer_number",payer)
+                                if (current.optString("channel") == "orange_money") payload.put("occurred_at",java.time.OffsetDateTime.parse(date.replace(' ','T') + ":00+01:00").toString())
+                                api.subscriptionRequest(session.accessToken,payload)
+                                sms = ""; payer = ""; date = ""; load()
                             }
-                        },
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (busy) if (fr) "Enregistrement…" else "Saving…" else if (fr) "Enregistrer la demande" else "Save request") }
-                    if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
-                    if (message != null) Text(message!!, color = MaterialTheme.colorScheme.primary)
+                        }) { Text(if (fr) "Déclarer le paiement" else "Declare payment") }
+                    } else Text(if (fr) "Déclaration reçue. En attente du crédit NAXA ; aucun droit activé par une preuve seule." else "Declaration received. Waiting for NAXA credit proof; one proof does not activate access.")
                 }
             }
         }
-        item { Text(if (fr) "Historique des demandes" else "Request history", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (records.isEmpty()) item { Text(if (fr) "Aucune demande enregistrée." else "No requests recorded.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-        items(records) { row ->
-            val metadata = runCatching { JSONObject(row.metadataJson) }.getOrNull()
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(14.dp)) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(row.title, fontWeight = FontWeight.SemiBold)
-                    Text(xaf(row.amountXaf) + " · " + row.status)
-                    Text((if (fr) "Périodicité" else "Billing period") + " : " + (metadata?.optString("billingPeriod") ?: "—"))
-                    Text((if (fr) "Date maturité" else "Maturity date") + " : " + (metadata?.optString("maturityEffectiveDate") ?: "2027-05-01"), color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
+        if (session.account.roleCode == "promoter") items(arrayObjects(snapshot?.optJSONArray("intents")).filter { it.optString("status") == "confirmed" }) { row ->
+            Text((if (fr) "Reçu " else "Receipt ") + row.optString("receipt_number") + " · " + xaf(row.optLong("amount_xaf")))
         }
+        item { Spacer(Modifier.height(12.dp)) }
     }
 }
-
 
 @Composable
 fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, session: AuthSession) {

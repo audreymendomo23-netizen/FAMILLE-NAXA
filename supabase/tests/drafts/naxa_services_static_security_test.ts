@@ -350,8 +350,8 @@ Deno.test("N2 pressing and appointment RPCs enforce lifecycle versions and serve
   assert(sql.includes("NAXA_PRESSING_DEPOSIT_CASH_SESSION_REQUIRED") &&
     sql.includes("NAXA_PRESSING_DEPOSIT_CASH_SESSION_NOT_OPEN"),
     "A cash pressing deposit must require a valid open cash session");
-  assert(sql.includes("v_payment_status:=case when v_method='cash' then 'confirmed' else 'pending' end"),
-    "Non-cash pressing deposits must remain pending until provider confirmation");
+  assert(sql.includes("v_payment_status:='confirmed'") && sql.includes("'manual_external'") && sql.includes("'external_deposit_recorded'") && sql.includes("'MOBILE_MONEY_CLEARING'"),
+    "Externally received pressing deposits must be recorded manually outside physical cash");
   assert(sql.includes("'CUSTOMER_ADVANCES'") && sql.includes("'cash_deposit_received'") &&
     sql.includes("'CASH_REGISTER'"),
     "Pressing cash deposits must post to customer advances, not revenue");
@@ -395,7 +395,7 @@ Deno.test("N2 cash session and expense handlers are scoped and compute close bal
 });
 
 
-Deno.test("N2 sale handlers post cash sale inventory once and keep Mobile Money pending until provider verification", async () => {
+Deno.test("N2 sale handlers post manually collected sales once and retain legacy pending cancellation", async () => {
   const sql=await readDraft("naxa_services_v4_supplier_accounting_forecast.sql");
   assert(/create\s+or\s+replace\s+function\s+public\.ns_create_sale\s*\(/i.test(sql),
     "Sale creation handler is required");
@@ -403,8 +403,8 @@ Deno.test("N2 sale handlers post cash sale inventory once and keep Mobile Money 
     "Pending Mobile Money cancellation handler is required");
   assert(/p_payment_method='cash'\s+and\s+p_expected_status<>'confirmed'/i.test(sql),
     "Cash sale must be confirmed synchronously");
-  assert(/p_payment_method='mobile_money'\s+and\s+p_expected_status<>'pending'/i.test(sql),
-    "Mobile Money sale must remain pending on client creation");
+  assert(sql.includes("v_payment_status:=p_expected_status") && sql.includes("when p_expected_status='confirmed' then 'manual_external'") && sql.includes("if p_expected_status='confirmed' then"),
+    "Previously received Mobile Money sales must post manually with audit source; legacy pending may be cancelled");
   assert(/ns_post_sale_inventory\(p_org_id,p_site_id,p_sale_id,p_event_id\)/i.test(sql),
     "Cash sale must call the existing atomic stock/accounting posting operation");
   assert(/status='failed',confirmation_source='cancelled_before_provider_confirmation'/i.test(sql),
