@@ -307,7 +307,7 @@ test("Web: offline outbox survives tab closure, keeps tenant data isolated and c
   expect(appliedEvents[0].org_id).toBe(ORG_A);
   await page.getByRole("button", { name: /Clients & fidélité/ }).first().click();
   await expect(page.getByText("Confirmé par le serveur")).toBeVisible();
-  await expect(page.getByText("Client distant Android")).toBeVisible();
+  await expect(page.locator(".module-layout .module-main-card").last().locator(".record").filter({ hasText: "Client distant Android" })).toBeVisible();
   await expect(page.getByText("Client privé organisation A")).toBeVisible();
   await page.close();
 });
@@ -466,7 +466,7 @@ test("Web N4-C: staff presence transitions follow the server-controlled sequence
   ] as const;
   for (let index = 0; index < actions.length; index++) {
     const [label, actionCode] = actions[index];
-    await page.getByRole("button", { name: label }).first().click();
+    await page.locator(".module-main-card .activity-transition-buttons").first().getByRole("button", { name: label }).click();
     await expect.poll(() => appliedEvents.length).toBe(index + 1);
     expect(appliedEvents[index].action_code).toBe(actionCode);
     expect(appliedEvents[index].aggregate_type).toBe(actionCode.replace(".recorded", ""));
