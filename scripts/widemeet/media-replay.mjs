@@ -27,7 +27,7 @@ let browser;
 async function until(fn,label,ms=25000){const end=Date.now()+ms;while(Date.now()<end){if(await fn())return;await delay(250)}throw Error("timeout: "+label)}
 try{
  await listen(proxy.server,7881);await listen(app,4173);
- await service.createRoom({name:room,emptyTimeout:300,maxParticipants:2});
+ await service.createRoom({name:room,emptyTimeout:300,maxParticipants:process.env.WM_TEST_EGRESS==="true"?4:2});
  browser=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream","--autoplay-policy=no-user-gesture-required"]});
  const context=await browser.newContext({permissions:["camera","microphone"]});
  const a=await context.newPage(),b=await context.newPage();
@@ -70,11 +70,12 @@ try{
  console.log("PASS actual server audio-only Egress, nonempty file, decoded audio stream and no video");
  }finally{if(!stopped)await egress.stopEgress(id).catch(()=>{})}
  }
+ const revokedToken=process.env.WM_TEST_EGRESS==="true"?token("guest"):oldGuest;
  admissions.get("guest").enabled=false;
  await until(async()=>evicted.has("guest")&&!(await service.listParticipants(room)).some(p=>p.identity==="guest"),"guest SFU eviction");
  assert.ok((await service.listParticipants(room)).some(p=>p.identity==="host"));
  const fresh=await context.newPage();await fresh.goto(origin);
- const denied=await fresh.evaluate(async t=>{const r=new window.LivekitClient.Room();try{await r.connect("ws://127.0.0.1:7881",t);await r.disconnect();return false}catch{return true}},oldGuest);
+ const denied=await fresh.evaluate(async t=>{const r=new window.LivekitClient.Room();try{await r.connect("ws://127.0.0.1:7881",t);await r.disconnect();return false}catch{return true}},revokedToken);
  assert.equal(denied,true);console.log("PASS revoked participant cannot reconnect with unexpired signed token");
  const wrong=await fresh.evaluate(async t=>{const r=new window.LivekitClient.Room();try{await r.connect("ws://127.0.0.1:7881",t);await r.disconnect();return false}catch{return true}},token("host","ns-"+randomUUID()));
  assert.equal(wrong,true);console.log("PASS cross-product room denied");
