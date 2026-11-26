@@ -29,7 +29,7 @@ Le périmètre fonctionnel est gelé à cette version. Les évolutions ultérieu
 2. ZIPPLE comporte exactement deux espaces métier : **Restaurant** et **Snack-Bar**. [V]
 3. Le mode **Restaurant-Bar** est une configuration de l’Espace Restaurant. Le Bar n’est pas une troisième application ni un troisième espace indépendant. [V]
 4. La clientèle ne crée aucun compte ZIPPLE. Le client commande depuis une page publique mobile, sans compte, sans installation et sans application cliente. [V]
-5. L’Espace Restaurant peut activer la livraison établissement par établissement. L’Espace Snack-Bar ne comporte pas de livraison. [V]
+5. L’Espace Restaurant peut activer la livraison établissement par établissement. L’Espace Snack-Bar inclut la remise des commandes sur place par le personnel de service, notamment à table ; la livraison hors établissement reste distincte. [V — 26/11/2026]
 6. Les deux offres commerciales sont exclusivement **Accès** et **Premium**. Aucun troisième pack ne doit être réintroduit. [V]
 7. Les opérations financières, stocks, paiements, annulations et écritures restent explicables, traçables et protégés par des validations humaines.
 8. L’IA assiste et recommande ; elle ne valide jamais seule un paiement, un remboursement, une annulation sensible, un ajustement financier ou une écriture de stock.
@@ -119,7 +119,7 @@ Fonctionnement principal :
 - retours clients et notation des postes ;
 - assistance ZIPPLE et livechat.
 
-**Aucune fonctionnalité de livraison ne doit être exposée ou activée dans l’Espace Snack-Bar.** [V]
+**Le Snack-Bar inclut obligatoirement la remise au client sur place par une serveuse ou un serveur habilité, après préparation.** [V — 26/11/2026] Le canal de livraison hors établissement (coursier) reste distinct.
 
 ## 1.2. Interfaces
 
@@ -356,7 +356,7 @@ Cette fonction complète les commandes publiques sans modifier la règle fondame
 - Afficher au promoteur : invitations émises, parrainages saisis, parrainages qualifiés, taux de conversion, récompenses à attribuer, attribuées et utilisées, coûts des avantages et résultats par établissement.
 - Le programme client de ZIPPLE est distinct d'un programme de partenaires commerciaux externes. Il ne rémunère pas automatiquement un intermédiaire externe.
 
-Le parcours de parrainage et de fidélité est prévu pour les deux espaces Restaurant et Snack-Bar. Il ne crée jamais de canal de livraison dans le Snack-Bar et ne modifie pas l'absence de compte client.
+Le parcours de parrainage et de fidélité est prévu pour les deux espaces Restaurant et Snack-Bar. Il ne crée pas de canal de livraison hors établissement dans le Snack-Bar et ne modifie pas l'absence de compte client.
 
 ---
 
@@ -528,7 +528,7 @@ Les règles légales de commercialisation des boissons alcoolisées, de contrôl
 
 # 6. Espace Snack-Bar — parcours spécialisé
 
-Le Snack-Bar doit reprendre les fonctions transversales du Restaurant tout en conservant un parcours express et sans livraison.
+Le Snack-Bar doit reprendre les fonctions transversales du Restaurant tout en conservant un parcours express avec remise à table ou retrait comptoir selon le canal.
 
 ## 6.1. Vente rapide
 
@@ -603,7 +603,7 @@ Le Snack-Bar peut disposer :
 - d’une page publique sans compte client ;
 - d’un suivi de préparation par numéro.
 
-**Le canal livraison est absent de l’Espace Snack-Bar.** Il ne doit pas apparaître dans les paramètres, les pages publiques, les tarifs de livraison ou les rapports de cet espace. [V]
+**La remise à table est incluse dans le Snack-Bar.** Le client scanne le QR de sa table, commande, attend la préparation puis reçoit sa commande de la serveuse ou du serveur habilité. Le statut « servie » est enregistré après remise ; le client peut confirmer la réception. Le retrait comptoir reste possible. Les tarifs et missions de coursier hors établissement restent distincts. [V — 26/11/2026]
 
 ---
 
@@ -733,7 +733,7 @@ Une capture d’écran, une déclaration du client ou un simple montant identiqu
 
 - Espace Restaurant : livraison facultative par établissement.
 - Module Bar : aucune livraison autonome.
-- Espace Snack-Bar : aucune livraison.
+- Espace Snack-Bar : remise sur place à table par personnel habilité ; pas de canal coursier hors établissement activé par cette décision.
 - Les commandes à emporter et le retrait au comptoir ne sont pas des livraisons.
 
 ---
@@ -1169,7 +1169,7 @@ Postes évaluables selon la commande :
 - Bar / boissons ;
 - service en salle ;
 - caisse / accueil ;
-- livraison, uniquement dans l’Espace Restaurant ;
+- livraison hors établissement, dans l’Espace Restaurant ; remise sur place dans les deux espaces ;
 - comptoir / remise, dans l’Espace Snack-Bar.
 
 Le feedback peut comprendre :
@@ -1881,7 +1881,7 @@ Le périmètre est gelé. Les priorités ci-dessous organisent la construction e
 - suivi de livraison ;
 - support client final.
 
-Le canal livraison reste exclu du Snack-Bar.
+Le service à table est inclus dans le Snack-Bar ; le canal coursier hors établissement reste distinct.
 
 ## J4 — Performance, vidéosurveillance et support avancé
 
@@ -1961,7 +1961,7 @@ La recette doit être faite sur des données de test et par établissement isol�
 5. Vérifier le cycle des consignes et des bouteilles vides.
 6. Exécuter une commande Snack-Bar au comptoir avec numéro.
 7. Vérifier les formules et suppléments.
-8. Vérifier qu’aucune option de livraison n’apparaît dans le Snack-Bar.
+8. Scanner le QR d’une table Snack-Bar ; commander, préparer, rendre prête, remettre via le personnel habilité et confirmer la réception côté invité. Vérifier les refus de remise non habilitée et de confirmation prématurée.
 
 ## 23.6. Livraison Restaurant
 
@@ -1976,7 +1976,7 @@ La recette doit être faite sur des données de test et par établissement isol�
 9. Vérifier l’absence de double paiement et de double commande.
 10. Attribuer un livreur, remettre la commande et clôturer la livraison.
 11. Vérifier que le livreur ne voit que les missions autorisées.
-12. Vérifier que le Snack-Bar ne présente aucune livraison.
+12. Vérifier que la remise sur place du Snack-Bar ne crée pas de mission de livraison externe ni de frais coursier.
 
 ## 23.7. Stocks, dépenses et comptabilité
 
@@ -2046,7 +2046,7 @@ La recette doit être faite sur des données de test et par établissement isol�
 - Un ERP ZIPPLE pour les restaurants et bars.
 - Deux espaces seulement : Restaurant et Snack-Bar.
 - Restaurant-Bar comme option du Restaurant.
-- Snack-Bar spécialisé comptoir, menus rapides et retrait, sans livraison.
+- Snack-Bar spécialisé menus rapides, comptoir/retrait et remise à table par personnel habilité.
 - Aucun compte client ZIPPLE.
 - QR Code unique par table et page publique de commande.
 - Menu dynamique et disponibilité mise à jour en temps réel par l’équipe.
@@ -2103,4 +2103,7 @@ Cette V2.0, révisée le 21 novembre 2026 pour intégrer la politique annuelle t
 - Les changements techniques doivent respecter les règles du monorepo Famille NAXA : audit, contradiction, cause racine, correction, tests/preuves, documentation et état.
 - Aucun déploiement, aucune migration Production et aucune publication APK ne sont autorisés par le seul fait de ce cahier des charges.
 
-**Conclusion : ZIPPLE = un ERP, deux espaces métier, un module Bar activable dans Restaurant, une page publique de commande sans compte client, une chaîne opérationnelle reliée aux stocks et aux finances, une livraison limitée au Restaurant, une intégration NAXA Security, un pilotage multi-sites, une fidélité avec parrainage client sans compte applicatif et deux offres uniquement : Accès et Premium, payables au mois ou à l'année (10 mois payés pour 12 mois de service).**
+**Conclusion : ZIPPLE = un ERP, deux espaces métier, un module Bar activable dans Restaurant, une page publique de commande sans compte client, une chaîne opérationnelle reliée aux stocks et aux finances, une livraison hors établissement limitée au Restaurant et une remise à table dans les deux espaces, une intégration NAXA Security, un pilotage multi-sites, une fidélité avec parrainage client sans compte applicatif et deux offres uniquement : Accès et Premium, payables au mois ou à l'année (10 mois payés pour 12 mois de service).**
+
+## Addendum validé 26/11/2026 — service Snack-Bar
+La décision postérieure remplace toute ancienne mention interdisant la remise au client dans le Snack-Bar. Critère de recette : QR de table → commande → préparation → prête → remise par serveur habilité → confirmation client → avis. Le retrait comptoir reste un canal séparé ; pas de création automatique d'un compte client ni d'une mission de coursier.

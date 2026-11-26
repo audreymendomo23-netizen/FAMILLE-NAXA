@@ -92,3 +92,8 @@ Les détails, états, critères d'acceptation et réserves sont définis dans `d
 | ZIP-004 | Parrainage professionnel NAXA Services, cinq filleuls distincts premier paiement confirmé, un mois gratuit/extension selon cadence; distinct du parrainage consommateur | VALIDÉ |
 | ZIP-005 | Accès mono-compte, Premium inclut Accès et multiniveau (règle portefeuille); attribution détaillée des entitlements et quotas non arbitrée | VALIDÉ POUR LE PRINCIPE / OUVERT POUR LE DÉTAIL |
 | ZIP-006 | Travail N0 en bulk, conservation des autres applications; aucune mise en production par l'audit | VALIDÉ |
+
+## ZIPPLE — arbitrage complémentaire du 26 novembre 2026
+| ID | Décision | Statut |
+|---|---|---|
+| ZIP-SNACK-SERVICE | La livraison au client sur place par la serveuse/serveur est incluse dans Snack-Bar ; commande QR de table, remise attribuée et confirmation client. Retrait comptoir conservé. Le canal coursier hors établissement est distinct et n'est pas activé par cette décision. | VALIDÉ (remise sur place), interprétation technique explicitée |
