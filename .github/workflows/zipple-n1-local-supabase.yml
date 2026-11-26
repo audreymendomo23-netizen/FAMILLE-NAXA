@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - "docs/apps/zipple/n1/backend/local*"
+      - "docs/apps/zipple/n1/backend/schema.sql"
+      - "docs/apps/zipple/n1/backend/adapter.mjs"
+      - "docs/apps/zipple/n1/auth-boundary.mjs"
       - ".github/workflows/zipple-n1-local-supabase.yml"
   workflow_dispatch:
 permissions:
