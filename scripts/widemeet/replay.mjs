@@ -88,6 +88,18 @@ try{
  assert.equal((await identityRequest(hs.access_token,"favorite",{member_id:o.id,enabled:true})).status,403);
  assert.equal((await identityRequest(gs.access_token,"billing")).status,403);
  assert.equal((await identity(hs.access_token,"billing")).plan,"premium");
+ const billingRequest={request_id:randomUUID(),offer:"premium",period:"month",capacity:50,channel:"OM"};
+ assert.equal((await identityRequest(gs.access_token,"billing-create",billingRequest)).status,403);
+ const intent=await identity(hs.access_token,"billing-create",billingRequest);
+ assert.equal(intent.amount,10000);assert.equal(intent.currency,"XAF");assert.equal(intent.status,"pending");
+ assert.deepEqual(await identity(hs.access_token,"billing-create",billingRequest),intent);
+ assert.equal((await identityRequest(hs.access_token,"billing-create",{...billingRequest,channel:"MOMO"})).status,403);
+ const listed=(await identity(hs.access_token,"billing-list")).intents;assert.ok(listed.some(x=>x.id===intent.id&&x.status==="pending"));
+ assert.equal((await identityRequest(os.access_token,"billing-cancel",{id:intent.id})).status,403);
+ assert.equal((await identity(hs.access_token,"billing-cancel",{id:intent.id})).status,"cancelled");
+ assert.equal((await identity(hs.access_token,"billing")).plan,"premium");
+ pass("actual N1 isolated payment intent creation, exact quote, replay, payer and tenant isolation, cancellation; no transfer");
+
  assert.equal((await identity(hs.access_token,"dashboard")).role,"promoteur");
  await identity(hs.access_token,"invite",{login_id:o.login,role:"staff"});
  const incoming=(await identity(os.access_token,"invitations")).invitations;
