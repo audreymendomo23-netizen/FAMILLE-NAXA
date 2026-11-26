@@ -34,7 +34,7 @@ export function createAuthHandler(provider){
    }
    if(action==="refresh"){
     if(typeof body.refresh_token!=="string"||body.refresh_token.length<20||body.refresh_token.length>4096)return response(400,{error:"INVALID"});
-    await provider.rateLimit({action});
+    await provider.rateLimit({action,identifier:body.refresh_token});
     return response(200,scopedSession(await provider.rotate({app_id:"ZIPPLE",refresh_token:body.refresh_token})));
    }
    if(action==="recovery"){
