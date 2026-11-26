@@ -395,3 +395,9 @@ Décision promoteur : « La livraison doit être incluse dans Snack-bar. Quand l
 - 19920aa : build Pages 45906118180, PWA 45906118119 et APK debug 45906118077 SUCCESS. SQL 45906118446 FAILURE (délimiteurs SQL réduits à un dollar lors de l'insertion). Correction 35908ad : balises nommées PostgreSQL explicites, SQL 45906242099 SUCCESS.
 - Recettes navigateur complémentaires achats par conditionnement fournisseur, réception partielle et consolidation/CSV ajoutées dans 9861d33, fixture fournisseur corrigée dans 4edaea7.
 - Dernier candidat 4edaea7bab82704cbf573608471286772b01855c : SQL 45906353467 et Edge/navigateur 45906353485 en cours au relevé. Aucun vert final présumé. Reprendre ces deux résultats et les éventuels runs Android en cours. Pas de déploiement métier hébergé ni modification main.
+
+
+### Correction recette navigateur — sélecteurs conditionnement
+- 4edaea7 : SQL 45906353467 SUCCESS ; E2E 45906353485 FAILURE, timeout Playwright ligne 394 sur le libellé exact « Fournisseur du conditionnement ». Les scénarios ERP antérieurs (comptabilité, achats classiques, inventaire, crédit, trésorerie, etc.) ont leurs marqueurs PASS ; les scénarios suivants ne sont pas atteints.
+- 2bab659bde7537cc37830a09693f7070990199d7 : cinq sélecteurs de conditionnement explicitement nommés via aria-label FR/EN, alignement de la recette sur les combobox par rôle, attente du composant et rafraîchissement des données, choix explicite du site dans la recette de révocation du serveur. Correction candidate à vérifier, pas de vert anticipé.
+- Nouvelle CI : SQL 45907197391 ; E2E 45907197427 ; socle N1 45907197322 ; PWA 45907197356 ; compilation Pages 45907197452 ; recette Pages existante 45907197418. En cours au relevé. Aucun merge main ni déploiement métier.
