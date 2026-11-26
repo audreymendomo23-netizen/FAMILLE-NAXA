@@ -32,7 +32,7 @@ jobs:
           node-version: "22"
       - name: Validate and export dedicated application configuration
         env:
-          NS_PROJECT_REF: ${{ vars.NAXA_SERVICES_SUPABASE_PROJECT_REF }}
+          NS_PROJECT_REF: "idupfjbkwjcavyisxteo"
           NS_ANON_KEY: ${{ secrets.NAXA_SERVICES_SUPABASE_ANON_KEY }}
           NS_FIREBASE_API_KEY: ${{ vars.NAXA_SERVICES_FIREBASE_API_KEY }}
           NS_FIREBASE_APP_ID: "1:203144467053:android:35b6db66aa6a85bce1e564"
