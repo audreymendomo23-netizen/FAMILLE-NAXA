@@ -29,7 +29,7 @@ pg_restore --list "$work/$name.dump" >/dev/null
 output="$BACKUP_OUTPUT_DIR/$name.dump.gpg"
 gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file "$passfile" \
   --symmetric --cipher-algo AES256 --output "$output" "$work/$name.dump"
-sha256sum "$output" > "$output.sha256"
+(cd "$BACKUP_OUTPUT_DIR" && sha256sum "$name.dump.gpg") > "$output.sha256"
 cat > "$output.manifest.json" <<MANIFEST
 {
   "artifact": "$(basename "$output")",
