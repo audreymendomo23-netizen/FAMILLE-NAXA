@@ -26,7 +26,8 @@ jobs:
           npm run build --workspace @famille/zipple-web
       - name: Browser smoke and responsive layout
         run: |
-          npm install --no-save --ignore-scripts playwright@1.51.1
+          npm install --no-save --ignore-scripts playwright@1.51.1 fake-indexeddb@6.0.0
+          node --experimental-strip-types --test docs/apps/zipple/n1/outbox.test.mjs
           npx playwright install --with-deps chromium
           npm run --workspace @famille/zipple-web build
           (cd apps/web/zipple && npx vite preview --host 127.0.0.1 --port 4173) > /tmp/zipple-preview.log 2>&1 &
