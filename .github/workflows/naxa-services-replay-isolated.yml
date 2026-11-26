@@ -217,8 +217,7 @@ jobs:
               const nav=async label=>{await page.locator('.side-nav button.nav-item').filter({hasText:label}).click();};
               const apply=async(action,click)=>{
                 const receipt=page.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-accounting')&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='apply_sync_event'&&r.request().postDataJSON()?.event?.action_code===action,{timeout:25000});
-                await click();
-                const response=await receipt,result=await response.json();
+                const [response]=await Promise.all([receipt,click()]);const result=await response.json();
                 console.log('Replay',action,'HTTP',response.status(),'receipt',result.result?.status??'absent','error',typeof result.error==='string'&&/^[A-Z0-9_]{1,80}$/.test(result.error)?result.error:'none');
                 assert.equal(response.status(),200,action);assert.equal(result.ok,true,action);assert.equal(result.result.status,'applied',action);
                 return response.request().postDataJSON().event;
@@ -249,6 +248,39 @@ jobs:
                 await apply('cash_session.closed',()=>page.getByRole('button',{name:"Clôturer et calculer l'écart"}).click());
                 const rows=await success(base+'/rest/v1/ns_cash_sessions?select=*&org_id=eq.'+f.org.id+'&id=eq.'+shift.aggregate_id,undefined,admin,admin,'GET');
                 assert.equal(rows.length,1);assert.equal(rows[0].status,'closed');
+              });
+              await scenario('real stock and supplier lifecycle with partial receipt and payment gating',async()=>{
+                await nav('Consommables');
+                await page.getByRole('button',{name:'Ajouter un article',exact:true}).click();
+                await page.getByLabel('Nom / référence').fill('Lessive Replay');
+                const item=await apply('inventory_item.created',()=>page.getByRole('button',{name:'Enregistrer',exact:true}).click());
+                assert.equal(await count('ns_inventory_items','id=eq.'+item.aggregate_id),1);
+                await page.getByLabel('Nom du fournisseur').fill('Fournisseur Replay');
+                const supplier=await apply('supplier.saved',()=>page.getByRole('button',{name:'Enregistrer le fournisseur'}).click());
+                assert.equal(await count('ns_suppliers','id=eq.'+supplier.aggregate_id),1);
+                await page.getByRole('combobox',{name:'Article',exact:true}).selectOption(item.aggregate_id);
+                await page.getByLabel('Quantité',{exact:true}).fill('10');
+                await page.getByLabel('Motif',{exact:true}).fill('Stock initial');
+                const movement=await apply('inventory_movement.created',()=>page.getByRole('button',{name:'Enregistrer le mouvement',exact:true}).click());
+                assert.equal(await count('ns_inventory_movements','id=eq.'+movement.aggregate_id),1);
+                await page.getByRole('combobox',{name:'Fournisseur',exact:true}).selectOption(supplier.aggregate_id);
+                await page.getByRole('combobox',{name:'Article commandé',exact:true}).selectOption(item.aggregate_id);
+                await page.getByLabel('Référence de commande').fill('REPLAY-CMD-001');
+                await page.getByLabel('Quantité commandée').fill('5');
+                await page.getByLabel('Coût unitaire (FCFA)').fill('1000');
+                const order=await apply('purchase.ordered',()=>page.getByRole('button',{name:'Valider la commande fournisseur'}).click());
+                assert.equal(await count('ns_purchase_documents','id=eq.'+order.aggregate_id),1);
+                await page.getByRole('combobox',{name:'Commande à réceptionner',exact:true}).selectOption(order.aggregate_id);
+                const pay=page.getByRole('button',{name:'Enregistrer un règlement bancaire',exact:true});
+                assert.equal(await pay.isDisabled(),true);
+                await page.getByLabel('Quantité reçue').fill('2');
+                await apply('purchase.receipt.confirmed',()=>page.getByRole('button',{name:'Enregistrer la réception partielle ou complète'}).click());
+                await page.getByLabel('Quantité reçue').fill('3');
+                await apply('purchase.receipt.confirmed',()=>page.getByRole('button',{name:'Enregistrer la réception partielle ou complète'}).click());
+                await page.getByLabel('Montant du règlement bancaire (FCFA)').fill('5000');
+                await page.getByLabel('Référence bancaire').fill('REPLAY-VIR-001');
+                await apply('supplier.payment.recorded',()=>pay.click());
+                assert.equal(await count('ns_supplier_payments','purchase_id=eq.'+order.aggregate_id),1);
               });
               await scenario('real staff attendance: arrival, break, resume and departure',async()=>{
                 await nav('Équipe & commissions');
@@ -290,9 +322,9 @@ jobs:
                 await page.getByText('Photo supprimée.',{exact:true}).waitFor();
                 assert.equal(await page.getByAltText('Photo de profil').count(),0);
               });
-              assert.deepEqual(failures,[],'All independent real browser scenarios must pass');
               await page.getByRole('button',{name:/Déconnexion/}).click();
               await page.getByLabel('Identifiant NAXA Services').waitFor();
+              return failures;
             }finally{
               if(browser)await browser.close();
               if(server)await new Promise(r=>server.close(r));
@@ -322,7 +354,7 @@ jobs:
               const renewed=await act('refresh',{refresh_token:a.refresh_token,device:A.device});assert.equal(renewed.status,200);a=renewed.data;assert.equal(a.account.default_locale,locale);
             }
             pass('all three languages persisted by real member API and rotated Auth tokens');
-            await browserReplay(await fixture('WEB'));
+            const browserFailures=await browserReplay(await fixture('WEB'));
             let r=await upload(A,a.access_token);assert.ok(r.ok,'own Storage upload HTTP '+r.status);
             r=await read(A,a.access_token);assert.ok(r.ok,'own Storage read HTTP '+r.status);assert.deepEqual(Buffer.from(await r.arrayBuffer()),png);
             r=await upload(A,a.access_token);assert.ok(r.ok,'own Storage upsert HTTP '+r.status);
@@ -350,6 +382,7 @@ jobs:
             assert.ok((await act('refresh',{refresh_token:a.refresh_token,device:A.device})).status>=400);
             pass('logout and revoked session denied by real Storage and refresh');
             assert.equal((await act('logout',{device:B.device},b.access_token)).status,200);
+            assert.deepEqual(browserFailures,[],'All independent real browser scenarios must pass');
             console.log('REPLAY AUTH STORAGE BILLING NOTIFICATION REGISTRATION PASSED');
           }finally{await stop();}
           NODE
