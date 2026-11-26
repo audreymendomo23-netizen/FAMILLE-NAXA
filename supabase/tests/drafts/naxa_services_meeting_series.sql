@@ -640,6 +640,26 @@ begin
 end $f$;
 revoke all on function public.ns_schedule_meeting_series(uuid,uuid,uuid,uuid,text,timestamptz,uuid[],text,integer,text,integer) from public,anon,authenticated;
 grant execute on function public.ns_schedule_meeting_series(uuid,uuid,uuid,uuid,text,timestamptz,uuid[],text,integer,text,integer) to authenticated;
+-- Atomically cancel all still-scheduled occurrences; preserve opened/closed/cancelled history.
+create function public.ns_cancel_meeting_series(p_id uuid,p_expected jsonb) returns jsonb language plpgsql security definer set search_path='' as $f$
+declare s public.ns_meeting_series%rowtype; m public.ns_internal_meetings%rowtype; actual jsonb; n integer:=0;
+begin
+ select * into s from public.ns_meeting_series where id=p_id for update;
+ if not found or s.host_member_id is distinct from public.ns_current_member_id(s.org_id) or not public.ns_roster_enabled(s.org_id) then raise exception 'NS_SERIES_FORBIDDEN';end if;
+ -- Lock all occurrences before validating the caller's snapshot.
+ perform 1 from public.ns_internal_meetings where series_id=p_id order by id for update;
+ if exists(select 1 from public.ns_internal_meetings where series_id=p_id and not public.ns_meeting_can_host(id)) then raise exception 'NS_SERIES_FORBIDDEN';end if;
+ select coalesce(jsonb_agg(jsonb_build_object('id',id,'revision',revision) order by id),'[]'::jsonb) into actual from public.ns_internal_meetings where series_id=p_id and status='scheduled';
+ if jsonb_typeof(p_expected) is distinct from 'array' or jsonb_array_length(p_expected)>12 then raise exception 'NS_SERIES_STATE_CONFLICT';end if;
+ if actual is distinct from (select coalesce(jsonb_agg(x order by x->>'id'),'[]'::jsonb) from jsonb_array_elements(p_expected) x) then raise exception 'NS_SERIES_STATE_CONFLICT';end if;
+ for m in select * from public.ns_internal_meetings where series_id=p_id and status='scheduled' order by id loop
+  perform public.ns_transition_internal_meeting(m.id,m.revision,'cancelled');n:=n+1;
+ end loop;
+ return jsonb_build_object('id',p_id,'cancelled_count',n);
+end $f$;
+revoke all on function public.ns_cancel_meeting_series(uuid,jsonb) from public,anon,authenticated;
+grant execute on function public.ns_cancel_meeting_series(uuid,jsonb) to authenticated;
+
 
 insert into auth.users(id) values ('10000000-0000-4000-8000-000000000091'),('10000000-0000-4000-8000-000000000092');
 insert into public.ns_organizations(id,display_name,business_mode) values ('20000000-0000-4000-8000-000000000091','QA Attendance','multi_site_network');
@@ -950,6 +970,24 @@ do $qa$ begin
 end $qa$;
 reset role;
 
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000092',true); select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000092","session_id":"qa-92-session","role":"authenticated"}',true);
+set local role authenticated;
+do $qa$ begin
+ begin perform public.ns_cancel_meeting_series('70000000-0000-4000-8000-000000000230','[]');raise exception 'QA STAFF SERIES CANCEL';exception when others then if sqlerrm not like '%NS_SERIES_FORBIDDEN%' then raise;end if;end;
+end $qa$;
+reset role;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000091',true); select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000091","session_id":"qa-91-session","role":"authenticated"}',true);
+set local role authenticated;
+do $qa$ declare expected jsonb;r jsonb;begin
+ begin perform public.ns_cancel_meeting_series('70000000-0000-4000-8000-000000000230','[]');raise exception 'QA STALE SERIES CANCEL';exception when others then if sqlerrm not like '%NS_SERIES_STATE_CONFLICT%' then raise;end if;end;
+ select jsonb_agg(jsonb_build_object('id',id,'revision',revision)) into expected from public.ns_internal_meetings where series_id='70000000-0000-4000-8000-000000000230' and status='scheduled';
+ r:=public.ns_cancel_meeting_series('70000000-0000-4000-8000-000000000230',expected);
+ if r->>'cancelled_count'<>'2' or (select count(*) from public.ns_internal_meetings where series_id='70000000-0000-4000-8000-000000000230' and status='cancelled' and revision=2)<>3 then raise exception 'QA SERIES CANCEL ALL';end if;
+ r:=public.ns_cancel_meeting_series('70000000-0000-4000-8000-000000000230','[]');
+ if r->>'cancelled_count'<>'0' then raise exception 'QA SERIES CANCEL EMPTY';end if;
+end $qa$;
+reset role;
+
 update public.ns_organizations set business_mode='solo' where id='20000000-0000-4000-8000-000000000091';
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000091',true); select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000091","session_id":"qa-91-session","role":"authenticated"}',true);
 set local role authenticated;
@@ -961,4 +999,4 @@ end $$;
 reset role;
 
 rollback;
-select 'PASS: bounded recurring meetings, cadence, invitation idempotence and individual cancellation' as result;
+select 'PASS: bounded recurring meetings, cadence, invitation idempotence, individual and atomic series cancellation' as result;
