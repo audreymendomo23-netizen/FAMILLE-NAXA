@@ -57,6 +57,17 @@ export function createBootikService(db,{now=Date.now}={}){
   let result;
   if(action==='entitlement'&&allowed.has(p.universe))result=await first('select bootik.bk_has_entitlement($1,$2,$3) as active',[s.organization_id,s.app_id,p.universe]);
   else if(action==='trial'&&allowed.has(p.universe)&&plans.has(p.plan))result=await first('select bootik.bk_start_trial($1,$2,$3,$4,$5,$6) as expires_at',[...scope,p.universe,p.plan]);
+  else if(action==='payment-intent'&&allowed.has(p.universe)&&plans.has(p.plan)&&[1,12].includes(p.months)&&['mtn_momo','orange_money'].includes(p.channel)&&validId(p.request_key)){
+   const i=await first('select bootik.bk_prepare_subscription($1,$2,$3,$4,$5,$6,$7,$8,$9) as id',[...scope,p.universe,p.plan,p.months,p.channel,p.request_key]);
+   result=await first('select id,amount_fcfa,channel,destination,beneficiary,instructions,expires_at,state from bootik.bk_payment_intents where id=$1',[i.id]);
+  }
+  else if(action==='payment-status'&&validId(p.intent_id)){
+   result=await first('select id,amount_fcfa,channel,destination,beneficiary,instructions,expires_at,state,paid_period_id from bootik.bk_payment_intents where id=$1 and organization_id=$2 and app_id=$3 and user_id=$4 and location_id=$5',[p.intent_id,...scope]);
+   if(!result)return reject(403);
+  }
+  else if(action==='payment-debit'&&validId(p.intent_id)&&p.direction==='payer_debit'&&p.success===true&&typeof p.reference==='string'&&Number.isSafeInteger(p.amount_fcfa)&&typeof p.destination==='string'&&typeof p.provider_at==='string'&&typeof p.evidence_sha==='string'){
+   result=await first('select bootik.bk_submit_debit($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) as accepted',[...scope,p.intent_id,p.reference,p.amount_fcfa,p.destination,p.provider_at,p.evidence_sha]);
+  }
   else if(action==='support'&&kinds.has(p.kind)&&typeof p.consent==='boolean')result=await first('select bootik.bk_request_support($1,$2,$3,$4,$5,$6) as request_id',[...scope,p.kind,p.consent]);
   else if(action==='support-cancel'&&validId(p.request_id))result=await first('select bootik.bk_cancel_support($1,$2,$3,$4,$5) as cancelled',[...scope,p.request_id]);
   else if(action==='sale'&&validId(p.balance_id)&&typeof p.quantity==='number'&&Number.isFinite(p.quantity)&&p.quantity>0&&Number.isSafeInteger(p.unit_price_fcfa)&&p.unit_price_fcfa>=0&&validId(p.idempotency_key))result=await first('select bootik.bk_record_sale($1,$2,$3,$4,$5,$6,$7,$8) as sale_id',[...scope,p.balance_id,p.quantity,p.unit_price_fcfa,p.idempotency_key]);
