@@ -1,0 +1,5 @@
+import test from "node:test";import assert from "node:assert/strict";import {tabs,palette,actions,menu,messages,normalizePrefs,nightEffect} from "./domain.mjs";
+test("palette weights and seven colors",()=>{assert.equal(Object.values(palette).reduce((a,b)=>a+b.weight,0),100);assert.equal(Object.keys(palette).length,7)});
+test("five stable tabs and localized actions",()=>{assert.equal(tabs.length,5);for(const lang of Object.values(messages))for(const k of [...tabs,...actions,...menu])assert.ok(lang[k],k)});
+test("preferences safe defaults",()=>{assert.deepEqual(normalizePrefs({theme:"invalid",locale:"xx"}),{theme:"light",locale:"fr",motion:true,discovered:false});assert.equal(normalizePrefs({theme:"dark",locale:"en",motion:false,discovered:true}).motion,false)});
+test("only entering night triggers glow",()=>{assert.equal(nightEffect("light","dark"),true);for(const args of [["dark","dark"],["dark","light"],["light","dark",false],["light","dark",true,true]])assert.equal(nightEffect(...args),false)});

@@ -1,0 +1,18 @@
+{
+  "name": "WideMeet",
+  "short_name": "WideMeet",
+  "id": "/widemeet",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#07552C",
+  "background_color": "#f6faef",
+  "icons": [
+    {
+      "src": "/brand/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

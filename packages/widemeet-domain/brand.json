@@ -1,0 +1,30 @@
+{
+  "green": {
+    "hex": "#78C800",
+    "weight": 30
+  },
+  "yellow": {
+    "hex": "#FFE52B",
+    "weight": 30
+  },
+  "white": {
+    "hex": "#FFFFFF",
+    "weight": 10
+  },
+  "black": {
+    "hex": "#121714",
+    "weight": 10
+  },
+  "blue": {
+    "hex": "#29B9FF",
+    "weight": 10
+  },
+  "orange": {
+    "hex": "#FF9A24",
+    "weight": 5
+  },
+  "red": {
+    "hex": "#E43636",
+    "weight": 5
+  }
+}
