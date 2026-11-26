@@ -73,10 +73,16 @@ export function createBootikService(db,{now=Date.now}={}){
   }
   else if(action==='support'&&kinds.has(p.kind)&&typeof p.consent==='boolean')result=await first('select bootik.bk_request_support($1,$2,$3,$4,$5,$6) as request_id',[...scope,p.kind,p.consent]);
   else if(action==='support-cancel'&&validId(p.request_id))result=await first('select bootik.bk_cancel_support($1,$2,$3,$4,$5) as cancelled',[...scope,p.request_id]);
+  else if(action==='sync-sale'&&validId(p.balance_id)&&typeof p.quantity==='number'&&Number.isFinite(p.quantity)&&p.quantity>0&&Number.isSafeInteger(p.unit_price_fcfa)&&p.unit_price_fcfa>=0&&validId(p.idempotency_key)){
+   const scopedReceipt={app_id:'BOOTIK',organization_id:s.organization_id,member_id:s.user_id,site_id:site,action,event_id:p.idempotency_key};
+   try{const v=await first('select bootik.bk_record_sale($1,$2,$3,$4,$5,$6,$7,$8) as sale_id',[...scope,p.balance_id,p.quantity,p.unit_price_fcfa,p.idempotency_key]);return {status:200,body:{...scopedReceipt,state:'acknowledged',result:v}}}
+   catch(e){const conflict=['BOOTIK_IDEMPOTENCY_CONFLICT','BOOTIK_STOCK_INSUFFICIENT','BOOTIK_PRICE_MISMATCH','BOOTIK_LOT_UNAVAILABLE','BOOTIK_ENTITLEMENT_REQUIRED','BOOTIK_BALANCE_DENIED','BOOTIK_ACTIVITY_INACTIVE','BOOTIK_ITEM_UNAVAILABLE','BOOTIK_FRACTIONAL_XAF'];
+    if(conflict.includes(e?.message))return {status:200,body:{...scopedReceipt,state:'conflict',result:{reason:e.message}}};throw e}
+  }
   else if(action==='sale'&&validId(p.balance_id)&&typeof p.quantity==='number'&&Number.isFinite(p.quantity)&&p.quantity>0&&Number.isSafeInteger(p.unit_price_fcfa)&&p.unit_price_fcfa>=0&&validId(p.idempotency_key))result=await first('select bootik.bk_record_sale($1,$2,$3,$4,$5,$6,$7,$8) as sale_id',[...scope,p.balance_id,p.quantity,p.unit_price_fcfa,p.idempotency_key]);
   else if(action==='catalog')result={items:(await query('select b.id as balance_id,c.display_name,b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged as available,p.unit_price_fcfa from bootik.bk_inventory_balances b join bootik.bk_catalog_items c on c.id=b.item_id and c.organization_id=b.organization_id and c.activity_id=b.activity_id and c.app_id=b.app_id join bootik.bk_sale_prices p on p.item_id=b.item_id and p.organization_id=b.organization_id and p.activity_id=b.activity_id and p.app_id=b.app_id where b.organization_id=$1 and b.app_id=$2 and b.location_id=$3 and c.status=\'active\' order by c.display_name limit 500',[s.organization_id,s.app_id,site])).rows};
   else return reject();
-  return {status:200,body:{app_id:'BOOTIK',organization_id:s.organization_id,site_id:site,action,state:'acknowledged',result}};
+  return {status:200,body:{app_id:'BOOTIK',organization_id:s.organization_id,member_id:s.user_id,site_id:site,action,state:'acknowledged',result}};
  }catch(e){return reject(e?.code==='42501'?403:400)}
  }
 }

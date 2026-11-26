@@ -1,5 +1,5 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {operation} from '../../apps/web/bootik/src/operations.mjs';
-const s={app_id:'BOOTIK',organization_id:'o',access_token:'test-token',expires_at:Date.now()+600000,sites:[{id:'s'}]};
-const receipt={app_id:'BOOTIK',organization_id:'o',site_id:'s',action:'trial',state:'acknowledged',result:{expires_at:'test'}};
+const s={app_id:'BOOTIK',organization_id:'o',member_id:'m',access_token:'test-token',expires_at:Date.now()+600000,sites:[{id:'s'}]};
+const receipt={app_id:'BOOTIK',organization_id:'o',member_id:'m',site_id:'s',action:'trial',state:'acknowledged',result:{expires_at:'test'}};
 test('accepts scoped receipt',async()=>{const v=await operation('https://example.test',s,'s','trial',{universe:'retailer'},async(url,opts)=>{assert.equal(opts.headers.Authorization,'Bearer test-token');assert.equal(JSON.parse(opts.body).site_id,'s');return {ok:true,json:async()=>receipt}});assert.equal(v.expires_at,'test')});
 test('rejects cross-site, wrong receipt and non-HTTPS',async()=>{const fetcher=async()=>({ok:true,json:async()=>({...receipt,organization_id:'other'})});await assert.rejects(operation('https://example.test',s,'other','trial',{},fetcher));await assert.rejects(operation('https://example.test',s,'s','trial',{},fetcher));await assert.rejects(operation('http://example.test',s,'s','trial',{},fetcher))});

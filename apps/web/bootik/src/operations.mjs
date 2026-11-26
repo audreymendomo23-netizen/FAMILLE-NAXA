@@ -1,5 +1,5 @@
 import {permitsSite} from './session.mjs';
-const actions=new Set(['entitlement','trial','sale','support','support-cancel','catalog']);
+const actions=new Set(['entitlement','trial','sale','support','support-cancel','catalog','payment-intent','payment-current','payment-status','payment-debit','team']);
 export async function operation(base,session,site,action,payload,fetcher=fetch){
  if(!permitsSite(session,site)||session.app_id!=='BOOTIK'||!actions.has(action))throw Error('SCOPE_DENIED');
  const url=new URL(base.replace(/\/$/,'')+'/operation');
@@ -7,6 +7,16 @@ export async function operation(base,session,site,action,payload,fetcher=fetch){
  const res=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({app_id:'BOOTIK',site_id:site,action,payload}),cache:'no-store',redirect:'error'});
  if(!res.ok)throw Error('REQUEST_REJECTED');
  const j=await res.json();
- if(j.app_id!=='BOOTIK'||j.organization_id!==session.organization_id||j.site_id!==site||j.action!==action||j.state!=='acknowledged'||!j.result||typeof j.result!=='object')throw Error('INVALID_RECEIPT');
+ if(j.app_id!=='BOOTIK'||j.organization_id!==session.organization_id||j.member_id!==session.member_id||j.site_id!==site||j.action!==action||j.state!=='acknowledged'||!j.result||typeof j.result!=='object')throw Error('INVALID_RECEIPT');
  return j.result;
+}
+
+export async function syncSale(base,session,site,event,fetcher=fetch){
+ if(!permitsSite(session,site)||session.app_id!=='BOOTIK'||event.orgId!==session.organization_id||event.memberId!==session.member_id||event.siteId!==site||event.aggregateType!=='sale')throw Error('SCOPE_DENIED');
+ const payload=JSON.parse(event.payload);if(payload.idempotency_key!==event.eventId)throw Error('EVENT_MISMATCH');
+ const url=new URL(base.replace(/\/$/,'')+'/operation');if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash)throw Error('INVALID_API');
+ const res=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({app_id:'BOOTIK',site_id:site,action:'sync-sale',payload}),cache:'no-store',redirect:'error'});
+ if(!res.ok)throw Error('SYNC_RETRY_REQUIRED');
+ const j=await res.json();if(j.app_id!=='BOOTIK'||j.organization_id!==event.orgId||j.member_id!==event.memberId||j.site_id!==site||j.event_id!==event.eventId||j.action!=='sync-sale'||!['acknowledged','conflict','rejected'].includes(j.state)||(j.state==='acknowledged'&&typeof j.result?.sale_id!=='string'))throw Error('INVALID_RECEIPT');
+ return j;
 }
