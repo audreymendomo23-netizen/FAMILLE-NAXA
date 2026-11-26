@@ -24,7 +24,7 @@ passfile="$work/passphrase"
 printf '%s' "$BACKUP_ENCRYPTION_PASSPHRASE" > "$passfile"
 chmod 600 "$passfile"
 
-pg_dump --dbname="$DATABASE_URL" --format=custom --no-owner --no-acl --file="$work/$name.dump"
+pg_dump --dbname="$DATABASE_URL" --format=custom --no-owner --file="$work/$name.dump"
 pg_restore --list "$work/$name.dump" >/dev/null
 output="$BACKUP_OUTPUT_DIR/$name.dump.gpg"
 gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-file "$passfile" \
