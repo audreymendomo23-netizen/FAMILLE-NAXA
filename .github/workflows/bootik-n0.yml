@@ -29,7 +29,9 @@ jobs:
         run: |
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c 'create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key);'
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f supabase/drafts/bootik_v1.sql
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f supabase/drafts/bootik_operations.sql
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f docs/bootik-n0/isolation.sql
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f docs/bootik-n0/operations.sql
   android:
     runs-on: ubuntu-24.04
     steps:

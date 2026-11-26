@@ -1,0 +1,26 @@
+begin;
+do $$ declare a uuid;o uuid;s uuid;u uuid;v uuid;i uuid;b uuid;other uuid;sale uuid;again uuid; n numeric; denied boolean;
+begin
+ select app_id into a from bootik.bk_app_registration;
+ insert into auth.users values(gen_random_uuid()) returning id into u;
+ insert into bootik.bk_organizations(app_id,display_name) values(a,'test') returning organization_id into o;
+ insert into bootik.bk_locations(app_id,organization_id,display_name) values(a,o,'site') returning id into s;
+ insert into bootik.bk_locations(app_id,organization_id,display_name) values(a,o,'foreign site') returning id into other;
+ insert into bootik.bk_members values(o,a,u,'manager',true);
+ insert into bootik.bk_member_sites values(o,a,u,s);
+ insert into bootik.bk_activities(app_id,organization_id,universe_code,profile_code,display_name,status) values(a,o,'retailer','boutique','test','active') returning id into v;
+ insert into bootik.bk_activity_locations(app_id,organization_id,activity_id,location_id) values(a,o,v,s);
+ insert into bootik.bk_catalog_items(app_id,organization_id,activity_id,sku,display_name,base_unit_code) values(a,o,v,'SKU','test','unit') returning id into i;
+ insert into bootik.bk_item_units(app_id,organization_id,activity_id,item_id,unit_code,unit_role,to_base_factor) values(a,o,v,i,'unit','base',1);
+ insert into bootik.bk_inventory_balances(app_id,organization_id,activity_id,location_id,item_id,quantity_on_hand) values(a,o,v,s,i,10) returning id into b;
+ sale:=bootik.bk_record_sale(o,a,u,s,b,2,500,'test-1');again:=bootik.bk_record_sale(o,a,u,s,b,2,500,'test-1');
+ select quantity_on_hand into n from bootik.bk_inventory_balances where id=b;
+ if sale<>again or n<>8 or (select count(*) from bootik.bk_inventory_movements where organization_id=o)<>1 then raise exception 'sale atomic/idempotency failed';end if;
+ denied:=false;begin perform bootik.bk_record_sale(o,a,u,s,b,9,500,'test-2');exception when others then if sqlerrm<>'BOOTIK_STOCK_INSUFFICIENT' then raise;end if;denied:=true;end;if not denied then raise exception 'oversell allowed';end if;
+ denied:=false;begin perform bootik.bk_record_sale(o,a,u,other,b,1,500,'test-3');exception when insufficient_privilege then denied:=true;end;if not denied then raise exception 'cross-site allowed';end if;
+ denied:=false;begin perform bootik.bk_request_support(o,a,u,s,'screen',false);exception when others then if sqlerrm<>'BOOTIK_CONSENT_REQUIRED' then raise;end if;denied:=true;end;if not denied then raise exception 'consent bypass';end if;
+ perform bootik.bk_request_support(o,a,u,s,'video',true);
+ if bootik.bk_quote('retailer','access',12)<>40000 or bootik.bk_quote('distributor','premium',12)<>250000 then raise exception 'price mismatch';end if;
+end $$;
+rollback;
+select 'BOOTIK_BULK_OPERATIONS_PASS';
