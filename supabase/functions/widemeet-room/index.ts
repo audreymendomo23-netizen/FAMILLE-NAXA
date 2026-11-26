@@ -13,7 +13,7 @@ function projection(room:any,actor:any){
  const self=room.participants.find((p:any)=>p.memberId===actor.memberId&&!p.excluded);
  if(!self)throw Error("forbidden");
  const admitted=self.response==="accepted";
- const result={id:room.id,hostId:room.hostId,status:room.status,revision:room.revision,scheduledMs:room.scheduledMs,durationMinutes:room.durationMinutes,endMs:room.endMs??null,response:self.response,recording:admitted?room.recording:"off",participants:admitted?room.participants.filter((p:any)=>!p.excluded).map((p:any)=>({memberId:p.memberId,response:p.response,hand:p.hand===true,mic:p.mic===true,screen:p.screen===true})):[],events:admitted?room.events.filter((e:any)=>["chat","reaction"].includes(e.action)).slice(-100).map((e:any)=>({id:e.id,actor:e.actor,action:e.action,value:JSON.parse(e.payload)[2],at:e.at})):[],polls:admitted?room.polls.map((p:any)=>({id:p.id,options:p.options,open:p.open,counts:p.options.map((_:unknown,i:number)=>Object.values(p.votes).filter(v=>v===i).length),voted:Object.hasOwn(p.votes,actor.memberId)})):[]};
+ const result={id:room.id,title:room.title,description:room.description,hostId:room.hostId,status:room.status,revision:room.revision,scheduledMs:room.scheduledMs,durationMinutes:room.durationMinutes,endMs:room.endMs??null,response:self.response,recording:admitted?room.recording:"off",participants:admitted?room.participants.filter((p:any)=>!p.excluded).map((p:any)=>({memberId:p.memberId,response:p.response,hand:p.hand===true,mic:p.mic===true,screen:p.screen===true})):[],events:admitted?room.events.filter((e:any)=>["chat","reaction"].includes(e.action)).slice(-100).map((e:any)=>({id:e.id,actor:e.actor,action:e.action,value:JSON.parse(e.payload)[2],at:e.at})):[],polls:admitted?room.polls.map((p:any)=>({id:p.id,options:p.options,open:p.open,counts:p.options.map((_:unknown,i:number)=>Object.values(p.votes).filter(v=>v===i).length),voted:Object.hasOwn(p.votes,actor.memberId)})):[]};
  // Do not return raw receipts, votes, consent ledger, or provider recording state.
  return result;
 }
@@ -50,11 +50,12 @@ Deno.serve(async request=>{
  if(!a||!["owner","promoteur","manager","staff"].includes(a.role)||!["access","premium"].includes(a.plan)||!Number.isSafeInteger(a.entitlement_end_ms)||a.entitlement_end_ms<=now)return send(403,{error:"forbidden"});
  const actor={memberId:a.account_id,workspaceId:a.workspace_id,enabled:true,passwordChangeRequired:false,role:a.role,plan:a.plan,entitlementEndMs:a.entitlement_end_ms};
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
+ if(action==="list")return send(200,await rpc("wm_room_list",{p_hash}));
  if(!uuid.test(b.room_id??""))return send(400,{error:"invalid_room"});
  const p_room=b.room_id.toLowerCase();
  if(action==="create"){
  if(!Array.isArray(b.invitees)||b.invitees.length>100||!b.invitees.every((id:unknown)=>typeof id==="string"&&uuid.test(id)))return send(400,{error:"invalid_invitees"});
- const state=createRoom(actor,{id:p_room,startMs:b.scheduled_ms,durationMinutes:b.duration_minutes,hardEndMs:actor.entitlementEndMs,invitees:b.invitees.map((id:string)=>id.toLowerCase())});
+ const state=createRoom(actor,{id:p_room,title:b.title,description:b.description??"",startMs:b.scheduled_ms,durationMinutes:b.duration_minutes,hardEndMs:actor.entitlementEndMs,invitees:b.invitees.map((id:string)=>id.toLowerCase())});
  if(await rpc("wm_room_create",{p_hash,p_state:state})!==true)return send(409,{error:"conflict_or_scope"});
  return send(201,projection(state,actor));
  }
