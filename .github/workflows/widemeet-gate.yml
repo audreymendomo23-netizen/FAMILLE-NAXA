@@ -12,6 +12,9 @@ on:
       - 'supabase/tests/drafts/widemeet_*.sql'
       - 'supabase/functions/widemeet-auth/**'
       - '.github/workflows/widemeet-gate.yml'
+  pull_request:
+    branches: [test/widemeet-qualification-20261126]
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 permissions:
   contents: read
@@ -36,6 +39,10 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run build --workspace @famille/widemeet-web
+      - run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - run: npx playwright test --config apps/web/widemeet/playwright.config.mjs
       - run: |
           test -s apps/web/widemeet/dist/index.html
           test -s apps/web/widemeet/dist/sw.js
