@@ -69,7 +69,7 @@ const moduleCopy: Record<ModuleId, { eyebrow: string; headline: string; helper: 
   network: { eyebrow: "RÉSEAU", headline: "Consolider sans mélanger les opérations.", helper: "Chaque point de vente garde ses propres caisses, stocks, équipes et tickets.", empty: "Aucun autre point de vente rattaché à cette organisation.", features: ["Vue consolidée du réseau", "Accès détaillé selon délégation", "Comparaison des sites", "Transferts inter-sites avec validation et audit"] },
   sites: { eyebrow: "POINTS DE VENTE", headline: "Chaque site fonctionne de façon autonome.", helper: "Les opérations d'un point ne sont jamais réaffectées implicitement à un autre.", empty: "Aucun point de vente supplémentaire.", features: ["Responsable et équipe du site", "Caisse et sessions propres", "Stock et consommables propres", "Catalogue et paramètres effectifs"] },
   workstations: { eyebrow: "EMPLACEMENTS", headline: "Organiser plusieurs postes dans le même lieu.", helper: "Les emplacements sont des unités de planning et de ressources à l'intérieur d'un point de vente.", empty: "Aucun emplacement configuré.", features: ["Fauteuils de coiffure", "Atelier / comptoir pressing", "Planning et capacité", "Affectation des prestataires"] },
-  security: { eyebrow: "PROTECTION", headline: "Maîtriser les sessions et les appareils.", helper: "Contactez votre responsable pour récupérer votre accès.", empty: "Aucun événement disponible dans l'aperçu local.", features: ["Sessions et appareils enrôlés", "Révocation à distance", "Demandes de récupération", "Audit des opérations privilégiées"] },
+  security: { eyebrow: "PROTECTION", headline: "Maîtriser les sessions et les appareils.", helper: "Contactez votre responsable pour récupérer votre accès.", empty: "Aucune opération disponible.", features: ["Sessions et appareils enrôlés", "Révocation à distance", "Demandes de récupération", "Audit des opérations privilégiées"] },
   settings: { eyebrow: "CONFIGURATION", headline: "Un environnement adapté à l'équipe.", helper: "Personnalisez votre espace de travail.", empty: "Les paramètres de production ne sont pas connectés.", features: ["Français et English", "Thème sombre / clair", "Mode offline et reprise de synchronisation", "Imprimantes et notifications"] },
   help: { eyebrow: "ASSISTANCE", headline: "Faire remonter les blocages avec contexte.", helper: "Ne communiquez jamais vos codes confidentiels.", empty: "Aucune demande de support dans cette session.", features: ["FAQ et guides", "Demande d'assistance", "Briefing du matin", "Briefing du soir"] },
 };
@@ -284,7 +284,7 @@ function App() {
 
   async function loadPerformanceReport() {
     if (!authSession) throw new Error("AUTHENTICATION_REQUIRED");
-    if (!accountingEndpoint || !anonKey) throw new Error("Le connecteur comptable Web n’est pas configuré.");
+    if (!accountingEndpoint || !anonKey) throw new Error("Service comptable indisponible.");
     const siteIds = authSession.account.active_site_ids;
     if (!siteIds.length) throw new Error("Aucun site de lecture n'est autorisé pour cette session.");
     if (!/^\d{4}-\d{2}-\d{2}$/.test(performanceFromDate) || !Number.isFinite(new Date(performanceFromDate).getTime())) {
@@ -347,7 +347,7 @@ function App() {
       setPassword("");
       setAuthMessage(nextSession.requirePasswordChange
         ? "Connexion réussie. Le mot de passe initial doit être remplacé avant les opérations."
-        : "Session authentifiée. Les parcours Web disponibles écrivent dans la file isolée de l'organisation et attendent un reçu serveur ; les autres restent en lecture seule.");
+        : "Bienvenue dans votre espace.");
     } catch (error) {
       setAuthSession(null);
       setAuthenticated(false);
@@ -552,14 +552,14 @@ function App() {
       setBusy(false);
       setAuthMessage(serverRevoked || !activeSession
         ? "Session fermée."
-        : "Session locale fermée ; la révocation serveur n'a pas pu être confirmée. Une reconnexion sera nécessaire.");
+        : "Vous êtes déconnecté. Une nouvelle connexion sera nécessaire.");
     }
   }
 
 
   async function syncWebOutbox(activeSession: WebAuthSession) {
     const isCurrent=captureSession(activeSession);
-    if (!accountingEndpoint || !anonKey) throw new Error("Le connecteur de synchronisation Web n’est pas configuré.");
+    if (!accountingEndpoint || !anonKey) throw new Error("Actualisation indisponible.");
     const freshSession = await ensureFreshSession(activeSession);
     const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID, freshSession.deviceId, freshSession.account.organization_id);
     let acknowledged=0,retrying=0,rejected=0,billingHolds=0;
@@ -616,7 +616,7 @@ function App() {
   }
   async function syncWebPullChanges(activeSession: WebAuthSession) {
     const isCurrent=captureSession(activeSession);
-    if(!accountingEndpoint||!anonKey)throw new Error("Le connecteur de synchronisation Web n’est pas configuré.");
+    if(!accountingEndpoint||!anonKey)throw new Error("Actualisation indisponible.");
     const fresh=await ensureFreshSession(activeSession);
     let cursor=await getSyncCursor(OFFLINE_APP_ID,fresh.deviceId,fresh.account.organization_id),pages=0,received=0,more=true;
     while(more&&pages<20&&isCurrent()){
@@ -653,7 +653,7 @@ function App() {
         const revision=typeof serverRecord.revision==="number"?serverRecord.revision:undefined;
         if(revision!==undefined && prior?.revision!==undefined && revision<prior.revision)continue;
         const record:Entry={
-          id:change.aggregate_id,title,detail,state:"Reçu du serveur · autre appareil",createdAt:new Date(change.recorded_at).toLocaleString("fr-FR"),
+          id:change.aggregate_id,title,detail,state:"Confirmé · autre appareil",createdAt:new Date(change.recorded_at).toLocaleString("fr-FR"),
           recordType: change.aggregate_type === "work_order" || change.aggregate_type === "repair_order" || change.aggregate_type === "service_order" || change.aggregate_type === "pressing_order" ? change.aggregate_type : undefined,
           aggregateType: change.aggregate_type,
           actionCode: change.action_code,
@@ -832,7 +832,7 @@ function App() {
   async function openCashSession(input:{register:Entry;openingFloat:number}) {
     const id=crypto.randomUUID(),siteId=sharedOperationSiteId();
     if(!Number.isSafeInteger(input.openingFloat)||input.openingFloat<0)throw new Error("Fonds d'ouverture invalide.");
-    if(!input.register.state.includes("Confirmé")&&!input.register.state.startsWith("Reçu du serveur"))throw new Error("Le registre doit être confirmé par le serveur.");
+    if(!input.register.state.includes("Confirmé")&&!input.register.state.startsWith("Confirmé"))throw new Error("Le registre doit être confirmé.");
     await submitWebBusinessEvent("cash","cash_session.opened","cash_session",id,
       {cash_session_id:id,register_id:input.register.id,register_name:String(input.register.data?.name??input.register.title),
        opening_float_xaf:input.openingFloat,opened_at:new Date().toISOString()},
@@ -842,7 +842,7 @@ function App() {
   async function createCashSale(input:{session:Entry;description:string;amount:number;itemId:string;quantity:number;paymentMethod:string}) {
     const session=authSession;if(!session)throw new Error("AUTHENTICATION_REQUIRED");
     const siteId=sharedOperationSiteId(),id=crypto.randomUUID();
-    if(input.session.status!=="open"||(!input.session.state.includes("Confirmé")&&!input.session.state.startsWith("Reçu du serveur")))throw new Error("La session doit être ouverte et confirmée par le serveur.");
+    if(input.session.status!=="open"||(!input.session.state.includes("Confirmé")&&!input.session.state.startsWith("Confirmé")))throw new Error("La caisse doit être ouverte et confirmée.");
     if(input.description.trim().length<2||!Number.isSafeInteger(input.amount)||input.amount<=0)throw new Error("Désignation et montant entier positif obligatoires.");
     if(input.itemId&&(!Number.isFinite(input.quantity)||input.quantity<=0))throw new Error("Quantité de sortie stock invalide.");
     await submitWebBusinessEvent("cash","sale.created","sale",id,{
@@ -862,7 +862,7 @@ function App() {
   }
 
   async function transitionWebAppointment(entry:Entry,nextStatus:string,reason:string) {
-    if(entry.aggregateType!=="appointment"||!entry.siteId||!entry.revision||!entry.status)throw new Error("Rendez-vous sans révision serveur exploitable.");
+    if(entry.aggregateType!=="appointment"||!entry.siteId||!entry.revision||!entry.status)throw new Error("Rendez-vous en attente de confirmation.");
     const allowed:Record<string,string[]>={booked:["confirmed","cancelled","no_show"],confirmed:["cancelled","no_show","completed"]};
     if(!(allowed[entry.status]??[]).includes(nextStatus)||reason.trim().length<3)throw new Error("Transition ou motif invalide.");
     const payload={appointment_id:entry.id,from_status:entry.status,to_status:nextStatus,reason:reason.trim(),expected_version:entry.revision,transitioned_at:new Date().toISOString()};
@@ -870,7 +870,7 @@ function App() {
   }
 
   async function rescheduleWebAppointment(entry:Entry,startsAt:string,endsAt:string,reason:string) {
-    if(entry.aggregateType!=="appointment"||!entry.siteId||!entry.revision||!["booked","confirmed"].includes(entry.status??""))throw new Error("Rendez-vous non reportable ou révision manquante.");
+    if(entry.aggregateType!=="appointment"||!entry.siteId||!entry.revision||!["booked","confirmed"].includes(entry.status??""))throw new Error("Ce rendez-vous ne peut pas être reporté.");
     const starts=new Date(startsAt),ends=new Date(endsAt);
     if(!startsAt||!endsAt||!Number.isFinite(starts.getTime())||!Number.isFinite(ends.getTime())||ends<=starts||reason.trim().length<3)throw new Error("Dates ou motif de report invalides.");
     await submitWebBusinessEvent("agenda","appointment.rescheduled","appointment",entry.id,{
@@ -923,7 +923,7 @@ function App() {
     if(!Number.isSafeInteger(input.amount)||input.amount<=0)throw new Error("Montant de règlement bancaire invalide.");
     const receipts=entries.stock??[];
     if(!receipts.some(x=>x.actionCode==="purchase.receipt.confirmed"&&x.data?.purchase_id===input.purchase.id&&
-      (x.state.includes("Confirmé")||x.state.startsWith("Reçu du serveur"))))throw new Error("Un reçu de réception confirmé est requis avant règlement.");
+      (x.state.includes("Confirmé")||x.state.startsWith("Confirmé"))))throw new Error("Un reçu de réception confirmé est requis avant règlement.");
     await submitWebBusinessEvent("stock","supplier.payment.recorded","supplier_payment",key,{
       payment_id:key,idempotency_key:key,purchase_id:input.purchase.id,amount_xaf:input.amount,payment_method:"bank",
       cash_session_id:null,payment_reference:input.reference.trim(),
@@ -951,7 +951,7 @@ function App() {
   async function completeCustomerFollowup(input:{followup:Entry;note:string;nextDue:string}) {
     const siteId=sharedOperationSiteId(),now=new Date(),nextDue=input.nextDue?new Date(input.nextDue):null;
     if(input.followup.aggregateType!=="customer_followup"||input.followup.siteId!==siteId||input.followup.status!=="active"||
-      !(input.followup.state.includes("Confirmé")||input.followup.state.startsWith("Reçu du serveur")))throw new Error("Suivi actif et confirmé du site requis.");
+      !(input.followup.state.includes("Confirmé")||input.followup.state.startsWith("Confirmé")))throw new Error("Suivi actif et confirmé du site requis.");
     if(input.note.length>1000||(nextDue&&(!Number.isFinite(nextDue.getTime())||nextDue<=now)))throw new Error("Note ou nouvelle échéance invalide.");
     await submitWebBusinessEvent("customers","customer_followup.completed","customer_followup",input.followup.id,{
       followup_id:input.followup.id,completed_at:now.toISOString(),next_due_at_if_repeating:nextDue?.toISOString()??null,completion_note:input.note.trim(),
@@ -1013,7 +1013,7 @@ function App() {
     const session=authSession;
     if(!session||entry.recordType!=="pressing_order"||!entry.siteId||!entry.status||
       !Number.isSafeInteger(entry.revision)||(entry.revision??0)<1) {
-      throw new Error("Le reçu serveur et la révision sont nécessaires avant le changement d'étape.");
+      throw new Error("Attendez la confirmation avant de passer à l'étape suivante.");
     }
     if(entry.siteId !== (activeSiteId || session.account.active_site_ids[0])) throw new Error("Sélectionne le point de vente du ticket avant sa transition.");
     if(!canTransitionActivity("pressing",entry.status,nextStatus)) throw new Error("Transition Pressing interdite.");
@@ -1029,7 +1029,7 @@ function App() {
   async function transitionWebWorkOrder(entry: Entry, nextStatus: string, reason: string) {
     const session = authSession;
     if (!session || !entry.recordType || !entry.siteId || !entry.status || !Number.isSafeInteger(entry.revision) || (entry.revision ?? 0) < 1) {
-      throw new Error("Le reçu serveur et sa révision sont nécessaires avant toute transition.");
+      throw new Error("Attendez la confirmation avant de poursuivre.");
     }
     if(entry.siteId !== (activeSiteId || session.account.active_site_ids[0])) throw new Error("Sélectionne le point de vente du dossier avant sa transition.");
     const profile = entry.activityProfile ?? session.account.activity_profile;
@@ -1352,11 +1352,11 @@ function DeviceSecurityPage({authenticated,onLoad,onRevoke}:{authenticated:boole
 function GenericPage({ active, entries, copy, preview, authenticated }: { active: ModuleId; entries: Entry[]; copy: typeof moduleCopy[ModuleId]; preview: boolean; authenticated: boolean }) {
   const serverWriteAvailable = authenticated && ["stock", "services", "customers", "team", "help"].includes(active);
   return <div className="module-layout">
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PÉRIMÈTRE FONCTIONNEL</span><h2>Fonctionnalités</h2></div><span className="status-tag pending">{preview?"Aperçu fonctionnel":serverWriteAvailable?"Disponible":"Indisponible"}</span></div>
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">VOTRE ACTIVITÉ</span><h2>Fonctionnalités</h2></div><span className="status-tag pending">{preview?"Aperçu fonctionnel":serverWriteAvailable?"Disponible":"Indisponible"}</span></div>
       <div className="feature-list">{copy.features.map((feature,i)=><div className="feature-row" key={feature}><span className="feature-number">{String(i+1).padStart(2,"0")}</span><span>{feature}</span><span className="feature-check">◇</span></div>)}</div>
       {!preview&&!serverWriteAvailable&&<div className="notice">Les écritures sont désactivées en session réelle jusqu'à livraison du parcours métier correspondant.</div>}
     </div>
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{preview?"SESSION EN COURS":"JOURNAL MÉTIER"}</span><h2>{preview?"Brouillons locaux":"Événements reçus et émis"}</h2></div><span className="status-tag local">{preview?"Local":serverWriteAvailable?"File + reçu serveur":"Projection à compléter"}</span></div>
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{preview?"SESSION EN COURS":"HISTORIQUE"}</span><h2>{preview?"Brouillons":"Opérations"}</h2></div><span className="status-tag local">{preview?"Local":serverWriteAvailable?"Historique":"Consultation"}</span></div>
       {entries.length===0?<Empty text={preview?copy.empty:serverWriteAvailable?"Aucune opération pour le moment.":"Aucun résultat disponible pour le moment."}/>:<div className="record-list">{entries.map(entry=><Record key={entry.id} entry={entry}/>)}</div>}
     </div>
   </div>;
@@ -1370,7 +1370,7 @@ function AgendaPage({ entries, authenticated }: { entries: Entry[]; authenticate
     date.setDate(monday.getDate() + index);
     return { label: date.toLocaleDateString("fr-FR", { weekday: "short" }), day: date.getDate(), isToday: date.toDateString() === today.toDateString() };
   });
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue de la semaine</h2></div><span className="status-tag pending">{authenticated?"Rendez-vous":"Aperçu local"}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Créneaux détaillés non projetés</strong><p>Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.</p></div></div><div className="module-main-card"><h2>Rendez-vous du journal serveur</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucun rendez-vous dans le périmètre chargé." />}</div></div>;
+  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue de la semaine</h2></div><span className="status-tag pending">{authenticated?"Rendez-vous":"Aperçu local"}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Aucun créneau disponible</strong><p>Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.</p></div></div><div className="module-main-card"><h2>Rendez-vous du journal serveur</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucun rendez-vous dans le périmètre chargé." />}</div></div>;
 }
 function PressingPage({
   entries,onAdvance,onTransition,canPreviewEdit,authenticated,busy,
@@ -1395,7 +1395,7 @@ function PressingPage({
         const status=entry.status??"received";
         const next=nextStatus[status];
         return <div className="activity-record" key={entry.id}>
-          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail}</small><small>{entry.id} · {entry.revision? "révision "+entry.revision : "reçu serveur en attente"}</small></div><span className="status-tag local">{statusLabels[status]??entry.state}</span></div>
+          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail}</small><small>{entry.revision?"Confirmé":"En attente de confirmation"}</small></div><span className="status-tag local">{statusLabels[status]??entry.state}</span></div>
           {canPreviewEdit&&<button className="btn secondary" onClick={()=>onAdvance(entry.id)} disabled={status==="picked_up"}>Avancer l'aperçu</button>}
           {authenticated&&next&&entry.recordType==="pressing_order"&&entry.siteId&&entry.revision?<div className="activity-transition">
             <label>Motif du changement d'étape<input value={reasons[entry.id]??""} onChange={e=>setReasons(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500}/></label>
@@ -1503,7 +1503,7 @@ function WorkOrdersPage({
         const next=stage?.next??[];
         const detailRows=Object.entries(entry.metadata??{}).filter(([,value])=>Boolean(value));
         return <div className="activity-record" key={entry.id}>
-          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail||entry.createdAt}</small><small>{entry.id} · {entry.recordType??"dossier"} · révision {entry.revision??"en attente"}</small></div><span className="status-tag local">{stage?.label??entry.state}</span></div>
+          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail||entry.createdAt}</small><small data-testid="record-confirmation" data-version={entry.revision??0}>{entry.revision?"Confirmé":"En attente de confirmation"}</small></div><span className="status-tag local">{stage?.label??entry.state}</span></div>
           {detailRows.length>0&&<ul className="brief-list">{detailRows.map(([key,value])=><li key={key}>{key} : {value}</li>)}</ul>}
           {authenticated&&next.length>0&&entry.revision&&entry.siteId&&<div className="activity-transition">
             <label>Motif du changement d'étape<input value={reasonByEntry[entry.id]??""} onChange={e=>setReasonByEntry(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500} /></label>
@@ -1530,7 +1530,7 @@ function PerformancePage({
       {values.map((row,index)=><tr key={String(row[key]??index)}><td>{String(row[key]??"—")}</td><td>{fmt(row.revenue_xaf)}</td><td>{fmt(row.cost_of_goods_xaf??row.known_cost_of_goods_xaf)}</td><td>{fmt(row.gross_profit_xaf)}</td><td>{fmt(row.confirmed_sales_count)}</td><td>{fmt(row.uncosted_sales_count)}</td></tr>)}
     </tbody></table></div>;
   return <div className="module-layout">
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">ANALYTIQUE SERVEUR</span><h2>Performances financières confirmées</h2></div><span className="status-tag pending">{data?"Données serveur":"À charger"}</span></div>
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">ANALYSE FINANCIÈRE</span><h2>Performances financières confirmées</h2></div><span className="status-tag pending">{data?"Données serveur":"À charger"}</span></div>
       {authenticated?<><label>À partir du<input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} max={new Date().toISOString().slice(0,10)}/></label><button className="btn primary" disabled={loading} onClick={onLoad}>{loading?"Chargement…":"Charger les rapports"}</button></>:<div className="notice">Les rapports réels exigent une session Auth.</div>}
       {error&&<div className="notice">{error}</div>}
       <p className="muted">Les indicateurs tiennent compte des ventes confirmées.</p>
