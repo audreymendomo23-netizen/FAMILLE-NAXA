@@ -9,6 +9,7 @@ data class OfflineEvent(@PrimaryKey val eventId:String,val appId:String="ZIPPLE"
  @Insert(onConflict=OnConflictStrategy.IGNORE) suspend fun insert(event:OfflineEvent):Long
  @Query("SELECT * FROM offline_events WHERE eventId=:id") suspend fun get(id:String):OfflineEvent?
  @Query("SELECT * FROM offline_events WHERE appId='ZIPPLE' AND organizationId=:org AND memberId=:member AND siteId=:site AND state='queued' ORDER BY deviceSequence,eventId") suspend fun queued(org:String,member:String,site:String):List<OfflineEvent>
+ @Query("SELECT COUNT(*) FROM offline_events WHERE appId='ZIPPLE' AND organizationId=:org AND memberId=:member AND siteId=:site AND state IN ('conflict','rejected')") suspend fun blocked(org:String,member:String,site:String):Int
  @Transaction suspend fun enqueue(event:OfflineEvent):Boolean{
   require(event.appId=="ZIPPLE"&&event.organizationId.isNotBlank()&&event.memberId.isNotBlank()&&event.siteId.isNotBlank()&&event.eventId.isNotBlank()&&event.deviceSequence>=0&&event.state=="queued")
   val inserted=insert(event)

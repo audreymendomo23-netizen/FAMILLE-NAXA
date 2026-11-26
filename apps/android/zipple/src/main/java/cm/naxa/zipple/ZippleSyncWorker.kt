@@ -25,6 +25,7 @@ class ZippleSyncWorker(context:Context,params:WorkerParameters):CoroutineWorker(
   val api=ZippleAuth(BuildConfig.ZIPPLE_API_URL)
   try {
    for(site in session.sites){
+    if(dao.blocked(session.organization,session.member,site.id)>0)continue
     for(event in dao.queued(session.organization,session.member,site.id)){
      if(ZippleSyncSession.current!==session||!session.permits(site.id))return Result.success()
      val state=api.sync(session,event)

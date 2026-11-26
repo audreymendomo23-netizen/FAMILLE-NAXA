@@ -61,7 +61,7 @@ class MainActivity:FragmentActivity(){
  TextButton(onClick={ZippleSyncSession.schedule(context)}){Text(tr("Synchroniser","Synchronize"))}
  TextButton(onClick={unlocked=false;ZippleSyncSession.current=null}){Text(tr("Verrouiller","Lock"))}
  }
- if(current!=null)TextButton(onClick={vault.clear();session=null;site="";pin="";unlocked=false;message="";scope.launch{try{api.logout(current.token)}catch(_:Exception){message=tr("Session locale fermée ; révocation distante non confirmée","Local session closed; remote revocation unconfirmed")}}}){Text(tr("Déconnexion","Sign out"))}
+ if(current!=null)TextButton(onClick={ZippleSyncSession.current=null;vault.clear();session=null;site="";pin="";unlocked=false;message="";scope.launch{try{api.logout(current.token)}catch(_:Exception){message=tr("Session locale fermée ; révocation distante non confirmée","Local session closed; remote revocation unconfirmed")}}}){Text(tr("Déconnexion","Sign out"))}
  if(message.isNotEmpty())Text(message,color=MaterialTheme.colorScheme.error)
  }
  }
