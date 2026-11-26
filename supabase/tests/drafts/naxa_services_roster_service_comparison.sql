@@ -171,6 +171,21 @@ select s.id shift_id,s.org_id,s.site_id,s.workstation_id,s.member_id,s.revision 
 revoke all on public.ns_roster_service_comparison from public,anon,authenticated;
 grant select on public.ns_roster_service_comparison to authenticated;
 
+-- Scoped target directory: only assignable members and posts, no personal contact information.
+create function public.ns_roster_targets(p_org uuid,p_site uuid)
+returns table(member_id uuid,display_name text,workstation_id uuid,workstation_name text)
+language sql stable security definer set search_path='' as $fn$
+ select m.id,m.display_name,null::uuid,null::text
+ from public.ns_members m where m.org_id=p_org and public.ns_roster_can_manage(p_org,p_site,null,m.id)
+ union all
+ select m.id,m.display_name,w.id,w.name
+ from public.ns_members m join public.ns_workstations w on w.org_id=m.org_id and w.site_id=p_site and w.status='active'
+ where m.org_id=p_org and public.ns_roster_can_manage(p_org,p_site,w.id,m.id)
+ order by 2,4 nulls first
+$fn$;
+revoke all on function public.ns_roster_targets(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.ns_roster_targets(uuid,uuid) to authenticated;
+
 insert into auth.users(id) values ('10000000-0000-4000-8000-000000000091'),('10000000-0000-4000-8000-000000000092');
 insert into public.ns_organizations(id,display_name,business_mode) values ('20000000-0000-4000-8000-000000000091','QA Attendance','multi_site_network');
 insert into public.ns_accounts(id,auth_user_id,login_id,auth_alias,password_change_required) values ('50000000-0000-4000-8000-000000000091','10000000-0000-4000-8000-000000000091','NS-QA91','qa91@example.invalid',false),('50000000-0000-4000-8000-000000000092','10000000-0000-4000-8000-000000000092','NS-QA92','qa92@example.invalid',false);
@@ -184,6 +199,8 @@ set local role authenticated;
 do $$ declare o uuid:='20000000-0000-4000-8000-000000000091'; s uuid:='30000000-0000-4000-8000-000000000091'; u uuid:='60000000-0000-4000-8000-000000000092'; x uuid:='70000000-0000-4000-8000-000000000095'; y uuid:='70000000-0000-4000-8000-000000000096'; t timestamptz:=now()+interval '1 day'; v jsonb;
 begin
  if not public.ns_roster_enabled(o) or not public.ns_roster_can_manage(o,s,null,u) then raise exception 'QA MANAGER SCOPE'; end if;
+ if (select count(*) from public.ns_roster_targets(o,s) where member_id=u and workstation_id is null)<>1 then raise exception 'QA TARGET DIRECTORY'; end if;
+ if exists(select 1 from public.ns_roster_targets(o,s) where member_id='60000000-0000-4000-8000-000000000091') then raise exception 'QA SELF DIRECTORY'; end if;
  if public.ns_roster_can_manage(o,s,null,'60000000-0000-4000-8000-000000000091') then raise exception 'QA SELF MANAGEMENT'; end if;
  v:=public.ns_publish_roster_shift(x,o,s,null,u,t,t+interval '8 hours',30,10,'published',0,'Initial');
  if v->>'revision'<>'1' then raise exception 'QA INITIAL REVISION'; end if;
@@ -200,6 +217,7 @@ set local role authenticated;
 do $$ declare o uuid:='20000000-0000-4000-8000-000000000091'; s uuid:='30000000-0000-4000-8000-000000000091'; u uuid:='60000000-0000-4000-8000-000000000092'; x uuid:='70000000-0000-4000-8000-000000000095'; t timestamptz:=now()+interval '1 day';
 begin
  if (select count(*) from public.ns_roster_shifts where id=x and revision=2)<>1 then raise exception 'QA PERSONAL READ'; end if;
+ if exists(select 1 from public.ns_roster_targets(o,s)) then raise exception 'QA STAFF DIRECTORY'; end if;
  begin perform public.ns_publish_roster_shift(x,o,s,null,u,t,t+interval '7 hours',30,10,'published',2,'Employee'); raise exception 'QA EMPLOYEE WRITE'; exception when others then if sqlerrm not like '%NS_ROSTER_FORBIDDEN%' then raise; end if; end;
  begin perform public.ns_ack_roster_shift(x,1); raise exception 'QA OLD ACK'; exception when others then if sqlerrm not like '%NS_ROSTER_REVISION_CONFLICT%' then raise; end if; end;
  perform public.ns_ack_roster_shift(x,2); perform public.ns_ack_roster_shift(x,2);
@@ -242,4 +260,4 @@ end $$;
 reset role;
 
 rollback;
-select 'PASS: roster and service comparison, original baseline preserved' as result;
+select 'PASS: roster, scoped directory, service comparison and frozen baseline' as result;
