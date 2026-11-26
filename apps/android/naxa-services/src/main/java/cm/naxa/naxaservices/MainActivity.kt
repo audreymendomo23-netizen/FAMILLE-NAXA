@@ -467,7 +467,9 @@ private fun NaxaServicesRoot(
                             busy, message, locale,
                             onLogin,
                             { route = AppRoute.RECOVERY.name },
-                            onLocale = { locale = it; preferences.saveLocale(it) }
+                            onLocale = { locale = it; preferences.saveLocale(it) },
+                            lightTheme = lightTheme,
+                            onToggleTheme = { val next = !lightTheme; preferences.saveTheme(if(next) "light" else "dark", preferences.nightStart(), preferences.nightEnd(), preferences.flashlightEnabled()); lightTheme = next }
                         )
                         AppRoute.RECOVERY -> RecoveryScreen(busy, message, onRecovery, { route = AppRoute.LOGIN.name })
                         AppRoute.CHANGE_PASSWORD -> ChangePasswordScreen(busy, message, onChangePassword)
@@ -713,7 +715,9 @@ private fun LoginScreen(
     locale: String,
     onLogin: (String, String, Boolean) -> Unit,
     onForgot: () -> Unit,
-    onLocale: (String) -> Unit
+    onLocale: (String) -> Unit,
+    lightTheme: Boolean,
+    onToggleTheme: () -> Unit
 ) {
     var identifier by rememberSaveable { mutableStateOf("") }
     var password by rememberSaveable { mutableStateOf("") }
@@ -727,6 +731,7 @@ private fun LoginScreen(
     ) {
         NaxaServicesWordmark()
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
+            TextButton(onClick=onToggleTheme, modifier=Modifier.testTag("login-theme-toggle")){Text(if(lightTheme) "☾" else "☀")}
             TextButton(onClick={onLocale("fr")},enabled=locale!="fr"){Text("FR")}
             TextButton(onClick={onLocale("en")},enabled=locale!="en"){Text("EN")}
             TextButton(onClick={onLocale("ff-CM")},enabled=locale!="ff-CM"){Text("FF")}
