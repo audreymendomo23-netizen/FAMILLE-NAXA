@@ -59,4 +59,38 @@ begin
 end $$;
 revoke all on function public.wm_issue_device_session(uuid,uuid,uuid,text) from public,anon,authenticated;
 grant execute on function public.wm_issue_device_session(uuid,uuid,uuid,text) to service_role;
+-- Revalidate authority on EVERY sensitive action; this function does not confer client SQL access.
+create function public.wm_session_context(p_hash text)
+returns table(session_id uuid,account_id uuid,installation_id uuid,workspace_id uuid,expires_at timestamptz,password_change_required boolean)
+language sql security invoker stable set search_path=pg_catalog,public as $
+ select s.id,s.account_id,s.installation_id,s.workspace_id,s.expires_at,a.password_change_required
+ from public.wm_device_sessions s
+ join public.wm_accounts a on a.id=s.account_id and a.enabled
+ join public.wm_memberships m on m.account_id=s.account_id and m.workspace_id=s.workspace_id and m.enabled
+ join public.wm_workspaces w on w.id=m.workspace_id and w.enabled
+ where s.token_hash=p_hash and s.revoked_at is null and s.expires_at>now()
+ and ((w.kind='individual' and m.role='owner') or (w.kind='enterprise' and m.role in ('promoteur','manager','staff')))
+$;
+revoke all on function public.wm_session_context(text) from public,anon,authenticated;
+grant execute on function public.wm_session_context(text) to service_role;
+-- Serialize rotation with login, then recheck OLD token under the lock; never accept client account IDs.
+create function public.wm_switch_workspace(p_old_hash text,p_workspace uuid,p_new_hash text)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $
+declare v_account uuid;v_installation uuid;v_old public.wm_device_sessions%rowtype;v_new uuid;
+begin
+ select s.account_id into v_account from public.wm_device_sessions s where s.token_hash=p_old_hash;
+ if not found then raise exception 'invalid session';end if;
+ perform 1 from public.wm_accounts a where a.id=v_account and a.enabled and not a.password_change_required for update;
+ if not found then raise exception 'account unavailable';end if;
+ select * into v_old from public.wm_device_sessions s where s.token_hash=p_old_hash and s.account_id=v_account and s.revoked_at is null and s.expires_at>clock_timestamp() for update;
+ if not found then raise exception 'invalid session';end if;
+ if not exists(select 1 from public.wm_session_context(p_old_hash)) then raise exception 'scope unavailable';end if;
+ if not exists(select 1 from public.wm_memberships m join public.wm_workspaces w on w.id=m.workspace_id where m.account_id=v_account and m.workspace_id=p_workspace and m.enabled and w.enabled and ((w.kind='individual' and m.role='owner') or (w.kind='enterprise' and m.role in ('promoteur','manager','staff')))) then raise exception 'scope unavailable';end if;
+ update public.wm_device_sessions set revoked_at=clock_timestamp() where id=v_old.id;
+ -- Preserve the original expiry: switching is not refresh.
+ insert into public.wm_device_sessions(account_id,installation_id,workspace_id,token_hash,expires_at) values(v_account,v_old.installation_id,p_workspace,p_new_hash,v_old.expires_at) returning id into v_new;
+ return v_new;
+end $;
+revoke all on function public.wm_switch_workspace(text,uuid,text) from public,anon,authenticated;
+grant execute on function public.wm_switch_workspace(text,uuid,text) to service_role;
 commit;

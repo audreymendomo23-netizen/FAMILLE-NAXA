@@ -20,7 +20,7 @@ async function workspaces(accountId:string){
 }
 Deno.serve(async request=>{
  const origin=request.headers.get("origin");
- const cors=origin&&origins.has(origin)?{"Access-Control-Allow-Origin":origin,"Vary":"Origin","Access-Control-Allow-Headers":"content-type,authorization,apikey","Access-Control-Allow-Methods":"POST,OPTIONS"}:{};
+ const cors:Record<string,string>=origin&&origins.has(origin)?{"Access-Control-Allow-Origin":origin,"Vary":"Origin","Access-Control-Allow-Headers":"content-type,authorization,apikey","Access-Control-Allow-Methods":"POST,OPTIONS"}:{};
  const send=(status:number,body:unknown)=>new Response(status===204?null:JSON.stringify(body),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store",...cors}});
  if(origin&&!origins.has(origin))return send(403,{error:"forbidden"});
  if(request.method==="OPTIONS")return send(204,null);
@@ -28,7 +28,8 @@ Deno.serve(async request=>{
  if(request.method!=="POST")return send(405,{error:"method"});
  try{
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
- const body=await request.json();
+ const raw=await request.text();if(raw.length>16384)return send(413,{error:"request_too_large"});
+ const body=JSON.parse(raw);
  if(!body||body.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
  if(action==="login"){
  const identifier=typeof body.identifier==="string"?body.identifier.trim().toUpperCase():"";
@@ -47,6 +48,20 @@ Deno.serve(async request=>{
  const saved=(await rest("wm_device_sessions?select=expires_at&id=eq."+eq(sessionId)+"&revoked_at=is.null&limit=1"))[0];
  if(!saved)return send(403,{error:"scope"});
  return send(200,{app_id:"WIDEMEET",access_token:access,member_id:a.id,device_id:sessionId,expires_at:Date.parse(saved.expires_at),server_now:Date.now(),require_password_change:a.password_change_required,active_workspace_id:active.id,workspaces:ws});
+ }
+ if(action==="switch-workspace"){
+ const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
+ if(!/^[a-f0-9]{64}$/.test(access)||!uuid.test(body.workspace_id??""))return send(401,{error:"credentials"});
+ const oldHash=await digest(access);
+ const context=(await rest("rpc/wm_session_context",{method:"POST",body:JSON.stringify({p_hash:oldHash})}))[0];
+ if(!context||context.password_change_required)return send(403,{error:"scope"});
+ const ws=await workspaces(context.account_id);
+ if(!ws.some((w:any)=>w.id===body.workspace_id))return send(403,{error:"scope"});
+ const newAccess=token();
+ const sessionId=await rest("rpc/wm_switch_workspace",{method:"POST",body:JSON.stringify({p_old_hash:oldHash,p_workspace:body.workspace_id,p_new_hash:await digest(newAccess)})});
+ const saved=(await rest("wm_device_sessions?select=expires_at&id=eq."+eq(sessionId)+"&revoked_at=is.null&limit=1"))[0];
+ if(!saved)return send(403,{error:"scope"});
+ return send(200,{app_id:"WIDEMEET",access_token:newAccess,member_id:context.account_id,device_id:sessionId,expires_at:Date.parse(saved.expires_at),server_now:Date.now(),require_password_change:false,active_workspace_id:body.workspace_id,workspaces:ws});
  }
  if(action==="logout"){
  const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");

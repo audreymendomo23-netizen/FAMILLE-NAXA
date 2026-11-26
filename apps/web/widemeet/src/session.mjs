@@ -47,3 +47,12 @@ export async function authorizedRequest(base,action,body,token,fetcher=fetch){
  const res=await fetcher(endpoint(base,action),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify({...body,app_id:"WIDEMEET"}),cache:"no-store",redirect:"error",credentials:"omit"});
  if(!res.ok)throw Error("REQUEST_REJECTED");return res.status===204?{}:res.json();
 }
+
+/** Server-confirmed workspace switch, never change the active workspace locally. */
+export async function switchWorkspace(base,session,workspaceId,fetcher=fetch){
+ if(!workspaceAccess(session,session.active_workspace_id)||!session.workspaces.some(w=>w.id===workspaceId&&w.enabled))throw Error("FORBIDDEN_SCOPE");
+ const raw=await authorizedRequest(base,"switch-workspace",{workspace_id:workspaceId},session.access_token,fetcher);
+ const next=parseSession(raw);
+ if(next.member_id!==session.member_id||next.active_workspace_id!==workspaceId||next.expires_at>session.expires_at)throw Error("INVALID_SCOPE");
+ return next;
+}
