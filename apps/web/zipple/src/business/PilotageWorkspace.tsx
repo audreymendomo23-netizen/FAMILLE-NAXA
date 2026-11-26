@@ -16,7 +16,7 @@ export function PilotageWorkspace({call,disabled,en}:Props){
  {error&&<p role="alert">{error}</p>}{data&&<>
  <p>{data.start} — {data.end} · Africa/Douala</p>
  <div className="business-panel"><strong>{t("Ventes enregistrées","Recorded sales")}</strong>{fmt(data.recorded_xaf)} · {data.receipts} {t("reçus","receipts")}</div>
- <p>{t("Encaissements enregistrés","Recorded collections")} : {fmt(data.collected_xaf??data.recorded_xaf)}</p><p>{t("Coût des ventes connu","Known sale cost")} : {fmt(data.known_cost_xaf)}</p><p>{t("Marge brute sur ventes","Gross margin on sales")} : {fmt(data.gross_margin_xaf)}</p>
+ <p>{t("Remboursements enregistrés","Recorded refunds")} : {fmt(data.refunds_xaf??0)}</p><p>{t("Ventes nettes des remboursements","Sales net of refunds")} : {fmt(data.recorded_xaf-(data.refunds_xaf??0))}</p><p>{t("Encaissements bruts","Gross collections")} : {fmt(data.collected_xaf??data.recorded_xaf)}</p><p>{t("Coût des ventes connu","Known sale cost")} : {fmt(data.known_cost_xaf)}</p><p>{t("Marge sur ventes brutes avant remboursements","Margin on gross sales before refunds")} : {fmt(data.gross_margin_xaf)}</p>
  {data.uncosted_receipts>0&&<p>{data.uncosted_receipts} {t("reçus sans coût complet : marge non calculable.","receipts without full cost: margin unavailable.")}</p>}
  <p>{t("Charges enregistrées","Recorded expenses")} : {fmt(data.expenses_xaf)}</p><p>{t("Avis clients","Customer reviews")} : {data.feedback_average??"—"}/5 · {data.feedback_count} {t("avis","reviews")}</p>
  {data.feedback_count<10&&<p>{t("Échantillon insuffisant pour classer les performances.","Insufficient sample for ranking performance.")}</p>}
