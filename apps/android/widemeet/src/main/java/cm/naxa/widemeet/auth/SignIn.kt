@@ -8,11 +8,33 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import cm.naxa.widemeet.BuildConfig
+import java.util.UUID
 
 @Composable fun SignIn(english:Boolean,configured:Boolean,gateway:AuthGateway,onSession:(Session)->Unit,onBack:()->Unit){
  var identifier by remember{mutableStateOf("")};var password by remember{mutableStateOf("")};var show by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var recoveryError by remember{mutableStateOf(false)};var recoveryNotice by remember{mutableStateOf(false)}
+ var signup by remember{mutableStateOf(false)};var enterprise by remember{mutableStateOf(false)};var display by remember{mutableStateOf("")};var workspace by remember{mutableStateOf("")};var confirm by remember{mutableStateOf("")};var accepted by remember{mutableStateOf(false)};var registered by remember{mutableStateOf("")};var requestId by remember{mutableStateOf(UUID.randomUUID().toString())}
  val scope=rememberCoroutineScope()
  fun tr(fr:String,en:String)=if(english)en else fr
+ if(signup){
+ Card(Modifier.fillMaxWidth()){Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
+ Text(tr("Créer un compte","Create an account"),style=MaterialTheme.typography.headlineMedium)
+ Text(tr("Environnement de recette : aucun paiement, aucune donnée réelle. Conditions de test, sans valeur commerciale.","Test environment: no payment or real data. Test terms, not a commercial agreement."))
+ if(registered.isNotEmpty()){Text(tr("Votre identifiant","Your ID"));Text(registered);Button(onClick={identifier=registered;registered="";signup=false}){Text(tr("Se connecter","Sign in"))}}
+ else{
+ Row{Checkbox(enterprise,{enterprise=it},enabled=!busy);Text(tr("Compte entreprise","Company account"),Modifier.padding(top=12.dp))}
+ OutlinedTextField(display,{display=it.take(120)},label={Text(tr("Nom affiché","Display name"))},enabled=!busy,modifier=Modifier.fillMaxWidth())
+ if(enterprise)OutlinedTextField(workspace,{workspace=it.take(120)},label={Text(tr("Nom de l’entreprise","Company name"))},enabled=!busy,modifier=Modifier.fillMaxWidth())
+ OutlinedTextField(password,{password=it.take(256)},label={Text(tr("Mot de passe","Password"))},visualTransformation=PasswordVisualTransformation(),enabled=!busy,modifier=Modifier.fillMaxWidth())
+ OutlinedTextField(confirm,{confirm=it.take(256)},label={Text(tr("Confirmer le mot de passe","Confirm password"))},visualTransformation=PasswordVisualTransformation(),enabled=!busy,modifier=Modifier.fillMaxWidth())
+ Row{Checkbox(accepted,{accepted=it},enabled=!busy);Text(tr("J’accepte les conditions de cette recette : données fictives et compte de test uniquement.","I accept these test conditions: fictitious data and test account only."),Modifier.padding(top=12.dp))}
+ Button(enabled=configured&&!busy&&accepted&&display.isNotBlank()&&(!enterprise||workspace.isNotBlank())&&password.length>=12&&password==confirm,onClick={busy=true;error=false;scope.launch{try{registered=gateway.register(if(enterprise)"enterprise"else "individual",display,if(enterprise)workspace else display,password,requestId);requestId=UUID.randomUUID().toString()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true}finally{password="";confirm="";busy=false}}}){Text(tr("Créer mon compte","Create account"))}
+ }
+ if(error)Text(tr("Inscription non confirmée. Réessayez avec les mêmes informations.","Registration not confirmed. Retry with the same details."),color=MaterialTheme.colorScheme.error)
+ TextButton(enabled=!busy,onClick={signup=false;password="";confirm="";error=false}){Text(tr("Retour","Back"))}
+ }}
+ return
+ }
  Card(Modifier.fillMaxWidth()){
  Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
  Text(tr("Connexion","Sign in"),style=MaterialTheme.typography.headlineMedium,modifier=Modifier.testTag("wm-signin-title"))
@@ -25,6 +47,7 @@ import kotlinx.coroutines.launch
  TextButton(enabled=configured&&!busy&&identifier.isNotBlank(),onClick={busy=true;error=false;recoveryError=false;recoveryNotice=false;scope.launch{try{gateway.requestRecovery(identifier);recoveryNotice=true}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){recoveryError=true}finally{busy=false}}}){Text(tr("Mot de passe oublié ?","Forgot password?"))}
  if(recoveryNotice)Text(tr("Demande reçue. Un contrôle d’identité est nécessaire avant toute récupération.","Request received. Identity verification is required before recovery."))
  if(recoveryError)Text(tr("Demande non confirmée. Vérifiez votre identifiant ou réessayez plus tard.","Request not confirmed. Check your ID or try again later."),color=MaterialTheme.colorScheme.error)
+ if(BuildConfig.WIDEMEET_SIGNUP_TEST)TextButton(enabled=configured&&!busy,onClick={signup=true;error=false;password=""}){Text(tr("Créer un compte","Create an account"))}
  TextButton(onClick=onBack){Text(tr("Retour","Back"))}
  }
  }
