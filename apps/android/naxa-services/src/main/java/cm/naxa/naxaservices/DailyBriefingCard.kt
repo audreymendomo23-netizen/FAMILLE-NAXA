@@ -9,9 +9,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.findViewTreeLifecycleOwner
 import androidx.compose.ui.unit.dp
 import cm.naxa.naxaservices.auth.AuthSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.time.LocalDate
@@ -51,6 +56,10 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
   val context=LocalContext.current
   val latest by rememberUpdatedState(session)
   val scope=rememberCoroutineScope()
+  val owner=LocalView.current.findViewTreeLifecycleOwner()
+  var foreground by remember(owner){mutableStateOf(owner?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED)==true)}
+  var loadJob by remember{mutableStateOf<Job?>(null)}
+  var requestGeneration by remember{mutableStateOf(0)}
   var language by remember{mutableStateOf(session.account.defaultLocale.takeIf{it in briefingLanguages}?:"fr")}
   var speed by remember{mutableStateOf(1f)}
   var engine by remember{mutableStateOf<TextToSpeech?>(null)}
@@ -81,6 +90,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
   fun stop(){activeUtterance=null;engine?.stop();playing=false;paused=false;spokenText="";spokenOffset=0;segmentBase=0}
   fun pause(){if(!playing)return;activeUtterance=null;engine?.stop();playing=false;paused=true}
   fun speakRemaining(){
+   if(!foreground)return
    val tts=engine?:return
    segmentBase=spokenOffset.coerceIn(0,spokenText.length)
    if(segmentBase>=spokenText.length){stop();return}
@@ -100,17 +110,31 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
    spokenText=briefingText(r,language);spokenOffset=0;speakRemaining()
   }
   fun load(andPlay:Boolean){
+   if(!foreground)return
+   loadJob?.cancel();val generation=++requestGeneration
    stop();busy=true;error=false;report=null
-   scope.launch{
+   loadJob=scope.launch{
     try{
      val date=LocalDate.now(ZoneId.of("Africa/Douala")).toString()
      val r=JSONObject(StaffRosterApi.call(latest,"rpc/ns_daily_briefing",JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_day",date)))
      require(r.getString("day")==date)
      briefingText(r,language)
+     if(!foreground||generation!=requestGeneration)return@launch
      report=r
      if(andPlay)play(r)
-    }catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}
+    }catch(c:CancellationException){throw c}catch(_:Exception){if(generation==requestGeneration&&foreground)error=true}finally{if(generation==requestGeneration)busy=false}
    }
+  }
+  DisposableEffect(owner){
+   val observer=LifecycleEventObserver{_,event->
+    when(event){
+     Lifecycle.Event.ON_RESUME->foreground=true
+     Lifecycle.Event.ON_PAUSE,Lifecycle.Event.ON_STOP->{foreground=false;requestGeneration++;loadJob?.cancel();loadJob=null;stop();report=null;busy=false;error=false}
+     else->Unit
+    }
+   }
+   owner?.lifecycle?.addObserver(observer)
+   onDispose{owner?.lifecycle?.removeObserver(observer);loadJob?.cancel()}
   }
   Card(Modifier.fillMaxWidth()){
    Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){

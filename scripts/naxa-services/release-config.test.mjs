@@ -24,7 +24,7 @@ test("release configuration rejects pharmacy project, empty configuration, and p
   for (const key of ["", "sb_secret_fixture", jwt({role:"service_role",ref:project}), jwt({role:"anon",ref:"other"})]) {
     assert.throws(() => validateReleaseConfig({...valid,NS_ANON_KEY:key}), /publishable/);
   }
-  assert.equal(validateReleaseConfig({...valid,NS_ANON_KEY:jwt({role:"anon",ref:project})}).NS_ENABLE_SUPPLIER_SYNC,"true");
+  assert.equal(validateReleaseConfig({...valid,NS_ANON_KEY:jwt({role:"anon",ref:project,exp:Math.floor(Date.now()/1000)+3600})}).NS_ENABLE_SUPPLIER_SYNC,"true");
 });
 test("release configuration rejects missing or inconsistent Firebase app configuration", () => {
   for (const name of ["NS_FIREBASE_API_KEY","NS_FIREBASE_APP_ID","NS_FIREBASE_PROJECT_ID","NS_FIREBASE_SENDER_ID"]) {
@@ -54,4 +54,8 @@ test("real release workflow enforces independent certificate check before signin
   }
   assert.ok(release.indexOf("verifyApprovedSigner(readFileSync") < release.indexOf("gradle --no-daemon :naxa-services:assembleRelease"));
   assert.ok(release.includes("workflow_dispatch:") && !release.includes("branches:"));
+});
+
+test("Android release rejects expired or undated anon JWTs just like Web preflight",()=>{
+ for(const exp of [undefined,null,"9999999999",0,Math.floor(Date.now()/1000)-10])assert.throws(()=>validateReleaseConfig({...valid,NS_ANON_KEY:jwt({role:"anon",ref:project,exp})}),/publishable/);
 });

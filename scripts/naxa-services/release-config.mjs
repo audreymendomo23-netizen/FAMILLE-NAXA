@@ -11,7 +11,7 @@ export function validateReleaseConfig(env) {
   if (!publishable && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(key)) {
     try {
       const claims = JSON.parse(Buffer.from(key.split(".")[1], "base64url").toString("utf8"));
-      publishable = claims.role === "anon" && claims.ref === project;
+      publishable = claims.role === "anon" && claims.ref === project && Number.isFinite(claims.exp) && claims.exp > Date.now()/1000;
     } catch { /* malformed JWT */ }
   }
   if (!publishable) throw new Error("NS_ANON_KEY must be a publishable key or matching anon JWT, never a privileged key.");

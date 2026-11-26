@@ -1,7 +1,7 @@
 import React,{useEffect,useRef,useState} from "react";
 import type {WebAuthAccount} from "../auth/session";
 import {rosterApiOrigin} from "./staff-roster";
-type Report={day:string;generated_at:string;scope:"site"|"personal";finance:{revenue_xaf:number;confirmed_sales_count:number;uncosted_sales_count:number}|null;appointments:{scheduled_count:number;completed_count:number};personal_clock_events:{event_count:number}|null;coverage:string};
+export type Report={day:string;generated_at:string;scope:"site"|"personal";finance:{revenue_xaf:number;confirmed_sales_count:number;uncosted_sales_count:number}|null;appointments:{scheduled_count:number;completed_count:number};personal_clock_events:{event_count:number}|null;coverage:string};
 type Lang="fr"|"en"|"ff-CM"|"es"|"it"|"zh-CN";
 const languages:Record<Lang,string>={fr:"Français",en:"English","ff-CM":"Fulfulde",es:"Español",it:"Italiano","zh-CN":"中文"};
 const copy:Record<Lang,{title:string;intro:string;appointments:string;completed:string;finance:string;sales:string;clocks:string;missing:string;play:string;stop:string;unavailable:string;load:string}> = {
@@ -15,6 +15,18 @@ const copy:Record<Lang,{title:string;intro:string;appointments:string;completed:
 export function briefingNarration(r:Report,l:Lang):string{
  const t=copy[l];
  return [t.intro,r.day,t.appointments+": "+r.appointments.scheduled_count+"; "+t.completed+": "+r.appointments.completed_count+".",r.finance===null?"":t.finance+": "+r.finance.revenue_xaf+"; "+t.sales+": "+r.finance.confirmed_sales_count+".",r.personal_clock_events===null?"":t.clocks+": "+r.personal_clock_events.event_count+".",t.missing].filter(Boolean).join(" ");
+}
+
+export function validateBriefing(value:unknown,day:string):Report {
+ const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==="object"&&!Array.isArray(v);
+ const count=(v:unknown):v is number=>typeof v==="number"&&Number.isSafeInteger(v)&&v>=0;
+ if(!object(value)||value.day!==day||typeof value.generated_at!=="string"||!Number.isFinite(Date.parse(value.generated_at))||value.coverage!=="partial_confirmed_server_facts"||(value.scope!=="site"&&value.scope!=="personal"))throw Error("INVALID_BRIEFING");
+ const a=value.appointments,f=value.finance,p=value.personal_clock_events;
+ if(!object(a)||!count(a.scheduled_count)||!count(a.completed_count)||a.completed_count>a.scheduled_count)throw Error("INVALID_BRIEFING");
+ if(f!==null&&(!object(f)||!count(f.revenue_xaf)||!count(f.confirmed_sales_count)||!count(f.uncosted_sales_count)||f.uncosted_sales_count>f.confirmed_sales_count))throw Error("INVALID_BRIEFING");
+ if(value.scope==="personal"&&f!==null)throw Error("INVALID_BRIEFING");
+ if(p!==null&&(!object(p)||!count(p.event_count)))throw Error("INVALID_BRIEFING");
+ return value as Report;
 }
 function dayInDouala(){return new Date(Date.now()+3600000).toISOString().slice(0,10);}
 type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>};
@@ -31,8 +43,7 @@ export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Pro
    const token=await getToken();if(abort.signal.aborted||!mounted.current||!token||!anonKey)return;
    const r=await fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/ns_daily_briefing",{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({p_org:account.organization_id,p_site:siteId,p_day:dayInDouala()}),signal:abort.signal,cache:"no-store",credentials:"omit"});
    if(!r.ok)throw Error("BRIEFING_UNAVAILABLE");
-   const data=await r.json() as Report;
-   if(data.day!==dayInDouala()||data.coverage!=="partial_confirmed_server_facts"||!data.appointments||!["site","personal"].includes(data.scope)||data.scope==="personal"&&data.finance!==null)throw Error("INVALID_BRIEFING");
+   const data=validateBriefing(await r.json(),dayInDouala());
    if(abort.signal.aborted||!mounted.current||controller.current!==abort||document.visibilityState==="hidden")return;
    setReport(data);
    return {data,abort};

@@ -1,6 +1,7 @@
 import {
   inboxTransition,
   confirmedFcmReference,
+  classifyFcmFailure,
   normalizeNotificationPayload,
   normalizePushPlatform,
   normalizePushToken,
@@ -301,12 +302,7 @@ async function sendFcm(accessToken: string, projectId: string, token: string, ev
   });
   const result = await response.json().catch(() => null) as Json | null;
   if (!response.ok) {
-    const details = Array.isArray((result?.error as Json | undefined)?.details)
-      ? (result!.error as Json).details as Json[] : [];
-    const fcmCode = details.find((detail) => typeof detail.errorCode === "string")?.errorCode;
-    const code = typeof fcmCode === "string" ? fcmCode : response.status >= 500 || response.status === 429
-      ? "FCM_TEMPORARY_UNAVAILABLE" : "FCM_REJECTED";
-    throw new ApiError(502, code);
+    throw new ApiError(502, classifyFcmFailure(response.status,result));
   }
   return confirmedFcmReference(result,projectId);
 }

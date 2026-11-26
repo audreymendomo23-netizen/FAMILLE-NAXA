@@ -1,6 +1,7 @@
 import {
   inboxTransition,
   confirmedFcmReference,
+  classifyFcmFailure,
   normalizeNotificationPayload,
   normalizePushPlatform,
   normalizePushToken,
@@ -90,4 +91,15 @@ Deno.test("FCM acceptance requires a genuine scoped provider message reference",
   let rejected=false;try{confirmedFcmReference(payload,project);}catch(e){rejected=e instanceof Error&&retryablePushFailure(e.message);}
   if(!rejected)throw Error("FALSE_ACCEPTANCE");
  }
+});
+
+Deno.test("explicit FCM provider transient codes remain retryable and are not marked permanent",()=>{
+ for(const [status,code] of [[429,"QUOTA_EXCEEDED"],[503,"UNAVAILABLE"],[500,"INTERNAL"],[429,"RESOURCE_EXHAUSTED"],[401,"UNAUTHENTICATED"],[401,"THIRD_PARTY_AUTH_ERROR"]] as const){
+  const mapped=classifyFcmFailure(status,{error:{details:[{errorCode:code}]}});
+  if(!retryablePushFailure(mapped)||shouldRevokePushToken(mapped))throw Error("TRANSIENT_FAILURE_MISCLASSIFIED");
+ }
+ for(const code of ["UNREGISTERED","SENDER_ID_MISMATCH"])if(!shouldRevokePushToken(classifyFcmFailure(404,{error:{details:[{errorCode:code}]}})))throw Error("REVOKE_FAILED");
+ if(retryablePushFailure(classifyFcmFailure(400,{error:{status:"INVALID_ARGUMENT"}})))throw Error("INVALID_RETRIED");
+ if(!retryablePushFailure(classifyFcmFailure(503,null)))throw Error("UNAVAILABLE_NOT_RETRIED");
+ if(classifyFcmFailure(400,{error:{details:[null,{}, {errorCode:"arbitrary-provider-text"}]}})!=="FCM_REJECTED")throw Error("UNTRUSTED_ERROR_FORWARDED");
 });

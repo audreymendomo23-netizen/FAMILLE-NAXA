@@ -84,3 +84,17 @@ export function confirmedFcmReference(result:unknown,projectId:string):string {
   if(typeof name!=="string"||!name.startsWith(prefix)||!/^[A-Za-z0-9_:%.-]{1,256}$/.test(name.slice(prefix.length)))throw Error("FCM_TEMPORARY_UNAVAILABLE");
   return name;
 }
+
+// Map documented FCM codes to the bounded internal retry/revocation policy.
+export function classifyFcmFailure(status:number,result:unknown):string {
+ const e=result&&typeof result==="object"?(result as Record<string,unknown>).error:undefined;
+ const error=e&&typeof e==="object"?e as Record<string,unknown>:{};
+ const details=Array.isArray(error.details)?error.details:[];
+ const detail=details.find(x=>x&&typeof x==="object"&&typeof (x as Record<string,unknown>).errorCode==="string") as Record<string,unknown>|undefined;
+ const code=detail?.errorCode??error.status;
+ if(code==="UNREGISTERED"||code==="SENDER_ID_MISMATCH")return code;
+ if(code==="QUOTA_EXCEEDED"||code==="RESOURCE_EXHAUSTED"||code==="UNAVAILABLE"||code==="INTERNAL"||status===429||status>=500)return "FCM_TEMPORARY_UNAVAILABLE";
+ if(code==="UNAUTHENTICATED"||code==="THIRD_PARTY_AUTH_ERROR"||status===401)return "FCM_AUTH_TEMPORARY";
+ if(code==="INVALID_ARGUMENT")return code;
+ return "FCM_REJECTED";
+}
