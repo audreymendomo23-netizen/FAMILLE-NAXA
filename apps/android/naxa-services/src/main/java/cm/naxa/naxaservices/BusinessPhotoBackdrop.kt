@@ -58,8 +58,8 @@ internal fun LoginBusinessBanner(locale:String){
     Box(Modifier.fillMaxWidth().heightIn(min=112.dp).clip(RoundedCornerShape(20.dp))) {
         BusinessPhotoBackdrop(login=true,modifier=Modifier.matchParentSize())
         Column(Modifier.fillMaxWidth().padding(18.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-            Text(if(locale=="en")"Your business, in control." else "Votre activité, maîtrisée.",color=Color.White,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
-            Text(if(locale=="en")"Customers, services and teams in one place." else "Clients, prestations et équipes au même endroit.",color=Color(0xFFF4EEEE),style=MaterialTheme.typography.bodyMedium)
+            Text(when(locale){"en"->"Your business, in control.";"ff-CM"->"Golle maa e juuɗe maa.";else->"Votre activité, maîtrisée."},color=Color.White,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+            Text(when(locale){"en"->"Customers, services and teams in one place.";"ff-CM"->"Soottotooɓe, golle e golluɓe e nokkuure wootere.";else->"Clients, prestations et équipes au même endroit."},color=Color(0xFFF4EEEE),style=MaterialTheme.typography.bodyMedium)
         }
     }
 }

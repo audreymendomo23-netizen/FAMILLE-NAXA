@@ -13,7 +13,7 @@
     <string name="show">Show</string>
     <string name="hide">Hide</string>
     <string name="recovery_title">Recover access</string>
-    <string name="recovery_explainer">Your request goes to the manager. After an out-of-band identity check, the manager may reset access. No code or email is sent.</string>
+    <string name="recovery_explainer">Your manager will help you regain access after verifying your identity.</string>
     <string name="recovery_note">Note for the manager (optional)</string>
     <string name="send_recovery">Submit request</string>
     <string name="back_to_login">Back to sign in</string>
@@ -38,7 +38,7 @@
     <string name="dark_mode">Dark mode</string>
     <string name="light_mode">Light mode</string>
     <string name="module_status_title">Module status</string>
-    <string name="module_status_pending">Interface and contracts prepared; business operations still need a secure repository connection.</string>
+    <string name="module_status_pending">This service is temporarily unavailable.</string>
     <string name="available_workflows">Available workflows</string>
     <string name="all_modules">All modules</string>
     <string name="back_dashboard">Back to dashboard</string>
@@ -119,7 +119,7 @@
     <string name="action_devices">Connected devices</string>
     <string name="action_recovery_queue">Recovery requests</string>
     <string name="action_access_log">Access log</string>
-    <string name="action_language">Language FR / EN</string>
+    <string name="action_language">Language FR / EN / FF</string>
     <string name="action_theme">Light / dark mode</string>
     <string name="action_offline">Offline and synchronization</string>
     <string name="action_faq">Open FAQ</string>

@@ -119,3 +119,6 @@ button:focus-visible,a:focus-visible{outline:2px solid #ff9d96;outline-offset:3p
 }
 @media(max-width:380px){.top-actions{width:100%;justify-content:flex-start}.metric-grid{grid-template-columns:minmax(0,1fr)}.pressing-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.pressing-steps div:after{display:none}.auth-panel{padding-inline:16px}}
 @media(prefers-reduced-motion:reduce){.business-backdrop img,.btn,.shortcut-card{transition:none!important}.night-torch{display:none!important}}
+
+/* Language selection remains reachable on small screens and has no fixed width. */
+.language-picker{display:flex;align-items:center;gap:.4rem;flex:0 1 auto;min-width:0;font-size:.75rem;white-space:nowrap}.language-picker select{font:inherit;max-width:8rem;padding:.4rem;border-radius:.5rem}.auth-panel>.language-picker{align-self:flex-end;margin:.5rem 0;position:relative;z-index:2}.top-actions .language-picker span{display:none}@media(max-width:480px){.top-actions .language-picker select{max-width:5.6rem;padding:.35rem .2rem}.top-actions{gap:.3rem}.topbar .crumb{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}

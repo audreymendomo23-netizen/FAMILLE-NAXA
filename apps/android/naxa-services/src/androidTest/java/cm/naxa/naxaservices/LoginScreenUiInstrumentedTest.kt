@@ -4,6 +4,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performScrollTo
@@ -37,6 +38,21 @@ class LoginScreenUiInstrumentedTest {
 
         password.performScrollTo().performTextInput("ui-test-only-invalid-password")
         submit.performScrollTo().assertIsEnabled()
+    }
+
+    @Test
+    fun loginLanguageSwitchesAcrossFrenchEnglishAndFulfulde() {
+        composeRule.onNodeWithTag("locale-fr").performScrollTo()
+        val fr = composeRule.onNodeWithTag("locale-fr")
+        if (NaxaServicesPreferences(composeRule.activity).locale() != "fr") fr.performClick()
+        composeRule.onNodeWithText("Bienvenue").assertIsDisplayed()
+        composeRule.onNodeWithTag("locale-en").performClick()
+        composeRule.onNodeWithText("Welcome").assertIsDisplayed()
+        composeRule.onNodeWithTag("locale-ff").performClick()
+        composeRule.onNodeWithText("A jaɓɓaama").assertIsDisplayed()
+        org.junit.Assert.assertEquals("ff-CM",NaxaServicesPreferences(composeRule.activity).locale())
+        fr.performClick()
+        composeRule.onNodeWithText("Bienvenue").assertIsDisplayed()
     }
 
     @Test

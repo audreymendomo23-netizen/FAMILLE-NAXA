@@ -443,13 +443,14 @@ private fun NaxaServicesRoot(
     val currentLocale = active?.account?.defaultLocale ?: locale
     val appConfiguration = remember(currentLocale) {
         Configuration(context.resources.configuration).apply {
-            setLocale(Locale(currentLocale))
-            setLayoutDirection(Locale(currentLocale))
+            setLocale(Locale.forLanguageTag(currentLocale))
+            setLayoutDirection(Locale.forLanguageTag(currentLocale))
         }
     }
 
+    val localizedContext = remember(context, appConfiguration) { context.createConfigurationContext(appConfiguration) }
     NaxaServicesTheme(light = lightTheme) {
-        CompositionLocalProvider(LocalConfiguration provides appConfiguration) {
+        CompositionLocalProvider(LocalConfiguration provides appConfiguration, androidx.compose.ui.platform.LocalContext provides localizedContext) {
             Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                 Box(
                     Modifier.fillMaxSize().pointerInput(lightTheme, preferences.flashlightEnabled()) {
@@ -732,9 +733,9 @@ private fun LoginScreen(
         NaxaServicesWordmark()
         Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.End) {
             TextButton(onClick=onToggleTheme, modifier=Modifier.testTag("login-theme-toggle")){Text(if(lightTheme) "☾" else "☀")}
-            TextButton(onClick={onLocale("fr")},enabled=locale!="fr"){Text("FR")}
-            TextButton(onClick={onLocale("en")},enabled=locale!="en"){Text("EN")}
-            TextButton(onClick={onLocale("ff-CM")},enabled=locale!="ff-CM"){Text("FF")}
+            TextButton(onClick={onLocale("fr")},enabled=locale!="fr",modifier=Modifier.testTag("locale-fr")){Text("FR")}
+            TextButton(onClick={onLocale("en")},enabled=locale!="en",modifier=Modifier.testTag("locale-en")){Text("EN")}
+            TextButton(onClick={onLocale("ff-CM")},enabled=locale!="ff-CM",modifier=Modifier.testTag("locale-ff")){Text("FF")}
         }
         Spacer(Modifier.height(12.dp))
         LoginBusinessBanner(locale)
@@ -2417,7 +2418,9 @@ private fun DashboardContent(
     val siteLabels = session.account.activeSites.associate {
         it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel)
     }
-    val greeting = if (locale == "en") {
+    val greeting = if (locale == "ff-CM") {
+        if (hour >= 18 || hour < 6) "Jam waali, $name" else "Jam weeti, $name"
+    } else if (locale == "en") {
         if (hour >= 18 || hour < 6) "Good evening, $name" else "Good morning, $name"
     } else {
         if (hour >= 18 || hour < 6) "Bonsoir, $name" else "Bonjour, $name"

@@ -55,6 +55,8 @@ function authSession(organizationId: string, activityProfile = "autre", multiSit
 
 async function installBackend(context: BrowserContext, incomingChanges: Record<string, unknown>[] = []) {
   const appliedEvents: Record<string, unknown>[] = [];
+  const memberLocales=new Map<string,string>();
+  let currentOrg=ORG_A;
   await context.route("https://naxa-services-e2e.invalid/storage/v1/object/**", async route => {
     const headers = {...CORS_HEADERS,"Access-Control-Allow-Methods":"GET, POST, DELETE, OPTIONS","Access-Control-Allow-Headers":"authorization, apikey, content-type, x-upsert, cache-control"};
     await route.fulfill({status:route.request().method()==="OPTIONS"?200:404,headers,body:"{}"});
@@ -66,8 +68,12 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
       const organizationId = request.identifier === "NS-OTHER" ? ORG_B : ORG_A;
       const identifier = typeof request.identifier === "string" ? request.identifier : "";
       const activityProfile = identifier.startsWith("NS-ACT-") ? identifier.slice("NS-ACT-".length).toLowerCase() : "autre";
-      return json(route, authSession(organizationId, activityProfile, identifier === "NS-MULTISITE"));
+      currentOrg=organizationId;
+      const session=authSession(organizationId, activityProfile, identifier === "NS-MULTISITE");
+      session.account.default_locale=memberLocales.get(organizationId)??"fr";
+      return json(route,session);
     }
+    if(request.action==="set_member_locale"){memberLocales.set(currentOrg,String(request.locale));return json(route,{saved:true,locale:request.locale});}
     if (request.action === "logout") return json(route, { ok: true });
     if (request.action === "refresh") return json(route, authSession(ORG_A));
     if (request.action === "request_recovery") return json(route, { ok: true });
@@ -886,4 +892,29 @@ test("Web access: failed login and recovery stay in the customer journey",async(
   await expect.poll(()=>recovery).toBe(true);
   await page.getByRole("button",{name:"Retour à la connexion"}).click();
   await expect(page.getByLabel("Mot de passe")).toBeVisible();
+});
+
+
+test("Commercial languages: FR, EN and Fulfulde change login, dashboard and menu; member choice survives login",async({context})=>{
+  await installBackend(context);
+  const page=await context.newPage();await page.goto("/");
+  await page.getByRole("combobox",{name:"Langue",exact:true}).selectOption("en");
+  await expect(page.getByLabel("NAXA Services ID")).toBeVisible();await expect(page.getByRole("button",{name:"Sign in",exact:true})).toBeVisible();
+  await page.reload();await expect(page.getByRole("button",{name:"Sign in",exact:true})).toBeVisible();
+  await page.getByRole("combobox",{name:"Language",exact:true}).selectOption("ff-CM");
+  await expect(page.getByLabel("Innol NAXA Services")).toBeVisible();await expect(page.getByRole("button",{name:"Naatu",exact:true})).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("lang","ff-CM");
+  await page.getByRole("combobox",{name:"Ɗemngal",exact:true}).selectOption("fr");
+  await signIn(page);
+  await page.getByRole("combobox",{name:"Langue",exact:true}).selectOption("en");
+  await expect(page.getByRole("heading",{name:"A well-organized day starts here."})).toBeVisible();
+  await expect(page.locator(".side-nav")).toContainText("Cash & sales");
+  await page.getByRole("combobox",{name:"Language",exact:true}).selectOption("ff-CM");
+  await expect(page.getByRole("heading",{name:"Ñalawma moƴƴo fuɗɗata ɗoo."})).toBeVisible();
+  await expect(page.locator(".side-nav")).toContainText("Ceede e jaaygol");
+  await page.getByRole("button",{name:/Yaltu/}).click();
+  await page.getByLabel("Innol NAXA Services").fill("NS-ORG-A");await page.getByLabel("Finnde",{exact:true}).fill("E2E-Password-Only-For-Test");await page.getByRole("button",{name:"Naatu",exact:true}).click();
+  await expect(page.getByRole("heading",{name:"Ñalawma moƴƴo fuɗɗata ɗoo."})).toBeVisible();
+  await page.getByRole("combobox",{name:"Ɗemngal",exact:true}).selectOption("fr");
+  await expect(page.getByRole("heading",{name:"Une journée bien organisée commence ici."})).toBeVisible();
 });

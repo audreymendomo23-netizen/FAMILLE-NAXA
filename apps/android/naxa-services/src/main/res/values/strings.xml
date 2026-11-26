@@ -13,7 +13,7 @@
     <string name="show">Afficher</string>
     <string name="hide">Masquer</string>
     <string name="recovery_title">Récupérer mon accès</string>
-    <string name="recovery_explainer">Ta demande sera transmise au responsable. Après contrôle d’identité hors bande, il pourra réinitialiser ton accès. Aucun code ni e-mail ne sera envoyé.</string>
+    <string name="recovery_explainer">Ton responsable t’aidera à retrouver ton accès après vérification de ton identité.</string>
     <string name="recovery_note">Note pour le responsable (facultatif)</string>
     <string name="send_recovery">Envoyer la demande</string>
     <string name="back_to_login">Retour à la connexion</string>
@@ -38,7 +38,7 @@
     <string name="dark_mode">Mode sombre</string>
     <string name="light_mode">Mode clair</string>
     <string name="module_status_title">État du module</string>
-    <string name="module_status_pending">Interface et contrats préparés ; opérations métier à connecter au dépôt sécurisé.</string>
+    <string name="module_status_pending">Ce service est momentanément indisponible.</string>
     <string name="available_workflows">Parcours disponibles</string>
     <string name="all_modules">Tous les modules</string>
     <string name="back_dashboard">Retour au tableau de bord</string>
@@ -119,7 +119,7 @@
     <string name="action_devices">Appareils connectés</string>
     <string name="action_recovery_queue">Demandes de récupération</string>
     <string name="action_access_log">Journal des accès</string>
-    <string name="action_language">Langue FR / EN</string>
+    <string name="action_language">Langue FR / EN / FF</string>
     <string name="action_theme">Mode clair / sombre</string>
     <string name="action_offline">Hors connexion et synchronisation</string>
     <string name="action_faq">Consulter la FAQ</string>

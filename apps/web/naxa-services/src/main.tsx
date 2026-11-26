@@ -13,6 +13,7 @@ import {
 import { parseWebSession, type WebAuthSession } from "./auth/session";
 import { ProfilePhoto } from "./auth/profile-photo";
 import { BusinessBackdrop, NightTorch } from "./business-visuals";
+import { localeOf, translate, type Locale } from "./locale";
 import { createRoot } from "react-dom/client";
 import "@famille/design-system/tokens.css";
 import "./naxa-services.css";
@@ -70,7 +71,7 @@ const moduleCopy: Record<ModuleId, { eyebrow: string; headline: string; helper: 
   sites: { eyebrow: "POINTS DE VENTE", headline: "Chaque site fonctionne de façon autonome.", helper: "Les opérations d'un point ne sont jamais réaffectées implicitement à un autre.", empty: "Aucun point de vente supplémentaire.", features: ["Responsable et équipe du site", "Caisse et sessions propres", "Stock et consommables propres", "Catalogue et paramètres du point de vente"] },
   workstations: { eyebrow: "EMPLACEMENTS", headline: "Organiser plusieurs postes dans le même lieu.", helper: "Les emplacements sont des unités de planning et de ressources à l'intérieur d'un point de vente.", empty: "Aucun emplacement configuré.", features: ["Fauteuils de coiffure", "Atelier / comptoir pressing", "Planning et capacité", "Affectation des prestataires"] },
   security: { eyebrow: "PROTECTION", headline: "Maîtriser les sessions et les appareils.", helper: "Contactez votre responsable pour récupérer votre accès.", empty: "Aucune opération disponible.", features: ["Sessions et appareils enrôlés", "Révocation à distance", "Demandes de récupération", "Audit des opérations privilégiées"] },
-  settings: { eyebrow: "CONFIGURATION", headline: "Un environnement adapté à l'équipe.", helper: "Personnalisez votre espace de travail.", empty: "Personnalisez votre espace.", features: ["Français et English", "Thème sombre / clair", "Travail sans Internet et mise à jour au retour du réseau", "Imprimantes et notifications"] },
+  settings: { eyebrow: "CONFIGURATION", headline: "Un environnement adapté à l'équipe.", helper: "Personnalisez votre espace de travail.", empty: "Personnalisez votre espace.", features: ["Français, English et Fulfulde", "Thème sombre / clair", "Travail sans Internet et mise à jour au retour du réseau", "Imprimantes et notifications"] },
   help: { eyebrow: "ASSISTANCE", headline: "Obtenez de l’aide quand vous en avez besoin.", helper: "Ne communiquez jamais vos codes confidentiels.", empty: "Aucune demande d’assistance pour le moment.", features: ["FAQ et guides", "Demande d'assistance", "Briefing du matin", "Briefing du soir"] },
 };
 
@@ -82,6 +83,9 @@ function customerMessage(value:string):string {
 
 function App() {
   const [authenticated, setAuthenticated] = useState(false);
+  const [locale,setLocale]=useState<Locale>(()=>{try{return localeOf(localStorage.getItem("ns-display-locale"));}catch{return "fr";}});
+  const t=(value:string)=>translate(locale,value);
+  useEffect(()=>{document.documentElement.lang=locale;try{localStorage.setItem("ns-display-locale",locale);}catch{}},[locale]);
   const [authSession, setAuthSession] = useState<WebAuthSession | null>(null);
   // A generation belongs to a login, not just an organization or a device.
   // Late responses may persist in their own tenant partition but must never repaint a new login.
@@ -208,6 +212,19 @@ function App() {
     return data;
   }
 
+  async function changeLocale(value:Locale) {
+    if(!authSession){setLocale(value);return;}
+    const current=captureSession(authSession);
+    try {
+      const fresh=await ensureFreshSession(authSession);
+      const result=await authRequest({action:"set_member_locale",locale:value},fresh.accessToken);
+      if(!current())return;
+      if(result.saved!==true||result.locale!==value)throw new Error("LOCALE_NOT_SAVED");
+      setAuthSession(previous=>previous&&scopeOf(previous)===scopeOf(fresh)?{...previous,account:{...previous.account,default_locale:value}}:previous);
+      setLocale(value);setAuthMessage("Langue enregistrée.");
+    } catch {if(current())setAuthMessage("Impossible de modifier la langue.");}
+  }
+  const languagePicker=<label className="language-picker" aria-label={t("Langue")}><span>{t("Langue")}</span><select aria-label={t("Langue")} value={locale} onChange={e=>void changeLocale(localeOf(e.target.value))} disabled={busy}><option value="fr">Français</option><option value="en">English</option><option value="ff-CM">Fulfulde</option></select></label>;
   async function requestSubscription(payload:Record<string,unknown>) {
     if(!authSession)throw new Error("Connexion requise.");
     const current=captureSession(authSession);
@@ -342,6 +359,7 @@ function App() {
       const nextSession = parseWebSession(data);
       sessionFence.current={generation:sessionFence.current.generation+1,scope:scopeOf(nextSession)};
       setAuthSession(nextSession);
+      setLocale(localeOf(nextSession.account.default_locale));
       setActiveSiteId(nextSession.account.active_site_ids[0] ?? "");
       setMode(nextSession.account.business_mode ?? "solo");
       setSiteName(nextSession.account.organization_name || nextSession.account.active_sites[0]?.name || "Point de vente principal");
@@ -1072,29 +1090,29 @@ function App() {
         <div className="auth-art"><BusinessBackdrop kind="auth"/>
           <div className="auth-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
           <div className="auth-copy">
-            <span className="eyebrow">PROTECTION DU COMPTE</span>
-            <h1>Une dernière<br /><em>étape.</em></h1>
-            <p>Le mot de passe initial doit être remplacé avant tout accès aux pages de gestion.</p>
-            <div className="auth-proof"><span>01</span> Votre identité est authentifiée</div>
+            <span className="eyebrow">{t("PROTECTION DU COMPTE")}</span>
+            <h1>{t("Une dernière")}<br /><em>{t("étape.")}</em></h1>
+            <p>{t("Le mot de passe initial doit être remplacé avant tout accès aux pages de gestion.")}</p>
+            <div className="auth-proof"><span>01</span> {t("Votre identité est authentifiée")}</div>
           </div>
           <div className="auth-footer">NAXA SERVICES · COMPTE SÉCURISÉ</div>
         </div>
-        <main className="auth-panel"><button className="auth-theme-toggle btn secondary" type="button" onClick={toggleTheme}>{theme==="dark"?"Mode clair":"Mode nuit"}</button><NightTorch active={nightPulse}/>
+        <main className="auth-panel"><button className="auth-theme-toggle btn secondary" type="button" onClick={toggleTheme}>{theme==="dark"?t("Mode clair"):t("Mode nuit")}</button><NightTorch active={nightPulse}/>{languagePicker}
           <div className="mobile-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
           <div className="auth-form-wrap">
-            <span className="eyebrow">CHANGEMENT OBLIGATOIRE</span>
-            <h2>Créer un nouveau mot de passe</h2>
-            <p className="muted">Choisissez un mot de passe d'au moins 10 caractères.</p>
+            <span className="eyebrow">{t("CHANGEMENT OBLIGATOIRE")}</span>
+            <h2>{t("Créer un nouveau mot de passe")}</h2>
+            <p className="muted">{t("Choisissez un mot de passe d'au moins 10 caractères.")}</p>
             <form onSubmit={changeWebPassword} className="auth-form">
-              <label>Mot de passe actuel<input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" required /></label>
-              <label>Nouveau mot de passe<input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" minLength={10} maxLength={256} required /></label>
-              <label>Confirmer le nouveau mot de passe<input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" minLength={10} maxLength={256} required /></label>
-              {authMessage && <div className="notice" role="status">{customerMessage(authMessage)}</div>}
-              <button className="btn primary" disabled={busy}>{busy ? "Vérification…" : "Enregistrer le nouveau mot de passe"}</button>
+              <label>{t("Mot de passe actuel")}<input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" required /></label>
+              <label>{t("Nouveau mot de passe")}<input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" minLength={10} maxLength={256} required /></label>
+              <label>{t("Confirmer le nouveau mot de passe")}<input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" minLength={10} maxLength={256} required /></label>
+              {authMessage && <div className="notice" role="status">{t(customerMessage(authMessage))}</div>}
+              <button className="btn primary" disabled={busy}>{busy ? t("Vérification…") : t("Enregistrer le nouveau mot de passe")}</button>
             </form>
-            <button className="link-button" onClick={signOut} disabled={busy}>Fermer la session</button>
+            <button className="link-button" onClick={signOut} disabled={busy}>{t("Fermer la session")}</button>
           </div>
-          <div className="panel-bottom"><span>FR · EN</span><span>Connexion sécurisée</span></div>
+          <div className="panel-bottom"><span>FR · EN · FF</span><span>{t("Connexion sécurisée")}</span></div>
         </main>
       </div>
     );
@@ -1106,32 +1124,32 @@ function App() {
         <div className="auth-art"><BusinessBackdrop kind="auth"/>
           <div className="auth-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
           <div className="auth-copy">
-            <span className="eyebrow">GESTION INTELLIGENTE DES PRESTATIONS</span>
-            <h1>Votre établissement.<br /><em>Maîtrisé.</em></h1>
-            <p>Pressing, coiffure, équipes, caisse et points de vente réunis dans un espace professionnel.</p>
-            <div className="auth-proof"><span>01</span> Des opérations suivies de bout en bout</div>
-            <div className="auth-proof"><span>02</span> Une autonomie par établissement</div>
-            <div className="auth-proof"><span>03</span> Une vision réseau sans mélange des caisses</div>
+            <span className="eyebrow">{t("GESTION INTELLIGENTE DES PRESTATIONS")}</span>
+            <h1>{t("Votre établissement.")}<br /><em>{t("Maîtrisé.")}</em></h1>
+            <p>{t("Pressing, coiffure, équipes, caisse et points de vente réunis dans un espace professionnel.")}</p>
+            <div className="auth-proof"><span>01</span> {t("Des opérations suivies de bout en bout")}</div>
+            <div className="auth-proof"><span>02</span> {t("Une autonomie par établissement")}</div>
+            <div className="auth-proof"><span>03</span> {t("Une vision réseau sans mélange des caisses")}</div>
           </div>
           <div className="auth-footer">NAXA SERVICES · ESPACE PROFESSIONNEL</div>
         </div>
-        <main className="auth-panel"><button className="auth-theme-toggle btn secondary" type="button" onClick={toggleTheme}>{theme==="dark"?"Mode clair":"Mode nuit"}</button><NightTorch active={nightPulse}/>
+        <main className="auth-panel"><button className="auth-theme-toggle btn secondary" type="button" onClick={toggleTheme}>{theme==="dark"?t("Mode clair"):t("Mode nuit")}</button><NightTorch active={nightPulse}/>{languagePicker}
           <div className="mobile-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
           <div className="auth-form-wrap">
-            <span className="eyebrow">{showRecovery ? "ASSISTANCE D'ACCÈS" : "ESPACE SÉCURISÉ"}</span>
-            <h2>{showRecovery ? "Récupérer mon accès" : "Content de vous revoir."}</h2>
-            <p className="muted">{showRecovery ? "Votre responsable vous aidera à retrouver votre accès." : "Accédez à votre espace professionnel."}</p>
+            <span className="eyebrow">{showRecovery ? t("ASSISTANCE D'ACCÈS") : t("ESPACE SÉCURISÉ")}</span>
+            <h2>{showRecovery ? t("Récupérer mon accès") : t("Content de vous revoir.")}</h2>
+            <p className="muted">{showRecovery ? t("Votre responsable vous aidera à retrouver votre accès.") : t("Accédez à votre espace professionnel.")}</p>
             <form onSubmit={showRecovery ? requestRecovery : signIn} className="auth-form">
-              <label>Identifiant NAXA Services<input value={identifier} onChange={(e) => setIdentifier(e.target.value.toUpperCase())} placeholder="NS-000000" autoComplete="username" required /></label>
-              {!showRecovery && <label>Mot de passe<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></label>}
-              {showRecovery && <label>Note au responsable (facultatif)<textarea rows={3} value={recoveryNote} onChange={(e) => setRecoveryNote(e.target.value)} placeholder="Expliquez brièvement votre demande" /></label>}
-              {authMessage && <div className="notice" role="status">{customerMessage(authMessage)}</div>}
-              <button className="btn primary" disabled={busy}>{busy ? "Traitement…" : showRecovery ? "Envoyer la demande" : "Se connecter"}</button>
+              <label>{t("Identifiant NAXA Services")}<input value={identifier} onChange={(e) => setIdentifier(e.target.value.toUpperCase())} placeholder="NS-000000" autoComplete="username" required /></label>
+              {!showRecovery && <label>{t("Mot de passe")}<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></label>}
+              {showRecovery && <label>{t("Note au responsable (facultatif)")}<textarea rows={3} value={recoveryNote} onChange={(e) => setRecoveryNote(e.target.value)} placeholder={t("Expliquez brièvement votre demande")} /></label>}
+              {authMessage && <div className="notice" role="status">{t(customerMessage(authMessage))}</div>}
+              <button className="btn primary" disabled={busy}>{busy ? t("Traitement…") : showRecovery ? t("Envoyer la demande") : t("Se connecter")}</button>
             </form>
-            <button className="link-button" onClick={() => { setShowRecovery(!showRecovery); setAuthMessage(""); }}>{showRecovery ? "Retour à la connexion" : "Mot de passe oublié ?"}</button>
-            <button className="preview-link" onClick={() => { setPreview(true); setAuthMessage(""); }}>Découvrir NAXA Services</button>
+            <button className="link-button" onClick={() => { setShowRecovery(!showRecovery); setAuthMessage(""); }}>{showRecovery ? t("Retour à la connexion") : t("Mot de passe oublié ?")}</button>
+            <button className="preview-link" onClick={() => { setPreview(true); setAuthMessage(""); }}>{t("Découvrir NAXA Services")}</button>
           </div>
-          <div className="panel-bottom"><span>FR · EN</span><span>Mode sécurisé</span></div>
+          <div className="panel-bottom"><span>FR · EN · FF</span><span>{t("Mode sécurisé")}</span></div>
         </main>
       </div>
     );
@@ -1140,49 +1158,49 @@ function App() {
   return (
     <div className={"app erp-app " + theme}><NightTorch active={nightPulse}/>
       {preview && <div className="preview-banner"><strong>DÉMONSTRATION</strong> Essayez les fonctionnalités sans enregistrer d'opérations réelles. <button onClick={() => { setPreview(false); setAuthenticated(false); setActive("overview"); }}>Quitter l'aperçu</button></div>}
-      {mobileMenu&&<button className="menu-scrim" aria-label="Fermer le menu" onClick={()=>setMobileMenu(false)}/>}<aside className={"sidebar "+(mobileMenu?"mobile-open":"")} id="ns-navigation">
+      {mobileMenu&&<button className="menu-scrim" aria-label={t("Fermer le menu")} onClick={()=>setMobileMenu(false)}/>}<aside className={"sidebar "+(mobileMenu?"mobile-open":"")} id="ns-navigation">
         <div className="side-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
-        <div className="workspace-label">ESPACE DE TRAVAIL</div>
-        <div className="site-select"><span className="site-dot" /> <div>{authSession && !preview ? <label>Point de vente actif<select aria-label="Point de vente actif" value={activeSiteId || authSession.account.active_site_ids[0] || ""} onChange={event => setActiveSiteId(event.target.value)} disabled={busy}>{authSession.account.active_sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label> : <strong>{siteName}</strong>}<small>{modeLabel(mode)}</small></div></div>
+        <div className="workspace-label">{t("ESPACE DE TRAVAIL")}</div>
+        <div className="site-select"><span className="site-dot" /> <div>{authSession && !preview ? <label>{t("Point de vente actif")}<select aria-label={t("Point de vente actif")} value={activeSiteId || authSession.account.active_site_ids[0] || ""} onChange={event => setActiveSiteId(event.target.value)} disabled={busy}>{authSession.account.active_sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label> : <strong>{siteName}</strong>}<small>{modeLabel(mode)}</small></div></div>
         <nav className="side-nav">
           {grouped.map(([group, groupModules]) => <div className="nav-group" key={group}>
-            <div className="nav-heading">{group}</div>
-            {groupModules.map((m) => <button key={m.id} aria-current={active===m.id?"page":undefined} className={"nav-item " + (active === m.id ? "active" : "")} onClick={() => {setActive(m.id);setMobileMenu(false);}}><span className="nav-glyph">{iconFor(m.id)}</span><span>{m.title}</span></button>)}
+            <div className="nav-heading">{t(group)}</div>
+            {groupModules.map((m) => <button key={m.id} aria-current={active===m.id?"page":undefined} className={"nav-item " + (active === m.id ? "active" : "")} onClick={() => {setActive(m.id);setMobileMenu(false);}}><span className="nav-glyph">{iconFor(m.id)}</span><span>{t(m.title)}</span></button>)}
           </div>)}
         </nav>
         <div className="side-bottom">
-          <button className="nav-item" onClick={toggleTheme}><span className="nav-glyph">◐</span>{theme === "dark" ? "Mode clair" : "Mode sombre"}</button>
-          <button className="nav-item" onClick={signOut} disabled={busy}><span className="nav-glyph">↪</span>Déconnexion</button>
+          <button className="nav-item" onClick={toggleTheme}><span className="nav-glyph">◐</span>{theme === "dark" ? t("Mode clair") : t("Mode sombre")}</button>
+          <button className="nav-item" onClick={signOut} disabled={busy}><span className="nav-glyph">↪</span>{t("Déconnexion")}</button>
           <div className="user-mini"><div className="avatar">NS</div><div><strong>{preview ? "Démonstration" : authSession?.account.display_name ?? "Espace connecté"}</strong><small>{authSession ? (authSession.account.organization_name || authSession.account.role_code || "NAXA Services") : "NAXA Services"}</small></div></div>
         </div>
       </aside>
       <main className="main-area">
         <header className="topbar">
-          <div className="crumb"><button className="mobile-menu-trigger icon-button" aria-label="Tous les modules" aria-expanded={mobileMenu} aria-controls="ns-navigation" onClick={()=>setMobileMenu(v=>!v)}>☰</button><span>NAXA SERVICES</span><b>/</b>{selected.title}</div>
-          <div className="top-actions">
-            <span className="sync-pill"><i /> {preview ? "Démonstration" : authSession ? (authSession.requirePasswordChange ? "Changement du mot de passe requis" : "Connecté") : "Non connecté"}</span>
-            <button className="icon-button mobile-theme-toggle" aria-label={theme==="dark"?"Mode clair":"Mode nuit"} onClick={toggleTheme}>{theme==="dark"?"☀":"☾"}</button><button className="icon-button" title="Aide" onClick={() => setActive("help")}>?</button>
+          <div className="crumb"><button className="mobile-menu-trigger icon-button" aria-label={t("Tous les modules")} aria-expanded={mobileMenu} aria-controls="ns-navigation" onClick={()=>setMobileMenu(v=>!v)}>☰</button><span>NAXA SERVICES</span><b>/</b>{t(selected.title)}</div>
+          <div className="top-actions">{languagePicker}
+            <span className="sync-pill"><i /> {preview ? "Démonstration" : authSession ? (authSession.requirePasswordChange ? t("Changement du mot de passe requis") : t("Connecté")) : t("Non connecté")}</span>
+            <button className="icon-button mobile-theme-toggle" aria-label={theme==="dark"?t("Mode clair"):t("Mode nuit")} onClick={toggleTheme}>{theme==="dark"?"☀":"☾"}</button><button className="icon-button" title={t("Aide")} onClick={() => setActive("help")}>?</button>
             {authSession && !preview && !authSession.requirePasswordChange ? <ProfilePhoto key={scopeOf(authSession)+":"+sessionFence.current.generation} authEndpoint={authEndpoint} anonKey={anonKey} orgId={authSession.account.organization_id} memberId={authSession.account.member_id} initials={authSession.account.display_name.slice(0,2).toUpperCase()} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("Session expirée.");return fresh.accessToken;}}/> : <div className="avatar">NS</div>}
           </div>
         </header>
         <section className="content-area">
-          {authSession && authMessage && <div className="notice" role="status">{customerMessage(authMessage)}</div>}
+          {authSession && authMessage && <div className="notice" role="status">{t(customerMessage(authMessage))}</div>}
           <div className="page-heading">
-            <div><span className="eyebrow">{moduleCopy[active].eyebrow}</span><h1>{moduleCopy[active].headline}</h1><p>{moduleCopy[active].helper}</p></div>
+            <div><span className="eyebrow">{t(moduleCopy[active].eyebrow)}</span><h1>{t(moduleCopy[active].headline)}</h1><p>{t(moduleCopy[active].helper)}</p></div>
             <div className="heading-actions">
-              {active !== "overview" && <button className="btn secondary" onClick={() => setActive("overview")}>Vue d'ensemble</button>}
+              {active !== "overview" && <button className="btn secondary" onClick={() => setActive("overview")}>{t("Vue d'ensemble")}</button>}
               {authSession && <button className="btn secondary" disabled={busy} onClick={() => {
                 const operation = pendingSyncCount > 0 ? syncWebOutbox(authSession) : syncWebPullChanges(authSession);
                 void operation.catch((error) => setAuthMessage(error instanceof Error ? error.message : "Synchronisation impossible."));
-              }}>{pendingSyncCount > 0 ? "Synchroniser (" + pendingSyncCount + ")" : "Actualiser"}</button>}
+              }}>{pendingSyncCount > 0 ? "Synchroniser (" + pendingSyncCount + ")" : t("Actualiser")}</button>}
               {active !== "workOrders" && active !== "team" && <button className="btn primary" disabled={busy || (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active))} title={!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active) ? "Action indisponible." : undefined} onClick={() => {
                 if (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)) { setAuthMessage("Cette action est indisponible."); return; }
                 setDraftTitle(active==="team"&&authSession?authSession.account.display_name:"");setDraftDetail("");setDraftSku("");setDraftUnit("pièce");setDraftReorderLevel("0");setDraftSupplierWhatsApp("");setDraftPhone("");setDraftAmount("0");setDraftDate("");setDraftEndDate("");setDraftPriority("normal");setDraftActivity("general");setDraftContactConsent(false);setDialogOpen(true);
-              }}>{!preview&&!["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)?"Indisponible":active==="team"?"Pointer mon arrivée":selected.action}</button>}
+              }}>{!preview&&!["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)?"Indisponible":active==="team"?"Pointer mon arrivée":t(selected.action)}</button>}
             </div>
           </div>
 
-          {active === "overview" ? <Overview entries={entries} onNavigate={setActive} mode={mode} activity={authSession?.account.activity_profile} /> :
+          {active === "overview" ? <Overview entries={entries} onNavigate={setActive} mode={mode} activity={authSession?.account.activity_profile} locale={locale} /> :
             active === "organization" ? <><OrganizationPage mode={mode} setMode={setMode} siteName={siteName} setSiteName={setSiteName} editable={preview || authSession?.account.role_code === "promoter"} onSave={saveWebOrganizationProfile} locale={authSession?.account.default_locale ?? "fr"} /><SubscriptionPage key={authSession?.account.organization_id+":"+authSession?.account.member_id+":"+authSession?.deviceId} canRead={Boolean(authSession&&!preview)} requiresPremium={Boolean(authSession&&authSession.account.business_mode!=="solo")} enabled={Boolean(authSession&&!preview&&authSession.account.role_code==="promoter")} request={requestSubscription}/></> :
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
@@ -1222,12 +1240,12 @@ function App() {
             <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} authenticated={Boolean(authSession && !preview)} />}
         </section>
         <nav className="mobile-tabs">
-          {(["overview", "agenda", "pressing", "cash", "services"] as ModuleId[]).map((id) => <button key={id} className={active === id ? "selected" : ""} onClick={() => setActive(id)}><span>{iconFor(id)}</span>{modules.find((m) => m.id === id)?.title.split(" ")[0]}</button>)}
+          {(["overview", "agenda", "pressing", "cash", "services"] as ModuleId[]).map((id) => <button key={id} className={active === id ? "selected" : ""} onClick={() => setActive(id)}><span>{iconFor(id)}</span>{t(modules.find((m) => m.id === id)?.title??"").split(" ")[0]}</button>)}
         </nav>
       </main>
       {dialogOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <div className="modal-head"><div><span className="eyebrow">{authSession&&!preview?"NOUVELLE OPÉRATION":"NOUVELLE OPÉRATION · DÉMONSTRATION"}</span><h2 id="modal-title">{active==="team"&&authSession&&!preview?"Pointer mon arrivée":selected.action}</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)}>×</button></div>
+          <div className="modal-head"><div><span className="eyebrow">{authSession&&!preview?"NOUVELLE OPÉRATION":"NOUVELLE OPÉRATION · DÉMONSTRATION"}</span><h2 id="modal-title">{active==="team"&&authSession&&!preview?"Pointer mon arrivée":t(selected.action)}</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)}>×</button></div>
           <form onSubmit={(e) => {e.preventDefault();if(active==="stock"&&authSession)void submitStockItem();else if(authSession&&!preview)void submitModuleOperation().catch(error=>setAuthMessage(error instanceof Error?error.message:"Opération impossible."));else if(preview)addLocalEntry();else{setAuthMessage("Action indisponible.");setDialogOpen(false);}}}>
             <label>{active==="customers"?"Nom du client":active==="pressing"?"Nom du client":active==="agenda"?"Nom / référence du client":active==="help"?"Sujet":active==="cash"?"Catégorie de dépense":active==="team"?"Membre":"Nom / référence"}<input autoFocus value={draftTitle} readOnly={active==="team"&&authSession&&!preview} onChange={(e) => setDraftTitle(e.target.value)} required placeholder="Saisir la valeur" /></label>
             {active === "stock" && authSession ? <>
@@ -1238,7 +1256,7 @@ function App() {
               <label>WhatsApp fournisseur<input value={draftSupplierWhatsApp} onChange={(e) => setDraftSupplierWhatsApp(e.target.value)} maxLength={32} placeholder="+237 6xx xx xx xx" /></label>
               <div className="notice">L'article sera disponible après confirmation.</div>
             </> : authSession && !preview && active==="customers" ? <>
-              <label>Téléphone facultatif<input value={draftPhone} onChange={e=>setDraftPhone(e.target.value)} maxLength={32}/></label>
+              <label>{t("Téléphone facultatif")}<input value={draftPhone} onChange={e=>setDraftPhone(e.target.value)} maxLength={32}/></label>
               <label><input type="checkbox" checked={draftContactConsent} onChange={e=>setDraftContactConsent(e.target.checked)}/> Consentement de contact obtenu</label>
             </> : authSession && !preview && active==="services" ? <>
               <label>Code prestation<input value={draftSku} onChange={e=>setDraftSku(e.target.value)} required maxLength={80}/></label>
@@ -1270,7 +1288,7 @@ function App() {
               <label>Détails<textarea rows={3} value={draftDetail} onChange={(e) => setDraftDetail(e.target.value)} placeholder="Informations complémentaires" /></label>
               <div className="notice">Cette démonstration ne crée aucune opération réelle.</div>
             </>}
-            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>Annuler</button><button className="btn primary" disabled={busy}>{authSession&&!preview?"Enregistrer":"Ajouter à la démonstration"}</button></div>
+            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>{t("Annuler")}</button><button className="btn primary" disabled={busy}>{authSession&&!preview?"Enregistrer":"Ajouter à la démonstration"}</button></div>
           </form>
         </div>
       </div>}
@@ -1310,29 +1328,30 @@ function nextPressingState(state: string) {
   if (state === "Prêt") return "Retiré";
   return "Retiré";
 }
-function Overview({ entries, onNavigate, mode, activity }: { entries: Record<ModuleId, Entry[]>; onNavigate: (id: ModuleId) => void; mode: BusinessMode; activity?:string }) {
+function Overview({ entries, onNavigate, mode, activity, locale }: { entries: Record<ModuleId, Entry[]>; onNavigate: (id: ModuleId) => void; mode: BusinessMode; activity?:string;locale:Locale }) {
+  const t=(value:string)=>translate(locale,value);
   const totalDrafts = Object.values(entries).reduce((sum, list) => sum + (list?.length ?? 0), 0);
   return <div className="overview-grid">
     <div className="overview-main">
-      <div className="hero-card"><BusinessBackdrop activity={activity}/><div className="hero-content"><span className="hero-kicker">VOTRE ESPACE DE GESTION</span><h2>Une journée bien organisée commence ici.</h2><p>Retrouvez vos activités, vos objectifs et vos priorités.</p></div></div>
+      <div className="hero-card"><BusinessBackdrop activity={activity}/><div className="hero-content"><span className="hero-kicker">{t("VOTRE ESPACE DE GESTION")}</span><h2>{t("Une journée bien organisée commence ici.")}</h2><p>{t("Retrouvez vos activités, vos objectifs et vos priorités.")}</p></div></div>
       <div className="metric-grid">
-        <Metric label="Rendez-vous aujourd'hui" value="—" meta="En attente de confirmation" />
-        <Metric label="Tickets à rendre" value="—" meta="En attente de confirmation" />
-        <Metric label="Caisse du jour" value="—" meta="Aucun solde disponible" />
-        <Metric label="Équipe présente" value="—" meta="Aucun pointage disponible" />
+        <Metric label={t("Rendez-vous aujourd'hui")} value="—" meta={t("En attente de confirmation")} />
+        <Metric label={t("Tickets à rendre")} value="—" meta={t("En attente de confirmation")} />
+        <Metric label={t("Caisse du jour")} value="—" meta={t("Aucun solde disponible")} />
+        <Metric label={t("Équipe présente")} value="—" meta={t("Aucun pointage disponible")} />
       </div>
-      <div className="section-title"><div><span className="eyebrow">VOTRE ACTIVITÉ</span><h2>Accès rapides</h2></div><span className="local-counter">{totalDrafts} opération(s) enregistrée(s)</span></div>
+      <div className="section-title"><div><span className="eyebrow">{t("VOTRE ACTIVITÉ")}</span><h2>{t("Accès rapides")}</h2></div><span className="local-counter">{totalDrafts} opération(s) enregistrée(s)</span></div>
       <div className="shortcut-grid">
         {(["agenda", "pressing", "cash", "services"] as ModuleId[]).map((id) => {
           const item = modules.find((m) => m.id === id)!;
-          return <button className="shortcut-card" key={id} onClick={() => onNavigate(id)}><span className="shortcut-icon">{iconFor(id)}</span><strong>{item.title}</strong><small>{item.description}</small><b>Ouvrir <span>→</span></b></button>;
+          return <button className="shortcut-card" key={id} onClick={() => onNavigate(id)}><span className="shortcut-icon">{iconFor(id)}</span><strong>{t(item.title)}</strong><small>{t(item.description)}</small><b>{t("Ouvrir")} <span>→</span></b></button>;
         })}
       </div>
     </div>
     <aside className="overview-side">
-      <div className="side-card"><div className="section-title"><div><span className="eyebrow">STRUCTURE</span><h3>Mode d'exploitation</h3></div></div><strong className="mode-name">{modeLabel(mode)}</strong><p>Les données restent isolées par organisation, site et poste selon les droits attribués.</p><button className="text-action" onClick={() => onNavigate("organization")}>Configurer la structure →</button></div>
-      <div className="side-card"><span className="eyebrow">BRIEFING DU MATIN</span><h3>À préparer</h3><ul className="brief-list"><li>Vérifier les rendez-vous et les créneaux.</li><li>Contrôler les tickets dont la date promise approche.</li><li>Ouvrir les caisses de chaque poste autorisé.</li><li>Consulter les alertes de consommables.</li></ul></div>
-      <div className="side-card alert-card"><span className="eyebrow">SYNCHRONISATION</span><h3>Indicateurs à venir</h3><p>Vos indicateurs apparaîtront dès que les données seront disponibles.</p></div>
+      <div className="side-card"><div className="section-title"><div><span className="eyebrow">STRUCTURE</span><h3>{t("Mode d'exploitation")}</h3></div></div><strong className="mode-name">{modeLabel(mode)}</strong><p>Les données restent isolées par organisation, site et poste selon les droits attribués.</p><button className="text-action" onClick={() => onNavigate("organization")}>{t("Configurer la structure")} →</button></div>
+      <div className="side-card"><span className="eyebrow">BRIEFING DU MATIN</span><h3>{t("À préparer")}</h3><ul className="brief-list"><li>Vérifier les rendez-vous et les créneaux.</li><li>Contrôler les tickets dont la date promise approche.</li><li>Ouvrir les caisses de chaque poste autorisé.</li><li>Consulter les alertes de consommables.</li></ul></div>
+      <div className="side-card alert-card"><span className="eyebrow">SYNCHRONISATION</span><h3>{t("Indicateurs à venir")}</h3><p>{t("Vos indicateurs apparaîtront dès que les données seront disponibles.")}</p></div>
     </aside>
   </div>;
 }
@@ -1353,7 +1372,7 @@ function DeviceSecurityPage({authenticated,onLoad,onRevoke}:{authenticated:boole
     {loaded&&!devices.length&&<p>Aucun appareil enregistré.</p>}
     {devices.map(device=><div className="record" key={device.id}><div><strong>{device.label||device.platform}</strong><small>{device.platform} · {device.current?"Cet appareil":device.revoked_at?"Révoqué":"Actif"}</small><small>Dernière activité : {device.last_seen_at?new Date(device.last_seen_at).toLocaleString("fr-FR"):"—"}</small></div>{!device.current&&!device.revoked_at&&<button className="btn secondary" disabled={loading} onClick={()=>setSelected(device)}>Révoquer</button>}</div>)}
     {selected&&<div className="notice"><p>Révoquer l’appareil {selected.label||selected.platform} ?</p><button className="btn secondary" disabled={loading} onClick={()=>setSelected(null)}>Annuler</button><button className="btn primary" disabled={loading} onClick={()=>void revoke()}>Confirmer la révocation</button></div>}
-  </div><div className="module-main-card"><h2>Protection des accès</h2><p>Le mot de passe et les jetons ne sont jamais affichés dans ce registre. Pour fermer la session de cet appareil, utilise Déconnexion.</p></div></div>;
+  </div><div className="module-main-card"><h2>Protection des accès</h2><p>Pour protéger votre compte, déconnectez les appareils que vous ne reconnaissez pas.</p></div></div>;
 }
 function GenericPage({ active, entries, copy, preview, authenticated }: { active: ModuleId; entries: Entry[]; copy: typeof moduleCopy[ModuleId]; preview: boolean; authenticated: boolean }) {
   const serverWriteAvailable = authenticated && ["stock", "services", "customers", "team", "help"].includes(active);
