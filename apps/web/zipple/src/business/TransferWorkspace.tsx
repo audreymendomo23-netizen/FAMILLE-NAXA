@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from "react";
+import {PreparedTransferWorkspace} from "./PreparedTransferWorkspace";
 // Reuses the NAXA Services stock movement form pattern; all effects are server confirmed.
 type Props={ingredients:any[];lots:any[];call:(action:string,body?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean;refreshStock:()=>Promise<void>};
 const milli=(v:string)=>{if(!/^\d{1,7}(\.\d{1,3})?$/.test(v))throw Error("INVALID_QUANTITY");return Math.round(Number(v)*1000)};
@@ -31,5 +32,6 @@ export function TransferWorkspace({ingredients,lots,call,disabled,en,refreshStoc
  {x.state==="received"&&<p>{t("Reçu","Received")} : {x.received_milli/1000} · {t("Écart valorisé","Valued discrepancy")} : {x.transferred_cost-x.received_cost} FCFA</p>}
  </div>)}
  </>}
+ <PreparedTransferWorkspace call={call} disabled={disabled} en={en} refreshStock={refreshStock}/>
  </section>
 }

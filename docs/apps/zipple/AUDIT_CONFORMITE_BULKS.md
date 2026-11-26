@@ -47,3 +47,5 @@ Candidat achats multi-lignes, réutilisation de la chaîne existante fournisseur
 - Bulk 3 : achats multi-lignes SQL 45879524756 et navigateur 45879524727 SUCCESS; conversions réception SQL 45879842973 SUCCESS. Candidat journal équilibré à partir des sources confirmées, comptes explicites, clôture conservatrice, interface et tests. Restent écritures de correction/multi-lignes, exports, couverture complète et fiscalité paramétrable. Gate nouveau à constater.
 
 - Candidat multi-caisses / paiement mixte : deux caisses simultanées et ventilation exacte testées par nouvelles assertions; aucune double vente ni double coût. Couverture UI partielle (paiement mixte sur caisse supplémentaire); reste clôtures avec motifs, flux de décaissement, avoirs, rapprochement comptable et Android natif. Gate à relever.
+
+- Candidat transfert de préparations : portions valorisées et conservation du coût de production entre sites avec écart explicite. Restrictions conservatrices contre stock réservé. Restent dates limites et préparations intermédiaires, transfert multi-lignes, parité native, recette navigateur dédiée. Aucun vert global présumé.
