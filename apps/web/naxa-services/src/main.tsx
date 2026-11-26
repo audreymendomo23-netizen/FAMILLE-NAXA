@@ -546,7 +546,7 @@ function App() {
     if (!accountingEndpoint || !anonKey) throw new Error("Le connecteur de synchronisation Web n’est pas configuré.");
     const freshSession = await ensureFreshSession(activeSession);
     const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID, freshSession.deviceId, freshSession.account.organization_id);
-    let acknowledged=0,retrying=0,rejected=0;
+    let acknowledged=0,retrying=0,rejected=0,billingHolds=0;
     for (const queued of batch) {
       let status:number|null=null,errorCode="NETWORK_UNAVAILABLE",command:Record<string,unknown>={};
       try {
@@ -581,7 +581,7 @@ function App() {
         else if(queueState==="rejected"||queueState==="conflict")rejected++;
       }catch{
         const willRetry=await scheduleRetry(queued.eventId,{status,errorCode},Date.now(),OFFLINE_APP_ID).catch(()=>false);
-        if(willRetry)retrying++;else rejected++;
+        if(willRetry){retrying++;if(errorCode==="NS_SUBSCRIPTION_ACCESS_REQUIRED")billingHolds++;}else rejected++;
       }
     }
     const remaining=await listQueued(OFFLINE_APP_ID,freshSession.deviceId,freshSession.account.organization_id);
@@ -592,6 +592,7 @@ function App() {
     await hydrateWebRecords(freshSession);
     if(!isCurrent())return{acknowledged,retrying,rejected,remaining:remaining.length};
     if(acknowledged)setAuthMessage(acknowledged+" opération(s) confirmée(s) par le journal serveur.");
+    else if(billingHolds)setAuthMessage("Abonnement à renouveler : les opérations locales sont conservées en attente de synchronisation.");
     else if(retrying)setAuthMessage(retrying+" opération(s) en attente de reprise réseau.");
     else if(rejected)setAuthMessage(rejected+" opération(s) rejetée(s) ou anciennes à ré-enregistrer ; aucun reçu n'a été fabriqué.");
     else if(!batch.length)setAuthMessage("Aucune opération Web en attente.");

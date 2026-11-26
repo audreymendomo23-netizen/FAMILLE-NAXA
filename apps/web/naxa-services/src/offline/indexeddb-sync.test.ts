@@ -1,7 +1,7 @@
 import "fake-indexeddb/auto";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  enqueue, listAppEvents, listQueued, acquireDueBatch, applySyncPage, getSyncCursor, listSyncChanges,
+  enqueue, listAppEvents, listQueued, acquireDueBatch, applySyncPage, getSyncCursor, listSyncChanges, scheduleRetry,
 } from "@famille/offline-web";
 
 const APP = "naxa-services-web";
@@ -176,3 +176,21 @@ describe("NAXA Services Web IndexedDB sync storage", () => {
     expect(await getSyncCursor(APP, DEVICE_A, ORG)).toBe(0);
   });
 });
+
+ it("preserves NAXA Services events across more than twelve billing holds and resumes after payment", async () => {
+    const eventId="billing-hold";
+    const payload=JSON.stringify({org_id:ORG,action_code:"customer.created"});
+    await enqueue({appId:APP,eventId,deviceId:DEVICE_A,organizationId:ORG,payload,state:"queued",createdAt:1});
+    let now=10000;
+    for(let i=0;i<15;i++){
+      const batch=await acquireDueBatch(1,now,60000,APP,DEVICE_A,ORG);
+      expect(batch.map(item=>item.eventId)).toEqual([eventId]);
+      expect(await scheduleRetry(eventId,{status:402,errorCode:"NS_SUBSCRIPTION_ACCESS_REQUIRED"},now,APP)).toBe(true);
+      now+=30*60*1000;
+    }
+    const pending=await listQueued(APP,DEVICE_A,ORG);
+    expect(pending).toHaveLength(1);
+    expect(pending[0].attemptCount).toBe(0);
+    expect(pending[0].payload).toBe(payload);
+    expect((await acquireDueBatch(1,now,60000,APP,DEVICE_A,ORG))[0].eventId).toBe(eventId);
+ });

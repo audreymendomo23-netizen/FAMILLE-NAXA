@@ -123,6 +123,10 @@ class SupplierSyncCoordinatorTest {
         assertEquals("retry_wait", SupplierSyncCoordinator.classifySyncFailure(503, "UPSTREAM_UNAVAILABLE").state)
         assertEquals("blocked_dependency", SupplierSyncCoordinator.classifySyncFailure(404, "NAXA_SUPPLIER_NOT_FOUND").state)
         assertEquals("rejected", SupplierSyncCoordinator.classifySyncFailure(422, "NAXA_SYNC_PAYLOAD_INVALID").state)
+        val billingHold = SupplierSyncCoordinator.classifySyncFailure(402, "NS_SUBSCRIPTION_ACCESS_REQUIRED")
+        assertEquals("retry_wait", billingHold.state)
+        assertEquals("NS_SUBSCRIPTION_ACCESS_REQUIRED", billingHold.errorCode)
+        assertTrue(billingHold.retryable)
     }
 
     @Test

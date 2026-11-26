@@ -77,6 +77,7 @@ async function postRpc(
     const code = result && typeof result === "object" && "code" in result
       ? String((result as JsonObject).code).slice(0, 80)
       : "RPC_FAILED";
+    if (code === "42501" && (result as JsonObject).message === "NS_SUBSCRIPTION_ACCESS_REQUIRED") throw new Error("NS_SUBSCRIPTION_ACCESS_REQUIRED");
     throw new Error("ERP_" + code);
   }
   return result;
@@ -337,7 +338,7 @@ export async function handleAccountingRequest(
     return reply(200, responseBody);
   } catch (error) {
     const message = error instanceof Error ? error.message : "ACCOUNTING_REQUEST_FAILED";
-    const status = message === "AUTHENTICATION_REQUIRED" ? 401 :
+    const status = message === "NS_SUBSCRIPTION_ACCESS_REQUIRED" ? 402 : message === "AUTHENTICATION_REQUIRED" ? 401 :
       message.startsWith("ERP_") ? 422 : 400;
     return reply(status, { error: message });
   }

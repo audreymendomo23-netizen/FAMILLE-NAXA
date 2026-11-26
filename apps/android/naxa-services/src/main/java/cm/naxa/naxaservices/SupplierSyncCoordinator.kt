@@ -179,6 +179,9 @@ object SupplierSyncCoordinator {
 
     internal fun classifySyncFailure(statusCode: Int?, remoteCode: String): SyncFailurePolicy {
         val normalized = remoteCode.uppercase()
+        if (statusCode == 402 && normalized == "NS_SUBSCRIPTION_ACCESS_REQUIRED") {
+            return SyncFailurePolicy("retry_wait", "NS_SUBSCRIPTION_ACCESS_REQUIRED", true, false)
+        }
         val dependencyBlocked = normalized.contains("DEPENDENCY") ||
             normalized.contains("NOT_FOUND") ||
             normalized.contains("NOT_AVAILABLE") ||

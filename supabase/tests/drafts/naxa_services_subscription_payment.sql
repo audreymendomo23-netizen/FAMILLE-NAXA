@@ -133,7 +133,7 @@ do $f$ declare i public.ns_subscription_intents%rowtype; c public.ns_subscriptio
 end $f$;
 -- Paid access expires without deleting data; renewal and status remain available.
 update public.ns_subscriptions set period_start=(now() at time zone 'Africa/Douala')::date-interval '2 months',period_end_exclusive=(now() at time zone 'Africa/Douala')::date-1 where org_id='20000000-0000-4000-8000-000000000071';
-update public.ns_subscription_intents set submitted_at=now()-interval '2 days',confirmed_at=case when confirmed_at is null then null else now()-interval '3 days' end where org_id='20000000-0000-4000-8000-000000000071';
+update public.ns_subscription_intents set submitted_at=case when submitted_at is null then null else now()-interval '2 days' end,confirmed_at=case when confirmed_at is null then null else now()-interval '3 days' end where org_id='20000000-0000-4000-8000-000000000071';
 set local role authenticated;
 do $f$ declare a jsonb; begin
  a:=public.ns_subscription_access_state('20000000-0000-4000-8000-000000000071');
@@ -153,7 +153,7 @@ update public.ns_subscription_intents set submitted_at=now()-interval '4 days' w
 set local role authenticated;
 do $f$ declare a jsonb; begin
  a:=public.ns_subscription_access_state('20000000-0000-4000-8000-000000000071');
- if a->>'paid_access' is distinct from 'false' or a->>'erp_access' is distinct from 'true' or a->>'access_reason' is distinct from 'provisional' then raise exception 'PROVISIONAL_ACCESS_FAILED'; end if;
+ if a->>'paid_access' is distinct from 'false' or a->>'erp_access' is distinct from 'true' or a->>'access_reason' is distinct from 'provisional' then raise exception 'PROVISIONAL_ACCESS_FAILED: %',a; end if;
 end $f$;
 reset role;
 rollback;

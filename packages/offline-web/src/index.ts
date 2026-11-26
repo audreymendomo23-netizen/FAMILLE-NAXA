@@ -225,10 +225,13 @@ export async function scheduleRetry(eventId: string, failure: { status?: number 
         const item = get.result as QueueItem | undefined;
         if (!item) { tx.abort(); reject(new Error("QUEUE_EVENT_NOT_FOUND")); return; }
         if (appId != null && item.appId !== appId) { tx.abort(); reject(new Error("QUEUE_APP_SCOPE_MISMATCH")); return; }
-        retry = canRetrySyncFailure({ status: failure.status, attemptCount: item.attemptCount ?? 0, errorCode: failure.errorCode });
+        const billingHold = item.appId === "naxa-services-web" && failure.status === 402 && failure.errorCode === "NS_SUBSCRIPTION_ACCESS_REQUIRED";
+        retry = billingHold || canRetrySyncFailure({ status: failure.status, attemptCount: item.attemptCount ?? 0, errorCode: failure.errorCode });
         store.put({
           ...item, state: retry ? "retry_wait" : "rejected",
-          nextAttemptAt: retry ? nextRetryAt(Math.max(1, item.attemptCount ?? 1), now) : null,
+          // A subscription hold is not a failed mutation and consumes no retry budget.
+          attemptCount: billingHold ? Math.max(0, (item.attemptCount ?? 1) - 1) : item.attemptCount,
+          nextAttemptAt: billingHold ? now + 30 * 60 * 1000 : retry ? nextRetryAt(Math.max(1, item.attemptCount ?? 1), now) : null,
           leaseUntil: null, lastErrorCode: failure.errorCode ?? "REMOTE_REQUEST_FAILED",
         });
       };
