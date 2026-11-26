@@ -1,5 +1,6 @@
 import {
   inboxTransition,
+  confirmedFcmReference,
   normalizeNotificationPayload,
   normalizePushPlatform,
   normalizePushToken,
@@ -307,7 +308,7 @@ async function sendFcm(accessToken: string, projectId: string, token: string, ev
       ? "FCM_TEMPORARY_UNAVAILABLE" : "FCM_REJECTED";
     throw new ApiError(502, code);
   }
-  return typeof result?.name === "string" ? result.name : "fcm-accepted";
+  return confirmedFcmReference(result,projectId);
 }
 
 async function revokeProviderToken(id: string, orgId: string) {

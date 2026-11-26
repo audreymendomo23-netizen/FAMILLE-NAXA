@@ -1,5 +1,6 @@
 import {
   inboxTransition,
+  confirmedFcmReference,
   normalizeNotificationPayload,
   normalizePushPlatform,
   normalizePushToken,
@@ -80,4 +81,13 @@ Deno.test("FCM accepts only credentials from the dedicated project and trusted O
     try { validateFcmServiceAccount(raw, expected); } catch { rejected = true; }
     if (!rejected) throw new Error("UNSAFE_FCM_CREDENTIALS_ACCEPTED");
   }
+});
+
+Deno.test("FCM acceptance requires a genuine scoped provider message reference",()=>{
+ const project="naxa-services";const valid="projects/"+project+"/messages/0:1234567890%abcd";
+ if(confirmedFcmReference({name:valid},project)!==valid)throw Error("VALID_RECEIPT_REJECTED");
+ for(const payload of [null,{},[],{name:""},{name:"fcm-accepted"},{name:"projects/other/messages/123"},{name:"projects/"+project+"/messages/"},{name:"projects/"+project+"/messages/../../other"},{name:"projects/"+project+"/messages/a b"},{name:123}]){
+  let rejected=false;try{confirmedFcmReference(payload,project);}catch(e){rejected=e instanceof Error&&retryablePushFailure(e.message);}
+  if(!rejected)throw Error("FALSE_ACCEPTANCE");
+ }
 });

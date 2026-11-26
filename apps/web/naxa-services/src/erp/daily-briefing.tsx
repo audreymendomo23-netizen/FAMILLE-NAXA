@@ -24,7 +24,7 @@ export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Pro
  const controller=useRef<AbortController|null>(null),audio=useRef<SpeechSynthesisUtterance|null>(null),mounted=useRef(false);
  const t=copy[lang];
  function stop(){if(audio.current){audio.current.onend=null;audio.current.onerror=null;window.speechSynthesis?.cancel();audio.current=null;}setPlaying(false);setPaused(false);}
- useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;controller.current?.abort();if(audio.current){audio.current.onend=null;audio.current.onerror=null;window.speechSynthesis?.cancel();audio.current=null;}};},[]);
+ useEffect(()=>{mounted.current=true;const hide=()=>{if(document.visibilityState!=="hidden")return;controller.current?.abort();controller.current=null;stop();setReport(null);setLoading(false);};document.addEventListener("visibilitychange",hide);return()=>{mounted.current=false;document.removeEventListener("visibilitychange",hide);controller.current?.abort();if(audio.current){audio.current.onend=null;audio.current.onerror=null;window.speechSynthesis?.cancel();audio.current=null;}};},[]);
  async function load(){
   stop();controller.current?.abort();const abort=new AbortController();controller.current=abort;setLoading(true);setError(false);setReport(null);
   try{
@@ -33,13 +33,14 @@ export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Pro
    if(!r.ok)throw Error("BRIEFING_UNAVAILABLE");
    const data=await r.json() as Report;
    if(data.day!==dayInDouala()||data.coverage!=="partial_confirmed_server_facts"||!data.appointments||!["site","personal"].includes(data.scope)||data.scope==="personal"&&data.finance!==null)throw Error("INVALID_BRIEFING");
-   if(abort.signal.aborted||!mounted.current||controller.current!==abort)return;
+   if(abort.signal.aborted||!mounted.current||controller.current!==abort||document.visibilityState==="hidden")return;
    setReport(data);
    return {data,abort};
   }catch{if(!abort.signal.aborted&&mounted.current)setError(true);}
   finally{if(!abort.signal.aborted&&mounted.current)setLoading(false);}
  }
  function speak(r:Report){
+  if(document.visibilityState==="hidden"||!mounted.current)return;
   if(!window.speechSynthesis){setError(true);return;}
   // Only a local voice: never transmit business data to a browser cloud voice.
   const voice=window.speechSynthesis.getVoices().find(v=>v.localService&&v.lang.toLowerCase().split("-")[0]===lang.toLowerCase().split("-")[0]);

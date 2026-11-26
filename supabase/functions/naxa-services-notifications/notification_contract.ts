@@ -76,3 +76,11 @@ export function validateFcmServiceAccount(raw: string, expectedProject: string):
   if (account.token_uri !== undefined && account.token_uri !== FCM_OAUTH_TOKEN_URL) throw new Error("FCM_OAUTH_ENDPOINT_INVALID");
   return { project_id: project, client_email: account.client_email, private_key: account.private_key, token_uri: FCM_OAUTH_TOKEN_URL };
 }
+
+/** FCM HTTP 200 alone is not a device acceptance receipt. */
+export function confirmedFcmReference(result:unknown,projectId:string):string {
+  const name=result&&typeof result==="object"&&!Array.isArray(result)?(result as Record<string,unknown>).name:undefined;
+  const prefix="projects/"+projectId+"/messages/";
+  if(typeof name!=="string"||!name.startsWith(prefix)||!/^[A-Za-z0-9_:%.-]{1,256}$/.test(name.slice(prefix.length)))throw Error("FCM_TEMPORARY_UNAVAILABLE");
+  return name;
+}
