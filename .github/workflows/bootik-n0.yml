@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test docs/bootik-n0/policy.test.mjs docs/bootik-n0/bulk.test.mjs
+      - run: node --test docs/bootik-n0/policy.test.mjs docs/bootik-n0/bulk.test.mjs docs/bootik-n0/client.test.mjs
       - name: Isolated PostgreSQL draft qualification
         env:
           PGPASSWORD: test
