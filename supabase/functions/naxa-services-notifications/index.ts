@@ -319,42 +319,52 @@ async function dispatchBatch(limit: number) {
   const account = await loadServiceAccount();
   const { accessToken, projectId } = await fcmAccessToken(account);
   const claims = await rpc("ns_claim_notification_batch", { p_limit: limit }) as ClaimedNotification[];
-  const result = { claimed: claims?.length ?? 0, sent: 0, retried: 0, failed: 0 };
+  const result = { claimed: claims?.length ?? 0, sent: 0, retried: 0, failed: 0, accepted_devices: 0, rejected_devices: 0 };
   for (const item of claims ?? []) {
     try {
       if (!item.recipient_member_id) throw new ApiError(422, "NO_MEMBER_RECIPIENT");
-      const tokens = await rpc("ns_live_push_tokens", {
-        p_org_id: item.org_id, p_member_id: item.recipient_member_id,
-      }) as Json[];
-      if (!tokens?.length) throw new ApiError(503, "NO_ACTIVE_PUSH_TOKEN");
-      let acceptedReference = "";
-      let lastError = "FCM_REJECTED";
-      for (const tokenRow of tokens) {
-        try {
-          const token = await decryptPushToken(String(tokenRow.token_ciphertext), String(tokenRow.token_iv));
-          acceptedReference = await sendFcm(accessToken, projectId, token, item.event_code, item.id, item.payload_redacted ?? {});
-          break;
-        } catch (error) {
-          const code = error instanceof ApiError ? error.code : "FCM_TEMPORARY_UNAVAILABLE";
-          lastError = code;
-          if (shouldRevokePushToken(code) && typeof tokenRow.id === "string") {
-            await revokeProviderToken(tokenRow.id, item.org_id);
-            continue;
+      const scope = { p_notification_id: item.id, p_claim_token: item.claim_token };
+      const targets = await rpc("ns_pending_push_targets", scope) as Json[];
+      const recordOutcome = async (tokenId: string, outcome: "accepted" | "rejected", reference: string | null, code: string | null) => {
+        const saved = await rpc("ns_record_push_device_outcome", {
+          ...scope, p_token_id: tokenId, p_outcome: outcome, p_provider_reference: reference, p_error_code: code,
+        });
+        if (saved !== true) throw new ApiError(503, "FCM_TEMPORARY_UNAVAILABLE");
+      };
+      // Bound concurrent provider calls. An already recorded device is excluded on retry.
+      for (let offset = 0; offset < (targets?.length ?? 0); offset += 4) {
+        await Promise.all((targets ?? []).slice(offset, offset + 4).map(async row => {
+          const id = String(row.id);
+          let reference = "";
+          let failure = "";
+          try {
+            const token = await decryptPushToken(String(row.token_ciphertext), String(row.token_iv));
+            reference = await sendFcm(accessToken, projectId, token, item.event_code, item.id, item.payload_redacted ?? {});
+          } catch (error) {
+            failure = error instanceof ApiError ? error.code : "FCM_TEMPORARY_UNAVAILABLE";
           }
-          if (!retryablePushFailure(code)) continue;
-        }
+          if (reference) {
+            await recordOutcome(id, "accepted", reference, null);
+            result.accepted_devices++;
+          } else if (!retryablePushFailure(failure) || item.attempts >= 5) {
+            await recordOutcome(id, "rejected", null, failure || "FCM_REJECTED");
+            result.rejected_devices++;
+            if (shouldRevokePushToken(failure)) await revokeProviderToken(id, item.org_id);
+          }
+        }));
       }
-      if (acceptedReference) {
+      const summary = await rpc("ns_push_delivery_summary", scope) as Json | null;
+      if (!summary || typeof summary.pending !== "number" || typeof summary.accepted !== "number" || typeof summary.rejected !== "number") throw new ApiError(503, "FCM_TEMPORARY_UNAVAILABLE");
+      if (summary.pending === 0 && summary.accepted > 0 && typeof summary.provider_reference === "string") {
         const completed = await rpc("ns_finish_notification_send", {
-          p_notification_id: item.id, p_claim_token: item.claim_token,
-          p_provider_reference: acceptedReference,
+          ...scope, p_provider_reference: summary.provider_reference,
         }) as boolean;
         if (completed) result.sent++;
         else result.failed++;
       } else {
+        const retry = summary.pending > 0 || (summary.accepted === 0 && summary.rejected === 0);
         const status = await rpc("ns_fail_notification_send", {
-          p_notification_id: item.id, p_claim_token: item.claim_token,
-          p_error_code: lastError, p_retryable: retryablePushFailure(lastError),
+          ...scope, p_error_code: summary.pending > 0 ? "FCM_TEMPORARY_UNAVAILABLE" : retry ? "NO_ACTIVE_PUSH_TOKEN" : "FCM_REJECTED", p_retryable: retry,
         }) as string;
         if (status === "pending") result.retried++;
         else result.failed++;
