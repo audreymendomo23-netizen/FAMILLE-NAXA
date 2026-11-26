@@ -685,3 +685,30 @@ test("Web CRM: create a follow-up, reschedule it with a confirmed completion and
   await expect(record).toContainText("Confirmé par le serveur");
   await expect(record.getByRole("button",{name:"Clôturer le suivi"})).toHaveCount(0);
 });
+
+
+test("Web subscriptions: member sees server paid state without gaining payment authority", async ({context}) => {
+  await installBackend(context);
+  let state="active";
+  let reads=0;
+  await context.route(AUTH_URL,async route=>{
+    if(route.request().method()==="OPTIONS")return route.fallback();
+    const request=route.request().postDataJSON() as Record<string,unknown>;
+    if(request.action==="subscription_access"){
+      expect(request.org_id).toBeUndefined();
+      reads++;
+      return json(route,{subscription_access:{state,paid_access:state==="active",plan_code:"ACCESS",period_end_exclusive:"2026-12-01"}});
+    }
+    return route.fallback();
+  });
+  const page=await context.newPage();
+  await signIn(page);
+  await page.locator(".side-nav button.nav-item").filter({hasText:"PME & organisation"}).click();
+  await page.getByRole("button",{name:"Vérifier les droits payés"}).click();
+  await expect(page.getByText("Période payée active",{exact:false})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Obtenir le montant et la destination"})).toHaveCount(0);
+  state="expired";
+  await page.getByRole("button",{name:"Vérifier les droits payés"}).click();
+  await expect(page.getByText("Période payée expirée",{exact:false})).toBeVisible();
+  expect(reads).toBe(2);
+});
