@@ -1,0 +1,25 @@
+import React,{useRef,useState} from "react";
+type Props={call:(action:string,body?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean;data:any;refresh:()=>Promise<void>};
+type Line={account_id:string;side:"debit"|"credit";amount_xaf:string};
+const empty=(side:"debit"|"credit"):Line=>({account_id:"",side,amount_xaf:""});
+export function LedgerAllocations({call,disabled,en,data,refresh}:Props){
+ const t=(fr:string,eng:string)=>en?eng:fr;
+ const [mode,M]=useState("split"),[source,S]=useState(""),[journal,J]=useState(""),[reason,R]=useState(""),[lines,L]=useState<Line[]>([empty("debit"),empty("credit")]),[busy,B]=useState(false),[err,E]=useState("");
+ const key=useRef<{body:string,id:string}|null>(null);const lock=disabled||busy;
+ const event=mode==="split"?data.pending.find((x:any)=>x.kind+":"+x.source_id===source):data.entries.find((x:any)=>x.id===source&&!x.corrected&&x.source_kind!=="correction_reverse");
+ const sum=(side:string)=>lines.filter(l=>l.side===side).reduce((a,l)=>a+(/^[1-9][0-9]{0,17}$/.test(l.amount_xaf)?BigInt(l.amount_xaf):0n),0n);
+ const valid=!!event&&lines.every(l=>l.account_id&&/^[1-9][0-9]{0,17}$/.test(l.amount_xaf))&&new Set(lines.map(l=>l.account_id)).size===lines.length&&sum("debit")===BigInt(event.amount_xaf)&&sum("credit")===BigInt(event.amount_xaf);
+ const update=(i:number,patch:Partial<Line>)=>L(v=>v.map((l,j)=>i===j?{...l,...patch}:l));
+ async function save(){if(lock||!valid)return;B(true);E("");try{
+ const body=mode==="split"?{kind:event.kind,source_id:event.source_id,journal,label:reason,lines}:{entry_id:event.id,reason,lines};const encoded=JSON.stringify({mode,...body});
+ if(key.current?.body!==encoded)key.current={body:encoded,id:crypto.randomUUID()};await call(mode==="split"?"ledger_post_split":"ledger_correct",{...body,request_id:key.current.id});key.current=null;S("");R("");L([empty("debit"),empty("credit")]);await refresh()
+ }catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}
+ return <section><h5>{t("Ventilation et correction comptables","Accounting allocation and correction")}</h5><p>{t("Une correction conserve l’écriture d’origine et crée une contrepassation puis une nouvelle écriture. Aucun remboursement client n’est effectué.","Corrections preserve the original entry, reverse it and create a replacement. No customer refund is made.")}</p>{err&&<p role="alert">{err}</p>}
+ <label>{t("Type de traitement","Posting type")}<select value={mode} onChange={e=>{M(e.target.value);S("");L([empty("debit"),empty("credit")])}}><option value="split">{t("Ventiler un événement","Allocate an event")}</option><option value="correct">{t("Corriger une écriture","Correct an entry")}</option></select></label>
+ <label>{t("Opération à ventiler ou corriger","Operation to allocate or correct")}<select value={source} onChange={e=>{S(e.target.value);L([empty("debit"),empty("credit")])}}><option value="">—</option>{mode==="split"?data.pending.map((x:any)=><option key={x.kind+":"+x.source_id} value={x.kind+":"+x.source_id}>{x.label} · {x.amount_xaf} FCFA · {x.entry_date}</option>):data.entries.filter((x:any)=>!x.corrected&&x.source_kind!=="correction_reverse").map((x:any)=><option key={x.id} value={x.id}>{x.label} · {x.amount_xaf} FCFA · {x.entry_date}</option>)}</select></label>
+ {event&&<p>{t("Montant à équilibrer","Amount to balance")} : {event.amount_xaf} FCFA</p>}
+ {mode==="split"&&<label>{t("Journal de ventilation","Allocation journal")}<input value={journal} onChange={e=>J(e.target.value)}/></label>}
+ <label>{t("Libellé ou motif de correction","Description or correction reason")}<input value={reason} onChange={e=>R(e.target.value)}/></label>
+ {lines.map((l,i)=><div key={i}><label>{t("Compte ligne","Line account")} {i+1}<select value={l.account_id} onChange={e=>update(i,{account_id:e.target.value})}><option value="">—</option>{data.accounts.map((x:any)=><option key={x.id} value={x.id}>{x.code} · {x.label}</option>)}</select></label><label>{t("Sens ligne","Line side")} {i+1}<select value={l.side} onChange={e=>update(i,{side:e.target.value as Line["side"]})}><option value="debit">{t("Débit","Debit")}</option><option value="credit">{t("Crédit","Credit")}</option></select></label><label>{t("Montant ligne FCFA","Line amount XAF")} {i+1}<input inputMode="numeric" value={l.amount_xaf} onChange={e=>update(i,{amount_xaf:e.target.value})}/></label>{lines.length>2&&<button disabled={lock} onClick={()=>L(v=>v.filter((_,j)=>i!==j))}>{t("Retirer la ligne","Remove line")}</button>}</div>)}
+ <button disabled={lock||lines.length>=20} onClick={()=>L(v=>[...v,empty("debit")])}>{t("Ajouter une ligne comptable","Add accounting line")}</button><p>{t("Débit ventilé","Allocated debit")} : {String(sum("debit"))} FCFA · {t("Crédit ventilé","Allocated credit")} : {String(sum("credit"))} FCFA</p><button disabled={lock||!valid||reason.trim().length<5||(mode==="split"&&!journal.trim())} onClick={save}>{mode==="split"?t("Valider la ventilation","Post allocation"):t("Contrepasser et corriger","Reverse and correct")}</button></section>
+}
