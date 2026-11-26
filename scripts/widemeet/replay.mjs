@@ -94,6 +94,14 @@ try{
  await cmd(hs.access_token,"consent",true);await cmd(gs.access_token,"consent",true);await cmd(hs.access_token,"record",true);
  assert.equal(state.recording,"requested");await cmd(gs.access_token,"consent",false);assert.equal(state.recording,"off");
  const pid=randomUUID();await cmd(hs.access_token,"poll",["Yes","No"],pid);await cmd(gs.access_token,"vote",0,pid);assert.equal(state.polls[0].counts[0],1);assert.equal(state.polls[0].votes,undefined);await cmd(hs.access_token,"close_poll",null,pid);
+ const originalDeadline=state.endMs;
+ await cmd(hs.access_token,"extend",15);assert.equal(state.endMs,originalDeadline+900000);
+ const sid=randomUUID();await cmd(hs.access_token,"survey",{question:"Choose dates",kind:"multiple",options:["A","B","C"],anonymous:true,visibility:"closed",quorum:100,threshold:50},sid);
+ await cmd(gs.access_token,"survey_vote",[0,2],sid);let survey=state.polls.find(p=>p.id===sid);
+ assert.equal(survey.counts,null);assert.equal(survey.responses,null);assert.equal(survey.votes,undefined);
+ await cmd(hs.access_token,"survey_vote",[0],sid);await cmd(hs.access_token,"close_poll",null,sid);survey=state.polls.find(p=>p.id===sid);
+ assert.deepEqual(survey.counts,[2,0,1]);assert.equal(survey.quorumMet,true);assert.deepEqual(survey.accepted,[true,false,true]);
+ pass("real duration extension and delayed anonymous multiple choice survey");
  await cmd(hs.access_token,"pause");await cmd(hs.access_token,"resume");await cmd(hs.access_token,"exclude",null,g.id);
  assert.equal((await request(room+"/read",{room_id:rid},gs.access_token)).status,404);
  await cmd(hs.access_token,"end");assert.equal(state.status,"ended");
