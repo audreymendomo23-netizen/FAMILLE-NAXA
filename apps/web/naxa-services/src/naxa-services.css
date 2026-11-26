@@ -110,7 +110,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #ff9d96;outline-offset:3p
  .sidebar{display:none}.sidebar.mobile-open{display:flex;position:fixed;left:0;top:0;bottom:0;height:100dvh;width:min(86vw,320px);z-index:45;box-shadow:0 12px 40px #0007;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
  .menu-scrim{display:block;position:fixed;inset:0;border:0;background:#0009;z-index:44}
  .mobile-menu-trigger,.mobile-theme-toggle{display:inline-grid;place-items:center;flex:0 0 40px;height:40px;width:40px}
- .topbar{padding:8px 12px;align-items:center}.top-actions{gap:6px;justify-content:flex-end}.crumb{flex:1;gap:6px}.top-actions .avatar{display:none}
+ .topbar{padding:8px 12px;align-items:center}.top-actions{gap:6px;justify-content:flex-end}.crumb{flex:1;gap:6px}.top-actions .avatar{display:grid}
  .top-actions .btn{min-height:40px;padding:0 10px}.content-area{padding:20px 12px calc(90px + env(safe-area-inset-bottom))}
  .page-heading h1{font-size:clamp(23px,6vw,30px)}.heading-actions{flex-wrap:wrap}.heading-actions .btn{min-width:0;white-space:normal}
  .module-main-card,.side-card{padding:15px}.mobile-tabs{height:calc(64px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom)}
