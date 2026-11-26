@@ -25,6 +25,7 @@ on:
       - "supabase/functions/naxa-services-customer-promotions/**"
       - "supabase/functions/naxa-services-notifications/**"
       - "supabase/functions/naxa-services-meeting-media/**"
+      - "supabase/functions/naxa-services-attendance-cleanup/**"
       - "supabase/drafts/naxa_services_v1.sql"
       - "supabase/drafts/naxa_services_v2_activity_onboarding_management.sql"
       - "supabase/drafts/naxa_services_referrals_v1.sql"
@@ -262,6 +263,7 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno test supabase/functions/naxa-services-meeting-media/contract_test.ts
+      - run: deno test supabase/functions/naxa-services-attendance-cleanup/contract_test.ts
 
   postgres-rls-runtime:
     name: NAXA SERVICES PostgreSQL 17 schema and runtime RLS tests

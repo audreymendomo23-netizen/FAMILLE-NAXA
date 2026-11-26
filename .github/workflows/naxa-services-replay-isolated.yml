@@ -8,6 +8,7 @@ on:
       - 'supabase/drafts/naxa_services_v9_attendance*.sql'
       - 'supabase/drafts/naxa_services_v15_attendance*.sql'
       - 'supabase/drafts/naxa_services_v16_attendance*.sql'
+      - 'supabase/drafts/naxa_services_v17_attendance*.sql'
       - 'supabase/tests/drafts/naxa_services_attendance*.sql'
       - 'supabase/drafts/naxa_services_v10_*roster*.sql'
       - 'supabase/tests/drafts/naxa_services_*roster*.sql'
@@ -104,6 +105,14 @@ jobs:
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_attendance_review.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regprocedure('public.ns_attendance_review(uuid,uuid,timestamptz,integer)') is null" | grep -Fx t
+      - name: Qualify orphan selfie inventory with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_attendance_orphans.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regprocedure('public.ns_attendance_orphan_candidates(integer)') is null" | grep -Fx t
       - name: Qualify hierarchical roster and service comparison with rollback
         shell: bash
         run: |
