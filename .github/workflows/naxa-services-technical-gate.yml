@@ -285,6 +285,8 @@ jobs:
             supabase/drafts/naxa_services_v7_financial_controls.sql \
             supabase/drafts/naxa_services_v8_subscription_payment.sql; do
             echo "Applying disposable test copy of $draft"
+            # Reject any candidate that would commit when run directly.
+            test "$(tail -n 1 "$draft")" = "rollback;" || { echo "Unsafe candidate transaction: $draft" >&2; exit 1; }
             # The repository candidate files remain ROLLBACK-by-default.
             sed -E '$s/rollback;/commit/' "$draft" | psql -v ON_ERROR_STOP=1
           done

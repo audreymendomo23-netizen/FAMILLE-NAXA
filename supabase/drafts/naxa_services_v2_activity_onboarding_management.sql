@@ -78,4 +78,4 @@ create trigger ns_organizations_activity_profile_once
 before update on public.ns_organizations
 for each row execute function public.ns_enforce_activity_profile_once();
 revoke all on function public.ns_enforce_activity_profile_once() from public, anon, authenticated;
-commit;
+rollback;

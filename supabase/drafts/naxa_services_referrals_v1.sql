@@ -194,4 +194,4 @@ revoke all on function public.ns_record_referral_first_subscription(uuid,text,te
 grant execute on function public.ns_record_referral_first_subscription(uuid,text,text,timestamptz,text) to service_role;
 revoke all on function public.ns_mark_referral_reward_applied(uuid,text,timestamptz) from public, anon, authenticated;
 grant execute on function public.ns_mark_referral_reward_applied(uuid,text,timestamptz) to service_role;
-commit;
+rollback;

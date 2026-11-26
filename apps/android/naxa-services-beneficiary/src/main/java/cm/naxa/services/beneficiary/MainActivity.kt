@@ -28,7 +28,10 @@ class MainActivity:Activity() {
         val password=field("Mot de passe").apply{inputType=InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD}
         status=TextView(this)
         button("Connexion du compte central"){
+            if(busy)return@button
             val id=login.text.toString().trim();val secret=password.text.toString();password.text.clear()
+            consent.isChecked=false;device.text.clear();reviewRows.removeAllViews()
+            status.text="Connexion en cours ; ancienne revue effacée."
             work {
                 BeneficiaryApi.login(this,id,secret)
                 val ref=BeneficiaryApi.sessionReference(this)
@@ -37,8 +40,10 @@ class MainActivity:Activity() {
         }
         device=field("Identifiant UUID de l’appareil enrôlé").apply{setText(SecureVault.get(this@MainActivity,"device").orEmpty())}
         button("Vérifier l’enrôlement"){
+            if(busy)return@button
             val id=device.text.toString().trim()
-            consent.isChecked=false
+            consent.isChecked=false;reviewRows.removeAllViews()
+            status.text="Vérification de l’enrôlement en cours."
             work {
                 SecureVault.remove(this,"consent");SecureVault.remove(this,"device");SecureVault.remove(this,"channel")
                 val channel=BeneficiaryApi.verify(this,id)
@@ -82,7 +87,10 @@ class MainActivity:Activity() {
         }
     }
     private fun loadReview(){
+        if(busy)return
         val id=SecureVault.get(this,"device")?:return
+        reviewRows.removeAllViews()
+        status.text="Actualisation de la revue."
         work {
             val rows=BeneficiaryApi.review(this,id)
             runOnUiThread {
@@ -96,7 +104,9 @@ class MainActivity:Activity() {
                             AlertDialog.Builder(this@MainActivity).setTitle("Motif du rejet").setItems(reasons){_,index->
                                 AlertDialog.Builder(this@MainActivity).setMessage("Confirmer le rejet de ce candidat ? Aucun droit ne sera activé.")
                                     .setNegativeButton("Annuler",null).setPositiveButton("Confirmer"){_,_->
-                                        work { BeneficiaryApi.reject(this@MainActivity,id,row.optString("id"),reasons[index]);runOnUiThread{reviewRows.removeAllViews();status.text="Rejet confirmé. Actualisez la file."} }
+                                        if(SecureVault.get(this@MainActivity,"device")!=id || SecureVault.get(this@MainActivity,"channel")==null) {
+                                            reviewRows.removeAllViews();status.text="Enrôlement modifié. Actualisez la file."
+                                        } else work { BeneficiaryApi.reject(this@MainActivity,id,row.optString("id"),reasons[index]);runOnUiThread{reviewRows.removeAllViews();status.text="Rejet confirmé. Actualisez la file."} }
                                     }.show()
                             }.show()
                         }})
