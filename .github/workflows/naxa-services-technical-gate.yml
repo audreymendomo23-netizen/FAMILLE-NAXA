@@ -6,6 +6,7 @@ on:
       - work/naxa-services-completion-20261120
     paths:
       - "apps/android/naxa-services/**"
+      - "apps/android/naxa-services-beneficiary/**"
       - "apps/web/naxa-services/**"
       - "packages/core-android/**"
       - "packages/billing-core/**"
@@ -40,6 +41,7 @@ on:
   pull_request:
     paths:
       - "apps/android/naxa-services/**"
+      - "apps/android/naxa-services-beneficiary/**"
       - "apps/web/naxa-services/**"
       - "packages/core-android/**"
       - "supabase/functions/naxa-services-auth/**"
@@ -328,10 +330,10 @@ jobs:
       - name: Install Android 35 platform and build tools
         run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - name: Run NAXA SERVICES accounting and performance unit tests
-        run: gradle --no-daemon --stacktrace --info :naxa-services:testDebugUnitTest
+        run: gradle --no-daemon --stacktrace --info :naxa-services:testDebugUnitTest :naxa-services-beneficiary:testDebugUnitTest
       - name: Compile and package NAXA SERVICES
         id: assemble_debug_apk
-        run: gradle --no-daemon :naxa-services:assembleDebug
+        run: gradle --no-daemon :naxa-services:assembleDebug :naxa-services-beneficiary:assembleDebug
       - name: Run Android Keystore and local PIN integration tests
         uses: reactivecircus/android-emulator-runner@v2
         with:

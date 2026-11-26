@@ -1139,6 +1139,16 @@ async function subscriptionAdminCapture(body:Record<string,unknown>,token:string
   }catch{return {status:409,body:{message:"Capture non acceptée ; rapprochement manuel nécessaire."}};}
 }
 
+async function subscriptionAdminDeviceStatus(body:Record<string,unknown>,token:string) {
+  const auth=await authCall("user",{method:"GET"},token);
+  const sessionId=verifiedTokenSessionId(token);
+  const id=String(body.device_id??"");
+  if(!auth.ok||!auth.data.id||!sessionId||!(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)))return {status:403,body:{message:"Appareil non autorisé."}};
+  const rows=await rest("ns_subscription_admin_devices?select=id,channel&id=eq."+encodeURIComponent(id)+"&auth_user_id=eq."+encodeURIComponent(String(auth.data.id))+"&session_id=eq."+encodeURIComponent(sessionId)+"&active=eq.true&sms_capture_allowed=eq.true&limit=2",{headers:serviceHeaders()}) as Record<string,unknown>[];
+  if(!Array.isArray(rows)||rows.length!==1||!["mtn_momo","orange_money"].includes(String(rows[0].channel)))return {status:403,body:{message:"Appareil non autorisé."}};
+  return {status:200,body:{device_status:{id:rows[0].id,channel:rows[0].channel}}};
+}
+
 async function subscriptionAdminReview(action:string,body:Record<string,unknown>,token:string) {
   const auth=await authCall("user",{method:"GET"},token);
   const sessionId=verifiedTokenSessionId(token);
@@ -1206,6 +1216,7 @@ Deno.serve(async (request: Request) => {
     else if (action === "list_own_devices") result = await listOwnDevices(bearer);
     else if (action === "revoke_device") result = await revokeDevice(body, bearer);
     else if (["subscription_list","subscription_create","subscription_declare","subscription_cancel"].includes(action)) result = await subscriptionAction(action,body,bearer);
+    else if (action === "subscription_admin_device_status") result = await subscriptionAdminDeviceStatus(body,bearer);
     else if (action === "subscription_admin_capture") result = await subscriptionAdminCapture(body,bearer);
     else if (["subscription_admin_review_list","subscription_admin_review_reject"].includes(action)) result = await subscriptionAdminReview(action,body,bearer);
     else if (action === "subscription_access") result = await subscriptionAccess(bearer);
