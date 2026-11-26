@@ -43,7 +43,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   assert.ok(await scalar("select guest_served_at from zp_orders where org_id=$1",[org]));
   await page.getByRole("button",{name:"Actualiser"}).click();
   for(let i=0;i<3;i++){const next=page.getByRole("button",{name:"Étape suivante"});await next.waitFor();await next.click();await page.getByText("Plat recette × 1 · kitchen · "+["preparing","ready","served"][i],{exact:true}).waitFor()}
-  await guest.getByRole("heading",{name:"Votre avis (facultatif)"}).waitFor({timeout:15000});await guest.getByRole("button",{name:"Envoyer mon avis"}).click();await guest.getByText("Merci pour votre avis.").waitFor();
+  await guest.getByRole("heading",{name:"Votre avis (facultatif)"}).waitFor({timeout:15000});await guest.getByRole("combobox",{name:"Note du poste kitchen"}).selectOption("4");await guest.getByRole("button",{name:"Envoyer mon avis"}).click();await guest.getByText("Merci pour votre avis.").waitFor();assert.equal(await scalar("select rating from zp_feedback_posts where org_id=$1 and post='kitchen'",[org]),4);
   assert.equal(Number(await scalar("select count(*) from zp_feedback where org_id=$1",[org])),1);
   assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[item.body.data]),2);
   await page.getByRole("button",{name:"Stocks & finances"}).click();await page.getByRole("heading",{name:"Stocks et finances"}).waitFor();
@@ -107,6 +107,13 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByText(/Historique insuffisant : 28 jours/).waitFor();
   await page.getByText(/Charges enregistrées : 2[\s\u00a0\u202f]500 FCFA/).waitFor();
   console.log("ZIPPLE_N7_REAL_EDGE_PILOTAGE_UI_PASS");
+  await page.getByRole("button",{name:"Salles et réservations"}).click();
+  await page.getByLabel("Nom de la zone").fill("Terrasse test");await page.getByRole("button",{name:"Créer la zone"}).click();
+  await page.getByRole("combobox",{name:"Table à configurer"}).selectOption(tableId);
+  await page.getByRole("combobox",{name:"Zone de la table"}).selectOption({label:"Terrasse test"});await page.getByLabel("Nombre de places").fill("6");await page.getByRole("button",{name:"Enregistrer la table"}).click();
+  await page.getByRole("button",{name:"Afficher l’addition"}).click();await page.getByText(/Total : 2500 FCFA/).waitFor();
+  assert.equal(await scalar("select seats from zp_tables where id=$1",[tableId]),6);
+  console.log("ZIPPLE_BULK2_REAL_EDGE_FLOOR_BILL_FEEDBACK_PASS");
   // Verify the new boundary through actual GoTrue / PostgREST / Edge, not a mocked RPC.
   const tableSession=await scalar("select id from zp_table_sessions where table_id=$1 and closed_at is null",[tableId]);
   assert.equal((await b("snapshot",{site_id:id()})).status,403);
