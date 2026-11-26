@@ -5,24 +5,17 @@ import {createServer} from "node:https";
 import {readFile,writeFile} from "node:fs/promises";
 import {resolve,extname,sep} from "node:path";
 import {spawn} from "node:child_process";
-const base="https://idupfjbkwjcavyisxteo.supabase.co/functions/v1",edge=base+"/zipple-n1",fixture=base+"/zipple-n1-ci-fixture";
-async function oidc(){
- const url=new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);url.searchParams.set("audience","zipple-n1-hosted-recipe");
- const r=await fetch(url,{headers:{authorization:"Bearer "+process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN}});
- assert.ok(r.ok,"OIDC request failed");return (await r.json()).value;
-}
-async function ci(action){
- const r=await fetch(fixture+"/"+action,{method:"POST",headers:{authorization:"Bearer "+await oidc()},signal:AbortSignal.timeout(45000)});
- const data=await r.json();return {status:r.status,data};
-}
+const base="https://idupfjbkwjcavyisxteo.supabase.co/functions/v1",edge=base+"/zipple-n1";
 async function call(action,body,token){
  const r=await fetch(edge+"/"+action,{method:"POST",headers:{"content-type":"application/json",...(token?{authorization:"Bearer "+token}:{})},body:JSON.stringify({app_id:"ZIPPLE",...body}),signal:AbortSignal.timeout(20000)});
  return {status:r.status,data:await r.json()};
 }
-let f,server,browser,provisioned=false;
+let server,browser;
 try{
- const p=await ci("provision");assert.equal(p.status,200,"CI fixture provisioning");f=p.data;provisioned=true;console.log("::add-mask::"+f.password);
- const {login,password,org,member,site}=f;
+ // Provision the synthetic account through the normal Supabase Auth admin interface first.
+ const login="zipple-ci-n1-2c7834f04bc1",password=process.env.ZIPPLE_N1_FIXTURE_PASSWORD;
+ if(!password)throw Error("Dedicated synthetic fixture password must be configured as a GitHub Actions secret");
+ const org="1f68a6e8-9d60-4aa7-a146-2c7834f04bc1",member="2f68a6e8-9d60-4aa7-a146-2c7834f04bc1",site="3f68a6e8-9d60-4aa7-a146-2c7834f04bc1";
  assert.equal((await call("login",{identifier:login,password:"wrong"})).status,401);
  const signed=await call("login",{identifier:login,password,remember_device:true});assert.equal(signed.status,200);
  const s=signed.data;assert.equal(s.organization_id,org);assert.equal(s.member_id,member);assert.deepEqual(s.sites.map(x=>x.id),[site]);
@@ -85,5 +78,5 @@ try{
  console.log("ZIPPLE_HOSTED_NATIVE_RECEIPT_PASS");
 }finally{
  if(browser)await browser.close();if(server)await new Promise(ok=>server.close(ok));
- if(provisioned){const c=await ci("cleanup");assert.equal(c.status,200,"fixture cleanup");console.log("ZIPPLE_HOSTED_FIXTURE_CLEANED")}
+ // A trusted administrator must deactivate the dedicated fixture and revoke its sessions after evidence collection.
 }

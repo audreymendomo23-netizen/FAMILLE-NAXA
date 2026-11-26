@@ -14,6 +14,8 @@ test("hosted Edge rejects untrusted calls",async()=>{
  assert.deepEqual(await request("/logout",{app_id:"ZIPPLE"}),{status:401,data:{error:"DENIED"}});
  assert.deepEqual(await request("/admin/recovery/list",{app_id:"ZIPPLE"}),{status:403,data:{error:"DENIED"}});
  assert.deepEqual(await request("/sync",{app_id:"ZIPPLE",aggregate_type:"sale"}),{status:403,data:{error:"DENIED"}});
+ assert.deepEqual(await request("/refresh",{app_id:"ZIPPLE",refresh_token:"invalid-synthetic-refresh-token-for-n1"}),{status:401,data:{error:"DENIED"}});
+ assert.deepEqual(await request("/sync",{app_id:"ZIPPLE",aggregate_type:"n1_probe",event_id:"invalid-synthetic-event",organization_id:"1f68a6e8-9d60-4aa7-a146-2c7834f04bc1",member_id:"2f68a6e8-9d60-4aa7-a146-2c7834f04bc1",site_id:"3f68a6e8-9d60-4aa7-a146-2c7834f04bc1",sequence:1,payload:{probe:true}},{authorization:"Bearer invalid-synthetic-access-token"}),{status:403,data:{error:"DENIED"}});
  console.log("ZIPPLE_HOSTED_EDGE_FAIL_CLOSED_PASS");
 });
 test("hosted recovery generic acknowledgement for synthetic unknown identifier",async()=>{

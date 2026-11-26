@@ -1,18 +1,17 @@
 name: ZIPPLE N1 — hosted positive end-to-end
 on:
-  push:
-    branches: [main]
-    paths:
-      - "docs/apps/zipple/n1/hosted/positive.test.mjs"
-      - ".github/workflows/zipple-n1-hosted-positive.yml"
+  workflow_dispatch:
 permissions:
   contents: read
-  id-token: write
 jobs:
   hosted-positive:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
+    env:
+      ZIPPLE_N1_FIXTURE_PASSWORD: ${{ secrets.ZIPPLE_N1_FIXTURE_PASSWORD }}
     steps:
+      - name: Require explicitly provisioned synthetic fixture
+        run: test -n "$ZIPPLE_N1_FIXTURE_PASSWORD" || { echo 'Synthetic fixture secret not configured'; exit 1; }
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
