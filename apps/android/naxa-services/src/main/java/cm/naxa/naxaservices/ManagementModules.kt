@@ -117,7 +117,7 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
             Text("Facturation, crédits et remboursements", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Devis, factures, créances à recevoir du client et remboursements que la PME doit au client : deux soldes distincts. Les écritures restent rattachées au site.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
-            LocalOnlyNotice("Documents locaux en attente de synchronisation et validation serveur.")
+            LocalOnlyNotice("Documents en attente de confirmation.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
@@ -160,7 +160,7 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
                                         session.account.memberId
                                     )
                                 }.onSuccess {
-                                    notice = labelRecord(type) + " enregistré localement."
+                                    notice = labelRecord(type) + " enregistré."
                                     customer = ""; title = ""; total = ""; paid = "0"; error = null
                                 }.onFailure { error = it.message ?: "Enregistrement impossible." }
                             }
@@ -169,7 +169,7 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
                     ) { Text("Enregistrer la pièce") }
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                     if (notice != null) Text(notice!!, color = MaterialTheme.colorScheme.secondary)
-                    Text("Une facture ou un remboursement reste un brouillon local jusqu’à synchronisation et validation serveur.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Les factures et remboursements en attente ne sont pas encore confirmés.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -418,7 +418,7 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) {
                 siteId = it; selectedSupplierId = ""; selectedItemId = ""; draftLines.clear()
             }
-            LocalOnlyNotice(if (fr) "Registres comptables de gestion conservés localement sur cet appareil. La synchronisation avec le serveur reste liée à l'environnement ERP isolé." else "Management accounting records are stored locally on this device. Server synchronization still depends on the isolated ERP environment.")
+            LocalOnlyNotice(if (fr) "Consultez vos registres comptables disponibles." else "View your available accounting records.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -810,7 +810,7 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
             Text("Pilotage et objectifs", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text("Baselines datées et historisées. Un nouvel objectif ajoute une nouvelle version ; il ne réécrit pas les objectifs déjà enregistrés.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
-            LocalOnlyNotice("Le réalisé provient des ventes confirmées locales de ce site. La consolidation réseau complète dépendra de la synchronisation ERP.")
+            LocalOnlyNotice("Les résultats de ce site reposent sur les ventes confirmées.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -1146,9 +1146,9 @@ internal fun ProfileContent(
             OutlinedButton(onClick = { onNavigate(AppRoute.SUBSCRIPTIONS) }, modifier = Modifier.fillMaxWidth()) { Text("Abonnement et paiement") }
         }
         item {
-            Text("Historique local", fontWeight = FontWeight.Bold)
+            Text("Historique", fontWeight = FontWeight.Bold)
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
-            LocalOnlyNotice("Historique des registres locaux ; l’historique serveur complet dépend de la synchronisation.")
+            LocalOnlyNotice("Consultez vos dernières opérations disponibles.")
         }
         items(history.take(30)) { item ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -1182,7 +1182,7 @@ fun LivechatContent(modifier: Modifier, repository: NaxaServicesLocalRepository,
         item {
             Spacer(Modifier.height(12.dp))
             Text("Livechat et assistance", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("FAQ et demandes d’assistance. Les messages sont conservés localement et attendent la passerelle support. Les appels et le partage d’écran temps réel nécessitent encore le service média et les permissions de session.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Consultez la FAQ et envoyez une demande d’assistance.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorizedSitePicker(
                 siteIds,
                 siteId,
@@ -1210,7 +1210,7 @@ fun LivechatContent(modifier: Modifier, repository: NaxaServicesLocalRepository,
                         if (subject.isBlank() || message.trim().length < 10) notice = "Saisis un sujet et au moins 10 caractères."
                         else scope.launch {
                             runCatching { repository.createSupportRequest(session.account.organizationId, siteId, subject, message, "normal") }
-                                .onSuccess { subject = ""; message = ""; notice = "Demande enregistrée localement. Elle sera transmise à la synchronisation." }
+                                .onSuccess { subject = ""; message = ""; notice = "Demande enregistrée, en attente d'envoi." }
                                 .onFailure { notice = it.message ?: "Envoi impossible." }
                         }
                     }, enabled = siteId.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Créer une demande") }
@@ -1299,7 +1299,7 @@ fun CashReceiptActions(sale: LocalSale, session: AuthSession, onDismiss: () -> U
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("Reçu de caisse", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(record.reference + " · " + xaf(record.amountXaf))
-                Text(if (sale.status == "pending") "Paiement Mobile Money en attente : ce reçu n'atteste pas encore du règlement." else "Paiement espèces enregistré localement.")
+                Text(if (sale.status == "pending") "Paiement Mobile Money en attente : ce reçu n'atteste pas encore du règlement." else "Paiement espèces enregistré.")
                 Text("Choisis une action pour remettre le justificatif au client.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(onClick = { saveLauncher.launch("NAXA-" + sale.saleNumber + ".pdf") }, modifier = Modifier.fillMaxWidth()) {
                     Text("Télécharger / enregistrer le PDF")
@@ -1797,7 +1797,7 @@ fun WorkOrdersContent(
                                         }.onSuccess {
                                             reason = ""
                                             error = null
-                                            message = if (fr) "Étape mise à jour et journalisée." else "Workflow stage updated and audited."
+                                            message = if (fr) "Étape mise à jour et journalisée." else "Stage updated."
                                         }.onFailure {
                                             error = it.message ?: if (fr) "Transition impossible." else "Transition failed."
                                         }
@@ -1811,7 +1811,7 @@ fun WorkOrdersContent(
                         }
                     }
                     if (events.isNotEmpty()) {
-                        Text(if (fr) "Historique des étapes" else "Workflow history", fontWeight = FontWeight.SemiBold)
+                        Text(if (fr) "Historique des étapes" else "Activity history", fontWeight = FontWeight.SemiBold)
                         events.take(5).forEach { event ->
                             Text(
                                 event.fromStatus + " → " + event.toStatus + " · " + event.reason,
@@ -2091,7 +2091,7 @@ fun RecurringChargesContent(
             Spacer(Modifier.height(12.dp))
             ModulePageTitle("Charges, échéances et trésorerie", "Configure les dépenses récurrentes, suis les règlements et anticipe les dates de paiement.")
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
-            LocalOnlyNotice("Les rappels Android sont calculés localement sur cet appareil. Les notifications multi-appareils, SMS et WhatsApp côté serveur restent dépendantes du backend.")
+            LocalOnlyNotice("Consultez les rappels disponibles. Les envois SMS et WhatsApp ne sont pas disponibles.")
             if (android.os.Build.VERSION.SDK_INT >= 33 &&
                 ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED
             ) {
@@ -2278,7 +2278,7 @@ fun LoyaltyProgramsContent(
             }
             Text("Quatre programmes autonomes adaptés au profil d'activité : points, passages, dépenses cumulées et fréquence de visite.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it; selectedCustomerId = "" }
-            LocalOnlyNotice("Les gains et historiques sont enregistrés localement et rattachés à l'organisation et au site. L'interconnexion automatique à la caisse sera activée avec l'API ERP synchronisée.")
+            LocalOnlyNotice("Consultez vos gains et votre historique. Le versement automatique n'est pas disponible.")
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
