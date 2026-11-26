@@ -55,4 +55,24 @@ end $f$;
 revoke all on function public.ns_schedule_meeting_series(uuid,uuid,uuid,uuid,text,timestamptz,uuid[],text,integer,text,integer) from public,anon,authenticated;
 grant execute on function public.ns_schedule_meeting_series(uuid,uuid,uuid,uuid,text,timestamptz,uuid[],text,integer,text,integer) to authenticated;
 
+-- Atomically cancel all still-scheduled occurrences; preserve opened/closed/cancelled history.
+create function public.ns_cancel_meeting_series(p_id uuid,p_expected jsonb) returns jsonb language plpgsql security definer set search_path='' as $f$
+declare s public.ns_meeting_series%rowtype; m public.ns_internal_meetings%rowtype; actual jsonb; n integer:=0;
+begin
+ select * into s from public.ns_meeting_series where id=p_id for update;
+ if not found or s.host_member_id is distinct from public.ns_current_member_id(s.org_id) or not public.ns_roster_enabled(s.org_id) then raise exception 'NS_SERIES_FORBIDDEN';end if;
+ -- Lock all occurrences before validating the caller's snapshot.
+ perform 1 from public.ns_internal_meetings where series_id=p_id order by id for update;
+ if exists(select 1 from public.ns_internal_meetings where series_id=p_id and not public.ns_meeting_can_host(id)) then raise exception 'NS_SERIES_FORBIDDEN';end if;
+ select coalesce(jsonb_agg(jsonb_build_object('id',id,'revision',revision) order by id),'[]'::jsonb) into actual from public.ns_internal_meetings where series_id=p_id and status='scheduled';
+ if jsonb_typeof(p_expected) is distinct from 'array' or jsonb_array_length(p_expected)>12 then raise exception 'NS_SERIES_STATE_CONFLICT';end if;
+ if actual is distinct from (select coalesce(jsonb_agg(x order by x->>'id'),'[]'::jsonb) from jsonb_array_elements(p_expected) x) then raise exception 'NS_SERIES_STATE_CONFLICT';end if;
+ for m in select * from public.ns_internal_meetings where series_id=p_id and status='scheduled' order by id loop
+  perform public.ns_transition_internal_meeting(m.id,m.revision,'cancelled');n:=n+1;
+ end loop;
+ return jsonb_build_object('id',p_id,'cancelled_count',n);
+end $f$;
+revoke all on function public.ns_cancel_meeting_series(uuid,jsonb) from public,anon,authenticated;
+grant execute on function public.ns_cancel_meeting_series(uuid,jsonb) to authenticated;
+
 rollback;
