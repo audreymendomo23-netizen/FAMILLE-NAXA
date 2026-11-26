@@ -142,7 +142,7 @@ jobs:
             const root=resolve('apps/web/naxa-services/dist');
             const types={'.html':'text/html','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.json':'application/json','.webmanifest':'application/manifest+json','.woff2':'font/woff2'};
             try{
-              accounting=spawn('deno',['run','--allow-env','--allow-net=127.0.0.1:54321,0.0.0.0:8001,127.0.0.1:8001',process.env.RUNNER_TEMP+'/ns-accounting/index.ts'],{stdio:'ignore'});
+              accounting=spawn('deno',['run','--cert',process.env.RUNNER_TEMP+'/ns-replay.crt','--allow-env','--allow-net=127.0.0.1:8443,0.0.0.0:8001,127.0.0.1:8001',process.env.RUNNER_TEMP+'/ns-accounting/index.ts'],{env:{...process.env,SUPABASE_URL:'https://127.0.0.1:8443'},stdio:'ignore'});
               let ready=false;
               for(let i=0;i<40;i++){try{if((await fetch('http://127.0.0.1:8001',{method:'OPTIONS'})).ok){ready=true;break;}}catch{}if(accounting.exitCode!==null)break;await pause(250);}
               assert.ok(ready,'real accounting gateway ready');
@@ -152,7 +152,7 @@ jobs:
                   let upstream;
                   if(path==='/functions/v1/naxa-services-auth')upstream='http://127.0.0.1:8000'+req.url;
                   else if(path==='/functions/v1/naxa-services-accounting')upstream='http://127.0.0.1:8001'+req.url;
-                  else if(path.startsWith('/storage/v1/'))upstream=base+req.url;
+                  else if(path.startsWith('/storage/v1/')||path==='/auth/v1/user'||path.startsWith('/rest/v1/'))upstream=base+req.url;
                   if(upstream){const u=new URL(upstream);const forward=http.request(u,{method:req.method,headers:{...req.headers,host:u.host}},r=>{res.writeHead(r.statusCode,r.headers);r.pipe(res);});forward.on('error',()=>{if(!res.headersSent)res.writeHead(502);res.end();});req.pipe(forward);return;}
                   let file=resolve(root,'.'+decodeURIComponent(path));if(file!==root&&!file.startsWith(root+sep)){res.writeHead(403);res.end();return;}
                   if(!(await stat(file).catch(()=>null))?.isFile())file=resolve(root,'index.html');
@@ -194,6 +194,7 @@ jobs:
               const receipt=page.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-accounting')&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='apply_sync_event',{timeout:25000});
               await page.getByRole('button',{name:'Enregistrer',exact:true}).click();
               const response=await receipt;const result=await response.json();
+              console.log('Replay customer write HTTP',response.status(),'error code',typeof result.error==='string'&&/^[A-Z0-9_]{1,80}$/.test(result.error)?result.error:'none','receipt status',result.result?.status??'absent');
               assert.equal(response.status(),200);assert.equal(result.ok,true);assert.equal(result.result.status,'applied');
               const records=await success(base+'/rest/v1/ns_customers?select=id&org_id=eq.'+f.org.id+'&display_name=eq.'+encodeURIComponent(customer),undefined,admin,admin,'GET');
               assert.equal(records.length,1);
