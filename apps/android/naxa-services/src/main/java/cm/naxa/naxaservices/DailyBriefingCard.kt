@@ -1,0 +1,114 @@
+package cm.naxa.naxaservices
+
+import android.os.Handler
+import android.os.Looper
+import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import cm.naxa.naxaservices.auth.AuthSession
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.time.LocalDate
+import java.time.ZoneId
+import java.util.Locale
+import java.util.UUID
+
+private data class BriefingWords(val title:String,val intro:String,val appointment:String,val completed:String,val revenue:String,val sales:String,val attendance:String,val missing:String,val play:String,val stop:String,val error:String)
+private val briefingWords=mapOf(
+ "fr" to BriefingWords("Mon bilan","Voici votre bilan partiel, établi à partir des données confirmées.","Rendez-vous","terminés","Chiffre d’affaires en francs CFA","ventes confirmées","Pointages personnels","Les autres indicateurs ne sont pas disponibles dans ce bilan.","Écouter mon bilan","Arrêter","Voix locale ou données indisponibles."),
+ "en" to BriefingWords("My report","Here is your partial report based on confirmed records.","Appointments","completed","Revenue in CFA francs","confirmed sales","Personal clock events","Other indicators are not available in this report.","Listen to my report","Stop","Local voice or data unavailable."),
+ "ff-CM" to BriefingWords("Jaŋtol am","Ɗoo ko jaŋtol maa ummoraade e humpito tabbitinaango.","Kawrital","timmuɗe","Ceede soodugol CFA","soodugol tabbitinaaɗo","Winndanɗe naatugol","Humpito goɗɗo heɓotaako e jaŋtol ngol.","Heɗo jaŋtol am","Dartin","Daande walla humpito heɓotaako."),
+ "es" to BriefingWords("Mi informe","Este es tu informe parcial basado en datos confirmados.","Citas","completadas","Ingresos en francos CFA","ventas confirmadas","Registros personales de asistencia","Los demás indicadores no están disponibles en este informe.","Escuchar mi informe","Detener","Voz local o datos no disponibles."),
+ "it" to BriefingWords("Il mio resoconto","Ecco il tuo resoconto parziale basato sui dati confermati.","Appuntamenti","completati","Ricavi in franchi CFA","vendite confermate","Registrazioni personali delle presenze","Gli altri indicatori non sono disponibili in questo resoconto.","Ascolta il mio resoconto","Interrompi","Voce locale o dati non disponibili."),
+ "zh-CN" to BriefingWords("我的日报","这是根据已确认数据生成的部分报告。","预约","已完成","营业收入（非洲金融共同体法郎）","已确认销售","个人考勤记录","其他指标暂未包含在此报告中。","收听我的日报","停止","本地语音或数据不可用。"))
+private val briefingLanguages=linkedMapOf("fr" to "Français","en" to "English","ff-CM" to "Fulfulde","es" to "Español","it" to "Italiano","zh-CN" to "中文")
+internal fun briefingText(report:JSONObject,language:String):String {
+ val w=briefingWords.getValue(language)
+ val appointments=report.getJSONObject("appointments")
+ val finance=report.optJSONObject("finance")
+ val attendance=report.optJSONObject("personal_clock_events")
+ require(report.getString("coverage")=="partial_confirmed_server_facts")
+ require(report.getString("scope") in setOf("site","personal"))
+ require(report.getString("scope")!="personal"||finance==null)
+ return buildString {
+  append(w.intro).append(" ").append(report.getString("day")).append(". ")
+  append(w.appointment).append(": ").append(appointments.getInt("scheduled_count")).append("; ").append(w.completed).append(": ").append(appointments.getInt("completed_count")).append(". ")
+  if(finance!=null)append(w.revenue).append(": ").append(finance.getLong("revenue_xaf")).append("; ").append(w.sales).append(": ").append(finance.getInt("confirmed_sales_count")).append(". ")
+  if(attendance!=null)append(w.attendance).append(": ").append(attendance.getInt("event_count")).append(". ")
+  append(w.missing)
+ }
+}
+@Composable
+internal fun DailyBriefingCard(session:AuthSession,siteId:String){
+ if(!BuildConfig.BRIEFING_ENABLED||siteId.isBlank()||session.requirePasswordChange)return
+ key(session.account.organizationId,session.account.memberId,session.deviceId,siteId){
+  val context=LocalContext.current
+  val latest by rememberUpdatedState(session)
+  val scope=rememberCoroutineScope()
+  var language by remember{mutableStateOf(session.account.defaultLocale.takeIf{it in briefingLanguages}?:"fr")}
+  var speed by remember{mutableStateOf(1f)}
+  var engine by remember{mutableStateOf<TextToSpeech?>(null)}
+  var ready by remember{mutableStateOf(false)}
+  var playing by remember{mutableStateOf(false)}
+  var busy by remember{mutableStateOf(false)}
+  var error by remember{mutableStateOf(false)}
+  var report by remember{mutableStateOf<JSONObject?>(null)}
+  val w=briefingWords.getValue(language)
+  DisposableEffect(context){
+   var disposed=false
+   val handler=Handler(Looper.getMainLooper())
+   val tts=TextToSpeech(context.applicationContext){status->handler.post{if(!disposed)ready=status==TextToSpeech.SUCCESS}}
+   engine=tts
+   tts.setOnUtteranceProgressListener(object:UtteranceProgressListener(){
+    override fun onStart(utteranceId:String?){}
+    override fun onDone(utteranceId:String?){handler.post{if(!disposed)playing=false}}
+    @Deprecated("Deprecated in Java") override fun onError(utteranceId:String?){handler.post{if(!disposed){playing=false;error=true}}}
+   })
+   onDispose{disposed=true;tts.stop();tts.shutdown()}
+  }
+  fun stop(){engine?.stop();playing=false}
+  fun play(r:JSONObject){
+   val tts=engine
+   if(!ready||tts==null){error=true;return}
+   val wanted=Locale.forLanguageTag(language)
+   val voice=tts.voices?.firstOrNull{!it.isNetworkConnectionRequired&&it.locale.language==wanted.language}
+   if(voice==null){error=true;return}
+   stop()
+   if(tts.setVoice(voice)!=TextToSpeech.SUCCESS){error=true;return}
+   tts.setSpeechRate(speed)
+   playing=tts.speak(briefingText(r,language),TextToSpeech.QUEUE_FLUSH,null,UUID.randomUUID().toString())==TextToSpeech.SUCCESS
+   error=!playing
+  }
+  fun load(andPlay:Boolean){
+   stop();busy=true;error=false;report=null
+   scope.launch{
+    try{
+     val date=LocalDate.now(ZoneId.of("Africa/Douala")).toString()
+     val r=JSONObject(StaffRosterApi.call(latest,"rpc/ns_daily_briefing",JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_day",date)))
+     require(r.getString("day")==date)
+     briefingText(r,language)
+     report=r
+     if(andPlay)play(r)
+    }catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}
+   }
+  }
+  Card(Modifier.fillMaxWidth()){
+   Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+    Text(w.title,style=MaterialTheme.typography.titleLarge)
+    briefingLanguages.forEach{(code,label)->OutlinedButton(onClick={stop();language=code;error=false},enabled=!busy){Text((if(code==language)"✓ " else "")+label)}}
+    Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+     listOf(.8f,1f,1.2f,1.5f).forEach{s->TextButton(onClick={stop();speed=s},enabled=!busy){Text((if(s==speed)"✓ " else "")+s+"×")}}
+    }
+    Button(onClick={if(playing)stop() else load(true)},enabled=!busy){Text(if(playing)w.stop else w.play)}
+    if(error)Text(w.error,color=MaterialTheme.colorScheme.error)
+    report?.let{Text(briefingText(it,language))}
+   }
+  }
+ }
+}

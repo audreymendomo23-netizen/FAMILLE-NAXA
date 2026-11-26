@@ -9,6 +9,8 @@ on:
       - 'supabase/tests/drafts/naxa_services_attendance*.sql'
       - 'supabase/drafts/naxa_services_v10_*roster*.sql'
       - 'supabase/tests/drafts/naxa_services_*roster*.sql'
+      - 'supabase/drafts/naxa_services_v11_meeting_briefing.sql'
+      - 'supabase/tests/drafts/naxa_services_meeting_briefing.sql'
 permissions:
   contents: read
 concurrency:
@@ -84,6 +86,14 @@ jobs:
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_roster_service_comparison.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regclass('public.ns_roster_shifts') is null and to_regclass('public.ns_roster_clock_links') is null" | grep -Fx t
+      - name: Qualify meetings and scoped briefing with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_meeting_briefing.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regclass('public.ns_internal_meetings') is null and to_regprocedure('public.ns_daily_briefing(uuid,uuid,date)') is null" | grep -Fx t
       - name: Build commercial Web and install Chromium for real Replay
         shell: bash
         run: |

@@ -24,7 +24,7 @@ import java.time.format.DateTimeFormatter
 import java.util.UUID
 
 internal fun rosterAvailable(mode:String)=mode=="single_site_multi_workstation"||mode=="multi_site_network"
-private object StaffRosterApi {
+internal object StaffRosterApi {
     suspend fun call(session:AuthSession,path:String,body:JSONObject?=null):String=withContext(Dispatchers.IO){
         val base=URI(BuildConfig.AUTH_FUNCTION_URL)
         require(base.scheme=="https"&&base.host!=null&&base.userInfo==null&&base.path.trimEnd('/')=="/functions/v1/naxa-services-auth")
