@@ -37,6 +37,9 @@ type Entry = {
   status?: string; revision?: number; siteId?: string; activityProfile?: ActivityProfile;
   metadata?: Record<string, string>;
 };
+function confirmedActivityRevision(entry:Entry):boolean {
+  return Number.isSafeInteger(entry.revision)&&(entry.revision??0)>0&&(entry.state==="Confirmé"||entry.state==="Confirmé · autre appareil");
+}
 type WebDevice = {id:string;installation_id:string;platform:string;label:string|null;last_seen_at:string;revoked_at:string|null;current:boolean};
 type WebWorkstation = { id: string; site_id: string; code: string; name: string; kind: string; capacity: number; status: string };
 
@@ -294,6 +297,7 @@ function App() {
           actionCode: typeof command.action_code === "string" ? command.action_code : existingEntry?.actionCode,
           data: { ...(existingEntry?.data ?? {}), ...payload, server_result: serverRecord, server_recorded_at: typeof storedReceipt.recorded_at === "string" ? storedReceipt.recorded_at : typeof payload.server_recorded_at === "string" ? payload.server_recorded_at : undefined },
           status: receiptIsNewer && typeof serverRecord.status === "string" ? serverRecord.status
+            : item.state!=="acknowledged"&&existingRevision>0 ? existingEntry?.status
             : typeof payload.to_status === "string" ? payload.to_status
             : typeof payload.status === "string" ? payload.status
             : existingEntry?.status,
@@ -1052,7 +1056,7 @@ function App() {
   async function transitionWebPressing(entry: Entry, nextStatus: string, reason: string) {
     const session=authSession;
     if(!session||entry.recordType!=="pressing_order"||!entry.siteId||!entry.status||
-      !Number.isSafeInteger(entry.revision)||(entry.revision??0)<1) {
+      !confirmedActivityRevision(entry)) {
       throw new Error("Attendez la confirmation avant de passer à l'étape suivante.");
     }
     if(entry.siteId !== (activeSiteId || session.account.active_site_ids[0])) throw new Error("Sélectionne le point de vente du ticket avant sa transition.");
@@ -1068,7 +1072,7 @@ function App() {
 
   async function transitionWebWorkOrder(entry: Entry, nextStatus: string, reason: string) {
     const session = authSession;
-    if (!session || !entry.recordType || !entry.siteId || !entry.status || !Number.isSafeInteger(entry.revision) || (entry.revision ?? 0) < 1) {
+    if (!session || !entry.recordType || !entry.siteId || !entry.status || !confirmedActivityRevision(entry)) {
       throw new Error("Attendez la confirmation avant de poursuivre.");
     }
     if(entry.siteId !== (activeSiteId || session.account.active_site_ids[0])) throw new Error("Sélectionne le point de vente du dossier avant sa transition.");
@@ -1181,7 +1185,7 @@ function App() {
         <nav className="side-nav">
           {grouped.map(([group, groupModules]) => <div className="nav-group" key={group}>
             <div className="nav-heading">{t(group)}</div>
-            {groupModules.map((m) => <button key={m.id} aria-current={active===m.id?"page":undefined} className={"nav-item " + (active === m.id ? "active" : "")} onClick={() => {setActive(m.id);setMobileMenu(false);}}><span className="nav-glyph">{iconFor(m.id)}</span><span>{t(m.title)}</span></button>)}
+            {groupModules.map((m) => <button key={m.id} data-module-id={m.id} aria-current={active===m.id?"page":undefined} className={"nav-item " + (active === m.id ? "active" : "")} onClick={() => {setActive(m.id);setMobileMenu(false);}}><span className="nav-glyph" aria-hidden="true">{iconFor(m.id)}</span><span>{t(m.title)}</span></button>)}
           </div>)}
         </nav>
         <div className="side-bottom">
@@ -1440,9 +1444,9 @@ function PressingPage({
         const status=entry.status??"received";
         const next=nextStatus[status];
         return <div className="activity-record" key={entry.id}>
-          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail}</small><small>{t(entry.revision?"Confirmé":"En attente de confirmation")}</small></div><span className="status-tag local">{t(statusLabels[status]??entry.state)}</span></div>
+          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail}</small><small>{t(confirmedActivityRevision(entry)?"Confirmé":entry.state)}</small></div><span className="status-tag local">{t(statusLabels[status]??entry.state)}</span></div>
           {canPreviewEdit&&<button className="btn secondary" onClick={()=>onAdvance(entry.id)} disabled={status==="picked_up"}>{t("Avancer l'aperçu")}</button>}
-          {authenticated&&next&&entry.recordType==="pressing_order"&&entry.siteId&&entry.revision?<div className="activity-transition">
+          {authenticated&&next&&entry.recordType==="pressing_order"&&entry.siteId&&confirmedActivityRevision(entry)?<div className="activity-transition">
             <label>{t("Motif du changement d'étape")}<input value={reasons[entry.id]??""} onChange={e=>setReasons(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500}/></label>
             <button className="btn secondary" disabled={busy||(reasons[entry.id]??"").trim().length<3} onClick={()=>void onTransition(entry,next,reasons[entry.id]??"").then(
               ()=>setReasons(previous=>({...previous,[entry.id]:""})),
@@ -1549,9 +1553,9 @@ function WorkOrdersPage({
         const next=stage?.next??[];
         const detailRows=Object.entries(entry.metadata??{}).filter(([,value])=>Boolean(value));
         return <div className="activity-record" key={entry.id} data-record-id={entry.id}>
-          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail||entry.createdAt}</small><small data-testid="record-confirmation" data-version={entry.revision??0}>{t(entry.revision?"Confirmé":"En attente de confirmation")}</small></div><span className="status-tag local">{stage?.label??entry.state}</span></div>
+          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail||entry.createdAt}</small><small data-testid="record-confirmation" data-version={confirmedActivityRevision(entry)?entry.revision:0}>{t(confirmedActivityRevision(entry)?"Confirmé":entry.state)}</small></div><span className="status-tag local">{stage?.label??entry.state}</span></div>
           {detailRows.length>0&&<ul className="brief-list">{detailRows.map(([key,value])=><li key={key}>{key} : {value}</li>)}</ul>}
-          {authenticated&&next.length>0&&entry.revision&&entry.siteId&&<div className="activity-transition">
+          {authenticated&&next.length>0&&confirmedActivityRevision(entry)&&entry.siteId&&<div className="activity-transition">
             <label>{t("Motif du changement d'étape")}<input value={reasonByEntry[entry.id]??""} onChange={e=>setReasonByEntry(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500} /></label>
             <div className="activity-transition-buttons">{next.map(code=><button className="btn secondary" key={code} disabled={busy||transitioning===entry.id||(reasonByEntry[entry.id]??"").trim().length<3} onClick={()=>void transition(entry,code)}>{transitioning===entry.id?"Envoi…":entryWorkflow.stages.find(item=>item.code===code)?.label??code}</button>)}</div>
           </div>}

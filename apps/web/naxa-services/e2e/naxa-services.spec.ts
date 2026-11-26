@@ -971,7 +971,10 @@ for(const profile of Object.keys(ACTIVITY_WORKFLOWS) as ActivityProfile[]){
    }
   }
   const events=await installBackend(context,fixtures),page=await context.newPage();
-  await signIn(page,"NS-ACT-"+profile.toUpperCase());await page.getByRole("button",{name:"Dossiers métier",exact:true}).click();
+  await signIn(page,"NS-ACT-"+profile.toUpperCase());
+  const nav=page.locator('.side-nav button[data-module-id="workOrders"]');
+  await expect(nav).toHaveAccessibleName("Dossiers métier");
+  await nav.click({timeout:8_000});await expect(nav).toHaveAttribute("aria-current","page");
   await expect(page.locator(".activity-record")).toHaveCount(cases.length);
   let sent=0;
   for(const c of cases){
@@ -989,7 +992,7 @@ for(const profile of Object.keys(ACTIVITY_WORKFLOWS) as ActivityProfile[]){
    for(const button of await buttons.all())await expect(button).toBeDisabled();
    await record.getByLabel("Motif du changement d'étape").fill("Recette matrice "+c.from+" vers "+c.to);
    const next=workflow.stages.find(s=>s.code===c.to)!;
-   await record.getByRole("button",{name:next.label,exact:true}).click();
+   await record.getByRole("button",{name:next.label,exact:true}).click({timeout:8_000});
    await expect.poll(()=>events.length).toBe(++sent);
    const event=events[sent-1],payload=event.payload as Record<string,unknown>;
    expect(event.aggregate_id).toBe(c.id);expect(event.action_code).toBe(kind+".status_changed");
@@ -1012,6 +1015,7 @@ for(const mode of ["NS-ORG-A","NS-SINGLE","NS-MULTISITE"]){
    const sites=page.locator(".site-select select");await expect(sites.locator("option")).toHaveCount(mode==="NS-MULTISITE"?2:1);
    if(mode==="NS-MULTISITE"){await sites.selectOption(SECOND_SITE_ID);await expect(sites).toHaveValue(SECOND_SITE_ID);await sites.selectOption(SITE_ID);}
    const nav=page.locator(".side-nav button.nav-item");await expect(nav).toHaveCount(17);
+   await expect(nav.filter({has:page.locator(".nav-glyph[aria-hidden=true]")})).toHaveCount(17);
    for(const width of [1440,320]){
     await page.setViewportSize({width,height:900});
     for(let i=0;i<17;i++){
@@ -1071,4 +1075,26 @@ test("Financial interactions: delayed period response cannot restore an obsolete
   await expect(page.getByRole("table").first()).toContainText("2026-11-25");await expect(page.getByRole("table").first()).not.toContainText("2026-11-24");
   await expect(page.getByRole("button",{name:"Exporter Excel",exact:true})).toBeEnabled();
  }finally{release();}
+});
+
+
+test("Activity confirmation: rejected transition cannot present a confirmed new stage or allow a second transition",async({context})=>{
+ const id=randomUUID();
+ await installBackend(context,[{source_device_id:REMOTE_DEVICE_ID,origin_site_id:SITE_ID,site_id:SITE_ID,visible_site_ids:[SITE_ID],workstation_id:null,aggregate_type:"work_order",aggregate_id:id,recorded_at:"2026-11-25T10:00:00.000Z",cursor:1,event_id:randomUUID(),action_code:"work_order.created",aggregate_version:1,payload:{org_id:ORG_A,site_id:SITE_ID,record_id:id,title:"Dossier refus recette",metadata_json:{activity_profile:"autre",fields:{service:"Service",specifications:"Recette"}},server_result:{status:"received",revision:1}}}]);
+ let rejected=0;
+ await context.route(ACCOUNTING_URL,async route=>{
+  if(route.request().method()==="OPTIONS")return route.fallback();
+  const request=route.request().postDataJSON();
+  if(request.action!=="apply_sync_event")return route.fallback();
+  if(request.event.aggregate_id!==id)return route.fallback();
+  rejected++;return json(route,{ok:false,error:"NAXA_ACTIVITY_VERSION_CONFLICT"},409);
+ });
+ const page=await context.newPage();await signIn(page,"NS-ACT-AUTRE");await page.locator('.side-nav button[data-module-id="workOrders"]').click();
+ const record=page.locator('.activity-record[data-record-id="'+id+'"]');
+ await expect(record.getByTestId("record-confirmation")).toHaveAttribute("data-version","1");
+ await record.getByLabel("Motif du changement d'étape").fill("Recette conflit");
+ await record.getByRole("button",{name:"Annulée",exact:true}).click();
+ await expect.poll(()=>rejected).toBe(1);
+ await expect(record.getByTestId("record-confirmation")).toHaveAttribute("data-version","0");
+ await expect(record.locator(".activity-transition")).toHaveCount(0);
 });
