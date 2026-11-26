@@ -3,16 +3,27 @@ import android.content.Context
 import android.os.SystemClock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URI
 import java.util.UUID
 
 class AuthGateway(private val context:Context,private val base:String){
+ private val lifecycle=Mutex()
+ private val vault=SessionVault(context)
+ private val unlock=LocalUnlock(context)
+ private var refreshSecret:String?=null
+ private var remembered=false
+ fun hasRememberedSession()=unlock.configured()
+ fun canRefresh()=refreshSecret!=null
+ fun clearLocalSession(){refreshSecret=null;remembered=false;unlock.clear()}
+ private fun remember(s:Session){val secret=refreshSecret?:return;if(remembered)vault.save(VaultSession(s.accessToken,secret,s.deviceId),true)}
  private fun endpoint(action:String):URI{
   val u=URI(base)
   require(u.scheme=="https" && !u.host.isNullOrBlank() && u.userInfo==null && u.query==null && u.fragment==null && u.path.trimEnd('/').endsWith("/widemeet-auth"))
-  require(action in setOf("login","logout","switch-workspace","request-recovery","change-password","identity","register"))
+  require(action in setOf("login","logout","switch-workspace","request-recovery","change-password","identity","register","refresh"))
   return URI(base.trimEnd('/')+"/"+action)
  }
  private fun installation():String{
@@ -33,11 +44,36 @@ class AuthGateway(private val context:Context,private val base:String){
    val raw=c.inputStream.bufferedReader().use{it.readText()};require(raw.length<=131072);return JSONObject(raw)
   }finally{c.disconnect()}
  }
- suspend fun login(identifier:String,password:String):Session=withContext(Dispatchers.IO){
-  require(identifier.isNotBlank()&&password.isNotBlank()&&password.length<=256)
-  val j=request("login",JSONObject().put("app_id","WIDEMEET").put("identifier",identifier.trim()).put("password",password).put("installation_id",installation()).put("platform","android"))
-  parse(j)
+ suspend fun login(identifier:String,password:String,keep:Boolean=false,pin:String=""):Session=withContext(Dispatchers.IO){lifecycle.withLock{
+  require(identifier.isNotBlank()&&password.isNotBlank()&&password.length<=256&&(!keep||Regex("^[0-9]{4}$").matches(pin)))
+  val j=request("login",JSONObject().put("app_id","WIDEMEET").put("identifier",identifier.trim()).put("password",password).put("installation_id",installation()).put("platform","android").put("remember_me",keep))
+  val s=parse(j)
+  clearLocalSession()
+  if(!s.requirePasswordChange){
+   val secret=j.getString("refresh_token");require(Regex("^[a-f0-9]{64}$").matches(secret));refreshSecret=secret
+   if(keep){try{unlock.configure(pin);remembered=true;remember(s)}catch(e:Exception){clearLocalSession();runCatching{request("logout",JSONObject().put("app_id","WIDEMEET"),s.accessToken)};throw e}}
+  }
+  s
+ }}
+ private fun rotate(secret:String):Session{
+  require(Regex("^[a-f0-9]{64}$").matches(secret))
+  val j=request("refresh",JSONObject().put("app_id","WIDEMEET").put("installation_id",installation()).put("platform","android").put("refresh_token",secret))
+  val s=parse(j);val replacement=j.getString("refresh_token")
+  require(!s.requirePasswordChange&&Regex("^[a-f0-9]{64}$").matches(replacement)&&replacement!=secret)
+  refreshSecret=replacement;remember(s);return s
  }
+ suspend fun refresh(s:Session):Session=withContext(Dispatchers.IO){lifecycle.withLock{
+  try{val next=rotate(refreshSecret?:error("no refresh"));require(next.memberId==s.memberId&&next.activeWorkspaceId==s.activeWorkspaceId);next}catch(e:Exception){clearLocalSession();throw e}
+ }}
+ suspend fun restoreWithPin(pin:String):Session=withContext(Dispatchers.IO){lifecycle.withLock{
+  require(unlock.verify(pin)){"unlock_failed"}
+  try{remembered=true;rotate(vault.loadRefreshToken()?:error("no saved session"))}catch(e:Exception){clearLocalSession();throw e}
+ }}
+ // Caller must be the local system BiometricPrompt success callback.
+ suspend fun restoreAfterBiometric():Session=withContext(Dispatchers.IO){lifecycle.withLock{
+  require(unlock.configured())
+  try{remembered=true;rotate(vault.loadRefreshToken()?:error("no saved session"))}catch(e:Exception){clearLocalSession();throw e}
+ }}
  suspend fun requestRecovery(identifier:String):Unit=withContext(Dispatchers.IO){
   val normalized=identifier.trim().uppercase(java.util.Locale.ROOT)
   require(Regex("^WM-[A-Z0-9]{8,24}$").matches(normalized))
@@ -47,7 +83,7 @@ class AuthGateway(private val context:Context,private val base:String){
  suspend fun changePassword(s:Session,current:String,next:String,requestId:String):Unit=withContext(Dispatchers.IO){
   require(current.isNotBlank()&&next.length in 12..256&&current!=next)
   val result=request("change-password",JSONObject().put("app_id","WIDEMEET").put("current_password",current).put("new_password",next).put("request_id",requestId),s.accessToken)
-  require(result.optBoolean("changed",false)&&result.optBoolean("reconnect",false))
+  require(result.optBoolean("changed",false)&&result.optBoolean("reconnect",false));clearLocalSession()
  }
  suspend fun identity(s:Session,action:String,data:JSONObject=JSONObject()):JSONObject=withContext(Dispatchers.IO){
   require(activeWorkspace(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())!=null)
@@ -65,11 +101,11 @@ class AuthGateway(private val context:Context,private val base:String){
   val s=Session(j.getString("app_id"),j.getString("access_token"),j.getString("member_id"),j.getString("device_id"),j.getLong("expires_at"),j.getLong("server_now"),System.currentTimeMillis(),SystemClock.elapsedRealtime(),j.getBoolean("require_password_change"),j.getString("active_workspace_id"),ws)
   require(validSession(s));return s
  }
- suspend fun switchWorkspace(s:Session,id:String):Session=withContext(Dispatchers.IO){
+ suspend fun switchWorkspace(s:Session,id:String):Session=withContext(Dispatchers.IO){lifecycle.withLock{
   require(activeWorkspace(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())!=null && s.workspaces.any{it.id==id&&it.enabled})
   val next=parse(request("switch-workspace",JSONObject().put("app_id","WIDEMEET").put("workspace_id",id),s.accessToken))
   require(next.memberId==s.memberId && next.activeWorkspaceId==id && next.expiresAt<=s.expiresAt)
-  next
- }
- suspend fun logout(s:Session)=withContext(Dispatchers.IO){request("logout",JSONObject().put("app_id","WIDEMEET"),s.accessToken);Unit}
+  remember(next);next
+ }}
+ suspend fun logout(s:Session)=withContext(Dispatchers.IO){lifecycle.withLock{clearLocalSession();request("logout",JSONObject().put("app_id","WIDEMEET"),s.accessToken);Unit}}
 }
