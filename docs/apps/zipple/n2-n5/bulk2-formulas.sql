@@ -50,10 +50,10 @@ declare m public.zp_members;g public.zp_guest_sessions;s public.zp_site_modes;or
  insert into public.zp_orders(org_id,site_id,member_id,guest_id,table_session_id,request_id,request_body,channel) values(org,p_site,m.id,g.id,p_table_session,p_request,body,p_channel) returning id into oid;
  -- Check commercial selections under the same site lock; each physical component is then deducted once.
  if exists(select 1 from jsonb_to_recordset(p_lines) as x(item_id uuid,qty int) left join public.zp_menu_items i on i.id=x.item_id and i.org_id=org and i.site_id=p_site where i.id is null or public.zp_sellable_qty(i.id)<x.qty) then raise exception 'ITEM_UNAVAILABLE';end if;
- select jsonb_agg(jsonb_build_object('item_id',i.id,'name',i.name,'qty',x.qty,'price_xaf',i.price_xaf,'note',coalesce(x.note,'')) order by x.ordinality),sum(x.qty::bigint*i.price_xaf) into commercial,total
- from jsonb_to_recordset(p_lines) with ordinality as x(item_id uuid,qty int,note text,ordinality bigint) join public.zp_menu_items i on i.id=x.item_id and i.org_id=org and i.site_id=p_site;
+ select jsonb_agg(jsonb_build_object('item_id',i.id,'name',i.name,'qty',x.qty,'price_xaf',i.price_xaf,'note',coalesce(x.note,'')) order by q.ordinality),sum(x.qty::bigint*i.price_xaf) into commercial,total
+ from jsonb_array_elements(p_lines) with ordinality as q(value,ordinality) cross join lateral jsonb_to_record(q.value) as x(item_id uuid,qty int,note text) join public.zp_menu_items i on i.id=x.item_id and i.org_id=org and i.site_id=p_site;
  for line in
- with requests as (select x.item_id,x.qty,x.note,x.ordinality,i.kind,i.price_xaf from jsonb_to_recordset(p_lines) with ordinality as x(item_id uuid,qty int,note text,ordinality bigint) join public.zp_menu_items i on i.id=x.item_id),
+ with requests as (select x.item_id,x.qty,x.note,q.ordinality,i.kind,i.price_xaf from jsonb_array_elements(p_lines) with ordinality as q(value,ordinality) cross join lateral jsonb_to_record(q.value) as x(item_id uuid,qty int,note text) join public.zp_menu_items i on i.id=x.item_id),
  expanded as (
  select r.ordinality,r.item_id,r.qty::bigint qty,r.qty::bigint*r.price_xaf allocation,coalesce(r.note,'') note from requests r where r.kind<>'formula'
  union all
