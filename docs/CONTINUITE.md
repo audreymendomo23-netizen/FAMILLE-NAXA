@@ -1290,3 +1290,12 @@ Le document de référence est NAXA_SERVICES_EVIDENCE_RECONCILIATION_2026-11-21.
 - VERT LABORATOIRE : tests PostgreSQL 17 et RLS sur bases jetables, ainsi que backup/restore chiffré sur bases jetables ; aucun déploiement Supabase hébergé n'en découle.
 
 Le gate CI le plus récent est le run 44946137015, 12/12 jobs SUCCESS, sur le commit documentaire 697d58f. L'artefact Debug courant est l'ID 14724147044, digest d'archive edfa9665b220a1442b1a82455d6da2e07f221172d7b226761cf25c95b46b5e7e. main demeure sur 6836f37766a88504260156951bf648cdb905e19b.
+
+
+---
+
+## Addendum du 26 novembre 2026 — Point de reprise NAXA SERVICES uniquement
+
+Ne pas reprendre les anciennes réserves des sections 6.17 comme si les modules étaient absents. La source courante est [le document de continuité dédié, §22.40](naxa-services/NAXA_SERVICES_CONTINUITY_2026-11-21.md), complétant les preuves du §22.39 et le cahier source du 31 octobre (arbitrages ultérieurs prioritaires). Branche exclusive `work/naxa-services-completion-20261120`. Dernier gate #705 11/12 : Android et dix contrats verts, Web 16/19 scénarios. Correctifs accessibilité stock et recettes CRM/offline dans eea8411 et 5f7ced8 ; [gate #707](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45864855921) sur 5f7ced8, 10/12 success au dernier contrôle, Web/Android en cours. Ne pas déclarer vert complet avant résultat terminal.
+
+Supabase FAMILLE-NAXA vérifié en lecture seule : 77/77 tables ns_ RLS, 41 cycles cron réussis/0 échoué, cinq Edge NS actives, bucket photo privé ; zéro compte et jeton push, donc qualification réelle non démontrée. Les réserves d'activation restent Auth réelle, téléphone/push/SIM, paiements d'abonnement et rapprochement, stockage JWT, rotation de la clé Release et nouvelle signature, sauvegarde externalisée/restauration isolée, preuves métier et conformité. Préserver les 13 activités et les trois modes ; aucune réécriture des fondations. Aucun changement de main, du projet NAXA pharmacie, de ZIPPLE ou du backend hébergé effectué par cette passe. Le document dédié constitue le registre opérationnel à suivre.
