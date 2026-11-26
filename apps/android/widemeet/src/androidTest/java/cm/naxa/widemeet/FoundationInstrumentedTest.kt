@@ -38,7 +38,8 @@ class FoundationInstrumentedTest {
   rule.waitUntil(5000){prefs.getBoolean("english",false)!=previousLanguage}
   rule.onNodeWithTag("wm-tab-0").performClick()
   rule.onNodeWithTag("wm-login").performScrollTo().performClick()
-  rule.onNodeWithText(if(previousLanguage)"Connexion" else "Sign in").assertExists()
+  rule.onNodeWithTag("wm-signin-title").assertTextEquals(if(previousLanguage)"Connexion" else "Sign in").assertIsDisplayed()
+  rule.onNodeWithTag("wm-signin-submit").assertIsNotEnabled()
  }
  @Test fun keystoreRememberMeRoundTrip(){
   val context=ApplicationProvider.getApplicationContext<Context>()
