@@ -93,7 +93,7 @@ declare f text;
 begin
  select function_code into f from bootik.bk_member_functions where organization_id=p_org and app_id=p_app and user_id=p_user;
  if not found then return true;end if;
- if p_action in ('entitlement','security-state','support','support-cancel') or (p_action='admin-action' and p_payload->>'kind'='session-revoke') then return true;end if;
+ if p_action in ('entitlement','security-state','support','support-cancel','approval-own-state','approval-execute') or (p_action='admin-action' and p_payload->>'kind'='session-revoke') then return true;end if;
  if f in ('director','site_manager') then return p_action in ('activities','catalog','team','dashboard','stock-health','stock-setup','master-create','partners','stock-template','stock-import-preview','stock-import-apply','sync-stock','sale','sync-sale','sync-item-sale','count-batch','transfer-ship','transfer-receive','transfers','purchases','purchase-create','purchase-receive','purchase-pay','cash-state','cash-action');end if;
  if f in ('stock_manager','picker') then return p_action in ('activities','catalog','stock-health','stock-setup','stock-template','stock-import-preview','stock-import-apply','sync-stock','count-batch','transfers','transfer-ship','transfer-receive') or (p_action='master-create' and p_payload->>'kind'='item');end if;
  if f='buyer' then return p_action in ('activities','catalog','partners','purchases','purchase-create','purchase-receive','stock-health') or (p_action='master-create' and p_payload->>'kind'='supplier');end if;

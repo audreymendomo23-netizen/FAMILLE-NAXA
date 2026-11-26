@@ -457,3 +457,5 @@ Correction du paramètre de lecture ressources et restriction au Promoteur non r
 
 ### BULK 01 — seuils et validation financière (candidat)
 Politiques optionnelles par activité/site pour règlement fournisseur et sortie/dépense de caisse ; Promoteur configure, délégataire au-delà du seuil soumet, mutation bloquée en SQL jusqu'à décision d'un Promoteur distinct, exactitude du payload, décision auditée, rejeu sûr. Interface Web/Android et registre de demandes. La décision n'exécute pas le paiement externe. Le seuil s'applique aux opérations implémentées seulement, les autres opérations sensibles et circuits multiniveaux restent à compléter avec leurs modules. Tests de non-écriture avant approbation, refus écriture directe et rejeu. CI à confirmer.
+
+Reprise des approbations après redémarrage : liste serveur des demandes propres, finalisation avec UUID et payload d'origine, nouvelle vérification de la session/rôle/ressource via opération métier et reçu original, aucune duplication. Android/Web. Recette API ajoutée.

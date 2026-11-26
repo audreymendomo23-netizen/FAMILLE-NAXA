@@ -334,7 +334,9 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  await assert.rejects(db.query('select bootik.bk_purchase_pay($1,$2,$3,$4,$5,$6,$7,$8,$9)',[o,a,u,s,sensitivePay.order_id,sensitivePay.payment_id,sensitivePay.amount_fcfa,sensitivePay.method,sensitivePay.reference]));
  await assert.rejects(db.query("update bootik.bk_approval_requests set state='approved' where id=$1",[sensitivePay.payment_id]));
  assert.equal((await call('purchase-pay',{...sensitivePay,amount_fcfa:201})).status,400);
+ assert.equal((await call('approval-execute',{approval_id:sensitivePay.payment_id})).status,403);assert.equal((await call('approval-own-state',{})).body.result.requests.find(x=>x.id===sensitivePay.payment_id).state,'pending');
  await approvalAdmin({kind:'decide',approval_id:sensitivePay.payment_id,decision:'approved',reason:'Vérifié'});
+ assert.equal((await call('approval-own-state',{})).body.result.requests.find(x=>x.id===sensitivePay.payment_id).state,'approved');assert.equal((await call('approval-execute',{approval_id:sensitivePay.payment_id})).body.result.state,'executed');assert.equal((await call('approval-execute',{approval_id:sensitivePay.payment_id})).body.result.state,'executed');assert.equal((await call('approval-own-state',{})).body.result.requests.find(x=>x.id===sensitivePay.payment_id).state,'executed');
  assert.equal((await call('purchase-pay',sensitivePay)).body.result.payment_id,sensitivePay.payment_id);assert.equal((await call('purchase-pay',sensitivePay)).body.result.payment_id,sensitivePay.payment_id);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);

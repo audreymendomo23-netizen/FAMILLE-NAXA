@@ -507,7 +507,7 @@ declare rr bootik.bk_member_resource_rules%rowtype;
 begin
  select * into rr from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site;
  if not found then return true;end if;
- if p_action in ('entitlement','security-state','support','support-cancel','activities') or (p_action='admin-action' and p_data->>'kind'='session-revoke') then return true;end if;
+ if p_action in ('entitlement','security-state','support','support-cancel','activities','approval-own-state','approval-execute') or (p_action='admin-action' and p_data->>'kind'='session-revoke') then return true;end if;
  if rr.resource_kind='storage' then return p_action in ('catalog','stock-health','sync-stock','count-batch');end if;
  if rr.resource_kind in ('register','workstation') then return p_action in ('catalog','cash-state') or (p_action='cash-action' and p_data->>'kind' in ('open','checkout','movement','close'));end if;
  return false;
