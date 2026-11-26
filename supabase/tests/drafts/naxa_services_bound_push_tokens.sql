@@ -1,0 +1,25 @@
+begin;
+insert into auth.users(id) values ('10000000-0000-4000-8000-000000000091'),('10000000-0000-4000-8000-000000000092');
+insert into auth.sessions(id,user_id,created_at,updated_at) values ('11000000-0000-4000-8000-000000000091','10000000-0000-4000-8000-000000000091',now(),now()),('11000000-0000-4000-8000-000000000092','10000000-0000-4000-8000-000000000092',now(),now());
+insert into public.ns_organizations(id,display_name,business_mode) values ('20000000-0000-4000-8000-000000000091','QA push binding A','solo'),('20000000-0000-4000-8000-000000000092','QA push binding B','solo');
+insert into public.ns_accounts(id,auth_user_id,login_id,auth_alias,password_change_required) values ('50000000-0000-4000-8000-000000000091','10000000-0000-4000-8000-000000000091','NS-QA91','ns-qa91@example.invalid',false),('50000000-0000-4000-8000-000000000092','10000000-0000-4000-8000-000000000092','NS-QA92','ns-qa92@example.invalid',false);
+insert into public.ns_members(id,org_id,account_id,display_name,role_code) values ('60000000-0000-4000-8000-000000000091','20000000-0000-4000-8000-000000000091','50000000-0000-4000-8000-000000000091','QA A','promoter'),('60000000-0000-4000-8000-000000000092','20000000-0000-4000-8000-000000000092','50000000-0000-4000-8000-000000000092','QA B','promoter');
+insert into public.ns_devices(id,account_id,installation_id,platform,session_id) values ('70000000-0000-4000-8000-000000000091','50000000-0000-4000-8000-000000000091','qa91','android','11000000-0000-4000-8000-000000000091'),('70000000-0000-4000-8000-000000000092','50000000-0000-4000-8000-000000000092','qa92','android','11000000-0000-4000-8000-000000000092');
+do $qa$ declare oa uuid:='20000000-0000-4000-8000-000000000091'; ob uuid:='20000000-0000-4000-8000-000000000092'; ma uuid:='60000000-0000-4000-8000-000000000091'; mb uuid:='60000000-0000-4000-8000-000000000092'; da uuid:='70000000-0000-4000-8000-000000000091'; db uuid:='70000000-0000-4000-8000-000000000092'; sa text:='11000000-0000-4000-8000-000000000091'; sb text:='11000000-0000-4000-8000-000000000092'; x uuid; y uuid;
+begin
+ x:=public.ns_register_bound_push_token(oa,ma,da,sa,'android',repeat('x',64),repeat('i',16),repeat('a',64),'aaaa');
+ if (select count(*) from public.ns_live_push_tokens(oa,ma))<>1 then raise exception 'ACTIVE_TOKEN_MISSING'; end if;
+ begin perform public.ns_register_bound_push_token(ob,mb,da,sa,'android',repeat('x',64),repeat('i',16),repeat('b',64),'bbbb'); raise exception 'FOREIGN_DEVICE_ACCEPTED'; exception when insufficient_privilege then null; end;
+ y:=public.ns_register_bound_push_token(ob,mb,db,sb,'android',repeat('x',64),repeat('i',16),repeat('a',64),'aaaa');
+ if x<>y or (select count(*) from public.ns_live_push_tokens(oa,ma))<>0 or (select count(*) from public.ns_live_push_tokens(ob,mb))<>1 then raise exception 'TRANSFER_NOT_ISOLATED'; end if;
+ y:=public.ns_register_bound_push_token(ob,mb,db,sb,'android',repeat('x',64),repeat('i',16),repeat('c',64),'cccc');
+ if (select count(*) from public.ns_live_push_tokens(ob,mb))<>1 or (select count(*) from public.ns_push_tokens where device_id=db and status='revoked')<>1 then raise exception 'ROTATION_NOT_ISOLATED'; end if;
+ update public.ns_devices set revoked_at=now() where id=db;
+ if (select count(*) from public.ns_live_push_tokens(ob,mb))<>0 then raise exception 'REVOKED_DEVICE_ACCEPTED'; end if;
+ update public.ns_devices set revoked_at=null where id=db;
+ update auth.sessions set not_after=now()-interval '1 second' where id=sb::uuid;
+ if (select count(*) from public.ns_live_push_tokens(ob,mb))<>0 then raise exception 'EXPIRED_SESSION_ACCEPTED'; end if;
+ begin perform public.ns_register_bound_push_token(ob,mb,db,sb,'android',repeat('x',64),repeat('i',16),repeat('d',64),'dddd'); raise exception 'EXPIRED_REGISTRATION_ACCEPTED'; exception when insufficient_privilege then null; end;
+end $qa$;
+rollback;
+select 'PASS: token binding transfer rotation revocation session expiry' result;
