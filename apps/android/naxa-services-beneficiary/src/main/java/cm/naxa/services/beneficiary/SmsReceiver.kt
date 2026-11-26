@@ -54,13 +54,11 @@ internal object CaptureIncidents {
     private fun prefs(context:Context)=context.applicationContext.getSharedPreferences("ns_beneficiary_incident_counts_v1",Context.MODE_PRIVATE)
     @Synchronized fun outstanding(context:Context,device:String):Int = prefs(context).getInt(device,0).coerceAtLeast(0)
     @Synchronized fun begin(context:Context,device:String):Boolean {
-        val count=outstanding(context,device)
-        if(count==Int.MAX_VALUE)return false
-        return prefs(context).edit().putInt(device,count+1).commit()
+        val next=CapturePolicy.nextOutstanding(outstanding(context,device),false) ?: return false
+        return prefs(context).edit().putInt(device,next).commit()
     }
     @Synchronized fun confirm(context:Context,device:String):Boolean {
-        val count=outstanding(context,device)
-        if(count==0)return false
-        return prefs(context).edit().putInt(device,count-1).commit()
+        val next=CapturePolicy.nextOutstanding(outstanding(context,device),true) ?: return false
+        return prefs(context).edit().putInt(device,next).commit()
     }
 }
