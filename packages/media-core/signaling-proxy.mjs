@@ -3,9 +3,10 @@
 import http from "node:http";
 import {WebSocket,WebSocketServer} from "ws";
 import {verifyJoinToken,allowedJoin} from "./signaling-policy.mjs";
-export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigins,checkEveryMs=1000}){
+export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigins,onRevoke,checkEveryMs=1000}){
  const origin=new URL(upstream);
  if(!["http:","https:"].includes(origin.protocol)||origin.username||origin.password||origin.pathname!=="/"||origin.search||origin.hash)throw Error("invalid upstream");
+ if(typeof onRevoke!=="function")throw Error("SFU revocation callback required");
  const active=new Set(),wss=new WebSocketServer({noServer:true,maxPayload:1024*1024});
  const checked=async req=>{
   try{
@@ -19,6 +20,8 @@ export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigi
  };
  const deny=(socket)=>{socket.write("HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n");socket.destroy()};
  const server=http.createServer(async(req,res)=>{
+  const requestOrigin=req.headers.origin;if(requestOrigin&&allowedOrigins.has(requestOrigin)){res.setHeader("Access-Control-Allow-Origin",requestOrigin);res.setHeader("Vary","Origin");res.setHeader("Access-Control-Allow-Headers","authorization");res.setHeader("Access-Control-Allow-Methods","GET,OPTIONS");}
+  if(req.method==="OPTIONS"&&requestOrigin&&allowedOrigins.has(requestOrigin)){res.writeHead(204);res.end();return;}
   if(req.method!=="GET"){res.writeHead(405);res.end();return;}
   const access=await checked(req);
   if(!access||access.u.pathname!=="/rtc/validate"){res.writeHead(403);res.end();return}
@@ -55,8 +58,8 @@ export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigi
  const timer=setInterval(async()=>{
   if(running)return;running=true;
   try{await Promise.all([...active].map(async e=>{
-   try{const state=await readAdmission(e.grant);if(!allowedJoin({...e.grant,expiresAt:Date.now()+1000},state))disconnect(e.grant.room,e.grant.identity)}
-   catch{disconnect(e.grant.room,e.grant.identity)}
+   let allowed=false;try{allowed=allowedJoin({...e.grant,expiresAt:Date.now()+1000},await readAdmission(e.grant))}catch{}
+   if(!allowed){disconnect(e.grant.room,e.grant.identity);await onRevoke(e.grant).catch(()=>{/* owner must independently reconcile SFU state */})}
   }))}finally{running=false}
  },checkEveryMs);timer.unref();
  server.on("close",()=>{clearInterval(timer);for(const e of active){e.client.terminate();e.peer.terminate()}wss.close()});
