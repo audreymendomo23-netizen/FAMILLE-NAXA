@@ -226,6 +226,18 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const unknown=await scalar("select zp_pilotage($1,$2,(now() at time zone 'Africa/Douala')::date,(now() at time zone 'Africa/Douala')::date)",[a.access,a.site]);assert.equal(unknown.uncosted_receipts,1);assert.equal(unknown.gross_margin_xaf,null);assert.equal(unknown.feedback_count,1);
  await assert.rejects(scalar("select zp_pilotage($1,$2,current_date,current_date)",[a.access,b.site]),/DENIED/);
  await assert.rejects(scalar("select zp_pilotage($1,$2,current_date,current_date-1)",[a.access,a.site]),/INVALID_PERIOD/);
+ const fFood=await add(a,"Plat formule","kitchen",2000,3),fDrink=await add(a,"Boisson formule","bar",1000,3),formula=await add(a,"Formule mixte","kitchen",2500,0);
+ await scalar("select zp_catalog_update($1,$2,$3,'Formules','','','', 'formula',10,1,true,null,null)",[a.access,a.site,formula]);
+ await scalar("select zp_formula_define($1,$2,$3,$4)",[a.access,a.site,formula,JSON.stringify([{component_id:fFood,qty:1},{component_id:fDrink,qty:1}])]);
+ assert.equal(await scalar("select zp_sellable_qty($1)",[formula]),3);
+ const fkey=uid(),fLines=[{item_id:formula,qty:1,note:"Sans sel"},{item_id:fDrink,qty:1}];const fSale=await order(a,"counter",fLines,fkey);
+ assert.equal(fSale.total_xaf,3500);assert.equal((await order(a,"counter",fLines,fkey)).id,fSale.id);
+ const allocated=(await db.query("select post,qty,line_total_xaf,instructions from zp_order_lines where order_id=$1 order by post",[fSale.id])).rows;assert.equal(allocated.length,2);assert.equal(allocated.reduce((s,l)=>s+Number(l.line_total_xaf),0),3500);assert.equal(allocated[0].qty,2);assert.equal(allocated[1].qty,1);assert.equal(allocated[1].instructions[0].note,"Sans sel");
+ assert.equal(await scalar("select zp_sellable_qty($1)",[formula]),1);
+ await assert.rejects(order(a,"counter",[{item_id:formula,qty:2}]),/ITEM_UNAVAILABLE/);
+ assert.equal(await scalar("select zp_cancel_unprepared_order($1,$2,$3,'Erreur de test')",[a.access,a.site,fSale.id]),true);
+ assert.equal(await scalar("select zp_sellable_qty($1)",[formula]),3);
+ console.log("ZIPPLE_BULK2_COMPOSITE_FORMULA_PASS");
  console.log("ZIPPLE_N7_RECORDED_METRICS_PASS");
  console.log("ZIPPLE_N5_CONTAINER_MOVEMENTS_PASS");
  console.log("ZIPPLE_N5_TRANSFER_LIFECYCLE_PASS");
