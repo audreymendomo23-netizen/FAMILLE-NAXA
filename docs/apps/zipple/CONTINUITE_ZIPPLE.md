@@ -401,3 +401,24 @@ Décision promoteur : « La livraison doit être incluse dans Snack-bar. Quand l
 - 4edaea7 : SQL 45906353467 SUCCESS ; E2E 45906353485 FAILURE, timeout Playwright ligne 394 sur le libellé exact « Fournisseur du conditionnement ». Les scénarios ERP antérieurs (comptabilité, achats classiques, inventaire, crédit, trésorerie, etc.) ont leurs marqueurs PASS ; les scénarios suivants ne sont pas atteints.
 - 2bab659bde7537cc37830a09693f7070990199d7 : cinq sélecteurs de conditionnement explicitement nommés via aria-label FR/EN, alignement de la recette sur les combobox par rôle, attente du composant et rafraîchissement des données, choix explicite du site dans la recette de révocation du serveur. Correction candidate à vérifier, pas de vert anticipé.
 - Nouvelle CI : SQL 45907197391 ; E2E 45907197427 ; socle N1 45907197322 ; PWA 45907197356 ; compilation Pages 45907197452 ; recette Pages existante 45907197418. En cours au relevé. Aucun merge main ni déploiement métier.
+
+
+## Point de continuité actualisé — qualification du commit 2bab659 (26/11/2026)
+Cette section prévaut sur les mentions historiques « en cours » relatives aux six workflows du commit 2bab659bde7537cc37830a09693f7070990199d7.
+| Workflow | Run | Conclusion |
+|---|---|---|
+| N1 socle isolé | 45907197322 | SUCCESS |
+| N2–N5 contrats SQL isolés | 45907197391 | SUCCESS |
+| PWA multinavigateur | 45907197356 | SUCCESS |
+| Compilation Cloudflare Pages | 45907197452 | SUCCESS |
+| N1 Pages hébergé | 45907197418 | SUCCESS |
+| GoTrue/PostgREST/Edge métier + navigateur réel | 45907197427 | FAILURE |
+Bilan : 5/6 workflows relancés verts, 1/6 rouge, aucun en attente. APK debug 45906118077 vert sur le candidat antérieur 19920aa ; ne pas assimiler ce résultat à une qualification native de toutes les fonctions métier du dernier commit.
+### Diagnostic vérifié du dernier échec
+Journal GitHub Actions du job 140206659858 : initialisation GoTrue/PostgreSQL/Edge et application du schéma local réussies. Le test local-business.test.mjs dépasse désormais les cinq sélecteurs et atteint le clic de confirmation de l'achat converti. Nouvel échec ligne 403 : attente de visibilité du texte /Commande · 2 Sac 5 kg/ pendant 30 s. La correction des sélecteurs a permis d'avancer mais n'a pas fermé la recette. La cause racine de la non-apparition de l'événement n'est pas encore démontrée : réponse RPC, données persistées, état/rafraîchissement du composant et format du rendu doivent être contrôlés avant correction. Ne pas modifier l'assertion simplement pour masquer le défaut. Les marqueurs précédant l'échec confirment notamment remboursements, transferts préparés, production hors ligne, péremption, excédents d'inventaire, vente directe, production pesée, états financiers, crédit/relances, avoirs/retours, trésorerie, QR/réservations.
+### Reprise prioritaire
+1. Capturer le statut et le corps de la requête purchase_create_converted au clic, vérifier l'identité/site, le journal zp_purchase_conversion_log et la commande zp_purchases ; confronter les champs renvoyés par purchase_conversion_snapshot au rendu ConvertedPurchases. Corriger la cause prouvée puis relancer la CI sans skip.
+2. Qualifier réception partielle convertie (5 000 milli, coût 5 000 FCFA) et consolidation/CSV sur les deux sites autorisés.
+3. Atteindre les scénarios Snack-Bar : retrait comptoir, livraison sur place à table par personnel habilité, interdiction au poste de préparation seul, confirmation client et attribution de la remise. Vérifier assistance liée à la commande, refus inter-sites/inter-invités et indicateurs de service. Ces nouvelles recettes demeurent non validées au dernier run.
+4. Reprendre les réserves documentées Bulks 3–6 sans repartir de zéro : couverture offline/conflits, comptabilité réglementaire et pièces, paiements/abonnements et interconnexions, support/fidélité/livraison externe, RH/pointage/IA, parité native/Web/PWA et qualification hébergée/physique. Bulk 1 validé dans son périmètre de socle local, Bulks 2–6 non clôturés ; aucun vert global déclaré.
+Aucun code modifié pendant cette mise à jour documentaire, aucun merge main ni déploiement métier de production. Branche de reprise : work/zipple-completion-20261126.
