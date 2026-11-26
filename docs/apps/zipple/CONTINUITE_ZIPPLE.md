@@ -26,3 +26,6 @@ Run GitHub Actions 45783733195 (job 139785200082) VERT : tests Node ZIPPLE et in
 
 ### Dernière preuve
 Run 45783895660, job 139785736136 : SUCCESS, 31/31 tests Node, 12 modules JOBLY inspectés statiquement. L'inventaire JOBLY est désormais acquis; la réutilisation de code reste conditionnée à une revue ciblée lors des intégrations. Les droits optionnels et quotas ne sont pas approuvés; compatibilité backend et raccordement facturation non prouvés. N0 PARTIEL selon ses critères initiaux. Ne pas relancer les audits archive et contrat déjà verts.
+
+### Troisième passe bulk : recette technique verte
+Run 45792810950, commit 32d0cd2ef13cf570548b48d299fdc29f25ef0202, jobs 139815827440 et 139815827943 : SUCCESS. 31/31 tests JS; JOBLY inventaire et 12 modules prioritaires; PostgreSQL 17 réel éphémère : quatre prix, refus 3/6, isolation app/org/site, rôle, compte révoqué, inactivité, anon, options avec/sans grant et absence d'écriture client. N0 technique VERT dans son périmètre de cadrage et faisabilité. N0 global PARTIEL : restent les décisions commerciales détaillées exigées par le cahier §21.1; droits non définis refusés par défaut. Aucun droit fictif considéré validé. Raccordement réel du backend/clients et paiement à N1/N2/N6; aucune mise en production. Reprendre sans rejouer les contrôles déjà validés, sauf modification des contrats.
