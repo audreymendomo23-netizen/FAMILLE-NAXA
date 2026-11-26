@@ -73,8 +73,8 @@ Deno.serve(async request=>{
  // Reserve before looking up account; fail closed if the shared limiter is unavailable.
  const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-login:"+identifier),p_installation_hash:await digest("wm-installation:"+body.installation_id.toLowerCase())})});
  if(allowed!==true)return send(429,{error:"too_many_attempts"});
- const rows=await rest("wm_accounts?select=id,auth_user_id,auth_alias,password_change_required,enabled&login_id=eq."+eq(identifier)+"&enabled=eq.true&limit=1");
- const a=rows[0];if(!a)return send(401,{error:"credentials"});
+ const rows=await rest("wm_accounts?select=id,auth_user_id,auth_alias,password_change_required,credential_epoch,password_change_id,enabled&login_id=eq."+eq(identifier)+"&enabled=eq.true&limit=1");
+ const a=rows[0];if(!a||a.password_change_id!==null)return send(401,{error:"credentials"});
  const auth=await fetch(url+"/auth/v1/token?grant_type=password",{method:"POST",headers:{apikey:anon,"Content-Type":"application/json"},body:JSON.stringify({email:a.auth_alias,password}),redirect:"error",cache:"no-store"});
  if(!auth.ok)return send(401,{error:"credentials"});
  const authData=await auth.json();if(authData.user?.id!==a.auth_user_id)return send(401,{error:"credentials"});
@@ -82,10 +82,44 @@ Deno.serve(async request=>{
  const ws=await workspaces(a.id);if(!ws.length)return send(403,{error:"scope"});
  const active=ws.find((w:any)=>w.kind==="individual")??ws[0];
  const access=token();
- const sessionId=await rest("rpc/wm_issue_device_session",{method:"POST",body:JSON.stringify({p_account:a.id,p_installation:body.installation_id,p_workspace:active.id,p_hash:await digest(access)})});
+ const sessionId=await rest("rpc/wm_issue_verified_session",{method:"POST",body:JSON.stringify({p_account:a.id,p_installation:body.installation_id,p_workspace:active.id,p_hash:await digest(access),p_epoch:a.credential_epoch})});
  const saved=(await rest("wm_device_sessions?select=expires_at&id=eq."+eq(sessionId)+"&revoked_at=is.null&limit=1"))[0];
  if(!saved)return send(403,{error:"scope"});
  return send(200,{app_id:"WIDEMEET",access_token:access,member_id:a.id,device_id:sessionId,expires_at:Date.parse(saved.expires_at),server_now:Date.now(),require_password_change:a.password_change_required,active_workspace_id:active.id,workspaces:ws});
+ }
+ if(action==="change-password"){
+ const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
+ const old=body.current_password,next=body.new_password,requestId=body.request_id;
+ if(!/^[a-f0-9]{64}$/.test(access)||!uuid.test(requestId??"")||typeof old!=="string"||!old||old.length>256||typeof next!=="string"||next.length<12||next.length>256||old===next)return send(400,{error:"invalid_request"});
+ const p_hash=await digest(access);
+ const context=(await rest("rpc/wm_session_context",{method:"POST",body:JSON.stringify({p_hash})}))[0];
+ if(!context)return send(401,{error:"credentials"});
+ const account=(await rest("wm_accounts?select=id,auth_user_id,auth_alias,credential_epoch,password_change_id,password_change_session&id=eq."+eq(context.account_id)+"&enabled=eq.true&limit=1"))[0];
+ if(!account)return send(403,{error:"scope"});
+ const pending=account.password_change_id!==null;
+ if(pending&&(account.password_change_id!==requestId||account.password_change_session!==context.session_id))return send(409,{error:"change_pending"});
+ const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-change:"+account.id),p_installation_hash:await digest("wm-change-session:"+context.session_id)})});
+ if(allowed!==true)return send(429,{error:"too_many_attempts"});
+ async function verify(password:string){
+ const response=await fetch(url+"/auth/v1/token?grant_type=password",{method:"POST",headers:{apikey:anon,"Content-Type":"application/json"},body:JSON.stringify({email:account.auth_alias,password}),redirect:"error",cache:"no-store"});
+ if(!response.ok)return null;
+ const data=await response.json();
+ return data.user?.id===account.auth_user_id&&typeof data.access_token==="string"?data:null;
+ }
+ // If a password update response was lost, only the same change owner can
+ // complete the pending operation, after independently proving the new password.
+ let verifiedNew=pending?await verify(next):null;
+ if(!verifiedNew){
+ const verified=await verify(old);if(!verified)return send(401,{error:"credentials"});
+ const begun=await rest("rpc/wm_begin_password_change",{method:"POST",body:JSON.stringify({p_hash,p_request:requestId,p_epoch:account.credential_epoch})});
+ if(begun!==true)return send(409,{error:"change_pending"});
+ const updated=await fetch(url+"/auth/v1/user",{method:"PUT",headers:{apikey:anon,Authorization:"Bearer "+verified.access_token,"Content-Type":"application/json"},body:JSON.stringify({password:next}),redirect:"error",cache:"no-store"});
+ if(!updated.ok)return send(409,{error:"change_unconfirmed"});
+ verifiedNew=await verify(next);if(!verifiedNew)return send(409,{error:"change_unconfirmed"});
+ }
+ const finished=await rest("rpc/wm_finish_password_change",{method:"POST",body:JSON.stringify({p_hash,p_request:requestId})});
+ if(finished!==true)return send(409,{error:"change_unconfirmed"});
+ return send(200,{changed:true,reconnect:true});
  }
  if(action==="switch-workspace"){
  const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
