@@ -99,6 +99,7 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
       Text(status(own.optString("response")))
       listOf("accepted","declined","tentative").forEach{r->OutlinedButton(onClick={perform{StaffRosterApi.call(latest,"rpc/ns_respond_meeting_invitation",JSONObject().put("p_id",id).put("p_revision",m.getInt("revision")).put("p_response",r))}},enabled=!busy){Text(status(r))}}
      }
+     if(own!=null&&state=="open"&&own.optString("response")!="declined")MeetingCollaborationCard(session,id,host)
      if(own!=null&&state in listOf("scheduled","open")){
       Text(tr("Langue d’écoute souhaitée","Preferred listening language","Ɗemngal heɗagol"))
       languages.forEach{(k,v)->OutlinedButton(onClick={perform{StaffRosterApi.call(latest,"rpc/ns_set_meeting_listener",JSONObject().put("p_id",id).put("p_locale",k).put("p_consent",JSONObject.NULL))}},enabled=!busy){Text((if(own.optString("listening_locale")==k)"✓ " else "")+v)}}

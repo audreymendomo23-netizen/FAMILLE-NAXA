@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from "react";
+import {MeetingCollaboration} from "./meeting-collaboration";
 import type {WebAuthAccount} from "../auth/session";
 import {rosterApiOrigin,rosterModeEnabled} from "./staff-roster";
 type Target={member_id:string;display_name:string;workstation_id:string|null;workstation_name:string|null};
@@ -72,5 +73,6 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
  {own&&["scheduled","open"].includes(m.status)&&<><label>{tr("Langue d’écoute souhaitée","Preferred listening language","Ɗemngal heɗagol")}<select disabled={busy} value={own.listening_locale} onChange={e=>void perform(()=>req("rpc/ns_set_meeting_listener",{p_id:m.id,p_locale:e.target.value,p_consent:null}))}>{langs.map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
  <p>{tr("Consentement à un futur enregistrement audio","Consent to future audio recording","Jaɓgol nanndugol daande")} : {own.recording_consent===null?"—":own.recording_consent?tr("Oui","Yes","Eey"):tr("Non","No","Alaa")}</p>
  {[true,false].map(v=><button key={String(v)} className="btn secondary" disabled={busy} onClick={()=>void perform(()=>req("rpc/ns_set_meeting_listener",{p_id:m.id,p_locale:own.listening_locale,p_consent:v}))}>{v?tr("J’accepte","I consent","Mi jaɓii"):tr("Je refuse","I decline","Mi salii")}</button>)}</>}
+ {m.status==="open"&&own&&own.response!=="declined"&&<MeetingCollaboration key={account.member_id+":"+m.id} account={account} meetingId={m.id} host={host} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken} onUnavailable={()=>setRevision(r=>r+1)}/>}
  </article>;})}</section>;
 }

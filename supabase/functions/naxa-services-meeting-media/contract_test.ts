@@ -1,7 +1,7 @@
 import {parseMediaGrant,signJoinToken,validMediaUrl} from "./media_contract.ts";
 import {handleMediaRequest} from "./index.ts";
 const id="70000000-0000-4000-8000-000000000105",member="60000000-0000-4000-8000-000000000092";
-const g={meeting_id:id,member_id:member,room:"ns-"+id,host:false,revision:2};
+const g={meeting_id:id,member_id:member,room:"ns-"+id,host:false,revision:2,screen_allowed:false,microphone_allowed:true};
 const env={base:"https://qa.example.invalid",anon:"test-anon-key-not-real-123",url:"wss://media.example.invalid",key:"TEST_KEY_123",secret:"fixture-secret-not-real-at-least-32",enabled:true,allowedOrigins:["https://app.example.invalid"]};
 const check=(v:unknown)=>{if(!v)throw Error("ASSERTION_FAILED");};
 function throws(fn:()=>unknown){let fail=false;try{fn()}catch{fail=true;}check(fail);}
@@ -12,7 +12,9 @@ Deno.test("opaque scoped grants and join-only short token",async()=>{
  check(decode(h).alg==="HS256"&&payload.sub===member&&payload.exp===1090&&payload.video.room===g.room);
  check(payload.video.roomJoin&&!payload.video.roomAdmin&&!payload.video.roomRecord&&!payload.video.roomCreate&&!payload.video.canPublishData);
  check(payload.video.canPublishSources.join(",")==="camera,microphone");
- const host=decode((await signJoinToken({...g,host:true},env.key,env.secret,1000)).split(".")[1]);check(host.video.canPublishSources.includes("screen_share")&&!host.video.roomAdmin&&!host.video.roomRecord);
+ const host=decode((await signJoinToken({...g,host:true,screen_allowed:true},env.key,env.secret,1000)).split(".")[1]);check(host.video.canPublishSources.includes("screen_share")&&!host.video.roomAdmin&&!host.video.roomRecord);
+ const limited=decode((await signJoinToken({...g,screen_allowed:true,microphone_allowed:false},env.key,env.secret,1000)).split(".")[1]);check(limited.video.canPublishSources.join(",")==="camera,screen_share");
+ throws(()=>parseMediaGrant({...g,microphone_allowed:undefined},id));
  const key=await crypto.subtle.importKey("raw",new TextEncoder().encode(env.secret),{name:"HMAC",hash:"SHA-256"},false,["verify"]);
  const bytes=Uint8Array.from(atob(s.replace(/-/g,"+").replace(/_/g,"/").padEnd(Math.ceil(s.length/4)*4,"=")),c=>c.charCodeAt(0));
  check(await crypto.subtle.verify("HMAC",key,bytes,new TextEncoder().encode(h+"."+b)));
