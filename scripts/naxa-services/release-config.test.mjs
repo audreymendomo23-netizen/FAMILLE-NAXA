@@ -30,3 +30,7 @@ test("release configuration rejects missing or inconsistent Firebase app configu
   }
   assert.throws(() => validateReleaseConfig({...valid,NS_FIREBASE_APP_ID:"1:999:android:fixture"}), /same project/);
 });
+
+test("release rejects the historical pharmacy Firebase project", () => {
+  assert.throws(() => validateReleaseConfig({...valid,NS_FIREBASE_PROJECT_ID:"naxatechnologie"}), /Dedicated Firebase/);
+});
