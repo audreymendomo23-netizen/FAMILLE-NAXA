@@ -40,6 +40,7 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
   var edited by remember{mutableStateOf<JSONObject?>(null)}
   var frequency by remember{mutableStateOf("once")};var count by remember{mutableStateOf("3")}
   var pendingCreation by remember{mutableStateOf<Pair<String,JSONObject>?>(null)}
+  var seriesToCancel by remember{mutableStateOf<String?>(null)}
   var busy by remember{mutableStateOf(false)};var loaded by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var reload by remember{mutableIntStateOf(0)}
   val languages=linkedMapOf("original" to "Original","fr" to "Français","en" to "English","ff-CM" to "Fulfulde","es" to "Español","it" to "Italiano","zh-CN" to "中文")
   fun status(s:String)=when(s){
@@ -62,6 +63,12 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
   }
   fun clear(){edited=null;title="";whenAt="";agenda="";duration="30";selected=emptySet();frequency="once";count="3";pendingCreation=null}
   fun transition(m:JSONObject,next:String)=perform{StaffRosterApi.call(latest,"rpc/ns_transition_internal_meeting",JSONObject().put("p_id",m.getString("id")).put("p_revision",m.getInt("revision")).put("p_next",next))}
+  seriesToCancel?.let{sid->
+   AlertDialog(onDismissRequest={seriesToCancel=null},title={Text(tr("Annuler la série","Cancel series","Haaytu dentuuji"))},text={Text(tr("Annuler toutes les réunions encore programmées de cette série ?","Cancel all still-scheduled meetings in this series?","Haaytu dentuuji feewnaaɗi ɗii fof?"))},confirmButton={TextButton(onClick={seriesToCancel=null;perform{
+    val expected=JSONArray();meetings.filter{it.optional("series_id")==sid&&it.optString("status")=="scheduled"}.forEach{expected.put(JSONObject().put("id",it.getString("id")).put("revision",it.getInt("revision")))}
+    StaffRosterApi.call(latest,"rpc/ns_cancel_meeting_series",JSONObject().put("p_id",sid).put("p_expected",expected))
+   }}){Text(tr("Confirmer","Confirm","Tabbitin"))}},dismissButton={TextButton(onClick={seriesToCancel=null}){Text(tr("Abandonner","Discard","Accu"))}})
+  }
   Card(Modifier.fillMaxWidth()){
    Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
     Text(tr("Mes réunions","My meetings","Dentuuji am"),style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
@@ -105,6 +112,7 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
       OutlinedButton(onClick={edited=m;title=m.getString("title");whenAt=meetingDate(m.getString("scheduled_at"));agenda=m.optString("agenda");duration=m.optInt("duration_minutes",30).toString()},enabled=!busy){Text(tr("Modifier","Edit","Waylu"))}
       Button(onClick={transition(m,"open")},enabled=!busy){Text(tr("Ouvrir (sans appel)","Open (no call)","Uddit dental"))}
       TextButton(onClick={transition(m,"cancelled")},enabled=!busy){Text(tr("Annuler","Cancel","Haaytu"))}
+      m.optional("series_id")?.let{sid->TextButton(onClick={seriesToCancel=sid},enabled=!busy){Text(tr("Annuler la série","Cancel series","Haaytu dentuuji"))}}
      }
      if(host&&state=="open")Button(onClick={transition(m,"closed")},enabled=!busy){Text(tr("Terminer","End","Timmin"))}
      if(host)invites.filter{it.getString("meeting_id")==id&&it.getString("member_id")!=session.account.memberId}.forEach{i->Text((targets.firstOrNull{it.getString("member_id")==i.getString("member_id")}?.getString("display_name")?:tr("Participant","Participant","Jeyaaɗo"))+" : "+status(i.optString("response")))}
