@@ -8,3 +8,5 @@ Gestionnaire de PIN par membre repris de NAXA Services (Keystore HMAC et backoff
 
 ## Reprise session et CI
 Commit c091e335e3a61bfc3a3f41e5753d03e76ab31def : SessionVault AES-GCM Android Keystore dérivé de NS, token refresh uniquement avec consentement, connexion/refresh/récupération/déconnexion HTTPS, révocation non confirmée signalée. API ZIPPLE encore non déployée. Run 45794175578 : 13 tests Web verts et build; navigateur échoue sur incompatibilité Playwright 1.51 avec ubuntu26.04-x64, corrigé en fixant ubuntu-24.04 dans le workflow dédié. Android précédent en cours. Nouvelle recette complète du dernier code; aucun déploiement.
+
+Contrat serveur candidat dans auth-boundary.mjs : adaptation de la règle NS nativeSiteIdsForScopes (un poste ne confère pas la visibilité entière du site), tests de réponse auth/refresh/recovery/logout, app et membres actifs. Fournisseur de recette simulé, non déployé. Le provider réel devra valider les jetons, la rotation, les rôles, la limitation des tentatives et RLS avec Supabase; aucune preuve de cela n'est revendiquée.

@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: node --test docs/apps/zipple/n1/session.test.mjs
+      - run: node --test docs/apps/zipple/n1/session.test.mjs docs/apps/zipple/n1/auth-boundary.test.mjs
       - name: Build only ZIPPLE web
         run: |
           npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
