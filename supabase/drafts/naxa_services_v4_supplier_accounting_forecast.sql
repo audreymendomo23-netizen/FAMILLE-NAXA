@@ -3308,6 +3308,9 @@ begin
   if v_account_id is null or v_member_id is null or v_session_id is null then
     raise exception 'NAXA_SYNC_AUTH_REQUIRED';
   end if;
+  if public.ns_erp_access_reason(p_org_id)='blocked' then
+    raise exception 'NS_SUBSCRIPTION_ACCESS_REQUIRED' using errcode='42501';
+  end if;
 
   select * into v_device
   from public.ns_devices d
@@ -4581,6 +4584,9 @@ begin
   v_session_id := auth.jwt() ->> 'session_id';
   if v_account_id is null or v_member_id is null or v_session_id is null then
     raise exception 'NAXA_SYNC_AUTH_REQUIRED';
+  end if;
+  if public.ns_erp_access_reason(p_org_id)='blocked' then
+    raise exception 'NS_SUBSCRIPTION_ACCESS_REQUIRED' using errcode='42501';
   end if;
   select * into v_device
   from public.ns_devices d

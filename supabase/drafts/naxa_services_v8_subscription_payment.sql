@@ -308,6 +308,137 @@ end $f$;
 revoke all on function public.ns_subscription_review_list(uuid,uuid,text),public.ns_subscription_review_reject(uuid,uuid,text,uuid,text) from public,anon,authenticated;
 grant execute on function public.ns_subscription_review_list(uuid,uuid,text),public.ns_subscription_review_reject(uuid,uuid,text,uuid,text) to service_role;
 
+
+-- The shared billing-core defines a 72-hour organization trial. Start at
+-- organization provisioning, not on each installation/login. The existing
+-- specification provides a single 24h provisional period following declaration.
+-- Neither trial nor provisional access is recorded as a confirmed payment.
+create function public.ns_erp_access_reason(p_org uuid) returns text
+language plpgsql stable security definer set search_path='' as $f$
+declare s public.ns_subscriptions%rowtype; created timestamptz; last_paid timestamptz; first_claim timestamptz; today date:=(now() at time zone 'Africa/Douala')::date;
+begin
+ if auth.uid() is null or public.ns_current_member_id(p_org) is null then return 'blocked'; end if;
+ select created_at into created from public.ns_organizations where id=p_org and status='active';
+ if not found then return 'blocked'; end if;
+ select * into s from public.ns_subscriptions where org_id=p_org;
+ if s.status='cancelled' then return 'blocked'; end if;
+ if s.status='active' and s.period_start<=today and s.period_end_exclusive>today then return 'paid'; end if;
+ if s.org_id is null and now()>=created and now()<created+interval '72 hours' then return 'trial'; end if;
+ select max(confirmed_at) into last_paid from public.ns_subscription_intents where org_id=p_org and status='confirmed';
+ select min(submitted_at) into first_claim from public.ns_subscription_intents where org_id=p_org and submitted_at is not null and submitted_at>=coalesce(last_paid,created);
+ if first_claim is not null and now()>=first_claim and now()<first_claim+interval '24 hours' then return 'provisional'; end if;
+ return 'blocked';
+end $f$;
+revoke all on function public.ns_erp_access_reason(uuid) from public,anon,authenticated;
+grant execute on function public.ns_erp_access_reason(uuid) to authenticated;
+
+create or replace function public.ns_can_access_site(p_org_id uuid, p_site_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $naxa$
+  select public.ns_erp_access_reason(p_org_id)<>'blocked' and exists (
+    select 1
+    from public.ns_member_scopes s
+    join public.ns_members m on m.id = s.member_id and m.org_id = s.org_id
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+      and s.can_read
+      and (
+        s.scope_type = 'organization'
+        or (s.scope_type = 'site' and s.site_id = p_site_id)
+      )
+  );
+$naxa$;
+
+create or replace function public.ns_can_operate_site(p_org_id uuid, p_site_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $naxa$
+  select public.ns_erp_access_reason(p_org_id)<>'blocked' and exists (
+    select 1
+    from public.ns_member_scopes s
+    join public.ns_members m on m.id = s.member_id and m.org_id = s.org_id
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+      and (s.can_operate or s.can_manage)
+      and (s.scope_type = 'organization' or (s.scope_type = 'site' and s.site_id = p_site_id))
+  );
+$naxa$;
+
+create or replace function public.ns_can_manage_site(p_org_id uuid, p_site_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $naxa$
+  select public.ns_erp_access_reason(p_org_id)<>'blocked' and exists (
+    select 1
+    from public.ns_member_scopes s
+    join public.ns_members m on m.id = s.member_id and m.org_id = s.org_id
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+      and m.role_code in ('promoter','network_manager','site_manager')
+      and s.can_manage
+      and (s.scope_type = 'organization' or s.site_id = p_site_id)
+  );
+$naxa$;
+
+create or replace function public.ns_can_access_workstation(p_org_id uuid, p_site_id uuid, p_workstation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $naxa$
+  select public.ns_erp_access_reason(p_org_id)<>'blocked' and exists (
+    select 1
+    from public.ns_member_scopes s
+    join public.ns_members m on m.id = s.member_id and m.org_id = s.org_id
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+      and s.can_read
+      and (
+        s.scope_type = 'organization'
+        or (s.scope_type = 'site' and s.site_id = p_site_id)
+        or (s.scope_type = 'workstation' and s.site_id = p_site_id and s.workstation_id = p_workstation_id)
+      )
+  );
+$naxa$;
+
+create or replace function public.ns_can_operate_workstation(p_org_id uuid, p_site_id uuid, p_workstation_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $naxa$
+  select public.ns_erp_access_reason(p_org_id)<>'blocked' and exists (
+    select 1
+    from public.ns_member_scopes s
+    join public.ns_members m on m.id = s.member_id and m.org_id = s.org_id
+    where m.account_id = public.ns_current_account_id()
+      and m.org_id = p_org_id
+      and m.status = 'active'
+      and (s.can_operate or s.can_manage)
+      and (
+        s.scope_type = 'organization'
+        or (s.scope_type = 'site' and s.site_id = p_site_id)
+        or (s.scope_type = 'workstation' and s.site_id = p_site_id and s.workstation_id = p_workstation_id)
+      )
+  );
+$naxa$;
+
 -- Read-only entitlement snapshot. An unconfigured initial/trial policy is not treated
 -- as either a paid entitlement or a mandate to erase or lock local ERP records.
 create function public.ns_subscription_access_state(p_org uuid) returns jsonb
@@ -321,7 +452,7 @@ begin
  elsif s.period_start>today then state:='not_started';
  elsif s.period_end_exclusive<=today then state:='expired';
  else state:='active'; end if;
- return jsonb_build_object('state',state,'paid_access',state='active','plan_code',s.plan_code,'period_start',s.period_start,'period_end_exclusive',s.period_end_exclusive);
+ return jsonb_build_object('state',state,'paid_access',state='active','erp_access',public.ns_erp_access_reason(p_org)<>'blocked','access_reason',public.ns_erp_access_reason(p_org),'plan_code',s.plan_code,'period_start',s.period_start,'period_end_exclusive',s.period_end_exclusive);
 end $f$;
 revoke all on function public.ns_subscription_access_state(uuid) from public,anon,authenticated;
 grant execute on function public.ns_subscription_access_state(uuid) to authenticated;

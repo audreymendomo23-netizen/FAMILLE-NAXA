@@ -18,6 +18,7 @@ do $f$
 declare i jsonb; j jsonb; begin
  if has_table_privilege(current_user,'public.ns_subscription_credit_proofs','INSERT') or has_function_privilege(current_user,'public.ns_subscription_confirm_credit(uuid,uuid,uuid,text,text,text,text,bigint,text,timestamptz,timestamptz,text,text)','EXECUTE') then raise exception 'PAYER_CAN_CONFIRM'; end if;
  begin perform public.ns_subscription_list('20000000-0000-4000-8000-000000000001'); raise exception 'CROSS_TENANT_ALLOWED'; exception when insufficient_privilege then null; end;
+ if public.ns_erp_access_reason('20000000-0000-4000-8000-000000000071') is distinct from 'trial' then raise exception 'TRIAL_ACCESS_MISSING'; end if;
  i:=public.ns_subscription_create('20000000-0000-4000-8000-000000000071','ACCESS',1,'mtn_momo');
  if i->>'status' is distinct from 'pending' then raise exception 'INVALID_INTENT'; end if;
  begin
@@ -130,4 +131,29 @@ do $f$ declare i public.ns_subscription_intents%rowtype; c public.ns_subscriptio
  if v->>'status' is distinct from 'rejected' or v<>v2 or (select count(*) from public.ns_subscription_review_audit where candidate_id=c.id)<>1 then raise exception 'REVIEW_AUDIT_FAILED'; end if;
  if (select status from public.ns_subscription_intents where id=i.id)<>'submitted' or (select period_end_exclusive from public.ns_subscriptions where org_id=i.org_id)<>before_end then raise exception 'REVIEW_ALTERED_ACCESS'; end if;
 end $f$;
+-- Paid access expires without deleting data; renewal and status remain available.
+update public.ns_subscriptions set period_start=(now() at time zone 'Africa/Douala')::date-interval '2 months',period_end_exclusive=(now() at time zone 'Africa/Douala')::date-1 where org_id='20000000-0000-4000-8000-000000000071';
+update public.ns_subscription_intents set submitted_at=now()-interval '2 days',confirmed_at=case when confirmed_at is null then null else now()-interval '3 days' end where org_id='20000000-0000-4000-8000-000000000071';
+set local role authenticated;
+do $f$ declare a jsonb; begin
+ a:=public.ns_subscription_access_state('20000000-0000-4000-8000-000000000071');
+ if a->>'state' is distinct from 'expired' or a->>'erp_access' is distinct from 'false' or a->>'access_reason' is distinct from 'blocked' then raise exception 'EXPIRED_ERP_ACCESS'; end if;
+ if public.ns_can_access_site('20000000-0000-4000-8000-000000000071','30000000-0000-4000-8000-000000000071') then raise exception 'EXPIRED_SITE_ACCESS'; end if;
+ begin perform public.ns_pull_sync_changes('20000000-0000-4000-8000-000000000071','80000000-0000-4000-8000-000000000071',0,100); raise exception 'EXPIRED_PULL_ALLOWED'; exception when insufficient_privilege then null; end;
+ begin perform public.ns_apply_sync_event('20000000-0000-4000-8000-000000000071',null,null,'80000000-0000-4000-8000-000000000071','90000000-0000-4000-8000-000000000071',1,'loyalty_program','fixture','loyalty_program.updated','{"org_id":"20000000-0000-4000-8000-000000000071"}'::jsonb); raise exception 'EXPIRED_PUSH_ALLOWED'; exception when insufficient_privilege then null; end;
+ if public.ns_subscription_list('20000000-0000-4000-8000-000000000071')->'intents' is null then raise exception 'BILLING_LOCKED'; end if;
+end $f$;
+reset role;
+-- The current declaration may provide one bounded provisional access window.
+update public.ns_subscription_intents set submitted_at=now()-interval '1 hour' where org_id='20000000-0000-4000-8000-000000000071' and status='submitted';
+-- Earlier declarations after the last payment prevent resetting the window; for this
+-- fixture the prior confirmations precede their declaration by synthetic dates, so
+-- make their original submissions precede the corresponding confirmation.
+update public.ns_subscription_intents set submitted_at=now()-interval '4 days' where org_id='20000000-0000-4000-8000-000000000071' and status='confirmed';
+set local role authenticated;
+do $f$ declare a jsonb; begin
+ a:=public.ns_subscription_access_state('20000000-0000-4000-8000-000000000071');
+ if a->>'paid_access' is distinct from 'false' or a->>'erp_access' is distinct from 'true' or a->>'access_reason' is distinct from 'provisional' then raise exception 'PROVISIONAL_ACCESS_FAILED'; end if;
+end $f$;
+reset role;
 rollback;

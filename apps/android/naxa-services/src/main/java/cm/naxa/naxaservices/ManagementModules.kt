@@ -267,7 +267,14 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
                     Text((if (fr) "Échéance exclusive : " else "Exclusive end date: ") + it)
                 }
             }
-            Text(if (fr) "Information sur la période payée, sans décision de blocage ERP." else "Paid period information, not an ERP access decision.")
+            access?.let { paid ->
+                if (paid.has("erp_access")) Text(when (paid.optString("access_reason")) {
+                    "trial" -> if (fr) "Essai de 72 h en cours" else "72-hour trial"
+                    "provisional" -> if (fr) "Accès provisoire de 24 h, paiement non confirmé" else "24-hour provisional access; payment not confirmed"
+                    "paid" -> if (fr) "Accès ERP serveur autorisé" else "Server ERP access allowed"
+                    else -> if (fr) "Accès ERP serveur suspendu. Données locales conservées ; règlement accessible." else "Server ERP access suspended. Local data retained; payment available."
+                })
+            }
             if (session.account.roleCode != "promoter") {
                 Text(if (fr) "Règlement réservé au Promoteur." else "Payment reserved for the promoter.")
             } else {
