@@ -9,7 +9,7 @@
     <string name="sign_in">Sign in</string>
     <string name="sign_out">Sign out</string>
     <string name="forgot_password">Forgot password?</string>
-    <string name="no_public_signup">Access is created by your establishment manager. Public sign-up is disabled.</string>
+    <string name="no_public_signup"></string>
     <string name="show">Show</string>
     <string name="hide">Hide</string>
     <string name="recovery_title">Recover access</string>
@@ -25,8 +25,8 @@
     <string name="save_password">Save new password</string>
     <string name="dashboard_greeting">Hello, %1$s</string>
     <string name="dashboard_today">Today in your establishment</string>
-    <string name="no_synced_data">No business data has been synchronized for this account.</string>
-    <string name="backend_pending">Backend connection and first data load await technical validation.</string>
+    <string name="no_synced_data">No transactions available.</string>
+    <string name="backend_pending">This service is temporarily unavailable.</string>
     <string name="quick_actions">Quick access</string>
     <string name="network_overview">Open network overview</string>
     <string name="security_devices">Security and devices</string>
@@ -43,7 +43,7 @@
     <string name="all_modules">All modules</string>
     <string name="back_dashboard">Back to dashboard</string>
     <string name="form_prepare_title">Prepare an operation</string>
-    <string name="form_prepare_explainer">This form will be connected to the local business repository and then to the server after the data contract is validated.</string>
+    <string name="form_prepare_explainer">Complete the requested information.</string>
     <string name="form_reference">Reference / label</string>
     <string name="action_create">Create</string>
     <string name="close">Close</string>
@@ -129,10 +129,10 @@
     <string name="team_access_admin_desc">Create an individual login within the sites you are authorized to manage.</string>
     <string name="member_display_name">Full name</string>
     <string name="member_phone_optional">Contact phone (optional)</string>
-    <string name="member_role_code">Role code (e.g. cashier, hair_stylist)</string>
+    <string name="member_role_code">Team member role</string>
     <string name="member_site_id">Point-of-sale ID</string>
     <string name="member_workstation_id_optional">Workstation ID (optional)</string>
-    <string name="provision_scope_hint">Leave workstation blank for site-level access. Enter a workstation to restrict access to that location. The server validates the actor\'s role and permissions.</string>
+    <string name="provision_scope_hint">Choose a location and, if needed, a workstation.</string>
     <string name="provision_member">Create access</string>
     <string name="provisioned_credentials_title">Credentials created — one-time display</string>
     <string name="provisioned_login_id">Login ID</string>
@@ -164,7 +164,7 @@
     <string name="mode_manager_desc">Multiple chairs, workshops or counters in one establishment. Planning by workstation, site cash shared by default.</string>
     <string name="mode_promoter_title">03 · Multi-site promoter</string>
     <string name="mode_promoter_desc">Several independent points of sale under one parent organization. Cash, stock and teams are never merged.</string>
-    <string name="structure_selection_preview">This selection is a local preview. The contractual mode is saved by administration after dossier validation.</string>
+    <string name="structure_selection_preview">Your selection is pending approval.</string>
     <string name="authorized_site_scope">Points of sale visible in your scope</string>
     <string name="no_active_sites">No active point of sale is assigned to this account.</string>
     <string name="site_reference">Point of sale %1$d</string>
@@ -177,7 +177,7 @@
     <string name="workstation_reception">Reception desk</string>
     <string name="workstation_cash">Cash register station</string>
     <string name="workstation_not_created">Suggested type · workstation not yet created</string>
-    <string name="organization_scope_safety">Server permissions and RLS remain authoritative. A visible page never grants a permission that was not assigned.</string>
+    <string name="organization_scope_safety">You can access only your authorized locations.</string>
     <string name="pressing_local_title">Pressing tickets</string>
     <string name="pressing_local_desc">Record garment drop-offs, deposits and order progress.</string>
     <string name="customer_name">Customer name</string>
@@ -186,7 +186,7 @@
     <string name="total_amount_xaf">Total amount (XAF)</string>
     <string name="deposit_amount_xaf">Deposit (XAF)</string>
     <string name="create_pressing_ticket">Create pressing ticket</string>
-    <string name="local_outbox_notice">Local record only: server synchronization is not enabled yet.</string>
+    <string name="local_outbox_notice">Pending confirmation.</string>
     <string name="local_pressing_tickets">Tickets at this point of sale</string>
     <string name="no_local_pressing_tickets">No ticket recorded on this device.</string>
     <string name="pressing_status_received">Received</string>
@@ -200,7 +200,7 @@
     <string name="appointment_start_local">Start (YYYY-MM-DD HH:MM)</string>
     <string name="appointment_duration_minutes">Duration (minutes)</string>
     <string name="create_appointment">Save appointment</string>
-    <string name="appointment_conflict_local_only">Conflict checks cover only appointments stored on this device. Server validation is required before synchronization.</string>
+    <string name="appointment_conflict_local_only">Check availability before confirming the appointment.</string>
     <string name="appointments_local_list">Appointments at this point of sale</string>
     <string name="no_local_appointments">No appointment recorded.</string>
     <string name="cash_local_title">Point-of-sale cash register</string>
@@ -213,7 +213,7 @@
     <string name="sale_description">Sale description</string>
     <string name="sale_total_xaf">Sale amount (XAF)</string>
     <string name="payment_method_cash_or_momo">Payment method (cash / mobile_money)</string>
-    <string name="record_sale_local">Record sale locally</string>
+    <string name="record_sale_local">Record sale</string>
     <string name="cash_expense_title">Cash expense</string>
     <string name="expense_category">Expense category</string>
     <string name="expense_description">Expense description</string>
@@ -223,11 +223,11 @@
     <string name="cash_counted_amount">Counted amount (XAF)</string>
     <string name="cash_variance_reason">Variance explanation</string>
     <string name="close_cash_session">Close session</string>
-    <string name="local_sales">Local sales</string>
+    <string name="local_sales">Sales</string>
     <string name="no_local_sales">No sale recorded.</string>
     <string name="pressing_total_and_deposit">Total: %1$d XAF · Deposit: %2$d XAF</string>
     <string name="appointment_local_status">Status: %1$s</string>
-    <string name="outbox_pending_count">%1$d event(s) waiting for synchronization</string>
+    <string name="outbox_pending_count">%1$d operation(s) pending</string>
     <string name="cash_session_open">Open session · %1$s</string>
     <string name="cash_opening_amount_xaf">Opening float: %1$d XAF</string>
     <string name="module_work_orders">Work orders</string>
@@ -243,7 +243,7 @@
     <string name="module_taxes">Taxes</string>
     <string name="taxes_desc">Tax preparation and deadline tracking</string>
     <string name="module_ai_insights">Business assistant</string>
-    <string name="ai_insights_desc">Local analysis, controls and business summary</string>
+    <string name="ai_insights_desc">Business analysis and summary</string>
     <string name="module_livechat">Livechat and support</string>
     <string name="livechat_desc">FAQ, support requests and user assistance</string>
     <string name="module_appearance">Appearance</string>
@@ -291,7 +291,7 @@
     <string name="local_pin_mismatch">The two codes do not match.</string>
     <string name="local_pin_invalid_attempts">Incorrect code. %1$d attempt(s) remain before a temporary lockout.</string>
     <string name="local_pin_blocked">Too many attempts. Try again in %1$d second(s).</string>
-    <string name="local_pin_storage_error">The local security vault is unavailable. Reauthenticate to reset the code.</string>
+    <string name="local_pin_storage_error">Protection unavailable. Sign in again to reset your code.</string>
     <string name="local_pin_forgot">Forgot code? Verify my identity</string>
     <string name="local_pin_reauth_title">Verify your identity</string>
     <string name="local_pin_reauth_explainer">Sign in with the login ID and password for this same account to reset the local code.</string>
@@ -301,14 +301,14 @@
     <string name="local_pin_reauth_back">Back to code</string>
     <string name="local_pin_reauth_account_mismatch">These credentials belong to a different account. No code was changed.</string>
     <string name="local_pin_reauth_failed">Verification failed. Check your credentials and try again.</string>
-    <string name="local_pin_change_open">Change my local code</string>
+    <string name="local_pin_change_open">Change my personal code</string>
     <string name="local_pin_change_title">Change unlock code</string>
     <string name="local_pin_current">Current code</string>
     <string name="local_pin_new">New 4-digit code</string>
     <string name="local_pin_confirm_new">Confirm new code</string>
     <string name="local_pin_change_submit">Save new code</string>
     <string name="local_pin_change_cancel">Cancel</string>
-    <string name="local_pin_change_saved">The local code has been changed.</string>
+    <string name="local_pin_change_saved">Your personal code has been changed.</string>
     <string name="local_pin_change_failed">Change refused. Check your current code and try again.</string>
     <string name="module_customer_promotions">Customer referrals and wheel</string>
     <string name="customer_promotions_desc">Customer referral campaigns, codes, benefits and secure promotional wheel setup.</string>
