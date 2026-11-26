@@ -53,12 +53,14 @@ class MainActivity:ComponentActivity(){
  val roomGateway=remember{RoomGateway(BuildConfig.WIDEMEET_AUTH_URL)}
  var session by remember{mutableStateOf<Session?>(null)}
  var signIn by remember{mutableStateOf(false)}
+ var locked by remember{mutableStateOf(gateway.hasRememberedSession())}
+ var renewing by remember{mutableStateOf(false)}
  var logoutError by remember{mutableStateOf(false)}
  var switchError by remember{mutableStateOf(false)}
  var switching by remember{mutableStateOf(false)}
  var switchDialog by remember{mutableStateOf(false)}
  val coroutineScope=rememberCoroutineScope()
- LaunchedEffect(session){while(session!=null){val s=session?:break;if(!validLease(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())){session=null;break};delay(1000)}}
+ LaunchedEffect(session,switching){while(session!=null){val s=session?:break;if(!validLease(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())){session=null;gateway.clearLocalSession();break};if(!switching&&!s.requirePasswordChange&&gateway.canRefresh()&&s.expiresAt-System.currentTimeMillis()<=60000){renewing=true;try{session=gateway.refresh(s)}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){session=null;signIn=true}finally{renewing=false};break};delay(1000)}}
  val current=session?.let{activeWorkspace(it,System.currentTimeMillis(),SystemClock.elapsedRealtime())}
  val prefs=remember{context.getSharedPreferences("widemeet.appearance.v1",Context.MODE_PRIVATE)}
  var dark by rememberSaveable{mutableStateOf(prefs.getBoolean("dark",false))}
@@ -76,8 +78,8 @@ class MainActivity:ComponentActivity(){
  LaunchedEffect(dark,english,motion){prefs.edit().putBoolean("dark",dark).putBoolean("english",english).putBoolean("motion",motion).apply()}
  LaunchedEffect(animate){if(animate){startup.snapTo(.6f);startup.animateTo(0f,tween(1200))}else startup.snapTo(0f)}
  LaunchedEffect(pulse,animate){if(pulse>0&&animate){alpha.snapTo(.5f);alpha.animateTo(0f,tween(1700))}else alpha.snapTo(0f)}
- fun changeWorkspace(id:String){val s=session?:return;if(switching||id==s.activeWorkspaceId)return;switching=true;switchDialog=false;switchError=false;coroutineScope.launch{try{session=gateway.switchWorkspace(s,id);detail="";tab=0}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){session=null;detail="";tab=0;switchError=true}finally{switching=false}}}
- fun logout(){if(switching)return;val s=session?:return;session=null;logoutError=false;coroutineScope.launch{try{gateway.logout(s)}catch(e:Exception){logoutError=true}}}
+ fun changeWorkspace(id:String){val s=session?:return;if(switching||renewing||id==s.activeWorkspaceId)return;switching=true;switchDialog=false;switchError=false;coroutineScope.launch{try{session=gateway.switchWorkspace(s,id);detail="";tab=0}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){session=null;detail="";tab=0;switchError=true}finally{switching=false}}}
+ fun logout(){if(switching||renewing)return;val s=session?:return;session=null;logoutError=false;coroutineScope.launch{try{gateway.logout(s)}catch(e:Exception){logoutError=true}}}
  fun toggle(){if(!dark&&animate)pulse++ else pulse=0;dark=!dark}
  fun tr(fr:String,en:String)=if(english)en else fr
  val labels=if(english)tabsEn else tabs
@@ -96,7 +98,8 @@ class MainActivity:ComponentActivity(){
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
  if(switchError)Text(tr("Changement d’espace non confirmé. Reconnectez-vous.","Workspace switch unconfirmed. Sign in again."),color=MaterialTheme.colorScheme.error)
  if(logoutError)Text(tr("Déconnexion locale effectuée ; révocation distante non confirmée.","Local sign-out completed; remote revocation unconfirmed."),color=MaterialTheme.colorScheme.error)
- if(signIn){SignIn(english,BuildConfig.WIDEMEET_AUTH_URL.isNotBlank(),gateway,{session=it;signIn=false;tab=0;detail=""},{signIn=false})}
+ if(locked){UnlockRemembered(english,gateway,{session=it;locked=false;signIn=false;tab=0;detail=""},{locked=false;signIn=true;detail=""})}
+ else if(signIn){SignIn(english,BuildConfig.WIDEMEET_AUTH_URL.isNotBlank(),gateway,{session=it;signIn=false;tab=0;detail=""},{signIn=false})}
  else if(session?.requirePasswordChange==true){val s=session!!;key(s.deviceId){ChangePassword(english,gateway,s,{session=null;signIn=true;detail=""},{logout()})}}
  else if(current!=null&&session!=null&&(detail in listOf("Nouvelle réunion","New meeting","Programmer","Schedule","Rejoindre","Join")||tab==1&&detail.isEmpty())){
  val s=session!!
