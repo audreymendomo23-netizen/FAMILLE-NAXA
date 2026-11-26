@@ -25,6 +25,17 @@ import java.util.UUID
 
 internal fun rosterAvailable(mode:String)=mode=="single_site_multi_workstation"||mode=="multi_site_network"
 internal object StaffRosterApi {
+    suspend fun uploadAttendanceSelfie(session:AuthSession,siteId:String,eventId:String,bytes:ByteArray)=withContext(Dispatchers.IO){
+        val base=URI(BuildConfig.AUTH_FUNCTION_URL)
+        require(base.scheme=="https"&&base.host!=null&&base.userInfo==null&&base.path.trimEnd('/')=="/functions/v1/naxa-services-auth")
+        require(!session.requirePasswordChange&&session.accessToken.isNotBlank()&&BuildConfig.SUPABASE_ANON_KEY.isNotBlank()&&bytes.isNotEmpty()&&bytes.size<=2097152)
+        val path=listOf(session.account.organizationId,siteId,session.account.memberId,eventId).joinToString("/"){UUID.fromString(it).toString()}+".jpg"
+        val c=URL("https://"+base.rawAuthority+"/storage/v1/object/ns-attendance-selfies/"+path).openConnection() as HttpURLConnection
+        try{c.requestMethod="POST";c.instanceFollowRedirects=false;c.connectTimeout=10000;c.readTimeout=15000;c.useCaches=false;c.doOutput=true
+            c.setRequestProperty("apikey",BuildConfig.SUPABASE_ANON_KEY);c.setRequestProperty("Authorization","Bearer "+session.accessToken);c.setRequestProperty("Content-Type","image/jpeg");c.setRequestProperty("x-upsert","false")
+            c.outputStream.use{it.write(bytes)};require(c.responseCode in 200..299)
+        }finally{c.disconnect()}
+    }
     suspend fun call(session:AuthSession,path:String,body:JSONObject?=null):String=withContext(Dispatchers.IO){
         val base=URI(BuildConfig.AUTH_FUNCTION_URL)
         require(base.scheme=="https"&&base.host!=null&&base.userInfo==null&&base.path.trimEnd('/')=="/functions/v1/naxa-services-auth")

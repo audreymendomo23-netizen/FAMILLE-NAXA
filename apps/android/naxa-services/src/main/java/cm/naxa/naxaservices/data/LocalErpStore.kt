@@ -984,6 +984,9 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_management_records WHERE orgId = :orgId AND siteId = :siteId AND counterparty = :staffName AND recordType IN ('staff_clock_in','staff_break_start','staff_break_end','staff_clock_out') ORDER BY createdAtMillis DESC LIMIT 1")
     suspend fun findLatestStaffTimeEvent(orgId: String, siteId: String, staffName: String): LocalManagementRecord?
 
+    @Query("SELECT * FROM local_management_records WHERE orgId = :orgId AND siteId = :siteId AND actorMemberId = :actorId AND recordType IN (\'staff_clock_in\',\'staff_break_start\',\'staff_break_end\',\'staff_clock_out\') ORDER BY createdAtMillis DESC")
+    suspend fun findStaffTimeEventsByActor(orgId: String, siteId: String, actorId: String): List<LocalManagementRecord>
+
     @Query("SELECT * FROM local_management_records WHERE orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis DESC")
     fun observeManagementRecords(orgId: String, siteId: String): Flow<List<LocalManagementRecord>>
 
@@ -3634,11 +3637,15 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         staffName: String,
         actorMemberId: String,
         workstationId: String? = null,
-        staffMemberId: String? = null
+        staffMemberId: String? = null,
+        eventId: String? = null,
+        occurredAtMillis: Long? = null,
+        proofRef: String? = null
     ): LocalManagementRecord = database.withTransaction {
         require(orgId.isNotBlank() && siteId.isNotBlank() && actorMemberId.isNotBlank()) {
             "Organisation, site et opérateur obligatoires."
         }
+        require(proofRef == null || (proofRef == eventId && staffMemberId == actorMemberId && occurredAtMillis != null))
         val staff = staffName.trim()
         require(staff.length in 2..120) { "Nom ou identifiant de collaborateur invalide." }
         require(staffMemberId == null || runCatching { UUID.fromString(staffMemberId) }.isSuccess) {
@@ -3647,7 +3654,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         require(eventType in setOf("staff_clock_in", "staff_break_start", "staff_break_end", "staff_clock_out")) {
             "Événement de pointage non pris en charge."
         }
-        val latest = dao.findLatestStaffTimeEvent(orgId, siteId, staff)
+        val latest = if (staffMemberId == null) dao.findLatestStaffTimeEvent(orgId, siteId, staff) else dao.findStaffTimeEventsByActor(orgId, siteId, actorMemberId).firstOrNull { runCatching { JSONObject(it.metadataJson).optString("staffMemberId") == staffMemberId }.getOrDefault(false) }
         val allowed = when (eventType) {
             "staff_clock_in" -> latest == null || latest.recordType == "staff_clock_out"
             "staff_break_start" -> latest != null && latest.recordType in setOf("staff_clock_in", "staff_break_end")
@@ -3665,7 +3672,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
                 "L'emplacement choisi ne fait pas partie de ce point de vente."
             }
         }
-        val now = System.currentTimeMillis()
+        val now = occurredAtMillis ?: System.currentTimeMillis()
         val title = when (eventType) {
             "staff_clock_in" -> "Prise de service"
             "staff_break_start" -> "Début de pause"
@@ -3673,7 +3680,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             else -> "Fin de service"
         }
         val item = LocalManagementRecord(
-            id = UUID.randomUUID().toString(),
+            id = eventId?.let { UUID.fromString(it).toString() } ?: UUID.randomUUID().toString(),
             orgId = orgId,
             siteId = siteId,
             recordType = eventType,
@@ -3717,6 +3724,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             .put("staff_member_id", staffMemberId)
             .put("staff_name_snapshot", staff)
             .put("occurred_at", Instant.ofEpochMilli(now).toString())
+        if (proofRef != null) timeEventPayload.put("attendance_proof_ref", proofRef)
         enqueue(orgId, eventType, item.id, eventType + ".recorded", siteId, timeEventPayload.toString())
         item
     }

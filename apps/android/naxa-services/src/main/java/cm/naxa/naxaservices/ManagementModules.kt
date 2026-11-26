@@ -1866,15 +1866,13 @@ fun TeamPerformanceContent(
                 when (session.account.defaultLocale) { "en" -> "Track attendance. Time entries remain pending approval."; "ff-CM" -> "Rewindo sahaaaji naatugol. Winndanɗe ƴeewtetee."; else -> "Suivez les heures de présence. Les pointages restent soumis à validation." }
             )
         }
-        item {
+        if (BuildConfig.ATTENDANCE_ENABLED && rosterAvailable(session.account.businessMode)) {
+            item { AttendanceEvidenceCard(repository,session,siteId,attendanceWorkstationId.takeIf { it.isNotBlank() }) }
+        } else item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(when (session.account.defaultLocale) { "en" -> "Team time clock"; "ff-CM" -> "Winndanɗe naatugol e golle"; else -> "Pointage et mouvements d’équipe" }, fontWeight = FontWeight.Bold)
-                    OutlinedTextField(
-                        staff, { staff = it }, Modifier.fillMaxWidth(),
-                        label = { Text(when (session.account.defaultLocale) { "en" -> "Staff member (name or ID)"; "ff-CM" -> "Gollotooɗo (innde walla innol)"; else -> "Collaborateur (nom ou identifiant)" }) },
-                        singleLine = true
-                    )
+                    Text(session.account.displayName, fontWeight = FontWeight.SemiBold)
                     Text(when (session.account.defaultLocale) { "en" -> "Workstation (optional)"; "ff-CM" -> "Nokkuure golle (so a yiɗi)"; else -> "Emplacement / poste (facultatif)" }, fontWeight = FontWeight.SemiBold)
                     OutlinedButton(onClick = { attendanceWorkstationId = "" }, modifier = Modifier.fillMaxWidth()) {
                         Text(if (attendanceWorkstationId.isBlank()) (when (session.account.defaultLocale) { "en" -> "✓ Site-level time clock"; "ff-CM" -> "✓ Winndugol naatugol e nokkuure"; else -> "✓ Pointage au niveau du site" }) else when (session.account.defaultLocale) { "en" -> "No dedicated workstation"; "ff-CM" -> "Alaa nokkuure golle keeriiɗe"; else -> "Aucun poste dédié" })
@@ -1901,14 +1899,14 @@ fun TeamPerformanceContent(
                     )
                     Button(
                         onClick = {
-                            if (staff.isBlank() || siteId.isBlank()) {
+                            if (siteId.isBlank()) {
                                 error = when (session.account.defaultLocale) { "en" -> "Choose a staff member and site."; "ff-CM" -> "Suɓo gollotooɗo e nokkuure jaaygol."; else -> "Choisis un collaborateur et un point de vente." }
                             } else scope.launch {
                                 runCatching {
                                     repository.recordStaffTimeEvent(
                                         session.account.organizationId, siteId, attendanceOperation,
-                                        staff, session.account.memberId,
-                                        attendanceWorkstationId.takeIf { it.isNotBlank() }
+                                        session.account.displayName, session.account.memberId,
+                                        attendanceWorkstationId.takeIf { it.isNotBlank() }, session.account.memberId
                                     )
                                 }.onSuccess {
                                     message = when (session.account.defaultLocale) { "en" -> "Clock event saved; sequence validated and recorded."; "ff-CM" -> "Naatugol danndaama; feere tabbitinaama."; else -> "Pointage enregistré ; séquence validée et historisée." }
@@ -1916,7 +1914,7 @@ fun TeamPerformanceContent(
                                 }.onFailure { error = it.message ?: when (session.account.defaultLocale) { "en" -> "Unable to record time event."; "ff-CM" -> "Winndugol naatugol waawataa."; else -> "Pointage impossible." } }
                             }
                         },
-                        enabled = staff.isNotBlank() && siteId.isNotBlank(),
+                        enabled = siteId.isNotBlank(),
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(when (session.account.defaultLocale) { "en" -> "Record time event"; "ff-CM" -> "Danndu naatugol"; else -> "Enregistrer le pointage" }) }
                 }
