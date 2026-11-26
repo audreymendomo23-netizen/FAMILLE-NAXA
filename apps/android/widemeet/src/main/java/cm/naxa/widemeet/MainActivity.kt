@@ -50,6 +50,7 @@ class MainActivity:ComponentActivity(){
 @Composable private fun WideMeetRoot(){
  val context=LocalContext.current
  val gateway=remember{AuthGateway(context,BuildConfig.WIDEMEET_AUTH_URL)}
+ val roomGateway=remember{RoomGateway(BuildConfig.WIDEMEET_AUTH_URL)}
  var session by remember{mutableStateOf<Session?>(null)}
  var signIn by remember{mutableStateOf(false)}
  var logoutError by remember{mutableStateOf(false)}
@@ -97,6 +98,11 @@ class MainActivity:ComponentActivity(){
  if(logoutError)Text(tr("Déconnexion locale effectuée ; révocation distante non confirmée.","Local sign-out completed; remote revocation unconfirmed."),color=MaterialTheme.colorScheme.error)
  if(signIn){SignIn(english,BuildConfig.WIDEMEET_AUTH_URL.isNotBlank(),gateway,{session=it;signIn=false;tab=0;detail=""},{signIn=false})}
  else if(session?.requirePasswordChange==true){Text(tr("Votre mot de passe doit être changé avant d’accéder à votre espace.","Change your password before accessing your workspace."));Button(onClick={logout()}){Text(tr("Se déconnecter","Sign out"))}}
+ else if(current!=null&&session!=null&&(detail in listOf("Nouvelle réunion","New meeting","Programmer","Schedule","Rejoindre","Join")||tab==1&&detail.isEmpty())){
+ val s=session!!
+ if(detail.isNotEmpty())TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))}
+ key(s.deviceId,detail,tab){RoomPanel(english,roomGateway,s,current,detail in listOf("Nouvelle réunion","New meeting","Programmer","Schedule"))}
+ }
  else if(detail.isNotEmpty()){TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))};Text(detail,style=MaterialTheme.typography.headlineMedium)
  if(detail in listOf(menuFr[11],menuFr[12],menuFr[13],menuEn[11],menuEn[12],menuEn[13])){Button(onClick={toggle()}){Text(if(dark)tr("Mode clair","Light mode")else tr("Mode nuit","Dark mode"))};Button(onClick={english=!english;detail=""},modifier=Modifier.testTag("wm-language")){Text(if(english)"Français"else "English")};Row(verticalAlignment=Alignment.CenterVertically){Switch(checked=motion,onCheckedChange={motion=it},modifier=Modifier.testTag("wm-motion"));Text("Animations")}}else Text(unavailable)
  }else if(tab==0){
