@@ -24,6 +24,14 @@ jobs:
         run: |
           npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
           npm run build --workspace @famille/zipple-web
+      - name: Browser smoke and responsive layout
+        run: |
+          npm install --no-save --ignore-scripts playwright@1.51.1
+          npx playwright install --with-deps chromium
+          npm run --workspace @famille/zipple-web build
+          (cd apps/web/zipple && npx vite preview --host 127.0.0.1 --port 4173) > /tmp/zipple-preview.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          node docs/apps/zipple/n1/browser.mjs
       - name: Verify ZIPPLE PWA assets
         run: |
           test -s apps/web/zipple/dist/manifest.webmanifest

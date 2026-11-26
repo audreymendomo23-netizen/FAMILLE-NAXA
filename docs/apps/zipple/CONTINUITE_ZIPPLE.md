@@ -32,3 +32,6 @@ Run 45792810950, commit 32d0cd2ef13cf570548b48d299fdc29f25ef0202, jobs 139815827
 
 ## N1 — lancement en bulk
 Voir n1/ETAT_N1.md. Socle ZIPPLE Android/Web/PWA modifié sur commit 1952cf7946ccef49292ca9e55fba77dde2d39ea6; recettes ciblées lancées séparément. N1 PARTIEL avant preuves, pas d'API ZIPPLE réelle ni de migration hébergée.
+
+## Reprise — commit 4616b08128fadb0a65dcf4dda652366d6fb4f2b3
+Gestionnaire de PIN par membre repris de NAXA Services (Keystore HMAC et backoff), biométrie du socle commun, expiration de session et Room avec scopes app/org/member/site et déduplication. Tests unitaires PIN ajoutés. Le changement de schéma Room v1→v2 n'a pas encore de migration testée; aucun effacement automatique autorisé. WorkManager et reçus serveur restent à raccorder. Premier run 45794002307 : Web SUCCESS (13/13, build et assets); Android encore à constater. Nouveau contrôle navigateur desktop/mobile et nouveau build Android lancés pour le dernier code. Pas d'intégration de production.

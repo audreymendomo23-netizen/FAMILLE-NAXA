@@ -1,0 +1,28 @@
+import { chromium } from "playwright";
+import assert from "node:assert/strict";
+const browser=await chromium.launch({headless:true});
+try {
+ const ctx=await browser.newContext({viewport:{width:360,height:800}});
+ const page=await ctx.newPage();
+ await page.goto("http://127.0.0.1:4173/");
+ await page.getByRole("heading",{name:"Votre restaurant, bien piloté"}).waitFor();
+ const submit=page.getByRole("button",{name:"Se connecter"});
+ assert.equal(await submit.isDisabled(),true);
+ await page.getByLabel("Identifiant").fill("demo");
+ await page.getByLabel("Mot de passe").fill("test-only");
+ assert.equal(await submit.isEnabled(),true);
+ await submit.click();
+ await page.getByRole("alert").waitFor();
+ assert.match(await page.getByRole("alert").innerText(),/Connexion indisponible/);
+ await page.getByRole("button",{name:"EN",exact:true}).click();
+ await page.getByRole("heading",{name:"Manage your restaurant"}).waitFor();
+ await page.getByRole("button",{name:"Theme",exact:true}).click();
+ assert.equal(await page.locator("main").getAttribute("data-theme"),"dark");
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.setViewportSize({width:1280,height:800});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.evaluate(async()=>{await navigator.serviceWorker.ready});
+ const m=await page.request.get("http://127.0.0.1:4173/manifest.webmanifest");
+ assert.equal((await m.json()).theme_color,"#0E224D");
+ console.log("ZIPPLE_N1_BROWSER_PASS mobile desktop, disabled login, fail closed, FR/EN, theme, service worker");
+}finally{await browser.close()}
