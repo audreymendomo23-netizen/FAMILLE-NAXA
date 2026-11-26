@@ -1,0 +1,173 @@
+name: NAXA SERVICES — Replay isolé Auth, Storage et abonnements
+on:
+  workflow_dispatch:
+  push:
+    branches: [work/naxa-services-completion-20261120]
+    paths:
+      - '.github/workflows/naxa-services-replay-isolated.yml'
+permissions:
+  contents: read
+concurrency:
+  group: naxa-services-real-local-replay
+  cancel-in-progress: false
+jobs:
+  actual-local-auth-storage:
+    name: Real GoTrue sessions, Storage and tenant isolation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+      - name: Start disposable Supabase (no linked project or hosted secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/ns-replay"
+          cd "$RUNNER_TEMP/ns-replay"
+          supabase --version
+          supabase init --help >/dev/null
+          supabase start --help >/dev/null
+          supabase status --help >/dev/null
+          supabase init
+          supabase start
+          supabase status -o env > "$RUNNER_TEMP/ns-replay.env"
+          chmod 600 "$RUNNER_TEMP/ns-replay.env"
+      - name: Install exact NAXA SERVICES schema only on local DB
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || { echo 'Unexpected API host'; exit 1; }
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || { echo 'Unexpected DB host'; exit 1; }
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "create extension if not exists pgcrypto with schema extensions"
+          for file in naxa_services_v1.sql naxa_services_v2_activity_onboarding_management.sql naxa_services_v3_operations_rewards_sync.sql naxa_services_v4_supplier_accounting_forecast.sql naxa_services_referrals_v1.sql naxa_services_v5_customer_referrals_promotions.sql naxa_services_v6_notifications.sql naxa_services_v7_financial_controls.sql naxa_services_v8_subscription_payment.sql; do
+            sed -E 's/^rollback;[[:space:]]*$/commit;/I' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
+            echo "Applied local draft: $file"
+          done
+          for file in 20261126080317_naxa_services_strict_site_management_scope.sql 20261126133458_naxa_services_push_only_notification_claim.sql 20261126133841_naxa_services_bound_push_tokens.sql 20261126140054_naxa_services_notification_device_deliveries.sql 20261126140440_naxa_services_private_profile_photo_access.sql; do
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "docs/naxa-services/hosted-migrations/$file" >/dev/null
+            echo "Applied local archive: $file"
+          done
+          psql "$DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+          values('ns-profile-photos','ns-profile-photos',false,2097152,array['image/jpeg','image/png','image/webp']);
+          notify pgrst, 'reload schema';
+          SQL
+      - name: Exercise real Auth Admin, gateway, JWT, private Storage, billing and push registration
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export NS_ALLOWED_ORIGINS=http://127.0.0.1:4173 NS_AUTH_ALIAS_DOMAIN=example.test
+          export NS_PUSH_TOKEN_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+          export NS_NOTIFICATION_WORKER_SECRET="$(openssl rand -hex 32)"
+          unset FCM_SERVICE_ACCOUNT_JSON NS_FIREBASE_PROJECT_ID
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import {randomUUID,randomBytes} from 'node:crypto';
+          import {spawn} from 'node:child_process';
+          const base=process.env.SUPABASE_URL, anon=process.env.SUPABASE_ANON_KEY, admin=process.env.SUPABASE_SERVICE_ROLE_KEY;
+          assert.equal(base,'http://127.0.0.1:54321');
+          const gateway='http://127.0.0.1:8000';
+          let child;
+          const pause=ms=>new Promise(r=>setTimeout(r,ms));
+          async function stop(){if(child){const c=child;child=undefined;c.kill('SIGTERM');if(c.exitCode===null)await new Promise(r=>c.once('exit',r));}}
+          async function start(name){
+            await stop();
+            child=spawn('deno',['run','--allow-env','--allow-net=127.0.0.1:54321,0.0.0.0:8000,127.0.0.1:8000','supabase/functions/naxa-services-'+name+'/index.ts'],{stdio:['ignore','ignore','ignore']});
+            for(let i=0;i<40;i++){try{const r=await fetch(gateway,{method:'OPTIONS'});if(r.ok)return;}catch{}if(child.exitCode!==null)break;await pause(250);}
+            throw Error('GATEWAY_START_FAILED_'+name);
+          }
+          const headers=(token=admin,key=admin)=>({apikey:key,Authorization:'Bearer '+token,'Content-Type':'application/json'});
+          async function json(url,body,token=admin,key=admin,method='POST'){
+            const r=await fetch(url,{method,headers:{...headers(token,key),Prefer:'return=representation'},...(body===undefined?{}:{body:JSON.stringify(body)})});
+            const data=await r.json().catch(()=>null);
+            return {status:r.status,data};
+          }
+          async function success(url,body,token=admin,key=admin,method='POST'){
+            const r=await json(url,body,token,key,method);assert.ok(r.status>=200&&r.status<300,'HTTP '+r.status+' at '+new URL(url).pathname);return r.data;
+          }
+          const rest=(table,body)=>success(base+'/rest/v1/'+table,body);
+          const pass=label=>console.log('PASS '+label);
+          async function fixture(suffix){
+            const email='ns-replay-'+suffix+'-'+randomUUID()+'@example.test', password='Qa7!'+randomBytes(18).toString('hex');
+            const user=await success(base+'/auth/v1/admin/users',{email,password,email_confirm:true,app_metadata:{app_code:'naxa-services'}});
+            assert.match(user.id,/^[0-9a-f-]{36}$/);
+            const [org]=await rest('ns_organizations',{display_name:'Replay '+suffix,business_mode:'solo'});
+            const login='NS-'+randomBytes(5).toString('hex').toUpperCase();
+            const [account]=await rest('ns_accounts',{auth_user_id:user.id,login_id:login,auth_alias:email,password_change_required:false});
+            const [member]=await rest('ns_members',{org_id:org.id,account_id:account.id,display_name:'Recette '+suffix,role_code:'promoter'});
+            const [site]=await rest('ns_sites',{org_id:org.id,code:'REPLAY',name:'Recette isolée'});
+            await rest('ns_member_scopes',{org_id:org.id,member_id:member.id,scope_type:'organization',scope_id:org.id,can_read:true,can_operate:true,can_manage:true});
+            return {user,org,member,site,login,password,device:{installation_id:randomUUID(),platform:'web',label:'Replay'}};
+          }
+          const act=(action,body={},token=anon)=>json(gateway,{app_code:'naxa-services',action,...body},token,anon);
+          async function login(f){const r=await act('login',{identifier:f.login,password:f.password,device:f.device});assert.equal(r.status,200,'positive login');assert.equal(r.data.account.organization_id,f.org.id);assert.deepEqual(r.data.account.active_site_ids,[f.site.id]);assert.ok(r.data.access_token&&r.data.refresh_token&&r.data.device_id);return r.data;}
+          const storage=base+'/storage/v1/object/';
+          const photo=f=>f.org.id+'/'+f.member.id+'/avatar.png';
+          const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l2sAAAAASUVORK5CYII=','base64');
+          const storageHeaders=t=>({apikey:anon,Authorization:'Bearer '+t});
+          async function upload(f,t){return fetch(storage+'ns-profile-photos/'+photo(f),{method:'POST',headers:{...storageHeaders(t),'Content-Type':'image/png','x-upsert':'true'},body:png});}
+          async function read(f,t){return fetch(storage+'authenticated/ns-profile-photos/'+photo(f),{headers:storageHeaders(t)});}
+          try{
+            const A=await fixture('A'), B=await fixture('B');
+            pass('Auth Admin official API created two isolated synthetic users');
+            await start('auth');
+            let a=await login(A), b=await login(B);
+            pass('two genuine GoTrue JWT logins with separate tenant scopes');
+            assert.equal((await act('login',{identifier:A.login,password:'wrong-password',device:A.device})).status,401);
+            assert.equal((await act('set_member_locale',{locale:'ff-CM'},a.access_token)).status,200);
+            const refresh=await act('refresh',{refresh_token:a.refresh_token,device:A.device});
+            assert.equal(refresh.status,200);a=refresh.data;assert.equal(a.account.default_locale,'ff-CM');
+            pass('negative login, real refresh and locale persistence (not UI translation)');
+            let r=await upload(A,a.access_token);assert.ok(r.ok,'own Storage upload HTTP '+r.status);
+            r=await read(A,a.access_token);assert.ok(r.ok,'own Storage read HTTP '+r.status);assert.deepEqual(Buffer.from(await r.arrayBuffer()),png);
+            r=await upload(A,a.access_token);assert.ok(r.ok,'own Storage upsert HTTP '+r.status);
+            assert.ok(!(await read(A,b.access_token)).ok,'foreign Storage read denied');
+            assert.ok(!(await upload(A,b.access_token)).ok,'foreign Storage write denied');
+            assert.ok(!(await read(A,anon)).ok,'anonymous Storage read denied');
+            pass('real Storage upload, read, upsert and cross-tenant/anonymous denial');
+            const d=await act('subscription_access',{},a.access_token);assert.equal(d.status,200);
+            await rest('ns_subscription_destinations',{channel:'mtn_momo',merchant_code:'123456',beneficiary:'REPLAY ONLY',destination_reference:'237690000072',active:true});
+            const intent=await act('subscription_create',{plan_code:'ACCESS',months:1,channel:'mtn_momo'},a.access_token);
+            assert.equal(intent.status,200);assert.equal(intent.data.subscription_result.status,'pending');assert.ok(intent.data.subscription_result.amount_xaf>0);
+            assert.equal((await act('subscription_cancel',{intent_id:intent.data.subscription_result.id,not_paid:true},a.access_token)).data.subscription_result.status,'cancelled');
+            pass('real JWT subscription access, intent creation and cancel; no money moved');
+            await start('notifications');
+            const registered=await act('register_push_token',{platform:'web',token:'replay-'+randomBytes(80).toString('hex')},a.access_token);
+            assert.equal(registered.status,200);assert.equal(registered.data.result.registered,true);
+            const tokens=await success(base+'/rest/v1/ns_push_tokens?select=token_ciphertext,token_iv,status&device_id=eq.'+a.device_id,undefined,admin,admin,'GET');
+            assert.equal(tokens.length,1);assert.equal(tokens[0].status,'active');assert.ok(tokens[0].token_ciphertext&&tokens[0].token_iv);
+            assert.equal((await act('list_inbox',{},a.access_token)).status,200);
+            assert.equal((await act('revoke_current_device_tokens',{},a.access_token)).status,200);
+            pass('real notification registration, encryption, inbox, revocation; no FCM send');
+            await start('auth');
+            assert.equal((await act('logout',{device:A.device},a.access_token)).status,200);
+            assert.ok(!(await read(A,a.access_token)).ok,'revoked JWT must lose private photo access');
+            assert.ok((await act('refresh',{refresh_token:a.refresh_token,device:A.device})).status>=400);
+            pass('logout and revoked session denied by real Storage and refresh');
+            assert.equal((await act('logout',{device:B.device},b.access_token)).status,200);
+            console.log('REPLAY AUTH STORAGE BILLING NOTIFICATION REGISTRATION PASSED');
+          }finally{await stop();}
+          NODE
+      - name: Destroy isolated stack even if a test failed
+        if: always()
+        shell: bash
+        run: |
+          if [ -d "$RUNNER_TEMP/ns-replay/supabase" ]; then
+            cd "$RUNNER_TEMP/ns-replay"
+            supabase stop --no-backup
+          fi
+          rm -f "$RUNNER_TEMP/ns-replay.env"
