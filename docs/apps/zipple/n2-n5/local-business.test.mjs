@@ -52,6 +52,18 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   assert.equal(Number(await scalar("select amount_xaf from zp_expenses where org_id=$1",[org])),2500);
   await page.getByRole("button",{name:"Comptabilité",exact:true}).click();await page.getByText(/Coût des ventes non déterminé/).waitFor();
   console.log("ZIPPLE_N5_REAL_EDGE_STOCK_EXPENSE_UI_PASS");
+  await page.getByRole("button",{name:"Achats",exact:true}).click();
+  await page.getByLabel("Nom du fournisseur").fill("Grossiste recette");await page.getByRole("button",{name:"Créer le fournisseur"}).click();
+  await page.getByRole("combobox",{name:"Fournisseur de la commande",exact:true}).selectOption({label:"Grossiste recette"});
+  await page.getByRole("combobox",{name:"Matière commandée",exact:true}).selectOption({label:"Farine recette (kg)"});
+  await page.getByLabel("Référence de commande").fill("ACH-RECETTE");await page.getByLabel("Quantité commandée").fill("2");await page.getByLabel("Coût total commandé FCFA").fill("1000");await page.getByRole("button",{name:"Créer la commande"}).click();
+  await page.getByRole("combobox",{name:"Commande à traiter",exact:true}).selectOption({label:"ACH-RECETTE"});
+  await page.getByLabel("Quantité réceptionnée").fill("1");await page.getByLabel("Lot de réception").fill("ACH-LOT");await page.getByRole("button",{name:"Confirmer la réception"}).click();
+  await page.getByText(/Reçu : 1\/2/).waitFor();
+  await page.getByLabel("Montant du règlement FCFA").fill("200");await page.getByLabel("Référence du règlement").fill("REG-RECETTE");await page.getByRole("button",{name:"Enregistrer le règlement"}).click();
+  await page.getByText(/Dette fournisseur enregistrée : 300 FCFA/).waitFor();
+  const purchase=await scalar("select id from zp_purchases where org_id=$1",[org]);assert.equal(Number(await scalar("select paid_xaf from zp_purchases where id=$1",[purchase])),200);
+  console.log("ZIPPLE_N5_REAL_EDGE_PROCUREMENT_UI_PASS");
   await staff.close();await guestCtx.close();
   console.log("ZIPPLE_BUSINESS_REAL_EDGE_PROFESSIONAL_AND_GUEST_BROWSER_PASS");
  }finally{if(browser)await browser.close();if(server)await new Promise(ok=>server.close(ok));await db.end()}
