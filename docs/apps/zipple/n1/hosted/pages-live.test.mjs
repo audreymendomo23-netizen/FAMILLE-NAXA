@@ -9,6 +9,7 @@ test("public Pages UI and exact-origin CORS",async()=>{
   const page=await browser.newPage();
   // Pages may be building at the same time as GitHub Actions; only qualify the new version.
   let published=false;for(let i=0;i<18;i++){const res=await fetch(origin+"/zipple-restaurant-bar.webp",{cache:"no-store"});if(res.ok&&res.headers.get("content-type")?.includes("image/webp")){published=true;break}await new Promise(r=>setTimeout(r,5000))}assert.equal(published,true,"new photo build not deployed");
+  let latest=false;for(let i=0;i<24;i++){try{const manifest=await (await fetch(origin+"/manifest.webmanifest",{cache:"no-store"})).json();const pre=await (await fetch(origin+"/zipple-precache.json",{cache:"no-store"})).json();if(manifest.icons?.some(x=>x.sizes==="512x512")&&pre.some(x=>x.endsWith(".js"))){latest=true;break}}catch{}await new Promise(r=>setTimeout(r,5000))}assert.ok(latest,"Latest PWA manifest and asset list not deployed");
   await page.goto(origin,{waitUntil:"networkidle"});
   await page.getByRole("heading",{name:/Servez mieux, gérez en toute sécurité\.|Votre restaurant, bien piloté/}).waitFor();
   const submit=page.getByRole("button",{name:"Se connecter",exact:true});
@@ -22,6 +23,7 @@ test("public Pages UI and exact-origin CORS",async()=>{
   assert.equal(await page.getByRole("checkbox",{name:"Rester connecté"}).isChecked(),false);
   const noCookie=await fetch(origin+"/session/refresh",{method:"POST",headers:{origin,"Content-Type":"application/json"},body:"{}",redirect:"error"});assert.equal(noCookie.status,401,"Pages session worker must fail closed without cookie");assert.match(noCookie.headers.get("set-cookie")??"",/HttpOnly; SameSite=Strict; Max-Age=0/);
   console.log("ZIPPLE_PAGES_PHOTO_AND_COOKIE_BOUNDARY_PASS");
+  await page.waitForFunction(()=>!!navigator.serviceWorker.controller);console.log("ZIPPLE_PAGES_PWA_PRECACHE_DEPLOYED_PASS");
   console.log("ZIPPLE_PAGES_UI_PASS");
   const preflight=await fetch(edge+"/login",{method:"OPTIONS",headers:{origin,"access-control-request-method":"POST","access-control-request-headers":"content-type"},redirect:"error"});
   console.log("ZIPPLE_PAGES_PREFLIGHT_STATUS",preflight.status,"ORIGIN",preflight.headers.get("access-control-allow-origin"));

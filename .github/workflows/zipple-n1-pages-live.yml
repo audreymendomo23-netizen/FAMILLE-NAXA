@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/zipple-n1-pages-live.yml"
       - "docs/apps/zipple/n1/hosted/pages-live.test.mjs"
+      - "apps/web/zipple/**"
   workflow_dispatch:
 permissions:
   contents: read
