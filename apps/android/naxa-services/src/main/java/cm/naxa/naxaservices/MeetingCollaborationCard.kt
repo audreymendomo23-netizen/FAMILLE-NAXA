@@ -23,6 +23,7 @@ internal fun MeetingCollaborationCard(session:AuthSession,meetingId:String,host:
   var people by remember{mutableStateOf<List<JSONObject>>(emptyList())}
   var chat by remember{mutableStateOf<List<JSONObject>>(emptyList())}
   var reactions by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+  var recordings by remember{mutableStateOf<List<JSONObject>>(emptyList())}
   var draft by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)};var ready by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var reload by remember{mutableIntStateOf(0)}
   var exclude by remember{mutableStateOf<JSONObject?>(null)}
   val emojis=linkedMapOf("like" to "👍","clap" to "👏","heart" to "❤️","laugh" to "😄","agree" to "✅","celebrate" to "🎉")
@@ -30,11 +31,12 @@ internal fun MeetingCollaborationCard(session:AuthSession,meetingId:String,host:
    try{
     val id=UUID.fromString(meetingId).toString();val current=latest
     val p=JSONArray(StaffRosterApi.call(current,"rpc/ns_meeting_participants",JSONObject().put("p_id",id))).collabRows()
-    if(p.none{it.getString("member_id")==current.account.memberId}){ready=false;people=emptyList();chat=emptyList();reactions=emptyList();return}
+    if(p.none{it.getString("member_id")==current.account.memberId}){ready=false;people=emptyList();chat=emptyList();reactions=emptyList();recordings=emptyList();return}
     val c=JSONArray(StaffRosterApi.call(current,"ns_meeting_chat?select=id,member_id,message,created_at&meeting_id=eq."+id+"&order=created_at.desc,id.desc&limit=100")).collabRows()
     val r=JSONArray(StaffRosterApi.call(current,"ns_meeting_reactions?select=id,member_id,reaction&meeting_id=eq."+id+"&order=created_at.desc&limit=20")).collabRows()
-    people=p;chat=c.reversed();reactions=r;ready=true;error=false
-   }catch(c:CancellationException){throw c}catch(_:Exception){ready=false;error=true;people=emptyList();chat=emptyList();reactions=emptyList()}
+    val rec=JSONArray(StaffRosterApi.call(current,"ns_meeting_recording_requests?select=id,status,display_name&meeting_id=eq."+id+"&order=requested_at.desc&limit=20")).collabRows()
+    people=p;chat=c.reversed();reactions=r;recordings=rec;ready=true;error=false
+   }catch(c:CancellationException){throw c}catch(_:Exception){ready=false;error=true;people=emptyList();chat=emptyList();reactions=emptyList();recordings=emptyList()}
   }
   LaunchedEffect(reload,session.accessToken){while(true){if(!busy)refresh();delay(3000)}}
   fun act(action:String,value:String?=null,target:String?=null){
@@ -49,6 +51,11 @@ internal fun MeetingCollaborationCard(session:AuthSession,meetingId:String,host:
     }catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}
    }
   }
+  fun requestRecording(id:String,action:String){
+   if(busy||!ready||!host)return;busy=true
+   scope.launch{try{StaffRosterApi.call(latest,"rpc/ns_request_meeting_recording",JSONObject().put("p_id",meetingId).put("p_request",id).put("p_action",action));reload++}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}
+  }
+  val currentRecording=recordings.firstOrNull{it.optString("status") in listOf("requested","recording","stop_requested")}
   val own=people.firstOrNull{it.optString("member_id")==session.account.memberId}
   Text(tr("Échanges de réunion","Meeting discussion","Jeewte dental"),style=MaterialTheme.typography.titleMedium)
   Text(tr("Autorisations micro/écran sans appel actif.","Mic/screen permissions without active call.","Yamirooje daande e ekran tan."))
@@ -57,6 +64,10 @@ internal fun MeetingCollaborationCard(session:AuthSession,meetingId:String,host:
    OutlinedButton(onClick={act(if(own.isNull("hand_raised_at"))"raise_hand" else "lower_hand")},enabled=!busy){Text(if(own.isNull("hand_raised_at"))tr("Lever la main","Raise hand","Ɓamtu junngo")else tr("Baisser la main","Lower hand","Lesɗin junngo"))}
    emojis.entries.chunked(3).forEach{group->Row{group.forEach{(k,v)->TextButton(onClick={act("reaction",k)},enabled=!busy){Text(v)}}}}
    Text(reactions.mapNotNull{emojis[it.optString("reaction")]}.joinToString(" "))
+   Text(tr("Enregistrement audio","Audio recording","Nanndugol daande"))
+   Text(tr("Moteur audio indisponible. Une demande ne constitue pas un enregistrement.","Audio engine unavailable. A request is not a recording.","Masiŋ daande heɓotaako."))
+   currentRecording?.let{Text(it.optString("display_name")+" · "+if(it.optString("status")=="requested")tr("Demande en attente","Pending request","Ɗaɓɓitannde e fadade")else tr("Vérification nécessaire","Verification required","Ƴeewtagol ena sokli"))}
+   if(host)OutlinedButton(onClick={requestRecording(currentRecording?.getString("id")?:UUID.randomUUID().toString(),if(currentRecording==null)"start" else "stop")},enabled=!busy&&currentRecording?.optString("status")!="stop_requested"){Text(if(currentRecording==null)tr("Demander l’enregistrement (sans capture)","Request recording (no capture)","Ɗaɓɓu nanndugol")else tr("Annuler la demande","Cancel request","Haaytu ɗaɓɓitannde"))}
    Text(tr("Invités habilités","Authorized invitees","Noddaaɓe yamiraaɓe"))
    people.forEach{p->
     val id=p.getString("member_id");Text(p.getString("display_name")+if(!p.isNull("hand_raised_at"))" ✋"else "")
