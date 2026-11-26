@@ -74,5 +74,26 @@ do $$ begin
 end $$;
 reset role;
 
+-- N1 throttle: shared identifier across installations, shared device across identifiers,
+-- reset after window, no direct client privileges.
+do $wm$ begin
+ if has_function_privilege('anon','public.wm_reserve_auth_attempt(text,text)','EXECUTE') or has_function_privilege('authenticated','public.wm_reserve_auth_attempt(text,text)','EXECUTE') or has_table_privilege('authenticated','public.wm_auth_attempt_buckets','SELECT') then raise exception 'throttle acl leak';end if;
+ if not exists(select 1 from pg_class where oid='public.wm_auth_attempt_buckets'::regclass and relrowsecurity) then raise exception 'throttle rls missing';end if;
+end $wm$;
+set local role service_role;
+do $wm$ declare i integer; begin
+ for i in 1..5 loop
+  if not public.wm_reserve_auth_attempt(repeat('a',64),repeat('b',64)) then raise exception 'premature throttle';end if;
+ end loop;
+ if public.wm_reserve_auth_attempt(repeat('a',64),repeat('c',64)) then raise exception 'identifier limit bypass';end if;
+ for i in 1..20 loop
+  if not public.wm_reserve_auth_attempt(lpad(to_hex(i),64,'0'),repeat('d',64)) then raise exception 'device premature throttle';end if;
+ end loop;
+ if public.wm_reserve_auth_attempt(lpad(to_hex(21),64,'0'),repeat('d',64)) then raise exception 'device limit bypass';end if;
+ update public.wm_auth_attempt_buckets set window_start=clock_timestamp()-interval '16 minutes';
+ if not public.wm_reserve_auth_attempt(repeat('a',64),repeat('b',64)) then raise exception 'window did not reset';end if;
+end $wm$;
+reset role;
+
 rollback;
 select 'WIDEMEET_IDENTITY_SQL_PASS';
