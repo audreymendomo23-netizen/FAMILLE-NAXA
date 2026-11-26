@@ -51,6 +51,22 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal(denied.body.state,'rejected');assert.equal(denied.body.result.reason,'BOOTIK_SCOPE_DENIED');
  assert.equal(Number((await snapshot()).quantity_on_hand),6);
  await one("update bootik.bk_members set role='manager' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
+ // NAXA Services strict-scope pattern: site membership must not widen an activity restriction.
+ await one('update bootik.bk_member_sites set activity_restricted=true where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4',[o,a,u,s]);
+ assert.deepEqual((await call('catalog',{})).body.result.items,[]);
+ assert.equal((await call('sale',sale)).status,403);
+ assert.equal((await call('sync-sale',sale)).body.state,'rejected');
+ assert.equal((await call('sync-stock',stock)).body.state,'rejected');
+ await assert.rejects(db.query('insert into bootik.bk_member_activity_scopes values($1,$2,$3,$4,$5)',[o,a,u,s,v]));
+ await one('insert into bootik.bk_member_activity_scopes values($1,$2,$3,$4,$5)',[o,a,u,s,v]);
+ assert.equal((await snapshot()).balance_id,b);
+ assert.equal((await call('sync-sale',sale)).body.result.sale_id,sold.body.result.sale_id);
+ assert.equal((await call('sync-stock',stock)).body.result.stock_event_id,received.body.result.stock_event_id);
+ await one('delete from bootik.bk_member_activity_scopes where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4 and activity_id=$5',[o,a,u,s,v]);
+ assert.equal((await call('sync-stock',stock)).body.state,'rejected');
+ assert.deepEqual((await call('catalog',{})).body.result.items,[]);
+ assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),6);
+ await one('update bootik.bk_member_sites set activity_restricted=false where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4',[o,a,u,s]);
  assert.equal((await call('support',{kind:'screen',consent:false})).status,400);
  const req=await call('support',{kind:'video',consent:true});assert.equal(req.status,200);
  assert.equal((await call('support-cancel',{request_id:req.body.result.request_id})).body.result.cancelled,true);
