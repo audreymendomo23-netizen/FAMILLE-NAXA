@@ -10,3 +10,8 @@ grant update(revoked_at,token_hash,expires_at,refresh_hash,refresh_expires_at) o
 grant update(quantity_on_hand,updated_at) on bootik.bk_inventory_balances to bootik_runtime;
 grant update(state,revoked_at) on bootik.bk_support_requests to bootik_runtime;
 grant execute on function bootik.bk_assert_scope(uuid,uuid,uuid,uuid,boolean),bootik.bk_quote(text,text,integer),bootik.bk_start_trial(uuid,uuid,uuid,uuid,text,text),bootik.bk_has_entitlement(uuid,uuid,text),bootik.bk_record_sale(uuid,uuid,uuid,uuid,uuid,numeric,bigint,text),bootik.bk_request_support(uuid,uuid,uuid,uuid,text,boolean),bootik.bk_cancel_support(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;
+
+-- Dedicated runtime can inspect scopes, never change assignments.
+create policy bk_runtime_access on bootik.bk_member_activity_scopes for select to bootik_runtime using (true);
+grant select on bootik.bk_member_activity_scopes to bootik_runtime;
+grant execute on function bootik.bk_can_access_activity(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;
