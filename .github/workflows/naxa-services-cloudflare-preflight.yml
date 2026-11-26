@@ -15,19 +15,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Validate public client configuration
-        env:
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.NAXA_SERVICES_SUPABASE_ANON_KEY }}
-        run: |
-          node --input-type=module <<'NODE'
-          const k=process.env.VITE_SUPABASE_ANON_KEY || '';
-          let valid=k.startsWith('sb_publishable_');
-          if(!valid) {
-            try { const p=JSON.parse(Buffer.from(k.split('.')[1],'base64url').toString()); valid=p.role==='anon' && p.ref==='idupfjbkwjcavyisxteo'; } catch {}
-          }
-          if(!valid) { console.error('Missing or invalid public Supabase key; never use service role'); process.exit(1); }
-          console.log('Public client key validated (role/ref checked for legacy JWT).');
-          NODE
       - name: Install workspace dependencies
         run: npm install --no-audit --no-fund
       - name: Build dedicated Web/PWA candidate
@@ -35,7 +22,7 @@ jobs:
           VITE_NAXA_SERVICES_AUTH_URL: https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/naxa-services-auth
           VITE_NAXA_SERVICES_ACCOUNTING_URL: https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/naxa-services-accounting
           VITE_SUPABASE_ANON_KEY: ${{ secrets.NAXA_SERVICES_SUPABASE_ANON_KEY }}
-        run: npm run build --workspace @famille/naxa-services-web
+        run: node scripts/naxa-services/cloudflare-pages-build.mjs
       - name: Validate static deployment output
         run: |
           cd apps/web/naxa-services/dist
@@ -52,23 +39,28 @@ jobs:
           name: naxa-services-cloudflare-candidate
           path: apps/web/naxa-services/dist/
           if-no-files-found: error
-  cloudflare-project-access:
+  cloudflare-live-match:
+    needs: production-web-build
     runs-on: ubuntu-24.04
     steps:
-      - name: Verify dedicated Pages project using GET only
-        env:
-          CF_ACCOUNT: ${{ vars.NAXA_SERVICES_CLOUDFLARE_ACCOUNT_ID }}
-          CF_PROJECT: ${{ vars.NAXA_SERVICES_CLOUDFLARE_PAGES_PROJECT }}
-          CF_TOKEN: ${{ secrets.NAXA_SERVICES_CLOUDFLARE_API_TOKEN }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: naxa-services-cloudflare-candidate
+          path: candidate
+      - name: Verify public Pages files against exact build candidate (read only)
         shell: bash
         run: |
-          set -eu
-          [[ "$CF_ACCOUNT" =~ ^[0-9a-fA-F]{32}$ ]] || { echo 'Missing or invalid NAXA SERVICES Cloudflare account ID'; exit 1; }
-          [[ "$CF_PROJECT" =~ ^naxa-services(-[a-z0-9-]+)?$ ]] || { echo 'Missing or non-dedicated Pages project name'; exit 1; }
-          [[ -n "$CF_TOKEN" ]] || { echo 'Missing dedicated Cloudflare API token'; exit 1; }
-          response="$(mktemp)"
-          trap 'rm -f "$response"' EXIT
-          status="$(curl --silent --show-error --max-time 30 --output "$response" --write-out '%{http_code}' -H "Authorization: Bearer $CF_TOKEN" "https://api.cloudflare.com/client/v4/accounts/$CF_ACCOUNT/pages/projects/$CF_PROJECT")"
-          [[ "$status" == 200 ]] || { echo "Cloudflare project lookup HTTP $status"; exit 1; }
-          jq -e --arg expected "$CF_PROJECT" '.success == true and .result.name == $expected' "$response" >/dev/null
-          echo 'Dedicated Pages project is reachable. No deployment or project mutation performed.'
+          set -euo pipefail
+          origin='https://famille-naxa.pages.dev'
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cd candidate
+          for file in index.html manifest.webmanifest sw.js; do
+            curl --silent --show-error --fail --max-time 30 -H 'Cache-Control: no-cache' "$origin/$file" -o "$tmp/remote"
+            cmp -s "$file" "$tmp/remote" || { echo "Live file differs from candidate: $file"; exit 1; }
+          done
+          while IFS= read -r -d '' file; do
+            curl --silent --show-error --fail --max-time 30 -H 'Cache-Control: no-cache' "$origin/$file" -o "$tmp/remote"
+            cmp -s "$file" "$tmp/remote" || { echo "Live asset differs from candidate: $file"; exit 1; }
+          done < <(find assets -type f -print0)
+          echo 'Live HTML, PWA files and compiled assets match this exact candidate. This is not a customer acceptance test or proof of a Cloudflare deployment ID.'
