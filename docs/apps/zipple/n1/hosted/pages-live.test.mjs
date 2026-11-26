@@ -21,7 +21,7 @@ test("public Pages UI and exact-origin CORS",async()=>{
   assert.equal(await page.locator("main").getAttribute("data-theme"),"dark");
   assert.ok((await page.locator("main").evaluate(e=>getComputedStyle(e).backgroundImage)).includes("zipple-restaurant-bar.webp"));
   assert.equal(await page.getByRole("checkbox",{name:"Rester connecté"}).isChecked(),false);
-  let noCookie;for(let i=0;i<24;i++){noCookie=await fetch(origin+"/session/refresh",{method:"POST",headers:{origin,"Content-Type":"application/json"},body:"{}",redirect:"error"});if(noCookie.headers.get("x-zipple-session-revision")==="2")break;await new Promise(r=>setTimeout(r,5000))}assert.equal(noCookie?.headers.get("x-zipple-session-revision"),"2","new session worker not deployed");assert.equal(noCookie.status,401,"Pages session worker must fail closed without cookie");assert.match(noCookie.headers.get("set-cookie")??"",/HttpOnly; SameSite=Strict; Max-Age=0/);
+  let noCookie;for(let i=0;i<24;i++){noCookie=await fetch(origin+"/session/refresh",{method:"POST",headers:{origin,"Content-Type":"application/json"},body:"{}",redirect:"error"});if(noCookie.headers.get("x-zipple-session-revision")==="3")break;await new Promise(r=>setTimeout(r,5000))}assert.equal(noCookie?.headers.get("x-zipple-session-revision"),"3","new session worker not deployed");assert.equal(noCookie.status,401,"Pages session worker must fail closed without cookie");assert.match(noCookie.headers.get("set-cookie")??"",/HttpOnly; SameSite=Strict; Max-Age=0/);
   console.log("ZIPPLE_PAGES_PHOTO_AND_COOKIE_BOUNDARY_PASS");
   await page.waitForFunction(()=>!!navigator.serviceWorker.controller);console.log("ZIPPLE_PAGES_PWA_PRECACHE_DEPLOYED_PASS");
   console.log("ZIPPLE_PAGES_UI_PASS");
@@ -43,7 +43,7 @@ test("public Pages UI and exact-origin CORS",async()=>{
   const forbidden=await fetch(origin+"/session/login",{method:"POST",headers:{origin:"https://untrusted.invalid","content-type":"application/json"},body:JSON.stringify({identifier:"zipple-ci-negative",password:"fixture-only"}),redirect:"error"});
   assert.equal(forbidden.status,403);assert.equal(forbidden.headers.get("set-cookie"),null);
   const invalid=await fetch(origin+"/session/login",{method:"POST",headers:{origin,"content-type":"application/json"},body:JSON.stringify({identifier:"zipple-ci-cookie-negative-"+Date.now(),password:"fixture-only"}),redirect:"error"});
-  assert.equal(invalid.status,401);assert.equal(invalid.headers.get("set-cookie"),null);assert.match(invalid.headers.get("cache-control")??"",/no-store/);assert.equal((await invalid.json()).refresh_token,undefined);
+  const rejection=await invalid.json();console.log("ZIPPLE_PAGES_COOKIE_STATUS",invalid.status,"REASON",["DENIED","UPSTREAM_REDIRECT","TRANSPORT_UNAVAILABLE","UPSTREAM_UNAVAILABLE","RATE_LIMITED"].includes(rejection.error)?rejection.error:"OTHER");assert.equal(invalid.status,401);assert.equal(invalid.headers.get("set-cookie"),null);assert.match(invalid.headers.get("cache-control")??"",/no-store/);assert.equal(rejection.refresh_token,undefined);
   console.log("ZIPPLE_PAGES_COOKIE_NEGATIVE_LOGIN_PASS");
   // Check present layout only; approved HD assets intentionally deferred.
   for(const width of [320,390,768,1440]){
