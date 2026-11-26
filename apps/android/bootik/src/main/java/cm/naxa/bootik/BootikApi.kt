@@ -7,7 +7,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 data class BootikSite(val id:String,val name:String)
-data class BootikSession(val token:String,val member:String,val organization:String,val role:String,val sites:List<BootikSite>,val expiresAt:Long) {
+data class BootikSession(val token:String,val member:String,val organization:String,val role:String,val sites:List<BootikSite>,val expiresAt:Long,val refreshToken:String?=null) {
  fun permits(site:String,now:Long=System.currentTimeMillis())=expiresAt>now && sites.any{it.id==site}
 }
 object BootikAccess {
@@ -30,16 +30,20 @@ class BootikApi(private val endpoint:String) {
    if(conn.responseCode==204) JSONObject() else JSONObject(conn.inputStream.bufferedReader().use{it.readText()})
   } finally {conn.disconnect()}
  }
- suspend fun login(identifier:String,password:String):BootikSession {
+ suspend fun login(identifier:String,password:String,remember:Boolean=false):BootikSession {
   require(identifier.isNotBlank()&&password.isNotBlank())
-  val j=request("login",JSONObject().put("identifier",identifier.trim()).put("password",password))
+  return parse(request("login",JSONObject().put("identifier",identifier.trim()).put("password",password).put("remember_device",remember)))
+ }
+ suspend fun refresh(token:String):BootikSession {require(token.length>=20);return parse(request("refresh",JSONObject().put("refresh_token",token)))}
+ private fun parse(j:JSONObject):BootikSession {
   val sites=j.getJSONArray("sites");val list=(0 until sites.length()).map{val s=sites.getJSONObject(it);BootikSite(s.getString("id"),s.getString("name"))}
   val member=j.getString("member_id");val org=j.getString("organization_id");val role=j.getString("role");val expires=j.getLong("expires_at");val token=j.getString("access_token")
   require(BootikAccess.valid(j.getString("app_id"),member,org,role,list.map{it.id},expires,System.currentTimeMillis())&&token.length>=20)
-  return BootikSession(token,member,org,role,list,expires)
+  return BootikSession(token,member,org,role,list,expires,j.optString("refresh_token").takeIf{it.length>=20})
  }
  suspend fun recovery(identifier:String){require(identifier.isNotBlank());request("recovery",JSONObject().put("identifier",identifier.trim()))}
- suspend fun logout(session:BootikSession){request("logout",JSONObject(),session.token)}
+ suspend fun logout(session:BootikSession){request("logout",JSONObject().put("refresh_token",session.refreshToken),session.token)}
+ suspend fun forget(token:String){request("logout",JSONObject().put("refresh_token",token))}
  suspend fun operation(session:BootikSession,site:String,action:String,payload:JSONObject):JSONObject{
   require(session.permits(site)&&action in setOf("entitlement","trial","sale","support","support-cancel","catalog"))
   val response=request("operation",JSONObject().put("site_id",site).put("action",action).put("payload",payload),session.token)

@@ -6,7 +6,7 @@ do $$ declare n text;begin foreach n in array array['bk_credentials','bk_session
  end loop;end $$;
 grant select on bootik.bk_credentials,bootik.bk_sessions,bootik.bk_members,bootik.bk_member_sites,bootik.bk_locations,bootik.bk_activities,bootik.bk_trials,bootik.bk_paid_periods,bootik.bk_sale_prices,bootik.bk_sales,bootik.bk_catalog_items,bootik.bk_inventory_balances,bootik.bk_product_lots,bootik.bk_support_requests to bootik_runtime;
 grant insert on bootik.bk_sessions,bootik.bk_recovery_requests,bootik.bk_trials,bootik.bk_sales,bootik.bk_inventory_movements,bootik.bk_support_requests to bootik_runtime;
-grant update(revoked_at) on bootik.bk_sessions to bootik_runtime;
+grant update(revoked_at,token_hash,expires_at,refresh_hash,refresh_expires_at) on bootik.bk_sessions to bootik_runtime;
 grant update(quantity_on_hand,updated_at) on bootik.bk_inventory_balances to bootik_runtime;
 grant update(state,revoked_at) on bootik.bk_support_requests to bootik_runtime;
 grant execute on function bootik.bk_assert_scope(uuid,uuid,uuid,uuid,boolean),bootik.bk_quote(text,text,integer),bootik.bk_start_trial(uuid,uuid,uuid,uuid,text,text),bootik.bk_has_entitlement(uuid,uuid,text),bootik.bk_record_sale(uuid,uuid,uuid,uuid,uuid,numeric,bigint,text),bootik.bk_request_support(uuid,uuid,uuid,uuid,text,boolean),bootik.bk_cancel_support(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;

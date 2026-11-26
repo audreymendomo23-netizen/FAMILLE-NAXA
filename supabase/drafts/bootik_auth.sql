@@ -10,6 +10,20 @@ create table bootik.bk_credentials (
 create table bootik.bk_sessions (
  token_hash text primary key check(token_hash ~ '^[0-9a-f]{64}$'), organization_id uuid not null,app_id uuid not null,user_id uuid not null,
  expires_at timestamptz not null,revoked_at timestamptz,
+ refresh_hash text unique check(refresh_hash ~ '^[0-9a-f]{64}
+ foreign key(organization_id,app_id,user_id) references bootik.bk_members(organization_id,app_id,user_id)
+);
+create table bootik.bk_recovery_requests (
+ id uuid primary key default gen_random_uuid(),identifier text not null,created_at timestamptz not null default now()
+);
+do $$ declare n text;begin foreach n in array array['bk_credentials','bk_sessions','bk_recovery_requests'] loop
+ execute format('alter table bootik.%I enable row level security',n);
+ execute format('alter table bootik.%I force row level security',n);
+ execute format('revoke all on bootik.%I from public,anon,authenticated',n);
+ end loop;end $$;
+commit;
+),refresh_expires_at timestamptz,
+ check((refresh_hash is null)=(refresh_expires_at is null)),
  foreign key(organization_id,app_id,user_id) references bootik.bk_members(organization_id,app_id,user_id)
 );
 create table bootik.bk_recovery_requests (

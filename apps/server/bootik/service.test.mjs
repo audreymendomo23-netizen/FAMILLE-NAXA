@@ -15,7 +15,11 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  await one('insert into bootik.bk_item_units(app_id,organization_id,activity_id,item_id,unit_code,unit_role,to_base_factor) values($1,$2,$3,$4,$5,$6,1)',[a,o,v,i,'unit','base']);
  await one('insert into bootik.bk_inventory_balances(id,app_id,organization_id,activity_id,location_id,item_id,quantity_on_hand) values($1,$2,$3,$4,$5,$6,10)',[b,a,o,v,s,i]);
  await one('insert into bootik.bk_sale_prices values($1,$2,$3,$4,500)',[i,o,v,a]);
- const login=await handle('login',{app_id:'BOOTIK',identifier,password:'test-only-password'},null);assert.equal(login.status,200);assert.equal(login.body.sites.length,1);const token=login.body.access_token;
+ const login=await handle('login',{app_id:'BOOTIK',identifier,password:'test-only-password',remember_device:true},null);assert.equal(login.status,200);assert.equal(login.body.sites.length,1);assert.ok(login.body.refresh_token);
+ const refreshed=await handle('refresh',{app_id:'BOOTIK',refresh_token:login.body.refresh_token},null);assert.equal(refreshed.status,200);
+ assert.equal((await handle('refresh',{app_id:'BOOTIK',refresh_token:login.body.refresh_token},null)).status,401);
+ assert.equal((await handle('operation',{app_id:'BOOTIK',site_id:s,action:'catalog',payload:{}},login.body.access_token)).status,401);
+ const token=refreshed.body.access_token;
  const call=(action,payload,site=s)=>handle('operation',{app_id:'BOOTIK',site_id:site,action,payload,organization_id:'forged'},token);
  assert.equal((await handle('login',{app_id:'BOOTIK',identifier,password:'wrong'},null)).status,401);
  assert.equal((await call('catalog',{},foreign)).status,403);
@@ -28,7 +32,7 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  const req=await call('support',{kind:'video',consent:true});assert.equal(req.status,200);
  assert.equal((await call('support-cancel',{request_id:req.body.result.request_id})).body.result.cancelled,true);
  assert.equal((await handle('recovery',{app_id:'BOOTIK',identifier},null)).status,204);
- assert.equal((await handle('logout',{app_id:'BOOTIK'},token)).status,204);assert.equal((await call('catalog',{})).status,401);
+ assert.equal((await handle('logout',{app_id:'BOOTIK'},token)).status,204);assert.equal((await call('catalog',{})).status,401);assert.equal((await handle('refresh',{app_id:'BOOTIK',refresh_token:refreshed.body.refresh_token},null)).status,401);
  await assert.rejects(db.query('select bootik.bk_confirm_paid_period($1,$2,$3,$4,$5,$6,$7)',[o,a,'retailer','access',1,4000,'forged']));
  }finally{await db.end();await admin.end()}
 });

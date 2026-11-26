@@ -32,12 +32,24 @@ export function createBootikService(db,{now=Date.now}={}){
    const actual=await verifier(body.password,row?.salt_hex||'00000000000000000000000000000000');
    if(!row||!timingSafeEqual(Buffer.from(actual,'hex'),Buffer.from(row.verifier_hex,'hex')))return reject(401);
    const permitted=await sites(row);if(!permitted.length)return reject(401);
-   const raw=randomBytes(32).toString('hex');
-   const s=await first('insert into bootik.bk_sessions(token_hash,organization_id,app_id,user_id,expires_at) values($1,$2,$3,$4,now()+interval \'15 minutes\') returning expires_at',[digest(raw),row.organization_id,row.app_id,row.user_id]);
-   return {status:200,body:{app_id:'BOOTIK',access_token:raw,organization_id:row.organization_id,member_id:row.user_id,role:row.role,sites:permitted,expires_at:new Date(s.expires_at).getTime()}};
+   const raw=randomBytes(32).toString('hex'), refresh=body.remember_device===true?randomBytes(32).toString('hex'):null;
+   const s=await first("insert into bootik.bk_sessions(token_hash,organization_id,app_id,user_id,expires_at,refresh_hash,refresh_expires_at) values($1,$2,$3,$4,now()+interval '15 minutes',$5,case when $5::text is null then null else now()+interval '30 days' end) returning expires_at",[digest(raw),row.organization_id,row.app_id,row.user_id,refresh?digest(refresh):null]);
+   return {status:200,body:{app_id:'BOOTIK',access_token:raw,organization_id:row.organization_id,member_id:row.user_id,role:row.role,sites:permitted,expires_at:new Date(s.expires_at).getTime(),...(refresh?{refresh_token:refresh}:{})}};
+  }
+  if(route==='refresh'){
+   if(typeof body.refresh_token!=='string'||!/^[0-9a-f]{64}$/.test(body.refresh_token))return reject(401);
+   const raw=randomBytes(32).toString('hex'),refresh=randomBytes(32).toString('hex');
+   const s=await first("update bootik.bk_sessions s set token_hash=$1,expires_at=now()+interval '15 minutes',refresh_hash=$2 from bootik.bk_members m where s.refresh_hash=$3 and s.revoked_at is null and s.refresh_expires_at>now() and m.organization_id=s.organization_id and m.app_id=s.app_id and m.user_id=s.user_id and m.active returning s.organization_id,s.app_id,s.user_id,s.expires_at,m.role",[digest(raw),digest(refresh),digest(body.refresh_token)]);
+   if(!s)return reject(401);const permitted=await sites(s);if(!permitted.length)return reject(401);
+   return {status:200,body:{app_id:'BOOTIK',access_token:raw,refresh_token:refresh,organization_id:s.organization_id,member_id:s.user_id,role:s.role,sites:permitted,expires_at:new Date(s.expires_at).getTime()}};
+  }
+  if(route==='logout'){
+   const raw=typeof token==='string'&&/^[0-9a-f]{64}$/.test(token)?digest(token):null;
+   const refresh=typeof body.refresh_token==='string'&&/^[0-9a-f]{64}$/.test(body.refresh_token)?digest(body.refresh_token):null;
+   if(!raw&&!refresh)return reject(401);
+   await query('update bootik.bk_sessions set revoked_at=now() where revoked_at is null and (token_hash=$1 or refresh_hash=$2)',[raw,refresh]);return {status:204,body:{}};
   }
   const s=await identity(token);if(!s)return reject(401);
-  if(route==='logout'){await query('update bootik.bk_sessions set revoked_at=now() where token_hash=$1',[digest(token)]);return {status:204,body:{}}}
   if(route!=='operation'||!validId(body.site_id)||!body.payload||typeof body.payload!=='object'||Array.isArray(body.payload))return reject();
   const site=body.site_id,p=body.payload,action=body.action;
   const scope=[s.organization_id,s.app_id,s.user_id,site];
