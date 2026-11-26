@@ -2,6 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
 import {randomUUID} from "node:crypto";
+import {chromium} from "playwright";
+import {createServer} from "node:https";
+import {readFile} from "node:fs/promises";
+import {resolve,extname,sep} from "node:path";
 const base=process.env.API_URL,anon=process.env.ANON_KEY,service=process.env.SERVICE_ROLE_KEY;
 const db=new pg.Pool({connectionString:process.env.DB_URL});
 const edge=base+"/functions/v1/zipple-n1";
@@ -17,6 +21,51 @@ async function createUser(email,password){
  assert.ok(r.ok,"local GoTrue provisioning status "+r.status);
  const j=await r.json();assert.ok(j.id);return j.id;
 }
+
+async function browserRecipe({pw,org,member,site}){
+ const root=resolve("apps/web/zipple/dist");
+ const server=createServer({key:await readFile(process.env.ZIPPLE_TLS_KEY),cert:await readFile(process.env.ZIPPLE_TLS_CERT)},async(req,res)=>{
+  try{
+   const url=new URL(req.url,"https://127.0.0.1:4443");
+   if(/^\/gateway\/(login|logout|recovery|sync)$/.test(url.pathname)&&req.method==="POST"){
+    const chunks=[];let size=0;for await(const c of req){size+=c.length;if(size>8192){res.writeHead(413).end();return}chunks.push(c)}
+    const auth=req.headers.authorization;
+    const upstream=await fetch(edge+"/"+url.pathname.split("/").pop(),{method:"POST",headers:{"content-type":"application/json",origin:"https://zipple.test",...(auth?{authorization:auth}:{})},body:Buffer.concat(chunks)});
+    res.writeHead(upstream.status,{"content-type":upstream.headers.get("content-type")??"application/json","cache-control":"no-store"});res.end(Buffer.from(await upstream.arrayBuffer()));return;
+   }
+   if(req.method!=="GET"){res.writeHead(405).end();return}
+   const path=resolve(root,"."+decodeURIComponent(url.pathname==="/"?"/index.html":url.pathname));
+   if(!path.startsWith(root+sep)){res.writeHead(403).end();return}
+   const data=await readFile(path);const mime={".html":"text/html",".js":"application/javascript",".css":"text/css",".jpg":"image/jpeg",".svg":"image/svg+xml",".webmanifest":"application/manifest+json"};
+   res.writeHead(200,{"content-type":mime[extname(path)]??"application/octet-stream"});res.end(data);
+  }catch{res.writeHead(404).end()}
+ });
+ await new Promise((ok,fail)=>{server.once("error",fail);server.listen(4443,"127.0.0.1",ok)});
+ let browser;
+ try{
+  browser=await chromium.launch({headless:true});
+  const ctx=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:390,height:844}});
+  const page=await ctx.newPage();await page.goto("https://127.0.0.1:4443/");
+  await page.getByLabel("Identifiant").fill("fixture");await page.getByLabel("Mot de passe").fill(pw);
+  const loginResponse=page.waitForResponse(r=>r.url().endsWith("/gateway/login")&&r.request().method()==="POST");
+  await page.getByRole("button",{name:"Se connecter"}).click();assert.equal((await loginResponse).status(),200);
+  await page.getByRole("heading",{name:"ZIPPLE fixture"}).waitFor();
+  assert.equal(await page.getByLabel("Établissement autorisé").locator("option").count(),1);
+  assert.equal(await page.getByLabel("Établissement autorisé").inputValue(),site);
+  const eventId=randomUUID();
+  await page.evaluate(async e=>{await new Promise((ok,fail)=>{const q=indexedDB.open("zipple-outbox-v1",1);q.onupgradeneeded=()=>q.result.createObjectStore("events",{keyPath:"eventId"});q.onerror=()=>fail(q.error);q.onsuccess=()=>{const db=q.result,tx=db.transaction("events","readwrite");tx.objectStore("events").add(e);tx.oncomplete=()=>{db.close();ok()};tx.onerror=()=>fail(tx.error)}})}, {eventId,orgId:org,memberId:member,siteId:site,sequence:2,aggregateType:"n1_probe",payload:'{"browser":true}',state:"queued"});
+  const receiptPromise=page.waitForResponse(r=>r.url().endsWith("/gateway/sync")&&r.request().method()==="POST");
+  await page.getByRole("button",{name:"Synchroniser"}).click();const response=await receiptPromise;assert.equal(response.status(),200);assert.equal((await response.json()).state,"acknowledged");
+  await page.waitForFunction(async id=>await new Promise(ok=>{const q=indexedDB.open("zipple-outbox-v1",1);q.onsuccess=()=>{const db=q.result,r=db.transaction("events").objectStore("events").get(id);r.onsuccess=()=>{db.close();ok(r.result?.state==="acknowledged")}}}),eventId);
+  assert.equal(Number((await db.query("select count(*) from public.zp_n1_receipts where event_id=$1",[eventId])).rows[0].count),1);
+  const logoutPromise=page.waitForResponse(r=>r.url().endsWith("/gateway/logout")&&r.request().method()==="POST");
+  await page.getByRole("button",{name:"Déconnexion"}).click();assert.equal((await logoutPromise).status(),200);
+  await page.getByRole("button",{name:"Se connecter"}).waitFor();
+  await page.reload();await page.getByRole("button",{name:"Se connecter"}).waitFor();
+  console.log("ZIPPLE_N1_BROWSER_REAL_EDGE_PASS");
+ }finally{if(browser)await browser.close();await new Promise(ok=>server.close(ok))}
+}
+
 test("actual GoTrue, PostgREST and Edge runtime on isolated local Supabase",async()=>{
  try{
   assert.ok(/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(base),"local only");
@@ -56,5 +105,6 @@ test("actual GoTrue, PostgREST and Edge runtime on isolated local Supabase",asyn
   assert.equal(Number((await db.query("select count(*) from public.zp_recovery_requests")).rows[0].count),1);
   assert.equal(Number((await db.query("select count(*) from public.zp_n1_receipts")).rows[0].count),1);
   console.log("ZIPPLE_N1_LOCAL_SUPABASE_EDGE_PASS");
+  await browserRecipe({pw,org,member,site});
  }finally{await db.end()}
 });

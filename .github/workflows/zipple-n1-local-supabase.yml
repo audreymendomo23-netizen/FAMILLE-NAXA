@@ -58,7 +58,12 @@ jobs:
       - name: Real Auth + REST + Edge integration
         run: |
           set -euo pipefail
-          npm install --no-save --ignore-scripts pg@8.13.3
+          npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
+          npm install --no-save --ignore-scripts pg@8.13.3 playwright@1.51.1
+          npx playwright install --with-deps chromium
+          VITE_ZIPPLE_API_URL=https://127.0.0.1:4443/gateway npm run build --workspace @famille/zipple-web
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 -subj "/CN=localhost" -keyout "$RUNNER_TEMP/zipple-ci.key" -out "$RUNNER_TEMP/zipple-ci.crt" >/dev/null 2>&1
+          export ZIPPLE_TLS_KEY="$RUNNER_TEMP/zipple-ci.key" ZIPPLE_TLS_CERT="$RUNNER_TEMP/zipple-ci.crt"
           set -a
           source "$RUNNER_TEMP/zipple-local.env"
           set +a
