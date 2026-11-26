@@ -60,3 +60,15 @@ Run 45799773553 : trois jobs Android/Web/émulateur SUCCESS; run 45803872704 : a
 - Run 45804077913 in_progress: android=in_progress (Build and unit-test ZIPPLE native only), android-device=in_progress (ZIPPLE Android 35 instrumented recipe), web=success
 - Run 45804077830 success: adapter-sql=success
 N1 PARTIEL : ne déclarer VERT qu'après lecture des résultats réels. Limites : aucun déploiement hébergé, aucune migration Supabase production, biométrie matérielle non prouvée, provisionnement/récupération admin et politique complète appareil/session restent à valider. Recette Web authentifiée ne prouve pas encore parcours Android authentifié réel. Ne pas relancer les gates verts sans changement. Reprendre les runs existants avant toute nouvelle modification.
+
+## Passe N1 — convergence réelle locale
+- Run 45804077913 SUCCESS 3/3 Android/Web/émulateur; run 45804077830 et 45809223504 adaptateur SQL SUCCESS. Les runs 45803872799 et 45804077838 ont démarré Supabase réel et appliqué le schéma, mais échoué sur le test OPTIONS qui exigeait 204 alors que Kong renvoie 200. Commit 43f98ddf5c948d26d4379a6e7ce8f58cacb69067 : acceptation des deux réponses CORS de succès; le test POST d'origine interdite reste impératif.
+- Run 45808626160 : le test a atteint la connexion Edge réelle HTTP 200; échec sur la directive identique dupliquée 'no-store, no-store'. Commit 4c360abcb456b644c0fc7bacb0d75e58eb256322 corrige l'assertion en vérifiant la présence de la directive no-store, sans relâcher la politique de cache. Ne pas qualifier la recette entière de verte sur cette seule preuve.
+- Commit 4806ae945ca193d4c97fe8fc06dcdc925ab8cfe3 et 5a1d0cfc8580f62a79dac5946ca4925c3cbf5b02 : recette instrumentée Android authentifiée sur le même serveur local que Web : PIN, périmètre site, événement Room/WorkManager, réception persistée en PostgreSQL, déconnexion. Le test est conditionné à un endpoint de recette et à des identifiants synthétiques; certificat temporaire et trust debug créés uniquement sur runner, pas dans la source release. Commit 82c89c4d2c3e85213ac700e5898896811fbca8be : script Bash unique pour conserver l'environnement lors de l'exécution par l'émulateur. Aucune migration ni mise en production.
+- Derniers états constatés :
+  - 45804077913: success; android=success, android-device=success, web=success
+  - 45809223504: success; adapter-sql=success
+  - 45808778142: success; web=success, android=success, android-device=success
+  - 45809223339: in_progress; web=in_progress (Browser smoke and responsive layout), android=success, android-device=in_progress (ZIPPLE Android 35 instrumented recipe)
+  - 45809223602: in_progress; local-supabase=in_progress (Create disposable isolated Supabase project)
+N1 reste PARTIEL tant que les marqueurs de recette réelle Web et Android ainsi que les résultats CI ne sont pas constatés. Ne pas relancer les contrôles déjà verts ni modifier le générateur global partagé (risque identifié). La mise en service hébergée et les contrôles production restent distincts, soumis à autorisation; les droits administratifs de provisioning/récupération et la biométrie matérielle ne sont pas certifiés par ces tests.
