@@ -43,3 +43,5 @@ Candidat achats multi-lignes, réutilisation de la chaîne existante fournisseur
 - Candidat consignes financières : preuve de règlement/remboursement distincte du stock, contrôle montant et solde, refus des doublons et du cross-site. Reste rapprochement caisse/banque, écritures comptables et cas de remboursements fractionnés/consignes perdues à traiter. Ne pas annoncer vert global.
 
 - Candidat conversions : règle explicite par matière et réception en unité alternative, preuve d'exactitude et trace. Ne pas assimiler à couverture complète des conversions sur achats, production, boissons et vente directe.
+
+- Bulk 3 : achats multi-lignes SQL 45879524756 et navigateur 45879524727 SUCCESS; conversions réception SQL 45879842973 SUCCESS. Candidat journal équilibré à partir des sources confirmées, comptes explicites, clôture conservatrice, interface et tests. Restent écritures de correction/multi-lignes, exports, couverture complète et fiscalité paramétrable. Gate nouveau à constater.

@@ -57,6 +57,15 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByRole("button",{name:"Dépenses",exact:true}).click();await page.getByLabel("Libellé de dépense").fill("Loyer recette");await page.getByLabel("Montant FCFA",{exact:true}).fill("2500");await page.getByLabel("Référence justificative").fill("LOYER-TEST");await page.getByRole("button",{name:"Enregistrer la dépense"}).click();await page.getByText(/Loyer recette ·/).waitFor();
   assert.equal(Number(await scalar("select amount_xaf from zp_expenses where org_id=$1",[org])),2500);
   await page.getByRole("button",{name:"Comptabilité",exact:true}).click();await page.getByText(/Coût des ventes non déterminé/).waitFor();
+  await page.getByRole("heading",{name:"Journal comptable et balance"}).waitFor();
+  await page.getByLabel("Code du compte").fill("TEST-D");await page.getByLabel("Intitulé du compte").fill("Charges test");await page.getByLabel("Section comptable").fill("Charges");await page.getByRole("button",{name:"Valider le compte"}).click();await page.getByText("TEST-D · Charges test · Charges",{exact:true}).waitFor();
+  await page.getByLabel("Code du compte").fill("TEST-C");await page.getByLabel("Intitulé du compte").fill("Banque test");await page.getByLabel("Section comptable").fill("Trésorerie");await page.getByRole("button",{name:"Valider le compte"}).click();await page.getByText("TEST-C · Banque test · Trésorerie",{exact:true}).waitFor();
+  const expenseSource=await scalar("select id from zp_expenses where org_id=$1",[org]);
+  await page.getByLabel("Événement comptable").selectOption("expense:"+expenseSource);
+  await page.getByLabel("Code journal").fill("OD");await page.getByLabel("Compte débit").selectOption({label:"TEST-D · Charges test"});await page.getByLabel("Compte crédit").selectOption({label:"TEST-C · Banque test"});await page.getByLabel("Libellé de l’écriture").fill("Loyer confirmé");
+  await page.getByRole("button",{name:"Valider l’écriture équilibrée"}).click();await page.getByText(/Total débit.*2.*500 FCFA.*Total crédit.*2.*500 FCFA/).waitFor();
+  assert.equal(Number(await scalar("select amount_xaf from zp_ledger_entries where org_id=$1 and source_id=$2",[org,expenseSource])),2500);
+  console.log("ZIPPLE_BULK3_REAL_EDGE_LEDGER_PASS");
   console.log("ZIPPLE_N5_REAL_EDGE_STOCK_EXPENSE_UI_PASS");
   await page.getByRole("button",{name:"Achats",exact:true}).click();
   await page.getByLabel("Nom du fournisseur").fill("Grossiste recette");await page.getByRole("button",{name:"Créer le fournisseur"}).click();
