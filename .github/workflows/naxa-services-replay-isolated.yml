@@ -74,7 +74,13 @@ jobs:
           npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
           npx playwright install --with-deps chromium
           VITE_NAXA_SERVICES_AUTH_URL=https://127.0.0.1:8443/functions/v1/naxa-services-auth VITE_SUPABASE_ANON_KEY="$ANON_KEY" npm run build --workspace @famille/naxa-services-web
-          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=127.0.0.1' -addext 'subjectAltName=IP:127.0.0.1' -keyout "$RUNNER_TEMP/ns-replay.key" -out "$RUNNER_TEMP/ns-replay.crt" 2>/dev/null
+          # Distinct CA and leaf avoid using a CA certificate as the TLS end entity.
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=NAXA Replay disposable CA' -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign' -keyout "$RUNNER_TEMP/ns-replay-ca.key" -out "$RUNNER_TEMP/ns-replay-ca.crt" 2>/dev/null
+          openssl req -new -newkey rsa:2048 -nodes -subj '/CN=127.0.0.1' -keyout "$RUNNER_TEMP/ns-replay.key" -out "$RUNNER_TEMP/ns-replay.csr" 2>/dev/null
+          printf '%s\n' 'basicConstraints=critical,CA:FALSE' 'keyUsage=critical,digitalSignature,keyEncipherment' 'extendedKeyUsage=serverAuth' 'subjectAltName=IP:127.0.0.1' > "$RUNNER_TEMP/ns-replay.ext"
+          openssl x509 -req -in "$RUNNER_TEMP/ns-replay.csr" -CA "$RUNNER_TEMP/ns-replay-ca.crt" -CAkey "$RUNNER_TEMP/ns-replay-ca.key" -CAcreateserial -days 1 -extfile "$RUNNER_TEMP/ns-replay.ext" -out "$RUNNER_TEMP/ns-replay.crt" 2>/dev/null
+          openssl verify -CAfile "$RUNNER_TEMP/ns-replay-ca.crt" "$RUNNER_TEMP/ns-replay.crt"
+          rm -f "$RUNNER_TEMP/ns-replay-ca.key"
           chmod 600 "$RUNNER_TEMP/ns-replay.key"
           # Only change the listening port in an isolated copy; do not change any gateway logic.
           cp -r supabase/functions/naxa-services-accounting "$RUNNER_TEMP/ns-accounting"
@@ -142,7 +148,7 @@ jobs:
             const root=resolve('apps/web/naxa-services/dist');
             const types={'.html':'text/html','.js':'application/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.webp':'image/webp','.json':'application/json','.webmanifest':'application/manifest+json','.woff2':'font/woff2'};
             try{
-              accounting=spawn('deno',['run','--cert',process.env.RUNNER_TEMP+'/ns-replay.crt','--allow-env','--allow-net=127.0.0.1:8443,0.0.0.0:8001,127.0.0.1:8001',process.env.RUNNER_TEMP+'/ns-accounting/index.ts'],{env:{...process.env,SUPABASE_URL:'https://127.0.0.1:8443'},stdio:'ignore'});
+              accounting=spawn('deno',['run','--cert',process.env.RUNNER_TEMP+'/ns-replay-ca.crt','--allow-env','--allow-net=127.0.0.1:8443,0.0.0.0:8001,127.0.0.1:8001',process.env.RUNNER_TEMP+'/ns-accounting/index.ts'],{env:{...process.env,SUPABASE_URL:'https://127.0.0.1:8443'},stdio:'ignore'});
               let ready=false;
               for(let i=0;i<40;i++){try{if((await fetch('http://127.0.0.1:8001',{method:'OPTIONS'})).ok){ready=true;break;}}catch{}if(accounting.exitCode!==null)break;await pause(250);}
               assert.ok(ready,'real accounting gateway ready');
@@ -160,6 +166,9 @@ jobs:
                 }catch{if(!res.headersSent)res.writeHead(500);res.end();}
               });
               await new Promise((r,j)=>{server.once('error',j);server.listen(8443,'127.0.0.1',r);});
+              // Prove transport trust with the same Deno runtime before business traffic.
+              const transport=spawn('deno',['eval','--cert',process.env.RUNNER_TEMP+'/ns-replay-ca.crt',"const r=await fetch('https://127.0.0.1:8443/auth/v1/user');if(r.status!==401)throw Error('Expected unauthenticated probe HTTP 401, got '+r.status);console.log('PASS Deno trusted HTTPS to local Auth');"],{stdio:'inherit'});
+              assert.equal(await new Promise((r,j)=>{transport.on('error',j);transport.on('exit',r);}),0,'Deno TLS probe');
               browser=await chromium.launch({headless:true});
               const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:900}});
               const page=await context.newPage();page.setDefaultTimeout(15000);
@@ -194,7 +203,9 @@ jobs:
               const receipt=page.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-accounting')&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='apply_sync_event',{timeout:25000});
               await page.getByRole('button',{name:'Enregistrer',exact:true}).click();
               const response=await receipt;const result=await response.json();
-              console.log('Replay customer write HTTP',response.status(),'error code',typeof result.error==='string'&&/^[A-Z0-9_]{1,80}$/.test(result.error)?result.error:'none','receipt status',result.result?.status??'absent');
+              const err=typeof result.error==='string'?result.error:'';
+              const errorKind=/^[A-Z0-9_]{1,80}$/.test(err)?err:/certificate|tls|ssl|issuer/i.test(err)?'TLS_CERTIFICATE':/permission denied|requires net access/i.test(err)?'DENO_PERMISSION':/fetch|connection|network/i.test(err)?'FETCH_TRANSPORT':'OTHER';
+              console.log('Replay customer write HTTP',response.status(),'error class',errorKind,'receipt status',result.result?.status??'absent');
               assert.equal(response.status(),200);assert.equal(result.ok,true);assert.equal(result.result.status,'applied');
               const records=await success(base+'/rest/v1/ns_customers?select=id&org_id=eq.'+f.org.id+'&display_name=eq.'+encodeURIComponent(customer),undefined,admin,admin,'GET');
               assert.equal(records.length,1);
