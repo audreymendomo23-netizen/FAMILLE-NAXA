@@ -4,8 +4,14 @@ export function ContainerWorkspace({call,disabled,en}:Props){
  const t=(fr:string,eng:string)=>en?eng:fr;
  const [d,D]=useState<any>(null),[busy,B]=useState(false),[error,E]=useState("");
  const [side,S]=useState("supplier"),[party,P]=useState(""),[label,L]=useState(""),[deposit,DE]=useState("0"),[account,A]=useState(""),[kind,K]=useState("issued"),[quantity,Q]=useState(""),[reason,R]=useState("");
+ const [financialEvent,FE]=useState(""),[financialMethod,FM]=useState("cash"),[financialRef,FR]=useState("");
+ const financeKey=useRef<{body:string,id:string}|null>(null);
  const key=useRef<{body:string,id:string}|null>(null);
  const lock=disabled||busy;
+ const eligible=(d?.events??[]).filter((x:any)=>["issued","returned"].includes(x.kind)&&x.unit_deposit_xaf>0&&!(d?.finance??[]).some((f:any)=>f.event_id===x.id));
+ const selectedEvent=eligible.find((x:any)=>x.id===financialEvent);
+ const selectedAccount=(d?.accounts??[]).find((x:any)=>x.id===selectedEvent?.account_id);
+ const expectedAmount=selectedEvent?selectedEvent.qty*selectedEvent.unit_deposit_xaf:0;
  async function load(){D(await call("container_snapshot"))}
  async function run(fn:()=>Promise<void>){if(lock)return;B(true);E("");try{await fn()}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}
  useEffect(()=>{let live=true;call("container_snapshot").then(v=>{if(live)D(v)}).catch(()=>{if(live)E("OPERATION_UNAVAILABLE")});return()=>{live=false}},[]);
@@ -23,5 +29,14 @@ export function ContainerWorkspace({call,disabled,en}:Props){
  <label>{t("Motif","Reason")}<input maxLength={500} value={reason} onChange={e=>R(e.target.value)}/></label>
  <button disabled={lock||!account||!quantity||(kind==="lost"&&reason.trim().length<5)} onClick={()=>run(async()=>{const body={account_id:account,kind,qty:Number(quantity),reason},encoded=JSON.stringify(body);if(key.current?.body!==encoded)key.current={body:encoded,id:crypto.randomUUID()};await call("container_move",{...body,request_id:key.current.id});key.current=null;Q("");R("");await load()})}>{t("Enregistrer le mouvement","Record movement")}</button>
  {(d?.events??[]).map((x:any)=><p key={x.id}>{x.kind} · {x.qty} · {x.reason}</p>)}
+ <h4>{t("Règlements et remboursements de consignes","Deposit payments and refunds")}</h4>
+ <p>{t("Enregistrer uniquement un règlement déjà effectué. Les flux de consigne sont distincts des ventes, achats et charges.","Record only an already completed payment. Deposit flows are separate from sales, purchases and expenses.")}</p>
+ {(d?.accounts??[]).map((x:any)=><p key={x.id}>{x.label} · {t("Solde financier de consigne","Recorded deposit balance")} : {x.deposit_balance_xaf} FCFA</p>)}
+ <label>{t("Mouvement à régler","Movement to settle")}<select value={financialEvent} onChange={e=>FE(e.target.value)}><option value="">—</option>{eligible.map((x:any)=><option key={x.id} value={x.id}>{(d?.accounts??[]).find((a:any)=>a.id===x.account_id)?.label} · {x.kind} · {x.qty} · {x.created_at}</option>)}</select></label>
+ {selectedEvent&&<p>{selectedEvent.kind==="issued"?t("Consigne","Deposit"):t("Remboursement","Refund")} · {((selectedAccount?.side==="customer"&&selectedEvent.kind==="issued")||(selectedAccount?.side==="supplier"&&selectedEvent.kind==="returned"))?t("Encaissement","Inflow"):t("Décaissement","Outflow")} · {expectedAmount} FCFA</p>}
+ <label>{t("Moyen de règlement de consigne","Deposit payment method")}<select value={financialMethod} onChange={e=>FM(e.target.value)}>{["cash","bank","mtn_momo","orange_money","card"].map(x=><option key={x}>{x}</option>)}</select></label>
+ <label>{t("Référence du règlement de consigne","Deposit payment reference")}<input value={financialRef} onChange={e=>FR(e.target.value)}/></label>
+ <button disabled={lock||!selectedEvent||financialRef.trim().length<4||expectedAmount>2147483647} onClick={()=>run(async()=>{const body={event_id:financialEvent,amount_xaf:expectedAmount,method:financialMethod,reference:financialRef},encoded=JSON.stringify(body);if(financeKey.current?.body!==encoded)financeKey.current={body:encoded,id:crypto.randomUUID()};await call("container_finance_record",{...body,request_id:financeKey.current.id});financeKey.current=null;FE("");FR("");await load()})}>{t("Confirmer le règlement de consigne","Confirm deposit payment")}</button>
+ {(d?.finance??[]).map((x:any)=><p key={x.id}>{x.kind} · {x.direction} · {x.amount_xaf} FCFA · {x.reference}</p>)}
  </section>
 }

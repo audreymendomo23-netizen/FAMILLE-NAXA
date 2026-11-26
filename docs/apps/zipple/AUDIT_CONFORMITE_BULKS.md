@@ -39,3 +39,5 @@ Code qualifié 42ae5cd76fce665f66c0db773d253d3cd5060399. **Gate technique local 
 Candidat achats multi-lignes, réutilisation de la chaîne existante fournisseur/achat/réception/règlement. Nouvelles assertions d'atomicité, idempotence, refus cross-site et exactitude des montants reçus. Gate non encore constaté; reste règlement fournisseur groupé, transferts préparations, conversions/consignes financières, braiseur, recettes versionnées, stock direct, multi-caisses, ardoise, pièces, journal comptable et offline métier. Ne pas déclarer Bulk 3 vert avant preuve.
 
 - Audit contradictoire Bulk 3 : une recette initiale verrouillée n'est pas un versionnement. Candidat historique/association lot/version et mutation révisée à vide, sans effacer le passé; vérification SQL prévue. Les autres clauses ERP non couvertes demeurent ouvertes; ne pas annoncer vert global.
+
+- Candidat consignes financières : preuve de règlement/remboursement distincte du stock, contrôle montant et solde, refus des doublons et du cross-site. Reste rapprochement caisse/banque, écritures comptables et cas de remboursements fractionnés/consignes perdues à traiter. Ne pas annoncer vert global.
