@@ -88,12 +88,12 @@ internal fun NotificationInboxContent(
 
     suspend fun enablePushOnThisDevice() {
         if (!FirebasePushClient.isConfigured(context)) {
-            throw IllegalStateException(if (french) "Configuration Firebase absente : le projet NAXA SERVICES doit d'abord être enregistré." else "Firebase configuration missing: the NAXA SERVICES project must be registered first.")
+            throw IllegalStateException(when (session.account.defaultLocale) { "en" -> "Firebase configuration missing: the NAXA SERVICES project must be registered first."; "ff-CM" -> "Tintine telefon alaa jooni. Ɗaɓɓu ballal."; else -> "Configuration Firebase absente : le projet NAXA SERVICES doit d'abord être enregistré." })
         }
         val token = FirebasePushClient.fetchToken(context)
         PushTokenRegistry.enable(context, token)
         pushError = null
-        pushNotice = if (french) "Autorisation enregistrée. L'appareil est en cours d'enregistrement auprès de NAXA." else "Permission saved. This device is being registered with NAXA."
+        pushNotice = when (session.account.defaultLocale) { "en" -> "Permission saved. This device is being registered with NAXA."; "ff-CM" -> "Yamiroore danndaama. Kaɓirgol ngol nana winnditee e NAXA."; else -> "Autorisation enregistrée. L'appareil est en cours d'enregistrement auprès de NAXA." }
     }
 
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
@@ -107,7 +107,7 @@ internal fun NotificationInboxContent(
                 pushBusy = false
             }
         } else {
-            pushError = if (french) "Autorisation Android refusée. Les notifications restent disponibles dans le centre de l'application." else "Android permission denied. Notifications remain available in the in-app centre."
+            pushError = when (session.account.defaultLocale) { "en" -> "Android permission denied. Notifications remain available in the in-app centre."; "ff-CM" -> "Yamiroore telefon salaama. Tintine keɓetee e nokkuure tintine."; else -> "Autorisation Android refusée. Les notifications restent disponibles dans le centre de l'application." }
         }
     }
     var inbox by remember { mutableStateOf<List<NotificationInboxItem>>(emptyList()) }
@@ -122,7 +122,7 @@ internal fun NotificationInboxContent(
     LaunchedEffect(session.account.memberId) {
         busy = true
         runCatching { reload() }
-            .onFailure { error = it.message ?: if (french) "Impossible de charger les notifications." else "Unable to load notifications." }
+            .onFailure { error = it.message ?: when (session.account.defaultLocale) { "en" -> "Unable to load notifications."; "ff-CM" -> "Hollugol tintine waawataa."; else -> "Impossible de charger les notifications." } }
         busy = false
     }
 
@@ -132,8 +132,8 @@ internal fun NotificationInboxContent(
             error = null
             notice = null
             runCatching { action(); reload() }
-                .onSuccess { notice = if (french) "Notification mise à jour." else "Notification updated." }
-                .onFailure { error = it.message ?: if (french) "Mise à jour impossible." else "Unable to update notification." }
+                .onSuccess { notice = when (session.account.defaultLocale) { "en" -> "Notification updated."; "ff-CM" -> "Tintinol hesɗitinaama."; else -> "Notification mise à jour." } }
+                .onFailure { error = it.message ?: when (session.account.defaultLocale) { "en" -> "Unable to update notification."; "ff-CM" -> "Hesɗitingol waawataa."; else -> "Mise à jour impossible." } }
             busy = false
         }
     }
@@ -146,15 +146,15 @@ internal fun NotificationInboxContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (french) "Notifications sur cet appareil" else "Notifications on this device", fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "Notifications on this device"; "ff-CM" -> "Tintine e kaɓirgol ngol"; else -> "Notifications sur cet appareil" }, fontWeight = FontWeight.Bold)
                     Text(
                         when {
-                            !firebaseConfigured -> if (french) "Firebase n'est pas encore configuré pour NAXA SERVICES. Le centre de notifications reste accessible." else "Firebase is not configured for NAXA SERVICES yet. The in-app inbox remains available."
-                            !notificationPermissionGranted -> if (french) "L'autorisation Android n'est pas accordée sur cet appareil." else "Android notification permission is not granted on this device."
-                            !pushState.enabled -> if (french) "Les notifications distantes sont désactivées sur cet appareil." else "Remote notifications are disabled on this device."
-                            pushState.registeredMemberId == session.account.memberId -> if (french) "Cet appareil est enregistré pour votre compte." else "This device is registered for your account."
-                            pushState.errorMessage != null -> (if (french) "Enregistrement en échec : " else "Registration failed: ") + pushState.errorMessage
-                            else -> if (french) "Enregistrement du jeton auprès du serveur…" else "Registering this device token with the server…"
+                            !firebaseConfigured -> when (session.account.defaultLocale) { "en" -> "Firebase is not configured for NAXA SERVICES yet. The in-app inbox remains available."; "ff-CM" -> "Tintine telefon alaa tawo. A waawi yiyde nokkuure tintine."; else -> "Firebase n'est pas encore configuré pour NAXA SERVICES. Le centre de notifications reste accessible." }
+                            !notificationPermissionGranted -> when (session.account.defaultLocale) { "en" -> "Android notification permission is not granted on this device."; "ff-CM" -> "Kaɓirgol ngol alaa yamiroore tintine."; else -> "L'autorisation Android n'est pas accordée sur cet appareil." }
+                            !pushState.enabled -> when (session.account.defaultLocale) { "en" -> "Remote notifications are disabled on this device."; "ff-CM" -> "Tintine telefon uddaa e kaɓirgol ngol."; else -> "Les notifications distantes sont désactivées sur cet appareil." }
+                            pushState.registeredMemberId == session.account.memberId -> when (session.account.defaultLocale) { "en" -> "This device is registered for your account."; "ff-CM" -> "Kaɓirgol ngol winnditaama e konte maa."; else -> "Cet appareil est enregistré pour votre compte." }
+                            pushState.errorMessage != null -> (when (session.account.defaultLocale) { "en" -> "Registration failed: "; "ff-CM" -> "Winnditagol timmaani : "; else -> "Enregistrement en échec : " }) + pushState.errorMessage
+                            else -> when (session.account.defaultLocale) { "en" -> "Registering this device token with the server…"; "ff-CM" -> "Kaɓirgol ngol nana winnditee…"; else -> "Enregistrement du jeton auprès du serveur…" }
                         },
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -177,7 +177,7 @@ internal fun NotificationInboxContent(
                         },
                         enabled = !pushBusy && firebaseConfigured,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (french) "Activer les notifications distantes" else "Enable remote notifications") }
+                    ) { Text(when (session.account.defaultLocale) { "en" -> "Enable remote notifications"; "ff-CM" -> "Uddit tintine telefon"; else -> "Activer les notifications distantes" }) }
                     if (pushState.enabled) {
                         OutlinedButton(
                             onClick = {
@@ -187,19 +187,19 @@ internal fun NotificationInboxContent(
                                     runCatching {
                                         authApi.revokeCurrentDevicePushTokens(session.accessToken)
                                         PushTokenRegistry.disable(context)
-                                        pushNotice = if (french) "Jeton révoqué côté serveur. Les notifications distantes sont désactivées." else "Server token revoked. Remote notifications are disabled."
+                                        pushNotice = when (session.account.defaultLocale) { "en" -> "Server token revoked. Remote notifications are disabled."; "ff-CM" -> "Yamiroore ittaama. Tintine telefon uddaa."; else -> "Jeton révoqué côté serveur. Les notifications distantes sont désactivées." }
                                     }.onFailure { pushError = it.message ?: "PUSH_TOKEN_REVOCATION_FAILED" }
                                     pushBusy = false
                                 }
                             },
                             enabled = !pushBusy,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (french) "Désactiver sur cet appareil" else "Disable on this device") }
+                        ) { Text(when (session.account.defaultLocale) { "en" -> "Disable on this device"; "ff-CM" -> "Uddu e kaɓirgol ngol"; else -> "Désactiver sur cet appareil" }) }
                         if (pushState.errorMessage != null) {
                             TextButton(
                                 onClick = { PushTokenRegistry.retry() },
                                 enabled = !pushBusy
-                            ) { Text(if (french) "Réessayer l'enregistrement" else "Retry registration") }
+                            ) { Text(when (session.account.defaultLocale) { "en" -> "Retry registration"; "ff-CM" -> "Eto winnditagol kadi"; else -> "Réessayer l'enregistrement" }) }
                         }
                     }
                 }
@@ -209,23 +209,22 @@ internal fun NotificationInboxContent(
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text(if (french) "Centre de notifications" else "Notification centre", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "Notification centre"; "ff-CM" -> "Nokkuure tintine"; else -> "Centre de notifications" }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        unread.toString() + if (french) " notification(s) non lue(s)" else " unread notification(s)",
+                        unread.toString() + when (session.account.defaultLocale) { "en" -> " unread notification(s)"; "ff-CM" -> " tintine ɗe taraaka"; else -> " notification(s) non lue(s)" },
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                TextButton(onClick = onBack) { Text(if (french) "Retour" else "Back") }
+                TextButton(onClick = onBack) { Text(when (session.account.defaultLocale) { "en" -> "Back"; "ff-CM" -> "Rutto"; else -> "Retour" }) }
             }
             OutlinedButton(onClick = { runAction { reload() } }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
-                Text(if (french) "Actualiser" else "Refresh")
+                Text(when (session.account.defaultLocale) { "en" -> "Refresh"; "ff-CM" -> "Hesɗitin"; else -> "Actualiser" })
             }
             if (busy) LinearProgressIndicator(Modifier.fillMaxWidth())
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             notice?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
             Text(
-                if (french) "Ces messages sont chargés depuis le serveur pour ce compte. Une notification ne valide jamais un paiement et ne confère aucun droit métier. Les opérations se réalisent dans leur module respectif."
-                else "These messages are loaded from the server for this account. A notification never validates a payment or grants business rights. Complete operations in their respective modules.",
+                when (session.account.defaultLocale) { "en" -> "These messages are loaded from the server for this account. A notification never validates a payment or grants business rights. Complete operations in their respective modules."; "ff-CM" -> "Ɓatakuuji ɗii ko ngam konte maa. Tintinol tabbitintaa njoɓdi walla hokku yamiroore. Waɗ golle kala e nokkuure mum."; else -> "Ces messages sont chargés depuis le serveur pour ce compte. Une notification ne valide jamais un paiement et ne confère aucun droit métier. Les opérations se réalisent dans leur module respectif." },
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -234,10 +233,9 @@ internal fun NotificationInboxContent(
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(if (french) "Aucune notification distante" else "No remote notifications", fontWeight = FontWeight.Bold)
+                        Text(when (session.account.defaultLocale) { "en" -> "No remote notifications"; "ff-CM" -> "Alaa tintinol telefon"; else -> "Aucune notification distante" }, fontWeight = FontWeight.Bold)
                         Text(
-                            if (french) "Les notifications apparaîtront ici dès qu’elles auront été enregistrées pour votre compte."
-                            else "Notifications will appear here once recorded for your account.",
+                            when (session.account.defaultLocale) { "en" -> "Notifications will appear here once recorded for your account."; "ff-CM" -> "Tintine maa njiyete ɗoo so ɗe winnditaama e konte maa."; else -> "Les notifications apparaîtront ici dès qu’elles auront été enregistrées pour votre compte." },
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -247,9 +245,9 @@ internal fun NotificationInboxContent(
         items(inbox, key = { it.id }) { item ->
             val title = item.title?.takeIf { it.isNotBlank() } ?: notificationFallbackTitle(item.eventCode, french)
             val statusLabel = when (item.status) {
-                "sent" -> if (french) "Non lue" else "Unread"
-                "read" -> if (french) "Lue" else "Read"
-                "actioned" -> if (french) "Traitée" else "Handled"
+                "sent" -> when (session.account.defaultLocale) { "en" -> "Unread"; "ff-CM" -> "Taraaka"; else -> "Non lue" }
+                "read" -> when (session.account.defaultLocale) { "en" -> "Read"; "ff-CM" -> "Taraama"; else -> "Lue" }
+                "actioned" -> when (session.account.defaultLocale) { "en" -> "Handled"; "ff-CM" -> "Timmii"; else -> "Traitée" }
                 else -> item.status
             }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -266,12 +264,12 @@ internal fun NotificationInboxContent(
                                 OutlinedButton(
                                     onClick = { runAction { authApi.acknowledgeNotification(session.accessToken, item.id, "read") } },
                                     enabled = !busy
-                                ) { Text(if (french) "Marquer comme lue" else "Mark as read") }
+                                ) { Text(when (session.account.defaultLocale) { "en" -> "Mark as read"; "ff-CM" -> "Maanto ko taraama"; else -> "Marquer comme lue" }) }
                             }
                             Button(
                                 onClick = { runAction { authApi.acknowledgeNotification(session.accessToken, item.id, "actioned") } },
                                 enabled = !busy
-                            ) { Text(if (french) "Marquer comme traitée" else "Mark as handled") }
+                            ) { Text(when (session.account.defaultLocale) { "en" -> "Mark as handled"; "ff-CM" -> "Maanto ko timmii"; else -> "Marquer comme traitée" }) }
                         }
                     }
                 }

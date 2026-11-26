@@ -74,8 +74,8 @@ internal fun ReferralScreen(
             error = null
             notice = null
             runCatching { action(); reload() }
-                .onSuccess { notice = if (fr) "Opération enregistrée." else "Operation saved." }
-                .onFailure { error = it.message ?: if (fr) "Opération impossible." else "Operation failed." }
+                .onSuccess { notice = when (session.account.defaultLocale) { "en" -> "Operation saved."; "ff-CM" -> "Golle ɗee danndaama."; else -> "Opération enregistrée." } }
+                .onFailure { error = it.message ?: when (session.account.defaultLocale) { "en" -> "Operation failed."; "ff-CM" -> "Golle ɗee waawataa."; else -> "Opération impossible." } }
             busy = false
         }
     }
@@ -88,32 +88,32 @@ internal fun ReferralScreen(
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f)) {
-                    Text(if (fr) "Parrainage PME" else "SME referrals", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "SME referrals"; "ff-CM" -> "Hollinde NAXA e golle goɗɗe"; else -> "Parrainage PME" }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
                     Text(
-                        if (fr) "Parrainez cinq PME qui réalisent chacune leur premier abonnement payé. Chaque groupe de cinq déclenche un avantage." else "Refer five SMEs that each complete their first paid subscription. Every group of five earns a benefit.",
+                        when (session.account.defaultLocale) { "en" -> "Refer five SMEs that each complete their first paid subscription. Every group of five earns a benefit."; "ff-CM" -> "Hollin NAXA e golle joy ɗe kala yoɓi abonman arano. Golle joy kala addata njariñ."; else -> "Parrainez cinq PME qui réalisent chacune leur premier abonnement payé. Chaque groupe de cinq déclenche un avantage." },
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                OutlinedButton(onClick = onBack) { Text(if (fr) "Retour" else "Back") }
+                OutlinedButton(onClick = onBack) { Text(when (session.account.defaultLocale) { "en" -> "Back"; "ff-CM" -> "Rutto"; else -> "Retour" }) }
             }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text(if (fr) "Mon code de parrainage" else "My referral code", fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "My referral code"; "ff-CM" -> "Kode recommandation am"; else -> "Mon code de parrainage" }, fontWeight = FontWeight.Bold)
                     if (!isPromoter) {
-                        Text(if (fr) "La gestion du parrainage est réservée au Promoteur de l’organisation." else "Referral management is reserved for the organization Promoter.")
+                        Text(when (session.account.defaultLocale) { "en" -> "Referral management is reserved for the organization Promoter."; "ff-CM" -> "Jom golle tan waawi ɗowtude recommandation."; else -> "La gestion du parrainage est réservée au Promoteur de l’organisation." })
                     } else if (dashboard?.code != null) {
                         Text(dashboard!!.code!!, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
                         OutlinedButton(onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("NAXA SERVICES referral code", dashboard!!.code!!))
-                            notice = if (fr) "Code copié." else "Code copied."
-                        }) { Text(if (fr) "Copier le code" else "Copy code") }
+                            notice = when (session.account.defaultLocale) { "en" -> "Code copied."; "ff-CM" -> "Kode nattaama."; else -> "Code copié." }
+                        }) { Text(when (session.account.defaultLocale) { "en" -> "Copy code"; "ff-CM" -> "Nattu kode"; else -> "Copier le code" }) }
                     } else {
-                        Text(if (fr) "Aucun code actif pour cette organisation." else "No active code for this organization.")
+                        Text(when (session.account.defaultLocale) { "en" -> "No active code for this organization."; "ff-CM" -> "Alaa kode huutorteeɗo e fedde ndee."; else -> "Aucun code actif pour cette organisation." })
                         Button(onClick = { runAction { authApi.generateReferralCode(session.accessToken) } }, enabled = !busy) {
-                            Text(if (fr) "Générer un code de parrainage" else "Generate referral code")
+                            Text(when (session.account.defaultLocale) { "en" -> "Generate referral code"; "ff-CM" -> "Sos kode recommandation"; else -> "Générer un code de parrainage" })
                         }
                     }
                     if (busy) CircularProgressIndicator()
@@ -127,26 +127,26 @@ internal fun ReferralScreen(
             val progress = (data?.progressInCurrentWave ?: 0).coerceIn(0, 4)
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (fr) "Suivre mes gains" else "Track my rewards", fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "Track my rewards"; "ff-CM" -> "Rewindo njariñ am"; else -> "Suivre mes gains" }, fontWeight = FontWeight.Bold)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(if (fr) "PME inscrites : ${data?.referredCount ?: 0}" else "SMEs referred: ${data?.referredCount ?: 0}")
-                        Text(if (fr) "Activées : ${data?.activatedCount ?: 0}" else "Activated: ${data?.activatedCount ?: 0}")
+                        Text(when (session.account.defaultLocale) { "en" -> "SMEs referred: ${data?.referredCount ?: 0}"; "ff-CM" -> "Golle winnditaaɗe : ${data?.referredCount ?: 0}"; else -> "PME inscrites : ${data?.referredCount ?: 0}" })
+                        Text(when (session.account.defaultLocale) { "en" -> "Activated: ${data?.activatedCount ?: 0}"; "ff-CM" -> "Abonman fuɗɗii : ${data?.activatedCount ?: 0}"; else -> "Activées : ${data?.activatedCount ?: 0}" })
                     }
                     Text(
-                        if (fr) "Vague ${data?.nextWaveNumber ?: 1} : $progress / 5 premières souscriptions payées" else "Wave ${data?.nextWaveNumber ?: 1}: $progress / 5 first paid subscriptions"
+                        when (session.account.defaultLocale) { "en" -> "Wave ${data?.nextWaveNumber ?: 1}: $progress / 5 first paid subscriptions"; "ff-CM" -> "Fedde ${data?.nextWaveNumber ?: 1} : $progress / 5 abonman arande yoɓaaɗe"; else -> "Vague ${data?.nextWaveNumber ?: 1} : $progress / 5 premières souscriptions payées" }
                     )
                     LinearProgressIndicator(progress = progress / 5f, modifier = Modifier.fillMaxWidth())
                     Text(
-                        if (fr) "Une activation est comptée seulement après confirmation serveur du premier abonnement payé du filleul." else "A referral counts only after the server confirms the referred SME's first paid subscription.",
+                        when (session.account.defaultLocale) { "en" -> "A referral counts only after the server confirms the referred SME's first paid subscription."; "ff-CM" -> "Limtol waɗata tan caggal tabbitinol njoɓdi abonman arano."; else -> "Une activation est comptée seulement après confirmation serveur du premier abonnement payé du filleul." },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
                 }
             }
         }
-        item { Text(if (fr) "PME parrainées et activations" else "Referred SMEs and activations", fontWeight = FontWeight.Bold) }
+        item { Text(when (session.account.defaultLocale) { "en" -> "Referred SMEs and activations"; "ff-CM" -> "Golle kollinaaɗe e abonman"; else -> "PME parrainées et activations" }, fontWeight = FontWeight.Bold) }
         if (dashboard?.referrals.isNullOrEmpty()) {
-            item { Text(if (fr) "Aucune PME rattachée à votre code pour le moment." else "No SMEs have used your code yet.") }
+            item { Text(when (session.account.defaultLocale) { "en" -> "No SMEs have used your code yet."; "ff-CM" -> "Alaa golle kuutortooɗe kode maa jooni."; else -> "Aucune PME rattachée à votre code pour le moment." }) }
         } else {
             items(dashboard!!.referrals) { referral ->
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
@@ -154,36 +154,36 @@ internal fun ReferralScreen(
                         Text(referral.organizationName, fontWeight = FontWeight.SemiBold)
                         Text(
                             if (referral.status == "qualified") {
-                                if (fr) "Premier abonnement payé confirmé" else "First paid subscription confirmed"
+                                when (session.account.defaultLocale) { "en" -> "First paid subscription confirmed"; "ff-CM" -> "Abonman arano yoɓaama tabbitinaama"; else -> "Premier abonnement payé confirmé" }
                             } else {
-                                if (fr) "Inscription reçue — activation en attente" else "Registration received — activation pending"
+                                when (session.account.defaultLocale) { "en" -> "Registration received — activation pending"; "ff-CM" -> "Winnditagol heɓaama — nana fadi njoɓdi"; else -> "Inscription reçue — activation en attente" }
                             },
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Text((if (fr) "Inscription : " else "Joined: ") + referral.referredAt)
-                        Text((if (fr) "Activation : " else "Activated: ") + (referral.activatedAt ?: if (fr) "En attente" else "Pending"))
+                        Text((when (session.account.defaultLocale) { "en" -> "Joined: "; "ff-CM" -> "Winnditagol : "; else -> "Inscription : " }) + referral.referredAt)
+                        Text((when (session.account.defaultLocale) { "en" -> "Activated: "; "ff-CM" -> "Fuɗɗagol : "; else -> "Activation : " }) + (referral.activatedAt ?: when (session.account.defaultLocale) { "en" -> "Pending"; "ff-CM" -> "Nana fadi"; else -> "En attente" }))
                     }
                 }
             }
         }
-        item { Text(if (fr) "Récompenses par vague" else "Wave rewards", fontWeight = FontWeight.Bold) }
+        item { Text(when (session.account.defaultLocale) { "en" -> "Wave rewards"; "ff-CM" -> "Njariñ fedde kala"; else -> "Récompenses par vague" }, fontWeight = FontWeight.Bold) }
         if (dashboard?.rewards.isNullOrEmpty()) {
-            item { Text(if (fr) "Aucune récompense acquise. Les vagues sont calculées par groupes distincts de cinq PME activées." else "No rewards earned yet. Waves are calculated in separate groups of five activated SMEs.") }
+            item { Text(when (session.account.defaultLocale) { "en" -> "No rewards earned yet. Waves are calculated in separate groups of five activated SMEs."; "ff-CM" -> "Alaa njariñ heɓaango. Fedde kala ko golle joy ɗe abonman mum fuɗɗii."; else -> "Aucune récompense acquise. Les vagues sont calculées par groupes distincts de cinq PME activées." }) }
         } else {
             items(dashboard!!.rewards) { reward ->
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(if (fr) "Vague ${reward.waveNumber}" else "Wave ${reward.waveNumber}", fontWeight = FontWeight.SemiBold)
+                        Text(when (session.account.defaultLocale) { "en" -> "Wave ${reward.waveNumber}"; "ff-CM" -> "Fedde ${reward.waveNumber}"; else -> "Vague ${reward.waveNumber}" }, fontWeight = FontWeight.SemiBold)
                         Text(
                             when (reward.rewardKind) {
-                                "monthly_free_cycle" -> if (fr) "Un cycle mensuel gratuit" else "One free monthly renewal"
-                                "annual_extension_month" -> if (fr) "Un mois supplémentaire à l’expiration de l’annuel" else "One extra month at annual expiry"
+                                "monthly_free_cycle" -> when (session.account.defaultLocale) { "en" -> "One free monthly renewal"; "ff-CM" -> "Lewru wooturu tawa yoɓaaka"; else -> "Un cycle mensuel gratuit" }
+                                "annual_extension_month" -> when (session.account.defaultLocale) { "en" -> "One extra month at annual expiry"; "ff-CM" -> "Lewru goɗɗuru caggal timmugol hitaande"; else -> "Un mois supplémentaire à l’expiration de l’annuel" }
                                 else -> reward.rewardKind
                             }
                         )
-                        Text((if (fr) "État : " else "Status: ") + reward.status)
-                        Text((if (fr) "Obtenue le : " else "Earned: ") + reward.createdAt)
-                        if (reward.appliedAt != null) Text((if (fr) "Appliquée le : " else "Applied: ") + reward.appliedAt)
+                        Text((when (session.account.defaultLocale) { "en" -> "Status: "; "ff-CM" -> "Ngonka : "; else -> "État : " }) + reward.status)
+                        Text((when (session.account.defaultLocale) { "en" -> "Earned: "; "ff-CM" -> "Heɓaama ñalnde : "; else -> "Obtenue le : " }) + reward.createdAt)
+                        if (reward.appliedAt != null) Text((when (session.account.defaultLocale) { "en" -> "Applied: "; "ff-CM" -> "Huutoraama ñalnde : "; else -> "Appliquée le : " }) + reward.appliedAt)
                     }
                 }
             }
@@ -191,19 +191,19 @@ internal fun ReferralScreen(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (fr) "J’ai reçu un code" else "I received a code", fontWeight = FontWeight.Bold)
-                    Text(if (fr) "Le Promoteur de la PME filleule peut enregistrer le code une seule fois, avant sa première activation payante." else "The referred SME's Promoter can register the code once, before its first paid activation.")
+                    Text(when (session.account.defaultLocale) { "en" -> "I received a code"; "ff-CM" -> "Mi heɓii kode"; else -> "J’ai reçu un code" }, fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "The referred SME's Promoter can register the code once, before its first paid activation."; "ff-CM" -> "Jom golle waawi danndude kode laawol gootol hade njoɓdi abonman arano."; else -> "Le Promoteur de la PME filleule peut enregistrer le code une seule fois, avant sa première activation payante." })
                     OutlinedTextField(
                         value = referralCodeInput,
                         onValueChange = { referralCodeInput = it.uppercase().take(10) },
-                        label = { Text(if (fr) "Code de parrainage" else "Referral code") },
+                        label = { Text(when (session.account.defaultLocale) { "en" -> "Referral code"; "ff-CM" -> "Kode recommandation"; else -> "Code de parrainage" }) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     Button(
                         onClick = { runAction { authApi.applyReferralCode(session.accessToken, referralCodeInput) } },
                         enabled = !busy && isPromoter && referralCodeInput.matches(Regex("^NS-[A-Z0-9]{7}$"))
-                    ) { Text(if (fr) "Valider le code reçu" else "Apply received code") }
+                    ) { Text(when (session.account.defaultLocale) { "en" -> "Apply received code"; "ff-CM" -> "Tabbitin kode heɓaaɗo"; else -> "Valider le code reçu" }) }
                 }
             }
         }

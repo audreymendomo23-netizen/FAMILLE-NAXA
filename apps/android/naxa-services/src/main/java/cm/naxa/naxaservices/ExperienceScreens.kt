@@ -31,11 +31,9 @@ fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boo
  Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(22.dp),verticalArrangement=Arrangement.Center) {
   Text("NAXA SERVICES",style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Black)
   Spacer(Modifier.height(16.dp))
-  Text(if(canChoose) { if(fr)"Choisir votre activité" else "Choose your business activity" } else { if(fr)"Configuration de votre organisation" else "Organization setup" },style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-  Text(if(canChoose) { if(fr)"Choisissez votre métier pour personnaliser votre espace de travail."
-   else "Choose your business to personalize your workspace." }
-   else { if(fr)"L’activité principale n’a pas encore été définie par le Promoteur. Déconnectez-vous et demandez-lui de terminer la configuration."
-   else "The organization owner has not selected the main activity yet. Sign out and ask them to finish setup." },color=MaterialTheme.colorScheme.onSurfaceVariant)
+  Text(if(canChoose) { when (locale) { "en" -> "Choose your business activity"; "ff-CM" -> "Suɓo golle maa"; else -> "Choisir votre activité" } } else { when (locale) { "en" -> "Organization setup"; "ff-CM" -> "Teelte fedde maa"; else -> "Configuration de votre organisation" } },style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
+  Text(if(canChoose) { when (locale) { "en" -> "Choose your business to personalize your workspace."; "ff-CM" -> "Suɓo golle maa ngam teeltude nokkuure golle maa."; else -> "Choisissez votre métier pour personnaliser votre espace de travail." } }
+   else { when (locale) { "en" -> "The organization owner has not selected the main activity yet. Sign out and ask them to finish setup."; "ff-CM" -> "Jom golle suɓaaki golle arande tawo. Yaltu, ɗaɓɓu mo o timmin teelte."; else -> "L’activité principale n’a pas encore été définie par le Promoteur. Déconnectez-vous et demandez-lui de terminer la configuration." } },color=MaterialTheme.colorScheme.onSurfaceVariant)
   Spacer(Modifier.height(20.dp))
   if(canChoose) {
    Box {
@@ -52,9 +50,8 @@ fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boo
    Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface),border=BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant),shape=RoundedCornerShape(20.dp)) {
     Column(Modifier.fillMaxWidth().padding(18.dp),verticalArrangement=Arrangement.spacedBy(8.dp)) {
      Text("🔒",style=MaterialTheme.typography.displaySmall)
-     Text(if(fr)"En attente du Promoteur" else "Waiting for the organization owner",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
-     Text(if(fr)"Le profil métier n’a pas encore été défini. Le Promoteur de votre organisation doit terminer cette configuration. Vous ne pouvez pas choisir une activité à sa place."
-      else "The business profile has not been set yet. Your organization owner must finish setup. You cannot select an activity on their behalf.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+     Text(when (locale) { "en" -> "Waiting for the organization owner"; "ff-CM" -> "Nana fadi jom golle"; else -> "En attente du Promoteur" },style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+     Text(when (locale) { "en" -> "The business profile has not been set yet. Your organization owner must finish setup. You cannot select an activity on their behalf."; "ff-CM" -> "Golle fedde suɓaaka tawo. Jom golle maa foti timminde teelte ɗee. A waawaa suɓude golle e nokkuure mum."; else -> "Le profil métier n’a pas encore été défini. Le Promoteur de votre organisation doit terminer cette configuration. Vous ne pouvez pas choisir une activité à sa place." },color=MaterialTheme.colorScheme.onSurfaceVariant)
     }
    }
   }
@@ -72,17 +69,15 @@ fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boo
   Spacer(Modifier.height(18.dp))
   if(canChoose) {
    Button(onClick={onSelect(selected)},enabled=!busy && profile!=null,modifier=Modifier.fillMaxWidth().height(54.dp)) {
-    Text(if(busy) (if(fr) "Enregistrement…" else "Saving…") else if(fr) "Confirmer mon activité" else "Confirm activity")
+    Text(if(busy) (when (locale) { "en" -> "Saving…"; "ff-CM" -> "Nana dannda…"; else -> "Enregistrement…" }) else when (locale) { "en" -> "Confirm activity"; "ff-CM" -> "Tabbitin golle am"; else -> "Confirmer mon activité" })
    }
   } else {
    OutlinedButton(onClick=onLogout,modifier=Modifier.fillMaxWidth().height(52.dp)) {
-    Text(if(fr)"Se déconnecter" else "Sign out")
+    Text(when (locale) { "en" -> "Sign out"; "ff-CM" -> "Yaltu"; else -> "Se déconnecter" })
    }
   }
-  Text(if(canChoose) { if(fr)"Votre choix s’applique à votre établissement."
-   else "Your choice applies to your business." }
-   else { if(fr)"Le choix du Promoteur configurera automatiquement votre espace de travail."
-   else "The business profile selected by the owner will automatically configure your workspace." },color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall,modifier=Modifier.padding(top=12.dp))
+  Text(if(canChoose) { when (locale) { "en" -> "Your choice applies to your business."; "ff-CM" -> "Cuɓol maa huutortee e nokkuure golle maa."; else -> "Votre choix s’applique à votre établissement." } }
+   else { when (locale) { "en" -> "The business profile selected by the owner will automatically configure your workspace."; "ff-CM" -> "Cuɓol jom golle maa teeltu nokkuure golle maa."; else -> "Le choix du Promoteur configurera automatiquement votre espace de travail." } },color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall,modifier=Modifier.padding(top=12.dp))
  }
 }
 
@@ -107,27 +102,26 @@ fun LegalAcceptanceScreen(
  val privacyAsset=if(fr)"legal/PRIVACY_POLICY_2026-11-v1.md" else "legal/PRIVACY_POLICY_2026-11-v1_EN.md"
  val termsText=remember(termsAsset) {
   runCatching { context.assets.open(termsAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }
-   .getOrElse { if(fr)"Conditions générales indisponibles. Contactez l’assistance." else "Terms are unavailable. Contact support." }
+   .getOrElse { when (locale) { "en" -> "Terms are unavailable. Contact support."; "ff-CM" -> "Laabi huutorgol alaa jooni. Ɗaɓɓu ballal."; else -> "Conditions générales indisponibles. Contactez l’assistance." } }
  }
  val privacyText=remember(privacyAsset) {
   runCatching { context.assets.open(privacyAsset).bufferedReader(Charsets.UTF_8).use { it.readText() } }
-   .getOrElse { if(fr)"Politique de confidentialité indisponible. Contactez l’assistance." else "Privacy policy is unavailable. Contact support." }
+   .getOrElse { when (locale) { "en" -> "Privacy policy is unavailable. Contact support."; "ff-CM" -> "Laabi kisal humpito alaa jooni. Ɗaɓɓu ballal."; else -> "Politique de confidentialité indisponible. Contactez l’assistance." } }
  }
  LazyColumn(Modifier.fillMaxSize().padding(22.dp),verticalArrangement=Arrangement.spacedBy(14.dp)) {
   item {
-   Text(if(fr)"Avant de commencer" else "Before you start",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-   Text(if(fr)"Lisez les deux documents complets. Vous devez les ouvrir avant de confirmer séparément chaque acceptation."
-    else "Read both complete documents. You must open them before separately confirming each acceptance.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Text(when (locale) { "en" -> "Before you start"; "ff-CM" -> "Hade fuɗɗaade"; else -> "Avant de commencer" },style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
+   Text(when (locale) { "en" -> "Read both complete documents. You must open them before separately confirming each acceptance."; "ff-CM" -> "Tar kayite ɗiɗi ɗin fof. Uddit kala hade tabbitinde jaɓugol mum."; else -> "Lisez les deux documents complets. Vous devez les ouvrir avant de confirmer séparément chaque acceptation." },color=MaterialTheme.colorScheme.onSurfaceVariant)
   }
   item {
    Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
     Column(Modifier.padding(16.dp)) {
-     Text(if(fr)"Conditions générales d’utilisation" else "Terms of use",fontWeight=FontWeight.Bold)
-     Text(if(termsViewed)(if(fr)"Document consulté" else "Document viewed") else (if(fr)"Lecture obligatoire" else "Reading required"),color=MaterialTheme.colorScheme.onSurfaceVariant)
-     TextButton(onClick={showTerms=true}){Text(if(fr)"Lire les conditions complètes" else "Read full terms")}
+     Text(when (locale) { "en" -> "Terms of use"; "ff-CM" -> "Laabi huutorgol"; else -> "Conditions générales d’utilisation" },fontWeight=FontWeight.Bold)
+     Text(if(termsViewed)(when (locale) { "en" -> "Document viewed"; "ff-CM" -> "Kayit taraama"; else -> "Document consulté" }) else (when (locale) { "en" -> "Reading required"; "ff-CM" -> "Tarugol waajib"; else -> "Lecture obligatoire" }),color=MaterialTheme.colorScheme.onSurfaceVariant)
+     TextButton(onClick={showTerms=true}){Text(when (locale) { "en" -> "Read full terms"; "ff-CM" -> "Tar laabi fof"; else -> "Lire les conditions complètes" })}
      Row(verticalAlignment=Alignment.CenterVertically) {
       Checkbox(checked=terms,onCheckedChange={terms=it},enabled=termsViewed)
-      Text(if(fr)"J’accepte les Conditions générales" else "I accept the Terms of use")
+      Text(when (locale) { "en" -> "I accept the Terms of use"; "ff-CM" -> "Mi jaɓii laabi huutorgol"; else -> "J’accepte les Conditions générales" })
      }
     }
    }
@@ -135,12 +129,12 @@ fun LegalAcceptanceScreen(
   item {
    Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)) {
     Column(Modifier.padding(16.dp)) {
-     Text(if(fr)"Politique de confidentialité" else "Privacy policy",fontWeight=FontWeight.Bold)
-     Text(if(privacyViewed)(if(fr)"Document consulté" else "Document viewed") else (if(fr)"Lecture obligatoire" else "Reading required"),color=MaterialTheme.colorScheme.onSurfaceVariant)
-     TextButton(onClick={showPrivacy=true}){Text(if(fr)"Lire la politique complète" else "Read full privacy policy")}
+     Text(when (locale) { "en" -> "Privacy policy"; "ff-CM" -> "Laabi kisal humpito"; else -> "Politique de confidentialité" },fontWeight=FontWeight.Bold)
+     Text(if(privacyViewed)(when (locale) { "en" -> "Document viewed"; "ff-CM" -> "Kayit taraama"; else -> "Document consulté" }) else (when (locale) { "en" -> "Reading required"; "ff-CM" -> "Tarugol waajib"; else -> "Lecture obligatoire" }),color=MaterialTheme.colorScheme.onSurfaceVariant)
+     TextButton(onClick={showPrivacy=true}){Text(when (locale) { "en" -> "Read full privacy policy"; "ff-CM" -> "Tar laabi kisal fof"; else -> "Lire la politique complète" })}
      Row(verticalAlignment=Alignment.CenterVertically) {
       Checkbox(checked=privacy,onCheckedChange={privacy=it},enabled=privacyViewed)
-      Text(if(fr)"J’accepte la Politique de confidentialité" else "I accept the Privacy policy")
+      Text(when (locale) { "en" -> "I accept the Privacy policy"; "ff-CM" -> "Mi jaɓii laabi kisal humpito"; else -> "J’accepte la Politique de confidentialité" })
      }
     }
    }
@@ -148,27 +142,27 @@ fun LegalAcceptanceScreen(
   if(!error.isNullOrBlank()) item { Text(error,color=MaterialTheme.colorScheme.error) }
   item {
    Button(onClick={onAccept(terms,privacy)},enabled=terms && privacy && termsViewed && privacyViewed && !busy,modifier=Modifier.fillMaxWidth().height(52.dp)) {
-    Text(if(busy)(if(fr)"Enregistrement…" else "Saving…") else if(fr)"Continuer" else "Continue")
+    Text(if(busy)(when (locale) { "en" -> "Saving…"; "ff-CM" -> "Nana dannda…"; else -> "Enregistrement…" }) else when (locale) { "en" -> "Continue"; "ff-CM" -> "Jokku"; else -> "Continuer" })
    }
   }
  }
  if(showTerms) androidx.compose.material3.AlertDialog(
   onDismissRequest={showTerms=false},
-  title={Text(if(fr)"Conditions générales — version 2026-11-v1" else "Terms of use — version 2026-11-v1")},
+  title={Text(when (locale) { "en" -> "Terms of use — version 2026-11-v1"; "ff-CM" -> "Laabi huutorgol — 2026-11-v1"; else -> "Conditions générales — version 2026-11-v1" })},
   text={
    Text(legalPlainText(termsText),modifier=Modifier.heightIn(max=480.dp).verticalScroll(rememberScrollState()),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
   },
-  confirmButton={TextButton(onClick={termsViewed=true;showTerms=false}){Text(if(fr)"J’ai lu les conditions" else "I have read the terms")}},
-  dismissButton={TextButton(onClick={showTerms=false}){Text(if(fr)"Fermer" else "Close")}}
+  confirmButton={TextButton(onClick={termsViewed=true;showTerms=false}){Text(when (locale) { "en" -> "I have read the terms"; "ff-CM" -> "Mi tari laabi ɗii"; else -> "J’ai lu les conditions" })}},
+  dismissButton={TextButton(onClick={showTerms=false}){Text(when (locale) { "en" -> "Close"; "ff-CM" -> "Uddu"; else -> "Fermer" })}}
  )
  if(showPrivacy) androidx.compose.material3.AlertDialog(
   onDismissRequest={showPrivacy=false},
-  title={Text(if(fr)"Politique de confidentialité — version 2026-11-v1" else "Privacy policy — version 2026-11-v1")},
+  title={Text(when (locale) { "en" -> "Privacy policy — version 2026-11-v1"; "ff-CM" -> "Laabi kisal humpito — 2026-11-v1"; else -> "Politique de confidentialité — version 2026-11-v1" })},
   text={
    Text(legalPlainText(privacyText),modifier=Modifier.heightIn(max=480.dp).verticalScroll(rememberScrollState()),style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
   },
-  confirmButton={TextButton(onClick={privacyViewed=true;showPrivacy=false}){Text(if(fr)"J’ai lu la politique" else "I have read the policy")}},
-  dismissButton={TextButton(onClick={showPrivacy=false}){Text(if(fr)"Fermer" else "Close")}}
+  confirmButton={TextButton(onClick={privacyViewed=true;showPrivacy=false}){Text(when (locale) { "en" -> "I have read the policy"; "ff-CM" -> "Mi tari laabi kisal"; else -> "J’ai lu la politique" })}},
+  dismissButton={TextButton(onClick={showPrivacy=false}){Text(when (locale) { "en" -> "Close"; "ff-CM" -> "Uddu"; else -> "Fermer" })}}
  )
 }
 
@@ -207,10 +201,10 @@ fun DiscoveryScreen(locale:String,onComplete:()->Unit) {
   }
   Spacer(Modifier.height(22.dp))
   Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically) {
-   TextButton(onClick=onComplete){Text(if(fr)"Passer" else "Skip")}
+   TextButton(onClick=onComplete){Text(when (locale) { "en" -> "Skip"; "ff-CM" -> "Waɗtu"; else -> "Passer" })}
    Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
-    if(page>0)OutlinedButton(onClick={page--}){Text(if(fr)"Précédent" else "Back")}
-    Button(onClick={if(page==cards.lastIndex)onComplete() else {page++}}){Text(if(page==cards.lastIndex){if(fr)"Commencer" else "Start"}else{if(fr)"Suivant" else "Next"})}
+    if(page>0)OutlinedButton(onClick={page--}){Text(when (locale) { "en" -> "Back"; "ff-CM" -> "Rutto"; else -> "Précédent" })}
+    Button(onClick={if(page==cards.lastIndex)onComplete() else {page++}}){Text(if(page==cards.lastIndex){when (locale) { "en" -> "Start"; "ff-CM" -> "Fuɗɗo"; else -> "Commencer" }}else{when (locale) { "en" -> "Next"; "ff-CM" -> "Aroowo"; else -> "Suivant" }})}
    }
   }
  }
@@ -234,8 +228,8 @@ fun FirstUseTourContent(locale:String,step:Int,onNext:()->Unit,onSkip:()->Unit) 
     Text(item.first,style=MaterialTheme.typography.headlineMedium)
     Text(if(fr)item.second else listOf("Your activity, goals, alerts and key daily figures.","Create a ticket, appointment, work order or sale for your business.","Track quantities, purchase prices, consumption and margins.","Control roles, devices, access rights and subscription expiry.","Browse the FAQ and contact support from your workspace.")[step],style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
     Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween) {
-     TextButton(onClick=onSkip){Text(if(fr)"Passer le tutoriel" else "Skip tutorial")}
-     Button(onClick=onNext){Text(if(step==4){if(fr)"Terminer" else "Done"}else{if(fr)"J’ai compris" else "Got it"})}
+     TextButton(onClick=onSkip){Text(when (locale) { "en" -> "Skip tutorial"; "ff-CM" -> "Waɗtu hollirgol"; else -> "Passer le tutoriel" })}
+     Button(onClick=onNext){Text(if(step==4){when (locale) { "en" -> "Done"; "ff-CM" -> "Timmin"; else -> "Terminer" }}else{when (locale) { "en" -> "Got it"; "ff-CM" -> "Mi faamii"; else -> "J’ai compris" }})}
     }
    }
   }
@@ -247,10 +241,10 @@ fun DashboardHeroCarousel(locale:String,activityProfile:String?,onOpen:()->Unit)
  val context=LocalContext.current
  val fr=locale!="en"; val activity=NaxaActivityCatalog.find(activityProfile)
  val cards=listOf(
-  Triple("📈",if(fr)"Performance du jour" else "Today's performance",if(fr)"Ventes, objectifs et tendances de votre activité." else "Sales, targets and business trends."),
+  Triple("📈",when (locale) { "en" -> "Today's performance"; "ff-CM" -> "Limooje hannde"; else -> "Performance du jour" },when (locale) { "en" -> "Sales, targets and business trends."; "ff-CM" -> "Jaaygol, faandaare e no golle maa njahata."; else -> "Ventes, objectifs et tendances de votre activité." }),
   Triple(activity?.icon ?: "🧰",if(fr)activity?.titleFr ?: "Votre activité" else activity?.titleEn ?: "Your business",if(fr)activity?.descriptionFr ?: "Retrouvez les services de votre activité." else activity?.descriptionEn ?: "Explore your business services."),
-  Triple("📦",if(fr)"Stock et approvisionnement" else "Inventory and supply",if(fr)"Coûts, seuils de sécurité et réapprovisionnement." else "Costs, safety thresholds and replenishment."),
-  Triple("🛡️",if(fr)"Vue de management" else "Management overview",if(fr)"Les données restent séparées par site et consolidées selon vos droits." else "Data stays separate by site and is consolidated according to your access.")
+  Triple("📦",when (locale) { "en" -> "Inventory and supply"; "ff-CM" -> "Jawdi e soodugol"; else -> "Stock et approvisionnement" },when (locale) { "en" -> "Costs, safety thresholds and replenishment."; "ff-CM" -> "Njoɓdi, keewal les e ɓeydude jawdi."; else -> "Coûts, seuils de sécurité et réapprovisionnement." }),
+  Triple("🛡️",when (locale) { "en" -> "Management overview"; "ff-CM" -> "Yiyde ɗowtugol"; else -> "Vue de management" },when (locale) { "en" -> "Data stays separate by site and is consolidated according to your access."; "ff-CM" -> "Humpito nokkuure kala seertii, renndinee e yamiroore maa."; else -> "Les données restent séparées par site et consolidées selon vos droits." })
  )
  var index by rememberSaveable { mutableIntStateOf(0) }
  LaunchedEffect(Unit){while(true){delay(4000);index=(index+1)%cards.size}}
@@ -263,7 +257,7 @@ fun DashboardHeroCarousel(locale:String,activityProfile:String?,onOpen:()->Unit)
     Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)){
      Text(card.second,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=Color.White)
      Text(card.third,color=Color.White.copy(alpha=.94f))
-     Text((index+1).toString()+" / "+cards.size+"  •  "+(if(fr)"Explorer" else "Explore"),color=Color(0xFFFFA8A0),style=MaterialTheme.typography.labelMedium)
+     Text((index+1).toString()+" / "+cards.size+"  •  "+(when (locale) { "en" -> "Explore"; "ff-CM" -> "Yiy"; else -> "Explorer" }),color=Color(0xFFFFA8A0),style=MaterialTheme.typography.labelMedium)
     }
    }
   }
@@ -280,44 +274,44 @@ fun AppearanceSettingsContent(locale:String,preferences:NaxaServicesPreferences,
  var error by remember { mutableStateOf<String?>(null) }
  LazyColumn(Modifier.fillMaxSize().padding(horizontal=18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
   item{
-   Spacer(Modifier.height(12.dp)); Text(if(fr)"Apparence et mode nuit" else "Appearance and night mode",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-   Text(if(fr)"Choisissez votre confort visuel, de jour comme de nuit." else "Choose your preferred display, day or night.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Spacer(Modifier.height(12.dp)); Text(when (locale) { "en" -> "Appearance and night mode"; "ff-CM" -> "No hollirtee e jemma"; else -> "Apparence et mode nuit" },style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
+   Text(when (locale) { "en" -> "Choose your preferred display, day or night."; "ff-CM" -> "Suɓo no a yiɗi yiyde ñalawma e jemma."; else -> "Choisissez votre confort visuel, de jour comme de nuit." },color=MaterialTheme.colorScheme.onSurfaceVariant)
   }
   item{
    Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)){
     Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
-     Text(if(fr)"Langue de l’application" else "Application language",fontWeight=FontWeight.Bold)
+     Text(when (locale) { "en" -> "Application language"; "ff-CM" -> "Ɗemngal aplikasiyoŋ"; else -> "Langue de l’application" },fontWeight=FontWeight.Bold)
      Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
       OutlinedButton(onClick={onLocale("fr")},enabled=locale!="fr"){Text("Français")}
       OutlinedButton(onClick={onLocale("en")},enabled=locale!="en"){Text("English")}
       OutlinedButton(onClick={onLocale("ff-CM")},enabled=locale!="ff-CM"){Text("Fulfulde")}
      }
-     if(locale=="ff-CM") Text("Certaines pages restent disponibles en français.", color=MaterialTheme.colorScheme.onSurfaceVariant, style=MaterialTheme.typography.bodySmall)
-     Text(if(fr)"Mode d’affichage" else "Display mode",fontWeight=FontWeight.Bold)
+     if(locale=="ff-CM") Text("Won e hellooji keddii e Français.", color=MaterialTheme.colorScheme.onSurfaceVariant, style=MaterialTheme.typography.bodySmall)
+     Text(when (locale) { "en" -> "Display mode"; "ff-CM" -> "No hollirtee"; else -> "Mode d’affichage" },fontWeight=FontWeight.Bold)
      listOf("dark","light","scheduled").forEach{value->
       Row(verticalAlignment=Alignment.CenterVertically){
        RadioButton(selected=mode==value,onClick={mode=value})
-       Text(when(value){"dark"->if(fr)"Nuit permanente" else "Always dark";"light"->if(fr)"Clair permanent" else "Always light";else->if(fr)"Automatique selon les heures" else "Scheduled automatically"})
+       Text(when(value){"dark"->when (locale) { "en" -> "Always dark"; "ff-CM" -> "Jemma sahaa fof"; else -> "Nuit permanente" };"light"->when (locale) { "en" -> "Always light"; "ff-CM" -> "Jayngol sahaa fof"; else -> "Clair permanent" };else->when (locale) { "en" -> "Scheduled automatically"; "ff-CM" -> "Wayla sahaa kala"; else -> "Automatique selon les heures" }})
       }
      }
-     OutlinedTextField(start,{start=it;error=null},modifier=Modifier.fillMaxWidth(),label={Text(if(fr)"Activation du mode nuit (HH:mm)" else "Night mode starts (HH:mm)")},singleLine=true)
-     OutlinedTextField(end,{end=it;error=null},modifier=Modifier.fillMaxWidth(),label={Text(if(fr)"Désactivation du mode nuit (HH:mm)" else "Night mode ends (HH:mm)")},singleLine=true)
+     OutlinedTextField(start,{start=it;error=null},modifier=Modifier.fillMaxWidth(),label={Text(when (locale) { "en" -> "Night mode starts (HH:mm)"; "ff-CM" -> "Fuɗɗagol jemma (HH:mm)"; else -> "Activation du mode nuit (HH:mm)" })},singleLine=true)
+     OutlinedTextField(end,{end=it;error=null},modifier=Modifier.fillMaxWidth(),label={Text(when (locale) { "en" -> "Night mode ends (HH:mm)"; "ff-CM" -> "Timmugol jemma (HH:mm)"; else -> "Désactivation du mode nuit (HH:mm)" })},singleLine=true)
      Row(verticalAlignment=Alignment.CenterVertically){
       Switch(checked=torch,onCheckedChange={torch=it})
       Spacer(Modifier.size(8.dp))
-      Column { Text(if(fr)"Mini-lampe torche" else "Mini flashlight",fontWeight=FontWeight.SemiBold); Text(if(fr)"Effet graphique doux autour des zones touchées." else "Soft visual light around touched controls.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) }
+      Column { Text(when (locale) { "en" -> "Mini flashlight"; "ff-CM" -> "Fitila pamarela"; else -> "Mini-lampe torche" },fontWeight=FontWeight.SemiBold); Text(when (locale) { "en" -> "Soft visual light around touched controls."; "ff-CM" -> "Jayngol seeɗa e nokkuure nde a memi."; else -> "Effet graphique doux autour des zones touchées." },style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant) }
      }
      if(error!=null)Text(error!!,color=MaterialTheme.colorScheme.error)
      Button(onClick={
       val s=parseMinute(start);val e=parseMinute(end)
-      if(s==null||e==null)error=if(fr)"Saisis deux heures valides au format HH:mm." else "Enter two valid times as HH:mm."
+      if(s==null||e==null)error=when (locale) { "en" -> "Enter two valid times as HH:mm."; "ff-CM" -> "Winndu sahaaaji ɗiɗi feewɗi e HH:mm."; else -> "Saisis deux heures valides au format HH:mm." }
       else{preferences.saveTheme(mode,s,e,torch);onChanged(preferences.isLightNow());error=null}
-     },modifier=Modifier.fillMaxWidth()){Text(if(fr)"Enregistrer les préférences" else "Save preferences")}
+     },modifier=Modifier.fillMaxWidth()){Text(when (locale) { "en" -> "Save preferences"; "ff-CM" -> "Danndu cuɓe"; else -> "Enregistrer les préférences" })}
     }
    }
   }
   item{
-   Text(if(fr)"La lampe est une animation d’interface. Elle n’active jamais le flash LED du téléphone et ne demande aucune permission caméra." else "The flashlight is a UI animation. It never activates the phone LED flash and requires no camera permission.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Text(when (locale) { "en" -> "The flashlight is a UI animation. It never activates the phone LED flash and requires no camera permission."; "ff-CM" -> "Fitila ngol ko natal dirtungal tan. Udditataa fitila telefon walla ɗaɓɓude yamiroore kamera."; else -> "La lampe est une animation d’interface. Elle n’active jamais le flash LED du téléphone et ne demande aucune permission caméra." },style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
   }
  }
 }
