@@ -12,6 +12,7 @@ import {
 } from "./erp/activity-workflows";
 import { parseWebSession, type WebAuthSession } from "./auth/session";
 import { ProfilePhoto } from "./auth/profile-photo";
+import { StaffRoster, rosterModeEnabled } from "./erp/staff-roster";
 import { BusinessBackdrop, NightTorch } from "./business-visuals";
 import { localeOf, translate, LocaleContext, useTranslation, type Locale } from "./locale";
 import { createRoot } from "react-dom/client";
@@ -176,6 +177,7 @@ function App() {
       VITE_NAXA_SERVICES_AUTH_URL?: string;
       VITE_NAXA_SERVICES_ACCOUNTING_URL?: string;
       VITE_SUPABASE_ANON_KEY?: string;
+      VITE_NAXA_SERVICES_ROSTER_ENABLED?: string;
     };
   }).env ?? {};
   const authEndpoint = env.VITE_NAXA_SERVICES_AUTH_URL ?? "";
@@ -1235,7 +1237,7 @@ function App() {
               busy={busy} onCreateSupplier={createSupplier} onMovement={createInventoryMovement}
               onPurchase={createSupplierPurchase} onReceive={receiveSupplierPurchase} onPay={paySupplier}
             /> :
-            active === "team" ? <TeamOperationsPage memberId={authSession?.account.member_id} entries={(entries.team ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} /> :
+            active === "team" ? <><TeamOperationsPage memberId={authSession?.account.member_id} entries={(entries.team ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} />{env.VITE_NAXA_SERVICES_ROSTER_ENABLED==="true" && authSession && !preview && !authSession.requirePasswordChange && rosterModeEnabled(authSession.account.business_mode) && <StaffRoster key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+(activeSiteId||authSession.account.active_site_ids[0])} account={authSession.account} siteId={activeSiteId||authSession.account.active_site_ids[0]||""} authEndpoint={authEndpoint} anonKey={anonKey} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("SESSION_CHANGED");return fresh.accessToken;}}/>}</> :
             active === "customers" ? <CustomerFollowupsPage entries={(entries.customers ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onCreate={createCustomerFollowup} onComplete={completeCustomerFollowup} /> :
             <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} authenticated={Boolean(authSession && !preview)} />}
         </section>
