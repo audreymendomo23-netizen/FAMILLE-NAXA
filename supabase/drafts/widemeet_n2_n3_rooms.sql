@@ -13,7 +13,7 @@ create table public.wm_rooms(
  revision bigint not null check(revision>=1),
  state jsonb not null check(jsonb_typeof(state)='object'),
  foreign key(host_id,workspace_id) references public.wm_memberships(account_id,workspace_id),
- check(state->>'id'=id::text and state->>'workspaceId'=workspace_id::text and state->>'hostId'=host_id::text and (state->>'revision')::bigint=revision),
+ check((state->>'id') is not distinct from id::text and (state->>'workspaceId') is not distinct from workspace_id::text and (state->>'hostId') is not distinct from host_id::text and (state->>'revision')::bigint is not distinct from revision),
  check(octet_length(state::text)<=1048576)
 );
 create index wm_rooms_workspace on public.wm_rooms(workspace_id);
@@ -80,19 +80,20 @@ $wm$;
 revoke all on function public.wm_room_read(text,uuid) from public,anon,authenticated;
 grant execute on function public.wm_room_read(text,uuid) to service_role;
 -- The trusted gateway calls domain policy before CAS. SQL rejects scope, revoked session and stale version.
-create function public.wm_room_write(p_hash text,p_room uuid,p_expected bigint,p_state jsonb)
+create function public.wm_room_write(p_hash text,p_room uuid,p_expected bigint,p_role text,p_plan text,p_state jsonb)
 returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; old public.wm_rooms%rowtype;
+declare a record; v_old public.wm_rooms%rowtype;
 begin
  select * into a from public.wm_lock_room_actor(p_hash);
- if not found then return false;end if;
- select * into old from public.wm_rooms r where r.id=p_room and r.workspace_id=a.workspace_id for update;
- if not found or old.revision<>p_expected or not exists(select 1 from jsonb_array_elements(old.state->'participants') p where p->>'memberId'=a.account_id::text and p->>'excluded'='false') then return false;end if;
- if p_state is null or p_state->>'id' is distinct from old.id::text or p_state->>'workspaceId' is distinct from old.workspace_id::text or p_state->>'hostId' is distinct from old.host_id::text or (p_state->>'revision')::bigint is distinct from p_expected+1 or jsonb_typeof(p_state->'participants') is distinct from 'array' then return false;end if;
- if exists(select 1 from jsonb_array_elements(p_state->'participants') p where not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.account_id::text=p->>'memberId') and p->>'excluded' is distinct from 'true') then return false;end if;
+ if not found or a.role is distinct from p_role or a.plan is distinct from p_plan then return false;end if;
+ select * into v_old from public.wm_rooms r where r.id=p_room and r.workspace_id=a.workspace_id for update;
+ if not found or v_old.revision<>p_expected or not exists(select 1 from jsonb_array_elements(v_old.state->'participants') p where p->>'memberId'=a.account_id::text and p->>'excluded'='false') then return false;end if;
+ if p_state is null or p_state->>'id' is distinct from v_old.id::text or p_state->>'workspaceId' is distinct from v_old.workspace_id::text or p_state->>'hostId' is distinct from v_old.host_id::text or (p_state->>'revision')::bigint is distinct from p_expected+1 or jsonb_typeof(p_state->'participants') is distinct from 'array' then return false;end if;
+ if p_state->>'recording'='requested' and a.plan<>'premium' then return false;end if;
+ if exists(select 1 from jsonb_array_elements(p_state->'participants') p where not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.enabled and m.account_id::text=p->>'memberId') and p->>'excluded' is distinct from 'true') then return false;end if;
  update public.wm_rooms set revision=p_expected+1,state=p_state where id=p_room and revision=p_expected;
  return found;
 end $wm$;
-revoke all on function public.wm_room_write(text,uuid,bigint,jsonb) from public,anon,authenticated;
-grant execute on function public.wm_room_write(text,uuid,bigint,jsonb) to service_role;
+revoke all on function public.wm_room_write(text,uuid,bigint,text,text,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_room_write(text,uuid,bigint,text,text,jsonb) to service_role;
 commit;
