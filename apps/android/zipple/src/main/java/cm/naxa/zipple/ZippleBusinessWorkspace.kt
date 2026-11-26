@@ -12,7 +12,7 @@ import org.json.JSONObject
 import org.json.JSONArray
 import java.util.UUID
 
-private fun JSONObject.rows(key:String):List<JSONObject> {
+internal fun JSONObject.rows(key:String):List<JSONObject> {
     val rows=optJSONArray(key)?:return emptyList()
     return (0 until rows.length()).mapNotNull{rows.optJSONObject(it)}
 }
@@ -59,7 +59,12 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
         OutlinedButton(onClick={tab="tables";run{load()}}){Text(tr("Tables","Tables"))}
         OutlinedButton(onClick={tab="cash";run{load()}}){Text(tr("Caisse","Cash"))}
     }
+    Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
+        OutlinedButton(onClick={tab="erp_write"}){Text(tr("Opérations stock","Stock operations"))}
+        OutlinedButton(onClick={tab="crm"}){Text(tr("Clients","Customers"))}
+    }
     when(tab){
+        "erp_write","crm"->{key(tab){ZippleNativeErp(api,session,site,en,tab)}}
         "tables"->{
             Text(tr("Tables et sessions","Tables and sessions"))
             snapshot?.rows("tables")?.forEach{x->
