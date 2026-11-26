@@ -68,6 +68,26 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[snack]),2);
  assert.equal((await scalar("select zp_business_snapshot($1,$2)",[b.access,b.site])).items.length,1);
  await assert.rejects(scalar("select zp_business_snapshot($1,$2)",[b.access,a.site]),/DENIED/);
+ const ingredient=await scalar("select zp_add_ingredient($1,$2,'Farine','FAR','kg',1000,'')",[b.access,b.site]);
+ const second=await scalar("select zp_add_ingredient($1,$2,'Huile','HUI','l',200,'')",[b.access,b.site]);
+ const lotKey=uid(),receive=(ing,key,label,qty,cost)=>scalar("select zp_receive_lot($1,$2,$3,$4,$5,'Fournisseur test',$6,$7,null)",[b.access,b.site,ing,key,label,qty,cost]);
+ const lot=await receive(ingredient,lotKey,"L1",3000,1500);assert.equal(await receive(ingredient,lotKey,"L1",3000,1500),lot);
+ await assert.rejects(receive(ingredient,lotKey,"L1",4000,1500),/IDEMPOTENCY_CONFLICT/);
+ await receive(second,uid(),"H1",1000,800);
+ const producedItem=await add(b,"Production snack","snack",1200,0);
+ await assert.rejects(scalar("select zp_define_recipe($1,$2,$3,$4)",[b.access,b.site,producedItem,JSON.stringify([{ingredient_id:ingredient,qty_milli:500},{ingredient_id:food,qty_milli:1}])]),/INVALID_COMPONENTS/);
+ assert.equal(await scalar("select zp_define_recipe($1,$2,$3,$4)",[b.access,b.site,producedItem,JSON.stringify([{ingredient_id:ingredient,qty_milli:500},{ingredient_id:second,qty_milli:100}])]),true);
+ const prodKey=uid(),produce=(count,key=uid())=>scalar("select zp_produce($1,$2,$3,$4,$5)",[b.access,b.site,producedItem,key,count]);
+ const batch=await produce(4,prodKey);assert.equal(batch.cost_xaf,1320);assert.equal((await produce(4,prodKey)).id,batch.id);
+ await assert.rejects(produce(3),/INGREDIENT_SHORTAGE/);
+ assert.equal(Number(await scalar("select remaining_milli from zp_ingredient_lots where id=$1",[lot])),1000);
+ assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[producedItem]),4);
+ await assert.rejects(scalar("select zp_erp_snapshot($1,$2)",[a.access,b.site]),/DENIED/);
+ const expKey=uid(),expense=()=>scalar("select zp_record_expense($1,$2,$3,'rent','Loyer',2500,'bank','test-ref',(now() at time zone 'Africa/Douala')::date)",[b.access,b.site,expKey]);
+ assert.equal(await expense(),await expense());
+ const erp=await scalar("select zp_erp_snapshot($1,$2)",[b.access,b.site]);assert.equal(erp.recorded_expenses_xaf,2500);assert.equal(erp.accounting_status,"mapping_required");assert.equal(erp.ingredients.length,2);
+ assert.equal(await scalar("select has_function_privilege('authenticated','public.zp_produce(text,uuid,uuid,uuid,integer)','execute')"),false);
+ console.log("ZIPPLE_N5_LOTS_RECIPE_PRODUCTION_EXPENSE_PASS");
  console.log("ZIPPLE_TABLE_TICKETS_CASH_FEEDBACK_PASS");assert.equal(await scalar("select zp_guest_order($1,$2)",[g1,anonymous.id]),null);await assert.rejects(order(a,"table",[{item_id:drink,qty:1}],uid(),ts,g1),/DENIED/);
  for(let n=0;n<5;n++){const t=await tenant("Referral "+n);await db.query("insert into zp_referral_links(referred_org,referrer_org) values($1,$2)",[t.org,a.org]);await pay(await intent(t,"ACCESS","monthly"));}
  assert.equal(await scalar("select zp_claim_referral($1,$2)",[a.access,a.site]),referralWave(5,"monthly").completedWaves);assert.equal(await scalar("select zp_claim_referral($1,$2)",[a.access,a.site]),0);

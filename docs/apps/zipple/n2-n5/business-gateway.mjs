@@ -13,7 +13,7 @@ function choice(v,allowed){if(!allowed.includes(v))invalid();return v}
 function amount(v,min=0){if(!integer(v,min,2147483647))invalid();return v}
 function lineItems(v){if(!Array.isArray(v)||!v.length||v.length>50)invalid();return v.map(x=>{if(!isObject(x)||!integer(x.qty,1,1000))invalid();return {item_id:id(x.item_id),qty:x.qty}})}
 const publicActions=new Set(["guest_open","guest_menu","guest_order_create","guest_order_read","guest_feedback"]);
-const professionalActions=new Set(["quote","referral_claim","snapshot","mode","menu_add","table_create","table_open","table_close","order_create","line_advance","delay","cancel","cash_open","cash_record","cash_close"]);
+const professionalActions=new Set(["quote","referral_claim","snapshot","mode","menu_add","table_create","table_open","table_close","order_create","line_advance","delay","cancel","cash_open","cash_record","cash_close","erp_snapshot","ingredient_add","lot_receive","recipe_define","produce","expense_record"]);
 export function createBusinessGateway({rpc,origins,allowGuestOpen=false}){
  if(typeof rpc!=="function"||!Array.isArray(origins))throw Error("CONFIGURATION");
  return async req=>{
@@ -63,12 +63,18 @@ export function createBusinessGateway({rpc,origins,allowGuestOpen=false}){
     case "cash_open":name="zp_open_cash";args={...scope,p_opening:amount(b.opening_xaf)};break;
     case "cash_record":name="zp_record_sale";args={...scope,p_cash:id(b.cash_id),p_order:id(b.order_id),p_request:id(b.request_id),p_method:choice(b.method,["cash","mtn_momo","orange_money","bank","card"]),p_amount:amount(b.amount_xaf,1),p_ref:b.reference==null?null:text(b.reference,160)};break;
     case "cash_close":name="zp_close_cash";args={...scope,p_cash:id(b.cash_id),p_counted:amount(b.counted_xaf)};break;
+    case "erp_snapshot":name="zp_erp_snapshot";args=scope;break;
+    case "ingredient_add":if(!text(b.name)||!text(b.unit,40)||typeof b.sku!=="string"||b.sku.length>80||!integer(b.reorder_milli,0,99999999999)||typeof b.supplier_whatsapp!=="string"||!/^(\d{9,15})?$/.test(b.supplier_whatsapp))invalid();name="zp_add_ingredient";args={...scope,p_name:text(b.name),p_sku:b.sku,p_unit:text(b.unit,40),p_reorder:b.reorder_milli,p_whatsapp:b.supplier_whatsapp};break;
+    case "lot_receive":if(!text(b.label,100)||!text(b.supplier)||!integer(b.qty_milli,1,1000000000)||!(b.expires_on==null||typeof b.expires_on==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(b.expires_on)))invalid();name="zp_receive_lot";args={...scope,p_ingredient:id(b.ingredient_id),p_request:id(b.request_id),p_label:text(b.label,100),p_supplier:text(b.supplier),p_qty:b.qty_milli,p_cost:amount(b.cost_xaf),p_expires:b.expires_on??null};break;
+    case "recipe_define":if(!Array.isArray(b.components)||b.components.length<1||b.components.length>30)invalid();name="zp_define_recipe";args={...scope,p_item:id(b.item_id),p_components:b.components.map(c=>{if(!isObject(c)||!integer(c.qty_milli,1,1000000000))invalid();return {ingredient_id:id(c.ingredient_id),qty_milli:c.qty_milli}})};break;
+    case "produce":if(!integer(b.servings,1,10000))invalid();name="zp_produce";args={...scope,p_item:id(b.item_id),p_request:id(b.request_id),p_servings:b.servings};break;
+    case "expense_record":if(!text(b.label)||!text(b.reference)||typeof b.expense_date!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(b.expense_date))invalid();name="zp_record_expense";args={...scope,p_request:id(b.request_id),p_category:choice(b.category,["rent","utilities","transport","staff","maintenance","other"]),p_label:text(b.label),p_amount:amount(b.amount_xaf,1),p_method:choice(b.method,["cash","mtn_momo","orange_money","bank","card"]),p_reference:text(b.reference),p_date:b.expense_date};break;
     default:return result(403,{error:"DENIED"});
    }
    value=await rpc(name,args);
    return result(200,{data:value??null});
   }catch(error){
-   const safe=["DENIED","SUBSCRIPTION_OR_ROLE_REQUIRED","SUBSCRIPTION_REQUIRED","OFFER_DENIED","ITEM_UNAVAILABLE","IDEMPOTENCY_CONFLICT","TABLE_HAS_OPEN_ORDERS","INVALID_TRANSITION","CASH_CLOSED","SALE_NOT_SETTLEABLE","CHANNEL_DENIED","TABLE_CLOSED","POST_DENIED","CANCELLATION_REQUIRES_REVIEW","MODE_CHANGE_REQUIRES_MIGRATION"];
+   const safe=["DENIED","SUBSCRIPTION_OR_ROLE_REQUIRED","SUBSCRIPTION_REQUIRED","OFFER_DENIED","ITEM_UNAVAILABLE","IDEMPOTENCY_CONFLICT","TABLE_HAS_OPEN_ORDERS","INVALID_TRANSITION","CASH_CLOSED","SALE_NOT_SETTLEABLE","CHANNEL_DENIED","TABLE_CLOSED","POST_DENIED","CANCELLATION_REQUIRES_REVIEW","MODE_CHANGE_REQUIRES_MIGRATION","EXPIRED_LOT","RECIPE_REQUIRES_EMPTY_ITEM","RECIPE_VERSION_REQUIRED","INVALID_COMPONENTS","INVALID_PRODUCTION","INGREDIENT_SHORTAGE","INVALID_EXPENSE_DATE"];
    const code=String(error?.message??"");if(code==="INVALID_INPUT"||error instanceof SyntaxError)return result(400,{error:"INVALID_INPUT"});
    if(safe.includes(code))return result(code==="DENIED"||code.includes("REQUIRED")?403:409,{error:code});
    return result(503,{error:"OPERATION_UNAVAILABLE"});
