@@ -5,15 +5,15 @@
     <string name="universe_retailer">Univers Détaillants</string>
     <string name="universe_retailer_desc">Première phase — 14 profils métier avec des catalogues et des règles de stock adaptés.</string>
     <string name="universe_distributor">Univers Distributeurs</string>
-    <string name="universe_distributor_next">Deuxième phase — ERP et CRM B2B complets, préparés dans l'architecture mais non activés dans ce premier écran.</string>
+    <string name="universe_distributor_next">Deuxième phase — ERP et CRM B2B complets, préparés dans l\'architecture mais non activés dans ce premier écran.</string>
     <string name="setup_workspace_title">Préparer mon activité</string>
-    <string name="business_name">Nom de l'entreprise</string>
+    <string name="business_name">Nom de l\'entreprise</string>
     <string name="site_name">Nom du premier point de vente</string>
     <string name="profile_selection_title">Choisir le profil métier principal</string>
     <string name="save_local_draft">Enregistrer un brouillon sur cet appareil</string>
-    <string name="local_only_warning">Ce brouillon reste sur cet appareil. Il ne crée pas encore de compte, d'abonnement, de site serveur ni de connexion à un distributeur. L'activation réelle nécessitera un accès administrateur Famille NAXA.</string>
-    <string name="local_draft_saved">Brouillon local enregistré. Aucune donnée n'a été transmise au serveur.</string>
-    <string name="local_draft_error">Impossible d'enregistrer ce brouillon sur cet appareil. Réessaie.</string>
+    <string name="local_only_warning">Ce brouillon reste sur cet appareil. Il ne crée pas encore de compte, d\'abonnement, de site serveur ni de connexion à un distributeur. L\'activation réelle nécessitera un accès administrateur Famille NAXA.</string>
+    <string name="local_draft_saved">Brouillon local enregistré. Aucune donnée n\'a été transmise au serveur.</string>
+    <string name="local_draft_error">Impossible d\'enregistrer ce brouillon sur cet appareil. Réessaie.</string>
     <string name="local_drafts_title">Brouillons locaux</string>
     <string name="no_local_drafts">Aucun brouillon local pour le moment.</string>
     <string name="local_draft_state">Brouillon local · non synchronisé</string>
@@ -45,5 +45,5 @@
     <string name="profile_supermarche">Supermarché</string>
     <string name="profile_supermarche_desc">Départements, rayons, multiples caisses, entrepôts et inventaires tournants.</string>
     <string name="profile_brocante">Brocante</string>
-    <string name="profile_brocante_desc">Articles uniques ou d'occasion, état, provenance, photos, estimation et prix négociable.</string>
+    <string name="profile_brocante_desc">Articles uniques ou d\'occasion, état, provenance, photos, estimation et prix négociable.</string>
 </resources>

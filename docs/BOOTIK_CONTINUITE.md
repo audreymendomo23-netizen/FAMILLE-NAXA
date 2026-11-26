@@ -261,3 +261,6 @@ Branche de reprise work/bootik-n0-20261126. Voir [audit N0](audits/BOOTIK_N0_202
 
 ### Reprise N0 — qualification
 Draft BOOTIK autonome sans famille_core, recette PostgreSQL éphémère, CI Android/Web et inventaire JOBLY par ZIP en lecture seule ajoutés. Politique 1/12 mois testée par contrat candidat. Aucun résultat CI revendiqué avant lecture des runs. Aucun déploiement.
+
+### Recette N0 — correction Android
+Run 45834117940 : contrats 6/6 et PostgreSQL 17 PASS, Web build SUCCESS, JOBLY inventaire 788 fichiers SUCCESS. Android échec mergeDebugResources : six ressources FR contenant des apostrophes ASCII non échappées. Correction systématique des valeurs de chaînes FR, EN vérifié sans apostrophes non échappées. Relance CI ; aucune validation Android revendiquée avant résultat. JOBLY inventaire distinct de qualification du code. Aucun déploiement.
