@@ -10,6 +10,7 @@ import org.junit.runner.RunWith
 import org.junit.Assert.*
 import cm.naxa.widemeet.auth.SessionVault
 import cm.naxa.widemeet.auth.VaultSession
+import cm.naxa.widemeet.auth.LocalUnlock
 
 @RunWith(AndroidJUnit4::class)
 class FoundationInstrumentedTest {
@@ -55,4 +56,21 @@ class FoundationInstrumentedTest {
    vault.clear();assertNull(vault.loadAccessToken())
   }finally{vault.clear()}
  }
+ @Test fun localPinKeystoreAndPersistentAttemptLimit(){
+  val context=ApplicationProvider.getApplicationContext<Context>()
+  val gate=LocalUnlock(context);val vault=SessionVault(context)
+  try{
+   gate.clear();assertFalse(gate.configured());gate.configure("4831")
+   vault.save(VaultSession("fixture-access","fixture-refresh","fixture-device"),true)
+   assertTrue(LocalUnlock(context).configured())
+   assertFalse(LocalUnlock(context).verify("0000"))
+   assertTrue(LocalUnlock(context).verify("4831"))
+   repeat(4){assertFalse(LocalUnlock(context).verify("0000"));assertTrue(LocalUnlock(context).configured())}
+   assertFalse(LocalUnlock(context).verify("0000"))
+   assertFalse(LocalUnlock(context).configured())
+   assertNull(vault.loadRefreshToken())
+   assertFalse(LocalUnlock(context).verify("4831"))
+  }finally{gate.clear()}
+ }
+
 }
