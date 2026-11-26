@@ -575,7 +575,7 @@ begin
 
   -- Unbiased rejection sampling over a 32-bit cryptographically secure value.
   loop
-    v_bytes := public.gen_random_bytes(4);
+    v_bytes := extensions.gen_random_bytes(4);
     v_random :=
       (get_byte(v_bytes, 0)::bigint << 24) +
       (get_byte(v_bytes, 1)::bigint << 16) +
