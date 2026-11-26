@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 import org.json.JSONArray
+import java.util.UUID
 
 private fun entries(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0 until a.length()).mapNotNull{a.optJSONObject(it)}
 @Composable fun IdentityPanel(english:Boolean,gateway:AuthGateway,session:Session,mode:String,onLocale:(Boolean)->Unit={}){
@@ -17,6 +18,7 @@ private fun entries(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else
  var profile by remember{mutableStateOf<JSONObject?>(null)}
  var devices by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var billing by remember{mutableStateOf<JSONObject?>(null)}
+ var intents by remember{mutableStateOf<List<JSONObject>>(emptyList())};var premium by remember{mutableStateOf(false)};var yearly by remember{mutableStateOf(false)};var capacity by remember{mutableIntStateOf(20)};var momo by remember{mutableStateOf(false)};var intentRequest by remember{mutableStateOf(UUID.randomUUID().toString())}
  var dashboard by remember{mutableStateOf<JSONObject?>(null)}
  var contacts by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var invitations by remember{mutableStateOf<List<JSONObject>>(emptyList())}
@@ -32,13 +34,13 @@ private fun entries(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else
  if(mode in setOf("profile","company","team"))invitations=entries(gateway.identity(session,"invitations").optJSONArray("invitations"))
  if(mode=="dashboard")dashboard=gateway.identity(session,"dashboard")
  if(mode=="security")devices=entries(gateway.identity(session,"devices").optJSONArray("devices"))
- if(mode=="billing")billing=gateway.identity(session,"billing")
+ if(mode=="billing"){val b=gateway.identity(session,"billing");billing=b;if(b.optBoolean("intent_available"))intents=entries(gateway.identity(session,"billing-list").optJSONArray("intents"))}
  }
  LaunchedEffect(session.deviceId,mode){busy=true;error=false;try{load()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}
  fun mutate(action:String,data:JSONObject,message:String){
  if(busy)return;busy=true;error=false;notice=""
  val selectedLanguage=language
- scope.launch{try{gateway.identity(session,action,data);load();notice=message;if(action=="profile-update")onLocale(selectedLanguage=="en")}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}
+ scope.launch{try{gateway.identity(session,action,data);load();notice=message;if(action=="profile-update")onLocale(selectedLanguage=="en");if(action=="billing-create")intentRequest=UUID.randomUUID().toString()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}
  }
  val p=profile
  val owner=p?.optString("role")=="promoteur"
@@ -56,7 +58,14 @@ private fun entries(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else
  if(mode in setOf("company","team")&&manager){Text(tr("Inviter un collaborateur","Invite a colleague"));OutlinedTextField(identifier,{identifier=it.take(27)},label={Text(tr("Identifiant WideMeet","WideMeet ID"))},modifier=Modifier.fillMaxWidth());if(owner)Row{Checkbox(inviteManager,{inviteManager=it});Text(tr("Responsable","Manager"),Modifier.padding(top=12.dp))};Button(enabled=!busy&&Regex("^WM-[A-Z0-9]{8,24}$").matches(identifier.trim().uppercase()),onClick={mutate("invite",JSONObject().put("login_id",identifier.trim().uppercase()).put("role",if(owner&&inviteManager)"manager" else "staff"),tr("Demande d’invitation prise en compte","Invitation request received"))}){Text(tr("Inviter","Invite"))}}
  if(mode in setOf("profile","company","team")){Text(tr("Invitations reçues","Received invitations"));invitations.forEach{i->Text(i.getString("workspace_name")+" · "+roleLabel(i.getString("role")));Row{TextButton(enabled=!busy,onClick={mutate("respond-invite",JSONObject().put("id",i.getString("id")).put("accept",true),tr("Invitation acceptée. Reconnectez-vous pour accéder au nouvel espace.","Invitation accepted. Sign in again to access the new workspace."))}){Text(tr("Accepter","Accept"))};TextButton(enabled=!busy,onClick={mutate("respond-invite",JSONObject().put("id",i.getString("id")).put("accept",false),tr("Invitation refusée","Invitation declined"))}){Text(tr("Refuser","Decline"))}}}}
  if(mode=="security"){Text(tr("Appareils connectés","Connected devices"),style=MaterialTheme.typography.titleLarge);devices.forEach{d->Text((if(d.optBoolean("current"))tr("Cet appareil","This device")else tr("Autre appareil","Other device"))+" · "+d.optString("created_at").take(16));Text(if(d.optBoolean("remembered"))tr("Session mémorisée","Remembered session")else tr("Session temporaire","Temporary session"));if(!d.optBoolean("current"))TextButton(enabled=!busy,onClick={revokeDevice=d.getString("id")}){Text(tr("Révoquer","Revoke"))}}}
- if(mode=="billing")billing?.let{b->Text(tr("Abonnement","Subscription"),style=MaterialTheme.typography.titleLarge);Text(if(b.isNull("plan"))tr("Aucun abonnement actif","No active subscription")else b.optString("plan").uppercase());if(!b.isNull("valid_until"))Text(tr("Valable jusqu’au","Valid until")+" "+b.optString("valid_until").take(10));if(b.optString("kind")=="enterprise"){Text("Access : 5 000 FCFA/"+tr("mois","month")+" · 50 000 FCFA/"+tr("an","year"));Text("Premium : 10 000 FCFA/"+tr("mois","month")+" · 100 000 FCFA/"+tr("an","year"));Text(tr("Grande équipe : sur devis, maximum 20 000 FCFA/mois.","Large team: quote, maximum 20,000 FCFA/month."))}else{Text(tr("Pass Premium","Premium pass")+" : 1 000 FCFA (≤20), 3 000 FCFA (21–50), 5 000 FCFA (51–100)");Text(tr("Validité maximale de 24 heures, une réunion.","Maximum 24-hour validity, one meeting."))};Text(tr("Paiement en ligne momentanément indisponible.","Online payment currently unavailable."))}
+ if(mode=="billing")billing?.let{b->Text(tr("Abonnement","Subscription"),style=MaterialTheme.typography.titleLarge);Text(if(b.isNull("plan"))tr("Aucun abonnement actif","No active subscription")else b.optString("plan").uppercase());if(!b.isNull("valid_until"))Text(tr("Valable jusqu’au","Valid until")+" "+b.optString("valid_until").take(10));if(b.optString("kind")=="enterprise"){Text("Access : 5 000 FCFA/"+tr("mois","month")+" · 50 000 FCFA/"+tr("an","year"));Text("Premium : 10 000 FCFA/"+tr("mois","month")+" · 100 000 FCFA/"+tr("an","year"));Text(tr("Grande équipe : sur devis, maximum 20 000 FCFA/mois.","Large team: quote, maximum 20,000 FCFA/month."))}else{Text(tr("Pass Premium","Premium pass")+" : 1 000 FCFA (≤20), 3 000 FCFA (21–50), 5 000 FCFA (51–100)");Text(tr("Validité maximale de 24 heures, une réunion.","Maximum 24-hour validity, one meeting."))};Text(tr("Paiement en ligne momentanément indisponible.","Online payment currently unavailable."));if(b.optBoolean("intent_available")){
+ Text(tr("Simulation d’intention — aucun transfert","Test intent — no transfer"),style=MaterialTheme.typography.titleMedium)
+ val enterprise=b.optString("kind")=="enterprise"
+ if(enterprise){Row{Checkbox(premium,{premium=it});Text("Premium",Modifier.padding(top=12.dp))};Row{Checkbox(yearly,{yearly=it});Text(tr("Annuel","Yearly"),Modifier.padding(top=12.dp))}}else{Text(tr("Participants","Participants"));Row{listOf(20,50,100).forEach{n->RadioButton(capacity==n,{capacity=n});Text(n.toString(),Modifier.padding(top=12.dp))}}}
+ Row{RadioButton(!momo,{momo=false});Text("Orange Money",Modifier.padding(top=12.dp))};Row{RadioButton(momo,{momo=true});Text("MTN MoMo",Modifier.padding(top=12.dp))}
+ Button(enabled=!busy,onClick={mutate("billing-create",JSONObject().put("request_id",intentRequest).put("offer",if(!enterprise)"pass" else if(premium)"premium" else "access").put("period",if(!enterprise)"once"else if(yearly)"year"else "month").put("capacity",if(!enterprise)capacity else if(premium)50 else 20).put("channel",if(momo)"MOMO"else "OM"),tr("Intention enregistrée, aucun paiement effectué","Intent recorded, no payment made"))}){Text(tr("Créer une intention de test","Create test intent"))}
+ intents.forEach{i->Text(i.optInt("amount").toString()+" FCFA · "+i.optString("channel")+" · "+when(i.optString("status")){"pending"->tr("En attente","Pending");"confirmed"->tr("Confirmée","Confirmed");else->tr("Annulée","Cancelled")});if(i.optString("status")=="pending")TextButton(enabled=!busy,onClick={mutate("billing-cancel",JSONObject().put("id",i.getString("id")),tr("Intention annulée","Intent cancelled"))}){Text(tr("Annuler","Cancel"))}}
+ }}
  }}
  revokeDevice?.let{id->AlertDialog(onDismissRequest={revokeDevice=null},title={Text(tr("Révoquer cet appareil ?","Revoke this device?"))},confirmButton={TextButton(onClick={revokeDevice=null;mutate("revoke-device",JSONObject().put("id",id),tr("Appareil révoqué","Device revoked"))}){Text(tr("Confirmer","Confirm"))}},dismissButton={TextButton(onClick={revokeDevice=null}){Text(tr("Annuler","Cancel"))}})}
  revokeTarget?.let{id->AlertDialog(onDismissRequest={revokeTarget=null},title={Text(tr("Retirer ce membre ?","Remove this member?"))},confirmButton={TextButton(onClick={revokeTarget=null;mutate("revoke-member",JSONObject().put("member_id",id),tr("Accès retiré","Access removed"))}){Text(tr("Confirmer","Confirm"))}},dismissButton={TextButton(onClick={revokeTarget=null}){Text(tr("Annuler","Cancel"))}})}
