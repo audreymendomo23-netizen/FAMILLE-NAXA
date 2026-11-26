@@ -34,6 +34,8 @@ begin
  if public.wm_room_create(repeat('a',64),s) then raise exception 'duplicate room created';end if;
  if public.wm_room_read(repeat('b',64),r) is distinct from s then raise exception 'invitee read failed';end if;
  if public.wm_room_read(repeat('c',64),r) is not null then raise exception 'cross tenant leak';end if;
+ if (select count(*) from public.wm_room_list(repeat('a',64)))<>1 or (select count(*) from public.wm_room_list(repeat('c',64)))<>0 then raise exception 'agenda leak';end if;
+ if (select count(*) from public.wm_room_contacts(repeat('a',64)))<>1 or (select count(*) from public.wm_room_contacts(repeat('c',64)))<>0 then raise exception 'contacts leak';end if;
  n:=jsonb_set(jsonb_set(s,'{revision}','2'::jsonb),'{status}','"open"'::jsonb);
  if public.wm_room_write(repeat('c',64),r,1,'promoteur','premium',n) then raise exception 'foreign write';end if;
  if public.wm_room_write(repeat('a',64),r,1,'manager','premium',n) then raise exception 'stale role accepted';end if;
