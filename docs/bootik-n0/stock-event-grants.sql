@@ -15,3 +15,8 @@ create policy bk_runtime_access on bootik.bk_stock_imports to bootik_runtime usi
 grant select,insert on bootik.bk_stock_imports to bootik_runtime;
 grant execute on function bootik.bk_apply_stock_import(uuid,uuid,uuid,uuid,uuid,uuid,jsonb) to bootik_runtime;
 grant select on bootik.bk_inventory_movements to bootik_runtime;
+
+create policy bk_runtime_access on bootik.bk_item_sale_groups to bootik_runtime using(true) with check(true);
+create policy bk_runtime_access on bootik.bk_stock_setup_receipts to bootik_runtime using(true) with check(true);
+grant select,insert on bootik.bk_item_sale_groups,bootik.bk_stock_setup_receipts to bootik_runtime;
+grant execute on function bootik.bk_sell_item(uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint),bootik.bk_setup_stock(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb) to bootik_runtime;

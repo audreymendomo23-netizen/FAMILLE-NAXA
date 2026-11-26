@@ -1,5 +1,5 @@
 import {permitsSite} from './session.mjs';
-const actions=new Set(['entitlement','trial','sale','support','support-cancel','catalog','payment-intent','payment-current','payment-status','payment-debit','team','activities','master-create','partners','dashboard','count-batch','transfer-ship','transfer-receive','transfers','stock-template','stock-import-preview','stock-import-apply']);
+const actions=new Set(['entitlement','trial','sale','support','support-cancel','catalog','payment-intent','payment-current','payment-status','payment-debit','team','activities','master-create','partners','dashboard','count-batch','transfer-ship','transfer-receive','transfers','stock-template','stock-import-preview','stock-import-apply','stock-setup']);
 export async function operation(base,session,site,action,payload,fetcher=fetch){
  if(!permitsSite(session,site)||session.app_id!=='BOOTIK'||!actions.has(action))throw Error('SCOPE_DENIED');
  const url=new URL(base.replace(/\/$/,'')+'/operation');
@@ -12,11 +12,11 @@ export async function operation(base,session,site,action,payload,fetcher=fetch){
 }
 
 export async function syncEvent(base,session,site,event,fetcher=fetch){
- if(!permitsSite(session,site)||session.app_id!=='BOOTIK'||event.orgId!==session.organization_id||event.memberId!==session.member_id||event.siteId!==site||!['sale','stock'].includes(event.aggregateType))throw Error('SCOPE_DENIED');
+ if(!permitsSite(session,site)||session.app_id!=='BOOTIK'||event.orgId!==session.organization_id||event.memberId!==session.member_id||event.siteId!==site||!['sale','stock','item-sale'].includes(event.aggregateType))throw Error('SCOPE_DENIED');
  const payload=JSON.parse(event.payload);if(payload.idempotency_key!==event.eventId)throw Error('EVENT_MISMATCH');
- const action=event.aggregateType==='stock'?'sync-stock':'sync-sale',resultKey=event.aggregateType==='stock'?'stock_event_id':'sale_id';
+ const action=event.aggregateType==='stock'?'sync-stock':event.aggregateType==='item-sale'?'sync-item-sale':'sync-sale',resultKey=event.aggregateType==='stock'?'stock_event_id':event.aggregateType==='item-sale'?'sale_group_id':'sale_id';
  if(event.aggregateType==='stock'&&(!['receipt','loss','count'].includes(payload.stock_kind)||session.role==='staff'))throw Error('SCOPE_DENIED');
- if(event.aggregateType==='sale'&&payload.stock_kind!==undefined)throw Error('EVENT_MISMATCH');
+ if(event.aggregateType!=='stock'&&payload.stock_kind!==undefined)throw Error('EVENT_MISMATCH');
  const url=new URL(base.replace(/\/$/,'')+'/operation');if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash)throw Error('INVALID_API');
  const res=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({app_id:'BOOTIK',site_id:site,action,payload}),cache:'no-store',redirect:'error'});
  if(!res.ok)throw Error('SYNC_RETRY_REQUIRED');

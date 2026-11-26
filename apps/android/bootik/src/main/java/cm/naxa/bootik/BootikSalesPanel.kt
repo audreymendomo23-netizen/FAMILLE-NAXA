@@ -10,9 +10,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-private data class CachedSaleItem(val balanceId:String,val name:String,val available:Double,val price:Long,val onHand:Double,val version:String,val sku:String,val barcode:String,val lot:String,val location:String,val activity:String,val expiry:String,val serialized:Boolean,val activityId:String)
+private data class CachedSaleItem(val balanceId:String,val name:String,val available:Double,val price:Long,val onHand:Double,val version:String,val sku:String,val barcode:String,val lot:String,val location:String,val activity:String,val expiry:String,val serialized:Boolean,val activityId:String,val itemId:String,val baseUnit:String,val units:List<Pair<String,Double>>)
 private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length()).map{
- val j=a.getJSONObject(it);CachedSaleItem(j.getString("balance_id"),j.getString("display_name"),j.getDouble("available"),j.getLong("unit_price_fcfa"),j.optDouble("quantity_on_hand",Double.NaN),j.optString("stock_version",""),j.optString("sku",""),j.optString("barcode",""),j.optString("lot_code",""),j.optString("storage_label",""),j.optString("activity_name",""),j.optString("expires_at",""),j.optBoolean("is_serialized",false),j.optString("activity_id","")).also{v->require(v.balanceId.isNotBlank()&&v.available.isFinite()&&v.price>=0)}
+ val j=a.getJSONObject(it);CachedSaleItem(j.getString("balance_id"),j.getString("display_name"),j.getDouble("available"),j.getLong("unit_price_fcfa"),j.optDouble("quantity_on_hand",Double.NaN),j.optString("stock_version",""),j.optString("sku",""),j.optString("barcode",""),j.optString("lot_code",""),j.optString("storage_label",""),j.optString("activity_name",""),j.optString("expires_at",""),j.optBoolean("is_serialized",false),j.optString("activity_id",""),j.optString("item_id",""),j.optString("base_unit_code",""),j.optJSONArray("sale_units")?.let{u->(0 until u.length()).map{n->val x=u.getJSONObject(n);x.getString("unit_code") to x.getDouble("factor")}}?:emptyList()).also{v->require(v.balanceId.isNotBlank()&&v.available.isFinite()&&v.price>=0)}
 }
 @Composable fun BootikSalesPanel(api:BootikApi,dao:BootikScopedDao,session:BootikSession,site:String){
  val context=LocalContext.current
@@ -22,6 +22,7 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  val org=session.organization;val member=session.member;val scope=rememberCoroutineScope()
  var items by remember(org,member,site){mutableStateOf<List<CachedSaleItem>>(emptyList())}
  var events by remember(org,member,site){mutableStateOf<List<BootikScopedEvent>>(emptyList())}
+ var saleUnit by remember(site){mutableStateOf("")};var setupKind by remember(site){mutableStateOf("lot")};var setupCode by remember(site){mutableStateOf("")};var setupExpiry by remember(site){mutableStateOf("")};var setupOrigin by remember(site){mutableStateOf("")};var setupFactor by remember(site){mutableStateOf("1")}
  var search by remember(org,member,site){mutableStateOf("")};var page by remember(org,member,site){mutableStateOf(0)}
  val matches=remember(items,search){items.filter{v->listOf(v.name,v.sku,v.barcode,v.lot,v.location,v.activity).any{BootikCatalogSearch.matches(it,search)}}}
  var selected by remember(site){mutableStateOf("")};var quantity by remember(site){mutableStateOf("1")}
@@ -42,11 +43,21 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  OutlinedTextField(search,{search=it;page=0;selected=""},label={Text("Nom, SKU, code-barres ou emplacement")},singleLine=true,enabled=!busy)
  Text("${matches.size} référence(s) • page ${page+1} / ${maxOf(1,(matches.size+99)/100)}")
  Row{TextButton(enabled=page>0&&!busy,onClick={page--;selected=""}){Text("Précédent")};TextButton(enabled=(page+1)*100<matches.size&&!busy,onClick={page++;selected=""}){Text("Suivant")}}
- matches.drop(page*100).take(100).forEach{i->Row{RadioButton(selected==i.balanceId,{selected=i.balanceId},enabled=!busy);Text(i.name+(if(i.lot.isNotBlank()&&i.lot!="null")" / "+i.lot else "")+" • "+i.price+" FCFA • stock "+i.available)}}
+ matches.drop(page*100).take(100).forEach{i->Row{RadioButton(selected==i.balanceId,{selected=i.balanceId;saleUnit=""},enabled=!busy);Text(i.name+(if(i.lot.isNotBlank()&&i.lot!="null")" / "+i.lot else "")+" • "+i.price+" FCFA • stock "+i.available)}}
  OutlinedTextField(quantity,{quantity=it},label={Text("Quantité")},singleLine=true,enabled=!busy)
  val n=quantity.toDoubleOrNull();val item=items.firstOrNull{it.balanceId==selected}
+ val chosenUnit=item?.units?.firstOrNull{it.first==saleUnit}?.first?:item?.baseUnit.orEmpty();val groupSale=item!=null&&item.itemId.isNotBlank()&&chosenUnit.isNotBlank()&&((item.lot.isNotBlank()&&item.lot!="null")||chosenUnit!=item.baseUnit||items.count{it.itemId==item.itemId}>1)
+ item?.units?.forEach{(code,factor)->Row{RadioButton(chosenUnit==code,{saleUnit=code},enabled=!busy);Text("$code × $factor")}}
+ if(groupSale)Text("Allocation automatique FEFO. Mouvements et transferts en unité de base.")
  if(item!=null)Text("SKU : ${item.sku} • Activité : ${item.activity} • Lot : ${item.lot} • Péremption : ${item.expiry} • Emplacement : ${item.location}")
- Button(enabled=!busy&&n!=null&&n.isFinite()&&n>0&&item!=null&&!item.serialized,onClick={task{require(session.permits(site));val id=UUID.randomUUID().toString();val payload=JSONObject().put("balance_id",item!!.balanceId).put("quantity",n!!).put("unit_price_fcfa",item.price).put("idempotency_key",id);dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));status="Vente en attente, aucune confirmation serveur";if(automatic)BootikSync.schedule(context,binding)}}){Text("Mettre la vente en file")}
+ Button(enabled=!busy&&n!=null&&n.isFinite()&&n>0&&item!=null&&!item.serialized,onClick={task{require(session.permits(site));val id=UUID.randomUUID().toString();val payload=JSONObject().put("quantity",n!!).put("unit_price_fcfa",item!!.price).put("idempotency_key",id);if(groupSale){payload.put("item_id",item.itemId).put("unit_code",chosenUnit)}else payload.put("balance_id",item.balanceId);dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));status="Vente en attente, aucune confirmation serveur";if(automatic)BootikSync.schedule(context,binding)}}){Text("Mettre la vente en file")}
+ if(session.role!="staff"&&item!=null&&item.itemId.isNotBlank()){
+  Text("Lots et conditionnements",style=MaterialTheme.typography.titleMedium)
+  listOf("lot" to "Nouveau lot","unit" to "Unité de vente").forEach{(k,label)->Row{RadioButton(setupKind==k,{setupKind=k},enabled=!busy);Text(label)}}
+  OutlinedTextField(setupCode,{setupCode=it},label={Text("Code")},enabled=!busy,singleLine=true)
+  if(setupKind=="lot"){OutlinedTextField(setupExpiry,{setupExpiry=it},label={Text("Péremption AAAA-MM-JJ")},enabled=!busy,singleLine=true);OutlinedTextField(setupOrigin,{setupOrigin=it},label={Text("Origine")},enabled=!busy,singleLine=true)}else OutlinedTextField(setupFactor,{setupFactor=it},label={Text("Nombre d’unités de base")},enabled=!busy,singleLine=true)
+  Button(enabled=!busy&&setupCode.isNotBlank()&&!item.serialized,onClick={task{val p=JSONObject().put("kind",setupKind).put("item_id",item.itemId);if(setupKind=="lot")p.put("lot_code",setupCode.trim()).put("expiry",setupExpiry).put("origin",setupOrigin)else p.put("unit_code",setupCode.trim()).put("factor",setupFactor.toDouble());val id=requestId("setup",p);p.put("request_id",id);check(api.operation(session,site,"stock-setup",p).getString("setup_id").isNotBlank());requests.remove("setup");setupCode="";status="Configuration confirmée. Actualisez le catalogue."}}){Text("Enregistrer la configuration")}
+ }
  if(session.role!="staff"){
   Text("Réceptions, pertes et comptages",style=MaterialTheme.typography.titleMedium)
   Text("Sélectionnez un article, actualisez le stock si nécessaire. Quantité ci-dessus ; aucune modification avant confirmation serveur.")

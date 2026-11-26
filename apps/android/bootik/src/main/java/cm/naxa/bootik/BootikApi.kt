@@ -45,7 +45,7 @@ class BootikApi(private val endpoint:String) {
  suspend fun logout(session:BootikSession){request("logout",JSONObject().put("refresh_token",session.refreshToken),session.token)}
  suspend fun forget(token:String){request("logout",JSONObject().put("refresh_token",token))}
  suspend fun operation(session:BootikSession,site:String,action:String,payload:JSONObject):JSONObject{
-  require(session.permits(site)&&action in setOf("entitlement","trial","sale","support","support-cancel","catalog","payment-intent","payment-current","payment-status","payment-debit","team","activities","master-create","partners","dashboard","count-batch","transfer-ship","transfer-receive","transfers","stock-template","stock-import-preview","stock-import-apply"))
+  require(session.permits(site)&&action in setOf("entitlement","trial","sale","support","support-cancel","catalog","payment-intent","payment-current","payment-status","payment-debit","team","activities","master-create","partners","dashboard","count-batch","transfer-ship","transfer-receive","transfers","stock-template","stock-import-preview","stock-import-apply","stock-setup"))
   val response=request("operation",JSONObject().put("site_id",site).put("action",action).put("payload",payload),session.token)
   require(response.getString("app_id")=="BOOTIK"&&response.getString("organization_id")==session.organization&&response.getString("member_id")==session.member&&response.getString("site_id")==site&&response.getString("action")==action&&response.getString("state")=="acknowledged")
   return response.getJSONObject("result")
@@ -64,12 +64,12 @@ class BootikApi(private val endpoint:String) {
  suspend fun syncSale(session:BootikSession,site:String,event:BootikScopedEvent):String{
   require(session.permits(site)&&event.organizationId==session.organization&&event.memberId==session.member&&event.siteId==site&&event.state=="queued")
   val payload=JSONObject(event.payload);require(payload.getString("idempotency_key")==event.eventId)
-  val stock=payload.has("stock_kind");val action=if(stock)"sync-stock" else "sync-sale"
+  val stock=payload.has("stock_kind");val grouped=!stock&&payload.has("item_id");val action=if(stock)"sync-stock" else if(grouped)"sync-item-sale" else "sync-sale"
   if(stock)require(payload.getString("stock_kind") in setOf("receipt","loss","count")&&session.role!="staff")
   val j=request("operation",JSONObject().put("site_id",site).put("action",action).put("payload",payload),session.token)
   val state=j.getString("state")
   require(BootikReceiptPolicy.valid(j.getString("app_id"),j.getString("organization_id"),j.getString("member_id"),j.getString("site_id"),j.getString("event_id"),j.getString("action"),state,event,action))
-  if(state=="acknowledged")require(j.getJSONObject("result").getString(if(stock)"stock_event_id" else "sale_id").isNotBlank())
+  if(state=="acknowledged")require(j.getJSONObject("result").getString(if(stock)"stock_event_id" else if(grouped)"sale_group_id" else "sale_id").isNotBlank())
   return state
  }
 }

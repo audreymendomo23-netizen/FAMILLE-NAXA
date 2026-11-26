@@ -137,6 +137,26 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  const mixed=csv+'\nProduit nouveau;IMP-2;unit;500;000124;2;Epicerie';
  assert.equal((await call('stock-import-apply',{activity_id:v,csv:mixed,batch_id:randomUUID()})).status,400);
  assert.equal(Number((await one("select count(*) from bootik.bk_catalog_items where organization_id=$1 and sku='IMP-2'",[o])).count),0);
+ // FEFO over multiple lots: early first, later second, no partial sale on insufficient stock.
+ const fresh=await call('master-create',{...newItem,request_id:randomUUID(),sku:'FEFO-1',barcode:'',lot_code:'FIRST',expiry:'2098-01-01'});assert.equal(fresh.status,200);
+ const product=fresh.body.result.entity_id;
+ const locate=async(code)=>await one('select b.id,b.updated_at::text as version,b.quantity_on_hand from bootik.bk_inventory_balances b join bootik.bk_product_lots l on l.id=b.lot_id where b.item_id=$1 and b.location_id=$2 and l.lot_code=$3',[product,s,code]);
+ const extra={item_id:product,request_id:randomUUID(),kind:'lot',lot_code:'SECOND',expiry:'2099-01-01',origin:''};
+ const setup=await call('stock-setup',extra);assert.equal(setup.status,200);assert.equal((await call('stock-setup',extra)).body.result.setup_id,setup.body.result.setup_id);
+ for(const code of ['FIRST','SECOND']){const x=await locate(code);assert.equal((await call('sync-stock',{balance_id:x.id,stock_kind:'receipt',quantity:4,expected_version:x.version,reason:'Réception FEFO',idempotency_key:randomUUID()})).body.state,'acknowledged')}
+ const firstLot=await locate('FIRST'),secondLot=await locate('SECOND');
+ assert.equal((await call('sync-sale',{balance_id:secondLot.id,idempotency_key:randomUUID(),quantity:1,unit_price_fcfa:250})).body.result.reason,'BOOTIK_FEFO_REQUIRED');
+ const group={item_id:product,idempotency_key:randomUUID(),unit_code:'unit',quantity:5,unit_price_fcfa:250};
+ assert.equal((await call('sync-item-sale',group)).body.state,'acknowledged');assert.equal((await call('sync-item-sale',group)).body.result.sale_group_id,group.idempotency_key);
+ assert.equal(Number((await locate('FIRST')).quantity_on_hand),0);assert.equal(Number((await locate('SECOND')).quantity_on_hand),3);
+ assert.equal((await call('sync-item-sale',{...group,idempotency_key:randomUUID(),quantity:10})).body.state,'conflict');assert.equal(Number((await locate('SECOND')).quantity_on_hand),3);
+ // Multi-site units require full activity scope.
+ const unitReq={item_id:product,request_id:randomUUID(),kind:'unit',unit_code:'pack',factor:2};
+ assert.equal((await call('stock-setup',unitReq)).status,403);
+ await one('insert into bootik.bk_member_sites(organization_id,app_id,user_id,location_id) values($1,$2,$3,$4)',[o,a,u,foreign]);
+ assert.equal((await call('stock-setup',unitReq)).status,200);
+ const converted={...group,idempotency_key:randomUUID(),unit_code:'pack',quantity:1};assert.equal((await call('sync-item-sale',converted)).body.state,'acknowledged');assert.equal(Number((await locate('SECOND')).quantity_on_hand),1);
+ await one('delete from bootik.bk_member_sites where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4',[o,a,u,foreign]);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);

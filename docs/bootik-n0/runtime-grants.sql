@@ -27,3 +27,5 @@ create policy bk_runtime_access on bootik.bk_storage_locations to bootik_runtime
 create policy bk_runtime_access on bootik.bk_reorder_policies to bootik_runtime using (true) with check (true);
 grant select,insert on bootik.bk_storage_locations,bootik.bk_reorder_policies to bootik_runtime;
 grant insert on bootik.bk_product_lots to bootik_runtime;
+
+grant select on bootik.bk_item_units to bootik_runtime;

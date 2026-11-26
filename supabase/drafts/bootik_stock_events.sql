@@ -193,4 +193,91 @@ begin
 end $$;
 revoke all on function bootik.bk_apply_stock_import(uuid,uuid,uuid,uuid,uuid,uuid,jsonb) from public,anon,authenticated;
 
+-- NAXA FEFO allocation with BOOTIK scope, base-unit conversions and immutable grouped receipt.
+create table bootik.bk_item_sale_groups(
+ id uuid primary key,organization_id uuid not null,app_id uuid not null,actor uuid not null,location_id uuid not null,activity_id uuid not null,item_id uuid not null,
+ unit_code text not null,quantity numeric(20,6) not null,base_factor numeric(20,6) not null,base_price bigint not null,allocations jsonb not null,created_at timestamptz not null default clock_timestamp(),
+ foreign key(organization_id,app_id,actor,location_id) references bootik.bk_member_sites(organization_id,app_id,user_id,location_id),
+ foreign key(activity_id,location_id,organization_id,app_id) references bootik.bk_activity_locations(activity_id,location_id,organization_id,app_id)
+);
+create table bootik.bk_stock_setup_receipts(
+ id uuid primary key,organization_id uuid not null,app_id uuid not null,actor uuid not null,location_id uuid not null,item_id uuid not null,kind text not null,payload jsonb not null,result_id uuid not null,created_at timestamptz not null default clock_timestamp(),
+ foreign key(organization_id,app_id,actor,location_id) references bootik.bk_member_sites(organization_id,app_id,user_id,location_id)
+);
+alter table bootik.bk_item_sale_groups enable row level security;alter table bootik.bk_item_sale_groups force row level security;
+alter table bootik.bk_stock_setup_receipts enable row level security;alter table bootik.bk_stock_setup_receipts force row level security;
+revoke all on bootik.bk_item_sale_groups,bootik.bk_stock_setup_receipts from public,anon,authenticated;
+create function bootik.bk_sell_item(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_item uuid,p_id uuid,p_unit text,p_qty numeric,p_price bigint)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare a uuid;u text;factor numeric;left_qty numeric;taken numeric;old bootik.bk_item_sale_groups%rowtype;row_data record;line_id uuid;alloc jsonb:='[]'::jsonb;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site);
+ if p_id is null or p_unit is null or length(p_unit)>40 or p_qty is null or p_qty<=0 or p_qty>1000000000 or p_qty<>round(p_qty,6) or p_price is null or p_price<0 then raise exception 'BOOTIK_INVALID_SALE';end if;
+ select activity_id,base_unit_code into a,u from bootik.bk_catalog_items where id=p_item and organization_id=p_org and app_id=p_app and status='active' and not is_serialized;
+ if not found or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) or not exists(select 1 from bootik.bk_activity_locations where activity_id=a and location_id=p_site and organization_id=p_org and app_id=p_app) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':item-sale:'||p_id::text,0));
+ select * into old from bootik.bk_item_sale_groups where id=p_id and organization_id=p_org and app_id=p_app;
+ if found then
+  if (old.actor,old.location_id,old.item_id,old.unit_code,old.quantity,old.base_price) is distinct from (p_actor,p_site,p_item,p_unit,p_qty,p_price) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;return old.id;
+ end if;
+ select to_base_factor into factor from bootik.bk_item_units where item_id=p_item and organization_id=p_org and app_id=p_app and activity_id=a and unit_code=p_unit and unit_role in ('base','sale');
+ if not found then raise exception 'BOOTIK_INVALID_UNIT';end if;
+ if lower(p_unit) in ('unit','unite','unité','piece','pièce','bouteille','carton','pack','sac','casier','palette') and p_qty<>trunc(p_qty) then raise exception 'BOOTIK_INVALID_SALE';end if;
+ left_qty:=p_qty*factor;if left_qty>1000000000 or left_qty<>round(left_qty,6) then raise exception 'BOOTIK_INVALID_SALE';end if;
+ if lower(u) in ('unit','unite','unité','piece','pièce','bouteille','carton','pack','sac','casier','palette') and left_qty<>trunc(left_qty) then raise exception 'BOOTIK_INVALID_UNIT';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':sale-item:'||p_site::text||':'||p_item::text,0));
+ -- Stable locking order across all candidate balances before allocation.
+ perform 1 from bootik.bk_inventory_balances b where b.organization_id=p_org and b.app_id=p_app and b.activity_id=a and b.location_id=p_site and b.item_id=p_item order by b.id for update;
+ for row_data in select b.id,b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged as available from bootik.bk_inventory_balances b left join bootik.bk_product_lots l on l.id=b.lot_id where b.organization_id=p_org and b.app_id=p_app and b.activity_id=a and b.location_id=p_site and b.item_id=p_item and b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged>0 and (b.lot_id is null or (l.quality_state='available' and (l.expires_at is null or l.expires_at>=current_date))) order by (b.lot_id is null),l.expires_at asc nulls last,l.created_at asc nulls last,l.id asc nulls last,b.id loop
+  exit when left_qty=0;taken:=least(left_qty,row_data.available);
+  line_id:=bootik.bk_record_sale(p_org,p_app,p_actor,p_site,row_data.id,taken,p_price,'item-sale:'||p_id::text||':'||row_data.id::text);
+  alloc:=alloc||jsonb_build_array(jsonb_build_object('balance_id',row_data.id,'sale_id',line_id,'base_quantity',taken));left_qty:=left_qty-taken;
+ end loop;
+ if left_qty<>0 then raise exception 'BOOTIK_STOCK_INSUFFICIENT';end if;
+ insert into bootik.bk_item_sale_groups(id,organization_id,app_id,actor,location_id,activity_id,item_id,unit_code,quantity,base_factor,base_price,allocations) values(p_id,p_org,p_app,p_actor,p_site,a,p_item,p_unit,p_qty,factor,p_price,alloc);
+ return p_id;
+end $$;
+create function bootik.bk_setup_stock(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_item uuid,p_id uuid,p_kind text,p_data jsonb)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare a uuid;u text;universe text;old bootik.bk_stock_setup_receipts%rowtype;v uuid;v_lot_id uuid;v_lot_code text;expiry date;origin text;v_unit_code text;factor numeric;prior bootik.bk_product_lots%rowtype;prior_unit bootik.bk_item_units%rowtype;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
+ if p_id is null or p_kind is null or p_kind not in ('lot','unit') or jsonb_typeof(p_data) is distinct from 'object' then raise exception 'BOOTIK_SETUP_INVALID';end if;
+ select activity_id,base_unit_code into a,u from bootik.bk_catalog_items where id=p_item and organization_id=p_org and app_id=p_app and status='active' and not is_serialized;
+ if not found or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) or not exists(select 1 from bootik.bk_activity_locations where activity_id=a and location_id=p_site and organization_id=p_org and app_id=p_app) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ select universe_code into universe from bootik.bk_activities where id=a and organization_id=p_org and app_id=p_app and status='active';
+ if not found or not bootik.bk_has_entitlement(p_org,p_app,universe) then raise exception 'BOOTIK_ENTITLEMENT_REQUIRED';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':setup:'||p_id::text,0));
+ select * into old from bootik.bk_stock_setup_receipts where id=p_id and organization_id=p_org and app_id=p_app;
+ if found then
+  if (old.actor,old.location_id,old.item_id,old.kind,old.payload) is distinct from (p_actor,p_site,p_item,p_kind,p_data) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;return old.result_id;
+ end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':setup-item:'||p_item::text,0));
+ if p_kind='lot' then
+  v_lot_code:=btrim(p_data->>'lot_code');expiry:=nullif(p_data->>'expiry','')::date;origin:=nullif(btrim(p_data->>'origin'),'');
+  if v_lot_code is null or length(v_lot_code) not between 1 and 80 or length(coalesce(origin,''))>160 or (expiry is not null and expiry<current_date) then raise exception 'BOOTIK_SETUP_INVALID';end if;
+  select * into prior from bootik.bk_product_lots l where l.item_id=p_item and l.organization_id=p_org and l.app_id=p_app and l.activity_id=a and l.lot_code=v_lot_code;
+  if found then
+   if (prior.expires_at,prior.origin_label) is distinct from (expiry,origin) or prior.quality_state<>'available' then raise exception 'BOOTIK_LOT_UNAVAILABLE';end if;v_lot_id:=prior.id;
+  else
+   insert into bootik.bk_product_lots(app_id,organization_id,activity_id,item_id,lot_code,expires_at,origin_label) values(p_app,p_org,a,p_item,v_lot_code,expiry,origin) returning id into v_lot_id;
+  end if;
+  select id into v from bootik.bk_inventory_balances b where b.organization_id=p_org and b.app_id=p_app and b.activity_id=a and b.location_id=p_site and b.item_id=p_item and b.lot_id=v_lot_id and b.storage_location_id is null;
+  if not found then insert into bootik.bk_inventory_balances(app_id,organization_id,activity_id,location_id,item_id,lot_id) values(p_app,p_org,a,p_site,p_item,v_lot_id) returning id into v;end if;
+ else
+  -- Units belong to the item across sites: do not widen an assignment at one site.
+  if exists(select 1 from bootik.bk_activity_locations al where al.activity_id=a and al.organization_id=p_org and al.app_id=p_app and not bootik.bk_can_access_activity(p_org,p_app,p_actor,al.location_id,a)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+  v_unit_code:=btrim(p_data->>'unit_code');factor:=(p_data->>'factor')::numeric;
+  if v_unit_code is null or length(v_unit_code) not between 1 and 40 or v_unit_code=u or factor is null or factor<=0 or factor>1000000 or factor<>round(factor,6) then raise exception 'BOOTIK_SETUP_INVALID';end if;
+  if lower(u) in ('unit','unite','unité','piece','pièce','bouteille','carton','pack','sac','casier','palette') and factor<>trunc(factor) then raise exception 'BOOTIK_INVALID_UNIT';end if;
+  select * into prior_unit from bootik.bk_item_units i where i.item_id=p_item and i.organization_id=p_org and i.app_id=p_app and i.activity_id=a and i.unit_code=v_unit_code;
+  if found then
+   if prior_unit.to_base_factor<>factor or prior_unit.unit_role<>'sale' then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;v:=prior_unit.id;
+  else insert into bootik.bk_item_units(app_id,organization_id,activity_id,item_id,unit_code,unit_role,to_base_factor) values(p_app,p_org,a,p_item,v_unit_code,'sale',factor) returning id into v;end if;
+ end if;
+ insert into bootik.bk_stock_setup_receipts(id,organization_id,app_id,actor,location_id,item_id,kind,payload,result_id) values(p_id,p_org,p_app,p_actor,p_site,p_item,p_kind,p_data,v);
+ return v;
+end $$;
+revoke all on function bootik.bk_sell_item(uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint),bootik.bk_setup_stock(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+
 commit;
