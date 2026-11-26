@@ -659,6 +659,46 @@ begin
 end $f$;
 revoke all on function public.ns_cancel_meeting_series(uuid,jsonb) from public,anon,authenticated;
 grant execute on function public.ns_cancel_meeting_series(uuid,jsonb) to authenticated;
+-- Scheduled-only invite edits, with revision checks and a private audit of added/removed participants.
+create table public.ns_meeting_invitation_changes(
+ meeting_id uuid not null references public.ns_internal_meetings(id),revision integer not null,actor_member_id uuid not null,
+ added uuid[] not null,removed uuid[] not null,changed_at timestamptz not null default clock_timestamp(),primary key(meeting_id,revision));
+alter table public.ns_meeting_invitation_changes enable row level security;
+revoke all on public.ns_meeting_invitation_changes from public,anon,authenticated;
+create function public.ns_revise_meeting_invitees(p_id uuid,p_revision integer,p_title text,p_at timestamptz,p_agenda text,p_duration integer,p_members uuid[]) returns jsonb language plpgsql security definer set search_path='' as $f$
+declare m public.ns_internal_meetings%rowtype; target uuid; wanted uuid[]; added uuid[]; removed uuid[]; result jsonb; loc text; msg jsonb; nid uuid;
+begin
+ select * into m from public.ns_internal_meetings where id=p_id for update;
+ if not found or not public.ns_meeting_can_host(p_id) then raise exception 'NS_MEETING_FORBIDDEN';end if;
+ if m.status<>'scheduled' or m.revision is distinct from p_revision then raise exception 'NS_MEETING_STATE_CONFLICT';end if;
+ if coalesce(cardinality(p_members),0) not between 1 and 100 then raise exception 'NS_MEETING_INVALID';end if;
+ foreach target in array p_members loop
+  if target is null or target=m.host_member_id or not public.ns_roster_can_manage(m.org_id,m.site_id,m.workstation_id,target) then raise exception 'NS_MEETING_FORBIDDEN_OR_INVALID';end if;
+ end loop;
+ select array_agg(distinct x order by x) into wanted from unnest(p_members) x;
+ select coalesce(array_agg(i.member_id order by i.member_id),'{}') into removed from public.ns_internal_meeting_invitees i where i.meeting_id=p_id and i.member_id<>m.host_member_id and not(i.member_id=any(wanted));
+ select coalesce(array_agg(x order by x),'{}') into added from unnest(wanted) x where not exists(select 1 from public.ns_internal_meeting_invitees i where i.meeting_id=p_id and i.member_id=x);
+ delete from public.ns_internal_meeting_invitees where meeting_id=p_id and member_id=any(removed);
+ insert into public.ns_internal_meeting_invitees(meeting_id,org_id,member_id) select p_id,m.org_id,x from unnest(added) x;
+ -- Existing revision/history trigger resets RSVP and notifies the newly selected invitees.
+ result:=public.ns_revise_internal_meeting(p_id,p_revision,p_title,p_at,p_agenda,p_duration);
+ insert into public.ns_meeting_invitation_changes(meeting_id,revision,actor_member_id,added,removed) values(p_id,p_revision+1,m.host_member_id,added,removed);
+ foreach target in array removed loop
+  select coalesce(preferred_locale,'fr') into loc from public.ns_members where id=target and org_id=m.org_id;
+  msg:=case loc when 'en' then jsonb_build_object('title','Invitation withdrawn','body','Your invitation to an internal meeting was withdrawn.')
+   when 'ff-CM' then jsonb_build_object('title','Noddaango momtaama','body','Noddaango maa dental momtaama.')
+   else jsonb_build_object('title','Invitation retirée','body','Votre invitation à une réunion interne a été retirée.') end;
+  -- No meeting title, time, link or participant list is disclosed to a removed member.
+  insert into public.ns_notification_outbox(org_id,site_id,recipient_member_id,channel,event_code,idempotency_key,payload_redacted)
+    values(m.org_id,m.site_id,target,'push','internal_meeting.invitation_withdrawn','meeting-withdrawn:'||p_id::text||':'||target::text||':'||(p_revision+1),msg) returning id into nid;
+  insert into public.ns_notification_inbox(org_id,site_id,member_id,notification_id,event_code,payload_redacted,status,sent_at)
+    values(m.org_id,m.site_id,target,nid,'internal_meeting.invitation_withdrawn',msg,'sent',now());
+ end loop;
+ return result||jsonb_build_object('added_count',cardinality(added),'removed_count',cardinality(removed));
+end $f$;
+revoke all on function public.ns_revise_meeting_invitees(uuid,integer,text,timestamptz,text,integer,uuid[]) from public,anon,authenticated;
+grant execute on function public.ns_revise_meeting_invitees(uuid,integer,text,timestamptz,text,integer,uuid[]) to authenticated;
+
 
 
 insert into auth.users(id) values ('10000000-0000-4000-8000-000000000091'),('10000000-0000-4000-8000-000000000092');
@@ -988,6 +1028,39 @@ do $qa$ declare expected jsonb;r jsonb;begin
 end $qa$;
 reset role;
 
+-- A third, newly eligible employee is introduced only after prior directory assertions.
+insert into auth.users(id) values ('10000000-0000-4000-8000-000000000093');
+insert into public.ns_accounts(id,auth_user_id,login_id,auth_alias,password_change_required) values ('50000000-0000-4000-8000-000000000093','10000000-0000-4000-8000-000000000093','NS-QA93','qa93@example.invalid',false);
+insert into public.ns_members(id,org_id,account_id,display_name,role_code) values ('60000000-0000-4000-8000-000000000093','20000000-0000-4000-8000-000000000091','50000000-0000-4000-8000-000000000093','QA Replacement','cashier');
+insert into public.ns_member_scopes(org_id,member_id,scope_type,scope_id,site_id,can_read,can_operate,can_manage) values ('20000000-0000-4000-8000-000000000091','60000000-0000-4000-8000-000000000093','site','30000000-0000-4000-8000-000000000091','30000000-0000-4000-8000-000000000091',true,true,false);
+insert into public.ns_devices(account_id,installation_id,platform,label,session_id) values ('50000000-0000-4000-8000-000000000093','qa-93','web','QA','qa-93-session');
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000091',true);select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000091","session_id":"qa-91-session","role":"authenticated"}',true);
+set local role authenticated;
+do $qa$ declare r jsonb;t timestamptz:=now()+interval '1 day';begin
+ begin perform public.ns_revise_meeting_invitees('70000000-0000-4000-8000-000000000210',0,'Stale',t,'',30,array['60000000-0000-4000-8000-000000000093'::uuid]);raise exception 'QA STALE INVITE';exception when others then if sqlerrm not like '%NS_MEETING_STATE_CONFLICT%' then raise;end if;end;
+ begin perform public.ns_revise_meeting_invitees('70000000-0000-4000-8000-000000000210',1,'Invalid',t,'',30,array['60000000-0000-4000-8000-000000000091'::uuid]);raise exception 'QA SELF INVITE';exception when others then if sqlerrm not like '%NS_MEETING_FORBIDDEN_OR_INVALID%' then raise;end if;end;
+ r:=public.ns_revise_meeting_invitees('70000000-0000-4000-8000-000000000210',1,'Coordination updated',t,'New agenda',40,array['60000000-0000-4000-8000-000000000093'::uuid]);
+ if r->>'added_count'<>'1' or r->>'removed_count'<>'1' or r->>'revision'<>'2' then raise exception 'QA INVITATION REVISION';end if;
+end $qa$;
+reset role;
+do $qa$ begin
+ if not exists(select 1 from public.ns_meeting_invitation_changes where meeting_id='70000000-0000-4000-8000-000000000210' and revision=2 and added=array['60000000-0000-4000-8000-000000000093'::uuid] and removed=array['60000000-0000-4000-8000-000000000092'::uuid]) then raise exception 'QA INVITATION AUDIT';end if;
+ if (select count(*) from public.ns_notification_outbox where event_code='internal_meeting.invitation_withdrawn' and recipient_member_id='60000000-0000-4000-8000-000000000092' and not(payload_redacted?'meeting_id'))<>1 then raise exception 'QA WITHDRAWAL NOTICE';end if;
+end $qa$;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000092',true);select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000092","session_id":"qa-92-session","role":"authenticated"}',true);
+set local role authenticated;
+do $qa$ begin
+ if exists(select 1 from public.ns_internal_meetings where id='70000000-0000-4000-8000-000000000210') then raise exception 'QA REMOVED READ';end if;
+ begin perform public.ns_revise_meeting_invitees('70000000-0000-4000-8000-000000000210',2,'Unauthorized',now()+interval '1 day','',30,array['60000000-0000-4000-8000-000000000093'::uuid]);raise exception 'QA STAFF INVITE EDIT';exception when others then if sqlerrm not like '%NS_MEETING_FORBIDDEN%' then raise;end if;end;
+end $qa$;
+reset role;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000093',true);select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000093","session_id":"qa-93-session","role":"authenticated"}',true);
+set local role authenticated;
+do $qa$ begin
+ if not exists(select 1 from public.ns_internal_meetings where id='70000000-0000-4000-8000-000000000210' and revision=2 and agenda='New agenda') then raise exception 'QA NEW INVITEE READ';end if;
+end $qa$;
+reset role;
+
 update public.ns_organizations set business_mode='solo' where id='20000000-0000-4000-8000-000000000091';
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000091',true); select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000091","session_id":"qa-91-session","role":"authenticated"}',true);
 set local role authenticated;
@@ -999,4 +1072,4 @@ end $$;
 reset role;
 
 rollback;
-select 'PASS: bounded recurring meetings, cadence, invitation idempotence, individual and atomic series cancellation' as result;
+select 'PASS: recurring meetings, atomic series cancellation, scoped invitation replacement and revocation' as result;
