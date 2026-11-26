@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "appId": "ZIPPLE",
+  "status": "baseline_documentaire",
+  "currency": "XAF",
+  "timeZone": "Africa/Douala",
+  "billingUnit": "organization_promoteur",
+  "plans": {
+    "ACCESS": {
+      "monthly": 5000,
+      "annual": 50000,
+      "architecture": "mono_compte"
+    },
+    "PREMIUM": {
+      "monthly": 18000,
+      "annual": 180000,
+      "architecture": "multiniveau",
+      "inherits": "ACCESS"
+    }
+  },
+  "periods": {
+    "monthly": {
+      "serviceMonths": 1,
+      "paidMonths": 1
+    },
+    "annual": {
+      "serviceMonths": 12,
+      "paidMonths": 10
+    }
+  },
+  "prohibitedOfferMonths": [
+    3,
+    6
+  ],
+  "maturity": {
+    "automaticZippleRepricing": false,
+    "reason": "Aucun nouveau prix ZIPPLE validé dans le cahier gelé; arbitrage daté requis avant tout changement."
+  },
+  "professionalReferral": {
+    "qualifiedPerWave": 5,
+    "qualifyingEvent": "first_paid_subscription_confirmed_server_side",
+    "monthlyReward": "monthly_free_cycle",
+    "annualReward": "annual_extension_month",
+    "rewardMonths": 1,
+    "uniquePerReferredOrganization": true,
+    "idempotent": true,
+    "activationRequiresEntitlementReceipt": true
+  },
+  "consumerReferral": {
+    "separate": true,
+    "commercialRewardValues": "unresolved"
+  },
+  "entitlements": {
+    "principle": "ACCESS mono-compte; PREMIUM inclut ACCESS et architecture multiniveau",
+    "detailedLimits": "pending_explicit_approval"
+  },
+  "payment": {
+    "subscription": "verified_server_confirmation",
+    "operationalSales": "separate_ledger",
+    "delivery": "restaurant_only_existing_naxa_contract_after_compatibility"
+  }
+}

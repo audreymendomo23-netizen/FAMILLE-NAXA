@@ -1,0 +1,19 @@
+# Continuité ZIPPLE — 26 novembre 2026
+## Référence
+Cahier gelé : ../../cahiers-des-charges/ZIPPLE_V2_0.md. Audit : AUDIT_N0_ZIPPLE.md. Matrice : MATRICE_N0_ZIPPLE.md. Contrat tarifaire : POLITIQUE_COMMERCIALE_ZIPPLE.json. Le promoteur a validé les modules réutilisables de NAXA, NS, JOBLY et Famille. Traitement en bulk, jamais une sous-tâche isolée comme résultat final.
+## Architecture et méthode
+Android Kotlin/Compose entièrement natif; Web/PWA responsive distincte; pages QR invité sans compte; cible Famille NAXA distincte à confirmer techniquement; aucun accès aux données d'autres applications. Audit → contradiction → cause → correction → preuves → doc → état. Ne pas modifier NAXA Services ni NAXA, aucun déploiement/APK/migration production sans autorisation. Reprendre le code existant après audit de compatibilité, pas de fusion aveugle.
+## Plan d'exécution
+| Niveau | Lot bulk | Gate minimal |
+|---|---|---|
+| N0 | inventaire sources, identité, cahier, contrats, matrice, backend | preuve de l'archive JOBLY ou décision explicite de ne réutiliser que sa documentation; arbitrages droits et fermeture contradictions de cadrage |
+| N1 | socle Android/Web/PWA, auth, organisation, RLS, thème, locale, offline | builds réels, tests auth/session/PIN, routes et isolation, queue offline, design |
+| N2 | billing, droits, administration et parrainage PME | 4 prix, refus 3/6, aucun prix obsolète, provider verified, 5 filleuls, reward idempotent, gates droits |
+| N3 | Restaurant, Bar, Snack-Bar simultanément | commandes, menu, table/réservation, tickets, postes et absence livraison Snack |
+| N4 | QR public, commandes sans compte, disponibilité, délai, feedback | tests anonymes et inter-session, dernier article concurrent, délai serveur, notation |
+| N5 | ERP : caisse, stock, recettes, consignes, achats, dépenses, compta, équipe, CRM, fidélité | local+serveur, réconciliation, annulation, coûts, rapprochements, multisite |
+| N6 | intégrations livraison, NAXA Security, notifications, support, partenaires | tests API, autorisations, pas de fuite, aucune activation GRILLAD sans accord/contrat |
+| N7 | IA, projections, tableaux de bord et performance | données réelles, explications, no autonomous mutations, consolidations |
+| N8 | recette complète Android/Web/PWA, test RLS, sécurité et préparation livraison | preuve par exigence, build/tests/recette, aucun déploiement sans accord |
+## État au dernier contrôle
+N0 PARTIEL : audit et docs réalisés en bulk. Contrat ZIPPLE vérifié en mémoire (16 checks), sans intégration production. Ouvert : lecture du ZIP JOBLY, droits détaillés, correction et tests runtime billing (N2), compatibilité effective backend et recettes (N1–N8), Connect conditionnel. Aucun N1 lancé. Aucune preuve inventée. Reprendre au dossier N0, traiter les réserves ensemble, ne pas redémarrer les audits déjà prouvés.

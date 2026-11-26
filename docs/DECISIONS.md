@@ -81,3 +81,14 @@
 | COT-024 | Aucun changement code, migration Supabase Production, déploiement ou publication APK sans autorisation explicite distincte | VALIDÉ — RÈGLE DE DÉPÔT |
 
 Les détails, états, critères d'acceptation et réserves sont définis dans `docs/cahiers-des-charges/COTIZ_360_V2_1.md` et `docs/audits/COTIZ_AUDIT_CONTRADICTIONS_V2_1.md`. Les statuts VALIDÉ concernent les orientations produit, pas leur implémentation technique ni la conformité réglementaire.
+
+## ZIPPLE — décisions N0 du 26 novembre 2026
+
+| ID | Décision | État |
+|---|---|---|
+| ZIP-001 | Réutilisation de tous les modules annoncés dans l'audit N0 (NAXA Services, NAXA, JOBLY et Famille), sous contrôle de compatibilité, sans reconstruire les composants éprouvés | VALIDÉ |
+| ZIP-002 | Android entièrement natif Kotlin/Compose; Web/PWA responsive distincte; logo original bleu nuit/orange et deux espaces Restaurant et Snack-Bar | VALIDÉ |
+| ZIP-003 | Accès 5000 FCFA/mois, 50000/an; Premium 18000/mois, 180000/an; uniquement mensuel et annuel (10/12), aucun ancien montant automatique | VALIDÉ |
+| ZIP-004 | Parrainage professionnel NAXA Services, cinq filleuls distincts premier paiement confirmé, un mois gratuit/extension selon cadence; distinct du parrainage consommateur | VALIDÉ |
+| ZIP-005 | Accès mono-compte, Premium inclut Accès et multiniveau (règle portefeuille); attribution détaillée des entitlements et quotas non arbitrée | VALIDÉ POUR LE PRINCIPE / OUVERT POUR LE DÉTAIL |
+| ZIP-006 | Travail N0 en bulk, conservation des autres applications; aucune mise en production par l'audit | VALIDÉ |

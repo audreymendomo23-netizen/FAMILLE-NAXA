@@ -1563,6 +1563,9 @@ Aucune troisième formule ne doit être créée sous un autre nom. La règle de 
 
 ---
 
+## 17.8. Parrainage des abonnés professionnels — modèle NAXA Services [V]
+Ce module est distinct du parrainage consommateur de la section 3.6. Le promoteur professionnel accède à Profil → Parrainage et suivi de mes gains, génère un code unique et le partage. Un filleul organisation ne peut rattacher qu'un seul code, une fois; auto-parrainage interdit. Seul le premier abonnement réellement payé et confirmé par le serveur qualifie le filleul; ni essai, ni inscription, ni renouvellement, ni pending. Chaque vague de cinq filleuls distincts qualifiés donne un cycle mensuel gratuit au parrain mensuel ou un mois d'accès supplémentaire à l'échéance au parrain annuel. Le registre est idempotent par événement et abonnement, la cadence réelle est lue côté serveur; la récompense reste en attente tant que l'entitlement n'est pas appliqué et confirmé. Aucun paiement fictif, aucun code secret opérateur ni accès client aux événements serveur. Les récompenses sont distinctes des forfaits commerciaux interdits 3/6 mois. Ne pas inventer plafond, commission monétaire ni valeur de récompense consommateur. Source : https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/work/naxa-services-completion-20261120/supabase/functions/naxa-services-referrals/README.md
+
 # 18. Tableau de bord et performances 360°
 
 ## 18.1. Vue promoteur
@@ -1905,6 +1908,8 @@ Aucun jalon ne peut être déclaré terminé sur la seule base d’un écran, d�
 
 # 23. Critères de recette fonctionnelle
 
+Recette additionnelle obligatoire du parrainage PME (17.8) : premier paiement confirmé, 4 filleuls sans récompense, 5 avec une récompense, 10 avec deux vagues, rejouer le même événement sans double crédit, rejet auto-parrainage/essai/pending/renouvellement, mois gratuit ou extension selon cadence, récompense pending avant reçu entitlement; isolation app/organisation et permissions. Recette facturation ZIPPLE : 5000/50000 et 18000/180000 FCFA, rejet de 3/6 mois côté serveur, 12 mois d'accès annuel, non-repricing des périodes payées.
+
 La recette doit être faite sur des données de test et par établissement isolé.
 
 ## 23.1. Espaces et multi-sites
@@ -2064,6 +2069,8 @@ La recette doit être faite sur des données de test et par établissement isol�
 
 ## 24.2. Points techniques à vérifier sans rouvrir la vision
 
+Réutilisation des modules NAXA, NAXA Services, JOBLY et Famille NAXA validée par le promoteur le 26/11/2026, conditionnée aux preuves techniques; références et matrice dans `docs/apps/zipple/AUDIT_N0_ZIPPLE.md` et `MATRICE_N0_ZIPPLE.md`. Accès mono-compte, Premium inclut Accès et architecture multiniveau selon règle portefeuille; répartition détaillée et quotas restent à arbitrer, sans invention. Intégration GRILLAD Connect conditionnée aux droits et accords réciproques, commandes/paiements séparés et résolution du blocage GRILLAD V1.3. Interaction NAXA HOTEL conformément à FAM-023, folio sur validation seulement.
+
 - contrat courant du paiement NAXA et opérations supportées ;
 - contrat courant de livraison NAXA et possibilité de réutilisation ;
 - interface sécurisée entre ZIPPLE et NAXA Security ;
@@ -2076,6 +2083,9 @@ La recette doit être faite sur des données de test et par établissement isol�
 Ces contrôles ne constituent pas des alternatives au périmètre retenu. Ils sont des conditions de réalisation sûre et de recette.
 
 ## 24.3. Prix
+
+[26/11/2026] La politique ZIPPLE canonique est décrite dans `docs/apps/zipple/POLITIQUE_COMMERCIALE_ZIPPLE.json`. Les anciens tarifs de lancement/maturité présents dans le code partagé ne doivent pas être appliqués à ZIPPLE en contradiction avec ce cahier. Aucun changement automatique des montants ZIPPLE sans décision explicite. Les règles des autres produits restent hors de cette modification.
+
 
 Les tarifs mensuels et annuels sont validés : Accès à 5 000 FCFA/mois ou 50 000 FCFA/an ; Premium à 18 000 FCFA/mois ou 180 000 FCFA/an. Le paiement annuel correspond à 10 mensualités pour 12 mois de service, donc 2 mois offerts. Les seules périodicités sont mensuelle et annuelle ; aucune formule de 3 ou 6 mois n'est autorisée. La matrice précise des droits reste pilotée par les entitlements validés.
 
