@@ -15,6 +15,7 @@ declare m public.zp_members;x public.zp_purchases;i uuid;begin m:=public.zp_erp_
  select * into x from public.zp_purchases where member_id=m.id and request_id=p_request;
  if x.id is not null then if (x.site_id,x.supplier_id,x.ingredient_id,x.reference,x.qty_milli,x.total_xaf) is distinct from (p_site,p_supplier,p_ingredient,trim(p_reference),p_qty,p_total) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return x.id;end if;
  if not exists(select 1 from public.zp_suppliers where id=p_supplier and org_id=m.org_id and site_id=p_site) or not exists(select 1 from public.zp_ingredients where id=p_ingredient and org_id=m.org_id and site_id=p_site) then raise exception 'DENIED';end if;
+ if exists(select 1 from public.zp_purchase_batches where site_id=p_site and reference=trim(p_reference)) then raise exception 'INVALID_PURCHASE_LINES';end if;
  insert into public.zp_purchases(org_id,site_id,supplier_id,ingredient_id,member_id,request_id,reference,qty_milli,total_xaf) values(m.org_id,p_site,p_supplier,p_ingredient,m.id,p_request,trim(p_reference),p_qty,p_total) returning id into i;return i;end $$;
 create function public.zp_purchase_receive(p_access text,p_site uuid,p_purchase uuid,p_request uuid,p_qty bigint,p_label text,p_expires date) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;x public.zp_purchases;y public.zp_purchase_receipts;cost bigint;lot uuid;i uuid;sup text;begin m:=public.zp_erp_actor(p_access,p_site);
