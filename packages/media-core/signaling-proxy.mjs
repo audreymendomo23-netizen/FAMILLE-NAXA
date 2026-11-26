@@ -3,7 +3,7 @@
 import http from "node:http";
 import {WebSocket,WebSocketServer} from "ws";
 import {verifyJoinToken,allowedJoin} from "./signaling-policy.mjs";
-export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigins,onRevoke,checkEveryMs=1000}){
+export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigins,onRevoke,onAdmit=async()=>{},checkEveryMs=1000}){
  const origin=new URL(upstream);
  if(!["http:","https:"].includes(origin.protocol)||origin.username||origin.password||origin.pathname!=="/"||origin.search||origin.hash)throw Error("invalid upstream");
  if(typeof onRevoke!=="function")throw Error("SFU revocation callback required");
@@ -35,6 +35,10 @@ export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigi
  server.on("upgrade",async(req,socket,head)=>{
   socket.pause();const access=await checked(req);
   if(!access||access.u.pathname==="/rtc/validate"){deny(socket);return}
+  try{
+   await onAdmit(access.grant);
+   if(leases.get(leaseKey(access.grant))?.revoking||!allowedJoin(access.grant,await readAdmission(access.grant))){deny(socket);return}
+  }catch{deny(socket);return}
   if(socket.destroyed)return;
   wss.handleUpgrade(req,socket,head,client=>{
    const target=new URL(access.u.pathname+access.u.search,origin);target.protocol=origin.protocol==="https:"?"wss:":"ws:";
