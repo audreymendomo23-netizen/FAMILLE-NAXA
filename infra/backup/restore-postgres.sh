@@ -40,5 +40,5 @@ fi
 gpg --batch --quiet --pinentry-mode loopback --passphrase-file "$passfile" \
   --decrypt --output "$temporary/restore.dump" "$BACKUP_FILE"
 pg_restore --list "$temporary/restore.dump" >/dev/null
-pg_restore --dbname="$DESTINATION_DATABASE_URL" --clean --if-exists --no-owner --no-acl --exit-on-error "$temporary/restore.dump"
+pg_restore --dbname="$DESTINATION_DATABASE_URL" --clean --if-exists --no-owner --exit-on-error --single-transaction "$temporary/restore.dump"
 echo "Restore verified structurally into database: $actual_database"
