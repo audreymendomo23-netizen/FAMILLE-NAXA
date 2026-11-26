@@ -237,4 +237,132 @@ begin
 end $wm$;
 revoke all on function public.wm_finish_password_change(text,uuid) from public,anon,authenticated;
 grant execute on function public.wm_finish_password_change(text,uuid) to service_role;
+
+-- N1 private account profile and onboarding. The profile belongs to the identity,
+-- favorites belong to an identity within a particular workspace.
+alter table public.wm_accounts add column locale text not null default 'fr' check(locale in ('fr','en'));
+alter table public.wm_accounts add column onboarding_step integer not null default 0 check(onboarding_step between 0 and 5);
+create table public.wm_favorites(
+ account_id uuid not null, workspace_id uuid not null, contact_id uuid not null,
+ primary key(account_id,workspace_id,contact_id),
+ foreign key(account_id,workspace_id) references public.wm_memberships(account_id,workspace_id),
+ foreign key(contact_id,workspace_id) references public.wm_memberships(account_id,workspace_id),
+ check(account_id<>contact_id)
+);
+create table public.wm_membership_invites(
+ id uuid primary key default gen_random_uuid(),
+ workspace_id uuid not null references public.wm_workspaces(id),
+ target_id uuid not null references public.wm_accounts(id),
+ sender_id uuid not null references public.wm_accounts(id),
+ role text not null check(role in ('manager','staff')),
+ status text not null default 'pending' check(status in ('pending','accepted','declined','revoked')),
+ created_at timestamptz not null default now(),
+ expires_at timestamptz not null default (now()+interval '7 days'),
+ check(expires_at>created_at)
+);
+create unique index wm_invite_pending on public.wm_membership_invites(workspace_id,target_id) where status='pending';
+alter table public.wm_favorites enable row level security;
+alter table public.wm_membership_invites enable row level security;
+revoke all on public.wm_favorites,public.wm_membership_invites from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_favorites,public.wm_membership_invites to service_role;
+-- Every mutation revalidates opaque session and current scope. No account IDs or
+-- workspace IDs submitted by the client may override the trusted context.
+create function public.wm_identity_action(p_hash text,p_action text,p_data jsonb)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare s record; a public.wm_accounts%rowtype; w public.wm_workspaces%rowtype;
+ v_role text; v_target uuid; v_inv public.wm_membership_invites%rowtype; v_step integer; v_newrole text;
+ v_name text; v_result jsonb;
+begin
+ select * into s from public.wm_session_context(p_hash);
+ if not found or s.password_change_required then return null;end if;
+ -- Serialize N1 mutations, including invite acceptance and cancellation, without
+ -- cross-account lock order inversion. Candidate scoped to this application.
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ select * into a from public.wm_accounts where id=s.account_id and enabled and not password_change_required for update;
+ if not found then return null;end if;
+ if not exists(select 1 from public.wm_session_context(p_hash) c where c.session_id=s.session_id and not c.password_change_required) then return null;end if;
+ select * into w from public.wm_workspaces where id=s.workspace_id and enabled;
+ if not found then return null;end if;
+ select role into v_role from public.wm_memberships where account_id=a.id and workspace_id=w.id and enabled;
+ if not found then return null;end if;
+ case p_action
+ when 'profile' then
+  return jsonb_build_object('display_name',a.display_name,'login_id',a.login_id,'locale',a.locale,'onboarding_step',a.onboarding_step,'workspace_name',w.name,'workspace_kind',w.kind,'role',v_role);
+ when 'profile-update' then
+  v_name:=btrim(p_data->>'display_name');
+  if v_name is null or length(v_name) not between 1 and 120 or p_data->>'locale' not in ('fr','en') or p_data->>'locale' is null then return null;end if;
+  update public.wm_accounts set display_name=v_name,locale=p_data->>'locale' where id=a.id;
+  return jsonb_build_object('updated',true);
+ when 'onboarding-step' then
+  if jsonb_typeof(p_data->'step') is distinct from 'number' or p_data->>'step' !~ '^[0-5]$' then return null;end if;
+  v_step:=(p_data->>'step')::integer;
+  if v_step>a.onboarding_step+1 then return null;end if;
+  update public.wm_accounts set onboarding_step=greatest(onboarding_step,v_step) where id=a.id returning onboarding_step into v_step;
+  return jsonb_build_object('step',v_step);
+ when 'contacts' then
+  select coalesce(jsonb_agg(q order by q->>'display_name',q->>'member_id'),'[]'::jsonb) into v_result from (
+   select jsonb_build_object('member_id',m.account_id,'display_name',c.display_name,'role',m.role,'favorite',f.contact_id is not null) q
+   from public.wm_memberships m join public.wm_accounts c on c.id=m.account_id and c.enabled
+   left join public.wm_favorites f on f.account_id=a.id and f.workspace_id=w.id and f.contact_id=m.account_id
+   where m.workspace_id=w.id and m.enabled and m.account_id<>a.id
+   order by c.display_name,m.account_id limit 200
+  ) q;
+  return jsonb_build_object('contacts',v_result);
+ when 'favorite' then
+  v_target:=(p_data->>'member_id')::uuid;
+  if v_target is null or v_target=a.id or jsonb_typeof(p_data->'enabled') is distinct from 'boolean' or not exists(select 1 from public.wm_memberships m join public.wm_accounts c on c.id=m.account_id and c.enabled where m.account_id=v_target and m.workspace_id=w.id and m.enabled) then return null;end if;
+  if (p_data->>'enabled')::boolean then insert into public.wm_favorites values(a.id,w.id,v_target) on conflict do nothing;
+  else delete from public.wm_favorites where account_id=a.id and workspace_id=w.id and contact_id=v_target;end if;
+  return jsonb_build_object('updated',true);
+ when 'invite' then
+  v_newrole:=p_data->>'role';
+  if w.kind<>'enterprise' or v_role not in ('promoteur','manager') or v_newrole not in ('manager','staff') or v_newrole is null or (v_role='manager' and v_newrole<>'staff') then return null;end if;
+  if coalesce(p_data->>'login_id','') !~ '^WM-[A-Z0-9]{8,24}$' then return null;end if;
+  select id into v_target from public.wm_accounts where login_id=p_data->>'login_id' and enabled;
+  -- Neutral success avoids exposing whether a global identifier exists.
+  if not found or v_target=a.id or exists(select 1 from public.wm_memberships where account_id=v_target and workspace_id=w.id and enabled) then return jsonb_build_object('accepted',true);end if;
+  update public.wm_membership_invites set status='revoked' where workspace_id=w.id and target_id=v_target and status='pending' and expires_at<=clock_timestamp();
+  insert into public.wm_membership_invites(workspace_id,target_id,sender_id,role) values(w.id,v_target,a.id,v_newrole) on conflict do nothing;
+  return jsonb_build_object('accepted',true);
+ when 'invitations' then
+  select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'workspace_name',x.name,'role',i.role,'expires_at',i.expires_at) order by i.created_at desc),'[]'::jsonb) into v_result
+  from public.wm_membership_invites i join public.wm_workspaces x on x.id=i.workspace_id and x.enabled
+  join public.wm_memberships m on m.account_id=i.sender_id and m.workspace_id=i.workspace_id and m.enabled
+  where i.target_id=a.id and i.status='pending' and i.expires_at>clock_timestamp() and (m.role='promoteur' or (m.role='manager' and i.role='staff'));
+  return jsonb_build_object('invitations',v_result);
+ when 'respond-invite' then
+  if jsonb_typeof(p_data->'accept') is distinct from 'boolean' then return null;end if;
+  select * into v_inv from public.wm_membership_invites where id=(p_data->>'id')::uuid and target_id=a.id and status='pending' and expires_at>clock_timestamp() for update;
+  if not found then return null;end if;
+  if not exists(select 1 from public.wm_workspaces x join public.wm_memberships m on m.workspace_id=x.id join public.wm_accounts c on c.id=m.account_id and c.enabled where x.id=v_inv.workspace_id and x.enabled and x.kind='enterprise' and m.account_id=v_inv.sender_id and m.enabled and (m.role='promoteur' or (m.role='manager' and v_inv.role='staff'))) then return null;end if;
+  if (p_data->>'accept')::boolean then
+   -- Preserve existing active memberships; a disabled membership cannot
+   -- silently be revived by an old invitation.
+   if exists(select 1 from public.wm_memberships where account_id=a.id and workspace_id=v_inv.workspace_id) then return null;end if;
+   insert into public.wm_memberships(account_id,workspace_id,role) values(a.id,v_inv.workspace_id,v_inv.role);
+   update public.wm_membership_invites set status='accepted' where id=v_inv.id;
+  else update public.wm_membership_invites set status='declined' where id=v_inv.id;end if;
+  return jsonb_build_object('updated',true);
+ when 'member-role' then
+  v_target:=(p_data->>'member_id')::uuid;v_newrole:=p_data->>'role';
+  if w.kind<>'enterprise' or v_role<>'promoteur' or v_newrole is null or v_newrole not in ('manager','staff') or v_target=a.id then return null;end if;
+  update public.wm_memberships set role=v_newrole where workspace_id=w.id and account_id=v_target and role in ('manager','staff') and enabled;
+  if not found then return null;end if;
+  update public.wm_device_sessions set revoked_at=clock_timestamp() where workspace_id=w.id and account_id=v_target and revoked_at is null;
+  update public.wm_membership_invites set status='revoked' where workspace_id=w.id and sender_id=v_target and status='pending';
+  return jsonb_build_object('updated',true);
+ when 'revoke-member' then
+  v_target:=(p_data->>'member_id')::uuid;
+  if w.kind<>'enterprise' or v_role<>'promoteur' or v_target=a.id then return null;end if;
+  update public.wm_memberships set enabled=false where workspace_id=w.id and account_id=v_target and role in ('manager','staff') and enabled;
+  if not found then return null;end if;
+  update public.wm_device_sessions set revoked_at=clock_timestamp() where workspace_id=w.id and account_id=v_target and revoked_at is null;
+  update public.wm_membership_invites set status='revoked' where workspace_id=w.id and (sender_id=v_target or target_id=v_target) and status='pending';
+  delete from public.wm_favorites where workspace_id=w.id and (account_id=v_target or contact_id=v_target);
+  return jsonb_build_object('updated',true);
+ else return null;
+ end case;
+end $wm$;
+revoke all on function public.wm_identity_action(text,text,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_identity_action(text,text,jsonb) to service_role;
 commit;
