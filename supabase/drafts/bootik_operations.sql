@@ -49,9 +49,63 @@ begin
  if m is null then raise exception 'BOOTIK_INVALID_OFFER';end if;
  return m * case when p_months=12 then 10 else 1 end;
 end $$;
+-- BOOTIK billing and canonical selling prices: trusted server contracts.
+create table bootik.bk_paid_periods (
+ id uuid primary key default gen_random_uuid(), organization_id uuid not null, app_id uuid not null,
+ universe text not null check(universe in ('retailer','distributor')), plan text not null check(plan in ('access','premium')),
+ months integer not null check(months in (1,12)), amount_fcfa bigint not null check(amount_fcfa>0),
+ provider_reference text not null unique, starts_at timestamptz not null, ends_at timestamptz not null,
+ revoked_at timestamptz, check(ends_at>starts_at),
+ foreign key(organization_id,app_id) references bootik.bk_organizations(organization_id,app_id)
+);
+create function bootik.bk_start_trial(p_org uuid,p_app uuid,p_user uuid,p_site uuid,p_universe text,p_plan text)
+returns timestamptz language plpgsql security invoker set search_path=pg_catalog,bootik as $
+declare v timestamptz;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_user,p_site,true);
+ perform bootik.bk_quote(p_universe,p_plan,1);
+ insert into bootik.bk_trials(organization_id,app_id,universe,plan) values(p_org,p_app,p_universe,p_plan) on conflict do nothing;
+ select activated_at+interval '72 hours' into v from bootik.bk_trials where organization_id=p_org and app_id=p_app and universe=p_universe;
+ return v;
+end $;
+create function bootik.bk_has_entitlement(p_org uuid,p_app uuid,p_universe text)
+returns boolean language sql stable security invoker set search_path=pg_catalog,bootik as $
+ select exists(select 1 from bootik.bk_trials where organization_id=p_org and app_id=p_app and universe=p_universe and activated_at<=now() and now()<activated_at+interval '72 hours')
+ or exists(select 1 from bootik.bk_paid_periods where organization_id=p_org and app_id=p_app and universe=p_universe and revoked_at is null and starts_at<=now() and now()<ends_at);
+$;
+create function bootik.bk_confirm_paid_period(p_org uuid,p_app uuid,p_universe text,p_plan text,p_months integer,p_amount bigint,p_reference text)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $
+declare v uuid; old bootik.bk_paid_periods%rowtype; start_time timestamptz;
+begin
+ if p_amount is distinct from bootik.bk_quote(p_universe,p_plan,p_months) or nullif(btrim(p_reference),'') is null then raise exception 'BOOTIK_PAYMENT_MISMATCH';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_universe,1));
+ select * into old from bootik.bk_paid_periods where provider_reference=p_reference;
+ if found then
+ if (old.organization_id,old.app_id,old.universe,old.plan,old.months,old.amount_fcfa) is distinct from (p_org,p_app,p_universe,p_plan,p_months,p_amount) then raise exception 'BOOTIK_PAYMENT_CONFLICT';end if;
+ return old.id;end if;
+ select greatest(now(),coalesce(max(ends_at),now())) into start_time from bootik.bk_paid_periods where organization_id=p_org and app_id=p_app and universe=p_universe and revoked_at is null;
+ insert into bootik.bk_paid_periods(organization_id,app_id,universe,plan,months,amount_fcfa,provider_reference,starts_at,ends_at)
+ values(p_org,p_app,p_universe,p_plan,p_months,p_amount,p_reference,start_time,start_time+make_interval(months=>p_months)) returning id into v;
+ return v;
+end $;
+create table bootik.bk_sale_prices (
+ item_id uuid not null, organization_id uuid not null, activity_id uuid not null, app_id uuid not null,
+ unit_price_fcfa bigint not null check(unit_price_fcfa>=0),
+ primary key(item_id,organization_id,activity_id,app_id),
+ foreign key(item_id,organization_id,activity_id,app_id) references bootik.bk_catalog_items(id,organization_id,activity_id,app_id)
+);
+create function bootik.bk_cancel_support(p_org uuid,p_app uuid,p_user uuid,p_site uuid,p_request uuid)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,bootik as $
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_user,p_site);
+ update bootik.bk_support_requests set state='cancelled',revoked_at=clock_timestamp()
+ where id=p_request and organization_id=p_org and app_id=p_app and actor=p_user and location_id=p_site and state='requested';
+ return found;
+end $;
+
 create function bootik.bk_record_sale(p_org uuid,p_app uuid,p_user uuid,p_site uuid,p_balance uuid,p_quantity numeric,p_price bigint,p_key text)
 returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
-declare b bootik.bk_inventory_balances%rowtype; old bootik.bk_sales%rowtype; v_id uuid; v_unit text; v_total numeric;
+declare b bootik.bk_inventory_balances%rowtype; old bootik.bk_sales%rowtype; v_id uuid; v_unit text; v_total numeric; v_universe text; v_price bigint;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_user,p_site);
  if p_quantity is null or p_quantity<=0 or p_quantity<>round(p_quantity,6) or p_price is null or p_price<0 or nullif(btrim(p_key),'') is null then raise exception 'BOOTIK_INVALID_SALE';end if;
@@ -62,7 +116,11 @@ begin
  return old.id;end if;
  select * into b from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site for update;
  if not found then raise exception 'BOOTIK_BALANCE_DENIED';end if;
- if not exists(select 1 from bootik.bk_activities a where a.id=b.activity_id and a.status='active') then raise exception 'BOOTIK_ACTIVITY_INACTIVE';end if;
+ select universe_code into v_universe from bootik.bk_activities a where a.id=b.activity_id and a.status='active';
+ if not found then raise exception 'BOOTIK_ACTIVITY_INACTIVE';end if;
+ if not bootik.bk_has_entitlement(p_org,p_app,v_universe) then raise exception 'BOOTIK_ENTITLEMENT_REQUIRED';end if;
+ select unit_price_fcfa into v_price from bootik.bk_sale_prices where item_id=b.item_id and organization_id=p_org and activity_id=b.activity_id and app_id=p_app;
+ if not found or v_price is distinct from p_price then raise exception 'BOOTIK_PRICE_MISMATCH';end if;
  if b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged<p_quantity then raise exception 'BOOTIK_STOCK_INSUFFICIENT';end if;
  if b.lot_id is not null and not exists(select 1 from bootik.bk_product_lots l where l.id=b.lot_id and l.quality_state='available' and (l.expires_at is null or l.expires_at>=current_date)) then raise exception 'BOOTIK_LOT_UNAVAILABLE';end if;
  select base_unit_code into v_unit from bootik.bk_catalog_items where id=b.item_id and status='active' and (not is_serialized or p_quantity=1);

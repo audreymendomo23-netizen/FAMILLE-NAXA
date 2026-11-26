@@ -273,3 +273,6 @@ CI N0 45837071003 SUCCESS 4/4 ; tests instrumentés compilés, pas exécutés su
 
 ### Bulk opérations serveur — 26 novembre
 Run 45840646356 4/4 SUCCESS. Ajout candidat SQL isolé : adhésions et droits par site, registre essai par organisation/univers, devis, vente unitaire atomique avec déduction stock et mouvement idempotent, demande support avec consentement. Recette rollback stock, répétition, survente, site étranger, consentement, tarifs. Fonctions invoker sans droits clients ; appel réservé à un futur adaptateur serveur authentifié, prix fourni encore non canonique et droits abonnement non raccordés. Aucun paiement, flux RTC, migration hébergée ni parcours client opérationnel revendiqué. CI requise.
+
+### Bulk droits et prix — 26 novembre
+Run 45841440818 4/4 SUCCESS. Contrats SQL renforcés : essai unique 72 h par organisation/univers sans reset, registre périodes payées et idempotence référence prestataire, contrôle des droits et prix canonique avant vente, annulation demande média. Tests négatifs et positifs dans operations.sql. Fonction paiement réservée au serveur de confiance après confirmation prestataire (aucune intégration prestataire effective). Pas de déploiement ni de droit client direct. CI à vérifier.
