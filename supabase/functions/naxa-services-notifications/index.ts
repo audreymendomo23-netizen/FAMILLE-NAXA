@@ -36,7 +36,7 @@ class ApiError extends Error {
 
 function reply(status: number, body: Json, origin?: string | null) {
   const allow = origin && (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes("*")) ? origin : "null";
-  return new Response(JSON.stringify(body), {
+  return new Response(status === 204 ? null : JSON.stringify(body), {
     status,
     headers: {
       "Content-Type": "application/json; charset=utf-8",
