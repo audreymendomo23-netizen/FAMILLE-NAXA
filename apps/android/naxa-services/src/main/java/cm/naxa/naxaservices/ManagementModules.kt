@@ -219,7 +219,7 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
         access = api.subscriptionAccess(session.accessToken)
     }
     suspend fun load() {
-        loadAccess()
+        access = null
         notPaid = false
         val result = api.subscriptionRequest(session.accessToken, JSONObject().put("action", "subscription_list"))
         snapshot = result
