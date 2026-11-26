@@ -43,7 +43,7 @@ private object StaffRosterApi {
         }finally{connection.disconnect()}
     }
 }
-private fun JSONArray.rows():List<JSONObject>=(0 until length()).mapNotNull{optJSONObject(it)}
+private fun JSONArray.rows():List<JSONObject> = (0 until length()).mapNotNull{optJSONObject(it)}
 private fun JSONObject.nullable(key:String):String?=if(isNull(key))null else optString(key).takeIf{it.isNotBlank()}
 private val rosterOffset=ZoneOffset.ofHours(1)
 private val rosterFormat=DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm")
