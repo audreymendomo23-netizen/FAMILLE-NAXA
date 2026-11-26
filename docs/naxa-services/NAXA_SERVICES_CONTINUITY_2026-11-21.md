@@ -772,3 +772,10 @@ Le [run #604](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/ru
 Malgré ce PASS, l'audit source a établi un défaut d'exécution : ManagementModules appelle subscription_cancel, mais AuthApi.subscriptionRequest rejetait cette action avant tout appel réseau. La liste des quatre actions payeur est désormais commune à la validation de la requête et à un nouveau test unitaire positif/négatif. Les actions administratives restent exclues et le serveur conserve les contrôles d'abandon avant déclaration et d'attestation de non-paiement. Le nouveau gate reste à constater.
 
 L'état des droits payés est calculé côté serveur mais aucun verrou métier n'est déclaré actif. Ne pas inventer une durée d'essai, de grâce ni une politique d'accès en cas d'expiration ; la capture bénéficiaire physique et les recettes dédiées restent ouvertes. Aucun déploiement ni modification de main ou du Supabase pharmacie.
+
+
+### 22.14 — Droits payés : raccordement des clients — 26 novembre 2026
+
+Le [gate #605](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45716787429) est SUCCESS 12/12 sur `c5a371e687a0b97251e94fb00e09978d229a33b9`. La correction de l'abandon Android est validée par les contrôles CI.
+
+Le serveur exposait subscription_access sans client Web ni Android. Cette passe raccorde la consultation de l'état payé (active, expired, cancelled, not_started, unconfigured) aux deux interfaces, séparément des opérations de règlement réservées au Promoteur. L'interface ne déduit pas les droits de la date locale ni d'une déclaration SMS. La consultation est indépendante du paiement ; le rafraîchissement des demandes efface l'ancien état payé affiché. Une recette navigateur simulée couvre la lecture par un membre et le passage actif → expiré. Commits de code : `34f82ff`, `bb22eae`, `fe79a91`, `60d2277`, `c361d7c`, `cdec1d6`, `3eaf0ee`. Nouveau gate à constater. Le verrou ERP, les règles d'essai/de grâce et d'accès hors ligne, et la capture bénéficiaire physique ne sont pas déclarés livrés. Aucun déploiement ni modification de main ou du Supabase pharmacie.
