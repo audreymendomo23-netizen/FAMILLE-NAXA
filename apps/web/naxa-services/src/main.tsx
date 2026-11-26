@@ -747,7 +747,7 @@ function App() {
     setDraftTitle("");setDraftDetail("");setDraftSku("");setDraftPhone("");setDraftAmount("0");
     setDraftDate("");setDraftEndDate("");setDraftContactConsent(false);setDraftPriority("normal");setDraftActivity("general");
     if(navigator.onLine)await syncWebOutbox(session);
-    else setAuthMessage("Opération mise en file hors ligne ; elle sera envoyée au retour du réseau.");
+    else setAuthMessage("Opération enregistré hors connexion ; elle sera envoyée au retour du réseau.");
   }
 
   async function submitModuleOperation() {
@@ -1141,7 +1141,7 @@ function App() {
         <nav className="side-nav">
           {grouped.map(([group, groupModules]) => <div className="nav-group" key={group}>
             <div className="nav-heading">{group}</div>
-            {groupModules.map((m) => <button key={m.id} className={"nav-item " + (active === m.id ? "active" : "")} onClick={() => setActive(m.id)}><span className="nav-glyph">{iconFor(m.id)}</span><span>{m.title}</span></button>)}
+            {groupModules.map((m) => <button key={m.id} aria-current={active===m.id?"page":undefined} className={"nav-item " + (active === m.id ? "active" : "")} onClick={() => {setActive(m.id);setMobileMenu(false);}}><span className="nav-glyph">{iconFor(m.id)}</span><span>{m.title}</span></button>)}
           </div>)}
         </nav>
         <div className="side-bottom">
