@@ -27,7 +27,7 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await call('entitlement',{universe:'retailer'})).body.result.active,false);
  const sale={balance_id:b,quantity:2,unit_price_fcfa:500,idempotency_key:key};assert.equal((await call('sale',sale)).status,400);
  assert.equal((await call('trial',{universe:'retailer',plan:'access'})).status,200);
- assert.equal((await call('entitlement',{universe:'retailer'})).body.result.plan,'access');
+ assert.equal((await call('entitlement',{universe:'retailer'})).body.result.plan,'access');const matrix=(await call('entitlement',{universe:'retailer'})).body.result;assert.equal(matrix.matrix_version,'BOOTIK-V1.1-20261126');assert.equal(matrix.capabilities.sales,true);assert.equal(matrix.capabilities.advanced_analytics,false);assert.equal(Object.keys(matrix.capabilities).length,16);
  assert.equal((await call('entitlement',{universe:'retailer'})).body.result.consolidation,false);
  assert.equal((await call('trial',{universe:'distributor',plan:'premium'})).status,400);
  assert.equal((await call('trial',{universe:'retailer',plan:'premium'})).status,200);
@@ -343,6 +343,22 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  await approvalAdmin({kind:'decide',approval_id:sensitivePay.payment_id,decision:'approved',reason:'Vérifié'});
  assert.equal((await call('approval-own-state',{})).body.result.requests.find(x=>x.id===sensitivePay.payment_id).state,'approved');assert.equal((await call('approval-execute',{approval_id:sensitivePay.payment_id})).body.result.state,'executed');assert.equal((await call('approval-execute',{approval_id:sensitivePay.payment_id})).body.result.state,'executed');assert.equal((await call('approval-own-state',{})).body.result.requests.find(x=>x.id===sensitivePay.payment_id).state,'executed');
  assert.equal((await call('purchase-pay',sensitivePay)).body.result.payment_id,sensitivePay.payment_id);assert.equal((await call('purchase-pay',sensitivePay)).body.result.payment_id,sensitivePay.payment_id);
+ // Cash movements and closing variance obey independent monetary approval.
+ await approvalAdmin({kind:'policy',activity_id:v,operation_kind:'cash-movement',threshold_fcfa:50,reason:'Sorties surveillées'});
+ await approvalAdmin({kind:'policy',activity_id:v,operation_kind:'cash-close',threshold_fcfa:10,reason:'Écarts surveillés'});
+ const newCash=randomUUID();assert.equal((await cash('open',{request_id:newCash,register_id:regId,opening_float_fcfa:1000})).status,200);
+ const expense={request_id:randomUUID(),session_id:newCash,movement_kind:'expense',amount_fcfa:100,reason:'Dépense contrôlée'};
+ assert.equal((await cash('movement',expense)).body.result.approval_state,'pending');
+ assert.equal(Number((await one('select count(*) from bootik.bk_cash_movements where id=$1',[expense.request_id])).count),0);
+ await approvalAdmin({kind:'decide',approval_id:expense.request_id,decision:'approved',reason:'Dépense vérifiée'});
+ assert.equal((await call('approval-execute',{approval_id:expense.request_id})).body.result.state,'executed');
+ const pendingClose={request_id:randomUUID(),session_id:newCash,counted_close_fcfa:850,reason:'Écart constaté'};
+ assert.equal((await cash('close',pendingClose)).body.result.approval_state,'pending');
+ assert.equal((await one('select closed_at from bootik.bk_cash_sessions where id=$1',[newCash])).closed_at,null);
+ await approvalAdmin({kind:'decide',approval_id:pendingClose.request_id,decision:'approved',reason:'Écart justifié'});
+ assert.equal((await call('approval-execute',{approval_id:pendingClose.request_id})).body.result.state,'executed');
+ assert.equal((await call('approval-execute',{approval_id:pendingClose.request_id})).body.result.state,'executed');
+ assert.equal(Number((await one('select expected_close_fcfa-counted_close_fcfa as gap from bootik.bk_cash_sessions where id=$1',[newCash])).gap),50);
  // Family central expansion: one organization, one entitlement across two sites, existing member identity.
  const expansionSite=randomUUID(),newAct=randomUUID();
  const expand={app_id:'BOOTIK',kind:'site',event_id:randomUUID(),central_actor_id:centralActor,organization_id:centralOrg,central_user_id:centralMember,site_id:expansionSite,activity_id:centralAct,site_name:'Second site'};

@@ -244,6 +244,7 @@ returns text language sql stable security invoker set search_path=pg_catalog,boo
  select plan from bootik.bk_trials where organization_id=p_org and app_id=p_app and universe=p_universe and activated_at<=now() and now()<activated_at+interval '72 hours'
  ) p order by case when plan='premium' then 0 else 1 end limit 1;
 $$;
+-- Entitlement matrix BOOTIK-V1.1-20261126; change the version on any semantic change.
 create function bootik.bk_has_capability(p_org uuid,p_app uuid,p_universe text,p_capability text)
 returns boolean language sql stable security invoker set search_path=pg_catalog,bootik as $$
  select coalesce(case when p_capability in ('sales','stock','purchases','crm','finance','delivery','profile','exports','audit','security','ai_basic') then bootik.bk_effective_plan(p_org,p_app,p_universe) in ('access','premium')

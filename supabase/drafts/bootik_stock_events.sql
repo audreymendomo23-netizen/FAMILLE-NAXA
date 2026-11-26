@@ -453,6 +453,7 @@ begin
    else
     amt:=(p_data->>'counted_close_fcfa')::bigint;
     if amt is null or amt<0 or amt>9007199254740991 or length(why)>500 or (amt<>expected and length(why)<3) then raise exception 'BOOTIK_CASH_VARIANCE_REASON_REQUIRED';end if;
+    if amt<>expected or exists(select 1 from bootik.bk_approval_requests where id=req) then perform bootik.bk_approval_check(p_org,p_app,p_actor,p_site,a,'cash-close',req,abs(amt-expected)::bigint,jsonb_build_object('session_id',sid,'counted_close_fcfa',amt,'expected_close_fcfa',expected::bigint,'reason',why),false);end if;
     update bootik.bk_cash_sessions set closed_at=clock_timestamp(),closed_by=p_actor,expected_close_fcfa=expected::bigint,counted_close_fcfa=amt,variance_reason=nullif(why,'') where id=sid;
     answer:=jsonb_build_object('session_id',sid,'expected_close_fcfa',expected::bigint,'counted_close_fcfa',amt,'variance_fcfa',amt-expected::bigint);
    end if;
@@ -572,13 +573,13 @@ revoke all on function bootik.bk_resource_allowed(uuid,uuid,uuid,uuid,text,uuid)
 
 -- Monetary delegation: configurable per site/activity, immutable request payload and distinct approver.
 create table bootik.bk_approval_policies(
- organization_id uuid not null,app_id uuid not null,location_id uuid not null,activity_id uuid not null,kind text not null check(kind in ('purchase-pay','cash-movement')),
+ organization_id uuid not null,app_id uuid not null,location_id uuid not null,activity_id uuid not null,kind text not null check(kind in ('purchase-pay','cash-movement','cash-close')),
  threshold_fcfa bigint not null check(threshold_fcfa between 0 and 9007199254740991),primary key(organization_id,app_id,location_id,activity_id,kind),
  foreign key(activity_id,location_id,organization_id,app_id) references bootik.bk_activity_locations(activity_id,location_id,organization_id,app_id)
 );
 create table bootik.bk_approval_requests(
  id uuid primary key,organization_id uuid not null,app_id uuid not null,location_id uuid not null,activity_id uuid not null,actor uuid not null,
- kind text not null check(kind in ('purchase-pay','cash-movement')),amount_fcfa bigint not null check(amount_fcfa>0),payload jsonb not null,
+ kind text not null check(kind in ('purchase-pay','cash-movement','cash-close')),amount_fcfa bigint not null check(amount_fcfa>0),payload jsonb not null,
  state text not null default 'pending' check(state in ('pending','approved','refused')),approver uuid,decided_at timestamptz,reason text,created_at timestamptz not null default clock_timestamp(),
  check((state='pending' and approver is null and decided_at is null) or (state<>'pending' and approver is not null and approver<>actor and decided_at is not null))
 );
@@ -588,7 +589,7 @@ returns text language plpgsql security invoker set search_path=pg_catalog,bootik
 declare lim bigint;old bootik.bk_approval_requests%rowtype;v_role text;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
- if not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,p_activity) or p_id is null or p_amount is null or p_amount<=0 or p_amount>9007199254740991 or p_kind not in ('purchase-pay','cash-movement') then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ if not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,p_activity) or p_id is null or p_amount is null or p_amount<=0 or p_amount>9007199254740991 or p_kind not in ('purchase-pay','cash-movement','cash-close') then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_app::text||':'||p_site::text||':'||p_activity::text||':'||p_kind,91));
  select * into old from bootik.bk_approval_requests where id=p_id;
  if found then
@@ -606,7 +607,7 @@ begin
 end $$;
 create function bootik.bk_approval_preflight(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_kind text,p_data jsonb)
 returns text language plpgsql security invoker set search_path=pg_catalog,bootik as $$
-declare a uuid;rid uuid;sid uuid;req uuid;amt bigint;u text;canonical jsonb;remaining bigint;
+declare a uuid;rid uuid;sid uuid;req uuid;amt bigint;u text;canonical jsonb;remaining bigint;counted bigint;expected numeric;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
  if p_kind='purchase-pay' then
@@ -616,13 +617,22 @@ begin
   if exists(select 1 from bootik.bk_supplier_payments where id=req and order_id=(p_data->>'order_id')::uuid) then return null;end if;
   if amt>remaining or coalesce(p_data->>'method','') not in ('cash','bank','mobile_money') or length(btrim(coalesce(p_data->>'reference',''))) not between 3 and 120 then raise exception 'BOOTIK_PURCHASE_INVALID';end if;
   canonical:=jsonb_build_object('order_id',(p_data->>'order_id')::uuid,'method',p_data->>'method','reference',btrim(p_data->>'reference'));
- elsif p_kind='cash-movement' then
+ elsif p_kind in ('cash-movement','cash-close') then
   a:=(p_data->>'activity_id')::uuid;sid:=(p_data->>'session_id')::uuid;req:=(p_data->>'request_id')::uuid;amt:=(p_data->>'amount_fcfa')::bigint;
   select r.id into rid from bootik.bk_cash_sessions s join bootik.bk_registers r on r.id=s.register_id where s.id=sid and r.organization_id=p_org and r.app_id=p_app and r.location_id=p_site and r.activity_id=a;
   if not found or not bootik.bk_resource_allowed(p_org,p_app,p_actor,p_site,'register',rid) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
   if exists(select 1 from bootik.bk_cash_operation_receipts where id=req and organization_id=p_org and app_id=p_app) then return null;end if;
-  if coalesce(p_data->>'movement_kind','') not in ('out','expense') or length(btrim(coalesce(p_data->>'reason',''))) not between 3 and 500 then raise exception 'BOOTIK_CASH_INVALID';end if;
-  canonical:=jsonb_build_object('session_id',sid,'movement_kind',p_data->>'movement_kind','reason',btrim(p_data->>'reason'));
+  if p_kind='cash-close' then
+   counted:=(p_data->>'counted_close_fcfa')::bigint;
+   select s.opening_float_fcfa+(select coalesce(sum(total_fcfa),0) from bootik.bk_cash_checkouts where session_id=sid)+(select coalesce(sum(case when kind='in' then amount_fcfa else -amount_fcfa end),0) from bootik.bk_cash_movements where session_id=sid) into expected from bootik.bk_cash_sessions s where s.id=sid and s.closed_at is null;
+   if not found or counted is null or counted<0 or counted>9007199254740991 or expected<0 or expected>9007199254740991 or (counted<>expected and length(btrim(coalesce(p_data->>'reason',''))) not between 3 and 500) then raise exception 'BOOTIK_CASH_INVALID';end if;
+   amt:=abs(counted-expected)::bigint;
+   if amt=0 and not exists(select 1 from bootik.bk_approval_requests where id=req) then return null;end if;
+   canonical:=jsonb_build_object('session_id',sid,'counted_close_fcfa',counted,'expected_close_fcfa',expected::bigint,'reason',btrim(coalesce(p_data->>'reason','')));
+  else
+   if coalesce(p_data->>'movement_kind','') not in ('out','expense') or length(btrim(coalesce(p_data->>'reason',''))) not between 3 and 500 then raise exception 'BOOTIK_CASH_INVALID';end if;
+   canonical:=jsonb_build_object('session_id',sid,'movement_kind',p_data->>'movement_kind','reason',btrim(p_data->>'reason'));
+  end if;
  else raise exception 'BOOTIK_APPROVAL_INVALID';end if;
  select universe_code into u from bootik.bk_activities where id=a and organization_id=p_org and app_id=p_app and status='active';
  if not found or not bootik.bk_has_entitlement(p_org,p_app,u) then raise exception 'BOOTIK_ENTITLEMENT_REQUIRED';end if;
@@ -640,7 +650,7 @@ begin
  if found then if (old.actor,old.site_id,old.payload) is distinct from (p_actor,p_site,p_data) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;return old.result;end if;
  if p_data->>'kind'='policy' then
   a:=(p_data->>'activity_id')::uuid;k:=p_data->>'operation_kind';t:=(p_data->>'threshold_fcfa')::bigint;
-  if k is null or k not in ('purchase-pay','cash-movement') or t is null or t<0 or t>9007199254740991 or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) then raise exception 'BOOTIK_APPROVAL_INVALID';end if;
+  if k is null or k not in ('purchase-pay','cash-movement','cash-close') or t is null or t<0 or t>9007199254740991 or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) then raise exception 'BOOTIK_APPROVAL_INVALID';end if;
   perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_app::text||':'||p_site::text||':'||a::text||':'||k,91));
   select to_jsonb(x) into prev from bootik.bk_approval_policies x where organization_id=p_org and app_id=p_app and location_id=p_site and activity_id=a and kind=k;
   insert into bootik.bk_approval_policies values(p_org,p_app,p_site,a,k,t) on conflict(organization_id,app_id,location_id,activity_id,kind) do update set threshold_fcfa=excluded.threshold_fcfa;

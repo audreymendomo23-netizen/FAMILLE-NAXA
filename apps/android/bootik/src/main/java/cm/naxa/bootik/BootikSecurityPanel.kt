@@ -36,7 +36,7 @@ import java.util.UUID
  Text("Approbations financières")
  Button(enabled=!busy,onClick={task{acts=rows(call("activities",JSONObject()).getJSONArray("activities"));loadApprovals()}}){Text("Charger les approbations")}
  acts.forEach{x->Row{RadioButton(approvalActivity==x.getString("id"),{approvalActivity=x.getString("id")},enabled=!busy);Text(x.getString("display_name"))}}
- listOf("purchase-pay" to "Règlement fournisseur","cash-movement" to "Sortie ou dépense caisse").forEach{(k,n)->Row{RadioButton(approvalKind==k,{approvalKind=k},enabled=!busy);Text(n)}}
+ listOf("purchase-pay" to "Règlement fournisseur","cash-movement" to "Sortie ou dépense caisse","cash-close" to "Écart de clôture").forEach{(k,n)->Row{RadioButton(approvalKind==k,{approvalKind=k},enabled=!busy);Text(n)}}
  OutlinedTextField(threshold,{threshold=it},label={Text("Seuil FCFA")},enabled=!busy)
  Button(enabled=!busy&&approvalActivity.isNotBlank()&&(threshold.toLongOrNull()?.let{it in 0..9007199254740991L}==true)&&reason.trim().length>=3,onClick={task{call("approval-admin",JSONObject().put("kind","policy").put("request_id",UUID.randomUUID().toString()).put("activity_id",approvalActivity).put("operation_kind",approvalKind).put("threshold_fcfa",threshold.toLong()).put("reason",reason.trim()));loadApprovals();message="Seuil confirmé."}}){Text("Enregistrer le seuil")}
  policies.forEach{x->Text(x.getString("kind")+" • "+x.getString("threshold_fcfa")+" FCFA")}

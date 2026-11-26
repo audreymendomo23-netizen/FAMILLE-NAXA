@@ -468,3 +468,6 @@ La clé des règles inclut la catégorie de ressource. Les règles caisse et pos
 
 ### B01 — notifications de sécurité
 Réutilisation du principe inbox par destinataire et états lu/non lu de NAXA SERVICES (notification_contract.ts, v6 SQL et NotificationInboxContent.kt). Inbox BOOTIK dérivée des événements immuables, identifiants stables, reçu de lecture unique, accès selon site et identité, préférence d'approbation désactivable, sécurité non désactivable, aucun contenu secret ou motif brut. Android/Web raccordés. Tests réel PostgreSQL de lecture, rejeu, autre tenant et préférence. Pas de prétention de livraison push FCM : configuration BOOTIK dédiée et appareil réels non vérifiés.
+
+### B01 — matrice et clôture contrôlée
+Version explicite de la grille serveur ACCÈS/PREMIUM (16 capacités), sans changer les prix ni la formule mixte non arbitrée. Seuil configurable de clôture sur écart absolu, capture du solde théorique dans la demande ; si le solde ou le comptage change, le payload ne correspond plus et l'ancienne approbation ne s'applique pas. Reprise idempotente par demande serveur. Tests de sortie caisse, écart, aucune clôture avant approbation, rejeu. Seuils des futures mutations (remises, avoirs, crédit, B2B) à intégrer dans leur module, pas de succès fictif.
