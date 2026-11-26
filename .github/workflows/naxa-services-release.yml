@@ -3,6 +3,10 @@ name: NAXA SERVICES — signed Android release
 on:
   workflow_dispatch:
   push:
+    branches:
+      - "work/naxa-services-completion-20261120"
+    paths:
+      - ".github/workflows/naxa-services-release.yml"
     tags:
       - "naxa-services-v*"
 
@@ -58,6 +62,13 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      - name: Validate keystore and record expected certificate fingerprint
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.NAXA_SERVICES_RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.NAXA_SERVICES_RELEASE_KEY_ALIAS }}
+        run: |
+          keytool -exportcert -keystore "$RUNNER_TEMP/naxa-services-release.jks" -storepass:env RELEASE_STORE_PASSWORD -alias "$RELEASE_KEY_ALIAS" -file "$RUNNER_TEMP/naxa-services-release.cer"
+          sha256sum "$RUNNER_TEMP/naxa-services-release.cer" | cut -d' ' -f1 > "$RUNNER_TEMP/naxa-services-release.cert.sha256"
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.7"
@@ -77,7 +88,11 @@ jobs:
         run: |
           apk="$(find apps/android/naxa-services/build/outputs/apk/release -maxdepth 1 -name '*.apk' -print -quit)"
           test -n "$apk"
-          apksigner verify --verbose --print-certs "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$apk" | tee "$RUNNER_TEMP/naxa-services-apk-signature.txt"
+          actual="$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' "$RUNNER_TEMP/naxa-services-apk-signature.txt" | tr '[:upper:]' '[:lower:]')"
+          expected="$(cat "$RUNNER_TEMP/naxa-services-release.cert.sha256")"
+          test -n "$actual" && test "$actual" = "$expected" || { echo "::error::APK signer does not match configured keystore"; exit 1; }
+          echo "APK signer matches configured keystore"
           sha256sum "$apk" > "$apk.sha256"
       - uses: actions/upload-artifact@v4
         with:
@@ -87,3 +102,6 @@ jobs:
             apps/android/naxa-services/build/outputs/apk/release/*.sha256
           if-no-files-found: error
           retention-days: 14
+      - name: Remove temporary signing material
+        if: always()
+        run: rm -f "$RUNNER_TEMP/naxa-services-release.jks" "$RUNNER_TEMP/naxa-services-release.cer" "$RUNNER_TEMP/naxa-services-release.cert.sha256" "$RUNNER_TEMP/naxa-services-apk-signature.txt"
