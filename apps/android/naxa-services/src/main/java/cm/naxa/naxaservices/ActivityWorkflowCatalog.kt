@@ -494,12 +494,12 @@ internal object ActivityWorkflows {
             when (field.kind) {
                 ActivityFieldKind.NUMBER -> {
                     val parsed = value.toLongOrNull()
-                    if (parsed == null || (field.min != null && parsed < field.min) ||
+                    if (!value.matches(Regex("[0-9]{1,16}")) || parsed == null || parsed > 9007199254740991L || (field.min != null && parsed < field.min) ||
                         (field.max != null && parsed > field.max)
                     ) errors += field.key
                 }
                 ActivityFieldKind.DATE -> {
-                    val valid = runCatching { LocalDate.parse(value).toString() == value }.getOrDefault(false)
+                    val valid = value.matches(Regex("[0-9]{4}-[0-9]{2}-[0-9]{2}")) && !value.startsWith("0000-") && runCatching { LocalDate.parse(value).toString() == value }.getOrDefault(false)
                     if (!valid) errors += field.key
                 }
                 ActivityFieldKind.SELECT -> if (field.options.none { it.value == value }) errors += field.key

@@ -45,10 +45,10 @@ export const ACTIVITY_WORKFLOWS: Readonly<Record<ActivityProfile, ActivityWorkfl
     purpose: "Dépôt textile individualisé, ticket, traitement, contrôle, retrait et suivi des pièces non retirées.",
     fields: [
       { key: "garments", label: "Pièces déposées et quantités", required: true },
-      { key: "care", label: "Traitement, textiles et précautions", required: true },
-      { key: "stains", label: "Taches, défauts constatés et réserves", required: false },
-      { key: "promised_at", label: "Date promise de retrait", required: true },
-      { key: "deposit", label: "Acompte demandé (FCFA)", required: false },
+      { key: "care", label: "Traitement, textiles et précautions", required: true, kind: "textarea", maxLength: 1000 },
+      { key: "stains", label: "Taches, défauts constatés et réserves", required: false, kind: "textarea", maxLength: 1000 },
+      { key: "promised_at", label: "Date promise de retrait", required: true, kind: "date" },
+      { key: "deposit", label: "Acompte demandé (FCFA)", required: false, kind: "number", min: 0 },
     ],
     stages: [
       stage("received", "Reçu", "in_progress"),
@@ -406,15 +406,15 @@ export function validateActivityFields(profile: unknown, values: Record<string, 
       const value = typeof raw === "string" ? raw.trim() : "";
       if (field.required && !value) return true;
       if (!value) return false;
-      if (field.maxLength && value.length > field.maxLength) return true;
+      if (value.length > (field.maxLength ?? (field.kind === "textarea" ? 1200 : 500))) return true;
       if (field.kind === "number") {
         const number = Number(value);
-        return !/^[+-]?\d+$/.test(value) || !Number.isSafeInteger(number) ||
+        return !/^\d{1,16}$/.test(value) || !Number.isSafeInteger(number) ||
           (field.min !== undefined && number < field.min) ||
           (field.max !== undefined && number > field.max);
       }
       if (field.kind === "date") {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return true;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(value) || value.startsWith("0000-")) return true;
         const parsed = new Date(value + "T00:00:00.000Z");
         return !Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== value;
       }

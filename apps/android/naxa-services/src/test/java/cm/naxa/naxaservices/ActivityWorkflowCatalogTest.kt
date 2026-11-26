@@ -198,8 +198,8 @@ class ActivityWorkflowCatalogTest {
                 if(f.required) invalid("  ")
                 when(f.kind){
                     ActivityFieldKind.SELECT -> { f.options.forEach { assertFalse(f.key in ActivityWorkflows.validate(workflow.profile,sample + (f.key to it.value))) };invalid("__unknown__") }
-                    ActivityFieldKind.DATE -> listOf("2027-02-29","2026-13-01","not-a-date").forEach(::invalid)
-                    ActivityFieldKind.NUMBER -> { listOf("1.5","1e2","0x10","NaN","9223372036854775808").forEach(::invalid);f.min?.let{invalid((it-1).toString())};f.max?.let{invalid((it+1).toString())} }
+                    ActivityFieldKind.DATE -> listOf("2027-02-29","2026-13-01","not-a-date","11/26/2026","today","0000-01-01").forEach(::invalid)
+                    ActivityFieldKind.NUMBER -> { listOf("1.5","1e2","0x10","NaN","9223372036854775808","9007199254740992","+1","-0").forEach(::invalid);f.min?.let{invalid((it-1).toString())};f.max?.let{invalid((it+1).toString())} }
                     else -> invalid("x".repeat(f.maxLength+1))
                 }
             }

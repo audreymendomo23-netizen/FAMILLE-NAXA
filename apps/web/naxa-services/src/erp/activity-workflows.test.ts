@@ -172,13 +172,13 @@ describe("All sector transition pairs and field boundaries",()=>{
     if(f.required)expect(validateActivityFields(workflow.profile,{...sample,[f.key]:"  "})).toContain(f.key);
     if(f.kind==="select")for(const choice of f.options??[])expect(validateActivityFields(workflow.profile,{...sample,[f.key]:choice.value})).not.toContain(f.key);
     if(f.kind==="select")expect(validateActivityFields(workflow.profile,{...sample,[f.key]:"__unknown__"})).toContain(f.key);
-    if(f.kind==="date")for(const v of ["2027-02-29","2026-13-01","not-a-date"])expect(validateActivityFields(workflow.profile,{...sample,[f.key]:v})).toContain(f.key);
+    if(f.kind==="date")for(const v of ["2027-02-29","2026-13-01","not-a-date","11/26/2026","today","0000-01-01"])expect(validateActivityFields(workflow.profile,{...sample,[f.key]:v})).toContain(f.key);
     if(f.kind==="number"){
-     for(const v of ["1.5","1e2","0x10","NaN","9007199254740992"])expect(validateActivityFields(workflow.profile,{...sample,[f.key]:v})).toContain(f.key);
+     for(const v of ["1.5","1e2","0x10","NaN","9007199254740992","+1","-0"])expect(validateActivityFields(workflow.profile,{...sample,[f.key]:v})).toContain(f.key);
      if(f.min!==undefined)expect(validateActivityFields(workflow.profile,{...sample,[f.key]:String(f.min-1)})).toContain(f.key);
      if(f.max!==undefined)expect(validateActivityFields(workflow.profile,{...sample,[f.key]:String(f.max+1)})).toContain(f.key);
     }
-    if(f.maxLength!==undefined&&f.kind!=="number"&&f.kind!=="date"&&f.kind!=="select")expect(validateActivityFields(workflow.profile,{...sample,[f.key]:"x".repeat(f.maxLength+1)})).toContain(f.key);
+    if(f.kind!=="number"&&f.kind!=="date"&&f.kind!=="select"){const limit=f.maxLength??(f.kind==="textarea"?1200:500);expect(validateActivityFields(workflow.profile,{...sample,[f.key]:"x".repeat(limit)})).not.toContain(f.key);expect(validateActivityFields(workflow.profile,{...sample,[f.key]:"x".repeat(limit+1)})).toContain(f.key);}
    }
   });
  }
