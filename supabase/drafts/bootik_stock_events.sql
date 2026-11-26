@@ -66,7 +66,7 @@ begin
  if not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,p_activity) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  if p_batch is null or jsonb_typeof(p_lines) is distinct from 'array' or p_reason is null or length(btrim(p_reason)) not between 3 and 500 then raise exception 'BOOTIK_BATCH_INVALID';end if;
  n:=jsonb_array_length(p_lines);if n not between 1 and 30 then raise exception 'BOOTIK_BATCH_INVALID';end if;
- if (select count(distinct x->>'balance_id') from jsonb_array_elements(p_lines) x)<>n or (select count(distinct x->>'event_id') from jsonb_array_elements(p_lines) x)<>n then raise exception 'BOOTIK_BATCH_DUPLICATE';end if;
+ if (select count(distinct j.value->>'balance_id') from jsonb_array_elements(p_lines) as j(value))<>n or (select count(distinct j.value->>'event_id') from jsonb_array_elements(p_lines) as j(value))<>n then raise exception 'BOOTIK_BATCH_DUPLICATE';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':count-batch:'||p_batch::text,0));
  select * into old from bootik.bk_count_batches where id=p_batch and organization_id=p_org and app_id=p_app;
  if found then
