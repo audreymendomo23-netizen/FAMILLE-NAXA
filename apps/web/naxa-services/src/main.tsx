@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SubscriptionPage } from "./erp/subscription";
 import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, listAppEvents, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
 import { normalizeInventoryItemDraft } from "./erp/inventory";
+import { financialRows,downloadFinancialXlsx,printFinancialReport } from "./erp/performance-export";
 import {
   AgendaOperationsPage, CashOperationsPage, StockOperationsPage,
   TeamOperationsPage, CustomerFollowupsPage,
@@ -324,6 +325,7 @@ function App() {
     }
     const isCurrent=captureSession(authSession);
     setPerformanceBusy(true);
+    setPerformanceData(null);
     setPerformanceError("");
     try {
       const fresh = await ensureFreshSession(authSession);
@@ -1211,7 +1213,7 @@ function App() {
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
             active === "security" ? <DeviceSecurityPage key={authSession?.deviceId??"preview"} authenticated={Boolean(authSession&&!preview)} onLoad={loadOwnDevices} onRevoke={revokeOwnDevice} /> :
-            active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={setPerformanceFromDate} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport().catch(error => setPerformanceError(error instanceof Error ? error.message : "Chargement du rapport impossible.")); }} authenticated={Boolean(authSession)} /> :
+            active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={value=>{setPerformanceData(null);setPerformanceFromDate(value);}} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport().catch(error => setPerformanceError(error instanceof Error ? error.message : "Chargement du rapport impossible.")); }} authenticated={Boolean(authSession&&!preview)} locale={authSession?.account.default_locale??"fr"} /> :
             active === "agenda" ? <AgendaOperationsPage entries={(entries.agenda ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTransition={transitionWebAppointment} onReschedule={rescheduleWebAppointment} /> :
             active === "pressing" ? <PressingPage
               entries={(entries.pressing ?? []).filter(entry => preview || entry.siteId === (activeSiteId || authSession?.account.active_site_ids[0]))} canPreviewEdit={preview}
@@ -1556,12 +1558,19 @@ function CashPage({ entries }: { entries: Entry[] }) {
   return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{t("TRÉSORERIE")}</span><h2>{t("Sessions de caisse")}</h2></div><span className="status-tag pending">{t("Dépenses")}</span></div><div className="cash-summary"><div><small>{t("Fonds d'ouverture")}</small><strong>—</strong></div><div><small>{t("Encaissements confirmés")}</small><strong>—</strong></div><div><small>{t("Écart de clôture")}</small><strong>—</strong></div></div><div className="notice">{t("Ce formulaire enregistre une dépense, pas une vente ni un paiement client. Les ouvertures/clôtures, encaissements et reçus ne sont pas encore raccordés à cette vue.")}</div></div><div className="module-main-card"><h2>{t("Dépenses du journal serveur")}</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text={t("Aucune dépense dans le périmètre chargé.")} />}</div></div>;
 }
 function PerformancePage({
-  data, fromDate, setFromDate, loading, error, onLoad, authenticated,
+  data, fromDate, setFromDate, loading, error, onLoad, authenticated, locale,
 }: {
   data: {daily:Record<string,unknown>[];monthly:Record<string,unknown>[];annual:Record<string,unknown>[]} | null;
-  fromDate:string;setFromDate:(value:string)=>void;loading:boolean;error:string;onLoad:()=>void;authenticated:boolean;
+  fromDate:string;setFromDate:(value:string)=>void;loading:boolean;error:string;onLoad:()=>void;authenticated:boolean;locale:Locale;
 }) {
   const t=useTranslation();
+  const [exportError,setExportError]=useState(false);
+  const tr=(fr:string,en:string,ff:string)=>locale==="en"?en:locale==="ff-CM"?ff:fr;
+  function exportReport(format:"xlsx"|"pdf"){
+    if(!authenticated||loading||!data)return;setExportError(false);
+    try{const report=financialRows(data,[t("Journalier"),t("Mensuel"),t("Annuel")],[tr("Type de période","Period type","Fannu sahaa"),t("Période"),t("Recettes confirmées")+" (FCFA)",t("Coût connu")+" (FCFA)",t("Marge brute")+" (FCFA)",t("Ventes confirmées"),t("Coût manquant")]);if(format==="xlsx")downloadFinancialXlsx(report);else printFinancialReport(report,t("Performances financières confirmées"));}
+    catch{setExportError(true);}
+  }
   const fmt=(value:unknown)=>typeof value==="number"?new Intl.NumberFormat("fr-FR").format(value)+" FCFA":value==null?"—":String(value);
   const rows=(values:Record<string,unknown>[],key:string)=>values.length===0?<Empty text={t("Aucune donnée disponible pour cette période.")}/>:
     <div style={{overflowX:"auto"}}><table className="data-table"><thead><tr><th>{t("Période")}</th><th>{t("Recettes confirmées")}</th><th>{t("Coût connu")}</th><th>{t("Marge brute")}</th><th>{t("Ventes confirmées")}</th><th>{t("Coût manquant")}</th></tr></thead><tbody>
@@ -1572,6 +1581,8 @@ function PerformancePage({
       {authenticated?<><label>{t("À partir du")}<input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} max={new Date().toISOString().slice(0,10)}/></label><button className="btn primary" disabled={loading} onClick={onLoad}>{t(loading?"Chargement…":"Charger les rapports")}</button></>:<div className="notice">{t("Connectez-vous pour consulter vos rapports.")}</div>}
       {error&&<div className="notice" role="status">{t(customerMessage(error))}</div>}
       <p className="muted">{t("Les indicateurs tiennent compte des ventes confirmées.")}</p>
+      {authenticated&&data&&<><button className="btn secondary" disabled={loading} onClick={()=>exportReport("xlsx")}>{tr("Exporter Excel","Export Excel","Yaltin Excel")}</button><button className="btn secondary" disabled={loading} onClick={()=>exportReport("pdf")}>{tr("Imprimer / enregistrer en PDF","Print / save as PDF","Winndit / danndu PDF")}</button></>}
+      {exportError&&<p role="alert">{tr("Export indisponible. Réessayez.","Export unavailable. Try again.","Yaltinol heɓotaako. Eto kadi.")}</p>}
     </div>
     <div className="module-main-card"><h2>{t("Journalier")}</h2>{rows(data?.daily??[],"performance_day")}</div>
     <div className="module-main-card"><h2>{t("Mensuel")}</h2>{rows(data?.monthly??[],"performance_month")}</div>
