@@ -79,8 +79,8 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
      Text(if(edited==null)tr("Programmer","Schedule","Feewnu") else tr("Modifier","Edit","Waylu"))
      if(edited==null){
       targets.distinctBy{it.optional("workstation_id")}.forEach{t->val p=t.optional("workstation_id")?:"";OutlinedButton(onClick={post=p;selected=emptySet()},enabled=!busy){Text((if(post==p)"✓ " else "")+(t.optional("workstation_name")?:tr("Site entier","Whole site","Nokkuure fof")))}}
-      targets.filter{(it.optional("workstation_id")?:"")==post}.forEach{t->val id=t.getString("member_id");Row{Checkbox(checked=id in selected,onCheckedChange={v->selected=if(v)selected+id else selected-id},enabled=!busy);Text(t.getString("display_name"))}}
      }
+      targets.filter{(it.optional("workstation_id")?:"")==post}.forEach{t->val id=t.getString("member_id");Row{Checkbox(checked=id in selected,onCheckedChange={v->selected=if(v)selected+id else selected-id},enabled=!busy);Text(t.getString("display_name"))}}
      OutlinedTextField(title,{title=it},label={Text(tr("Intitulé","Title","Innde"))},singleLine=true,modifier=Modifier.fillMaxWidth())
      OutlinedTextField(whenAt,{whenAt=it},label={Text(tr("AAAA-MM-JJ HH:mm (vide : maintenant)","YYYY-MM-DD HH:mm (blank: now)","Ñalnde e sahaa"))},singleLine=true,modifier=Modifier.fillMaxWidth())
      OutlinedTextField(agenda,{agenda=it},label={Text(tr("Ordre du jour","Agenda","Feere dental"))},modifier=Modifier.fillMaxWidth());OutlinedTextField(duration,{duration=it},label={Text(tr("Durée (min)","Duration (min)","Sahaa (min)"))},modifier=Modifier.fillMaxWidth())
@@ -98,9 +98,9 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
        val payload=pendingCreation?.takeIf{it.first==signature}?.second?:fields.put("p_id",UUID.randomUUID().toString()).put("p_at",if(whenAt.isBlank())Instant.now().toString() else meetingInstant(whenAt)).also{pendingCreation=signature to it}
        StaffRosterApi.call(latest,if(frequency=="once")"rpc/ns_schedule_internal_meeting_details" else "rpc/ns_schedule_meeting_series",payload)
       }
-      else StaffRosterApi.call(latest,"rpc/ns_revise_internal_meeting",JSONObject().put("p_id",m.getString("id")).put("p_revision",m.getInt("revision")).put("p_title",title).put("p_at",meetingInstant(whenAt)).put("p_agenda",agenda).put("p_duration",duration.toInt()))
+      else StaffRosterApi.call(latest,"rpc/ns_revise_meeting_invitees",JSONObject().put("p_id",m.getString("id")).put("p_revision",m.getInt("revision")).put("p_title",title).put("p_at",meetingInstant(whenAt)).put("p_agenda",agenda).put("p_duration",duration.toInt()).put("p_members",JSONArray(selected.sorted())))
       clear()
-     }},enabled=!busy&&title.isNotBlank()&&agenda.length<=2000&&duration.toIntOrNull()?.let{it in 5..480}==true&&(edited!=null||selected.isNotEmpty()&&(frequency=="once"||count.toIntOrNull()?.let{it in 2..12}==true))){Text(tr("Enregistrer et inviter","Save and invite","Danndu e noddu"))}
+     }},enabled=!busy&&title.isNotBlank()&&agenda.length<=2000&&duration.toIntOrNull()?.let{it in 5..480}==true&&selected.isNotEmpty()&&(edited!=null||frequency=="once"||count.toIntOrNull()?.let{it in 2..12}==true)){Text(tr("Enregistrer et inviter","Save and invite","Danndu e noddu"))}
      if(edited!=null)TextButton(onClick={clear()}){Text(tr("Abandonner","Discard","Accu"))}
     }
     if(loaded&&meetings.isEmpty())Text(tr("Aucune réunion.","No meetings.","Alaa dental."))
@@ -109,7 +109,7 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
      val id=m.getString("id");val state=m.getString("status");val host=m.getString("host_member_id")==session.account.memberId;val own=invites.firstOrNull{it.getString("meeting_id")==id&&it.getString("member_id")==session.account.memberId}
      Text(m.getString("title"),fontWeight=FontWeight.Bold);Text(meetingDate(m.getString("scheduled_at"))+" · "+m.optInt("duration_minutes",30)+" min · "+status(state));m.optional("agenda")?.let{Text(it)};if(m.optInt("series_occurrence",0)>0)Text(tr("Réunion récurrente","Recurring meeting","Dental yaltindetee")+" · "+m.optInt("series_occurrence"))
      if(host&&state=="scheduled"){
-      OutlinedButton(onClick={edited=m;title=m.getString("title");whenAt=meetingDate(m.getString("scheduled_at"));agenda=m.optString("agenda");duration=m.optInt("duration_minutes",30).toString()},enabled=!busy){Text(tr("Modifier","Edit","Waylu"))}
+      OutlinedButton(onClick={edited=m;post=m.optional("workstation_id")?:"";selected=invites.filter{it.getString("meeting_id")==id&&it.getString("member_id")!=session.account.memberId&&targets.any{t->t.getString("member_id")==it.getString("member_id")&&(t.optional("workstation_id")?:"")==post}}.map{it.getString("member_id")}.toSet();title=m.getString("title");whenAt=meetingDate(m.getString("scheduled_at"));agenda=m.optString("agenda");duration=m.optInt("duration_minutes",30).toString()},enabled=!busy){Text(tr("Modifier","Edit","Waylu"))}
       Button(onClick={transition(m,"open")},enabled=!busy){Text(tr("Ouvrir (sans appel)","Open (no call)","Uddit dental"))}
       TextButton(onClick={transition(m,"cancelled")},enabled=!busy){Text(tr("Annuler","Cancel","Haaytu"))}
       m.optional("series_id")?.let{sid->TextButton(onClick={seriesToCancel=sid},enabled=!busy){Text(tr("Annuler la série","Cancel series","Haaytu dentuuji"))}}
