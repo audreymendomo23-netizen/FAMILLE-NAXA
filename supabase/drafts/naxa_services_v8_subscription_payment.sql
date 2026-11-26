@@ -325,7 +325,7 @@ begin
  if s.status='active' and s.period_start<=today and s.period_end_exclusive>today then return 'paid'; end if;
  if s.org_id is null and now()>=created and now()<created+interval '72 hours' then return 'trial'; end if;
  select max(confirmed_at) into last_paid from public.ns_subscription_intents where org_id=p_org and status='confirmed';
- select min(submitted_at) into first_claim from public.ns_subscription_intents where org_id=p_org and submitted_at is not null and submitted_at>=coalesce(last_paid,created);
+ select min(submitted_at) into first_claim from public.ns_subscription_intents where org_id=p_org and status<>'confirmed' and submitted_at is not null and submitted_at>=coalesce(last_paid,created);
  if first_claim is not null and now()>=first_claim and now()<first_claim+interval '24 hours' then return 'provisional'; end if;
  return 'blocked';
 end $f$;
@@ -438,6 +438,16 @@ as $naxa$
       )
   );
 $naxa$;
+
+-- Organization-wide ERP rows have their own restrictive policy; the site
+-- helpers already protect site and workstation data. Identity and billing
+-- metadata remain available for renewal. Existing RBAC policies still apply.
+create policy ns_services_subscription_guard on public.ns_services as restrictive for all to authenticated
+ using(public.ns_erp_access_reason(org_id)<>'blocked') with check(public.ns_erp_access_reason(org_id)<>'blocked');
+create policy ns_loyalty_programs_subscription_guard on public.ns_loyalty_programs as restrictive for all to authenticated
+ using(public.ns_erp_access_reason(org_id)<>'blocked') with check(public.ns_erp_access_reason(org_id)<>'blocked');
+create policy ns_loyalty_events_subscription_guard on public.ns_loyalty_events as restrictive for all to authenticated
+ using(public.ns_erp_access_reason(org_id)<>'blocked') with check(public.ns_erp_access_reason(org_id)<>'blocked');
 
 -- Read-only entitlement snapshot. An unconfigured initial/trial policy is not treated
 -- as either a paid entitlement or a mandate to erase or lock local ERP records.

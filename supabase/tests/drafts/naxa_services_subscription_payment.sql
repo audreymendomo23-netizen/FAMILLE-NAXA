@@ -131,6 +131,9 @@ do $f$ declare i public.ns_subscription_intents%rowtype; c public.ns_subscriptio
  if v->>'status' is distinct from 'rejected' or v<>v2 or (select count(*) from public.ns_subscription_review_audit where candidate_id=c.id)<>1 then raise exception 'REVIEW_AUDIT_FAILED'; end if;
  if (select status from public.ns_subscription_intents where id=i.id)<>'submitted' or (select period_end_exclusive from public.ns_subscriptions where org_id=i.org_id)<>before_end then raise exception 'REVIEW_ALTERED_ACCESS'; end if;
 end $f$;
+-- Seed an organization-wide catalog row (no site). It must not bypass expiry.
+insert into public.ns_loyalty_programs(org_id,activity_profile,program_code,name,metric_code,unit_amount_xaf,target_value,reward_description,created_by,updated_by)
+ values('20000000-0000-4000-8000-000000000071','autre','points','CI loyalty','points',100,10,'CI reward','60000000-0000-4000-8000-000000000071','60000000-0000-4000-8000-000000000071');
 -- Paid access expires without deleting data; renewal and status remain available.
 update public.ns_subscriptions set period_start=(now() at time zone 'Africa/Douala')::date-interval '2 months',period_end_exclusive=(now() at time zone 'Africa/Douala')::date-1 where org_id='20000000-0000-4000-8000-000000000071';
 update public.ns_subscription_intents set submitted_at=case when submitted_at is null then null else now()-interval '2 days' end,confirmed_at=case when confirmed_at is null then null else now()-interval '3 days' end where org_id='20000000-0000-4000-8000-000000000071';
@@ -139,6 +142,7 @@ do $f$ declare a jsonb; begin
  a:=public.ns_subscription_access_state('20000000-0000-4000-8000-000000000071');
  if a->>'state' is distinct from 'expired' or a->>'erp_access' is distinct from 'false' or a->>'access_reason' is distinct from 'blocked' then raise exception 'EXPIRED_ERP_ACCESS'; end if;
  if public.ns_can_access_site('20000000-0000-4000-8000-000000000071','30000000-0000-4000-8000-000000000071') then raise exception 'EXPIRED_SITE_ACCESS'; end if;
+ if exists(select 1 from public.ns_loyalty_programs where org_id='20000000-0000-4000-8000-000000000071') then raise exception 'EXPIRED_ORG_CATALOG_VISIBLE'; end if;
  begin perform public.ns_pull_sync_changes('20000000-0000-4000-8000-000000000071','80000000-0000-4000-8000-000000000071',0,100); raise exception 'EXPIRED_PULL_ALLOWED'; exception when insufficient_privilege then null; end;
  begin perform public.ns_apply_sync_event('20000000-0000-4000-8000-000000000071',null,null,'80000000-0000-4000-8000-000000000071','90000000-0000-4000-8000-000000000071',1,'loyalty_program','fixture','loyalty_program.updated','{"org_id":"20000000-0000-4000-8000-000000000071"}'::jsonb); raise exception 'EXPIRED_PUSH_ALLOWED'; exception when insufficient_privilege then null; end;
  if public.ns_subscription_list('20000000-0000-4000-8000-000000000071')->'intents' is null then raise exception 'BILLING_LOCKED'; end if;
@@ -146,14 +150,14 @@ end $f$;
 reset role;
 -- The current declaration may provide one bounded provisional access window.
 update public.ns_subscription_intents set submitted_at=now()-interval '1 hour' where org_id='20000000-0000-4000-8000-000000000071' and status='submitted';
--- Earlier declarations after the last payment prevent resetting the window; for this
--- fixture the prior confirmations precede their declaration by synthetic dates, so
--- make their original submissions precede the corresponding confirmation.
-update public.ns_subscription_intents set submitted_at=now()-interval '4 days' where org_id='20000000-0000-4000-8000-000000000071' and status='confirmed';
+-- A paired credit arriving first can confirm in the same transaction as the debit declaration.
+-- Its already-confirmed declaration must not consume the next provisional window.
+update public.ns_subscription_intents set submitted_at=confirmed_at where org_id='20000000-0000-4000-8000-000000000071' and status='confirmed';
 set local role authenticated;
 do $f$ declare a jsonb; begin
  a:=public.ns_subscription_access_state('20000000-0000-4000-8000-000000000071');
  if a->>'paid_access' is distinct from 'false' or a->>'erp_access' is distinct from 'true' or a->>'access_reason' is distinct from 'provisional' then raise exception 'PROVISIONAL_ACCESS_FAILED: %',a; end if;
+ if not exists(select 1 from public.ns_loyalty_programs where org_id='20000000-0000-4000-8000-000000000071') then raise exception 'CATALOG_DATA_LOST_OR_NOT_RESTORED'; end if;
 end $f$;
 reset role;
 rollback;

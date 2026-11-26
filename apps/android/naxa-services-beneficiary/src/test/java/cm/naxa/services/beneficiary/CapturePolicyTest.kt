@@ -16,5 +16,6 @@ class CapturePolicyTest {
         assertTrue(CapturePolicy.creditCandidate("orange_money","Payment de 699000111 par 699000222. ID transaction: ABC123, montant transaction: 5000 FCFA"))
         assertFalse(CapturePolicy.creditCandidate("mtn_momo","Votre code de confirmation est 1234"))
         assertFalse(CapturePolicy.creditCandidate("orange_money","Vous avez envoyé 5000 FCFA"))
+        assertFalse(CapturePolicy.creditCandidate("mtn_momo","Vous avez reçu 5000 FCFA. Financial Transaction ID: TEST123. Votre code PIN est 1234"))
     }
 }

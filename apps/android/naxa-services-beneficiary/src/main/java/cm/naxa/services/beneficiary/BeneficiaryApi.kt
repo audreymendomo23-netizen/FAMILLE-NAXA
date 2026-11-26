@@ -9,15 +9,18 @@ internal object BeneficiaryApi {
     private fun configuration(): Pair<String,String> {
         val endpoint=BuildConfig.AUTH_ENDPOINT.trim()
         val uri=Uri.parse(endpoint)
-        require(uri.scheme=="https" && !uri.host.isNullOrBlank() && uri.encodedUserInfo==null &&
-            uri.query==null && uri.fragment==null && endpoint.endsWith("/functions/v1/naxa-services-auth")) {
+        val project=BuildConfig.PROJECT_REF.trim()
+        require(project.matches(Regex("^[a-z0-9]{20}$")) && project == BuildConfig.FAMILY_PROJECT_REF.trim() &&
+            project != "ykgjfindlgseegmznaog" && uri.scheme=="https" &&
+            endpoint == "https://"+project+".supabase.co/functions/v1/naxa-services-auth") {
             "Configuration NAXA SERVICES dédiée requise."
         }
         val key=BuildConfig.ANON_KEY.trim()
         val publicKey = if (key.startsWith("sb_publishable_")) true else runCatching {
             val part=key.split(".").getOrNull(1) ?: error("Clé invalide")
             val decoded=android.util.Base64.decode(part,android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
-            JSONObject(String(decoded,Charsets.UTF_8)).optString("role")=="anon"
+            val claims=JSONObject(String(decoded,Charsets.UTF_8))
+            claims.optString("role")=="anon" && claims.optString("ref")==project
         }.getOrDefault(false)
         require(publicKey) { "Clé publique non configurée." }
         return endpoint to key

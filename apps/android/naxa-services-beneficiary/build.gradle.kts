@@ -14,6 +14,8 @@ android {
         fun setting(name: String): String = (project.findProperty(name) as? String ?: "").replace("\\", "\\\\").replace("\"", "\\\"")
         buildConfigField("String", "AUTH_ENDPOINT", "\"" + setting("NS_AUTH_FUNCTION_URL") + "\"")
         buildConfigField("String", "ANON_KEY", "\"" + setting("NS_SUPABASE_ANON_KEY") + "\"")
+        buildConfigField("String", "PROJECT_REF", "\"" + setting("NS_SUPABASE_PROJECT_REF") + "\"")
+        buildConfigField("String", "FAMILY_PROJECT_REF", "\"" + setting("NS_FAMILY_SUPABASE_PROJECT_REF") + "\"")
     }
     buildFeatures { buildConfig = true }
     compileOptions {

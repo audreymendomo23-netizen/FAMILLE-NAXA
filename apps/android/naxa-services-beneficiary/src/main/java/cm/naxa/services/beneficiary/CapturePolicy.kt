@@ -15,6 +15,7 @@ internal object CapturePolicy {
         if (message.length !in 12..8000) return false
         val text = java.text.Normalizer.normalize(message, java.text.Normalizer.Form.NFD)
             .replace(Regex("\\p{M}+"), "").lowercase(java.util.Locale.ROOT)
+        if (Regex("\\b(?:otp|pin|code de confirmation|code de securite|verification code|one.time password)\\b").containsMatchIn(text)) return false
         return when (channel) {
             "mtn_momo" -> (text.contains("vous avez recu") || text.contains("you have received")) &&
                 (text.contains("financial transaction id") || text.contains("identifiant de transaction financiere"))
