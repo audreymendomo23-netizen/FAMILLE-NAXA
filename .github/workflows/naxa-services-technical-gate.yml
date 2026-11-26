@@ -299,6 +299,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_strict_site_management_scope.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_unbound_session_guards.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_push_only_notifications.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_bound_push_tokens.sql
 
   android-debug:
     name: Assemble NAXA SERVICES Android debug APK
