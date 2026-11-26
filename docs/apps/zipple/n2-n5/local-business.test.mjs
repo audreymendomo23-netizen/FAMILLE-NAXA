@@ -42,7 +42,8 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[item.body.data]),2);
   await page.getByRole("button",{name:"Stocks & finances"}).click();await page.getByRole("heading",{name:"Stocks et finances"}).waitFor();
   await page.getByLabel("Nom de la matière").fill("Farine recette");await page.getByLabel("SKU",{exact:true}).fill("FAR-TEST");await page.getByRole("button",{name:"Ajouter la matière"}).click();
-  await page.getByLabel("Matière",{exact:true}).selectOption({label:"Farine recette (kg)"});
+  await page.getByRole("combobox",{name:"Matière",exact:true}).locator("option").filter({hasText:"Farine recette (kg)"}).waitFor({state:"attached"});
+  await page.getByRole("combobox",{name:"Matière",exact:true}).selectOption({label:"Farine recette (kg)"});
   await page.getByLabel("Numéro de lot").fill("LOT-TEST");await page.getByLabel("Fournisseur",{exact:true}).fill("Fournisseur recette");await page.getByLabel("Quantité reçue").fill("3");await page.getByLabel("Coût total du lot FCFA").fill("1500");await page.getByRole("button",{name:"Enregistrer la réception"}).click();
   await page.getByText(/LOT-TEST · Fournisseur recette/).waitFor();
   const ingredientId=await scalar("select id from zp_ingredients where org_id=$1 and name='Farine recette'",[org]);
