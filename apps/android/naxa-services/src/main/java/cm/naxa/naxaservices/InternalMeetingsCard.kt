@@ -38,6 +38,7 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
   var post by remember{mutableStateOf("")}
   var title by remember{mutableStateOf("")};var whenAt by remember{mutableStateOf("")};var agenda by remember{mutableStateOf("")};var duration by remember{mutableStateOf("30")}
   var edited by remember{mutableStateOf<JSONObject?>(null)}
+  var frequency by remember{mutableStateOf("once")};var count by remember{mutableStateOf("3")}
   var busy by remember{mutableStateOf(false)};var loaded by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var reload by remember{mutableIntStateOf(0)}
   val languages=linkedMapOf("original" to "Original","fr" to "Français","en" to "English","ff-CM" to "Fulfulde","es" to "Español","it" to "Italiano","zh-CN" to "中文")
   fun status(s:String)=when(s){
@@ -58,7 +59,7 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
    if(busy||!loaded)return;busy=true;error=false
    scope.launch{try{action();reload++}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}
   }
-  fun clear(){edited=null;title="";whenAt="";agenda="";duration="30";selected=emptySet()}
+  fun clear(){edited=null;title="";whenAt="";agenda="";duration="30";selected=emptySet();frequency="once";count="3"}
   fun transition(m:JSONObject,next:String)=perform{StaffRosterApi.call(latest,"rpc/ns_transition_internal_meeting",JSONObject().put("p_id",m.getString("id")).put("p_revision",m.getInt("revision")).put("p_next",next))}
   Card(Modifier.fillMaxWidth()){
    Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
@@ -75,19 +76,24 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
      OutlinedTextField(title,{title=it},label={Text(tr("Intitulé","Title","Innde"))},singleLine=true,modifier=Modifier.fillMaxWidth())
      OutlinedTextField(whenAt,{whenAt=it},label={Text(tr("AAAA-MM-JJ HH:mm (vide : maintenant)","YYYY-MM-DD HH:mm (blank: now)","Ñalnde e sahaa"))},singleLine=true,modifier=Modifier.fillMaxWidth())
      OutlinedTextField(agenda,{agenda=it},label={Text(tr("Ordre du jour","Agenda","Feere dental"))},modifier=Modifier.fillMaxWidth());OutlinedTextField(duration,{duration=it},label={Text(tr("Durée (min)","Duration (min)","Sahaa (min)"))},modifier=Modifier.fillMaxWidth())
+     if(edited==null){
+      Text(tr("Répétition","Repeat","Yaltinde"))
+      listOf("once" to tr("Une seule fois","Once","Gooto"),"daily" to tr("Chaque jour","Daily","Kala ñalnde"),"weekly" to tr("Chaque semaine","Weekly","Kala yontere")).forEach{(code,label)->OutlinedButton(onClick={frequency=code},enabled=!busy){Text((if(frequency==code)"✓ " else "")+label)}}
+      if(frequency!="once")OutlinedTextField(count,{count=it},label={Text(tr("Nombre de réunions","Number of meetings","Limoore dentuuji"))},singleLine=true,modifier=Modifier.fillMaxWidth())
+     }
      Button(onClick={perform{
       val m=edited
-      if(m==null)StaffRosterApi.call(latest,"rpc/ns_schedule_internal_meeting_details",JSONObject().put("p_id",UUID.randomUUID().toString()).put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_post",post.takeIf{it.isNotBlank()}?:JSONObject.NULL).put("p_title",title).put("p_at",if(whenAt.isBlank())Instant.now().toString() else meetingInstant(whenAt)).put("p_members",JSONArray(selected.toList())).put("p_agenda",agenda).put("p_duration",duration.toInt()))
+      if(m==null){val payload=JSONObject().put("p_id",UUID.randomUUID().toString()).put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_post",post.takeIf{it.isNotBlank()}?:JSONObject.NULL).put("p_title",title).put("p_at",if(whenAt.isBlank())Instant.now().toString() else meetingInstant(whenAt)).put("p_members",JSONArray(selected.toList())).put("p_agenda",agenda).put("p_duration",duration.toInt());if(frequency=="once")StaffRosterApi.call(latest,"rpc/ns_schedule_internal_meeting_details",payload)else StaffRosterApi.call(latest,"rpc/ns_schedule_meeting_series",payload.put("p_frequency",frequency).put("p_count",count.toInt()))}
       else StaffRosterApi.call(latest,"rpc/ns_revise_internal_meeting",JSONObject().put("p_id",m.getString("id")).put("p_revision",m.getInt("revision")).put("p_title",title).put("p_at",meetingInstant(whenAt)).put("p_agenda",agenda).put("p_duration",duration.toInt()))
       clear()
-     }},enabled=!busy&&title.isNotBlank()&&agenda.length<=2000&&duration.toIntOrNull()?.let{it in 5..480}==true&&(edited!=null||selected.isNotEmpty())){Text(tr("Enregistrer et inviter","Save and invite","Danndu e noddu"))}
+     }},enabled=!busy&&title.isNotBlank()&&agenda.length<=2000&&duration.toIntOrNull()?.let{it in 5..480}==true&&(edited!=null||selected.isNotEmpty()&&(frequency=="once"||count.toIntOrNull()?.let{it in 2..12}==true))){Text(tr("Enregistrer et inviter","Save and invite","Danndu e noddu"))}
      if(edited!=null)TextButton(onClick={clear()}){Text(tr("Abandonner","Discard","Accu"))}
     }
     if(loaded&&meetings.isEmpty())Text(tr("Aucune réunion.","No meetings.","Alaa dental."))
     meetings.forEach{m->
      HorizontalDivider()
      val id=m.getString("id");val state=m.getString("status");val host=m.getString("host_member_id")==session.account.memberId;val own=invites.firstOrNull{it.getString("meeting_id")==id&&it.getString("member_id")==session.account.memberId}
-     Text(m.getString("title"),fontWeight=FontWeight.Bold);Text(meetingDate(m.getString("scheduled_at"))+" · "+m.optInt("duration_minutes",30)+" min · "+status(state));m.optional("agenda")?.let{Text(it)}
+     Text(m.getString("title"),fontWeight=FontWeight.Bold);Text(meetingDate(m.getString("scheduled_at"))+" · "+m.optInt("duration_minutes",30)+" min · "+status(state));m.optional("agenda")?.let{Text(it)};if(m.optInt("series_occurrence",0)>0)Text(tr("Réunion récurrente","Recurring meeting","Dental yaltindetee")+" · "+m.optInt("series_occurrence"))
      if(host&&state=="scheduled"){
       OutlinedButton(onClick={edited=m;title=m.getString("title");whenAt=meetingDate(m.getString("scheduled_at"));agenda=m.optString("agenda");duration=m.optInt("duration_minutes",30).toString()},enabled=!busy){Text(tr("Modifier","Edit","Waylu"))}
       Button(onClick={transition(m,"open")},enabled=!busy){Text(tr("Ouvrir (sans appel)","Open (no call)","Uddit dental"))}

@@ -22,6 +22,8 @@ on:
       - 'supabase/tests/drafts/naxa_services_meeting_collaboration.sql'
       - 'supabase/drafts/naxa_services_v14_recording_request.sql'
       - 'supabase/drafts/naxa_services_v18_meeting_creation.sql'
+      - 'supabase/drafts/naxa_services_v19_meeting_series.sql'
+      - 'supabase/tests/drafts/naxa_services_meeting_series.sql'
       - 'supabase/tests/drafts/naxa_services_meeting_creation.sql'
       - 'supabase/tests/drafts/naxa_services_recording_request.sql'
 permissions:
@@ -171,13 +173,21 @@ jobs:
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_meeting_creation.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regprocedure('public.ns_schedule_internal_meeting_details(uuid,uuid,uuid,uuid,text,timestamptz,uuid[],text,integer)') is null" | grep -Fx t
+      - name: Qualify recurring meetings with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_meeting_series.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regclass('public.ns_meeting_series') is null" | grep -Fx t
       - name: Activate attendance candidates on disposable DB for actual browser proof
         shell: bash
         run: |
           set -euo pipefail
           set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql; do
+          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql; do
             test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
             sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
           done
@@ -612,6 +622,26 @@ jobs:
                   await gr.getByRole('button',{name:'Actualiser',exact:true}).click();
                   await grow().getByRole('button',{name:'Lever la main',exact:true}).waitFor({state:'detached'});
                   pass('two browser accounts: initial agenda, RSVP, language preference, chat, hand, reaction, moderator restriction and recording consent withdrawal; no media capture');
+                  phase='recurring meeting creation and guest visibility';
+                  await hr.getByRole('checkbox',{name:'Recette Collaborateur',exact:true}).check();
+                  await hr.getByLabel('Intitulé',{exact:true}).fill('Réunion hebdomadaire de recette');
+                  await hr.getByLabel('Répétition',{exact:true}).selectOption('weekly');
+                  await hr.getByLabel('Nombre de réunions',{exact:true}).fill('3');
+                  const series=await rpc(page,'ns_schedule_meeting_series',()=>hr.getByRole('button',{name:'Créer et inviter',exact:true}).click());
+                  assert.equal(series.meeting_ids.length,3);
+                  const hostSeries=hr.getByRole('article').filter({hasText:'Réunion hebdomadaire de recette'});
+                  await hostSeries.filter({hasText:'Réunion récurrente · 3'}).waitFor();
+                  assert.equal(await hostSeries.count(),3);
+                  await gr.getByRole('button',{name:'Actualiser',exact:true}).click();
+                  const guestSeries=gr.getByRole('article').filter({hasText:'Réunion hebdomadaire de recette'});
+                  await guestSeries.filter({hasText:'Réunion récurrente · 3'}).waitFor();
+                  assert.equal(await guestSeries.count(),3);
+                  page.once('dialog',d=>d.accept());
+                  await rpc(page,'ns_transition_internal_meeting',()=>hostSeries.filter({hasText:'Réunion récurrente · 2'}).getByRole('button',{name:'Annuler',exact:true}).click());
+                  await hostSeries.filter({hasText:'Réunion récurrente · 2'}).getByText(/Annulée/).waitFor();
+                  const occurrences=await success(base+'/rest/v1/ns_internal_meetings?select=status,series_occurrence&series_id=eq.'+series.id,undefined,admin,admin,'GET');
+                  assert.equal(occurrences.filter(x=>x.status==='scheduled').length,2);assert.equal(occurrences.find(x=>x.series_occurrence===2).status,'cancelled');
+                  pass('real browser recurring series, guest visibility and isolated occurrence cancellation');
                   phase='scoped daily briefing';
                   const hb=page.getByRole('region',{name:'Mon bilan',exact:true}),gb=guest.getByRole('region',{name:'Mon bilan',exact:true});
                   const hd=await rpc(page,'ns_daily_briefing',()=>hb.getByRole('button',{name:'Actualiser',exact:true}).click());
