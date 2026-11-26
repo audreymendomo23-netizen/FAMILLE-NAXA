@@ -1,5 +1,5 @@
-const CACHE = "naxa-services-shell-v2";
-const CORE_ASSETS = ["/", "/manifest.webmanifest", "/naxa-services-icon.svg"];
+const CACHE = "naxa-services-shell-v3";
+const CORE_ASSETS = ["/", "/manifest.webmanifest", "/naxa-services-icon.svg", "/media/office.jpg", "/media/workspace.jpg", "/media/printing.jpg", "/media/teamwork.jpg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -42,6 +42,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   const isShellAsset = url.pathname.startsWith("/assets/") ||
+    /^\/media\/(office|workspace|printing|stationery|wood-stock|furniture|painting|teamwork)\.jpg$/.test(url.pathname) ||
     url.pathname === "/manifest.webmanifest" ||
     url.pathname === "/naxa-services-icon.svg";
   if (!isShellAsset) return;
