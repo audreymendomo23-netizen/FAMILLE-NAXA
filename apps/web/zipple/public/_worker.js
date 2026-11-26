@@ -28,7 +28,7 @@ export async function sessionRoute(req,fetcher=fetch){
  }
  try{
   const upstream=await fetcher(EDGE+"/"+action,{method:"POST",headers:{"Content-Type":"application/json",...(authorization?{Authorization:authorization}:{})},body:JSON.stringify(payload),redirect:"error",cache:"no-store"});
-  if(!upstream.ok)return answer(upstream.status>=500?503:401,{error:"DENIED"},action==="login"?undefined:clear);
+  if(!upstream.ok)return answer(upstream.status>=500?503:401,{error:"DENIED"},action==="logout"||(action==="refresh"&&upstream.status<500)?clear:undefined);
   if(action==="logout")return answer(200,{accepted:true},clear);
   const data=await upstream.json();
   if(data.app_id!=="ZIPPLE"||!tokenOK(data.refresh_token)||!tokenOK(data.access_token))return answer(502,{error:"INVALID_SESSION"},clear);

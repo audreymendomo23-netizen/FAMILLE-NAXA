@@ -10,6 +10,8 @@ import {spawn} from "node:child_process";
 const base=process.env.API_URL,anon=process.env.ANON_KEY,service=process.env.SERVICE_ROLE_KEY;
 const db=new pg.Pool({connectionString:process.env.DB_URL});
 const edge=base+"/functions/v1/zipple-n1";
+const workerSource=await readFile(new URL("../../../../../apps/web/zipple/public/_worker.js",import.meta.url),"utf8");
+const {sessionRoute}=await import("data:text/javascript;base64,"+Buffer.from(workerSource).toString("base64"));
 const headers=(key,token=key)=>({apikey:key,authorization:"Bearer "+token,"content-type":"application/json"});
 const rest=(path,key,token=key)=>fetch(base+"/rest/v1/"+path,{headers:headers(key,token)});
 async function call(action,body,token,origin="https://zipple.test"){
@@ -28,6 +30,14 @@ async function browserRecipe({pw,org,member,site}){
  const server=createServer({key:await readFile(process.env.ZIPPLE_TLS_KEY),cert:await readFile(process.env.ZIPPLE_TLS_CERT)},async(req,res)=>{
   try{
    const url=new URL(req.url,"https://127.0.0.1:4443");
+   if(url.pathname.startsWith("/session/")&&req.method==="POST"){
+    // Test harness only: exact local browser origin, real worker logic, upstream constrained to disposable local Supabase.
+    if(req.headers.origin!=="https://127.0.0.1:4443"){res.writeHead(403).end();return}
+    const chunks=[];let size=0;for await(const c of req){size+=c.length;if(size>8192){res.writeHead(413).end();return}chunks.push(c)}
+    const request=new Request("https://naxa-zipple.pages.dev"+url.pathname,{method:"POST",headers:{origin:"https://naxa-zipple.pages.dev","content-type":"application/json",cookie:req.headers.cookie||""},body:Buffer.concat(chunks)});
+    const response=await sessionRoute(request,(target,options)=>{const u=new URL(target);assert.equal(u.origin,"https://idupfjbkwjcavyisxteo.supabase.co");assert.ok(["login","refresh","logout"].includes(u.pathname.split("/").pop()));return fetch(edge+"/"+u.pathname.split("/").pop(),{...options,headers:{...options.headers,origin:"https://zipple.test"}})});
+    res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));return;
+   }
    if(/^\/gateway\/(login|logout|recovery|sync)$/.test(url.pathname)&&req.method==="POST"){
     const chunks=[];let size=0;for await(const c of req){size+=c.length;if(size>8192){res.writeHead(413).end();return}chunks.push(c)}
     const auth=req.headers.authorization;
@@ -48,21 +58,25 @@ async function browserRecipe({pw,org,member,site}){
   const ctx=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:390,height:844}});
   const page=await ctx.newPage();await page.goto("https://127.0.0.1:4443/");
   await page.getByLabel("Identifiant").fill("fixture");await page.getByLabel("Mot de passe").fill(pw);
-  const loginResponse=page.waitForResponse(r=>r.url().endsWith("/gateway/login")&&r.request().method()==="POST");
-  await page.getByRole("button",{name:"Se connecter"}).click();assert.equal((await loginResponse).status(),200);
+  await page.getByRole("checkbox",{name:"Rester connecté"}).check();
+  const loginResponse=page.waitForResponse(r=>r.url().endsWith("/session/login")&&r.request().method()==="POST");
+  await page.getByRole("button",{name:"Se connecter"}).click();const signed=await loginResponse;assert.equal(signed.status(),200);const first=await signed.json();assert.equal(first.refresh_token,undefined);
   await page.getByRole("heading",{name:"ZIPPLE fixture"}).waitFor();
   assert.equal(await page.getByLabel("Établissement autorisé").locator("option").count(),1);
   assert.equal(await page.getByLabel("Établissement autorisé").inputValue(),site);
+  const cookieBefore=(await ctx.cookies()).find(c=>c.name==="__Host-zipple-refresh");assert.ok(cookieBefore?.httpOnly&&cookieBefore.secure&&cookieBefore.sameSite==="Strict");assert.ok(!(await page.evaluate(()=>document.cookie)).includes("__Host-zipple-refresh"));assert.equal(await page.evaluate(()=>JSON.stringify(localStorage).includes("fixture")),false);
+  const refreshResponse=page.waitForResponse(r=>r.url().endsWith("/session/refresh")&&r.request().method()==="POST");await page.reload();const restored=await refreshResponse;assert.equal(restored.status(),200);assert.equal((await restored.json()).refresh_token,undefined);await page.getByRole("heading",{name:"ZIPPLE fixture"}).waitFor();const cookieAfter=(await ctx.cookies()).find(c=>c.name==="__Host-zipple-refresh");assert.ok(cookieAfter&&cookieAfter.value!==cookieBefore.value);assert.equal(await page.getByLabel("Établissement autorisé").inputValue(),site);
   const eventId=randomUUID();
   await page.evaluate(async e=>{await new Promise((ok,fail)=>{const q=indexedDB.open("zipple-outbox-v1",1);q.onupgradeneeded=()=>q.result.createObjectStore("events",{keyPath:"eventId"});q.onerror=()=>fail(q.error);q.onsuccess=()=>{const db=q.result,tx=db.transaction("events","readwrite");tx.objectStore("events").add(e);tx.oncomplete=()=>{db.close();ok()};tx.onerror=()=>fail(tx.error)}})}, {eventId,orgId:org,memberId:member,siteId:site,sequence:2,aggregateType:"n1_probe",payload:'{"browser":true}',state:"queued"});
   const receiptPromise=page.waitForResponse(r=>r.url().endsWith("/gateway/sync")&&r.request().method()==="POST");
   await page.getByRole("button",{name:"Synchroniser"}).click();const response=await receiptPromise;assert.equal(response.status(),200);assert.equal((await response.json()).state,"acknowledged");
   await page.waitForFunction(async id=>await new Promise(ok=>{const q=indexedDB.open("zipple-outbox-v1",1);q.onsuccess=()=>{const db=q.result,r=db.transaction("events").objectStore("events").get(id);r.onsuccess=()=>{db.close();ok(r.result?.state==="acknowledged")}}}),eventId);
   assert.equal(Number((await db.query("select count(*) from public.zp_n1_receipts where event_id=$1",[eventId])).rows[0].count),1);
-  const logoutPromise=page.waitForResponse(r=>r.url().endsWith("/gateway/logout")&&r.request().method()==="POST");
+  const logoutPromise=page.waitForResponse(r=>r.url().endsWith("/session/logout")&&r.request().method()==="POST");
   await page.getByRole("button",{name:"Déconnexion"}).click();assert.equal((await logoutPromise).status(),200);
   await page.getByRole("button",{name:"Se connecter"}).waitFor();
-  await page.reload();await page.getByRole("button",{name:"Se connecter"}).waitFor();
+  await page.reload();await page.getByRole("button",{name:"Se connecter"}).waitFor();assert.equal((await ctx.cookies()).some(c=>c.name==="__Host-zipple-refresh"),false);
+  console.log("ZIPPLE_N1_REAL_LOCAL_COOKIE_ROTATION_LOGOUT_PASS");
   console.log("ZIPPLE_N1_BROWSER_REAL_EDGE_PASS");
   if(process.env.ZIPPLE_ANDROID_LIVE==="1"){
    const nativeEvent=randomUUID();

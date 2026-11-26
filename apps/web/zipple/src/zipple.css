@@ -28,3 +28,8 @@ header .theme-toggle{display:flex;gap:3px;align-items:center;width:auto;padding:
 @keyframes splash-exit{from{opacity:1}to{opacity:0}}
 @media(max-width:400px){header .language{padding:6px 9px;font-size:.84rem}.theme-toggle span{padding:6px 8px;font-size:.84rem}article{padding:25px 18px}.secure{font-size:.8rem}}
 @media(prefers-reduced-motion:reduce){.zipple-splash{display:none}}
+
+/* Use the original approved media when present; never artificially blur the photograph outside the card. */
+main[data-theme=light][data-view=login]{background-image:linear-gradient(#48281703,#4828170a),url("/zipple-restaurant-bar.webp")}
+main[data-theme=dark]{background-image:linear-gradient(#20150c70,#20150c50),url("/zipple-restaurant-bar.webp")}
+.splash-video{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;opacity:0;pointer-events:none;background:#2b170e}.zipple-splash.video-ready{animation:none}.video-ready .splash-video{opacity:1;z-index:2}.video-ready .splash-food,.video-ready .splash-content,.video-ready .splash-vignette{visibility:hidden}

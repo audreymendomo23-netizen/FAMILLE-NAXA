@@ -1,1 +1,2 @@
-import {defineConfig} from "vite";import react from "@vitejs/plugin-react";export default defineConfig({plugins:[react()]});
+import {defineConfig} from "vite";import react from "@vitejs/plugin-react";
+export default defineConfig({plugins:[react(),{name:"zipple-precache-manifest",generateBundle(_options,bundle){const assets=Object.keys(bundle).filter(x=>x.startsWith("assets/")).map(x=>"/"+x).sort();if(!assets.length)throw Error("ZIPPLE assets missing");this.emitFile({type:"asset",fileName:"zipple-precache.json",source:JSON.stringify(assets)})}}]});

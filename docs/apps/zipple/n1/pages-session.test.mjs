@@ -13,3 +13,5 @@ test("untrusted origins denied without upstream",async()=>{const res=await sessi
 test("logout clears cookie even if upstream fails",async()=>{const res=await sessionRoute(req("logout",{access_token:access}),async(u,o)=>{assert.equal(o.headers.Authorization,"Bearer "+access);return new Response("denied",{status:401})});assert.match(res.headers.get("set-cookie"),/Max-Age=0/)});
 
 test("explicit opt-out clears cookie and attempts revocation",async()=>{const calls=[];const res=await sessionRoute(req("forget",{},{"cookie":"__Host-zipple-refresh="+token}),async(u,o)=>{calls.push(u.split("/").pop());return upstream(u,o)});assert.deepEqual(calls,["refresh","logout"]);assert.match(res.headers.get("set-cookie"),/Max-Age=0/)});
+
+test("temporary upstream failure preserves secure cookie for retry",async()=>{const res=await sessionRoute(req("refresh",{},{"cookie":"__Host-zipple-refresh="+token}),async()=>new Response("unavailable",{status:503}));assert.equal(res.status,503);assert.equal(res.headers.get("set-cookie"),null)});

@@ -4,6 +4,7 @@ on:
     branches: [work/zipple-completion-20261126]
     paths:
       - ".github/workflows/zipple-n1-device-handoff.yml"
+      - "apps/android/zipple/**"
   workflow_dispatch:
 permissions:
   contents: read

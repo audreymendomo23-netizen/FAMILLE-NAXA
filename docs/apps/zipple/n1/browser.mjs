@@ -30,5 +30,9 @@ try {
  await page.evaluate(async()=>{await navigator.serviceWorker.ready});
  const m=await page.request.get("http://127.0.0.1:4173/manifest.webmanifest");
  assert.equal((await m.json()).theme_color,"#482817");
+ await page.waitForFunction(()=>!!navigator.serviceWorker.controller);
+ const precache=await page.request.get("http://127.0.0.1:4173/zipple-precache.json");const assetPaths=await precache.json();assert.ok(assetPaths.some(x=>x.endsWith(".js")));assert.ok(await page.evaluate(async paths=>{const c=await caches.open("zipple-shell-v4");return (await Promise.all(paths.map(p=>c.match(p)))).every(Boolean)},assetPaths));
+ await ctx.setOffline(true);await page.reload();await page.getByRole("heading",{name:"Servez mieux, gérez en toute sécurité."}).waitFor();assert.equal(await page.getByRole("button",{name:"Se connecter"}).isDisabled(),true);await ctx.setOffline(false);
+ console.log("ZIPPLE_PWA_OFFLINE_COLD_RELOAD_PASS");
  console.log("ZIPPLE_N1_BROWSER_PASS mobile desktop, disabled login, fail closed, FR/EN, theme, service worker");
 }finally{await browser.close()}

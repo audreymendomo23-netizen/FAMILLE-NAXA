@@ -1,5 +1,8 @@
 package cm.naxa.zipple
 import android.os.Bundle
+import android.net.Uri
+import android.widget.VideoView
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
@@ -52,7 +55,7 @@ class MainActivity:FragmentActivity(){
  MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=Color(0xFFE5BE85),secondary=orange,background=Color(0xFF2B1A11),surface=Color(0xFF3D281B))else lightColorScheme(primary=orange,secondary=navy,background=Color(0xFFF1E4D8),surface=Color(0xFFFCF9F5),onPrimary=Color.White)){
  Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
  Box(Modifier.fillMaxSize().clipToBounds()){
- Image(painterResource(R.drawable.zipple_restaurant_bar),contentDescription=null,contentScale=ContentScale.Crop,modifier=Modifier.fillMaxSize(),alpha=if(dark)0.37f else 0.94f)
+ Image(painterResource(R.drawable.zipple_restaurant_bar),contentDescription=null,contentScale=ContentScale.Crop,modifier=Modifier.fillMaxSize(),alpha=if(dark)0.62f else 1f)
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center){
  Surface(modifier=Modifier.widthIn(max=570.dp).fillMaxWidth(),shape=RoundedCornerShape(28.dp),color=MaterialTheme.colorScheme.surface.copy(alpha=if(dark)0.94f else 0.88f),tonalElevation=0.dp){
  Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
@@ -99,6 +102,17 @@ class MainActivity:FragmentActivity(){
  }
 }
 @Composable private fun ZippleSplash(onFinished:()->Unit){
+ val context=LocalContext.current
+ val resource=remember{context.resources.getIdentifier("zipple_startup","raw",context.packageName)}
+ var failed by remember{mutableStateOf(false)}
+ if(resource!=0&&!failed){
+  val view=remember{VideoView(context)}
+  val finished by rememberUpdatedState(onFinished)
+  DisposableEffect(resource,view){view.setOnPreparedListener{player->player.setVolume(0f,0f);view.start()};view.setOnCompletionListener{finished()};view.setOnErrorListener{_,_,_->failed=true;true};view.setVideoURI(Uri.parse("android.resource://"+context.packageName+"/"+resource));onDispose{view.stopPlayback()}}
+  LaunchedEffect(Unit){kotlinx.coroutines.delay(3600);finished()}
+  Box(Modifier.fillMaxSize().background(Color(0xFF2B170E)).clearAndSetSemantics{},contentAlignment=Alignment.Center){AndroidView(factory={view},modifier=Modifier.fillMaxWidth().aspectRatio(16f/9f))}
+  return
+ }
  var stage by remember { mutableIntStateOf(0) }
  LaunchedEffect(Unit){kotlinx.coroutines.delay(650);stage=1;kotlinx.coroutines.delay(750);stage=2;kotlinx.coroutines.delay(1000);onFinished()}
  val photo by animateFloatAsState(if(stage>=1)1f else 0f,tween(550),label="food")
