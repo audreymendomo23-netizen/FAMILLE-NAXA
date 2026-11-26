@@ -52,7 +52,7 @@ try{
  browser=await chromium.launch({headless:true});
  const ctx=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:390,height:844}});const page=await ctx.newPage();
  await page.goto("https://127.0.0.1:4443/");
- await page.getByLabel("Identifiant").fill(login);await page.getByLabel("Mot de passe").fill(password);
+ await page.getByLabel("Identifiant").fill(login);await page.getByLabel("Mot de passe",{exact:true}).fill(password);
  await page.getByRole("button",{name:"Se connecter"}).click();await page.getByRole("heading",{name:"ZIPPLE fixture"}).waitFor();
  assert.equal(await page.getByLabel("Établissement autorisé").inputValue(),site);
  const eventId=randomUUID();

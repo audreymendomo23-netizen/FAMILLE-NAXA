@@ -57,7 +57,7 @@ async function browserRecipe({pw,org,member,site}){
   browser=await chromium.launch({headless:true});
   const ctx=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:390,height:844}});
   const page=await ctx.newPage();await page.goto("https://127.0.0.1:4443/");
-  await page.getByLabel("Identifiant").fill("fixture");await page.getByLabel("Mot de passe").fill(pw);
+  await page.getByLabel("Identifiant").fill("fixture");await page.getByLabel("Mot de passe",{exact:true}).fill(pw);
   await page.getByRole("checkbox",{name:"Rester connecté"}).check();
   const loginResponse=page.waitForResponse(r=>r.url().endsWith("/session/login")&&r.request().method()==="POST");
   await page.getByRole("button",{name:"Se connecter"}).click();const signed=await loginResponse;assert.equal(signed.status(),200);const first=await signed.json();assert.equal(first.refresh_token,undefined);
