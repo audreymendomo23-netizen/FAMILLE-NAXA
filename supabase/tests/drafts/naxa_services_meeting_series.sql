@@ -699,6 +699,44 @@ end $f$;
 revoke all on function public.ns_revise_meeting_invitees(uuid,integer,text,timestamptz,text,integer,uuid[]) from public,anon,authenticated;
 grant execute on function public.ns_revise_meeting_invitees(uuid,integer,text,timestamptz,text,integer,uuid[]) to authenticated;
 
+-- Schedule one generic reminder per active invitee and meeting revision, through the existing worker.
+-- The 30-minute lead is provisional. A claimed provider request may already be in flight;
+-- cancellation invalidates its lease but cannot retract a push already accepted by FCM.
+create function public.ns_refresh_meeting_reminders(p_id uuid) returns void language plpgsql security definer set search_path='' as $f$
+declare m public.ns_internal_meetings%rowtype;i record;due timestamptz;msg jsonb;
+begin
+ select * into m from public.ns_internal_meetings where id=p_id;
+ if not found then return;end if;
+ due:=m.scheduled_at-interval '30 minutes';
+ update public.ns_notification_outbox n set status='cancelled',claim_token=null,claim_expires_at=null
+ where n.org_id=m.org_id and n.event_code='internal_meeting.reminder' and n.payload_redacted->>'meeting_id'=p_id::text
+ and n.status in ('pending','processing') and (m.status<>'scheduled' or m.scheduled_at<=now() or n.payload_redacted->>'revision'<>m.revision::text or not exists(
+ select 1 from public.ns_internal_meeting_invitees v where v.meeting_id=p_id and v.member_id=n.recipient_member_id and v.response<>'declined' and public.ns_meeting_scope_valid(m.org_id,m.site_id,m.workstation_id,v.member_id,false)));
+ if m.status<>'scheduled' or due<=now() then return;end if;
+ for i in select v.member_id,coalesce(u.preferred_locale,'fr') locale from public.ns_internal_meeting_invitees v join public.ns_members u on u.id=v.member_id and u.org_id=v.org_id
+ where v.meeting_id=p_id and v.response<>'declined' and public.ns_meeting_scope_valid(m.org_id,m.site_id,m.workstation_id,v.member_id,false) loop
+  msg:=case i.locale when 'en' then jsonb_build_object('title','Meeting reminder','body','An internal meeting is approaching. Check your meetings.')
+   when 'ff-CM' then jsonb_build_object('title','Ciftinol dental','body','Dental golle ɓadii. Ƴeewto dentuuji maa.')
+   else jsonb_build_object('title','Rappel de réunion','body','Une réunion interne approche. Consultez vos réunions.') end;
+  msg:=msg||jsonb_build_object('meeting_id',m.id,'revision',m.revision,'route','/team');
+  insert into public.ns_notification_outbox(org_id,site_id,recipient_member_id,channel,event_code,idempotency_key,payload_redacted,scheduled_at)
+  values(m.org_id,m.site_id,i.member_id,'push','internal_meeting.reminder','meeting-reminder:'||m.id::text||':'||i.member_id::text||':'||m.revision,msg,due)
+  on conflict(org_id,channel,idempotency_key) do update set status='pending',scheduled_at=excluded.scheduled_at,payload_redacted=excluded.payload_redacted
+  where ns_notification_outbox.status='cancelled' and ns_notification_outbox.attempts=0;
+ end loop;
+end $f$;
+revoke all on function public.ns_refresh_meeting_reminders(uuid) from public,anon,authenticated;
+create function public.ns_meeting_reminder_trigger() returns trigger language plpgsql security definer set search_path='' as $f$
+begin
+ if tg_table_name='ns_internal_meetings' then perform public.ns_refresh_meeting_reminders(new.id);return new;end if;
+ if tg_op='DELETE' then perform public.ns_refresh_meeting_reminders(old.meeting_id);return old;end if;
+ perform public.ns_refresh_meeting_reminders(new.meeting_id);return new;
+end $f$;
+revoke all on function public.ns_meeting_reminder_trigger() from public,anon,authenticated;
+create trigger ns_meeting_reminder_revision after update of revision,status,scheduled_at on public.ns_internal_meetings for each row execute function public.ns_meeting_reminder_trigger();
+create trigger ns_meeting_reminder_invitee after insert or update of response or delete on public.ns_internal_meeting_invitees for each row execute function public.ns_meeting_reminder_trigger();
+
+
 
 
 insert into auth.users(id) values ('10000000-0000-4000-8000-000000000091'),('10000000-0000-4000-8000-000000000092');
@@ -1061,6 +1099,26 @@ do $qa$ begin
 end $qa$;
 reset role;
 
+do $qa$ begin
+ if (select count(*) from public.ns_notification_outbox n join public.ns_internal_meetings m on n.payload_redacted->>'meeting_id'=m.id::text where m.id='70000000-0000-4000-8000-000000000210' and n.event_code='internal_meeting.reminder' and n.status='pending' and n.scheduled_at=m.scheduled_at-interval '30 minutes' and n.payload_redacted->>'revision'='2')<>2 then raise exception 'QA REMINDER NEW REVISION';end if;
+ if exists(select 1 from public.ns_notification_outbox where event_code='internal_meeting.reminder' and payload_redacted->>'meeting_id'='70000000-0000-4000-8000-000000000210' and recipient_member_id='60000000-0000-4000-8000-000000000092' and status='pending') then raise exception 'QA REMINDER REMOVED';end if;
+ if exists(select 1 from public.ns_notification_outbox n join public.ns_internal_meetings m on n.payload_redacted->>'meeting_id'=m.id::text where m.series_id='70000000-0000-4000-8000-000000000230' and n.event_code='internal_meeting.reminder' and n.status='pending') then raise exception 'QA REMINDER CANCELLED SERIES';end if;
+end $qa$;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000093',true);select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000093","session_id":"qa-93-session","role":"authenticated"}',true);
+set local role authenticated;
+select public.ns_respond_meeting_invitation('70000000-0000-4000-8000-000000000210',2,'declined');
+reset role;
+do $qa$ begin
+ if exists(select 1 from public.ns_notification_outbox where event_code='internal_meeting.reminder' and payload_redacted->>'meeting_id'='70000000-0000-4000-8000-000000000210' and recipient_member_id='60000000-0000-4000-8000-000000000093' and status='pending') then raise exception 'QA REMINDER DECLINED';end if;
+end $qa$;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000093',true);select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000093","session_id":"qa-93-session","role":"authenticated"}',true);
+set local role authenticated;
+select public.ns_respond_meeting_invitation('70000000-0000-4000-8000-000000000210',2,'accepted');
+reset role;
+do $qa$ begin
+ if (select count(*) from public.ns_notification_outbox where event_code='internal_meeting.reminder' and payload_redacted->>'meeting_id'='70000000-0000-4000-8000-000000000210' and recipient_member_id='60000000-0000-4000-8000-000000000093' and status='pending')<>1 then raise exception 'QA REMINDER REACCEPT';end if;
+end $qa$;
+
 update public.ns_organizations set business_mode='solo' where id='20000000-0000-4000-8000-000000000091';
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000091',true); select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000091","session_id":"qa-91-session","role":"authenticated"}',true);
 set local role authenticated;
@@ -1072,4 +1130,4 @@ end $$;
 reset role;
 
 rollback;
-select 'PASS: recurring meetings, atomic series cancellation, scoped invitation replacement and revocation' as result;
+select 'PASS: recurring meetings, atomic series cancellation, invitation replacement and revision-aware reminders' as result;
