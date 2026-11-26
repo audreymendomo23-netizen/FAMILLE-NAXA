@@ -87,6 +87,7 @@ jobs:
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f docs/apps/zipple/n2-n5/bulk3-treasury-reconciliation.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f docs/apps/zipple/n2-n5/bulk3-commercial-notes.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f docs/apps/zipple/n2-n5/bulk3-intermediates.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f docs/apps/zipple/n2-n5/bulk3-purchase-consolidation.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema'"
       - name: Build Web and qualify real business UI via isolated Edge
         run: |

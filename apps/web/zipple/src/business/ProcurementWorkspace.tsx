@@ -1,3 +1,4 @@
+import {ConvertedPurchases} from "./ConvertedPurchases";
 import {InventoryGains} from "./InventoryGains";
 import React,{useEffect,useState,useRef} from "react";
 // Adaptation of NAXA Services StockOperationsPage: server-confirmed supplier, purchase, receipt, payment.
@@ -63,6 +64,7 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  <label>{t("Quantité physique comptée","Physical count")}<input inputMode="decimal" value={count} onChange={e=>CO(e.target.value)}/></label>
  <label>{t("Motif du comptage","Count reason")}<input value={reason} onChange={e=>RS(e.target.value)}/></label>
  <button disabled={lock||!selectedLot||count===""||reason.trim().length<5} onClick={()=>run(async()=>{await idem("count_lot",{lot_id:lotId,expected_milli:Number(selectedLot.remaining_milli),counted_milli:milli(count),reason});CO("");RS("");await load();await refreshStock()})}>{t("Valider le comptage","Confirm count")}</button>{queueErp&&<button disabled={busy||!selectedLot||count===""||reason.trim().length<5} onClick={async()=>{B(true);E("");try{const q=milli(count);if(q>Number(selectedLot.remaining_milli))throw Error("COUNT_REQUIRES_REVIEW");await queueErp("count_lot",{lot_id:lotId,expected_milli:Number(selectedLot.remaining_milli),counted_milli:q,reason:reason.trim()});CO("");RS("");E(t("Comptage en attente de validation serveur.","Count awaiting server confirmation."))}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}}>{t("Mettre le comptage en attente hors connexion","Queue count offline")}</button>}
+ <ConvertedPurchases call={call} disabled={lock} en={en} refresh={async()=>{await load();await refreshStock()}}/>
  <InventoryGains call={call} disabled={lock} en={en} lot={selectedLot} refresh={async()=>{await load();await refreshStock()}}/>
  </section>
 }
