@@ -380,7 +380,9 @@ stable
 security definer
 set search_path = ''
 as $naxa$
-  select public.ns_erp_access_reason(p_org_id)<>'blocked' and exists (
+  select public.ns_erp_access_reason(p_org_id)<>'blocked'
+    and exists (select 1 from public.ns_sites t where t.id=p_site_id and t.org_id=p_org_id)
+    and exists (
     select 1
     from public.ns_member_scopes s
     join public.ns_members m on m.id = s.member_id and m.org_id = s.org_id
@@ -389,7 +391,7 @@ as $naxa$
       and m.status = 'active'
       and m.role_code in ('promoter','network_manager','site_manager')
       and s.can_manage
-      and (s.scope_type = 'organization' or s.site_id = p_site_id)
+      and (s.scope_type = 'organization' or (s.scope_type = 'site' and s.site_id = p_site_id))
   );
 $naxa$;
 
