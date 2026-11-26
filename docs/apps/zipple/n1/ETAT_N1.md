@@ -5,3 +5,6 @@ Le workflow général régénère les entrées des dix applications et pousse su
 
 ## Reprise — commit 4616b08128fadb0a65dcf4dda652366d6fb4f2b3
 Gestionnaire de PIN par membre repris de NAXA Services (Keystore HMAC et backoff), biométrie du socle commun, expiration de session et Room avec scopes app/org/member/site et déduplication. Tests unitaires PIN ajoutés. Le changement de schéma Room v1→v2 n'a pas encore de migration testée; aucun effacement automatique autorisé. WorkManager et reçus serveur restent à raccorder. Premier run 45794002307 : Web SUCCESS (13/13, build et assets); Android encore à constater. Nouveau contrôle navigateur desktop/mobile et nouveau build Android lancés pour le dernier code. Pas d'intégration de production.
+
+## Reprise session et CI
+Commit c091e335e3a61bfc3a3f41e5753d03e76ab31def : SessionVault AES-GCM Android Keystore dérivé de NS, token refresh uniquement avec consentement, connexion/refresh/récupération/déconnexion HTTPS, révocation non confirmée signalée. API ZIPPLE encore non déployée. Run 45794175578 : 13 tests Web verts et build; navigateur échoue sur incompatibilité Playwright 1.51 avec ubuntu26.04-x64, corrigé en fixant ubuntu-24.04 dans le workflow dédié. Android précédent en cours. Nouvelle recette complète du dernier code; aucun déploiement.

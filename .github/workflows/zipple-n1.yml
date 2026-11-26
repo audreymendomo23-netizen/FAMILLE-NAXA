@@ -10,7 +10,7 @@ permissions:
   contents: read
 jobs:
   web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +39,7 @@ jobs:
           test -s apps/web/zipple/dist/zipple-logo.jpg
           node -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync("apps/web/zipple/dist/manifest.webmanifest"));if(m.theme_color!=="#0E224D"||m.display!=="standalone")process.exit(1)'
   android:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
