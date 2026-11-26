@@ -112,5 +112,33 @@ do $wm$ begin
 end $wm$;
 reset role;
 
+
+-- Registration creates exactly one receipt/account/workspace and preserves role boundaries.
+insert into auth.users(id) values ('00000000-0000-4000-8000-000000000003'),('00000000-0000-4000-8000-000000000004');
+do $wm$ begin
+ if has_table_privilege('authenticated','public.wm_registration_receipts','SELECT') or has_function_privilege('anon','public.wm_register_account(uuid,uuid,uuid,text,text,text,text,text,text,text)','EXECUTE') then raise exception 'registration acl leak';end if;
+end $wm$;
+set local role service_role;
+do $wm$ declare
+ v_install uuid:='30000000-0000-4000-8000-000000000003';
+ v_request uuid:='40000000-0000-4000-8000-000000000003';
+ v_user uuid:='00000000-0000-4000-8000-000000000003';
+ v_login text;
+begin
+ v_login:=public.wm_register_account(v_install,v_request,v_user,'WM-REGISTER1','wm3@example.invalid','New Individual','individual','Personal','wm-replay-draft-20261126','wm-replay-draft-20261126');
+ if v_login<>'WM-REGISTER1' then raise exception 'registration login mismatch';end if;
+ if public.wm_register_account(v_install,v_request,v_user,'WM-REGISTER9','wm3@example.invalid','New Individual','individual','Personal','wm-replay-draft-20261126','wm-replay-draft-20261126')<>v_login then raise exception 'registration retry changed login';end if;
+ if (select count(*) from public.wm_accounts where auth_user_id=v_user)<>1 then raise exception 'duplicate account';end if;
+ if not exists(select 1 from public.wm_memberships m join public.wm_accounts a on a.id=m.account_id join public.wm_workspaces w on w.id=m.workspace_id where a.auth_user_id=v_user and w.kind='individual' and m.role='owner') then raise exception 'individual role mismatch';end if;
+ begin
+ perform public.wm_register_account(v_install,v_request,v_user,'WM-REGISTER1','wm3@example.invalid','Changed','individual','Personal','wm-replay-draft-20261126','wm-replay-draft-20261126');
+ raise exception 'changed registration accepted' using errcode='XX000';
+ exception when raise_exception then null;
+ end;
+ perform public.wm_register_account(v_install,'40000000-0000-4000-8000-000000000004','00000000-0000-4000-8000-000000000004','WM-REGISTER2','wm4@example.invalid','New Enterprise','enterprise','Company','wm-replay-draft-20261126','wm-replay-draft-20261126');
+ if not exists(select 1 from public.wm_memberships m join public.wm_accounts a on a.id=m.account_id join public.wm_workspaces w on w.id=m.workspace_id where a.login_id='WM-REGISTER2' and w.kind='enterprise' and m.role='promoteur') then raise exception 'enterprise role mismatch';end if;
+end $wm$;
+reset role;
+
 rollback;
 select 'WIDEMEET_IDENTITY_SQL_PASS';
