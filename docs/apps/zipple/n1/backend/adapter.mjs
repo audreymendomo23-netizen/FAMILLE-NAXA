@@ -6,6 +6,15 @@ const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(32))).map(x=>x.
 const deny=()=>{throw Error("DENIED")};
 const normalize=x=>x.trim().toLowerCase();
 const loginId=x=>/^[a-z0-9][a-z0-9._+@-]{0,179}$/.test(x);
+// Claims are used ONLY after GoTrue has verified the exact bearer token.
+export function freshOperatorTotp(verifiedUser,token,now=Math.floor(Date.now()/1000)){
+ try{
+  const parts=token.split(".");if(parts.length!==3||!verifiedUser?.id)return false;
+  const payload=parts[1].replace(/-/g,"+").replace(/_/g,"/");
+  const c=JSON.parse(atob(payload.padEnd(Math.ceil(payload.length/4)*4,"=")));
+  return c.sub===verifiedUser.id&&c.role==="authenticated"&&c.aal==="aal2"&&c.is_anonymous!==true&&typeof c.session_id==="string"&&c.session_id.length>0&&Number.isFinite(c.exp)&&c.exp>now&&Array.isArray(c.amr)&&c.amr.some(a=>a.method==="totp"&&Number.isFinite(a.timestamp)&&a.timestamp<=now+30&&a.timestamp>=now-600);
+ }catch{return false}
+}
 export function createSupabaseZipple({url,anonKey,serviceKey,origins=[],fetcher=fetch}){
  if(!url||!anonKey||!serviceKey)throw Error("MISSING_SERVER_CONFIG");
  const base=url.replace(/\/$/,"");
@@ -50,7 +59,7 @@ export function createSupabaseZipple({url,anonKey,serviceKey,origins=[],fetcher=
     if(req.method!=="POST"||raw.length>8192||!bearer.startsWith("Bearer "))deny();
     const body=JSON.parse(raw);if(body.app_id!=="ZIPPLE")deny();
     const identity=await call("/auth/v1/user",{key:anonKey,bearer:bearer.slice(7)});
-    operator=identity?.id;if(!operator)deny();
+    operator=identity?.id;if(!operator||!freshOperatorTotp(identity,bearer.slice(7)))deny();
     const action=new URL(req.url).pathname.split("/").pop();
     if(action==="list"){res=Response.json({requests:await rpc("zp_admin_recovery_list",{p_operator:operator})})}
     else if(action==="complete"){

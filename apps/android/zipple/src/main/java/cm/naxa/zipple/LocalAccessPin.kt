@@ -49,6 +49,17 @@ internal class LocalAccessPinManager(context: Context) {
         return preferences.contains(p + "verifier") || preferences.contains(p + "salt")
     }
 
+    /** Never bypass a PIN lockout using a different local unlock mechanism. */
+    @Synchronized fun canUseBiometric(memberId: String, nowMillis: Long = System.currentTimeMillis()): Boolean {
+        if (!isConfigured(memberId)) return false
+        return runCatching {
+            val p = prefix(memberId)
+            preferences.contains(p + "verifier") && preferences.contains(p + "salt") &&
+                preferences.getLong(p + "locked_until", 0L) <= nowMillis &&
+                keyFor(memberId, false) != null
+        }.getOrDefault(false)
+    }
+
     @Synchronized fun enroll(memberId: String, pin: String): LocalAccessPinResult {
         if (memberId.isBlank() || !LocalAccessPinPolicy.isValid(pin)) return LocalAccessPinResult(LocalAccessPinCode.INVALID_FORMAT)
         if (isConfigured(memberId)) return LocalAccessPinResult(LocalAccessPinCode.ALREADY_CONFIGURED)

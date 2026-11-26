@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import pg from "pg";
-import {randomUUID} from "node:crypto";
+import {randomUUID,createHmac} from "node:crypto";
 import {chromium} from "playwright";
 import {createServer} from "node:https";
 import {readFile} from "node:fs/promises";
@@ -121,7 +121,21 @@ test("actual GoTrue, PostgREST and Edge runtime on isolated local Supabase",asyn
   const operatorAlias="operator-"+randomUUID()+"@example.test",operatorPw="Operator-"+randomUUID()+"-Aa9!",operator=await createUser(operatorAlias,operatorPw);
   await db.query("insert into public.zp_recovery_operators values($1,true)",[operator]);
   const authOperator=await fetch(base+"/auth/v1/token?grant_type=password",{method:"POST",headers:headers(anon),body:JSON.stringify({email:operatorAlias,password:operatorPw})});
-  assert.ok(authOperator.ok);const operatorJwt=(await authOperator.json()).access_token;
+  assert.ok(authOperator.ok);const aal1=(await authOperator.json()).access_token;
+  assert.equal((await call("admin/recovery/list",{},aal1)).status,403);
+  const enroll=await fetch(base+"/auth/v1/factors",{method:"POST",headers:headers(anon,aal1),body:JSON.stringify({factor_type:"totp",friendly_name:"CI operator"})});
+  assert.ok(enroll.ok,"local TOTP enrollment");const factor=await enroll.json();
+  const challenge=await fetch(base+"/auth/v1/factors/"+factor.id+"/challenge",{method:"POST",headers:headers(anon,aal1),body:"{}"});
+  assert.ok(challenge.ok,"local TOTP challenge");const challengeId=(await challenge.json()).id;
+  // RFC 6238: only generated local fixture secret, never a real operator's factor.
+  let bits=0,value=0;const bytes=[];for(const c of factor.totp.secret.toUpperCase().replace(/=+$/,"")){const n="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".indexOf(c);assert.ok(n>=0);value=(value<<5)|n;bits+=5;if(bits>=8){bits-=8;bytes.push((value>>bits)&255)}}
+  const counter=Buffer.alloc(8);counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));
+  const mac=createHmac("sha1",Buffer.from(bytes)).update(counter).digest(),offset=mac[mac.length-1]&15;
+  const code=String((mac.readUInt32BE(offset)&0x7fffffff)%1000000).padStart(6,"0");
+  const verification=await fetch(base+"/auth/v1/factors/"+factor.id+"/verify",{method:"POST",headers:headers(anon,aal1),body:JSON.stringify({challenge_id:challengeId,code})});
+  assert.ok(verification.ok,"local TOTP verification");const verified=await verification.json();const operatorJwt=verified.access_token;
+  assert.ok(operatorJwt,"verified operator access token");
+  console.log("ZIPPLE_N1_REAL_OPERATOR_MFA_PASS");
   const pendingLogin=await call("login",{identifier:"fixture",password:pw,remember_device:true});assert.equal(pendingLogin.status,200);
   const oldSession=pendingLogin.data;
   assert.equal((await call("admin/recovery/list",{},oldSession.access_token)).status,403);

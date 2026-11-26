@@ -33,9 +33,11 @@ class N1DeviceTest {
   assertEquals(LocalAccessPinCode.SUCCESS,pin.enroll(one,"1234").code)
   assertEquals(LocalAccessPinCode.NOT_CONFIGURED,pin.verify(two,"1234").code)
   assertEquals(LocalAccessPinCode.SUCCESS,pin.verify(one,"1234").code)
+  assertTrue(pin.canUseBiometric(one));assertFalse(pin.canUseBiometric(two))
   repeat(4){assertEquals(LocalAccessPinCode.INVALID,pin.verify(one,"9999").code)}
   assertEquals(LocalAccessPinCode.LOCKED,pin.verify(one,"9999").code)
   assertEquals(LocalAccessPinCode.LOCKED,pin.verify(one,"1234").code)
+  assertFalse(pin.canUseBiometric(one));assertFalse(pin.canUseBiometric(two))
   val vault=SessionVault(context);val token="synthetic-"+UUID.randomUUID()
   try{vault.save(token);assertEquals(token,vault.loadRefreshToken());assertFalse(context.getSharedPreferences("zipple_secure_session",0).all.values.any{it.toString().contains(token)})}finally{vault.clear()}
   assertNull(vault.loadRefreshToken())

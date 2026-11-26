@@ -53,7 +53,7 @@ class MainActivity:FragmentActivity(){
  }else if(!unlocked){
  Text(if(lock.isConfigured(current.member))tr("Déverrouiller","Unlock") else tr("Configurer votre code local","Set your local PIN"))
  OutlinedTextField(pin,{pin=it.filter{c->c in '0'..'9'}.take(4)},label={Text("PIN")},keyboardOptions=KeyboardOptions(keyboardType=KeyboardType.NumberPassword),visualTransformation=PasswordVisualTransformation())
- if(context is FragmentActivity&&ZippleBiometricPolicy.allowed(lock.isConfigured(current.member),biometricEnabled,BiometricGate.available(context),session===current,current.expiresAt,System.currentTimeMillis())){TextButton(onClick={BiometricGate.prompt(context,{if(ZippleBiometricPolicy.allowed(lock.isConfigured(current.member),biometricPrefs.enabled(current.member),BiometricGate.available(context),session===current,current.expiresAt,System.currentTimeMillis())){unlockedByPin=false;unlocked=true}},{message=tr("Biométrie non validée","Biometric verification failed")})}){Text(tr("Empreinte digitale","Fingerprint"))}}
+ if(context is FragmentActivity&&ZippleBiometricPolicy.allowed(lock.canUseBiometric(current.member),biometricEnabled,BiometricGate.available(context),session===current,current.expiresAt,System.currentTimeMillis())){TextButton(onClick={BiometricGate.prompt(context,{if(ZippleBiometricPolicy.allowed(lock.canUseBiometric(current.member),biometricPrefs.enabled(current.member),BiometricGate.available(context),session===current,current.expiresAt,System.currentTimeMillis())){unlockedByPin=false;unlocked=true}},{message=tr("Biométrie non validée","Biometric verification failed")})}){Text(tr("Empreinte digitale","Fingerprint"))}}
  Button(enabled=pin.length==4,onClick={val result=if(!lock.isConfigured(current.member))lock.enroll(current.member,pin)else lock.verify(current.member,pin);unlocked=result.code==LocalAccessPinCode.SUCCESS;unlockedByPin=unlocked;if(!unlocked)message=tr("Code refusé ou verrouillé","PIN denied or locked");pin=""}){Text(tr("Continuer","Continue"))}
  }else{
  Text(current.name,style=MaterialTheme.typography.titleLarge);Text(tr("Établissement autorisé","Authorized site"))
@@ -63,7 +63,7 @@ class MainActivity:FragmentActivity(){
  TextButton(onClick={ZippleSyncSession.schedule(context)}){Text(tr("Synchroniser","Synchronize"))}
  TextButton(onClick={unlocked=false;unlockedByPin=false;ZippleSyncSession.current=null}){Text(tr("Verrouiller","Lock"))}
  }
- if(current!=null)TextButton(onClick={ZippleSyncSession.current=null;vault.clear();session=null;site="";pin="";unlocked=false;message="";scope.launch{try{api.logout(current.token)}catch(_:Exception){message=tr("Session locale fermée ; révocation distante non confirmée","Local session closed; remote revocation unconfirmed")}}}){Text(tr("Déconnexion","Sign out"))}
+ if(current!=null)TextButton(onClick={ZippleSyncSession.current=null;vault.clear();session=null;site="";pin="";unlocked=false;unlockedByPin=false;message="";scope.launch{try{api.logout(current.token)}catch(_:Exception){message=tr("Session locale fermée ; révocation distante non confirmée","Local session closed; remote revocation unconfirmed")}}}){Text(tr("Déconnexion","Sign out"))}
  if(message.isNotEmpty())Text(message,color=MaterialTheme.colorScheme.error)
  }
  }
