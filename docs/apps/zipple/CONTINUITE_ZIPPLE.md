@@ -222,3 +222,5 @@ N1 Cloudflare révision 3 : run 45856957319 SUCCESS, HTTP 401 DENIED via cookie,
 - UI Web transferts raccordée à l'ERP : choix du lot, destination autorisée et SKU/unité compatible, demande avec clé idempotente, validation/annulation, départ et réception avec quantité/écart. Actions natives autorisées au contrat mais pas encore écrans Android. Aucune activation hébergée. Recettes à constater.
 
 - Consignes physiques : réutilisation du mouvement consommable et des fiches fournisseur/client, comptes d'emballages par contrepartie, circulation, retours, casse/pertes motivées, solde non négatif, idempotence, isolation, valeur de référence non comptabilisée. UI ERP et API raccordées, tests SQL sur retour excédentaire, double requête et dette inchangée. Règlements/restitutions de consigne et conversions contenant/dose non encore raccordés, pas d'activation hébergée.
+
+- Run 45864919862 : SQL appliqué mais recette JS interrompue par doublon d'identifiant local receive (réception achat déjà définie). Renommage explicite receiveTransfer, assertions de coût et d'idempotence conservées. Relance requise.

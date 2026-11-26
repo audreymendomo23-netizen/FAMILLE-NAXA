@@ -141,8 +141,8 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal(Number(await scalar("select remaining_cost from zp_ingredient_lots where id=$1",[srcLot])),334);
  await assert.rejects(scalar("select zp_transfer_receive($1,$2,$3,1500,'')",[a.access,dest,transfer]),/TRANSFER_COUNT_REVIEW/);
  await assert.rejects(scalar("select zp_transfer_receive($1,$2,$3,1500,'Perte transit')",[a.access,a.site,transfer]),/DENIED/);
- const receive=()=>scalar("select zp_transfer_receive($1,$2,$3,1500,'Perte transit')",[a.access,dest,transfer]);
- const received=await receive();assert.equal(received.received_cost,499);assert.equal(received.loss_cost,167);assert.deepEqual(await receive(),received);
+ const receiveTransfer=()=>scalar("select zp_transfer_receive($1,$2,$3,1500,'Perte transit')",[a.access,dest,transfer]);
+ const received=await receiveTransfer();assert.equal(received.received_cost,499);assert.equal(received.loss_cost,167);assert.deepEqual(await receiveTransfer(),received);
  assert.equal(Number(await scalar("select sum(remaining_milli) from zp_ingredient_lots where ingredient_id=$1",[dstIng])),1500);
  assert.equal((await scalar("select zp_transfer_snapshot($1,$2)",[a.access,dest])).transfers[0].state,"received");
  const account=await scalar("select zp_container_account($1,$2,$3,null,'Casiers',500)",[b.access,b.site,supplierId]);
