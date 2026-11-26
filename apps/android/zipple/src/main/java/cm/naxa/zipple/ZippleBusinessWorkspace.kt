@@ -64,7 +64,9 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
         OutlinedButton(onClick={tab="crm"}){Text(tr("Clients","Customers"))}
     }
     if(canManage)OutlinedButton(onClick={tab="bulk3"}){Text(tr("ERP 360° — gestion complète","ERP 360° — management"))}
+    if(canManage)OutlinedButton(onClick={tab="documents"}){Text(tr("Justificatifs","Documents"))}
     when(tab){
+        "documents"->{key(session.member,site){ZippleNativeDocuments(api,session,site,en)}}
         "bulk3"->{key(session.member,site){ZippleNativeBulk3(api,session,site,en)}}
         "erp_write","crm"->{key(tab){ZippleNativeErp(api,session,site,en,tab)}}
         "tables"->{
