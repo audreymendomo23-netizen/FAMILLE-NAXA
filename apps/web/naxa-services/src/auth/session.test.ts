@@ -42,6 +42,12 @@ describe("Web authentication session", () => {
     expect(Object.isFrozen(session.account.active_sites)).toBe(true);
   });
 
+  it("accepts opaque GoTrue refresh tokens without assuming a minimum length", () => {
+    expect(parseWebSession({...valid,refresh_token:"a1b2c3d4e5f6"}).refreshToken).toBe("a1b2c3d4e5f6");
+    expect(()=>parseWebSession({...valid,refresh_token:"   "})).toThrow();
+    expect(()=>parseWebSession({...valid,refresh_token:"x".repeat(4097)})).toThrow();
+  });
+
   it("rejects missing tokens, account scope and malformed site IDs", () => {
     expect(() => parseWebSession({ ...valid, device_id:"invalid" })).toThrow();
     expect(() => parseWebSession({ ...valid, refresh_token: "" })).toThrow();

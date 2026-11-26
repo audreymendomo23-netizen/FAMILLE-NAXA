@@ -13,7 +13,7 @@ import {
 import { parseWebSession, type WebAuthSession } from "./auth/session";
 import { ProfilePhoto } from "./auth/profile-photo";
 import { BusinessBackdrop, NightTorch } from "./business-visuals";
-import { localeOf, translate, type Locale } from "./locale";
+import { localeOf, translate, LocaleContext, type Locale } from "./locale";
 import { createRoot } from "react-dom/client";
 import "@famille/design-system/tokens.css";
 import "./naxa-services.css";
@@ -1156,7 +1156,7 @@ function App() {
   }
 
   return (
-    <div className={"app erp-app " + theme}><NightTorch active={nightPulse}/>
+    <LocaleContext.Provider value={locale}><div className={"app erp-app " + theme}><NightTorch active={nightPulse}/>
       {preview && <div className="preview-banner"><strong>DÉMONSTRATION</strong> Essayez les fonctionnalités sans enregistrer d'opérations réelles. <button onClick={() => { setPreview(false); setAuthenticated(false); setActive("overview"); }}>Quitter l'aperçu</button></div>}
       {mobileMenu&&<button className="menu-scrim" aria-label={t("Fermer le menu")} onClick={()=>setMobileMenu(false)}/>}<aside className={"sidebar "+(mobileMenu?"mobile-open":"")} id="ns-navigation">
         <div className="side-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
@@ -1247,7 +1247,7 @@ function App() {
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
           <div className="modal-head"><div><span className="eyebrow">{authSession&&!preview?"NOUVELLE OPÉRATION":"NOUVELLE OPÉRATION · DÉMONSTRATION"}</span><h2 id="modal-title">{active==="team"&&authSession&&!preview?"Pointer mon arrivée":t(selected.action)}</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)}>×</button></div>
           <form onSubmit={(e) => {e.preventDefault();if(active==="stock"&&authSession)void submitStockItem();else if(authSession&&!preview)void submitModuleOperation().catch(error=>setAuthMessage(error instanceof Error?error.message:"Opération impossible."));else if(preview)addLocalEntry();else{setAuthMessage("Action indisponible.");setDialogOpen(false);}}}>
-            <label>{active==="customers"?"Nom du client":active==="pressing"?"Nom du client":active==="agenda"?"Nom / référence du client":active==="help"?"Sujet":active==="cash"?"Catégorie de dépense":active==="team"?"Membre":"Nom / référence"}<input autoFocus value={draftTitle} readOnly={active==="team"&&authSession&&!preview} onChange={(e) => setDraftTitle(e.target.value)} required placeholder="Saisir la valeur" /></label>
+            <label>{active==="customers"?t("Nom du client"):active==="pressing"?t("Nom du client"):active==="agenda"?"Nom / référence du client":active==="help"?"Sujet":active==="cash"?"Catégorie de dépense":active==="team"?"Membre":"Nom / référence"}<input autoFocus value={draftTitle} readOnly={active==="team"&&authSession&&!preview} onChange={(e) => setDraftTitle(e.target.value)} required placeholder="Saisir la valeur" /></label>
             {active === "stock" && authSession ? <>
               <label>Point de vente<select value={activeSiteId} onChange={(e) => setActiveSiteId(e.target.value)} required>{authSession.account.active_site_ids.map((siteId) => <option key={siteId} value={siteId}>{siteId}</option>)}</select></label>
               <label>SKU (facultatif)<input value={draftSku} onChange={(e) => setDraftSku(e.target.value)} maxLength={80} /></label>
@@ -1288,11 +1288,11 @@ function App() {
               <label>Détails<textarea rows={3} value={draftDetail} onChange={(e) => setDraftDetail(e.target.value)} placeholder="Informations complémentaires" /></label>
               <div className="notice">Cette démonstration ne crée aucune opération réelle.</div>
             </>}
-            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>{t("Annuler")}</button><button className="btn primary" disabled={busy}>{authSession&&!preview?"Enregistrer":"Ajouter à la démonstration"}</button></div>
+            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>{t("Annuler")}</button><button className="btn primary" disabled={busy}>{authSession&&!preview?t("Enregistrer"):"Ajouter à la démonstration"}</button></div>
           </form>
         </div>
       </div>}
-    </div>
+    </div></LocaleContext.Provider>
   );
 }
 

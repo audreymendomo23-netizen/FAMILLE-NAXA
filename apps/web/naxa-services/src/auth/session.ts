@@ -51,7 +51,7 @@ export function parseWebSession(value: unknown, now = Date.now()): WebAuthSessio
   if (
     typeof data.device_id !== "string" || !UUID.test(data.device_id) ||
     typeof data.access_token !== "string" || data.access_token.length < 20 ||
-    typeof data.refresh_token !== "string" || data.refresh_token.length < 20 ||
+    typeof data.refresh_token !== "string" || data.refresh_token.length === 0 || data.refresh_token.length > 4096 || /\s/.test(data.refresh_token) ||
     typeof rawAccount.member_id !== "string" || !UUID.test(rawAccount.member_id) ||
     typeof rawAccount.organization_id !== "string" || !UUID.test(rawAccount.organization_id) ||
     !Array.isArray(activeSites) || !activeSites.every((site) => typeof site === "string" && UUID.test(site))

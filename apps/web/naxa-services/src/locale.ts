@@ -1,3 +1,4 @@
+import { createContext, useContext } from "react";
 export type Locale = "fr" | "en" | "ff-CM";
 export const LANGUAGES: readonly Locale[] = ["fr","en","ff-CM"];
 export function localeOf(value: unknown): Locale { return value === "en" || value === "ff-CM" ? value : "fr"; }
@@ -549,6 +550,593 @@ const catalogue: Record<string, readonly [string,string]> = {
   "Aucune opération pour le moment.": [
     "No operations yet.",
     "Alaa golle jooni."
+  ],
+  "PLANNING": [
+    "CALENDAR",
+    "SAHAAAJI"
+  ],
+  "Rendez-vous et disponibilité": [
+    "Appointments and availability",
+    "Sahaaaji e heɓugol"
+  ],
+  "Les conflits d'horaires sont vérifiés lors de la réservation ou du report.": [
+    "Schedule conflicts are checked when booking or rescheduling.",
+    "Sahaaaji ƴeewtatee so a suɓii walla a wayli sahaa."
+  ],
+  "Réservation avec membre affecté": [
+    "Booking with assigned staff",
+    "Sahaa gollotooɗo"
+  ],
+  "Confirmation, annulation et absence": [
+    "Confirmation, cancellation and absence",
+    "Tabbitinol, haaytugol e ŋakkugol"
+  ],
+  "Report daté et contrôle des conflits": [
+    "Rescheduling and conflict checks",
+    "Waylugol sahaa e ƴeewtagol"
+  ],
+  "Rendez-vous du site": [
+    "Location appointments",
+    "Sahaaaji nokkuure"
+  ],
+  "Aucun rendez-vous chargé": [
+    "No appointments loaded",
+    "Alaa sahaaaji hollitaaɗi"
+  ],
+  "Aucun rendez-vous pour le moment.": [
+    "No appointments yet.",
+    "Alaa sahaaaji jooni."
+  ],
+  "Motif obligatoire (3 à 500 caractères)": [
+    "Reason required (3 to 500 characters)",
+    "Daliilu (binndi 3 haa 500)"
+  ],
+  "Nouvelle date et heure de début": [
+    "New start date and time",
+    "Ñalnde e sahaa fuɗɗagol hesere"
+  ],
+  "Nouvelle date et heure de fin": [
+    "New end date and time",
+    "Ñalnde e sahaa timmugol hesere"
+  ],
+  "Reporter le rendez-vous": [
+    "Reschedule appointment",
+    "Waylu sahaa"
+  ],
+  "Cette opération n'est pas modifiable pour le moment.": [
+    "This operation cannot be changed yet.",
+    "Golle ɗee waawaa wayleede jooni."
+  ],
+  "TRÉSORERIE": [
+    "CASH MANAGEMENT",
+    "CEEDE"
+  ],
+  "Registres et sessions": [
+    "Registers and shifts",
+    "Keesuuji ceede"
+  ],
+  "Créer la première caisse": [
+    "Create first register",
+    "Sos keesu adano"
+  ],
+  "Code unique": [
+    "Unique code",
+    "Innol keeriiɗol"
+  ],
+  "Nom du registre": [
+    "Register name",
+    "Innde keesu"
+  ],
+  "Créer le registre": [
+    "Create register",
+    "Sos keesu"
+  ],
+  "La création d'un registre exige le droit de gestion du site.": [
+    "Only authorized managers can create a register.",
+    "Hooreeɓe yamiraaɓe tan mbaawi sosde keesu."
+  ],
+  "Création en attente de confirmation.": [
+    "Creation awaiting confirmation.",
+    "Nana fadi tabbitinol."
+  ],
+  "Ouvrir une session": [
+    "Open a shift",
+    "Uddit sahaa golle"
+  ],
+  "Registre": [
+    "Register",
+    "Keesu"
+  ],
+  "Fonds d'ouverture (FCFA)": [
+    "Opening cash (XAF)",
+    "Ceede fuɗɗagol (FCFA)"
+  ],
+  "Ouvrir la caisse": [
+    "Open register",
+    "Uddit keesu"
+  ],
+  "Une session est déjà ouverte sur ce registre. Fermez-la avant d'en ouvrir une autre.": [
+    "This register is already open. Close it before opening another.",
+    "Keesu nguu udditaama. Uddu ngu hade udditde goɗɗu."
+  ],
+  "L’ouverture de cette caisse est en attente de confirmation.": [
+    "Register opening is awaiting confirmation.",
+    "Udditugol keesu nana fadi tabbitinol."
+  ],
+  "Session actuellement ouverte": [
+    "Current open shift",
+    "Sahaa golle udditiiɗo"
+  ],
+  "Registre à clôturer": [
+    "Register to close",
+    "Keesu uddeteengu"
+  ],
+  "Montant compté à la clôture (FCFA)": [
+    "Cash counted at closing (XAF)",
+    "Ceede limtaaɗe e timmugol (FCFA)"
+  ],
+  "Motif d'écart (si nécessaire)": [
+    "Difference reason (if needed)",
+    "Daliilu seertugol (so ena sokli)"
+  ],
+  "Clôturer et calculer l'écart": [
+    "Close and calculate difference",
+    "Uddu e limtu seertugol"
+  ],
+  "VENTES AU COMPTOIR": [
+    "COUNTER SALES",
+    "JAAYGOL"
+  ],
+  "Enregistrer un encaissement reçu": [
+    "Record received payment",
+    "Danndu ceede keɓaaɗe"
+  ],
+  "Saisie manuelle": [
+    "Manual entry",
+    "Winndugol"
+  ],
+  "Saisissez uniquement les fonds déjà reçus. Cette action n'effectue aucun transfert d'argent.": [
+    "Enter only funds already received. No money is transferred.",
+    "Winndu tan ceede keɓaaɗe. Ceede neldaaka."
+  ],
+  "Session ouverte": [
+    "Open shift",
+    "Sahaa golle udditiiɗo"
+  ],
+  "Désignation vendue": [
+    "Item sold",
+    "Jawdi jaayndi"
+  ],
+  "Article en stock (facultatif)": [
+    "Stock item (optional)",
+    "Jawdi (so a yiɗi)"
+  ],
+  "Prestation / vente sans sortie stock": [
+    "Service / sale without stock movement",
+    "Golle / jaaygol tawa jawdi yaltaaki"
+  ],
+  "Quantité sortie": [
+    "Quantity issued",
+    "Keewal yaltungal"
+  ],
+  "Mode d’encaissement reçu": [
+    "Payment method received",
+    "Laawol heɓugol ceede"
+  ],
+  "Espèces": [
+    "Cash",
+    "Ceede e juuɗe"
+  ],
+  "Mobile Money (externe)": [
+    "Mobile Money (external)",
+    "Mobile Money"
+  ],
+  "Total encaissé (FCFA)": [
+    "Total received (XAF)",
+    "Ceede keɓaaɗe fof (FCFA)"
+  ],
+  "Enregistrer la vente comptant": [
+    "Record cash sale",
+    "Danndu jaaygol"
+  ],
+  "Dernières opérations": [
+    "Latest operations",
+    "Golle sakkitiiɗe"
+  ],
+  "FOURNISSEURS": [
+    "SUPPLIERS",
+    "HOKKOOƁE JAWDI"
+  ],
+  "Référentiel fournisseur": [
+    "Supplier directory",
+    "Doggol hokkooɓe jawdi"
+  ],
+  "Nom du fournisseur": [
+    "Supplier name",
+    "Innde hokkooɗo jawdi"
+  ],
+  "Téléphone": [
+    "Phone",
+    "Telefon"
+  ],
+  "Adresse": [
+    "Address",
+    "Nokkuure"
+  ],
+  "Délai de paiement (jours)": [
+    "Payment term (days)",
+    "Sahaa yoɓde (balɗe)"
+  ],
+  "Enregistrer le fournisseur": [
+    "Save supplier",
+    "Danndu hokkooɗo jawdi"
+  ],
+  "Mouvements de consommables": [
+    "Stock movements",
+    "Dirtugol jawdi"
+  ],
+  "Article": [
+    "Item",
+    "Jawdi"
+  ],
+  "Choisir un article": [
+    "Choose item",
+    "Suɓo jawdi"
+  ],
+  "Nature du mouvement": [
+    "Movement type",
+    "Fannu dirtugol"
+  ],
+  "Entrée": [
+    "Incoming",
+    "Naatugol"
+  ],
+  "Consommation": [
+    "Consumption",
+    "Huutoraade"
+  ],
+  "Perte": [
+    "Loss",
+    "Majjugol"
+  ],
+  "Ajustement signé": [
+    "Signed adjustment",
+    "Peewngol"
+  ],
+  "Quantité": [
+    "Quantity",
+    "Keewal"
+  ],
+  "Motif": [
+    "Reason",
+    "Daliilu"
+  ],
+  "Enregistrer le mouvement": [
+    "Save movement",
+    "Danndu dirtugol"
+  ],
+  "ACHATS ET RÉCEPTIONS": [
+    "PURCHASES AND RECEIPTS",
+    "SOODUGOL E HEƁUGOL"
+  ],
+  "Commander auprès d'un fournisseur": [
+    "Order from supplier",
+    "Ɗaɓɓu jawdi"
+  ],
+  "Fournisseur": [
+    "Supplier",
+    "Hokkooɗo jawdi"
+  ],
+  "Choisir": [
+    "Choose",
+    "Suɓo"
+  ],
+  "Article commandé": [
+    "Ordered item",
+    "Jawdi ɗaɓɓitaandi"
+  ],
+  "Référence de commande": [
+    "Order reference",
+    "Innol ɗaɓɓitannde"
+  ],
+  "Quantité commandée": [
+    "Quantity ordered",
+    "Keewal ɗaɓɓitaangal"
+  ],
+  "Coût unitaire (FCFA)": [
+    "Unit cost (XAF)",
+    "Njoɓdi gootal (FCFA)"
+  ],
+  "Valider la commande fournisseur": [
+    "Confirm supplier order",
+    "Tabbitin ɗaɓɓitannde jawdi"
+  ],
+  "La commande fournisseur exige le droit de gestion du site.": [
+    "Only authorized managers may place supplier orders.",
+    "Hooreeɓe yamiraaɓe tan mbaawi ɗaɓɓude jawdi."
+  ],
+  "Réception et règlement": [
+    "Receipt and payment",
+    "Heɓugol e yoɓugol"
+  ],
+  "Commande à réceptionner": [
+    "Order to receive",
+    "Ɗaɓɓitannde heɓetende"
+  ],
+  "Choisir une commande": [
+    "Choose order",
+    "Suɓo ɗaɓɓitannde"
+  ],
+  "Quantité reçue": [
+    "Quantity received",
+    "Keewal heɓaangal"
+  ],
+  "Enregistrer la réception partielle ou complète": [
+    "Record partial or full receipt",
+    "Danndu jawdi heɓaandi"
+  ],
+  "Montant du règlement bancaire (FCFA)": [
+    "Bank payment amount (XAF)",
+    "Ceede yoɓaaɗe e banki (FCFA)"
+  ],
+  "Référence bancaire": [
+    "Bank reference",
+    "Innol banki"
+  ],
+  "Enregistrer un règlement bancaire": [
+    "Record bank payment",
+    "Danndu njoɓdi banki"
+  ],
+  "Journal stock / achats": [
+    "Stock / purchase log",
+    "Jaŋtol jawdi e soodugol"
+  ],
+  "PRÉSENCE & TEMPS": [
+    "ATTENDANCE & TIME",
+    "NAATUGOL E SAHAA"
+  ],
+  "Pointage de l'utilisateur connecté": [
+    "Your attendance",
+    "Naatugol maa"
+  ],
+  "Pointez votre arrivée, vos pauses, votre reprise et votre départ dans cet ordre.": [
+    "Record arrival, breaks, return and departure in order.",
+    "Winndu naatugol, fooftugol, ruttugol e yaltugol."
+  ],
+  "Aucun pointage aujourd'hui": [
+    "No attendance today",
+    "Alaa naatugol hannde"
+  ],
+  "Commence par pointer ton arrivée.": [
+    "Start by recording your arrival.",
+    "Fuɗɗo e winndugol naatugol maa."
+  ],
+  "Attendez la confirmation du dernier pointage avant de poursuivre.": [
+    "Wait for the last attendance confirmation before continuing.",
+    "Fad tabbitinol hade jokkude."
+  ],
+  "Historique": [
+    "History",
+    "Jaŋtol"
+  ],
+  "Aucun pointage disponible.": [
+    "No attendance available.",
+    "Alaa winndannde naatugol."
+  ],
+  "RELATION CLIENT": [
+    "CUSTOMER RELATIONS",
+    "SOOTTOTOOƁE"
+  ],
+  "Créer un suivi": [
+    "Create follow-up",
+    "Sos rewindo"
+  ],
+  "Crée ou synchronise d'abord une fiche client pour pouvoir lui rattacher un suivi.": [
+    "Create or refresh a customer record before adding a follow-up.",
+    "Sos humpito soottotooɗo hade rewindo."
+  ],
+  "Client": [
+    "Customer",
+    "Soottotooɗo"
+  ],
+  "Choisir une fiche": [
+    "Choose record",
+    "Suɓo humpito"
+  ],
+  "Objet du suivi": [
+    "Follow-up subject",
+    "Ko rewindo"
+  ],
+  "Fréquence": [
+    "Frequency",
+    "Sahaa"
+  ],
+  "Canal": [
+    "Channel",
+    "Laawol"
+  ],
+  "Notes": [
+    "Notes",
+    "Ɓatakuuji"
+  ],
+  "Prochaine échéance": [
+    "Next due date",
+    "Ñalnde aroore"
+  ],
+  "Créer le suivi client": [
+    "Create customer follow-up",
+    "Sos rewindo soottotooɗo"
+  ],
+  "Fiches clients": [
+    "Customer records",
+    "Humpito soottotooɓe"
+  ],
+  "Aucune fiche client dans le site actif.": [
+    "No customer records at this location.",
+    "Alaa humpito soottotooɓe e nokkuure ndee."
+  ],
+  "Suivis enregistrés": [
+    "Saved follow-ups",
+    "Rewindo danndaaɗe"
+  ],
+  "Note de réalisation": [
+    "Completion note",
+    "Ɓatakuru timmugol"
+  ],
+  "Prochaine échéance (facultative, suivi récurrent)": [
+    "Next due date (optional, recurring follow-up)",
+    "Ñalnde aroore (so a yiɗi)"
+  ],
+  "Aucun suivi client synchronisé.": [
+    "No customer follow-ups available.",
+    "Alaa rewindo soottotooɓe."
+  ],
+  "ABONNEMENT NAXA SERVICES": [
+    "NAXA SERVICES SUBSCRIPTION",
+    "ABONMAN NAXA SERVICES"
+  ],
+  "Abonnement et règlement": [
+    "Subscription and payment",
+    "Abonman e njoɓdi"
+  ],
+  "Ce paiement concerne exclusivement votre abonnement NAXA. Les encaissements de votre entreprise restent externes et sont saisis dans la caisse ERP.": [
+    "This payment is for your NAXA subscription only. Record your own business payments separately.",
+    "Njoɓdi ɗee ko abonman NAXA tan. Winndu ceede golle maa seertunde."
+  ],
+  "Vérifier les droits payés": [
+    "Check paid access",
+    "Ƴeewto abonman maa"
+  ],
+  "Règlement réservé au Promoteur authentifié.": [
+    "Only the business owner may pay.",
+    "Jom golle tan waawi yoɓde."
+  ],
+  "Consulter mon abonnement": [
+    "View my subscription",
+    "Yiy abonman am"
+  ],
+  "Formule": [
+    "Plan",
+    "Fannu abonman"
+  ],
+  "PREMIUM requis pour une organisation multi-postes ou multisite.": [
+    "PREMIUM is required for multiple workstations or locations.",
+    "PREMIUM soklaa so nokkuuji keewi."
+  ],
+  "Durée": [
+    "Duration",
+    "Sahaa"
+  ],
+  "Mensuelle": [
+    "Monthly",
+    "Lewru"
+  ],
+  "Annuelle": [
+    "Annual",
+    "Hitaande"
+  ],
+  "Opérateur": [
+    "Provider",
+    "Hokkooɗo"
+  ],
+  "Obtenir le montant et la destination": [
+    "Get amount and payment destination",
+    "Yiy ceede e nokkuure yoɓde"
+  ],
+  "Aucune destination NAXA n’est activée. Ne payez pas sur un autre compte.": [
+    "No NAXA payment destination is active. Do not pay another account.",
+    "Alaa nokkuure yoɓde NAXA. Hoto yoɓ konte goɗɗo."
+  ],
+  "Ouvrir le composeur": [
+    "Open dialler",
+    "Uddit telefon"
+  ],
+  "Numéro du payeur": [
+    "Payer phone number",
+    "Tonngoode telefon yoɓooɗo"
+  ],
+  "Date et heure du paiement (Cameroun)": [
+    "Payment date and time (Cameroon)",
+    "Ñalnde e sahaa njoɓdi (Kameruun)"
+  ],
+  "SMS de débit de cette transaction uniquement": [
+    "Debit SMS for this payment only",
+    "SMS njoɓdi ɗee tan"
+  ],
+  "Déclarer le paiement": [
+    "Declare payment",
+    "Hollu njoɓdi"
+  ],
+  "Je confirme n’avoir effectué aucun paiement pour cette demande.": [
+    "I confirm I have not paid this request.",
+    "Mi tabbitinii mi yoɓaani ɗaɓɓitannde ndee."
+  ],
+  "Abandonner la demande non payée": [
+    "Cancel unpaid request",
+    "Haaytu ɗaɓɓitannde nde yoɓaaka"
+  ],
+  "Reçu": [
+    "Received",
+    "Heɓaama"
+  ],
+  "Confirmé": [
+    "Confirmed",
+    "Tabbitinaama"
+  ],
+  "Réservé": [
+    "Booked",
+    "Suɓaama"
+  ],
+  "En attente": [
+    "Pending",
+    "Nana fadi"
+  ],
+  "Actif": [
+    "Active",
+    "Nana golla"
+  ],
+  "Ouvert": [
+    "Open",
+    "Udditaaɗo"
+  ],
+  "Clôturé": [
+    "Closed",
+    "Uddaaɗo"
+  ],
+  "Commandé": [
+    "Ordered",
+    "Ɗaɓɓitaama"
+  ],
+  "Annulé": [
+    "Cancelled",
+    "Haaytaama"
+  ],
+  "Terminé": [
+    "Completed",
+    "Timmii"
+  ],
+  "Absent": [
+    "Absent",
+    "Alaa ɗoo"
+  ],
+  "Enregistré": [
+    "Saved",
+    "Danndaama"
+  ],
+  "Refusé": [
+    "Rejected",
+    "Salaama"
+  ],
+  "Lecture seule": [
+    "View only",
+    "Yiyde tan"
+  ],
+  "Rendez-vous": [
+    "Appointments",
+    "Sahaaaji"
   ]
 };
 export function translate(locale:Locale, text:string):string { if(locale==="fr")return text;return catalogue[text]?.[locale==="en"?0:1]??text; }
+
+export const LocaleContext=createContext<Locale>("fr");
+export function useTranslation(){const locale=useContext(LocaleContext);return (text:string)=>translate(locale,text);}

@@ -166,7 +166,12 @@ jobs:
               await page.goto('https://127.0.0.1:8443/');
               await page.getByLabel('Identifiant NAXA Services').fill(f.login);
               await page.getByLabel('Mot de passe',{exact:true}).fill(f.password);
+              const loginResponse=page.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-auth')&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='login');
               await page.getByRole('button',{name:'Se connecter',exact:true}).click();
+              const lr=await loginResponse;const ld=await lr.json();
+              console.log('Replay browser login HTTP',lr.status(),'refresh token length',typeof ld.refresh_token==='string'?ld.refresh_token.length:0,'account present',Boolean(ld.account));
+              assert.equal(lr.status(),200,'browser login HTTP');
+              assert.ok(ld.account&&ld.access_token&&ld.refresh_token,'browser auth response structure');
               await page.getByRole('heading',{name:'Une journée bien organisée commence ici.'}).waitFor();
               await page.getByRole('combobox',{name:'Langue',exact:true}).selectOption('en');
               await page.getByRole('heading',{name:'A well-organized day starts here.'}).waitFor();
