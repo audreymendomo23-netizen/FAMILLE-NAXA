@@ -10,7 +10,7 @@ create table public.zp_credit_accounts(
 create table public.zp_credit_sales(
  id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,account_id uuid not null,order_id uuid not null unique,
  receipt_id uuid not null unique,member_id uuid not null,request_id uuid not null,due_on date not null,reason text not null check(length(reason) between 5 and 500),
- amount_xaf bigint not null check(amount_xaf>0),paid_xaf bigint not null default 0 check(paid_xaf>=0 and paid_xaf<=amount_xaf),
+ amount_xaf bigint not null check(amount_xaf>0),paid_xaf bigint not null default 0 check(paid_xaf>=0 and paid_xaf<=amount_xaf),refunded_xaf bigint not null default 0 check(refunded_xaf>=0 and refunded_xaf<=paid_xaf),credit_note_xaf bigint not null default 0 check(credit_note_xaf>=0 and credit_note_xaf<=amount_xaf),balance_xaf bigint generated always as (amount_xaf-paid_xaf+refunded_xaf-credit_note_xaf) stored check(balance_xaf>=0),
  created_at timestamptz not null default now(),unique(member_id,request_id),unique(id,org_id,site_id),
  foreign key(account_id,org_id,site_id) references public.zp_credit_accounts(id,org_id,site_id),foreign key(order_id,org_id,site_id) references public.zp_orders(id,org_id,site_id),
  foreign key(receipt_id,org_id,site_id) references public.zp_cash_receipts(id,org_id,site_id),foreign key(member_id,org_id) references public.zp_members(id,org_id));
@@ -22,7 +22,7 @@ create table public.zp_credit_payments(
  foreign key(member_id,org_id) references public.zp_members(id,org_id),
  check((method='cash' and reference is null) or (method<>'cash' and reference is not null and length(reference) between 4 and 160)));
 create function public.zp_credit_status(p_order uuid) returns text language sql stable security invoker set search_path=pg_catalog,public as $$
- select coalesce((select case when r.method='credit' and (s.id is null or s.paid_xaf<s.amount_xaf) then 'credit_due' else 'paid' end from public.zp_cash_receipts r left join public.zp_credit_sales s on s.receipt_id=r.id where r.order_id=p_order),'unpaid');
+ select coalesce((select case when r.method='credit' and (s.id is null or s.balance_xaf>0) then 'credit_due' else 'paid' end from public.zp_cash_receipts r left join public.zp_credit_sales s on s.receipt_id=r.id where r.order_id=p_order),'unpaid');
 $$;
 create function public.zp_credit_account_add(p_access text,p_site uuid,p_customer uuid,p_limit bigint) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;i uuid;begin m:=public.zp_erp_actor(p_access,p_site);
@@ -42,7 +42,7 @@ declare m public.zp_members;a public.zp_credit_accounts;c public.zp_cash_session
  if p_request is null or p_due is null or p_due<(now() at time zone 'Africa/Douala')::date or length(why) not between 5 and 500 then raise exception 'INVALID_CREDIT_SALE';end if;
  select * into o from public.zp_orders where id=p_order and org_id=m.org_id and site_id=p_site for update;
  if o.id is null or o.status<>'served' or o.total_xaf<=0 or exists(select 1 from public.zp_cash_receipts where order_id=p_order) then raise exception 'SALE_NOT_SETTLEABLE';end if;
- select coalesce(sum(amount_xaf-paid_xaf),0) into debt from public.zp_credit_sales where account_id=a.id;
+ select coalesce(sum(balance_xaf),0) into debt from public.zp_credit_sales where account_id=a.id;
  if debt+o.total_xaf>a.limit_xaf then raise exception 'CREDIT_LIMIT_EXCEEDED';end if;
  perform public.zp_customer_attach(p_access,p_site,a.customer_id,o.id);
  insert into public.zp_cash_receipts(org_id,site_id,cash_id,order_id,member_id,request_id,method,amount_xaf,reference) values(m.org_id,p_site,c.id,o.id,m.id,gen_random_uuid(),'credit',o.total_xaf,null) returning id into rid;
@@ -57,15 +57,15 @@ declare m public.zp_members;s public.zp_credit_sales;c public.zp_cash_sessions;x
  if x.id is not null then if (x.site_id,x.sale_id,x.cash_id,x.amount_xaf,x.method,x.reference) is distinct from (p_site,p_sale,p_cash,p_amount,p_method,ref) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return x.id;end if;
  if c.closed_at is not null then raise exception 'CASH_CLOSED';end if;
  select * into s from public.zp_credit_sales where id=p_sale and org_id=m.org_id and site_id=p_site for update;if s.id is null then raise exception 'DENIED';end if;
- if p_request is null or p_amount is null or p_amount not between 1 and s.amount_xaf-s.paid_xaf or p_method is null or p_method not in ('cash','mtn_momo','orange_money','bank','card') or (p_method<>'cash' and (ref is null or length(ref) not between 4 and 160)) then raise exception 'CREDIT_PAYMENT_EXCEEDS_BALANCE';end if;
+ if p_request is null or p_amount is null or p_amount not between 1 and s.balance_xaf or p_method is null or p_method not in ('cash','mtn_momo','orange_money','bank','card') or (p_method<>'cash' and (ref is null or length(ref) not between 4 and 160)) then raise exception 'CREDIT_PAYMENT_EXCEEDS_BALANCE';end if;
  if p_method<>'cash' then insert into public.zp_settlement_references values(m.org_id,p_method,ref);end if;
  insert into public.zp_credit_payments(org_id,site_id,sale_id,cash_id,member_id,request_id,amount_xaf,method,reference) values(m.org_id,p_site,s.id,c.id,m.id,p_request,p_amount,p_method,ref) returning id into i;
  update public.zp_credit_sales set paid_xaf=paid_xaf+p_amount where id=s.id;return i;end $$;
 create function public.zp_credit_snapshot(p_access text,p_site uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;begin m:=public.zp_erp_actor(p_access,p_site);
  return jsonb_build_object('customers',coalesce((select jsonb_agg(jsonb_build_object('id',id,'name',display_name) order by display_name) from public.zp_customers where org_id=m.org_id),'[]'::jsonb),
- 'accounts',coalesce((select jsonb_agg(jsonb_build_object('id',a.id,'customer_id',a.customer_id,'name',c.display_name,'limit_xaf',a.limit_xaf,'balance_xaf',(select coalesce(sum(amount_xaf-paid_xaf),0) from public.zp_credit_sales where account_id=a.id)) order by c.display_name) from public.zp_credit_accounts a join public.zp_customers c on c.id=a.customer_id where a.org_id=m.org_id and a.site_id=p_site),'[]'::jsonb),
- 'sales',coalesce((select jsonb_agg(to_jsonb(s) order by s.due_on) from (select id,account_id,order_id,due_on,reason,amount_xaf,paid_xaf,created_at from public.zp_credit_sales where org_id=m.org_id and site_id=p_site)s),'[]'::jsonb),
+ 'accounts',coalesce((select jsonb_agg(jsonb_build_object('id',a.id,'customer_id',a.customer_id,'name',c.display_name,'limit_xaf',a.limit_xaf,'balance_xaf',(select coalesce(sum(balance_xaf),0) from public.zp_credit_sales where account_id=a.id)) order by c.display_name) from public.zp_credit_accounts a join public.zp_customers c on c.id=a.customer_id where a.org_id=m.org_id and a.site_id=p_site),'[]'::jsonb),
+ 'sales',coalesce((select jsonb_agg(to_jsonb(s) order by s.due_on) from (select id,account_id,order_id,due_on,reason,amount_xaf,paid_xaf,refunded_xaf,credit_note_xaf,balance_xaf,created_at from public.zp_credit_sales where org_id=m.org_id and site_id=p_site)s),'[]'::jsonb),
  'payments',coalesce((select jsonb_agg(to_jsonb(p) order by p.created_at desc) from (select id,sale_id,amount_xaf,method,reference,created_at from public.zp_credit_payments where org_id=m.org_id and site_id=p_site)p),'[]'::jsonb));end $$;
 create or replace function public.zp_business_snapshot(p_access text,p_site uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;mode jsonb;items jsonb;orders jsonb;tables jsonb;begin m:=public.zp_business_actor(p_access,p_site);if not public.zp_can_operate(m.id,p_site,'order') then raise exception 'DENIED';end if;

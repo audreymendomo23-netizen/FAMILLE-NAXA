@@ -47,7 +47,7 @@ declare m public.zp_members;s public.zp_credit_sales;x public.zp_credit_followup
  select * into x from public.zp_credit_followups where member_id=m.id and request_id=p_request;
  if x.followup_id is not null then
  if (x.site_id,x.sale_id) is distinct from (p_site,p_sale) or not exists(select 1 from public.zp_customer_followups where id=x.followup_id and channel=p_channel and due_on=p_due) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return x.followup_id;end if;
- if s.paid_xaf>=s.amount_xaf or p_request is null or p_due is null or p_due<(now() at time zone 'Africa/Douala')::date or p_channel is null or p_channel not in ('telephone','whatsapp','in_person') then raise exception 'INVALID_CREDIT_FOLLOWUP';end if;
+ if s.balance_xaf=0 or p_request is null or p_due is null or p_due<(now() at time zone 'Africa/Douala')::date or p_channel is null or p_channel not in ('telephone','whatsapp','in_person') then raise exception 'INVALID_CREDIT_FOLLOWUP';end if;
  select customer_id into customer from public.zp_credit_accounts where id=s.account_id;
  i:=public.zp_followup_create(p_access,p_site,customer,p_request,'Relance créance / Credit follow-up #'||left(s.id::text,8),p_channel,p_due);
  insert into public.zp_credit_followups values(s.id,i,m.org_id,p_site,m.id,p_request);return i;end $$;
