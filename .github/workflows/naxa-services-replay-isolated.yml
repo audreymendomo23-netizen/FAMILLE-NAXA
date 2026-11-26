@@ -627,7 +627,23 @@ jobs:
                   await hr.getByLabel('Intitulé',{exact:true}).fill('Réunion hebdomadaire de recette');
                   await hr.getByLabel('Répétition',{exact:true}).selectOption('weekly');
                   await hr.getByLabel('Nombre de réunions',{exact:true}).fill('3');
-                  const series=await rpc(page,'ns_schedule_meeting_series',()=>hr.getByRole('button',{name:'Créer et inviter',exact:true}).click());
+                  // Commit the request on the real disposable backend, then simulate loss of its response.
+                  const seriesRoute='**/rest/v1/rpc/ns_schedule_meeting_series';
+                  let committedPayload;
+                  await page.route(seriesRoute,async route=>{
+                    committedPayload=route.request().postDataJSON();
+                    const upstream=await route.fetch();
+                    if(upstream.status()!==200){await route.fulfill({response:upstream});return;}
+                    await route.fulfill({response:upstream,status:503,contentType:'application/json',body:JSON.stringify({message:'Simulated lost acknowledgement'})});
+                  },{times:1});
+                  await rpc(page,'ns_schedule_meeting_series',()=>hr.getByRole('button',{name:'Créer et inviter',exact:true}).click(),503);
+                  assert.ok(committedPayload?.p_id);
+                  await hr.getByRole('alert').waitFor();
+                  const retryResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/rest/v1/rpc/ns_schedule_meeting_series'&&r.request().method()==='POST');
+                  await hr.getByRole('button',{name:'Créer et inviter',exact:true}).click();
+                  const retry=await retryResponse;assert.equal(retry.status(),200);
+                  assert.deepEqual(retry.request().postDataJSON(),committedPayload);
+                  const series=await retry.json();assert.equal(series.id,committedPayload.p_id);
                   assert.equal(series.meeting_ids.length,3);
                   const hostSeries=hr.getByRole('article').filter({hasText:'Réunion hebdomadaire de recette'});
                   await hostSeries.filter({hasText:'Réunion récurrente · 3'}).waitFor();
@@ -641,7 +657,7 @@ jobs:
                   await hostSeries.filter({hasText:'Réunion récurrente · 2'}).getByText(/Annulée/).waitFor();
                   const occurrences=await success(base+'/rest/v1/ns_internal_meetings?select=status,series_occurrence&series_id=eq.'+series.id,undefined,admin,admin,'GET');
                   assert.equal(occurrences.filter(x=>x.status==='scheduled').length,2);assert.equal(occurrences.find(x=>x.series_occurrence===2).status,'cancelled');
-                  pass('real browser recurring series, guest visibility and isolated occurrence cancellation');
+                  pass('real browser recurring series, lost acknowledgement retry without duplicates, guest visibility and isolated occurrence cancellation');
                   phase='scoped daily briefing';
                   const hb=page.getByRole('region',{name:'Mon bilan',exact:true}),gb=guest.getByRole('region',{name:'Mon bilan',exact:true});
                   const hd=await rpc(page,'ns_daily_briefing',()=>hb.getByRole('button',{name:'Actualiser',exact:true}).click());
