@@ -34,6 +34,8 @@ jobs:
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f docs/bootik-n0/runtime-grants.sql
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f supabase/drafts/bootik_payments.sql
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f docs/bootik-n0/payment-grants.sql
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f supabase/drafts/bootik_stock_events.sql
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f docs/bootik-n0/stock-event-grants.sql
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f docs/bootik-n0/isolation.sql
           psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f docs/bootik-n0/operations.sql
       - name: Real PostgreSQL API service recipe
