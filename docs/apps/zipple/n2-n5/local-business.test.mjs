@@ -40,6 +40,17 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await guest.getByRole("heading",{name:"Votre avis (facultatif)"}).waitFor({timeout:15000});await guest.getByRole("button",{name:"Envoyer mon avis"}).click();await guest.getByText("Merci pour votre avis.").waitFor();
   assert.equal(Number(await scalar("select count(*) from zp_feedback where org_id=$1",[org])),1);
   assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[item.body.data]),2);
+  await page.getByRole("button",{name:"Stocks & finances"}).click();await page.getByRole("heading",{name:"Stocks et finances"}).waitFor();
+  await page.getByLabel("Nom de la matière").fill("Farine recette");await page.getByLabel("SKU",{exact:true}).fill("FAR-TEST");await page.getByRole("button",{name:"Ajouter la matière"}).click();
+  await page.getByLabel("Matière",{exact:true}).selectOption({label:"Farine recette (kg)"});
+  await page.getByLabel("Numéro de lot").fill("LOT-TEST");await page.getByLabel("Fournisseur",{exact:true}).fill("Fournisseur recette");await page.getByLabel("Quantité reçue").fill("3");await page.getByLabel("Coût total du lot FCFA").fill("1500");await page.getByRole("button",{name:"Enregistrer la réception"}).click();
+  await page.getByText(/LOT-TEST · Fournisseur recette/).waitFor();
+  const ingredientId=await scalar("select id from zp_ingredients where org_id=$1 and name='Farine recette'",[org]);
+  assert.equal(Number(await scalar("select remaining_milli from zp_ingredient_lots where ingredient_id=$1",[ingredientId])),3000);
+  await page.getByRole("button",{name:"Dépenses",exact:true}).click();await page.getByLabel("Libellé de dépense").fill("Loyer recette");await page.getByLabel("Montant FCFA",{exact:true}).fill("2500");await page.getByLabel("Référence justificative").fill("LOYER-TEST");await page.getByRole("button",{name:"Enregistrer la dépense"}).click();await page.getByText(/Loyer recette ·/).waitFor();
+  assert.equal(Number(await scalar("select amount_xaf from zp_expenses where org_id=$1",[org])),2500);
+  await page.getByRole("button",{name:"Comptabilité",exact:true}).click();await page.getByText(/Coût des ventes non déterminé/).waitFor();
+  console.log("ZIPPLE_N5_REAL_EDGE_STOCK_EXPENSE_UI_PASS");
   await staff.close();await guestCtx.close();
   console.log("ZIPPLE_BUSINESS_REAL_EDGE_PROFESSIONAL_AND_GUEST_BROWSER_PASS");
  }finally{if(browser)await browser.close();if(server)await new Promise(ok=>server.close(ok));await db.end()}
