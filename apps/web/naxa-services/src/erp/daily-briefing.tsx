@@ -20,10 +20,10 @@ function dayInDouala(){return new Date(Date.now()+3600000).toISOString().slice(0
 type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>};
 export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Props){
  const [lang,setLang]=useState<Lang>(account.default_locale);
- const [report,setReport]=useState<Report|null>(null),[error,setError]=useState(false),[loading,setLoading]=useState(false),[playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
+ const [report,setReport]=useState<Report|null>(null),[error,setError]=useState(false),[loading,setLoading]=useState(false),[playing,setPlaying]=useState(false),[paused,setPaused]=useState(false),[speed,setSpeed]=useState(1);
  const controller=useRef<AbortController|null>(null),audio=useRef<SpeechSynthesisUtterance|null>(null),mounted=useRef(false);
  const t=copy[lang];
- function stop(){if(audio.current){audio.current.onend=null;audio.current.onerror=null;window.speechSynthesis?.cancel();audio.current=null;}setPlaying(false);}
+ function stop(){if(audio.current){audio.current.onend=null;audio.current.onerror=null;window.speechSynthesis?.cancel();audio.current=null;}setPlaying(false);setPaused(false);}
  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;controller.current?.abort();if(audio.current){audio.current.onend=null;audio.current.onerror=null;window.speechSynthesis?.cancel();audio.current=null;}};},[]);
  async function load(){
   stop();controller.current?.abort();const abort=new AbortController();controller.current=abort;setLoading(true);setError(false);setReport(null);
@@ -45,14 +45,15 @@ export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Pro
   const voice=window.speechSynthesis.getVoices().find(v=>v.localService&&v.lang.toLowerCase().split("-")[0]===lang.toLowerCase().split("-")[0]);
   if(!voice){setError(true);return;}
   stop();setError(false);const u=new SpeechSynthesisUtterance(briefingNarration(r,lang));u.voice=voice;u.lang=voice.lang;u.rate=speed;audio.current=u;
-  u.onend=()=>{if(audio.current===u){audio.current=null;setPlaying(false);}};u.onerror=()=>{if(audio.current===u){audio.current=null;setPlaying(false);setError(true);}};
-  setPlaying(true);window.speechSynthesis.speak(u);
+  u.onend=()=>{if(audio.current===u){audio.current=null;setPlaying(false);setPaused(false);}};u.onerror=()=>{if(audio.current===u){audio.current=null;setPlaying(false);setPaused(false);setError(true);}};
+  setPaused(false);setPlaying(true);window.speechSynthesis.speak(u);
  }
  if(!siteId)return null;
  return <section className="module-main-card" aria-label={t.title}><h2>{t.title}</h2>
  <label><select aria-label="Language / Langue" disabled={loading} value={lang} onChange={e=>{stop();setLang(e.target.value as Lang);setError(false);}}>{Object.entries(languages).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
  <label><select aria-label="Speed / Vitesse" disabled={loading} value={speed} onChange={e=>{stop();setSpeed(Number(e.target.value));}}>{[.8,1,1.2,1.5].map(s=><option key={s} value={s}>{s}×</option>)}</select></label>
  <button className="btn primary" disabled={loading} onClick={()=>{if(playing){stop();return;}void load().then(r=>{if(r&&mounted.current&&!r.abort.signal.aborted&&controller.current===r.abort)speak(r.data);});}}>{playing?t.stop:t.play}</button>
+ {playing&&<button className="btn secondary" onClick={()=>{if(!audio.current)return;if(paused)window.speechSynthesis.resume();else window.speechSynthesis.pause();setPaused(!paused);}}>{({fr:paused?"Reprendre":"Pause",en:paused?"Resume":"Pause","ff-CM":paused?"Jokku":"Fowtu",es:paused?"Continuar":"Pausa",it:paused?"Riprendi":"Pausa","zh-CN":paused?"继续":"暂停"})[lang]}</button>}
  <button className="btn secondary" disabled={loading} onClick={()=>void load()}>{t.load}</button>
  {error&&<p role="alert">{t.unavailable}</p>}{report&&<p>{briefingNarration(report,lang)}</p>}</section>;
 }
