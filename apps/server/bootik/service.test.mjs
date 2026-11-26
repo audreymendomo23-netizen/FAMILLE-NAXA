@@ -157,6 +157,20 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await call('stock-setup',unitReq)).status,200);
  const converted={...group,idempotency_key:randomUUID(),unit_code:'pack',quantity:1};assert.equal((await call('sync-item-sale',converted)).body.state,'acknowledged');assert.equal(Number((await locate('SECOND')).quantity_on_hand),1);
  await one('delete from bootik.bk_member_sites where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4',[o,a,u,foreign]);
+ // Weighted cost remains unknown for historical uncosted stock; cost snapshots are immutable.
+ const costedItem=await call('master-create',{...newItem,request_id:randomUUID(),sku:'COST-1',barcode:'',minimum_quantity:2,target_quantity:10});assert.equal(costedItem.status,200);
+ const costBalance=async()=>await one('select id,quantity_on_hand,unit_cost_fcfa,updated_at::text as version from bootik.bk_inventory_balances where item_id=$1 and location_id=$2',[costedItem.body.result.entity_id,s]);
+ const costReceipt=async(q,cost)=>{const x=await costBalance();return {balance_id:x.id,stock_kind:'receipt',quantity:q,landed_cost_fcfa:cost,expected_version:x.version,reason:'Réception valorisée',idempotency_key:randomUUID()}};
+ const c1=await costReceipt(10,1000);assert.equal((await call('sync-stock',c1)).body.state,'acknowledged');assert.equal((await call('sync-stock',c1)).body.state,'acknowledged');
+ assert.equal(Number((await costBalance()).unit_cost_fcfa),100);
+ const c2=await costReceipt(10,2000);assert.equal((await call('sync-stock',c2)).body.state,'acknowledged');assert.equal(Number((await costBalance()).unit_cost_fcfa),150);
+ assert.equal((await call('sync-stock',{...c2,landed_cost_fcfa:1})).body.state,'conflict');
+ const cb=await costBalance();const cv=await call('sync-sale',{balance_id:cb.id,quantity:2,unit_price_fcfa:250,idempotency_key:randomUUID()});assert.equal(cv.body.state,'acknowledged');
+ const costs=await one('select unit_cost_snapshot_fcfa,cost_of_goods_fcfa,gross_margin_fcfa from bootik.bk_sales where id=$1',[cv.body.result.sale_id]);assert.equal(Number(costs.cost_of_goods_fcfa),300);assert.equal(Number(costs.gross_margin_fcfa),200);
+ const health=await call('stock-health',{});assert.equal(health.status,200);assert.equal(Number(health.body.result.items.find(x=>x.sku==='COST-1').valuation_fcfa),2700);
+ const c3=await costReceipt(1,null);assert.equal((await call('sync-stock',c3)).body.state,'acknowledged');assert.equal((await costBalance()).unit_cost_fcfa,null);assert.equal(Number((await one('select cost_of_goods_fcfa from bootik.bk_sales where id=$1',[cv.body.result.sale_id])).cost_of_goods_fcfa),300);
+ await one("update bootik.bk_members set role='staff' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);assert.equal((await call('stock-health',{})).status,400);
+ await one("update bootik.bk_members set role='manager' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);

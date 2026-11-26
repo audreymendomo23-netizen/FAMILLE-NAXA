@@ -29,3 +29,5 @@ grant select,insert on bootik.bk_storage_locations,bootik.bk_reorder_policies to
 grant insert on bootik.bk_product_lots to bootik_runtime;
 
 grant select on bootik.bk_item_units to bootik_runtime;
+
+grant update(unit_cost_fcfa) on bootik.bk_inventory_balances to bootik_runtime;

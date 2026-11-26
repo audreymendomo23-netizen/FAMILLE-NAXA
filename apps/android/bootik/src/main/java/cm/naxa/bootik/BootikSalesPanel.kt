@@ -10,9 +10,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-private data class CachedSaleItem(val balanceId:String,val name:String,val available:Double,val price:Long,val onHand:Double,val version:String,val sku:String,val barcode:String,val lot:String,val location:String,val activity:String,val expiry:String,val serialized:Boolean,val activityId:String,val itemId:String,val baseUnit:String,val units:List<Pair<String,Double>>)
+private data class CachedSaleItem(val balanceId:String,val name:String,val available:Double,val price:Long,val onHand:Double,val version:String,val sku:String,val barcode:String,val lot:String,val location:String,val activity:String,val expiry:String,val serialized:Boolean,val activityId:String,val itemId:String,val baseUnit:String,val units:List<Pair<String,Double>>,val unitCost:String?)
 private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length()).map{
- val j=a.getJSONObject(it);CachedSaleItem(j.getString("balance_id"),j.getString("display_name"),j.getDouble("available"),j.getLong("unit_price_fcfa"),j.optDouble("quantity_on_hand",Double.NaN),j.optString("stock_version",""),j.optString("sku",""),j.optString("barcode",""),j.optString("lot_code",""),j.optString("storage_label",""),j.optString("activity_name",""),j.optString("expires_at",""),j.optBoolean("is_serialized",false),j.optString("activity_id",""),j.optString("item_id",""),j.optString("base_unit_code",""),j.optJSONArray("sale_units")?.let{u->(0 until u.length()).map{n->val x=u.getJSONObject(n);x.getString("unit_code") to x.getDouble("factor")}}?:emptyList()).also{v->require(v.balanceId.isNotBlank()&&v.available.isFinite()&&v.price>=0)}
+ val j=a.getJSONObject(it);CachedSaleItem(j.getString("balance_id"),j.getString("display_name"),j.getDouble("available"),j.getLong("unit_price_fcfa"),j.optDouble("quantity_on_hand",Double.NaN),j.optString("stock_version",""),j.optString("sku",""),j.optString("barcode",""),j.optString("lot_code",""),j.optString("storage_label",""),j.optString("activity_name",""),j.optString("expires_at",""),j.optBoolean("is_serialized",false),j.optString("activity_id",""),j.optString("item_id",""),j.optString("base_unit_code",""),j.optJSONArray("sale_units")?.let{u->(0 until u.length()).map{n->val x=u.getJSONObject(n);x.getString("unit_code") to x.getDouble("factor")}}?:emptyList(),if(j.isNull("unit_cost_fcfa"))null else j.optString("unit_cost_fcfa")).also{v->require(v.balanceId.isNotBlank()&&v.available.isFinite()&&v.price>=0)}
 }
 @Composable fun BootikSalesPanel(api:BootikApi,dao:BootikScopedDao,session:BootikSession,site:String){
  val context=LocalContext.current
@@ -26,7 +26,7 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  var search by remember(org,member,site){mutableStateOf("")};var page by remember(org,member,site){mutableStateOf(0)}
  val matches=remember(items,search){items.filter{v->listOf(v.name,v.sku,v.barcode,v.lot,v.location,v.activity).any{BootikCatalogSearch.matches(it,search)}}}
  var selected by remember(site){mutableStateOf("")};var quantity by remember(site){mutableStateOf("1")}
- var stockKind by remember(site){mutableStateOf("receipt")};var reason by remember(site){mutableStateOf("")}
+ var stockKind by remember(site){mutableStateOf("receipt")};var reason by remember(site){mutableStateOf("")};var landedCost by remember(site){mutableStateOf("")};var health by remember(site){mutableStateOf<List<JSONObject>>(emptyList())}
  var batch by remember(org,member,site){mutableStateOf<List<JSONObject>>(emptyList())};var batchReason by remember(site){mutableStateOf("")}
  var dest by remember(site){mutableStateOf("")};var transfers by remember(site){mutableStateOf<List<JSONObject>>(emptyList())};var transferId by remember(site){mutableStateOf("")};var transferQty by remember(site){mutableStateOf("")};var transferReason by remember(site){mutableStateOf("")}
  val requests=remember(org,member,site){mutableMapOf<String,Pair<String,String>>()}
@@ -61,16 +61,21 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  if(session.role!="staff"){
   Text("Réceptions, pertes et comptages",style=MaterialTheme.typography.titleMedium)
   Text("Sélectionnez un article, actualisez le stock si nécessaire. Quantité ci-dessus ; aucune modification avant confirmation serveur.")
-  if(item!=null&&item.version.isNotBlank())Text("Quantité physique de référence : "+item.onHand)
+  if(item!=null&&item.version.isNotBlank())Text("Quantité physique de référence : "+item.onHand+" • Coût moyen : "+(item.unitCost?.let{"$it FCFA"}?:"Non renseigné"))
   listOf("receipt" to "Réception physique", "loss" to "Perte", "count" to "Comptage").forEach{(kind,label)->Row{RadioButton(stockKind==kind,{stockKind=kind},enabled=!busy);Text(label)}}
+  if(stockKind=="receipt")OutlinedTextField(landedCost,{landedCost=it},label={Text("Coût total rendu FCFA (facultatif)")},enabled=!busy,singleLine=true)
   OutlinedTextField(reason,{if(it.length<=500)reason=it},label={Text("Motif / référence de stock")},enabled=!busy)
-  Button(enabled=!busy&&item!=null&&item.version.isNotBlank()&&n!=null&&n.isFinite()&&n>=0&&(stockKind=="count"||n>0)&&reason.trim().length>=3,onClick={task{
+  Button(enabled=!busy&&item!=null&&item.version.isNotBlank()&&n!=null&&n.isFinite()&&n>=0&&(stockKind=="count"||n>0)&&reason.trim().length>=3&&(stockKind!="receipt"||landedCost.isBlank()||(landedCost.toLongOrNull()?.let{it>=0}==true)),onClick={task{
    require(session.permits(site));val id=UUID.randomUUID().toString()
    val payload=JSONObject().put("balance_id",item!!.balanceId).put("quantity",n!!).put("stock_kind",stockKind).put("expected_version",item.version).put("reason",reason.trim()).put("idempotency_key",id)
-   dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));reason="";status="Mouvement en attente, aucun stock confirmé";if(automatic)BootikSync.schedule(context,binding)
+   if(stockKind=="receipt"&&landedCost.isNotBlank())payload.put("landed_cost_fcfa",landedCost.toLong());dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));reason="";landedCost="";status="Mouvement en attente, aucun stock confirmé";if(automatic)BootikSync.schedule(context,binding)
   }}){Text("Mettre le mouvement en file")}
  }
  if(session.role!="staff"){
+  Text("Indicateurs et valorisation du stock",style=MaterialTheme.typography.titleMedium)
+  Button(enabled=!busy,onClick={task{val a=api.operation(session,site,"stock-health",JSONObject()).getJSONArray("items");health=(0 until a.length()).map{a.getJSONObject(it)}}}){Text("Actualiser les alertes stock")}
+  Text("${health.size} articles • ${health.count{it.optBoolean("low_stock")}} seuils atteints")
+  health.filter{it.optBoolean("low_stock")||it.optInt("expiring_balances")>0||it.optInt("blocked_balances")>0||it.optInt("uncosted_balances")>0}.take(100).forEach{x->Text(x.getString("display_name")+" • disponible "+x.getString("available")+" • réassort "+x.optString("suggested_quantity","—")+" • lots proches échéance "+x.optInt("expiring_balances")+" • valeur "+if(x.isNull("valuation_fcfa"))"inconnue" else x.getString("valuation_fcfa")+" FCFA")}
   Text("Inventaire groupé (30 lignes maximum)",style=MaterialTheme.typography.titleMedium)
   Button(enabled=!busy&&item!=null&&item.activityId.isNotBlank()&&item.version.isNotBlank()&&!item.serialized&&n!=null&&n.isFinite()&&n>=0&&batch.size<30&&batch.none{it.optString("balance_id")==item.balanceId}&&(batch.isEmpty()||batch.first().optString("activity_id")==item.activityId),onClick={val it=item!!;batch=batch+JSONObject().put("balance_id",it.balanceId).put("activity_id",it.activityId).put("event_id",UUID.randomUUID().toString()).put("quantity",n!!).put("expected_version",it.version).put("name",it.name)}){Text("Ajouter au comptage groupé")}
   batch.forEach{x->Row{Text(x.getString("name")+" : "+x.getString("quantity"));TextButton(enabled=!busy,onClick={batch=batch.filter{it.getString("balance_id")!=x.getString("balance_id")}}){Text("Retirer")}}}

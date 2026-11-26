@@ -230,6 +230,7 @@ create table if not exists bootik.bk_inventory_balances (
   quantity_on_hand numeric(20,6) not null default 0 check (quantity_on_hand >= 0),
   quantity_reserved numeric(20,6) not null default 0 check (quantity_reserved >= 0),
   quantity_damaged numeric(20,6) not null default 0 check (quantity_damaged >= 0),
+  unit_cost_fcfa numeric(20,6) check (unit_cost_fcfa is null or unit_cost_fcfa>=0),
   updated_at timestamptz not null default now(),
   foreign key (activity_id, location_id, organization_id, app_id)
     references bootik.bk_activity_locations(activity_id, location_id, organization_id, app_id) on delete restrict,

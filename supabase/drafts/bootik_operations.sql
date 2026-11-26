@@ -40,7 +40,9 @@ create table bootik.bk_sales (
  id uuid primary key default gen_random_uuid(),organization_id uuid not null,app_id uuid not null,activity_id uuid not null,location_id uuid not null,
  actor uuid not null,idempotency_key text not null, balance_id uuid not null references bootik.bk_inventory_balances(id),
  quantity numeric(20,6) not null check(quantity>0),unit_price_fcfa bigint not null check(unit_price_fcfa>=0),
- total_fcfa bigint not null check(total_fcfa>=0), created_at timestamptz not null default now(),
+ total_fcfa bigint not null check(total_fcfa>=0), unit_cost_snapshot_fcfa numeric(20,6) check(unit_cost_snapshot_fcfa is null or unit_cost_snapshot_fcfa>=0),
+ cost_of_goods_fcfa numeric generated always as (round(quantity*unit_cost_snapshot_fcfa)) stored,
+ gross_margin_fcfa numeric generated always as (total_fcfa-round(quantity*unit_cost_snapshot_fcfa)) stored, created_at timestamptz not null default now(),
  unique(organization_id,app_id,idempotency_key),
  foreign key(activity_id,location_id,organization_id,app_id) references bootik.bk_activity_locations(activity_id,location_id,organization_id,app_id),
  foreign key(organization_id,app_id,actor,location_id) references bootik.bk_member_sites(organization_id,app_id,user_id,location_id)
@@ -150,8 +152,8 @@ begin
  if not found then raise exception 'BOOTIK_ITEM_UNAVAILABLE';end if;
  if lower(v_unit) in ('unit','unite','unité','piece','pièce','bouteille','carton','pack','sac','casier','palette') and p_quantity<>trunc(p_quantity) then raise exception 'BOOTIK_INVALID_SALE';end if;
  v_total:=p_quantity*p_price;if v_total<>round(v_total) then raise exception 'BOOTIK_FRACTIONAL_XAF';end if;
- insert into bootik.bk_sales(organization_id,app_id,activity_id,location_id,actor,idempotency_key,balance_id,quantity,unit_price_fcfa,total_fcfa)
- values(p_org,p_app,b.activity_id,p_site,p_user,p_key,p_balance,p_quantity,p_price,v_total::bigint) returning id into v_id;
+ insert into bootik.bk_sales(organization_id,app_id,activity_id,location_id,actor,idempotency_key,balance_id,quantity,unit_price_fcfa,total_fcfa,unit_cost_snapshot_fcfa)
+ values(p_org,p_app,b.activity_id,p_site,p_user,p_key,p_balance,p_quantity,p_price,v_total::bigint,b.unit_cost_fcfa) returning id into v_id;
  update bootik.bk_inventory_balances set quantity_on_hand=quantity_on_hand-p_quantity,updated_at=now() where id=p_balance;
  insert into bootik.bk_inventory_movements(app_id,organization_id,activity_id,location_id,item_id,lot_id,movement_code,quantity_delta,unit_code,source_reference,idempotency_key,actor_user_id)
  values(p_app,p_org,b.activity_id,p_site,b.item_id,b.lot_id,'sale',-p_quantity,v_unit,v_id::text,'sale:'||p_key,p_user);
