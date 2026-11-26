@@ -13,7 +13,7 @@ function choice(v,allowed){if(!allowed.includes(v))invalid();return v}
 function amount(v,min=0){if(!integer(v,min,2147483647))invalid();return v}
 function lineItems(v){if(!Array.isArray(v)||!v.length||v.length>50)invalid();return v.map(x=>{if(!isObject(x)||!integer(x.qty,1,1000))invalid();return {item_id:id(x.item_id),qty:x.qty}})}
 const publicActions=new Set(["guest_open","guest_menu","guest_order_create","guest_order_read","guest_feedback","guest_served"]);
-const professionalActions=new Set(["quote","referral_claim","snapshot","mode","menu_add","table_create","table_open","table_close","order_create","line_advance","delay","cancel","cash_open","cash_record","cash_close","erp_snapshot","ingredient_add","lot_receive","recipe_define","produce","expense_record","supplier_add","purchase_create","purchase_receive","supplier_pay","count_lot","procurement_snapshot","customer_add","customer_attach","followup_create","followup_complete","crm_snapshot"]);
+const professionalActions=new Set(["quote","referral_claim","snapshot","mode","menu_add","table_create","table_open","table_close","order_create","line_advance","delay","cancel","cash_open","cash_record","cash_close","erp_snapshot","ingredient_add","lot_receive","recipe_define","produce","expense_record","supplier_add","purchase_create","purchase_receive","supplier_pay","count_lot","procurement_snapshot","customer_add","customer_attach","followup_create","followup_complete","crm_snapshot","transfer_snapshot","transfer_request","transfer_decide","transfer_dispatch","transfer_receive"]);
 export function createBusinessGateway({rpc,origins,allowGuestOpen=false}){
  if(typeof rpc!=="function"||!Array.isArray(origins))throw Error("CONFIGURATION");
  return async req=>{
@@ -81,12 +81,17 @@ export function createBusinessGateway({rpc,origins,allowGuestOpen=false}){
     case "followup_create":if(!text(b.title)||typeof b.due_on!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(b.due_on))invalid();name="zp_followup_create";args={...scope,p_customer:id(b.customer_id),p_request:id(b.request_id),p_title:text(b.title),p_channel:choice(b.channel,["telephone","whatsapp","in_person"]),p_due:b.due_on};break;
     case "followup_complete":name="zp_followup_complete";args={...scope,p_followup:id(b.followup_id)};break;
     case "crm_snapshot":name="zp_crm_snapshot";args=scope;break;
+    case "transfer_snapshot":name="zp_transfer_snapshot";args=scope;break;
+    case "transfer_request":if(!integer(b.qty_milli,1,1000000000))invalid();name="zp_transfer_request";args={...scope,p_destination:id(b.destination_site),p_lot:id(b.source_lot),p_ingredient:id(b.destination_ingredient),p_request:id(b.request_id),p_qty:b.qty_milli};break;
+    case "transfer_decide":name="zp_transfer_decide";args={...scope,p_transfer:id(b.transfer_id),p_decision:choice(b.decision,["approved","cancelled"])};break;
+    case "transfer_dispatch":name="zp_transfer_dispatch";args={...scope,p_transfer:id(b.transfer_id)};break;
+    case "transfer_receive":if(!integer(b.qty_milli,0,1000000000)||typeof b.reason!=="string"||b.reason.length>500)invalid();name="zp_transfer_receive";args={...scope,p_transfer:id(b.transfer_id),p_qty:b.qty_milli,p_reason:b.reason};break;
     default:return result(403,{error:"DENIED"});
    }
    value=await rpc(name,args);
    return result(200,{data:value??null});
   }catch(error){
-   const safe=["DENIED","SUBSCRIPTION_OR_ROLE_REQUIRED","SUBSCRIPTION_REQUIRED","OFFER_DENIED","ITEM_UNAVAILABLE","IDEMPOTENCY_CONFLICT","TABLE_HAS_OPEN_ORDERS","INVALID_TRANSITION","CASH_CLOSED","SALE_NOT_SETTLEABLE","CHANNEL_DENIED","TABLE_CLOSED","POST_DENIED","CANCELLATION_REQUIRES_REVIEW","MODE_CHANGE_REQUIRES_MIGRATION","EXPIRED_LOT","RECIPE_REQUIRES_EMPTY_ITEM","RECIPE_VERSION_REQUIRED","INVALID_COMPONENTS","INVALID_PRODUCTION","INGREDIENT_SHORTAGE","INVALID_EXPENSE_DATE","RECIPE_REQUIRES_NO_OPEN_ORDERS","PRODUCTION_COST_SHORTAGE","RECEIPT_EXCEEDS_PURCHASE","PAYMENT_EXCEEDS_DEBT","STALE_INVENTORY_COUNT","COUNT_REQUIRES_REVIEW","CUSTOMER_REVIEW_REQUIRED","CUSTOMER_LINK_LOCKED"];
+   const safe=["DENIED","SUBSCRIPTION_OR_ROLE_REQUIRED","SUBSCRIPTION_REQUIRED","OFFER_DENIED","ITEM_UNAVAILABLE","IDEMPOTENCY_CONFLICT","TABLE_HAS_OPEN_ORDERS","INVALID_TRANSITION","CASH_CLOSED","SALE_NOT_SETTLEABLE","CHANNEL_DENIED","TABLE_CLOSED","POST_DENIED","CANCELLATION_REQUIRES_REVIEW","MODE_CHANGE_REQUIRES_MIGRATION","EXPIRED_LOT","RECIPE_REQUIRES_EMPTY_ITEM","RECIPE_VERSION_REQUIRED","INVALID_COMPONENTS","INVALID_PRODUCTION","INGREDIENT_SHORTAGE","INVALID_EXPENSE_DATE","RECIPE_REQUIRES_NO_OPEN_ORDERS","PRODUCTION_COST_SHORTAGE","RECEIPT_EXCEEDS_PURCHASE","PAYMENT_EXCEEDS_DEBT","STALE_INVENTORY_COUNT","COUNT_REQUIRES_REVIEW","CUSTOMER_REVIEW_REQUIRED","CUSTOMER_LINK_LOCKED","PREMIUM_REQUIRED","TRANSFER_ITEM_MISMATCH","TRANSFER_COUNT_REVIEW"];
    const code=String(error?.message??"");if(code==="INVALID_INPUT"||error instanceof SyntaxError)return result(400,{error:"INVALID_INPUT"});
    if(safe.includes(code))return result(code==="DENIED"||code.includes("REQUIRED")?403:409,{error:code});
    return result(503,{error:"OPERATION_UNAVAILABLE"});
