@@ -25,6 +25,18 @@ import java.util.UUID
 
 internal fun rosterAvailable(mode:String)=mode=="single_site_multi_workstation"||mode=="multi_site_network"
 internal object StaffRosterApi {
+    suspend fun readAttendanceSelfie(session:AuthSession,siteId:String,eventId:String,path:String):ByteArray=withContext(Dispatchers.IO){
+        val base=URI(BuildConfig.AUTH_FUNCTION_URL)
+        require(base.scheme=="https"&&base.host!=null&&base.userInfo==null&&base.path.trimEnd('/')=="/functions/v1/naxa-services-auth")
+        val parts=path.split("/");require(parts.size==4&&parts[0]==session.account.organizationId&&parts[1]==siteId&&parts[3]==eventId+".jpg")
+        parts.take(3).forEach{require(UUID.fromString(it).toString()==it)};require(UUID.fromString(eventId).toString()==eventId)
+        require(!session.requirePasswordChange&&session.accessToken.isNotBlank()&&BuildConfig.SUPABASE_ANON_KEY.isNotBlank())
+        val c=URL("https://"+base.rawAuthority+"/storage/v1/object/authenticated/ns-attendance-selfies/"+path).openConnection() as HttpURLConnection
+        try{c.instanceFollowRedirects=false;c.connectTimeout=10000;c.readTimeout=15000;c.useCaches=false;c.setRequestProperty("apikey",BuildConfig.SUPABASE_ANON_KEY);c.setRequestProperty("Authorization","Bearer "+session.accessToken)
+            require(c.responseCode in 200..299&&c.contentType?.substringBefore(';')=="image/jpeg")
+            c.inputStream.use{input->val out=java.io.ByteArrayOutputStream();val buf=ByteArray(8192);while(true){val n=input.read(buf);if(n<0)break;require(out.size()+n<=2097152);out.write(buf,0,n)};out.toByteArray().also{require(it.isNotEmpty())}}
+        }finally{c.disconnect()}
+    }
     suspend fun uploadAttendanceSelfie(session:AuthSession,siteId:String,eventId:String,bytes:ByteArray)=withContext(Dispatchers.IO){
         val base=URI(BuildConfig.AUTH_FUNCTION_URL)
         require(base.scheme=="https"&&base.host!=null&&base.userInfo==null&&base.path.trimEnd('/')=="/functions/v1/naxa-services-auth")

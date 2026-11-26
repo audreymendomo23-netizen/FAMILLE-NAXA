@@ -17,6 +17,9 @@ import android.view.TextureView
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
+import android.graphics.BitmapFactory
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -184,6 +187,55 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
        }catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}
       }
      }){Text(tr("Confirmer mon pointage","Confirm my attendance","Tabbitin golle am"))}
+    }
+   }
+  }
+  AttendanceReviewCard(session,siteId)
+ }
+}
+
+@Composable
+private fun AttendanceReviewCard(session:AuthSession,siteId:String){
+ val latest by rememberUpdatedState(session)
+ val scope=rememberCoroutineScope()
+ fun tr(fr:String,en:String,ff:String)=when(session.account.defaultLocale){"en"->en;"ff-CM"->ff;else->fr}
+ var rows by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+ var shown by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
+ var photo by remember{mutableStateOf<Bitmap?>(null)};var photoId by remember{mutableStateOf("")}
+ fun clearPhoto(){photo=null;photoId=""}
+ fun load(){
+  shown=true;busy=true;error=false;clearPhoto();rows=emptyList()
+  scope.launch{
+   try{val r=JSONArray(StaffRosterApi.call(latest,"rpc/ns_attendance_review",JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_limit",50)));rows=(0 until r.length()).mapNotNull{r.optJSONObject(it)}}
+   catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}
+  }
+ }
+ Card(Modifier.fillMaxWidth()){
+  Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+   Text(tr("Consulter les preuves","Review evidence","Ƴeewto seedeeji"),style=MaterialTheme.typography.titleMedium)
+   OutlinedButton(enabled=!busy,onClick={if(shown){clearPhoto();rows=emptyList();shown=false}else load()}){Text(if(shown)tr("Fermer","Close","Uddu")else tr("Afficher les preuves autorisées","Show authorized evidence","Hollu seedeeji"))}
+   if(shown){
+    TextButton(onClick={load()},enabled=!busy){Text(tr("Actualiser","Refresh","Hesɗitin"))}
+    if(error)Text(tr("Preuve indisponible ou accès retiré.","Evidence unavailable or access withdrawn.","Seedee heɓotaako."),color=MaterialTheme.colorScheme.error)
+    if(!busy&&!error&&rows.isEmpty())Text(tr("Aucune preuve disponible.","No evidence available.","Alaa seedee."))
+    rows.forEach{r->
+     HorizontalDivider();val id=r.getString("event_id")
+     val label=when(r.getString("event_type")){"staff_clock_in"->tr("Prise de service","Start shift","Fuɗɗo golle");"staff_break_start"->tr("Début de pause","Start break","Fuɗɗo fowtude");"staff_break_end"->tr("Fin de pause","End break","Timmin fowtude");else->tr("Fin de service","End shift","Timmin golle")}
+     Text(r.getString("member_name")+" · "+label)
+     Text(runCatching{java.time.OffsetDateTime.parse(r.getString("occurred_at")).atZoneSameInstant(java.time.ZoneId.of("Africa/Douala")).toLocalDateTime().toString().replace("T"," ")}.getOrDefault("—"))
+     Text("GPS: "+if(r.isNull("latitude"))tr("Non fourni","Not supplied","Alaa")else r.getDouble("latitude").toString()+", "+r.getDouble("longitude")+" (±"+r.getDouble("accuracy_m")+" m)")
+     if(!r.isNull("selfie_path")){
+      OutlinedButton(enabled=!busy,onClick={
+       if(photoId==id)clearPhoto()else{
+        clearPhoto();busy=true;error=false
+        scope.launch{try{
+         val bytes=StaffRosterApi.readAttendanceSelfie(latest,siteId,id,r.getString("selfie_path"))
+         try{photo=BitmapFactory.decodeByteArray(bytes,0,bytes.size)?:throw IllegalStateException();photoId=id}finally{bytes.fill(0)}
+        }catch(c:CancellationException){throw c}catch(_:Exception){error=true;rows=emptyList()}finally{busy=false}}
+       }
+      }){Text(if(photoId==id)tr("Masquer","Hide","Suuɗ")else tr("Voir le selfie","View selfie","Yi'u natal"))}
+      if(photoId==id)photo?.let{Image(it.asImageBitmap(),contentDescription=tr("Selfie du pointage","Attendance selfie","Natal golle"),modifier=Modifier.height(180.dp))}
+     }
     }
    }
   }

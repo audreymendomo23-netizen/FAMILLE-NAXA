@@ -7,6 +7,7 @@ on:
       - '.github/workflows/naxa-services-replay-isolated.yml'
       - 'supabase/drafts/naxa_services_v9_attendance*.sql'
       - 'supabase/drafts/naxa_services_v15_attendance*.sql'
+      - 'supabase/drafts/naxa_services_v16_attendance*.sql'
       - 'supabase/tests/drafts/naxa_services_attendance*.sql'
       - 'supabase/drafts/naxa_services_v10_*roster*.sql'
       - 'supabase/tests/drafts/naxa_services_*roster*.sql'
@@ -95,6 +96,14 @@ jobs:
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_attendance_staging.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regclass('public.ns_attendance_staged_proof') is null and to_regclass('public.ns_attendance_policy_history') is null" | grep -Fx t
+      - name: Qualify scoped proof review and expired staging with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_attendance_review.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regprocedure('public.ns_attendance_review(uuid,uuid,timestamptz,integer)') is null" | grep -Fx t
       - name: Qualify hierarchical roster and service comparison with rollback
         shell: bash
         run: |
@@ -149,7 +158,7 @@ jobs:
           set -euo pipefail
           set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql; do
+          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql; do
             test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
             sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
           done
