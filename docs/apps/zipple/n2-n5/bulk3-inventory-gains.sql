@@ -1,5 +1,13 @@
 -- Positive physical count: separate documented review, never an automatic zero-cost stock increase.
 begin;
+-- Original receipt quantity and cost remain immutable; independently approved gains extend their bounds.
+alter table public.zp_ingredient_lots add column gain_milli bigint not null default 0 check(gain_milli>=0),add column gain_cost bigint not null default 0 check(gain_cost>=0);
+do $$ declare x record;begin
+ for x in select conname,pg_get_constraintdef(oid) as def from pg_constraint where conrelid='public.zp_ingredient_lots'::regclass and contype='c' loop
+  if x.def like '%remaining_milli%received_milli%' or x.def like '%remaining_cost%received_cost%' then execute format('alter table public.zp_ingredient_lots drop constraint %I',x.conname);end if;
+ end loop;
+end $$;
+alter table public.zp_ingredient_lots add constraint zp_lot_remaining_with_gains check(remaining_milli>=0 and remaining_milli<=received_milli+gain_milli),add constraint zp_lot_cost_with_gains check(remaining_cost>=0 and remaining_cost<=received_cost+gain_cost);
 create table public.zp_inventory_gains(
  id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,lot_id uuid not null,member_id uuid not null,request_id uuid not null,
  before_milli bigint not null check(before_milli>=0),before_cost bigint not null check(before_cost>=0),counted_milli bigint not null check(counted_milli>before_milli),
@@ -27,7 +35,7 @@ declare m public.zp_members;x public.zp_inventory_gains;l public.zp_ingredient_l
   select * into l from public.zp_ingredient_lots where id=x.lot_id and org_id=m.org_id and site_id=p_site for update;
   if (l.remaining_milli,l.remaining_cost) is distinct from (x.before_milli,x.before_cost) then raise exception 'STALE_INVENTORY_COUNT';end if;
   if l.expires_on<(now() at time zone 'Africa/Douala')::date then raise exception 'INVALID_INVENTORY_GAIN';end if;
-  update public.zp_ingredient_lots set remaining_milli=x.counted_milli,remaining_cost=remaining_cost+p_value where id=l.id;
+  update public.zp_ingredient_lots set remaining_milli=x.counted_milli,remaining_cost=remaining_cost+p_value,gain_milli=gain_milli+(x.counted_milli-x.before_milli),gain_cost=gain_cost+p_value where id=l.id;
  end if;
  update public.zp_inventory_gains set state=p_decision,approved_value=p_value,evidence=proof,decided_by=m.id,decided_at=clock_timestamp() where id=x.id;return p_decision;end $$;
 create function public.zp_inventory_gain_snapshot(p_access text,p_site uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $$
