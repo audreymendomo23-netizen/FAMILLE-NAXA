@@ -1,0 +1,78 @@
+name: ZIPPLE business — real local Supabase
+on:
+  push:
+    branches: [work/zipple-completion-20261126]
+    paths:
+      - "docs/apps/zipple/n2-n5/**"
+      - "apps/web/zipple/src/business/**"
+      - ".github/workflows/zipple-business-local.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  local-business:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.75.0
+      - name: Reuse N1 local GoTrue, PostgreSQL and Edge recipe
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/zipple-business-local"
+          cd "$RUNNER_TEMP/zipple-business-local"
+          supabase init
+          sed -i 's/^project_id = .*/project_id = "zipple-business-ci"/' supabase/config.toml
+          sed -i 's/^major_version = .*/major_version = 17/' supabase/config.toml
+          cat >> supabase/config.toml <<'TOML'
+          [functions.zipple-n1]
+          verify_jwt = false
+          [functions.zipple-business]
+          verify_jwt = false
+          TOML
+          mkdir -p supabase/functions/zipple-n1 supabase/functions/zipple-business
+          cp "$GITHUB_WORKSPACE/docs/apps/zipple/n1/backend/local-index.ts" supabase/functions/zipple-n1/index.ts
+          cp "$GITHUB_WORKSPACE/docs/apps/zipple/n1/backend/adapter.mjs" supabase/functions/zipple-n1/adapter.mjs
+          cp "$GITHUB_WORKSPACE/docs/apps/zipple/n1/auth-boundary.mjs" supabase/functions/auth-boundary.mjs
+          cp "$GITHUB_WORKSPACE/docs/apps/zipple/n2-n5/local-index.ts" supabase/functions/zipple-business/index.ts
+          cp "$GITHUB_WORKSPACE/docs/apps/zipple/n2-n5/business-gateway.mjs" supabase/functions/zipple-business/business-gateway.mjs
+          printf 'ZIPPLE_ALLOWED_ORIGINS=https://zipple.test\nZIPPLE_BUSINESS_DISPOSABLE=1\n' > supabase/functions/.env
+          supabase start -x studio,imgproxy,inbucket,logflare,vector,supavisor
+          supabase status -o env > "$RUNNER_TEMP/zipple-business.env"
+          chmod 600 "$RUNNER_TEMP/zipple-business.env"
+      - name: Apply business schema only to loopback database
+        run: |
+          set -euo pipefail
+          set -a
+          source "$RUNNER_TEMP/zipple-business.env"
+          set +a
+          case "$DB_URL" in *127.0.0.1*|*localhost*) ;; *) exit 1;; esac
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f docs/apps/zipple/n1/backend/schema.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f docs/apps/zipple/n2-n5/schema.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f docs/apps/zipple/n2-n5/operations.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema'"
+      - name: Build Web and qualify real business UI via isolated Edge
+        run: |
+          set -euo pipefail
+          npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
+          npm install --no-save --ignore-scripts pg@8.13.3 playwright@1.51.1
+          npx playwright install --with-deps chromium
+          VITE_ZIPPLE_API_URL=https://127.0.0.1:4443/gateway VITE_ZIPPLE_BUSINESS_API_URL=https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-business npm run build --workspace @famille/zipple-web
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 -subj "/CN=localhost" -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" -keyout "$RUNNER_TEMP/zipple-ci.key" -out "$RUNNER_TEMP/zipple-ci.crt" >/dev/null 2>&1
+          set -a
+          source "$RUNNER_TEMP/zipple-business.env"
+          set +a
+          export ZIPPLE_TLS_KEY="$RUNNER_TEMP/zipple-ci.key" ZIPPLE_TLS_CERT="$RUNNER_TEMP/zipple-ci.crt"
+          node --test docs/apps/zipple/n2-n5/local-business.test.mjs
+      - name: Stop disposable stack
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP/zipple-business-local"
+          supabase stop --no-backup
