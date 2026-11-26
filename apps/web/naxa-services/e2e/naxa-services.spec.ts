@@ -97,7 +97,10 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
       // Pressing transitions encode the target status in the action suffix, like ns_apply_sync_event.
       const pressingStatus = actionCode.startsWith("pressing_order.status_changed:")
         ? actionCode.slice("pressing_order.status_changed:".length) : null;
-      const status = actionCode === "customer_followup.completed" ? (payload.next_due_at_if_repeating ? "active" : "completed")
+      const status = actionCode === "appointment.created" ? "booked"
+        : actionCode === "appointment.rescheduled" ? "confirmed"
+        : actionCode === "purchase.ordered" ? "ordered"
+        : actionCode === "customer_followup.completed" ? (payload.next_due_at_if_repeating ? "active" : "completed")
         : actionCode === "cash_session.opened" ? "open"
         : actionCode === "cash_session.closed" ? "closed"
         : typeof payload.to_status === "string" ? payload.to_status
@@ -812,4 +815,74 @@ test("Reduced motion: photos stay still and torch is suppressed",async({context}
   await page.getByRole("button",{name:"Mode clair",exact:true}).click();
   await page.getByRole("button",{name:"Mode nuit",exact:true}).click();
   await expect(page.getByTestId("night-torch")).toHaveCount(0);
+});
+
+test("Web stock: create item and supplier, movement, order, receipt then supplier payment",async({context})=>{
+  test.setTimeout(60_000);const events=await installBackend(context);
+  const page=await context.newPage();await signIn(page);
+  await page.locator(".side-nav .nav-item").filter({hasText:"Consommables"}).click();
+  await page.getByRole("button",{name:"Ajouter un article",exact:true}).click();
+  await page.getByLabel("Nom / référence").fill("Lessive de recette");
+  await page.getByRole("button",{name:"Enregistrer",exact:true}).click();
+  await expect.poll(()=>events.length).toBe(1);
+  expect(events[0].action_code).toBe("inventory_item.created");
+  const item=String(events[0].aggregate_id);
+  await page.getByLabel("Nom du fournisseur").fill("Fournisseur recette");
+  await page.getByRole("button",{name:"Enregistrer le fournisseur"}).click();
+  await expect.poll(()=>events.length).toBe(2);
+  expect(events[1].action_code).toBe("supplier.saved");
+  const supplier=String(events[1].aggregate_id);
+  await page.getByLabel("Article",{exact:true}).selectOption(item);
+  await page.getByLabel("Quantité",{exact:true}).fill("10");
+  await page.getByLabel("Motif",{exact:true}).fill("Stock initial");
+  await page.getByRole("button",{name:"Enregistrer le mouvement",exact:true}).click();
+  await expect.poll(()=>events.length).toBe(3);
+  expect(events[2].action_code).toBe("inventory_movement.created");
+  await page.getByLabel("Fournisseur",{exact:true}).selectOption(supplier);
+  await page.getByLabel("Article commandé").selectOption(item);
+  await page.getByLabel("Référence de commande").fill("CMD-RECETTE-01");
+  await page.getByLabel("Quantité commandée").fill("5");
+  await page.getByLabel("Coût unitaire (FCFA)").fill("1000");
+  await page.getByRole("button",{name:"Valider la commande fournisseur"}).click();
+  await expect.poll(()=>events.length).toBe(4);
+  expect(events[3].action_code).toBe("purchase.ordered");
+  const order=String(events[3].aggregate_id);
+  await page.getByLabel("Commande à réceptionner").selectOption(order);
+  const pay=page.getByRole("button",{name:"Enregistrer un règlement bancaire"});
+  await expect(pay).toBeDisabled();
+  await page.getByLabel("Quantité reçue").fill("5");
+  await page.getByRole("button",{name:"Enregistrer la réception partielle ou complète"}).click();
+  await expect.poll(()=>events.length).toBe(5);
+  expect(events[4].action_code).toBe("purchase.receipt.confirmed");
+  expect((events[4].payload as Record<string,unknown>).purchase_id).toBe(order);
+  await expect(pay).toBeEnabled();
+  await page.getByLabel("Montant du règlement bancaire (FCFA)").fill("5000");
+  await page.getByLabel("Référence bancaire").fill("VIR-RECETTE-01");
+  await pay.click();
+  await expect.poll(()=>events.length).toBe(6);
+  expect(events[5].action_code).toBe("supplier.payment.recorded");
+  expect((events[5].payload as Record<string,unknown>).amount_xaf).toBe(5000);
+  await expect(page.getByText("Règlement fournisseur",{exact:true})).toBeVisible();
+});
+test("Web access: failed login and recovery stay in the customer journey",async({context})=>{
+  await installBackend(context);
+  let recovery=false;
+  await context.route(AUTH_URL,async route=>{
+    if(route.request().method()==="OPTIONS")return route.fallback();
+    const body=route.request().postDataJSON();
+    if(body.action==="login")return json(route,{message:"Identifiant ou mot de passe incorrect."},401);
+    if(body.action==="request_recovery"){recovery=true;return json(route,{accepted:true});}
+    return route.fallback();
+  });
+  const page=await context.newPage();await page.goto("/");
+  await page.getByLabel("Identifiant NAXA Services").fill("NS-INVALID");
+  await page.getByLabel("Mot de passe").fill("Wrong-test-password");
+  await page.getByRole("button",{name:"Se connecter"}).click();
+  await expect(page.getByText("Identifiant ou mot de passe incorrect.",{exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Mot de passe oublié ?"}).click();
+  await page.getByLabel("Note au responsable (facultatif)").fill("Demande de recette");
+  await page.getByRole("button",{name:"Envoyer la demande"}).click();
+  await expect.poll(()=>recovery).toBe(true);
+  await page.getByRole("button",{name:"Retour à la connexion"}).click();
+  await expect(page.getByLabel("Mot de passe")).toBeVisible();
 });
