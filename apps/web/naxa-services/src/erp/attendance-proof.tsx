@@ -109,7 +109,7 @@ function AttendanceReview({account,siteId,authEndpoint,anonKey,getToken}:Pick<Pr
    if(alive.current&&n===epoch.current&&!c.signal.aborted){const url=URL.createObjectURL(b);objectUrl.current=url;setPhoto({id:row.event_id,url});}
   }catch{if(alive.current&&n===epoch.current){setError(true);setRows([]);}}finally{if(alive.current&&n===epoch.current)setBusy(false);}
  }
- return <section className="module-main-card"><h3>{tr("Consulter les preuves","Review evidence","Ƴeewto seedeeji")}</h3>
+ return <section className="module-main-card" aria-labelledby="ns-attendance-review-title"><h3 id="ns-attendance-review-title">{tr("Consulter les preuves","Review evidence","Ƴeewto seedeeji")}</h3>
  <button className="btn secondary" onClick={()=>shown?close():void load()}>{shown?tr("Fermer","Close","Uddu"):tr("Afficher les preuves autorisées","Show authorized evidence","Hollu seedeeji")}</button>
  {shown&&<><button className="btn secondary" disabled={busy} onClick={()=>void load()}>{tr("Actualiser","Refresh","Hesɗitin")}</button>
  {error&&<p role="alert">{tr("Preuve indisponible ou accès retiré.","Evidence unavailable or access withdrawn.","Seedee heɓotaako.")}</p>}
