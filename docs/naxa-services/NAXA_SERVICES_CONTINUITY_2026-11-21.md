@@ -1002,3 +1002,8 @@ Run #640 (45825922172) : 12/12 jobs success, compilation Android comprise. Contr
 ### Contrôle complémentaire 22.33 — nouvelle relance
 
 Contrôle runtime : project_matches=true, worker_configured=true, encryption_present=true, encryption_configured=true (64 caractères hexadécimaux), credential_present=false, credential_valid=false, oauth_ok=false. Trois des quatre paramètres Firebase/worker validés en présence/format ; FCM_SERVICE_ACCOUNT_JSON toujours absent du runtime et OAuth non validé. Sonde v17 retirée, version normale v18 ACTIVE, garde FCM conservée et nonce absent, bundle 9fd1f448bc394804871aef04115c3d8473c59458da51c67d107d3b342554352c. Aucun secret affiché, aucun envoi push réel. CI #640 déjà vérifiée 12/12 ; qualification production toujours ouverte.
+
+
+### Contrôle complémentaire 22.33 — nouvelle confirmation de saisie
+
+Après confirmation propriétaire, contrôle runtime : project_matches=true, worker_configured=true, encryption_configured=true, credential_present=false, credential_valid=false, oauth_ok=false. Le dernier secret FCM_SERVICE_ACCOUNT_JSON demeure non visible dans le runtime ; ceci ne prouve pas l'absence dans le tableau de bord. Vérifier la liste des noms uniquement, le projet et l'enregistrement effectif, plutôt que répéter les sondes. Sonde v20 retirée, code normal v21 ACTIVE, garde FCM conservée et nonce absent, bundle c5d34d4fc894f0111c4bdf4cc823d6a672ae51cda440ba7af74b1f357e6dc4a3. Aucun secret affiché, aucun envoi push réel.
