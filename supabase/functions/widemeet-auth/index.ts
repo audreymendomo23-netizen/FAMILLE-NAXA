@@ -5,6 +5,10 @@ const service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??"";
 const anon=Deno.env.get("SUPABASE_ANON_KEY")??"";
 const origins=new Set((Deno.env.get("WM_ALLOWED_ORIGINS")??"").split(",").map(s=>s.trim()).filter(Boolean));
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const cookieName="__Host-widemeet_refresh";
+const refreshCookie=(value:string,remember:boolean,until:number)=>cookieName+"="+value+"; Path=/; Secure; HttpOnly; SameSite=Strict"+(remember?"; Max-Age="+Math.max(0,Math.floor((until-Date.now())/1000)):"");
+const clearCookie=cookieName+"=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0";
+function cookieRefresh(req:Request){const parts=(req.headers.get("cookie")??"").split(";").map(x=>x.trim()).filter(x=>x.startsWith(cookieName+"="));return parts.length===1?parts[0].slice(cookieName.length+1):"";}
 const headers={apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json"};
 async function rest(path:string,init:RequestInit={}){
  const response=await fetch(url+"/rest/v1/"+path,{...init,headers:{...headers,...(init.headers??{})},redirect:"error",cache:"no-store"});
@@ -20,8 +24,8 @@ async function workspaces(accountId:string){
 }
 Deno.serve(async request=>{
  const origin=request.headers.get("origin");
- const cors:Record<string,string>=origin&&origins.has(origin)?{"Access-Control-Allow-Origin":origin,"Vary":"Origin","Access-Control-Allow-Headers":"content-type,authorization,apikey","Access-Control-Allow-Methods":"POST,OPTIONS"}:{};
- const send=(status:number,body:unknown)=>new Response(status===204?null:JSON.stringify(body),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store",...cors}});
+ const cors:Record<string,string>=origin&&origins.has(origin)?{"Access-Control-Allow-Origin":origin,"Vary":"Origin","Access-Control-Allow-Headers":"content-type,authorization,apikey","Access-Control-Allow-Methods":"POST,OPTIONS","Access-Control-Allow-Credentials":"true"}:{};
+ const send=(status:number,body:unknown,extra:Record<string,string>={})=>new Response(status===204?null:JSON.stringify(body),{status,headers:{"Content-Type":"application/json","Cache-Control":"no-store",...cors,...extra}});
  if(origin&&!origins.has(origin))return send(403,{error:"forbidden"});
  if(request.method==="OPTIONS")return send(204,null);
  if(Deno.env.get("WM_AUTH_QUALIFIED")!=="true"||!url||!service||!anon)return send(503,{error:"unavailable"});
@@ -81,11 +85,31 @@ Deno.serve(async request=>{
  // Do not return the GoTrue token, use a dedicated WideMeet opaque session instead.
  const ws=await workspaces(a.id);if(!ws.length)return send(403,{error:"scope"});
  const active=ws.find((w:any)=>w.kind==="individual")??ws[0];
- const access=token();
- const sessionId=await rest("rpc/wm_issue_verified_session",{method:"POST",body:JSON.stringify({p_account:a.id,p_installation:body.installation_id,p_workspace:active.id,p_hash:await digest(access),p_epoch:a.credential_epoch})});
- const saved=(await rest("wm_device_sessions?select=expires_at&id=eq."+eq(sessionId)+"&revoked_at=is.null&limit=1"))[0];
+ const access=token(),accessHash=await digest(access);
+ const sessionId=await rest("rpc/wm_issue_verified_session",{method:"POST",body:JSON.stringify({p_account:a.id,p_installation:body.installation_id,p_workspace:active.id,p_hash:accessHash,p_epoch:a.credential_epoch})});
+ let refresh="";
+ if(typeof body.remember_me==="boolean"&&!a.password_change_required){
+ refresh=token();
+ if(await rest("rpc/wm_attach_refresh",{method:"POST",body:JSON.stringify({p_hash:accessHash,p_refresh_hash:await digest(refresh),p_remember:body.remember_me})})!==true)return send(503,{error:"unavailable"});
+ }
+ const saved=(await rest("wm_device_sessions?select=expires_at,refresh_until,remember_me&id=eq."+eq(sessionId)+"&revoked_at=is.null&limit=1"))[0];
  if(!saved)return send(403,{error:"scope"});
- return send(200,{app_id:"WIDEMEET",access_token:access,member_id:a.id,device_id:sessionId,expires_at:Date.parse(saved.expires_at),server_now:Date.now(),require_password_change:a.password_change_required,active_workspace_id:active.id,workspaces:ws});
+ const response={app_id:"WIDEMEET",access_token:access,member_id:a.id,device_id:sessionId,expires_at:Date.parse(saved.expires_at),server_now:Date.now(),require_password_change:a.password_change_required,active_workspace_id:active.id,workspaces:ws,refresh_available:!!refresh,...(refresh&&body.platform==="android"&&!origin?{refresh_token:refresh}:{})};
+ return send(200,response,body.platform==="web"?{"Set-Cookie":refresh?refreshCookie(refresh,saved.remember_me,Date.parse(saved.refresh_until)):clearCookie}:{});
+
+ }
+ if(action==="refresh"){
+ if(!uuid.test(body.installation_id??"")||!["web","android"].includes(body.platform)||body.platform==="android"&&origin)return send(401,{error:"credentials"});
+ const previous=body.platform==="web"?cookieRefresh(request):body.refresh_token;
+ if(typeof previous!=="string"||!/^[a-f0-9]{64}$/.test(previous))return send(401,{error:"credentials"},body.platform==="web"?{"Set-Cookie":clearCookie}:{});
+ const access=token(),refresh=token();
+ const sessionId=await rest("rpc/wm_rotate_refresh",{method:"POST",body:JSON.stringify({p_old:await digest(previous),p_installation:body.installation_id,p_access:await digest(access),p_refresh:await digest(refresh)})});
+ if(!uuid.test(sessionId??""))return send(401,{error:"credentials"},body.platform==="web"?{"Set-Cookie":clearCookie}:{});
+ const saved=(await rest("wm_device_sessions?select=account_id,workspace_id,expires_at,refresh_until,remember_me&id=eq."+eq(sessionId)+"&revoked_at=is.null&limit=1"))[0];
+ if(!saved)return send(403,{error:"scope"});
+ const ws=await workspaces(saved.account_id);
+ if(!ws.some((w:any)=>w.id===saved.workspace_id))return send(403,{error:"scope"});
+ return send(200,{app_id:"WIDEMEET",access_token:access,member_id:saved.account_id,device_id:sessionId,expires_at:Date.parse(saved.expires_at),server_now:Date.now(),require_password_change:false,active_workspace_id:saved.workspace_id,workspaces:ws,refresh_available:true,...(body.platform==="android"?{refresh_token:refresh}:{})},body.platform==="web"?{"Set-Cookie":refreshCookie(refresh,saved.remember_me,Date.parse(saved.refresh_until))}:{});
  }
  if(action==="change-password"){
  const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
@@ -120,7 +144,7 @@ Deno.serve(async request=>{
  }
  const finished=await rest("rpc/wm_finish_password_change",{method:"POST",body:JSON.stringify({p_hash,p_request:requestId})});
  if(finished!==true)return send(409,{error:"change_unconfirmed"});
- return send(200,{changed:true,reconnect:true});
+ return send(200,{changed:true,reconnect:true},{"Set-Cookie":clearCookie});
  }
  if(action==="identity"){
  const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
@@ -166,8 +190,8 @@ Deno.serve(async request=>{
  if(action==="logout"){
  const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
  if(!/^[a-f0-9]{64}$/.test(access))return send(401,{error:"credentials"});
- await rest("wm_device_sessions?token_hash=eq."+await digest(access)+"&revoked_at=is.null",{method:"PATCH",body:JSON.stringify({revoked_at:new Date().toISOString()})});
- return send(204,null);
+ await rest("wm_device_sessions?token_hash=eq."+await digest(access)+"&revoked_at=is.null",{method:"PATCH",body:JSON.stringify({revoked_at:new Date().toISOString(),refresh_hash:null,refresh_until:null})});
+ return send(204,null,{"Set-Cookie":clearCookie});
  }
  return send(404,{error:"unavailable"});
  }catch{return send(503,{error:"unavailable"})}
