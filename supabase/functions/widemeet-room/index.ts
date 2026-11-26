@@ -19,14 +19,15 @@ function projection(room:any,actor:any){
 }
 const enc=(s:Uint8Array)=>btoa(String.fromCharCode(...s)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 const json=(v:unknown)=>enc(new TextEncoder().encode(JSON.stringify(v)));
-async function signGrant(grant:any,now:number){
+async function signGrant(grant:any,now:number,sessionHash:string){
+ if(!/^[a-f0-9]{64}$/.test(sessionHash))throw Error("media_unavailable");
  if(Deno.env.get("WM_MEDIA_QUALIFIED")!=="true")throw Error("media_unavailable");
  const key=Deno.env.get("WM_LIVEKIT_API_KEY")??"",secret=Deno.env.get("WM_LIVEKIT_API_SECRET")??"";
  const endpoint=new URL(Deno.env.get("WM_LIVEKIT_URL")??"");
  if(endpoint.protocol!=="wss:"||endpoint.username||endpoint.password||endpoint.pathname!=="/"||endpoint.search||endpoint.hash||!/^[A-Za-z0-9_-]{8,128}$/.test(key)||secret.length<32)throw Error("media_unavailable");
  const exp=Math.floor(grant.expiresMs/1000),nbf=Math.floor(now/1000)-5;
  if(exp<=Math.floor(now/1000))throw Error("media_unavailable");
- const claims={iss:key,sub:grant.memberId,nbf,exp,video:{room:grant.room,roomJoin:true,canPublish:grant.canPublish,canSubscribe:true,canPublishData:false,canUpdateOwnMetadata:false,canPublishSources:["camera",...(grant.microphone?["microphone"]:[]),...(grant.screen?["screen_share"]:[]),...(grant.microphone&&grant.screen?["screen_share_audio"]:[])],roomAdmin:false,roomCreate:false,roomRecord:false,roomList:false}};
+ const claims={iss:key,sub:grant.memberId,nbf,exp,wm_session_hash:sessionHash,video:{room:grant.room,roomJoin:true,canPublish:grant.canPublish,canSubscribe:true,canPublishData:false,canUpdateOwnMetadata:false,canPublishSources:["camera",...(grant.microphone?["microphone"]:[]),...(grant.screen?["screen_share"]:[]),...(grant.microphone&&grant.screen?["screen_share_audio"]:[])],roomAdmin:false,roomCreate:false,roomRecord:false,roomList:false}};
  const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
  const data=json({alg:"HS256",typ:"JWT"})+"."+json(claims);
  const sig=await crypto.subtle.sign("HMAC",k,new TextEncoder().encode(data));
@@ -72,7 +73,7 @@ Deno.serve(async request=>{
  if(action==="media-grant"){
  const grant=mediaPermission(room,actor,now);if(!grant)return send(403,{error:"forbidden"});
  // Remains disabled until SFU eviction and actual audio/video Replay qualify.
- return send(200,await signGrant(grant,now));
+ return send(200,await signGrant(grant,now,p_hash));
  }
  return send(404,{error:"unavailable"});
  }catch(e){const code=e instanceof Error?e.message:"unavailable";const publicErrors=new Set(["forbidden","invalid_room","invalid_command","invalid_response","invalid_state","invalid_target","invalid_chat","invalid_reaction","invalid_hand","invalid_screen","invalid_poll","invalid_vote","invalid_record","invalid_consent","consent_required","premium_required","entitlement_required","room_unavailable","revision_conflict","idempotency_conflict","rate_limit","unknown_action","media_unavailable","limit_exceeded","invalid_request","not_active"]);return send(publicErrors.has(code)?409:503,{error:publicErrors.has(code)?code:"unavailable"});}
