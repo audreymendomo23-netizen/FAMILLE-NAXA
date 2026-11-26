@@ -53,3 +53,26 @@ export function safeWorkerLimit(value: unknown): number {
   if (typeof value !== "number" || !Number.isInteger(value)) return 25;
   return Math.min(100, Math.max(1, value));
 }
+
+export type FcmServiceAccount = { project_id: string; client_email: string; private_key: string; token_uri: string };
+export const FCM_OAUTH_TOKEN_URL = "https://oauth2.googleapis.com/token";
+
+// NAXA Pharmacy's project is intentionally excluded from this application.
+export function validateFcmServiceAccount(raw: string, expectedProject: string): FcmServiceAccount {
+  const project = expectedProject.trim();
+  if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(project) || project === "naxatechnologie") {
+    throw new Error("FCM_DEDICATED_PROJECT_REQUIRED");
+  }
+  let account: Record<string, unknown>;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error();
+    account = parsed as Record<string, unknown>;
+  } catch { throw new Error("FCM_CREDENTIALS_NOT_CONFIGURED"); }
+  if (account.project_id !== project) throw new Error("FCM_PROJECT_MISMATCH");
+  if (typeof account.client_email !== "string" || !account.client_email.endsWith("@" + project + ".iam.gserviceaccount.com") ||
+      typeof account.private_key !== "string" || !account.private_key.includes("-----BEGIN PRIVATE KEY-----") ||
+      !account.private_key.includes("-----END PRIVATE KEY-----")) throw new Error("FCM_CREDENTIALS_NOT_CONFIGURED");
+  if (account.token_uri !== undefined && account.token_uri !== FCM_OAUTH_TOKEN_URL) throw new Error("FCM_OAUTH_ENDPOINT_INVALID");
+  return { project_id: project, client_email: account.client_email, private_key: account.private_key, token_uri: FCM_OAUTH_TOKEN_URL };
+}
