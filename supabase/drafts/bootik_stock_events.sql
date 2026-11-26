@@ -18,6 +18,7 @@ declare b bootik.bk_inventory_balances%rowtype;old bootik.bk_stock_event_receipt
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
  if p_event is null or p_kind is null or p_kind not in ('receipt','loss','count') or p_qty is null or p_qty<0 or p_qty>1000000000 or p_qty<>round(p_qty,6) or (p_kind<>'count' and p_qty=0) or p_version is null or length(p_version)>100 or p_reason is null or length(btrim(p_reason)) not between 3 and 500 then raise exception 'BOOTIK_STOCK_EVENT_INVALID';end if;
+ if not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,(select activity_id from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':stock:'||p_event::text,0));
  select * into old from bootik.bk_stock_event_receipts where organization_id=p_org and app_id=p_app and event_id=p_event;
  if found then
