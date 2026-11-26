@@ -1,0 +1,48 @@
+name: ZIPPLE N2–N5 — isolated business candidate
+on:
+  push:
+    branches: [work/zipple-completion-20261126]
+    paths:
+      - "docs/apps/zipple/n2-n5/**"
+      - ".github/workflows/zipple-n2-n5.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  business:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local_test_only
+          POSTGRES_DB: zipple
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d zipple"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:local_test_only@127.0.0.1:5432/zipple
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Apply N1 and business candidate only to disposable PostgreSQL
+        run: |
+          docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon nologin;
+          create role authenticated nologin;
+          create role service_role nologin bypassrls;
+          create schema auth;
+          create table auth.users(id uuid primary key);
+          SQL
+          docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple -v ON_ERROR_STOP=1 < docs/apps/zipple/n1/backend/schema.sql
+          docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple -v ON_ERROR_STOP=1 < docs/apps/zipple/n2-n5/schema.sql
+      - run: npm install --no-save --ignore-scripts pg@8.13.3
+      - run: node --test docs/apps/zipple/contracts/zipple-policy.test.mjs docs/apps/zipple/n2-n5/recipe.test.mjs
