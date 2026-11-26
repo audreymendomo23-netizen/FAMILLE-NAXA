@@ -276,3 +276,6 @@ Run 45840646356 4/4 SUCCESS. Ajout candidat SQL isolé : adhésions et droits pa
 
 ### Bulk droits et prix — 26 novembre
 Run 45841440818 4/4 SUCCESS. Contrats SQL renforcés : essai unique 72 h par organisation/univers sans reset, registre périodes payées et idempotence référence prestataire, contrôle des droits et prix canonique avant vente, annulation demande média. Tests négatifs et positifs dans operations.sql. Fonction paiement réservée au serveur de confiance après confirmation prestataire (aucune intégration prestataire effective). Pas de déploiement ni de droit client direct. CI à vérifier.
+
+### Correction CI contrats 45843955223
+Erreur SQL ligne 63 : délimiteurs dollar-quote réduits à un seul dollar par remplacement JavaScript. Correction des huit délimiteurs et cohérence temporelle de l'activation d'essai dans la transaction PostgreSQL (now()). Web et inventaire réussis, Android encore en cours au constat. Nouvelle recette requise.

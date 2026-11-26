@@ -13,7 +13,7 @@ create table bootik.bk_member_sites (
 );
 create table bootik.bk_trials (
  organization_id uuid not null,app_id uuid not null,universe text not null check(universe in ('retailer','distributor')),
- plan text not null check(plan in ('access','premium')), activated_at timestamptz not null default clock_timestamp(),
+ plan text not null check(plan in ('access','premium')), activated_at timestamptz not null default now(),
  primary key(organization_id,app_id,universe),foreign key(organization_id,app_id) references bootik.bk_organizations(organization_id,app_id)
 );
 create table bootik.bk_sales (
@@ -59,7 +59,7 @@ create table bootik.bk_paid_periods (
  foreign key(organization_id,app_id) references bootik.bk_organizations(organization_id,app_id)
 );
 create function bootik.bk_start_trial(p_org uuid,p_app uuid,p_user uuid,p_site uuid,p_universe text,p_plan text)
-returns timestamptz language plpgsql security invoker set search_path=pg_catalog,bootik as $
+returns timestamptz language plpgsql security invoker set search_path=pg_catalog,bootik as $$
 declare v timestamptz;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_user,p_site,true);
@@ -67,14 +67,14 @@ begin
  insert into bootik.bk_trials(organization_id,app_id,universe,plan) values(p_org,p_app,p_universe,p_plan) on conflict do nothing;
  select activated_at+interval '72 hours' into v from bootik.bk_trials where organization_id=p_org and app_id=p_app and universe=p_universe;
  return v;
-end $;
+end $$;
 create function bootik.bk_has_entitlement(p_org uuid,p_app uuid,p_universe text)
-returns boolean language sql stable security invoker set search_path=pg_catalog,bootik as $
+returns boolean language sql stable security invoker set search_path=pg_catalog,bootik as $$
  select exists(select 1 from bootik.bk_trials where organization_id=p_org and app_id=p_app and universe=p_universe and activated_at<=now() and now()<activated_at+interval '72 hours')
  or exists(select 1 from bootik.bk_paid_periods where organization_id=p_org and app_id=p_app and universe=p_universe and revoked_at is null and starts_at<=now() and now()<ends_at);
-$;
+$$;
 create function bootik.bk_confirm_paid_period(p_org uuid,p_app uuid,p_universe text,p_plan text,p_months integer,p_amount bigint,p_reference text)
-returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
 declare v uuid; old bootik.bk_paid_periods%rowtype; start_time timestamptz;
 begin
  if p_amount is distinct from bootik.bk_quote(p_universe,p_plan,p_months) or nullif(btrim(p_reference),'') is null then raise exception 'BOOTIK_PAYMENT_MISMATCH';end if;
@@ -87,7 +87,7 @@ begin
  insert into bootik.bk_paid_periods(organization_id,app_id,universe,plan,months,amount_fcfa,provider_reference,starts_at,ends_at)
  values(p_org,p_app,p_universe,p_plan,p_months,p_amount,p_reference,start_time,start_time+make_interval(months=>p_months)) returning id into v;
  return v;
-end $;
+end $$;
 create table bootik.bk_sale_prices (
  item_id uuid not null, organization_id uuid not null, activity_id uuid not null, app_id uuid not null,
  unit_price_fcfa bigint not null check(unit_price_fcfa>=0),
@@ -95,13 +95,13 @@ create table bootik.bk_sale_prices (
  foreign key(item_id,organization_id,activity_id,app_id) references bootik.bk_catalog_items(id,organization_id,activity_id,app_id)
 );
 create function bootik.bk_cancel_support(p_org uuid,p_app uuid,p_user uuid,p_site uuid,p_request uuid)
-returns boolean language plpgsql security invoker set search_path=pg_catalog,bootik as $
+returns boolean language plpgsql security invoker set search_path=pg_catalog,bootik as $$
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_user,p_site);
  update bootik.bk_support_requests set state='cancelled',revoked_at=clock_timestamp()
  where id=p_request and organization_id=p_org and app_id=p_app and actor=p_user and location_id=p_site and state='requested';
  return found;
-end $;
+end $$;
 
 create function bootik.bk_record_sale(p_org uuid,p_app uuid,p_user uuid,p_site uuid,p_balance uuid,p_quantity numeric,p_price bigint,p_key text)
 returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
