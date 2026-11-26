@@ -73,7 +73,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByRole("combobox",{name:"Matière commandée",exact:true}).selectOption({label:"Farine recette (kg)"});
   await page.getByLabel("Référence de commande").fill("ACH-RECETTE");await page.getByLabel("Quantité commandée").fill("2");await page.getByLabel("Coût total commandé FCFA").fill("1000");await page.getByRole("button",{name:"Créer la commande"}).click();
   await page.getByRole("combobox",{name:"Commande à traiter",exact:true}).selectOption({label:"ACH-RECETTE"});
-  await page.getByLabel("Quantité réceptionnée").fill("1");await page.getByLabel("Lot de réception").fill("ACH-LOT");await page.getByRole("button",{name:"Confirmer la réception"}).click();
+  await page.getByLabel("Quantité réceptionnée").fill("1");await page.getByLabel("Lot de réception").fill("ACH-LOT");await page.getByRole("button",{name:"Confirmer la réception",exact:true}).click();
   await page.getByText(/Reçu : 1\/2/).waitFor();
   await page.getByLabel("Montant du règlement FCFA").fill("200");await page.getByLabel("Référence du règlement").fill("REG-RECETTE");await page.getByRole("button",{name:"Enregistrer le règlement"}).click();
   await page.getByText(/Dette fournisseur enregistrée : 300 FCFA/).waitFor();
@@ -88,7 +88,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   const batchId=await scalar("select id from zp_purchase_batches where org_id=$1 and reference='ACH-MULTI'",[org]);assert.ok(batchId);
   assert.equal(Number(await scalar("select sum(total_xaf) from zp_purchases where id=any((select purchase_ids from zp_purchase_batches where id=$1)::uuid[])",[batchId])),1001);
   await page.getByRole("combobox",{name:"Commande à traiter",exact:true}).selectOption({label:"ACH-MULTI / 1 · Farine recette"});
-  await page.getByLabel("Quantité réceptionnée").fill("1");await page.getByLabel("Lot de réception").fill("ACH-MULTI-LOT");await page.getByRole("button",{name:"Confirmer la réception"}).click();
+  await page.getByLabel("Quantité réceptionnée").fill("1");await page.getByLabel("Lot de réception").fill("ACH-MULTI-LOT");await page.getByRole("button",{name:"Confirmer la réception",exact:true}).click();
   await page.getByText(/Dette fournisseur enregistrée : 601 FCFA/).waitFor();
   assert.equal(Number(await scalar("select received_cost from zp_purchases where id=(select purchase_ids[1] from zp_purchase_batches where id=$1)",[batchId])),301);
   console.log("ZIPPLE_BULK3_REAL_EDGE_MULTILINE_PURCHASE_PASS");
@@ -115,13 +115,13 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByRole("combobox",{name:"Lot source",exact:true}).selectOption(sourceLot);
   await page.getByRole("combobox",{name:"Établissement destinataire",exact:true}).selectOption(destination);
   await page.getByRole("combobox",{name:"Matière correspondante",exact:true}).selectOption(destinationIngredient.body.data);
-  await page.getByLabel("Quantité à transférer").fill("1");await page.getByRole("button",{name:"Demander le transfert"}).click();
-  await page.getByRole("button",{name:"Approuver",exact:true}).click();await page.getByRole("button",{name:"Confirmer le départ"}).click();
+  await page.getByLabel("Quantité à transférer").fill("1");await page.getByRole("button",{name:"Demander le transfert",exact:true}).click();
+  await page.getByRole("button",{name:"Approuver",exact:true}).click();await page.getByRole("button",{name:"Confirmer le départ",exact:true}).click();
   await page.getByText(/1 · in_transit/).waitFor();
   assert.equal(Number(await scalar("select remaining_milli from zp_ingredient_lots where id=$1",[sourceLot])),2000);
   await page.getByRole("combobox",{name:"Établissement autorisé",exact:true}).selectOption(destination);
   await page.getByRole("heading",{name:"Nouvelle commande"}).waitFor();await page.getByRole("button",{name:"Stocks & finances"}).click();await page.getByRole("button",{name:"Transferts",exact:true}).click();
-  await page.getByRole("button",{name:"Confirmer la réception"}).click();await page.getByText(/1 · received/).waitFor();
+  await page.getByRole("button",{name:"Confirmer la réception",exact:true}).click();await page.getByText(/1 · received/).waitFor();
   assert.equal(Number(await scalar("select remaining_milli from zp_ingredient_lots where ingredient_id=$1",[destinationIngredient.body.data])),1000);
   console.log("ZIPPLE_N5_REAL_EDGE_TRANSFER_UI_PASS");
   await page.getByRole("combobox",{name:"Établissement autorisé",exact:true}).selectOption(site);await page.getByRole("heading",{name:"Nouvelle commande"}).waitFor();
@@ -178,6 +178,48 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByRole("button",{name:"Confirmer le règlement groupé reçu"}).click();await page.getByText(/Reste à régler : 0 FCFA/).waitFor();
   assert.equal(Number(await scalar("select count(*) from zp_cash_receipts where order_id in ($1,$2)",[orderId,formulaOrder])),2);
   console.log("ZIPPLE_BULK2_REAL_EDGE_FORMULA_GROUP_PAYMENT_PASS");
+  // Confirm new ERP flows on the real gateway, then inspect persisted SQL state.
+  const creditCustomer=await scalar("select id from zp_customers where org_id=$1 and display_name='Client recette'",[org]);
+  const creditProduct=await ok("menu_add",{name:"Ardoise navigateur",post:"kitchen",price_xaf:1000,qty:3});
+  const creditTicket=await ok("order_create",{channel:"counter",request_id:id(),lines:[{item_id:creditProduct,qty:1}]});
+  for(const next of ["preparing","ready","served"])await ok("line_advance",{order_id:creditTicket.id,item_id:creditProduct,next});
+  await page.getByRole("button",{name:"Actualiser",exact:true}).click();await page.getByRole("button",{name:"Clients",exact:true}).click();
+  await page.getByRole("heading",{name:"Ardoises et créances"}).waitFor();
+  await page.getByLabel("Client autorisé au crédit",{exact:true}).selectOption(creditCustomer);
+  await page.getByLabel("Plafond de crédit FCFA").fill("1500");await page.getByRole("button",{name:"Autoriser le plafond"}).click();
+  const creditAccount=await scalar("select id from zp_credit_accounts where site_id=$1 and customer_id=$2",[site,creditCustomer]);
+  await page.getByLabel("Compte d’ardoise",{exact:true}).selectOption(creditAccount);
+  await page.getByLabel("Commande servie à crédit",{exact:true}).selectOption(creditTicket.id);
+  const creditDue=await scalar("select ((now() at time zone 'Africa/Douala')::date+7)::text");
+  await page.getByLabel("Échéance du crédit").fill(creditDue);await page.getByLabel("Motif d’autorisation").fill("Ardoise validée recette");
+  await page.getByRole("button",{name:"Autoriser la vente à crédit"}).click();
+  await page.getByText(/Créance : 1000 \/ 1500 FCFA/).waitFor();
+  const creditSale=await scalar("select id from zp_credit_sales where order_id=$1",[creditTicket.id]);assert.ok(creditSale);
+  assert.equal(await scalar("select zp_credit_status($1)",[creditTicket.id]),"credit_due");
+  await page.getByLabel("Créance à encaisser",{exact:true}).selectOption(creditSale);await page.getByLabel("Montant reçu pour la créance").fill("400");await page.getByRole("button",{name:"Enregistrer le règlement de créance"}).click();await page.getByText(/Créance : 600 \/ 1500 FCFA/).waitFor();
+  assert.equal(Number(await scalar("select paid_xaf from zp_credit_sales where id=$1",[creditSale])),400);
+  console.log("ZIPPLE_BULK3_REAL_EDGE_CREDIT_UI_PASS");
+  const mixedProduct=await ok("menu_add",{name:"Mixte navigateur",post:"kitchen",price_xaf:1000,qty:2});
+  const mixedTicket=await ok("order_create",{channel:"counter",request_id:id(),lines:[{item_id:mixedProduct,qty:1}]});
+  for(const next of ["preparing","ready","served"])await ok("line_advance",{order_id:mixedTicket.id,item_id:mixedProduct,next});
+  const newDesk=await ok("cash_desk_add",{label:"Caisse mixte recette",member_id:member}),newCash=await ok("cash_desk_open",{desk_id:newDesk,opening_xaf:100});
+  const mixedId=await ok("cash_record_mixed",{cash_id:newCash,order_id:mixedTicket.id,request_id:id(),tenders:[{method:"cash",amount_xaf:400,reference:null},{method:"mtn_momo",amount_xaf:600,reference:"MIX-"+id()}]});
+  assert.equal(Number(await scalar("select sum(amount_xaf) from zp_cash_tenders where receipt_id=$1",[mixedId])),1000);
+  assert.equal((await ok("cash_close",{cash_id:newCash,counted_xaf:500})).variance_xaf,0);
+  console.log("ZIPPLE_BULK3_REAL_EDGE_MIXED_CASH_PASS");
+  const sourcePrep=await ok("menu_add",{name:"Préparation recette",post:"kitchen",price_xaf:1000,qty:0});
+  const destPrep=await ok("menu_add",{site_id:destination,name:"Préparation destination",post:"kitchen",price_xaf:1000,qty:0});
+  for(const [sid,pid,ing] of [[site,sourcePrep,ingredientId],[destination,destPrep,destinationIngredient.body.data]]){
+   await ok("catalog_base_set",{site_id:sid,item_id:pid,name:"Préparation recette",sku:"PREP-EDGE",sale_unit:"portion",price_xaf:1000,reason:"SKU transfert recette"});
+   await ok("recipe_define",{site_id:sid,item_id:pid,components:[{ingredient_id:ing,qty_milli:100}]});
+  }
+  const prep=await ok("produce",{item_id:sourcePrep,request_id:id(),servings:2});
+  const preparedTransfer=await ok("prepared_transfer_request",{destination_site:destination,source_batch:prep.id,destination_item:destPrep,request_id:id(),servings:1});
+  await ok("prepared_transfer_decide",{transfer_id:preparedTransfer,decision:"approved"});await ok("prepared_transfer_dispatch",{transfer_id:preparedTransfer});
+  const prepReceipt=await ok("prepared_transfer_receive",{site_id:destination,transfer_id:preparedTransfer,servings:1,reason:""});
+  assert.equal(prepReceipt.loss_cost,0);assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[destPrep]),1);
+  console.log("ZIPPLE_BULK3_REAL_EDGE_PREPARED_TRANSFER_PASS");
+
   await page.getByRole("button",{name:"Tables",exact:true}).click();await page.getByLabel("Nom de la table").fill("Table QR recette");await page.getByRole("button",{name:"Créer une table"}).click();
   const qrImg=page.getByRole("img",{name:"QR de commande de table"});await qrImg.waitFor();assert.match(await qrImg.getAttribute("src"),/^data:image\/png;base64,/);
   assert.equal(await page.getByRole("link",{name:"Enregistrer le QR imprimable"}).getAttribute("download"),"zipple-table-qr.png");
