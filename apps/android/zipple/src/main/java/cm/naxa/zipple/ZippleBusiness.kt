@@ -5,7 +5,7 @@ import java.net.URI
 /** Reuses the NAXA-family N1 HTTPS transport and session; server owns prices, stock and rights. */
 object ZippleBusinessPolicy {
     private const val hosted="https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-business"
-    private val actions=setOf("snapshot","quote","referral_claim","mode","menu_add","table_create","table_open","table_close","order_create","line_advance","delay","cancel","cash_open","cash_record","cash_close","erp_snapshot","ingredient_add","lot_receive","recipe_define","produce","expense_record","procurement_snapshot","supplier_add","purchase_create","purchase_receive","supplier_pay","count_lot","crm_snapshot","customer_add","customer_attach","followup_create","followup_complete")
+    private val actions=setOf("snapshot","quote","referral_claim","mode","menu_add","table_create","table_open","table_close","order_create","line_advance","delay","cancel","cash_open","cash_record","cash_close","erp_snapshot","ingredient_add","lot_receive","recipe_define","produce","expense_record","procurement_snapshot","supplier_add","purchase_create","purchase_receive","supplier_pay","count_lot","crm_snapshot","customer_add","customer_attach","followup_create","followup_complete","transfer_snapshot","transfer_request","transfer_decide","transfer_dispatch","transfer_receive")
     fun endpoint(value:String,debug:Boolean):String? {
         if(value==hosted)return value
         if(!debug)return null
