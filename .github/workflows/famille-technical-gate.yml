@@ -33,7 +33,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   sql-postgres-17:
@@ -84,6 +84,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - name: Installer Node.js 22
         uses: actions/setup-node@v4
         with:
@@ -93,8 +95,8 @@ jobs:
         with:
           version: 12.21.0
           run_install: false
-      - name: Générer les 10 socles Android et les 10 applications Next.js/PWA
-        run: node scripts/bootstrap-foundations.mjs
+      - name: Prévisualiser les anciens socles dans le runner jetable — jamais persistés
+        run: node scripts/bootstrap-foundations.mjs --legacy-ci-preview
       - name: Vérifier les manifests et les points d'entrée des 20 applications
         shell: bash
         run: |
@@ -168,19 +170,8 @@ jobs:
           target: google_apis
           disable-animations: true
           script: ./gradlew --no-daemon connectedDebugAndroidTest
-      - name: Persister les socles générés, le wrapper et le lockfile sur main
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A -- apps/android apps/web packages scripts settings.gradle.kts build.gradle.kts gradle.properties gradle pnpm-workspace.yaml pnpm-lock.yaml package.json .npmrc .gitignore playwright.config.ts tests infra
-          if git diff --cached --quiet; then
-            echo "Aucun fichier généré nouveau à persister."
-          else
-            git commit -m "chore: persister le socle Prompt 0.1 [skip ci]"
-            git push origin HEAD:main
-          fi
+      - name: Fin de prévisualisation historique
+        run: echo "Aucun socle généré, wrapper ou lockfile ne sera poussé sur main. Les recettes dédiées font foi pour les applications développées."
   prompt-03-rls:
     name: Prompt 0.3 — policies RLS et scénarios d'isolation
     runs-on: ubuntu-latest

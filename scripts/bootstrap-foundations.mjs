@@ -1,5 +1,12 @@
 import { mkdir, writeFile, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { existsSync } from "node:fs";
+// Mature ZIPPLE must never be regenerated in a working checkout. Legacy CI preview is disposable and read-only.
+if (existsSync(join(process.cwd(), "apps/android/zipple/src/main/java/cm/naxa/zipple/ZippleAuth.kt")) && !(process.env.GITHUB_ACTIONS === "true" && process.argv.includes("--legacy-ci-preview"))) {
+  console.error("ZIPPLE protected: legacy generator refused before any writes. Use dedicated application gates.");
+  process.exit(2);
+}
+
 
 const apps = [
   ["kiosko", "Kiosko", "K"], ["bootik", "Bootik", "B"], ["zipple", "Zipple", "Z"],
