@@ -1,7 +1,7 @@
 name: ZIPPLE N1 — real local Supabase
 on:
   push:
-    branches: [main]
+    branches: [work/zipple-completion-20261126]
     paths:
       - "docs/apps/zipple/n1/backend/local*"
       - "docs/apps/zipple/n1/backend/schema.sql"
