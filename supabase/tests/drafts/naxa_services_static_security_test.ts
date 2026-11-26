@@ -69,8 +69,8 @@ const DRAFTS: DraftSpec[] = [
   },
   {
     file: "naxa_services_v6_notifications.sql",
-    tablesWithoutPolicy: ["ns_push_tokens", "ns_notification_inbox"],
-    restrictedTables: ["ns_push_tokens", "ns_notification_inbox"],
+    tablesWithoutPolicy: ["ns_push_tokens", "ns_notification_inbox", "ns_notification_device_deliveries"],
+    restrictedTables: ["ns_push_tokens", "ns_notification_inbox", "ns_notification_device_deliveries"],
   },
   {
     file: "naxa_services_v7_financial_controls.sql",
