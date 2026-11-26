@@ -35,6 +35,9 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   const staff=await context(),page=await staff.newPage();await page.goto(publicOrigin);await page.getByLabel("Identifiant").fill(login);await page.getByLabel("Mot de passe",{exact:true}).fill(password);await page.getByRole("button",{name:"Se connecter"}).click();await page.getByRole("heading",{name:"Gestion ZIPPLE"}).waitFor();await page.getByRole("heading",{name:"Nouvelle commande"}).waitFor();
   const guestCtx=await context(),guest=await guestCtx.newPage();await guest.goto(publicOrigin+"/#table="+qr);await guest.getByRole("heading",{name:"Commander sans compte"}).waitFor();await guest.getByRole("button",{name:"Voir la carte"}).click();await guest.getByLabel(/Plat recette/).fill("1");await guest.getByRole("button",{name:"Confirmer ma commande"}).click();await guest.getByRole("heading",{name:"Commande confirmée"}).waitFor();
   assert.equal(Number(await scalar("select count(*) from zp_orders where org_id=$1 and guest_id is not null",[org])),1);
+  await guest.getByRole("button",{name:"J’ai été servi"}).click();await guest.getByText("Service confirmé par vous").waitFor();
+  assert.equal(await scalar("select status from zp_orders where org_id=$1",[org]),"received");
+  assert.ok(await scalar("select guest_served_at from zp_orders where org_id=$1",[org]));
   await page.getByRole("button",{name:"Actualiser"}).click();
   for(let i=0;i<3;i++){const next=page.getByRole("button",{name:"Étape suivante"});await next.waitFor();await next.click();await page.getByText("Plat recette × 1 · kitchen · "+["preparing","ready","served"][i],{exact:true}).waitFor()}
   await guest.getByRole("heading",{name:"Votre avis (facultatif)"}).waitFor({timeout:15000});await guest.getByRole("button",{name:"Envoyer mon avis"}).click();await guest.getByText("Merci pour votre avis.").waitFor();
@@ -64,6 +67,15 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByText(/Dette fournisseur enregistrée : 300 FCFA/).waitFor();
   const purchase=await scalar("select id from zp_purchases where org_id=$1",[org]);assert.equal(Number(await scalar("select paid_xaf from zp_purchases where id=$1",[purchase])),200);
   console.log("ZIPPLE_N5_REAL_EDGE_PROCUREMENT_UI_PASS");
+  await page.getByRole("button",{name:"Clients",exact:true}).click();await page.getByRole("heading",{name:"Relation client"}).waitFor();
+  await page.getByLabel("Nom d’usage").fill("Client recette");await page.getByLabel("Téléphone volontaire (facultatif)").fill("237699000001");await page.getByLabel("Le client a volontairement communiqué ces informations.").check();await page.getByRole("button",{name:"Enregistrer la fiche"}).click();
+  await page.getByRole("combobox",{name:"Client sélectionné"}).selectOption({label:"Client recette · 237699000001"});
+  const orderId=await scalar("select id from zp_orders where org_id=$1",[org]);
+  await page.getByRole("combobox",{name:"Commande à rattacher"}).selectOption(orderId);await page.getByRole("button",{name:"Rattacher la commande"}).click();await page.getByText(/Non réglée/).waitFor();
+  await page.getByLabel("Objet du suivi").fill("Suivi recette");await page.getByLabel("Échéance du suivi").fill("2026-12-01");await page.getByRole("button",{name:"Créer le suivi"}).click();
+  await page.getByRole("button",{name:"Clôturer le suivi"}).click();await page.getByText("Terminé",{exact:true}).waitFor();
+  assert.ok(await scalar("select completed_at from zp_customer_followups where org_id=$1",[org]));
+  console.log("ZIPPLE_CRM_REAL_EDGE_BROWSER_PASS");
   await staff.close();await guestCtx.close();
   console.log("ZIPPLE_BUSINESS_REAL_EDGE_PROFESSIONAL_AND_GUEST_BROWSER_PASS");
  }finally{if(browser)await browser.close();if(server)await new Promise(ok=>server.close(ok));await db.end()}
