@@ -39,6 +39,7 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
   var title by remember{mutableStateOf("")};var whenAt by remember{mutableStateOf("")};var agenda by remember{mutableStateOf("")};var duration by remember{mutableStateOf("30")}
   var edited by remember{mutableStateOf<JSONObject?>(null)}
   var frequency by remember{mutableStateOf("once")};var count by remember{mutableStateOf("3")}
+  var pendingCreation by remember{mutableStateOf<Pair<String,JSONObject>?>(null)}
   var busy by remember{mutableStateOf(false)};var loaded by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var reload by remember{mutableIntStateOf(0)}
   val languages=linkedMapOf("original" to "Original","fr" to "Français","en" to "English","ff-CM" to "Fulfulde","es" to "Español","it" to "Italiano","zh-CN" to "中文")
   fun status(s:String)=when(s){
@@ -59,7 +60,7 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
    if(busy||!loaded)return;busy=true;error=false
    scope.launch{try{action();reload++}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}
   }
-  fun clear(){edited=null;title="";whenAt="";agenda="";duration="30";selected=emptySet();frequency="once";count="3"}
+  fun clear(){edited=null;title="";whenAt="";agenda="";duration="30";selected=emptySet();frequency="once";count="3";pendingCreation=null}
   fun transition(m:JSONObject,next:String)=perform{StaffRosterApi.call(latest,"rpc/ns_transition_internal_meeting",JSONObject().put("p_id",m.getString("id")).put("p_revision",m.getInt("revision")).put("p_next",next))}
   Card(Modifier.fillMaxWidth()){
    Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
@@ -83,7 +84,13 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
      }
      Button(onClick={perform{
       val m=edited
-      if(m==null){val payload=JSONObject().put("p_id",UUID.randomUUID().toString()).put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_post",post.takeIf{it.isNotBlank()}?:JSONObject.NULL).put("p_title",title).put("p_at",if(whenAt.isBlank())Instant.now().toString() else meetingInstant(whenAt)).put("p_members",JSONArray(selected.toList())).put("p_agenda",agenda).put("p_duration",duration.toInt());if(frequency=="once")StaffRosterApi.call(latest,"rpc/ns_schedule_internal_meeting_details",payload)else StaffRosterApi.call(latest,"rpc/ns_schedule_meeting_series",payload.put("p_frequency",frequency).put("p_count",count.toInt()))}
+      if(m==null){
+       val fields=JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_post",post.takeIf{it.isNotBlank()}?:JSONObject.NULL).put("p_title",title).put("p_at",whenAt).put("p_members",JSONArray(selected.sorted())).put("p_agenda",agenda).put("p_duration",duration.toInt())
+       if(frequency!="once")fields.put("p_frequency",frequency).put("p_count",count.toInt())
+       val signature=fields.toString()
+       val payload=pendingCreation?.takeIf{it.first==signature}?.second?:fields.put("p_id",UUID.randomUUID().toString()).put("p_at",if(whenAt.isBlank())Instant.now().toString() else meetingInstant(whenAt)).also{pendingCreation=signature to it}
+       StaffRosterApi.call(latest,if(frequency=="once")"rpc/ns_schedule_internal_meeting_details" else "rpc/ns_schedule_meeting_series",payload)
+      }
       else StaffRosterApi.call(latest,"rpc/ns_revise_internal_meeting",JSONObject().put("p_id",m.getString("id")).put("p_revision",m.getInt("revision")).put("p_title",title).put("p_at",meetingInstant(whenAt)).put("p_agenda",agenda).put("p_duration",duration.toInt()))
       clear()
      }},enabled=!busy&&title.isNotBlank()&&agenda.length<=2000&&duration.toIntOrNull()?.let{it in 5..480}==true&&(edited!=null||selected.isNotEmpty()&&(frequency=="once"||count.toIntOrNull()?.let{it in 2..12}==true))){Text(tr("Enregistrer et inviter","Save and invite","Danndu e noddu"))}
