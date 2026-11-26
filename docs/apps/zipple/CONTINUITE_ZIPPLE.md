@@ -20,3 +20,6 @@ N0 PARTIEL : audit et docs réalisés en bulk. Contrat ZIPPLE vérifié en mémo
 
 ### Reprise bulk
 Contrat exécutable ZIPPLE et tests ajoutés sous contracts/; 31 contrôles en mémoire réussis avant commit. Le workflow ciblé ne déploie rien et ne réécrit aucun autre socle. Matrice détaillée candidate ajoutée; validation commerciale des droits non arbitrés et audit sémantique JOBLY restent ouverts. Aucun appel backend d'écriture ni lancement N1. Ne pas déclarer N0 vert sans preuve.
+
+### Preuve de reprise
+Run GitHub Actions 45783733195 (job 139785200082) VERT : tests Node ZIPPLE et inventaire JOBLY. Archive intégrité vérifiée, 726 fichiers candidats, 12 modules ciblés pour inspection structurelle. Audit backend complémentaire lecture seule : 11 tables NS, RLS activée, aucun SELECT anon. Ne pas appeler les tables NS depuis ZIPPLE. La matrice de droits candidate reste à valider pour les options commerciales; la CI n'est pas une recette backend ZIPPLE.
