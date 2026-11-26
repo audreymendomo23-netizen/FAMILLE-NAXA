@@ -997,3 +997,8 @@ Droits comptables : les 7 anciens RPC de stock/fournisseurs restent service_role
 ### Contrôle complémentaire 22.33 — variable ajoutée
 
 Run #640 (45825922172) : 12/12 jobs success, compilation Android comprise. Contrôle runtime post-ajout : project_matches=true, worker_configured=true, credential_present=false, credential_valid=false, encryption_configured=false, oauth_ok=false. Worker désormais conforme au contrôle de longueur (>=32), sans validation de dispatch authentifié. FCM_SERVICE_ACCOUNT_JSON absent du runtime ; NS_PUSH_TOKEN_ENCRYPTION_KEY absent ou format non conforme. OAuth et push réel restent non validés. Sonde temporaire v13 retirée, code normal v14 ACTIVE, garde FCM présente et nonce absent, bundle 976c7f98fd9a007d1b5e8d93bbac02153eba6861531c32c2854fee8139a4cdcc. Aucun secret retourné, aucune notification envoyée, aucun changement main/pharmacie/ZIPPLE.
+
+
+### Contrôle complémentaire 22.33 — nouvelle relance
+
+Contrôle runtime : project_matches=true, worker_configured=true, encryption_present=true, encryption_configured=true (64 caractères hexadécimaux), credential_present=false, credential_valid=false, oauth_ok=false. Trois des quatre paramètres Firebase/worker validés en présence/format ; FCM_SERVICE_ACCOUNT_JSON toujours absent du runtime et OAuth non validé. Sonde v17 retirée, version normale v18 ACTIVE, garde FCM conservée et nonce absent, bundle 9fd1f448bc394804871aef04115c3d8473c59458da51c67d107d3b342554352c. Aucun secret affiché, aucun envoi push réel. CI #640 déjà vérifiée 12/12 ; qualification production toujours ouverte.
