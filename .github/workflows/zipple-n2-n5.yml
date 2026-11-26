@@ -70,5 +70,6 @@ jobs:
           docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple -v ON_ERROR_STOP=1 < docs/apps/zipple/n2-n5/bulk3-expiry.sql
           docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple -v ON_ERROR_STOP=1 < docs/apps/zipple/n2-n5/bulk3-inventory-gains.sql
           docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple -v ON_ERROR_STOP=1 < docs/apps/zipple/n2-n5/bulk3-direct-sale.sql
+          docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple -v ON_ERROR_STOP=1 < docs/apps/zipple/n2-n5/bulk3-financial-statements.sql
       - run: npm install --no-save --ignore-scripts pg@8.13.3
       - run: node --experimental-strip-types --test docs/apps/zipple/contracts/zipple-policy.test.mjs docs/apps/zipple/n2-n5/recipe.test.mjs docs/apps/zipple/n2-n5/cash-reuse.test.mjs docs/apps/zipple/n2-n5/business-gateway.test.mjs docs/apps/zipple/n2-n5/erp-reuse.test.mjs docs/apps/zipple/n2-n5/pilotage.test.mjs docs/apps/zipple/n2-n5/bulk1-contract.test.mjs

@@ -2,6 +2,7 @@ import React,{useState,useEffect,useRef} from "react";
 import {calculerBalance} from "./accounting/calculs";
 import {downloadCsv} from "./accounting/exports";
 import {LedgerAllocations} from "./LedgerAllocations";
+import {FinancialStatements} from "./FinancialStatements";
 import type {CompteComptable,EcritureComptable} from "./accounting/types";
 type Props={call:(action:string,body?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean};
 export function LedgerWorkspace({call,disabled,en}:Props){
@@ -36,6 +37,7 @@ export function LedgerWorkspace({call,disabled,en}:Props){
  <h5>{t("Journal validé","Posted journal")}</h5>
  <button disabled={lock||!entries.length} onClick={()=>downloadCsv("zipple-journal.csv",[[t("Date","Date"),t("Journal","Journal"),t("Écriture","Entry"),t("Source","Source"),t("Libellé","Description"),t("Compte","Account"),t("Débit FCFA","Debit XAF"),t("Crédit FCFA","Credit XAF")],...entries.flatMap(x=>x.lignes.map(l=>[x.dateEcriture,x.journalCode,x.id,x.referenceSource,x.libelle,accounts.find(a=>a.id===l.compteId)?.code,String(l.debitFcfa),String(l.creditFcfa)]))])}>{t("Exporter le journal CSV","Export journal CSV")}</button>{entries.map(x=><div key={x.id}><p>{x.dateEcriture} · {x.journalCode} · {x.libelle}</p>{x.lignes.map((l,i)=><p key={i}>{accounts.find(a=>a.id===l.compteId)?.code} · {t("Débit","Debit")} {money(BigInt(l.debitFcfa))} · {t("Crédit","Credit")} {money(BigInt(l.creditFcfa))}</p>)}</div>)}
  <h5>{t("Balance des comptes","Trial balance")}</h5><button disabled={lock||!balance.lignes.length} onClick={()=>downloadCsv("zipple-balance.csv",[[t("Compte","Account"),t("Libellé","Description"),t("Débit FCFA","Debit XAF"),t("Crédit FCFA","Credit XAF"),t("Solde débit","Debit balance"),t("Solde crédit","Credit balance")],...balance.lignes.map(x=>[x.code,x.libelle,String(x.totalDebitFcfa),String(x.totalCreditFcfa),String(x.soldeDebitFcfa),String(x.soldeCreditFcfa)])])}>{t("Exporter la balance CSV","Export trial balance CSV")}</button>{balance.lignes.map(x=><p key={x.compteId}>{x.code} · {x.libelle} · {t("Solde débit","Debit balance")} {money(x.soldeDebitFcfa)} · {t("Solde crédit","Credit balance")} {money(x.soldeCreditFcfa)}</p>)}<p>{t("Total débit","Total debit")} {money(balance.totalDebitFcfa)} · {t("Total crédit","Total credit")} {money(balance.totalCreditFcfa)}</p>
+ <FinancialStatements call={call} disabled={lock} en={en}/>
  <h5>{t("Clôture de période","Period close")}</h5><p>{t("Clôturé jusqu’au","Closed through")} : {data.closed_through??"—"}</p><label>{t("Date de clôture comptable","Accounting closing date")}<input type="date" value={date} onChange={e=>DT(e.target.value)}/></label><label>{t("Motif de clôture","Closing reason")}<input value={reason} onChange={e=>R(e.target.value)}/></label><button disabled={lock||!date||reason.trim().length<5} onClick={()=>run(async()=>{await call("ledger_close",{through_date:date,reason});await load()})}>{t("Clôturer la période","Close period")}</button>
  </>}
  </section>
