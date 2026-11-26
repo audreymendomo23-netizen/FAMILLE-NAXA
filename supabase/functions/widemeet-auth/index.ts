@@ -150,17 +150,22 @@ Deno.serve(async request=>{
  const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
  if(!/^[a-f0-9]{64}$/.test(access))return send(401,{error:"credentials"});
  const name=body.action,data=body.data??{};
- if(!["profile","profile-update","onboarding-step","contacts","favorite","invite","invitations","respond-invite","member-role","revoke-member","billing","devices","revoke-device","dashboard"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
+ if(!["profile","profile-update","onboarding-step","contacts","favorite","invite","invitations","respond-invite","member-role","revoke-member","billing","billing-list","billing-create","billing-cancel","devices","revoke-device","dashboard"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
  const p_hash=await digest(access);
  const context=(await rest("rpc/wm_session_context",{method:"POST",body:JSON.stringify({p_hash})}))?.[0];
  if(!context||context.password_change_required)return send(403,{error:"scope"});
+ if(["billing-list","billing-create","billing-cancel"].includes(name)){
+ if(Deno.env.get("WM_BILLING_TEST")!=="true")return send(503,{error:"unavailable"});
+ const result=await rest("rpc/wm_billing_action",{method:"POST",body:JSON.stringify({p_hash,p_action:name,p_data:data})});
+ return result?send(200,result):send(403,{error:"scope"});
+ }
  if(["billing","dashboard"].includes(name)){
  const profile=await rest("rpc/wm_identity_action",{method:"POST",body:JSON.stringify({p_hash,p_action:"profile",p_data:{}})});
  if(!profile)return send(403,{error:"scope"});
  if(name==="billing"&&!["owner","promoteur"].includes(profile.role))return send(403,{error:"scope"});
  const ent=(await rest("wm_room_entitlements?select=plan,enabled,valid_until&workspace_id=eq."+eq(context.workspace_id)+"&limit=1"))?.[0];
  const valid=ent?.enabled===true&&Date.parse(ent.valid_until)>Date.now();
- if(name==="billing")return send(200,{plan:valid?ent.plan:null,valid_until:valid?ent.valid_until:null,kind:profile.workspace_kind,payment_available:false});
+ if(name==="billing")return send(200,{plan:valid?ent.plan:null,valid_until:valid?ent.valid_until:null,kind:profile.workspace_kind,payment_available:false,intent_available:Deno.env.get("WM_BILLING_TEST")==="true"});
  const rows=valid?await rest("rpc/wm_room_list",{method:"POST",body:JSON.stringify({p_hash})}):[];
  const upcoming=Array.isArray(rows)?rows.filter((r:any)=>r.status==="scheduled"&&r.scheduled_ms>=Date.now()).sort((a:any,b:any)=>a.scheduled_ms-b.scheduled_ms):[];
  return send(200,{display_name:profile.display_name,role:profile.role,next_meeting:upcoming[0]??null,upcoming_count:upcoming.length,active_count:Array.isArray(rows)?rows.filter((r:any)=>r.status==="open"||r.status==="paused").length:0,subscription_active:valid});
