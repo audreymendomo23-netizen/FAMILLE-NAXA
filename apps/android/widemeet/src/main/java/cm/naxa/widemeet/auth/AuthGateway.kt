@@ -12,7 +12,7 @@ class AuthGateway(private val context:Context,private val base:String){
  private fun endpoint(action:String):URI{
   val u=URI(base)
   require(u.scheme=="https" && !u.host.isNullOrBlank() && u.userInfo==null && u.query==null && u.fragment==null && u.path.trimEnd('/').endsWith("/widemeet-auth"))
-  require(action in setOf("login","logout","switch-workspace"))
+  require(action in setOf("login","logout","switch-workspace","request-recovery"))
   return URI(base.trimEnd('/')+"/"+action)
  }
  private fun installation():String{
@@ -37,6 +37,12 @@ class AuthGateway(private val context:Context,private val base:String){
   require(identifier.isNotBlank()&&password.isNotBlank()&&password.length<=256)
   val j=request("login",JSONObject().put("app_id","WIDEMEET").put("identifier",identifier.trim()).put("password",password).put("installation_id",installation()).put("platform","android"))
   parse(j)
+ }
+ suspend fun requestRecovery(identifier:String):Unit=withContext(Dispatchers.IO){
+  val normalized=identifier.trim().uppercase(java.util.Locale.ROOT)
+  require(Regex("^WM-[A-Z0-9]{8,24}$").matches(normalized))
+  val j=request("request-recovery",JSONObject().put("app_id","WIDEMEET").put("identifier",normalized).put("installation_id",installation()).put("platform","android"))
+  require(j.optBoolean("accepted",false))
  }
  private fun parse(j:JSONObject):Session{
   val a=j.getJSONArray("workspaces")
