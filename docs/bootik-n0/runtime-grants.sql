@@ -42,3 +42,9 @@ create policy bk_runtime_scope_insert on bootik.bk_member_activity_scopes for in
 create policy bk_runtime_scope_delete on bootik.bk_member_activity_scopes for delete to bootik_runtime using(true);
 grant insert,delete on bootik.bk_member_activity_scopes to bootik_runtime;
 grant execute on function bootik.bk_effective_plan(uuid,uuid,text),bootik.bk_has_capability(uuid,uuid,text,text),bootik.bk_issue_session(uuid,uuid,uuid,text,text),bootik.bk_admin_action(uuid,uuid,uuid,uuid,uuid,jsonb) to bootik_runtime;
+
+create policy bk_runtime_access on bootik.bk_member_functions to bootik_runtime using(true) with check(true);
+grant select,insert on bootik.bk_member_functions to bootik_runtime;
+grant update(function_code) on bootik.bk_member_functions to bootik_runtime;
+grant update(role) on bootik.bk_members to bootik_runtime;
+grant execute on function bootik.bk_permits_operation(uuid,uuid,uuid,text,jsonb) to bootik_runtime;

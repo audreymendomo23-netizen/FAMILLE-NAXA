@@ -34,7 +34,8 @@ test('Chromium real API, session, trial, persistent offline queue, payment and s
  const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:4173');
  async function login(expected=1){await page.getByLabel('Identifiant',{exact:true}).fill(identifier);await page.getByLabel('Mot de passe',{exact:true}).fill('browser-test-only');await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.getByLabel('Site actif').waitFor();assert.equal(await page.getByLabel('Site actif').locator('option').count(),expected)}
- await login();await page.getByRole('button',{name:'Activer l’essai',exact:true}).click();await page.getByText(/Fin d’essai :/).waitFor();
+ await login();await page.getByRole('button',{name:'Actualiser la sécurité',exact:true}).click();await page.getByText(/Session actuelle ·/).waitFor();
+ await page.getByRole('button',{name:'Activer l’essai',exact:true}).click();await page.getByText(/Fin d’essai :/).waitFor();
  await page.getByRole('button',{name:'Actualiser le catalogue'}).click();await page.getByText('Catalogue actualisé',{exact:true}).waitFor();
  await page.getByLabel('Article',{exact:true}).selectOption(b);await page.getByLabel('Quantité',{exact:true}).fill('2');
  await context.setOffline(true);await page.getByRole('button',{name:'Mettre la vente en file'}).click();await page.getByText(/1 en attente ·/).waitFor();await context.setOffline(false);

@@ -75,6 +75,7 @@ export function createBootikService(db,{now=Date.now}={}){
   const site=body.site_id,p=body.payload,action=body.action;
   const scope=[s.organization_id,s.app_id,s.user_id,site];
   await query('select bootik.bk_assert_scope($1,$2,$3,$4)',scope);
+  const permission=await first('select bootik.bk_permits_operation($1,$2,$3,$4,$5::jsonb) as allowed',[s.organization_id,s.app_id,s.user_id,action,JSON.stringify(p)]);if(!permission?.allowed)return reject(403);
   let result;
   if(action==='entitlement'&&allowed.has(p.universe))result=await first("select bootik.bk_has_entitlement($1,$2,$3) as active,bootik.bk_effective_plan($1,$2,$3) as plan,bootik.bk_has_capability($1,$2,$3,'consolidation') as consolidation,bootik.bk_has_capability($1,$2,$3,'automated_reorder') as automated_reorder",[s.organization_id,s.app_id,p.universe]);
   else if(action==='security-state'){
@@ -84,11 +85,11 @@ export function createBootikService(db,{now=Date.now}={}){
   else if(action==='security-audit'&&s.role==='promoteur'){
    result={events:(await query("select id,action,target,actor,site_id,created_at from bootik.bk_security_audit where organization_id=$1 and app_id=$2 and (site_id=$4 or (site_id is null and actor=$3)) order by created_at desc limit 200",scope)).rows};
   }
-  else if(action==='admin-action'&&validId(p.request_id)&&['session-revoke','member-scope','member-disable','session-limit'].includes(p.kind)){
+  else if(action==='admin-action'&&validId(p.request_id)&&['session-revoke','member-scope','member-disable','session-limit','member-role'].includes(p.kind)){
    const data={kind:p.kind,reason:clean(p.reason,500,true)};
    if(p.kind==='session-revoke'){if(!validId(p.device_session_id))return reject();data.device_session_id=p.device_session_id}
    else if(p.kind==='session-limit'){if(!Number.isInteger(p.limit)||p.limit<1||p.limit>50)return reject();data.limit=p.limit}
-   else{if(!validId(p.member_id))return reject();data.member_id=p.member_id;if(p.kind==='member-scope'){if(!Array.isArray(p.activities)||p.activities.length>22||!p.activities.every(validId))return reject();data.activities=[...new Set(p.activities)].sort()}}
+   else{if(!validId(p.member_id))return reject();data.member_id=p.member_id;if(p.kind==='member-role'){if(!['director','site_manager','stock_manager','buyer','cashier','accountant','auditor','delivery','territory_manager','sales','picker','collection','crm'].includes(p.function_code))return reject();data.function_code=p.function_code}if(p.kind==='member-scope'){if(!Array.isArray(p.activities)||p.activities.length>22||!p.activities.every(validId))return reject();data.activities=[...new Set(p.activities)].sort()}}
    result=(await first('select bootik.bk_admin_action($1,$2,$3,$4,$5,$6::jsonb) as result',[...scope,p.request_id,JSON.stringify(data)])).result;
   }
   else if(action==='trial'&&allowed.has(p.universe)&&plans.has(p.plan))result=await first('select bootik.bk_start_trial($1,$2,$3,$4,$5,$6) as expires_at',[...scope,p.universe,p.plan]);
@@ -132,7 +133,7 @@ export function createBootikService(db,{now=Date.now}={}){
     if(conflict.includes(e?.message))return {status:200,body:{...scopedReceipt,state:'conflict',result:{reason:e.message}}};throw e}
   }
   else if(action==='sale'&&validId(p.balance_id)&&typeof p.quantity==='number'&&Number.isFinite(p.quantity)&&p.quantity>0&&Number.isSafeInteger(p.unit_price_fcfa)&&p.unit_price_fcfa>=0&&validId(p.idempotency_key))result=await first('select bootik.bk_record_sale($1,$2,$3,$4,$5,$6,$7,$8) as sale_id',[...scope,p.balance_id,p.quantity,p.unit_price_fcfa,p.idempotency_key]);
-  else if(action==='team'&&s.role!=='staff')result={members:(await query("select m.user_id,m.role,m.active from bootik.bk_members m join bootik.bk_member_sites ms using(organization_id,app_id,user_id) where m.organization_id=$1 and m.app_id=$2 and ms.location_id=$3 order by m.role,m.user_id",[s.organization_id,s.app_id,site])).rows};
+  else if(action==='team'&&s.role!=='staff')result={members:(await query("select m.user_id,m.role,m.active,ms.activity_restricted,f.function_code from bootik.bk_members m join bootik.bk_member_sites ms using(organization_id,app_id,user_id) left join bootik.bk_member_functions f using(organization_id,app_id,user_id) where m.organization_id=$1 and m.app_id=$2 and ms.location_id=$3 order by m.role,m.user_id",[s.organization_id,s.app_id,site])).rows};
   else if(action==='activities')result={activities:(await query("select a.id,a.display_name,a.profile_code,a.universe_code from bootik.bk_activities a join bootik.bk_activity_locations al on (al.activity_id,al.organization_id,al.app_id)=(a.id,a.organization_id,a.app_id) where a.organization_id=$1 and a.app_id=$2 and al.location_id=$4 and a.status='active' and bootik.bk_can_access_activity($1,$2,$3,$4,a.id) order by a.display_name",scope)).rows};
   else if(action==='master-create'&&validId(p.activity_id)&&validId(p.request_id)&&['item','customer','supplier'].includes(p.kind)){
    const data=normalizeMaster(p.kind,p);
