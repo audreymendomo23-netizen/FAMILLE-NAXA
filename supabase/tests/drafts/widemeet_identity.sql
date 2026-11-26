@@ -47,5 +47,32 @@ do $$ begin
  end;
 end $$;
 reset role;
+-- Additional independent negative cases; all fixtures rolled back.
+do $$ begin
+ if has_function_privilege('anon','public.wm_session_context(text)','EXECUTE') or has_function_privilege('authenticated','public.wm_switch_workspace(text,uuid,text)','EXECUTE') then raise exception 'function grant leak';end if;
+ if has_table_privilege('anon','public.wm_memberships','SELECT') or has_table_privilege('authenticated','public.wm_accounts','UPDATE') then raise exception 'table grant leak';end if;
+end $$;
+set local role service_role;
+update public.wm_memberships set enabled=true where account_id='10000000-0000-4000-8000-000000000001';
+select public.wm_issue_device_session('10000000-0000-4000-8000-000000000001','30000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001',repeat('1',64));
+do $$ begin
+ if not exists(select 1 from public.wm_session_context(repeat('1',64))) then raise exception 'active session missing';end if;
+ update public.wm_workspaces set enabled=false where id='20000000-0000-4000-8000-000000000001';
+ if exists(select 1 from public.wm_session_context(repeat('1',64))) then raise exception 'disabled workspace accepted';end if;
+ update public.wm_workspaces set enabled=true where id='20000000-0000-4000-8000-000000000001';
+ update public.wm_accounts set enabled=false where id='10000000-0000-4000-8000-000000000001';
+ if exists(select 1 from public.wm_session_context(repeat('1',64))) then raise exception 'disabled account accepted';end if;
+ update public.wm_accounts set enabled=true,password_change_required=true where id='10000000-0000-4000-8000-000000000001';
+ begin
+ perform public.wm_switch_workspace(repeat('1',64),'20000000-0000-4000-8000-000000000003',repeat('2',64));
+ raise exception 'password gate bypass' using errcode='XX000';
+ exception when raise_exception then null;
+ end;
+ update public.wm_accounts set password_change_required=false where id='10000000-0000-4000-8000-000000000001';
+ update public.wm_device_sessions set created_at=now()-interval '2 hours',expires_at=now()-interval '1 hour' where token_hash=repeat('1',64);
+ if exists(select 1 from public.wm_session_context(repeat('1',64))) then raise exception 'expired session accepted';end if;
+end $$;
+reset role;
+
 rollback;
 select 'WIDEMEET_IDENTITY_SQL_PASS';

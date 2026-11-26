@@ -81,7 +81,7 @@ class MainActivity:ComponentActivity(){
  fun tr(fr:String,en:String)=if(english)en else fr
  val labels=if(english)tabsEn else tabs
  val menuLabels=if(english)menuEn else menuFr
- val colors=if(dark)darkColorScheme(primary=Green,onPrimary=Black,secondary=Yellow,onSecondary=Black,background=Color(0xFF101611),surface=Color(0xFF1A241C),onSurface=White,onBackground=White,error=Color(0xFFFF7777)) else lightColorScheme(primary=Deep,onPrimary=White,secondary=Yellow,onSecondary=Black,background=Color(0xFFF6FAEF),surface=White,onSurface=Black,onBackground=Black,error=Red)
+ val colors=if(dark)darkColorScheme(primary=Green,onPrimary=Black,secondary=Yellow,onSecondary=Black,background=Color(0xFF101611),surface=Color(0xFF1A241C),onSurface=White,onBackground=White,error=Color(0xFFFF7777)) else lightColorScheme(primary=Deep,onPrimary=White,secondary=Yellow,onSecondary=Black,background=Color(0xFFF6FAEF),surface=White,onSurface=Black,onBackground=Black,error=Color(0xFFC02626))
  val unavailable=tr("Cet espace sera disponible à la connexion de votre compte.","This area will be available when your account is connected.")
  MaterialTheme(colorScheme=colors){
  Scaffold(contentWindowInsets=WindowInsets.safeDrawing,topBar={
