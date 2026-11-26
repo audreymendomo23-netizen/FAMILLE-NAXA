@@ -271,7 +271,7 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
                 if (paid.has("erp_access")) Text(when (paid.optString("access_reason")) {
                     "trial" -> if (fr) "Essai de 72 h en cours" else "72-hour trial"
                     "provisional" -> if (fr) "Accès provisoire de 24 h, paiement non confirmé" else "24-hour provisional access; payment not confirmed"
-                    "paid" -> if (fr) "Accès ERP serveur autorisé" else "Server ERP access allowed"
+                    "paid" -> if (fr) "Votre abonnement est actif" else "Your subscription is active"
                     else -> if (fr) "Abonnement suspendu. Vos données disponibles restent consultables." else "Subscription suspended. Available records remain accessible."
                 })
             }
@@ -754,7 +754,7 @@ fun TaxesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, se
                 }
             }
         }
-        item { Text("Préparations locales", fontWeight = FontWeight.Bold) }
+        item { Text("Opérations à finaliser", fontWeight = FontWeight.Bold) }
         items(records) { Text(it.title + " · " + xaf(it.amountXaf), color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
@@ -982,11 +982,11 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
             Spacer(Modifier.height(12.dp))
             Text("Assistant IA de pilotage", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(
-                "Prévisions de CA, comparaison des périodes et recommandations de redressement. Les projections utilisent les ventes confirmées locales et les objectifs enregistrés ; aucune vente en attente n'est comptée.",
+                "Prévisions de CA, comparaison des périodes et recommandations de redressement. Les projections utilisent les ventes confirmées disponibles et vos objectifs ; aucune vente en attente n'est comptée.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             LocalOnlyNotice(
-                "Moteur statistique local explicable : moyenne glissante de 14 jours pour la journée, 28 jours pour la clôture mensuelle et 90 jours pour la clôture annuelle. Les résultats dépendent de l'historique disponible et se recalculent à chaque actualisation des données."
+                "Les estimations s’appuient sur vos ventes des 14, 28 et 90 derniers jours. Elles évoluent avec votre activité."
             )
             Text("Périmètre : " + siteIds.size + " site(s) accessibles et consolidés.", style = MaterialTheme.typography.labelSmall)
             Text("Couverture des ventes : " + dashboard.dataCoverageDays + " jour(s).", style = MaterialTheme.typography.labelSmall)
@@ -1025,7 +1025,7 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
-                        "Le solde de gestion est un indicateur local avant éléments non enregistrés, amortissements, commissions et fiscalité ; il n'est pas un résultat SYSCOHADA certifié.",
+                        "Le solde de gestion est une estimation avant éléments non enregistrés, amortissements, commissions et fiscalité ; il n'est pas un résultat SYSCOHADA certifié.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

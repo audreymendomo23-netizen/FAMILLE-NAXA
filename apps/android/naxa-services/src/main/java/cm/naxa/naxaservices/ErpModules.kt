@@ -1060,7 +1060,7 @@ fun StockContent(
                     Text("Valeur de vente théorique : " + formatInventoryXaf(stockSaleValue))
                     Text("Marge brute potentielle : " + formatInventoryXaf(potentialGrossMargin), fontWeight = FontWeight.Bold)
                     Text("Articles non valorisés : " + unvaluedItems + " / " + stock.size, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Calcul local fondé sur les coûts et prix saisis. Hors taxes, pertes, remises, frais indirects et mouvements non synchronisés.",
+                    Text("Estimation fondée sur les coûts et prix saisis. Hors taxes, pertes, remises, frais indirects et mouvements non synchronisés.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
@@ -1389,7 +1389,7 @@ fun ReportsContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle("Rapports et pilotage", "Indicateurs de la journée, ventilés par point de vente autorisé.")
-            LocalOnlyNotice("Rapport issu des données locales de cet appareil ; il ne constitue pas une clôture comptable ni un rapport réseau synchronisé.")
+            LocalOnlyNotice("Rapport fondé sur les données disponibles sur cet appareil. Il ne constitue ni une clôture comptable ni un rapport complet du réseau.")
             Button(onClick = { refresh() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
                 Text(if (busy) "Calcul…" else "Actualiser le rapport du jour")
             }
@@ -1424,7 +1424,7 @@ fun ReportsContent(
                 }
             }
         }
-        if (rows.isEmpty() && !busy) item { Text("Aucune donnée locale pour les points de vente de ce compte.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (rows.isEmpty() && !busy) item { Text("Aucune donnée disponible pour vos points de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 
@@ -1515,7 +1515,7 @@ internal fun OrganizationWorkspaceContent(
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Brouillon local non confirmé", fontWeight = FontWeight.Bold)
+                            Text("Brouillon en attente de confirmation", fontWeight = FontWeight.Bold)
                             Text(profile!!.displayName + " · " + profile!!.businessMode)
                             Text("Cette modification est en attente de confirmation.")
                             OutlinedButton(
@@ -1525,7 +1525,7 @@ internal fun OrganizationWorkspaceContent(
                                     locale = profile!!.defaultLocale
                                 },
                                 modifier = Modifier.fillMaxWidth()
-                            ) { Text("Reprendre ce brouillon local") }
+                            ) { Text("Reprendre ce brouillon") }
                         }
                     }
                 }
@@ -1725,7 +1725,7 @@ internal fun OrganizationWorkspaceContent(
                         if (item.syncStatus == "server_confirmed") {
                             Text("Actif", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
                         } else {
-                            LocalOnlyNotice("Brouillon local · non activé")
+                            LocalOnlyNotice("Brouillon · non activé")
                         }
                     }
                 }
@@ -1853,7 +1853,7 @@ fun SettingsContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("File locale d’événements", fontWeight = FontWeight.Bold)
+                    Text("Opérations en attente", fontWeight = FontWeight.Bold)
                     Text(pending.toString() + " événement(s) en attente ou non synchronisé(s)")
                     if (supplierSyncConfigured) {
                         OutlinedButton(

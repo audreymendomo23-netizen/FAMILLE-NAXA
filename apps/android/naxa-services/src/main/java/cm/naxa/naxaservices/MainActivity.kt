@@ -1834,7 +1834,7 @@ private fun CashLocalContent(
                                             if (pair.first.inventoryItemId != null) {
                                                 "Encaissement enregistré ; sortie de stock et mouvement d'inventaire créés dans la même transaction."
                                             } else {
-                                                "Encaissement reçu hors application enregistré localement. Le reçu ERP est prêt."
+                                                "Encaissement externe enregistré. Votre reçu est prêt."
                                             }
                                         }
                                     }.onFailure { error = it.message ?: "Vente impossible." }
@@ -1865,7 +1865,7 @@ private fun CashLocalContent(
                                     error = null
                                     runCatching {
                                         repository.addExpense(session.account.organizationId, siteId, openSession.id, expenseCategory, expenseDescription, expenseAmount.toLong(), session.account.memberId)
-                                    }.onSuccess { expenseCategory = ""; expenseDescription = ""; expenseAmount = ""; notice = "Dépense ajoutée à la file locale." }
+                                    }.onSuccess { expenseCategory = ""; expenseDescription = ""; expenseAmount = ""; notice = "Dépense enregistrée, en attente de confirmation." }
                                         .onFailure { error = it.message ?: "Dépense impossible." }
                                     busy = false
                                 }
@@ -1884,7 +1884,7 @@ private fun CashLocalContent(
                                     error = null
                                     runCatching {
                                         repository.closeCashSession(session.account.organizationId, siteId, openSession.id, countedClose.toLong(), varianceReason, session.account.memberId)
-                                    }.onSuccess { notice = "Clôture locale terminée. Écart : " + (it.varianceXaf ?: 0L) + " FCFA." }
+                                    }.onSuccess { notice = "Clôture enregistrée, en attente de confirmation. Écart : " + (it.varianceXaf ?: 0L) + " FCFA." }
                                         .onFailure { error = it.message ?: "Clôture impossible." }
                                     busy = false
                                 }
@@ -1937,7 +1937,7 @@ private fun CashLocalContent(
                                         )
                                     }.onSuccess {
                                         cancellationReason = ""
-                                        notice = "Vente annulée ; la réservation locale de stock est libérée."
+                                        notice = "Vente annulée ; les articles réservés sont de nouveau disponibles."
                                         error = null
                                     }.onFailure { error = it.message ?: "Annulation impossible." }
                                 }
