@@ -51,7 +51,8 @@ jobs:
           sudo apt-get install -y postgresql-client
           psql "$DB_URL" -v ON_ERROR_STOP=1 -c "create extension if not exists pgcrypto with schema extensions"
           for file in naxa_services_v1.sql naxa_services_v2_activity_onboarding_management.sql naxa_services_v3_operations_rewards_sync.sql naxa_services_v4_supplier_accounting_forecast.sql naxa_services_referrals_v1.sql naxa_services_v5_customer_referrals_promotions.sql naxa_services_v6_notifications.sql naxa_services_v7_financial_controls.sql naxa_services_v8_subscription_payment.sql; do
-            sed -E 's/^rollback;[[:space:]]*$/commit;/I' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
+            test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
+            sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
             echo "Applied local draft: $file"
           done
           for file in 20261126080317_naxa_services_strict_site_management_scope.sql 20261126133458_naxa_services_push_only_notification_claim.sql 20261126133841_naxa_services_bound_push_tokens.sql 20261126140054_naxa_services_notification_device_deliveries.sql 20261126140440_naxa_services_private_profile_photo_access.sql; do
@@ -71,7 +72,7 @@ jobs:
           [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
           export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
           export NS_ALLOWED_ORIGINS=http://127.0.0.1:4173 NS_AUTH_ALIAS_DOMAIN=example.test
-          export NS_PUSH_TOKEN_ENCRYPTION_KEY="$(openssl rand -base64 32)"
+          export NS_PUSH_TOKEN_ENCRYPTION_KEY="$(openssl rand -hex 32)"
           export NS_NOTIFICATION_WORKER_SECRET="$(openssl rand -hex 32)"
           unset FCM_SERVICE_ACCOUNT_JSON NS_FIREBASE_PROJECT_ID
           node --input-type=module <<'NODE'
