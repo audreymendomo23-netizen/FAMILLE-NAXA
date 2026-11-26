@@ -468,6 +468,16 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal(Number(await scalar("select count(*) from zp_production_batches where request_id=$1",[validOffline])),1);
  await assert.rejects(scalar("select zp_offline_erp_apply($1,$2,$3,$4,$5,'produce',$6)",[a.access,a.site,orgB,memberB,uid(),JSON.stringify(validPayload)]),/DENIED/);
  console.log("ZIPPLE_BULK3_OFFLINE_PRODUCTION_RECEIPT_PASS");
+ const proofPng="iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=";
+ const proofKey=uid(),proofAdd=(request=proofKey,content=proofPng,label="Justificatif test")=>scalar("select zp_finance_document_add($1,$2,$3,'expense',$4,$5,'image/png',$6)",[b.access,b.site,request,ledgerExpense,label,content]);
+ const proofId=await proofAdd();assert.equal(await proofAdd(),proofId);
+ await assert.rejects(proofAdd(uid()),/DOCUMENT_ALREADY_ATTACHED/);
+ await assert.rejects(proofAdd(proofKey,proofPng,"Autre preuve"),/IDEMPOTENCY_CONFLICT/);
+ await assert.rejects(proofAdd(uid(),"YWJjZGVmZ2g="),/INVALID_DOCUMENT/);
+ const proof=await scalar("select zp_finance_document_read($1,$2,$3)",[b.access,b.site,proofId]);assert.equal(proof.base64,proofPng);assert.equal(proof.sha256_hex.length,64);
+ await assert.rejects(scalar("select zp_finance_document_read($1,$2,$3)",[a.access,a.site,proofId]),/DENIED/);
+ const proofSnap=await scalar("select zp_finance_documents_snapshot($1,$2)",[b.access,b.site]);assert.ok(proofSnap.documents.some(x=>x.id===proofId&&!x.base64&&!x.content));
+ console.log("ZIPPLE_BULK3_SCOPED_DOCUMENT_EVIDENCE_PASS");
  const issueEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='issued'",[account]);
  const returnEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='returned'",[account]);
  const lostEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='lost'",[account]);

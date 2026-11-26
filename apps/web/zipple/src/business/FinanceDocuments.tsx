@@ -1,0 +1,26 @@
+import React,{useEffect,useRef,useState} from "react";
+type Props={call:(action:string,body?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean};
+const types:Record<string,string>={"application/pdf":"pdf","image/jpeg":"jpg","image/png":"png"};
+export function FinanceDocuments({call,disabled,en}:Props){
+ const t=(fr:string,eng:string)=>en?eng:fr;
+ const [data,D]=useState<any>(null),[busy,B]=useState(false),[error,E]=useState(""),[source,S]=useState(""),[label,L]=useState(""),[file,F]=useState<File|null>(null);
+ const input=useRef<HTMLInputElement>(null),key=useRef<{file:File,source:string,label:string,id:string}|null>(null);const lock=disabled||busy;
+ const selected=(data?.sources??[]).find((x:any)=>x.kind+":"+x.source_id===source);
+ async function load(){D(await call("finance_documents_snapshot"))}
+ async function run(fn:()=>Promise<void>){if(lock)return;B(true);E("");try{await fn()}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}
+ useEffect(()=>{let live=true;call("finance_documents_snapshot").then(v=>{if(live)D(v)}).catch(e=>{if(live)E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")});return()=>{live=false}},[]);
+ async function upload(){if(!file||!selected||!types[file.type]||file.size>2097152||file.size<8)throw Error(t("PDF, JPG ou PNG de 2 Mo maximum.","PDF, JPG or PNG up to 2 MB."));
+  if(key.current?.file!==file||key.current.source!==source||key.current.label!==label)key.current={file,source,label,id:crypto.randomUUID()};
+  const base64=await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(reader.error);reader.onload=()=>resolve(String(reader.result).split(",")[1]);reader.readAsDataURL(file)});
+  await call("finance_document_add",{request_id:key.current.id,kind:selected.kind,source_id:selected.source_id,label,mime:file.type,base64});key.current=null;F(null);L("");if(input.current)input.current.value="";await load()
+ }
+ async function retrieve(x:any){const v=await call("finance_document_read",{document_id:x.id});if(v.id!==x.id||v.mime!==x.mime||v.sha256_hex!==x.sha256_hex||!types[v.mime])throw Error("INVALID_DOCUMENT");
+ const bytes=Uint8Array.from(atob(v.base64),c=>c.charCodeAt(0));const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes)),n=>n.toString(16).padStart(2,"0")).join("");if(digest!==x.sha256_hex)throw Error("DOCUMENT_INTEGRITY");
+ const url=URL.createObjectURL(new Blob([bytes],{type:"application/octet-stream"}));const a=document.createElement("a");a.href=url;a.download="zipple-"+x.id+"."+types[v.mime];document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+ const kinds:Record<string,string>={expense:t("Dépense","Expense"),purchase_receipt:t("Réception achat","Purchase receipt"),supplier_payment:t("Règlement fournisseur","Supplier payment"),credit_payment:t("Règlement client","Customer payment"),sale:t("Vente","Sale"),credit_sale:t("Vente à crédit","Credit sale"),deposit_in:t("Consigne entrante","Deposit in"),deposit_out:t("Consigne sortante","Deposit out")};
+ return <section><h4>{t("Pièces justificatives","Supporting documents")}</h4><p>{t("PDF, JPG ou PNG — 2 Mo maximum. Les documents sont liés à une opération confirmée et accessibles uniquement aux comptes autorisés.","PDF, JPG or PNG — 2 MB maximum. Documents are linked to confirmed operations and restricted to authorized accounts.")}</p>{error&&<p role="alert">{error}</p>}
+ <button disabled={lock} onClick={()=>run(load)}>{t("Actualiser les justificatifs","Refresh documents")}</button>
+ {data&&<><label>{t("Opération à justifier","Source operation")}<select value={source} onChange={e=>S(e.target.value)}><option value="">—</option>{data.sources.map((x:any)=><option key={x.kind+":"+x.source_id} value={x.kind+":"+x.source_id}>{kinds[x.kind]} · {x.label} · {x.amount_xaf} FCFA · {x.entry_date}</option>)}</select></label><label>{t("Intitulé du justificatif","Document label")}<input maxLength={160} value={label} onChange={e=>L(e.target.value)}/></label><label>{t("Fichier justificatif","Supporting file")}<input ref={input} type="file" accept="application/pdf,image/jpeg,image/png" onChange={e=>F(e.target.files?.[0]??null)}/></label><button disabled={lock||!selected||!file||!label.trim()||!types[file.type]||file.size>2097152} onClick={()=>run(upload)}>{t("Joindre le justificatif","Attach document")}</button>
+ {data.documents.map((x:any)=><div key={x.id}><p>{x.label} · {kinds[x.source_kind]} · {x.size_bytes} {t("octets","bytes")} · {x.created_at}</p><p>{t("Empreinte SHA-256","SHA-256 fingerprint")} : {x.sha256_hex}</p><button disabled={lock} onClick={()=>run(()=>retrieve(x))}>{t("Télécharger le justificatif","Download document")}</button></div>)}</>}
+ </section>
+}

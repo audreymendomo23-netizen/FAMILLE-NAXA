@@ -68,6 +68,15 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   const downloadJournal=page.waitForEvent("download");await page.getByRole("button",{name:"Exporter le journal CSV"}).click();const journalFile=await downloadJournal;assert.equal(journalFile.suggestedFilename(),"zipple-journal.csv");const journalText=await readFile(await journalFile.path(),"utf8");assert.match(journalText,/2500/);assert.match(journalText,/TEST-D/);assert.match(journalText,/TEST-C/);
   const downloadBalance=page.waitForEvent("download");await page.getByRole("button",{name:"Exporter la balance CSV"}).click();const balanceFile=await downloadBalance;assert.equal(balanceFile.suggestedFilename(),"zipple-balance.csv");assert.match(await readFile(await balanceFile.path(),"utf8"),/2500/);
   console.log("ZIPPLE_BULK3_REAL_EDGE_LEDGER_EXPORT_PASS");
+  await page.getByRole("button",{name:"Justificatifs",exact:true}).click();await page.getByRole("heading",{name:"Pièces justificatives"}).waitFor();
+  await page.getByLabel("Opération à justifier").selectOption("expense:"+expenseSource);
+  await page.getByLabel("Intitulé du justificatif").fill("Pièce recette");
+  const evidenceBytes=Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=","base64");
+  await page.getByLabel("Fichier justificatif").setInputFiles({name:"preuve.png",mimeType:"image/png",buffer:evidenceBytes});
+  await page.getByRole("button",{name:"Joindre le justificatif"}).click();await page.getByText(/Pièce recette · Dépense/).waitFor();
+  const evidenceDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Télécharger le justificatif"}).click();
+  assert.deepEqual(await readFile(await (await evidenceDownload).path()),evidenceBytes);
+  console.log("ZIPPLE_BULK3_REAL_EDGE_DOCUMENT_PASS");
   console.log("ZIPPLE_BULK3_REAL_EDGE_LEDGER_PASS");
   console.log("ZIPPLE_N5_REAL_EDGE_STOCK_EXPENSE_UI_PASS");
   await page.getByRole("button",{name:"Achats",exact:true}).click();
