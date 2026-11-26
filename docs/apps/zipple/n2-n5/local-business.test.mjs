@@ -130,10 +130,11 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await g2.getByRole("button",{name:"Voir la carte"}).click();await g2.getByLabel(/Menu choix recette/).fill("1");
   assert.ok(await g2.getByRole("button",{name:"Confirmer ma commande"}).isDisabled());
   const select=g2.getByRole("combobox",{name:"Menu choix recette · Boisson"});
-  assert.ok(await select.locator('option[value="'+emptyJuice+'"]').isDisabled());
+  const optionServer=(await scalar("select zp_formula_groups_view($1,'table')",[formula]))[0].options.find(x=>x.component_id===emptyJuice);assert.equal(optionServer.available,false,"server marks sold-out choice unavailable");
+  const option=select.locator('option[value="'+emptyJuice+'"]');assert.equal(await option.evaluate(el=>el.disabled),true,"actual option disabled in browser");
   await select.selectOption(juice);await g2.getByRole("button",{name:"Confirmer ma commande"}).click();
   await g2.getByRole("heading",{name:"Commande confirmée"}).waitFor();
-  const formulaOrder=await scalar("select id from zp_orders where org_id=$1 and id<>$2",[org,orderId]);
+  const formulaOrder=await scalar("select id from zp_orders where org_id=$1 and commercial_lines @> $2::jsonb",[org,JSON.stringify([{item_id:formula}])]);assert.ok(formulaOrder);
   assert.equal(Number(await scalar("select total_xaf from zp_orders where id=$1",[formulaOrder])),2000);
   assert.equal(Number(await scalar("select sum(line_total_xaf) from zp_order_lines where order_id=$1",[formulaOrder])),2000);
   assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[juice]),3);
@@ -179,7 +180,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await db.query("insert into zp_members(id,org_id,auth_user_id,login_id,auth_alias,role_code) values($1,$2,$3,$4,$5,'staff')",[staffId,org,(await staffAuth.json()).id,staffLogin,staffEmail]);
   await db.query("insert into zp_site_scopes values($1,$2,$3)",[staffId,org,site]);
   await ok("operational_grant",{member_id:staffId,role:"server",enabled:true});
-  const staffToken=(await call("zipple-n1","login",{identifier:staffLogin,password})).body.access_token;
+  const staffLoginResult=await call("zipple-n1","login",{identifier:staffLogin,password});assert.equal(staffLoginResult.status,200);const staffToken=staffLoginResult.body.access_token;
   assert.ok(staffToken);assert.equal((await b("erp_snapshot",{},staffToken)).status,403);
   const worker=await context(),workerPage=await worker.newPage();await workerPage.goto(publicOrigin);await workerPage.getByLabel("Identifiant").fill(staffLogin);await workerPage.getByLabel("Mot de passe",{exact:true}).fill(password);await workerPage.getByRole("button",{name:"Se connecter"}).click();await workerPage.getByRole("heading",{name:"Nouvelle commande"}).waitFor();
   assert.equal(await workerPage.getByRole("button",{name:"Stocks & finances"}).count(),0);assert.equal(await workerPage.getByRole("button",{name:"Caisse",exact:true}).count(),0);
