@@ -40,5 +40,17 @@ test("public Pages UI and exact-origin CORS",async()=>{
   await page.getByRole("alert").waitFor();
   assert.equal(await page.getByLabel("Mot de passe",{exact:true}).inputValue(),"");
   console.log("ZIPPLE_PAGES_CORS_NEGATIVE_LOGIN_PASS");
+  const forbidden=await fetch(origin+"/session/login",{method:"POST",headers:{origin:"https://untrusted.invalid","content-type":"application/json"},body:JSON.stringify({identifier:"zipple-ci-negative",password:"fixture-only"}),redirect:"error"});
+  assert.equal(forbidden.status,403);assert.equal(forbidden.headers.get("set-cookie"),null);
+  const invalid=await fetch(origin+"/session/login",{method:"POST",headers:{origin,"content-type":"application/json"},body:JSON.stringify({identifier:"zipple-ci-cookie-negative-"+Date.now(),password:"fixture-only"}),redirect:"error"});
+  assert.equal(invalid.status,401);assert.equal(invalid.headers.get("set-cookie"),null);assert.match(invalid.headers.get("cache-control")??"",/no-store/);assert.equal((await invalid.json()).refresh_token,undefined);
+  console.log("ZIPPLE_PAGES_COOKIE_NEGATIVE_LOGIN_PASS");
+  // Check present layout only; approved HD assets intentionally deferred.
+  for(const width of [320,390,768,1440]){
+    await page.setViewportSize({width,height:844});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    assert.ok(await submit.isVisible());
+  }
+  console.log("ZIPPLE_PAGES_RESPONSIVE_EXISTING_LAYOUT_PASS");
  }finally{await browser.close()}
 });

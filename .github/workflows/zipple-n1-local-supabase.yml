@@ -85,10 +85,12 @@ jobs:
       - name: Prepare browser and temporary CI-only Android TLS trust
         run: |
           set -euo pipefail
-          npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
+          npm install --workspace @famille/zipple-web --workspace @famille/admin-console --include-workspace-root=false --ignore-scripts
           npm install --no-save --ignore-scripts pg@8.13.3 playwright@1.51.1
           npx playwright install --with-deps chromium
           VITE_ZIPPLE_API_URL=https://127.0.0.1:4443/gateway npm run build --workspace @famille/zipple-web
+          # Public placeholder only; browser test transports calls exclusively to local GoTrue.
+          VITE_ADMIN_SUPABASE_URL=https://idupfjbkwjcavyisxteo.supabase.co VITE_ADMIN_PUBLIC_KEY=sb_publishable_fixture node scripts/zipple/admin-cloudflare-build.mjs
           openssl req -x509 -nodes -newkey rsa:2048 -days 1 -subj "/CN=localhost" -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" -addext "basicConstraints=critical,CA:TRUE" -keyout "$RUNNER_TEMP/zipple-ci.key" -out "$RUNNER_TEMP/zipple-ci.crt" >/dev/null 2>&1
           # Only in the temporary CI checkout, never committed or packaged for release.
           mkdir -p apps/android/zipple/src/debug/res/raw apps/android/zipple/src/debug/res/xml

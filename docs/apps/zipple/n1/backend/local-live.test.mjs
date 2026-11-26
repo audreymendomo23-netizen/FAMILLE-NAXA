@@ -25,6 +25,70 @@ async function createUser(email,password){
  const j=await r.json();assert.ok(j.id);return j.id;
 }
 
+// Real admin UI on the same isolated GoTrue/PostgREST/Edge stack. Browser network
+// interception is transport-only; no response, authorization or MFA decision is mocked.
+async function adminBrowserRecipe({operatorAlias,operatorPw,codeFor,member,requestId,newPassword}){
+ const root=resolve("apps/web/admin-console/dist");
+ const server=createServer({key:await readFile(process.env.ZIPPLE_TLS_KEY),cert:await readFile(process.env.ZIPPLE_TLS_CERT)},async(req,res)=>{
+  try{
+   const url=new URL(req.url,"https://127.0.0.1:4444");
+   if(req.method!=="GET"){res.writeHead(405).end();return}
+   const path=resolve(root,"."+decodeURIComponent(url.pathname==="/"?"/index.html":url.pathname));
+   if(!path.startsWith(root+sep)){res.writeHead(403).end();return}
+   const data=await readFile(path);const mime={".html":"text/html",".js":"application/javascript",".css":"text/css",".svg":"image/svg+xml"};
+   res.writeHead(200,{"content-type":mime[extname(path)]??"application/octet-stream","cache-control":"no-store"});res.end(data);
+  }catch{res.writeHead(404).end()}
+ });
+ await new Promise((ok,fail)=>{server.once("error",fail);server.listen(4444,"127.0.0.1",ok)});
+ let browser;
+ const localOrigin="https://127.0.0.1:4444",configuredOrigin="https://idupfjbkwjcavyisxteo.supabase.co";
+ try{
+  browser=await chromium.launch({headless:true});
+  const ctx=await browser.newContext({ignoreHTTPSErrors:true,serviceWorkers:"block",viewport:{width:390,height:844}});
+  let recoveryCalls=0;
+  await ctx.route("**/*",async route=>{
+   const req=route.request(),url=new URL(req.url());
+   if(url.origin===localOrigin)return route.continue();
+   if(url.origin!==configuredOrigin)return route.abort();
+   const isAuth=/^\/auth\/v1\/(token|user|logout|factors\/[0-9a-f-]+\/(challenge|verify))$/.test(url.pathname);
+   const isAdmin=/^\/functions\/v1\/zipple-n1\/admin\/recovery\/(list|complete)$/.test(url.pathname);
+   if(!isAuth&&!isAdmin)return route.abort();
+   const cors={"access-control-allow-origin":localOrigin,"access-control-allow-headers":"authorization,content-type,apikey","access-control-allow-methods":"GET,POST,OPTIONS","cache-control":"no-store"};
+   if(req.method()==="OPTIONS")return route.fulfill({status:204,headers:cors});
+   if(!["GET","POST"].includes(req.method()))return route.abort();
+   if(isAdmin)recoveryCalls++;
+   const authorization=req.headers().authorization;
+   const response=await fetch(base+url.pathname+url.search,{method:req.method(),headers:{"content-type":"application/json",origin:"https://zipple.test",...(isAuth?{apikey:anon}:{}),...(authorization?{authorization}:{})},...(req.method()==="POST"?{body:req.postDataBuffer()??Buffer.from("{}")}:{})});
+   await route.fulfill({status:response.status,headers:{...cors,"content-type":response.headers.get("content-type")??"application/json"},body:Buffer.from(await response.arrayBuffer())});
+  });
+  const page=await ctx.newPage();await page.goto(localOrigin);
+  await page.getByLabel("Adresse technique de l’opérateur").fill(operatorAlias);
+  await page.getByLabel("Mot de passe opérateur",{exact:true}).fill(operatorPw);
+  await page.getByRole("button",{name:"Se connecter"}).click();
+  await page.getByRole("heading",{name:"Authentification renforcée"}).waitFor();
+  assert.equal(recoveryCalls,0,"no administrative request before MFA");
+  // Wait for a fresh TOTP period after enrollment verification; do not reuse a code.
+  const wait=30000-(Date.now()%30000)+1000;await new Promise(r=>setTimeout(r,wait));
+  await page.getByLabel("Code de l’authentificateur").fill(codeFor());
+  await page.getByRole("button",{name:"Vérifier"}).click();
+  await page.getByRole("heading",{name:"Demandes de récupération"}).waitFor();
+  await page.getByRole("row").filter({hasText:"fixture"}).getByRole("button",{name:"Traiter",exact:true}).click();
+  const complete=page.getByRole("button",{name:"Confirmer la récupération"});
+  await page.getByLabel("Motif vérifié").fill("Fixture identity verified by authorized operator");
+  await page.getByLabel("Nouveau mot de passe temporaire").fill(newPassword);
+  assert.equal(await complete.isDisabled(),true);
+  await page.getByRole("checkbox").check();
+  const done=page.waitForResponse(x=>x.url().endsWith("/admin/recovery/complete")&&x.request().method()==="POST");
+  await complete.click();assert.equal((await done).status(),200);
+  await page.getByText("Aucune demande ouverte.").waitFor();
+  assert.equal((await db.query("select state from public.zp_recovery_requests where id=$1 and member_id=$2",[requestId,member])).rows[0].state,"resolved");
+  assert.equal(await page.evaluate(()=>localStorage.length+sessionStorage.length),0);
+  await page.getByRole("button",{name:"Déconnexion"}).click();
+  await page.getByRole("heading",{name:"Connexion opérateur"}).waitFor();
+  await ctx.close();console.log("ZIPPLE_N1_ADMIN_UI_REAL_MFA_RECOVERY_PASS");
+ }finally{if(browser)await browser.close();await new Promise(ok=>server.close(ok))}
+}
+
 async function browserRecipe({pw,org,member,site}){
  const root=resolve("apps/web/zipple/dist");
  const server=createServer({key:await readFile(process.env.ZIPPLE_TLS_KEY),cert:await readFile(process.env.ZIPPLE_TLS_CERT)},async(req,res)=>{
@@ -93,6 +157,7 @@ async function browserRecipe({pw,org,member,site}){
 test("actual GoTrue, PostgREST and Edge runtime on isolated local Supabase",async()=>{
  try{
   assert.ok(/^http:\/\/(127\.0\.0\.1|localhost):\d+$/.test(base),"local only");
+  const dbURL=new URL(process.env.DB_URL);assert.ok(["127.0.0.1","localhost"].includes(dbURL.hostname),"disposable database only");
   const pw="Fixture-"+randomUUID()+"-Aa9!",alias="zipple-"+randomUUID()+"@example.test",u=await createUser(alias,pw),other=await createUser("other-"+randomUUID()+"@example.test",pw);
   const org=randomUUID(),site=randomUUID(),member=randomUUID(),org2=randomUUID(),site2=randomUUID();
   await db.query("insert into public.zp_organizations values($1,'ZIPPLE fixture',true),($2,'Other tenant',true)",[org,org2]);
@@ -143,9 +208,8 @@ test("actual GoTrue, PostgREST and Edge runtime on isolated local Supabase",asyn
   assert.ok(challenge.ok,"local TOTP challenge");const challengeId=(await challenge.json()).id;
   // RFC 6238: only generated local fixture secret, never a real operator's factor.
   let bits=0,value=0;const bytes=[];for(const c of factor.totp.secret.toUpperCase().replace(/=+$/,"")){const n="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567".indexOf(c);assert.ok(n>=0);value=(value<<5)|n;bits+=5;if(bits>=8){bits-=8;bytes.push((value>>bits)&255)}}
-  const counter=Buffer.alloc(8);counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));
-  const mac=createHmac("sha1",Buffer.from(bytes)).update(counter).digest(),offset=mac[mac.length-1]&15;
-  const code=String((mac.readUInt32BE(offset)&0x7fffffff)%1000000).padStart(6,"0");
+  const codeFor=()=>{const counter=Buffer.alloc(8);counter.writeBigUInt64BE(BigInt(Math.floor(Date.now()/30000)));const mac=createHmac("sha1",Buffer.from(bytes)).update(counter).digest(),offset=mac[mac.length-1]&15;return String((mac.readUInt32BE(offset)&0x7fffffff)%1000000).padStart(6,"0")};
+  const code=codeFor();
   const verification=await fetch(base+"/auth/v1/factors/"+factor.id+"/verify",{method:"POST",headers:headers(anon,aal1),body:JSON.stringify({challenge_id:challengeId,code})});
   assert.ok(verification.ok,"local TOTP verification");const verified=await verification.json();const operatorJwt=verified.access_token;
   assert.ok(operatorJwt,"verified operator access token");
@@ -157,7 +221,7 @@ test("actual GoTrue, PostgREST and Edge runtime on isolated local Supabase",asyn
   const listing=await call("admin/recovery/list",{},operatorJwt);assert.equal(listing.status,200);
   const reqId=listing.data.requests.find(q=>q.member_id===member&&q.state==="pending").id;
   const newPw="Replacement-"+randomUUID()+"-Aa9!";
-  assert.equal((await call("admin/recovery/complete",{request_id:reqId,reason:"Fixture identity verified",new_password:newPw},operatorJwt)).status,200);
+  await adminBrowserRecipe({operatorAlias,operatorPw,codeFor,member,requestId:reqId,newPassword:newPw});
   assert.equal((await call("sync",event,oldSession.access_token)).status,403);
   assert.equal((await call("refresh",{refresh_token:oldSession.refresh_token})).status,401);
   assert.equal((await call("login",{identifier:"fixture",password:pw})).status,401);
