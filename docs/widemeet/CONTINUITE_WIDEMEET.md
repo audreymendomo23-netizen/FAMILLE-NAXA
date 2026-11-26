@@ -1,0 +1,15 @@
+# WideMeet — Document de continuité
+## 26 novembre 2026 — N0 démarré, NON CLÔTURÉ
+Branche de travail : `work/widemeet-n0-20261126` ; base main 8ab45776cd3606b43e97aae5d641fab7f89aa750. Aucun merge, déploiement, migration Supabase, achat, publication ni modification des applications sœurs.
+Décision : WideMeet, logo première proposition vert/jaune (trois personnes dans un écran panoramique et arc), slogan « Vos réunions, sans frontières. ». Le fichier source binaire choisi n'a pas pu être transféré par le connecteur ; ne pas le remplacer par une approximation. Recherche d'antériorité OAPI à réaliser.
+Cahier v1.0 : [12-widemeet.md](../../7%20famille%20naxa/01-cahiers-des-charges/12-widemeet.md), commit 190eaefd2df9ccae99bd5222100b0adf0c0b6d1c. 25 modules, six bulks N0–N5, décisions et réserves explicites.
+Premier contrat pur : packages/widemeet-domain/pricing.mjs (e93aa8b8177d0f501629c7c120e975b8ca86f2ac), tests Node (96fd8d62f9c8ac42e5ea3778611489ce8a53fbc3). 13 cas de prix et 5 refus ont été exécutés directement sur la fonction dans l'environnement JS du connecteur, sans échec. Ce n'est pas une exécution du fichier Node de tests ni une CI ; aucun encaissement/entitlement. Commande future ou locale : node --test packages/widemeet-domain/pricing.test.mjs. Au-delà de 50 Premium devis manuel, plafond 20 000 F/mois, aucun tarif inventé. Pass au-delà de 100 exige entreprise ; 24h validité maximale, pas durée média garantie.
+## Reprise exacte
+1. N0 : récupérer le logo original et ses déclinaisons, auditer arborescences/versions des packages main et sœurs, qualifier les composants, définir app IDs et architecture avec isolation. Compléter registre officiel après réconciliation du portefeuille commercial 11 solutions vs monorepo 10 apps historiques dont GrillaD ; ne pas supprimer ni renommer une solution. WideMeet est une nouvelle entrée additionnelle.
+2. Inventorier Supabase Replay et Production en lecture seule avant migration, suivre AGENTS.md et architecture. Pas de clés ni données réelles dans dépôt public. Choisir hébergement et moteur SFU/TURN après coût/qualification, pas de service payant sans autorisation.
+3. N1 : reprendre Auth et onboarding NAXA SERVICES, adapter inscription individuelle, comptes entreprises, promoteur payeur, profils, favoris, accès, tarifs et dashboard à 5 onglets + hamburger droit ; extraire packages communs sans casser les sœurs. 
+4. N2–N5 : suivre cahier et matrice de recettes, tester progressivement Android/Web/PWA, vrai média et IA ; ne pas réinventer les briques déjà qualifiées. 
+## Statuts
+- Cadrage et branche : écrit et versionné ; logo exact non importé ; tarif pur candidat avec vérification JS limitée, CI non exécutée.
+- N0 PARTIEL ; N1–N5 NON DÉMARRÉS. Aucune application installable ni service opérationnel.
+- Réserves : quotas, rétention, capacités grande équipe et annuel, règles de comptage, langues locales, consentement/conformité, intégrations externes, coût média, marque. La validation utilisateur du concept ne vaut pas certification de faisabilité ni autorisation de production.
