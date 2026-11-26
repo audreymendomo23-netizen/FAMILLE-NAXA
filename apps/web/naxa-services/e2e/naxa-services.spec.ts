@@ -55,6 +55,10 @@ function authSession(organizationId: string, activityProfile = "autre", multiSit
 
 async function installBackend(context: BrowserContext, incomingChanges: Record<string, unknown>[] = []) {
   const appliedEvents: Record<string, unknown>[] = [];
+  await context.route("https://naxa-services-e2e.invalid/storage/v1/object/**", async route => {
+    const headers = {...CORS_HEADERS,"Access-Control-Allow-Methods":"GET, POST, DELETE, OPTIONS","Access-Control-Allow-Headers":"authorization, apikey, content-type, x-upsert, cache-control"};
+    await route.fulfill({status:route.request().method()==="OPTIONS"?200:404,headers,body:"{}"});
+  });
   await context.route(AUTH_URL, async (route) => {
     if (route.request().method() === "OPTIONS") return json(route, {}, 200);
     const request = route.request().postDataJSON() as Record<string, unknown>;
@@ -711,4 +715,55 @@ test("Web subscriptions: member sees server paid state without gaining payment a
   await page.getByRole("button",{name:"Vérifier les droits payés"}).click();
   await expect(page.getByText("Période payée expirée",{exact:false})).toBeVisible();
   expect(reads).toBe(2);
+});
+
+test("Web profile photo: private authenticated upload, read, deletion and account isolation",async({context})=>{
+  await installBackend(context);
+  const objects=new Map<string,Buffer>();
+  const requests:string[]=[];
+  const base="https://naxa-services-e2e.invalid/storage/v1/object/";
+  const headers={...CORS_HEADERS,"Access-Control-Allow-Methods":"GET, POST, DELETE, OPTIONS","Access-Control-Allow-Headers":"authorization, apikey, content-type, x-upsert, cache-control"};
+  await context.route(base+"**",async route=>{
+    const req=route.request(),method=req.method();
+    if(method==="OPTIONS")return route.fulfill({status:200,headers,body:""});
+    expect(req.headers().authorization).toBe("Bearer e2e-access-token-with-more-than-twenty-characters");
+    const path=new URL(req.url()).pathname.replace(/^\/storage\/v1\/object\/(authenticated\/)?ns-profile-photos\/?/,"");
+    requests.push(method+" "+path);
+    if(method==="GET"){
+      const photo=objects.get(path);
+      return route.fulfill(photo?{status:200,headers:{...headers,"Content-Type":"image/jpeg"},body:photo}:{status:404,headers,body:"{}"});
+    }
+    if(method==="POST"){
+      expect(req.headers()["x-upsert"]).toBe("true");
+      expect(req.headers()["content-type"]).toBe("image/jpeg");
+      const data=req.postDataBuffer();expect(data?.subarray(0,2).toString("hex")).toBe("ffd8");
+      objects.set(path,data!);
+      return route.fulfill({status:200,headers,body:"{}"});
+    }
+    if(method==="DELETE"){
+      const paths=req.postDataJSON().prefixes as string[];
+      expect(paths).toHaveLength(1);objects.delete(paths[0]);
+      return route.fulfill({status:200,headers,body:"[]"});
+    }
+    return route.fulfill({status:405,headers,body:"{}"});
+  });
+  const page=await context.newPage();
+  await signIn(page);
+  await expect(page.getByRole("button",{name:"Photo de profil",exact:true})).toBeEnabled();
+  await page.getByLabel("Fichier photo de profil").setInputFiles({name:"test.png",mimeType:"image/png",buffer:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lGQAAAAASUVORK5CYII=","base64")});
+  await expect(page.getByText("Photo enregistrée.",{exact:true})).toBeVisible();
+  await expect(page.getByAltText("Photo de profil")).toBeVisible();
+  expect(objects.has(ORG_A+"/"+MEMBER_A+"/avatar.jpg")).toBe(true);
+  await page.getByRole("button",{name:"Déconnexion"}).click();
+  await signIn(page,"NS-OTHER");
+  await expect(page.getByRole("button",{name:"Photo de profil",exact:true})).toBeEnabled();
+  await expect(page.getByAltText("Photo de profil")).toHaveCount(0);
+  expect(requests).toContain("GET "+ORG_B+"/"+MEMBER_B+"/avatar.jpg");
+  await page.getByRole("button",{name:"Déconnexion"}).click();
+  await signIn(page);
+  await expect(page.getByAltText("Photo de profil")).toBeVisible();
+  page.once("dialog",dialog=>dialog.accept());
+  await page.getByRole("button",{name:"Supprimer la photo"}).click();
+  await expect(page.getByText("Photo supprimée.",{exact:true})).toBeVisible();
+  expect(objects.size).toBe(0);
 });
