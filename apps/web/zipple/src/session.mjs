@@ -18,3 +18,27 @@ export async function authorizedRequest(base,action,body,token,fetcher=fetch){
  const res=await fetcher(url,{method:"POST",headers,body:JSON.stringify({...body,app_id:"ZIPPLE"}),cache:"no-store",redirect:"error"});
  if(!res.ok)throw Error("REQUEST_REJECTED");return res.status===204?{}:res.json();
 }
+
+const MARKER="zipple-remember-v1";
+export function rememberMarker(storage=globalThis.localStorage){try{return storage?.getItem(MARKER)==="yes"}catch{return false}}
+function marker(on,storage=globalThis.localStorage){try{if(on)storage?.setItem(MARKER,"yes");else storage?.removeItem(MARKER)}catch{}}
+async function cookieRequest(action,body,fetcher=fetch){
+ const response=await fetcher("/session/"+action,{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",redirect:"error",body:JSON.stringify(body)});
+ if(!response.ok)throw Error("ZIPPLE_SESSION_REJECTED");
+ return response.json();
+}
+export async function rememberedLogin(identifier,password,fetcher=fetch){
+ if(!identifier.trim()||!password)throw Error("INVALID_CREDENTIALS");
+ const session=parseSession(await cookieRequest("login",{identifier:identifier.trim(),password},fetcher));
+ if("refresh_token" in session)throw Error("UNSAFE_SESSION_RESPONSE");
+ marker(true);return session;
+}
+export async function restoreRemembered(fetcher=fetch){
+ try{
+  const run=async()=>{const session=parseSession(await cookieRequest("refresh",{},fetcher));if("refresh_token" in session)throw Error("UNSAFE_SESSION_RESPONSE");return session};
+  return globalThis.navigator?.locks?await navigator.locks.request("zipple-refresh-v1",run):await run();
+ }catch(e){marker(false);throw e}
+}
+export async function forgetRemembered(access_token,fetcher=fetch){
+ marker(false);await cookieRequest("logout",{access_token},fetcher);
+}

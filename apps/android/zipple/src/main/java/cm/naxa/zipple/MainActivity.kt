@@ -3,6 +3,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,18 +30,20 @@ class MainActivity:FragmentActivity(){
  var dark by remember { mutableStateOf(false) };var en by remember { mutableStateOf(false) }
  val context=LocalContext.current;val scope=rememberCoroutineScope()
  val lock=remember { LocalAccessPinManager(context) };val biometricPrefs=remember { ZippleBiometricPreferences(context) };val vault=remember { SessionVault(context) };val api=remember { ZippleAuth(BuildConfig.ZIPPLE_API_URL) }
- var rememberDevice by remember { mutableStateOf(false) };var identifier by remember { mutableStateOf("") };var password by remember { mutableStateOf("") }
+ var showPassword by remember { mutableStateOf(false) };var rememberDevice by remember { mutableStateOf(false) };var identifier by remember { mutableStateOf("") };var password by remember { mutableStateOf("") }
  var session by remember { mutableStateOf<Session?>(null) };var site by remember { mutableStateOf("") }
  var unlocked by remember { mutableStateOf(false) };var unlockedByPin by remember { mutableStateOf(false) };var biometricEnabled by remember { mutableStateOf(false) };var pin by remember { mutableStateOf("") };var message by remember { mutableStateOf("") };var busy by remember { mutableStateOf(false) }
  val tr:(String,String)->String={fr,eng->if(en)eng else fr}
  LaunchedEffect(Unit){val saved=vault.loadRefreshToken();if(saved!=null){busy=true;try{val restored=api.refresh(saved);val replacement=restored.refreshToken?:error("refresh missing");vault.save(replacement);session=restored;site=restored.sites.first().id;unlocked=false;rememberDevice=true}catch(_:Exception){vault.clear()}finally{busy=false}}}
- val navy=Color(0xFF0E224D);val orange=Color(0xFFF56202)
- MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=Color(0xFFFFB37C),secondary=orange,background=Color(0xFF0A1632),surface=Color(0xFF15244D))else lightColorScheme(primary=navy,secondary=orange,background=Color(0xFFFFF0E3),surface=Color.White,onPrimary=Color.White)){
+ val navy=Color(0xFF482817);val orange=Color(0xFFA66A25)
+ MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=Color(0xFFE5BE85),secondary=orange,background=Color(0xFF2B1A11),surface=Color(0xFF3D281B))else lightColorScheme(primary=orange,secondary=navy,background=Color(0xFFF1E4D8),surface=Color(0xFFFCF9F5),onPrimary=Color.White)){
  Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
- Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(14.dp)){
+ Surface(modifier=Modifier.widthIn(max=570.dp).fillMaxWidth(),shape=RoundedCornerShape(28.dp),color=MaterialTheme.colorScheme.surface,tonalElevation=2.dp){
+ Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
  Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){TextButton(onClick={en=!en}){Text(if(en)"FR" else "EN")};TextButton(onClick={dark=!dark}){Text(tr("Thème","Theme"))}}
  Image(painterResource(R.drawable.zipple_logo),contentDescription="ZIPPLE",modifier=Modifier.height(92.dp).fillMaxWidth())
- Text(tr("Votre restaurant, bien piloté","Manage your restaurant"),style=MaterialTheme.typography.headlineSmall)
+ Text(tr("Servez mieux, gérez en toute sécurité.","Serve better, manage securely."),style=MaterialTheme.typography.headlineSmall,textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth())
  val current=session
  LaunchedEffect(current?.member){biometricEnabled=current?.member?.let{biometricPrefs.enabled(it)}?:false;unlockedByPin=false}
  LaunchedEffect(current,unlocked){ZippleSyncSession.current=if(unlocked)current else null;if(unlocked&&current!=null)ZippleSyncSession.schedule(context)}
@@ -45,9 +51,9 @@ class MainActivity:FragmentActivity(){
  if(current!=null){LaunchedEffect(current.expiresAt){kotlinx.coroutines.delay((current.expiresAt-System.currentTimeMillis()).coerceAtLeast(0));if(session==current){session=null;unlocked=false;site="";message=tr("Session expirée","Session expired")}}}
  if(current==null){
  OutlinedTextField(identifier,{identifier=it},label={Text(tr("Identifiant","Identifier"))},singleLine=true,modifier=Modifier.fillMaxWidth())
- OutlinedTextField(password,{password=it},label={Text(tr("Mot de passe","Password"))},singleLine=true,visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
+ OutlinedTextField(password,{password=it},label={Text(tr("Mot de passe","Password"))},singleLine=true,visualTransformation=if(showPassword)VisualTransformation.None else PasswordVisualTransformation(),trailingIcon={TextButton(onClick={showPassword=!showPassword}){Text(if(showPassword)tr("Masquer","Hide") else tr("Afficher","Show"))}},modifier=Modifier.fillMaxWidth())
  Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){Checkbox(checked=rememberDevice,onCheckedChange={rememberDevice=it});Text(tr("Rester connecté","Remember me"))}
- Button(enabled=identifier.isNotBlank()&&password.isNotBlank()&&!busy,modifier=Modifier.fillMaxWidth(),onClick={busy=true;message="";scope.launch{try{val authenticated=api.login(identifier,password,rememberDevice);if(rememberDevice&&authenticated.refreshToken!=null)vault.save(authenticated.refreshToken)else vault.clear();session=authenticated;site=authenticated.sites.first().id;unlocked=false}catch(_:Exception){message=tr("Connexion indisponible ou refusée","Connection unavailable or denied")}finally{password="";busy=false}}}){Text(tr("Se connecter","Sign in"))}
+ Button(enabled=identifier.isNotBlank()&&password.isNotBlank()&&!busy,modifier=Modifier.fillMaxWidth(),onClick={busy=true;message="";scope.launch{try{val authenticated=api.login(identifier,password,rememberDevice);if(rememberDevice&&authenticated.refreshToken!=null)vault.save(authenticated.refreshToken)else vault.clear();session=authenticated;site=authenticated.sites.first().id;unlocked=false}catch(_:Exception){message=tr("Connexion indisponible ou refusée","Connection unavailable or denied")}finally{password="";showPassword=false;busy=false}}}){Text(tr("Se connecter","Sign in"))}
  TextButton(enabled=identifier.isNotBlank()&&!busy,onClick={scope.launch{try{api.recovery(identifier);message=tr("Si le compte est reconnu, la demande sera traitée.","If recognized, your request will be processed.")}catch(_:Exception){message=tr("Assistance indisponible","Recovery unavailable")}}}){Text(tr("Mot de passe oublié","Forgot password"))}
  Text(tr("Accès professionnel sécurisé","Secure professional access"))
  }else if(!unlocked){
@@ -65,6 +71,8 @@ class MainActivity:FragmentActivity(){
  }
  if(current!=null)TextButton(onClick={ZippleSyncSession.current=null;vault.clear();session=null;site="";pin="";unlocked=false;unlockedByPin=false;message="";scope.launch{try{api.logout(current.token)}catch(_:Exception){message=tr("Session locale fermée ; révocation distante non confirmée","Local session closed; remote revocation unconfirmed")}}}){Text(tr("Déconnexion","Sign out"))}
  if(message.isNotEmpty())Text(message,color=MaterialTheme.colorScheme.error)
+ }
+ }
  }
  }
  }

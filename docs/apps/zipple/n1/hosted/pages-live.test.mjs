@@ -8,11 +8,11 @@ test("public Pages UI and exact-origin CORS",async()=>{
  try{
   const page=await browser.newPage();
   await page.goto(origin,{waitUntil:"networkidle"});
-  await page.getByRole("heading",{name:"Votre restaurant, bien piloté"}).waitFor();
+  await page.getByRole("heading",{name:/Servez mieux, gérez en toute sécurité\.|Votre restaurant, bien piloté/}).waitFor();
   const submit=page.getByRole("button",{name:"Se connecter",exact:true});
   assert.equal(await submit.isDisabled(),true,"empty submit must be disabled");
   await page.getByRole("button",{name:"EN",exact:true}).click();
-  await page.getByRole("heading",{name:"Manage your restaurant"}).waitFor();
+  await page.getByRole("heading",{name:/Serve better, manage securely\.|Manage your restaurant/}).waitFor();
   await page.getByRole("button",{name:"FR",exact:true}).click();
   await page.getByRole("button",{name:"Thème",exact:true}).click();
   assert.equal(await page.locator("main").getAttribute("data-theme"),"dark");

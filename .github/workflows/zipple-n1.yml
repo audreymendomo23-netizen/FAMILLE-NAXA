@@ -4,6 +4,8 @@ on:
     branches: [work/zipple-completion-20261126]
     paths:
       - "docs/apps/zipple/n1/**"
+      - "apps/web/zipple/**"
+      - "apps/android/zipple/**"
       - ".github/workflows/zipple-n1.yml"
   workflow_dispatch:
 permissions:
@@ -19,7 +21,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: node --test docs/apps/zipple/n1/session.test.mjs docs/apps/zipple/n1/auth-boundary.test.mjs docs/apps/zipple/n1/generator-guard.test.mjs
+      - run: node --test docs/apps/zipple/n1/session.test.mjs docs/apps/zipple/n1/pages-session.test.mjs docs/apps/zipple/n1/auth-boundary.test.mjs docs/apps/zipple/n1/generator-guard.test.mjs
       - name: Build only ZIPPLE web
         run: |
           npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
@@ -38,7 +40,7 @@ jobs:
           test -s apps/web/zipple/dist/manifest.webmanifest
           test -s apps/web/zipple/dist/sw.js
           test -s apps/web/zipple/dist/zipple-logo.jpg
-          node -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync("apps/web/zipple/dist/manifest.webmanifest"));if(m.theme_color!=="#0E224D"||m.display!=="standalone")process.exit(1)'
+          node -e 'const fs=require("fs");const m=JSON.parse(fs.readFileSync("apps/web/zipple/dist/manifest.webmanifest"));if(m.theme_color!=="#482817"||m.display!=="standalone")process.exit(1)'
   android:
     runs-on: ubuntu-24.04
     timeout-minutes: 18

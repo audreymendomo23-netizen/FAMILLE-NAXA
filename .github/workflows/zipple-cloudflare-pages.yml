@@ -4,6 +4,7 @@ on:
     branches: [work/zipple-completion-20261126]
     paths:
       - "scripts/zipple/cloudflare-pages-build*.mjs"
+      - "apps/web/zipple/**"
       - ".github/workflows/zipple-cloudflare-pages.yml"
   workflow_dispatch:
 permissions:
