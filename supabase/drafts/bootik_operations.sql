@@ -164,6 +164,54 @@ begin
  values(p_org,p_app,p_site,p_user,p_kind,case when p_consent is true then clock_timestamp() end) returning id into v;
  return v;
 end $$;
+-- Master data: adapted from NAXA Services validated inventory and supplier creation patterns.
+create table bootik.bk_master_creation_receipts (
+ organization_id uuid not null,app_id uuid not null,actor uuid not null,location_id uuid not null,activity_id uuid not null,
+ request_id uuid not null,kind text not null check(kind in ('item','customer','supplier')),payload jsonb not null,entity_id uuid not null,created_at timestamptz not null default clock_timestamp(),
+ primary key(organization_id,app_id,request_id),
+ foreign key(organization_id,app_id,actor,location_id) references bootik.bk_member_sites(organization_id,app_id,user_id,location_id),
+ foreign key(activity_id,location_id,organization_id,app_id) references bootik.bk_activity_locations(activity_id,location_id,organization_id,app_id)
+);
+create function bootik.bk_create_master(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_request uuid,p_kind text,p_data jsonb)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare v_universe text; v_id uuid; old bootik.bk_master_creation_receipts%rowtype; nm text; sku text; unit text; price bigint; phone text; wa text; mail text; terms integer;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
+ if not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,p_activity) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ select a.universe_code into v_universe from bootik.bk_activities a join bootik.bk_activity_locations al on (al.activity_id,al.organization_id,al.app_id)=(a.id,a.organization_id,a.app_id)
+ where a.id=p_activity and a.organization_id=p_org and a.app_id=p_app and al.location_id=p_site and a.status='active';
+ if not found then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ if not bootik.bk_has_entitlement(p_org,p_app,v_universe) then raise exception 'BOOTIK_ENTITLEMENT_REQUIRED';end if;
+ if p_request is null or p_kind is null or p_kind not in ('item','customer','supplier') or jsonb_typeof(p_data) is distinct from 'object' then raise exception 'BOOTIK_MASTER_INVALID';end if;
+ nm:=btrim(p_data->>'name');
+ if nm is null or length(nm) not between 1 and 160 then raise exception 'BOOTIK_MASTER_INVALID';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':master:'||p_request::text,0));
+ select * into old from bootik.bk_master_creation_receipts where organization_id=p_org and app_id=p_app and request_id=p_request;
+ if found then
+  if (old.actor,old.location_id,old.activity_id,old.kind,old.payload) is distinct from (p_actor,p_site,p_activity,p_kind,p_data) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;
+  return old.entity_id;
+ end if;
+ if p_kind='item' then
+  sku:=upper(btrim(p_data->>'sku'));unit:=btrim(p_data->>'unit');price:=(p_data->>'price_fcfa')::bigint;
+  if sku is null or length(sku) not between 1 and 80 or unit is null or length(unit) not between 1 and 40 or price is null or price<0 or price>9007199254740991 then raise exception 'BOOTIK_MASTER_INVALID';end if;
+  insert into bootik.bk_catalog_items(app_id,organization_id,activity_id,sku,display_name,base_unit_code,barcode) values(p_app,p_org,p_activity,sku,nm,unit,nullif(btrim(p_data->>'barcode'),'')) returning id into v_id;
+  insert into bootik.bk_item_units(app_id,organization_id,activity_id,item_id,unit_code,unit_role,to_base_factor,is_default) values(p_app,p_org,p_activity,v_id,unit,'base',1,true);
+  insert into bootik.bk_inventory_balances(app_id,organization_id,activity_id,location_id,item_id) values(p_app,p_org,p_activity,p_site,v_id);
+  insert into bootik.bk_sale_prices(item_id,organization_id,activity_id,app_id,unit_price_fcfa) values(v_id,p_org,p_activity,p_app,price);
+ else
+  phone:=nullif(btrim(p_data->>'phone'),'');wa:=nullif(btrim(p_data->>'whatsapp'),'');mail:=nullif(btrim(p_data->>'email'),'');
+  if length(coalesce(phone,''))>32 or length(coalesce(mail,''))>160 or (wa is not null and wa !~ '^[0-9]{9,15}$') then raise exception 'BOOTIK_MASTER_INVALID';end if;
+  if p_kind='customer' then
+   insert into bootik.bk_customers(app_id,organization_id,activity_id,display_name,phone,email) values(p_app,p_org,p_activity,nm,phone,mail) returning id into v_id;
+  else
+   terms:=(p_data->>'terms_days')::integer;
+   if terms is null or terms not between 0 and 365 then raise exception 'BOOTIK_MASTER_INVALID';end if;
+   insert into bootik.bk_suppliers(app_id,organization_id,activity_id,display_name,phone,whatsapp_phone,email,payment_terms) values(p_app,p_org,p_activity,nm,phone,wa,mail,jsonb_build_object('days',terms)) returning id into v_id;
+  end if;
+ end if;
+ insert into bootik.bk_master_creation_receipts(organization_id,app_id,actor,location_id,activity_id,request_id,kind,payload,entity_id) values(p_org,p_app,p_actor,p_site,p_activity,p_request,p_kind,p_data,v_id);
+ return v_id;
+end $$;
 do $$ declare r record;begin for r in select tablename from pg_tables where schemaname='bootik' loop
  execute format('alter table bootik.%I enable row level security',r.tablename);
  execute format('alter table bootik.%I force row level security',r.tablename);

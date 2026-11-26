@@ -15,3 +15,9 @@ grant execute on function bootik.bk_assert_scope(uuid,uuid,uuid,uuid,boolean),bo
 create policy bk_runtime_access on bootik.bk_member_activity_scopes for select to bootik_runtime using (true);
 grant select on bootik.bk_member_activity_scopes to bootik_runtime;
 grant execute on function bootik.bk_can_access_activity(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;
+
+-- Master data: isolated runtime only, append-only creation receipts.
+do $$ declare n text;begin foreach n in array array['bk_activity_locations','bk_item_units','bk_customers','bk_suppliers','bk_master_creation_receipts'] loop execute format('create policy bk_runtime_access on bootik.%I to bootik_runtime using (true) with check (true)',n);end loop;end $$;
+grant select on bootik.bk_activity_locations,bootik.bk_customers,bootik.bk_suppliers,bootik.bk_master_creation_receipts to bootik_runtime;
+grant insert on bootik.bk_catalog_items,bootik.bk_item_units,bootik.bk_inventory_balances,bootik.bk_sale_prices,bootik.bk_customers,bootik.bk_suppliers,bootik.bk_master_creation_receipts to bootik_runtime;
+grant execute on function bootik.bk_create_master(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb) to bootik_runtime;

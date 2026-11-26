@@ -70,6 +70,27 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await call('support',{kind:'screen',consent:false})).status,400);
  const req=await call('support',{kind:'video',consent:true});assert.equal(req.status,200);
  assert.equal((await call('support-cancel',{request_id:req.body.result.request_id})).body.result.cancelled,true);
+ // Master-data recipe; previous sales and stock fixtures remain unchanged.
+ const newItem={activity_id:v,request_id:randomUUID(),kind:'item',name:' Savon ',sku:' soap-1 ',unit:'unit',price_fcfa:250,barcode:'12345'};
+ const created=await call('master-create',newItem);assert.equal(created.status,200);
+ assert.equal((await call('master-create',newItem)).body.result.entity_id,created.body.result.entity_id);
+ assert.equal((await call('master-create',{...newItem,price_fcfa:999})).status,400);
+ assert.equal((await call('master-create',{...newItem,request_id:randomUUID()})).status,400);
+ assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where item_id=$1',[created.body.result.entity_id])).quantity_on_hand),0);
+ assert.equal((await call('catalog',{})).body.result.items.length,2);
+ assert.equal((await call('activities',{})).body.result.activities[0].id,v);
+ const partner={activity_id:v,request_id:randomUUID(),kind:'supplier',name:'Fournisseur',phone:'690000000',whatsapp:'+237 690 00 00 00',email:'',terms_days:30};
+ assert.equal((await call('master-create',partner)).status,200);
+ assert.equal((await call('master-create',{...partner,request_id:randomUUID(),kind:'customer',name:'Client'})).status,200);
+ assert.equal((await call('partners',{activity_id:v})).body.result.suppliers[0].whatsapp_phone,'237690000000');
+ assert.equal((await call('partners',{activity_id:v})).body.result.customers.length,1);
+ assert.equal((await call('dashboard',{})).body.result.revenue_fcfa,'1000');
+ await one('update bootik.bk_member_sites set activity_restricted=true where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4',[o,a,u,s]);
+ assert.equal((await call('master-create',newItem)).status,403);assert.equal((await call('partners',{activity_id:v})).status,403);assert.equal((await call('dashboard',{})).body.result.sales_count,'0');
+ await one('update bootik.bk_member_sites set activity_restricted=false where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4',[o,a,u,s]);
+ await one("update bootik.bk_members set role='staff' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
+ assert.equal((await call('master-create',{...newItem,request_id:randomUUID()})).status,403);
+ await one("update bootik.bk_members set role='manager' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);

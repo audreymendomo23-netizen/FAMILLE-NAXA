@@ -8,6 +8,22 @@ const allowed=new Set(['retailer','distributor']);
 const plans=new Set(['access','premium']);
 const kinds=new Set(['ticket','camera','alert','audio','video','screen']);
 const reject=(status=400)=>({status,body:{error:status===401?'UNAUTHORIZED':'REQUEST_REJECTED'}});
+// Adapted from NAXA Services inventory.ts / supplier form: explicit normalization, no implicit stock change.
+const clean=(x,n,required=false)=>{if(typeof x!=='string')throw Error('INVALID_TEXT');const v=x.trim();if(v.length>n||(required&&!v))throw Error('INVALID_TEXT');return v};
+function normalizeMaster(kind,p){
+ const name=clean(p.name,160,true);
+ if(kind==='item'){
+  if(!Number.isSafeInteger(p.price_fcfa)||p.price_fcfa<0)throw Error('INVALID_PRICE');
+  return {name,sku:clean(p.sku,80,true).toUpperCase(),unit:clean(p.unit,40,true),barcode:clean(p.barcode??'',80),price_fcfa:p.price_fcfa};
+ }
+ const phone=clean(p.phone??'',32),email=clean(p.email??'',160);
+ if(email&&!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))throw Error('INVALID_EMAIL');
+ if(kind==='customer')return {name,phone,email};
+ const whatsapp=clean(p.whatsapp??'',32).replace(/\D/g,'');
+ if(whatsapp&&!/^\d{9,15}$/.test(whatsapp))throw Error('INVALID_WHATSAPP');
+ if(!Number.isInteger(p.terms_days)||p.terms_days<0||p.terms_days>365)throw Error('INVALID_TERMS');
+ return {name,phone,email,whatsapp,terms_days:p.terms_days};
+}
 export function createBootikService(db,{now=Date.now}={}){
  const attempts=new Map();
  const query=(q,p=[])=>db.query(q,p);
@@ -87,6 +103,16 @@ export function createBootikService(db,{now=Date.now}={}){
   }
   else if(action==='sale'&&validId(p.balance_id)&&typeof p.quantity==='number'&&Number.isFinite(p.quantity)&&p.quantity>0&&Number.isSafeInteger(p.unit_price_fcfa)&&p.unit_price_fcfa>=0&&validId(p.idempotency_key))result=await first('select bootik.bk_record_sale($1,$2,$3,$4,$5,$6,$7,$8) as sale_id',[...scope,p.balance_id,p.quantity,p.unit_price_fcfa,p.idempotency_key]);
   else if(action==='team'&&s.role!=='staff')result={members:(await query("select m.user_id,m.role,m.active from bootik.bk_members m join bootik.bk_member_sites ms using(organization_id,app_id,user_id) where m.organization_id=$1 and m.app_id=$2 and ms.location_id=$3 order by m.role,m.user_id",[s.organization_id,s.app_id,site])).rows};
+  else if(action==='activities')result={activities:(await query("select a.id,a.display_name,a.profile_code,a.universe_code from bootik.bk_activities a join bootik.bk_activity_locations al on (al.activity_id,al.organization_id,al.app_id)=(a.id,a.organization_id,a.app_id) where a.organization_id=$1 and a.app_id=$2 and al.location_id=$4 and a.status='active' and bootik.bk_can_access_activity($1,$2,$3,$4,a.id) order by a.display_name",scope)).rows};
+  else if(action==='master-create'&&validId(p.activity_id)&&validId(p.request_id)&&['item','customer','supplier'].includes(p.kind)){
+   const data=normalizeMaster(p.kind,p);
+   result=await first('select bootik.bk_create_master($1,$2,$3,$4,$5,$6,$7,$8) as entity_id',[...scope,p.activity_id,p.request_id,p.kind,data]);
+  }
+  else if(action==='partners'&&s.role!=='staff'&&validId(p.activity_id)){
+   const permitted=await first('select bootik.bk_can_access_activity($1,$2,$3,$4,$5) and exists(select 1 from bootik.bk_activity_locations where organization_id=$1 and app_id=$2 and location_id=$4 and activity_id=$5) as permitted',[...scope,p.activity_id]);if(!permitted?.permitted)return reject(403);
+   result={customers:(await query('select id,display_name,phone,email from bootik.bk_customers where organization_id=$1 and app_id=$2 and activity_id=$3 and status=\'active\' order by display_name,id limit 500',[s.organization_id,s.app_id,p.activity_id])).rows,suppliers:(await query('select id,display_name,phone,whatsapp_phone,email,payment_terms from bootik.bk_suppliers where organization_id=$1 and app_id=$2 and activity_id=$3 and status=\'active\' order by display_name,id limit 500',[s.organization_id,s.app_id,p.activity_id])).rows};
+  }
+  else if(action==='dashboard'&&s.role!=='staff')result=await first("select count(*)::text as sales_count,coalesce(sum(total_fcfa),0)::text as revenue_fcfa from bootik.bk_sales where organization_id=$1 and app_id=$2 and location_id=$4 and bootik.bk_can_access_activity($1,$2,$3,$4,activity_id) and created_at>=date_trunc('day',now() at time zone 'Africa/Douala') at time zone 'Africa/Douala' and created_at<=now()",scope);
   else if(action==='catalog')result={items:(await query('select b.id as balance_id,c.display_name,b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged as available,b.quantity_on_hand,b.updated_at::text as stock_version,p.unit_price_fcfa from bootik.bk_inventory_balances b join bootik.bk_catalog_items c on c.id=b.item_id and c.organization_id=b.organization_id and c.activity_id=b.activity_id and c.app_id=b.app_id join bootik.bk_sale_prices p on p.item_id=b.item_id and p.organization_id=b.organization_id and p.activity_id=b.activity_id and p.app_id=b.app_id where b.organization_id=$1 and b.app_id=$2 and b.location_id=$3 and bootik.bk_can_access_activity($1,$2,$4,$3,b.activity_id) and c.status=\'active\' order by c.display_name limit 500',[s.organization_id,s.app_id,site,s.user_id])).rows};
   else return reject();
   return {status:200,body:{app_id:'BOOTIK',organization_id:s.organization_id,member_id:s.user_id,site_id:site,action,state:'acknowledged',result}};
