@@ -520,6 +520,18 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const expiryLoss=await expiryDiscard();assert.equal(await expiryDiscard(),expiryLoss);assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[expiryItem]),0);
  await assert.rejects(scalar("select zp_preparation_expiry_snapshot($1,$2)",[b.access,a.site]),/DENIED/);
  console.log("ZIPPLE_BULK3_PREPARED_EXPIRY_PASS");
+ const gainLot=await scalar("select id from zp_ingredient_lots where site_id=$1 and remaining_milli>0 and (expires_on is null or expires_on>=current_date) order by remaining_milli desc limit 1",[b.site]);
+ const beforeGain=await scalar("select remaining_milli from zp_ingredient_lots where id=$1",[gainLot]),beforeGainCost=Number(await scalar("select remaining_cost from zp_ingredient_lots where id=$1",[gainLot]));
+ const gainKey=uid(),gainRequest=()=>scalar("select zp_inventory_gain_request($1,$2,$3,$4,$5,$6,'Excédent constaté')",[b.access,b.site,gainLot,gainKey,Number(beforeGain),Number(beforeGain)+100]);
+ const gainId=await gainRequest();assert.equal(await gainRequest(),gainId);
+ assert.equal(await scalar("select remaining_milli from zp_ingredient_lots where id=$1",[gainLot]),beforeGain);
+ const approveGain=()=>scalar("select zp_inventory_gain_decide($1,$2,$3,'approved',50,'Facture de valorisation')",[b.access,b.site,gainId]);
+ assert.equal(await approveGain(),"approved");assert.equal(await approveGain(),"approved");
+ assert.equal(Number(await scalar("select remaining_milli from zp_ingredient_lots where id=$1",[gainLot])),Number(beforeGain)+100);
+ assert.equal(Number(await scalar("select remaining_cost from zp_ingredient_lots where id=$1",[gainLot])),beforeGainCost+50);
+ await assert.rejects(scalar("select zp_inventory_gain_decide($1,$2,$3,'approved',50,'Facture de valorisation')",[a.access,a.site,gainId]),/DENIED/);
+ assert.ok((await scalar("select zp_ledger_snapshot($1,$2)",[b.access,b.site])).pending.some(x=>x.kind==="inventory_gain"&&x.source_id===gainId));
+ console.log("ZIPPLE_BULK3_INVENTORY_GAIN_REVIEW_PASS");
  const issueEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='issued'",[account]);
  const returnEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='returned'",[account]);
  const lostEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='lost'",[account]);

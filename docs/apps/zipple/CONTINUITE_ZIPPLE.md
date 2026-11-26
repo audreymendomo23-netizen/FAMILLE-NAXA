@@ -336,3 +336,5 @@ Les 44 tests SQL sont verts sur le candidat 3c01c26, mais une réussite de gate 
 6. Parité Android native : production, stock, lots, dépenses et CRM partiellement raccordés; autres écrans ERP et recette métier native sur environnement hébergé restent ouverts. APK et émulateur N1 verts ne prouvent pas la parité. Les qualifications réelles locales navigateur ne prouvent pas un déploiement de production.
 
 Prochaine reprise : lire les journaux exacts des runs 45883380874/45883380969, corriger les écarts, préserver le périmètre, compléter les six réserves ci-dessus et ne clore qu'après preuves fonctionnelles.
+
+- Candidat excédents physiques : demande de comptage positive sans modification du stock, validation/rejet promoteur et valorisation motivée, contrôle quantité/coût attendus, non-réapplication, journal des gains. Interface Web, contrat Android et assertions SQL. Correction des sélecteurs E2E par libellés accessibles (7b9c5af). Gates à constater.

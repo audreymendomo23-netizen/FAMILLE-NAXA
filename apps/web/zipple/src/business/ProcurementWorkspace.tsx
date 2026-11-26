@@ -1,3 +1,4 @@
+import {InventoryGains} from "./InventoryGains";
 import React,{useEffect,useState,useRef} from "react";
 // Adaptation of NAXA Services StockOperationsPage: server-confirmed supplier, purchase, receipt, payment.
 type Props={ingredients:any[];lots:any[];call:(action:string,body?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean;refreshStock:()=>Promise<void>};
@@ -62,6 +63,6 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  <label>{t("Quantité physique comptée","Physical count")}<input inputMode="decimal" value={count} onChange={e=>CO(e.target.value)}/></label>
  <label>{t("Motif du comptage","Count reason")}<input value={reason} onChange={e=>RS(e.target.value)}/></label>
  <button disabled={lock||!selectedLot||count===""||reason.trim().length<5} onClick={()=>run(async()=>{await idem("count_lot",{lot_id:lotId,expected_milli:Number(selectedLot.remaining_milli),counted_milli:milli(count),reason});CO("");RS("");await load();await refreshStock()})}>{t("Valider le comptage","Confirm count")}</button>
- <p>{t("Les excédents nécessitent une valorisation justifiée et un contrôle distinct.","Surplus requires reviewed valuation and a separate control.")}</p>
+ <InventoryGains call={call} disabled={lock} en={en} lot={selectedLot} refresh={async()=>{await load();await refreshStock()}}/>
  </section>
 }
