@@ -1,9 +1,9 @@
 package cm.naxa.bootik
 
-import androidx.compose.ui.test.assertExists
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToIndex
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -17,7 +17,8 @@ class AppShellInstrumentedTest {
     @Test
     fun retailFirstSetupAndFourteenProfileEntryPointAreVisible() {
         composeRule.onNodeWithText("BOOTIK").assertExists()
-        composeRule.onNodeWithText("Univers Détaillants").assertExists()
-        composeRule.onNodeWithText("Brocante").performScrollTo().assertExists()
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.universe_retailer)).assertExists()
+        composeRule.onNodeWithTag("bootik-setup-list").performScrollToIndex(16)
+        composeRule.onNodeWithText(composeRule.activity.getString(R.string.profile_brocante)).assertExists()
     }
 }

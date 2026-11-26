@@ -1,0 +1,65 @@
+name: BOOTIK N0 isolated qualification
+on:
+  push:
+    branches: [work/bootik-n0-20261126]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test docs/bootik-n0/policy.test.mjs
+      - name: Isolated PostgreSQL draft qualification
+        env:
+          PGPASSWORD: test
+        run: |
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -c 'create role anon; create role authenticated; create schema auth; create table auth.users(id uuid primary key);'
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f supabase/drafts/bootik_v1.sql
+          psql -h localhost -U postgres -v ON_ERROR_STOP=1 -f docs/bootik-n0/isolation.sql
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - run: gradle --no-daemon :bootik:testDebugUnitTest :bootik:assembleDebug :bootik:assembleDebugAndroidTest
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --workspace @famille/bootik-web --include-workspace-root=false --ignore-scripts
+      - run: npm run build --workspace @famille/bootik-web
+  jobly-inventory:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Inventory source archive without executing it
+        run: python3 docs/bootik-n0/jobly-inventory.py

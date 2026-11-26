@@ -258,3 +258,6 @@ La branche de travail a été créée depuis le HEAD courant de `main` observé 
 
 ## N0 — 26 novembre 2026
 Branche de reprise work/bootik-n0-20261126. Voir [audit N0](audits/BOOTIK_N0_20261126.md). Backend Famille vérifié en lecture seule, aucun objet BOOTIK hébergé. Ancien draft non applicable en l'état. Audit PARTIEL : JOBLY inaccessible et qualification runtime en attente. Aucun déploiement, aucune modification NAXA/NS/ZIPPLE.
+
+### Reprise N0 — qualification
+Draft BOOTIK autonome sans famille_core, recette PostgreSQL éphémère, CI Android/Web et inventaire JOBLY par ZIP en lecture seule ajoutés. Politique 1/12 mois testée par contrat candidat. Aucun résultat CI revendiqué avant lecture des runs. Aucun déploiement.

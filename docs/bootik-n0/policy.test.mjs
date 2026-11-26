@@ -1,0 +1,3 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {quote,trialEnd} from './policy.mjs';
+for(const [u,p,m,a] of [['retailer','access',4000,40000],['retailer','premium',10000,100000],['distributor','access',10000,100000],['distributor','premium',25000,250000]])test(u+' '+p,()=>{assert.equal(quote(u,p,1),m);assert.equal(quote(u,p,12),a);for(const n of [0,3,6,13,'12'])assert.throws(()=>quote(u,p,n));});
+test('reject unapproved plans',()=>{for(const p of ['pro','__proto__','constructor'])assert.throws(()=>quote('retailer',p,1));});test('72h',()=>assert.equal(trialEnd(0),259200000));

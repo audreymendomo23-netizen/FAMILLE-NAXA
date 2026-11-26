@@ -1,1 +1,9 @@
-{"name":"Bootik","short_name":"Bootik","start_url":"/","display":"standalone","theme_color":"#174c3c","lang":"fr"}
+{
+  "name": "Bootik",
+  "short_name": "Bootik",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#052163",
+  "lang": "fr",
+  "background_color": "#F4F6FB"
+}

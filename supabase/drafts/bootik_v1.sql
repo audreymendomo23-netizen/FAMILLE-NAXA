@@ -1,10 +1,10 @@
 -- BOOTIK V1.1 — retailer-first domain schema and distributor-link contract.
 -- DRAFT ONLY. Not applied to Replay or Production.
--- Prerequisite: separately reviewed Famille Core schema + Auth app_id claim.
+-- Prerequisite: Supabase auth.users and standard roles; no famille_core dependency.
 --
 -- Anti-collision invariants:
 --   * BOOTIK-only business data lives in schema bootik, object prefix bk_*.
---   * Every domain object is tied to the Famille application registration code 'bootik'.
+--   * Every domain object is tied to the BOOTIK application registration code 'bootik'.
 --   * No public.* table, ns_* table/function, NAXA Pharmacy table/role, or NAXA
 --     independent service is created, altered, or called.
 --   * No client grants/policies are defined here. RLS is enabled and forced.
@@ -18,14 +18,26 @@ revoke all on schema bootik from public, anon, authenticated;
 
 create table if not exists bootik.bk_app_registration (
   app_code text primary key check (app_code = 'bootik'),
-  app_id uuid not null unique references famille_core.applications(id) on delete restrict,
+  app_id uuid not null unique default gen_random_uuid(),
   registered_at timestamptz not null default now()
 );
-insert into bootik.bk_app_registration(app_code, app_id)
-select 'bootik', id
-from famille_core.applications
-where code = 'bootik'
-on conflict (app_code) do nothing;
+insert into bootik.bk_app_registration(app_code) values ('bootik') on conflict (app_code) do nothing;
+
+create table if not exists bootik.bk_organizations (
+  organization_id uuid primary key default gen_random_uuid(),
+  app_id uuid not null references bootik.bk_app_registration(app_id),
+  display_name text not null,
+  unique (organization_id, app_id)
+);
+create table if not exists bootik.bk_locations (
+  id uuid primary key default gen_random_uuid(),
+  organization_id uuid not null,
+  app_id uuid not null,
+  display_name text not null,
+  foreign key (organization_id, app_id) references bootik.bk_organizations(organization_id, app_id),
+  unique (id, organization_id),
+  unique (id, organization_id, app_id)
+);
 
 create table if not exists bootik.bk_activities (
   id uuid primary key default gen_random_uuid(),
@@ -39,7 +51,7 @@ create table if not exists bootik.bk_activities (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   foreign key (organization_id, app_id)
-    references famille_core.organization_apps(organization_id, app_id) on delete restrict,
+    references bootik.bk_organizations(organization_id, app_id) on delete restrict,
   unique (id, organization_id, app_id),
   check (
     (universe_code = 'retailer' and profile_code in (
@@ -66,8 +78,8 @@ create table if not exists bootik.bk_activity_locations (
   unique (activity_id, location_id, organization_id, app_id),
   foreign key (activity_id, organization_id, app_id)
     references bootik.bk_activities(id, organization_id, app_id) on delete restrict,
-  foreign key (location_id, organization_id)
-    references famille_core.locations(id, organization_id) on delete restrict
+  foreign key (location_id, organization_id, app_id)
+    references bootik.bk_locations(id, organization_id, app_id) on delete restrict
 );
 
 create table if not exists bootik.bk_profile_compatibility_rules (
@@ -335,9 +347,9 @@ create table if not exists bootik.bk_trade_links (
   activated_at timestamptz,
   closed_at timestamptz,
   foreign key (buyer_organization_id, app_id)
-    references famille_core.organization_apps(organization_id, app_id) on delete restrict,
+    references bootik.bk_organizations(organization_id, app_id) on delete restrict,
   foreign key (seller_organization_id, app_id)
-    references famille_core.organization_apps(organization_id, app_id) on delete restrict,
+    references bootik.bk_organizations(organization_id, app_id) on delete restrict,
   foreign key (buyer_activity_id, buyer_organization_id, app_id)
     references bootik.bk_activities(id, organization_id, app_id) on delete restrict,
   foreign key (seller_activity_id, seller_organization_id, app_id)
@@ -352,7 +364,7 @@ create table if not exists bootik.bk_trade_links (
 create or replace function bootik.bk_assert_trade_activity_roles()
 returns trigger
 language plpgsql
-security definer
+security invoker
 set search_path = pg_catalog, bootik
 as $$
 declare
