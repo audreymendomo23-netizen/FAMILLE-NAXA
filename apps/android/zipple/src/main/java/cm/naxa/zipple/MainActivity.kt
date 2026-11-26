@@ -87,6 +87,8 @@ class MainActivity:FragmentActivity(){
  Text(current.name,style=MaterialTheme.typography.titleLarge);Text(tr("Établissement autorisé","Authorized site"))
  current.sites.forEach { s->OutlinedButton(onClick={if(current.permits(s.id))site=s.id},enabled=current.permits(s.id)){Text((if(site==s.id)"✓ " else "")+s.name)} }
  if(current.permits(site))Text(tr("Espace professionnel — socle N1","Professional workspace — N1 foundation"))else Text(tr("Session expirée","Session expired"))
+ val businessEndpoint=ZippleBusinessPolicy.endpoint(BuildConfig.ZIPPLE_BUSINESS_API_URL,BuildConfig.DEBUG)
+ if(businessEndpoint!=null&&current.permits(site)){key(current.member,site,current.token){val business=remember(businessEndpoint){ZippleBusiness(businessEndpoint,BuildConfig.DEBUG)};ZippleBusinessWorkspace(business,current,site,en)}}
  if(unlockedByPin&&context is FragmentActivity&&BiometricGate.available(context)){Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){Checkbox(checked=biometricEnabled,onCheckedChange={biometricPrefs.set(current.member,it);biometricEnabled=it});Text(tr("Autoriser la biométrie de cet appareil","Allow this device biometrics"))}}
  TextButton(onClick={ZippleSyncSession.schedule(context)}){Text(tr("Synchroniser","Synchronize"))}
  TextButton(onClick={unlocked=false;unlockedByPin=false;ZippleSyncSession.current=null}){Text(tr("Verrouiller","Lock"))}

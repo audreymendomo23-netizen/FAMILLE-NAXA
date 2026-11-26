@@ -42,7 +42,7 @@ class ZippleAuth(private val endpoint:String) {
         val refresh=j.optString("refresh_token").takeIf{it.length>=20}
         return Session(token,member,org,j.getString("organization_name"),role,sites,expiry,refresh)
     }
-    private suspend fun request(action:String,body:JSONObject,bearer:String?=null):JSONObject=withContext(Dispatchers.IO){
+    internal suspend fun request(action:String,body:JSONObject,bearer:String?=null):JSONObject=withContext(Dispatchers.IO){
         require(endpoint.startsWith("https://")){"API ZIPPLE non configurée"}
         val url=URL(endpoint.trimEnd('/')+"/"+action)
         require(url.protocol=="https" && url.userInfo==null)
