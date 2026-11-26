@@ -20,3 +20,9 @@ create policy bk_runtime_access on bootik.bk_item_sale_groups to bootik_runtime 
 create policy bk_runtime_access on bootik.bk_stock_setup_receipts to bootik_runtime using(true) with check(true);
 grant select,insert on bootik.bk_item_sale_groups,bootik.bk_stock_setup_receipts to bootik_runtime;
 grant execute on function bootik.bk_sell_item(uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint),bootik.bk_setup_stock(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb) to bootik_runtime;
+
+-- Isolated runtime only: supplier purchases.
+do $$ declare t text;begin foreach t in array array['bk_purchase_orders','bk_purchase_receipts','bk_supplier_payments'] loop execute format('create policy bk_runtime_access on bootik.%I to bootik_runtime using(true) with check(true)',t);end loop;end $$;
+grant select,insert on bootik.bk_purchase_orders,bootik.bk_purchase_receipts,bootik.bk_supplier_payments to bootik_runtime;
+grant update(received_quantity,received_amount_fcfa,paid_amount_fcfa) on bootik.bk_purchase_orders to bootik_runtime;
+grant execute on function bootik.bk_purchase_create(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint),bootik.bk_purchase_receive(uuid,uuid,uuid,uuid,uuid,uuid,numeric,bigint),bootik.bk_purchase_pay(uuid,uuid,uuid,uuid,uuid,uuid,bigint,text,text) to bootik_runtime;

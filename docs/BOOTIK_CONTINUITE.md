@@ -399,3 +399,7 @@ Les runs 45862449979 (catalogue) et 45862708785 (inventaire/transfert corrigé) 
 
 ### Reprise après recette consolidée
 Valorisation 45863520967 et FEFO 45863295045 : SUCCESS 5/5. Recette 45863709732 : 4/5, échec Chromium à la sélection de l'activité par libellé accessible. Correction des noms accessibles explicites des listes métier et nouvelle recette ; ne pas masquer le test.
+
+
+### BULK ACHATS — raccordement NAXA SERVICES (candidat)
+Réutilisation des parcours StockOperationsPage (commande, réception, règlement) et du contrat de valorisation comptable déjà adapté ; aucune réécriture du moteur stock. Commande mono-référence en unité de base, fournisseur de même activité, solde de site autorisé, réception partielle atomique avec mouvement et frais attribuables, coût pondéré, dette créée seulement à réception (hors frais de tiers), règlement externe partiel journalisé, sur-réception/sur-paiement refusés, reçus idempotents, aucun transfert financier. UI Android/Web et tests API réels. Reste commandes multi-lignes, avances, avoirs, litiges, échéances, pièces jointes, WhatsApp, B2B et journaux comptables complets. CI à confirmer. Aucun déploiement ni modification d'autres solutions.

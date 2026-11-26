@@ -1,5 +1,5 @@
 import React,{useRef,useState}from'react';
-import{StockImportPanel}from './StockImportPanel';import{operation}from './operations.mjs';
+import{PurchasePanel}from './PurchasePanel';import{StockImportPanel}from './StockImportPanel';import{operation}from './operations.mjs';
 export function MasterPanel({base,session,site}:{base:string,session:any,site:string}){
  const [activities,A]=useState<any[]>([]),[activity,V]=useState(''),[kind,K]=useState('item'),[name,N]=useState(''),[sku,S]=useState(''),[unit,U]=useState('unit'),[price,P]=useState(''),[barcode,C]=useState(''),[phone,H]=useState(''),[email,E]=useState(''),[wa,W]=useState(''),[terms,T]=useState('0'),[partners,L]=useState<any>(null),[dashboard,D]=useState<any>(null),[message,M]=useState(''),[busy,B]=useState(false);
  const [lot,Lot]=useState(''),[expiry,Expiry]=useState(''),[location,Location]=useState(''),[minimum,Minimum]=useState('0'),[target,Target]=useState('0');
@@ -16,6 +16,7 @@ export function MasterPanel({base,session,site}:{base:string,session:any,site:st
  <button disabled={busy||!activity||!name.trim()||(kind==='item'&&(!sku.trim()||!unit.trim()||price.trim()===''||!Number.isSafeInteger(Number(price))||Number(price)<0))} onClick={()=>task(create)}>Enregistrer la fiche</button>
  <button disabled={busy||!activity} onClick={()=>task(async()=>L(await call('partners',{activity_id:activity})))}>Afficher clients et fournisseurs</button>
  {partners&&<>{['customers','suppliers'].map(k=><section key={k}><h3>{k==='customers'?'Clients':'Fournisseurs'}</h3>{partners[k].map((x:any)=><p key={x.id}>{x.display_name} · {x.phone||'—'}</p>)}</section>)}</>}
+ {activity&&<PurchasePanel key={'purchase:'+activity} base={base} session={session} site={site} activity={activity}/>}
  {activity&&<StockImportPanel key={activity} base={base} session={session} site={site} activity={activity}/>}
  <h3>Ventes du jour (Douala)</h3><button disabled={busy} onClick={()=>task(async()=>D(await call('dashboard',{})))}>Actualiser les indicateurs</button>{dashboard&&<p>{dashboard.sales_count} ventes unitaires · {dashboard.revenue_fcfa} FCFA de ventes confirmées (pas un total de caisse)</p>}<p role="status">{message}</p></article>
 }

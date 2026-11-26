@@ -282,4 +282,86 @@ begin
 end $$;
 revoke all on function bootik.bk_sell_item(uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint),bootik.bk_setup_stock(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
 
+-- NAXA Services purchasing workflow adapted to BOOTIK's versioned stock receipt.
+-- One order line per reference in this first connected flow; no financial transfer is executed.
+create table bootik.bk_purchase_orders (
+ id uuid primary key,organization_id uuid not null,app_id uuid not null,activity_id uuid not null,location_id uuid not null,actor uuid not null,
+ supplier_id uuid not null,balance_id uuid not null references bootik.bk_inventory_balances(id),reference text not null,quantity numeric(20,6) not null check(quantity>0),unit_cost_fcfa bigint not null check(unit_cost_fcfa>=0),
+ received_quantity numeric(20,6) not null default 0,received_amount_fcfa bigint not null default 0,paid_amount_fcfa bigint not null default 0,created_at timestamptz not null default clock_timestamp(),
+ check(received_quantity between 0 and quantity),check(paid_amount_fcfa between 0 and received_amount_fcfa),
+ unique(organization_id,app_id,activity_id,location_id,reference),
+ foreign key(activity_id,location_id,organization_id,app_id) references bootik.bk_activity_locations(activity_id,location_id,organization_id,app_id),
+ foreign key(supplier_id,organization_id,activity_id,app_id) references bootik.bk_suppliers(id,organization_id,activity_id,app_id)
+);
+create table bootik.bk_purchase_receipts (
+ id uuid primary key,order_id uuid not null references bootik.bk_purchase_orders(id),actor uuid not null,quantity numeric(20,6) not null check(quantity>0),amount_fcfa bigint not null check(amount_fcfa>=0),freight_fcfa bigint not null check(freight_fcfa>=0),stock_receipt_id uuid not null references bootik.bk_stock_event_receipts(id),created_at timestamptz not null default clock_timestamp()
+);
+create table bootik.bk_supplier_payments (
+ id uuid primary key,order_id uuid not null references bootik.bk_purchase_orders(id),actor uuid not null,amount_fcfa bigint not null check(amount_fcfa>0),method text not null check(method in ('cash','bank','mobile_money')),reference text not null,created_at timestamptz not null default clock_timestamp(),
+ unique(order_id,method,reference)
+);
+do $$ declare t text;begin foreach t in array array['bk_purchase_orders','bk_purchase_receipts','bk_supplier_payments'] loop execute format('alter table bootik.%I enable row level security',t);execute format('alter table bootik.%I force row level security',t);execute format('revoke all on bootik.%I from public,anon,authenticated',t);end loop;end $$;
+create function bootik.bk_purchase_create(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_id uuid,p_supplier uuid,p_balance uuid,p_ref text,p_qty numeric,p_cost bigint)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare b bootik.bk_inventory_balances%rowtype;old bootik.bk_purchase_orders%rowtype;u text;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
+ if p_id is null or p_ref is null or length(btrim(p_ref)) not between 3 and 80 or p_qty is null or p_qty<=0 or p_qty>1000000000 or p_qty<>round(p_qty,6) or p_cost is null or p_cost<0 or p_qty*p_cost<>round(p_qty*p_cost) or p_qty*p_cost>9007199254740991 then raise exception 'BOOTIK_PURCHASE_INVALID';end if;
+ select * into b from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site;
+ if not found or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,b.activity_id) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ if not exists(select 1 from bootik.bk_suppliers where id=p_supplier and organization_id=p_org and app_id=p_app and activity_id=b.activity_id and status='active') then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ select universe_code into u from bootik.bk_activities where id=b.activity_id and organization_id=p_org and app_id=p_app and status='active';
+ if not found or not bootik.bk_has_entitlement(p_org,p_app,u) then raise exception 'BOOTIK_ENTITLEMENT_REQUIRED';end if;
+ select base_unit_code into u from bootik.bk_catalog_items where id=b.item_id and organization_id=p_org and app_id=p_app and activity_id=b.activity_id and status='active' and not is_serialized;
+ if not found or (lower(u) in ('unit','unite','unité','piece','pièce','bouteille','carton','pack','sac','casier','palette') and p_qty<>trunc(p_qty)) then raise exception 'BOOTIK_PURCHASE_INVALID';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':purchase:'||p_id::text,0));
+ select * into old from bootik.bk_purchase_orders where id=p_id and organization_id=p_org and app_id=p_app;
+ if found then
+  if (old.actor,old.location_id,old.supplier_id,old.balance_id,old.reference,old.quantity,old.unit_cost_fcfa) is distinct from (p_actor,p_site,p_supplier,p_balance,btrim(p_ref),p_qty,p_cost) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;return old.id;
+ end if;
+ insert into bootik.bk_purchase_orders(id,organization_id,app_id,activity_id,location_id,actor,supplier_id,balance_id,reference,quantity,unit_cost_fcfa) values(p_id,p_org,p_app,b.activity_id,p_site,p_actor,p_supplier,p_balance,btrim(p_ref),p_qty,p_cost);
+ return p_id;
+end $$;
+create function bootik.bk_purchase_receive(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_order uuid,p_id uuid,p_qty numeric,p_freight bigint)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare o bootik.bk_purchase_orders%rowtype;old bootik.bk_purchase_receipts%rowtype;v_version text;v_stock uuid;v_amount numeric;u text;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
+ if p_id is null or p_qty is null or p_qty<=0 or p_qty<>round(p_qty,6) or p_freight is null or p_freight<0 or p_freight>9007199254740991 then raise exception 'BOOTIK_PURCHASE_INVALID';end if;
+ select * into o from bootik.bk_purchase_orders where id=p_order and organization_id=p_org and app_id=p_app and location_id=p_site for update;
+ if not found or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,o.activity_id) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ select * into old from bootik.bk_purchase_receipts where id=p_id and order_id=p_order;
+ if found then
+  if (old.actor,old.quantity,old.freight_fcfa) is distinct from (p_actor,p_qty,p_freight) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;return old.id;
+ end if;
+ if o.received_quantity+p_qty>o.quantity then raise exception 'BOOTIK_PURCHASE_OVERRECEIPT';end if;
+ v_amount:=p_qty*o.unit_cost_fcfa;if v_amount<>round(v_amount) or v_amount+p_freight>9007199254740991 or o.received_amount_fcfa+v_amount>9007199254740991 then raise exception 'BOOTIK_PURCHASE_INVALID';end if;
+ select updated_at::text into v_version from bootik.bk_inventory_balances where id=o.balance_id and organization_id=p_org and app_id=p_app and location_id=p_site and activity_id=o.activity_id for update;
+ if not found then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ v_stock:=bootik.bk_record_stock_event(p_org,p_app,p_actor,p_site,o.balance_id,p_id,'receipt',p_qty,v_version,'Commande '||o.reference,(v_amount+p_freight)::bigint);
+ insert into bootik.bk_purchase_receipts(id,order_id,actor,quantity,amount_fcfa,freight_fcfa,stock_receipt_id) values(p_id,p_order,p_actor,p_qty,v_amount::bigint,p_freight,v_stock);
+ update bootik.bk_purchase_orders set received_quantity=received_quantity+p_qty,received_amount_fcfa=received_amount_fcfa+v_amount::bigint where id=o.id;
+ return p_id;
+end $$;
+create function bootik.bk_purchase_pay(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_order uuid,p_id uuid,p_amount bigint,p_method text,p_ref text)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare o bootik.bk_purchase_orders%rowtype;old bootik.bk_supplier_payments%rowtype;u text;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
+ if p_id is null or p_amount is null or p_amount<=0 or p_amount>9007199254740991 or p_method is null or p_method not in ('cash','bank','mobile_money') or p_ref is null or length(btrim(p_ref)) not between 3 and 120 then raise exception 'BOOTIK_PURCHASE_INVALID';end if;
+ select * into o from bootik.bk_purchase_orders where id=p_order and organization_id=p_org and app_id=p_app and location_id=p_site for update;
+ if not found or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,o.activity_id) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ select universe_code into u from bootik.bk_activities where id=o.activity_id and organization_id=p_org and app_id=p_app and status='active';
+ if not found or not bootik.bk_has_entitlement(p_org,p_app,u) then raise exception 'BOOTIK_ENTITLEMENT_REQUIRED';end if;
+ select * into old from bootik.bk_supplier_payments where id=p_id and order_id=p_order;
+ if found then
+  if (old.actor,old.amount_fcfa,old.method,old.reference) is distinct from (p_actor,p_amount,p_method,btrim(p_ref)) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;return old.id;
+ end if;
+ if p_amount>o.received_amount_fcfa-o.paid_amount_fcfa then raise exception 'BOOTIK_PURCHASE_OVERPAYMENT';end if;
+ insert into bootik.bk_supplier_payments(id,order_id,actor,amount_fcfa,method,reference) values(p_id,p_order,p_actor,p_amount,p_method,btrim(p_ref));
+ update bootik.bk_purchase_orders set paid_amount_fcfa=paid_amount_fcfa+p_amount where id=o.id;
+ return p_id;
+end $$;
+revoke all on function bootik.bk_purchase_create(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint),bootik.bk_purchase_receive(uuid,uuid,uuid,uuid,uuid,uuid,numeric,bigint),bootik.bk_purchase_pay(uuid,uuid,uuid,uuid,uuid,uuid,bigint,text,text) from public,anon,authenticated;
+
 commit;

@@ -171,6 +171,27 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  const c3=await costReceipt(1,null);assert.equal((await call('sync-stock',c3)).body.state,'acknowledged');assert.equal((await costBalance()).unit_cost_fcfa,null);assert.equal(Number((await one('select cost_of_goods_fcfa from bootik.bk_sales where id=$1',[cv.body.result.sale_id])).cost_of_goods_fcfa),300);
  await one("update bootik.bk_members set role='staff' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);assert.equal((await call('stock-health',{})).status,400);
  await one("update bootik.bk_members set role='manager' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
+ // NAXA Services purchase adaptation: no stock or debt until receipt; cost and payment independent.
+ const supplier=(await call('partners',{activity_id:v})).body.result.suppliers[0].id;
+ const purchase={order_id:randomUUID(),supplier_id:supplier,balance_id:cb.id,reference:'ACHAT-TEST',quantity:10,unit_cost_fcfa:100};
+ const before=Number((await costBalance()).quantity_on_hand);
+ assert.equal((await call('purchase-create',purchase)).status,200);assert.equal((await call('purchase-create',purchase)).body.result.order_id,purchase.order_id);
+ assert.equal((await call('purchase-create',{...purchase,quantity:11})).status,400);
+ assert.equal(Number((await costBalance()).quantity_on_hand),before);
+ const pay={order_id:purchase.order_id,payment_id:randomUUID(),amount_fcfa:250,method:'bank',reference:'BANK-TEST'};
+ assert.equal((await call('purchase-pay',pay)).status,400);
+ const receiptP={order_id:purchase.order_id,receipt_id:randomUUID(),quantity:4,freight_fcfa:50};
+ assert.equal((await call('purchase-receive',receiptP,foreign)).status,403);
+ assert.equal((await call('purchase-receive',receiptP)).status,200);
+ assert.equal((await call('purchase-receive',receiptP)).body.result.receipt_id,receiptP.receipt_id);
+ assert.equal(Number((await costBalance()).quantity_on_hand),before+4);
+ assert.equal((await call('purchase-receive',{...receiptP,receipt_id:randomUUID(),quantity:7})).status,400);
+ assert.equal((await call('purchase-pay',pay)).status,200);assert.equal((await call('purchase-pay',pay)).body.result.payment_id,pay.payment_id);
+ assert.equal((await call('purchase-pay',{...pay,payment_id:randomUUID(),reference:'OVERPAY',amount_fcfa:151})).status,400);
+ assert.equal((await call('purchase-receive',{...receiptP,receipt_id:randomUUID(),quantity:6,freight_fcfa:0})).status,200);
+ const po=(await call('purchases',{activity_id:v})).body.result.orders.find(x=>x.id===purchase.order_id);assert.equal(po.state,'received');assert.equal(Number(po.payable_fcfa),750);
+ await one("update bootik.bk_members set role='staff' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);assert.equal((await call('purchase-receive',receiptP)).status,403);
+ await one("update bootik.bk_members set role='manager' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);
