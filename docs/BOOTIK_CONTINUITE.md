@@ -279,3 +279,35 @@ Run 45841440818 4/4 SUCCESS. Contrats SQL renforcés : essai unique 72 h par org
 
 ### Correction CI contrats 45843955223
 Erreur SQL ligne 63 : délimiteurs dollar-quote réduits à un seul dollar par remplacement JavaScript. Correction des huit délimiteurs et cohérence temporelle de l'activation d'essai dans la transaction PostgreSQL (now()). Web et inventaire réussis, Android encore en cours au constat. Nouvelle recette requise.
+
+
+## Point de reprise consolidé — 26 novembre 2026
+
+**Ce point prévaut sur les anciens statuts contradictoires.** Dernier commit de code qualifié : `9808152678676462357b538579242061715d2529`. Branche exclusive : `work/bootik-n0-20261126`. [Recette 45844215281](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45844215281) terminée SUCCESS, 4/4 jobs (android, contracts, web, jobly-inventory). Journaux : 8 tests JavaScript réussis, 0 échec ; PostgreSQL 17 : BOOTIK_N0_DRAFT_ISOLATION_PASS et BOOTIK_BULK_OPERATIONS_PASS, transaction de test annulée (ROLLBACK). APK debug et APK de tests instrumentés compilés ; tests unitaires Android exécutés ; **pas d'exécution instrumentée sur émulateur attestée**. Web : build réussi, pas de recette navigateur E2E attestée. JOBLY : inventaire 788 fichiers, pas d'audit exhaustif du contenu. Correction des huit délimiteurs SQL et horloge transactionnelle de l'essai validées. Aucun déploiement ni application du draft au Supabase hébergé.
+
+### Tableau de vérité N0–N12
+
+| Niveau | Réalisé et prouvé | Reste à terminer | Statut |
+|---|---|---|---|
+| N0 | CI isolée, schéma BOOTIK privé, inventaire JOBLY, identité visuelle | audit approfondi JOBLY et qualification runtime | CI verte, qualification partielle |
+| N1 | Session Web, coffre Keystore/PIN Android, membres et droits site SQL, interfaces initiales | serveur d'authentification, login Android/Web réel, récupération, révocation, biométrie, navigation, synchronisation | jaune |
+| N2 | Tarifs 1/12 mois, essai 72 h non réinitialisable par organisation/univers, périodes payées idempotentes et droit SQL testé | API prestataire paiement réelle, admin central, activation et contrôle des droits sur toutes les opérations | jaune |
+| N3 | Schéma catalogue, unités, lots, stock ; contrôles SQL lors de vente | CRUD, import Excel, codes-barres, inventaire, transferts, réapprovisionnement et UI | jaune |
+| N4 | Vente SQL unitaire atomique, prix canonique, déduction et journal stock, idempotence | panier multiligne, caisse multi-opérateurs, encaissements saisis, reçus, annulations/retours, clôtures, API et UI | jaune |
+| N5 | Modèles clients, fournisseurs et journal stock | achats, dettes, crédit client, fidélité, dépenses, comptabilité, rapprochements, relances | jaune |
+| N6 | Référentiel 14 profils Détaillants, brouillons locaux Android | parcours spécifiques et recettes complètes des 14 profils en parallèle | jaune |
+| N7 | Espaces équipe et IA référencés | RH, pointage, objectifs, rapports, IA opérationnelle | jaune |
+| N8 | Référentiel 8 profils Distributeurs, modèles métiers | dépôts, commerciaux/livreurs, territoires, commandes, recouvrement, parcours complets | jaune |
+| N9 | Modèles liens B2B, compatibilité et approbation | accès et conditions privées, zone/gamme, approbations serveur, commandes, réapprovisionnement opt-in, tests E2E | jaune |
+| N10 | Contrats demande média, contrôle site, consentement et annulation SQL | NAXA SECURITY réel (vidéosurveillance, caméras, alertes, incidents, journal, pointage, multisite), support distinct (tickets, livechat, audio, visioconférence bidirectionnelle, partage écran consentement révocable), flux et notifications réels | jaune |
+| N11 | CI 4/4, tests contrats et PostgreSQL | émulateur Android, E2E navigateur, tests API réels, offline/reprise/conflits, sécurité intertenant et parcours 22 profils | jaune |
+| N12 | Pas de livraison production revendiquée | qualification complète, APK release, PWA, déploiement et recette finale selon autorisations | non clôturé |
+
+### Prochain lot obligatoire : Android et Web intégralement en bulk
+
+Dernière demande du propriétaire : terminer Android et Web entièrement, pas seulement compiler. Les interventions postérieures au commit de correction n'ont produit aucun nouveau commit : reprendre exactement au code qualifié ci-dessus, ne pas considérer les annonces de travaux comme des implémentations. Android MainActivity affiche encore le parcours de brouillon local ; Web main.tsx présente l'interface initiale, devis et connexion conditionnée à VITE_BOOTIK_API_URL. Les clients ne sont pas raccordés aux opérations métier réelles. Les contrats SQL privés SECURITY INVOKER n'ont aucun droit direct anon/authenticated ; construire un adaptateur serveur authentifié qui dérive l'identité du jeton vérifié, contrôle organisation/site/activité/rôle et droits, ne fait jamais confiance aux identifiants fournis par le client, et ne transmet aucun secret privilégié aux clients. Pas de simulation de réussite ni de paiement.
+
+- Traiter en parallèle authentification, autorisations, abonnement, navigation, ERP, les 22 profils, offline avec idempotence et reçus validés, NAXA SECURITY et support, FR/EN et langues validées par le cahier des charges. Réutiliser après audit les composants ZIPPLE, NAXA SERVICES, NAXA et JOBLY ; ne jamais modifier leurs domaines ou données. Vidéosurveillance et visioconférence distinctes : aucune activation implicite de caméra, micro ou écran ; droits, consentement, révocation et expiration des sessions.
+- Conserver les règles métier V1.1 : ACCÈS/PREMIUM seuls, mensualité et annuel 12 pour 10, essai 72 h sans prépaiement ; encaissements métier hors API prestataire, confirmation réelle requise pour abonnement ; priorité Détaillants, architecture Distributeurs compatible, pas de réactivation pharmacie.
+- Méthode imposée : traiter les N en bulk, corriger les causes racines des échecs simultanément, lancer recettes et lire les journaux, enregistrer les preuves et mettre ce document à jour. Fractionnement technique des écritures Git permis uniquement pour contourner les limites du connecteur, pas de découpage fonctionnel imposé. Ne pas s'arrêter à un audit lorsque des modifications réalisables restent ouvertes. Vert uniquement pour une capacité réellement implémentée et testée ; distinguer CI verte de vert fonctionnel global.
+- Garde-fous : branche BOOTIK exclusive, pas de fusion main ni déploiement BOOTIK non autorisé ; aucun changement NAXA/NS/ZIPPLE/JOBLY, aucun changement de données réelles ; drafts PostgreSQL en CI isolée avant qualification des migrations hébergées. 
