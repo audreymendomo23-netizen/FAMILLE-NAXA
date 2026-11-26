@@ -28,6 +28,10 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await call('trial',{universe:'retailer',plan:'access'})).status,200);
  const catalog=await call('catalog',{});assert.equal(catalog.status,200);assert.equal(catalog.body.result.items[0].balance_id,b);
  const sold=await call('sale',sale);assert.equal(sold.status,200);assert.equal((await call('sale',sale)).body.result.sale_id,sold.body.result.sale_id);assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),8);
+ const sync=await call('sync-sale',sale);assert.equal(sync.status,200);assert.equal(sync.body.state,'acknowledged');assert.equal(sync.body.event_id,key);assert.equal(sync.body.member_id,u);assert.equal(sync.body.result.sale_id,sold.body.result.sale_id);
+ const conflict=await call('sync-sale',{...sale,idempotency_key:randomUUID(),quantity:999});assert.equal(conflict.status,200);assert.equal(conflict.body.state,'conflict');
+ assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),8);
+ assert.equal((await call('team',{})).body.result.members.length,1);
  assert.equal((await call('support',{kind:'screen',consent:false})).status,400);
  const req=await call('support',{kind:'video',consent:true});assert.equal(req.status,200);
  assert.equal((await call('support-cancel',{request_id:req.body.result.request_id})).body.result.cancelled,true);
