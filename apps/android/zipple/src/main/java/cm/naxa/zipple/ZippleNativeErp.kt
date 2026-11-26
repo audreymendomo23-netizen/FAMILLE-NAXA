@@ -21,7 +21,7 @@ internal object ZippleErpNumbers{
  fun milli(raw:String):Long?=if(!Regex("[0-9]{1,7}(\\.[0-9]{1,3})?").matches(raw))null else runCatching{BigDecimal(raw).movePointRight(3).longValueExact()}.getOrNull()
  fun integer(raw:String):Long?=raw.takeIf{Regex("[0-9]{1,10}").matches(it)}?.toLongOrNull()?.takeIf{it in 0..2147483647L}
 }
-private class RequestKeys{
+internal class RequestKeys{
  private val requests=mutableMapOf<String,Pair<String,String>>()
  fun apply(action:String,body:JSONObject):JSONObject{
   val encoded=body.toString();val previous=requests[action];val id=if(previous?.first==encoded)previous.second else UUID.randomUUID().toString().also{requests[action]=encoded to it}
