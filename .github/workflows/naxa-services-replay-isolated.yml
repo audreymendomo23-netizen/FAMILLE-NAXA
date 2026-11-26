@@ -210,6 +210,87 @@ jobs:
               const records=await success(base+'/rest/v1/ns_customers?select=id&org_id=eq.'+f.org.id+'&display_name=eq.'+encodeURIComponent(customer),undefined,admin,admin,'GET');
               assert.equal(records.length,1);
               pass('real Chromium customer creation, offline queue, accounting receipt and persisted PostgreSQL row');
+              const failures=[];
+              async function scenario(label,run){
+                try{await run();pass(label);}catch(e){failures.push(label);console.log('FAIL independent browser scenario:',label, e instanceof Error?e.name:'Error');}
+              }
+              const nav=async label=>{await page.locator('.side-nav button.nav-item').filter({hasText:label}).click();};
+              const apply=async(action,click)=>{
+                const receipt=page.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-accounting')&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='apply_sync_event'&&r.request().postDataJSON()?.event?.action_code===action,{timeout:25000});
+                await click();
+                const response=await receipt,result=await response.json();
+                console.log('Replay',action,'HTTP',response.status(),'receipt',result.result?.status??'absent','error',typeof result.error==='string'&&/^[A-Z0-9_]{1,80}$/.test(result.error)?result.error:'none');
+                assert.equal(response.status(),200,action);assert.equal(result.ok,true,action);assert.equal(result.result.status,'applied',action);
+                return response.request().postDataJSON().event;
+              };
+              const count=async(table,filter)=>{assert.match(table,/^ns_[a-z_]+$/);return (await success(base+'/rest/v1/'+table+'?select=id&org_id=eq.'+f.org.id+'&'+filter,undefined,admin,admin,'GET')).length;};
+              await scenario('real cash register, opening, cash and external Mobile Money sales, double-open prevention and close',async()=>{
+                await nav('Caisse & ventes');
+                await page.getByLabel('Code unique').fill('REPLAY-CASH');
+                await page.getByLabel('Nom du registre').fill('Caisse Replay');
+                const register=await apply('cash_register.created',()=>page.getByRole('button',{name:'Créer le registre',exact:true}).click());
+                assert.equal(await count('ns_cash_registers','id=eq.'+register.aggregate_id),1);
+                await page.getByLabel("Fonds d'ouverture (FCFA)").fill('5000');
+                const shift=await apply('cash_session.opened',()=>page.getByRole('button',{name:'Ouvrir la caisse',exact:true}).click());
+                await page.getByRole('heading',{name:'Session actuellement ouverte'}).waitFor();
+                assert.equal(await page.getByRole('button',{name:'Ouvrir la caisse',exact:true}).isDisabled(),true);
+                await page.getByLabel('Désignation vendue').fill('Prestation Replay espèces');
+                await page.getByLabel('Total encaissé (FCFA)').fill('2500');
+                const cashSale=await apply('sale.created',()=>page.getByRole('button',{name:'Enregistrer la vente comptant'}).click());
+                assert.equal(cashSale.payload.payment_method,'cash');
+                assert.equal(await count('ns_sales','id=eq.'+cashSale.aggregate_id),1);
+                await page.getByLabel('Désignation vendue').fill('Prestation Replay MoMo externe');
+                await page.getByRole('combobox',{name:'Mode d’encaissement reçu'}).selectOption('mobile_money');
+                await page.getByLabel('Total encaissé (FCFA)').fill('1000');
+                const mobileSale=await apply('sale.created',()=>page.getByRole('button',{name:'Enregistrer la vente comptant'}).click());
+                assert.equal(mobileSale.payload.payment_method,'mobile_money');
+                assert.equal(await count('ns_sales','id=eq.'+mobileSale.aggregate_id),1);
+                await page.getByLabel('Montant compté à la clôture (FCFA)').fill('7500');
+                await apply('cash_session.closed',()=>page.getByRole('button',{name:"Clôturer et calculer l'écart"}).click());
+                const rows=await success(base+'/rest/v1/ns_cash_sessions?select=*&org_id=eq.'+f.org.id+'&id=eq.'+shift.aggregate_id,undefined,admin,admin,'GET');
+                assert.equal(rows.length,1);assert.equal(rows[0].status,'closed');
+              });
+              await scenario('real staff attendance: arrival, break, resume and departure',async()=>{
+                await nav('Équipe & commissions');
+                for(const [label,action] of [['Pointer mon arrivée','staff_clock_in.recorded'],['Commencer une pause','staff_break_start.recorded'],['Terminer la pause','staff_break_end.recorded'],['Pointer mon départ','staff_clock_out.recorded']]){
+                  await apply(action,()=>page.locator('.module-main-card .activity-transition-buttons').first().getByRole('button',{name:label,exact:true}).click());
+                }
+                await page.locator('.module-main-card .activity-transition-buttons').first().getByRole('button',{name:'Pointer mon arrivée',exact:true}).waitFor();
+              });
+              await scenario('real offline customer creation and exactly-one durable row after reconnection',async()=>{
+                await nav('Clients & fidélité');
+                const offlineCustomer='Client hors ligne '+randomBytes(6).toString('hex');
+                const filter='display_name=eq.'+encodeURIComponent(offlineCustomer);
+                await context.setOffline(true);
+                try{
+                  await page.getByRole('button',{name:'Créer une fiche client',exact:true}).click();
+                  await page.getByLabel('Nom du client').fill(offlineCustomer);
+                  await page.getByRole('button',{name:'Enregistrer',exact:true}).click();
+                  await page.getByText(/enregistré hors connexion/i).waitFor();
+                  assert.equal(await count('ns_customers',filter),0);
+                }finally{await context.setOffline(false);}
+                const sync=page.getByRole('button',{name:/Synchroniser \(/});
+                for(let i=0;i<40;i++){
+                  if(await count('ns_customers',filter)===1)break;
+                  if(await sync.isVisible()&&await sync.isEnabled())await sync.click();
+                  await pause(400);
+                }
+                assert.equal(await count('ns_customers',filter),1);
+                await pause(800);
+                assert.equal(await count('ns_customers',filter),1);
+              });
+              await scenario('real authenticated profile photo: browser upload and deletion',async()=>{
+                const photoButton=page.getByRole('button',{name:'Photo de profil',exact:true});
+                await photoButton.waitFor();
+                await page.getByLabel('Fichier photo de profil').setInputFiles({name:'replay.png',mimeType:'image/png',buffer:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAGUlEQVR4nGOsbvFjIAUwkaR6VMOohiGlAQAtrwFtmi6mgwAAAABJRU5ErkJggg==','base64')});
+                await page.getByText('Photo enregistrée.',{exact:true}).waitFor();
+                await page.getByAltText('Photo de profil').waitFor();
+                page.once('dialog',dialog=>dialog.accept());
+                await page.getByRole('button',{name:'Supprimer la photo',exact:true}).click();
+                await page.getByText('Photo supprimée.',{exact:true}).waitFor();
+                assert.equal(await page.getByAltText('Photo de profil').count(),0);
+              });
+              assert.deepEqual(failures,[],'All independent real browser scenarios must pass');
               await page.getByRole('button',{name:/Déconnexion/}).click();
               await page.getByLabel('Identifiant NAXA Services').waitFor();
             }finally{
