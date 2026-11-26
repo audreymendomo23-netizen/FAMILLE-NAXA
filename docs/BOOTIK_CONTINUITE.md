@@ -495,3 +495,6 @@ La présentation Compose utilisée par le client réel reçoit les fonctions de 
 
 ### B01 — textes juridiques candidats BOOTIK
 Adaptation des projets NAXA SERVICES à la V1.1 BOOTIK (univers détaillants/distributeurs, multi-activité, stocks, consignes, B2B, distinction abonnements/encaissements). Documents FR `docs/bootik/legal/` explicitement non approuvés ; ne pas injecter en production dans BOOTIK_LEGAL_DOCUMENTS_JSON. Validation de l'éditeur/conseil, coordonnées, bases, conservation, fournisseurs réellement actifs et traductions contractuelles requises. Le parcours d'acceptation est testé séparément avec documents fictifs.
+
+### B01 — caisse/poste/zone de stock combinés
+FEFO limité aux zones autorisées, contrôle de la zone dans la fonction SQL de vente et garde session de caisse ouverte/propre/autorisé pour tout délégataire restreint. Une caisse + poste + zone autorise la vente de lots de cette zone uniquement, même si un lot plus proche de péremption existe ailleurs. Tests transactionnels (catalogue, vente, quantité insuffisante, appel direct et zone refusés). Les opérations B2B par territoire restent réservées aux modules B04/B05. CI à vérifier.

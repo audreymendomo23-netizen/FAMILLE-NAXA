@@ -19,7 +19,7 @@ grant select on bootik.bk_inventory_movements to bootik_runtime;
 create policy bk_runtime_access on bootik.bk_item_sale_groups to bootik_runtime using(true) with check(true);
 create policy bk_runtime_access on bootik.bk_stock_setup_receipts to bootik_runtime using(true) with check(true);
 grant select,insert on bootik.bk_item_sale_groups,bootik.bk_stock_setup_receipts to bootik_runtime;
-grant execute on function bootik.bk_sell_item(uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint),bootik.bk_setup_stock(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb) to bootik_runtime;
+grant execute on function bootik.bk_sell_item(uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint,uuid),bootik.bk_setup_stock(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb) to bootik_runtime;
 
 -- Isolated runtime only: supplier purchases.
 do $$ declare t text;begin foreach t in array array['bk_purchase_orders','bk_purchase_receipts','bk_supplier_payments'] loop execute format('create policy bk_runtime_access on bootik.%I to bootik_runtime using(true) with check(true)',t);end loop;end $$;
@@ -54,3 +54,5 @@ grant select on bootik.bk_approval_requests to bootik_security_runtime;grant upd
 grant execute on function bootik.bk_approval_admin(uuid,uuid,uuid,uuid,uuid,jsonb) to bootik_security_runtime;
 
 grant execute on function bootik.bk_notification_inbox(uuid,uuid,uuid,uuid),bootik.bk_notification_read(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;
+
+grant execute on function bootik.bk_assert_sale_resource(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;

@@ -210,11 +210,12 @@ create table bootik.bk_stock_setup_receipts(
 alter table bootik.bk_item_sale_groups enable row level security;alter table bootik.bk_item_sale_groups force row level security;
 alter table bootik.bk_stock_setup_receipts enable row level security;alter table bootik.bk_stock_setup_receipts force row level security;
 revoke all on bootik.bk_item_sale_groups,bootik.bk_stock_setup_receipts from public,anon,authenticated;
-create function bootik.bk_sell_item(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_item uuid,p_id uuid,p_unit text,p_qty numeric,p_price bigint)
+create function bootik.bk_sell_item(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_item uuid,p_id uuid,p_unit text,p_qty numeric,p_price bigint,p_cash_session uuid default null)
 returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
 declare a uuid;u text;factor numeric;left_qty numeric;taken numeric;old bootik.bk_item_sale_groups%rowtype;row_data record;line_id uuid;alloc jsonb:='[]'::jsonb;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site);
+ perform bootik.bk_assert_sale_resource(p_org,p_app,p_actor,p_site,p_cash_session);
  if p_id is null or p_unit is null or length(p_unit)>40 or p_qty is null or p_qty<=0 or p_qty>1000000000 or p_qty<>round(p_qty,6) or p_price is null or p_price<0 then raise exception 'BOOTIK_INVALID_SALE';end if;
  select activity_id,base_unit_code into a,u from bootik.bk_catalog_items where id=p_item and organization_id=p_org and app_id=p_app and status='active' and not is_serialized;
  if not found or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) or not exists(select 1 from bootik.bk_activity_locations where activity_id=a and location_id=p_site and organization_id=p_org and app_id=p_app) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
@@ -231,9 +232,9 @@ begin
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':sale-item:'||p_site::text||':'||p_item::text,0));
  -- Stable locking order across all candidate balances before allocation.
  perform 1 from bootik.bk_inventory_balances b where b.organization_id=p_org and b.app_id=p_app and b.activity_id=a and b.location_id=p_site and b.item_id=p_item order by b.id for update;
- for row_data in select b.id,b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged as available from bootik.bk_inventory_balances b left join bootik.bk_product_lots l on l.id=b.lot_id where b.organization_id=p_org and b.app_id=p_app and b.activity_id=a and b.location_id=p_site and b.item_id=p_item and b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged>0 and (b.lot_id is null or (l.quality_state='available' and (l.expires_at is null or l.expires_at>=current_date))) order by (b.lot_id is null),l.expires_at asc nulls last,l.created_at asc nulls last,l.id asc nulls last,b.id loop
+ for row_data in select b.id,b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged as available from bootik.bk_inventory_balances b left join bootik.bk_product_lots l on l.id=b.lot_id where b.organization_id=p_org and b.app_id=p_app and b.activity_id=a and b.location_id=p_site and b.item_id=p_item and bootik.bk_resource_catalog(p_org,p_app,p_actor,p_site,b.activity_id,b.storage_location_id) and b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged>0 and (b.lot_id is null or (l.quality_state='available' and (l.expires_at is null or l.expires_at>=current_date))) order by (b.lot_id is null),l.expires_at asc nulls last,l.created_at asc nulls last,l.id asc nulls last,b.id loop
   exit when left_qty=0;taken:=least(left_qty,row_data.available);
-  line_id:=bootik.bk_record_sale(p_org,p_app,p_actor,p_site,row_data.id,taken,p_price,'item-sale:'||p_id::text||':'||row_data.id::text);
+  line_id:=bootik.bk_record_sale(p_org,p_app,p_actor,p_site,row_data.id,taken,p_price,'item-sale:'||p_id::text||':'||row_data.id::text,p_cash_session);
   alloc:=alloc||jsonb_build_array(jsonb_build_object('balance_id',row_data.id,'sale_id',line_id,'base_quantity',taken));left_qty:=left_qty-taken;
  end loop;
  if left_qty<>0 then raise exception 'BOOTIK_STOCK_INSUFFICIENT';end if;
@@ -281,7 +282,7 @@ begin
  insert into bootik.bk_stock_setup_receipts(id,organization_id,app_id,actor,location_id,item_id,kind,payload,result_id) values(p_id,p_org,p_app,p_actor,p_site,p_item,p_kind,p_data,v);
  return v;
 end $$;
-revoke all on function bootik.bk_sell_item(uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint),bootik.bk_setup_stock(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+revoke all on function bootik.bk_sell_item(uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint,uuid),bootik.bk_setup_stock(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
 
 -- NAXA Services purchasing workflow adapted to BOOTIK's versioned stock receipt.
 -- One order line per reference in this first connected flow; no financial transfer is executed.
@@ -434,7 +435,7 @@ begin
    if amt is null or amt<0 or amt>9007199254740991 then raise exception 'BOOTIK_CASH_INVALID';end if;
    for line in select x.value from jsonb_array_elements(p_data->'lines') x order by (x.value->>'item_id')::uuid loop
     if not exists(select 1 from bootik.bk_catalog_items i where i.id=(line->>'item_id')::uuid and i.organization_id=p_org and i.app_id=p_app and i.activity_id=a) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
-    gid:=bootik.bk_sell_item(p_org,p_app,p_actor,p_site,(line->>'item_id')::uuid,gen_random_uuid(),line->>'unit_code',(line->>'quantity')::numeric,(line->>'unit_price_fcfa')::bigint);
+    gid:=bootik.bk_sell_item(p_org,p_app,p_actor,p_site,(line->>'item_id')::uuid,gen_random_uuid(),line->>'unit_code',(line->>'quantity')::numeric,(line->>'unit_price_fcfa')::bigint,sid);
     select total+g.quantity*g.base_factor*g.base_price into total from bootik.bk_item_sale_groups g where g.id=gid;
     groups:=groups||jsonb_build_array(gid);
    end loop;
@@ -517,10 +518,10 @@ begin
  if p_action in ('entitlement','security-state','support','support-cancel','activities','approval-own-state','approval-execute','notification-list','notification-read','notification-preference') or (p_action='admin-action' and p_data->>'kind'='session-revoke') then return true;end if;
  if 'territory'=any(kinds) then return false;end if;
  if p_action='catalog' then return true;end if;
- -- No sale across a restricted stock zone until the FEFO allocation path accepts that scope.
+ -- Stock mutations and checkout preserve the intersection of the delegated resource sets.
  if p_action in ('stock-health','sync-stock','count-batch') then return 'storage'=any(kinds) and cardinality(kinds)=1;end if;
  if p_action='cash-state' or (p_action='cash-action' and p_data->>'kind' in ('open','checkout','movement','close')) then
-  return not('storage'=any(kinds)) and ('register'=any(kinds) or 'workstation'=any(kinds));
+  return 'register'=any(kinds) or 'workstation'=any(kinds);
  end if;
  return false;
 end $$;
@@ -698,5 +699,19 @@ begin
  insert into bootik.bk_notification_reads(organization_id,app_id,user_id,event_id) values(p_org,p_app,p_actor,p_event) on conflict do nothing;return true;
 end $$;
 revoke all on function bootik.bk_notification_inbox(uuid,uuid,uuid,uuid),bootik.bk_notification_read(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
+
+-- A scoped sale may only run inside its own open, authorized register session.
+create function bootik.bk_assert_sale_resource(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_session uuid)
+returns void language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
+declare rid uuid;a uuid;scoped boolean;
+begin
+ select exists(select 1 from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site) into scoped;
+ if p_session is null then
+  if scoped then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;return;
+ end if;
+ select r.id,r.activity_id into rid,a from bootik.bk_cash_sessions s join bootik.bk_registers r on r.id=s.register_id where s.id=p_session and s.opened_by=p_actor and s.closed_at is null and r.organization_id=p_org and r.app_id=p_app and r.location_id=p_site;
+ if not found or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) or not bootik.bk_resource_activity_access(p_org,p_app,p_actor,p_site,a) or not bootik.bk_resource_allowed(p_org,p_app,p_actor,p_site,'register',rid) or not bootik.bk_resource_gate(p_org,p_app,p_actor,p_site,'cash-action','{"kind":"checkout"}'::jsonb) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+end $$;
+revoke all on function bootik.bk_assert_sale_resource(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
 
 commit;

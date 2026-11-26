@@ -128,11 +128,12 @@ begin
  return found;
 end $$;
 
-create function bootik.bk_record_sale(p_org uuid,p_app uuid,p_user uuid,p_site uuid,p_balance uuid,p_quantity numeric,p_price bigint,p_key text)
+create function bootik.bk_record_sale(p_org uuid,p_app uuid,p_user uuid,p_site uuid,p_balance uuid,p_quantity numeric,p_price bigint,p_key text,p_cash_session uuid default null)
 returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
 declare b bootik.bk_inventory_balances%rowtype; old bootik.bk_sales%rowtype; v_id uuid; v_unit text; v_total numeric; v_universe text; v_price bigint;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_user,p_site);
+ perform bootik.bk_assert_sale_resource(p_org,p_app,p_user,p_site,p_cash_session);
  if p_quantity is null or p_quantity<=0 or p_quantity<>round(p_quantity,6) or p_price is null or p_price<0 or nullif(btrim(p_key),'') is null then raise exception 'BOOTIK_INVALID_SALE';end if;
  if not bootik.bk_can_access_activity(p_org,p_app,p_user,p_site,(select activity_id from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_key,0));
@@ -143,6 +144,7 @@ begin
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':sale-item:'||p_site::text||':'||(select item_id::text from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site),0));
  select * into b from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site for update;
  if not found then raise exception 'BOOTIK_BALANCE_DENIED';end if;
+ if not bootik.bk_resource_catalog(p_org,p_app,p_user,p_site,b.activity_id,b.storage_location_id) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  select universe_code into v_universe from bootik.bk_activities a where a.id=b.activity_id and a.status='active';
  if not found then raise exception 'BOOTIK_ACTIVITY_INACTIVE';end if;
  if not bootik.bk_has_entitlement(p_org,p_app,v_universe) then raise exception 'BOOTIK_ENTITLEMENT_REQUIRED';end if;
@@ -150,7 +152,7 @@ begin
  if not found or v_price is distinct from p_price then raise exception 'BOOTIK_PRICE_MISMATCH';end if;
  if b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged<p_quantity then raise exception 'BOOTIK_STOCK_INSUFFICIENT';end if;
  if b.lot_id is not null and not exists(select 1 from bootik.bk_product_lots l where l.id=b.lot_id and l.quality_state='available' and (l.expires_at is null or l.expires_at>=current_date)) then raise exception 'BOOTIK_LOT_UNAVAILABLE';end if;
- if exists(select 1 from bootik.bk_inventory_balances q join bootik.bk_product_lots l on l.id=q.lot_id left join bootik.bk_product_lots cur on cur.id=b.lot_id where q.organization_id=p_org and q.app_id=p_app and q.activity_id=b.activity_id and q.location_id=p_site and q.item_id=b.item_id and q.id<>b.id and q.quantity_on_hand-q.quantity_reserved-q.quantity_damaged>0 and l.quality_state='available' and (l.expires_at is null or l.expires_at>=current_date) and (b.lot_id is null or (coalesce(l.expires_at,'infinity'::date),l.created_at,l.id,q.id)<(coalesce(cur.expires_at,'infinity'::date),cur.created_at,cur.id,b.id))) then raise exception 'BOOTIK_FEFO_REQUIRED';end if;
+ if exists(select 1 from bootik.bk_inventory_balances q join bootik.bk_product_lots l on l.id=q.lot_id left join bootik.bk_product_lots cur on cur.id=b.lot_id where q.organization_id=p_org and q.app_id=p_app and q.activity_id=b.activity_id and q.location_id=p_site and q.item_id=b.item_id and q.id<>b.id and bootik.bk_resource_catalog(p_org,p_app,p_user,p_site,q.activity_id,q.storage_location_id) and q.quantity_on_hand-q.quantity_reserved-q.quantity_damaged>0 and l.quality_state='available' and (l.expires_at is null or l.expires_at>=current_date) and (b.lot_id is null or (coalesce(l.expires_at,'infinity'::date),l.created_at,l.id,q.id)<(coalesce(cur.expires_at,'infinity'::date),cur.created_at,cur.id,b.id))) then raise exception 'BOOTIK_FEFO_REQUIRED';end if;
  select base_unit_code into v_unit from bootik.bk_catalog_items where id=b.item_id and status='active' and not is_serialized;
  if not found then raise exception 'BOOTIK_ITEM_UNAVAILABLE';end if;
  if lower(v_unit) in ('unit','unite','unité','piece','pièce','bouteille','carton','pack','sac','casier','palette') and p_quantity<>trunc(p_quantity) then raise exception 'BOOTIK_INVALID_SALE';end if;
