@@ -29,3 +29,16 @@ Statuts : R = réutilisation ciblée après compatibilité, A = adapter, S = sp�
 | Recette et sécurité | Famille, NS/NAXA scripts A | JUnit/Compose instrumentation | Playwright et PWA | build + tests SQL/RLS, isolation, non-régression, E2E, signatures | N8 |
 ## Matrice Accès/Premium
 [V] Prix et cadence : contrat POLITIQUE_COMMERCIALE_ZIPPLE.json. [V portefeuille] Accès mono-compte; Premium inclut Accès et architecture multiniveau. [P] Transposition ZIPPLE : établissement autonome Accès, réseau multi-établissements avec promoteur/managers et consolidation Premium. Le cœur opérationnel (catalogue, commandes, caisse, stock, intégrité des données, sécurité, support et export) ne doit jamais être amputé de fonctions de cohérence. [O] Attribution commerciale précise des rôles employé, appareils, nombre de sites, vidéo, IA avancée, rapports, options, limites; aucun plafond chiffré ou droit additionnel inventé. Conserver un contrôle explicite par entitlement côté serveur, y compris cas négatifs. Ne pas activer la matrice proposée avant validation commerciale.
+
+## Matrice détaillée candidate (26/11, non approuvée pour commercialisation)
+| Capacité | Accès | Premium | Contrôle |
+|---|---|---|---|
+| Catalogue, commandes, tables, Bar et Snack-Bar selon activité | cœur métier | hérité | rôle et établissement |
+| Caisse, stocks, achats, dépenses, comptabilité intègre | cœur métier | hérité | permissions et validation serveur |
+| Support, export des données, sécurité de base | cœur métier | hérité | accès autorisé |
+| Parrainage PME | cœur métier | hérité | promoteur et premier paiement confirmé |
+| Architecture mono-compte | oui | héritée | compte actif |
+| Gestion multiniveau | non | éligible | organisation et affectations serveur |
+| Quotas utilisateurs/appareils/sites; vidéosurveillance, IA avancée, rapports avancés, options | à arbitrer | à arbitrer | refus par défaut sans droit explicite |
+
+Cette répartition est une proposition technique de sûreté, non une nouvelle décision commerciale. L'éligibilité ne confère jamais une permission métier. La tarification et le modèle de parrainage sont testés par le contrat isolé; l'idempotence de la base et l'application des récompenses restent des tests N2.

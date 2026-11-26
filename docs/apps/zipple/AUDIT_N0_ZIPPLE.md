@@ -44,3 +44,8 @@ Décision technique proposée : ZIPPLE cible le projet Famille distinct, avec id
 Ces contrôles JS en mémoire testent le contrat de cadrage, pas le code de production, le fournisseur de paiement ni les écrans. Le registre de décisions garde les exceptions explicites propres à d'autres produits (ne pas les modifier dans ZIPPLE).
 ## Clôture
 Cadrage fonctionnel, identité, provenance, stratégie de réutilisation, inventaire backend, contrat tarifaire et plan N1–N8 : établis. N0 n'est pas intégralement VERT : archive JOBLY non auditée, droits détaillés non arbitrés, contrat runtime partagé non mis en conformité dans ce chantier, compatibilité RLS/API et recettes non exécutées. Ne pas appeler une migration ni un déploiement pour résoudre ces réserves sans autorisation. Aucun code des applications existantes modifié.
+
+## Reprise bulk — 26/11
+- Contrat ZIPPLE exécutable isolé (quote, vagues de parrainage, qualification du premier paiement et contrôle des droits candidats) dans contracts/zipple-policy.mjs, tests Node natifs associés. 31 contrôles JS des mêmes fonctions exécutés en mémoire avant écriture; CI distincte à constater. Aucun remplacement du helper historique utilisé par les autres applications. Intégration serveur/clients à N2.
+- Matrice détaillée candidate complétée : droits de base, héritage Premium, multi-niveau, fonctions non arbitrées refusées par défaut. Ce n'est pas une approbation commerciale des options.
+- Archive JOBLY toujours inaccessible directement (réponse binaire vide et DNS indisponible). Nouveau script d'inventaire ZIP non exécutant et workflow ciblé proposés pour obtenir une preuve depuis le checkout GitHub; résultat non présumé. Même un inventaire réussi ne suffit pas à certifier le code.

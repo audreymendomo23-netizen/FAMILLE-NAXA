@@ -17,3 +17,6 @@ Android Kotlin/Compose entièrement natif; Web/PWA responsive distincte; pages Q
 | N8 | recette complète Android/Web/PWA, test RLS, sécurité et préparation livraison | preuve par exigence, build/tests/recette, aucun déploiement sans accord |
 ## État au dernier contrôle
 N0 PARTIEL : audit et docs réalisés en bulk. Contrat ZIPPLE vérifié en mémoire (16 checks), sans intégration production. Ouvert : lecture du ZIP JOBLY, droits détaillés, correction et tests runtime billing (N2), compatibilité effective backend et recettes (N1–N8), Connect conditionnel. Aucun N1 lancé. Aucune preuve inventée. Reprendre au dossier N0, traiter les réserves ensemble, ne pas redémarrer les audits déjà prouvés.
+
+### Reprise bulk
+Contrat exécutable ZIPPLE et tests ajoutés sous contracts/; 31 contrôles en mémoire réussis avant commit. Le workflow ciblé ne déploie rien et ne réécrit aucun autre socle. Matrice détaillée candidate ajoutée; validation commerciale des droits non arbitrés et audit sémantique JOBLY restent ouverts. Aucun appel backend d'écriture ni lancement N1. Ne pas déclarer N0 vert sans preuve.

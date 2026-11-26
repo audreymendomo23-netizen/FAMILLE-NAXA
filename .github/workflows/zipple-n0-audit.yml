@@ -1,0 +1,23 @@
+name: ZIPPLE N0 — isolated audit
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/apps/zipple/contracts/**"
+      - "docs/apps/zipple/POLITIQUE_COMMERCIALE_ZIPPLE.json"
+      - ".github/workflows/zipple-n0-audit.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  n0:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: ZIPPLE policy tests
+        run: node --test docs/apps/zipple/contracts/zipple-policy.test.mjs
+      - name: JOBLY read-only source inventory
+        run: python3 docs/apps/zipple/contracts/audit_jobly.py
