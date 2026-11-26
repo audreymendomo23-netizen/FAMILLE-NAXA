@@ -76,6 +76,34 @@ try{
  const denied=await request(auth+"/login",{identifier:h.login,password:"wrong",installation_id:randomUUID(),platform:"web"});assert.equal(denied.status,401);
  const rec=await ok(auth+"/request-recovery",{identifier:h.login,installation_id:randomUUID(),platform:"web"});const unknown=await ok(auth+"/request-recovery",{identifier:"WM-UNKNOWN123",installation_id:randomUUID(),platform:"web"});assert.deepEqual(rec,unknown);assert.equal(rec.accepted,true);
  pass("actual GoTrue login and neutral recovery intake");
+ const identity=(token,action,data={})=>ok(auth+"/identity",{action,data},token);
+ const identityRequest=(token,action,data={})=>request(auth+"/identity",{action,data},token);
+ const original=await identity(hs.access_token,"profile");
+ assert.equal(original.role,"promoteur");
+ await identity(hs.access_token,"profile-update",{display_name:"Replay promoteur",locale:"fr"});
+ for(let step=1;step<=5;step++)assert.equal((await identity(hs.access_token,"onboarding-step",{step})).step,step);
+ assert.equal((await identity(hs.access_token,"profile")).onboarding_step,5);
+ await identity(hs.access_token,"favorite",{member_id:g.id,enabled:true});
+ assert.equal((await identity(hs.access_token,"contacts")).contacts.find(x=>x.member_id===g.id).favorite,true);
+ assert.equal((await identityRequest(hs.access_token,"favorite",{member_id:o.id,enabled:true})).status,403);
+ assert.equal((await identityRequest(gs.access_token,"billing")).status,403);
+ assert.equal((await identity(hs.access_token,"billing")).plan,"premium");
+ assert.equal((await identity(hs.access_token,"dashboard")).role,"promoteur");
+ await identity(hs.access_token,"invite",{login_id:o.login,role:"staff"});
+ const incoming=(await identity(os.access_token,"invitations")).invitations;
+ assert.equal(incoming.length,1);
+ assert.equal((await identityRequest(gs.access_token,"respond-invite",{id:incoming[0].id,accept:true})).status,403);
+ await identity(os.access_token,"respond-invite",{id:incoming[0].id,accept:true});
+ const fresh=await login(o);assert.equal(fresh.workspaces.length,2);
+ const switched=await ok(auth+"/switch-workspace",{workspace_id:w},fresh.access_token);
+ assert.equal(switched.active_workspace_id,w);
+ assert.equal((await identity(switched.access_token,"profile")).role,"staff");
+ await identity(hs.access_token,"revoke-member",{member_id:o.id});
+ assert.equal((await identityRequest(switched.access_token,"profile")).status,403);
+ // Original foreign session remains confined to its own company.
+ assert.equal((await identity(os.access_token,"profile")).workspace_name,"Replay B");
+ pass("actual N1 profile and onboarding persistence, scoped favorites, payer-only billing, invitation and membership revocation");
+
  const contacts=await ok(room+"/contacts",{},hs.access_token);assert.equal(contacts.length,1);assert.equal(contacts[0].member_id,g.id);
  const rid=randomUUID(),create={room_id:rid,title:"Replay real meeting",description:"Scoped control plane",scheduled_ms:Date.now(),duration_minutes:30,invitees:[g.id]};
  assert.equal((await request(room+"/create",create,gs.access_token)).status,409);
