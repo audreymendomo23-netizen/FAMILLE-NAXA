@@ -28,14 +28,23 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  await assert.rejects(pay(i,uid(),1),/PAYMENT_MISMATCH/);
  await assert.rejects(scalar("select zp_confirm_subscription($1,'mtn_momo',$2,$3,null)",[i.id,uid(),i.amount_xaf]),/PAYMENT_MISMATCH/);
  assert.equal(await scalar("select zp_paid_plan($1)",[a.org]),null);
- const ref=uid(),pid=await pay(i,ref);assert.equal(await pay(i,ref),pid);assert.equal(await scalar("select zp_paid_plan($1)",[a.org]),"PREMIUM");
- await pay(await intent(b,"ACCESS","annual"));
+ const ref=uid(),pid=await pay(i,ref);assert.equal(await pay(i," "+ref+" "),pid);assert.equal(await scalar("select zp_paid_plan($1)",[a.org]),"PREMIUM");
+ const bIntent=await intent(b,"ACCESS","annual");await pay(bIntent);const duplicateIntent=await intent(b,"ACCESS","monthly");await assert.rejects(pay(duplicateIntent," "+ref+" "),/duplicate key/);
  await scalar("select zp_site_mode($1,$2,'restaurant',true,true)",[a.access,a.site]);
  await assert.rejects(scalar("select zp_site_mode($1,$2,'snack_bar',false,true)",[b.access,b.site]),/check constraint/);
  await scalar("select zp_site_mode($1,$2,'snack_bar',false,false)",[b.access,b.site]);
  const add=(t,name,post,price,qty)=>scalar("select zp_add_menu_item($1,$2,$3,$4,$5,$6)",[t.access,t.site,name,post,price,qty]);
  const food=await add(a,"Plat","kitchen",2500,2),drink=await add(a,"Boisson","bar",1000,4),snack=await add(b,"Menu","snack",1800,2);
  await assert.rejects(add(b,"Cocktail","bar",1000,2),/POST_DENIED/);
+ // Cross-role and scope tests exercise actual N1 members/sessions, not UI state.
+ const staffId=uid(),staffAuth=uid(),staffAccess=hash();
+ await db.query("insert into auth.users(id) values($1)",[staffAuth]);await db.query("insert into zp_members(id,org_id,auth_user_id,login_id,auth_alias,role_code) values($1,$2,$3,$4,$5,'staff')",[staffId,a.org,staffAuth,uid(),uid()+"@example.test"]);await db.query("insert into zp_site_scopes values($1,$2,$3)",[staffId,a.org,a.site]);await db.query("insert into zp_sessions(member_id,access_hash,access_until) values($1,$2,now()+interval '1 hour')",[staffId,staffAccess]);
+ const staff={...a,access:staffAccess,member:staffId};await assert.rejects(order(staff,"counter",[{item_id:food,qty:1}]),/DENIED/);
+ await db.query("update zp_members set role_code='manager' where id=$1",[staffId]);assert.ok(await scalar("select zp_business_snapshot($1,$2)",[staffAccess,a.site]));
+ await db.query("delete from zp_site_scopes where member_id=$1",[staffId]);await assert.rejects(scalar("select zp_business_snapshot($1,$2)",[staffAccess,a.site]),/DENIED/);
+ await db.query("insert into zp_site_scopes values($1,$2,$3)",[staffId,a.org,a.site]);await db.query("update zp_sessions set revoked=true where member_id=$1",[staffId]);await assert.rejects(order(staff,"counter",[{item_id:food,qty:1}]),/DENIED/);
+ await assert.rejects(scalar("select zp_business_snapshot($1,$2)",[hash(),a.site]),/DENIED/);
+ const before=await scalar("select available_qty from zp_menu_items where id=$1",[food]);assert.equal(before,2);
  await assert.rejects(order(b,"delivery",[{item_id:snack,qty:1}]),/CHANNEL_DENIED/);
  await assert.rejects(order(b,"counter",[{item_id:food,qty:1}]),/ITEM_UNAVAILABLE/);
  await assert.rejects(order(a,"takeaway",[{item_id:food,qty:2},{item_id:food,qty:-1}]),/INVALID_QUANTITY/);
@@ -46,6 +55,11 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const qr=hash(),g1=hash(),g2=hash(),table=await scalar("select zp_manage_table($1,$2,'T1',$3)",[a.access,a.site,qr]);
  await assert.rejects(scalar("select zp_open_guest($1,$2)",[qr,g1]),/DENIED/);
  const ts=await scalar("select zp_open_table($1,$2,$3)",[a.access,a.site,table]);
+ assert.equal(await scalar("select zp_guest_open_guard($1)",[hash()]),false);
+ for(let n=0;n<60;n++)assert.equal(await scalar("select zp_guest_open_guard($1)",[qr]),true);
+ assert.equal(await scalar("select zp_guest_open_guard($1)",[qr]),false);
+ await db.query("update zp_rate_windows set window_start=now()-interval '6 minutes' where bucket=$1",["ZIPPLE:guest-open:"+ts]);
+ assert.equal(await scalar("select zp_guest_open_guard($1)",[qr]),true);
  await scalar("select zp_open_guest($1,$2)",[qr,g1]);await scalar("select zp_open_guest($1,$2)",[qr,g2]);
  const anonymous=await order(a,"table",[{item_id:drink,qty:1}],uid(),ts,g1);assert.equal((await scalar("select zp_guest_order($1,$2)",[g1,anonymous.id])).id,anonymous.id);assert.equal(await scalar("select zp_guest_order($1,$2)",[g2,anonymous.id]),null);
  assert.equal((await scalar("select zp_guest_menu($1)",[g1])).site_id,a.site);
@@ -55,6 +69,17 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  await assert.rejects(scalar("select zp_guest_served($1,$2)",[g2,anonymous.id]),/DENIED/);
  const guestTime=await scalar("select zp_guest_served($1,$2)",[g1,anonymous.id]);
  assert.equal(String(await scalar("select zp_guest_served($1,$2)",[g1,anonymous.id])),String(guestTime));
+ await assert.rejects(scalar("select zp_cancel_unprepared_order($1,$2,$3,'Annulation après service')",[a.access,a.site,anonymous.id]),/CANCELLATION_REQUIRES_REVIEW/);
+ // Temporarily withdraw paid entitlement in the disposable fixture, preserving exact period.
+ const period=(await db.query("select starts_at,ends_at from zp_subscription_periods where id=$1",[pid])).rows[0];
+ await db.query("update zp_subscription_periods set starts_at=now()-interval '2 days',ends_at=now()-interval '1 day' where id=$1",[pid]);
+ assert.equal(await scalar("select zp_guest_order($1,$2)",[g1,anonymous.id]),null);
+ assert.equal(await scalar("select zp_guest_menu($1)",[g1]),null);
+ await assert.rejects(scalar("select zp_submit_feedback($1,$2,5,'Expired')",[g1,anonymous.id]),/DENIED/);
+ await assert.rejects(scalar("select zp_guest_served($1,$2)",[g1,anonymous.id]),/DENIED/);
+ await assert.rejects(scalar("select zp_business_snapshot($1,$2)",[a.access,a.site]),/SUBSCRIPTION_OR_ROLE_REQUIRED/);
+ await db.query("update zp_subscription_periods set starts_at=$2,ends_at=$3 where id=$1",[pid,period.starts_at,period.ends_at]);
+ console.log("ZIPPLE_BULK1_ACCESS_AND_GUEST_BOUNDARIES_PASS");
  const guestState=await scalar("select zp_guest_order($1,$2)",[g1,anonymous.id]);assert.equal(guestState.status,"received");assert.ok(guestState.guest_served_at);assert.ok(guestState.service_delta_seconds<0);
  const customer=await scalar("select zp_customer_add($1,$2,'Client volontaire','237699000001')",[a.access,a.site]);
  await assert.rejects(scalar("select zp_customer_add($1,$2,'Doublon','237699000001')",[a.access,a.site]),/CUSTOMER_REVIEW_REQUIRED/);
@@ -170,6 +195,9 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal(await scalar("select count(*)::int from pg_tables where schemaname='public' and tablename like 'zp_%' and not rowsecurity"),0);
  assert.equal(await scalar("select has_function_privilege('authenticated','public.zp_confirm_subscription(uuid,text,text,integer,text)','execute')"),false);
  assert.equal(await scalar("select has_table_privilege('anon','public.zp_orders','select')"),false);
+ assert.equal(await scalar("select count(*)::int from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname like 'zp_%' and (has_function_privilege('anon',p.oid,'execute') or has_function_privilege('authenticated',p.oid,'execute'))"),0);
+ assert.equal(await scalar("select count(*)::int from pg_tables where schemaname='public' and tablename like 'zp_%' and (has_table_privilege('anon',format('public.%I',tablename),'SELECT,INSERT,UPDATE,DELETE') or has_table_privilege('authenticated',format('public.%I',tablename),'SELECT,INSERT,UPDATE,DELETE'))"),0);
+ console.log("ZIPPLE_BULK1_ALL_RPC_AND_TABLE_GRANTS_PASS");
  console.log("ZIPPLE_N2_N4_REAL_POSTGRES_PASS");
  }finally{await db.end()}
 });

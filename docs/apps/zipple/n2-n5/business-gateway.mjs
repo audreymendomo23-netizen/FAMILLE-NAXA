@@ -29,10 +29,11 @@ export function createBusinessGateway({rpc,origins,allowGuestOpen=false}){
    if(publicActions.has(action)){
     if(!permitted)return result(403,{error:"DENIED"});
     if(action==="guest_open"){
-     // Not enabled on hosted infrastructure before rate limits and public QR acceptance.
+     // Explicit activation only; persisted N1-style rate guard runs in a separate RPC transaction.
      if(!allowGuestOpen)return result(503,{error:"GUEST_OPEN_NOT_CONFIGURED"});
      if(typeof b.qr!=="string"||!hex.test(b.qr))invalid();
-     const guest=token();await rpc("zp_open_guest",{p_qr_hash:await digest(b.qr),p_guest_hash:await digest(guest)});
+     const qrHash=await digest(b.qr);if(await rpc("zp_guest_open_guard",{p_qr_hash:qrHash})!==true)return result(429,{error:"GUEST_OPEN_LIMIT_OR_UNAVAILABLE"});
+     const guest=token();await rpc("zp_open_guest",{p_qr_hash:qrHash,p_guest_hash:await digest(guest)});
      const menu=await rpc("zp_guest_menu",{p_guest_hash:await digest(guest)});
      if(!menu)return result(403,{error:"DENIED"});
      return result(200,{guest_token:guest,menu});

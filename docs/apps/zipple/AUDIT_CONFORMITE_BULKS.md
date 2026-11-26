@@ -1,0 +1,18 @@
+# Audit contradictoire ZIPPLE V2.0 — 26/11/2026
+Référence gelée : docs/cahiers-des-charges/ZIPPLE_V2_0.md. Base audit 5b7b7be0da9dd0063ea165f5bb7edd0d65e6f158. Le statut vert est limité au périmètre effectivement recetté. SQL seul n'est pas une preuve UI, build n'est pas une preuve parcours, recette locale n'est pas une preuve hébergée.
+## Découpage, maximum 6 bulks
+| Bulk | Sections CDC et réserves | Réutilisation / preuve attendue |
+|---|---|---|
+| 1 Socle commun, cohérence et sécurité transversale | 0, 1, 2.2, 17.1-2, 17.7, 19.2, 21 : contrat N1, prix gelés, refus par défaut, session/révocation/scope, accès QR et expiration, droits directs, intégrité des opérations déjà existantes | N1 ZIPPLE issu NS, billing-core, rate windows N1; tests négatifs et régression PostgreSQL + Edge/browser local |
+| 2 Coeur opérationnel | 2.1, 3.1-5, 4, 5.1/3/4, 6, 8, 13.1/3 : salles, réservations, QR imprimable, disponibilité, catalogue, variantes, formules, délais, additions, feedback poste, rôles explicitement attribués | Modules caisse/catalogue NS/NAXA, parcours cuisine/bar/snack et tests 23.1-5 |
+| 3 ERP et finance | 2.4, 5.2, 9-12, 17.3 : transferts préparations, conversions, braiseur, recettes versionnées, achats multiligne, consignes financières, stock réservation/vente, multi-caisses, ardoise, pièces, journal comptable, offline métier | NAXA Services stock/finance/outbox, NAXA caisse/compta; recettes coût et intégrité, rapprochement |
+| 4 Commerce et interconnexions | 3.6, 7, 14, 16, 17.4-6/8, 21 : paiement abonnement réel, droits/quotas explicites, fidélité/QR/parrainage client, livraison restaurant uniquement, NAXA SECURITY/HOTEL/GRILLAD, notifications/documents/support | Contrats NAXA/NS et famille, accords et secrets autorisés, recettes intégration; aucun montant non validé |
+| 5 RH et intelligence | 2.3, 13.2-6, 15, 18 : dossiers/affectations, pointage, plannings, objectifs, formation, consolidation, IA/assistant/OCR/voix selon CDC | NS ManagementModules/PerformanceEngine, modules famille, validation humaine |
+| 6 Parité et livraison | 1.2, 19.3-4, 20, 23, 24 : tous parcours Android natif, Web/PWA, offline et qualification hébergée/physique, publication centrale et média fourni, sécurité finale | Recettes positives intégrées, aucun skip accepté pour parcours exigé; APK/release, vérification absence régression soeur |
+## Audit par contradiction
+- 39/39 SQL sur 2f3a757 (45865615003), Edge navigateur transferts/consignes/pilotage (45865614669 SUCCESS), build Android/Web/émulateur 45865763569 SUCCESS; test authentification native hébergée SKIPPED, ne pas compter comme vert.
+- Deux espaces, aucun compte client, quatre tarifs canoniques et modèle parrainage pro testés. Rôles génériques seulement, pas de quotas inventés. Le modèle de stock préparé n'épuise pas toutes les consommations directes à la vente.
+- Pas de backend métier publié, ni de confirmation opérateur, ni de livraison activée. Frontend candidat non synonyme de produit lancé. Média différé à la demande.
+## Mission bulk 1
+Preuves : prix canoniques, refus périodicités/pack, paiement synthétique uniquement privilégié, référence normalisée sans double validation, refus staff non habilité, scope/session révoqués, accès invité suspendu si abonnement expiré, limite technique ouverture QR (60/5 min/session, à ajuster avec mesures réelles au bulk 6), annulation après attestation de service bloquée, tous RPC/tables service-only, RLS; régression métier réelle et contrats. Les rôles fins métier et capacité commerciale ne sont pas inventés : bulks 2 et 4. Les qualifications production et physiques ne sont pas dans ce gate local. Pas de changement main ni de déploiement. 
+Etat : implémenté, preuves de la nouvelle CI à relever.

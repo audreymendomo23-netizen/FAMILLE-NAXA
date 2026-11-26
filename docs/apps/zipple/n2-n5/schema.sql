@@ -41,6 +41,7 @@ create function public.zp_confirm_subscription(p_intent uuid,p_provider text,p_r
 declare i public.zp_subscription_intents;c public.zp_plan_catalog;st timestamptz;pid uuid;first_paid boolean;begin
  select * into i from public.zp_subscription_intents where id=p_intent for update;
  if i.id is null or i.provider is distinct from p_provider or i.amount_xaf is distinct from p_amount or p_currency is distinct from 'XAF' or length(trim(coalesce(p_reference,'')))<4 then raise exception 'PAYMENT_MISMATCH';end if;
+ p_reference:=trim(p_reference);
  if i.status='confirmed' then if i.provider_reference<>p_reference then raise exception 'PAYMENT_MISMATCH';end if;return i.period_id;end if;
  perform 1 from public.zp_organizations where id=i.org_id and active for update;if not found then raise exception 'DENIED';end if;
  select not exists(select 1 from public.zp_subscription_intents where org_id=i.org_id and status='confirmed') into first_paid;
@@ -83,7 +84,7 @@ declare m public.zp_members;g public.zp_guest_sessions;s public.zp_site_modes;or
  if p_guest_hash is not null then
  select x.* into g from public.zp_guest_sessions x join public.zp_table_sessions ts on ts.id=x.table_session_id join public.zp_sites si on si.id=x.site_id join public.zp_organizations o on o.id=x.org_id where x.token_hash=p_guest_hash and x.expires_at>now() and ts.closed_at is null and si.active and o.active for update of ts;
  if g.id is null or g.site_id<>p_site or p_channel<>'table' or p_table_session is distinct from g.table_session_id then raise exception 'DENIED';end if;org:=g.org_id;
- else m:=public.zp_business_actor(p_access,p_site);org:=m.org_id;end if;
+ else m:=public.zp_business_actor(p_access,p_site);if m.role_code not in ('promoteur','manager') then raise exception 'DENIED';end if;org:=m.org_id;end if;
  if public.zp_paid_plan(org) is null then raise exception 'SUBSCRIPTION_REQUIRED';end if;
  select * into s from public.zp_site_modes where site_id=p_site and org_id=org;
  if s.site_id is null or p_channel is null or p_channel not in ('table','counter','takeaway','delivery') or p_channel='delivery' then raise exception 'CHANNEL_DENIED';end if;
