@@ -328,3 +328,24 @@ Branche BOOTIK exclusive : work/bootik-n0-20261126. Dernier code de qualificatio
 - Aucun déploiement, aucune migration Supabase hébergée, aucune configuration réelle d'API/compte marchand, aucun changement des autres applications. Les flux vidéo/RTC réels relèvent du BULK 04 ; les demandes et consentements sont raccordés, pas le média en direct.
 
 Point de vérité : socle testé en environnement isolé, mais BULK 01 fonctionnel intégral non clôturé. Prochaines preuves nécessaires : terminer la recette Chromium/émulateur sur le dernier code, qualifier l'administration centrale via un canal autorisé, intégration avec l'environnement hébergé BOOTIK isolé et réception des preuves opérateur sur téléphones autorisés, puis recettes positives/négatives Android et Web réelles. Ne pas relancer les travaux déjà prouvés sans régression constatée.
+
+
+## Directive permanente de construction — validée le 26 novembre 2026
+
+Le cahier des charges BOOTIK V1.1 est la source de vérité fonctionnelle. Avant chaque lot, auditer les modules effectivement codés de NAXA SERVICES, NAXA, JOBLY et ZIPPLE, et les packages communs. Ne pas réimplémenter un module compatible ; réutiliser directement un composant générique ou adapter le composant métier dans le périmètre BOOTIK. Le cahier prévaut en cas de divergence ; aucune réduction de périmètre implicite.
+
+| Référence | Modules à auditer et réutiliser | Contraintes |
+|---|---|---|
+| NAXA SERVICES | Multi-activité, multisite, équipes, PIN, caisse, facturation, stock, fournisseurs, CRM, objectifs, notifications, IA | Adapter les droits aux univers détaillant/distributeur ; aucun accès ns_* |
+| NAXA | Catalogue, lots, stock, caisse, comptabilité, paiement abonnement à double preuve, support RTC, caméras | Pas de pharmacie BOOTIK, pas de partage de données historiques ; distinguer vidéosurveillance et assistance |
+| JOBLY | Administration, gestion des comptes, abonnements, assistance, onboarding, UX | Inventaire de l'archive effectué, audit détaillé à poursuivre ; ne pas revendiquer une réutilisation sans preuve source |
+| ZIPPLE | Authentification, Keystore, reprise de session, file offline, reçus, WorkManager, PWA, recette navigateur, administration centrale | Adapter noms d'application, scopes et identifiants ; ne jamais écrire dans les tables zp_* |
+| Packages communs | core-android, core-kotlin, contracts, core-web, offline-web, billing-core, design-system, assistant | Réutiliser sans modifier les autres consommateurs ; ne pas reprendre les durées offline 7/14 jours sans validation |
+
+Références auditées : NAXA SERVICES branche work/naxa-services-completion-20261120 commit 86e0948509008dc12429983c3cbf9155c4860220 ; NAXA main 4acbab129b403ef87e879c87e99793fb9d35e98f (architecture paiement et composants cités plus haut) ; ZIPPLE et packages présents dans l'arbre BOOTIK cb812e83 ; JOBLY inventaire 788 fichiers, non audit exhaustif. Composants vérifiés : ZippleSyncWorker.kt, NotificationChannels.kt, BriefingScheduler.kt, NotificationContract.kt, SyncContract.kt. Le scheduler commun ne suffit pas à garantir la confidentialité du briefing après déconnexion : n'utiliser que des messages génériques ou un contrôle de session. 
+
+Procédure obligatoire de chaque passe bulk : matrice exigence V1.1 → référence source et commit → adaptation BOOTIK Android/Web/backend → tests positifs/négatifs et intertenant → correction des logs → mise à jour de continuité. Les 14 profils Détaillants sont prioritaires, les 8 Distributeurs restent prévus. Ne pas fusionner les activités, les sites, les caisses ni les stocks. Tarifs et essais validés inchangés. Ne pas confondre CI verte et disponibilité réelle ; aucun accès ou paiement simulé ne doit être affiché confirmé.
+
+### Point de reprise vérifié
+
+Commit cb812e83a971ff56ad3a81ee87e3a3a11ada4101 : recette 45852191947 SUCCESS (5/5). B01-01 recette Chromium corrigée et validée, B01-04 PIN/Keystore testé sur émulateur (biométrie physique non attestée), B01-09 affichage équipe et expiration session implémentés, renouvellement des intentions de paiement corrigé sur Android/Web. Les tests isolés ne prouvent pas la réception opérateur ni les flux en production. B01-02/03 administration centrale et cycle complet de création/récupération restent ouverts (précédente tentative bloquée par contrôle de sécurité, à traiter uniquement par canal autorisé), B01-05/06 paiements réels nécessitent environnement marchand, B01-07 backend hébergé non raccordé, B01-08 offline au-delà des ventes, B01-09 droits fins par activité/poste et gestion multisite complète, B01-10 recette de livraison. Aucune modification des autres applications, aucune fusion main, aucun déploiement BOOTIK non autorisé. Continuer en adaptant d'abord les briques éprouvées au lieu de redévelopper le socle.
