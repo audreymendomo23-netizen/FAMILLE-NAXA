@@ -35,6 +35,9 @@ Deno.serve(async request=>{
  const identifier=typeof body.identifier==="string"?body.identifier.trim().toUpperCase():"";
  const password=body.password;
  if(!/^WM-[A-Z0-9]{8,24}$/.test(identifier)||typeof password!=="string"||password.length<1||password.length>256||!uuid.test(body.installation_id??"")||!["web","android"].includes(body.platform))return send(401,{error:"credentials"});
+ // Reserve before looking up account; fail closed if the shared limiter is unavailable.
+ const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-login:"+identifier),p_installation_hash:await digest("wm-installation:"+body.installation_id.toLowerCase())})});
+ if(allowed!==true)return send(429,{error:"too_many_attempts"});
  const rows=await rest("wm_accounts?select=id,auth_user_id,auth_alias,password_change_required,enabled&login_id=eq."+eq(identifier)+"&enabled=eq.true&limit=1");
  const a=rows[0];if(!a)return send(401,{error:"credentials"});
  const auth=await fetch(url+"/auth/v1/token?grant_type=password",{method:"POST",headers:{apikey:anon,"Content-Type":"application/json"},body:JSON.stringify({email:a.auth_alias,password}),redirect:"error",cache:"no-store"});
