@@ -1,4 +1,5 @@
 import {
+  promotionHttpResponse,
   isCustomerReferralCode,
   isUuid,
   normalizeCustomerReferralCampaignDraft,
@@ -28,18 +29,7 @@ class ApiError extends Error {
 }
 
 function reply(status: number, body: Json, origin?: string | null) {
-  const allowed = origin && (ALLOWED_ORIGINS.includes(origin) || ALLOWED_ORIGINS.includes("*")) ? origin : "null";
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "no-store",
-      "Access-Control-Allow-Origin": allowed,
-      "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-naxa-promotions-signature",
-      "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Vary": "Origin",
-    },
-  });
+  return promotionHttpResponse(status, body, origin, ALLOWED_ORIGINS);
 }
 
 function serviceHeaders(extra: Record<string, string> = {}) {

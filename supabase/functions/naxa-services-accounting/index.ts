@@ -1,19 +1,11 @@
 import { normalizeAtomicSyncEvent, normalizeSyncPullRequest } from "./sync_contract.ts";
 
-const CORS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Content-Type": "application/json; charset=utf-8",
-};
+import { accountingCorsHeaders } from "./accounting_contract.ts";
 
 type JsonObject = Record<string, unknown>;
 
 const EVENT_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function reply(status: number, body: JsonObject): Response {
-  return new Response(JSON.stringify(body), { status, headers: CORS });
-}
 
 function requiredString(value: unknown, key: string): string {
   if (typeof value !== "string" || value.trim().length === 0 || value.length > 512) {
@@ -116,9 +108,11 @@ async function readView(
 
 export async function handleAccountingRequest(
   request: Request,
-  env: { supabaseUrl: string; anonKey: string },
+  env: { supabaseUrl: string; anonKey: string; allowedOrigins?: readonly string[] },
 ): Promise<Response> {
-  if (request.method === "OPTIONS") return new Response("ok", { headers: CORS });
+  const cors = accountingCorsHeaders(request.headers.get("origin"), env.allowedOrigins ?? []);
+  const reply = (status: number, body: JsonObject) => new Response(JSON.stringify(body), { status, headers: cors });
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
   if (request.method !== "POST") return reply(405, { error: "METHOD_NOT_ALLOWED" });
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
   if (!token) return reply(401, { error: "AUTHENTICATION_REQUIRED" });
@@ -240,5 +234,6 @@ export async function handleAccountingRequest(
 Deno.serve(async (request) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
   const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-  return await handleAccountingRequest(request, { supabaseUrl, anonKey });
+  const allowedOrigins = (Deno.env.get("NS_ALLOWED_ORIGINS") ?? "").split(",").map((value) => value.trim()).filter(Boolean);
+  return await handleAccountingRequest(request, { supabaseUrl, anonKey, allowedOrigins });
 });

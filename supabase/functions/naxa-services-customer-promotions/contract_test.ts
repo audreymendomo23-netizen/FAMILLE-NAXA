@@ -1,4 +1,5 @@
 import {
+  promotionHttpResponse,
   isAllowedPromotionTransition,
   isCustomerReferralCode,
   normalizeCustomerPhone,
@@ -86,4 +87,14 @@ Deno.test("Edge API cannot activate wheel campaigns or approve legal status", ()
   for (const status of ["approved", "active", "suspended", "expired"]) {
     if (isAllowedPromotionTransition(status)) throw new Error("PRODUCTION_TRANSITION_EXPOSED");
   }
+});
+
+Deno.test("promotion preflight is bodyless and restricts browser origins", async () => {
+  const origin = "https://famille-naxa.pages.dev";
+  const response = promotionHttpResponse(204, {}, origin, [origin]);
+  if (response.status !== 204 || await response.text() !== "" || response.headers.get("Access-Control-Allow-Origin") !== origin) throw new Error("PREFLIGHT_FAILED");
+  const foreign = promotionHttpResponse(204, {}, "https://untrusted.invalid", [origin, "*"]);
+  if (foreign.headers.get("Access-Control-Allow-Origin") !== "null") throw new Error("FOREIGN_ORIGIN_ALLOWED");
+  const error = promotionHttpResponse(401, {error:"AUTHENTICATION_REQUIRED"}, origin, [origin]);
+  if (error.status !== 401 || (await error.json()).error !== "AUTHENTICATION_REQUIRED") throw new Error("JSON_ERROR_CHANGED");
 });

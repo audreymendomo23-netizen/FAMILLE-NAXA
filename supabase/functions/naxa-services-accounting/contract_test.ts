@@ -1,3 +1,4 @@
+import { accountingCorsHeaders } from "./accounting_contract.ts";
 import {
   confirmedRevenue,
   costOfGoodsSold,
@@ -56,4 +57,13 @@ Deno.test("monthly projection and recovery effort are deterministic", () => {
   if (projectRevenue(200000, 10000, 10) !== 300000) throw new Error("Projection mismatch");
   if (dailyRecoveryNeed(500000, 300000, 10) !== 20000) throw new Error("Daily recovery effort mismatch");
   if (dailyRecoveryNeed(500000, 300000, 0) !== 200000) throw new Error("Closed-period gap mismatch");
+});
+
+Deno.test("accounting browser allowlist is exact and never wildcard", () => {
+  const origin = "https://famille-naxa.pages.dev";
+  if (accountingCorsHeaders(origin, [origin])["Access-Control-Allow-Origin"] !== origin) throw new Error("OFFICIAL_ORIGIN_REJECTED");
+  for (const other of [null, "https://untrusted.invalid", origin + ".invalid"]) {
+    const headers = accountingCorsHeaders(other, [origin, "*"]);
+    if (headers["Access-Control-Allow-Origin"] !== "null" || headers["Vary"] !== "Origin") throw new Error("FOREIGN_ORIGIN_ALLOWED");
+  }
 });

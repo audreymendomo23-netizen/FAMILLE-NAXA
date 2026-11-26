@@ -145,3 +145,19 @@ export function isAllowedPromotionTransition(nextStatus: unknown): nextStatus is
   // and explicit business authorization are external release gates.
   return nextStatus === "draft" || nextStatus === "legal_review";
 }
+
+// HTTP 204 must have a null body: JSON.stringify({}) throws in Fetch runtimes.
+export function promotionHttpResponse(status: number, body: Record<string, unknown>, origin: string | null | undefined, allowedOrigins: readonly string[]): Response {
+  const allowed = origin && allowedOrigins.includes(origin) ? origin : "null";
+  return new Response(status === 204 ? null : JSON.stringify(body), {
+    status,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+      "Access-Control-Allow-Origin": allowed,
+      "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-naxa-promotions-signature",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Vary": "Origin",
+    },
+  });
+}

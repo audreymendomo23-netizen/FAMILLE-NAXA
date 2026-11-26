@@ -88,3 +88,15 @@ export function dailyRecoveryNeed(targetXaf: number, projectedXaf: number, remai
   if (remainingDays === 0) return Math.max(0, targetXaf - projectedXaf);
   return Math.ceil(Math.max(0, targetXaf - projectedXaf) / remainingDays);
 }
+
+/** Explicit browser allowlist; native callers need no Origin header. Never authorize wildcard origins. */
+export function accountingCorsHeaders(origin: string | null, allowedOrigins: readonly string[]): Record<string, string> {
+  return {
+    "Access-Control-Allow-Origin": origin && allowedOrigins.includes(origin) ? origin : "null",
+    "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
+    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "Vary": "Origin",
+  };
+}
