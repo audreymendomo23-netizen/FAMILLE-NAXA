@@ -12,7 +12,7 @@ class AuthGateway(private val context:Context,private val base:String){
  private fun endpoint(action:String):URI{
   val u=URI(base)
   require(u.scheme=="https" && !u.host.isNullOrBlank() && u.userInfo==null && u.query==null && u.fragment==null && u.path.trimEnd('/').endsWith("/widemeet-auth"))
-  require(action in setOf("login","logout","switch-workspace","request-recovery"))
+  require(action in setOf("login","logout","switch-workspace","request-recovery","change-password"))
   return URI(base.trimEnd('/')+"/"+action)
  }
  private fun installation():String{
@@ -43,6 +43,11 @@ class AuthGateway(private val context:Context,private val base:String){
   require(Regex("^WM-[A-Z0-9]{8,24}$").matches(normalized))
   val j=request("request-recovery",JSONObject().put("app_id","WIDEMEET").put("identifier",normalized).put("installation_id",installation()).put("platform","android"))
   require(j.optBoolean("accepted",false))
+ }
+ suspend fun changePassword(s:Session,current:String,next:String,requestId:String):Unit=withContext(Dispatchers.IO){
+  require(current.isNotBlank()&&next.length in 12..256&&current!=next)
+  val result=request("change-password",JSONObject().put("app_id","WIDEMEET").put("current_password",current).put("new_password",next).put("request_id",requestId),s.accessToken)
+  require(result.optBoolean("changed",false)&&result.optBoolean("reconnect",false))
  }
  private fun parse(j:JSONObject):Session{
   val a=j.getJSONArray("workspaces")
