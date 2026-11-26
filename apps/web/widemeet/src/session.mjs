@@ -43,7 +43,7 @@ export async function login(base,identifier,password,fetcher=fetch,device=instal
  if(!res.ok)throw Error("LOGIN_REJECTED");return parseSession(await res.json());
 }
 export async function authorizedRequest(base,action,body,token,fetcher=fetch){
- if(!["logout","change-password","onboarding-state","onboarding-step","switch-workspace"].includes(action)||!tokenOk(token))throw Error("FORBIDDEN_ACTION");
+ if(!["logout","change-password","onboarding-state","onboarding-step","switch-workspace","identity"].includes(action)||!tokenOk(token))throw Error("FORBIDDEN_ACTION");
  const res=await fetcher(endpoint(base,action),{method:"POST",headers:{"Content-Type":"application/json","Authorization":"Bearer "+token},body:JSON.stringify({...body,app_id:"WIDEMEET"}),cache:"no-store",redirect:"error",credentials:"omit"});
  if(!res.ok)throw Error("REQUEST_REJECTED");return res.status===204?{}:res.json();
 }
@@ -61,4 +61,14 @@ export async function requestRecovery(base,identifier,fetcher=fetch,device=insta
  if(typeof identifier!=="string"||!/^WM-[A-Z0-9]{8,24}$/.test(identifier.trim().toUpperCase()))throw Error("INVALID_IDENTIFIER");
  const res=await fetcher(endpoint(base,"request-recovery"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:"WIDEMEET",identifier:identifier.trim().toUpperCase(),installation_id:device(),platform:"web"}),cache:"no-store",redirect:"error",credentials:"omit"});
  if(!res.ok)throw Error("RECOVERY_REJECTED");const payload=await res.json();if(payload?.accepted!==true)throw Error("RECOVERY_UNCONFIRMED");return true;
+}
+
+export async function identityAction(base,session,action,data={},fetcher=fetch){
+ if(!workspaceAccess(session,session.active_workspace_id))throw Error("FORBIDDEN_SCOPE");
+ return authorizedRequest(base,"identity",{action,data},session.access_token,fetcher);
+}
+export async function registerAccount(base,form,fetcher=fetch,device=installationId){
+ if(!["individual","enterprise"].includes(form.kind)||!form.display_name?.trim()||!form.workspace_name?.trim()||typeof form.password!=="string"||form.password.length<12||form.password.length>256||form.accepted_terms!==true||!UUID.test(form.request_id??""))throw Error("INVALID_REGISTRATION");
+ const res=await fetcher(endpoint(base,"register"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({...form,app_id:"WIDEMEET",installation_id:device(),terms_version:"wm-replay-draft-20261126",privacy_version:"wm-replay-draft-20261126"}),cache:"no-store",redirect:"error",credentials:"omit"});
+ if(!res.ok)throw Error("REGISTRATION_REJECTED");const data=await res.json();if(!/^WM-[A-Z0-9]{8,24}$/.test(data.login_id??"")||data.kind!==form.kind)throw Error("REGISTRATION_UNCONFIRMED");return data;
 }
