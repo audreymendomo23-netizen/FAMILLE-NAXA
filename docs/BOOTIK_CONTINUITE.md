@@ -471,3 +471,6 @@ Réutilisation du principe inbox par destinataire et états lu/non lu de NAXA SE
 
 ### B01 — matrice et clôture contrôlée
 Version explicite de la grille serveur ACCÈS/PREMIUM (16 capacités), sans changer les prix ni la formule mixte non arbitrée. Seuil configurable de clôture sur écart absolu, capture du solde théorique dans la demande ; si le solde ou le comptage change, le payload ne correspond plus et l'ancienne approbation ne s'applique pas. Reprise idempotente par demande serveur. Tests de sortie caisse, écart, aucune clôture avant approbation, rejeu. Seuils des futures mutations (remises, avoirs, crédit, B2B) à intégrer dans leur module, pas de succès fictif.
+
+### B01 — périodes d’affectation
+Début/fin optionnels par employé/site, validation temporelle ISO avec fuseau, révocation des anciennes sessions après modification, contrôle SQL avant opérations et filtre login, bail offline plafonné par la première échéance d’affectation. Aucun effet sur les autres sites actifs. UI Android/Web, journal et recette réelle (période active, expiration et rejet site expiré).

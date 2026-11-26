@@ -114,3 +114,5 @@ create policy bk_runtime_access on bootik.bk_notification_reads to bootik_runtim
 create policy bk_runtime_access on bootik.bk_notification_preferences to bootik_runtime using(true) with check(true);
 grant select,insert on bootik.bk_notification_reads,bootik.bk_notification_preferences to bootik_runtime;
 grant update(approval_enabled) on bootik.bk_notification_preferences to bootik_runtime;
+
+grant update(valid_from,valid_until) on bootik.bk_member_sites to bootik_security_runtime;

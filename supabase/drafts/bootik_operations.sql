@@ -13,6 +13,7 @@ create table bootik.bk_member_sites (
 );
 -- Site-wide assignments remain explicit; restricted assignments need a matching activity.
 alter table bootik.bk_member_sites add column activity_restricted boolean not null default false;
+alter table bootik.bk_member_sites add column valid_from timestamptz,add column valid_until timestamptz,add constraint bk_member_site_period check(valid_from is null or valid_until is null or valid_from<valid_until);
 create table bootik.bk_member_activity_scopes (
  organization_id uuid not null, app_id uuid not null, user_id uuid not null, location_id uuid not null, activity_id uuid not null,
  primary key(organization_id,app_id,user_id,location_id,activity_id),
@@ -26,7 +27,7 @@ create function bootik.bk_can_access_activity(p_org uuid,p_app uuid,p_actor uuid
 returns boolean language sql stable security invoker set search_path=pg_catalog,bootik as $$
  select p_activity is not null and exists (
  select 1 from bootik.bk_member_sites s join bootik.bk_members m using(organization_id,app_id,user_id)
- where s.organization_id=p_org and s.app_id=p_app and s.user_id=p_actor and s.location_id=p_site and m.active
+ where s.organization_id=p_org and s.app_id=p_app and s.user_id=p_actor and s.location_id=p_site and m.active and (s.valid_from is null or s.valid_from<=now()) and (s.valid_until is null or s.valid_until>now())
  and (not s.activity_restricted or exists (
  select 1 from bootik.bk_member_activity_scopes a where a.organization_id=p_org and a.app_id=p_app and a.user_id=p_actor and a.location_id=p_site and a.activity_id=p_activity)));
 $$;
@@ -59,7 +60,7 @@ create function bootik.bk_assert_scope(p_org uuid,p_app uuid,p_user uuid,p_site 
 returns void language plpgsql security invoker set search_path=pg_catalog,bootik as $$
 begin
  if not exists(select 1 from bootik.bk_member_sites s join bootik.bk_members m using(organization_id,app_id,user_id)
- where s.organization_id=p_org and s.app_id=p_app and s.user_id=p_user and s.location_id=p_site and m.active
+ where s.organization_id=p_org and s.app_id=p_app and s.user_id=p_user and s.location_id=p_site and m.active and (s.valid_from is null or s.valid_from<=now()) and (s.valid_until is null or s.valid_until>now())
  and (not p_manager or m.role in ('promoteur','manager'))) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501'; end if;
 end $$;
 create function bootik.bk_quote(p_universe text,p_plan text,p_months integer)

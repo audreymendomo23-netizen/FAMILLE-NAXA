@@ -83,7 +83,7 @@ do $$ declare n text;begin foreach n in array array['bk_member_resource_rules','
 -- Cache scope fingerprint; not a secret or authorization token. Any changed assignment yields a different cache partition.
 create function bootik.bk_scope_stamp(p_org uuid,p_app uuid,p_user uuid)
 returns text language sql stable security invoker set search_path=pg_catalog,bootik as $$
- select md5(jsonb_build_object('role',m.role,'function',f.function_code,'sites',coalesce((select jsonb_agg(jsonb_build_object('id',s.location_id,'restricted',s.activity_restricted,'resource_rule',(select jsonb_agg(jsonb_build_object('kind',rr.resource_kind,'ids',rr.resources) order by rr.resource_kind) from bootik.bk_member_resource_rules rr where rr.organization_id=p_org and rr.app_id=p_app and rr.user_id=p_user and rr.location_id=s.location_id),'activities',coalesce((select jsonb_agg(a.activity_id order by a.activity_id) from bootik.bk_member_activity_scopes a where a.organization_id=p_org and a.app_id=p_app and a.user_id=p_user and a.location_id=s.location_id),'[]'::jsonb)) order by s.location_id) from bootik.bk_member_sites s where s.organization_id=p_org and s.app_id=p_app and s.user_id=p_user),'[]'::jsonb))::text)
+ select md5(jsonb_build_object('role',m.role,'function',f.function_code,'sites',coalesce((select jsonb_agg(jsonb_build_object('id',s.location_id,'restricted',s.activity_restricted,'valid_from',s.valid_from,'valid_until',s.valid_until,'resource_rule',(select jsonb_agg(jsonb_build_object('kind',rr.resource_kind,'ids',rr.resources) order by rr.resource_kind) from bootik.bk_member_resource_rules rr where rr.organization_id=p_org and rr.app_id=p_app and rr.user_id=p_user and rr.location_id=s.location_id),'activities',coalesce((select jsonb_agg(a.activity_id order by a.activity_id) from bootik.bk_member_activity_scopes a where a.organization_id=p_org and a.app_id=p_app and a.user_id=p_user and a.location_id=s.location_id),'[]'::jsonb)) order by s.location_id) from bootik.bk_member_sites s where s.organization_id=p_org and s.app_id=p_app and s.user_id=p_user),'[]'::jsonb))::text)
  from bootik.bk_members m left join bootik.bk_member_functions f using(organization_id,app_id,user_id) where m.organization_id=p_org and m.app_id=p_app and m.user_id=p_user and m.active;
 $$;
 revoke all on function bootik.bk_scope_stamp(uuid,uuid,uuid) from public,anon,authenticated;
@@ -142,7 +142,7 @@ begin
  perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site);
  if p_req is null or jsonb_typeof(p_data) is distinct from 'object' then raise exception 'BOOTIK_ADMIN_INVALID';end if;
  k:=p_data->>'kind';why:=btrim(coalesce(p_data->>'reason',''));
- if k not in ('session-revoke','member-scope','member-disable','session-limit','member-role','site-device-limit','offline-policy') or length(why) not between 3 and 500 then raise exception 'BOOTIK_ADMIN_INVALID';end if;
+ if k not in ('session-revoke','member-scope','member-disable','session-limit','member-role','site-device-limit','offline-policy','member-period') or length(why) not between 3 and 500 then raise exception 'BOOTIK_ADMIN_INVALID';end if;
  select role into actor_role from bootik.bk_members where organization_id=p_org and app_id=p_app and user_id=p_actor and active;
  if k='session-revoke' then
   session_id:=(p_data->>'device_session_id')::uuid;
@@ -150,12 +150,12 @@ begin
   if not found or (target_user<>p_actor and (actor_role<>'promoteur' or exists(select 1 from bootik.bk_member_sites ms where ms.organization_id=p_org and ms.app_id=p_app and ms.user_id=target_user and not exists(select 1 from bootik.bk_member_sites mine where mine.organization_id=p_org and mine.app_id=p_app and mine.user_id=p_actor and mine.location_id=ms.location_id and not mine.activity_restricted)))) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
   select jsonb_build_object('revoked_at',revoked_at) into old_state from bootik.bk_sessions where device_session_id=session_id;
  elsif actor_role<>'promoteur' then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';
- elsif k in ('member-scope','member-disable','member-role') then
+ elsif k in ('member-scope','member-disable','member-role','member-period') then
   target_user:=(p_data->>'member_id')::uuid;
   select role into role_name from bootik.bk_members where organization_id=p_org and app_id=p_app and user_id=target_user;
   if not found or target_user=p_actor or role_name='promoteur' or not exists(select 1 from bootik.bk_member_sites where organization_id=p_org and app_id=p_app and user_id=target_user and location_id=p_site) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
   if exists(select 1 from bootik.bk_member_sites ms where ms.organization_id=p_org and ms.app_id=p_app and ms.user_id=target_user and not exists(select 1 from bootik.bk_member_sites mine where mine.organization_id=p_org and mine.app_id=p_app and mine.user_id=p_actor and mine.location_id=ms.location_id and not mine.activity_restricted)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
-  select jsonb_build_object('role',m.role,'active',m.active,'function',f.function_code,'restricted',ms.activity_restricted,'activities',(select coalesce(jsonb_agg(sc.activity_id order by sc.activity_id),'[]'::jsonb) from bootik.bk_member_activity_scopes sc where sc.organization_id=p_org and sc.app_id=p_app and sc.user_id=target_user and sc.location_id=p_site)) into old_state from bootik.bk_members m join bootik.bk_member_sites ms using(organization_id,app_id,user_id) left join bootik.bk_member_functions f using(organization_id,app_id,user_id) where m.organization_id=p_org and m.app_id=p_app and m.user_id=target_user and ms.location_id=p_site;
+  select jsonb_build_object('role',m.role,'active',m.active,'function',f.function_code,'restricted',ms.activity_restricted,'valid_from',ms.valid_from,'valid_until',ms.valid_until,'activities',(select coalesce(jsonb_agg(sc.activity_id order by sc.activity_id),'[]'::jsonb) from bootik.bk_member_activity_scopes sc where sc.organization_id=p_org and sc.app_id=p_app and sc.user_id=target_user and sc.location_id=p_site)) into old_state from bootik.bk_members m join bootik.bk_member_sites ms using(organization_id,app_id,user_id) left join bootik.bk_member_functions f using(organization_id,app_id,user_id) where m.organization_id=p_org and m.app_id=p_app and m.user_id=target_user and ms.location_id=p_site;
  end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':admin:'||p_req::text,0));
  select * into old from bootik.bk_admin_receipts where id=p_req and organization_id=p_org and app_id=p_app;
@@ -185,6 +185,11 @@ begin
   if (p_data->>'limit')::integer not between 1 and 50 then raise exception 'BOOTIK_ADMIN_INVALID';end if;
   insert into bootik.bk_security_settings(organization_id,app_id,max_member_sessions) values(p_org,p_app,(p_data->>'limit')::integer) on conflict(organization_id,app_id) do update set max_member_sessions=excluded.max_member_sessions;
   answer:=jsonb_build_object('limit',(p_data->>'limit')::integer);
+ elsif k='member-period' then
+  if not exists(select 1 from bootik.bk_member_sites where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site and not activity_restricted) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+  update bootik.bk_member_sites set valid_from=(p_data->>'valid_from')::timestamptz,valid_until=(p_data->>'valid_until')::timestamptz where organization_id=p_org and app_id=p_app and user_id=target_user and location_id=p_site;
+  update bootik.bk_sessions set revoked_at=coalesce(revoked_at,clock_timestamp()) where organization_id=p_org and app_id=p_app and user_id=target_user;
+  answer:=jsonb_build_object('member_id',target_user,'valid_from',p_data->'valid_from','valid_until',p_data->'valid_until');
  elsif k='member-disable' then
   update bootik.bk_members set active=false where organization_id=p_org and app_id=p_app and user_id=target_user;
   update bootik.bk_sessions set revoked_at=coalesce(revoked_at,clock_timestamp()) where organization_id=p_org and app_id=p_app and user_id=target_user;

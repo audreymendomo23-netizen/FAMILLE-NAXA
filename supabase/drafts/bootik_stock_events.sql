@@ -684,7 +684,7 @@ returns table(id uuid,event_code text,created_at timestamptz,read_at timestamptz
  where e.organization_id=p_org and e.app_id=p_app and (e.site_id=p_site or e.site_id is null and e.actor=p_actor)
  and (
  (e.action='new-site-device' and (e.actor=p_actor or m.role='promoteur' and not ms.activity_restricted))
- or (e.action in ('password-change','recovery-complete','family-provision-promoter-recovery','member-role','member-scope','member-disable','resource-assign') and (e.target=p_actor or m.role='promoteur' and not ms.activity_restricted))
+ or (e.action in ('password-change','recovery-complete','family-provision-promoter-recovery','member-role','member-scope','member-period','member-disable','resource-assign') and (e.target=p_actor or m.role='promoteur' and not ms.activity_restricted))
  or (e.action='approval-decide' and coalesce(pref.approval_enabled,true) and (q.actor=p_actor or m.role='promoteur' and not ms.activity_restricted))
  )
  order by e.created_at desc,e.id;
