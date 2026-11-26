@@ -23,3 +23,6 @@ Contrat exécutable ZIPPLE et tests ajoutés sous contracts/; 31 contrôles en m
 
 ### Preuve de reprise
 Run GitHub Actions 45783733195 (job 139785200082) VERT : tests Node ZIPPLE et inventaire JOBLY. Archive intégrité vérifiée, 726 fichiers candidats, 12 modules ciblés pour inspection structurelle. Audit backend complémentaire lecture seule : 11 tables NS, RLS activée, aucun SELECT anon. Ne pas appeler les tables NS depuis ZIPPLE. La matrice de droits candidate reste à valider pour les options commerciales; la CI n'est pas une recette backend ZIPPLE.
+
+### Dernière preuve
+Run 45783895660, job 139785736136 : SUCCESS, 31/31 tests Node, 12 modules JOBLY inspectés statiquement. L'inventaire JOBLY est désormais acquis; la réutilisation de code reste conditionnée à une revue ciblée lors des intégrations. Les droits optionnels et quotas ne sont pas approuvés; compatibilité backend et raccordement facturation non prouvés. N0 PARTIEL selon ses critères initiaux. Ne pas relancer les audits archive et contrat déjà verts.

@@ -42,3 +42,6 @@ Statuts : R = réutilisation ciblée après compatibilité, A = adapter, S = sp�
 | Quotas utilisateurs/appareils/sites; vidéosurveillance, IA avancée, rapports avancés, options | à arbitrer | à arbitrer | refus par défaut sans droit explicite |
 
 Cette répartition est une proposition technique de sûreté, non une nouvelle décision commerciale. L'éligibilité ne confère jamais une permission métier. La tarification et le modèle de parrainage sont testés par le contrat isolé; l'idempotence de la base et l'application des récompenses restent des tests N2.
+
+### JOBLY — preuves de sources et choix d'adaptation
+Inventaire et audit structurel 12 modules vérifiés par CI 45783895660. Reprendre concepts et fonctions ciblées : getPlan/getPrice/getEntitlements (sans catalogue recrutement), resolveActiveEntitlements (sans quotas candidature ni mode test illimité), PaymentProvider/ProviderVerification (pas de fournisseur mock en prod), session manager et offline-store (priorité NS et socle commun), adminWorkspaceCatalog et buildAnalytics360 (adapter métriques/permissions), enforceApiRateLimit, routes support/notifications; AI core et SMS Android sous revue spécifique. QR autonome non retrouvé par nom, à développer. Aucun module n'est déclaré directement compatible par la seule inspection statique.
