@@ -53,9 +53,54 @@ declare m public.zp_members;l public.zp_ingredient_lots;y public.zp_inventory_co
  update public.zp_ingredient_lots set remaining_milli=p_counted,remaining_cost=remaining_cost-c where id=l.id;return i;end $$;
 create function public.zp_procurement_snapshot(p_access text,p_site uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;begin m:=public.zp_erp_actor(p_access,p_site);
- return jsonb_build_object('suppliers',coalesce((select jsonb_agg(to_jsonb(s) order by s.name) from public.zp_suppliers s where s.org_id=m.org_id and s.site_id=p_site),'[]'::jsonb),'purchases',coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc) from (select id,supplier_id,ingredient_id,reference,qty_milli,total_xaf,received_milli,received_cost,paid_xaf,created_at from public.zp_purchases where org_id=m.org_id and site_id=p_site order by created_at desc limit 200) x),'[]'::jsonb),'debt_xaf',(select coalesce(sum(received_cost-paid_xaf),0) from public.zp_purchases where org_id=m.org_id and site_id=p_site),'loss_cost_xaf',(select coalesce(sum(loss_cost),0) from public.zp_inventory_counts where org_id=m.org_id and site_id=p_site));end $$;
+ return jsonb_build_object('suppliers',coalesce((select jsonb_agg(to_jsonb(s) order by s.name) from public.zp_suppliers s where s.org_id=m.org_id and s.site_id=p_site),'[]'::jsonb),'purchases',coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc) from (select id,supplier_id,ingredient_id,reference,qty_milli,total_xaf,received_milli,received_cost,paid_xaf,created_at from public.zp_purchases where org_id=m.org_id and site_id=p_site order by created_at desc limit 200) x),'[]'::jsonb),'batches',coalesce((select jsonb_agg(jsonb_build_object('id',b.id,'reference',b.reference,'purchase_ids',b.purchase_ids,'supplier_id',b.supplier_id,'total_xaf',(select coalesce(sum(p.total_xaf),0) from public.zp_purchases p where p.id=any(b.purchase_ids) and p.site_id=b.site_id and p.org_id=b.org_id),'received_cost',(select coalesce(sum(p.received_cost),0) from public.zp_purchases p where p.id=any(b.purchase_ids) and p.site_id=b.site_id and p.org_id=b.org_id),'paid_xaf',(select coalesce(sum(p.paid_xaf),0) from public.zp_purchases p where p.id=any(b.purchase_ids) and p.site_id=b.site_id and p.org_id=b.org_id)) order by b.created_at desc) from (select * from public.zp_purchase_batches where org_id=m.org_id and site_id=p_site order by created_at desc limit 200)b),'[]'::jsonb),'debt_xaf',(select coalesce(sum(received_cost-paid_xaf),0) from public.zp_purchases where org_id=m.org_id and site_id=p_site),'loss_cost_xaf',(select coalesce(sum(loss_cost),0) from public.zp_inventory_counts where org_id=m.org_id and site_id=p_site));end $$;
 do $$ declare t text;f record;begin
  foreach t in array array['zp_suppliers','zp_purchases','zp_purchase_receipts','zp_supplier_payments','zp_inventory_counts'] loop execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from public,anon,authenticated',t);execute format('grant select,insert,update,delete on public.%I to service_role',t);end loop;
  for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_supplier_add','zp_purchase_create','zp_purchase_receive','zp_supplier_pay','zp_count_lot','zp_procurement_snapshot') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;
 end $$;
+
+-- Bulk 3: a multi-line purchase reuses the existing atomic per-line receipt, lot,
+-- supplier debt and payment primitives. No duplicate stock or financial engine.
+create table public.zp_purchase_batches(
+ id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,
+ supplier_id uuid not null,member_id uuid not null,request_id uuid not null,
+ reference text not null check(length(trim(reference)) between 1 and 100),
+ lines jsonb not null,purchase_ids uuid[] not null default '{}',created_at timestamptz not null default now(),
+ unique(member_id,request_id),unique(site_id,reference),
+ foreign key(site_id,org_id) references public.zp_site_modes(site_id,org_id),
+ foreign key(supplier_id,org_id,site_id) references public.zp_suppliers(id,org_id,site_id),
+ foreign key(member_id,org_id) references public.zp_members(id,org_id));
+create function public.zp_purchase_batch_create(p_access text,p_site uuid,p_supplier uuid,p_request uuid,p_reference text,p_lines jsonb)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $
+declare m public.zp_members;x public.zp_purchase_batches;line jsonb;ids uuid[]:='{}';n int:=0;batch_id uuid;
+begin
+ m:=public.zp_erp_actor(p_access,p_site);
+ perform 1 from public.zp_site_modes where site_id=p_site for update;
+ select * into x from public.zp_purchase_batches where member_id=m.id and request_id=p_request;
+ if x.id is not null then
+  if (x.site_id,x.supplier_id,x.reference,x.lines) is distinct from (p_site,p_supplier,trim(p_reference),p_lines) then raise exception 'IDEMPOTENCY_CONFLICT';end if;
+  return jsonb_build_object('id',x.id,'purchase_ids',x.purchase_ids);
+ end if;
+ if p_lines is null or jsonb_typeof(p_lines)<>'array' then raise exception 'INVALID_PURCHASE_LINES';end if;
+ if jsonb_array_length(p_lines) not between 2 and 50 then raise exception 'INVALID_PURCHASE_LINES';end if;
+ if not exists(select 1 from public.zp_suppliers where id=p_supplier and org_id=m.org_id and site_id=p_site) then raise exception 'DENIED';end if;
+ if exists(select 1 from public.zp_purchases where site_id=p_site and reference=trim(p_reference)) then raise exception 'INVALID_PURCHASE_LINES';end if;
+ insert into public.zp_purchase_batches(org_id,site_id,supplier_id,member_id,request_id,reference,lines)
+ values(m.org_id,p_site,p_supplier,m.id,p_request,trim(p_reference),p_lines) returning id into batch_id;
+ for line in select value from jsonb_array_elements(p_lines) loop
+  if jsonb_typeof(line)<>'object' or not (line ?& array['ingredient_id','qty_milli','total_xaf']) then raise exception 'INVALID_PURCHASE_LINES';end if;
+  if coalesce(line->>'qty_milli','') !~ '^[1-9][0-9]{0,9} or coalesce(line->>'total_xaf','') !~ '^[1-9][0-9]{0,9} then raise exception 'INVALID_PURCHASE_LINES';end if;
+  if (line->>'qty_milli')::bigint>1000000000 or (line->>'total_xaf')::bigint>2147483647 then raise exception 'INVALID_PURCHASE_LINES';end if;
+  n:=n+1;
+  ids:=array_append(ids,public.zp_purchase_create(p_access,p_site,p_supplier,(line->>'ingredient_id')::uuid,gen_random_uuid(),'ML-'||batch_id::text||'-'||n::text,(line->>'qty_milli')::bigint,(line->>'total_xaf')::bigint));
+ end loop;
+ update public.zp_purchase_batches set purchase_ids=ids where id=batch_id;
+ return jsonb_build_object('id',batch_id,'purchase_ids',ids);
+end $;
+alter table public.zp_purchase_batches enable row level security;
+revoke all on public.zp_purchase_batches from public,anon,authenticated;
+grant select,insert,update,delete on public.zp_purchase_batches to service_role;
+revoke all on function public.zp_purchase_batch_create(text,uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+grant execute on function public.zp_purchase_batch_create(text,uuid,uuid,uuid,text,jsonb) to service_role;
+
 commit;

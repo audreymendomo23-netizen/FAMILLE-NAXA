@@ -6,3 +6,12 @@ test("order ignores client pricing, rejects noninteger qty and delivery",async()
 
 test("guest open must pass persisted guard and never creates session on refusal",async()=>{const calls=[];const handler=createBusinessGateway({origins:[origin],allowGuestOpen:true,rpc:async(name,args)=>{calls.push({name,args});return false}});const result=await handler(request("guest_open",{qr:raw},""));assert.equal(result.status,429);assert.deepEqual(calls,[{name:"zp_guest_open_guard",args:{p_qr_hash:digest}}]);});
 test("guest open uses opaque tokens and separate guard",async()=>{const calls=[];const handler=createBusinessGateway({origins:[origin],allowGuestOpen:true,rpc:async(name,args)=>{calls.push({name,args});return name==="zp_guest_open_guard"?true:name==="zp_guest_menu"?{site_id:site}:randomUUID()}});const response=await handler(request("guest_open",{qr:raw},""));assert.equal(response.status,200);const value=await response.json();assert.match(value.guest_token,/^[0-9a-f]{64}$/);assert.equal(calls[1].args.p_guest_hash,createHash("sha256").update(value.guest_token).digest("hex"));assert.equal(calls[0].args.p_qr_hash,digest);assert.equal(calls[2].name,"zp_guest_menu");assert.equal(response.headers.get("cache-control"),"no-store");});
+
+test("multi-line purchase gateway rejects invalid quantities and passes normalized lines to existing scoped RPC",async()=>{
+ let seen;const handler=createBusinessGateway({origins:[origin],rpc:async(name,args)=>{seen={name,args};return {id:randomUUID(),purchase_ids:[randomUUID(),randomUUID()]}}});
+ const item=randomUUID(),line={ingredient_id:item,qty_milli:1000,total_xaf:300};
+ const body={supplier_id:randomUUID(),request_id:randomUUID(),reference:"BC-2",lines:[line,{...line,total_xaf:400}]};
+ assert.equal((await handler(request("purchase_batch_create",body))).status,200);assert.equal(seen.name,"zp_purchase_batch_create");assert.deepEqual(seen.args.p_lines,body.lines);assert.equal(seen.args.p_access,digest);
+ assert.equal((await handler(request("purchase_batch_create",{...body,lines:[line]}))).status,400);
+ assert.equal((await handler(request("purchase_batch_create",{...body,lines:[line,{...line,qty_milli:0}]}))).status,400);
+});

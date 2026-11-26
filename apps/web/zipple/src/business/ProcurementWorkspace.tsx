@@ -10,6 +10,7 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  const [data,D]=useState<any>(null),[busy,B]=useState(false),[error,E]=useState("");
  const [name,N]=useState(""),[phone,P]=useState(""),[wa,W]=useState(""),[terms,TE]=useState("30");
  const [supplier,SU]=useState(""),[ingredient,I]=useState(""),[ref,R]=useState(""),[quantity,Q]=useState(""),[total,TO]=useState("");
+ const [draftLines,DL]=useState<{ingredient_id:string;qty_milli:number;total_xaf:number}[]>([]);
  const [purchase,PU]=useState(""),[received,RE]=useState(""),[lot,L]=useState(""),[expiry,EX]=useState("");
  const [payment,PA]=useState(""),[method,ME]=useState("bank"),[paymentRef,PR]=useState("");
  const [lotId,LI]=useState(""),[count,CO]=useState(""),[reason,RS]=useState("");
@@ -19,6 +20,8 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  async function run(fn:()=>Promise<void>){if(disabled||busy)return;B(true);E("");try{await fn()}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}
  useEffect(()=>{let live=true;call("procurement_snapshot").then(v=>{if(live)D(v)}).catch(()=>{if(live)E("OPERATION_UNAVAILABLE")});return()=>{live=false}},[]);
  const suppliers:any[]=data?.suppliers??[],purchases:any[]=data?.purchases??[];const selected=purchases.find(x=>x.id===purchase),selectedLot=lots.find(x=>x.id===lotId);
+ const batches:any[]=data?.batches??[];
+ function purchaseLabel(x:any){const b=batches.find(g=>g.purchase_ids.includes(x.id));return b?b.reference+" / "+(b.purchase_ids.indexOf(x.id)+1)+" · "+(ingredients.find(i=>i.id===x.ingredient_id)?.name??"") :x.reference}
  const lock=disabled||busy;
  return <section>
  <h4>{t("Fournisseurs, achats et inventaires","Suppliers, purchases and inventory counts")}</h4>
@@ -37,9 +40,12 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  <label>{t("Référence de commande","Purchase reference")}<input value={ref} onChange={e=>R(e.target.value)}/></label>
  <label>{t("Quantité commandée","Ordered quantity")}<input inputMode="decimal" value={quantity} onChange={e=>Q(e.target.value)}/></label>
  <label>{t("Coût total commandé FCFA","Purchase total XAF")}<input inputMode="numeric" value={total} onChange={e=>TO(e.target.value)}/></label>
- <button disabled={lock||!supplier||!ingredient||!ref||!quantity||!total} onClick={()=>run(async()=>{const id=await idem("purchase_create",{supplier_id:supplier,ingredient_id:ingredient,reference:ref,qty_milli:milli(quantity),total_xaf:amount(total)});PU(id);R("");Q("");TO("");await load()})}>{t("Créer la commande","Create purchase")}</button>
+ <button disabled={lock||!ingredient||!quantity||!total||draftLines.length>=49} onClick={()=>{try{const q=milli(quantity),v=amount(total);if(q<1||q>1000000000||v<1)throw Error("INVALID_QUANTITY");DL([...draftLines,{ingredient_id:ingredient,qty_milli:q,total_xaf:v}]);I("");Q("");TO("");E("")}catch(e){E(e instanceof Error?e.message:"INVALID_QUANTITY")}}}>{t("Ajouter une autre ligne","Add another line")}</button>
+ {draftLines.map((x,i)=><p key={i}>{ingredients.find(v=>v.id===x.ingredient_id)?.name} · {qty(x.qty_milli)} · {money(x.total_xaf)} <button disabled={lock} onClick={()=>DL(draftLines.filter((_,j)=>j!==i))}>{t("Retirer","Remove")} {i+1}</button></p>)}
+ <button disabled={lock||!supplier||!ingredient||!ref||!quantity||!total} onClick={()=>run(async()=>{const line={ingredient_id:ingredient,qty_milli:milli(quantity),total_xaf:amount(total)};if(draftLines.length){const group=await idem("purchase_batch_create",{supplier_id:supplier,reference:ref,lines:[...draftLines,line]});PU(group.purchase_ids[0]);DL([])}else{const id=await idem("purchase_create",{supplier_id:supplier,reference:ref,...line});PU(id)}R("");Q("");TO("");await load()})}>{t("Créer la commande","Create purchase")}</button>
+ {batches.map(b=><p key={b.id}>{b.reference} · {b.purchase_ids.length} {t("lignes","lines")} · {money(b.total_xaf)} · {t("Dette","Debt")} : {money(b.received_cost-b.paid_xaf)}</p>)}
  <h4>{t("Réception et règlement","Receipt and payment")}</h4>
- <label>{t("Commande à traiter","Purchase to process")}<select aria-label={t("Commande à traiter","Purchase to process")} value={purchase} onChange={e=>PU(e.target.value)}><option value="">—</option>{purchases.map(x=><option key={x.id} value={x.id}>{x.reference}</option>)}</select></label>
+ <label>{t("Commande à traiter","Purchase to process")}<select aria-label={t("Commande à traiter","Purchase to process")} value={purchase} onChange={e=>PU(e.target.value)}><option value="">—</option>{purchases.map(x=><option key={x.id} value={x.id}>{purchaseLabel(x)}</option>)}</select></label>
  {selected&&<p>{t("Reçu","Received")} : {qty(selected.received_milli)}/{qty(selected.qty_milli)} · {t("Reste à régler","Outstanding")} : {money(selected.received_cost-selected.paid_xaf)}</p>}
  <label>{t("Quantité réceptionnée","Quantity received")}<input inputMode="decimal" value={received} onChange={e=>RE(e.target.value)}/></label>
  <label>{t("Lot de réception","Receipt lot")}<input value={lot} onChange={e=>L(e.target.value)}/></label>
