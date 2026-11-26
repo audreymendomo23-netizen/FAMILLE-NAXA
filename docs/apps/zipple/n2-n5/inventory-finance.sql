@@ -27,6 +27,51 @@ declare m public.zp_members;l public.zp_ingredient_lots;i uuid;begin m:=public.z
  if not exists(select 1 from public.zp_ingredients where id=p_ingredient and org_id=m.org_id and site_id=p_site) then raise exception 'DENIED';end if;
  insert into public.zp_ingredient_lots(org_id,site_id,ingredient_id,member_id,request_id,lot_label,supplier,received_milli,remaining_milli,received_cost,remaining_cost,expires_on) values(m.org_id,p_site,p_ingredient,m.id,p_request,trim(p_label),trim(p_supplier),p_qty,p_qty,p_cost,p_cost,p_expires) returning id into i;return i;end $$;
 -- Recipe immutable in this initial version. Never silently replace a recipe or mix historical cost.
+create table public.zp_unit_conversions(
+ id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,ingredient_id uuid not null,
+ label text not null check(length(label) between 1 and 40),base_milli_per_unit bigint not null check(base_milli_per_unit between 1 and 1000000000),
+ member_id uuid not null,request_id uuid not null,created_at timestamptz not null default now(),
+ unique(ingredient_id,label),unique(member_id,request_id),unique(id,org_id,site_id),
+ foreign key(ingredient_id,org_id,site_id) references public.zp_ingredients(id,org_id,site_id),
+ foreign key(member_id,org_id) references public.zp_members(id,org_id));
+create table public.zp_converted_receipts(
+ id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,conversion_id uuid not null,lot_id uuid not null unique,
+ member_id uuid not null,request_id uuid not null,input_milli bigint not null check(input_milli>0),base_milli bigint not null check(base_milli>0),
+ unique(member_id,request_id),foreign key(conversion_id,org_id,site_id) references public.zp_unit_conversions(id,org_id,site_id),
+ foreign key(lot_id,org_id,site_id) references public.zp_ingredient_lots(id,org_id,site_id),
+ foreign key(member_id,org_id) references public.zp_members(id,org_id));
+create function public.zp_unit_conversion_add(p_access text,p_site uuid,p_ingredient uuid,p_request uuid,p_label text,p_ratio bigint) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
+declare m public.zp_members;old public.zp_unit_conversions;i uuid;lbl text:=lower(trim(coalesce(p_label,'')));begin
+ m:=public.zp_erp_actor(p_access,p_site);
+ perform 1 from public.zp_site_modes where site_id=p_site for update;
+ select * into old from public.zp_unit_conversions where member_id=m.id and request_id=p_request;
+ if old.id is not null then
+  if (old.site_id,old.ingredient_id,old.label,old.base_milli_per_unit) is distinct from (p_site,p_ingredient,lbl,p_ratio) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return old.id;
+ end if;
+ if not exists(select 1 from public.zp_ingredients where id=p_ingredient and org_id=m.org_id and site_id=p_site) then raise exception 'DENIED';end if;
+ if p_request is null or length(lbl) not between 1 and 40 or p_ratio is null or p_ratio not between 1 and 1000000000 or exists(select 1 from public.zp_ingredients where id=p_ingredient and lower(trim(unit))=lbl) then raise exception 'INVALID_UNIT_CONVERSION';end if;
+ if exists(select 1 from public.zp_unit_conversions where ingredient_id=p_ingredient and label=lbl) then raise exception 'CONVERSION_ALREADY_DEFINED';end if;
+ insert into public.zp_unit_conversions(org_id,site_id,ingredient_id,label,base_milli_per_unit,member_id,request_id) values(m.org_id,p_site,p_ingredient,lbl,p_ratio,m.id,p_request) returning id into i;return i;
+end $$;
+create function public.zp_receive_converted_lot(p_access text,p_site uuid,p_ingredient uuid,p_conversion uuid,p_request uuid,p_label text,p_supplier text,p_qty bigint,p_cost bigint,p_expires date) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
+declare m public.zp_members;c public.zp_unit_conversions;old public.zp_converted_receipts;l uuid;q bigint;product numeric;begin
+ m:=public.zp_erp_actor(p_access,p_site);
+ perform 1 from public.zp_site_modes where site_id=p_site for update;
+ select * into c from public.zp_unit_conversions where id=p_conversion and ingredient_id=p_ingredient and org_id=m.org_id and site_id=p_site;
+ if c.id is null then raise exception 'DENIED';end if;
+ if p_request is null or p_qty is null or p_qty not between 1 and 1000000000 then raise exception 'INVALID_UNIT_CONVERSION';end if;
+ product:=p_qty::numeric*c.base_milli_per_unit;
+ if mod(product,1000)<>0 or product/1000 not between 1 and 1000000000 then raise exception 'CONVERSION_PRECISION_OR_RANGE';end if;
+ q:=(product/1000)::bigint;
+ select * into old from public.zp_converted_receipts where member_id=m.id and request_id=p_request;
+ if old.id is not null then
+  if (old.site_id,old.conversion_id,old.input_milli) is distinct from (p_site,p_conversion,p_qty) then raise exception 'IDEMPOTENCY_CONFLICT';end if;
+ elsif exists(select 1 from public.zp_ingredient_lots where member_id=m.id and request_id=p_request) then raise exception 'IDEMPOTENCY_CONFLICT';end if;
+ l:=public.zp_receive_lot(p_access,p_site,p_ingredient,p_request,p_label,p_supplier,q,p_cost,p_expires);
+ if old.id is not null then return l;end if;
+ insert into public.zp_converted_receipts(org_id,site_id,conversion_id,lot_id,member_id,request_id,input_milli,base_milli) values(m.org_id,p_site,c.id,l,m.id,p_request,p_qty,q);
+ return l;
+end $$;
 create table public.zp_recipe_versions(
  id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,item_id uuid not null,
  version int not null check(version>0),components jsonb not null,reason text not null check(length(trim(reason)) between 5 and 500),
@@ -132,11 +177,11 @@ declare m public.zp_members;ingredients jsonb;lots jsonb;batches jsonb;expenses 
  select coalesce(jsonb_agg(to_jsonb(b) order by b.created_at desc),'[]'::jsonb) into batches from (select id,item_id,servings,cost_xaf,recipe_version_id,created_at from public.zp_production_batches where org_id=m.org_id and site_id=p_site order by created_at desc limit 100) b;
  select coalesce(jsonb_agg(to_jsonb(e) order by e.created_at desc),'[]'::jsonb) into expenses from (select id,category,label,amount_xaf,method,reference,expense_date,created_at from public.zp_expenses where org_id=m.org_id and site_id=p_site order by created_at desc limit 100) e;
  select coalesce(jsonb_agg(to_jsonb(c)),'[]'::jsonb) into recipes from (select item_id,ingredient_id,qty_milli from public.zp_recipe_components where org_id=m.org_id and site_id=p_site) c;
- return jsonb_build_object('ingredients',ingredients,'lots',lots,'batches',batches,'expenses',expenses,'recipes',recipes,'recipe_versions',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'item_id',v.item_id,'version',v.version,'components',v.components,'reason',v.reason,'created_at',v.created_at) order by v.version desc) from public.zp_recipe_versions v where v.org_id=m.org_id and v.site_id=p_site),'[]'::jsonb),'recorded_expenses_xaf',(select coalesce(sum(amount_xaf),0) from public.zp_expenses where org_id=m.org_id and site_id=p_site),'recorded_sales_xaf',(select coalesce(sum(amount_xaf),0) from public.zp_cash_receipts where org_id=m.org_id and site_id=p_site),'recorded_cost_xaf',case when exists(select 1 from public.zp_cash_receipts r where r.org_id=m.org_id and r.site_id=p_site)
+ return jsonb_build_object('ingredients',ingredients,'lots',lots,'batches',batches,'expenses',expenses,'recipes',recipes,'conversions',coalesce((select jsonb_agg(jsonb_build_object('id',c.id,'ingredient_id',c.ingredient_id,'label',c.label,'base_milli_per_unit',c.base_milli_per_unit) order by c.label) from public.zp_unit_conversions c where c.org_id=m.org_id and c.site_id=p_site),'[]'::jsonb),'recipe_versions',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'item_id',v.item_id,'version',v.version,'components',v.components,'reason',v.reason,'created_at',v.created_at) order by v.version desc) from public.zp_recipe_versions v where v.org_id=m.org_id and v.site_id=p_site),'[]'::jsonb),'recorded_expenses_xaf',(select coalesce(sum(amount_xaf),0) from public.zp_expenses where org_id=m.org_id and site_id=p_site),'recorded_sales_xaf',(select coalesce(sum(amount_xaf),0) from public.zp_cash_receipts where org_id=m.org_id and site_id=p_site),'recorded_cost_xaf',case when exists(select 1 from public.zp_cash_receipts r where r.org_id=m.org_id and r.site_id=p_site)
  and not exists(select 1 from public.zp_cash_receipts r join public.zp_order_lines l on l.order_id=r.order_id left join public.zp_sale_costs c on c.receipt_id=r.id and c.item_id=l.item_id where r.org_id=m.org_id and r.site_id=p_site and c.cost_xaf is null)
  then (select sum(cost_xaf) from public.zp_sale_costs where org_id=m.org_id and site_id=p_site) else null end,'accounting_status','mapping_required');end $$;
 do $$ declare t text;f record;begin
- foreach t in array array['zp_ingredients','zp_ingredient_lots','zp_recipe_components','zp_recipe_versions','zp_production_batches','zp_production_consumption','zp_sale_costs','zp_sale_cost_allocations','zp_expenses'] loop execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from public,anon,authenticated',t);execute format('grant select,insert,update,delete on public.%I to service_role',t);end loop;
- for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_erp_actor','zp_add_ingredient','zp_receive_lot','zp_define_recipe','zp_revise_recipe','zp_produce','zp_allocate_sale_cost','zp_record_expense','zp_erp_snapshot') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;
+ foreach t in array array['zp_ingredients','zp_ingredient_lots','zp_recipe_components','zp_recipe_versions','zp_unit_conversions','zp_converted_receipts','zp_production_batches','zp_production_consumption','zp_sale_costs','zp_sale_cost_allocations','zp_expenses'] loop execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from public,anon,authenticated',t);execute format('grant select,insert,update,delete on public.%I to service_role',t);end loop;
+ for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_erp_actor','zp_add_ingredient','zp_receive_lot','zp_define_recipe','zp_revise_recipe','zp_unit_conversion_add','zp_receive_converted_lot','zp_produce','zp_allocate_sale_cost','zp_record_expense','zp_erp_snapshot') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;
 end $$;
 commit;

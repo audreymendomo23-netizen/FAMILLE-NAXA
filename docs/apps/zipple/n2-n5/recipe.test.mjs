@@ -351,6 +351,18 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  await assert.rejects(revise(uid(),2),/RECIPE_REQUIRES_EMPTY_ITEM/);
  await assert.rejects(scalar("select zp_revise_recipe($1,$2,$3,$4,2,$5,'Accès externe')",[a.access,b.site,versionedItem,uid(),JSON.stringify(versionNext)]),/DENIED/);
  console.log("ZIPPLE_BULK3_RECIPE_VERSION_HISTORY_PASS");
+ const convKey=uid(),addConversion=(ratio=1,key=convKey)=>scalar("select zp_unit_conversion_add($1,$2,$3,$4,'g',$5)",[b.access,b.site,ingredient,key,ratio]);
+ const conv=await addConversion();assert.equal(await addConversion(),conv);
+ await assert.rejects(addConversion(2),/IDEMPOTENCY_CONFLICT/);
+ await assert.rejects(addConversion(1,uid()),/CONVERSION_ALREADY_DEFINED/);
+ const convReceiptKey=uid(),convertedReceipt=(qty=500000,key=convReceiptKey)=>scalar("select zp_receive_converted_lot($1,$2,$3,$4,$5,'GRAMMES','Fournisseur test',$6,250,null)",[b.access,b.site,ingredient,conv,key,qty]);
+ const convLot=await convertedReceipt();assert.equal(await convertedReceipt(),convLot);
+ assert.equal(Number(await scalar("select received_milli from zp_ingredient_lots where id=$1",[convLot])),500);
+ assert.equal(Number(await scalar("select received_cost from zp_ingredient_lots where id=$1",[convLot])),250);
+ await assert.rejects(convertedReceipt(501000),/IDEMPOTENCY_CONFLICT/);
+ await assert.rejects(convertedReceipt(1,uid()),/CONVERSION_PRECISION_OR_RANGE/);
+ await assert.rejects(scalar("select zp_receive_converted_lot($1,$2,$3,$4,$5,'GRAMMES','Fournisseur test',1000,1,null)",[a.access,a.site,ingredient,conv,uid()]),/DENIED/);
+ console.log("ZIPPLE_BULK3_EXACT_UNIT_CONVERSION_PASS");
  const issueEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='issued'",[account]);
  const returnEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='returned'",[account]);
  const lostEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='lost'",[account]);
