@@ -63,6 +63,7 @@ declare m public.zp_members;c uuid;begin m:=public.zp_business_actor(p_access,p_
 create function public.zp_record_sale(p_access text,p_site uuid,p_cash uuid,p_order uuid,p_request uuid,p_method text,p_amount bigint,p_ref text) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;c public.zp_cash_sessions;o public.zp_orders;r public.zp_cash_receipts;rid uuid;begin
  m:=public.zp_business_actor(p_access,p_site);if m.role_code not in ('promoteur','manager') then raise exception 'DENIED';end if;
+ perform 1 from public.zp_site_modes where site_id=p_site for update;
  select * into c from public.zp_cash_sessions where id=p_cash and site_id=p_site and org_id=m.org_id for update;if c.id is null then raise exception 'DENIED';end if;
  select * into r from public.zp_cash_receipts where member_id=m.id and request_id=p_request;
  if r.id is not null then if (r.cash_id,r.order_id,r.method,r.amount_xaf,r.reference) is distinct from (p_cash,p_order,p_method,p_amount,p_ref) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return r.id;end if;

@@ -83,6 +83,16 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal(Number(await scalar("select remaining_milli from zp_ingredient_lots where id=$1",[lot])),1000);
  assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[producedItem]),4);
  await assert.rejects(scalar("select zp_erp_snapshot($1,$2)",[a.access,b.site]),/DENIED/);
+ const producedSale=await order(b,"counter",[{item_id:producedItem,qty:3}]);
+ for(const state of ["preparing","ready","served"])await scalar("select zp_advance_line($1,$2,$3,$4,$5)",[b.access,b.site,producedSale.id,producedItem,state]);
+ const cashB=await scalar("select zp_open_cash($1,$2,0)",[b.access,b.site]),saleKey=uid();
+ const settle=()=>scalar("select zp_record_sale($1,$2,$3,$4,$5,'cash',3600,null)",[b.access,b.site,cashB,producedSale.id,saleKey]);
+ const receiptB=await settle();assert.equal(await settle(),receiptB);
+ assert.equal(Number(await scalar("select cost_xaf from zp_sale_costs where receipt_id=$1",[receiptB])),990);
+ assert.equal(Number(await scalar("select remaining_cost_xaf from zp_production_batches where id=$1",[batch.id])),330);
+ const soldSnap=await scalar("select zp_erp_snapshot($1,$2)",[b.access,b.site]);assert.equal(soldSnap.recorded_sales_xaf,3600);assert.equal(soldSnap.recorded_cost_xaf,990);
+ assert.equal((await scalar("select zp_erp_snapshot($1,$2)",[a.access,a.site])).recorded_cost_xaf,null);
+ console.log("ZIPPLE_N5_COST_OF_RECORDED_SALE_PASS");
  const expKey=uid(),expense=()=>scalar("select zp_record_expense($1,$2,$3,'rent','Loyer',2500,'bank','test-ref',(now() at time zone 'Africa/Douala')::date)",[b.access,b.site,expKey]);
  assert.equal(await expense(),await expense());
  const erp=await scalar("select zp_erp_snapshot($1,$2)",[b.access,b.site]);assert.equal(erp.recorded_expenses_xaf,2500);assert.equal(erp.accounting_status,"mapping_required");assert.equal(erp.ingredients.length,2);
