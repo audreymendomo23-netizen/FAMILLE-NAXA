@@ -1,0 +1,38 @@
+name: ZIPPLE N1 — SQL-backed integration
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/apps/zipple/n1/postgres-*"
+      - ".github/workflows/zipple-n1-integration.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sql-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local_test_only
+          POSTGRES_DB: zipple_n1
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d zipple_n1"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      DATABASE_URL: postgresql://postgres:local_test_only@127.0.0.1:5432/zipple_n1
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple_n1 -v ON_ERROR_STOP=1 < docs/apps/zipple/n1/postgres-fixture.sql
+      - run: npm install --no-save --ignore-scripts pg@8.13.3
+      - run: node --test docs/apps/zipple/n1/postgres-integration.test.mjs
