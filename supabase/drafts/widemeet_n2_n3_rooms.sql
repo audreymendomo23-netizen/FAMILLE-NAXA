@@ -1,0 +1,98 @@
+-- WideMeet N2/N3 transactional room storage candidate. No media/provider or payment activation.
+begin;
+create table public.wm_room_entitlements(
+ workspace_id uuid primary key references public.wm_workspaces(id),
+ plan text not null check(plan in ('access','premium')),
+ valid_until timestamptz not null,
+ enabled boolean not null default false
+);
+create table public.wm_rooms(
+ id uuid primary key,
+ workspace_id uuid not null references public.wm_workspaces(id),
+ host_id uuid not null,
+ revision bigint not null check(revision>=1),
+ state jsonb not null check(jsonb_typeof(state)='object'),
+ foreign key(host_id,workspace_id) references public.wm_memberships(account_id,workspace_id),
+ check(state->>'id'=id::text and state->>'workspaceId'=workspace_id::text and state->>'hostId'=host_id::text and (state->>'revision')::bigint=revision),
+ check(octet_length(state::text)<=1048576)
+);
+create index wm_rooms_workspace on public.wm_rooms(workspace_id);
+alter table public.wm_room_entitlements enable row level security;
+alter table public.wm_rooms enable row level security;
+revoke all on public.wm_room_entitlements,public.wm_rooms from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_room_entitlements,public.wm_rooms to service_role;
+-- Trusted server context, not caller-provided role or plan. No client execution grant.
+create function public.wm_room_actor(p_hash text)
+returns table(account_id uuid,workspace_id uuid,role text,plan text,entitlement_end_ms bigint)
+language sql security invoker stable set search_path=pg_catalog,public as $wm$
+ select s.account_id,s.workspace_id,m.role,e.plan,floor(extract(epoch from e.valid_until)*1000)::bigint
+ from public.wm_session_context(p_hash) s
+ join public.wm_memberships m on m.account_id=s.account_id and m.workspace_id=s.workspace_id and m.enabled
+ join public.wm_room_entitlements e on e.workspace_id=s.workspace_id and e.enabled and e.valid_until>now()
+ where not s.password_change_required
+$wm$;
+revoke all on function public.wm_room_actor(text) from public,anon,authenticated;
+grant execute on function public.wm_room_actor(text) to service_role;
+-- Lock workspace entitlement and current account, membership and session before write.
+-- Ordering account -> workspace -> membership -> device matches identity account lock.
+create function public.wm_lock_room_actor(p_hash text)
+returns table(account_id uuid,workspace_id uuid,role text,plan text,entitlement_end_ms bigint)
+language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a uuid; w uuid;
+begin
+ select s.account_id,s.workspace_id into a,w from public.wm_device_sessions s where s.token_hash=p_hash;
+ if not found then return;end if;
+ perform 1 from public.wm_accounts x where x.id=a and x.enabled and not x.password_change_required for share;
+ if not found then return;end if;
+ perform 1 from public.wm_workspaces x where x.id=w and x.enabled for share;
+ if not found then return;end if;
+ perform 1 from public.wm_memberships x where x.account_id=a and x.workspace_id=w and x.enabled for share;
+ if not found then return;end if;
+ perform 1 from public.wm_device_sessions x where x.token_hash=p_hash and x.revoked_at is null and x.expires_at>clock_timestamp() for share;
+ if not found then return;end if;
+ perform 1 from public.wm_room_entitlements x where x.workspace_id=w and x.enabled and x.valid_until>clock_timestamp() for share;
+ if not found then return;end if;
+ return query select c.account_id,c.workspace_id,c.role,c.plan,c.entitlement_end_ms from public.wm_room_actor(p_hash) c;
+end $wm$;
+revoke all on function public.wm_lock_room_actor(text) from public,anon,authenticated;
+grant execute on function public.wm_lock_room_actor(text) to service_role;
+create function public.wm_room_create(p_hash text,p_state jsonb)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a record; rid uuid;
+begin
+ select * into a from public.wm_lock_room_actor(p_hash);
+ if not found or a.role not in ('owner','promoteur','manager') then return false;end if;
+ if p_state is null or p_state->>'workspaceId' is distinct from a.workspace_id::text or p_state->>'hostId' is distinct from a.account_id::text or p_state->>'status' is distinct from 'scheduled' or p_state->>'revision' is distinct from '1' or jsonb_typeof(p_state->'participants') is distinct from 'array' or (p_state->>'hardEndMs')::bigint>a.entitlement_end_ms then return false;end if;
+ if not exists(select 1 from jsonb_array_elements(p_state->'participants') p where p->>'memberId'=a.account_id::text and p->>'response'='accepted') then return false;end if;
+ if exists(select 1 from jsonb_array_elements(p_state->'participants') p where not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.enabled and m.account_id::text=p->>'memberId')) then return false;end if;
+ rid:=(p_state->>'id')::uuid;
+ insert into public.wm_rooms(id,workspace_id,host_id,revision,state) values(rid,a.workspace_id,a.account_id,1,p_state) on conflict(id) do nothing;
+ return found;
+end $wm$;
+revoke all on function public.wm_room_create(text,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_room_create(text,jsonb) to service_role;
+-- Raw state is private service-to-service only; gateway must project permitted fields.
+create function public.wm_room_read(p_hash text,p_room uuid)
+returns jsonb language sql security invoker stable set search_path=pg_catalog,public as $wm$
+ select r.state from public.wm_rooms r join public.wm_room_actor(p_hash) a on a.workspace_id=r.workspace_id
+ where r.id=p_room and exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'memberId'=a.account_id::text and p->>'excluded'='false')
+$wm$;
+revoke all on function public.wm_room_read(text,uuid) from public,anon,authenticated;
+grant execute on function public.wm_room_read(text,uuid) to service_role;
+-- The trusted gateway calls domain policy before CAS. SQL rejects scope, revoked session and stale version.
+create function public.wm_room_write(p_hash text,p_room uuid,p_expected bigint,p_state jsonb)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a record; old public.wm_rooms%rowtype;
+begin
+ select * into a from public.wm_lock_room_actor(p_hash);
+ if not found then return false;end if;
+ select * into old from public.wm_rooms r where r.id=p_room and r.workspace_id=a.workspace_id for update;
+ if not found or old.revision<>p_expected or not exists(select 1 from jsonb_array_elements(old.state->'participants') p where p->>'memberId'=a.account_id::text and p->>'excluded'='false') then return false;end if;
+ if p_state is null or p_state->>'id' is distinct from old.id::text or p_state->>'workspaceId' is distinct from old.workspace_id::text or p_state->>'hostId' is distinct from old.host_id::text or (p_state->>'revision')::bigint is distinct from p_expected+1 or jsonb_typeof(p_state->'participants') is distinct from 'array' then return false;end if;
+ if exists(select 1 from jsonb_array_elements(p_state->'participants') p where not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.account_id::text=p->>'memberId') and p->>'excluded' is distinct from 'true') then return false;end if;
+ update public.wm_rooms set revision=p_expected+1,state=p_state where id=p_room and revision=p_expected;
+ return found;
+end $wm$;
+revoke all on function public.wm_room_write(text,uuid,bigint,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_room_write(text,uuid,bigint,jsonb) to service_role;
+commit;
