@@ -1,4 +1,4 @@
-name: WideMeet — N0/N1 isolated gate
+name: WideMeet — N0–N3 isolated gate
 on:
   push:
     branches: [work/widemeet-n0-20261126]
@@ -11,6 +11,7 @@ on:
       - 'supabase/drafts/widemeet_*.sql'
       - 'supabase/tests/drafts/widemeet_*.sql'
       - 'supabase/functions/widemeet-auth/**'
+      - 'supabase/functions/widemeet-room/**'
       - '.github/workflows/widemeet-gate.yml'
   pull_request:
     branches: [test/widemeet-qualification-20261126]
@@ -119,6 +120,8 @@ jobs:
           SQL
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_identity.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_identity.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_n3_rooms.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_rooms.sql
   edge-typecheck:
     runs-on: ubuntu-24.04
     steps:
@@ -126,4 +129,4 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: deno check supabase/functions/widemeet-auth/index.ts
+      - run: deno check supabase/functions/widemeet-auth/index.ts supabase/functions/widemeet-room/index.ts
