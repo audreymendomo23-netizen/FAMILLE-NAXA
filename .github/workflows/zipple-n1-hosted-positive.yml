@@ -7,10 +7,10 @@ jobs:
   hosted-positive:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    env:
-      ZIPPLE_N1_FIXTURE_PASSWORD: ${{ secrets.ZIPPLE_N1_FIXTURE_PASSWORD }}
     steps:
       - name: Require explicitly provisioned synthetic fixture
+        env:
+          ZIPPLE_N1_FIXTURE_PASSWORD: ${{ secrets.ZIPPLE_N1_FIXTURE_PASSWORD }}
         run: test -n "$ZIPPLE_N1_FIXTURE_PASSWORD" || { echo 'Synthetic fixture secret not configured'; exit 1; }
       - uses: actions/checkout@v4
         with:
@@ -40,6 +40,8 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Real hosted API, Web and Android
+        env:
+          ZIPPLE_N1_FIXTURE_PASSWORD: ${{ secrets.ZIPPLE_N1_FIXTURE_PASSWORD }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
