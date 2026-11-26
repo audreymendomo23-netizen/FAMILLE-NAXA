@@ -108,4 +108,15 @@ language sql security invoker stable set search_path=pg_catalog,public as $wm$
 $wm$;
 revoke all on function public.wm_room_list(text) from public,anon,authenticated;
 grant execute on function public.wm_room_list(text) to service_role;
+create function public.wm_room_contacts(p_hash text)
+returns table(member_id uuid,display_name text,role text)
+language sql security invoker stable set search_path=pg_catalog,public as $wm$
+ select m.account_id,ac.display_name,m.role
+ from public.wm_room_actor(p_hash) a
+ join public.wm_memberships m on m.workspace_id=a.workspace_id and m.enabled and m.account_id<>a.account_id
+ join public.wm_accounts ac on ac.id=m.account_id and ac.enabled
+ order by ac.display_name,m.account_id limit 200
+$wm$;
+revoke all on function public.wm_room_contacts(text) from public,anon,authenticated;
+grant execute on function public.wm_room_contacts(text) to service_role;
 commit;
