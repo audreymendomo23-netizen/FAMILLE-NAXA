@@ -38,7 +38,7 @@ grant usage on schema bootik to bootik_security_runtime;
 do $$ declare n text;begin foreach n in array array['bk_security_settings','bk_security_audit','bk_member_functions'] loop execute format('create policy bk_runtime_access on bootik.%I to bootik_runtime using(true) with check(true)',n);end loop;end $$;
 grant select on bootik.bk_security_settings,bootik.bk_security_audit,bootik.bk_member_functions to bootik_runtime;
 grant insert on bootik.bk_security_audit to bootik_runtime;
-grant execute on function bootik.bk_effective_plan(uuid,uuid,text),bootik.bk_has_capability(uuid,uuid,text,text),bootik.bk_issue_session(uuid,uuid,uuid,text,text,bigint),bootik.bk_permits_operation(uuid,uuid,uuid,text,jsonb) to bootik_runtime;
+grant execute on function bootik.bk_effective_plan(uuid,uuid,text),bootik.bk_has_capability(uuid,uuid,text,text),bootik.bk_issue_session(uuid,uuid,uuid,text,text,bigint,uuid,text),bootik.bk_permits_operation(uuid,uuid,uuid,text,jsonb) to bootik_runtime;
 do $$ declare n text;begin foreach n in array array['bk_security_settings','bk_security_audit','bk_admin_receipts','bk_members','bk_member_sites','bk_member_activity_scopes','bk_member_functions','bk_locations','bk_activity_locations','bk_sessions'] loop execute format('create policy bk_security_access on bootik.%I to bootik_security_runtime using(true) with check(true)',n);end loop;end $$;
 grant select on bootik.bk_security_settings,bootik.bk_security_audit,bootik.bk_admin_receipts,bootik.bk_members,bootik.bk_member_sites,bootik.bk_member_activity_scopes,bootik.bk_member_functions,bootik.bk_locations,bootik.bk_activity_locations,bootik.bk_sessions to bootik_security_runtime;
 grant insert on bootik.bk_security_settings,bootik.bk_security_audit,bootik.bk_admin_receipts,bootik.bk_member_activity_scopes,bootik.bk_member_functions to bootik_security_runtime;
@@ -63,3 +63,14 @@ create policy bk_security_access on bootik.bk_recovery_requests to bootik_securi
 grant select on bootik.bk_recovery_requests to bootik_security_runtime;
 grant update(processed_at,handled_by) on bootik.bk_recovery_requests to bootik_security_runtime;
 grant execute on function bootik.bk_complete_recovery(uuid,uuid,uuid,uuid,uuid,text,text,text,text),bootik.bk_change_password(uuid,uuid,uuid,text,bigint,text,text) to bootik_security_runtime;
+
+create policy bk_runtime_access on bootik.bk_site_device_policy for select to bootik_runtime using(true);
+create policy bk_runtime_access on bootik.bk_device_site_bindings to bootik_runtime using(true) with check(true);
+grant select on bootik.bk_site_device_policy,bootik.bk_device_site_bindings to bootik_runtime;
+grant insert on bootik.bk_device_site_bindings to bootik_runtime;
+grant execute on function bootik.bk_bind_device_site(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;
+create policy bk_security_access on bootik.bk_site_device_policy to bootik_security_runtime using(true) with check(true);
+create policy bk_security_access on bootik.bk_device_site_bindings for select to bootik_security_runtime using(true);
+grant select,insert on bootik.bk_site_device_policy to bootik_security_runtime;
+grant update(max_devices) on bootik.bk_site_device_policy to bootik_security_runtime;
+grant select on bootik.bk_device_site_bindings to bootik_security_runtime;

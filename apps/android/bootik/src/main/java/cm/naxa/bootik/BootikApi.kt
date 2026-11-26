@@ -14,7 +14,7 @@ object BootikAccess {
  fun valid(app:String,member:String,org:String,role:String,sites:List<String>,expiry:Long,now:Long)=
  app=="BOOTIK" && member.isNotBlank() && org.isNotBlank() && role in setOf("promoteur","manager","staff") && sites.isNotEmpty() && sites.all{it.isNotBlank()} && sites.distinct().size==sites.size && expiry>now
 }
-class BootikApi(private val endpoint:String) {
+class BootikApi(private val endpoint:String,private val installationId:String=java.util.UUID.randomUUID().toString()) {
  private suspend fun request(action:String,body:JSONObject,token:String?=null):JSONObject=withContext(Dispatchers.IO){
   require(endpoint.startsWith("https://")){"API BOOTIK non configurée"}
   val url=URL(endpoint.trimEnd('/')+"/"+action)
@@ -32,9 +32,9 @@ class BootikApi(private val endpoint:String) {
  }
  suspend fun login(identifier:String,password:String,remember:Boolean=false):BootikSession {
   require(identifier.isNotBlank()&&password.isNotBlank())
-  return parse(request("login",JSONObject().put("identifier",identifier.trim()).put("password",password).put("remember_device",remember)))
+  return parse(request("login",JSONObject().put("identifier",identifier.trim()).put("password",password).put("remember_device",remember).put("installation_id",installationId).put("platform","android")))
  }
- suspend fun refresh(token:String):BootikSession {require(token.length>=20);return parse(request("refresh",JSONObject().put("refresh_token",token)))}
+ suspend fun refresh(token:String):BootikSession {require(token.length>=20);return parse(request("refresh",JSONObject().put("refresh_token",token).put("installation_id",installationId)))}
  private fun parse(j:JSONObject):BootikSession {
   val sites=j.getJSONArray("sites");val list=(0 until sites.length()).map{val s=sites.getJSONObject(it);BootikSite(s.getString("id"),s.getString("name"))}
   val member=j.getString("member_id");val org=j.getString("organization_id");val role=j.getString("role");val expires=j.getLong("expires_at");val token=j.getString("access_token")

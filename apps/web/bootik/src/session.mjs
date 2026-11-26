@@ -3,11 +3,15 @@ export function parseSession(j,now=Date.now()){
  return Object.freeze({...j,sites:Object.freeze(j.sites.map(s=>Object.freeze({...s})))});
 }
 export function permitsSite(session,id,now=Date.now()){return !!session&&session.expires_at>now&&session.sites.some(s=>s.id===id)}
+export function installationId(){
+ const key='bootik-installation-id';const re=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+ try{const saved=localStorage.getItem(key);if(saved&&re.test(saved))return saved;const id=crypto.randomUUID();localStorage.setItem(key,id);return id}catch{return crypto.randomUUID()}
+}
 export async function login(base,identifier,password,fetcher=fetch){
  if(!identifier.trim()||!password)throw Error("INVALID_CREDENTIALS");
  if(!base||!/^https:\/\//.test(base))throw Error("BOOTIK_API_NOT_CONFIGURED");
  const endpoint=new URL(base.replace(/\/$/,"")+"/login");if(endpoint.username||endpoint.password)throw Error("INVALID_API");
- const res=await fetcher(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:"BOOTIK",identifier:identifier.trim(),password}),cache:"no-store",redirect:"error"});
+ const res=await fetcher(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:"BOOTIK",identifier:identifier.trim(),password,installation_id:installationId(),platform:'web'}),cache:"no-store",redirect:"error"});
  if(!res.ok)throw Error("LOGIN_REJECTED");return parseSession(await res.json());
 }
 

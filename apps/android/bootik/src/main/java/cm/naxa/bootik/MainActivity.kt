@@ -60,10 +60,13 @@ class MainActivity : ComponentActivity() {
             "bootik-local.db"
         ).addMigrations(BOOTIK_MIGRATION_1_2).build()
 
+        val prefs=getSharedPreferences("bootik_installation",MODE_PRIVATE)
+        val installation=prefs.getString("id",null)?:UUID.randomUUID().toString().also{prefs.edit().putString("id",it).apply()}
+        val api=BootikApi(BuildConfig.BOOTIK_API_URL,installation)
         setContent {
             BootikTheme {
                 var connected by remember { mutableStateOf(false) }
-                if (connected) BootikConnectedScreen(BootikApi(BuildConfig.BOOTIK_API_URL),database.scoped()) { connected = false }
+                if (connected) BootikConnectedScreen(api,database.scoped()) { connected = false }
                 else Column { Button(onClick = { connected = true }) { Text("Connexion BOOTIK") }; BootikSetupScreen(database = database) }
             }
         }
