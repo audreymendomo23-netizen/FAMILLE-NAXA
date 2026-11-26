@@ -16,6 +16,7 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
  const [frequency,setFrequency]=useState("once"),[count,setCount]=useState("3");
  const [busy,setBusy]=useState(false),[error,setError]=useState(false),[loaded,setLoaded]=useState(false),[revision,setRevision]=useState(0);
  const token=useRef(getToken);token.current=getToken;const alive=useRef(false),controller=useRef<AbortController|null>(null);
+ const pendingCreation=useRef<{signature:string;payload:Record<string,unknown>}|null>(null);
  const err=tr("Réunion ou modification indisponible. Actualisez et réessayez.","Meeting or change unavailable. Refresh and retry.","Dental walla baylugol heɓotaako. Hesɗitin, eto.");
  async function req<T>(path:string,body?:Record<string,unknown>,signal?:AbortSignal):Promise<T>{
   const jwt=await token.current();if(!alive.current||signal?.aborted||!jwt||!anonKey)throw Error("SESSION_CHANGED");
@@ -39,7 +40,7 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
  },[account.organization_id,account.member_id,account.business_mode,siteId,authEndpoint,anonKey,revision]);
  const posts=Array.from(new Map(targets.map(t=>[t.workstation_id??"",t.workstation_name??tr("Site entier","Whole site","Nokkuure fof")])).entries());
  const people=targets.filter(t=>(t.workstation_id??"")===post);
- function reset(){setEdit(null);setTitle("");setWhen("");setAgenda("");setDuration("30");setSelected([]);setFrequency("once");setCount("3");}
+ function reset(){setEdit(null);setTitle("");setWhen("");setAgenda("");setDuration("30");setSelected([]);setFrequency("once");setCount("3");pendingCreation.current=null;}
  async function perform(action:()=>Promise<unknown>){
   if(busy||!loaded)return;setBusy(true);setError(false);
   try{await action();if(alive.current)setRevision(r=>r+1);}catch{if(alive.current)setError(true);}finally{if(alive.current)setBusy(false);}
@@ -47,7 +48,13 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
  function schedule(){
   if(edit){void perform(async()=>{await req("rpc/ns_revise_internal_meeting",{p_id:edit.id,p_revision:edit.revision,p_title:title,p_at:iso(when),p_agenda:agenda,p_duration:Number(duration)});reset();});return;}
   if(!selected.length)return;
-  void perform(async()=>{const payload={p_id:crypto.randomUUID(),p_org:account.organization_id,p_site:siteId,p_post:post||null,p_title:title,p_at:when?iso(when):new Date().toISOString(),p_members:selected,p_agenda:agenda,p_duration:Number(duration)};if(frequency==="once")await req("rpc/ns_schedule_internal_meeting_details",payload);else await req("rpc/ns_schedule_meeting_series",{...payload,p_frequency:frequency,p_count:Number(count)});reset();});
+  void perform(async()=>{
+   const fields={p_org:account.organization_id,p_site:siteId,p_post:post||null,p_title:title,p_at:when,p_members:[...selected].sort(),p_agenda:agenda,p_duration:Number(duration),...(frequency==="once"?{}:{p_frequency:frequency,p_count:Number(count)})};
+   const signature=JSON.stringify([account.member_id,fields]);
+   const payload=pendingCreation.current?.signature===signature?pendingCreation.current.payload:{...fields,p_id:crypto.randomUUID(),p_at:when?iso(when):new Date().toISOString()};
+   pendingCreation.current={signature,payload};
+   await req(frequency==="once"?"rpc/ns_schedule_internal_meeting_details":"rpc/ns_schedule_meeting_series",payload);reset();
+  });
  }
  function transition(m:Meeting,next:string){void perform(()=>req("rpc/ns_transition_internal_meeting",{p_id:m.id,p_revision:m.revision,p_next:next}));}
  function status(s:string){return ({scheduled:tr("Programmée","Scheduled","Feewnaama"),open:tr("Ouverte","Open","Udditaama"),closed:tr("Terminée","Ended","Timmi"),cancelled:tr("Annulée","Cancelled","Haaytaama"),pending:tr("En attente","Pending","E fadade"),accepted:tr("Acceptée","Accepted","Jaɓaama"),declined:tr("Refusée","Declined","Salaama"),tentative:tr("Provisoire","Tentative","Haa jooni") } as Record<string,string>)[s]??"—";}
