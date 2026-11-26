@@ -101,6 +101,27 @@ test('Chromium real API, session, trial, persistent offline queue, payment and s
  await page.getByRole('button',{name:'Enregistrer le règlement effectué',exact:true}).click();
  await page.getByText('Reçu 3.000000/5.000000 · Dette 180 FCFA',{exact:true}).waitFor();
  assert.equal(Number((await one('select paid_amount_fcfa from bootik.bk_purchase_orders where id=$1',[order.id])).paid_amount_fcfa),120);
+ // Register lifecycle and cash basket through the real web interface.
+ await page.getByRole('button',{name:'Charger les activités caisse',exact:true}).click();await page.getByLabel('Activité caisse',{exact:true}).selectOption(v);
+ await page.getByRole('button',{name:'Charger les caisses et articles',exact:true}).click();
+ await page.getByLabel('Code caisse',{exact:true}).fill('BROWSER-CAISSE');await page.getByLabel('Nom caisse',{exact:true}).fill('Caisse test');
+ await page.getByRole('button',{name:'Créer la caisse',exact:true}).click();await page.getByText('Opération caisse confirmée.',{exact:true}).waitFor();
+ const register=await one("select id from bootik.bk_registers where organization_id=$1 and code='BROWSER-CAISSE'",[o]);
+ await page.getByLabel('Caisse',{exact:true}).selectOption(register.id);await page.getByLabel('Fonds initial FCFA',{exact:true}).fill('1000');
+ await page.getByRole('button',{name:'Ouvrir la caisse',exact:true}).click();await page.getByText('Solde théorique espèces : 1000 FCFA',{exact:true}).waitFor();
+ const cashBefore=Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand);
+ await page.getByLabel('Article panier',{exact:true}).selectOption(i);await page.getByLabel('Quantité panier (unité de base)',{exact:true}).fill('1');await page.getByRole('button',{name:'Ajouter au panier caisse',exact:true}).click();
+ await page.getByLabel('Article panier',{exact:true}).selectOption(imported.id);await page.getByLabel('Quantité panier (unité de base)',{exact:true}).fill('1');await page.getByRole('button',{name:'Ajouter au panier caisse',exact:true}).click();
+ await page.getByLabel('Espèces remises FCFA',{exact:true}).fill('1000');await page.getByRole('button',{name:'Valider le panier espèces',exact:true}).click();
+ await page.getByText(/Vente caisse confirmée. Monnaie à rendre : 250 FCFA/).waitFor();assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),cashBefore-1);
+ // Restore the imported lot with the same real stock receipt path, for the later transfer.
+ await refresh();await search.fill('BROWSER-LOT');await page.getByLabel('Article',{exact:true}).selectOption(secondLot.id);
+ await page.getByLabel('Quantité',{exact:true}).fill('1');await page.getByLabel('Type de mouvement',{exact:true}).selectOption('receipt');await page.getByLabel('Coût total rendu FCFA (facultatif)',{exact:true}).fill('100');await page.getByLabel('Motif / référence de stock',{exact:true}).fill('Réception suivante');
+ await page.getByRole('button',{name:'Mettre le mouvement en file',exact:true}).click();await page.getByRole('button',{name:'Synchroniser',exact:true}).click();await page.getByText(/0 en attente ·/).waitFor();assert.equal(Number((await locate('SECOND')).quantity_on_hand),1);
+ await page.getByLabel('Type de mouvement caisse',{exact:true}).selectOption('expense');await page.getByLabel('Montant mouvement caisse FCFA',{exact:true}).fill('100');await page.getByLabel('Motif mouvement ou écart caisse',{exact:true}).fill('Nettoyage test');
+ await page.getByRole('button',{name:'Enregistrer le mouvement caisse',exact:true}).click();await page.getByText('Solde théorique espèces : 1650 FCFA',{exact:true}).waitFor();
+ await page.getByLabel('Espèces comptées à la clôture FCFA',{exact:true}).fill('1600');await page.getByLabel('Motif mouvement ou écart caisse',{exact:true}).fill('Écart de test');
+ await page.getByRole('button',{name:'Clôturer la caisse',exact:true}).click();await page.getByText('Caisse clôturée. Écart : -50 FCFA',{exact:true}).waitFor();
  await page.getByLabel('Canal',{exact:true}).selectOption('orange_money');await page.getByRole('button',{name:'Préparer le paiement',exact:true}).click();await page.getByText('Destination : '+dest,{exact:true}).waitFor();
  const ref='BROWSER-'+randomUUID().slice(0,8).toUpperCase(),when=new Date().toISOString();
  await page.getByLabel('SMS de débit volontairement partagé (sans PIN ni OTP)').fill('SMS de test de paiement '+ref);

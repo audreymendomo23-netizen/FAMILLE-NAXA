@@ -199,6 +199,9 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await cash('open',{register_id:regId,opening_float_fcfa:0})).status,400);
  const beforeCash=Number((await costBalance()).quantity_on_hand);
  const lines=[{item_id:costedItem.body.result.entity_id,unit_code:'unit',quantity:2,unit_price_fcfa:250}];
+ const otherBefore=Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand);
+ const mixedBad=[...lines,{item_id:i,unit_code:'unit',quantity:1,unit_price_fcfa:499}];assert.equal((await cash('checkout',{session_id:sessId,lines:mixedBad,tender_fcfa:2000})).status,400);assert.equal(Number((await costBalance()).quantity_on_hand),beforeCash);assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),otherBefore);
+ assert.equal((await cash('checkout',{session_id:sessId,lines:[...lines,...lines],tender_fcfa:2000})).status,400);
  const chk={request_id:randomUUID(),session_id:sessId,lines,tender_fcfa:1000};
  assert.equal((await cash('checkout',{...chk,tender_fcfa:400})).status,400);assert.equal(Number((await costBalance()).quantity_on_hand),beforeCash);
  const ck=await cash('checkout',chk);assert.equal(ck.status,200);assert.equal(ck.body.result.change_fcfa,500);assert.equal((await cash('checkout',chk)).body.result.checkout_id,chk.request_id);assert.equal(Number((await costBalance()).quantity_on_hand),beforeCash-2);

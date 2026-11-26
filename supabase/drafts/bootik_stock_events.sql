@@ -406,8 +406,9 @@ begin
   answer:=jsonb_build_object('register_id',req);
  elsif p_kind='open' then
   rid:=(p_data->>'register_id')::uuid;amt:=(p_data->>'opening_float_fcfa')::bigint;
-  if amt is null or amt<0 or amt>9007199254740991 then raise exception 'BOOTIK_CASH_INVALID';end if;
-  select * into reg from bootik.bk_registers where id=rid and organization_id=p_org and app_id=p_app and activity_id=a and location_id=p_site for update;
+  if rid is null or amt is null or amt<0 or amt>9007199254740991 then raise exception 'BOOTIK_CASH_INVALID';end if;
+  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':register-open:'||rid::text,0));
+  select * into reg from bootik.bk_registers where id=rid and organization_id=p_org and app_id=p_app and activity_id=a and location_id=p_site;
   if not found then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
   if exists(select 1 from bootik.bk_cash_sessions where register_id=rid and closed_at is null) then raise exception 'BOOTIK_REGISTER_ALREADY_OPEN';end if;
   insert into bootik.bk_cash_sessions(id,register_id,opened_by,opening_float_fcfa) values(req,rid,p_actor,amt);
