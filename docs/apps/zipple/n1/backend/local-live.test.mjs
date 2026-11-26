@@ -92,7 +92,7 @@ test("actual GoTrue, PostgREST and Edge runtime on isolated local Supabase",asyn
   assert.ok([200,204].includes(pre.status),"successful gateway preflight");assert.ok(["https://zipple.test","*"].includes(pre.headers.get("access-control-allow-origin")),"gateway preflight origin");
   // Kong may answer OPTIONS itself; actual POST must still enforce the app allowlist.
   const login=await call("login",{identifier:"FIXTURE",password:pw,remember_device:true});
-  assert.equal(login.status,200,"Edge login status "+login.status);assert.equal(login.cache,"no-store");
+  assert.equal(login.status,200,"Edge login status "+login.status);assert.ok(login.cache?.split(",").map(x=>x.trim().toLowerCase()).includes("no-store"),"session response must forbid caching");
   const s=login.data;assert.equal(s.app_id,"ZIPPLE");assert.equal(s.member_id,member);assert.deepEqual(s.sites.map(x=>x.id),[site]);assert.equal(s.access_token.length,64);
   const direct=await rest("zp_members?select=id",anon);assert.ok(!direct.ok,"anon direct table must be denied");
   const jwt=await fetch(base+"/auth/v1/token?grant_type=password",{method:"POST",headers:headers(anon),body:JSON.stringify({email:alias,password:pw})});assert.ok(jwt.ok);const gotrue=await jwt.json();
