@@ -72,6 +72,7 @@ declare v jsonb;begin
 create function public.zp_guest_support_create(p_guest_hash text,p_order uuid,p_message text) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $zp_support$
 declare o public.zp_orders;v public.zp_order_support;begin
  if p_message is null or length(trim(p_message)) not between 3 and 500 then raise exception 'INVALID_INPUT';end if;
+ if public.zp_guest_order(p_guest_hash,p_order) is null then raise exception 'DENIED';end if;
  select * into o from public.zp_orders where id=p_order for update;
  if o.id is null or o.status='cancelled' or public.zp_guest_order(p_guest_hash,p_order) is null then raise exception 'DENIED';end if;
  insert into public.zp_order_support(order_id,org_id,site_id,guest_id,message) values(o.id,o.org_id,o.site_id,o.guest_id,trim(p_message)) on conflict(order_id) do nothing;
