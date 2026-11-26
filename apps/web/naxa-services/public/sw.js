@@ -1,5 +1,5 @@
 const CACHE = "naxa-services-shell-v3";
-const CORE_ASSETS = ["/", "/manifest.webmanifest", "/naxa-services-icon.svg", "/media/office.jpg", "/media/workspace.jpg", "/media/printing.jpg", "/media/teamwork.jpg"];
+const CORE_ASSETS = ["/", "/manifest.webmanifest", "/naxa-services-icon.svg", "/media/office.jpg", "/media/workspace.jpg", "/media/printing.jpg", "/media/teamwork.jpg", "/media/stationery.jpg", "/media/wood-stock.jpg", "/media/furniture.jpg", "/media/painting.jpg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
