@@ -9,6 +9,7 @@ on:
       - 'supabase/drafts/naxa_services_v15_attendance*.sql'
       - 'supabase/drafts/naxa_services_v16_attendance*.sql'
       - 'supabase/drafts/naxa_services_v17_attendance*.sql'
+      - 'supabase/drafts/naxa_services_v21_attendance_mandatory_gps.sql'
       - 'supabase/tests/drafts/naxa_services_attendance*.sql'
       - 'supabase/drafts/naxa_services_v10_*roster*.sql'
       - 'supabase/tests/drafts/naxa_services_*roster*.sql'
@@ -191,13 +192,20 @@ jobs:
           set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
           { sed '$d' supabase/drafts/naxa_services_v20_activity_field_parity.sql; cat supabase/tests/drafts/naxa_services_activity_field_matrix.sql; echo 'rollback;'; } | psql "$DB_URL" -v ON_ERROR_STOP=1
+      - name: Qualify mandatory shift GPS with v15 staging fixtures and rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          { sed '/^rollback;$/,$d' supabase/tests/drafts/naxa_services_attendance_staging.sql; sed '1d;$d' supabase/drafts/naxa_services_v21_attendance_mandatory_gps.sql; cat supabase/tests/drafts/naxa_services_attendance_mandatory_gps.sql; echo 'rollback;'; } | psql "$DB_URL" -v ON_ERROR_STOP=1
       - name: Activate attendance candidates on disposable DB for actual browser proof
         shell: bash
         run: |
           set -euo pipefail
           set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql; do
+          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql naxa_services_v21_attendance_mandatory_gps.sql; do
             test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
             sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
           done
@@ -543,11 +551,10 @@ jobs:
                 await nav('Équipe & commissions');
                 await page.getByRole('heading',{name:'Preuves de service',exact:true}).waitFor();
                 const group=page.getByRole('group',{name:'Prise de service',exact:true});
-                proofCheckpoint='save GPS policy';
+                proofCheckpoint='mandatory GPS policy';
                 const gpsRule=group.getByRole('checkbox',{name:'GPS'}),selfieRule=group.getByRole('checkbox',{name:'Selfie'});
-                await gpsRule.click();
-                for(let i=0;i<40;i++){if(await gpsRule.isChecked().catch(()=>false)&&await selfieRule.isEnabled().catch(()=>false))break;await pause(200);}
-                assert.ok(await gpsRule.isChecked());
+                await gpsRule.waitFor();assert.ok(await gpsRule.isChecked());assert.ok(await gpsRule.isDisabled());
+                const endGps=page.getByRole('group',{name:'Fin de service',exact:true}).getByRole('checkbox',{name:'GPS'});assert.ok(await endGps.isChecked());assert.ok(await endGps.isDisabled());
                 proofCheckpoint='save selfie policy';await selfieRule.click();
                 for(let i=0;i<30;i++){if(await gpsRule.isChecked().catch(()=>false)&&await selfieRule.isChecked().catch(()=>false)&&await selfieRule.isEnabled().catch(()=>false))break;await pause(200);}
                 assert.ok(await group.getByRole('checkbox',{name:'GPS'}).isChecked());

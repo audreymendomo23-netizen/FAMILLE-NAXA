@@ -14,7 +14,8 @@ export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getTok
  const live=useRef(false),stream=useRef<MediaStream|null>(null),video=useRef<HTMLVideoElement|null>(null),controller=useRef<AbortController|null>(null),gen=useRef(0),token=useRef(getToken);
  token.current=getToken;
  const manager=["promoter","network_manager","site_manager"].includes(account.role_code);
- const rule=(a:AttendanceAction):Policy=>policies.find(p=>p.event_type===a)??{event_type:a,revision:0,require_gps:false,require_selfie:false};
+ const mandatoryGPS=(a:AttendanceAction)=>a==="staff_clock_in"||a==="staff_clock_out";
+ const rule=(a:AttendanceAction):Policy=>{const p=policies.find(p=>p.event_type===a)??{event_type:a,revision:0,require_gps:false,require_selfie:false};return {...p,require_gps:mandatoryGPS(a)||p.require_gps};};
  const policy=action?rule(action):null;
  function stop(){stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;if(video.current)video.current.srcObject=null;setCamera(false);}
  async function req<T>(path:string,body?:Record<string,unknown>):Promise<T>{
@@ -80,7 +81,7 @@ export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getTok
  return <><section className="module-main-card"><h2>{tr("Preuves de service","Attendance evidence","Seedeeji golle")}</h2>
  {error&&<p role="alert">{tr("Action non confirmée. Vérifiez la connexion, les permissions ou la règle du responsable.","Action not confirmed. Check connection, permissions or your manager's rule.","Golle tabbitinaaka. Ƴeewto ceŋol e yamirooje.")}</p>}
  <button className="btn secondary" disabled={busy} onClick={()=>setReload(x=>x+1)}>{tr("Actualiser les règles","Refresh rules","Hesɗitin yamirooje")}</button>
- {manager&&loaded&&<div>{actions.map(a=>{const p=rule(a);return <fieldset key={a}><legend>{labels[a]}</legend><label><input type="checkbox" checked={p.require_gps} disabled={busy||!!action} onChange={e=>void save(p,e.target.checked,p.require_selfie)}/> GPS</label><label><input type="checkbox" checked={p.require_selfie} disabled={busy||!!action} onChange={e=>void save(p,p.require_gps,e.target.checked)}/> Selfie</label></fieldset>;})}</div>}
+ {manager&&loaded&&<div>{actions.map(a=>{const p=rule(a);return <fieldset key={a}><legend>{labels[a]}</legend><label><input type="checkbox" checked={p.require_gps} disabled={busy||!!action||mandatoryGPS(a)} onChange={e=>void save(p,e.target.checked,p.require_selfie)}/> GPS</label><label><input type="checkbox" checked={p.require_selfie} disabled={busy||!!action} onChange={e=>void save(p,p.require_gps,e.target.checked)}/> Selfie</label></fieldset>;})}</div>}
  {action&&<div role="region" aria-label={labels[action]}><h3>{labels[action]}</h3><p>{tr("La preuve est collectée uniquement pour ce pointage. Une connexion est nécessaire.","Evidence is collected only for this attendance event. Connection required.","Seedeeji ko ngam golle ɗee tan. Ceŋol ena sokli.")}</p>
  {loaded&&policy&&<>{policy.require_gps&&<button className="btn secondary" disabled={busy} onClick={()=>void obtainGPS()}>{gps?tr("Position obtenue — reprendre","Position captured — retake","Nokkuure heɓiima"):tr("Obtenir ma position","Get my location","Heɓ nokkuure am")}</button>}
  {policy.require_selfie&&<><video ref={video} autoPlay playsInline muted style={{display:camera?"block":"none",width:"100%",maxWidth:"360px"}}/><button className="btn secondary" disabled={busy} onClick={()=>void (camera?takePhoto():openCamera())}>{camera?tr("Prendre le selfie","Take selfie","Ɓam natal"):photo?tr("Selfie pris — reprendre","Selfie captured — retake","Natal heɓiima"):tr("Ouvrir la caméra avant","Open front camera","Uddit kamera")}</button></>}

@@ -134,7 +134,8 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
   var loaded by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var queued by remember{mutableStateOf(false)}
   var selected by remember{mutableStateOf("staff_clock_in")};var reload by remember{mutableIntStateOf(0)}
   var location by remember{mutableStateOf<Location?>(null)};var selfie by remember{mutableStateOf<CapturedSelfie?>(null)};var camera by remember{mutableStateOf(false)}
-  val rule=rules[selected]?:AttendanceRule()
+  fun effectiveRule(a:String):AttendanceRule {val p=rules[a]?:AttendanceRule();return if(a=="staff_clock_in"||a=="staff_clock_out")p.copy(gps=true)else p}
+  val rule=effectiveRule(selected)
   fun clear(){camera=false;location=null;selfie?.bytes?.fill(0);selfie=null;queued=false}
   DisposableEffect(Unit){onDispose{selfie?.bytes?.fill(0)}}
   LaunchedEffect(reload,session.accessToken){
@@ -161,9 +162,9 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
     OutlinedButton(onClick={clear();reload++},enabled=!busy){Text(tr("Actualiser les règles","Refresh rules","Hesɗitin yamirooje"))}
     if(loaded){
      if(manager)attendanceActions.forEach{a->
-      val p=rules[a]?:AttendanceRule()
+      val p=effectiveRule(a)
       Text(labels.getValue(a))
-      Row{Checkbox(p.gps,{v->if(!busy){busy=true;scope.launch{try{StaffRosterApi.call(latest,"rpc/ns_set_attendance_policy",JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_event",a).put("p_revision",p.revision).put("p_gps",v).put("p_selfie",p.selfie));clear();reload++}catch(c:CancellationException){throw c}catch(_:Exception){error=true;loaded=false}finally{busy=false}}}},enabled=!busy);Text("GPS")
+      Row{Checkbox(p.gps,{v->if(!busy){busy=true;scope.launch{try{StaffRosterApi.call(latest,"rpc/ns_set_attendance_policy",JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_event",a).put("p_revision",p.revision).put("p_gps",v).put("p_selfie",p.selfie));clear();reload++}catch(c:CancellationException){throw c}catch(_:Exception){error=true;loaded=false}finally{busy=false}}}},enabled=!busy&&a!="staff_clock_in"&&a!="staff_clock_out");Text("GPS")
        Checkbox(p.selfie,{v->if(!busy){busy=true;scope.launch{try{StaffRosterApi.call(latest,"rpc/ns_set_attendance_policy",JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_event",a).put("p_revision",p.revision).put("p_gps",p.gps).put("p_selfie",v));clear();reload++}catch(c:CancellationException){throw c}catch(_:Exception){error=true;loaded=false}finally{busy=false}}}},enabled=!busy);Text("Selfie")}
      }
      attendanceActions.forEach{a->OutlinedButton(onClick={clear();selected=a},enabled=!busy){Text((if(selected==a)"✓ "else "")+labels.getValue(a))}}
