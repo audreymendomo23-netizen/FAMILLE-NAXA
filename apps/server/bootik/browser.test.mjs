@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import {createServer} from 'node:https';import {readFileSync} from 'node:fs';import {randomUUID,randomBytes,createHash} from 'node:crypto';import pg from 'pg';import {chromium} from 'playwright';
 import {createBootikService,verifier} from './service.mjs';import{captureCredit,reconcilePending}from './payment-worker.mjs';
-test('Chromium real API, session, trial, persistent offline queue, payment and support', {timeout:180000},async()=>{
+test('Chromium real API, session, trial, persistent offline queue, payment and support', {timeout:240000},async()=>{
  const admin=new pg.Pool({connectionString:process.env.BOOTIK_TEST_ADMIN_URL});
  const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL});
  const paymentDb=new pg.Pool({connectionString:process.env.BOOTIK_TEST_PAYMENT_URL});
@@ -33,7 +33,7 @@ test('Chromium real API, session, trial, persistent offline queue, payment and s
  const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:390,height:844}});
  const page=await context.newPage();page.setDefaultTimeout(20000);const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:4173');
- async function login(){await page.getByLabel('Identifiant',{exact:true}).fill(identifier);await page.getByLabel('Mot de passe',{exact:true}).fill('browser-test-only');await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.getByLabel('Site actif').waitFor();assert.equal(await page.getByLabel('Site actif').locator('option').count(),1)}
+ async function login(expected=1){await page.getByLabel('Identifiant',{exact:true}).fill(identifier);await page.getByLabel('Mot de passe',{exact:true}).fill('browser-test-only');await page.getByRole('button',{name:'Se connecter',exact:true}).click();await page.getByLabel('Site actif').waitFor();assert.equal(await page.getByLabel('Site actif').locator('option').count(),expected)}
  await login();await page.getByRole('button',{name:'Activer l’essai',exact:true}).click();await page.getByText(/Fin d’essai :/).waitFor();
  await page.getByRole('button',{name:'Actualiser le catalogue'}).click();await page.getByText('Catalogue actualisé',{exact:true}).waitFor();
  await page.getByLabel('Article',{exact:true}).selectOption(b);await page.getByLabel('Quantité',{exact:true}).fill('2');
@@ -50,6 +50,31 @@ test('Chromium real API, session, trial, persistent offline queue, payment and s
  await page.getByLabel('Type de mouvement',{exact:true}).selectOption('receipt');await page.getByLabel('Motif / référence de stock',{exact:true}).fill('Réception physique test');
  await context.setOffline(true);await page.getByRole('button',{name:'Mettre le mouvement en file'}).click();await page.getByText(/1 en attente ·/).waitFor();
  await context.setOffline(false);await page.getByRole('button',{name:'Synchroniser',exact:true}).click();await page.getByText(/0 en attente ·/).waitFor();assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),9);
+ // New stock paths are exercised through the rendered UI, not only service contracts.
+ await page.getByRole('button',{name:'Charger les activités autorisées',exact:true}).click();await page.getByLabel('Activité',{exact:true}).selectOption(v);
+ await page.getByLabel('Contenu CSV',{exact:true}).fill('nom;sku;unite;prix_fcfa;code_barres;lot;peremption;quantite_initiale;categorie\nTest périssable;BROWSER-LOT;unit;250;000987;FIRST;2098-01-01;4;Epicerie');
+ await page.getByRole('button',{name:'Analyser le fichier',exact:true}).click();await page.getByText('Ligne 2 — BROWSER-LOT : création, stock 4',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Confirmer l’import',exact:true}).click();await page.getByText('1 article(s) créé(s) avec reçu serveur. Actualisez le catalogue.',{exact:true}).waitFor();
+ const imported=await one("select id from bootik.bk_catalog_items where organization_id=$1 and sku='BROWSER-LOT'",[o]);
+ const locate=async(code)=>await one("select b.id,b.quantity_on_hand,b.unit_cost_fcfa from bootik.bk_inventory_balances b join bootik.bk_product_lots l on l.id=b.lot_id where b.item_id=$1 and b.location_id=$2 and l.lot_code=$3",[imported.id,s,code]);
+ const firstLot=await locate('FIRST');assert.equal(Number(firstLot.quantity_on_hand),4);
+ const refresh=async()=>{await page.getByRole('button',{name:'Actualiser le catalogue',exact:true}).click();await page.getByText('Catalogue actualisé',{exact:true}).waitFor()};
+ const search=page.getByLabel('Rechercher par nom, SKU, code-barres ou emplacement',{exact:true});
+ await refresh();await context.setOffline(true);await search.fill('000987');await page.getByLabel('Article',{exact:true}).selectOption(firstLot.id);await context.setOffline(false);
+ await page.getByLabel('Configuration',{exact:true}).selectOption('lot');await page.getByLabel('Code',{exact:true}).fill('SECOND');await page.getByLabel('Date de péremption du lot',{exact:true}).fill('2099-01-01');
+ await page.getByRole('button',{name:'Enregistrer la configuration',exact:true}).click();await page.getByText('Configuration confirmée. Actualisez le catalogue.',{exact:true}).waitFor();
+ const secondLot=await locate('SECOND');assert.ok(secondLot.id);
+ await refresh();await search.fill('BROWSER-LOT');await page.getByLabel('Article',{exact:true}).selectOption(secondLot.id);
+ await page.getByLabel('Quantité',{exact:true}).fill('2');await page.getByLabel('Type de mouvement',{exact:true}).selectOption('receipt');await page.getByLabel('Coût total rendu FCFA (facultatif)',{exact:true}).fill('200');await page.getByLabel('Motif / référence de stock',{exact:true}).fill('Réception valorisée navigateur');
+ await page.getByRole('button',{name:'Mettre le mouvement en file',exact:true}).click();await page.getByText(/1 en attente ·/).waitFor();await page.getByRole('button',{name:'Synchroniser',exact:true}).click();await page.getByText(/0 en attente ·/).waitFor();assert.equal(Number((await locate('SECOND')).unit_cost_fcfa),100);
+ await refresh();await search.fill('BROWSER-LOT');await page.getByLabel('Article',{exact:true}).selectOption(secondLot.id);await page.getByText(/Allocation automatique des lots/).waitFor();await page.getByLabel('Quantité',{exact:true}).fill('5');
+ await context.setOffline(true);await page.getByRole('button',{name:'Mettre la vente en file',exact:true}).click();await page.getByText(/1 en attente ·/).waitFor();await context.setOffline(false);await page.getByRole('button',{name:'Synchroniser',exact:true}).click();await page.getByText(/0 en attente ·/).waitFor();
+ assert.equal(Number((await locate('FIRST')).quantity_on_hand),0);assert.equal(Number((await locate('SECOND')).quantity_on_hand),1);
+ await refresh();await search.fill('BROWSER-LOT');await page.getByLabel('Article',{exact:true}).selectOption(firstLot.id);await page.getByLabel('Quantité',{exact:true}).fill('0');await page.getByRole('button',{name:'Ajouter au comptage groupé',exact:true}).click();
+ await page.getByLabel('Article',{exact:true}).selectOption(secondLot.id);await page.getByLabel('Quantité',{exact:true}).fill('1');await page.getByRole('button',{name:'Ajouter au comptage groupé',exact:true}).click();await page.getByLabel('Motif inventaire groupé',{exact:true}).fill('Contrôle inventaire navigateur');
+ await page.getByRole('button',{name:'Valider le comptage groupé',exact:true}).click();await page.getByText('Inventaire groupé confirmé. Actualisez le catalogue.',{exact:true}).waitFor();
+ assert.equal(Number((await one('select count(*) from bootik.bk_count_batches where organization_id=$1',[o])).count),1);
+ await page.getByRole('button',{name:'Actualiser les alertes stock',exact:true}).click();await page.getByText(/2 articles contrôlés ·/).waitFor();
  await page.getByLabel('Canal',{exact:true}).selectOption('orange_money');await page.getByRole('button',{name:'Préparer le paiement',exact:true}).click();await page.getByText('Destination : '+dest,{exact:true}).waitFor();
  const ref='BROWSER-'+randomUUID().slice(0,8).toUpperCase(),when=new Date().toISOString();
  await page.getByLabel('SMS de débit volontairement partagé (sans PIN ni OTP)').fill('SMS de test de paiement '+ref);
@@ -58,6 +83,19 @@ test('Chromium real API, session, trial, persistent offline queue, payment and s
  await captureCredit(paymentDb,device,{channel:'orange_money',direction:'merchant_credit',success:true,sender_origin_id:'OrangeMoney',reference:ref,amount_fcfa:4000,destination:dest,provider_at:when,evidence_sha:createHash('sha256').update('merchant test '+ref).digest('hex')});assert.equal(await reconcilePending(paymentDb),1);
  await page.getByRole('button',{name:'Vérifier le statut',exact:true}).click();await page.getByText('État : Confirmé',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Visioconférence',exact:true}).isDisabled(),true);await page.getByLabel('Je consens à demander une session multimédia').check();await page.getByRole('button',{name:'Visioconférence',exact:true}).click();await page.getByText('Demande enregistrée, flux non démarré',{exact:true}).waitFor();await page.getByRole('button',{name:'Annuler la demande',exact:true}).click();await page.getByText('Demande annulée',{exact:true}).waitFor();
+ // Two-site receipt is independently confirmed through UI after renewed site list.
+ await page.getByRole('button',{name:'Se déconnecter',exact:true}).click();await page.getByRole('button',{name:'Se connecter',exact:true}).waitFor();
+ await one('insert into bootik.bk_activity_locations(app_id,organization_id,activity_id,location_id) values($1,$2,$3,$4)',[a,o,v,other]);
+ await one('insert into bootik.bk_member_sites(organization_id,app_id,user_id,location_id) values($1,$2,$3,$4)',[o,a,u,other]);
+ await login(2);await page.getByLabel('Site actif',{exact:true}).selectOption(s);await refresh();await search.fill('BROWSER-LOT');await page.getByLabel('Article',{exact:true}).selectOption(secondLot.id);await page.getByLabel('Quantité',{exact:true}).fill('1');
+ await page.getByLabel('Site destinataire',{exact:true}).selectOption(other);await page.getByLabel('Motif transfert',{exact:true}).fill('Transfert navigateur');
+ await page.getByRole('button',{name:'Expédier la quantité sélectionnée',exact:true}).click();await page.getByText('Expédition confirmée ; marchandise en transit. Actualisez le catalogue.',{exact:true}).waitFor();
+ const transfer=await one('select id from bootik.bk_stock_transfers where organization_id=$1',[o]);assert.ok(transfer.id);
+ assert.equal(Number((await one('select count(*) from bootik.bk_inventory_balances where item_id=$1 and location_id=$2',[imported.id,other])).count),0);
+ await page.getByLabel('Site actif',{exact:true}).selectOption(other);await page.getByRole('button',{name:'Afficher les transferts',exact:true}).click();
+ await page.getByLabel('Transfert à réceptionner',{exact:true}).selectOption(transfer.id);await page.getByLabel('Quantité reçue',{exact:true}).fill('1');await page.getByLabel('Motif transfert',{exact:true}).fill('Réception navigateur');await page.getByRole('button',{name:'Confirmer la réception',exact:true}).click();
+ await page.getByText('Réception confirmée. Actualisez le catalogue et les transferts.',{exact:true}).waitFor();
+ const received=await one('select quantity_on_hand,unit_cost_fcfa from bootik.bk_inventory_balances where item_id=$1 and location_id=$2',[imported.id,other]);assert.equal(Number(received.quantity_on_hand),1);assert.equal(Number(received.unit_cost_fcfa),100);
  await page.getByRole('button',{name:'Se déconnecter',exact:true}).click();await page.getByRole('button',{name:'Se connecter',exact:true}).waitFor();
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
  await page.setViewportSize({width:1280,height:800});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);

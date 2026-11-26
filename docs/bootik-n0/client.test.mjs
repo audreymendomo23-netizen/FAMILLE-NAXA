@@ -25,3 +25,9 @@ test('catalogue local 5100 fiches: pagination et recherche SKU/code/lot/emplacem
 
 import {profileColumns,template,parseCsv} from '../../apps/server/bootik/stock-import.mjs';
 test('22 profils CSV et parser strict sans perte des zéros',()=>{assert.equal(Object.keys(profileColumns).length,22);for(const key of Object.keys(profileColumns)){assert.ok(template(key).includes('quantite_initiale'));assert.ok(profileColumns[key].every(x=>template(key).includes(x)))}assert.deepEqual(parseCsv('nom;code\n"Produit; A";00001'),[['nom','code'],['Produit; A','00001']]);assert.throws(()=>parseCsv('nom;code\n"non ferme'));});
+
+test('grouped FEFO receipt cannot acknowledge a regular sale',async()=>{
+ const e={eventId:'group',orgId:'o',memberId:'m',siteId:'s',aggregateType:'item-sale',payload:JSON.stringify({idempotency_key:'group',item_id:'i',unit_code:'pack',quantity:1})};const result={...receipt,action:'sync-item-sale',event_id:'group',result:{sale_group_id:'g'}};
+ const sender=body=>async(url,opts)=>{assert.equal(JSON.parse(opts.body).action,'sync-item-sale');return {ok:true,json:async()=>body}};
+ assert.equal((await syncEvent('https://example.test',s,'s',e,sender(result))).result.sale_group_id,'g');await assert.rejects(syncEvent('https://example.test',s,'s',e,sender({...result,action:'sync-sale'})));
+});

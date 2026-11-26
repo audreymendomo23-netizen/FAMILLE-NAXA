@@ -30,6 +30,18 @@ class BootikOutboxInstrumentedTest{
   assertFalse(BootikReceiptPolicy.valid("BOOTIK","org","member","site","stock-event","sync-sale","acknowledged",stock,"sync-stock"))
   assertFalse(BootikReceiptPolicy.valid("BOOTIK","org","other","site","stock-event","sync-stock","acknowledged",stock,"sync-stock"))
  }
+ @Test fun largeCatalogCacheAndGroupedReceipt()=runBlocking{
+  val db=Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext,BootikLocalDatabase::class.java).build()
+  try{
+   val a=org.json.JSONArray();for(i in 1..5100)a.put(org.json.JSONObject().put("sku","SKU-"+i).put("name","Référence "+i).put("barcode",if(i==5100)"0012345678901" else ""))
+   val d=db.scoped();d.cache(BootikCatalogCache("org","member","site",a.toString(),1));val loaded=org.json.JSONArray(d.catalog("org","member","site")!!.itemsJson);assertEquals(5100,loaded.length())
+   val matches=(0 until loaded.length()).map{loaded.getJSONObject(it)}.filter{BootikCatalogSearch.matches(it.getString("barcode"),"0012345678901")};assertEquals(1,matches.size);assertEquals("SKU-5100",matches.first().getString("sku"))
+   assertTrue(BootikCatalogSearch.matches("Étagère Z","etagere z"));assertNull(d.catalog("org","other","site"))
+   val e=BootikScopedEvent("group","org","member","site",1,"{}")
+   assertTrue(BootikReceiptPolicy.valid("BOOTIK","org","member","site","group","sync-item-sale","acknowledged",e,"sync-item-sale"))
+   assertFalse(BootikReceiptPolicy.valid("BOOTIK","org","member","site","group","sync-sale","acknowledged",e,"sync-item-sale"))
+  }finally{db.close()}
+ }
  @Test fun scopedQueueAndCache()=runBlocking{
   val db=Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext,BootikLocalDatabase::class.java).build()
   try{

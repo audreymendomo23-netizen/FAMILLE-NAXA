@@ -391,3 +391,7 @@ Adaptation du moteur NAXA migration 057 sans dupliquer la mutation de vente BOOT
 
 ### BULK STOCK — coût moyen et état des alertes (candidat)
 Adaptation NAXA 217 (coût historique figé), NAXA SERVICES accounting_contract.ts (coût moyen pondéré). Coût de réception déclaré facultatif, calcul par solde au serveur, valeurs inconnues explicitement nulles, mouvement sans coût entrant rend la valorisation indéterminée ; coût de vente et marge figés, transfert conserve coût source et pondère réception. Interface manager Android/Web, pas de fuite coût catalogue staff. Indicateurs agrégés par article/site, seuil minimum, quantité de réassort, lots à échéance 30 jours ou bloqués, valeur si tous soldes connus. Tests reçus coût, rejeu, changement coût, coût figé et permissions. Ce n'est pas encore un journal comptable achat/dette ni notification push, politique de coût global et export final restent à qualifier. CI à vérifier.
+
+
+### BULK STOCK — recette élargie des parcours réels
+Les runs 45862449979 (catalogue) et 45862708785 (inventaire/transfert corrigé) et 45862991550 (CSV) sont SUCCESS 5/5. Correction SQL alias x validée, ne pas relancer l'ancien échec. Ajout d'un scénario Chromium de création CSV, recherche offline, création deuxième lot, réception valorisée, vente FEFO offline, inventaire groupé, indicateurs, changement de site et réception de transfert. Ajout Room instrumenté cache 5100 fiches, recherche code-barres et contrôle reçu de groupe. CI du code final à confirmer. Aucun test caméra ni parcours physique réel revendiqué.
