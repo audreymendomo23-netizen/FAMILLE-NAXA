@@ -103,6 +103,8 @@ class MainActivity:ComponentActivity(){
  if(detail.isNotEmpty())TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))}
  key(s.deviceId,detail,tab){RoomPanel(english,roomGateway,s,current,detail in listOf("Nouvelle réunion","New meeting","Programmer","Schedule"))}
  }
+ else if(current!=null&&session!=null&&detail in (menuFr.take(3)+menuEn.take(3)+listOf(menuFr[7],menuEn[7]))){val s=session!!;val mode=when(detail){menuFr[0],menuEn[0]->"contacts";menuFr[1],menuEn[1]->"company";menuFr[2],menuEn[2]->"team";else->"billing"};TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))};key(s.deviceId,mode){IdentityPanel(english,gateway,s,mode)}}
+ else if(current!=null&&session!=null&&tab==4&&detail.isEmpty()){val s=session!!;key(s.deviceId,"profile"){IdentityPanel(english,gateway,s,"profile",{english=it})}}
  else if(detail.isNotEmpty()){TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))};Text(detail,style=MaterialTheme.typography.headlineMedium)
  if(detail in listOf(menuFr[11],menuFr[12],menuFr[13],menuEn[11],menuEn[12],menuEn[13])){Button(onClick={toggle()}){Text(if(dark)tr("Mode clair","Light mode")else tr("Mode nuit","Dark mode"))};Button(onClick={english=!english;detail=""},modifier=Modifier.testTag("wm-language")){Text(if(english)"Français"else "English")};Row(verticalAlignment=Alignment.CenterVertically){Switch(checked=motion,onCheckedChange={motion=it},modifier=Modifier.testTag("wm-motion"));Text("Animations")}}else Text(unavailable)
  }else if(tab==0){
@@ -119,7 +121,7 @@ class MainActivity:ComponentActivity(){
  Card(onClick={detail=actions[i]},modifier=Modifier.weight(1f).heightIn(min=110.dp)){
  Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Surface(color=accents[i],shape=MaterialTheme.shapes.medium){Text(marks[i],color=Black,fontSize=23.sp,modifier=Modifier.padding(8.dp))};Text(actions[i],style=MaterialTheme.typography.titleMedium)}
  }}}}
- Card(Modifier.fillMaxWidth()){Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text(labels[1],style=MaterialTheme.typography.titleLarge);Text(unavailable)}}
+ if(current!=null&&session!=null){val s=session!!;key(s.deviceId,"dashboard"){IdentityPanel(english,gateway,s,"dashboard")}}else Card(Modifier.fillMaxWidth()){Column(Modifier.padding(18.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){Text(labels[1],style=MaterialTheme.typography.titleLarge);Text(unavailable)}}
  }else{Text(labels[tab],style=MaterialTheme.typography.headlineMedium);Card(Modifier.fillMaxWidth()){Column(Modifier.padding(18.dp)){Text(unavailable);if(tab==4){TextButton(onClick={detail=menuLabels[13]}){Text(menuLabels[13])};TextButton(onClick={detail=menuLabels[9]}){Text(menuLabels[9])}}}}}
  }
  if(alpha.value>0f||startup.value>0f)Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(Yellow.copy(alpha=maxOf(alpha.value,startup.value)),Color.Transparent),center=Offset(0f,0f),radius=700f)))
