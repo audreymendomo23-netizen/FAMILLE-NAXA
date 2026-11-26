@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import {createHmac,randomBytes,randomUUID} from "node:crypto";
 import {createServer} from "node:http";
-import {readFile} from "node:fs/promises";
+import {readFile,readdir,stat} from "node:fs/promises";
+import {execFileSync} from "node:child_process";
 import {chromium} from "@playwright/test";
-import {RoomServiceClient} from "livekit-server-sdk";
+import {RoomServiceClient,EgressClient,EncodedFileOutput,EncodedFileType,EgressStatus} from "livekit-server-sdk";
 import {createMediaProxy} from "../../packages/media-core/signaling-proxy.mjs";
 const key=process.env.LK_TEST_KEY,secret=process.env.LK_TEST_SECRET;
 assert.ok(key&&secret&&secret.length>=32);
@@ -51,6 +52,24 @@ try{
  await a.evaluate(async()=>{const lk=window.LivekitClient,c=document.createElement("canvas");c.width=640;c.height=360;document.body.appendChild(c);let n=0;setInterval(()=>{const ctx=c.getContext("2d");ctx.fillStyle=n++%2?"red":"blue";ctx.fillRect(0,0,640,360)},100);const t=c.captureStream(10).getVideoTracks()[0];await window.r.localParticipant.publishTrack(t,{source:lk.Track.Source.ScreenShare})});
  await until(()=>b.evaluate(()=>window.received.some(t=>t.source===window.LivekitClient.Track.Source.ScreenShare)),"screen track");
  console.log("PASS screen-share track routed by SFU");
+ if(process.env.WM_TEST_EGRESS==="true"){
+ const egress=new EgressClient(upstream,key,secret);
+ const started=await egress.startRoomCompositeEgress(room,new EncodedFileOutput({fileType:EncodedFileType.OGG,filepath:"/out/"+room+".ogg"}),{audioOnly:true});
+ const id=started.egressId;assert.ok(id);
+ let stopped=false;
+ try{
+ await until(async()=>{const [info]=await egress.listEgress({egressId:id});return info?.status===EgressStatus.EGRESS_ACTIVE},"audio egress active",90000);
+ await delay(5000);
+ await egress.stopEgress(id);stopped=true;
+ await until(async()=>{const [info]=await egress.listEgress({egressId:id});if([EgressStatus.EGRESS_FAILED,EgressStatus.EGRESS_ABORTED].includes(info?.status))throw Error("egress failed");return info?.status===EgressStatus.EGRESS_COMPLETE},"audio egress complete",90000);
+ const out=process.env.WM_EGRESS_OUT;assert.ok(out);
+ const files=(await readdir(out)).filter(x=>x.endsWith(".ogg"));assert.equal(files.length,1);
+ const p=out+"/"+files[0];assert.ok((await stat(p)).size>1000);
+ const probe=JSON.parse(execFileSync("ffprobe",["-v","error","-show_streams","-show_format","-of","json",p],{encoding:"utf8"}));
+ assert.ok(probe.streams.some(x=>x.codec_type==="audio"));assert.ok(probe.streams.every(x=>x.codec_type!=="video"));assert.ok(Number(probe.format.duration)>1);
+ console.log("PASS actual server audio-only Egress, nonempty file, decoded audio stream and no video");
+ }finally{if(!stopped)await egress.stopEgress(id).catch(()=>{})}
+ }
  admissions.get("guest").enabled=false;
  await until(async()=>evicted.has("guest")&&!(await service.listParticipants(room)).some(p=>p.identity==="guest"),"guest SFU eviction");
  assert.ok((await service.listParticipants(room)).some(p=>p.identity==="host"));
