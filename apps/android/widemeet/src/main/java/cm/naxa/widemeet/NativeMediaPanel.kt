@@ -18,6 +18,7 @@ import io.livekit.android.events.RoomEvent
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
 import io.livekit.android.room.track.VideoTrack
+import io.livekit.android.room.track.Track
 import io.livekit.android.renderer.TextureViewRenderer
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
@@ -53,15 +54,15 @@ import java.net.URI
  else->Unit
  }}
  }
- LaunchedEffect(micAllowed,mic,room){val r=room;if(!micAllowed&&mic&&r!=null){try{if(!r.localParticipant.setMicrophoneEnabled(false))leave() else mic=false}catch(e:CancellationException){throw e}catch(e:Exception){leave()}}}
+ LaunchedEffect(micAllowed,mic,room){val r=room;if(!micAllowed&&mic&&r!=null){try{r.localParticipant.setMicrophoneEnabled(false);if(r.localParticipant.getTrackPublication(Track.Source.MICROPHONE)?.muted==false)leave() else mic=false}catch(e:CancellationException){throw e}catch(e:Exception){leave()}}}
  fun toggle(which:String){
  val r=room?:return
  if(status!="connected"||busy||which=="mic"&&!micAllowed)return
  busy=true;error=false
  scope.launch{
  try{
- if(which=="mic"){val next=!mic;require(r.localParticipant.setMicrophoneEnabled(next));if(room===r)mic=next}
- else{val next=!camera;require(r.localParticipant.setCameraEnabled(next));if(room===r)camera=next}
+ if(which=="mic"){val next=!mic;r.localParticipant.setMicrophoneEnabled(next);require(!next||r.localParticipant.getTrackPublication(Track.Source.MICROPHONE)?.muted==false);if(room===r)mic=next}
+ else{val next=!camera;r.localParticipant.setCameraEnabled(next);require(!next||r.localParticipant.getTrackPublication(Track.Source.CAMERA)?.muted==false);if(room===r)camera=next}
  }catch(e:CancellationException){throw e}catch(e:Exception){if(room===r)error=true}finally{if(room===r)busy=false}
  }
  }
