@@ -44,6 +44,23 @@ jobs:
           supabase init
           sed -i 's/^project_id = .*/project_id = "zipple-n1-ci"/' supabase/config.toml
           sed -i 's/^major_version = .*/major_version = 17/' supabase/config.toml
+          # CLI 2.75.0 disables TOTP by default. Enable only in the disposable local project.
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, tomllib
+          p = Path("supabase/config.toml")
+          text = p.read_text()
+          pattern = r"(?m)^\[auth\.mfa\.totp\]\s*\n(?:(?!^\[)[^\n]*\n)*"
+          matches = list(re.finditer(pattern, text))
+          if len(matches) != 1:
+              raise SystemExit("Expected exactly one TOTP section in pinned CLI template")
+          text = re.sub(pattern, "[auth.mfa.totp]\nenroll_enabled = true\nverify_enabled = true\n\n", text)
+          cfg = tomllib.loads(text)
+          assert cfg["auth"]["mfa"]["totp"]["enroll_enabled"] is True
+          assert cfg["auth"]["mfa"]["totp"]["verify_enabled"] is True
+          p.write_text(text)
+          print("ZIPPLE_LOCAL_TOTP_CONFIG_ENABLED")
+          PY
           cat >> supabase/config.toml <<'TOML'
           [functions.zipple-n1]
           verify_jwt = false
