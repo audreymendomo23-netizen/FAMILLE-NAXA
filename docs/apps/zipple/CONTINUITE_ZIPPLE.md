@@ -313,3 +313,26 @@ Reprise de zp_purchase_create, réception FIFO et dette fournisseur existantes, 
 - Candidat sorties de caisse : décaissement relié à une dépense existante (pas de charge doublée), retrait motivé, remboursement déjà effectué plafonné par moyen de paiement d'origine, idempotence, contrôle espèces disponibles et clôture ajustée; journal et indicateurs bruts/remboursements/net des ventes. Promoteur seul autorisé. Aucun débit externe ni retour stock automatique. Remboursement de créance et avoir commercial formalisé restent hors couverture; recette SQL à constater, UI Web et contrat Android ajoutés.
 
 - Candidat conservation des préparations : durée horaire explicite par article validée par promoteur, date limite figée à la production, héritage au transfert, blocage vente/service et réception non nulle de lot périmé, perte valorisée à confirmer sans commande ouverte, source comptable. Politique conservatrice : un lot expiré bloque l'article; anciens lots sans durée restent non renseignés, pas de durée sanitaire inventée. Vente au poids et gestion fine des réservations restent ouvertes. Gate à constater.
+
+## Bulk 3 — point de continuité consolidé (26 novembre 2026)
+Branche `work/zipple-completion-20261126`, dernier candidat de code/recettes `93e3c749d358737ec92c6b46e9087c42291ac864`. Aucun merge main, aucune migration ni déploiement en production, aucun changement des applications sœurs. Réutilisation du moteur comptable NAXA, caisse/stock/contrats existants, file Room/WorkManager et IndexedDB de ZIPPLE.
+
+### Preuves constatées
+- Socle précédent 9b93a4a : 7/7 workflows terminés SUCCESS (SQL 45881769481, navigateur réel 45881769363).
+- Clôture comptable et exports : SQL 45882551864, navigateur 45882551801 et build 45882551825 SUCCESS. Clôture uniquement d'un jour écoulé et garde transactionnelle sur dépense antidatée.
+- Production hors connexion : SQL 45882632936, navigateur 45882633004, APK 45882632978 et qualification Android 45882632954 SUCCESS. Interface de saisie native et file persistante; la recette navigateur vérifie la quantité inchangée avant synchronisation et augmentée après reçu.
+- Justificatifs : SQL 45882768108, navigateur 45882767953 et Web 45882768062 SUCCESS. Marqueurs ZIPPLE_BULK3_SCOPED_DOCUMENT_EVIDENCE_PASS, ZIPPLE_BULK3_REAL_EDGE_DOCUMENT_PASS, ZIPPLE_BULK3_REAL_EDGE_LEDGER_EXPORT_PASS, ZIPPLE_BULK3_REAL_BROWSER_OFFLINE_PRODUCTION_PASS. Téléchargement comparé octet pour octet au fichier déposé.
+- Comptabilité ventilée : run 45882907528 échoué (variable SQL `lines` ambiguë), correction 97d1c9f, run 45883144940 SUCCESS 44/44, 0 échec, 0 ignoré. Marqueurs ZIPPLE_BULK3_LEDGER_SPLIT_AND_REVERSAL_PASS et ZIPPLE_BULK3_CASH_OUTFLOWS_AND_ORIGINAL_METHOD_REFUND_PASS. Dépense liée à un décaissement sans doubler la charge; remboursement déjà réalisé plafonné au moyen d'origine, pas de transfert de fonds par ZIPPLE.
+- Péremption : candidat 3c01c26, SQL 45883315981 SUCCESS 44/44, 0 échec, 0 ignoré (marqueur ZIPPLE_BULK3_PREPARED_EXPIRY_PASS), build 45883316036 SUCCESS. Durée validée par promoteur, blocage conservateur, date de lot préservée au transfert et perte valorisée. 
+- Recettes navigateur supplémentaires de correction comptable, remboursement et péremption : commit 93e3c74; 45883380874 ZIPPLE business — real local Supabase: in_progress; 45883380969 ZIPPLE N2–N5 — isolated business candidate: success. Ne pas les compter comme succès avant résultat.
+
+### Statut par contradiction
+Les 44 tests SQL sont verts sur le candidat 3c01c26, mais une réussite de gate ne signifie pas conformité intégrale. Statut Bulk 3 : NON CLÔTURÉ. Les réserves sont :
+1. Vente directe au poids (tarification exacte), consommation directe des matières et boissons, conversions sur achat/vente, préparations intermédiaires et inventaires positifs approuvés : couverture incomplète.
+2. Avoir commercial formalisé, retours de produits selon état et remboursement sur créance, rapprochement fournisseur et consigne avec trésorerie, plafonds révisables et relances crédit : couverture incomplète. Remboursement simple/mixte sur moyen d'origine enregistré, pas de virement automatisé.
+3. Comptabilité : écritures et exports CSV disponibles; restent états financiers de synthèse, plan SYSCOHADA et règles fiscales validés par professionnel, mappings automatiques, accès/export multi-sites et justificatifs à gouvernance industrielle. Aucun paramètre fiscal inventé.
+4. Pièces privées : limite initiale 2 Mio, formats PDF/JPG/PNG, contrôle signature et hash; pas de scanner antivirus, rétention ni stockage industriel qualifié.
+5. Offline : production seule, sur données de recette déjà chargées, avec conflit bloquant. Autres mutations et parcours de résolution de conflit non exhaustifs.
+6. Parité Android native : production, stock, lots, dépenses et CRM partiellement raccordés; autres écrans ERP et recette métier native sur environnement hébergé restent ouverts. APK et émulateur N1 verts ne prouvent pas la parité. Les qualifications réelles locales navigateur ne prouvent pas un déploiement de production.
+
+Prochaine reprise : lire les journaux exacts des runs 45883380874/45883380969, corriger les écarts, préserver le périmètre, compléter les six réserves ci-dessus et ne clore qu'après preuves fonctionnelles.
