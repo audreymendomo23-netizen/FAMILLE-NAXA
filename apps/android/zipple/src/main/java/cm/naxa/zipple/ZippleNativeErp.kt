@@ -4,6 +4,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
@@ -87,6 +88,7 @@ private class RequestKeys{
    OutlinedButton(onClick={tab="ingredients"}){Text(tr("Matières","Ingredients"))}
    OutlinedButton(onClick={tab="receipts"}){Text(tr("Lots","Lots"))}
   }
+  OutlinedButton(onClick={tab="production"}){Text(tr("Production et file hors connexion","Production and offline queue"))}
   OutlinedButton(onClick={tab="expenses"}){Text(tr("Dépenses","Expenses"))}
   val ingredients=data?.rows("ingredients").orEmpty()
   when(tab){
@@ -112,6 +114,7 @@ private class RequestKeys{
     }}){Text(tr("Enregistrer la réception","Record receipt"))}
     data?.rows("lots")?.forEach{Text(it.optString("lot_label")+" · "+BigDecimal.valueOf(it.optLong("remaining_milli"),3).stripTrailingZeros().toPlainString())}
    }
+   "production"->{ZippleNativeProduction(api,session,site,en)}
    else->{
     Field(tr("Libellé","Label"),title,{title=it.take(160)})
     Choice(tr("Catégorie","Category"),listOf("rent" to tr("Loyer","Rent"),"utilities" to tr("Énergie","Utilities"),"transport" to "Transport","staff" to tr("Personnel","Staff"),"maintenance" to "Maintenance","other" to tr("Autre","Other")),category,{category=it},canWrite)
@@ -127,5 +130,44 @@ private class RequestKeys{
   }
   ingredients.forEach{Text(it.optString("name")+" · "+BigDecimal.valueOf(it.optLong("available_milli"),3).stripTrailingZeros().toPlainString()+" "+it.optString("unit"))}
  }
+ if(message.isNotBlank())Text(message)
+}
+
+@Composable private fun ZippleNativeProduction(api:ZippleBusiness,session:Session,site:String,en:Boolean){
+ val tr:(String,String)->String={fr,eng->if(en)eng else fr}
+ val context=LocalContext.current.applicationContext;val scope=rememberCoroutineScope()
+ val dao=remember(context){OfflineQueueDb.get(context).events()}
+ var recipes by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+ var items by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+ var selected by remember{mutableStateOf("")};var quantity by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)}
+ var message by remember{mutableStateOf("")};var queued by remember{mutableStateOf(0)};var blocked by remember{mutableStateOf(0)}
+ suspend fun counts(){queued=dao.queued(session.organization,session.member,site).size;blocked=dao.blocked(session.organization,session.member,site)}
+ suspend fun refresh(){
+  val erp=api.call(session,site,"erp_snapshot") as? JSONObject?:error("ERP_UNAVAILABLE")
+  val snapshot=api.call(session,site,"snapshot") as? JSONObject?:error("ERP_UNAVAILABLE")
+  recipes=erp.rows("recipe_versions").groupBy{it.getString("item_id")}.values.mapNotNull{rows->rows.maxByOrNull{it.optInt("version")}}
+  items=snapshot.rows("items");counts()
+ }
+ fun run(block:suspend ()->Unit){if(busy||!session.permits(site))return;busy=true;message="";scope.launch{try{block()}catch(c:CancellationException){throw c}catch(_:Exception){message=tr("Opération non confirmée","Operation unconfirmed")}finally{busy=false}}}
+ LaunchedEffect(session.token,site){try{counts();refresh()}catch(c:CancellationException){throw c}catch(_:Exception){message=tr("Chargez les recettes avant de travailler hors connexion.","Load recipes before working offline.")}}
+ LaunchedEffect(session.token,site){while(true){counts();kotlinx.coroutines.delay(2000)}}
+ val recipe=recipes.find{it.optString("item_id")==selected};val count=quantity.toIntOrNull()
+ val canQueue=session.role in setOf("promoteur","manager")&&session.permits(site)&&!busy&&blocked==0
+ Text(tr("Productions à confirmer","Production awaiting confirmation"),style=MaterialTheme.typography.titleMedium)
+ Text(tr("En attente","Pending")+" : "+queued+" · "+tr("À vérifier","Needs review")+" : "+blocked)
+ OutlinedButton(enabled=!busy,onClick={run{refresh()}}){Text(tr("Actualiser les recettes","Refresh recipes"))}
+ Choice(tr("Article produit","Produced item"),recipes.map{r->val id=r.optString("item_id");id to ((items.find{it.optString("id")==id}?.optString("name")?:id.take(8))+" · V"+r.optInt("version"))},selected,{selected=it},canQueue)
+ Field(tr("Portions réellement préparées","Servings actually prepared"),quantity,{quantity=it.filter(Char::isDigit).take(5)},true)
+ Button(enabled=canQueue&&recipe!=null&&count!=null&&count in 1..10000,onClick={run{
+  val version=recipe?.optInt("version")?:error("VERSION_REQUIRED");val servings=count?:error("QUANTITY_REQUIRED")
+  require(version>0&&session.permits(site)&&ZippleSyncSession.current===session)
+  val eventId=UUID.randomUUID().toString();val now=System.currentTimeMillis()
+  val payload=JSONObject().put("item_id",selected).put("servings",servings).put("expected_version",version)
+  dao.enqueue(OfflineEvent(eventId=eventId,organizationId=session.organization,memberId=session.member,siteId=site,aggregateType="erp_produce",payloadJson=payload.toString(),deviceSequence=now,createdAtEpochMs=now))
+  quantity="";counts();ZippleSyncSession.schedule(context)
+  message=tr("En attente de validation serveur. Stock non modifié localement.","Awaiting server confirmation. Local stock unchanged.")
+ }}){Text(tr("Mettre la production en attente","Queue production"))}
+ OutlinedButton(enabled=!busy,onClick={run{ZippleSyncSession.schedule(context);counts()}}){Text(tr("Synchroniser les productions","Synchronize production"))}
+ if(blocked>0)Text(tr("Une opération nécessite une vérification avant toute nouvelle synchronisation.","An operation requires review before further synchronization."))
  if(message.isNotBlank())Text(message)
 }

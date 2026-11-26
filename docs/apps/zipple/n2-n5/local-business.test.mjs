@@ -223,6 +223,21 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   const prepReceipt=await ok("prepared_transfer_receive",{site_id:destination,transfer_id:preparedTransfer,servings:1,reason:""});
   assert.equal(prepReceipt.loss_cost,0);assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[destPrep]),1);
   console.log("ZIPPLE_BULK3_REAL_EDGE_PREPARED_TRANSFER_PASS");
+  await page.getByRole("button",{name:"Actualiser",exact:true}).click();
+  await page.getByRole("button",{name:"Stocks & finances",exact:true}).click();await page.getByRole("button",{name:"Production",exact:true}).click();
+  await page.getByLabel("Article produit").selectOption(sourcePrep);await page.getByText("Version active : 1",{exact:true}).waitFor();
+  const beforeOfflineQty=Number(await scalar("select available_qty from zp_menu_items where id=$1",[sourcePrep]));
+  await staff.setOffline(true);
+  await page.getByLabel("Portions réellement préparées").fill("1");
+  await page.getByRole("button",{name:"Mettre la production en attente hors connexion"}).click();
+  await page.getByText(/Production en attente de validation serveur/).waitFor();
+  assert.equal(Number(await scalar("select available_qty from zp_menu_items where id=$1",[sourcePrep])),beforeOfflineQty);
+  await staff.setOffline(false);
+  await page.getByRole("button",{name:"Synchroniser",exact:true}).click();
+  await page.getByText(/En ligne · 0 en attente/).waitFor();
+  assert.equal(Number(await scalar("select available_qty from zp_menu_items where id=$1",[sourcePrep])),beforeOfflineQty+1);
+  assert.equal(Number(await scalar("select count(*) from zp_erp_sync_receipts where org_id=$1 and state='acknowledged'",[org])),1);
+  console.log("ZIPPLE_BULK3_REAL_BROWSER_OFFLINE_PRODUCTION_PASS");
 
   await page.getByRole("button",{name:"Tables",exact:true}).click();await page.getByLabel("Nom de la table").fill("Table QR recette");await page.getByRole("button",{name:"Créer une table"}).click();
   const qrImg=page.getByRole("img",{name:"QR de commande de table"});await qrImg.waitFor();assert.match(await qrImg.getAttribute("src"),/^data:image\/png;base64,/);
