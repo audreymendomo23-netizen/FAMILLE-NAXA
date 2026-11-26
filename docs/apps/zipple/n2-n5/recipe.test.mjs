@@ -30,6 +30,16 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal(await scalar("select zp_paid_plan($1)",[a.org]),null);
  const ref=uid(),pid=await pay(i,ref);assert.equal(await pay(i," "+ref+" "),pid);assert.equal(await scalar("select zp_paid_plan($1)",[a.org]),"PREMIUM");
  const bIntent=await intent(b,"ACCESS","annual");await pay(bIntent);const duplicateIntent=await intent(b,"ACCESS","monthly");await assert.rejects(pay(duplicateIntent," "+ref+" "),/duplicate key/);
+ // Access mono-compte: no choice of owner is invented; inconsistent provisioning fails closed.
+ const extraOwner=uid(),extraAuth=uid(),extraAccess=hash();
+ await db.query("insert into auth.users(id) values($1)",[extraAuth]);await db.query("insert into zp_members(id,org_id,auth_user_id,login_id,auth_alias,role_code) values($1,$2,$3,$4,$5,'promoteur')",[extraOwner,b.org,extraAuth,uid(),uid()+"@example.test"]);
+ await db.query("insert into zp_site_scopes values($1,$2,$3)",[extraOwner,b.org,b.site]);await db.query("insert into zp_sessions(member_id,access_hash,access_until) values($1,$2,now()+interval '1 hour')",[extraOwner,extraAccess]);
+ assert.equal(await scalar("select zp_paid_plan($1)",[b.org]),"ACCESS");assert.equal(await scalar("select zp_operational_plan($1)",[b.org]),null);
+ await assert.rejects(scalar("select zp_site_mode($1,$2,'snack_bar',false,false)",[b.access,b.site]),/SUBSCRIPTION_OR_ROLE_REQUIRED/);
+ await assert.rejects(scalar("select zp_business_snapshot($1,$2)",[extraAccess,b.site]),/SUBSCRIPTION_OR_ROLE_REQUIRED/);
+ await db.query("update zp_members set role_code='manager' where id=$1",[extraOwner]);assert.equal(await scalar("select zp_operational_plan($1)",[b.org]),"ACCESS");
+ await assert.rejects(scalar("select zp_business_snapshot($1,$2)",[extraAccess,b.site]),/SUBSCRIPTION_OR_ROLE_REQUIRED/);
+ console.log("ZIPPLE_BULK1_ACCESS_MONO_ACCOUNT_PASS");
  await scalar("select zp_site_mode($1,$2,'restaurant',true,true)",[a.access,a.site]);
  await assert.rejects(scalar("select zp_site_mode($1,$2,'snack_bar',false,true)",[b.access,b.site]),/check constraint/);
  await scalar("select zp_site_mode($1,$2,'snack_bar',false,false)",[b.access,b.site]);

@@ -3,7 +3,7 @@
 begin;
 create function public.zp_guest_open_guard(p_qr_hash text) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare sid uuid;allowed boolean;begin
- select x.id into sid from public.zp_table_sessions x join public.zp_tables t on t.id=x.table_id and t.org_id=x.org_id and t.site_id=x.site_id join public.zp_sites s on s.id=x.site_id and s.org_id=x.org_id join public.zp_organizations o on o.id=x.org_id where t.qr_hash=p_qr_hash and x.closed_at is null and s.active and o.active and public.zp_paid_plan(x.org_id) is not null;
+ select x.id into sid from public.zp_table_sessions x join public.zp_tables t on t.id=x.table_id and t.org_id=x.org_id and t.site_id=x.site_id join public.zp_sites s on s.id=x.site_id and s.org_id=x.org_id join public.zp_organizations o on o.id=x.org_id where t.qr_hash=p_qr_hash and x.closed_at is null and s.active and o.active and public.zp_operational_plan(x.org_id) is not null;
  if sid is null then return false;end if;
  insert into public.zp_rate_windows as w(bucket,window_start,attempts) values('ZIPPLE:guest-open:'||sid::text,now(),1)
  on conflict(bucket) do update set window_start=case when w.window_start<=now()-interval '5 minutes' then now() else w.window_start end,

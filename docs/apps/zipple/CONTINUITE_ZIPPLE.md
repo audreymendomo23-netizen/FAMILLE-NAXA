@@ -239,3 +239,5 @@ N1 Cloudflare révision 3 : run 45856957319 SUCCESS, HTTP 401 DENIED via cookie,
 
 ## Audit et découpage en six bulks
 Voir AUDIT_CONFORMITE_BULKS.md. Recettes précédentes 45865614669 et 45865763569 SUCCESS, authentification Android hébergée SKIPPED. Bulk 1 engagé : correction des frontières SQL (staff sans droit, référence paiement normalisée, expiration invité, annulation après confirmation client), réutilisation N1 rate windows avec garde persistée avant ouverture QR, audit de privilèges sur toutes tables/RPC zp_, recettes positives et négatives. Gate local uniquement; aucune activation hébergée. Les cinq autres bulks restent ouverts. Nouvelle recette à constater.
+
+- Bulk 1 complément mono-compte Access : séparation offre payée et accès effectif; incohérence de provisionnement (plusieurs promoteurs actifs) bloque l'exploitation sans sélectionner un propriétaire arbitraire. Guest et configuration respectent ce verrou. Test contrat Android/API et prix SQL canonique ajouté, preuves à relever.

@@ -16,3 +16,5 @@ Référence gelée : docs/cahiers-des-charges/ZIPPLE_V2_0.md. Base audit 5b7b7be
 ## Mission bulk 1
 Preuves : prix canoniques, refus périodicités/pack, paiement synthétique uniquement privilégié, référence normalisée sans double validation, refus staff non habilité, scope/session révoqués, accès invité suspendu si abonnement expiré, limite technique ouverture QR (60/5 min/session, à ajuster avec mesures réelles au bulk 6), annulation après attestation de service bloquée, tous RPC/tables service-only, RLS; régression métier réelle et contrats. Les rôles fins métier et capacité commerciale ne sont pas inventés : bulks 2 et 4. Les qualifications production et physiques ne sont pas dans ce gate local. Pas de changement main ni de déploiement. 
 Etat : implémenté, preuves de la nouvelle CI à relever.
+
+- Complément Bulk 1 : Access payé ≠ accès métier autorisé si plusieurs promoteurs actifs; refus conservatoire, aucun titulaire choisi implicitement. Manager Access refusé. Contrat Android/API vérifié par égalité des listes d'actions; aucun accès public à une confirmation de paiement. Concordance tarifs SQL/politique famille. Aucun quota de sites ou d'appareils inventé.
