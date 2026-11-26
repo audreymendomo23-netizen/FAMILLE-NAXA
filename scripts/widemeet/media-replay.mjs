@@ -55,19 +55,21 @@ try{
  if(process.env.WM_TEST_EGRESS==="true"){
  const egress=new EgressClient(upstream,key,secret);
  const started=await egress.startRoomCompositeEgress(room,new EncodedFileOutput({fileType:EncodedFileType.OGG,filepath:"/out/"+room+".ogg"}),{audioOnly:true});
- const id=started.egressId;assert.ok(id);
+ const id=started.egressId;assert.ok(id);console.log("Egress accepted status:",started.status,"code:",started.errorCode??0);
+ let lastStatus;
+ async function poll(expected){const rows=await egress.listEgress({egressId:id});const info=rows.find(x=>x.egressId===id);if(!info)return false;if(info.status!==lastStatus){lastStatus=info.status;console.log("Egress state:",info.status,"code:",info.errorCode??0)}if([EgressStatus.EGRESS_FAILED,EgressStatus.EGRESS_ABORTED,EgressStatus.EGRESS_LIMIT_REACHED].includes(info.status))throw Error("Egress terminal failure: "+info.status+" code "+(info.errorCode??0));return info.status===expected;}
  let stopped=false;
  try{
- await until(async()=>{const [info]=await egress.listEgress({egressId:id});return info?.status===EgressStatus.EGRESS_ACTIVE},"audio egress active",90000);
+ await until(()=>poll(EgressStatus.EGRESS_ACTIVE),"audio egress active",90000);
  await delay(5000);
  await egress.stopEgress(id);stopped=true;
- await until(async()=>{const [info]=await egress.listEgress({egressId:id});if([EgressStatus.EGRESS_FAILED,EgressStatus.EGRESS_ABORTED].includes(info?.status))throw Error("egress failed");return info?.status===EgressStatus.EGRESS_COMPLETE},"audio egress complete",90000);
+ await until(()=>poll(EgressStatus.EGRESS_COMPLETE),"audio egress complete",90000);
  const out=process.env.WM_EGRESS_OUT;assert.ok(out);
  const files=(await readdir(out)).filter(x=>x.endsWith(".ogg"));assert.equal(files.length,1);
  const p=out+"/"+files[0];assert.ok((await stat(p)).size>1000);
  const probe=JSON.parse(execFileSync("ffprobe",["-v","error","-show_streams","-show_format","-of","json",p],{encoding:"utf8"}));
  assert.ok(probe.streams.some(x=>x.codec_type==="audio"));assert.ok(probe.streams.every(x=>x.codec_type!=="video"));assert.ok(Number(probe.format.duration)>1);
- console.log("PASS actual server audio-only Egress, nonempty file, decoded audio stream and no video");
+ execFileSync("ffmpeg",["-v","error","-xerror","-i",p,"-map","0:a:0","-f","null","-"]);console.log("PASS actual server audio-only Egress, nonempty file, decoded audio stream and no video");
  }finally{if(!stopped)await egress.stopEgress(id).catch(()=>{})}
  }
  const revokedToken=process.env.WM_TEST_EGRESS==="true"?token("guest"):oldGuest;
