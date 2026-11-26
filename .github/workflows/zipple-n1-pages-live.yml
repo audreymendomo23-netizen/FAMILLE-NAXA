@@ -1,0 +1,24 @@
+name: ZIPPLE N1 — live Cloudflare Pages recipe
+on:
+  push:
+    branches: [work/zipple-completion-20261126]
+    paths:
+      - ".github/workflows/zipple-n1-pages-live.yml"
+      - "docs/apps/zipple/n1/hosted/pages-live.test.mjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pages-live:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --no-save --ignore-scripts playwright@1.51.1
+      - run: npx playwright install --with-deps chromium
+      - run: node --test docs/apps/zipple/n1/hosted/pages-live.test.mjs
