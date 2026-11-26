@@ -95,5 +95,22 @@ do $wm$ declare i integer; begin
 end $wm$;
 reset role;
 
+-- Recovery requests are service-only, neutral and idempotent; no password mutation.
+do $wm$ begin
+ if has_function_privilege('anon','public.wm_request_recovery(text)','EXECUTE') or has_function_privilege('authenticated','public.wm_request_recovery(text)','EXECUTE') or has_table_privilege('authenticated','public.wm_recovery_requests','SELECT') then raise exception 'recovery acl leak';end if;
+ if not exists(select 1 from pg_class where oid='public.wm_recovery_requests'::regclass and relrowsecurity) then raise exception 'recovery rls missing';end if;
+end $wm$;
+set local role service_role;
+do $wm$ begin
+ perform public.wm_request_recovery('WM-FIXTURE1');
+ perform public.wm_request_recovery('WM-FIXTURE1');
+ perform public.wm_request_recovery('WM-UNKNOWN1');
+ perform public.wm_request_recovery('invalid');
+ if (select count(*) from public.wm_recovery_requests)<>1 then raise exception 'recovery deduplication or privacy failed';end if;
+ if not exists(select 1 from public.wm_recovery_requests where account_id='10000000-0000-4000-8000-000000000001' and status='pending') then raise exception 'recovery not recorded';end if;
+ if (select password_change_required from public.wm_accounts where login_id='WM-FIXTURE1') then raise exception 'request mutated account';end if;
+end $wm$;
+reset role;
+
 rollback;
 select 'WIDEMEET_IDENTITY_SQL_PASS';
