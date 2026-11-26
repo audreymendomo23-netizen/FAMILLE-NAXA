@@ -58,10 +58,10 @@ const moduleCopy: Record<ModuleId, { eyebrow: string; headline: string; helper: 
   overview: { eyebrow: "PILOTAGE", headline: "Votre activité, au même endroit.", helper: "Retrouvez vos chiffres et vos objectifs.", empty: "Aucune opération pour le moment.", features: ["Rendez-vous du jour", "Tickets pressing à rendre", "Situation de caisse", "Briefing du matin / soir"] },
   agenda: { eyebrow: "PLANNING", headline: "Un planning lisible par poste et prestataire.", helper: "Organisez les horaires de vos rendez-vous.", empty: "Aucun rendez-vous dans cette vue.", features: ["Vues jour et semaine", "Disponibilité du prestataire", "Disponibilité du fauteuil / poste", "Acompte, annulation et liste d'attente"] },
   pressing: { eyebrow: "ATELIER", headline: "Chaque dépôt possède son ticket et son historique.", helper: "Les transitions de statut sont chronologiques et contrôlées.", empty: "Aucun ticket pressing dans la liste locale.", features: ["Pièces et prix par catégorie", "Date promise et acompte", "Reçu → En cours → Prêt → Retiré", "Relance des vêtements non retirés"] },
-  workOrders: { eyebrow: "PARCOURS MÉTIERS", headline: "Un dossier adapté au métier de votre organisation.", helper: "Gérez les prestations propres à votre activité.", empty: "Aucun dossier métier dans le périmètre autorisé.", features: ["Formulaire spécialisé par activité", "Devis, échéance et ressources", "Étapes métier versionnées côté serveur", "Historique et synchronisation multi-appareils"] },
+  workOrders: { eyebrow: "PARCOURS MÉTIERS", headline: "Un dossier adapté au métier de votre organisation.", helper: "Gérez les prestations propres à votre activité.", empty: "Aucun dossier métier dans le périmètre autorisé.", features: ["Formulaire spécialisé par activité", "Devis, échéance et ressources", "Suivi des étapes de traitement", "Historique et synchronisation multi-appareils"] },
   cash: { eyebrow: "ENCAISSEMENTS", headline: "Une caisse traçable, par point de vente.", helper: "Suivez vos ventes, paiements et dépenses.", empty: "Aucune vente enregistrée dans la session de prévisualisation.", features: ["Espèces et Mobile Money confirmé", "Paiement mixte et reçu", "Ouverture et clôture de caisse", "Dépenses, écarts et justificatifs"] },
   services: { eyebrow: "CATALOGUE", headline: "Des prestations adaptées à chaque activité.", helper: "Adaptez vos tarifs à votre établissement.", empty: "Le catalogue n'a pas encore été synchronisé.", features: ["Pressing et coiffure distincts", "Durée et prix par prestation", "Habilitations par employé et poste", "Forfaits et produits comptoir"] },
-  customers: { eyebrow: "RELATION CLIENT", headline: "Connaître l'historique, respecter les préférences.", helper: "Les coordonnées et notes client sont privées et restent sous le scope autorisé.", empty: "Aucune fiche client disponible.", features: ["Historique des prestations", "Préférences et dernières visites", "Consentement de contact", "Fidélité, QR et anniversaires"] },
+  customers: { eyebrow: "RELATION CLIENT", headline: "Connaître l'historique, respecter les préférences.", helper: "Les coordonnées et notes client sont confidentielles.", empty: "Aucune fiche client disponible.", features: ["Historique des prestations", "Préférences et dernières visites", "Consentement de contact", "Fidélité, QR et anniversaires"] },
   team: { eyebrow: "ÉQUIPE", headline: "Des comptes individuels et des droits précis.", helper: "Chaque membre possède son propre accès ; les comptes partagés sont exclus.", empty: "Aucun membre opérationnel chargé.", features: ["Rôles et permissions", "Affectation site / emplacement", "Présence, avances et primes", "Commissions calculées selon une règle datée"] },
   stock: { eyebrow: "CONSOMMABLES", headline: "Un stock léger centré sur l'exploitation.", helper: "Consultez l'historique de vos mouvements de stock.", empty: "Aucun consommable suivi pour le moment.", features: ["Lessive et produits coiffure", "Entrées et consommation", "Pertes et ajustements motivés", "Alertes de seuil"] },
   reports: { eyebrow: "ANALYTIQUE", headline: "Piloter les résultats, pas seulement les ventes.", helper: "Consultez les résultats de vos établissements autorisés.", empty: "Les rapports seront calculés à partir des données synchronisées.", features: ["Recettes et dépenses", "Écarts de caisse", "Rentabilité des prestations", "Remplissage agenda et commissions"] },
@@ -315,7 +315,7 @@ function App() {
       const annual = Array.isArray(result.annual) ? result.annual as Record<string,unknown>[] : [];
       if(!isCurrent())return;
       setPerformanceData({ daily, monthly, annual });
-      setAuthMessage("Rapport chargé depuis les vues serveur avec le périmètre de sites de votre session.");
+      setAuthMessage("Rapport actualisé pour vos établissements.");
     } finally {
       if(isCurrent())setPerformanceBusy(false);
     }
@@ -408,7 +408,7 @@ function App() {
     setAuthSession(updated);
     setMode(businessMode);
     setSiteName(displayName);
-    setAuthMessage("Profil d'organisation enregistré par Auth et journalisé côté serveur.");
+    setAuthMessage("Profil enregistré.");
   }
 
   async function createWebSite(input: { code: string; name: string; address_label: string; phone_contact: string }) {
@@ -695,7 +695,7 @@ function App() {
         ...previous,
         stock: [...(previous.stock ?? []), {
           id: inventoryItemId, title: item.name, detail: item.sku || item.unit,
-          state: navigator.onLine ? "En attente de confirmation serveur" : "En attente de connexion",
+          state: navigator.onLine ? "En attente de confirmation" : "En attente de connexion",
           createdAt: new Date().toLocaleString("fr-FR"), siteId,
         }],
       }));
@@ -734,7 +734,7 @@ function App() {
       const next:Entry={
         ...existing,
         id:aggregateId,title,detail,
-        state:navigator.onLine?"En attente de confirmation serveur":"En attente de connexion",
+        state:navigator.onLine?"En attente de confirmation":"En attente de connexion",
         createdAt:existing?.createdAt??new Date().toLocaleString("fr-FR"),
         aggregateType, actionCode, siteId,
         data:{...(existing?.data??{}),...payload},
@@ -1022,7 +1022,7 @@ function App() {
       "pressing","pressing_order.status_changed:"+nextStatus,"pressing_order",entry.id,
       {order_id:entry.id,from_status:entry.status,reason:reason.trim(),expected_version:entry.revision,transitioned_at:new Date().toISOString()},
       entry.siteId,entry.title,entry.detail+" · "+entry.status+" → "+nextStatus,
-      {...entry,status:nextStatus,revision:undefined,state:"Transition en attente du serveur"},
+      {...entry,status:nextStatus,revision:undefined,state:"Étape en attente de confirmation"},
     );
   }
 
@@ -1043,12 +1043,12 @@ function App() {
         metadata_json_delta: {}, transitioned_at: new Date().toISOString(), workstation_id: null,
       },
       entry.siteId, entry.title, entry.detail + " · " + entry.status + " → " + nextStatus,
-      { ...entry, status: nextStatus, revision: undefined, state: "Transition en attente du serveur" },
+      { ...entry, status: nextStatus, revision: undefined, state: "Étape en attente de confirmation" },
     );
   }
 
   function addLocalEntry() {
-    if (!preview) { setAuthMessage("Ce module est en aperçu uniquement tant que son parcours métier serveur n'est pas livré. Aucune donnée n'a été enregistrée."); setDialogOpen(false); return; }
+    if (!preview) { setAuthMessage("Cette action est indisponible. Aucune donnée n'a été enregistrée."); setDialogOpen(false); return; }
     const title = draftTitle.trim();
     if (!title) return;
     const item: Entry = { id: crypto.randomUUID(), title, detail: draftDetail.trim(), state: "Brouillon local", createdAt: new Date().toLocaleString("fr-FR") };
@@ -1370,7 +1370,7 @@ function AgendaPage({ entries, authenticated }: { entries: Entry[]; authenticate
     date.setDate(monday.getDate() + index);
     return { label: date.toLocaleDateString("fr-FR", { weekday: "short" }), day: date.getDate(), isToday: date.toDateString() === today.toDateString() };
   });
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue de la semaine</h2></div><span className="status-tag pending">{authenticated?"Rendez-vous":"Aperçu local"}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Aucun créneau disponible</strong><p>Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.</p></div></div><div className="module-main-card"><h2>Rendez-vous du journal serveur</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucun rendez-vous dans le périmètre chargé." />}</div></div>;
+  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue de la semaine</h2></div><span className="status-tag pending">{authenticated?"Rendez-vous":"Aperçu local"}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Aucun créneau disponible</strong><p>Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.</p></div></div><div className="module-main-card"><h2>Rendez-vous</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucun rendez-vous dans le périmètre chargé." />}</div></div>;
 }
 function PressingPage({
   entries,onAdvance,onTransition,canPreviewEdit,authenticated,busy,
@@ -1525,12 +1525,12 @@ function PerformancePage({
   fromDate:string;setFromDate:(value:string)=>void;loading:boolean;error:string;onLoad:()=>void;authenticated:boolean;
 }) {
   const fmt=(value:unknown)=>typeof value==="number"?new Intl.NumberFormat("fr-FR").format(value)+" FCFA":value==null?"—":String(value);
-  const rows=(values:Record<string,unknown>[],key:string)=>values.length===0?<Empty text="Aucune donnée serveur dans cette période pour le périmètre de sites autorisé."/>:
+  const rows=(values:Record<string,unknown>[],key:string)=>values.length===0?<Empty text="Aucune donnée disponible pour cette période."/>:
     <div style={{overflowX:"auto"}}><table className="data-table"><thead><tr><th>Période</th><th>Recettes confirmées</th><th>Coût connu</th><th>Marge brute</th><th>Ventes confirmées</th><th>Coût manquant</th></tr></thead><tbody>
       {values.map((row,index)=><tr key={String(row[key]??index)}><td>{String(row[key]??"—")}</td><td>{fmt(row.revenue_xaf)}</td><td>{fmt(row.cost_of_goods_xaf??row.known_cost_of_goods_xaf)}</td><td>{fmt(row.gross_profit_xaf)}</td><td>{fmt(row.confirmed_sales_count)}</td><td>{fmt(row.uncosted_sales_count)}</td></tr>)}
     </tbody></table></div>;
   return <div className="module-layout">
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">ANALYSE FINANCIÈRE</span><h2>Performances financières confirmées</h2></div><span className="status-tag pending">{data?"Données serveur":"À charger"}</span></div>
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">ANALYSE FINANCIÈRE</span><h2>Performances financières confirmées</h2></div><span className="status-tag pending">{data?"Données confirmées":"À charger"}</span></div>
       {authenticated?<><label>À partir du<input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} max={new Date().toISOString().slice(0,10)}/></label><button className="btn primary" disabled={loading} onClick={onLoad}>{loading?"Chargement…":"Charger les rapports"}</button></>:<div className="notice">Les rapports réels exigent une session Auth.</div>}
       {error&&<div className="notice">{error}</div>}
       <p className="muted">Les indicateurs tiennent compte des ventes confirmées.</p>
