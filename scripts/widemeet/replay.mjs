@@ -61,6 +61,17 @@ try{
  }
  pass("actual autonomous individual and enterprise registration, stable retry, no automatic entitlement");
  const hs=await login(h),gs=await login(g),os=await login(o);
+ // A separate fixture proves real password rotation without disturbing the room accounts.
+ const rotationUser=await fixture(other,"manager");
+ const oldSession=await login(rotationUser),otherDevice=await login(rotationUser);
+ const newPassword="Qa8!"+randomBytes(18).toString("hex"),changeId=randomUUID();
+ const changed=await ok(auth+"/change-password",{current_password:rotationUser.password,new_password:newPassword,request_id:changeId},oldSession.access_token);
+ assert.equal(changed.changed,true);assert.equal(changed.reconnect,true);
+ assert.equal((await request(room+"/list",{},oldSession.access_token)).status,403);
+ assert.equal((await request(room+"/list",{},otherDevice.access_token)).status,403);
+ assert.equal((await request(auth+"/login",{identifier:rotationUser.login,password:rotationUser.password,installation_id:randomUUID(),platform:"web"})).status,401);
+ const rotated=await login({login:rotationUser.login,password:newPassword});assert.equal(rotated.member_id,rotationUser.id);
+ pass("actual GoTrue password rotation and revocation of two devices");
  assert.equal(hs.member_id,h.id);assert.equal(gs.member_id,g.id);assert.equal(os.active_workspace_id,other);
  const denied=await request(auth+"/login",{identifier:h.login,password:"wrong",installation_id:randomUUID(),platform:"web"});assert.equal(denied.status,401);
  const rec=await ok(auth+"/request-recovery",{identifier:h.login,installation_id:randomUUID(),platform:"web"});const unknown=await ok(auth+"/request-recovery",{identifier:"WM-UNKNOWN123",installation_id:randomUUID(),platform:"web"});assert.deepEqual(rec,unknown);assert.equal(rec.accepted,true);
