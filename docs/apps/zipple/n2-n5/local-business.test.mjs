@@ -8,19 +8,22 @@ async function call(fn,action,body,token,guest=false){const res=await fetch(base
 test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and guest browser",async()=>{
  let server,browser;
  try{
-  const org=id(),member=id(),site=id(),login="zipple-business-fixture",email=id()+"@example.test",password="Fixture-"+id()+"-Aa9!";
+  const org=id(),member=id(),site=id(),destination=id(),login="zipple-business-fixture",email=id()+"@example.test",password="Fixture-"+id()+"-Aa9!";
   const created=await fetch(base+"/auth/v1/admin/users",{method:"POST",headers:{apikey:service,authorization:"Bearer "+service,"content-type":"application/json"},body:JSON.stringify({email,password,email_confirm:true})});assert.ok(created.ok,"local Auth fixture");
   const user=(await created.json()).id;
   await db.query("insert into zp_organizations values($1,'ZIPPLE business fixture',true)",[org]);
   await db.query("insert into zp_members(id,org_id,auth_user_id,login_id,auth_alias,role_code) values($1,$2,$3,$4,$5,'promoteur')",[member,org,user,login,email]);
-  await db.query("insert into zp_sites values($1,$2,'Restaurant fixture',true)",[site,org]);await db.query("insert into zp_site_scopes values($1,$2,$3)",[member,org,site]);
+  await db.query("insert into zp_sites values($1,$2,'Restaurant fixture',true)",[site,org]);await db.query("insert into zp_site_scopes values($1,$2,$3)",[member,org,site]);await db.query("insert into zp_sites values($1,$2,'Restaurant destination',true)",[destination,org]);await db.query("insert into zp_site_scopes values($1,$2,$3)",[member,org,destination]);
   const auth=await call("zipple-n1","login",{identifier:login,password});assert.equal(auth.status,200);const token=auth.body.access_token;
   const b=(action,body={},authToken=token,guest=false)=>call("zipple-business",action,{site_id:site,...body},authToken,guest);
   const quote=await b("quote",{plan:"ACCESS",cadence:"monthly",provider:"mtn_momo",request_id:id()});assert.equal(quote.status,200);assert.equal(quote.body.data.amount_xaf,5000);
   assert.equal((await b("snapshot")).status,403);assert.equal((await b("confirm_subscription",{verified:true})).status,403);
   // Synthetic payment confirmation only through privileged SQL on the disposable database.
-  await scalar("select zp_confirm_subscription($1,'mtn_momo',$2,5000,'XAF')",[quote.body.data.id,id()]);
+  const premium=await b("quote",{plan:"PREMIUM",cadence:"monthly",provider:"mtn_momo",request_id:id()});assert.equal(premium.status,200);assert.equal(premium.body.data.amount_xaf,18000);
+  await scalar("select zp_confirm_subscription($1,'mtn_momo',$2,18000,'XAF')",[premium.body.data.id,id()]);
   assert.equal((await b("mode",{space:"restaurant",bar:true,delivery:false})).status,200);
+  assert.equal((await b("mode",{site_id:destination,space:"restaurant",bar:false,delivery:false})).status,200);
+  const destinationIngredient=await b("ingredient_add",{site_id:destination,name:"Farine destination",sku:"FAR-TEST",unit:"kg",reorder_milli:0,supplier_whatsapp:""});assert.equal(destinationIngredient.status,200);
   const item=await b("menu_add",{name:"Plat recette",post:"kitchen",price_xaf:2500,qty:3});assert.equal(item.status,200);
   const table=await b("table_create",{label:"Table 1"});assert.equal(table.status,200);const tableId=table.body.data.id,qr=table.body.data.qr;
   assert.equal((await b("table_open",{table_id:tableId})).status,200);
@@ -32,7 +35,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   });await new Promise((ok,fail)=>{server.once("error",fail);server.listen(4443,"127.0.0.1",ok)});
   browser=await chromium.launch({headless:true});
   async function context(){const ctx=await browser.newContext({ignoreHTTPSErrors:true,reducedMotion:"reduce",serviceWorkers:"block",viewport:{width:390,height:844}});await ctx.route("**/*",async route=>{const req=route.request(),url=req.url();if(url.startsWith(publicOrigin+"/"))return route.continue();if(!url.startsWith(configured+"/"))return route.abort();const action=url.slice(configured.length+1);if(!/^[a-z_]+$/.test(action))return route.abort();const cors={"access-control-allow-origin":publicOrigin,"access-control-allow-headers":"authorization,content-type","access-control-allow-methods":"POST,OPTIONS","cache-control":"no-store"};if(req.method()==="OPTIONS")return route.fulfill({status:204,headers:cors});if(req.method()!=="POST")return route.abort();const response=await fetch(base+"/functions/v1/zipple-business/"+action,{method:"POST",headers:{origin,"content-type":"application/json",...(req.headers().authorization?{authorization:req.headers().authorization}:{})},body:req.postDataBuffer()??Buffer.from("{}")});return route.fulfill({status:response.status,headers:{...cors,"content-type":"application/json"},body:Buffer.from(await response.arrayBuffer())})});return ctx}
-  const staff=await context(),page=await staff.newPage();await page.goto(publicOrigin);await page.getByLabel("Identifiant").fill(login);await page.getByLabel("Mot de passe",{exact:true}).fill(password);await page.getByRole("button",{name:"Se connecter"}).click();await page.getByRole("heading",{name:"Gestion ZIPPLE"}).waitFor();await page.getByRole("heading",{name:"Nouvelle commande"}).waitFor();
+  const staff=await context(),page=await staff.newPage();await page.goto(publicOrigin);await page.getByLabel("Identifiant").fill(login);await page.getByLabel("Mot de passe",{exact:true}).fill(password);await page.getByRole("button",{name:"Se connecter"}).click();await page.getByRole("heading",{name:"Gestion ZIPPLE"}).waitFor();await page.getByRole("combobox",{name:"Établissement autorisé",exact:true}).selectOption(site);await page.getByRole("heading",{name:"Nouvelle commande"}).waitFor();
   const guestCtx=await context(),guest=await guestCtx.newPage();await guest.goto(publicOrigin+"/#table="+qr);await guest.getByRole("heading",{name:"Commander sans compte"}).waitFor();await guest.getByRole("button",{name:"Voir la carte"}).click();await guest.getByLabel(/Plat recette/).fill("1");await guest.getByRole("button",{name:"Confirmer ma commande"}).click();await guest.getByRole("heading",{name:"Commande confirmée"}).waitFor();
   assert.equal(Number(await scalar("select count(*) from zp_orders where org_id=$1 and guest_id is not null",[org])),1);
   await guest.getByRole("button",{name:"J’ai été servi"}).click();await guest.getByText("Service confirmé par vous").waitFor();
@@ -76,6 +79,34 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByRole("button",{name:"Clôturer le suivi"}).click();await page.getByText("Terminé",{exact:true}).waitFor();
   assert.ok(await scalar("select completed_at from zp_customer_followups where org_id=$1",[org]));
   console.log("ZIPPLE_CRM_REAL_EDGE_BROWSER_PASS");
+  // Reuse the same real professional session for packaging and transfer, no mocked response.
+  await page.getByRole("button",{name:"Stocks & finances"}).click();await page.getByRole("button",{name:"Consignes",exact:true}).click();
+  await page.getByRole("combobox",{name:"Fiche de contrepartie",exact:true}).selectOption({label:"Grossiste recette"});
+  await page.getByLabel("Type d'emballage").fill("Casiers recette");await page.getByLabel("Valeur unitaire de référence FCFA").fill("500");await page.getByRole("button",{name:"Créer le suivi de consigne"}).click();
+  await page.getByRole("combobox",{name:"Emballage suivi",exact:true}).selectOption({label:"Casiers recette · Grossiste recette"});
+  await page.getByLabel("Quantité",{exact:true}).fill("4");await page.getByRole("button",{name:"Enregistrer le mouvement"}).click();
+  await page.getByText(/Grossiste recette · Casiers recette · 4 à rendre/).waitFor();
+  assert.equal(await scalar("select outstanding from zp_container_accounts where org_id=$1",[org]),4);
+  console.log("ZIPPLE_N5_REAL_EDGE_CONTAINER_UI_PASS");
+  await page.getByRole("button",{name:"Transferts",exact:true}).click();
+  const sourceLot=await scalar("select id from zp_ingredient_lots where org_id=$1 and lot_label='LOT-TEST'",[org]);
+  await page.getByRole("combobox",{name:"Lot source",exact:true}).selectOption(sourceLot);
+  await page.getByRole("combobox",{name:"Établissement destinataire",exact:true}).selectOption(destination);
+  await page.getByRole("combobox",{name:"Matière correspondante",exact:true}).selectOption(destinationIngredient.body.data);
+  await page.getByLabel("Quantité à transférer").fill("1");await page.getByRole("button",{name:"Demander le transfert"}).click();
+  await page.getByRole("button",{name:"Approuver",exact:true}).click();await page.getByRole("button",{name:"Confirmer le départ"}).click();
+  await page.getByText(/1 · in_transit/).waitFor();
+  assert.equal(Number(await scalar("select remaining_milli from zp_ingredient_lots where id=$1",[sourceLot])),2000);
+  await page.getByRole("combobox",{name:"Établissement autorisé",exact:true}).selectOption(destination);
+  await page.getByRole("heading",{name:"Nouvelle commande"}).waitFor();await page.getByRole("button",{name:"Stocks & finances"}).click();await page.getByRole("button",{name:"Transferts",exact:true}).click();
+  await page.getByRole("button",{name:"Confirmer la réception"}).click();await page.getByText(/1 · received/).waitFor();
+  assert.equal(Number(await scalar("select remaining_milli from zp_ingredient_lots where ingredient_id=$1",[destinationIngredient.body.data])),1000);
+  console.log("ZIPPLE_N5_REAL_EDGE_TRANSFER_UI_PASS");
+  await page.getByRole("combobox",{name:"Établissement autorisé",exact:true}).selectOption(site);await page.getByRole("heading",{name:"Nouvelle commande"}).waitFor();
+  await page.getByRole("button",{name:"Pilotage",exact:true}).click();await page.getByRole("heading",{name:"Pilotage et recommandations"}).waitFor();
+  await page.getByText(/Historique insuffisant : 28 jours/).waitFor();
+  await page.getByText(/Charges enregistrées : 2[\s\u00a0\u202f]500 FCFA/).waitFor();
+  console.log("ZIPPLE_N7_REAL_EDGE_PILOTAGE_UI_PASS");
   await staff.close();await guestCtx.close();
   console.log("ZIPPLE_BUSINESS_REAL_EDGE_PROFESSIONAL_AND_GUEST_BROWSER_PASS");
  }finally{if(browser)await browser.close();if(server)await new Promise(ok=>server.close(ok));await db.end()}
