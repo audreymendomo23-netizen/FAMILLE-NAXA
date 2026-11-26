@@ -99,7 +99,7 @@ fun ModulePageTitle(title: String, description: String) {
 }
 
 @Composable
-fun LocalOnlyNotice(text: String = "Brouillon local : aucune synchronisation serveur ni validation distante n’est déclarée.") {
+fun LocalOnlyNotice(text: String = "En attente de confirmation.") {
     Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
 }
 
@@ -202,7 +202,7 @@ fun ServicesCatalogContent(
                 siteId = it
                 resetForm()
             }
-            LocalOnlyNotice(if (fr) "Le catalogue est local par site. Les prix ne sont pas synchronisés au serveur dans cette passe." else "The catalogue is local per site. Prices are not synchronized to the server in this pass.")
+            LocalOnlyNotice(if (fr) "Les modifications de prix sont en attente de confirmation." else "Price changes are pending confirmation.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
@@ -412,7 +412,7 @@ fun CustomersContent(
                 latitude = ""; longitude = ""; locationAccuracy = ""
                 contactConsent = false; locationConsent = false
             }
-            LocalOnlyNotice("CRM local pour ce point de vente. Les relances ne sont pas encore envoyées automatiquement : elles restent enregistrées dans l'agenda local jusqu'au raccordement du planificateur serveur et des notifications.")
+            LocalOnlyNotice("Consultez les relances prévues dans votre agenda. L'envoi automatique n'est pas disponible.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -513,7 +513,7 @@ fun CustomersContent(
                                     locationConsent = false; latitude = ""; longitude = ""; locationAccuracy = ""
                                     locationMessage = null
                                     editingCustomerId = ""
-                                    notice = "Fiche client enregistrée localement."
+                                    notice = "Fiche client enregistrée."
                                 }.onFailure { error = it.message ?: "Création impossible." }
                                 busy = false
                             }
@@ -804,7 +804,7 @@ fun StockContent(
                 selectedItemId = ""; unitCostXaf = ""; sellingPriceXaf = ""
                 transferDestinationSiteId = ""; transferItemId = ""
             }
-            LocalOnlyNotice("Chaque mouvement est journalisé localement ; le stock ne peut pas devenir négatif.")
+            LocalOnlyNotice("Votre stock ne peut pas devenir négatif.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -1501,9 +1501,9 @@ internal fun OrganizationWorkspaceContent(
             Spacer(Modifier.height(12.dp))
             ModulePageTitle(title, "Une organisation, plusieurs niveaux de gestion, des périmètres strictement séparés.")
             if (route == AppRoute.ORGANIZATION) {
-                LocalOnlyNotice("Le profil et le modèle sont enregistrés côté serveur. Les nouveaux sites et postes ajoutés depuis les autres onglets restent des brouillons locaux.")
+                LocalOnlyNotice("Gérez votre profil et vos établissements. Les nouveaux sites doivent être confirmés.")
             } else {
-                LocalOnlyNotice("Les nouveaux sites et postes sont préparés localement. Leur activation et les droits définitifs relèvent du serveur.")
+                LocalOnlyNotice("Les nouveaux sites et postes sont en attente d'activation.")
             }
         }
         if (route == AppRoute.ORGANIZATION) {
@@ -1517,7 +1517,7 @@ internal fun OrganizationWorkspaceContent(
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("Brouillon local non confirmé", fontWeight = FontWeight.Bold)
                             Text(profile!!.displayName + " · " + profile!!.businessMode)
-                            Text("Cette version n'a pas été validée par le serveur. Le profil serveur reste la référence.")
+                            Text("Cette modification est en attente de confirmation.")
                             OutlinedButton(
                                 onClick = {
                                     displayName = profile!!.displayName
@@ -1564,12 +1564,12 @@ internal fun OrganizationWorkspaceContent(
                                     }.onSuccess {
                                         runCatching { repository.saveOrganizationProfile(orgId, displayName, mode, locale) }
                                         profileConfirmedHere = true
-                                        notice = "Profil et modèle d’exploitation confirmés par le serveur."
+                                        notice = "Profil et modèle d’exploitation enregistrés."
                                     }.onFailure { remoteError ->
                                         profileConfirmedHere = false
                                         runCatching { repository.saveOrganizationProfile(orgId, displayName, mode, locale) }
                                             .onSuccess {
-                                                notice = "Brouillon local uniquement : le serveur n’a pas confirmé la modification."
+                                                notice = "Modification en attente de confirmation."
                                                 error = remoteError.message ?: "Service distant indisponible."
                                             }
                                             .onFailure { localError ->
@@ -1597,14 +1597,14 @@ internal fun OrganizationWorkspaceContent(
         }
         if (route == AppRoute.NETWORK || route == AppRoute.SITES) {
             item {
-                Text("Points de vente affectés par le serveur", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text("Vos points de vente", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 if (session.account.activeSites.isEmpty()) Text("Aucun point de vente affecté.")
                 else session.account.activeSites.forEachIndexed { index, site ->
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.fillMaxWidth().padding(13.dp)) {
                             Text(site.name.ifBlank { "Point " + (index + 1).toString() }, fontWeight = FontWeight.Bold)
                             Text(listOf(site.code, site.addressLabel, site.phoneContact).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
-                            Text("Données et opérations isolées · lecture selon les droits serveur", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
+                            Text("Accès autorisé", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -1616,7 +1616,7 @@ internal fun OrganizationWorkspaceContent(
                         Column(Modifier.fillMaxWidth().padding(13.dp)) {
                             Text(site.name, fontWeight = FontWeight.Bold)
                             Text(site.code + " · " + site.addressLabel)
-                            LocalOnlyNotice("Non activé côté serveur")
+                            LocalOnlyNotice("En attente d'activation")
                         }
                     }
                 }
@@ -1626,7 +1626,7 @@ internal fun OrganizationWorkspaceContent(
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("Créer un point de vente", fontWeight = FontWeight.Bold)
-                            Text("Le site devient actif uniquement après confirmation du serveur.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            Text("Le site sera disponible après confirmation.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             OutlinedTextField(siteCode, { siteCode = it }, Modifier.fillMaxWidth(), label = { Text("Code interne") }, singleLine = true)
                             OutlinedTextField(siteName, { siteName = it }, Modifier.fillMaxWidth(), label = { Text("Nom du point de vente") }, singleLine = true)
                             OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("Adresse") }, singleLine = true)
@@ -1643,7 +1643,7 @@ internal fun OrganizationWorkspaceContent(
                                                     activeSites = updatedSites
                                                 )))
                                                 siteCode = ""; siteName = ""; address = ""; phone = ""
-                                                notice = "Point de vente créé, activé et confirmé par le serveur."
+                                                notice = "Point de vente créé et activé."
                                             }
                                             .onFailure { error = it.message ?: "Création du point de vente impossible." }
                                         busy = false
@@ -1668,14 +1668,14 @@ internal fun OrganizationWorkspaceContent(
                     selectedSite,
                     session.account.activeSites.associate { it.id to it.name }
                 ) { selectedSite = it }
-                Text("Seuls les points de vente autorisés par le serveur peuvent recevoir des emplacements actifs.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Choisissez un point de vente autorisé.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Exemples : fauteuil de coiffure, comptoir pressing, atelier, réception ou caisse.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("Créer un emplacement dans ce point de vente", fontWeight = FontWeight.Bold)
-                        Text("La création et l’activation sont confirmées par le serveur.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        Text("L'emplacement sera disponible après confirmation.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         OutlinedTextField(workstationCode, { workstationCode = it }, Modifier.fillMaxWidth(), label = { Text("Code de l’emplacement") }, singleLine = true)
                         OutlinedTextField(workstationName, { workstationName = it }, Modifier.fillMaxWidth(), label = { Text("Nom de l’emplacement") }, singleLine = true)
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -1703,7 +1703,7 @@ internal fun OrganizationWorkspaceContent(
                                             serverRow.name, serverRow.kind, serverRow.capacity, serverRow.status
                                         )
                                         workstationCode = ""; workstationName = ""; capacity = "1"
-                                        notice = "Emplacement créé, activé et confirmé par le serveur."
+                                        notice = "Emplacement créé et activé."
                                     }.onFailure { error = it.message ?: "Création de l’emplacement impossible." }
                                     busy = false
                                 }
@@ -1723,7 +1723,7 @@ internal fun OrganizationWorkspaceContent(
                         Text(item.name, fontWeight = FontWeight.Bold)
                         Text(item.code + " · " + item.kind + " · capacité " + item.capacity)
                         if (item.syncStatus == "server_confirmed") {
-                            Text("Actif côté serveur", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
+                            Text("Actif", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
                         } else {
                             LocalOnlyNotice("Brouillon local · non activé")
                         }
@@ -1846,7 +1846,7 @@ fun SettingsContent(
                             Text("Autoriser les notifications")
                         }
                     }
-                    Text("Briefings locaux programmés : 07:00 et 19:00. Les notifications push distantes nécessitent le raccord FCM serveur.")
+                    Text("Vos briefings sont programmés à 07:00 et 19:00.")
                 }
             }
         }
@@ -1877,7 +1877,7 @@ fun SettingsContent(
                             Text(if (supplierSyncBusy) "Synchronisation…" else "Synchroniser les opérations fournisseurs")
                         }
                     } else {
-                        LocalOnlyNotice("Synchronisation fournisseurs désactivée par défaut. Elle exige une passerelle de recette Famille NAXA et l’option NS_ENABLE_SUPPLIER_SYNC=true dans un build dédié.")
+                        LocalOnlyNotice("L'actualisation des fournisseurs est momentanément indisponible.")
                     }
                     supplierSyncStatus?.let { Text(it, color = MaterialTheme.colorScheme.secondary) }
                 }
