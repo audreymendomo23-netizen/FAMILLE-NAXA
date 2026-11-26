@@ -24,6 +24,12 @@ class BootikOutboxInstrumentedTest{
    assertTrue(BootikSync.runActive(a.workId));assertEquals(0,BootikSync.flush(a))
   }finally{BootikSync.deactivate(a);BootikSync.deactivate(b);db.close()}
  }
+ @Test fun stockReceiptCannotAcknowledgeSale(){
+  val stock=BootikScopedEvent("stock-event","org","member","site",2,"{}")
+  assertTrue(BootikReceiptPolicy.valid("BOOTIK","org","member","site","stock-event","sync-stock","acknowledged",stock,"sync-stock"))
+  assertFalse(BootikReceiptPolicy.valid("BOOTIK","org","member","site","stock-event","sync-sale","acknowledged",stock,"sync-stock"))
+  assertFalse(BootikReceiptPolicy.valid("BOOTIK","org","other","site","stock-event","sync-stock","acknowledged",stock,"sync-stock"))
+ }
  @Test fun scopedQueueAndCache()=runBlocking{
   val db=Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext,BootikLocalDatabase::class.java).build()
   try{

@@ -46,6 +46,11 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await call('sync-stock',count)).body.state,'acknowledged');assert.equal(Number((await snapshot()).quantity_on_hand),6);
  assert.equal((await call('sync-stock',{...count,idempotency_key:randomUUID(),quantity:0,expected_version:'obsolete'})).body.state,'conflict');
  assert.equal(Number((await one('select count(*) from bootik.bk_stock_event_receipts where organization_id=$1',[o])).count),3);
+ await one("update bootik.bk_members set role='staff' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
+ const denied=await call('sync-stock',{...stock,idempotency_key:randomUUID(),expected_version:(await snapshot()).stock_version});
+ assert.equal(denied.body.state,'rejected');assert.equal(denied.body.result.reason,'BOOTIK_SCOPE_DENIED');
+ assert.equal(Number((await snapshot()).quantity_on_hand),6);
+ await one("update bootik.bk_members set role='manager' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
  assert.equal((await call('support',{kind:'screen',consent:false})).status,400);
  const req=await call('support',{kind:'video',consent:true});assert.equal(req.status,200);
  assert.equal((await call('support-cancel',{request_id:req.body.result.request_id})).body.result.cancelled,true);
