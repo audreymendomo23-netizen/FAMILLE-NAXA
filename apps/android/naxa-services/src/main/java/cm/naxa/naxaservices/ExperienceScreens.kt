@@ -32,8 +32,8 @@ fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boo
   Text("NAXA SERVICES",style=MaterialTheme.typography.labelLarge,color=MaterialTheme.colorScheme.primary,fontWeight=FontWeight.Black)
   Spacer(Modifier.height(16.dp))
   Text(if(canChoose) { if(fr)"Choisir votre activité" else "Choose your business activity" } else { if(fr)"Configuration de votre organisation" else "Organization setup" },style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-  Text(if(canChoose) { if(fr)"Ce choix configure les écrans, le catalogue, les stocks et les workflows de votre ERP. Il sera mémorisé pour toute l’organisation."
-   else "This choice configures ERP screens, catalogue, inventory and workflows. It is saved for the whole organization." }
+  Text(if(canChoose) { if(fr)"Choisissez votre métier pour personnaliser votre espace de travail."
+   else "Choose your business to personalize your workspace." }
    else { if(fr)"L’activité principale n’a pas encore été définie par le Promoteur. Déconnectez-vous et demandez-lui de terminer la configuration."
    else "The organization owner has not selected the main activity yet. Sign out and ask them to finish setup." },color=MaterialTheme.colorScheme.onSurfaceVariant)
   Spacer(Modifier.height(20.dp))
@@ -79,8 +79,8 @@ fun ActivitySelectionScreen(locale:String,initialSelection:String?,canChoose:Boo
     Text(if(fr)"Se déconnecter" else "Sign out")
    }
   }
-  Text(if(canChoose) { if(fr)"Le choix sera enregistré au niveau de l’organisation et verrouillé. Les collaborateurs ne pourront pas le remplacer depuis leur profil."
-   else "The choice will be saved and locked at organization level. Employees cannot replace it from their profile." }
+  Text(if(canChoose) { if(fr)"Votre choix s’applique à votre établissement."
+   else "Your choice applies to your business." }
    else { if(fr)"Le choix du Promoteur configurera automatiquement votre espace de travail."
    else "The business profile selected by the owner will automatically configure your workspace." },color=MaterialTheme.colorScheme.onSurfaceVariant,style=MaterialTheme.typography.bodySmall,modifier=Modifier.padding(top=12.dp))
  }
@@ -187,13 +187,13 @@ private data class DiscoveryCard(val icon:String,val titleFr:String,val titleEn:
 fun DiscoveryScreen(locale:String,onComplete:()->Unit) {
  val fr=locale!="en"
  val cards=remember { listOf(
-  DiscoveryCard("🧭","Votre activité, votre ERP","Your business, your ERP","Les modules s’adaptent au métier que votre organisation a choisi.","Modules adapt to the business profile selected by your organization."),
+  DiscoveryCard("🧭","Votre activité, votre gestion","Your business, your workspace","Les modules s’adaptent au métier que votre organisation a choisi.","Modules adapt to the business profile selected by your organization."),
   DiscoveryCard("📦","Opérations et stocks","Operations and inventory","Suivez les commandes, prestations, achats, consommations et coûts.","Track jobs, services, purchases, consumption and costs."),
   DiscoveryCard("📊","Pilotage au quotidien","Daily management","Comparez objectifs, ventes, caisse, marges et alertes.","Compare targets, sales, cash, margins and alerts."),
   DiscoveryCard("🛡️","Votre organisation reste protégée","Your organization stays protected","Les accès suivent les rôles, les sites et les emplacements autorisés.","Access follows authorized roles, sites and workstations.")
  ) }
  var page by rememberSaveable { mutableIntStateOf(0) }
- LaunchedEffect(page) { if(page<cards.lastIndex){delay(5000);page=(page+1).coerceAtMost(cards.lastIndex)} }
+ LaunchedEffect(page) { if(page<cards.lastIndex){delay(4000);page=(page+1).coerceAtMost(cards.lastIndex)} }
  val card=cards[page]
  Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(22.dp),verticalArrangement=Arrangement.Center) {
   Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){cards.indices.forEach{idx->Box(Modifier.weight(1f).height(4.dp).background(if(idx<=page)MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,RoundedCornerShape(4.dp)))}}
@@ -248,37 +248,22 @@ fun DashboardHeroCarousel(locale:String,activityProfile:String?,onOpen:()->Unit)
  val fr=locale!="en"; val activity=NaxaActivityCatalog.find(activityProfile)
  val cards=listOf(
   Triple("📈",if(fr)"Performance du jour" else "Today's performance",if(fr)"Ventes, objectifs et tendances de votre activité." else "Sales, targets and business trends."),
-  Triple(activity?.icon ?: "🧰",if(fr)activity?.titleFr ?: "Votre activité" else activity?.titleEn ?: "Your business",if(fr)activity?.descriptionFr ?: "Modules configurés pour votre métier." else activity?.descriptionEn ?: "Modules configured for your business."),
+  Triple(activity?.icon ?: "🧰",if(fr)activity?.titleFr ?: "Votre activité" else activity?.titleEn ?: "Your business",if(fr)activity?.descriptionFr ?: "Retrouvez les services de votre activité." else activity?.descriptionEn ?: "Explore your business services."),
   Triple("📦",if(fr)"Stock et approvisionnement" else "Inventory and supply",if(fr)"Coûts, seuils de sécurité et réapprovisionnement." else "Costs, safety thresholds and replenishment."),
   Triple("🛡️",if(fr)"Vue de management" else "Management overview",if(fr)"Les données restent séparées par site et consolidées selon vos droits." else "Data stays separate by site and is consolidated according to your access.")
  )
- val folder=activityProfile?.takeIf { NaxaActivityCatalog.find(it)!=null } ?: "autre"
- val photoNames=remember(folder) {
-  runCatching {
-   context.assets.list("activities/$folder").orEmpty()
-    .filter { it.lowercase().endsWith(".webp") || it.lowercase().endsWith(".jpg") || it.lowercase().endsWith(".jpeg") || it.lowercase().endsWith(".png") }
-    .sorted()
-  }.getOrDefault(emptyList())
- }
  var index by rememberSaveable { mutableIntStateOf(0) }
- var photoIndex by rememberSaveable(folder) { mutableIntStateOf(0) }
- LaunchedEffect(Unit){while(true){delay(5000);index=(index+1)%cards.size}}
- LaunchedEffect(photoNames.size) { if(photoNames.isNotEmpty()){while(true){delay(5000);photoIndex=(photoIndex+1)%photoNames.size}} }
- val photoName=photoNames.getOrNull(photoIndex)
- val bitmap:Bitmap?=remember(folder,photoName) {
-  photoName?.let { name -> runCatching { context.assets.open("activities/$folder/$name").use { stream -> BitmapFactory.decodeStream(stream) } }.getOrNull() }
- }
+ LaunchedEffect(Unit){while(true){delay(4000);index=(index+1)%cards.size}}
  val card=cards[index]
  Card(onClick=onOpen,modifier=Modifier.fillMaxWidth(),shape=RoundedCornerShape(24.dp),colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surfaceVariant),border=BorderStroke(1.dp,MaterialTheme.colorScheme.outlineVariant)){
-  Box(Modifier.fillMaxWidth().height(164.dp)) {
-   if(bitmap!=null) Image(bitmap.asImageBitmap(),contentDescription=null,modifier=Modifier.fillMaxSize(),contentScale=ContentScale.Crop)
-   Box(Modifier.fillMaxSize().background(if(bitmap!=null) Color(0xCC101010) else MaterialTheme.colorScheme.surfaceVariant))
-   Row(Modifier.fillMaxSize().padding(18.dp),horizontalArrangement=Arrangement.spacedBy(14.dp),verticalAlignment=Alignment.CenterVertically){
-    Text(if(bitmap==null)card.first else " ",style=MaterialTheme.typography.displayMedium)
+  Box(Modifier.fillMaxWidth().heightIn(min=164.dp)) {
+   BusinessPhotoBackdrop(activity=activityProfile,modifier=Modifier.matchParentSize())
+   Row(Modifier.fillMaxWidth().padding(18.dp),horizontalArrangement=Arrangement.spacedBy(14.dp),verticalAlignment=Alignment.CenterVertically){
+    Text(card.first,style=MaterialTheme.typography.titleLarge)
     Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(5.dp)){
-     Text(card.second,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=if(bitmap!=null)Color.White else MaterialTheme.colorScheme.onSurface)
-     Text(card.third,color=if(bitmap!=null)Color.White.copy(alpha=.9f) else MaterialTheme.colorScheme.onSurfaceVariant)
-     Text((index+1).toString()+" / "+cards.size+"  •  "+(if(fr)"Explorer" else "Explore"),color=if(bitmap!=null)Color(0xFFFF8A80) else MaterialTheme.colorScheme.primary,style=MaterialTheme.typography.labelMedium)
+     Text(card.second,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold,color=Color.White)
+     Text(card.third,color=Color.White.copy(alpha=.94f))
+     Text((index+1).toString()+" / "+cards.size+"  •  "+(if(fr)"Explorer" else "Explore"),color=Color(0xFFFFA8A0),style=MaterialTheme.typography.labelMedium)
     }
    }
   }
@@ -296,7 +281,7 @@ fun AppearanceSettingsContent(locale:String,preferences:NaxaServicesPreferences,
  LazyColumn(Modifier.fillMaxSize().padding(horizontal=18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
   item{
    Spacer(Modifier.height(12.dp)); Text(if(fr)"Apparence et mode nuit" else "Appearance and night mode",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold)
-   Text(if(fr)"Le mode nuit s’applique à toutes les pages. Le programme est recalculé à chaque reprise de l’application." else "Night mode applies across all pages. The schedule is recalculated whenever the app resumes.",color=MaterialTheme.colorScheme.onSurfaceVariant)
+   Text(if(fr)"Choisissez votre confort visuel, de jour comme de nuit." else "Choose your preferred display, day or night.",color=MaterialTheme.colorScheme.onSurfaceVariant)
   }
   item{
    Card(colors=CardDefaults.cardColors(containerColor=MaterialTheme.colorScheme.surface)){
@@ -307,7 +292,7 @@ fun AppearanceSettingsContent(locale:String,preferences:NaxaServicesPreferences,
       OutlinedButton(onClick={onLocale("en")},enabled=locale!="en"){Text("English")}
       OutlinedButton(onClick={onLocale("ff-CM")},enabled=locale!="ff-CM"){Text("Fulfulde")}
      }
-     if(locale=="ff-CM") Text("Les traductions Fulfulde sont en cours de validation ; les écrans non traduits restent affichés en français.", color=MaterialTheme.colorScheme.onSurfaceVariant, style=MaterialTheme.typography.bodySmall)
+     if(locale=="ff-CM") Text("Certaines pages restent disponibles en français.", color=MaterialTheme.colorScheme.onSurfaceVariant, style=MaterialTheme.typography.bodySmall)
      Text(if(fr)"Mode d’affichage" else "Display mode",fontWeight=FontWeight.Bold)
      listOf("dark","light","scheduled").forEach{value->
       Row(verticalAlignment=Alignment.CenterVertically){
