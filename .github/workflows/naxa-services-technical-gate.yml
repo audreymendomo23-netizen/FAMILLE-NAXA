@@ -274,8 +274,13 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install PostgreSQL client
         run: |
-          sudo apt-get update
-          sudo apt-get install -y postgresql-client
+          set -euo pipefail
+          # Prefer the client already on the runner. Do not update unrelated vendor repositories.
+          if ! command -v psql >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y postgresql-client
+          fi
+          psql --version
       - name: Bootstrap disposable Supabase Auth compatibility layer
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_postgres_bootstrap.sql
       - name: Apply candidate schemas to disposable PostgreSQL only
