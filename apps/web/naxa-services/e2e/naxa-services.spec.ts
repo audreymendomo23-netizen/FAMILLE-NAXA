@@ -424,8 +424,15 @@ test("PWA: production service worker keeps the app shell available after offline
     await navigator.serviceWorker.ready;
   });
   await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
-  await page.reload();
-  await page.waitForFunction(() => Boolean(navigator.serviceWorker.controller));
+  // First installation must cache every built entrypoint, without an online reload.
+  const cachedShell=await page.evaluate(async()=>{
+    const key=(await caches.keys()).find(k=>k.startsWith("naxa-services-shell-"))!;
+    const cache=await caches.open(key);const paths=(await cache.keys()).map(r=>new URL(r.url).pathname);
+    return {key,paths};
+  });
+  expect(cachedShell.key).toMatch(/^naxa-services-shell-[a-f0-9]{20}$/);
+  expect(cachedShell.paths.some(p=>p.startsWith("/assets/")&&p.endsWith(".js"))).toBe(true);
+  expect(cachedShell.paths.some(p=>p.startsWith("/assets/")&&p.endsWith(".css"))).toBe(true);
   const manifest = await page.evaluate(async () => {
     const response = await fetch("/manifest.webmanifest");
     if (!response.ok) throw new Error("MANIFEST_NOT_AVAILABLE");
