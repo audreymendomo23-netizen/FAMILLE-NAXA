@@ -112,6 +112,16 @@ export function createBootikService(db,{now=Date.now,securityDb=null,provisionDb
    const limit=await first('select coalesce((select max_member_sessions from bootik.bk_security_settings where organization_id=$1 and app_id=$2),2) as max_sessions,coalesce((select offline_minutes from bootik.bk_security_settings where organization_id=$1 and app_id=$2),15) as offline_minutes',[s.organization_id,s.app_id]);const siteLimit=await first('select coalesce((select max_devices from bootik.bk_site_device_policy where organization_id=$1 and app_id=$2 and location_id=$3),2) as max_site_devices',[s.organization_id,s.app_id,site]);
    const fullSite=await first('select not activity_restricted as allowed from bootik.bk_member_sites where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4',scope);const siteDevices=s.role==='promoteur'&&fullSite?.allowed?(await query("select distinct on (ss.device_session_id) ss.device_session_id,ss.installation_id,ss.platform,ss.user_id,ss.created_at,ss.device_session_id=$4 as current from bootik.bk_device_site_bindings d join bootik.bk_sessions ss using(device_session_id) where d.organization_id=$1 and d.app_id=$2 and d.location_id=$3 and ss.revoked_at is null and (ss.expires_at>now() or ss.refresh_expires_at>now()) order by ss.device_session_id,ss.created_at desc",[s.organization_id,s.app_id,site,s.device_session_id])).rows:[];result={sessions,site_devices:siteDevices,...limit,...siteLimit};
   }
+  else if(action==='approval-state'&&s.role==='promoteur'){
+   if(!securityDb)return reject(503);const full=await first('select not activity_restricted as allowed from bootik.bk_member_sites where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4',scope);if(!full?.allowed)return reject(403);
+   result={policies:(await securityDb.query('select activity_id,kind,threshold_fcfa from bootik.bk_approval_policies where organization_id=$1 and app_id=$2 and location_id=$3 order by activity_id,kind',[s.organization_id,s.app_id,site])).rows,requests:(await securityDb.query("select id,activity_id,actor,kind,amount_fcfa,payload,state,created_at from bootik.bk_approval_requests where organization_id=$1 and app_id=$2 and location_id=$3 and state='pending' order by created_at limit 100",[s.organization_id,s.app_id,site])).rows};
+  }
+  else if(action==='approval-admin'&&s.role==='promoteur'&&validId(p.request_id)&&['policy','decide'].includes(p.kind)){
+   if(!securityDb)return reject(503);const data={kind:p.kind,reason:clean(p.reason,500,true)};
+   if(p.kind==='policy'){if(!validId(p.activity_id)||!['purchase-pay','cash-movement'].includes(p.operation_kind)||!Number.isSafeInteger(p.threshold_fcfa)||p.threshold_fcfa<0)return reject();Object.assign(data,{activity_id:p.activity_id,operation_kind:p.operation_kind,threshold_fcfa:p.threshold_fcfa})}
+   else{if(!validId(p.approval_id)||!['approved','refused'].includes(p.decision))return reject();Object.assign(data,{approval_id:p.approval_id,decision:p.decision})}
+   result=(await securityDb.query('select bootik.bk_approval_admin($1,$2,$3,$4,$5,$6::jsonb) as result',[...scope,p.request_id,JSON.stringify(data)])).rows[0].result;
+  }
   else if(action==='resource-state'&&s.role==='promoteur'){
    if(!securityDb)return reject(503);const unrestricted=await first('select not activity_restricted as allowed from bootik.bk_member_sites where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4',scope);if(!unrestricted?.allowed)return reject(403);const rows=(await securityDb.query("select id,activity_id,code,label,'workstation' as kind from bootik.bk_workstations where organization_id=$1 and app_id=$2 and location_id=$3 union all select id,activity_id,code,label,'territory' from bootik.bk_territories where organization_id=$1 and app_id=$2 and location_id=$3 union all select id,activity_id,code,name,'register' from bootik.bk_registers where organization_id=$1 and app_id=$2 and location_id=$3 union all select id,activity_id,location_code,label,'storage' from bootik.bk_storage_locations where organization_id=$1 and app_id=$2 and location_id=$3 order by kind,label",[s.organization_id,s.app_id,site])).rows;result={resources:rows};
   }
@@ -236,7 +246,8 @@ export function createBootikService(db,{now=Date.now,securityDb=null,provisionDb
    if(p.kind==='open'&&(!validId(p.register_id)||!Number.isSafeInteger(p.opening_float_fcfa)))return reject();
    if(p.kind==='movement'&&(!validId(p.session_id)||!Number.isSafeInteger(p.amount_fcfa)))return reject();
    if(p.kind==='close'&&(!validId(p.session_id)||!Number.isSafeInteger(p.counted_close_fcfa)))return reject();
-   result=(await first('select bootik.bk_cash_action($1,$2,$3,$4,$5,$6::jsonb) as receipt',[...scope,p.kind,JSON.stringify(p)])).receipt;
+   const approval=p.kind==='movement'&&['out','expense'].includes(p.movement_kind)?(await first('select bootik.bk_approval_preflight($1,$2,$3,$4,$5,$6::jsonb) as state',[...scope,'cash-movement',JSON.stringify(p)])).state:null;
+   result=approval?{approval_id:p.request_id,approval_state:approval}:(await first('select bootik.bk_cash_action($1,$2,$3,$4,$5,$6::jsonb) as receipt',[...scope,p.kind,JSON.stringify(p)])).receipt;
   }
   else if(action==='purchase-create'&&validId(p.order_id)&&validId(p.supplier_id)&&validId(p.balance_id)&&typeof p.reference==='string'&&typeof p.quantity==='number'&&Number.isFinite(p.quantity)&&Number.isSafeInteger(p.unit_cost_fcfa)){
    result=await first('select bootik.bk_purchase_create($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) as order_id',[...scope,p.order_id,p.supplier_id,p.balance_id,p.reference,p.quantity,p.unit_cost_fcfa]);
@@ -245,7 +256,8 @@ export function createBootikService(db,{now=Date.now,securityDb=null,provisionDb
    result=await first('select bootik.bk_purchase_receive($1,$2,$3,$4,$5,$6,$7,$8) as receipt_id',[...scope,p.order_id,p.receipt_id,p.quantity,p.freight_fcfa]);
   }
   else if(action==='purchase-pay'&&validId(p.order_id)&&validId(p.payment_id)&&Number.isSafeInteger(p.amount_fcfa)&&['cash','bank','mobile_money'].includes(p.method)&&typeof p.reference==='string'){
-   result=await first('select bootik.bk_purchase_pay($1,$2,$3,$4,$5,$6,$7,$8,$9) as payment_id',[...scope,p.order_id,p.payment_id,p.amount_fcfa,p.method,p.reference]);
+   const approval=(await first('select bootik.bk_approval_preflight($1,$2,$3,$4,$5,$6::jsonb) as state',[...scope,'purchase-pay',JSON.stringify(p)])).state;
+   result=approval?{approval_id:p.payment_id,approval_state:approval}:await first('select bootik.bk_purchase_pay($1,$2,$3,$4,$5,$6,$7,$8,$9) as payment_id',[...scope,p.order_id,p.payment_id,p.amount_fcfa,p.method,p.reference]);
   }
   else if(action==='purchases'&&validId(p.activity_id)&&s.role!=='staff'){
    const allowed=await first('select bootik.bk_can_access_activity($1,$2,$3,$4,$5) and exists(select 1 from bootik.bk_activity_locations where organization_id=$1 and app_id=$2 and location_id=$4 and activity_id=$5) as allowed',[...scope,p.activity_id]);if(!allowed?.allowed)return reject(403);

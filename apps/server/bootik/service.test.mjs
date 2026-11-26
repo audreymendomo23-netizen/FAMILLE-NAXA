@@ -324,6 +324,18 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await centralCall('resource-admin',{...assignment,request_id:randomUUID(),resources:[]})).status,200);
  assert.equal((await empCall('cash-state',{activity_id:centralAct})).status,401);
  await assert.rejects(db.query('insert into bootik.bk_member_resource_rules values($1,$2,$3,$4,$5,$6::jsonb)',[centralOrg,a,employee,centralSite,'register','[]']));
+ // Delegation threshold: real DB mutation guard and independent approval, no accounting before decision.
+ const approver=randomUUID();await one('insert into auth.users(id) values($1)',[approver]);await one("insert into bootik.bk_members(organization_id,app_id,user_id,role,active) values($1,$2,$3,'promoteur',true)",[o,a,approver]);await one('insert into bootik.bk_member_sites(organization_id,app_id,user_id,location_id) values($1,$2,$3,$4)',[o,a,approver,s]);
+ const approvalAdmin=async(p)=> (await securityDb.query('select bootik.bk_approval_admin($1,$2,$3,$4,$5,$6::jsonb) as r',[o,a,approver,s,randomUUID(),JSON.stringify(p)])).rows[0].r;
+ await approvalAdmin({kind:'policy',activity_id:v,operation_kind:'purchase-pay',threshold_fcfa:100,reason:'Contrôle délégation'});
+ const sensitivePay={...pay,payment_id:randomUUID(),amount_fcfa:200,reference:'APPROVAL-TEST'};
+ const queued=await call('purchase-pay',sensitivePay);assert.equal(queued.status,200);assert.equal(queued.body.result.approval_state,'pending');assert.equal((await call('purchase-pay',sensitivePay)).body.result.approval_id,sensitivePay.payment_id);
+ assert.equal(Number((await one('select count(*) from bootik.bk_supplier_payments where id=$1',[sensitivePay.payment_id])).count),0);
+ await assert.rejects(db.query('select bootik.bk_purchase_pay($1,$2,$3,$4,$5,$6,$7,$8,$9)',[o,a,u,s,sensitivePay.order_id,sensitivePay.payment_id,sensitivePay.amount_fcfa,sensitivePay.method,sensitivePay.reference]));
+ await assert.rejects(db.query("update bootik.bk_approval_requests set state='approved' where id=$1",[sensitivePay.payment_id]));
+ assert.equal((await call('purchase-pay',{...sensitivePay,amount_fcfa:201})).status,400);
+ await approvalAdmin({kind:'decide',approval_id:sensitivePay.payment_id,decision:'approved',reason:'Vérifié'});
+ assert.equal((await call('purchase-pay',sensitivePay)).body.result.payment_id,sensitivePay.payment_id);assert.equal((await call('purchase-pay',sensitivePay)).body.result.payment_id,sensitivePay.payment_id);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);

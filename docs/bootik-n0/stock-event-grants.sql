@@ -41,3 +41,14 @@ grant select,insert on bootik.bk_register_workstations to bootik_security_runtim
 grant select on bootik.bk_registers to bootik_security_runtime;
 grant execute on function bootik.bk_resource_allowed(uuid,uuid,uuid,uuid,text,uuid),bootik.bk_resource_activity_access(uuid,uuid,uuid,uuid,uuid),bootik.bk_resource_catalog(uuid,uuid,uuid,uuid,uuid,uuid),bootik.bk_resource_gate(uuid,uuid,uuid,uuid,text,jsonb) to bootik_runtime;
 grant execute on function bootik.bk_resource_admin(uuid,uuid,uuid,uuid,uuid,jsonb) to bootik_security_runtime;
+
+create policy bk_runtime_approval_policy on bootik.bk_approval_policies for select to bootik_runtime using(true);
+create policy bk_runtime_approval_request on bootik.bk_approval_requests to bootik_runtime using(true) with check(state='pending' and approver is null and decided_at is null);
+grant select on bootik.bk_approval_policies,bootik.bk_approval_requests to bootik_runtime;
+grant insert(id,organization_id,app_id,location_id,activity_id,actor,kind,amount_fcfa,payload) on bootik.bk_approval_requests to bootik_runtime;
+grant execute on function bootik.bk_approval_check(uuid,uuid,uuid,uuid,uuid,text,uuid,bigint,jsonb,boolean),bootik.bk_approval_preflight(uuid,uuid,uuid,uuid,text,jsonb) to bootik_runtime;
+create policy bk_security_approval_policy on bootik.bk_approval_policies to bootik_security_runtime using(true) with check(true);
+create policy bk_security_approval_request on bootik.bk_approval_requests to bootik_security_runtime using(true) with check(true);
+grant select,insert on bootik.bk_approval_policies to bootik_security_runtime;grant update(threshold_fcfa) on bootik.bk_approval_policies to bootik_security_runtime;
+grant select on bootik.bk_approval_requests to bootik_security_runtime;grant update(state,approver,decided_at,reason) on bootik.bk_approval_requests to bootik_security_runtime;
+grant execute on function bootik.bk_approval_admin(uuid,uuid,uuid,uuid,uuid,jsonb) to bootik_security_runtime;
