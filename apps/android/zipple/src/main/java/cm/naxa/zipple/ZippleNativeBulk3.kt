@@ -26,7 +26,7 @@ private fun display(o:JSONObject,key:String):String {
  return safe+(money?.let{" · "+it+" FCFA"}?:"")
 }
 private fun opts(rows:List<JSONObject>,id:String,label:String)=rows.mapNotNull{v->v.optString(id).takeIf{it.isNotBlank()&&it!="null"}?.let{it to display(v,label)}}
-internal data class NF(val key:String,val fr:String,val en:String,val type:String,val optional:Boolean=false,val options:(ND,Map<String,String>)->List<Pair<String,String>>={_,_->emptyList()},val visible:(Map<String,String>)->Boolean={true})
+internal data class NF(val key:String,val fr:String,val en:String,val type:String,val optional:Boolean=false,val options:(ND,Map<String,String>)->List<Pair<String,String>> = {_,_->emptyList()},val visible:(Map<String,String>)->Boolean={true})
 internal data class NA(val action:String,val fr:String,val en:String,val fields:List<NF>,val owner:Boolean=false,val build:(JSONObject,ND,Map<String,String>)->JSONObject={b,_,_->b},val repeatFields:List<NF> = emptyList(),val arrayKey:String="",val minRows:Int=1,val maxRows:Int=30)
 internal data class NG(val id:String,val fr:String,val en:String,val loads:List<String>,val summaries:List<Triple<String,String,String>>,val forms:List<NA>,val owner:Boolean=false)
 internal val bulk3Groups=listOf(
