@@ -154,6 +154,12 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const packaging=await scalar("select zp_container_snapshot($1,$2)",[b.access,b.site]);assert.equal(packaging.accounts[0].outstanding,3);assert.equal(packaging.accounts[0].reference_exposure_xaf,1500);assert.equal(packaging.events.length,3);
  assert.equal((await scalar("select zp_procurement_snapshot($1,$2)",[b.access,b.site])).debt_xaf,400);
  await assert.rejects(scalar("select zp_container_move($1,$2,$3,$4,'returned',1,'')",[a.access,a.site,account,uid()]),/DENIED/);
+ const metrics=await scalar("select zp_pilotage($1,$2,(now() at time zone 'Africa/Douala')::date,(now() at time zone 'Africa/Douala')::date)",[b.access,b.site]);
+ assert.equal(metrics.recorded_xaf,3600);assert.equal(metrics.known_cost_xaf,990);assert.equal(metrics.gross_margin_xaf,2610);assert.equal(metrics.expenses_xaf,2500);assert.equal(metrics.posts[0].post,"snack");
+ const unknown=await scalar("select zp_pilotage($1,$2,(now() at time zone 'Africa/Douala')::date,(now() at time zone 'Africa/Douala')::date)",[a.access,a.site]);assert.equal(unknown.uncosted_receipts,1);assert.equal(unknown.gross_margin_xaf,null);assert.equal(unknown.feedback_count,1);
+ await assert.rejects(scalar("select zp_pilotage($1,$2,current_date,current_date)",[a.access,b.site]),/DENIED/);
+ await assert.rejects(scalar("select zp_pilotage($1,$2,current_date,current_date-1)",[a.access,a.site]),/INVALID_PERIOD/);
+ console.log("ZIPPLE_N7_RECORDED_METRICS_PASS");
  console.log("ZIPPLE_N5_CONTAINER_MOVEMENTS_PASS");
  console.log("ZIPPLE_N5_TRANSFER_LIFECYCLE_PASS");
  console.log("ZIPPLE_N5_PROCUREMENT_AND_INVENTORY_PASS");
