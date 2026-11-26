@@ -5,7 +5,7 @@ export type SharedEntry = {
   aggregateType?:string; actionCode?:string; status?:string; revision?:number;
   siteId?:string; data?:Record<string,unknown>;
 };
-const confirmed=(entry:SharedEntry)=>entry.state.includes("Confirmé par le serveur")||entry.state.startsWith("Reçu du serveur");
+const confirmed=(entry:SharedEntry)=>entry.state==="Confirmé"||entry.state.includes("Confirmé par le serveur")||entry.state.startsWith("Reçu du serveur");
 function Notice({children}:{children:React.ReactNode}){return <div className="notice" role="status">{children}</div>;}
 function RecordRow({entry}:{entry:SharedEntry}){return <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail}</small><small>{entry.state}</small></div><span className="status-tag local">{entry.status??(confirmed(entry)?"Confirmé":"En attente")}</span></div>;}
 
