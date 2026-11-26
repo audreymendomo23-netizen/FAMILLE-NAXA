@@ -1,6 +1,12 @@
 package cm.naxa.services.beneficiary
 
 internal object CapturePolicy {
+    // A stored candidate is acknowledged even when awaiting review; it is not a paid entitlement.
+    fun acknowledged(status: String?): Boolean = status in setOf("pending","matched","review","rejected")
+    fun nextOutstanding(count:Int, acknowledged:Boolean):Int? =
+        if(count < 0 || (acknowledged && count == 0) || (!acknowledged && count == Int.MAX_VALUE)) null
+        else if(acknowledged) count-1 else count+1
+
     fun channel(origin: String?): String? = when (origin) {
         "MobileMoney" -> "mtn_momo"
         "OrangeMoney" -> "orange_money"
