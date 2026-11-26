@@ -144,4 +144,47 @@ begin
 end $wm$;
 revoke all on function public.wm_request_recovery(text) from public,anon,authenticated;
 grant execute on function public.wm_request_recovery(text) to service_role;
+-- Autonomous registration candidate (disabled outside Replay until anti-abuse/recovery/legal qualification).
+-- GoTrue user provision is separate; this RPC atomically creates the product account, workspace and receipt.
+create table public.wm_registration_receipts(
+ installation_id uuid not null,
+ request_id uuid not null,
+ account_id uuid not null unique references public.wm_accounts(id),
+ workspace_id uuid not null unique references public.wm_workspaces(id),
+ auth_user_id uuid not null unique references auth.users(id),
+ display_name text not null,
+ workspace_name text not null,
+ workspace_kind text not null check(workspace_kind in ('individual','enterprise')),
+ terms_version text not null,
+ privacy_version text not null,
+ created_at timestamptz not null default clock_timestamp(),
+ primary key(installation_id,request_id)
+);
+alter table public.wm_registration_receipts enable row level security;
+revoke all on public.wm_registration_receipts from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_registration_receipts to service_role;
+create function public.wm_register_account(p_installation uuid,p_request uuid,p_auth_user uuid,p_login text,p_alias text,p_display text,p_kind text,p_workspace text,p_terms text,p_privacy text)
+returns text language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare receipt public.wm_registration_receipts%rowtype; aid uuid; wid uuid; result text;
+begin
+ if p_installation is null or p_request is null or p_auth_user is null or p_kind is null or p_kind not in ('individual','enterprise') or p_display is null or length(trim(p_display)) not between 1 and 120 or p_workspace is null or length(trim(p_workspace)) not between 1 and 120 or p_terms is distinct from 'wm-replay-draft-20261126' or p_privacy is distinct from 'wm-replay-draft-20261126' then raise exception 'invalid registration';end if;
+ perform pg_advisory_xact_lock(hashtextextended('wm-register:'||p_installation::text||':'||p_request::text,0));
+ select * into receipt from public.wm_registration_receipts x where x.installation_id=p_installation and x.request_id=p_request;
+ if found then
+  if receipt.auth_user_id<>p_auth_user or receipt.display_name<>trim(p_display) or receipt.workspace_kind<>p_kind or receipt.workspace_name<>trim(p_workspace) or receipt.terms_version<>p_terms or receipt.privacy_version<>p_privacy then raise exception 'registration conflict';end if;
+  select a.login_id into result from public.wm_accounts a where a.id=receipt.account_id and a.enabled;
+  if result is null then raise exception 'account unavailable';end if;
+  return result;
+ end if;
+ if p_login is null or p_login !~ '^WM-[A-Z0-9]{8,24}$' or p_alias is null or length(p_alias) not between 3 and 254 then raise exception 'invalid registration';end if;
+ insert into public.wm_accounts(auth_user_id,login_id,auth_alias,display_name,password_change_required)
+ values(p_auth_user,p_login,p_alias,trim(p_display),false) returning id into aid;
+ insert into public.wm_workspaces(kind,name) values(p_kind,trim(p_workspace)) returning id into wid;
+ insert into public.wm_memberships(account_id,workspace_id,role) values(aid,wid,case when p_kind='individual' then 'owner' else 'promoteur' end);
+ insert into public.wm_registration_receipts(installation_id,request_id,account_id,workspace_id,auth_user_id,display_name,workspace_name,workspace_kind,terms_version,privacy_version)
+ values(p_installation,p_request,aid,wid,p_auth_user,trim(p_display),trim(p_workspace),p_kind,p_terms,p_privacy);
+ return p_login;
+end $wm$;
+revoke all on function public.wm_register_account(uuid,uuid,uuid,text,text,text,text,text,text,text) from public,anon,authenticated;
+grant execute on function public.wm_register_account(uuid,uuid,uuid,text,text,text,text,text,text,text) to service_role;
 commit;
