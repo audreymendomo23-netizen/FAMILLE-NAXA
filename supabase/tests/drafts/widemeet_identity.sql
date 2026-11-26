@@ -213,5 +213,39 @@ do $wm$ begin
  if has_function_privilege('anon','public.wm_identity_action(text,text,jsonb)','EXECUTE') or has_table_privilege('authenticated','public.wm_membership_invites','SELECT') or has_table_privilege('anon','public.wm_favorites','SELECT') then raise exception 'identity ACL leak';end if;
 end $wm$;
 
+
+-- Rotating refresh secret, original absolute expiry, revoked devices and scope.
+set local role service_role;
+do $wm$ declare
+ a uuid:='10000000-0000-4000-8000-000000000001';
+ w uuid:='20000000-0000-4000-8000-000000000001';
+ ins uuid:='30000000-0000-4000-8000-000000000041';
+ sid uuid; next_id uuid; deadline timestamptz; j jsonb;
+begin
+ sid:=public.wm_issue_verified_session(a,ins,w,repeat('9',64),1);
+ if not public.wm_attach_refresh(repeat('9',64),repeat('0',64),true) then raise exception 'refresh attachment failed';end if;
+ select refresh_until into deadline from public.wm_device_sessions where id=sid;
+ if deadline<=now()+interval '29 days' or deadline>clock_timestamp()+interval '30 days' then raise exception 'invalid remember deadline';end if;
+ if public.wm_attach_refresh(repeat('9',64),repeat('1',64),true) then raise exception 'refresh reattached';end if;
+ if public.wm_rotate_refresh(repeat('0',64),gen_random_uuid(),repeat('a',63)||'1',repeat('b',63)||'1') is not null then raise exception 'wrong installation accepted';end if;
+ next_id:=public.wm_rotate_refresh(repeat('0',64),ins,repeat('a',63)||'1',repeat('b',63)||'1');
+ if next_id is null then raise exception 'refresh rotation failed';end if;
+ if exists(select 1 from public.wm_session_context(repeat('9',64))) then raise exception 'old access survived';end if;
+ if public.wm_rotate_refresh(repeat('0',64),ins,repeat('a',63)||'2',repeat('b',63)||'2') is not null then raise exception 'old refresh replay accepted';end if;
+ if (select refresh_until from public.wm_device_sessions where id=next_id) is distinct from deadline then raise exception 'absolute deadline extended';end if;
+ perform public.wm_switch_workspace(repeat('a',63)||'1','20000000-0000-4000-8000-000000000003',repeat('a',63)||'2');
+ next_id:=public.wm_rotate_refresh(repeat('b',63)||'1',ins,repeat('a',63)||'3',repeat('b',63)||'3');
+ if next_id is null or (select workspace_id from public.wm_device_sessions where id=next_id)<>'20000000-0000-4000-8000-000000000003'::uuid then raise exception 'refresh did not preserve selected workspace';end if;
+ j:=public.wm_identity_action(repeat('a',63)||'3','devices','{}');
+ if not exists(select 1 from jsonb_array_elements(j->'devices') d where d->>'id'=next_id::text and d->>'current'='true') then raise exception 'device listing failed';end if;
+ if public.wm_identity_action(repeat('a',63)||'3','revoke-device',jsonb_build_object('id',next_id)) is not null then raise exception 'self device revocation not via logout';end if;
+ update public.wm_device_sessions set refresh_until=clock_timestamp()-interval '1 second' where id=next_id;
+ if public.wm_rotate_refresh(repeat('b',63)||'3',ins,repeat('a',63)||'4',repeat('b',63)||'4') is not null then raise exception 'expired refresh accepted';end if;
+end $wm$;
+reset role;
+do $wm$ begin
+ if has_function_privilege('anon','public.wm_rotate_refresh(text,uuid,text,text)','EXECUTE') or has_function_privilege('authenticated','public.wm_attach_refresh(text,text,boolean)','EXECUTE') then raise exception 'refresh ACL leak';end if;
+end $wm$;
+
 rollback;
 select 'WIDEMEET_IDENTITY_SQL_PASS';
