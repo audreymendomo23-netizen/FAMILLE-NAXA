@@ -1,0 +1,84 @@
+name: Family media — isolated audio recording
+on:
+  pull_request:
+    branches: [test/widemeet-qualification-20261126]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'scripts/widemeet/media-replay.mjs'
+      - '.github/workflows/family-audio-replay.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audio-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare isolated recording dependencies
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund livekit-client@2.25.0 livekit-server-sdk@2.20.1 ws@8.18.3 @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y ffmpeg
+      - name: Start private Redis, SFU and Egress
+        run: |
+          set -euo pipefail
+          KEY=naxareplay
+          SECRET="$(openssl rand -hex 32)"
+          echo "::add-mask::$SECRET"
+          echo "LK_TEST_KEY=$KEY" >> "$GITHUB_ENV"
+          echo "LK_TEST_SECRET=$SECRET" >> "$GITHUB_ENV"
+          echo "WM_TEST_EGRESS=true" >> "$GITHUB_ENV"
+          OUT="$RUNNER_TEMP/wm-egress-out"
+          mkdir -p "$OUT"
+          chmod 777 "$OUT"
+          echo "WM_EGRESS_OUT=$OUT" >> "$GITHUB_ENV"
+          docker run -d --name wm-audio-redis --network host redis:7.4.1-alpine redis-server --bind 127.0.0.1 --port 6381 --save "" --appendonly no
+          cat > "$RUNNER_TEMP/wm-audio-lk.yaml" <<EOF
+          port: 7880
+          bind_addresses: ["127.0.0.1"]
+          redis:
+            address: 127.0.0.1:6381
+          rtc:
+            node_ip: 127.0.0.1
+            use_external_ip: false
+            tcp_port: 7882
+            udp_port: 7883
+          room:
+            auto_create: false
+            enable_remote_unmute: false
+          keys:
+            $KEY: $SECRET
+          EOF
+          cat > "$RUNNER_TEMP/wm-egress.yaml" <<EOF
+          api_key: $KEY
+          api_secret: $SECRET
+          ws_url: ws://127.0.0.1:7880
+          insecure: true
+          redis:
+            address: 127.0.0.1:6381
+          health_port: 7990
+          cpu_cost:
+            room_composite_cpu_cost: 1
+            audio_room_composite_cpu_cost: 1
+          EOF
+          chmod 600 "$RUNNER_TEMP/wm-audio-lk.yaml"
+          chmod 644 "$RUNNER_TEMP/wm-egress.yaml"
+          docker run -d --name wm-audio-lk --network host -v "$RUNNER_TEMP/wm-audio-lk.yaml:/etc/livekit.yaml:ro" livekit/livekit-server:v1.13.9 --config /etc/livekit.yaml
+          for i in $(seq 1 60); do if curl -fsS http://127.0.0.1:7880/ >/dev/null; then break; fi; sleep 1; done
+          curl -fsS http://127.0.0.1:7880/
+          docker run -d --name wm-audio-egress --network host --cap-add SYS_ADMIN -e EGRESS_CONFIG_FILE=/etc/egress.yaml -v "$RUNNER_TEMP/wm-egress.yaml:/etc/egress.yaml:ro" -v "$OUT:/out" livekit/egress:v1.12.0
+          for i in $(seq 1 90); do if curl -fsS http://127.0.0.1:7990/ >/dev/null; then exit 0; fi; sleep 1; done
+          echo "Egress readiness failed"
+          exit 1
+      - name: Verify actual audio-only capture (synthetic devices only)
+        run: node scripts/widemeet/media-replay.mjs
+      - name: Cleanup private test recording and containers
+        if: always()
+        run: |
+          docker rm -f wm-audio-egress wm-audio-lk wm-audio-redis || true
+          rm -rf "$RUNNER_TEMP/wm-egress-out" "$RUNNER_TEMP/wm-audio-lk.yaml" "$RUNNER_TEMP/wm-egress.yaml"
