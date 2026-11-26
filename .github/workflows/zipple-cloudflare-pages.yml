@@ -1,0 +1,30 @@
+name: ZIPPLE — Cloudflare Pages build qualification
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/zipple/cloudflare-pages-build*.mjs"
+      - ".github/workflows/zipple-cloudflare-pages.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pages-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test scripts/zipple/cloudflare-pages-build.test.mjs
+      - run: npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
+      - run: node scripts/zipple/cloudflare-pages-build.mjs
+        env:
+          VITE_ZIPPLE_API_URL: https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-n1
+      - run: |
+          test -s apps/web/zipple/dist/index.html
+          grep -R -l -F 'https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-n1' apps/web/zipple/dist/assets >/dev/null
+          echo ZIPPLE_CLOUDFLARE_BUILD_PASS
