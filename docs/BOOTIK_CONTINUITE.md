@@ -267,3 +267,6 @@ Run 45834117940 : contrats 6/6 et PostgreSQL 17 PASS, Web build SUCCESS, JOBLY i
 
 ### N0 — correction résolution Compose tests
 Run 45835804979 : ressources XML désormais compilées, contrats/PostgreSQL, Web et inventaire JOBLY SUCCESS. Job Android échoue sur checkDebugAndroidTestAarMetadata : Could not find androidx.compose.ui:ui-test-junit4:. Cause : BOM Compose absent de la configuration androidTestImplementation. Correction locale BOOTIK alignée sur ZIPPLE (BOM 2024.10.01), sans changer les versions ni les packages communs. Nouvelle CI requise ; pas de statut vert avant résultat.
+
+### Lot transverse N0–N10 — 26 novembre
+CI N0 45837071003 SUCCESS 4/4 ; tests instrumentés compilés, pas exécutés sur émulateur ; JOBLY inventaire 788 fichiers, qualification code ouverte. Commits 8f9b810a et 0a5ec47b : coffre Keystore et PIN ZIPPLE adaptés, session Web et IndexedDB isolés, référentiel 22 profils et 14 espaces, devis Kotlin/Web, interface responsive connexion et offres, SW isolé, contrat candidat accès Security/support. Aucune API BOOTIK configurée par défaut ; aucun accès métier ni droit payant simulé. Les modules restent en construction. Vidéosurveillance et support RTC séparés ; vidéo bidirectionnelle à implémenter et tester, consentement explicite. Aucun déploiement.

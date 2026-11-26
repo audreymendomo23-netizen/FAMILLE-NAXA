@@ -1138,3 +1138,6 @@ Toute question non tranchée doit être traitée comme paramètre ouvert, sans b
 - Aucun déploiement, publication APK, changement de Production, migration Supabase partagée ou push sur branche protégée sans l'accord explicite requis.
 - Les livraisons documentaires peuvent être isolées dans une branche dédiée et revues avant intégration.
 
+
+## 30. Complément validé le 26 novembre 2026 — Security et communication
+Intégrer NAXA SECURITY par contrats BOOTIK autorisés : caméras, visualisation en direct, alertes, incidents, journal, multisite, pointage et révocation des accès. Support : livechat, tickets, appels audio, visioconférence bidirectionnelle, partage d’écran sur consentement explicite et révocable, sans contrôle distant implicite. Sessions bornées au tenant/site/permission et expirables ; aucun flux ni secret de caméra dans les logs, aucun enregistrement implicite. Adaptation RTC NAXA après audit et tests, sans réutiliser les comptes pharmacie. Traitement en bulk multi-niveaux.
