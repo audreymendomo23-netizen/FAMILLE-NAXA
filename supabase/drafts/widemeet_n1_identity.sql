@@ -122,4 +122,26 @@ begin
 end $wm$;
 revoke all on function public.wm_reserve_auth_attempt(text,text) from public,anon,authenticated;
 grant execute on function public.wm_reserve_auth_attempt(text,text) to service_role;
+-- N1 supervised recovery intake, adapted from NS. A request never resets a password.
+create table public.wm_recovery_requests(
+ id uuid primary key default gen_random_uuid(),
+ account_id uuid not null references public.wm_accounts(id) on delete restrict,
+ requested_at timestamptz not null default clock_timestamp(),
+ status text not null default 'pending' check(status in ('pending','resolved','rejected'))
+);
+create unique index wm_recovery_one_pending on public.wm_recovery_requests(account_id) where status='pending';
+alter table public.wm_recovery_requests enable row level security;
+revoke all on public.wm_recovery_requests from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_recovery_requests to service_role;
+create function public.wm_request_recovery(p_identifier text)
+returns void language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+begin
+ -- No response distinguishes an existing, disabled or unknown account.
+ if p_identifier is null or p_identifier !~ '^WM-[A-Z0-9]{8,24}$' then return;end if;
+ insert into public.wm_recovery_requests(account_id)
+ select id from public.wm_accounts where login_id=p_identifier and enabled
+ on conflict(account_id) where status='pending' do nothing;
+end $wm$;
+revoke all on function public.wm_request_recovery(text) from public,anon,authenticated;
+grant execute on function public.wm_request_recovery(text) to service_role;
 commit;
