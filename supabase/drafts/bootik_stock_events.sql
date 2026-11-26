@@ -338,7 +338,7 @@ begin
  v_amount:=p_qty*o.unit_cost_fcfa;if v_amount<>round(v_amount) or v_amount+p_freight>9007199254740991 or o.received_amount_fcfa+v_amount>9007199254740991 then raise exception 'BOOTIK_PURCHASE_INVALID';end if;
  select updated_at::text into v_version from bootik.bk_inventory_balances where id=o.balance_id and organization_id=p_org and app_id=p_app and location_id=p_site and activity_id=o.activity_id for update;
  if not found then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
- v_stock:=bootik.bk_record_stock_event(p_org,p_app,p_actor,p_site,o.balance_id,p_id,'receipt',p_qty,v_version,'Commande '||o.reference,(v_amount+p_freight)::bigint);
+ v_stock:=bootik.bk_record_stock_event(p_org,p_app,p_actor,p_site,o.balance_id,gen_random_uuid(),'receipt',p_qty,v_version,'Commande '||o.reference,(v_amount+p_freight)::bigint);
  insert into bootik.bk_purchase_receipts(id,order_id,actor,quantity,amount_fcfa,freight_fcfa,stock_receipt_id) values(p_id,p_order,p_actor,p_qty,v_amount::bigint,p_freight,v_stock);
  update bootik.bk_purchase_orders set received_quantity=received_quantity+p_qty,received_amount_fcfa=received_amount_fcfa+v_amount::bigint where id=o.id;
  return p_id;

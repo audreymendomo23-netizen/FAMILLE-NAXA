@@ -403,3 +403,7 @@ Valorisation 45863520967 et FEFO 45863295045 : SUCCESS 5/5. Recette 45863709732 
 
 ### BULK ACHATS — raccordement NAXA SERVICES (candidat)
 Réutilisation des parcours StockOperationsPage (commande, réception, règlement) et du contrat de valorisation comptable déjà adapté ; aucune réécriture du moteur stock. Commande mono-référence en unité de base, fournisseur de même activité, solde de site autorisé, réception partielle atomique avec mouvement et frais attribuables, coût pondéré, dette créée seulement à réception (hors frais de tiers), règlement externe partiel journalisé, sur-réception/sur-paiement refusés, reçus idempotents, aucun transfert financier. UI Android/Web et tests API réels. Reste commandes multi-lignes, avances, avoirs, litiges, échéances, pièces jointes, WhatsApp, B2B et journaux comptables complets. CI à confirmer. Aucun déploiement ni modification d'autres solutions.
+
+
+### Achats — recette UI et durcissement
+La réception fournisseur crée un UUID de mouvement serveur distinct, afin de ne jamais rattacher un événement manuel préexistant. Le reçu de mutation reste confirmé même si le rafraîchissement de la liste échoue. Extension Chromium : fournisseur, commande, réception partielle avec frais, dette et règlement. CI à confirmer.

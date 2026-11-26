@@ -16,7 +16,7 @@ import java.util.UUID
  suspend fun call(action:String,p:JSONObject)=api.operation(session,site,action,p)
  suspend fun refresh(){orders=rows(call("purchases",JSONObject().put("activity_id",activity)).getJSONArray("orders"))}
  fun task(f:suspend()->Unit){if(busy)return;busy=true;message="";scope.launch{try{f()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){message="Opération non confirmée. Vérifiez les droits et la connexion."}finally{busy=false}}}
- suspend fun commit(action:String,key:String,field:String,p:JSONObject){val fp=p.toString();val old=pending[key];val id=if(old?.first==fp)old.second else UUID.randomUUID().toString().also{pending[key]=fp to it};p.put(field,id);check(call(action,p).getString(field)==id);pending.remove(key);message="Opération confirmée par le serveur.";refresh()}
+ suspend fun commit(action:String,key:String,field:String,p:JSONObject){val fp=p.toString();val old=pending[key];val id=if(old?.first==fp)old.second else UUID.randomUUID().toString().also{pending[key]=fp to it};p.put(field,id);check(call(action,p).getString(field)==id);pending.remove(key);message="Opération confirmée par le serveur.";try{refresh()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){orders=emptyList();order="";message="Opération confirmée ; rechargez la liste des achats."}}
  fun positive(s:String)=s.toDoubleOrNull()?.let{it.isFinite()&&it>0}==true
  fun money(s:String)=s.toLongOrNull()?.let{it>=0}==true
  val chosen=orders.find{it.getString("id")==order}
