@@ -312,6 +312,8 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  const assignment={kind:'assign',request_id:randomUUID(),member_id:employee,resource_kind:'workstation',resources:[station.request_id],reason:'Affectation caissier'};
  assert.equal((await centralCall('resource-admin',{...assignment,request_id:randomUUID(),resources:[randomUUID()]})).status,403);
  assert.equal((await centralCall('resource-admin',assignment)).status,200);
+ const registerRule={...assignment,request_id:randomUUID(),resource_kind:'register',resources:[registerA.body.result.register_id,registerB.body.result.register_id]};assert.equal((await centralCall('resource-admin',registerRule)).status,200);
+ assert.equal(Number((await one('select count(*) from bootik.bk_member_resource_rules where organization_id=$1 and user_id=$2 and location_id=$3',[centralOrg,employee,centralSite])).count),2);
  const empLogin=await handle('login',{app_id:'BOOTIK',installation_id:randomUUID(),platform:'test',identifier:empEvent.identifier,password:emp.body.temporary_password},null,'resource-test');assert.equal(empLogin.status,200);
  assert.equal((await handle('change-password',{app_id:'BOOTIK',current_password:emp.body.temporary_password,new_password:'employee-new-password'},empLogin.body.access_token)).status,204);
  const empActive=await handle('login',{app_id:'BOOTIK',installation_id:randomUUID(),platform:'test',identifier:empEvent.identifier,password:'employee-new-password'},null,'resource-test');assert.equal(empActive.status,200);

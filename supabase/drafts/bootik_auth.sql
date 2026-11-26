@@ -69,7 +69,7 @@ alter table bootik.bk_member_functions enable row level security;alter table boo
 create table bootik.bk_member_resource_rules(
  organization_id uuid not null,app_id uuid not null,user_id uuid not null,location_id uuid not null,
  resource_kind text not null check(resource_kind in ('register','workstation','storage','territory')),resources jsonb not null check(jsonb_typeof(resources)='array' and jsonb_array_length(resources)<=50),
- primary key(organization_id,app_id,user_id,location_id),foreign key(organization_id,app_id,user_id,location_id) references bootik.bk_member_sites(organization_id,app_id,user_id,location_id) on delete cascade
+ primary key(organization_id,app_id,user_id,location_id,resource_kind),foreign key(organization_id,app_id,user_id,location_id) references bootik.bk_member_sites(organization_id,app_id,user_id,location_id) on delete cascade
 );
 create table bootik.bk_workstations(
  id uuid primary key,organization_id uuid not null,app_id uuid not null,activity_id uuid not null,location_id uuid not null,code text not null,label text not null,
@@ -83,7 +83,7 @@ do $$ declare n text;begin foreach n in array array['bk_member_resource_rules','
 -- Cache scope fingerprint; not a secret or authorization token. Any changed assignment yields a different cache partition.
 create function bootik.bk_scope_stamp(p_org uuid,p_app uuid,p_user uuid)
 returns text language sql stable security invoker set search_path=pg_catalog,bootik as $$
- select md5(jsonb_build_object('role',m.role,'function',f.function_code,'sites',coalesce((select jsonb_agg(jsonb_build_object('id',s.location_id,'restricted',s.activity_restricted,'resource_rule',(select jsonb_build_object('kind',rr.resource_kind,'ids',rr.resources) from bootik.bk_member_resource_rules rr where rr.organization_id=p_org and rr.app_id=p_app and rr.user_id=p_user and rr.location_id=s.location_id),'activities',coalesce((select jsonb_agg(a.activity_id order by a.activity_id) from bootik.bk_member_activity_scopes a where a.organization_id=p_org and a.app_id=p_app and a.user_id=p_user and a.location_id=s.location_id),'[]'::jsonb)) order by s.location_id) from bootik.bk_member_sites s where s.organization_id=p_org and s.app_id=p_app and s.user_id=p_user),'[]'::jsonb))::text)
+ select md5(jsonb_build_object('role',m.role,'function',f.function_code,'sites',coalesce((select jsonb_agg(jsonb_build_object('id',s.location_id,'restricted',s.activity_restricted,'resource_rule',(select jsonb_agg(jsonb_build_object('kind',rr.resource_kind,'ids',rr.resources) order by rr.resource_kind) from bootik.bk_member_resource_rules rr where rr.organization_id=p_org and rr.app_id=p_app and rr.user_id=p_user and rr.location_id=s.location_id),'activities',coalesce((select jsonb_agg(a.activity_id order by a.activity_id) from bootik.bk_member_activity_scopes a where a.organization_id=p_org and a.app_id=p_app and a.user_id=p_user and a.location_id=s.location_id),'[]'::jsonb)) order by s.location_id) from bootik.bk_member_sites s where s.organization_id=p_org and s.app_id=p_app and s.user_id=p_user),'[]'::jsonb))::text)
  from bootik.bk_members m left join bootik.bk_member_functions f using(organization_id,app_id,user_id) where m.organization_id=p_org and m.app_id=p_app and m.user_id=p_user and m.active;
 $$;
 revoke all on function bootik.bk_scope_stamp(uuid,uuid,uuid) from public,anon,authenticated;

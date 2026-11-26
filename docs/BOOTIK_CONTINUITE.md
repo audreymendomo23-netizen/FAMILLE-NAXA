@@ -462,3 +462,6 @@ Reprise des approbations après redémarrage : liste serveur des demandes propre
 
 ### B01 — extension de dossier central et récupération Promoteur
 Adaptation du contrat site/activité de NAXA SERVICES : événements centraux idempotents site, activity, member-site, promoter-recovery. Extension sans second compte ni abonnement, vérification tenant/profil/activité, nouvel accès employé explicitement limité, ancien jeton employé révoqué, récupération Promoteur par événement central avec preuve humaine et secret provisoire unique. Tests PostgreSQL/API ajoutés. Aucun accès ni modification du service central réel ; preuve de transport hébergé encore nécessaire.
+
+### B01 — affectations cumulatives
+La clé des règles inclut la catégorie de ressource. Les règles caisse et poste sont maintenant intersectées (aucun écrasement implicite), fingerprint cache inclut toutes les règles ; lecture activité et catalogue intersectées. Les zones de stock associées à un poste/caisse restent fermées à la vente FEFO tant que B02/B03 ne garantit pas l'allocation de lot par zone ; territoire interdit aux opérations non encore raccordées B05. Test combiné caisse A+B et poste A : seule caisse A autorisée. Aucune permission élargie.

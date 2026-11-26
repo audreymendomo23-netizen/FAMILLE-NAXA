@@ -470,46 +470,56 @@ create table bootik.bk_register_workstations(
 alter table bootik.bk_register_workstations enable row level security;alter table bootik.bk_register_workstations force row level security;revoke all on bootik.bk_register_workstations from public,anon,authenticated;
 create function bootik.bk_resource_allowed(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_kind text,p_id uuid)
 returns boolean language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
-declare rr bootik.bk_member_resource_rules%rowtype;
+declare rr bootik.bk_member_resource_rules%rowtype;matched boolean:=false;
 begin
- select * into rr from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site;
- if not found then return true;end if;
- if p_id is null then return false;end if;
- if rr.resource_kind=p_kind then return rr.resources ? p_id::text;end if;
- if rr.resource_kind='workstation' and p_kind='register' then return exists(select 1 from bootik.bk_register_workstations rw where rw.register_id=p_id and rr.resources ? rw.workstation_id::text);end if;
- return false;
+ for rr in select * from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site loop
+  if rr.resource_kind=p_kind then
+   matched:=true;if p_id is null or not(rr.resources ? p_id::text) then return false;end if;
+  elsif rr.resource_kind='workstation' and p_kind='register' then
+   matched:=true;if p_id is null or not exists(select 1 from bootik.bk_register_workstations rw where rw.register_id=p_id and rr.resources ? rw.workstation_id::text) then return false;end if;
+  end if;
+ end loop;
+ return matched or not exists(select 1 from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site);
 end $$;
 create function bootik.bk_resource_activity_access(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid)
 returns boolean language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
-declare rr bootik.bk_member_resource_rules%rowtype;
+declare rr bootik.bk_member_resource_rules%rowtype;ok boolean;
 begin
- select * into rr from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site;
- if not found then return true;end if;
- if rr.resource_kind='storage' then return exists(select 1 from bootik.bk_storage_locations l where l.organization_id=p_org and l.app_id=p_app and l.location_id=p_site and l.activity_id=p_activity and rr.resources ? l.id::text);end if;
- if rr.resource_kind='register' then return exists(select 1 from bootik.bk_registers r where r.organization_id=p_org and r.app_id=p_app and r.location_id=p_site and r.activity_id=p_activity and rr.resources ? r.id::text);end if;
- if rr.resource_kind='workstation' then return exists(select 1 from bootik.bk_workstations w where w.organization_id=p_org and w.app_id=p_app and w.location_id=p_site and w.activity_id=p_activity and rr.resources ? w.id::text);end if;
- if rr.resource_kind='territory' then return exists(select 1 from bootik.bk_territories t where t.organization_id=p_org and t.app_id=p_app and t.location_id=p_site and t.activity_id=p_activity and rr.resources ? t.id::text);end if;
- return false;
+ for rr in select * from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site loop
+  if rr.resource_kind='storage' then select exists(select 1 from bootik.bk_storage_locations l where l.organization_id=p_org and l.app_id=p_app and l.location_id=p_site and l.activity_id=p_activity and rr.resources ? l.id::text) into ok;
+  elsif rr.resource_kind='register' then select exists(select 1 from bootik.bk_registers r where r.organization_id=p_org and r.app_id=p_app and r.location_id=p_site and r.activity_id=p_activity and rr.resources ? r.id::text) into ok;
+  elsif rr.resource_kind='workstation' then select exists(select 1 from bootik.bk_workstations w where w.organization_id=p_org and w.app_id=p_app and w.location_id=p_site and w.activity_id=p_activity and rr.resources ? w.id::text) into ok;
+  elsif rr.resource_kind='territory' then select exists(select 1 from bootik.bk_territories t where t.organization_id=p_org and t.app_id=p_app and t.location_id=p_site and t.activity_id=p_activity and rr.resources ? t.id::text) into ok;
+  else return false;end if;
+  if not ok then return false;end if;
+ end loop;
+ return true;
 end $$;
 create function bootik.bk_resource_catalog(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_storage uuid)
 returns boolean language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
 declare rr bootik.bk_member_resource_rules%rowtype;
 begin
- select * into rr from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site;
- if not found then return true;end if;
- if rr.resource_kind='storage' then return p_storage is not null and rr.resources ? p_storage::text;end if;
- if rr.resource_kind in ('register','workstation') then return bootik.bk_resource_activity_access(p_org,p_app,p_actor,p_site,p_activity);end if;
- return false;
+ if not bootik.bk_resource_activity_access(p_org,p_app,p_actor,p_site,p_activity) then return false;end if;
+ for rr in select * from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site loop
+  if rr.resource_kind='territory' then return false;end if;
+  if rr.resource_kind='storage' and (p_storage is null or not(rr.resources ? p_storage::text)) then return false;end if;
+ end loop;
+ return true;
 end $$;
 create function bootik.bk_resource_gate(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_action text,p_data jsonb)
 returns boolean language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
-declare rr bootik.bk_member_resource_rules%rowtype;
+declare kinds text[];
 begin
- select * into rr from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site;
- if not found then return true;end if;
+ select array_agg(resource_kind) into kinds from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site;
+ if kinds is null then return true;end if;
  if p_action in ('entitlement','security-state','support','support-cancel','activities','approval-own-state','approval-execute') or (p_action='admin-action' and p_data->>'kind'='session-revoke') then return true;end if;
- if rr.resource_kind='storage' then return p_action in ('catalog','stock-health','sync-stock','count-batch');end if;
- if rr.resource_kind in ('register','workstation') then return p_action in ('catalog','cash-state') or (p_action='cash-action' and p_data->>'kind' in ('open','checkout','movement','close'));end if;
+ if 'territory'=any(kinds) then return false;end if;
+ if p_action='catalog' then return true;end if;
+ -- No sale across a restricted stock zone until the FEFO allocation path accepts that scope.
+ if p_action in ('stock-health','sync-stock','count-batch') then return 'storage'=any(kinds) and cardinality(kinds)=1;end if;
+ if p_action='cash-state' or (p_action='cash-action' and p_data->>'kind' in ('open','checkout','movement','close')) then
+  return not('storage'=any(kinds)) and ('register'=any(kinds) or 'workstation'=any(kinds));
+ end if;
  return false;
 end $$;
 create function bootik.bk_resource_admin(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_req uuid,p_data jsonb)
@@ -549,8 +559,8 @@ begin
    else select activity_id into a from bootik.bk_territories where id=rid and organization_id=p_org and app_id=p_app and location_id=p_site;end if;
    if a is null or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) or not bootik.bk_can_access_activity(p_org,p_app,target_user,p_site,a) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
   end loop;
-  select jsonb_build_object('kind',resource_kind,'resources',resources) into previous from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=target_user and location_id=p_site;
-  insert into bootik.bk_member_resource_rules(organization_id,app_id,user_id,location_id,resource_kind,resources) values(p_org,p_app,target_user,p_site,kind,ids) on conflict(organization_id,app_id,user_id,location_id) do update set resource_kind=excluded.resource_kind,resources=excluded.resources;
+  select jsonb_build_object('kind',resource_kind,'resources',resources) into previous from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=target_user and location_id=p_site and resource_kind=kind;
+  insert into bootik.bk_member_resource_rules(organization_id,app_id,user_id,location_id,resource_kind,resources) values(p_org,p_app,target_user,p_site,kind,ids) on conflict(organization_id,app_id,user_id,location_id,resource_kind) do update set resources=excluded.resources;
   update bootik.bk_sessions set revoked_at=coalesce(revoked_at,clock_timestamp()) where organization_id=p_org and app_id=p_app and user_id=target_user;
   answer:=jsonb_build_object('member_id',target_user,'kind',kind,'resources',ids);
  end if;

@@ -53,7 +53,7 @@ import java.util.UUID
  Button(enabled=!busy&&target.isNotBlank()&&reason.trim().length>=3,onClick={task{change("member-scope",JSONObject().put("member_id",target).put("activities",JSONArray(selected.toList())))}}){Text("Enregistrer les activités autorisées")}
  Button(enabled=!busy&&target.isNotBlank()&&reason.trim().length>=3,onClick={task{change("member-disable",JSONObject().put("member_id",target))}}){Text("Désactiver le compte")}
  Text("Postes, caisses, zones et territoires")
- Text("Une affectation restreint les droits existants. Les territoires n'ouvrent pas les opérations B2B avant B05.")
+ Text("Les catégories se cumulent et se croisent ; une liste vide interdit la catégorie. Une affectation restreint les droits existants. Les territoires n'ouvrent pas les opérations B2B avant B05.")
  acts.forEach{x->Row{RadioButton(resourceActivity==x.getString("id"),{resourceActivity=x.getString("id")},enabled=!busy);Text(x.getString("display_name"))}}
  listOf("workstation" to "Poste","territory" to "Territoire").forEach{(k,label)->Row{RadioButton(createKind==k,{createKind=k},enabled=!busy);Text(label)}}
  OutlinedTextField(resourceCode,{resourceCode=it},label={Text("Code ressource")},enabled=!busy);OutlinedTextField(resourceLabel,{resourceLabel=it},label={Text("Libellé ressource")},enabled=!busy)
