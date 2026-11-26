@@ -28,7 +28,8 @@ create or replace function public.zp_sellable_qty(p_item uuid) returns int langu
  select greatest(public.zp_sellable_channel_qty(p_item,'table'),public.zp_sellable_channel_qty(p_item,'counter'),public.zp_sellable_channel_qty(p_item,'takeaway'))
 $$;
 create function public.zp_category_set(p_access text,p_site uuid,p_category text,p_active boolean) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$
-declare m public.zp_members;begin m:=public.zp_erp_actor(p_access,p_site);perform 1 from public.zp_site_modes where site_id=p_site for update;
+declare m public.zp_members;begin m:=public.zp_business_actor(p_access,p_site);perform 1 from public.zp_site_modes where site_id=p_site for update;
+ if m.role_code not in ('promoteur','manager') and exists(select 1 from public.zp_menu_items i where i.site_id=p_site and i.org_id=m.org_id and i.category=p_category and not exists(select 1 from public.zp_station_grants g where g.site_id=p_site and g.member_id=m.id and g.post=i.post)) then raise exception 'DENIED';end if;
  if p_active is null or not exists(select 1 from public.zp_menu_items where site_id=p_site and org_id=m.org_id and category=p_category) then raise exception 'DENIED';end if;
  insert into public.zp_category_controls values(m.org_id,p_site,p_category,p_active,m.id,now()) on conflict(site_id,category) do update set active=excluded.active,member_id=excluded.member_id,updated_at=excluded.updated_at;
  insert into public.zp_category_events(org_id,site_id,category,active,member_id) values(m.org_id,p_site,p_category,p_active,m.id);return true;end $$;

@@ -310,6 +310,10 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const limitedOrder=await order(a,"counter",[{item_id:limited,qty:1}]);await assert.rejects(order(a,"counter",[{item_id:limited,qty:1}]),/ITEM_UNAVAILABLE/);
  await scalar("select zp_cancel_unprepared_order($1,$2,$3,'Annulation recette')",[a.access,a.site,limitedOrder.id]);assert.equal(await scalar("select zp_sellable_channel_qty($1,'counter')",[limited]),1);
  await scalar("select zp_catalog_base_set($1,$2,$3,'Portion renommée','TEST-CODE','verre',1300,'Changement tarif recette')",[a.access,a.site,limited]);assert.equal(await scalar("select zp_current_price($1,'counter')",[limited]),1300);assert.equal(await scalar("select total_xaf::int from zp_orders where id=$1",[limitedOrder.id]),1200);
+ await scalar("select zp_call_number($1,$2,$3)",[b.access,b.site,queueOrder.id]);await scalar("select zp_no_show($1,$2,$3,'Client non présent')",[b.access,b.site,queueOrder.id]);assert.ok(await scalar("select no_show_at from zp_orders where id=$1",[queueOrder.id]));
+ assert.equal(await scalar("select status from zp_orders where id=$1",[queueOrder.id]),"ready");assert.equal(Number(await scalar("select count(*) from zp_cash_receipts where order_id=$1",[queueOrder.id])),0);
+ await scalar("select zp_station_window($1,$2,$3,'00:00','23:59')",[a.access,a.site,limited]);assert.equal(String(await scalar("select available_from from zp_menu_items where id=$1",[limited])),"00:00:00");await scalar("select zp_station_window($1,$2,$3,null,null)",[a.access,a.site,limited]);
+ console.log("ZIPPLE_BULK2_NO_SHOW_STATION_WINDOW_PASS");
  console.log("ZIPPLE_BULK2_SALE_LIMIT_PRICE_HISTORY_PASS");
  console.log("ZIPPLE_BULK2_OPERATIONAL_ROLES_PASS");
  console.log("ZIPPLE_BULK2_QUEUE_CAPACITY_DELAY_PASS");
