@@ -1,0 +1,15 @@
+import React,{useState,useEffect} from "react";
+export function QueueControls({order,call,disabled,en,refresh}:{order:any;call:(a:string,b?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean;refresh:()=>Promise<void>}){
+ const t=(fr:string,eng:string)=>en?eng:fr;const [minutes,M]=useState("15"),[priority,P]=useState(String(order.priority??0)),[reason,R]=useState(""),[busy,B]=useState(false),[error,E]=useState("");
+ async function run(action:string,body:Record<string,unknown>){if(disabled||busy)return;B(true);E("");try{await call(action,{order_id:order.id,...body});R("");await refresh()}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}
+ if(!["received","preparing","ready"].includes(order.status))return null;
+ return <details><summary>{t("Délai et priorité","Delay and priority")}</summary>{error&&<p role="alert">{error}</p>}<label>{t("Motif obligatoire","Required reason")}<input value={reason} onChange={e=>R(e.target.value)} maxLength={500}/></label><label>{t("Nouveau délai (minutes)","New delay (minutes)")}<input type="number" min="1" max="240" value={minutes} onChange={e=>M(e.target.value)}/></label><button disabled={disabled||busy||!!order.guest_served_at||reason.trim().length<5} onClick={()=>run("delay",{minutes:Number(minutes),reason})}>{t("Modifier le délai","Change delay")}</button>
+ <label>{t("Priorité","Priority")}<select value={priority} onChange={e=>P(e.target.value)}><option value="0">{t("Normale","Normal")}</option><option value="1">{t("Prioritaire","Priority")}</option><option value="2">{t("Urgente","Urgent")}</option></select></label><button disabled={disabled||busy||reason.trim().length<5} onClick={()=>run("order_priority",{priority:Number(priority),reason})}>{t("Modifier la priorité","Change priority")}</button>
+ {order.channel!=="table"&&order.status==="ready"&&<button disabled={disabled||busy||!!order.called_at} onClick={()=>run("call_number",{})}>{order.called_at?t("Numéro appelé","Number called"):t("Appeler le numéro","Call number")}</button>}</details>
+}
+export function CapacityControls({posts,call,disabled,en}:{posts:string[];call:(a:string,b?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean}){
+ const [values,V]=useState<Record<string,string>>({}),[error,E]=useState(""),[busy,B]=useState(false);
+ async function load(){const rows=await call("capacity_snapshot");V(Object.fromEntries(rows.map((x:any)=>[x.post,String(x.parallel_slots)])))}
+ useEffect(()=>{load().catch(()=>E("OPERATION_UNAVAILABLE"))},[]);
+ return <details><summary>{en?"Parallel preparation capacity":"Capacité de préparation parallèle"}</summary>{error&&<p role="alert">{error}</p>}{posts.map(post=><div key={post}><label>{post}<input type="number" min="1" max="100" value={values[post]??"1"} onChange={e=>V(x=>({...x,[post]:e.target.value}))}/></label><button disabled={disabled||busy} onClick={async()=>{B(true);E("");try{await call("capacity_set",{post,parallel_slots:Number(values[post]??1)});await load()}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}}>{en?"Save capacity":"Enregistrer la capacité"}</button></div>)}</details>
+}
