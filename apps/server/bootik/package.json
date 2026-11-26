@@ -8,5 +8,9 @@
   "scripts": {
     "start": "node index.mjs",
     "start:payment": "node payment-index.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.51.1",
+    "fake-indexeddb": "6.0.0"
   }
 }
