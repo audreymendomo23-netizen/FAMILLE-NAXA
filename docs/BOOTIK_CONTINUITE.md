@@ -264,3 +264,6 @@ Draft BOOTIK autonome sans famille_core, recette PostgreSQL éphémère, CI Andr
 
 ### Recette N0 — correction Android
 Run 45834117940 : contrats 6/6 et PostgreSQL 17 PASS, Web build SUCCESS, JOBLY inventaire 788 fichiers SUCCESS. Android échec mergeDebugResources : six ressources FR contenant des apostrophes ASCII non échappées. Correction systématique des valeurs de chaînes FR, EN vérifié sans apostrophes non échappées. Relance CI ; aucune validation Android revendiquée avant résultat. JOBLY inventaire distinct de qualification du code. Aucun déploiement.
+
+### N0 — correction résolution Compose tests
+Run 45835804979 : ressources XML désormais compilées, contrats/PostgreSQL, Web et inventaire JOBLY SUCCESS. Job Android échoue sur checkDebugAndroidTestAarMetadata : Could not find androidx.compose.ui:ui-test-junit4:. Cause : BOM Compose absent de la configuration androidTestImplementation. Correction locale BOOTIK alignée sur ZIPPLE (BOM 2024.10.01), sans changer les versions ni les packages communs. Nouvelle CI requise ; pas de statut vert avant résultat.
