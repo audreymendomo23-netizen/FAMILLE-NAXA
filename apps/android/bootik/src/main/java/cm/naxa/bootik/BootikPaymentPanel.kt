@@ -23,7 +23,7 @@ import java.util.UUID
  Row{RadioButton(channel=="mtn_momo",{channel="mtn_momo"},enabled=!busy&&!pending);Text("MTN MoMo");RadioButton(channel=="orange_money",{channel="orange_money"},enabled=!busy&&!pending);Text("Orange Money")}
  Row{RadioButton(months==1,{months=1},enabled=!busy&&!pending);Text("Mensuel");RadioButton(months==12,{months=12},enabled=!busy&&!pending);Text("Annuel")}
  Text("Montant : "+cm.naxa.bootik.domain.BootikPolicy.quote(universe,plan,months)+" FCFA")
- Button(enabled=!busy&&!pending,onClick={task{val key=keys.getOrPut("$universe:$plan:$months:$channel"){UUID.randomUUID().toString()};intent=api.operation(session,site,"payment-intent",JSONObject().put("universe",universe).put("plan",plan).put("months",months).put("channel",channel).put("request_key",key));message="Intention préparée, aucun paiement confirmé."}}){Text("Préparer le paiement")}
+ Button(enabled=!busy&&!pending,onClick={task{val slot="$universe:$plan:$months:$channel";if(state in setOf("confirmed","expired"))keys.remove(slot);val key=keys.getOrPut(slot){UUID.randomUUID().toString()};intent=api.operation(session,site,"payment-intent",JSONObject().put("universe",universe).put("plan",plan).put("months",months).put("channel",channel).put("request_key",key));message="Intention préparée, aucun paiement confirmé."}}){Text("Préparer le paiement")}
  Button(enabled=!busy,onClick={task{val result=api.operation(session,site,"payment-current",JSONObject().put("universe",universe));intent=result.optJSONObject("intent");message=if(intent==null)"Aucun règlement retrouvé" else "État récupéré"}}){Text("Retrouver mon règlement")}
  if(current!=null){
  Text(current.getString("amount_fcfa")+" FCFA • "+current.getString("beneficiary"))
