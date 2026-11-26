@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BOOTIK</string>
+    <string name="setup_subtitle">Retail and distribution ERP. The first delivery focuses on retailers.</string>
+    <string name="universe_retailer">Retailer universe</string>
+    <string name="universe_retailer_desc">First phase — 14 business profiles with dedicated catalogues and inventory rules.</string>
+    <string name="universe_distributor">Distributor universe</string>
+    <string name="universe_distributor_next">Second phase — complete B2B ERP and CRM, prepared in the architecture but not enabled in this first screen.</string>
+    <string name="setup_workspace_title">Set up my business</string>
+    <string name="business_name">Business name</string>
+    <string name="site_name">First point-of-sale name</string>
+    <string name="profile_selection_title">Choose the primary business profile</string>
+    <string name="save_local_draft">Save a draft on this device</string>
+    <string name="local_only_warning">This draft stays on this device. It does not create an account, subscription, server site or distributor connection. Real activation requires a Famille NAXA administrator-issued access.</string>
+    <string name="local_draft_saved">Local draft saved. No data was sent to the server.</string>
+    <string name="local_draft_error">Could not save this draft on the device. Please try again.</string>
+    <string name="local_drafts_title">Local drafts</string>
+    <string name="no_local_drafts">No local drafts yet.</string>
+    <string name="local_draft_state">Local draft · not synchronized</string>
+
+    <string name="profile_boutique">General shop</string>
+    <string name="profile_boutique_desc">Fast checkout, retail and wholesale prices, customer credit, suppliers and daily sales.</string>
+    <string name="profile_superette">Convenience store</string>
+    <string name="profile_superette_desc">Barcodes, aisles, batches, expiry dates, multiple tills and quick stock counts.</string>
+    <string name="profile_poissonnerie">Fishmonger</string>
+    <string name="profile_poissonnerie_desc">Species, actual weight, arrivals, freshness, storage, waste and daily prices.</string>
+    <string name="profile_boulangerie">Bakery</string>
+    <string name="profile_boulangerie_desc">Raw materials, recipes, batches, production, unsold goods and waste.</string>
+    <string name="profile_shopping">Fashion — clothing, shoes, bags and jewellery</string>
+    <string name="profile_shopping_desc">Sizes, colours, collections, variants, bags, jewellery, promotions and exchanges.</string>
+    <string name="profile_alimentation">Food retail</string>
+    <string name="profile_alimentation_desc">Bulk goods, kilograms, bags, litres, conversions, batches and volume pricing.</string>
+    <string name="profile_cave">Beverage shop</string>
+    <string name="profile_cave_desc">Drinks, bottles, cartons, crates, kegs, deposits and returns.</string>
+    <string name="profile_quincaillerie">Hardware store</string>
+    <string name="profile_quincaillerie_desc">Technical references, dimensions, multiple units, conversions and quotations.</string>
+    <string name="profile_parfumerie">Perfumery</string>
+    <string name="profile_parfumerie_desc">Brands, sizes, batches, gift sets, testers and high-value products.</string>
+    <string name="profile_boucherie">Butcher</string>
+    <string name="profile_boucherie_desc">Cuts, weights, cutting, yield, waste, origin and storage.</string>
+    <string name="profile_ferme">Farm</string>
+    <string name="profile_ferme_desc">Harvests, eggs, milk, batches, collection dates, quantities and waste.</string>
+    <string name="profile_depot_gaz">Gas depot</string>
+    <string name="profile_depot_gaz_desc">Cylinders by brand and capacity, full, empty, deposits, returns and deliveries.</string>
+    <string name="profile_supermarche">Supermarket</string>
+    <string name="profile_supermarche_desc">Departments, aisles, multiple tills, warehouses and cycle counts.</string>
+    <string name="profile_brocante">Second-hand and antiques shop</string>
+    <string name="profile_brocante_desc">Unique or pre-owned items, condition, provenance, photos, valuation and negotiable prices.</string>
+</resources>
