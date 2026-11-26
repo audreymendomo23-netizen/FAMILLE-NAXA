@@ -69,7 +69,7 @@ jobs:
           set +a
           for i in $(seq 1 30); do
             code=$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS "$API_URL/functions/v1/zipple-n1/login" -H 'Origin: https://zipple.test' || true)
-            if [ "$code" = 204 ]; then break; fi
+            if [ "$code" = 204 ] || [ "$code" = 200 ]; then break; fi
             sleep 2
           done
           node --test docs/apps/zipple/n1/backend/local-live.test.mjs
