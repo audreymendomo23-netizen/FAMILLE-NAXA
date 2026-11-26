@@ -341,6 +341,7 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await empCall('cash-action',{...zonedCheckout,request_id:randomUUID(),lines:[{...zonedCheckout.lines[0],quantity:2}],tender_fcfa:1000})).status,400);
  await assert.rejects(db.query('select bootik.bk_record_sale($1,$2,$3,$4,$5,$6,$7,$8)',[centralOrg,a,employee,centralSite,balanceLate,1,500,'direct-scoped-sale']));
  await assert.rejects(db.query('select bootik.bk_record_sale($1,$2,$3,$4,$5,$6,$7,$8,$9)',[centralOrg,a,employee,centralSite,balanceEarly,1,500,'forbidden-zone-sale',scopedCashId]));
+ await assert.rejects(db.query('select bootik.bk_assert_sale_resource($1,$2,$3,$4,$5,$6)',[centralOrg,a,employee,centralSite,scopedCashId,v]));
  assert.equal((await empCall('sale',{...sale,idempotency_key:randomUUID()})).status,403);
  assert.equal((await centralCall('resource-admin',{...assignment,request_id:randomUUID(),resources:[]})).status,200);
  assert.equal((await empCall('cash-state',{activity_id:centralAct})).status,401);

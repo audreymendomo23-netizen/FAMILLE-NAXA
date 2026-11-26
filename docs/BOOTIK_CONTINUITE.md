@@ -498,3 +498,5 @@ Adaptation des projets NAXA SERVICES à la V1.1 BOOTIK (univers détaillants/dis
 
 ### B01 — caisse/poste/zone de stock combinés
 FEFO limité aux zones autorisées, contrôle de la zone dans la fonction SQL de vente et garde session de caisse ouverte/propre/autorisé pour tout délégataire restreint. Une caisse + poste + zone autorise la vente de lots de cette zone uniquement, même si un lot plus proche de péremption existe ailleurs. Tests transactionnels (catalogue, vente, quantité insuffisante, appel direct et zone refusés). Les opérations B2B par territoire restent réservées aux modules B04/B05. CI à vérifier.
+
+Contrôle supplémentaire : une session de caisse ne peut jamais autoriser une mutation de vente dans une autre activité, même pour un membre multi-activité. Test SQL négatif ajouté.

@@ -215,10 +215,10 @@ returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik
 declare a uuid;u text;factor numeric;left_qty numeric;taken numeric;old bootik.bk_item_sale_groups%rowtype;row_data record;line_id uuid;alloc jsonb:='[]'::jsonb;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site);
- perform bootik.bk_assert_sale_resource(p_org,p_app,p_actor,p_site,p_cash_session);
  if p_id is null or p_unit is null or length(p_unit)>40 or p_qty is null or p_qty<=0 or p_qty>1000000000 or p_qty<>round(p_qty,6) or p_price is null or p_price<0 then raise exception 'BOOTIK_INVALID_SALE';end if;
  select activity_id,base_unit_code into a,u from bootik.bk_catalog_items where id=p_item and organization_id=p_org and app_id=p_app and status='active' and not is_serialized;
  if not found or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) or not exists(select 1 from bootik.bk_activity_locations where activity_id=a and location_id=p_site and organization_id=p_org and app_id=p_app) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ perform bootik.bk_assert_sale_resource(p_org,p_app,p_actor,p_site,p_cash_session,a);
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':item-sale:'||p_id::text,0));
  select * into old from bootik.bk_item_sale_groups where id=p_id and organization_id=p_org and app_id=p_app;
  if found then
@@ -701,7 +701,7 @@ end $$;
 revoke all on function bootik.bk_notification_inbox(uuid,uuid,uuid,uuid),bootik.bk_notification_read(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
 
 -- A scoped sale may only run inside its own open, authorized register session.
-create function bootik.bk_assert_sale_resource(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_session uuid)
+create function bootik.bk_assert_sale_resource(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_session uuid,p_activity uuid)
 returns void language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
 declare rid uuid;a uuid;scoped boolean;
 begin
@@ -710,8 +710,8 @@ begin
   if scoped then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;return;
  end if;
  select r.id,r.activity_id into rid,a from bootik.bk_cash_sessions s join bootik.bk_registers r on r.id=s.register_id where s.id=p_session and s.opened_by=p_actor and s.closed_at is null and r.organization_id=p_org and r.app_id=p_app and r.location_id=p_site;
- if not found or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) or not bootik.bk_resource_activity_access(p_org,p_app,p_actor,p_site,a) or not bootik.bk_resource_allowed(p_org,p_app,p_actor,p_site,'register',rid) or not bootik.bk_resource_gate(p_org,p_app,p_actor,p_site,'cash-action','{"kind":"checkout"}'::jsonb) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ if not found or a is distinct from p_activity or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) or not bootik.bk_resource_activity_access(p_org,p_app,p_actor,p_site,a) or not bootik.bk_resource_allowed(p_org,p_app,p_actor,p_site,'register',rid) or not bootik.bk_resource_gate(p_org,p_app,p_actor,p_site,'cash-action','{"kind":"checkout"}'::jsonb) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
 end $$;
-revoke all on function bootik.bk_assert_sale_resource(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
+revoke all on function bootik.bk_assert_sale_resource(uuid,uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
 
 commit;

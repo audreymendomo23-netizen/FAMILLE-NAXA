@@ -55,4 +55,4 @@ grant execute on function bootik.bk_approval_admin(uuid,uuid,uuid,uuid,uuid,json
 
 grant execute on function bootik.bk_notification_inbox(uuid,uuid,uuid,uuid),bootik.bk_notification_read(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;
 
-grant execute on function bootik.bk_assert_sale_resource(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;
+grant execute on function bootik.bk_assert_sale_resource(uuid,uuid,uuid,uuid,uuid,uuid) to bootik_runtime;

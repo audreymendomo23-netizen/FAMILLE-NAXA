@@ -133,7 +133,7 @@ returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik
 declare b bootik.bk_inventory_balances%rowtype; old bootik.bk_sales%rowtype; v_id uuid; v_unit text; v_total numeric; v_universe text; v_price bigint;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_user,p_site);
- perform bootik.bk_assert_sale_resource(p_org,p_app,p_user,p_site,p_cash_session);
+ perform bootik.bk_assert_sale_resource(p_org,p_app,p_user,p_site,p_cash_session,(select activity_id from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site));
  if p_quantity is null or p_quantity<=0 or p_quantity<>round(p_quantity,6) or p_price is null or p_price<0 or nullif(btrim(p_key),'') is null then raise exception 'BOOTIK_INVALID_SALE';end if;
  if not bootik.bk_can_access_activity(p_org,p_app,p_user,p_site,(select activity_id from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_key,0));
