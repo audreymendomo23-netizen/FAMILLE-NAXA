@@ -17,6 +17,10 @@ export function validateReleaseConfig(env) {
   for (const name of ["NS_FIREBASE_API_KEY", "NS_FIREBASE_APP_ID", "NS_FIREBASE_PROJECT_ID", "NS_FIREBASE_SENDER_ID"]) {
     if (!get(name)) throw new Error("Missing " + name);
   }
+  const firebaseProject = get("NS_FIREBASE_PROJECT_ID");
+  if (!/^[a-z][a-z0-9-]{4,28}[a-z0-9]$/.test(firebaseProject) || firebaseProject === "naxatechnologie") {
+    throw new Error("Dedicated Firebase project required; historical NAXA is forbidden.");
+  }
   const sender = get("NS_FIREBASE_SENDER_ID");
   if (!/^\d+$/.test(sender) || !get("NS_FIREBASE_APP_ID").startsWith("1:" + sender + ":android:")) {
     throw new Error("Firebase Android app ID and sender ID must belong to the same project.");
