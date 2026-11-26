@@ -114,15 +114,15 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text("Facturation, crédits et remboursements", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Devis, factures, créances à recevoir du client et remboursements que la PME doit au client : deux soldes distincts. Les écritures restent rattachées au site.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(localizedLabel("Facturation, crédits et remboursements","Invoicing, credit and refunds","Facture, ñaawoore e ruttugol ceede"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(localizedLabel("Devis, factures, créances à recevoir du client et remboursements que la PME doit au client : deux soldes distincts. Les écritures restent rattachées au site.","Quotes, invoices, customer receivables and refunds owed to customers are tracked separately by location.","Devis, facture, ceede soottotooɓe foti yoɓde e ceede golle foti ruttude: limooje ɗiɗi seertiiɗe e nokkuure."), color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
             LocalOnlyNotice("Documents en attente de confirmation.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("Nouvelle pièce commerciale", fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Nouvelle pièce commerciale","New business document","Kayit jaaygol kesol"), fontWeight = FontWeight.Bold)
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                             listOf("quote", "invoice", "credit_note").forEach { item ->
@@ -135,11 +135,11 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
                             }
                         }
                     }
-                    OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text("Client / tiers") }, singleLine = true)
-                    OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Détail de la prestation ou du remboursement") }, singleLine = true)
-                    OutlinedTextField(total, { total = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Montant total (FCFA)") }, singleLine = true)
+                    OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Client / tiers","Customer / third party","Soottotooɗo / goɗɗo")) }, singleLine = true)
+                    OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Détail de la prestation ou du remboursement","Service or refund details","Humpito golle walla ruttugol ceede")) }, singleLine = true)
+                    OutlinedTextField(total, { total = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Montant total (FCFA)","Total amount (XAF)","Ceede fof (FCFA)")) }, singleLine = true)
                     OutlinedTextField(paid, { paid = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (type == "customer_receivable") "Déjà encaissé par la PME (FCFA)" else if (type == "refund_due") "Déjà remboursé au client (FCFA)" else "Déjà réglé / encaissé (FCFA)") }, singleLine = true)
-                    OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("Échéance dans (jours)") }, singleLine = true)
+                    OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Échéance dans (jours)","Due in (days)","Yoɓde caggal (balɗe)")) }, singleLine = true)
                     Button(
                         onClick = {
                             val amount = total.toLongOrNull() ?: 0L
@@ -166,30 +166,30 @@ fun BillingContent(modifier: Modifier, repository: NaxaServicesLocalRepository, 
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Enregistrer la pièce") }
+                    ) { Text(localizedLabel("Enregistrer la pièce","Save document","Danndu kayit")) }
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                     if (notice != null) Text(notice!!, color = MaterialTheme.colorScheme.secondary)
-                    Text("Les factures et remboursements en attente ne sont pas encore confirmés.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(localizedLabel("Les factures et remboursements en attente ne sont pas encore confirmés.","Pending invoices and refunds are not yet confirmed.","Facture e ruttugol ceede nana fadi tabbitinol."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
-        item { Text("Historique des pièces", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Historique des pièces","Document history","Jaŋtol kayite"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(records.filter { it.recordType in setOf("quote", "invoice", "credit_note", "customer_receivable", "refund_due") }) { item ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(labelRecord(item.recordType) + " · " + item.reference, fontWeight = FontWeight.Bold)
                     Text(item.title + " · " + item.counterparty)
-                    Text("Total " + xaf(item.amountXaf) + " · réglé " + xaf(item.paidXaf) + " · restant " + xaf(item.amountXaf - item.paidXaf))
+                    Text(localizedLabel("Total ","Total ","Fof ") + xaf(item.amountXaf) + " · réglé " + xaf(item.paidXaf) + " · restant " + xaf(item.amountXaf - item.paidXaf))
                     Text(statusRecord(item.status), color = MaterialTheme.colorScheme.secondary)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { receiptToSave = item; pdfLauncher.launch("NAXA-" + item.reference + ".pdf") }) { Text("Télécharger le reçu PDF") }
-                        TextButton(onClick = { shareRecord(context, item) }) { Text("Partager WhatsApp") }
+                        TextButton(onClick = { receiptToSave = item; pdfLauncher.launch("NAXA-" + item.reference + ".pdf") }) { Text(localizedLabel("Télécharger le reçu PDF","Download PDF receipt","Heɓ kayit njoɓdi PDF")) }
+                        TextButton(onClick = { shareRecord(context, item) }) { Text(localizedLabel("Partager WhatsApp","Share on WhatsApp","Lollin e WhatsApp")) }
                     }
                 }
             }
         }
         if (records.none { it.recordType in setOf("quote", "invoice", "credit_note", "customer_receivable", "refund_due") }) {
-            item { Text("Aucune pièce commerciale enregistrée.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text(localizedLabel("Aucune pièce commerciale enregistrée.","No business documents recorded.","Alaa kayit jaaygol danndaangol."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }
@@ -250,7 +250,7 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text(if (fr) "Abonnement NAXA SERVICES" else "NAXA SERVICES subscription", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(when (session.account.defaultLocale) { "en" -> "NAXA SERVICES subscription"; "ff-CM" -> "Abonman NAXA SERVICES"; else -> "Abonnement NAXA SERVICES" }, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(when (session.account.defaultLocale) { "en" -> "One subscription per organization. Your business collects payments outside the app."; "ff-CM" -> "Abonman gooto ngam fedde kala. Ceede golle maa keɓetee tawa aplikasiyoŋ alaa."; else -> "Un abonnement par organisation. Les encaissements de votre entreprise sont réalisés hors application." })
             OutlinedButton(enabled = !busy, onClick = { runAction { loadAccess() } }) {
                 Text(when (session.account.defaultLocale) { "en" -> "Check paid access"; "ff-CM" -> "Ƴeewto abonman maa"; else -> "Vérifier les droits payés" })
@@ -442,8 +442,8 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                     }
                     OutlinedTextField(supplierName, { supplierName = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Supplier name"; "ff-CM" -> "Innde / innde fedde"; else -> "Nom / raison sociale" }) }, singleLine = true)
                     OutlinedTextField(supplierPhone, { supplierPhone = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Phone"; "ff-CM" -> "Telefon"; else -> "Téléphone" }) }, singleLine = true)
-                    OutlinedTextField(supplierWhatsApp, { supplierWhatsApp = it }, Modifier.fillMaxWidth(), label = { Text("WhatsApp fournisseur · indicatif pays") }, singleLine = true)
-                    OutlinedTextField(supplierEmail, { supplierEmail = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "E-mail" else "Email") }, singleLine = true)
+                    OutlinedTextField(supplierWhatsApp, { supplierWhatsApp = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("WhatsApp fournisseur · indicatif pays","Supplier WhatsApp · country code","WhatsApp hokkooɗo jawdi · innol leydi")) }, singleLine = true)
+                    OutlinedTextField(supplierEmail, { supplierEmail = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Email"; "ff-CM" -> "E-mail"; else -> "E-mail" }) }, singleLine = true)
                     OutlinedTextField(supplierAddress, { supplierAddress = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Address"; "ff-CM" -> "Nokkuure"; else -> "Adresse" }) }, minLines = 2)
                     OutlinedTextField(supplierTerms, { supplierTerms = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Payment terms (days)"; "ff-CM" -> "Sahaa yoɓde (balɗe)"; else -> "Délai de paiement (jours)" }) }, singleLine = true)
                     OutlinedTextField(supplierNotes, { supplierNotes = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Terms and notes"; "ff-CM" -> "Laabi e ɓatakuuji"; else -> "Conditions et notes" }) }, minLines = 2)
@@ -537,8 +537,8 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                     OutlinedTextField(otherFees, { otherFees = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Other allocable fees (XAF)"; "ff-CM" -> "Njoɓdi goɗɗi (FCFA)"; else -> "Autres frais imputables (FCFA)" }) }, singleLine = true)
                     OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Payment due in (days)"; "ff-CM" -> "Yoɓde caggal (balɗe)"; else -> "Échéance de paiement dans (jours)" }) }, singleLine = true)
                     OutlinedTextField(purchaseNotes, { purchaseNotes = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Notes / receiving conditions"; "ff-CM" -> "Ɓatakuuji / laabi heɓugol"; else -> "Notes / conditions de réception" }) }, minLines = 2)
-                    Text("Sous-total : " + xaf(orderSubtotal))
-                    Text("Total engagé : " + xaf(orderTotal), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Sous-total : ","Subtotal: ","Ceede hade fof : ") + xaf(orderSubtotal))
+                    Text(localizedLabel("Total engagé : ","Committed total: ","Ceede ɗaɓɓitaaɗe fof : ") + xaf(orderTotal), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(when (session.account.defaultLocale) { "en" -> "An order alone changes neither stock nor profit. Payables and journal entries are created as goods/services are actually received."; "ff-CM" -> "Ɗaɓɓitannde tan waylataa jawdi walla limooje. Ñaawoore e jaŋtol sosetee so jawdi heɓaama."; else -> "La commande seule ne modifie ni le stock ni le résultat. La dette et les écritures sont créées au rythme des réceptions effectives." })
                     Button(
                         onClick = {
@@ -581,7 +581,7 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text(purchase.reference + " · " + purchase.supplierNameSnapshot, fontWeight = FontWeight.Bold)
-                    Text("Statut : " + purchase.status + " · " + (purchase.supplierInvoiceNumber.ifBlank { when (session.account.defaultLocale) { "en" -> "Invoice not entered"; "ff-CM" -> "Facture winndaaka"; else -> "Facture non renseignée" } }))
+                    Text(localizedLabel("Statut : ","Status: ","Ngonka : ") + purchase.status + " · " + (purchase.supplierInvoiceNumber.ifBlank { when (session.account.defaultLocale) { "en" -> "Invoice not entered"; "ff-CM" -> "Facture winndaaka"; else -> "Facture non renseignée" } }))
                     val purchaseSupplier = suppliers.firstOrNull { it.id == purchase.supplierId }
                     if (!purchaseSupplier?.whatsapp.isNullOrBlank()) {
                         OutlinedButton(
@@ -600,14 +600,14 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(when (session.account.defaultLocale) { "en" -> "Send purchase order via WhatsApp"; "ff-CM" -> "Neldu kayit ɗaɓɓitannde e WhatsApp"; else -> "Envoyer le bon de commande par WhatsApp" }) }
                     }
-                    Text("Total commandé : " + xaf(purchase.subtotalXaf + purchase.recoverableTaxXaf + purchase.nonRecoverableTaxXaf + purchase.shippingXaf + purchase.otherFeesXaf))
-                    Text("Réceptionné : " + xaf(purchase.receivedTotalXaf) + " · réglé : " + xaf(purchase.paidTotalXaf))
+                    Text(localizedLabel("Total commandé : ","Ordered total: ","Ceede ɗaɓɓitaaɗe fof : ") + xaf(purchase.subtotalXaf + purchase.recoverableTaxXaf + purchase.nonRecoverableTaxXaf + purchase.shippingXaf + purchase.otherFeesXaf))
+                    Text(localizedLabel("Réceptionné : ","Received: ","Heɓaama : ") + xaf(purchase.receivedTotalXaf) + " · réglé : " + xaf(purchase.paidTotalXaf))
                     Text((when (session.account.defaultLocale) { "en" -> "Supplier payable: "; "ff-CM" -> "Ñaawoore hokkooɗo jawdi : "; else -> "Dette fournisseur : " }) + xaf(due.coerceAtLeast(0L)), color = if (due > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     lines.forEach { line ->
                         val remaining = (line.quantityOrdered - line.quantityReceived).coerceAtLeast(0.0)
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(line.description + " · " + line.itemType, fontWeight = FontWeight.SemiBold)
-                            Text("Commandé : " + line.quantityOrdered + " · reçu : " + line.quantityReceived + " · restant : " + remaining, style = MaterialTheme.typography.bodySmall)
+                            Text(localizedLabel("Commandé : ","Ordered: ","Ɗaɓɓitaama : ") + line.quantityOrdered + " · reçu : " + line.quantityReceived + " · restant : " + remaining, style = MaterialTheme.typography.bodySmall)
                             if (remaining > 0.000001 && purchase.status !in setOf("cancelled", "closed")) {
                                 val qtyText = receiptQuantities[line.id] ?: remaining.toString()
                                 OutlinedTextField(qtyText, { receiptQuantities[line.id] = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Quantity received now"; "ff-CM" -> "Keewal heɓaangal jooni"; else -> "Quantité reçue maintenant" }) }, singleLine = true)
@@ -697,7 +697,7 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                             when (session.account.defaultLocale) { "en" -> "Suppliers and orders from the former generic register remain visible below. They are not auto-converted, to avoid duplicate stock or payables."; "ff-CM" -> "Hokkooɓe jawdi e ɗaɓɓitanɗe ɓooyɗe ndanndaama les ɗoo. Ɗe wayletaake e hoore mum ngam haɗde jawdi walla ñaawoore ɗiɗol."; else -> "Les fournisseurs et commandes saisis dans l'ancien module générique sont conservés ci-dessous. Ils ne sont pas convertis automatiquement pour éviter les doublons de stock ou de dette." }
                         )
                         legacySuppliers.take(20).forEach { record ->
-                            Text("Fournisseur historique · " + record.title + " · " + record.counterparty, style = MaterialTheme.typography.bodySmall)
+                            Text(localizedLabel("Fournisseur historique · ","Previous supplier · ","Hokkooɗo jawdi ɓooyɗo · ") + record.title + " · " + record.counterparty, style = MaterialTheme.typography.bodySmall)
                         }
                         legacyPurchases.take(50).forEach { record ->
                             Text(record.reference + " · " + record.title + " · " + record.counterparty +
@@ -728,18 +728,18 @@ fun TaxesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, se
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text("Taxes et impôts", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Espace de préparation et de suivi. Les taux, régimes, échéances et obligations doivent être validés par votre comptable selon la réglementation applicable.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(localizedLabel("Taxes et impôts","Taxes","Taksa e sagalle"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(localizedLabel("Espace de préparation et de suivi. Les taux, régimes, échéances et obligations doivent être validés par votre comptable selon la réglementation applicable.","Preparation and tracking area. Your accountant must validate rates, regimes, due dates and obligations under applicable law.","Nokkuure heblugol e rewindo. Limtooɗo ceede maa foti tabbitinde sagalle, ñalɗi e laabi e sariya."), color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
             LocalOnlyNotice("Aucune déclaration fiscale n’est transmise par cet écran.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(label, { label = it }, Modifier.fillMaxWidth(), label = { Text("Nature de la taxe / échéance") })
-                    OutlinedTextField(base, { base = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Base taxable (FCFA)") })
-                    OutlinedTextField(rate, { rate = it.filter { c -> c.isDigit() || c == ',' || c == '.' } }, Modifier.fillMaxWidth(), label = { Text("Taux indicatif (%)") })
-                    Text("Montant estimatif : " + xaf(estimated), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(label, { label = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Nature de la taxe / échéance","Tax / due date type","Fannu sagalle / ñalnde yoɓde")) })
+                    OutlinedTextField(base, { base = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Base taxable (FCFA)","Taxable base (XAF)","Ceede ɗe sagalle limtetee (FCFA)")) })
+                    OutlinedTextField(rate, { rate = it.filter { c -> c.isDigit() || c == ',' || c == '.' } }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Taux indicatif (%)","Indicative rate (%)","Keewal tanƴaangal (%)")) })
+                    Text(localizedLabel("Montant estimatif : ","Estimated amount: ","Ceede tanƴaaɗe : ") + xaf(estimated), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Button(onClick = {
                         if (baseValue <= 0 || rateValue < 0.0 || rateValue > 100.0) message = "Vérifie la base et le taux."
                         else scope.launch {
@@ -747,13 +747,13 @@ fun TaxesContent(modifier: Modifier, repository: NaxaServicesLocalRepository, se
                                 .onSuccess { message = "Estimation sauvegardée comme brouillon, non déclarée." }
                                 .onFailure { message = it.message ?: "Sauvegarde impossible." }
                         }
-                    }, modifier = Modifier.fillMaxWidth()) { Text("Enregistrer le brouillon fiscal") }
+                    }, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Enregistrer le brouillon fiscal","Save tax draft","Danndu heblugol sagalle")) }
                     if (message != null) Text(message!!, color = MaterialTheme.colorScheme.secondary)
-                    Text("NAXA ne soumet pas de déclaration fiscale et ne calcule pas un impôt exigible sans régime confirmé.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(localizedLabel("NAXA ne soumet pas de déclaration fiscale et ne calcule pas un impôt exigible sans régime confirmé.","NAXA does not submit tax declarations or calculate tax due without a confirmed regime.","NAXA neldataa déclaration fiscale, limtataa sagalle yoɓeteɗe so laawol tabbitinaaka."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
-        item { Text("Opérations à finaliser", fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Opérations à finaliser","Operations to complete","Golle timmineteeɗe"), fontWeight = FontWeight.Bold) }
         items(records) { Text(it.title + " · " + xaf(it.amountXaf), color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
@@ -806,15 +806,15 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text("Pilotage et objectifs", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Baselines datées et historisées. Un nouvel objectif ajoute une nouvelle version ; il ne réécrit pas les objectifs déjà enregistrés.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(localizedLabel("Pilotage et objectifs","Management and targets","Ɗowtugol e faandaare"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(localizedLabel("Baselines datées et historisées. Un nouvel objectif ajoute une nouvelle version ; il ne réécrit pas les objectifs déjà enregistrés.","Targets are dated and tracked. A new target adds a new version without overwriting earlier targets.","Faandaare kala e ñalnde e jaŋtol mum. Faandaare hesere ɓeydata, waylataa ɗe ndanndaa."), color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
             LocalOnlyNotice("Les résultats de ce site reposent sur les ventes confirmées.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Période de pilotage")
+                    Text(localizedLabel("Période de pilotage","Reporting period","Sahaa ɗowtugol"))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("daily" to "Jour", "monthly" to "Mois", "annual" to "Année").forEach { option ->
                             OutlinedButton(onClick = { period = option.first }) {
@@ -822,14 +822,14 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
                             }
                         }
                     }
-                    Text("Du " + periodStart.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) +
+                    Text(localizedLabel("Du ","From ","Fuɗɗo e ") + periodStart.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")) +
                         " au " + periodEnd.format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy")),
                         style = MaterialTheme.typography.bodySmall)
-                    Text("CA confirmé : " + xaf(sales), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text("Objectif") })
-                    OutlinedTextField(target, { target = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Cible de CA (FCFA)") }, singleLine = true)
+                    Text(localizedLabel("CA confirmé : ","Confirmed revenue: ","Ceede jaaygol tabbitinaaɗe : ") + xaf(sales), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Objectif","Target","Faandaare")) })
+                    OutlinedTextField(target, { target = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Cible de CA (FCFA)","Revenue target (XAF)","Faandaare ceede jaaygol (FCFA)")) }, singleLine = true)
                     if (activeTarget != null) {
-                        Text("Baseline actuellement applicable : " + xaf(activeTarget.amountXaf) + " · enregistrée le " +
+                        Text(localizedLabel("Baseline actuellement applicable : ","Current target: ","Faandaare jooni : ") + xaf(activeTarget.amountXaf) + " · enregistrée le " +
                             java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(activeTarget.createdAtMillis)),
                             style = MaterialTheme.typography.bodySmall)
                     }
@@ -837,9 +837,9 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
                         androidx.compose.material3.LinearProgressIndicator(
                             progress = progress.toFloat().coerceIn(0f, 1f), modifier = Modifier.fillMaxWidth()
                         )
-                        Text("Atteinte : " + String.format(java.util.Locale.FRANCE, "%.1f", progress) +
+                        Text(localizedLabel("Atteinte : ","Achievement: ","Ko heɓaa : ") + String.format(java.util.Locale.FRANCE, "%.1f", progress) +
                             " % · " + if (gap > 0L) "reste " + xaf(gap) else "objectif atteint")
-                    } else Text("Aucune cible enregistrée pour cette période.")
+                    } else Text(localizedLabel("Aucune cible enregistrée pour cette période.","No target recorded for this period.","Alaa faandaare danndaande e sahaa oo."))
                     Button(
                         onClick = {
                             val value = target.toLongOrNull() ?: 0L
@@ -865,12 +865,12 @@ fun ObjectivesContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Enregistrer une nouvelle baseline") }
+                    ) { Text(localizedLabel("Enregistrer une nouvelle baseline","Save new target","Danndu faandaare hesere")) }
                     notice?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                 }
             }
         }
-        item { Text("Historique des objectifs approuvés", fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Historique des objectifs approuvés","Approved target history","Jaŋtol faandaare jaɓaaɗe"), fontWeight = FontWeight.Bold) }
         items(records.sortedByDescending { it.createdAtMillis }) { record ->
             Text(
                 record.title + " · " + record.counterparty + " · " + xaf(record.amountXaf) + " · " +
@@ -892,17 +892,16 @@ private fun FinancialTrendRow(point: FinancialTrendPoint, comparisonLabel: Strin
     ) {
         Column(Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(point.label, fontWeight = FontWeight.SemiBold)
-            Text("CA confirmé : " + xaf(point.revenueXaf) + " · " + comparisonLabel + " : " + change(point.revenueDeltaXaf))
-            Text("Coût des ventes connu : " + xaf(point.costOfGoodsXaf) + " · " + comparisonLabel + " : " + change(point.costOfGoodsDeltaXaf))
-            Text("Charges d'exploitation : " + xaf(point.operatingExpensesXaf) + " · " + comparisonLabel + " : " + change(point.operatingExpensesDeltaXaf))
-            Text("Marge brute : " + (point.grossProfitXaf?.let {
+            Text(localizedLabel("CA confirmé : ","Confirmed revenue: ","Ceede jaaygol tabbitinaaɗe : ") + xaf(point.revenueXaf) + " · " + comparisonLabel + " : " + change(point.revenueDeltaXaf))
+            Text(localizedLabel("Coût des ventes connu : ","Known cost of sales: ","Njoɓdi jaaygol anndaaɗi : ") + xaf(point.costOfGoodsXaf) + " · " + comparisonLabel + " : " + change(point.costOfGoodsDeltaXaf))
+            Text(localizedLabel("Charges d'exploitation : ","Operating expenses: ","Njoɓdi golle : ") + xaf(point.operatingExpensesXaf) + " · " + comparisonLabel + " : " + change(point.operatingExpensesDeltaXaf))
+            Text(localizedLabel("Marge brute : ","Gross margin: ","Ceede heddiiɗe : ") + (point.grossProfitXaf?.let {
                 xaf(it) + " · " + comparisonLabel + " : " + (point.grossProfitDeltaXaf?.let(::change) ?: "—")
             } ?: "non calculable : coût direct incomplet"), color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text("Résultat opérationnel indicatif : " + (point.operatingResultXaf?.let {
+            Text(localizedLabel("Résultat opérationnel indicatif : ","Indicative operating result: ","Limooje golle tanƴaaɗe : ") + (point.operatingResultXaf?.let {
                 xaf(it) + " · " + comparisonLabel + " : " + (point.operatingResultDeltaXaf?.let(::change) ?: "—")
             } ?: "non déterminable tant que le coût direct de toutes les ventes n'est pas documenté"), fontWeight = FontWeight.Medium)
-            Text(
-                "Fournisseurs : stock capitalisé " + xaf(point.supplierStockPurchasesXaf) +
+            Text(localizedLabel("Fournisseurs : stock capitalisé ","Suppliers: capitalized stock ","Hokkooɓe jawdi : jawdi danndaandi ") + xaf(point.supplierStockPurchasesXaf) +
                     " · achats/consommables " + xaf(point.supplierOperatingPurchasesXaf) +
                     " · immobilisations " + xaf(point.supplierFixedAssetsXaf) +
                     " · paiements " + xaf(point.supplierPaymentsXaf),
@@ -927,11 +926,11 @@ private fun PerformanceProjectionCard(title: String, period: PeriodProjection) {
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(title, fontWeight = FontWeight.Bold)
-            Text("Réalisé confirmé : " + xaf(period.actualXaf))
-            Text("Projection de clôture : " + xaf(period.projectedXaf), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text("Période comparable : " + xaf(period.comparablePreviousXaf) + " · " + comparison)
+            Text(localizedLabel("Réalisé confirmé : ","Confirmed actual: ","Ko heɓaa tabbitinaama : ") + xaf(period.actualXaf))
+            Text(localizedLabel("Projection de clôture : ","Closing forecast: ","Tanƴugol timmugol : ") + xaf(period.projectedXaf), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(localizedLabel("Période comparable : ","Comparable period: ","Sahaa yerondirgal : ") + xaf(period.comparablePreviousXaf) + " · " + comparison)
             period.targetXaf?.let { target ->
-                Text("Objectif approuvé : " + xaf(target))
+                Text(localizedLabel("Objectif approuvé : ","Approved target: ","Faandaare jaɓaande : ") + xaf(target))
                 Text(
                     if ((period.targetGapXaf ?: 0L) > 0L) "Écart prévisionnel : " + xaf(period.targetGapXaf ?: 0L)
                     else "Objectif projeté atteint ou dépassé",
@@ -942,9 +941,9 @@ private fun PerformanceProjectionCard(title: String, period: PeriodProjection) {
                         progress = (ratio / 100.0).toFloat().coerceIn(0f, 1f),
                         modifier = Modifier.fillMaxWidth()
                     )
-                    Text("Atteinte projetée : " + String.format(java.util.Locale.FRANCE, "%.1f", ratio) + " %")
+                    Text(localizedLabel("Atteinte projetée : ","Projected achievement: ","Ko tanƴaa heɓde : ") + String.format(java.util.Locale.FRANCE, "%.1f", ratio) + " %")
                 }
-            } ?: Text("Aucun objectif approuvé enregistré pour cette période.")
+            } ?: Text(localizedLabel("Aucun objectif approuvé enregistré pour cette période.","No approved target recorded for this period.","Alaa faandaare jaɓaande danndaande e sahaa oo."))
         }
     }
 }
@@ -979,16 +978,15 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text("Assistant IA de pilotage", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text(
-                "Prévisions de CA, comparaison des périodes et recommandations de redressement. Les projections utilisent les ventes confirmées disponibles et vos objectifs ; aucune vente en attente n'est comptée.",
+            Text(localizedLabel("Assistant IA de pilotage","AI management assistant","Ballal IA ɗowtugol"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(localizedLabel("Prévisions de CA, comparaison des périodes et recommandations de redressement. Les projections utilisent les ventes confirmées disponibles et vos objectifs ; aucune vente en attente n'est comptée.","Revenue forecasts, period comparison and improvement recommendations use available confirmed sales and targets, excluding pending sales.","Tanƴugol ceede jaaygol, yerondirgol sahaaaji e laabi ɓeydude golle. Jaaygol tabbitinaangol e faandaare tan limtetee, wonaa jaaygol fadotoongol."),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             LocalOnlyNotice(
                 "Les estimations s’appuient sur vos ventes des 14, 28 et 90 derniers jours. Elles évoluent avec votre activité."
             )
-            Text("Périmètre : " + siteIds.size + " site(s) accessibles et consolidés.", style = MaterialTheme.typography.labelSmall)
-            Text("Couverture des ventes : " + dashboard.dataCoverageDays + " jour(s).", style = MaterialTheme.typography.labelSmall)
+            Text(localizedLabel("Périmètre : ","Scope: ","Nokkuuji : ") + siteIds.size + " site(s) accessibles et consolidés.", style = MaterialTheme.typography.labelSmall)
+            Text(localizedLabel("Couverture des ventes : ","Sales coverage: ","Jaaygol limtaangol : ") + dashboard.dataCoverageDays + " jour(s).", style = MaterialTheme.typography.labelSmall)
         }
         item { PerformanceProjectionCard("Aujourd'hui · jour par jour", dashboard.day) }
         item { PerformanceProjectionCard("Mois en cours · mois par mois", dashboard.month) }
@@ -996,75 +994,73 @@ fun AiInsightsContent(modifier: Modifier, repository: NaxaServicesLocalRepositor
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Rentabilité et engagements fournisseurs", fontWeight = FontWeight.Bold)
-                    Text("Chiffre d'affaires confirmé (période couverte) : " + xaf(dashboard.revenueXaf))
-                    Text("CA des ventes au coût fiable : " + xaf(dashboard.costedRevenueXaf))
-                    Text("Coût des marchandises vendues valorisées : " + xaf(dashboard.costOfGoodsXaf))
-                    Text("Marge brute sur ventes au coût connu : " + xaf(dashboard.grossProfitXaf) +
+                    Text(localizedLabel("Rentabilité et engagements fournisseurs","Profitability and supplier commitments","Njariñ e ɗaɓɓitanɗe hokkooɓe jawdi"), fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Chiffre d'affaires confirmé (période couverte) : ","Confirmed revenue (covered period): ","Ceede jaaygol tabbitinaaɗe (sahaa oo) : ") + xaf(dashboard.revenueXaf))
+                    Text(localizedLabel("CA des ventes au coût fiable : ","Revenue with reliable costs: ","Ceede jaaygol ɗe njoɓdi mum anndaa : ") + xaf(dashboard.costedRevenueXaf))
+                    Text(localizedLabel("Coût des marchandises vendues valorisées : ","Valued cost of goods sold: ","Njoɓdi jawdi jaayndi limtaandi : ") + xaf(dashboard.costOfGoodsXaf))
+                    Text(localizedLabel("Marge brute sur ventes au coût connu : ","Gross margin on known-cost sales: ","Ceede heddiiɗe e jaaygol ɗe njoɓdi anndaa : ") + xaf(dashboard.grossProfitXaf) +
                         (dashboard.grossMarginPercent?.let { " · " + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %" } ?: " · non calculable"))
-                    Text("Charges d'exploitation journalisées : " + xaf(dashboard.operatingExpensesXaf))
-                    Text("Solde de gestion indicatif : " +
+                    Text(localizedLabel("Charges d'exploitation journalisées : ","Recorded operating expenses: ","Njoɓdi golle danndaaɗi : ") + xaf(dashboard.operatingExpensesXaf))
+                    Text(localizedLabel("Solde de gestion indicatif : ","Indicative management balance: ","Ceede heddiiɗe tanƴaaɗe : ") +
                         (dashboard.operatingProfitProxyXaf?.let { xaf(it) } ?: "non déterminable : COGS historique incomplet"),
                         fontWeight = FontWeight.Bold)
-                    Text("Dette fournisseurs non réglée : " + xaf(dashboard.supplierPayablesXaf))
-                    Text("Flux fournisseurs comptabilisés ce mois-ci", fontWeight = FontWeight.SemiBold)
-                    Text("Stocks reçus et capitalisés : " + xaf(dashboard.currentMonthSupplierStockPurchasesXaf))
-                    Text("Achats courants reçus et passés en charges : " + xaf(dashboard.currentMonthSupplierOperatingPurchasesXaf))
-                    Text("Immobilisations reçues : " + xaf(dashboard.currentMonthSupplierFixedAssetsXaf))
-                    Text("Règlements fournisseurs (trésorerie, sans seconde charge) : " + xaf(dashboard.currentMonthSupplierPaymentsXaf))
+                    Text(localizedLabel("Dette fournisseurs non réglée : ","Outstanding supplier debt: ","Ñaawoore hokkooɓe jawdi yoɓaaka : ") + xaf(dashboard.supplierPayablesXaf))
+                    Text(localizedLabel("Flux fournisseurs comptabilisés ce mois-ci","Supplier transactions recorded this month","Golle hokkooɓe jawdi danndaaɗe e lewru nduu"), fontWeight = FontWeight.SemiBold)
+                    Text(localizedLabel("Stocks reçus et capitalisés : ","Received and capitalized stock: ","Jawdi heɓaandi danndaandi : ") + xaf(dashboard.currentMonthSupplierStockPurchasesXaf))
+                    Text(localizedLabel("Achats courants reçus et passés en charges : ","Received purchases recorded as expenses: ","Jawdi soodaaɗi heɓaaɗi limtaaɗi e njoɓdi : ") + xaf(dashboard.currentMonthSupplierOperatingPurchasesXaf))
+                    Text(localizedLabel("Immobilisations reçues : ","Fixed assets received: ","Jawdi juutndi heɓaandi : ") + xaf(dashboard.currentMonthSupplierFixedAssetsXaf))
+                    Text(localizedLabel("Règlements fournisseurs (trésorerie, sans seconde charge) : ","Supplier payments (cash flow, not an additional expense): ","Njoɓdi hokkooɓe jawdi (ceede yaltuɗe, wonaa njoɓdi ɗiɗol) : ") + xaf(dashboard.currentMonthSupplierPaymentsXaf))
                     if (dashboard.uncostedStockSalesCount > 0) {
                         Text(
                             dashboard.uncostedStockSalesCount.toString() + " vente(s) de stock antérieure(s) ne possèdent pas de coût historique fiable ; elles sont signalées et ne sont pas inventées dans le coût des ventes.",
                             color = MaterialTheme.colorScheme.error
                         )
                     }
-                    Text(
-                        "Les achats de stock n'augmentent pas le CA et ne sont pas déduits immédiatement de la marge : ils augmentent la valeur du stock et la dette fournisseur. Le coût est passé en coût des ventes lorsque le stock est vendu.",
+                    Text(localizedLabel("Les achats de stock n'augmentent pas le CA et ne sont pas déduits immédiatement de la marge : ils augmentent la valeur du stock et la dette fournisseur. Le coût est passé en coût des ventes lorsque le stock est vendu.","Stock purchases increase stock value and supplier debt, not revenue or immediate margin expenses. Costs are recognized when stock is sold.","Soodugol jawdi ɓeydataa ceede jaaygol, ustataa njariñ jooni: ɓeydata jawdi e ñaawoore. Njoɓdi limtetee so jawdi jaayama."),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text(
-                        "Le solde de gestion est une estimation avant éléments non enregistrés, amortissements, commissions et fiscalité ; il n'est pas un résultat SYSCOHADA certifié.",
+                    Text(localizedLabel("Le solde de gestion est une estimation avant éléments non enregistrés, amortissements, commissions et fiscalité ; il n'est pas un résultat SYSCOHADA certifié.","The management balance is an estimate before unrecorded items, depreciation, commissions and tax; it is not a certified SYSCOHADA result.","Ceede heddiiɗe ko tanƴugol hade njoɓdi ɗi ndanndaaka, famɗugol jawdi, komisiyoŋ e sagalle; wonaa limooje SYSCOHADA tabbitinaaɗe."),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
         }
-        item { Text("Performance jour par jour · 14 derniers jours", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Performance jour par jour · 14 derniers jours","Daily performance · last 14 days","Limooje ñalawma kala · balɗe 14 sakkitiiɗe"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.dailyTrend) { row ->
             val delta = (if (row.deltaXaf >= 0L) "+" else "−") + xaf(if (row.deltaXaf >= 0L) row.deltaXaf else -row.deltaXaf)
             val rate = row.deltaPercent?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %)" } ?: ""
             Text(row.label + " · " + xaf(row.actualXaf) + " · écart vs veille : " + delta + rate,
                 style = MaterialTheme.typography.bodySmall)
         }
-        item { Text("Rentabilité et flux fournisseurs · détail jour par jour", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Rentabilité et flux fournisseurs · détail jour par jour","Profitability and supplier flows · daily detail","Njariñ e golle hokkooɓe jawdi · ñalawma kala"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.dailyFinancialTrend, key = { "finance-day-" + it.label }) { point ->
             FinancialTrendRow(point, "vs veille")
         }
-        item { Text("Performance mois par mois · 12 derniers mois", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Performance mois par mois · 12 derniers mois","Monthly performance · last 12 months","Limooje lewru kala · lebbi 12 sakkitiiɗi"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.monthlyTrend) { row ->
             val delta = (if (row.deltaXaf >= 0L) "+" else "−") + xaf(if (row.deltaXaf >= 0L) row.deltaXaf else -row.deltaXaf)
             val rate = row.deltaPercent?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %)" } ?: ""
             Text(row.label + " · " + xaf(row.actualXaf) + " · écart vs mois précédent : " + delta + rate,
                 style = MaterialTheme.typography.bodySmall)
         }
-        item { Text("Rentabilité et flux fournisseurs · détail mois par mois", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Rentabilité et flux fournisseurs · détail mois par mois","Profitability and supplier flows · monthly detail","Njariñ e golle hokkooɓe jawdi · lewru kala"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.monthlyFinancialTrend, key = { "finance-month-" + it.label }) { point ->
             FinancialTrendRow(point, "vs période comparable du mois précédent")
         }
-        item { Text("Performance année par année · 5 derniers exercices", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Performance année par année · 5 derniers exercices","Annual performance · last 5 years","Limooje hitaande kala · duuɓi 5 sakkitiiɗi"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.yearlyTrend) { row ->
             val delta = (if (row.deltaXaf >= 0L) "+" else "−") + xaf(if (row.deltaXaf >= 0L) row.deltaXaf else -row.deltaXaf)
             val rate = row.deltaPercent?.let { " (" + (if (it >= 0) "+" else "") + String.format(java.util.Locale.FRANCE, "%.1f", it) + " %)" } ?: ""
             Text(row.label + " · " + xaf(row.actualXaf) + " · écart vs exercice précédent : " + delta + rate,
                 style = MaterialTheme.typography.bodySmall)
         }
-        item { Text("Rentabilité et flux fournisseurs · détail année par année", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Rentabilité et flux fournisseurs · détail année par année","Profitability and supplier flows · annual detail","Njariñ e golle hokkooɓe jawdi · hitaande kala"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.yearlyFinancialTrend, key = { "finance-year-" + it.label }) { point ->
             FinancialTrendRow(point, "vs même période de l'exercice précédent")
         }
-        item { Text("Stratégies de redressement et de progression", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Stratégies de redressement et de progression","Improvement strategies","Laabi ɓeydude golle"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(dashboard.recoveryActions) { action ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(14.dp)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
@@ -1110,16 +1106,16 @@ internal fun ProfileContent(
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text("Profil", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(localizedLabel("Profil","Profile","Humpito am"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(22.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     PrivateProfilePhoto(session)
                     Text(session.account.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                     Text(session.account.roleCode + " · " + session.account.organizationName)
-                    Text("Identifiant membre : " + session.account.memberId, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Activité : " + (activity?.titleFr ?: "Non définie"))
-                    Text("Langue : " + session.account.defaultLocale.uppercase())
-                    Text("Modèle : " + when(session.account.businessMode) {
+                    Text(localizedLabel("Identifiant membre : ","Member ID: ","Innol gollotooɗo : ") + session.account.memberId, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(localizedLabel("Activité : ","Activity: ","Golle : ") + (activity?.titleFr ?: "Non définie"))
+                    Text(localizedLabel("Langue : ","Language: ","Ɗemngal : ") + session.account.defaultLocale.uppercase())
+                    Text(localizedLabel("Modèle : ","Model: ","No golle ɗowtirtee : ") + when(session.account.businessMode) {
                         "solo" -> "PME autonome"
                         "single_site_multi_workstation" -> "Plusieurs emplacements dans un établissement"
                         "multi_site_network" -> "Promoteur multi-sites"
@@ -1130,22 +1126,22 @@ internal fun ProfileContent(
             }
         }
         item {
-            Text("Préférences et sécurité", fontWeight = FontWeight.Bold)
-            OutlinedButton(onClick = { onNavigate(AppRoute.APPEARANCE) }, modifier = Modifier.fillMaxWidth()) { Text("Langue, thème et mode nuit") }
-            OutlinedButton(onClick = { onNavigate(AppRoute.SECURITY) }, modifier = Modifier.fillMaxWidth()) { Text("Comptes, appareils et accès") }
-            OutlinedButton(onClick = { onNavigate(AppRoute.NOTIFICATIONS) }, modifier = Modifier.fillMaxWidth()) { Text("Centre de notifications") }
+            Text(localizedLabel("Préférences et sécurité","Preferences and security","Cuɓe e kisal"), fontWeight = FontWeight.Bold)
+            OutlinedButton(onClick = { onNavigate(AppRoute.APPEARANCE) }, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Langue, thème et mode nuit","Language, theme and night mode","Ɗemngal, jayngol e jemma")) }
+            OutlinedButton(onClick = { onNavigate(AppRoute.SECURITY) }, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Comptes, appareils et accès","Accounts, devices and access","Konte, kaɓirɗe e naatugol")) }
+            OutlinedButton(onClick = { onNavigate(AppRoute.NOTIFICATIONS) }, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Centre de notifications","Notification centre","Nokkuure tintine")) }
             LocalAccessPinSettingsCard(session.account.memberId)
             if (session.account.roleCode == "promoter") {
-                OutlinedButton(onClick = { showReferralScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Parrainage PME et suivi de mes gains") }
-                OutlinedButton(onClick = { onNavigate(AppRoute.CUSTOMER_PROMOTIONS) }, modifier = Modifier.fillMaxWidth()) { Text("Parrainage client et roue promotionnelle") }
-                OutlinedButton(onClick = { showLoyaltyScreen = true }, modifier = Modifier.fillMaxWidth()) { Text("Programme de fidélité") }
-                OutlinedButton(onClick = { onNavigate(AppRoute.CHARGES) }, modifier = Modifier.fillMaxWidth()) { Text("Charges et échéances de paiement") }
+                OutlinedButton(onClick = { showReferralScreen = true }, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Parrainage PME et suivi de mes gains","Business referrals and reward tracking","Recommandation golle e rewindo njariñ am")) }
+                OutlinedButton(onClick = { onNavigate(AppRoute.CUSTOMER_PROMOTIONS) }, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Parrainage client et roue promotionnelle","Customer referrals and promotional wheel","Recommandation soottotooɓe e roue")) }
+                OutlinedButton(onClick = { showLoyaltyScreen = true }, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Programme de fidélité","Loyalty program","Laawol hoolaare")) }
+                OutlinedButton(onClick = { onNavigate(AppRoute.CHARGES) }, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Charges et échéances de paiement","Expenses and payment due dates","Njoɓdi e ñalɗi yoɓde")) }
             }
-            OutlinedButton(onClick = { onNavigate(AppRoute.HELP) }, modifier = Modifier.fillMaxWidth()) { Text("FAQ et assistance") }
-            OutlinedButton(onClick = { onNavigate(AppRoute.SUBSCRIPTIONS) }, modifier = Modifier.fillMaxWidth()) { Text("Abonnement et paiement") }
+            OutlinedButton(onClick = { onNavigate(AppRoute.HELP) }, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("FAQ et assistance","FAQ and support","Naamne e ballal")) }
+            OutlinedButton(onClick = { onNavigate(AppRoute.SUBSCRIPTIONS) }, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Abonnement et paiement","Subscription and payment","Abonman e njoɓdi")) }
         }
         item {
-            Text("Historique", fontWeight = FontWeight.Bold)
+            Text(localizedLabel("Historique","History","Jaŋtol"), fontWeight = FontWeight.Bold)
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it }
             LocalOnlyNotice("Consultez vos dernières opérations disponibles.")
         }
@@ -1158,7 +1154,7 @@ internal fun ProfileContent(
             }
         }
         item {
-            Button(onClick = onLogout, modifier = Modifier.fillMaxWidth()) { Text("Se déconnecter") }
+            Button(onClick = onLogout, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Se déconnecter","Sign out","Yaltu")) }
             Spacer(Modifier.height(20.dp))
         }
     }
@@ -1180,8 +1176,8 @@ fun LivechatContent(modifier: Modifier, repository: NaxaServicesLocalRepository,
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text("Livechat et assistance", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text("Consultez la FAQ et envoyez une demande d’assistance.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(localizedLabel("Livechat et assistance","Livechat and support","Livechat e ballal"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text(localizedLabel("Consultez la FAQ et envoyez une demande d’assistance.","Read the FAQ and send a support request.","Yiy naamne e neldu ɗaɓɓitannde ballal."), color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorizedSitePicker(
                 siteIds,
                 siteId,
@@ -1191,20 +1187,20 @@ fun LivechatContent(modifier: Modifier, repository: NaxaServicesLocalRepository,
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Questions fréquentes", fontWeight = FontWeight.Bold)
-                    Text("• Comment ouvrir et clôturer une caisse ?")
-                    Text("• Comment corriger une erreur sans effacer l’historique ?")
-                    Text("• Comment ajouter un employé ou un point de vente ?")
-                    Text("• Comment sauvegarder et restaurer mes données ?")
-                    Text("• Comment suivre une échéance d’abonnement ?")
+                    Text(localizedLabel("Questions fréquentes","Frequently asked questions","Naamne ɓurɗe naamneede"), fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("• Comment ouvrir et clôturer une caisse ?","• How do I open and close a register?","• No udditirtee e uddirtee keesu?"))
+                    Text(localizedLabel("• Comment corriger une erreur sans effacer l’historique ?","• How do I correct an error without deleting history?","• No peewnirtee juumre tawa jaŋtol momtaaka?"))
+                    Text(localizedLabel("• Comment ajouter un employé ou un point de vente ?","• How do I add an employee or a location?","• No ɓeydirtée gollotooɗo walla nokkuure jaaygol?"))
+                    Text(localizedLabel("• Comment sauvegarder et restaurer mes données ?","• How do I back up and restore my data?","• No danndirtee e heɓtirtee humpito am?"))
+                    Text(localizedLabel("• Comment suivre une échéance d’abonnement ?","• How do I track a subscription due date?","• No rewindirtee ñalnde abonman?"))
                 }
             }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(subject, { subject = it }, Modifier.fillMaxWidth(), label = { Text("Sujet") })
-                    OutlinedTextField(message, { message = it }, Modifier.fillMaxWidth(), label = { Text("Votre message") }, minLines = 4)
+                    OutlinedTextField(subject, { subject = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Sujet","Subject","Ko ɗaɓɓitaa")) })
+                    OutlinedTextField(message, { message = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Votre message","Your message","Ɓatakuru maa")) }, minLines = 4)
                     Button(onClick = {
                         if (subject.isBlank() || message.trim().length < 10) notice = "Saisis un sujet et au moins 10 caractères."
                         else scope.launch {
@@ -1212,12 +1208,12 @@ fun LivechatContent(modifier: Modifier, repository: NaxaServicesLocalRepository,
                                 .onSuccess { subject = ""; message = ""; notice = "Demande enregistrée, en attente d'envoi." }
                                 .onFailure { notice = it.message ?: "Envoi impossible." }
                         }
-                    }, enabled = siteId.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text("Créer une demande") }
+                    }, enabled = siteId.isNotBlank(), modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Créer une demande","Create request","Sos ɗaɓɓitannde")) }
                     if (notice != null) Text(notice!!, color = MaterialTheme.colorScheme.secondary)
                 }
             }
         }
-        item { Text("Demandes récentes", fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Demandes récentes","Recent requests","Ɗaɓɓitanɗe sakkitiiɗe"), fontWeight = FontWeight.Bold) }
         items(requests.take(20)) { Text(it.subject + " · " + it.state, color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
@@ -1296,12 +1292,12 @@ fun CashReceiptActions(sale: LocalSale, session: AuthSession, onDismiss: () -> U
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Card(shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Reçu de caisse", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(localizedLabel("Reçu de caisse","Cash receipt","Kayit ceede"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text(record.reference + " · " + xaf(record.amountXaf))
                 Text(if (sale.status == "pending") "Paiement Mobile Money en attente : ce reçu n'atteste pas encore du règlement." else "Paiement espèces enregistré.")
-                Text("Choisis une action pour remettre le justificatif au client.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(localizedLabel("Choisis une action pour remettre le justificatif au client.","Choose how to provide the receipt to the customer.","Suɓo laawol hokkude kayit soottotooɗo."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Button(onClick = { saveLauncher.launch("NAXA-" + sale.saleNumber + ".pdf") }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Télécharger / enregistrer le PDF")
+                    Text(localizedLabel("Télécharger / enregistrer le PDF","Download / save PDF","Heɓ / danndu PDF"))
                 }
                 OutlinedButton(
                     onClick = {
@@ -1318,16 +1314,16 @@ fun CashReceiptActions(sale: LocalSale, session: AuthSession, onDismiss: () -> U
                         }.onFailure { error = it.message ?: "Partage PDF impossible." }
                     },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Partager le PDF (WhatsApp ou autre)") }
+                ) { Text(localizedLabel("Partager le PDF (WhatsApp ou autre)","Share PDF (WhatsApp or other)","Lollin PDF (WhatsApp walla goɗɗum)")) }
                 OutlinedButton(
                     onClick = {
                         runCatching { printReceipt(context, record, session.account.organizationName) }
                             .onFailure { error = it.message ?: "Impression impossible." }
                     },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Imprimer le reçu") }
+                ) { Text(localizedLabel("Imprimer le reçu","Print receipt","Winnditin kayit")) }
                 if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
-                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text("Fermer") }
+                TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Fermer","Close","Uddu")) }
             }
         }
     }
@@ -1516,7 +1512,7 @@ fun WorkOrdersContent(
                 Text("• " + note, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
             }
             if (profile == "beaute" && fr) {
-                Text("Ne saisis aucune donnée médicale, aucun diagnostic ni antécédent dans ce dossier.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                Text(localizedLabel("Ne saisis aucune donnée médicale, aucun diagnostic ni antécédent dans ce dossier.","Do not enter medical data, diagnoses or medical history in this file.","Hoto winndu humpito cellal, ñawu walla jaŋtol cellal e kayit ngol."), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
             }
             if (workflow.journey == "retail") {
                 Text(
@@ -2094,17 +2090,17 @@ fun RecurringChargesContent(
                 OutlinedButton(
                     onClick = { notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS) },
                     modifier = Modifier.fillMaxWidth()
-                ) { Text("Autoriser les notifications d'échéance") }
+                ) { Text(localizedLabel("Autoriser les notifications d'échéance","Allow due date notifications","Yamir tintine ñalɗi yoɓde")) }
             }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Pilotage du mois en cours", fontWeight = FontWeight.Bold)
-                    Text("Chiffre d'affaires brut encaissé et confirmé : " + xaf(monthSales), style = MaterialTheme.typography.titleMedium)
-                    Text("Charges fixes réglées : " + xaf(monthFixedCharges))
-                    Text("Solde de gestion indicatif après ces charges : " + xaf(monthSales - monthFixedCharges), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-                    Text("Le CA reste le total des ventes confirmées. Le solde indicatif retranche uniquement les charges fixes enregistrées et payées ici ; il ne constitue ni un résultat comptable SYSCOHADA ni un résultat fiscal.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(localizedLabel("Pilotage du mois en cours","Current month overview","Yiyde lewru nduu"), fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Chiffre d'affaires brut encaissé et confirmé : ","Gross revenue received and confirmed: ","Ceede jaaygol fof keɓaaɗe tabbitinaaɗe : ") + xaf(monthSales), style = MaterialTheme.typography.titleMedium)
+                    Text(localizedLabel("Charges fixes réglées : ","Paid fixed expenses: ","Njoɓdi ɗi yoɓaa : ") + xaf(monthFixedCharges))
+                    Text(localizedLabel("Solde de gestion indicatif après ces charges : ","Indicative balance after these expenses: ","Ceede heddiiɗe tanƴaaɗe caggal njoɓdi ɗii : ") + xaf(monthSales - monthFixedCharges), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Le CA reste le total des ventes confirmées. Le solde indicatif retranche uniquement les charges fixes enregistrées et payées ici ; il ne constitue ni un résultat comptable SYSCOHADA ni un résultat fiscal.","Revenue remains total confirmed sales. This indicative balance deducts only fixed costs recorded and paid here; it is not a SYSCOHADA or tax result.","Ceede jaaygol ko jaaygol tabbitinaangol fof. Ceede heddiiɗe ustina tan njoɓdi danndaaɗi yoɓaaɗi ɗoo; wonaa limooje SYSCOHADA walla sagalle."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -2112,10 +2108,10 @@ fun RecurringChargesContent(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (editingId == null) "Nouvelle charge" else "Modifier la charge", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Libellé : loyer, électricité, impôts, taxes…") }, singleLine = true)
-                    OutlinedTextField(category, { category = it }, Modifier.fillMaxWidth(), label = { Text("Catégorie") }, singleLine = true)
-                    OutlinedTextField(amount, { amount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Montant attendu (FCFA)") }, singleLine = true)
-                    Text("Périodicité")
+                    OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Libellé : loyer, électricité, impôts, taxes…","Label: rent, electricity, taxes…","Innde: loyer, elektrisite, sagalle…")) }, singleLine = true)
+                    OutlinedTextField(category, { category = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Catégorie","Category","Fannu")) }, singleLine = true)
+                    OutlinedTextField(amount, { amount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Montant attendu (FCFA)","Expected amount (XAF)","Ceede fadotooɗe (FCFA)")) }, singleLine = true)
+                    Text(localizedLabel("Périodicité","Frequency","Sahaa kala"))
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         listOf("monthly" to "Mensuelle", "quarterly" to "Trimestrielle", "annual" to "Annuelle", "one_time" to "Unique").forEach { option ->
                             OutlinedButton(onClick = { recurrence = option.first }) {
@@ -2123,8 +2119,8 @@ fun RecurringChargesContent(
                             }
                         }
                     }
-                    OutlinedTextField(dueInDays, { dueInDays = it.filter(Char::isDigit).take(4) }, Modifier.fillMaxWidth(), label = { Text("Prochaine échéance dans (jours)") }, singleLine = true)
-                    OutlinedTextField(reminderDays, { reminderDays = it.filter(Char::isDigit).take(2) }, Modifier.fillMaxWidth(), label = { Text("Rappel avant échéance (jours)") }, singleLine = true)
+                    OutlinedTextField(dueInDays, { dueInDays = it.filter(Char::isDigit).take(4) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Prochaine échéance dans (jours)","Next due date in (days)","Ñalnde yoɓde aroore caggal (balɗe)")) }, singleLine = true)
+                    OutlinedTextField(reminderDays, { reminderDays = it.filter(Char::isDigit).take(2) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Rappel avant échéance (jours)","Reminder before due date (days)","Tintinol hade ñalnde yoɓde (balɗe)")) }, singleLine = true)
                     Button(
                         onClick = {
                             val value = amount.toLongOrNull() ?: 0L
@@ -2149,25 +2145,25 @@ fun RecurringChargesContent(
                         enabled = !busy && siteId.isNotBlank() && name.isNotBlank() && amount.toLongOrNull() != null && (reminderDays.toIntOrNull() ?: -1) in 0..30,
                         modifier = Modifier.fillMaxWidth()
                     ) { Text(if (busy) "Enregistrement…" else if (editingId == null) "Enregistrer la charge" else "Mettre à jour la charge") }
-                    if (editingId != null) TextButton(onClick = { editingId = null; name = ""; amount = ""; category = "Loyer" }) { Text("Annuler la modification") }
+                    if (editingId != null) TextButton(onClick = { editingId = null; name = ""; amount = ""; category = "Loyer" }) { Text(localizedLabel("Annuler la modification","Cancel editing","Haaytu waylugol")) }
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                     message?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                 }
             }
         }
-        item { Text("Rappels à surveiller", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (due.isEmpty()) item { Text("Aucune échéance dans la fenêtre de rappel configurée.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text(localizedLabel("Rappels à surveiller","Upcoming reminders","Tintine rewindoɗe"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (due.isEmpty()) item { Text(localizedLabel("Aucune échéance dans la fenêtre de rappel configurée.","No due dates within the selected reminder period.","Alaa ñalnde yoɓde e sahaa tintinol suɓaaɗo."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(due) { charge ->
             val paid = payments.filter { it.chargeId == charge.id && it.referenceDueAtMillis == charge.nextDueAtMillis }.sumOf { it.amountXaf }
             val balance = (charge.amountXaf - paid).coerceAtLeast(0L)
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(charge.name + " · " + charge.category, fontWeight = FontWeight.Bold)
-                    Text("Échéance : " + fmt.format(java.util.Date(charge.nextDueAtMillis)) + " · " + charge.recurrence)
-                    Text("Montant : " + xaf(charge.amountXaf) + " · déjà réglé : " + xaf(paid))
+                    Text(localizedLabel("Échéance : ","Due: ","Ñalnde yoɓde : ") + fmt.format(java.util.Date(charge.nextDueAtMillis)) + " · " + charge.recurrence)
+                    Text(localizedLabel("Montant : ","Amount: ","Ceede : ") + xaf(charge.amountXaf) + " · déjà réglé : " + xaf(paid))
                     Text(if (balance == 0L) "Échéance réglée" else if (charge.nextDueAtMillis < now) "En retard : " + xaf(balance) else "À provisionner : " + xaf(balance), color = if (charge.nextDueAtMillis < now && balance > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary)
                     if (balance > 0L) {
-                        OutlinedTextField(paymentAmount, { paymentAmount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Règlement partiel ou total (FCFA)") }, singleLine = true)
+                        OutlinedTextField(paymentAmount, { paymentAmount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Règlement partiel ou total (FCFA)","Partial or full payment (XAF)","Njoɓdi seeɗa walla fof (FCFA)")) }, singleLine = true)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
                                 onClick = {
@@ -2177,7 +2173,7 @@ fun RecurringChargesContent(
                                             .onFailure { error = it.message ?: "Paiement impossible." }
                                     }
                                 }, modifier = Modifier.weight(1f)
-                            ) { Text("Régler le solde") }
+                            ) { Text(localizedLabel("Régler le solde","Pay remaining balance","Yoɓ ceede heddiiɗe")) }
                             OutlinedButton(
                                 onClick = {
                                     val value = paymentAmount.toLongOrNull() ?: 0L
@@ -2188,7 +2184,7 @@ fun RecurringChargesContent(
                                             .onFailure { error = it.message ?: "Paiement partiel impossible." }
                                     }
                                 }, modifier = Modifier.weight(1f)
-                            ) { Text("Paiement partiel") }
+                            ) { Text(localizedLabel("Paiement partiel","Partial payment","Njoɓdi seeɗa")) }
                         }
                     }
                     TextButton(onClick = {
@@ -2196,41 +2192,41 @@ fun RecurringChargesContent(
                         recurrence = charge.recurrence
                         dueInDays = (((charge.nextDueAtMillis - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0L)).toString()
                         reminderDays = charge.reminderDays.toString()
-                    }) { Text("Modifier cette charge") }
+                    }) { Text(localizedLabel("Modifier cette charge","Edit this expense","Waylu njoɓdi ɗii")) }
                 }
             }
         }
-        item { Text("Autres échéances programmées", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (otherScheduled.isEmpty()) item { Text("Aucune autre charge active à venir.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text(localizedLabel("Autres échéances programmées","Other scheduled due dates","Ñalɗi yoɓde goɗɗi"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (otherScheduled.isEmpty()) item { Text(localizedLabel("Aucune autre charge active à venir.","No other upcoming active expenses.","Alaa njoɓdi goɗɗi arooɗi."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(otherScheduled) { charge ->
             val paid = payments.filter { it.chargeId == charge.id && it.referenceDueAtMillis == charge.nextDueAtMillis }.sumOf { it.amountXaf }
             val balance = (charge.amountXaf - paid).coerceAtLeast(0L)
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(charge.name + " · " + charge.category, fontWeight = FontWeight.Bold)
-                    Text("Prochaine échéance : " + fmt.format(java.util.Date(charge.nextDueAtMillis)) + " · " + charge.recurrence)
-                    Text("Montant : " + xaf(charge.amountXaf) + " · rappel " + charge.reminderDays + " jour(s) avant")
-                    Text("Solde sur l'échéance actuelle : " + xaf(balance))
+                    Text(localizedLabel("Prochaine échéance : ","Next due date: ","Ñalnde yoɓde aroore : ") + fmt.format(java.util.Date(charge.nextDueAtMillis)) + " · " + charge.recurrence)
+                    Text(localizedLabel("Montant : ","Amount: ","Ceede : ") + xaf(charge.amountXaf) + " · rappel " + charge.reminderDays + " jour(s) avant")
+                    Text(localizedLabel("Solde sur l'échéance actuelle : ","Remaining amount for current due date: ","Ceede heddiiɗe e ñalnde yoɓde ndee : ") + xaf(balance))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = {
                             editingId = charge.id; name = charge.name; category = charge.category; amount = charge.amountXaf.toString()
                             recurrence = charge.recurrence
                             dueInDays = (((charge.nextDueAtMillis - System.currentTimeMillis()) / 86_400_000L).coerceAtLeast(0L)).toString()
                             reminderDays = charge.reminderDays.toString()
-                        }) { Text("Modifier") }
+                        }) { Text(localizedLabel("Modifier","Edit","Waylu")) }
                         TextButton(onClick = {
                             scope.launch {
                                 runCatching { repository.deactivateRecurringCharge(orgId, siteId, charge.id, session.account.memberId) }
                                     .onSuccess { message = "Charge désactivée ; son historique est conservé." }
                                     .onFailure { error = it.message ?: "Désactivation impossible." }
                             }
-                        }) { Text("Désactiver") }
+                        }) { Text(localizedLabel("Désactiver","Disable","Uddu")) }
                     }
                 }
             }
         }
-        item { Text("Historique des règlements", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (payments.isEmpty()) item { Text("Aucun règlement enregistré.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text(localizedLabel("Historique des règlements","Payment history","Jaŋtol njoɓdi"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (payments.isEmpty()) item { Text(localizedLabel("Aucun règlement enregistré.","No payments recorded.","Alaa njoɓdi danndaaɗi."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(payments) { payment ->
             val chargeName = charges.firstOrNull { it.id == payment.chargeId }?.name ?: "Charge archivée"
             Text(chargeName + " · " + xaf(payment.amountXaf) + " · " + fmt.format(java.util.Date(payment.paidAtMillis)), style = MaterialTheme.typography.bodySmall)
@@ -2269,10 +2265,10 @@ fun LoyaltyProgramsContent(
         item {
             Spacer(Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Programmes de fidélité", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                TextButton(onClick = onBack) { Text("Retour") }
+                Text(localizedLabel("Programmes de fidélité","Loyalty programs","Laabi hoolaare"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                TextButton(onClick = onBack) { Text(localizedLabel("Retour","Back","Rutto")) }
             }
-            Text("Quatre programmes autonomes adaptés au profil d'activité : points, passages, dépenses cumulées et fréquence de visite.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(localizedLabel("Quatre programmes autonomes adaptés au profil d'activité : points, passages, dépenses cumulées et fréquence de visite.","Four independent programs: points, visits, cumulative spending and visit frequency.","Laabi nay keeriiɗi: puwan, garugol, ceede renndinaaɗe e sahaa garugol."), color = MaterialTheme.colorScheme.onSurfaceVariant)
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) { siteId = it; selectedCustomerId = "" }
             LocalOnlyNotice("Consultez vos gains et votre historique. Le versement automatique n'est pas disponible.")
         }
@@ -2299,21 +2295,21 @@ fun LoyaltyProgramsContent(
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(current.name, fontWeight = FontWeight.Bold)
-                        OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Nom du programme") }, singleLine = true)
-                        OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text("Présentation et règles") }, minLines = 2)
-                        Text("Indicateur suivi")
+                        OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Nom du programme","Program name","Innde laawol")) }, singleLine = true)
+                        OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Présentation et règles","Description and rules","Cifagol e laabi")) }, minLines = 2)
+                        Text(localizedLabel("Indicateur suivi","Tracked metric","Limoore rewindaande"))
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             listOf("points" to "Points", "visits" to "Visites", "spend" to "Montant dépensé").forEach { option ->
                                 OutlinedButton(onClick = { metric = option.first }) { Text((if (metric == option.first) "✓ " else "") + option.second) }
                             }
                         }
-                        OutlinedTextField(unitAmount, { unitAmount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("FCFA par unité gagnée (ex. 1 000 pour les points)") }, singleLine = true)
-                        OutlinedTextField(target, { target = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Seuil de récompense") }, singleLine = true)
-                        OutlinedTextField(reward, { reward = it }, Modifier.fillMaxWidth(), label = { Text("Récompense à offrir") }, minLines = 2)
-                        OutlinedTextField(window, { window = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text("Fenêtre glissante en jours (0 = illimitée)") }, singleLine = true)
+                        OutlinedTextField(unitAmount, { unitAmount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("FCFA par unité gagnée (ex. 1 000 pour les points)","XAF per earned unit (e.g. 1,000 per point)","FCFA ngam unit heɓaandi (1 000 ngam puwan)")) }, singleLine = true)
+                        OutlinedTextField(target, { target = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Seuil de récompense","Reward threshold","Keewal ngam heɓde njariñ")) }, singleLine = true)
+                        OutlinedTextField(reward, { reward = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Récompense à offrir","Reward to offer","Njariñ hokketeengal")) }, minLines = 2)
+                        OutlinedTextField(window, { window = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Fenêtre glissante en jours (0 = illimitée)","Rolling window in days (0 = unlimited)","Sahaa e balɗe (0 = alaa keerol)")) }, singleLine = true)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             androidx.compose.material3.Checkbox(checked = active, onCheckedChange = { active = it })
-                            Text("Programme actif")
+                            Text(localizedLabel("Programme actif","Active program","Laawol nana golla"))
                         }
                         Button(
                             onClick = {
@@ -2333,21 +2329,21 @@ fun LoyaltyProgramsContent(
                                         .onFailure { error = it.message ?: "Enregistrement du programme impossible." }
                                 }
                             }, modifier = Modifier.fillMaxWidth()
-                        ) { Text("Enregistrer la configuration") }
+                        ) { Text(localizedLabel("Enregistrer la configuration","Save settings","Danndu teelte")) }
                     }
                 }
             }
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Enregistrer une visite ou un achat client", fontWeight = FontWeight.Bold)
-                        if (customers.isEmpty()) Text("Crée d'abord la fiche du client dans le CRM.")
+                        Text(localizedLabel("Enregistrer une visite ou un achat client","Record a customer visit or purchase","Danndu garugol walla soodugol soottotooɗo"), fontWeight = FontWeight.Bold)
+                        if (customers.isEmpty()) Text(localizedLabel("Crée d'abord la fiche du client dans le CRM.","Create the customer record first.","Sos humpito soottotooɗo tawo."))
                         customers.forEach { customer ->
                             OutlinedButton(onClick = { selectedCustomerId = customer.id }, modifier = Modifier.fillMaxWidth()) {
                                 Text((if (selectedCustomerId == customer.id) "✓ " else "") + customer.displayName)
                             }
                         }
-                        OutlinedTextField(amount, { amount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Montant de l'achat (FCFA) ; 0 pour un passage") }, singleLine = true)
+                        OutlinedTextField(amount, { amount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Montant de l'achat (FCFA) ; 0 pour un passage","Purchase amount (XAF); 0 for a visit","Ceede soodugol (FCFA); 0 ngam garugol")) }, singleLine = true)
                         Button(
                             onClick = {
                                 val clientId = selectedCustomerId
@@ -2370,8 +2366,8 @@ fun LoyaltyProgramsContent(
                     }
                 }
             }
-            item { Text("Historique et récompenses", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            if (events.isEmpty()) item { Text("Aucune activité ou récompense enregistrée pour ce programme.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text(localizedLabel("Historique et récompenses","History and rewards","Jaŋtol e njariñ"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+            if (events.isEmpty()) item { Text(localizedLabel("Aucune activité ou récompense enregistrée pour ce programme.","No activity or rewards recorded for this program.","Alaa golle walla njariñ danndaangal e laawol ngol."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
             items(events) { event ->
                 val client = customers.firstOrNull { it.id == event.customerId }?.displayName ?: "Client"
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -2389,14 +2385,14 @@ fun LoyaltyProgramsContent(
                                         val success = repository.redeemLoyaltyReward(event, session.account.memberId)
                                         if (success) notice = "Récompense marquée comme utilisée."
                                     }
-                                }) { Text("Marquer comme utilisée") }
+                                }) { Text(localizedLabel("Marquer comme utilisée","Mark as used","Maanto ko huutoraama")) }
                             }
-                        } else Text("Valeur : " + event.metricDelta + " · achat : " + xaf(event.amountXaf), style = MaterialTheme.typography.bodySmall)
+                        } else Text(localizedLabel("Valeur : ","Value: ","Keewal : ") + event.metricDelta + " · achat : " + xaf(event.amountXaf), style = MaterialTheme.typography.bodySmall)
                     }
                 }
             }
         } else {
-            item { Text("Initialisation des quatre programmes en cours…", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text(localizedLabel("Initialisation des quatre programmes en cours…","Setting up the four programs…","Nana teelta laabi nay…"), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         error?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
         notice?.let { item { Text(it, color = MaterialTheme.colorScheme.primary) } }

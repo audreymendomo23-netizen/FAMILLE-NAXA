@@ -992,7 +992,7 @@ private fun ErpScreen(
                 title = { Column { Text("NAXA SERVICES", fontWeight = FontWeight.Black); Text(accountName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
                 actions = {
                     TextButton(onClick = { onNavigate(AppRoute.NOTIFICATIONS) }) { Text("Alertes") }
-                    TextButton(onClick = { onNavigate(AppRoute.PROFILE) }) { Text("Profil") }
+                    TextButton(onClick = { onNavigate(AppRoute.PROFILE) }) { Text(localizedLabel("Profil","Profile","Humpito am")) }
                     TextButton(onClick = onTheme) { Text(if (lightTheme) stringResource(R.string.dark_mode) else stringResource(R.string.light_mode)) }
                 }
             )
@@ -1291,7 +1291,7 @@ private fun PressingLocalContent(
                 PressingOrderCard(
                     order = order,
                     events = events,
-                    fr = fr,
+                    locale = session.account.defaultLocale,
                     reason = advanceReasons[order.id].orEmpty(),
                     onReasonChange = { value -> advanceReasons = advanceReasons + (order.id to value) },
                     onAdvance = {
@@ -1317,7 +1317,7 @@ private fun PressingLocalContent(
 private fun PressingOrderCard(
     order: LocalPressingOrder,
     events: List<LocalPressingStatusEvent>,
-    fr: Boolean,
+    locale: String,
     reason: String,
     onReasonChange: (String) -> Unit,
     onAdvance: () -> Unit
@@ -1331,9 +1331,9 @@ private fun PressingOrderCard(
     }
     val promised = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(order.promisedAtMillis))
     val nextLabel = when (order.status) {
-        "received" -> when (session.account.defaultLocale) { "en" -> "Start processing"; "ff-CM" -> "Fuɗɗo golle"; else -> "Lancer le traitement" }
-        "in_progress" -> when (session.account.defaultLocale) { "en" -> "Mark laundry ready"; "ff-CM" -> "Maanto comci ko hebii"; else -> "Marquer le linge prêt" }
-        "ready" -> when (session.account.defaultLocale) { "en" -> "Confirm pickup"; "ff-CM" -> "Tabbitin heɓtugol"; else -> "Confirmer le retrait" }
+        "received" -> when (locale) { "en" -> "Start processing"; "ff-CM" -> "Fuɗɗo golle"; else -> "Lancer le traitement" }
+        "in_progress" -> when (locale) { "en" -> "Mark laundry ready"; "ff-CM" -> "Maanto comci ko hebii"; else -> "Marquer le linge prêt" }
+        "ready" -> when (locale) { "en" -> "Confirm pickup"; "ff-CM" -> "Tabbitin heɓtugol"; else -> "Confirmer le retrait" }
         else -> ""
     }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -1345,23 +1345,23 @@ private fun PressingOrderCard(
             Text(order.customerName, style = MaterialTheme.typography.titleMedium)
             if (order.customerPhone.isNotBlank()) Text(order.customerPhone, style = MaterialTheme.typography.bodySmall)
             Text(order.itemsSummary, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text((when (session.account.defaultLocale) { "en" -> "Promised pickup: "; "ff-CM" -> "Heɓtugol fodoonde : "; else -> "Retrait promis : " }) + promised, style = MaterialTheme.typography.bodySmall)
-            order.workstationId?.let { Text((when (session.account.defaultLocale) { "en" -> "Workstation: "; "ff-CM" -> "Nokkuure golle : "; else -> "Poste : " }) + it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+            Text((when (locale) { "en" -> "Promised pickup: "; "ff-CM" -> "Heɓtugol fodoonde : "; else -> "Retrait promis : " }) + promised, style = MaterialTheme.typography.bodySmall)
+            order.workstationId?.let { Text((when (locale) { "en" -> "Workstation: "; "ff-CM" -> "Nokkuure golle : "; else -> "Poste : " }) + it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
             Text(stringResource(R.string.pressing_total_and_deposit, order.totalXaf, order.depositXaf), style = MaterialTheme.typography.bodySmall)
             if (order.depositXaf > 0) {
                 val methodLabel = when (order.depositPaymentMethod) {
-                    "cash" -> when (session.account.defaultLocale) { "en" -> "cash"; "ff-CM" -> "ceede e juuɗe"; else -> "espèces" }
+                    "cash" -> when (locale) { "en" -> "cash"; "ff-CM" -> "ceede e juuɗe"; else -> "espèces" }
                     "mobile_money" -> "Mobile Money"
-                    "other" -> when (session.account.defaultLocale) { "en" -> "bank transfer / other"; "ff-CM" -> "virement / goɗɗum"; else -> "virement / autre" }
-                    else -> when (session.account.defaultLocale) { "en" -> "method not recorded"; "ff-CM" -> "laawol winndaaka"; else -> "mode non renseigné" }
+                    "other" -> when (locale) { "en" -> "bank transfer / other"; "ff-CM" -> "virement / goɗɗum"; else -> "virement / autre" }
+                    else -> when (locale) { "en" -> "method not recorded"; "ff-CM" -> "laawol winndaaka"; else -> "mode non renseigné" }
                 }
                 val paymentState = when (order.depositPaymentStatus) {
-                    "confirmed" -> when (session.account.defaultLocale) { "en" -> "received · session linked"; "ff-CM" -> "heɓaama · keesu jokkondiraama"; else -> "encaissé · session liée" }
-                    "pending" -> when (session.account.defaultLocale) { "en" -> "awaiting confirmation"; "ff-CM" -> "nana fadi tabbitinol"; else -> "en attente de confirmation" }
-                    else -> when (session.account.defaultLocale) { "en" -> "not reconciled"; "ff-CM" -> "tabbitinaaka"; else -> "non rapproché" }
+                    "confirmed" -> when (locale) { "en" -> "received · session linked"; "ff-CM" -> "heɓaama · keesu jokkondiraama"; else -> "encaissé · session liée" }
+                    "pending" -> when (locale) { "en" -> "awaiting confirmation"; "ff-CM" -> "nana fadi tabbitinol"; else -> "en attente de confirmation" }
+                    else -> when (locale) { "en" -> "not reconciled"; "ff-CM" -> "tabbitinaaka"; else -> "non rapproché" }
                 }
                 Text(
-                    (when (session.account.defaultLocale) { "en" -> "Deposit: "; "ff-CM" -> "Ceede adiiɗe : "; else -> "Acompte : " }) + methodLabel + " · " + paymentState,
+                    (when (locale) { "en" -> "Deposit: "; "ff-CM" -> "Ceede adiiɗe : "; else -> "Acompte : " }) + methodLabel + " · " + paymentState,
                     color = if (order.depositPaymentStatus == "confirmed") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -1371,7 +1371,7 @@ private fun PressingOrderCard(
                     reason,
                     onReasonChange,
                     Modifier.fillMaxWidth(),
-                    label = { Text(when (session.account.defaultLocale) { "en" -> "Reason required for next stage"; "ff-CM" -> "Daliilu waajib ngam feere aroore"; else -> "Motif obligatoire pour l'étape suivante" }) },
+                    label = { Text(when (locale) { "en" -> "Reason required for next stage"; "ff-CM" -> "Daliilu waajib ngam feere aroore"; else -> "Motif obligatoire pour l'étape suivante" }) },
                     minLines = 1
                 )
                 Button(onClick = onAdvance, enabled = reason.trim().length >= 3, modifier = Modifier.fillMaxWidth()) {
@@ -1379,10 +1379,10 @@ private fun PressingOrderCard(
                 }
             }
             if (events.isNotEmpty()) {
-                Text(when (session.account.defaultLocale) { "en" -> "Ticket history"; "ff-CM" -> "Jaŋtol kayit"; else -> "Historique du ticket" }, fontWeight = FontWeight.SemiBold)
+                Text(when (locale) { "en" -> "Ticket history"; "ff-CM" -> "Jaŋtol kayit"; else -> "Historique du ticket" }, fontWeight = FontWeight.SemiBold)
                 events.take(6).forEach { event ->
                     Text(
-                        event.fromStatus + " → " + event.toStatus + " · " + event.reason.ifBlank { when (session.account.defaultLocale) { "en" -> "Initial stage"; "ff-CM" -> "Feere arande"; else -> "Étape initiale" } },
+                        event.fromStatus + " → " + event.toStatus + " · " + event.reason.ifBlank { when (locale) { "en" -> "Initial stage"; "ff-CM" -> "Feere arande"; else -> "Étape initiale" } },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -1912,7 +1912,7 @@ private fun CashLocalContent(
                             if (sale.inventoryItemId != null && sale.stockQuantity != null) {
                                 Text("Stock lié : " + sale.stockQuantity + " unité(s)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
-                            TextButton(onClick = { receiptSale = sale }) { Text("Reçu") }
+                            TextButton(onClick = { receiptSale = sale }) { Text(localizedLabel("Reçu","Received","Heɓaama")) }
                         }
                         Text(sale.totalXaf.toString() + " F")
                     }

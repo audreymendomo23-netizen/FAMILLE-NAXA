@@ -530,7 +530,7 @@ fun CustomersContent(
                             addressLine = ""; neighborhood = ""; landmark = ""
                             locationConsent = false; latitude = ""; longitude = ""; locationAccuracy = ""
                             locationMessage = null
-                        }, modifier = Modifier.fillMaxWidth()) { Text("Annuler la modification") }
+                        }, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Annuler la modification","Cancel editing","Haaytu waylugol")) }
                     }
                     if (!notice.isNullOrBlank()) Text(notice!!, color = MaterialTheme.colorScheme.primary)
                 }
@@ -545,8 +545,8 @@ fun CustomersContent(
                         selectedCustomer?.displayName?.let { "Client sélectionné : $it" } ?: "Sélectionne d'abord un client dans la liste ci-dessous.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    OutlinedTextField(followUpTitle, { followUpTitle = it }, Modifier.fillMaxWidth(), label = { Text("Objet du suivi") }, singleLine = true)
-                    Text("Fréquence", fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(followUpTitle, { followUpTitle = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Objet du suivi","Follow-up subject","Ko rewindo")) }, singleLine = true)
+                    Text(localizedLabel("Fréquence","Frequency","Sahaa"), fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { followUpFrequency = "weekly" }, enabled = followUpFrequency != "weekly") { Text("Chaque semaine") }
                         OutlinedButton(onClick = { followUpFrequency = "monthly" }, enabled = followUpFrequency != "monthly") { Text("Chaque mois") }
@@ -554,7 +554,7 @@ fun CustomersContent(
                     Text("Canal prévu", fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         OutlinedButton(onClick = { followUpChannel = "in_person" }, enabled = followUpChannel != "in_person") { Text("Sur place") }
-                        OutlinedButton(onClick = { followUpChannel = "phone" }, enabled = followUpChannel != "phone") { Text("Téléphone") }
+                        OutlinedButton(onClick = { followUpChannel = "phone" }, enabled = followUpChannel != "phone") { Text(localizedLabel("Téléphone","Phone","Telefon")) }
                         OutlinedButton(onClick = { followUpChannel = "whatsapp" }, enabled = followUpChannel != "whatsapp") { Text("WhatsApp") }
                     }
                     OutlinedTextField(followUpNotes, { followUpNotes = it }, Modifier.fillMaxWidth(), label = { Text("Consignes de relance (facultatif)") }, minLines = 2)
@@ -649,7 +649,7 @@ fun CustomersContent(
                                 else -> "Sur place"
                             }
                     )
-                    Text("Prochaine échéance : " + java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(followUp.nextDueAtMillis)))
+                    Text(localizedLabel("Prochaine échéance : ","Next due date: ","Ñalnde yoɓde aroore : ") + java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(followUp.nextDueAtMillis)))
                     if (followUp.notes.isNotBlank()) Text(followUp.notes, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     OutlinedButton(
                         onClick = {
@@ -813,7 +813,7 @@ fun StockContent(
                     Text("Le template adapte ses colonnes aux champs sélectionnés. Colonnes obligatoires : SKU, désignation, unité et quantité initiale.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = includeReorderField, onCheckedChange = { includeReorderField = it })
-                        Text("Seuil d'alerte")
+                        Text(localizedLabel("Seuil d'alerte","Alert threshold","Keewal les ngam tintinol"))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = includePurchasePriceField, onCheckedChange = { includePurchasePriceField = it })
@@ -1180,7 +1180,7 @@ fun StockContent(
                                 OutlinedButton(onClick = { movementType = type }) { Text(if (movementType == type) "✓ " + type else type) }
                             }
                         }
-                        OutlinedTextField(quantity, { quantity = it }, Modifier.fillMaxWidth(), label = { Text("Quantité") }, singleLine = true)
+                        OutlinedTextField(quantity, { quantity = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Quantité","Quantity","Keewal")) }, singleLine = true)
                         OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text("Motif obligatoire") }, singleLine = true)
                         Button(
                             onClick = {
@@ -1401,10 +1401,10 @@ fun ReportsContent(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text("Consolidation indicative des points autorisés", fontWeight = FontWeight.Bold)
                     Text("Chiffre d'affaires confirmé : " + totalSales + " FCFA")
-                    Text("Coût des ventes connu : " + totalCostOfGoods + " FCFA")
+                    Text(localizedLabel("Coût des ventes connu : ","Known cost of sales: ","Njoɓdi jaaygol anndaaɗi : ") + totalCostOfGoods + " FCFA")
                     Text("Charges d'exploitation enregistrées : " + totalExpenses + " FCFA")
-                    Text("Marge brute : " + (grossProfit?.let { "$it FCFA" } ?: "non calculable : au moins une vente n'a pas de coût direct documenté"))
-                    Text("Résultat opérationnel indicatif : " + (operatingResult?.let { "$it FCFA" } ?: "non déterminable avec les coûts directs manquants"))
+                    Text(localizedLabel("Marge brute : ","Gross margin: ","Ceede heddiiɗe : ") + (grossProfit?.let { "$it FCFA" } ?: "non calculable : au moins une vente n'a pas de coût direct documenté"))
+                    Text(localizedLabel("Résultat opérationnel indicatif : ","Indicative operating result: ","Limooje golle tanƴaaɗe : ") + (operatingResult?.let { "$it FCFA" } ?: "non déterminable avec les coûts directs manquants"))
                     Text("Règlements fournisseurs : " + totalSupplierPayments + " FCFA · sortie de dette, pas une charge supplémentaire")
                     Text("Les règlements fournisseurs restent inclus dans la clôture de caisse lorsqu'ils sont en espèces, mais séparés du résultat. Les caisses, stocks et équipes restent détaillés ci-dessous.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -1414,11 +1414,11 @@ fun ReportsContent(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(15.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(row.siteId, fontWeight = FontWeight.Bold)
-                    Text("CA confirmé : " + row.salesXaf + " FCFA")
-                    Text("Coût des ventes connu : " + row.costOfGoodsXaf + " FCFA")
-                    Text("Charges d'exploitation : " + row.expensesXaf + " FCFA")
-                    Text("Marge brute : " + (row.grossProfitXaf?.let { "$it FCFA" } ?: "non calculable : coût direct incomplet"))
-                    Text("Résultat opérationnel indicatif : " + (row.operatingResultXaf?.let { "$it FCFA" } ?: "non déterminable"))
+                    Text(localizedLabel("CA confirmé : ","Confirmed revenue: ","Ceede jaaygol tabbitinaaɗe : ") + row.salesXaf + " FCFA")
+                    Text(localizedLabel("Coût des ventes connu : ","Known cost of sales: ","Njoɓdi jaaygol anndaaɗi : ") + row.costOfGoodsXaf + " FCFA")
+                    Text(localizedLabel("Charges d'exploitation : ","Operating expenses: ","Njoɓdi golle : ") + row.expensesXaf + " FCFA")
+                    Text(localizedLabel("Marge brute : ","Gross margin: ","Ceede heddiiɗe : ") + (row.grossProfitXaf?.let { "$it FCFA" } ?: "non calculable : coût direct incomplet"))
+                    Text(localizedLabel("Résultat opérationnel indicatif : ","Indicative operating result: ","Limooje golle tanƴaaɗe : ") + (row.operatingResultXaf?.let { "$it FCFA" } ?: "non déterminable"))
                     Text("Règlements fournisseurs : " + row.supplierPaymentsXaf + " FCFA · hors charges d'exploitation")
                     Text("Rendez-vous : " + row.appointments + " · Tickets pressing : " + row.pressingTickets)
                 }
@@ -1604,7 +1604,7 @@ internal fun OrganizationWorkspaceContent(
                         Column(Modifier.fillMaxWidth().padding(13.dp)) {
                             Text(site.name.ifBlank { "Point " + (index + 1).toString() }, fontWeight = FontWeight.Bold)
                             Text(listOf(site.code, site.addressLabel, site.phoneContact).filter { it.isNotBlank() }.joinToString(" · "), style = MaterialTheme.typography.bodySmall)
-                            Text("Accès autorisé", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
+                            Text(localizedLabel("Accès autorisé","Access authorized","Naatugol yamiraama"), color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -1625,12 +1625,12 @@ internal fun OrganizationWorkspaceContent(
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Créer un point de vente", fontWeight = FontWeight.Bold)
+                            Text(localizedLabel("Créer un point de vente","Create location","Sos nokkuure jaaygol"), fontWeight = FontWeight.Bold)
                             Text("Le site sera disponible après confirmation.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             OutlinedTextField(siteCode, { siteCode = it }, Modifier.fillMaxWidth(), label = { Text("Code interne") }, singleLine = true)
                             OutlinedTextField(siteName, { siteName = it }, Modifier.fillMaxWidth(), label = { Text("Nom du point de vente") }, singleLine = true)
-                            OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text("Adresse") }, singleLine = true)
-                            OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text("Téléphone") }, singleLine = true)
+                            OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Adresse","Address","Nokkuure")) }, singleLine = true)
+                            OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Téléphone","Phone","Telefon")) }, singleLine = true)
                             Button(
                                 onClick = {
                                     scope.launch {
@@ -1683,7 +1683,7 @@ internal fun OrganizationWorkspaceContent(
                                 OutlinedButton(onClick = { workstationType = type }) { Text(if (workstationType == type) "✓ " + type else type) }
                             }
                         }
-                        OutlinedTextField(capacity, { capacity = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Capacité") }, singleLine = true)
+                        OutlinedTextField(capacity, { capacity = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Capacité","Capacity","Keewal")) }, singleLine = true)
                         Button(
                             onClick = {
                                 scope.launch {
@@ -1723,7 +1723,7 @@ internal fun OrganizationWorkspaceContent(
                         Text(item.name, fontWeight = FontWeight.Bold)
                         Text(item.code + " · " + item.kind + " · capacité " + item.capacity)
                         if (item.syncStatus == "server_confirmed") {
-                            Text("Actif", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
+                            Text(localizedLabel("Actif","Active","Nana golla"), color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelSmall)
                         } else {
                             LocalOnlyNotice("Brouillon · non activé")
                         }
@@ -1766,7 +1766,7 @@ fun SupportContent(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Nouvelle demande", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(subject, { subject = it }, Modifier.fillMaxWidth(), label = { Text("Sujet") }, singleLine = true)
+                    OutlinedTextField(subject, { subject = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Sujet","Subject","Ko ɗaɓɓitaa")) }, singleLine = true)
                     OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text("Description détaillée (10 caractères minimum)") }, minLines = 4)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("low", "normal", "high").forEach { value ->
@@ -1829,7 +1829,7 @@ fun SettingsContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Apparence", fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Apparence","Appearance","No hollirtee"), fontWeight = FontWeight.Bold)
                     Text(if (lightTheme) "Thème clair actif" else "Thème sombre actif")
                     OutlinedButton(onClick = onTheme, modifier = Modifier.fillMaxWidth()) { Text("Basculer le thème") }
                     Text("Langue : Français / English — les ressources de l’application sont disponibles dans les deux langues.")
