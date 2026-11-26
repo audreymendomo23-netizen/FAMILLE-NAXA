@@ -175,7 +175,7 @@ internal fun CustomerPromotionsContent(
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(if (fr) "Parrainage client et roue" else "Customer referrals and wheel", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Text(if (fr) "Les avantages et leur qualification sont pilotés par le serveur." else "Benefits and qualification are controlled by the server.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (fr) "Consultez vos avantages et les conditions d'éligibilité." else "View your benefits and eligibility requirements.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 TextButton(onClick = onBack) { Text(if (fr) "Retour" else "Back") }
             }
