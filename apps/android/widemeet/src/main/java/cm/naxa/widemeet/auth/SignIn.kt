@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 
 @Composable fun SignIn(english:Boolean,configured:Boolean,gateway:AuthGateway,onSession:(Session)->Unit,onBack:()->Unit){
- var identifier by remember{mutableStateOf("")};var password by remember{mutableStateOf("")};var show by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
+ var identifier by remember{mutableStateOf("")};var password by remember{mutableStateOf("")};var show by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var recoveryError by remember{mutableStateOf(false)};var recoveryNotice by remember{mutableStateOf(false)}
  val scope=rememberCoroutineScope()
  fun tr(fr:String,en:String)=if(english)en else fr
  Card(Modifier.fillMaxWidth()){
@@ -19,9 +19,12 @@ import kotlinx.coroutines.launch
  OutlinedTextField(identifier,{identifier=it.take(27)},enabled=!busy,label={Text(tr("Identifiant WideMeet","WideMeet ID"))},singleLine=true,modifier=Modifier.fillMaxWidth())
  OutlinedTextField(password,{password=it.take(256)},enabled=!busy,label={Text(tr("Mot de passe","Password"))},singleLine=true,visualTransformation=if(show)VisualTransformation.None else PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
  TextButton(onClick={show=!show}){Text(if(show)tr("Masquer le mot de passe","Hide password")else tr("Afficher le mot de passe","Show password"))}
- Button(modifier=Modifier.testTag("wm-signin-submit"),enabled=configured&&!busy&&identifier.isNotBlank()&&password.isNotBlank(),onClick={busy=true;error=false;scope.launch{try{onSession(gateway.login(identifier,password))}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true}finally{password="";busy=false}}}){Text(if(busy)tr("Connexion…","Signing in…")else tr("Se connecter","Sign in"))}
+ Button(modifier=Modifier.testTag("wm-signin-submit"),enabled=configured&&!busy&&identifier.isNotBlank()&&password.isNotBlank(),onClick={busy=true;error=false;recoveryError=false;recoveryNotice=false;scope.launch{try{onSession(gateway.login(identifier,password))}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true}finally{password="";busy=false}}}){Text(if(busy)tr("Connexion…","Signing in…")else tr("Se connecter","Sign in"))}
  if(!configured)Text(tr("Connexion momentanément indisponible.","Sign-in temporarily unavailable."))
  if(error)Text(tr("Connexion impossible. Vérifiez vos identifiants ou réessayez plus tard.","Unable to sign in. Check your credentials or try again later."),color=MaterialTheme.colorScheme.error)
+ TextButton(enabled=configured&&!busy&&identifier.isNotBlank(),onClick={busy=true;error=false;recoveryError=false;recoveryNotice=false;scope.launch{try{gateway.requestRecovery(identifier);recoveryNotice=true}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){recoveryError=true}finally{busy=false}}}){Text(tr("Mot de passe oublié ?","Forgot password?"))}
+ if(recoveryNotice)Text(tr("Demande reçue. Un contrôle d’identité est nécessaire avant toute récupération.","Request received. Identity verification is required before recovery."))
+ if(recoveryError)Text(tr("Demande non confirmée. Vérifiez votre identifiant ou réessayez plus tard.","Request not confirmed. Check your ID or try again later."),color=MaterialTheme.colorScheme.error)
  TextButton(onClick=onBack){Text(tr("Retour","Back"))}
  }
  }
