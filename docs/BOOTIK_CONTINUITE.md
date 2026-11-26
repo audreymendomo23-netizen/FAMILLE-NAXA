@@ -395,3 +395,7 @@ Adaptation NAXA 217 (coût historique figé), NAXA SERVICES accounting_contract.
 
 ### BULK STOCK — recette élargie des parcours réels
 Les runs 45862449979 (catalogue) et 45862708785 (inventaire/transfert corrigé) et 45862991550 (CSV) sont SUCCESS 5/5. Correction SQL alias x validée, ne pas relancer l'ancien échec. Ajout d'un scénario Chromium de création CSV, recherche offline, création deuxième lot, réception valorisée, vente FEFO offline, inventaire groupé, indicateurs, changement de site et réception de transfert. Ajout Room instrumenté cache 5100 fiches, recherche code-barres et contrôle reçu de groupe. CI du code final à confirmer. Aucun test caméra ni parcours physique réel revendiqué.
+
+
+### Reprise après recette consolidée
+Valorisation 45863520967 et FEFO 45863295045 : SUCCESS 5/5. Recette 45863709732 : 4/5, échec Chromium à la sélection de l'activité par libellé accessible. Correction des noms accessibles explicites des listes métier et nouvelle recette ; ne pas masquer le test.
