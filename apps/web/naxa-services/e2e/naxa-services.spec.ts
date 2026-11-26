@@ -1,5 +1,7 @@
 import { expect, test, type BrowserContext, type Page, type Route } from "@playwright/test";
 import { ACTIVITY_WORKFLOWS, type ActivityProfile } from "../src/erp/activity-workflows";
+import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 
 const AUTH_URL = "https://naxa-services-e2e.invalid/functions/v1/naxa-services-auth";
 const ACCOUNTING_URL = "https://naxa-services-e2e.invalid/functions/v1/naxa-services-accounting";
@@ -70,6 +72,7 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
       const activityProfile = identifier.startsWith("NS-ACT-") ? identifier.slice("NS-ACT-".length).toLowerCase() : "autre";
       currentOrg=organizationId;
       const session=authSession(organizationId, activityProfile, identifier === "NS-MULTISITE");
+      if(identifier==="NS-SINGLE")session.account.business_mode="single_site_multi_workstation";
       session.account.default_locale=memberLocales.get(organizationId)??"fr";
       return json(route,session);
     }
@@ -274,6 +277,7 @@ test("Web: Pressing keeps its dedicated ticket journey and waits for a server re
     expect((transition.payload as Record<string, unknown>).expected_version).toBe(step.revision);
     await expect(pressingStatusBadge).toHaveText(step.status === "ready" ? "Prêt" : "Retiré");
   }
+  await expect(page.locator(".activity-record .activity-transition")).toHaveCount(0);
   await page.close();
 });
 
@@ -934,4 +938,107 @@ test("Commercial languages: shared ERP screens render translated controls in FR 
     if(i>0){await page.getByRole("combobox",{name:labels[i-1],exact:true}).selectOption(langs[i]);await expect(page.locator("html")).toHaveAttribute("lang",langs[i]);}
     for(const c of cases){await page.locator(".side-nav").getByRole("button",{name:new RegExp(c.nav[i])}).click();await expect(page.getByRole("heading",{name:c.heading[i],exact:true})).toBeVisible();}
   }
+});
+
+
+// Every permitted edge is actually clicked on a separately projected record, including
+// alternative branches, rework loops and cancellation. Peer fixtures are simulated;
+// server enforcement is qualified independently by PostgreSQL and real Replay.
+for(const profile of Object.keys(ACTIVITY_WORKFLOWS) as ActivityProfile[]){
+ if(profile==="pressing")continue; // Dedicated complete ticket journey above.
+ test("Interaction matrix: "+profile+" all permitted transitions and terminal restrictions",async({context})=>{
+  test.setTimeout(150_000);
+  const workflow=ACTIVITY_WORKFLOWS[profile],kind=workflow.recordType==="retail"?"work_order":workflow.recordType;
+  const paths=new Map<string,string[]>([["received",["received"]]]);
+  const queue=["received"];while(queue.length){const state=queue.shift()!;for(const next of workflow.stages.find(s=>s.code===state)!.next){if(!paths.has(next)){paths.set(next,[...paths.get(state)!,next]);queue.push(next);}}}
+  const fixtures:Record<string,unknown>[]=[],cases:{id:string;title:string;from:string;to:string|null;revision:number}[]=[];
+  let cursor=0;
+  for(const stage of workflow.stages){
+   for(const target of stage.next.length?stage.next:[null]){
+    const id=randomUUID(),title="REC-"+profile+"-"+stage.code+"-"+(target??"terminal");
+    const journey=paths.get(stage.code)!;
+    const common={source_device_id:REMOTE_DEVICE_ID,origin_site_id:SITE_ID,site_id:SITE_ID,visible_site_ids:[SITE_ID],workstation_id:null,aggregate_type:kind,aggregate_id:id,recorded_at:"2026-11-25T10:00:00.000Z"};
+    journey.forEach((state,index)=>{
+     const revision=index+1;
+     fixtures.push({...common,cursor:++cursor,event_id:randomUUID(),action_code:kind+(index?".status_changed":".created"),aggregate_version:revision,
+      payload:{org_id:ORG_A,site_id:SITE_ID,record_id:id,...(index?{from_status:journey[index-1],to_status:state}:{title,counterparty:"Client matrice",metadata_json:{activity_profile:profile,fields:{}}}),server_result:{status:state,revision}}});
+    });
+    cases.push({id,title,from:stage.code,to:target,revision:journey.length});
+   }
+  }
+  const events=await installBackend(context,fixtures),page=await context.newPage();
+  await signIn(page,"NS-ACT-"+profile.toUpperCase());await page.getByRole("button",{name:"Dossiers métier",exact:true}).click();
+  await expect(page.locator(".activity-record")).toHaveCount(cases.length);
+  let sent=0;
+  for(const c of cases){
+   const record=page.locator(".activity-record").filter({has:page.getByText(c.title,{exact:true})});
+   const stage=workflow.stages.find(s=>s.code===c.from)!;
+   await expect(record.getByTestId("record-confirmation")).toHaveAttribute("data-version",String(c.revision));
+   await expect(record.locator(".status-tag")).toHaveText(stage.label);
+   const buttons=record.locator(".activity-transition-buttons button");
+   await expect(buttons).toHaveCount(stage.next.length);
+   if(c.to===null){await expect(record.locator(".activity-transition")).toHaveCount(0);continue;}
+   await expect(buttons).toHaveText(stage.next.map(n=>workflow.stages.find(s=>s.code===n)!.label));
+   for(const button of await buttons.all())await expect(button).toBeDisabled();
+   await record.getByLabel("Motif du changement d'étape").fill("xy");
+   for(const button of await buttons.all())await expect(button).toBeDisabled();
+   await record.getByLabel("Motif du changement d'étape").fill("Recette matrice "+c.from+" vers "+c.to);
+   const next=workflow.stages.find(s=>s.code===c.to)!;
+   await record.getByRole("button",{name:next.label,exact:true}).click();
+   await expect.poll(()=>events.length).toBe(++sent);
+   const event=events[sent-1],payload=event.payload as Record<string,unknown>;
+   expect(event.aggregate_id).toBe(c.id);expect(event.action_code).toBe(kind+".status_changed");
+   expect(payload.from_status).toBe(c.from);expect(payload.to_status).toBe(c.to);expect(payload.expected_version).toBe(c.revision);
+   await expect(record.getByTestId("record-confirmation")).toHaveAttribute("data-version",String(c.revision+1));
+   await expect(record.locator(".status-tag")).toHaveText(next.label);
+  }
+  expect(sent).toBe(workflow.stages.reduce((n,s)=>n+s.next.length,0));
+ });
+}
+
+// Cross the three operating modes with all three interface languages and two
+// screen classes, checking every reachable navigation entry.
+for(const mode of ["NS-ORG-A","NS-SINGLE","NS-MULTISITE"]){
+ for(const locale of ["fr","en","ff-CM"]){
+  test("Navigation matrix: "+mode+" / "+locale+" desktop and mobile",async({context})=>{
+   test.setTimeout(90_000);await installBackend(context);
+   const page=await context.newPage();await page.setViewportSize({width:1440,height:900});await signIn(page,mode);
+   if(locale!=="fr"){await page.locator(".language-picker select").selectOption(locale);await expect(page.locator("html")).toHaveAttribute("lang",locale);}
+   const sites=page.locator(".site-select select");await expect(sites.locator("option")).toHaveCount(mode==="NS-MULTISITE"?2:1);
+   if(mode==="NS-MULTISITE"){await sites.selectOption(SECOND_SITE_ID);await expect(sites).toHaveValue(SECOND_SITE_ID);await sites.selectOption(SITE_ID);}
+   const nav=page.locator(".side-nav button.nav-item");await expect(nav).toHaveCount(17);
+   for(const width of [1440,320]){
+    await page.setViewportSize({width,height:900});
+    for(let i=0;i<17;i++){
+     if(width===320)await page.locator(".mobile-menu-trigger").click();
+     const item=nav.nth(i);await expect(item).toBeVisible();await item.click();await expect(item).toHaveAttribute("aria-current","page");
+     await expect(page.locator(".page-heading h1")).toBeVisible();
+     await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    }
+   }
+  });
+ }
+}
+
+test("Financial interactions: report scopes, actual XLSX download and print view; stale report is cleared",async({context})=>{
+ await installBackend(context);let reports=0;
+ await context.route(ACCOUNTING_URL,async route=>{
+  if(route.request().method()==="OPTIONS")return route.fallback();
+  const request=route.request().postDataJSON();if(request.action!=="performance")return route.fallback();
+  expect(request.org_id).toBe(ORG_A);expect(request.site_ids).toEqual([SITE_ID]);reports++;
+  return json(route,{ok:true,result:{daily:[{performance_day:"2026-11-26",revenue_xaf:3500,known_cost_of_goods_xaf:0,gross_profit_xaf:null,confirmed_sales_count:2,uncosted_sales_count:2}],monthly:[],annual:[]}});
+ });
+ const page=await context.newPage();await signIn(page);
+ await page.locator(".side-nav button.nav-item").filter({hasText:"Rapports & comptabilité"}).click();
+ const excel=page.getByRole("button",{name:"Exporter Excel",exact:true});
+ await expect(excel).toHaveCount(0);
+ await page.getByRole("button",{name:"Charger les rapports",exact:true}).click();await expect(excel).toBeVisible();expect(reports).toBe(1);
+ const downloadPromise=page.waitForEvent("download");await excel.click();const download=await downloadPromise;expect(download.suggestedFilename()).toBe("naxa-services-performance.xlsx");
+ const bytes=await readFile((await download.path())!);expect(bytes.readUInt32LE(0)).toBe(0x04034b50);expect(bytes.readUInt32LE(bytes.length-22)).toBe(0x06054b50);
+ expect(bytes.toString("utf8")).toContain('<v>3500</v>');expect(bytes.toString("utf8")).toContain('<c r="D2"><v>0</v></c>');expect(bytes.toString("utf8")).toContain('<c r="E2"/>');
+ // Browser printing is intercepted only to prevent a native print dialog in CI.
+ await page.evaluate(()=>{const original=window.open.bind(window);window.open=((...args:Parameters<typeof window.open>)=>{const popup=original(...args);if(popup)popup.print=()=>{popup.document.body.dataset.printInvoked="true";};return popup;}) as typeof window.open;});
+ const popupPromise=page.waitForEvent("popup");await page.getByRole("button",{name:"Imprimer / enregistrer en PDF",exact:true}).click();const popup=await popupPromise;
+ await expect(popup.locator("body")).toHaveAttribute("data-print-invoked","true");await expect(popup.locator("table")).toContainText("3500");await popup.close();
+ await page.getByLabel("À partir du").fill("2026-11-25");await expect(excel).toHaveCount(0);
 });

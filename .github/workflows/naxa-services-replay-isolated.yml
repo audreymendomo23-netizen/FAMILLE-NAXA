@@ -392,6 +392,20 @@ jobs:
                 const rows=await success(base+'/rest/v1/ns_cash_sessions?select=*&org_id=eq.'+f.org.id+'&id=eq.'+shift.aggregate_id,undefined,admin,admin,'GET');
                 assert.equal(rows.length,1);assert.equal(rows[0].status,'closed');
               });
+              await scenario('real financial report and actual browser XLSX export after confirmed sales',async()=>{
+                await nav('Rapports & comptabilité');
+                const response=page.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-accounting')&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='performance',{timeout:25000});
+                await page.getByRole('button',{name:'Charger les rapports',exact:true}).click();
+                const report=await response;assert.equal(report.status(),200);
+                const data=await report.json();assert.equal(data.ok,true);
+                assert.ok(data.result.daily.some(row=>Number(row.revenue_xaf)===3500),'confirmed cash and external MoMo aggregate');
+                assert.deepEqual(report.request().postDataJSON().site_ids,[f.site.id]);
+                const downloadEvent=page.waitForEvent('download');
+                await page.getByRole('button',{name:'Exporter Excel',exact:true}).click();
+                const download=await downloadEvent;assert.equal(download.suggestedFilename(),'naxa-services-performance.xlsx');
+                const bytes=await readFile(await download.path());assert.equal(bytes.readUInt32LE(0),0x04034b50);assert.equal(bytes.readUInt32LE(bytes.length-22),0x06054b50);
+                assert.ok(bytes.includes(Buffer.from('<v>3500</v>')));
+              });
               await scenario('real stock and supplier lifecycle with partial receipt and payment gating',async()=>{
                 await nav('Consommables');
                 await page.getByRole('button',{name:'Ajouter un article',exact:true}).click();

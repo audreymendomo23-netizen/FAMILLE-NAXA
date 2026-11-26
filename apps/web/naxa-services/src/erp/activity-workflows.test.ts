@@ -158,3 +158,28 @@ describe("NAXA Services sector workflows", () => {
   });
 
 });
+describe("All sector transition pairs and field boundaries",()=>{
+ for(const workflow of Object.values(ACTIVITY_WORKFLOWS)){
+  it(workflow.profile+" accepts exactly its declared transitions and refuses all other pairs",()=>{
+   for(const from of workflow.stages)for(const to of workflow.stages)expect(canTransitionActivity(workflow.profile,from.code,to.code),from.code+" -> "+to.code).toBe(from.next.includes(to.code));
+   for(const stage of workflow.stages){expect(canTransitionActivity(workflow.profile,stage.code,"unknown_state")).toBe(false);expect(canTransitionActivity(workflow.profile,"unknown_state",stage.code)).toBe(false);}
+  });
+  it(workflow.profile+" validates each field at its boundaries",()=>{
+   const sample:Record<string,string>={};
+   for(const f of workflow.fields){sample[f.key]=f.kind==="select"?f.options![0].value:f.kind==="date"?"2028-02-29":f.kind==="number"?String(f.min??0):"Recette";}
+   expect(validateActivityFields(workflow.profile,sample)).toEqual([]);
+   for(const f of workflow.fields){
+    if(f.required)expect(validateActivityFields(workflow.profile,{...sample,[f.key]:"  "})).toContain(f.key);
+    if(f.kind==="select")for(const choice of f.options??[])expect(validateActivityFields(workflow.profile,{...sample,[f.key]:choice.value})).not.toContain(f.key);
+    if(f.kind==="select")expect(validateActivityFields(workflow.profile,{...sample,[f.key]:"__unknown__"})).toContain(f.key);
+    if(f.kind==="date")for(const v of ["2027-02-29","2026-13-01","not-a-date"])expect(validateActivityFields(workflow.profile,{...sample,[f.key]:v})).toContain(f.key);
+    if(f.kind==="number"){
+     for(const v of ["1.5","1e2","0x10","NaN","9007199254740992"])expect(validateActivityFields(workflow.profile,{...sample,[f.key]:v})).toContain(f.key);
+     if(f.min!==undefined)expect(validateActivityFields(workflow.profile,{...sample,[f.key]:String(f.min-1)})).toContain(f.key);
+     if(f.max!==undefined)expect(validateActivityFields(workflow.profile,{...sample,[f.key]:String(f.max+1)})).toContain(f.key);
+    }
+    if(f.maxLength!==undefined&&f.kind!=="number"&&f.kind!=="date"&&f.kind!=="select")expect(validateActivityFields(workflow.profile,{...sample,[f.key]:"x".repeat(f.maxLength+1)})).toContain(f.key);
+   }
+  });
+ }
+});

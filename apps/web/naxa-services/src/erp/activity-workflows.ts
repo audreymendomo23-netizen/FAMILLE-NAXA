@@ -409,7 +409,7 @@ export function validateActivityFields(profile: unknown, values: Record<string, 
       if (field.maxLength && value.length > field.maxLength) return true;
       if (field.kind === "number") {
         const number = Number(value);
-        return !Number.isSafeInteger(number) ||
+        return !/^[+-]?\d+$/.test(value) || !Number.isSafeInteger(number) ||
           (field.min !== undefined && number < field.min) ||
           (field.max !== undefined && number > field.max);
       }

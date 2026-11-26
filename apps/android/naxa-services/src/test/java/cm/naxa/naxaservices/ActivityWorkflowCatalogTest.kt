@@ -154,6 +154,7 @@ class ActivityWorkflowCatalogTest {
         )
     }
 
+    @Test
     fun unknownProfilesFallBackToConfigurableOtherActivity() {
         assertEquals("autre", ActivityWorkflows.get("not-a-sector").profile)
         assertEquals("autre", ActivityWorkflows.get(null).profile)
@@ -167,5 +168,41 @@ class ActivityWorkflowCatalogTest {
         assertEquals(listOf("picked_up"), ActivityWorkflows.nextStatusCodes("pressing", "ready"))
         assertTrue(ActivityWorkflows.nextStatusCodes("pressing", "picked_up").isEmpty())
         assertEquals(null, ActivityWorkflows.get("pressing").stage("cancelled"))
+    }
+
+    @Test
+    fun allSectorTransitionPairsAreExactAndUnknownStatesAreDenied() {
+        ActivityWorkflows.all.forEach { workflow ->
+            workflow.stages.forEach { from ->
+                workflow.stages.forEach { to ->
+                    assertEquals(workflow.profile + ":" + from.code + " -> " + to.code,
+                        to.code in from.next, ActivityWorkflows.canTransition(workflow.profile, from.code, to.code))
+                }
+                assertFalse(ActivityWorkflows.canTransition(workflow.profile, from.code, "unknown_state"))
+                assertFalse(ActivityWorkflows.canTransition(workflow.profile, "unknown_state", from.code))
+            }
+        }
+    }
+    @Test
+    fun everySectorFieldHasPositiveAndNegativeBoundaryCoverage() {
+        ActivityWorkflows.all.forEach { workflow ->
+            val sample=workflow.fields.associate { f -> f.key to when(f.kind) {
+                ActivityFieldKind.SELECT -> f.options.first().value
+                ActivityFieldKind.DATE -> "2028-02-29"
+                ActivityFieldKind.NUMBER -> (f.min ?: 0L).toString()
+                else -> "Recette"
+            } }
+            assertTrue(workflow.profile, ActivityWorkflows.validate(workflow.profile,sample).isEmpty())
+            workflow.fields.forEach { f ->
+                fun invalid(value:String)=assertTrue(workflow.profile+"/"+f.key+"/"+value.take(40), f.key in ActivityWorkflows.validate(workflow.profile,sample + (f.key to value)))
+                if(f.required) invalid("  ")
+                when(f.kind){
+                    ActivityFieldKind.SELECT -> { f.options.forEach { assertFalse(f.key in ActivityWorkflows.validate(workflow.profile,sample + (f.key to it.value))) };invalid("__unknown__") }
+                    ActivityFieldKind.DATE -> listOf("2027-02-29","2026-13-01","not-a-date").forEach(::invalid)
+                    ActivityFieldKind.NUMBER -> { listOf("1.5","1e2","0x10","NaN","9223372036854775808").forEach(::invalid);f.min?.let{invalid((it-1).toString())};f.max?.let{invalid((it+1).toString())} }
+                    else -> invalid("x".repeat(f.maxLength+1))
+                }
+            }
+        }
     }
 }
