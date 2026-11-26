@@ -6,6 +6,8 @@ import {
   retryablePushFailure,
   safeWorkerLimit,
   shouldRevokePushToken,
+  validateFcmServiceAccount,
+  FCM_OAUTH_TOKEN_URL,
 } from "./notification_contract.ts";
 
 Deno.test("push registration accepts only known platforms and bounded tokens", () => {
@@ -54,5 +56,25 @@ Deno.test("notification inbox state is monotonic and worker batch is bounded", (
   if (inboxTransition("actioned", "read") !== "actioned") throw new Error("INBOX_STATE_REGRESSION");
   if (safeWorkerLimit(1000) !== 100 || safeWorkerLimit(-1) !== 1 || safeWorkerLimit("10") !== 25) {
     throw new Error("WORKER_BATCH_LIMIT_FAILED");
+  }
+});
+
+Deno.test("FCM accepts only credentials from the dedicated project and trusted OAuth endpoint", () => {
+  const project = "naxa-services-qa";
+  const fixture = { project_id: project, client_email: "fcm@" + project + ".iam.gserviceaccount.com", private_key: "-----BEGIN PRIVATE KEY-----\nFIXTURE\n-----END PRIVATE KEY-----", token_uri: FCM_OAUTH_TOKEN_URL };
+  if (validateFcmServiceAccount(JSON.stringify(fixture), project).project_id !== project) throw new Error("VALID_PROJECT_REJECTED");
+  const invalid: Array<[string, string]> = [
+    [JSON.stringify(fixture), ""],
+    [JSON.stringify({...fixture, project_id:"naxatechnologie"}), "naxatechnologie"],
+    [JSON.stringify({...fixture, project_id:"naxatechnologie"}), project],
+    [JSON.stringify({...fixture, token_uri:"https://example.invalid/token"}), project],
+    [JSON.stringify({...fixture, client_email:"fcm@other-project.iam.gserviceaccount.com"}), project],
+    [JSON.stringify({...fixture, private_key:""}), project],
+    ["null", project],
+  ];
+  for (const [raw, expected] of invalid) {
+    let rejected = false;
+    try { validateFcmServiceAccount(raw, expected); } catch { rejected = true; }
+    if (!rejected) throw new Error("UNSAFE_FCM_CREDENTIALS_ACCEPTED");
   }
 });
