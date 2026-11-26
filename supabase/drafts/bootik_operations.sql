@@ -86,6 +86,8 @@ declare v timestamptz;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_user,p_site,true);
  perform bootik.bk_quote(p_universe,p_plan,1);
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':trial:'||p_app::text,0));
+ if exists(select 1 from bootik.bk_trials where organization_id=p_org and app_id=p_app and universe<>p_universe) then raise exception 'BOOTIK_TRIAL_ALREADY_USED';end if;
  insert into bootik.bk_trials(organization_id,app_id,universe,plan) values(p_org,p_app,p_universe,p_plan) on conflict do nothing;
  select activated_at+interval '72 hours' into v from bootik.bk_trials where organization_id=p_org and app_id=p_app and universe=p_universe;
  return v;
@@ -233,4 +235,20 @@ do $$ declare r record;begin for r in select tablename from pg_tables where sche
  execute format('revoke all on table bootik.%I from public,anon,authenticated',r.tablename);
  end loop;end $$;
 revoke all on all functions in schema bootik from public,anon,authenticated;
+-- Shared billing pattern: capability checks are independent of the UI plan selected.
+create function bootik.bk_effective_plan(p_org uuid,p_app uuid,p_universe text)
+returns text language sql stable security invoker set search_path=pg_catalog,bootik as $$
+ select plan from (
+ select plan from bootik.bk_paid_periods where organization_id=p_org and app_id=p_app and universe=p_universe and revoked_at is null and starts_at<=now() and now()<ends_at
+ union all
+ select plan from bootik.bk_trials where organization_id=p_org and app_id=p_app and universe=p_universe and activated_at<=now() and now()<activated_at+interval '72 hours'
+ ) p order by case when plan='premium' then 0 else 1 end limit 1;
+$$;
+create function bootik.bk_has_capability(p_org uuid,p_app uuid,p_universe text,p_capability text)
+returns boolean language sql stable security invoker set search_path=pg_catalog,bootik as $$
+ select coalesce(case when p_capability in ('sales','stock','purchases','crm','finance','delivery','profile','exports','audit','security','ai_basic') then bootik.bk_effective_plan(p_org,p_app,p_universe) in ('access','premium')
+ when p_capability in ('consolidation','advanced_delegation','advanced_forecast','automated_reorder','advanced_analytics') then bootik.bk_effective_plan(p_org,p_app,p_universe)='premium' else false end,false);
+$$;
+revoke all on function bootik.bk_effective_plan(uuid,uuid,text),bootik.bk_has_capability(uuid,uuid,text,text) from public,anon,authenticated;
+
 commit;

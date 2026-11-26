@@ -36,7 +36,7 @@ export function createBootikService(db,{now=Date.now}={}){
  async function sites(s){return (await query('select l.id,l.display_name as name from bootik.bk_member_sites ms join bootik.bk_locations l on l.id=ms.location_id and l.organization_id=ms.organization_id and l.app_id=ms.app_id where ms.organization_id=$1 and ms.app_id=$2 and ms.user_id=$3 order by l.id',[s.organization_id,s.app_id,s.user_id])).rows}
  async function identity(token){
   if(typeof token!=='string'||!/^[0-9a-f]{64}$/.test(token))return null;
-  return first('select s.organization_id,s.app_id,s.user_id,m.role,s.expires_at from bootik.bk_sessions s join bootik.bk_members m using(organization_id,app_id,user_id) where s.token_hash=$1 and s.revoked_at is null and s.expires_at>now() and m.active',[digest(token)]);
+  return first('select s.organization_id,s.app_id,s.user_id,m.role,s.expires_at,s.device_session_id from bootik.bk_sessions s join bootik.bk_members m using(organization_id,app_id,user_id) where s.token_hash=$1 and s.revoked_at is null and s.expires_at>now() and m.active',[digest(token)]);
  }
  return async function handle(route,body,token,rateKey='local'){
  try{
@@ -54,15 +54,15 @@ export function createBootikService(db,{now=Date.now}={}){
    if(!row||!timingSafeEqual(Buffer.from(actual,'hex'),Buffer.from(row.verifier_hex,'hex')))return reject(401);
    const permitted=await sites(row);if(!permitted.length)return reject(401);
    const raw=randomBytes(32).toString('hex'), refresh=body.remember_device===true?randomBytes(32).toString('hex'):null;
-   const s=await first("insert into bootik.bk_sessions(token_hash,organization_id,app_id,user_id,expires_at,refresh_hash,refresh_expires_at) values($1,$2,$3,$4,now()+interval '15 minutes',$5,case when $5::text is null then null else now()+interval '30 days' end) returning expires_at",[digest(raw),row.organization_id,row.app_id,row.user_id,refresh?digest(refresh):null]);
-   return {status:200,body:{app_id:'BOOTIK',access_token:raw,organization_id:row.organization_id,member_id:row.user_id,role:row.role,sites:permitted,expires_at:new Date(s.expires_at).getTime(),...(refresh?{refresh_token:refresh}:{})}};
+   const s=await first('select * from bootik.bk_issue_session($1,$2,$3,$4,$5)',[row.organization_id,row.app_id,row.user_id,digest(raw),refresh?digest(refresh):null]);
+   return {status:200,body:{app_id:'BOOTIK',access_token:raw,organization_id:row.organization_id,member_id:row.user_id,role:row.role,sites:permitted,device_session_id:s.device_session_id,expires_at:new Date(s.expires_at).getTime(),...(refresh?{refresh_token:refresh}:{})}};
   }
   if(route==='refresh'){
    if(typeof body.refresh_token!=='string'||!/^[0-9a-f]{64}$/.test(body.refresh_token))return reject(401);
    const raw=randomBytes(32).toString('hex'),refresh=randomBytes(32).toString('hex');
-   const s=await first("update bootik.bk_sessions s set token_hash=$1,expires_at=now()+interval '15 minutes',refresh_hash=$2 from bootik.bk_members m where s.refresh_hash=$3 and s.revoked_at is null and s.refresh_expires_at>now() and m.organization_id=s.organization_id and m.app_id=s.app_id and m.user_id=s.user_id and m.active returning s.organization_id,s.app_id,s.user_id,s.expires_at,m.role",[digest(raw),digest(refresh),digest(body.refresh_token)]);
+   const s=await first("update bootik.bk_sessions s set token_hash=$1,expires_at=now()+interval '15 minutes',refresh_hash=$2 from bootik.bk_members m where s.refresh_hash=$3 and s.revoked_at is null and s.refresh_expires_at>now() and m.organization_id=s.organization_id and m.app_id=s.app_id and m.user_id=s.user_id and m.active returning s.organization_id,s.app_id,s.user_id,s.expires_at,s.device_session_id,m.role",[digest(raw),digest(refresh),digest(body.refresh_token)]);
    if(!s)return reject(401);const permitted=await sites(s);if(!permitted.length)return reject(401);
-   return {status:200,body:{app_id:'BOOTIK',access_token:raw,refresh_token:refresh,organization_id:s.organization_id,member_id:s.user_id,role:s.role,sites:permitted,expires_at:new Date(s.expires_at).getTime()}};
+   return {status:200,body:{app_id:'BOOTIK',access_token:raw,refresh_token:refresh,organization_id:s.organization_id,member_id:s.user_id,role:s.role,sites:permitted,device_session_id:s.device_session_id,expires_at:new Date(s.expires_at).getTime()}};
   }
   if(route==='logout'){
    const raw=typeof token==='string'&&/^[0-9a-f]{64}$/.test(token)?digest(token):null;
@@ -76,7 +76,21 @@ export function createBootikService(db,{now=Date.now}={}){
   const scope=[s.organization_id,s.app_id,s.user_id,site];
   await query('select bootik.bk_assert_scope($1,$2,$3,$4)',scope);
   let result;
-  if(action==='entitlement'&&allowed.has(p.universe))result=await first('select bootik.bk_has_entitlement($1,$2,$3) as active',[s.organization_id,s.app_id,p.universe]);
+  if(action==='entitlement'&&allowed.has(p.universe))result=await first("select bootik.bk_has_entitlement($1,$2,$3) as active,bootik.bk_effective_plan($1,$2,$3) as plan,bootik.bk_has_capability($1,$2,$3,'consolidation') as consolidation,bootik.bk_has_capability($1,$2,$3,'automated_reorder') as automated_reorder",[s.organization_id,s.app_id,p.universe]);
+  else if(action==='security-state'){
+   const sessions=(await query("select device_session_id,created_at,expires_at,refresh_expires_at,device_session_id=$4 as current from bootik.bk_sessions where organization_id=$1 and app_id=$2 and user_id=$3 and revoked_at is null and (expires_at>now() or refresh_expires_at>now()) order by created_at desc",[s.organization_id,s.app_id,s.user_id,s.device_session_id])).rows;
+   const limit=await first('select coalesce((select max_member_sessions from bootik.bk_security_settings where organization_id=$1 and app_id=$2),2) as max_sessions',[s.organization_id,s.app_id]);result={sessions,...limit};
+  }
+  else if(action==='security-audit'&&s.role==='promoteur'){
+   result={events:(await query("select id,action,target,actor,site_id,created_at from bootik.bk_security_audit where organization_id=$1 and app_id=$2 and (site_id=$4 or (site_id is null and actor=$3)) order by created_at desc limit 200",scope)).rows};
+  }
+  else if(action==='admin-action'&&validId(p.request_id)&&['session-revoke','member-scope','member-disable','session-limit'].includes(p.kind)){
+   const data={kind:p.kind,reason:clean(p.reason,500,true)};
+   if(p.kind==='session-revoke'){if(!validId(p.device_session_id))return reject();data.device_session_id=p.device_session_id}
+   else if(p.kind==='session-limit'){if(!Number.isInteger(p.limit)||p.limit<1||p.limit>50)return reject();data.limit=p.limit}
+   else{if(!validId(p.member_id))return reject();data.member_id=p.member_id;if(p.kind==='member-scope'){if(!Array.isArray(p.activities)||p.activities.length>22||!p.activities.every(validId))return reject();data.activities=[...new Set(p.activities)].sort()}}
+   result=(await first('select bootik.bk_admin_action($1,$2,$3,$4,$5,$6::jsonb) as result',[...scope,p.request_id,JSON.stringify(data)])).result;
+  }
   else if(action==='trial'&&allowed.has(p.universe)&&plans.has(p.plan))result=await first('select bootik.bk_start_trial($1,$2,$3,$4,$5,$6) as expires_at',[...scope,p.universe,p.plan]);
   else if(action==='payment-intent'&&allowed.has(p.universe)&&plans.has(p.plan)&&[1,12].includes(p.months)&&['mtn_momo','orange_money'].includes(p.channel)&&validId(p.request_key)){
    const i=await first('select bootik.bk_prepare_subscription($1,$2,$3,$4,$5,$6,$7,$8,$9) as id',[...scope,p.universe,p.plan,p.months,p.channel,p.request_key]);
