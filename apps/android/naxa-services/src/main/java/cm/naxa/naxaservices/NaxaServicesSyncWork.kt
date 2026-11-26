@@ -16,6 +16,7 @@ import cm.naxa.naxaservices.auth.AuthApi
 import cm.naxa.naxaservices.auth.AuthApiException
 import cm.naxa.naxaservices.auth.AuthSession
 import cm.naxa.naxaservices.auth.SessionVault
+import cm.naxa.naxaservices.auth.discardRememberedSession
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_1_2
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_2_3
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_3_4
@@ -153,7 +154,7 @@ class NaxaServicesSyncWorker(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: AuthApiException) {
-            if (failure.statusCode == 401 || failure.statusCode == 403) {
+            if (discardRememberedSession(failure.statusCode)) {
                 vault.clear()
                 NaxaServicesSyncScheduler.cancel(applicationContext)
                 return Result.success()

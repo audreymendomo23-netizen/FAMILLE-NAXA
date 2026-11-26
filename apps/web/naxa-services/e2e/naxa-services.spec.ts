@@ -1111,3 +1111,25 @@ test("Hierarchical attendance: disabling the proof module cannot fall back to un
   await page.close();
  }
 });
+
+
+test("Web offline recovery: transient response and incomplete receipt retry automatically with identical event ID",async({context})=>{
+ const events=await installBackend(context);
+ const attempts:string[]=[];
+ await context.route(ACCOUNTING_URL,async route=>{
+  if(route.request().method()==="OPTIONS")return route.fallback();
+  const body=route.request().postDataJSON();
+  if(body?.action!=="apply_sync_event"||body.event?.action_code!=="customer.created")return route.fallback();
+  attempts.push(body.event.event_id);
+  if(attempts.length===1)return json(route,{ok:false,error:"REMOTE_TEMPORARY_FAILURE"},503);
+  if(attempts.length===2)return json(route,{ok:true,result:{status:"accepted",event_id:body.event.event_id}});
+  return route.fallback();
+ });
+ const page=await context.newPage();await signIn(page);
+ await createCustomer(page,"Client reprise automatique");
+ await expect.poll(()=>attempts.length).toBeGreaterThanOrEqual(1);
+ await expect(page.locator(".record").filter({hasText:"Client reprise automatique"}).getByText("Confirmé",{exact:true})).toHaveCount(0);
+ await expect.poll(()=>events.length,{timeout:35_000}).toBe(1);
+ expect(attempts).toHaveLength(3);expect(new Set(attempts).size).toBe(1);
+ await expect(page.locator(".record").filter({hasText:"Client reprise automatique"}).getByText("Confirmé",{exact:true}).first()).toBeVisible();
+});

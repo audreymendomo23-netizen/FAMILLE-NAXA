@@ -30,6 +30,8 @@ type ModuleId =
 
 type BusinessMode = "solo" | "single_site_multi_workstation" | "multi_site_network";
 const OFFLINE_APP_ID = "naxa-services-web";
+type WebSyncSummary = {acknowledged:number;retrying:number;rejected:number;remaining:number};
+const WEB_RETRY_POLL_MS=10_000;
 type Entry = {
   id: string; title: string; detail: string; state: string; createdAt: string;
   recordType?: "work_order" | "repair_order" | "service_order" | "pressing_order";
@@ -98,6 +100,7 @@ function App() {
   // A generation belongs to a login, not just an organization or a device.
   // Late responses may persist in their own tenant partition but must never repaint a new login.
   const sessionFence = useRef<{generation:number; scope:string}>({generation:0,scope:""});
+  const syncFlight=useRef<{generation:number;promise:Promise<WebSyncSummary>}|null>(null);
   function scopeOf(session:WebAuthSession) {
     return [session.account.organization_id,session.account.member_id,session.deviceId].join(":");
   }
@@ -315,11 +318,24 @@ function App() {
 
   useEffect(() => {
     if (!authSession) return;
-    const handleOnline = () => {
-      void syncWebOutbox(authSession).catch((error) => setAuthMessage(error instanceof Error ? error.message : "Reprise réseau impossible."));
+    const isCurrent=captureSession(authSession);
+    let stopped=false,checking=false;
+    const resume=async(force=false)=>{
+      if(stopped||checking||!isCurrent()||!navigator.onLine||authSession.requirePasswordChange)return;
+      checking=true;
+      try {
+        const rows=await listAppEvents(OFFLINE_APP_ID,authSession.deviceId,authSession.account.organization_id);
+        if(stopped||!isCurrent())return;
+        const now=Date.now();
+        const due=rows.some(row=>((row.state==="queued"||row.state==="retry_wait")&&(row.nextAttemptAt??0)<=now)||(row.state==="sending"&&(row.leaseUntil??0)<=now));
+        if(force||due)await syncWebOutbox(authSession);
+      }catch(error){if(!stopped&&isCurrent())setAuthMessage(error instanceof Error?error.message:"Reprise réseau impossible.");}
+      finally{checking=false;}
     };
-    window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
+    const handleOnline=()=>{void resume(true);};
+    const timer=window.setInterval(()=>{void resume();},WEB_RETRY_POLL_MS);
+    window.addEventListener("online",handleOnline);
+    return ()=>{stopped=true;window.clearInterval(timer);window.removeEventListener("online",handleOnline);};
   }, [authSession]);
 
   async function loadPerformanceReport() {
@@ -604,13 +620,24 @@ function App() {
   }
 
 
-  async function syncWebOutbox(activeSession: WebAuthSession) {
+  function syncWebOutbox(activeSession: WebAuthSession):Promise<WebSyncSummary> {
+    captureSession(activeSession);
+    const generation=sessionFence.current.generation;
+    if(syncFlight.current?.generation===generation)return syncFlight.current.promise;
+    const promise=syncWebOutboxOnce(activeSession).finally(()=>{if(syncFlight.current?.promise===promise)syncFlight.current=null;});
+    syncFlight.current={generation,promise};
+    return promise;
+  }
+
+  async function syncWebOutboxOnce(activeSession: WebAuthSession):Promise<WebSyncSummary> {
     const isCurrent=captureSession(activeSession);
     if (!accountingEndpoint || !anonKey) throw new Error("Actualisation indisponible.");
     const freshSession = await ensureFreshSession(activeSession);
+    if(!isCurrent())throw Error("WEB_SESSION_CHANGED");
     const batch = await acquireDueBatch(25, Date.now(), 60_000, OFFLINE_APP_ID, freshSession.deviceId, freshSession.account.organization_id);
     let acknowledged=0,retrying=0,rejected=0,billingHolds=0;
     for (const queued of batch) {
+      if(!isCurrent())break;
       let status:number|null=null,errorCode="NETWORK_UNAVAILABLE",command:Record<string,unknown>={};
       try {
         command=JSON.parse(queued.payload) as Record<string,unknown>;
@@ -621,14 +648,18 @@ function App() {
         const response=await fetch(accountingEndpoint,{method:"POST",credentials:"omit",headers:{"Content-Type":"application/json",apikey:anonKey,Authorization:"Bearer "+freshSession.accessToken},body:JSON.stringify({action:"apply_sync_event",app_code:"naxa-services",event})});
         status=response.status;
         const data=await response.json().catch(()=>({})) as Record<string,unknown>;
-        if(!response.ok||data.ok!==true){errorCode=typeof data.error==="string"?data.error:"REMOTE_REQUEST_FAILED";throw new Error(errorCode);}
-        if(!data.result||typeof data.result!=="object"||Array.isArray(data.result)){errorCode="SERVER_RECEIPT_MISSING";throw new Error(errorCode);}
-        const queueState=await applyServerReceipt(queued.eventId,data.result,OFFLINE_APP_ID);
+        if(!response.ok||data.ok!==true){errorCode=typeof data.error==="string"?data.error:"REMOTE_REQUEST_FAILED";if(status===401){status=null;errorCode="AUTHENTICATION_REQUIRED";}throw new Error(errorCode);}
+        const receipt=data.result as Record<string,unknown>|null;
+        // A lost, incomplete or merely accepted response never proves a durable mutation.
+        // Replay with the identical event ID instead of permanently discarding it.
+        if(!receipt||typeof receipt!=="object"||Array.isArray(receipt)||receipt.event_id!==queued.eventId||!["applied","rejected","conflict"].includes(String(receipt.status))){
+          status=null;errorCode="SERVER_RECEIPT_UNCONFIRMED";throw Error(errorCode);
+        }
+        const queueState=await applyServerReceipt(queued.eventId,receipt,OFFLINE_APP_ID);
         if(queueState==="acknowledged"){
           acknowledged++;
           const moduleId=typeof command.module_id==="string"?command.module_id as ModuleId:"stock";
           const id=typeof command.aggregate_id==="string"?command.aggregate_id:"";
-          const receipt=data.result as Record<string,unknown>;
           const serverRecord=receipt.result&&typeof receipt.result==="object"&&!Array.isArray(receipt.result)?receipt.result as Record<string,unknown>:{};
           const eventPayload=command.payload&&typeof command.payload==="object"&&!Array.isArray(command.payload)?command.payload as Record<string,unknown>:{};
           if(id&&isCurrent())setEntries(prev=>!isCurrent()?prev:({...prev,[moduleId]:(prev[moduleId]??[]).map(x=>x.id===id?{

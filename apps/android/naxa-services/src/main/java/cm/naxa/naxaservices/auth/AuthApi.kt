@@ -5,6 +5,7 @@ import android.content.Context
 import cm.naxa.naxaservices.BuildConfig
 import cm.naxa.naxaservices.NaxaActivityCatalog
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -715,6 +716,8 @@ class AuthApi(private val context: Context) {
             }
             response
         } catch (e: AuthApiException) {
+            throw e
+        } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             throw AuthApiException("Impossible de joindre le service. Vérifie la connexion Internet.")

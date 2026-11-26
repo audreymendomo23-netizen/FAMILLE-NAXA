@@ -107,6 +107,7 @@ import cm.naxa.naxaservices.auth.ProvisionScope
 import cm.naxa.naxaservices.auth.RecoveryRequestItem
 import cm.naxa.naxaservices.auth.RecoveryReset
 import cm.naxa.naxaservices.auth.SessionVault
+import cm.naxa.naxaservices.auth.discardRememberedSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -279,21 +280,36 @@ private fun NaxaServicesRoot(
 
     LaunchedEffect(Unit) {
         pendingRefresh = vault.loadRefreshToken()
-        if (!pendingRefresh.isNullOrBlank()) {
+        val saved = pendingRefresh
+        if (!saved.isNullOrBlank()) {
             rememberSession = true
-            busy = true
-            runCatching { api.refresh(pendingRefresh!!, rememberDevice = true) }
-                .onSuccess {
-                    session = it
-                    vault.save(it)
-                    route = if (it.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else routeAfterAuthentication(it)
-                }
-                .onFailure {
-                    vault.clear()
-                    rememberSession = false
-                    route = AppRoute.LOGIN.name
-                }
-            busy = false
+            while (pendingRefresh == saved && session == null) {
+                if (route != AppRoute.LOGIN.name || busy) { delay(15_000L); continue }
+                busy = true
+                try {
+                    val restored = api.refresh(saved, rememberDevice = true)
+                    if (pendingRefresh != saved || session != null || route != AppRoute.LOGIN.name) break
+                    session = restored
+                    vault.save(restored)
+                    pendingRefresh = null
+                    message = null
+                    route = if (restored.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else routeAfterAuthentication(restored)
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    if (pendingRefresh != saved || session != null) break
+                    if (discardRememberedSession((failure as? AuthApiException)?.statusCode)) {
+                        vault.clear()
+                        pendingRefresh = null
+                        rememberSession = false
+                        message = "Session expirée ou révoquée. Connecte-toi à nouveau."
+                    } else {
+                        // A transport failure is not a revocation. Keep the encrypted token and retry.
+                        message = "Connexion indisponible. Votre session mémorisée est conservée."
+                    }
+                } finally { busy = false }
+                if (pendingRefresh == saved) delay(15_000L)
+            }
         }
     }
 
@@ -361,7 +377,8 @@ private fun NaxaServicesRoot(
                     }
                     .onFailure { error ->
                         val authError = error as? AuthApiException
-                        if (authError?.statusCode == 401 || authError?.statusCode == 403) {
+                        if (error is CancellationException) throw error
+                        if (discardRememberedSession(authError?.statusCode)) {
                             runCatching { api.revokeCurrentDevicePushTokens(activeSession?.accessToken.orEmpty()) }
                             PushTokenRegistry.disable(context)
                             vault.clear()
@@ -379,12 +396,15 @@ private fun NaxaServicesRoot(
             }
             if (!refreshed && activeSession != null) {
                 message = "La session n'a pas pu être renouvelée. Vérifie le réseau avant de continuer."
-                activeSession = null
+                // Stay on the original authenticated scope. Do not invent a longer session lifetime.
+                delay(60_000L)
+                if (session?.refreshToken != activeSession?.refreshToken) break
             }
         }
     }
 
     val onLogin: (String, String, Boolean) -> Unit = { identifier, password, rememberMe ->
+        pendingRefresh = null
         scope.launch {
             busy = true
             message = null

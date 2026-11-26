@@ -512,15 +512,40 @@ jobs:
                   await page.getByText(/enregistré hors connexion/i).waitFor();
                   assert.equal(await count('ns_customers',filter),0);
                 }finally{await context.setOffline(false);}
-                const sync=page.getByRole('button',{name:/Synchroniser \(/});
-                for(let i=0;i<40;i++){
+                for(let i=0;i<75;i++){
                   if(await count('ns_customers',filter)===1)break;
-                  if(await sync.isVisible()&&await sync.isEnabled())await sync.click();
                   await pause(400);
                 }
                 assert.equal(await count('ns_customers',filter),1);
                 await pause(800);
                 assert.equal(await count('ns_customers',filter),1);
+              });
+              await scenario('real offline recovery after durable commit with lost response and identical event replay',async()=>{
+                await nav('Clients & fidélité');
+                const name='Client recu perdu '+randomBytes(6).toString('hex'),filter='display_name=eq.'+encodeURIComponent(name);
+                const url='**/functions/v1/naxa-services-accounting';
+                const attempts=[];
+                const intercept=async route=>{
+                  const body=route.request().method()==='POST'?route.request().postDataJSON():null;
+                  if(body?.action!=='apply_sync_event'||body.event?.action_code!=='customer.created')return route.continue();
+                  attempts.push(body.event.event_id);
+                  if(attempts.length!==1)return route.continue();
+                  const actual=await route.fetch();
+                  assert.equal(actual.status(),200);const result=await actual.json();assert.equal(result.result.status,'applied');
+                  // Only the response is lost: the real accounting RPC already committed.
+                  await route.fulfill({response:actual,status:200,contentType:'application/json',body:JSON.stringify({ok:true})});
+                };
+                await page.route(url,intercept);
+                try{
+                  await page.getByRole('button',{name:'Créer une fiche client',exact:true}).click();
+                  await page.getByLabel('Nom du client').fill(name);
+                  await page.getByRole('button',{name:'Enregistrer',exact:true}).click();
+                  for(let i=0;i<85;i++){if(attempts.length>=2)break;await pause(400);}
+                  assert.equal(attempts.length,2);assert.equal(attempts[0],attempts[1]);
+                  assert.equal(await count('ns_customers',filter),1);
+                  await page.locator('.record').filter({hasText:name}).getByText('Confirmé',{exact:true}).first().waitFor({timeout:15000});
+                  assert.equal(await count('ns_customers',filter),1);
+                }finally{await page.unroute(url,intercept);}
               });
               await scenario('real authenticated profile photo: browser upload and deletion',async()=>{
                 const photoButton=page.getByRole('button',{name:'Photo de profil',exact:true});
