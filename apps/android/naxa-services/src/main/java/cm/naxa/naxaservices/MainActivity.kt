@@ -34,6 +34,10 @@ import java.util.Locale
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -232,6 +236,14 @@ private fun NaxaServicesRoot(
     var tourActive by rememberSaveable { mutableStateOf(false) }
     var tourStep by rememberSaveable { mutableIntStateOf(0) }
     var torchTarget by remember { mutableStateOf<Offset?>(null) }
+    var nightActivation by remember { mutableStateOf(false) }
+    var previousLightTheme by remember { mutableStateOf(lightTheme) }
+    LaunchedEffect(lightTheme) {
+        val changed = previousLightTheme != lightTheme
+        previousLightTheme = lightTheme
+        nightActivation = changed && !lightTheme && preferences.flashlightEnabled()
+        if (nightActivation) { delay(1700L); nightActivation = false }
+    }
 
     LaunchedEffect(lockGenerationValue) {
         if (lockGenerationValue != lastHandledLockGeneration) {
@@ -644,7 +656,8 @@ private fun NaxaServicesRoot(
                     }
                     MiniTorchOverlay(
                         target = torchTarget,
-                        active = !lightTheme && preferences.flashlightEnabled()
+                        active = !lightTheme && preferences.flashlightEnabled(),
+                        activation = nightActivation
                     )
                     val gatedSession = session
                     if (gatedSession != null && !gatedSession.requirePasswordChange &&
@@ -707,8 +720,9 @@ private fun LoginScreen(
     var rememberMe by rememberSaveable { mutableStateOf(false) }
     var showPassword by rememberSaveable { mutableStateOf(false) }
 
+    Box(Modifier.fillMaxSize().imePadding(), contentAlignment = Alignment.Center) {
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 26.dp, vertical = 30.dp),
+        Modifier.widthIn(max = 560.dp).fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 24.dp),
         verticalArrangement = Arrangement.Center
     ) {
         NaxaServicesWordmark()
@@ -717,7 +731,9 @@ private fun LoginScreen(
             TextButton(onClick={onLocale("en")},enabled=locale!="en"){Text("EN")}
             TextButton(onClick={onLocale("ff-CM")},enabled=locale!="ff-CM"){Text("FF")}
         }
-        Spacer(Modifier.height(26.dp))
+        Spacer(Modifier.height(12.dp))
+        LoginBusinessBanner(locale)
+        Spacer(Modifier.height(18.dp))
         Text(stringResource(R.string.login_title), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
         Text(stringResource(R.string.login_subtitle), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -753,7 +769,7 @@ private fun LoginScreen(
         TextButton(onClick = onForgot, modifier = Modifier.align(Alignment.CenterHorizontally)) {
             Text(stringResource(R.string.forgot_password))
         }
-        Text(stringResource(R.string.no_public_signup), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.labelSmall)
+    }
     }
 }
 
@@ -766,7 +782,7 @@ private fun RecoveryScreen(
 ) {
     var identifier by rememberSaveable { mutableStateOf("") }
     var note by rememberSaveable { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
         NaxaServicesWordmark()
         Spacer(Modifier.height(30.dp))
         Text(stringResource(R.string.recovery_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
@@ -795,7 +811,7 @@ private fun ChangePasswordScreen(
     var current by rememberSaveable { mutableStateOf("") }
     var next by rememberSaveable { mutableStateOf("") }
     var confirm by rememberSaveable { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.Center) {
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
         NaxaServicesWordmark()
         Spacer(Modifier.height(30.dp))
         Text(stringResource(R.string.change_password_title), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
