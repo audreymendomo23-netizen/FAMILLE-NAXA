@@ -83,7 +83,9 @@ jobs:
           cd candidate
           failed=0
           while IFS= read -r -d '' file; do
-            if ! curl --silent --show-error --fail --retry 2 --max-time 30 -H 'Cache-Control: no-cache' "$VERIFIED_ORIGIN/${file#./}" -o "$tmp/remote"; then
+            request_path="/${file#./}"
+            [[ "$request_path" != /index.html ]] || request_path=/
+            if ! curl --silent --show-error --fail --location --proto-redir '=https' --max-redirs 3 --retry 2 --max-time 30 -H 'Cache-Control: no-cache' "$VERIFIED_ORIGIN$request_path" -o "$tmp/remote"; then
               echo "Missing published file: $file"; failed=1; continue
             fi
             if ! cmp -s "$file" "$tmp/remote"; then
@@ -102,7 +104,9 @@ jobs:
           trap 'rm -rf "$tmp"' EXIT
           cd candidate
           for file in index.html manifest.webmanifest sw.js; do
-            curl --silent --show-error --fail --retry 2 --max-time 30 -H 'Cache-Control: no-cache' "https://famille-naxa.pages.dev/$file" -o "$tmp/remote"
+            request_path="/$file"
+            [[ "$request_path" != /index.html ]] || request_path=/
+            curl --silent --show-error --fail --location --proto-redir '=https' --max-redirs 3 --retry 2 --max-time 30 -H 'Cache-Control: no-cache' "https://famille-naxa.pages.dev$request_path" -o "$tmp/remote"
             cmp -s "$file" "$tmp/remote" || { echo "Stable alias differs: $file (may be a newer deployment)"; exit 1; }
           done
           echo 'Stable Pages alias matches candidate shell.'
