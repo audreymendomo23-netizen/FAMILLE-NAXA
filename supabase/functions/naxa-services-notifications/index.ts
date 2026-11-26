@@ -6,6 +6,9 @@ import {
   retryablePushFailure,
   safeWorkerLimit,
   shouldRevokePushToken,
+  validateFcmServiceAccount,
+  FCM_OAUTH_TOKEN_URL,
+  type FcmServiceAccount,
 } from "./notification_contract.ts";
 
 const SUPABASE_URL = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/+$/, "");
@@ -13,10 +16,11 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const TOKEN_ENCRYPTION_KEY = Deno.env.get("NS_PUSH_TOKEN_ENCRYPTION_KEY") ?? "";
 const FCM_SERVICE_ACCOUNT_JSON = Deno.env.get("FCM_SERVICE_ACCOUNT_JSON") ?? "";
+const FCM_PROJECT_ID = Deno.env.get("NS_FIREBASE_PROJECT_ID") ?? "";
 const WORKER_SECRET = Deno.env.get("NS_NOTIFICATION_WORKER_SECRET") ?? "";
 const ALLOWED_ORIGINS = (Deno.env.get("NS_ALLOWED_ORIGINS") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
 const FCM_SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
-const FCM_TOKEN_URL = "https://oauth2.googleapis.com/token";
+
 
 type Json = Record<string, unknown>;
 type Actor = { authUserId: string; accountId: string; memberId: string; orgId: string; roleCode: string; deviceId: string; sessionId: string };
@@ -24,7 +28,7 @@ type ClaimedNotification = {
   id: string; org_id: string; site_id: string | null; recipient_member_id: string | null;
   event_code: string; idempotency_key: string; payload_redacted: Json; attempts: number; claim_token: string;
 };
-type ServiceAccount = { project_id: string; client_email: string; private_key: string; token_uri?: string };
+type ServiceAccount = FcmServiceAccount;
 
 class ApiError extends Error {
   constructor(public status: number, public code: string) { super(code); }
@@ -259,13 +263,10 @@ function pemBytes(pem: string) {
 }
 
 async function loadServiceAccount(): Promise<ServiceAccount> {
-  let account: ServiceAccount;
-  try { account = JSON.parse(FCM_SERVICE_ACCOUNT_JSON) as ServiceAccount; }
-  catch { throw new ApiError(503, "FCM_CREDENTIALS_NOT_CONFIGURED"); }
-  if (!account.project_id || !account.client_email || !account.private_key) {
-    throw new ApiError(503, "FCM_CREDENTIALS_NOT_CONFIGURED");
+  try { return validateFcmServiceAccount(FCM_SERVICE_ACCOUNT_JSON, FCM_PROJECT_ID); }
+  catch (error) {
+    throw new ApiError(503, error instanceof Error ? error.message : "FCM_CREDENTIALS_NOT_CONFIGURED");
   }
-  return account;
 }
 
 async function fcmAccessToken(account: ServiceAccount) {
@@ -273,7 +274,7 @@ async function fcmAccessToken(account: ServiceAccount) {
   const header = b64Url(JSON.stringify({ alg: "RS256", typ: "JWT" }));
   const payload = b64Url(JSON.stringify({
     iss: account.client_email, scope: FCM_SCOPE,
-    aud: account.token_uri || FCM_TOKEN_URL, iat: now, exp: now + 3600,
+    aud: FCM_OAUTH_TOKEN_URL, iat: now, exp: now + 3600,
   }));
   const unsigned = header + "." + payload;
   const key = await crypto.subtle.importKey(
@@ -282,7 +283,7 @@ async function fcmAccessToken(account: ServiceAccount) {
   );
   const signature = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned)));
   const assertion = unsigned + "." + b64Url(signature);
-  const response = await fetch(account.token_uri || FCM_TOKEN_URL, {
+  const response = await fetch(FCM_OAUTH_TOKEN_URL, {
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion,
