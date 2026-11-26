@@ -67,8 +67,9 @@ as $naxa$
   with due as (
     select n.id
     from public.ns_notification_outbox n
-    where (n.status = 'pending' and n.scheduled_at <= now())
-       or (n.status = 'processing' and (n.claim_expires_at is null or n.claim_expires_at <= now()))
+    where n.channel = 'push' and n.recipient_member_id is not null
+      and ((n.status = 'pending' and n.scheduled_at <= now())
+       or (n.status = 'processing' and (n.claim_expires_at is null or n.claim_expires_at <= now())))
     order by n.scheduled_at, n.created_at
     for update skip locked
     limit least(greatest(coalesce(p_limit, 25), 1), 100)
