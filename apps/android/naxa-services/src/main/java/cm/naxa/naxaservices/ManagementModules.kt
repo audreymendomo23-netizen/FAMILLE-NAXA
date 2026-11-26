@@ -272,7 +272,7 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
                     "trial" -> if (fr) "Essai de 72 h en cours" else "72-hour trial"
                     "provisional" -> if (fr) "Accès provisoire de 24 h, paiement non confirmé" else "24-hour provisional access; payment not confirmed"
                     "paid" -> if (fr) "Accès ERP serveur autorisé" else "Server ERP access allowed"
-                    else -> if (fr) "Accès ERP serveur suspendu. Données locales conservées ; règlement accessible." else "Server ERP access suspended. Local data retained; payment available."
+                    else -> if (fr) "Abonnement suspendu. Vos données disponibles restent consultables." else "Subscription suspended. Available records remain accessible."
                 })
             }
             if (session.account.roleCode != "promoter") {
@@ -1511,8 +1511,8 @@ fun WorkOrdersContent(
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
             ) { siteId = it; workstationId = "" }
             LocalOnlyNotice(
-                if (fr) "Dossiers enregistrés localement puis synchronisés selon le journal serveur. Cette fiche ne valide jamais un encaissement ; le paiement doit passer par la caisse." 
-                else "Records are saved locally then synchronized through the server journal. This form never confirms a payment; payment must go through cash."
+                if (fr) "Suivez vos dossiers. Enregistrez les encaissements dans la caisse." 
+                else "Track your orders. Record payments in the cash register."
             )
             workflow.notesFr.forEach { note ->
                 Text("• " + note, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
@@ -1871,7 +1871,7 @@ fun TeamPerformanceContent(
                 attendanceWorkstationId = ""
             }
             LocalOnlyNotice(
-                if (fr) "Les pointages sont locaux, horodatés et contrôlés par séquence. La validation RH/paie serveur et la synchronisation restent à raccorder." else "Clock events are local, timestamped and sequence-validated. Server HR/payroll approval and synchronization remain to be connected."
+                if (fr) "Suivez les heures de présence. Les pointages restent soumis à validation." else "Track attendance. Time entries remain pending approval."
             )
         }
         item {
