@@ -1,0 +1,23 @@
+begin;
+insert into auth.users(id) values ('10000000-0000-4000-8000-000000000099');
+insert into public.ns_organizations(id,display_name,business_mode) values ('20000000-0000-4000-8000-000000000099','QA FCM queue','solo');
+insert into public.ns_accounts(id,auth_user_id,login_id,auth_alias,password_change_required) values ('50000000-0000-4000-8000-000000000099','10000000-0000-4000-8000-000000000099','NS-QA99','ns-qa99@example.invalid',false);
+insert into public.ns_members(id,org_id,account_id,display_name,role_code) values ('60000000-0000-4000-8000-000000000099','20000000-0000-4000-8000-000000000099','50000000-0000-4000-8000-000000000099','QA','promoter');
+insert into public.ns_notification_outbox(org_id,recipient_member_id,channel,event_code,idempotency_key,payload_redacted) select '20000000-0000-4000-8000-000000000099','60000000-0000-4000-8000-000000000099',c,'QA_FCM','qa-fcm-'||c,'{"title":"QA","body":"QA"}'::jsonb from unnest(array['push','sms','whatsapp','email','in_app']) c;
+do $test$ declare v record; v_result text; v_ref uuid; begin
+  select * into strict v from public.ns_claim_notification_batch(100) where org_id='20000000-0000-4000-8000-000000000099';
+  if v.idempotency_key <> 'qa-fcm-push' or v.attempts <> 1 then raise exception 'WRONG_CHANNEL_OR_ATTEMPT'; end if;
+  if exists(select 1 from public.ns_notification_outbox where org_id=v.org_id and channel<>'push' and status<>'pending') then raise exception 'NON_PUSH_CLAIMED'; end if;
+  if public.ns_finish_notification_send(v.id,gen_random_uuid(),'invalid') then raise exception 'STALE_CLAIM_ACCEPTED'; end if;
+  v_result:=public.ns_fail_notification_send(v.id,v.claim_token,'QA_RETRY',true);
+  if v_result<>'pending' then raise exception 'RETRY_NOT_PENDING'; end if;
+  update public.ns_notification_outbox set scheduled_at=now()-interval '1 second' where id=v.id;
+  v_ref:=v.claim_token;
+  select * into strict v from public.ns_claim_notification_batch(100) where org_id='20000000-0000-4000-8000-000000000099';
+  if v.attempts<>2 or v.claim_token=v_ref then raise exception 'RECLAIM_FAILED'; end if;
+  if not public.ns_finish_notification_send(v.id,v.claim_token,'qa-validation-only') then raise exception 'FINALIZATION_FAILED'; end if;
+  if (select count(*) from public.ns_notification_inbox where notification_id=v.id)<>1 then raise exception 'INBOX_FAILED'; end if;
+  if public.ns_finish_notification_send(v.id,v.claim_token,'duplicate') then raise exception 'DUPLICATE_FINALIZATION'; end if;
+end $test$;
+rollback;
+select 'PASS: push-only claim, isolation, retry, stale claim, inbox and idempotence' result;
