@@ -11,12 +11,17 @@ export async function operation(base,session,site,action,payload,fetcher=fetch){
  return j.result;
 }
 
-export async function syncSale(base,session,site,event,fetcher=fetch){
- if(!permitsSite(session,site)||session.app_id!=='BOOTIK'||event.orgId!==session.organization_id||event.memberId!==session.member_id||event.siteId!==site||event.aggregateType!=='sale')throw Error('SCOPE_DENIED');
+export async function syncEvent(base,session,site,event,fetcher=fetch){
+ if(!permitsSite(session,site)||session.app_id!=='BOOTIK'||event.orgId!==session.organization_id||event.memberId!==session.member_id||event.siteId!==site||!['sale','stock'].includes(event.aggregateType))throw Error('SCOPE_DENIED');
  const payload=JSON.parse(event.payload);if(payload.idempotency_key!==event.eventId)throw Error('EVENT_MISMATCH');
+ const action=event.aggregateType==='stock'?'sync-stock':'sync-sale',resultKey=event.aggregateType==='stock'?'stock_event_id':'sale_id';
+ if(event.aggregateType==='stock'&&(!['receipt','loss','count'].includes(payload.stock_kind)||session.role==='staff'))throw Error('SCOPE_DENIED');
+ if(event.aggregateType==='sale'&&payload.stock_kind!==undefined)throw Error('EVENT_MISMATCH');
  const url=new URL(base.replace(/\/$/,'')+'/operation');if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash)throw Error('INVALID_API');
- const res=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({app_id:'BOOTIK',site_id:site,action:'sync-sale',payload}),cache:'no-store',redirect:'error'});
+ const res=await fetcher(url,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},body:JSON.stringify({app_id:'BOOTIK',site_id:site,action,payload}),cache:'no-store',redirect:'error'});
  if(!res.ok)throw Error('SYNC_RETRY_REQUIRED');
- const j=await res.json();if(j.app_id!=='BOOTIK'||j.organization_id!==event.orgId||j.member_id!==event.memberId||j.site_id!==site||j.event_id!==event.eventId||j.action!=='sync-sale'||!['acknowledged','conflict','rejected'].includes(j.state)||(j.state==='acknowledged'&&typeof j.result?.sale_id!=='string'))throw Error('INVALID_RECEIPT');
+ const j=await res.json();if(j.app_id!=='BOOTIK'||j.organization_id!==event.orgId||j.member_id!==event.memberId||j.site_id!==site||j.event_id!==event.eventId||j.action!==action||!['acknowledged','conflict','rejected'].includes(j.state)||(j.state==='acknowledged'&&(typeof j.result?.[resultKey]!=='string'||!j.result[resultKey])))throw Error('INVALID_RECEIPT');
  return j;
 }
+
+export async function syncSale(base,session,site,event,fetcher=fetch){if(event.aggregateType!=='sale')throw Error('EVENT_MISMATCH');return syncEvent(base,session,site,event,fetcher)}

@@ -18,5 +18,5 @@ interface BootikScopedDao{
  @Query("SELECT * FROM bk_catalog_cache WHERE organizationId=:org AND memberId=:member AND siteId=:site") suspend fun catalog(org:String,member:String,site:String):BootikCatalogCache?
 }
 object BootikReceiptPolicy{
- fun valid(app:String,org:String,member:String,site:String,event:String,action:String,state:String,expected:BootikScopedEvent)=app=="BOOTIK"&&org==expected.organizationId&&member==expected.memberId&&site==expected.siteId&&event==expected.eventId&&action=="sync-sale"&&state in setOf("acknowledged","conflict","rejected")
+ fun valid(app:String,org:String,member:String,site:String,event:String,action:String,state:String,expected:BootikScopedEvent,expectedAction:String="sync-sale")=app=="BOOTIK"&&org==expected.organizationId&&member==expected.memberId&&site==expected.siteId&&event==expected.eventId&&expectedAction in setOf("sync-sale","sync-stock")&&action==expectedAction&&state in setOf("acknowledged","conflict","rejected")
 }

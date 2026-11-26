@@ -10,9 +10,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-private data class CachedSaleItem(val balanceId:String,val name:String,val available:Double,val price:Long)
+private data class CachedSaleItem(val balanceId:String,val name:String,val available:Double,val price:Long,val onHand:Double,val version:String)
 private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length()).map{
- val j=a.getJSONObject(it);CachedSaleItem(j.getString("balance_id"),j.getString("display_name"),j.getDouble("available"),j.getLong("unit_price_fcfa")).also{v->require(v.balanceId.isNotBlank()&&v.available.isFinite()&&v.price>=0)}
+ val j=a.getJSONObject(it);CachedSaleItem(j.getString("balance_id"),j.getString("display_name"),j.getDouble("available"),j.getLong("unit_price_fcfa"),j.optDouble("quantity_on_hand",Double.NaN),j.optString("stock_version","")).also{v->require(v.balanceId.isNotBlank()&&v.available.isFinite()&&v.price>=0)}
 }
 @Composable fun BootikSalesPanel(api:BootikApi,dao:BootikScopedDao,session:BootikSession,site:String){
  val context=LocalContext.current
@@ -23,6 +23,7 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  var items by remember(org,member,site){mutableStateOf<List<CachedSaleItem>>(emptyList())}
  var events by remember(org,member,site){mutableStateOf<List<BootikScopedEvent>>(emptyList())}
  var selected by remember(site){mutableStateOf("")};var quantity by remember(site){mutableStateOf("1")}
+ var stockKind by remember(site){mutableStateOf("receipt")};var reason by remember(site){mutableStateOf("")}
  var status by remember(site){mutableStateOf("")};var busy by remember(site){mutableStateOf(false)};var cacheTime by remember(site){mutableStateOf(0L)}
  suspend fun reload(){events=dao.events(org,member,site)}
  LaunchedEffect(org,member,site){dao.observeEvents(org,member,site).collect{events=it}}
@@ -36,6 +37,18 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  OutlinedTextField(quantity,{quantity=it},label={Text("Quantité")},singleLine=true,enabled=!busy)
  val n=quantity.toDoubleOrNull();val item=items.firstOrNull{it.balanceId==selected}
  Button(enabled=!busy&&n!=null&&n.isFinite()&&n>0&&item!=null,onClick={task{require(session.permits(site));val id=UUID.randomUUID().toString();val payload=JSONObject().put("balance_id",item!!.balanceId).put("quantity",n!!).put("unit_price_fcfa",item.price).put("idempotency_key",id);dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));status="Vente en attente, aucune confirmation serveur";if(automatic)BootikSync.schedule(context,binding)}}){Text("Mettre la vente en file")}
+ if(session.role!="staff"){
+  Text("Réceptions, pertes et comptages",style=MaterialTheme.typography.titleMedium)
+  Text("Sélectionnez un article, actualisez le stock si nécessaire. Quantité ci-dessus ; aucune modification avant confirmation serveur.")
+  if(item!=null&&item.version.isNotBlank())Text("Quantité physique de référence : "+item.onHand)
+  listOf("receipt" to "Réception physique", "loss" to "Perte", "count" to "Comptage").forEach{(kind,label)->Row{RadioButton(stockKind==kind,{stockKind=kind},enabled=!busy);Text(label)}}
+  OutlinedTextField(reason,{if(it.length<=500)reason=it},label={Text("Motif / référence de stock")},enabled=!busy)
+  Button(enabled=!busy&&item!=null&&item.version.isNotBlank()&&n!=null&&n.isFinite()&&n>=0&&(stockKind=="count"||n>0)&&reason.trim().length>=3,onClick={task{
+   require(session.permits(site));val id=UUID.randomUUID().toString()
+   val payload=JSONObject().put("balance_id",item!!.balanceId).put("quantity",n!!).put("stock_kind",stockKind).put("expected_version",item.version).put("reason",reason.trim()).put("idempotency_key",id)
+   dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));reason="";status="Mouvement en attente, aucun stock confirmé";if(automatic)BootikSync.schedule(context,binding)
+  }}){Text("Mettre le mouvement en file")}
+ }
  Button(enabled=!busy,onClick={task{val all=dao.events(org,member,site);if(all.any{it.state in setOf("conflict","rejected")}){status="Corrigez le conflit avant de synchroniser";return@task};val count=BootikSync.flush(binding);status="$count réponse(s) traitée(s)"}}){Text("Synchroniser les ventes")}
  Row{Checkbox(automatic,{automatic=it;BootikSync.setAutomatic(binding,it)},enabled=!busy);Text("Synchroniser automatiquement au retour du réseau")}
  Text(events.count{it.state=="queued"}.toString()+" en attente")
