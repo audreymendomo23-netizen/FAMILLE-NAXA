@@ -750,7 +750,7 @@ test("Web profile photo: private authenticated upload, read, deletion and accoun
   const page=await context.newPage();
   await signIn(page);
   await expect(page.getByRole("button",{name:"Photo de profil",exact:true})).toBeEnabled();
-  await page.getByLabel("Fichier photo de profil").setInputFiles({name:"test.png",mimeType:"image/png",buffer:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/lGQAAAAASUVORK5CYII=","base64")});
+  await page.getByLabel("Fichier photo de profil").setInputFiles({name:"test.png",mimeType:"image/png",buffer:Buffer.from("iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAAGUlEQVR4nGOsbvFjIAUwkaR6VMOohiGlAQAtrwFtmi6mgwAAAABJRU5ErkJggg==","base64")});
   await expect(page.getByText("Photo enregistrée.",{exact:true})).toBeVisible();
   await expect(page.getByAltText("Photo de profil")).toBeVisible();
   expect(objects.has(ORG_A+"/"+MEMBER_A+"/avatar.jpg")).toBe(true);
