@@ -13,7 +13,7 @@ export function verifyJoinToken(token,{key,secret,now=Date.now()}){
  if(actual.length!==expected.length||!timingSafeEqual(actual,expected))return null;
  const v=claims.video;if(!v||v.roomJoin!==true||!validName(v.room)||v.roomAdmin||v.roomCreate||v.roomRecord||v.roomList||v.canSubscribe!==true||v.canPublishData!==false||v.canUpdateOwnMetadata!==false)return null;
  const sources=v.canPublishSources;if(!Array.isArray(sources)||sources.some(x=>!["camera","microphone","screen_share","screen_share_audio"].includes(x))||new Set(sources).size!==sources.length)return null;
- return {app:v.room.split("-")[0],room:v.room,identity:claims.sub,expiresAt:claims.exp*1000,sources,canPublish:v.canPublish===true};
+ return {app:v.room.split("-")[0],room:v.room,identity:claims.sub,sessionHash:typeof claims.wm_session_hash==="string"?claims.wm_session_hash:null,expiresAt:claims.exp*1000,sources,canPublish:v.canPublish===true};
  }catch{return null}
 }
 export function allowedJoin(grant,state,now=Date.now()){
