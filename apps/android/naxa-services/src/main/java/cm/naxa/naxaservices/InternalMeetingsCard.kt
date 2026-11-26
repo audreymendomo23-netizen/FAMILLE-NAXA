@@ -74,13 +74,13 @@ internal fun InternalMeetingsCard(session:AuthSession,siteId:String){
      }
      OutlinedTextField(title,{title=it},label={Text(tr("Intitulé","Title","Innde"))},singleLine=true,modifier=Modifier.fillMaxWidth())
      OutlinedTextField(whenAt,{whenAt=it},label={Text(tr("AAAA-MM-JJ HH:mm (vide : maintenant)","YYYY-MM-DD HH:mm (blank: now)","Ñalnde e sahaa"))},singleLine=true,modifier=Modifier.fillMaxWidth())
-     if(edited!=null){OutlinedTextField(agenda,{agenda=it},label={Text(tr("Ordre du jour","Agenda","Feere dental"))},modifier=Modifier.fillMaxWidth());OutlinedTextField(duration,{duration=it},label={Text(tr("Durée (min)","Duration (min)","Sahaa (min)"))},modifier=Modifier.fillMaxWidth())}
+     OutlinedTextField(agenda,{agenda=it},label={Text(tr("Ordre du jour","Agenda","Feere dental"))},modifier=Modifier.fillMaxWidth());OutlinedTextField(duration,{duration=it},label={Text(tr("Durée (min)","Duration (min)","Sahaa (min)"))},modifier=Modifier.fillMaxWidth())
      Button(onClick={perform{
       val m=edited
-      if(m==null)StaffRosterApi.call(latest,"rpc/ns_schedule_internal_meeting",JSONObject().put("p_id",UUID.randomUUID().toString()).put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_post",post.takeIf{it.isNotBlank()}?:JSONObject.NULL).put("p_title",title).put("p_at",if(whenAt.isBlank())Instant.now().toString() else meetingInstant(whenAt)).put("p_members",JSONArray(selected.toList())))
+      if(m==null)StaffRosterApi.call(latest,"rpc/ns_schedule_internal_meeting_details",JSONObject().put("p_id",UUID.randomUUID().toString()).put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_post",post.takeIf{it.isNotBlank()}?:JSONObject.NULL).put("p_title",title).put("p_at",if(whenAt.isBlank())Instant.now().toString() else meetingInstant(whenAt)).put("p_members",JSONArray(selected.toList())).put("p_agenda",agenda).put("p_duration",duration.toInt()))
       else StaffRosterApi.call(latest,"rpc/ns_revise_internal_meeting",JSONObject().put("p_id",m.getString("id")).put("p_revision",m.getInt("revision")).put("p_title",title).put("p_at",meetingInstant(whenAt)).put("p_agenda",agenda).put("p_duration",duration.toInt()))
       clear()
-     }},enabled=!busy&&title.isNotBlank()&&(edited!=null||selected.isNotEmpty())){Text(tr("Enregistrer et inviter","Save and invite","Danndu e noddu"))}
+     }},enabled=!busy&&title.isNotBlank()&&agenda.length<=2000&&duration.toIntOrNull()?.let{it in 5..480}==true&&(edited!=null||selected.isNotEmpty())){Text(tr("Enregistrer et inviter","Save and invite","Danndu e noddu"))}
      if(edited!=null)TextButton(onClick={clear()}){Text(tr("Abandonner","Discard","Accu"))}
     }
     if(loaded&&meetings.isEmpty())Text(tr("Aucune réunion.","No meetings.","Alaa dental."))

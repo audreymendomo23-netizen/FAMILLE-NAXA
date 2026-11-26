@@ -46,12 +46,12 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
  function schedule(){
   if(edit){void perform(async()=>{await req("rpc/ns_revise_internal_meeting",{p_id:edit.id,p_revision:edit.revision,p_title:title,p_at:iso(when),p_agenda:agenda,p_duration:Number(duration)});reset();});return;}
   if(!selected.length)return;
-  void perform(async()=>{await req("rpc/ns_schedule_internal_meeting",{p_id:crypto.randomUUID(),p_org:account.organization_id,p_site:siteId,p_post:post||null,p_title:title,p_at:when?iso(when):new Date().toISOString(),p_members:selected});reset();});
+  void perform(async()=>{await req("rpc/ns_schedule_internal_meeting_details",{p_id:crypto.randomUUID(),p_org:account.organization_id,p_site:siteId,p_post:post||null,p_title:title,p_at:when?iso(when):new Date().toISOString(),p_members:selected,p_agenda:agenda,p_duration:Number(duration)});reset();});
  }
  function transition(m:Meeting,next:string){void perform(()=>req("rpc/ns_transition_internal_meeting",{p_id:m.id,p_revision:m.revision,p_next:next}));}
  function status(s:string){return ({scheduled:tr("Programmée","Scheduled","Feewnaama"),open:tr("Ouverte","Open","Udditaama"),closed:tr("Terminée","Ended","Timmi"),cancelled:tr("Annulée","Cancelled","Haaytaama"),pending:tr("En attente","Pending","E fadade"),accepted:tr("Acceptée","Accepted","Jaɓaama"),declined:tr("Refusée","Declined","Salaama"),tentative:tr("Provisoire","Tentative","Haa jooni") } as Record<string,string>)[s]??"—";}
  if(!rosterModeEnabled(account.business_mode)||!siteId)return null;
- return <section className="module-main-card"><h2>{tr("Mes réunions","My meetings","Dentuuji am")}</h2>
+ return <section className="module-main-card" aria-label={tr("Mes réunions","My meetings","Dentuuji am")}><h2>{tr("Mes réunions","My meetings","Dentuuji am")}</h2>
  <p>{tr("Heure de Douala (UTC+1). L’appel audio/vidéo n’est pas encore disponible.","Douala time (UTC+1). Audio/video calling is not available yet.","Sahaa Duwaala (UTC+1). Noddaango daande e natal heɓotaako tawo.")}</p>
  <button className="btn secondary" disabled={busy} onClick={()=>setRevision(r=>r+1)}>{tr("Actualiser","Refresh","Hesɗitin")}</button>{error&&<p role="alert">{err}</p>}
  {loaded&&(targets.length>0||edit)&&<form onSubmit={e=>{e.preventDefault();schedule();}}>
@@ -60,7 +60,7 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
  <fieldset><legend>{tr("Invités","Invitees","Noddaaɓe")}</legend>{people.map(t=><label key={t.member_id}><input type="checkbox" checked={selected.includes(t.member_id)} onChange={e=>setSelected(p=>e.target.checked?[...p,t.member_id]:p.filter(x=>x!==t.member_id))}/>{t.display_name}</label>)}</fieldset></>}
  <label>{tr("Intitulé","Title","Innde")}<input required maxLength={160} value={title} onChange={e=>setTitle(e.target.value)}/></label>
  <label>{tr("Date et heure (vide : maintenant)","Date and time (blank: now)","Ñalnde e sahaa")}<input type="datetime-local" required={Boolean(edit)} value={when} onChange={e=>setWhen(e.target.value)}/></label>
- {edit&&<><label>{tr("Ordre du jour","Agenda","Feere dental")}<textarea maxLength={2000} value={agenda} onChange={e=>setAgenda(e.target.value)}/></label><label>{tr("Durée (min)","Duration (min)","Sahaa (min)")}<input type="number" min="5" max="480" required value={duration} onChange={e=>setDuration(e.target.value)}/></label></>}
+ <><label>{tr("Ordre du jour","Agenda","Feere dental")}<textarea maxLength={2000} value={agenda} onChange={e=>setAgenda(e.target.value)}/></label><label>{tr("Durée (min)","Duration (min)","Sahaa (min)")}<input type="number" min="5" max="480" required value={duration} onChange={e=>setDuration(e.target.value)}/></label></>
  <button className="btn primary" disabled={busy||(!edit&&!selected.length)}>{edit?tr("Enregistrer et notifier","Save and notify","Danndu e tintin"):tr("Créer et inviter","Create and invite","Sos e noddu")}</button>
  {edit&&<button type="button" className="btn secondary" onClick={reset}>{tr("Abandonner","Discard","Accu")}</button>}</form>}
  {loaded&&!meetings.length&&<p>{tr("Aucune réunion.","No meetings.","Alaa dental.")}</p>}

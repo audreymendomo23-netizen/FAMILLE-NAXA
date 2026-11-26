@@ -21,6 +21,8 @@ on:
       - 'supabase/drafts/naxa_services_v13_meeting_collaboration.sql'
       - 'supabase/tests/drafts/naxa_services_meeting_collaboration.sql'
       - 'supabase/drafts/naxa_services_v14_recording_request.sql'
+      - 'supabase/drafts/naxa_services_v18_meeting_creation.sql'
+      - 'supabase/tests/drafts/naxa_services_meeting_creation.sql'
       - 'supabase/tests/drafts/naxa_services_recording_request.sql'
 permissions:
   contents: read
@@ -161,13 +163,21 @@ jobs:
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_recording_request.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regclass('public.ns_meeting_recording_requests') is null" | grep -Fx t
+      - name: Qualify meeting creation details with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_meeting_creation.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regprocedure('public.ns_schedule_internal_meeting_details(uuid,uuid,uuid,uuid,text,timestamptz,uuid[],text,integer)') is null" | grep -Fx t
       - name: Activate attendance candidates on disposable DB for actual browser proof
         shell: bash
         run: |
           set -euo pipefail
           set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql; do
+          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql; do
             test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
             sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
           done
@@ -181,7 +191,7 @@ jobs:
           npm install --no-audit --no-fund
           npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
           npx playwright install --with-deps chromium
-          VITE_NAXA_SERVICES_ATTENDANCE_ENABLED=true VITE_NAXA_SERVICES_AUTH_URL=https://127.0.0.1:8443/functions/v1/naxa-services-auth VITE_SUPABASE_ANON_KEY="$ANON_KEY" npm run build --workspace @famille/naxa-services-web
+          VITE_NAXA_SERVICES_ATTENDANCE_ENABLED=true VITE_NAXA_SERVICES_ROSTER_ENABLED=true VITE_NAXA_SERVICES_MEETINGS_ENABLED=true VITE_NAXA_SERVICES_BRIEFING_ENABLED=true VITE_NAXA_SERVICES_AUTH_URL=https://127.0.0.1:8443/functions/v1/naxa-services-auth VITE_SUPABASE_ANON_KEY="$ANON_KEY" npm run build --workspace @famille/naxa-services-web
           # Distinct CA and leaf avoid using a CA certificate as the TLS end entity.
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=NAXA Replay disposable CA' -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign' -keyout "$RUNNER_TEMP/ns-replay-ca.key" -out "$RUNNER_TEMP/ns-replay-ca.crt" 2>/dev/null
           openssl req -new -newkey rsa:2048 -nodes -subj '/CN=127.0.0.1' -keyout "$RUNNER_TEMP/ns-replay.key" -out "$RUNNER_TEMP/ns-replay.csr" 2>/dev/null
@@ -530,6 +540,107 @@ jobs:
                 pass('commercial proof review: authorized RPC, authenticated JPEG, decoding and clearing');
                 await page.getByRole('button',{name:/Déconnexion/}).click();
                 await page.getByLabel('Identifiant NAXA Services').waitFor();
+              });
+              await scenario('hierarchical planning, meeting control and scoped briefing on two real browser accounts',async()=>{
+                let phase='fixture';let guestContext;
+                try{
+                  const host=await fixture('HIERARCHY','multi_site_network');
+                  const email='ns-replay-guest-'+randomUUID()+'@example.test',password='Qa7!'+randomBytes(18).toString('hex');
+                  const user=await success(base+'/auth/v1/admin/users',{email,password,email_confirm:true,app_metadata:{app_code:'naxa-services'}});
+                  const loginId='NS-'+randomBytes(5).toString('hex').toUpperCase();
+                  const [account]=await rest('ns_accounts',{auth_user_id:user.id,login_id:loginId,auth_alias:email,password_change_required:false});
+                  const [member]=await rest('ns_members',{org_id:host.org.id,account_id:account.id,display_name:'Recette Collaborateur',role_code:'cashier'});
+                  await rest('ns_member_scopes',{org_id:host.org.id,member_id:member.id,scope_type:'site',scope_id:host.site.id,site_id:host.site.id,can_read:true,can_operate:true,can_manage:false});
+                  async function signIn(p,id,pw){
+                    await p.goto('https://127.0.0.1:8443/');
+                    await p.getByLabel('Identifiant NAXA Services').fill(id);await p.getByLabel('Mot de passe',{exact:true}).fill(pw);
+                    const waiting=p.waitForResponse(r=>new URL(r.url()).pathname==='/functions/v1/naxa-services-auth'&&r.request().method()==='POST'&&r.request().postDataJSON()?.action==='login');
+                    const [r]=await Promise.all([waiting,p.getByRole('button',{name:'Se connecter',exact:true}).click()]);
+                    assert.equal(r.status(),200);const data=await r.json();await p.getByRole('heading',{name:'Une journée bien organisée commence ici.'}).waitFor();return data;
+                  }
+                  phase='two distinct sessions';
+                  const hostAuth=await signIn(page,host.login,host.password);
+                  guestContext=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:900}});
+                  const guest=await guestContext.newPage();guest.setDefaultTimeout(20000);
+                  const guestAuth=await signIn(guest,loginId,password);
+                  assert.equal(hostAuth.account.organization_id,guestAuth.account.organization_id);assert.notEqual(hostAuth.account.member_id,guestAuth.account.member_id);
+                  const rpc=async(p,name,click,expected=200)=>{
+                    const waiting=p.waitForResponse(r=>new URL(r.url()).pathname==='/rest/v1/rpc/'+name&&r.request().method()==='POST');
+                    const [r]=await Promise.all([waiting,click()]);assert.equal(r.status(),expected,name);return r.json();
+                  };
+                  const meetingTitle='Coordination de recette';
+                  const hr=page.getByRole('region',{name:'Mes réunions',exact:true}),gr=guest.getByRole('region',{name:'Mes réunions',exact:true});
+                  const hrow=()=>hr.getByRole('article').filter({has:page.getByText(meetingTitle,{exact:true})});
+                  const grow=()=>gr.getByRole('article').filter({has:guest.getByText(meetingTitle,{exact:true})});
+                  phase='create meeting with initial agenda';
+                  await hr.getByRole('checkbox',{name:'Recette Collaborateur',exact:true}).check();
+                  await hr.getByLabel('Intitulé',{exact:true}).fill(meetingTitle);
+                  await hr.getByLabel('Ordre du jour',{exact:true}).fill('Objectifs du jour');
+                  await hr.getByLabel('Durée (min)',{exact:true}).fill('45');
+                  const meeting=await rpc(page,'ns_schedule_internal_meeting_details',()=>hr.getByRole('button',{name:'Créer et inviter',exact:true}).click());
+                  assert.ok(meeting.id);await hrow().getByText('Objectifs du jour',{exact:true}).waitFor();
+                  await gr.getByRole('button',{name:'Actualiser',exact:true}).click();
+                  await grow().getByText('Objectifs du jour',{exact:true}).waitFor();
+                  assert.equal(await gr.getByRole('button',{name:'Créer et inviter',exact:true}).count(),0);
+                  assert.equal(await grow().getByRole('button',{name:'Ouvrir la réunion (sans appel)',exact:true}).count(),0);
+                  phase='guest RSVP and consent';
+                  await rpc(guest,'ns_respond_meeting_invitation',()=>grow().getByRole('button',{name:'Acceptée',exact:true}).click());
+                  await rpc(guest,'ns_set_meeting_listener',()=>grow().getByLabel('Langue d’écoute souhaitée').selectOption('en'));
+                  await rpc(guest,'ns_set_meeting_listener',()=>grow().getByRole('button',{name:'J’accepte',exact:true}).click());
+                  await rpc(page,'ns_set_meeting_listener',()=>hrow().getByRole('button',{name:'J’accepte',exact:true}).click());
+                  phase='host opens meeting control plane';
+                  await rpc(page,'ns_transition_internal_meeting',()=>hrow().getByRole('button',{name:'Ouvrir la réunion (sans appel)',exact:true}).click());
+                  await gr.getByRole('button',{name:'Actualiser',exact:true}).click();
+                  await grow().getByRole('button',{name:'Lever la main',exact:true}).waitFor();
+                  phase='guest chat and hand';
+                  await rpc(guest,'ns_meeting_action',()=>grow().getByRole('button',{name:'Lever la main',exact:true}).click());
+                  await grow().getByRole('textbox',{name:'Message',exact:true}).fill('Message de recette');
+                  await rpc(guest,'ns_meeting_action',()=>grow().getByRole('button',{name:'Envoyer',exact:true}).click());
+                  await hrow().getByText('Message de recette',{exact:false}).waitFor();
+                  await rpc(guest,'ns_meeting_action',()=>grow().getByRole('button',{name:'clap',exact:true}).click());
+                  phase='moderation and consent-gated recording request';
+                  await rpc(page,'ns_moderate_meeting',()=>hrow().getByRole('button',{name:'Restreindre chat',exact:true}).click());
+                  await grow().getByRole('textbox',{name:'Message',exact:true}).waitFor({state:'detached'});
+                  assert.equal(await grow().getByRole('button',{name:'Demander l’enregistrement (sans capture)',exact:true}).count(),0);
+                  const recording=await rpc(page,'ns_request_meeting_recording',()=>hrow().getByRole('button',{name:'Demander l’enregistrement (sans capture)',exact:true}).click());
+                  assert.equal(recording.status,'requested');
+                  await rpc(guest,'ns_set_meeting_listener',()=>grow().getByRole('button',{name:'Je refuse',exact:true}).click());
+                  await hrow().getByRole('button',{name:'Demander l’enregistrement (sans capture)',exact:true}).waitFor();
+                  const recorded=await success(base+'/rest/v1/ns_meeting_recording_requests?select=status&meeting_id=eq.'+meeting.id,undefined,admin,admin,'GET');
+                  assert.equal(recorded.length,1);assert.equal(recorded[0].status,'cancelled');
+                  await rpc(page,'ns_transition_internal_meeting',()=>hrow().getByRole('button',{name:'Terminer',exact:true}).click());
+                  await gr.getByRole('button',{name:'Actualiser',exact:true}).click();
+                  await grow().getByRole('button',{name:'Lever la main',exact:true}).waitFor({state:'detached'});
+                  pass('two browser accounts: initial agenda, RSVP, language preference, chat, hand, reaction, moderator restriction and recording consent withdrawal; no media capture');
+                  phase='scoped daily briefing';
+                  const hb=page.getByRole('region',{name:'Mon bilan',exact:true}),gb=guest.getByRole('region',{name:'Mon bilan',exact:true});
+                  const hd=await rpc(page,'ns_daily_briefing',()=>hb.getByRole('button',{name:'Actualiser',exact:true}).click());
+                  const gd=await rpc(guest,'ns_daily_briefing',()=>gb.getByRole('button',{name:'Actualiser',exact:true}).click());
+                  assert.equal(hd.scope,'site');assert.equal(gd.scope,'personal');assert.equal(gd.finance,null);
+                  await gb.getByText('Voici votre bilan partiel',{exact:false}).waitFor();
+                  await gb.getByRole('combobox',{name:'Language / Langue'}).selectOption('en');
+                  await guest.getByRole('region',{name:'My report',exact:true}).getByText('Here is your partial report',{exact:false}).waitFor();
+                  pass('real scoped partial briefing text and language selection, no synthetic audio claim');
+                  phase='planning publish and acknowledge';
+                  await nav('Équipe & commissions');
+                  const pr=page.getByRole('region',{name:'Planning de service',exact:true});
+                  await pr.getByLabel('Collaborateur et poste').selectOption(member.id+':');
+                  const local=(ms)=>new Date(ms+3600000).toISOString().slice(0,16);
+                  await pr.getByLabel('Début de service',{exact:true}).fill(local(Date.now()+3600000));
+                  await pr.getByLabel('Fin de service',{exact:true}).fill(local(Date.now()+3*3600000));
+                  await pr.getByLabel('Motif',{exact:true}).fill('Organisation du service');
+                  await rpc(page,'ns_publish_roster_shift',()=>pr.getByRole('button',{name:'Publier et notifier',exact:true}).click());
+                  await pr.getByText('Recette Collaborateur',{exact:true}).waitFor();
+                  await guest.locator('.side-nav button.nav-item').filter({hasText:'Équipe & commissions'}).click();
+                  const gp=guest.getByRole('region',{name:'Planning de service',exact:true});
+                  await rpc(guest,'ns_ack_roster_shift',()=>gp.getByRole('button',{name:"J'ai pris connaissance",exact:true}).click());
+                  await gp.getByText('Pris en compte',{exact:false}).waitFor();
+                  assert.equal(await gp.getByRole('button',{name:'Publier et notifier',exact:true}).count(),0);
+                  await pr.getByRole('button',{name:'Actualiser',exact:true}).click();
+                  await pr.getByText('Pris en compte',{exact:false}).waitFor();
+                  pass('two browser accounts: published roster, employee acknowledgement and manager view');
+                  await page.getByRole('button',{name:/Déconnexion/}).click();
+                }catch(e){console.log('Hierarchical browser last checkpoint:',phase);throw e;}finally{if(guestContext)await guestContext.close();}
               });
               return failures;
             }finally{

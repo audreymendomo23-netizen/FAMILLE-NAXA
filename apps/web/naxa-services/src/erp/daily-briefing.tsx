@@ -33,8 +33,9 @@ export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Pro
    if(!r.ok)throw Error("BRIEFING_UNAVAILABLE");
    const data=await r.json() as Report;
    if(data.day!==dayInDouala()||data.coverage!=="partial_confirmed_server_facts"||!data.appointments||!["site","personal"].includes(data.scope)||data.scope==="personal"&&data.finance!==null)throw Error("INVALID_BRIEFING");
-   if(!abort.signal.aborted&&mounted.current)setReport(data);
-   return data;
+   if(abort.signal.aborted||!mounted.current||controller.current!==abort)return;
+   setReport(data);
+   return {data,abort};
   }catch{if(!abort.signal.aborted&&mounted.current)setError(true);}
   finally{if(!abort.signal.aborted&&mounted.current)setLoading(false);}
  }
@@ -48,10 +49,10 @@ export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Pro
   setPlaying(true);window.speechSynthesis.speak(u);
  }
  if(!siteId)return null;
- return <section className="module-main-card"><h2>{t.title}</h2>
- <label><select aria-label="Language / Langue" value={lang} onChange={e=>{stop();setLang(e.target.value as Lang);setError(false);}}>{Object.entries(languages).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
- <label><select aria-label="Speed / Vitesse" value={speed} onChange={e=>{stop();setSpeed(Number(e.target.value));}}>{[.8,1,1.2,1.5].map(s=><option key={s} value={s}>{s}×</option>)}</select></label>
- <button className="btn primary" disabled={loading} onClick={()=>{if(playing){stop();return;}if(report){speak(report);}else void load().then(r=>{if(r&&mounted.current)speak(r);});}}>{playing?t.stop:t.play}</button>
+ return <section className="module-main-card" aria-label={t.title}><h2>{t.title}</h2>
+ <label><select aria-label="Language / Langue" disabled={loading} value={lang} onChange={e=>{stop();setLang(e.target.value as Lang);setError(false);}}>{Object.entries(languages).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
+ <label><select aria-label="Speed / Vitesse" disabled={loading} value={speed} onChange={e=>{stop();setSpeed(Number(e.target.value));}}>{[.8,1,1.2,1.5].map(s=><option key={s} value={s}>{s}×</option>)}</select></label>
+ <button className="btn primary" disabled={loading} onClick={()=>{if(playing){stop();return;}void load().then(r=>{if(r&&mounted.current&&!r.abort.signal.aborted&&controller.current===r.abort)speak(r.data);});}}>{playing?t.stop:t.play}</button>
  <button className="btn secondary" disabled={loading} onClick={()=>void load()}>{t.load}</button>
  {error&&<p role="alert">{t.unavailable}</p>}{report&&<p>{briefingNarration(report,lang)}</p>}</section>;
 }
