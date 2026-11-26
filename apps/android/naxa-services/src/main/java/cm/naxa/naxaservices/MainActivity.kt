@@ -181,6 +181,7 @@ private fun NaxaServicesRoot(
 
     var route by rememberSaveable { mutableStateOf(AppRoute.LOGIN.name) }
     var session by remember { mutableStateOf<AuthSession?>(null) }
+    var offlineRestored by remember { mutableStateOf(false) }
     val notificationOpenRequest by notificationOpenSignal.collectAsState()
     val pushRegistration by PushTokenRegistry.state.collectAsState()
 
@@ -306,6 +307,13 @@ private fun NaxaServicesRoot(
                     } else {
                         // A transport failure is not a revocation. Keep the encrypted token and retry.
                         message = "Connexion indisponible. Votre session mémorisée est conservée."
+                        val status=(failure as? AuthApiException)?.statusCode
+                        val cached=if(status==null||status==408||status==429||(status!=null&&status>=500))vault.loadOfflineSnapshot() else null
+                        if(cached!=null && localPinManager.isConfigured(cached.account.memberId)){
+                            offlineRestored=true;session=cached;pendingRefresh=null;localPinUnlockedMemberId=null
+                            route=AppRoute.DASHBOARD.name;tourActive=false
+                            message="Mode hors connexion : accès local temporaire. Les opérations attendent le serveur."
+                        }
                     }
                 } finally { busy = false }
                 if (pendingRefresh == saved) delay(15_000L)
@@ -313,10 +321,10 @@ private fun NaxaServicesRoot(
         }
     }
 
-    LaunchedEffect(session?.deviceId, rememberSession) {
+    LaunchedEffect(session?.deviceId, rememberSession,offlineRestored) {
         val activeSession = session
         if (
-            rememberSession &&
+            rememberSession && !offlineRestored &&
             activeSession != null &&
             activeSession.deviceId.isNotBlank() &&
             SupplierSyncCoordinator.isConfigured()
@@ -359,10 +367,28 @@ private fun NaxaServicesRoot(
         }
     }
 
-    LaunchedEffect(session?.refreshToken) {
+    LaunchedEffect(session?.accessToken,localPinUnlockedMemberId,rememberSession,offlineRestored) {
+        val current=session?:return@LaunchedEffect
+        if(offlineRestored||!rememberSession||localPinUnlockedMemberId!=current.account.memberId||!localPinManager.isConfigured(current.account.memberId))return@LaunchedEffect
+        try{
+            val access=api.subscriptionAccess(current.accessToken)
+            if(session?.accessToken==current.accessToken&&!offlineRestored&&rememberSession)vault.saveOfflineSnapshot(current,access)
+        }catch(c:CancellationException){throw c}catch(_:Exception){}
+    }
+    LaunchedEffect(offlineRestored,session?.refreshToken) {
+        while(offlineRestored&&session!=null){
+            if(vault.loadOfflineSnapshot()==null){
+                offlineRestored=false;session=null;localPinUnlockedMemberId=null;route=AppRoute.LOGIN.name
+                message="Autorisation locale expirée. Reconnectez-vous pour reprendre."
+                break
+            }
+            delay(1000L)
+        }
+    }
+    LaunchedEffect(session?.refreshToken,offlineRestored) {
         var activeSession = session
         while (activeSession != null) {
-            val waitSeconds = (activeSession.expiresIn - 60L).coerceAtLeast(30L)
+            val waitSeconds = if(offlineRestored) 15L else (activeSession.expiresIn - 60L).coerceAtLeast(30L)
             delay(waitSeconds * 1000L)
             var retry = 0
             var refreshed = false
@@ -370,6 +396,11 @@ private fun NaxaServicesRoot(
                 val token = activeSession?.refreshToken ?: break
                 runCatching { api.refresh(token, rememberDevice = rememberSession) }
                     .onSuccess { next ->
+                        if(offlineRestored){
+                            localPinUnlockedMemberId=null
+                            route=if(next.requirePasswordChange)AppRoute.CHANGE_PASSWORD.name else routeAfterAuthentication(next)
+                            offlineRestored=false
+                        }
                         session = next
                         if (vault.loadRefreshToken() != null) vault.save(next)
                         activeSession = next
@@ -385,6 +416,7 @@ private fun NaxaServicesRoot(
                             rememberSession = false
                             localPinUnlockedMemberId = null
                             session = null
+                            offlineRestored=false
                             route = AppRoute.LOGIN.name
                             message = "Session expirée ou révoquée. Connecte-toi à nouveau."
                             activeSession = null
@@ -405,6 +437,8 @@ private fun NaxaServicesRoot(
 
     val onLogin: (String, String, Boolean) -> Unit = { identifier, password, rememberMe ->
         pendingRefresh = null
+        offlineRestored=false
+        vault.clearOfflineSnapshot()
         scope.launch {
             busy = true
             message = null
@@ -587,6 +621,10 @@ private fun NaxaServicesRoot(
                             val current = session
                             if (current == null) {
                                 route = AppRoute.LOGIN.name
+                            } else if(offlineRestored&&localPinUnlockedMemberId!=current.account.memberId){
+                                Box(Modifier.fillMaxSize())
+                            } else if(offlineRestored&&AppRoute.valueOf(route) !in setOf(AppRoute.DASHBOARD,AppRoute.MENU,AppRoute.AGENDA,AppRoute.PRESSING,AppRoute.WORK_ORDERS,AppRoute.CASH,AppRoute.SERVICES,AppRoute.CUSTOMERS,AppRoute.STOCK,AppRoute.REPORTS,AppRoute.PURCHASES,AppRoute.CHARGES,AppRoute.OBJECTIVES)){
+                                AccessDeniedContent(Modifier.fillMaxSize()){route=AppRoute.DASHBOARD.name}
                             } else {
                                 ErpScreen(
                                     route = AppRoute.valueOf(route),
@@ -615,6 +653,7 @@ private fun NaxaServicesRoot(
                                             rememberSession = false
                                             localPinUnlockedMemberId = null
                                             session = null
+                                            offlineRestored=false
                                             tourActive = false
                                             route = AppRoute.LOGIN.name
                                         }
@@ -702,6 +741,7 @@ private fun NaxaServicesRoot(
                                 onReauthenticated = { updated ->
                                     localPinUnlockedMemberId = null
                                     session = updated
+                                    offlineRestored=false
                                     if (rememberSession) vault.save(updated) else vault.clear()
                                     if (updated.requirePasswordChange) route = AppRoute.CHANGE_PASSWORD.name
                                 }
