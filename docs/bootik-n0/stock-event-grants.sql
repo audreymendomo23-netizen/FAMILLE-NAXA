@@ -32,3 +32,12 @@ do $$ declare t text;begin foreach t in array array['bk_registers','bk_cash_sess
 grant select,insert on bootik.bk_registers,bootik.bk_cash_sessions,bootik.bk_cash_checkouts,bootik.bk_cash_movements,bootik.bk_cash_operation_receipts to bootik_runtime;
 grant update(closed_at,closed_by,expected_close_fcfa,counted_close_fcfa,variance_reason) on bootik.bk_cash_sessions to bootik_runtime;
 grant execute on function bootik.bk_cash_action(uuid,uuid,uuid,uuid,text,jsonb) to bootik_runtime;
+
+create policy bk_runtime_access on bootik.bk_register_workstations for select to bootik_runtime using(true);
+create policy bk_security_access on bootik.bk_register_workstations to bootik_security_runtime using(true) with check(true);
+create policy bk_security_access on bootik.bk_registers for select to bootik_security_runtime using(true);
+grant select on bootik.bk_register_workstations to bootik_runtime;
+grant select,insert on bootik.bk_register_workstations to bootik_security_runtime;
+grant select on bootik.bk_registers to bootik_security_runtime;
+grant execute on function bootik.bk_resource_allowed(uuid,uuid,uuid,uuid,text,uuid),bootik.bk_resource_activity_access(uuid,uuid,uuid,uuid,uuid),bootik.bk_resource_catalog(uuid,uuid,uuid,uuid,uuid,uuid),bootik.bk_resource_gate(uuid,uuid,uuid,uuid,text,jsonb) to bootik_runtime;
+grant execute on function bootik.bk_resource_admin(uuid,uuid,uuid,uuid,uuid,jsonb) to bootik_security_runtime;

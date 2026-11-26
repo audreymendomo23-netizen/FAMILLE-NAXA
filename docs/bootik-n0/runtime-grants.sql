@@ -93,3 +93,10 @@ grant select on bootik.bk_member_profiles to bootik_runtime;
 
 grant update(offline_minutes) on bootik.bk_security_settings to bootik_security_runtime;
 grant execute on function bootik.bk_scope_stamp(uuid,uuid,uuid) to bootik_runtime;
+
+do $$ declare n text;begin foreach n in array array['bk_member_resource_rules','bk_workstations','bk_territories'] loop execute format('create policy bk_runtime_access on bootik.%I for select to bootik_runtime using(true)',n);execute format('create policy bk_security_access on bootik.%I to bootik_security_runtime using(true) with check(true)',n);end loop;end $$;
+grant select on bootik.bk_member_resource_rules,bootik.bk_workstations,bootik.bk_territories to bootik_runtime;
+grant select,insert on bootik.bk_member_resource_rules,bootik.bk_workstations,bootik.bk_territories to bootik_security_runtime;
+grant update(resource_kind,resources) on bootik.bk_member_resource_rules to bootik_security_runtime;
+create policy bk_security_access on bootik.bk_storage_locations for select to bootik_security_runtime using(true);
+grant select on bootik.bk_storage_locations to bootik_security_runtime;

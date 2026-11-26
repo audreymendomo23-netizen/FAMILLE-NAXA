@@ -20,6 +20,7 @@ begin
  if p_event is null or p_kind is null or p_kind not in ('receipt','loss','count','opening') or p_qty is null or p_qty<0 or p_qty>1000000000 or p_qty<>round(p_qty,6) or (p_kind<>'count' and p_qty=0) or p_version is null or length(p_version)>100 or p_reason is null or length(btrim(p_reason)) not between 3 and 500 then raise exception 'BOOTIK_STOCK_EVENT_INVALID';end if;
  if p_landed_cost is not null and (p_kind not in ('receipt','opening') or p_landed_cost<0 or p_landed_cost>9007199254740991) then raise exception 'BOOTIK_STOCK_EVENT_INVALID';end if;
  if not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,(select activity_id from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ if not bootik.bk_resource_allowed(p_org,p_app,p_actor,p_site,'storage',(select storage_location_id from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':stock:'||p_event::text,0));
  select * into old from bootik.bk_stock_event_receipts where organization_id=p_org and app_id=p_app and event_id=p_event;
  if found then
@@ -395,6 +396,12 @@ begin
  if req is null or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  select x.universe_code into u from bootik.bk_activities x join bootik.bk_activity_locations l on (l.activity_id,l.organization_id,l.app_id)=(x.id,x.organization_id,x.app_id) where x.id=a and x.organization_id=p_org and x.app_id=p_app and l.location_id=p_site and x.status='active';
  if not found or not bootik.bk_has_entitlement(p_org,p_app,u) then raise exception 'BOOTIK_ENTITLEMENT_REQUIRED';end if;
+ if p_kind='register' then
+  if exists(select 1 from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ else
+  if p_kind='open' then rid:=(p_data->>'register_id')::uuid;else select s.register_id into rid from bootik.bk_cash_sessions s join bootik.bk_registers r on r.id=s.register_id where s.id=(p_data->>'session_id')::uuid and r.organization_id=p_org and r.app_id=p_app and r.location_id=p_site and r.activity_id=a;end if;
+  if not bootik.bk_resource_allowed(p_org,p_app,p_actor,p_site,'register',rid) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':cash:'||req::text,0));
  select * into old from bootik.bk_cash_operation_receipts where id=req and organization_id=p_org and app_id=p_app;
  if found then
@@ -453,5 +460,102 @@ begin
  return answer;
 end $$;
 revoke all on function bootik.bk_cash_action(uuid,uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+
+-- Register/workstation/stock scopes are explicit intersections; a territory-only scope is closed until B05.
+create table bootik.bk_register_workstations(
+ register_id uuid primary key references bootik.bk_registers(id),workstation_id uuid not null references bootik.bk_workstations(id)
+);
+alter table bootik.bk_register_workstations enable row level security;alter table bootik.bk_register_workstations force row level security;revoke all on bootik.bk_register_workstations from public,anon,authenticated;
+create function bootik.bk_resource_allowed(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_kind text,p_id uuid)
+returns boolean language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
+declare rr bootik.bk_member_resource_rules%rowtype;
+begin
+ select * into rr from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site;
+ if not found then return true;end if;
+ if p_id is null then return false;end if;
+ if rr.resource_kind=p_kind then return rr.resources ? p_id::text;end if;
+ if rr.resource_kind='workstation' and p_kind='register' then return exists(select 1 from bootik.bk_register_workstations rw where rw.register_id=p_id and rr.resources ? rw.workstation_id::text);end if;
+ return false;
+end $$;
+create function bootik.bk_resource_activity_access(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid)
+returns boolean language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
+declare rr bootik.bk_member_resource_rules%rowtype;
+begin
+ select * into rr from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site;
+ if not found then return true;end if;
+ if rr.resource_kind='storage' then return exists(select 1 from bootik.bk_storage_locations l where l.organization_id=p_org and l.app_id=p_app and l.location_id=p_site and l.activity_id=p_activity and rr.resources ? l.id::text);end if;
+ if rr.resource_kind='register' then return exists(select 1 from bootik.bk_registers r where r.organization_id=p_org and r.app_id=p_app and r.location_id=p_site and r.activity_id=p_activity and rr.resources ? r.id::text);end if;
+ if rr.resource_kind='workstation' then return exists(select 1 from bootik.bk_workstations w where w.organization_id=p_org and w.app_id=p_app and w.location_id=p_site and w.activity_id=p_activity and rr.resources ? w.id::text);end if;
+ if rr.resource_kind='territory' then return exists(select 1 from bootik.bk_territories t where t.organization_id=p_org and t.app_id=p_app and t.location_id=p_site and t.activity_id=p_activity and rr.resources ? t.id::text);end if;
+ return false;
+end $$;
+create function bootik.bk_resource_catalog(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_storage uuid)
+returns boolean language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
+declare rr bootik.bk_member_resource_rules%rowtype;
+begin
+ select * into rr from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site;
+ if not found then return true;end if;
+ if rr.resource_kind='storage' then return p_storage is not null and rr.resources ? p_storage::text;end if;
+ if rr.resource_kind in ('register','workstation') then return bootik.bk_resource_activity_access(p_org,p_app,p_actor,p_site,p_activity);end if;
+ return false;
+end $$;
+create function bootik.bk_resource_gate(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_action text,p_data jsonb)
+returns boolean language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
+declare rr bootik.bk_member_resource_rules%rowtype;
+begin
+ select * into rr from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site;
+ if not found then return true;end if;
+ if p_action in ('entitlement','security-state','support','support-cancel','activities') or (p_action='admin-action' and p_data->>'kind'='session-revoke') then return true;end if;
+ if rr.resource_kind='storage' then return p_action in ('catalog','stock-health','sync-stock','count-batch');end if;
+ if rr.resource_kind in ('register','workstation') then return p_action in ('catalog','cash-state') or (p_action='cash-action' and p_data->>'kind' in ('open','checkout','movement','close'));end if;
+ return false;
+end $$;
+create function bootik.bk_resource_admin(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_req uuid,p_data jsonb)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare k text;target_user uuid;rid uuid;a uuid;w uuid;kind text;ids jsonb;why text;old bootik.bk_admin_receipts%rowtype;previous jsonb;answer jsonb;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
+ if not exists(select 1 from bootik.bk_members m join bootik.bk_member_sites ms using(organization_id,app_id,user_id) where m.organization_id=p_org and m.app_id=p_app and m.user_id=p_actor and m.role='promoteur' and ms.location_id=p_site and not ms.activity_restricted) or exists(select 1 from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ k:=p_data->>'kind';why:=btrim(coalesce(p_data->>'reason',''));
+ if p_req is null or k not in ('workstation','territory','link-register','assign') or length(why) not between 3 and 500 then raise exception 'BOOTIK_RESOURCE_INVALID';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':resource:'||p_req::text,0));
+ select * into old from bootik.bk_admin_receipts where id=p_req and organization_id=p_org and app_id=p_app;
+ if found then
+  if (old.actor,old.site_id,old.payload) is distinct from (p_actor,p_site,p_data) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;return old.result;
+ end if;
+ if k in ('workstation','territory') then
+  a:=(p_data->>'activity_id')::uuid;
+  if not exists(select 1 from bootik.bk_activity_locations where organization_id=p_org and app_id=p_app and location_id=p_site and activity_id=a) or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+  if coalesce(p_data->>'code','') !~ '^[A-Z0-9][A-Z0-9_-]{1,19}$' or length(btrim(coalesce(p_data->>'label',''))) not between 2 and 120 then raise exception 'BOOTIK_RESOURCE_INVALID';end if;
+  if k='workstation' then insert into bootik.bk_workstations values(p_req,p_org,p_app,a,p_site,p_data->>'code',btrim(p_data->>'label'));else insert into bootik.bk_territories values(p_req,p_org,p_app,a,p_site,p_data->>'code',btrim(p_data->>'label'));end if;
+  answer:=jsonb_build_object('resource_id',p_req);
+ elsif k='link-register' then
+  rid:=(p_data->>'register_id')::uuid;w:=(p_data->>'workstation_id')::uuid;
+  if not exists(select 1 from bootik.bk_registers r join bootik.bk_workstations ws on (ws.organization_id,ws.app_id,ws.activity_id,ws.location_id)=(r.organization_id,r.app_id,r.activity_id,r.location_id) where r.id=rid and ws.id=w and r.organization_id=p_org and r.app_id=p_app and r.location_id=p_site) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+  if exists(select 1 from bootik.bk_register_workstations where register_id=rid) then raise exception 'BOOTIK_REGISTER_ALREADY_LINKED';end if;
+  insert into bootik.bk_register_workstations values(rid,w);
+  answer:=jsonb_build_object('register_id',rid,'workstation_id',w);
+ else
+  target_user:=(p_data->>'member_id')::uuid;kind:=p_data->>'resource_kind';ids:=p_data->'resources';
+  if kind not in ('register','workstation','storage','territory') or jsonb_typeof(ids) is distinct from 'array' or jsonb_array_length(ids)>50 then raise exception 'BOOTIK_RESOURCE_INVALID';end if;
+  if not exists(select 1 from bootik.bk_members m join bootik.bk_member_sites ms using(organization_id,app_id,user_id) where m.organization_id=p_org and m.app_id=p_app and m.user_id=target_user and m.active and m.role<>'promoteur' and ms.location_id=p_site) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+  for rid in select value::uuid from jsonb_array_elements_text(ids) loop
+   a:=null;
+   if kind='register' then select activity_id into a from bootik.bk_registers where id=rid and organization_id=p_org and app_id=p_app and location_id=p_site;
+   elsif kind='storage' then select activity_id into a from bootik.bk_storage_locations where id=rid and organization_id=p_org and app_id=p_app and location_id=p_site;
+   elsif kind='workstation' then select activity_id into a from bootik.bk_workstations where id=rid and organization_id=p_org and app_id=p_app and location_id=p_site;
+   else select activity_id into a from bootik.bk_territories where id=rid and organization_id=p_org and app_id=p_app and location_id=p_site;end if;
+   if a is null or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) or not bootik.bk_can_access_activity(p_org,p_app,target_user,p_site,a) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+  end loop;
+  select jsonb_build_object('kind',resource_kind,'resources',resources) into previous from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=target_user and location_id=p_site;
+  insert into bootik.bk_member_resource_rules(organization_id,app_id,user_id,location_id,resource_kind,resources) values(p_org,p_app,target_user,p_site,kind,ids) on conflict(organization_id,app_id,user_id,location_id) do update set resource_kind=excluded.resource_kind,resources=excluded.resources;
+  update bootik.bk_sessions set revoked_at=coalesce(revoked_at,clock_timestamp()) where organization_id=p_org and app_id=p_app and user_id=target_user;
+  answer:=jsonb_build_object('member_id',target_user,'kind',kind,'resources',ids);
+ end if;
+ insert into bootik.bk_admin_receipts(id,organization_id,app_id,actor,site_id,payload,result) values(p_req,p_org,p_app,p_actor,p_site,p_data,answer);
+ insert into bootik.bk_security_audit(organization_id,app_id,actor,site_id,action,target,details) values(p_org,p_app,p_actor,p_site,'resource-'||k,coalesce(target_user,rid,p_req),jsonb_build_object('before',previous,'after',answer,'reason',why));
+ return answer;
+end $$;
+revoke all on function bootik.bk_resource_allowed(uuid,uuid,uuid,uuid,text,uuid),bootik.bk_resource_activity_access(uuid,uuid,uuid,uuid,uuid),bootik.bk_resource_catalog(uuid,uuid,uuid,uuid,uuid,uuid),bootik.bk_resource_gate(uuid,uuid,uuid,uuid,text,jsonb),bootik.bk_resource_admin(uuid,uuid,uuid,uuid,uuid,jsonb) from public,anon,authenticated;
 
 commit;
