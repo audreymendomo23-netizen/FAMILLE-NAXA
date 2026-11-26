@@ -24,7 +24,7 @@ select public.wm_issue_device_session('10000000-0000-4000-8000-000000000011','30
 select public.wm_issue_device_session('10000000-0000-4000-8000-000000000012','30000000-0000-4000-8000-000000000012','20000000-0000-4000-8000-000000000011',repeat('b',64));
 select public.wm_issue_device_session('10000000-0000-4000-8000-000000000013','30000000-0000-4000-8000-000000000013','20000000-0000-4000-8000-000000000012',repeat('c',64));
 do $wm$
-declare r uuid:='40000000-0000-4000-8000-000000000011'; s jsonb; n jsonb;
+declare r uuid:='40000000-0000-4000-8000-000000000011'; s jsonb; n jsonb; x jsonb; y jsonb; q uuid;
 begin
  s:=jsonb_build_object('id',r::text,'workspaceId','20000000-0000-4000-8000-000000000011','hostId','10000000-0000-4000-8000-000000000011','status','scheduled','revision',1,'hardEndMs',floor(extract(epoch from now()+interval '1 hour')*1000)::bigint,'recording','off','participants',jsonb_build_array(jsonb_build_object('memberId','10000000-0000-4000-8000-000000000011','response','accepted','excluded',false),jsonb_build_object('memberId','10000000-0000-4000-8000-000000000012','response','pending','excluded',false)));
  if public.wm_room_create(repeat('b',64),s) then raise exception 'staff created room';end if;
@@ -36,11 +36,30 @@ begin
  if public.wm_room_read(repeat('c',64),r) is not null then raise exception 'cross tenant leak';end if;
  if (select count(*) from public.wm_room_list(repeat('a',64)))<>1 or (select count(*) from public.wm_room_list(repeat('c',64)))<>0 then raise exception 'agenda leak';end if;
  if (select count(*) from public.wm_room_contacts(repeat('a',64)))<>1 or (select count(*) from public.wm_room_contacts(repeat('c',64)))<>0 then raise exception 'contacts leak';end if;
- n:=jsonb_set(jsonb_set(s,'{revision}','2'::jsonb),'{status}','"open"'::jsonb);
+ n:=jsonb_set(jsonb_set(jsonb_set(s,'{revision}','2'::jsonb),'{status}','"open"'::jsonb),'{endMs}',to_jsonb(floor(extract(epoch from now()+interval '30 minutes')*1000)::bigint));
  if public.wm_room_write(repeat('c',64),r,1,'promoteur','premium',n) then raise exception 'foreign write';end if;
  if public.wm_room_write(repeat('a',64),r,1,'manager','premium',n) then raise exception 'stale role accepted';end if;
  if not public.wm_room_write(repeat('a',64),r,1,'promoteur','premium',n) then raise exception 'CAS failed';end if;
  if public.wm_room_write(repeat('a',64),r,1,'promoteur','premium',n) then raise exception 'stale version accepted';end if;
+ update public.wm_room_entitlements set plan='access' where workspace_id='20000000-0000-4000-8000-000000000011';
+ -- Access quota: a second room may be scheduled but cannot become active until first ends.
+ q:='40000000-0000-4000-8000-000000000012';
+ x:=jsonb_set(s,'{id}',to_jsonb(q::text));
+ if not public.wm_room_create(repeat('a',64),x) then raise exception 'second scheduled room failed';end if;
+ y:=jsonb_set(n,'{id}',to_jsonb(q::text));
+ if public.wm_room_write(repeat('a',64),q,1,'promoteur','access',y) then raise exception 'access quota bypass';end if;
+ -- Premium admits two additional rooms, not a fourth; paused still consumes capacity.
+ update public.wm_room_entitlements set plan='premium' where workspace_id='20000000-0000-4000-8000-000000000011';
+ if not public.wm_room_write(repeat('a',64),q,1,'promoteur','premium',y) then raise exception 'premium second room refused';end if;
+ for i in 3..4 loop
+  q:=('40000000-0000-4000-8000-00000000001'||i)::uuid;
+  x:=jsonb_set(s,'{id}',to_jsonb(q::text));y:=jsonb_set(n,'{id}',to_jsonb(q::text));
+  if not public.wm_room_create(repeat('a',64),x) then raise exception 'additional scheduled room failed';end if;
+  if i=3 then
+   y:=jsonb_set(y,'{status}','"paused"'::jsonb);
+   if not public.wm_room_write(repeat('a',64),q,1,'promoteur','premium',y) then raise exception 'premium third room refused';end if;
+  elsif public.wm_room_write(repeat('a',64),q,1,'promoteur','premium',y) then raise exception 'premium quota bypass';end if;
+ end loop;
  update public.wm_room_entitlements set plan='access' where workspace_id='20000000-0000-4000-8000-000000000011';
  n:=jsonb_set(jsonb_set(n,'{revision}','3'::jsonb),'{recording}','"requested"'::jsonb);
  if public.wm_room_write(repeat('a',64),r,2,'promoteur','premium',n) or public.wm_room_write(repeat('a',64),r,2,'promoteur','access',n) then raise exception 'record after downgrade';end if;
