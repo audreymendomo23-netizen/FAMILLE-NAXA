@@ -297,7 +297,7 @@ test("Web: offline outbox survives tab closure, keeps tenant data isolated and c
   let page = await context.newPage();
   await signIn(page);
   await page.getByRole("button",{name:/Clients & fidélité/}).first().click();
-  await expect(page.getByText("Client distant Android").first()).toBeVisible();
+  await expect(page.locator(".module-layout .module-main-card").last().locator(".record").filter({ hasText: "Client distant Android" })).toBeVisible();
 
   await context.setOffline(true);
   await createCustomer(page, "Client privé organisation A");
@@ -689,7 +689,7 @@ test("Web CRM: create a follow-up, reschedule it with a confirmed completion and
   await expect.poll(()=>events.length).toBe(4);
   expect(events[3].aggregate_id).toBe(followupId);
   expect((events[3].payload as Record<string,unknown>).next_due_at_if_repeating).toBeNull();
-  await expect(record.locator(".status-tag")).toHaveText("completed");
+  await expect(record.locator(".status-tag")).toHaveText("Terminé");
   await expect(record).toContainText("Confirmé");
   await expect(record.getByRole("button",{name:"Clôturer le suivi"})).toHaveCount(0);
 });
@@ -832,14 +832,14 @@ test("Web stock: create item and supplier, movement, order, receipt then supplie
   await expect.poll(()=>events.length).toBe(2);
   expect(events[1].action_code).toBe("supplier.saved");
   const supplier=String(events[1].aggregate_id);
-  await page.getByLabel("Article",{exact:true}).selectOption(item);
+  await page.getByRole("combobox",{name:"Article",exact:true}).selectOption(item);
   await page.getByLabel("Quantité",{exact:true}).fill("10");
   await page.getByLabel("Motif",{exact:true}).fill("Stock initial");
   await page.getByRole("button",{name:"Enregistrer le mouvement",exact:true}).click();
   await expect.poll(()=>events.length).toBe(3);
   expect(events[2].action_code).toBe("inventory_movement.created");
-  await page.getByLabel("Fournisseur",{exact:true}).selectOption(supplier);
-  await page.getByLabel("Article commandé").selectOption(item);
+  await page.getByRole("combobox",{name:"Fournisseur",exact:true}).selectOption(supplier);
+  await page.getByRole("combobox",{name:"Article commandé",exact:true}).selectOption(item);
   await page.getByLabel("Référence de commande").fill("CMD-RECETTE-01");
   await page.getByLabel("Quantité commandée").fill("5");
   await page.getByLabel("Coût unitaire (FCFA)").fill("1000");
@@ -847,7 +847,7 @@ test("Web stock: create item and supplier, movement, order, receipt then supplie
   await expect.poll(()=>events.length).toBe(4);
   expect(events[3].action_code).toBe("purchase.ordered");
   const order=String(events[3].aggregate_id);
-  await page.getByLabel("Commande à réceptionner").selectOption(order);
+  await page.getByRole("combobox",{name:"Commande à réceptionner",exact:true}).selectOption(order);
   const pay=page.getByRole("button",{name:"Enregistrer un règlement bancaire"});
   await expect(pay).toBeDisabled();
   await page.getByLabel("Quantité reçue").fill("5");
