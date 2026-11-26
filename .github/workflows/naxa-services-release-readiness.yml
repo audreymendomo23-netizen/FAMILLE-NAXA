@@ -1,0 +1,47 @@
+name: NAXA SERVICES — release configuration readiness
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "work/naxa-services-completion-20261120"
+    paths:
+      - ".github/workflows/naxa-services-release-readiness.yml"
+      - ".github/workflows/naxa-services-release.yml"
+permissions:
+  contents: read
+jobs:
+  release-readiness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Check required signing credentials and app config without printing values
+        env:
+          NS_PROJECT_REF: "idupfjbkwjcavyisxteo"
+          NS_ANON_KEY: ${{ secrets.NAXA_SERVICES_SUPABASE_ANON_KEY }}
+          NS_FIREBASE_API_KEY: ${{ vars.NAXA_SERVICES_FIREBASE_API_KEY }}
+          NS_FIREBASE_APP_ID: "1:203144467053:android:35b6db66aa6a85bce1e564"
+          NS_FIREBASE_PROJECT_ID: "naxa-services"
+          NS_FIREBASE_SENDER_ID: "203144467053"
+          NAXA_SERVICES_RELEASE_KEYSTORE_BASE64: ${{ secrets.NAXA_SERVICES_RELEASE_KEYSTORE_BASE64 }}
+          NAXA_SERVICES_RELEASE_STORE_PASSWORD: ${{ secrets.NAXA_SERVICES_RELEASE_STORE_PASSWORD }}
+          NAXA_SERVICES_RELEASE_KEY_ALIAS: ${{ secrets.NAXA_SERVICES_RELEASE_KEY_ALIAS }}
+          NAXA_SERVICES_RELEASE_KEY_PASSWORD: ${{ secrets.NAXA_SERVICES_RELEASE_KEY_PASSWORD }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { validateReleaseConfig } from './scripts/naxa-services/release-config.mjs';
+          import { appendFileSync } from 'node:fs';
+          const required = ['NS_ANON_KEY','NS_FIREBASE_API_KEY','NAXA_SERVICES_RELEASE_KEYSTORE_BASE64','NAXA_SERVICES_RELEASE_STORE_PASSWORD','NAXA_SERVICES_RELEASE_KEY_ALIAS','NAXA_SERVICES_RELEASE_KEY_PASSWORD'];
+          let failed = false;
+          for (const name of required) {
+            const present = !!process.env[name]?.trim();
+            console.log(name + ': ' + (present ? 'PRESENT' : 'MISSING'));
+            appendFileSync(process.env.GITHUB_STEP_SUMMARY, '- ' + name + ': ' + (present ? 'PRESENT' : 'MISSING') + '\n');
+            if (!present) failed = true;
+          }
+          try { validateReleaseConfig(process.env); console.log('Public application configuration: VALID'); }
+          catch { console.log('Public application configuration: INVALID OR INCOMPLETE'); failed = true; }
+          if (failed) process.exitCode = 1;
+          NODE
