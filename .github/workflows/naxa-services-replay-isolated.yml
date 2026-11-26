@@ -17,6 +17,8 @@ on:
       - 'supabase/tests/drafts/naxa_services_meeting_media_grant.sql'
       - 'supabase/drafts/naxa_services_v13_meeting_collaboration.sql'
       - 'supabase/tests/drafts/naxa_services_meeting_collaboration.sql'
+      - 'supabase/drafts/naxa_services_v14_recording_request.sql'
+      - 'supabase/tests/drafts/naxa_services_recording_request.sql'
 permissions:
   contents: read
 concurrency:
@@ -124,6 +126,14 @@ jobs:
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_meeting_collaboration.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regclass('public.ns_meeting_chat') is null and to_regclass('public.ns_meeting_moderation') is null" | grep -Fx t
+      - name: Qualify recording request lifecycle with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_recording_request.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regclass('public.ns_meeting_recording_requests') is null" | grep -Fx t
       - name: Build commercial Web and install Chromium for real Replay
         shell: bash
         run: |

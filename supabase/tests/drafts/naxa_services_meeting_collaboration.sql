@@ -645,12 +645,16 @@ end $qa$;
 reset role;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000092',true); select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000092","session_id":"qa-92-session","role":"authenticated"}',true);
 set local role authenticated;
-do $qa$ begin
+do $qa$ declare n integer; begin
  perform public.ns_meeting_action('70000000-0000-4000-8000-000000000107',null,'raise_hand');
  perform public.ns_meeting_action('70000000-0000-4000-8000-000000000107','70000000-0000-4000-8000-000000000108','chat','Hello');
  perform public.ns_meeting_action('70000000-0000-4000-8000-000000000107','70000000-0000-4000-8000-000000000108','chat','Hello');
  perform public.ns_meeting_action('70000000-0000-4000-8000-000000000107','70000000-0000-4000-8000-000000000109','reaction','clap');
  if (select count(*) from public.ns_meeting_chat where meeting_id='70000000-0000-4000-8000-000000000107')<>1 then raise exception 'QA CHAT IDEMPOTENCE';end if;
+ for n in 1..4 loop perform public.ns_meeting_action('70000000-0000-4000-8000-000000000107',('70000000-0000-4000-8000-00000000013'||n)::uuid,'chat','Rate fixture '||n);end loop;
+ begin perform public.ns_meeting_action('70000000-0000-4000-8000-000000000107','70000000-0000-4000-8000-000000000139','chat','Rate limit');raise exception 'QA RATE NOT ENFORCED';exception when others then if sqlerrm not like '%NS_MEETING_RATE_LIMIT%' then raise;end if;end;
+ begin perform public.ns_meeting_action('70000000-0000-4000-8000-000000000107','70000000-0000-4000-8000-000000000140','reaction','invalid');raise exception 'QA INVALID REACTION';exception when others then if sqlerrm not like '%NS_MEETING_REACTION_INVALID%' then raise;end if;end;
+
  if not exists(select 1 from public.ns_meeting_participants('70000000-0000-4000-8000-000000000107') where member_id='60000000-0000-4000-8000-000000000092' and hand_raised_at is not null) then raise exception 'QA HAND';end if;
  begin perform public.ns_moderate_meeting('70000000-0000-4000-8000-000000000107','70000000-0000-4000-8000-000000000110','60000000-0000-4000-8000-000000000092','allow_screen');raise exception 'QA STAFF MODERATION';exception when others then if sqlerrm not like '%NS_MEETING_MODERATION_FORBIDDEN%' then raise;end if;end;
  begin insert into public.ns_meeting_chat values('70000000-0000-4000-8000-000000000111','70000000-0000-4000-8000-000000000107','60000000-0000-4000-8000-000000000092','direct',now());raise exception 'QA DIRECT WRITE';exception when insufficient_privilege then null;end;
