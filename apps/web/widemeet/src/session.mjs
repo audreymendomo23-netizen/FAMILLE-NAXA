@@ -56,3 +56,9 @@ export async function switchWorkspace(base,session,workspaceId,fetcher=fetch){
  if(next.member_id!==session.member_id||next.active_workspace_id!==workspaceId||next.expires_at>session.expires_at)throw Error("INVALID_SCOPE");
  return next;
 }
+
+export async function requestRecovery(base,identifier,fetcher=fetch,device=installationId){
+ if(typeof identifier!=="string"||!/^WM-[A-Z0-9]{8,24}$/.test(identifier.trim().toUpperCase()))throw Error("INVALID_IDENTIFIER");
+ const res=await fetcher(endpoint(base,"request-recovery"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:"WIDEMEET",identifier:identifier.trim().toUpperCase(),installation_id:device(),platform:"web"}),cache:"no-store",redirect:"error",credentials:"omit"});
+ if(!res.ok)throw Error("RECOVERY_REJECTED");const payload=await res.json();if(payload?.accepted!==true)throw Error("RECOVERY_UNCONFIRMED");return true;
+}
