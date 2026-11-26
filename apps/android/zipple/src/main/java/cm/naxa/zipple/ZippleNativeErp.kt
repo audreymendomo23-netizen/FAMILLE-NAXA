@@ -41,7 +41,7 @@ private class RequestKeys{
 }
 @Composable fun ZippleNativeErp(api:ZippleBusiness,session:Session,site:String,en:Boolean,screen:String){
  val tr:(String,String)->String={fr,eng->if(en)eng else fr}
- val scope=rememberCoroutineScope();val keys=remember{RequestKeys()}
+ val scope=rememberCoroutineScope();val keys=remember{RequestKeys()};val context=LocalContext.current.applicationContext
  var data by remember{mutableStateOf<JSONObject?>(null)}
  var busy by remember{mutableStateOf(false)};var message by remember{mutableStateOf("")}
  var tab by remember{mutableStateOf("ingredients")}
@@ -52,6 +52,7 @@ private class RequestKeys{
  val canWrite=session.role in setOf("promoteur","manager")&&!busy&&session.permits(site)
  suspend fun call(action:String,body:JSONObject=JSONObject())=api.call(session,site,action,body)
  suspend fun write(action:String,body:JSONObject){call(action,keys.apply(action,body));keys.confirmed(action)}
+ suspend fun queue(action:String,body:JSONObject){require(session.permits(site)&&ZippleSyncSession.current===session&&session.role in setOf("promoteur","manager"));val dao=OfflineQueueDb.get(context).events();require(dao.blocked(session.organization,session.member,site)==0);val now=System.currentTimeMillis();dao.enqueue(OfflineEvent(eventId=UUID.randomUUID().toString(),organizationId=session.organization,memberId=session.member,siteId=site,aggregateType="erp_"+action,payloadJson=body.toString(),deviceSequence=now,createdAtEpochMs=now));ZippleSyncSession.schedule(context);message=tr("Opération en attente de validation serveur","Operation awaiting server confirmation")}
  suspend fun load(){data=call(if(screen=="crm")"crm_snapshot" else "erp_snapshot") as? JSONObject}
  fun run(block:suspend ()->Unit){if(busy||!session.permits(site))return;busy=true;message="";scope.launch{try{block()}catch(c:CancellationException){throw c}catch(_:Exception){message=tr("Opération non confirmée","Operation unconfirmed")}finally{busy=false}}}
  LaunchedEffect(screen){try{load()}catch(c:CancellationException){throw c}catch(_:Exception){message=tr("Données indisponibles","Data unavailable")}}
@@ -112,6 +113,9 @@ private class RequestKeys{
     Button(enabled=canWrite&&selected.isNotBlank()&&lot.isNotBlank()&&supplier.isNotBlank()&&(ZippleErpNumbers.milli(quantity)?:0)>0&&ZippleErpNumbers.integer(cost)!=null&&(expiry.isBlank()||runCatching{LocalDate.parse(expiry)}.isSuccess),onClick={run{
      write("lot_receive",JSONObject().put("ingredient_id",selected).put("label",lot.trim()).put("supplier",supplier.trim()).put("qty_milli",ZippleErpNumbers.milli(quantity)).put("cost_xaf",ZippleErpNumbers.integer(cost)).put("expires_on",if(expiry.isBlank())JSONObject.NULL else expiry));lot="";quantity="";cost="";load()
     }}){Text(tr("Enregistrer la réception","Record receipt"))}
+    OutlinedButton(enabled=canWrite&&selected.isNotBlank()&&lot.isNotBlank()&&supplier.isNotBlank()&&(ZippleErpNumbers.milli(quantity)?:0)>0&&ZippleErpNumbers.integer(cost)!=null&&(expiry.isBlank()||runCatching{LocalDate.parse(expiry)}.isSuccess),onClick={run{
+     queue("lot_receive",JSONObject().put("ingredient_id",selected).put("label",lot.trim()).put("supplier",supplier.trim()).put("qty_milli",ZippleErpNumbers.milli(quantity)).put("cost_xaf",ZippleErpNumbers.integer(cost)).put("expires_on",if(expiry.isBlank())JSONObject.NULL else expiry));lot="";quantity="";cost=""
+    }}){Text(tr("Mettre la réception en attente","Queue receipt"))}
     data?.rows("lots")?.forEach{Text(it.optString("lot_label")+" · "+BigDecimal.valueOf(it.optLong("remaining_milli"),3).stripTrailingZeros().toPlainString())}
    }
    "production"->{ZippleNativeProduction(api,session,site,en)}
@@ -125,6 +129,9 @@ private class RequestKeys{
     Button(enabled=canWrite&&title.isNotBlank()&&reference.trim().length>=4&&(ZippleErpNumbers.integer(cost)?:0)>0&&runCatching{LocalDate.parse(date)}.isSuccess,onClick={run{
      write("expense_record",JSONObject().put("label",title.trim()).put("category",category).put("method",method).put("amount_xaf",ZippleErpNumbers.integer(cost)).put("reference",reference.trim()).put("expense_date",date));title="";cost="";reference="";load()
     }}){Text(tr("Enregistrer la dépense","Record expense"))}
+    OutlinedButton(enabled=canWrite&&title.isNotBlank()&&reference.trim().length>=4&&(ZippleErpNumbers.integer(cost)?:0)>0&&runCatching{LocalDate.parse(date)}.isSuccess,onClick={run{
+     queue("expense_record",JSONObject().put("label",title.trim()).put("category",category).put("method",method).put("amount_xaf",ZippleErpNumbers.integer(cost)).put("reference",reference.trim()).put("expense_date",date));title="";cost="";reference=""
+    }}){Text(tr("Mettre la dépense en attente","Queue expense"))}
     data?.rows("expenses")?.forEach{Text(it.optString("label")+" · "+it.optLong("amount_xaf")+" FCFA")}
    }
   }

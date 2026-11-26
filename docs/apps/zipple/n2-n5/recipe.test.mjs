@@ -582,6 +582,17 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal(weightState.sold_g,300);assert.equal(weightState.remaining_g,400);
  assert.equal(Number(await scalar("select cost_xaf from zp_sale_costs where receipt_id=$1 and item_id=$2",[weightedReceipt,weightedItem]))+Number(await scalar("select remaining_cost_xaf from zp_production_batches where id=$1",[weightedBatch.id])),2000);
  console.log("ZIPPLE_BULK3_WEIGHTED_BRAISING_AND_SALE_PASS");
+ const offlineLotKey=uid(),offlineLotPayload={ingredient_id:weightedIng,label:"OFFLINE-LOT",supplier:"Fournisseur",qty_milli:500,cost_xaf:1000,expires_on:null};
+ const syncMore=(key,action,payload)=>scalar("select zp_offline_erp_apply($1,$2,$3,$4,$5,$6,$7)",[a.access,a.site,a.org,a.member,key,action,JSON.stringify(payload)]);
+ const offlineNewLot=await syncMore(offlineLotKey,"lot_receive",offlineLotPayload);assert.equal(offlineNewLot.state,"acknowledged");assert.deepEqual(await syncMore(offlineLotKey,"lot_receive",offlineLotPayload),offlineNewLot);
+ const offlineNewLotId=offlineNewLot.outcome.id;
+ const offlineCountKey=uid(),offlineCountPayload={lot_id:offlineNewLotId,expected_milli:500,counted_milli:400,reason:"Comptage terrain"};
+ const offlineCountReceipt=await syncMore(offlineCountKey,"count_lot",offlineCountPayload);assert.equal(offlineCountReceipt.state,"acknowledged");assert.deepEqual(await syncMore(offlineCountKey,"count_lot",offlineCountPayload),offlineCountReceipt);
+ assert.equal((await syncMore(uid(),"count_lot",offlineCountPayload)).state,"conflict");
+ const offlineExpenseKey=uid(),offlineExpensePayload={category:"rent",label:"Dépense hors ligne",method:"bank",amount_xaf:500,reference:"OFFLINE-REF",expense_date:statementDay};
+ const offlineExpenseReceipt=await syncMore(offlineExpenseKey,"expense_record",offlineExpensePayload);assert.equal(offlineExpenseReceipt.state,"acknowledged");assert.deepEqual(await syncMore(offlineExpenseKey,"expense_record",offlineExpensePayload),offlineExpenseReceipt);
+ assert.equal(Number(await scalar("select count(*) from zp_expenses where request_id=$1",[offlineExpenseKey])),1);
+ console.log("ZIPPLE_BULK3_OFFLINE_RECEIPT_COUNT_EXPENSE_PASS");
  const issueEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='issued'",[account]);
  const returnEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='returned'",[account]);
  const lostEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='lost'",[account]);
