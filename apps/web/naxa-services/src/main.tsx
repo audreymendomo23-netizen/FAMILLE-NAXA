@@ -14,6 +14,7 @@ import { parseWebSession, type WebAuthSession } from "./auth/session";
 import { ProfilePhoto } from "./auth/profile-photo";
 import { StaffRoster, rosterModeEnabled } from "./erp/staff-roster";
 import { DailyBriefing } from "./erp/daily-briefing";
+import { InternalMeetings } from "./erp/internal-meetings";
 import { BusinessBackdrop, NightTorch } from "./business-visuals";
 import { localeOf, translate, LocaleContext, useTranslation, type Locale } from "./locale";
 import { createRoot } from "react-dom/client";
@@ -180,6 +181,7 @@ function App() {
       VITE_SUPABASE_ANON_KEY?: string;
       VITE_NAXA_SERVICES_ROSTER_ENABLED?: string;
       VITE_NAXA_SERVICES_BRIEFING_ENABLED?: string;
+      VITE_NAXA_SERVICES_MEETINGS_ENABLED?: string;
     };
   }).env ?? {};
   const authEndpoint = env.VITE_NAXA_SERVICES_AUTH_URL ?? "";
@@ -1204,7 +1206,7 @@ function App() {
             </div>
           </div>
 
-          {active === "overview" ? <><Overview entries={entries} onNavigate={setActive} mode={mode} activity={authSession?.account.activity_profile} locale={locale} />{env.VITE_NAXA_SERVICES_BRIEFING_ENABLED==="true"&&authSession&&!preview&&!authSession.requirePasswordChange&&<DailyBriefing key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+(activeSiteId||authSession.account.active_site_ids[0])} account={authSession.account} siteId={activeSiteId||authSession.account.active_site_ids[0]||""} authEndpoint={authEndpoint} anonKey={anonKey} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("SESSION_CHANGED");return fresh.accessToken;}}/>}</> :
+          {active === "overview" ? <><Overview entries={entries} onNavigate={setActive} mode={mode} activity={authSession?.account.activity_profile} locale={locale} />{env.VITE_NAXA_SERVICES_BRIEFING_ENABLED==="true"&&authSession&&!preview&&!authSession.requirePasswordChange&&<DailyBriefing key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+(activeSiteId||authSession.account.active_site_ids[0])} account={authSession.account} siteId={activeSiteId||authSession.account.active_site_ids[0]||""} authEndpoint={authEndpoint} anonKey={anonKey} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("SESSION_CHANGED");return fresh.accessToken;}}/>}{env.VITE_NAXA_SERVICES_MEETINGS_ENABLED==="true"&&authSession&&!preview&&!authSession.requirePasswordChange&&rosterModeEnabled(authSession.account.business_mode)&&<InternalMeetings key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+(activeSiteId||authSession.account.active_site_ids[0])} account={authSession.account} siteId={activeSiteId||authSession.account.active_site_ids[0]||""} authEndpoint={authEndpoint} anonKey={anonKey} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("SESSION_CHANGED");return fresh.accessToken;}}/>}</> :
             active === "organization" ? <><OrganizationPage mode={mode} setMode={setMode} siteName={siteName} setSiteName={setSiteName} editable={preview || authSession?.account.role_code === "promoter"} onSave={saveWebOrganizationProfile} locale={authSession?.account.default_locale ?? "fr"} /><SubscriptionPage key={authSession?.account.organization_id+":"+authSession?.account.member_id+":"+authSession?.deviceId} canRead={Boolean(authSession&&!preview)} requiresPremium={Boolean(authSession&&authSession.account.business_mode!=="solo")} enabled={Boolean(authSession&&!preview&&authSession.account.role_code==="promoter")} request={requestSubscription}/></> :
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :

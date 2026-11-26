@@ -2537,6 +2537,7 @@ private fun DashboardContent(
             }
         }
         if (BuildConfig.BRIEFING_ENABLED) { item { DailyBriefingCard(session, siteId) } }
+        if (BuildConfig.MEETINGS_ENABLED && rosterAvailable(session.account.businessMode)) { item { InternalMeetingsCard(session, siteId) } }
         if (BuildConfig.ROSTER_ENABLED && rosterAvailable(session.account.businessMode)) {
             item { StaffRosterCard(session, siteId) }
         }
