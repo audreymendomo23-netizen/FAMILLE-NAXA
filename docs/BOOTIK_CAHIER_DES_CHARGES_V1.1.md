@@ -916,17 +916,20 @@ Rapports PDF/Excel : ventes, clients, tournée, picking, stock, lots, inventaire
 
 Aucun palier Pro générique. Tous les modules fondamentaux sont présents en ACCÈS ; PREMIUM ajoute l'échelle, les capacités multiniveaux et le pilotage avancé.
 
-### 23.2 Durées anticipées
+### 23.2 Périodicités exclusives [V — 26 novembre 2026]
 
-- 3 mois : total de trois mensualités diminué de 10 %, arrondi à la centaine inférieure.
-- 6 mois : prix de cinq mensualités pour six mois d'accès.
-- 12 mois : prix de dix mensualités pour douze mois d'accès.
+Uniquement mensuel (1 mois) et annuel (12 mois). Annuel : 12 mois au prix de 10, soit deux mensualités offertes (16,67 % de ristourne). Les offres 3 et 6 mois sont supprimées et doivent être refusées côté serveur, Android, Web et PWA.
 
-Les calculs dérivés sont documentés dans le document de continuité. Le moteur Billing commun est la source de vérité.
+| Univers | ACCÈS annuel | PREMIUM annuel |
+|---|---:|---:|
+| Détaillants | 40 000 FCFA | 100 000 FCFA |
+| Distributeurs | 100 000 FCFA | 250 000 FCFA |
+
+Le moteur partagé peut être utilisé uniquement derrière une politique BOOTIK restrictive ; aucune modification des autres produits.
 
 ### 23.3 Essai, paiement et droits
 
-- Essai de 72 heures par organisation, démarré côté serveur et non réinitialisable par réinstallation.
+- 72 heures d'utilisation gratuite par organisation, à compter de l'activation initiale côté serveur, sans paiement préalable, non réinitialisables par réinstallation. Accès aux fonctions de la formule choisie durant l'essai ; à expiration, aucun droit payant sans paiement confirmé. Conservation des données.
 - Parcours : création dossier → choix univers/formule → essai ou paiement → vérification canonique → attribution d'entitlements → reçu et période active → rappels.
 - L'identifiant de transaction seul ne vaut pas paiement.
 - Paiements idempotents, webhooks vérifiés, rapprochement et gestion des états pending/success/failed/refunded.
@@ -1082,7 +1085,7 @@ La recette doit être réalisée par lots et au niveau transversal. Chaque test 
 ### 26.6 Abonnement
 
 - essai 72h unique et non réinitialisable ;
-- montants des 4 formules et calculs 3/6/12 mois ;
+- montants des quatre offres mensuelles/annuelles, ristourne de deux mensualités et refus des durées 3/6 mois ;
 - paiement pending ne donne pas les droits success ;
 - webhook dupliqué n'active pas deux fois ;
 - remboursement/révocation et historique ;

@@ -61,33 +61,33 @@ Huit profils sont retenus :
 
 Un distributeur peut exercer plusieurs activités, mais chaque activité garde son catalogue, ses lots, unités, règles de stockage, autorisations documentaires, tarifs, marges et indicateurs.
 
-### 2.4 Tarifs confirmés — abonnements mensuels
+### 2.4 Tarifs confirmés — mensuels et annuels
 
 | Univers | ACCÈS | PREMIUM |
 |---|---:|---:|
 | Détaillants | 4 000 FCFA/mois | 10 000 FCFA/mois |
 | Distributeurs | 10 000 FCFA/mois | 25 000 FCFA/mois |
 
-- La périodicité mensuelle des quatre prix est confirmée.
+- Seules les périodicités mensuelle et annuelle sont autorisées (décision du 26 novembre 2026).
 - Le palier Pro générique est supprimé et ne doit pas réapparaître dans les écrans, données de référence, rapports, tests ou textes commerciaux BOOTIK.
 - ACCÈS conserve l'ensemble des fonctions métier essentielles, dont l'ERP et le CRM complet pour les Distributeurs.
 - PREMIUM ajoute des capacités avancées de dimensionnement, d'organisation multiniveau, de consolidation, de contrôle et d'automatisation ; il ne déverrouille pas artificiellement les opérations fondamentales.
 - Une souscription Promoteur couvre l'organisation et son réseau de sites du même univers ; ne pas facturer mécaniquement chaque caisse, dépôt ou boutique comme un abonnement indépendant.
-- Essai initial : 72 heures, contrôlé par le serveur et non réinitialisable par réinstallation ou recréation locale du compte.
-- Paiements anticipés : 3 mois avec 10 % de remise et arrondi à la centaine inférieure ; 6 mois payés au prix de 5 ; 12 mois payés au prix de 10.
+- Essai initial : 72 heures d'utilisation gratuite sans paiement préalable, à compter de l'activation serveur, pour la formule choisie ; non réinitialisable par réinstallation ou recréation locale du compte. À expiration, paiement confirmé requis pour poursuivre les opérations payantes ; données conservées.
+- Annuel : 12 mois au prix de 10, soit 16,67 % de ristourne. Durées 3 et 6 mois supprimées et refusées par le contrat BOOTIK.
 - L'IA opérationnelle est incluse dans l'abonnement ; pas de facturation par requête.
 - La confirmation, l'activation des droits et la réconciliation passent par le circuit canonique de paiement NAXA/KIOSKO après qualification réelle de son état. Un écran ou une référence saisie ne vaut pas confirmation de paiement.
 
-### 2.5 Calculs de référence des offres anticipées
+### 2.5 Grille tarifaire applicable
 
-| Univers / formule | Mensuel | 3 mois remisés | 6 mois | 12 mois |
-|---|---:|---:|---:|---:|
-| Détaillants ACCÈS | 4 000 | 10 800 | 20 000 | 40 000 |
-| Détaillants PREMIUM | 10 000 | 27 000 | 50 000 | 100 000 |
-| Distributeurs ACCÈS | 10 000 | 27 000 | 50 000 | 100 000 |
-| Distributeurs PREMIUM | 25 000 | 67 500 | 125 000 | 250 000 |
+| Univers / formule | Mensuel | Annuel |
+|---|---:|---:|
+| Détaillants ACCÈS | 4 000 | 40 000 |
+| Détaillants PREMIUM | 10 000 | 100 000 |
+| Distributeurs ACCÈS | 10 000 | 100 000 |
+| Distributeurs PREMIUM | 25 000 | 250 000 |
 
-Tous les montants sont en FCFA. Ces montants sont des valeurs catalogue dérivées des règles ci-dessus ; le moteur Billing doit conserver les règles de calcul et l'arrondi comme source de vérité, et non recopier les montants dans plusieurs écrans.
+Montants en FCFA. Le contrat BOOTIK valide exclusivement 1 ou 12 mois avant appel au moteur commun ; les autres solutions restent inchangées.
 
 ## 3. Interconnexion Détaillants ↔ Distributeurs : décision structurante
 

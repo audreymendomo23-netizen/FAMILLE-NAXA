@@ -1,0 +1,20 @@
+{
+  "app": "bootik",
+  "plans": {
+    "retailer": {
+      "access": 4000,
+      "premium": 10000
+    },
+    "distributor": {
+      "access": 10000,
+      "premium": 25000
+    }
+  },
+  "allowedMonths": [
+    1,
+    12
+  ],
+  "annualPaidMonths": 10,
+  "trialHours": 72,
+  "trialPaymentRequired": false
+}
