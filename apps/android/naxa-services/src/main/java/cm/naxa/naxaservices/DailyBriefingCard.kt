@@ -56,6 +56,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
   var engine by remember{mutableStateOf<TextToSpeech?>(null)}
   var ready by remember{mutableStateOf(false)}
   var playing by remember{mutableStateOf(false)}
+  var activeUtterance by remember{mutableStateOf<String?>(null)}
   var busy by remember{mutableStateOf(false)}
   var error by remember{mutableStateOf(false)}
   var report by remember{mutableStateOf<JSONObject?>(null)}
@@ -67,12 +68,12 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
    engine=tts
    tts.setOnUtteranceProgressListener(object:UtteranceProgressListener(){
     override fun onStart(utteranceId:String?){}
-    override fun onDone(utteranceId:String?){handler.post{if(!disposed)playing=false}}
-    @Deprecated("Deprecated in Java") override fun onError(utteranceId:String?){handler.post{if(!disposed){playing=false;error=true}}}
+    override fun onDone(utteranceId:String?){handler.post{if(!disposed&&activeUtterance==utteranceId){activeUtterance=null;playing=false}}}
+    @Deprecated("Deprecated in Java") override fun onError(utteranceId:String?){handler.post{if(!disposed&&activeUtterance==utteranceId){activeUtterance=null;playing=false;error=true}}}
    })
    onDispose{disposed=true;tts.stop();tts.shutdown()}
   }
-  fun stop(){engine?.stop();playing=false}
+  fun stop(){activeUtterance=null;engine?.stop();playing=false}
   fun play(r:JSONObject){
    val tts=engine
    if(!ready||tts==null){error=true;return}
@@ -82,7 +83,9 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
    stop()
    if(tts.setVoice(voice)!=TextToSpeech.SUCCESS){error=true;return}
    tts.setSpeechRate(speed)
-   playing=tts.speak(briefingText(r,language),TextToSpeech.QUEUE_FLUSH,null,UUID.randomUUID().toString())==TextToSpeech.SUCCESS
+   val utteranceId=UUID.randomUUID().toString();activeUtterance=utteranceId
+   playing=tts.speak(briefingText(r,language),TextToSpeech.QUEUE_FLUSH,null,utteranceId)==TextToSpeech.SUCCESS
+   if(!playing)activeUtterance=null
    error=!playing
   }
   fun load(andPlay:Boolean){
@@ -106,6 +109,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
      listOf(.8f,1f,1.2f,1.5f).forEach{s->TextButton(onClick={stop();speed=s},enabled=!busy){Text((if(s==speed)"✓ " else "")+s+"×")}}
     }
     Button(onClick={if(playing)stop() else load(true)},enabled=!busy){Text(if(playing)w.stop else w.play)}
+    OutlinedButton(onClick={load(false)},enabled=!busy){Text(when(language){"en"->"Refresh";"ff-CM"->"Hesɗitin";"es"->"Actualizar";"it"->"Aggiorna";"zh-CN"->"刷新";else->"Actualiser"})}
     if(error)Text(w.error,color=MaterialTheme.colorScheme.error)
     report?.let{Text(briefingText(it,language))}
    }
