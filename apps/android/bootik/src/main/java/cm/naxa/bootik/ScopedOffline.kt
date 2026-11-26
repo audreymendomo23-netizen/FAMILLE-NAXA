@@ -11,6 +11,7 @@ data class BootikCatalogCache(val organizationId:String,val memberId:String,val 
 interface BootikScopedDao{
  @Insert(onConflict=OnConflictStrategy.ABORT) suspend fun enqueue(event:BootikScopedEvent)
  @Query("SELECT * FROM bk_scoped_outbox WHERE organizationId=:org AND memberId=:member AND siteId=:site ORDER BY sequence,eventId") suspend fun events(org:String,member:String,site:String):List<BootikScopedEvent>
+ @Query("SELECT * FROM bk_scoped_outbox WHERE organizationId=:org AND memberId=:member AND siteId=:site ORDER BY sequence,eventId") fun observeEvents(org:String,member:String,site:String):kotlinx.coroutines.flow.Flow<List<BootikScopedEvent>>
  @Query("UPDATE bk_scoped_outbox SET state=:next WHERE eventId=:id AND organizationId=:org AND memberId=:member AND siteId=:site AND state='queued'") suspend fun acknowledge(id:String,org:String,member:String,site:String,next:String):Int
  @Query("UPDATE bk_scoped_outbox SET state='discarded' WHERE eventId=:id AND organizationId=:org AND memberId=:member AND siteId=:site AND state IN ('conflict','rejected')") suspend fun discard(id:String,org:String,member:String,site:String):Int
  @Insert(onConflict=OnConflictStrategy.REPLACE) suspend fun cache(value:BootikCatalogCache)
