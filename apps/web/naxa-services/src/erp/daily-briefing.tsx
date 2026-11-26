@@ -1,0 +1,57 @@
+import React,{useEffect,useRef,useState} from "react";
+import type {WebAuthAccount} from "../auth/session";
+import {rosterApiOrigin} from "./staff-roster";
+type Report={day:string;generated_at:string;scope:"site"|"personal";finance:{revenue_xaf:number;confirmed_sales_count:number;uncosted_sales_count:number}|null;appointments:{scheduled_count:number;completed_count:number};personal_clock_events:{event_count:number}|null;coverage:string};
+type Lang="fr"|"en"|"ff-CM"|"es"|"it"|"zh-CN";
+const languages:Record<Lang,string>={fr:"Français",en:"English","ff-CM":"Fulfulde",es:"Español",it:"Italiano","zh-CN":"中文"};
+const copy:Record<Lang,{title:string;intro:string;appointments:string;completed:string;finance:string;sales:string;clocks:string;missing:string;play:string;stop:string;unavailable:string;load:string}> = {
+ fr:{title:"Mon bilan",intro:"Voici votre bilan partiel, établi à partir des données confirmées.",appointments:"Rendez-vous",completed:"terminés",finance:"Chiffre d’affaires en francs CFA",sales:"ventes confirmées",clocks:"Pointages personnels",missing:"Les autres indicateurs ne sont pas disponibles dans ce bilan.",play:"Écouter mon bilan",stop:"Arrêter",unavailable:"Voix locale ou données indisponibles.",load:"Actualiser"},
+ en:{title:"My report",intro:"Here is your partial report, based on confirmed records.",appointments:"Appointments",completed:"completed",finance:"Revenue in CFA francs",sales:"confirmed sales",clocks:"Personal clock events",missing:"Other indicators are not available in this report.",play:"Listen to my report",stop:"Stop",unavailable:"Local voice or data unavailable.",load:"Refresh"},
+ "ff-CM":{title:"Jaŋtol am",intro:"Ɗoo ko jaŋtol maa ummoraade e humpito tabbitinaango.",appointments:"Kawrital",completed:"timmuɗe",finance:"Ceede soodugol CFA",sales:"soodugol tabbitinaaɗo",clocks:"Winndanɗe naatugol",missing:"Humpito goɗɗo heɓotaako e jaŋtol ngol.",play:"Heɗo jaŋtol am",stop:"Dartin",unavailable:"Daande walla humpito heɓotaako.",load:"Hesɗitin"},
+ es:{title:"Mi informe",intro:"Este es tu informe parcial basado en datos confirmados.",appointments:"Citas",completed:"completadas",finance:"Ingresos en francos CFA",sales:"ventas confirmadas",clocks:"Registros personales de asistencia",missing:"Los demás indicadores no están disponibles en este informe.",play:"Escuchar mi informe",stop:"Detener",unavailable:"Voz local o datos no disponibles.",load:"Actualizar"},
+ it:{title:"Il mio resoconto",intro:"Ecco il tuo resoconto parziale basato sui dati confermati.",appointments:"Appuntamenti",completed:"completati",finance:"Ricavi in franchi CFA",sales:"vendite confermate",clocks:"Registrazioni personali delle presenze",missing:"Gli altri indicatori non sono disponibili in questo resoconto.",play:"Ascolta il mio resoconto",stop:"Interrompi",unavailable:"Voce locale o dati non disponibili.",load:"Aggiorna"},
+ "zh-CN":{title:"我的日报",intro:"这是根据已确认数据生成的部分报告。",appointments:"预约",completed:"已完成",finance:"营业收入（非洲金融共同体法郎）",sales:"已确认销售",clocks:"个人考勤记录",missing:"其他指标暂未包含在此报告中。",play:"收听我的日报",stop:"停止",unavailable:"本地语音或数据不可用。",load:"刷新"}
+};
+export function briefingNarration(r:Report,l:Lang):string{
+ const t=copy[l];
+ return [t.intro,r.day,t.appointments+": "+r.appointments.scheduled_count+"; "+t.completed+": "+r.appointments.completed_count+".",r.finance===null?"":t.finance+": "+r.finance.revenue_xaf+"; "+t.sales+": "+r.finance.confirmed_sales_count+".",r.personal_clock_events===null?"":t.clocks+": "+r.personal_clock_events.event_count+".",t.missing].filter(Boolean).join(" ");
+}
+function dayInDouala(){return new Date(Date.now()+3600000).toISOString().slice(0,10);}
+type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>};
+export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Props){
+ const [lang,setLang]=useState<Lang>(account.default_locale);
+ const [report,setReport]=useState<Report|null>(null),[error,setError]=useState(false),[loading,setLoading]=useState(false),[playing,setPlaying]=useState(false),[speed,setSpeed]=useState(1);
+ const controller=useRef<AbortController|null>(null),audio=useRef<SpeechSynthesisUtterance|null>(null),mounted=useRef(false);
+ const t=copy[lang];
+ function stop(){if(audio.current){audio.current.onend=null;audio.current.onerror=null;window.speechSynthesis?.cancel();audio.current=null;}setPlaying(false);}
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;controller.current?.abort();if(audio.current){audio.current.onend=null;audio.current.onerror=null;window.speechSynthesis?.cancel();audio.current=null;}};},[]);
+ async function load(){
+  stop();controller.current?.abort();const abort=new AbortController();controller.current=abort;setLoading(true);setError(false);setReport(null);
+  try{
+   const token=await getToken();if(abort.signal.aborted||!mounted.current||!token||!anonKey)return;
+   const r=await fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/ns_daily_briefing",{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({p_org:account.organization_id,p_site:siteId,p_day:dayInDouala()}),signal:abort.signal,cache:"no-store",credentials:"omit"});
+   if(!r.ok)throw Error("BRIEFING_UNAVAILABLE");
+   const data=await r.json() as Report;
+   if(data.day!==dayInDouala()||data.coverage!=="partial_confirmed_server_facts"||!data.appointments||!["site","personal"].includes(data.scope)||data.scope==="personal"&&data.finance!==null)throw Error("INVALID_BRIEFING");
+   if(!abort.signal.aborted&&mounted.current)setReport(data);
+   return data;
+  }catch{if(!abort.signal.aborted&&mounted.current)setError(true);}
+  finally{if(!abort.signal.aborted&&mounted.current)setLoading(false);}
+ }
+ function speak(r:Report){
+  if(!window.speechSynthesis){setError(true);return;}
+  // Only a local voice: never transmit business data to a browser cloud voice.
+  const voice=window.speechSynthesis.getVoices().find(v=>v.localService&&v.lang.toLowerCase().split("-")[0]===lang.toLowerCase().split("-")[0]);
+  if(!voice){setError(true);return;}
+  stop();setError(false);const u=new SpeechSynthesisUtterance(briefingNarration(r,lang));u.voice=voice;u.lang=voice.lang;u.rate=speed;audio.current=u;
+  u.onend=()=>{if(audio.current===u){audio.current=null;setPlaying(false);}};u.onerror=()=>{if(audio.current===u){audio.current=null;setPlaying(false);setError(true);}};
+  setPlaying(true);window.speechSynthesis.speak(u);
+ }
+ if(!siteId)return null;
+ return <section className="module-main-card"><h2>{t.title}</h2>
+ <label><select aria-label="Language / Langue" value={lang} onChange={e=>{stop();setLang(e.target.value as Lang);setError(false);}}>{Object.entries(languages).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
+ <label><select aria-label="Speed / Vitesse" value={speed} onChange={e=>{stop();setSpeed(Number(e.target.value));}}>{[.8,1,1.2,1.5].map(s=><option key={s} value={s}>{s}×</option>)}</select></label>
+ <button className="btn primary" disabled={loading} onClick={()=>{if(playing){stop();return;}if(report){speak(report);}else void load().then(r=>{if(r&&mounted.current)speak(r);});}}>{playing?t.stop:t.play}</button>
+ <button className="btn secondary" disabled={loading} onClick={()=>void load()}>{t.load}</button>
+ {error&&<p role="alert">{t.unavailable}</p>}{report&&<p>{briefingNarration(report,lang)}</p>}</section>;
+}
