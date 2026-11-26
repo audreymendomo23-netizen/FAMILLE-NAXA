@@ -157,6 +157,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByRole("button",{name:"Pilotage",exact:true}).click();await page.getByRole("heading",{name:"Pilotage et recommandations"}).waitFor();
   await page.getByText(/Historique insuffisant : 28 jours/).waitFor();
   await page.getByText(/Charges enregistrées : 2[\s\u00a0\u202f]500 FCFA/).waitFor();
+  const stationReview=page.getByTestId("post-feedback-kitchen");await stationReview.waitFor();assert.match(await stationReview.innerText(),/4\/5/);assert.match(await stationReview.innerText(),/Échantillon insuffisant/);console.log("ZIPPLE_BULK5_REAL_POST_SATISFACTION_UI_PASS");
   console.log("ZIPPLE_N7_REAL_EDGE_PILOTAGE_UI_PASS");
   await page.getByRole("button",{name:"Salles et réservations"}).click();
   await page.getByLabel("Nom de la zone").fill("Terrasse test");await page.getByRole("button",{name:"Créer la zone"}).click();
@@ -474,8 +475,8 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   assert.equal((await b("order_support_reply",{site_id:site,order_id:tableOrder,reply:"Autre site"})).status,403);
   const serverCtx=await context(),serverPage=await serverCtx.newPage();await serverPage.goto(publicOrigin);await serverPage.getByLabel("Identifiant").fill(staffLogin);await serverPage.getByLabel("Mot de passe",{exact:true}).fill(password);await serverPage.getByRole("button",{name:"Se connecter"}).click();await serverPage.getByRole("combobox",{name:"Établissement autorisé",exact:true}).selectOption(snackSite);
   await serverPage.getByRole("button",{name:"Assistance commandes",exact:true}).click();
-  await serverPage.getByText(/Besoin de couverts/).waitFor();await serverPage.getByLabel(/Réponse à la commande/).fill("Nous arrivons");await serverPage.getByRole("button",{name:"Envoyer la réponse",exact:true}).click();
-  await serverPage.getByText("Nous arrivons",{exact:true}).waitFor();await serverCtx.close();
+  await serverPage.getByText(/Besoin de couverts/).waitFor();assert.match(await serverPage.getByText(/Demandes sans réponse \(liste chargée\)/).innerText(),/1$/);await serverPage.getByLabel(/Réponse à la commande/).fill("Nous arrivons");await serverPage.getByRole("button",{name:"Envoyer la réponse",exact:true}).click();
+  await serverPage.getByText("Nous arrivons",{exact:true}).waitFor();await serverPage.getByRole("checkbox",{name:"Afficher uniquement les demandes sans réponse"}).check();await serverPage.getByText("Aucune demande dans cette vue.").waitFor();assert.equal(await serverPage.getByText("Nous arrivons",{exact:true}).count(),0);await serverCtx.close();
   assert.equal(await scalar("select reply from zp_order_support where order_id=$1",[tableOrder]),"Nous arrivons");
   console.log("ZIPPLE_BULK4_REAL_STAFF_SUPPORT_UI_PASS");
   await snackGuest.getByText("Nous arrivons",{exact:true}).waitFor({timeout:15000});
