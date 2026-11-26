@@ -6,6 +6,8 @@ import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
 import org.junit.Test
@@ -24,15 +26,35 @@ class LoginScreenUiInstrumentedTest {
         val password = composeRule.onNodeWithTag("login-password")
         val submit = composeRule.onNodeWithTag("login-submit")
 
-        identifier.assertIsDisplayed()
-        password.assertIsDisplayed()
-        submit.assertIsDisplayed()
+        composeRule.onNodeWithTag("business-photo-backdrop").assertIsDisplayed()
+        identifier.performScrollTo().assertIsDisplayed()
+        password.performScrollTo().assertIsDisplayed()
+        submit.performScrollTo().assertIsDisplayed()
         submit.assertIsNotEnabled()
 
-        identifier.performTextInput("ns-000001")
+        identifier.performScrollTo().performTextInput("ns-000001")
         submit.assertIsNotEnabled()
 
-        password.performTextInput("ui-test-only-invalid-password")
-        submit.assertIsEnabled()
+        password.performScrollTo().performTextInput("ui-test-only-invalid-password")
+        submit.performScrollTo().assertIsEnabled()
+    }
+
+    @Test
+    fun nightModeActivationShowsDecorativeTorchThenClearsIt() {
+        val preferences = NaxaServicesPreferences(composeRule.activity)
+        val toggle = composeRule.onNodeWithTag("login-theme-toggle")
+        toggle.performScrollTo()
+        if (!preferences.isLightNow()) toggle.performClick()
+        composeRule.waitForIdle()
+        composeRule.mainClock.autoAdvance = false
+        try {
+            toggle.performClick()
+            composeRule.mainClock.advanceTimeBy(250)
+            composeRule.onNodeWithTag("night-torch-animation").assertIsDisplayed()
+            composeRule.mainClock.advanceTimeBy(1900)
+            composeRule.onNodeWithTag("night-torch-animation").assertDoesNotExist()
+        } finally {
+            composeRule.mainClock.autoAdvance = true
+        }
     }
 }
