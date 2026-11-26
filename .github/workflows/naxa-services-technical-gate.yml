@@ -5,6 +5,7 @@ on:
     branches:
       - work/naxa-services-completion-20261120
     paths:
+      - "assets/naxa-services/**"
       - "apps/android/naxa-services/**"
       - "apps/android/naxa-services-beneficiary/**"
       - "apps/web/naxa-services/**"
@@ -141,6 +142,13 @@ jobs:
         run: npm run test:contracts
       - name: Verify exact NAXA SERVICES outbox classification (N1)
         run: node scripts/naxa-services/verify-outbox-registry.mjs
+      - name: Inventory commercial UI interactions and copy
+        run: node scripts/naxa-services/audit-commercial-interactions.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: naxa-services-commercial-interaction-inventory
+          path: artifacts/naxa-services-commercial/
+          if-no-files-found: error
 
   billing-catalog:
     name: NAXA FAMILY launch and maturity tariff tests
