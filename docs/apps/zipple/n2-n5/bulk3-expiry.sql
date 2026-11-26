@@ -31,6 +31,7 @@ declare m public.zp_members;o public.zp_orders;current_state text;overall text;b
  perform 1 from public.zp_site_modes where site_id=p_site for update;
  select * into o from public.zp_orders where id=p_order and org_id=m.org_id and site_id=p_site for update;if o.id is null or o.status='cancelled' then raise exception 'DENIED';end if;
  select state into current_state from public.zp_order_lines where order_id=p_order and item_id=p_item;if current_state is null or (m.role_code not in ('promoteur','manager') and not (p_next='served' and public.zp_can_operate(m.id,p_site,'serve')) and not exists(select 1 from public.zp_station_grants g join public.zp_order_lines l on l.post=g.post where g.site_id=p_site and g.member_id=m.id and l.order_id=p_order and l.item_id=p_item)) then raise exception 'DENIED';end if;
+ if p_next='served' and o.channel='table' and exists(select 1 from public.zp_site_modes sm where sm.site_id=p_site and sm.org_id=m.org_id and sm.space='snack_bar') and not public.zp_can_operate(m.id,p_site,'serve') then raise exception 'DENIED';end if;
  if current_state=p_next then return o.status;end if;
  if exists(select 1 from public.zp_production_batches b where b.item_id=p_item and b.site_id=p_site and b.org_id=m.org_id and b.remaining_servings>0 and b.expires_at<=now()) then raise exception 'EXPIRED_PREPARATION_REVIEW';end if;
  if not ((current_state='received' and p_next='preparing') or (current_state='preparing' and p_next='ready') or (current_state='ready' and p_next='served')) then raise exception 'INVALID_TRANSITION';end if;

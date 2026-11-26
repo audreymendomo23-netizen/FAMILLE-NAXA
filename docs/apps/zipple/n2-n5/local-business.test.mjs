@@ -388,7 +388,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   console.log("ZIPPLE_BULK2_REAL_EDGE_QR_RESERVATION_PASS");
   // Validate the latest Bulk 3 additions in the actual browser, after earlier stock fixtures.
   const convIng=await ok("ingredient_add",{name:"Farine conditionnement navigateur",sku:"CONV-EDGE",unit:"kg",reorder_milli:0,supplier_whatsapp:""});
-  const convSupplier=await ok("supplier_add",{name:"Grossiste conversion navigateur",phone:"",whatsapp:""});
+  const convSupplier=await ok("supplier_add",{name:"Grossiste conversion navigateur",phone:"",whatsapp:"",terms_days:0});
   const convRule=await ok("conversion_add",{ingredient_id:convIng,request_id:id(),label:"Sac 5 kg",base_milli_per_unit:5000});
   await page.getByRole("button",{name:"Stocks & finances",exact:true}).click();await page.getByRole("button",{name:"Achats",exact:true}).click();
   await page.getByLabel("Fournisseur du conditionnement",{exact:true}).selectOption(convSupplier);
