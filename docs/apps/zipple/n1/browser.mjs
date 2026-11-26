@@ -7,6 +7,8 @@ try {
  await page.goto("http://127.0.0.1:4173/");
  await page.getByRole("heading",{name:"Servez mieux, gérez en toute sécurité."}).waitFor();
  const submit=page.getByRole("button",{name:"Se connecter"});
+ assert.ok((await page.locator("main").evaluate(e=>getComputedStyle(e).backgroundImage)).includes("zipple-restaurant-bar.webp"));
+ const photo=await page.request.get("http://127.0.0.1:4173/zipple-restaurant-bar.webp");assert.equal(photo.status(),200);assert.match(photo.headers()["content-type"],/image\/webp/);
  assert.equal(await submit.isDisabled(),true);
  await page.getByLabel("Identifiant").fill("demo");
  await page.getByLabel("Mot de passe",{exact:true}).fill("test-only");

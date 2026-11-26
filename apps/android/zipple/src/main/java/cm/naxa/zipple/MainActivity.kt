@@ -3,6 +3,18 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import android.provider.Settings
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.text.style.TextAlign
@@ -29,6 +41,7 @@ class MainActivity:FragmentActivity(){
 @Composable fun ZippleRoot(){
  var dark by remember { mutableStateOf(false) };var en by remember { mutableStateOf(false) }
  val context=LocalContext.current;val scope=rememberCoroutineScope()
+ var splash by remember { mutableStateOf(runCatching{Settings.Global.getFloat(context.contentResolver,Settings.Global.ANIMATOR_DURATION_SCALE,1f)>0f}.getOrDefault(true)) }
  val lock=remember { LocalAccessPinManager(context) };val biometricPrefs=remember { ZippleBiometricPreferences(context) };val vault=remember { SessionVault(context) };val api=remember { ZippleAuth(BuildConfig.ZIPPLE_API_URL) }
  var showPassword by remember { mutableStateOf(false) };var rememberDevice by remember { mutableStateOf(false) };var identifier by remember { mutableStateOf("") };var password by remember { mutableStateOf("") }
  var session by remember { mutableStateOf<Session?>(null) };var site by remember { mutableStateOf("") }
@@ -38,11 +51,17 @@ class MainActivity:FragmentActivity(){
  val navy=Color(0xFF482817);val orange=Color(0xFFA66A25)
  MaterialTheme(colorScheme=if(dark)darkColorScheme(primary=Color(0xFFE5BE85),secondary=orange,background=Color(0xFF2B1A11),surface=Color(0xFF3D281B))else lightColorScheme(primary=orange,secondary=navy,background=Color(0xFFF1E4D8),surface=Color(0xFFFCF9F5),onPrimary=Color.White)){
  Surface(Modifier.fillMaxSize(),color=MaterialTheme.colorScheme.background){
- Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy(14.dp)){
- Surface(modifier=Modifier.widthIn(max=570.dp).fillMaxWidth(),shape=RoundedCornerShape(28.dp),color=MaterialTheme.colorScheme.surface,tonalElevation=2.dp){
+ Box(Modifier.fillMaxSize().clipToBounds()){
+ Image(painterResource(R.drawable.zipple_restaurant_bar),contentDescription=null,contentScale=ContentScale.Crop,modifier=Modifier.fillMaxSize(),alpha=if(dark)0.37f else 0.94f)
+ Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.Center){
+ Surface(modifier=Modifier.widthIn(max=570.dp).fillMaxWidth(),shape=RoundedCornerShape(28.dp),color=MaterialTheme.colorScheme.surface.copy(alpha=if(dark)0.94f else 0.88f),tonalElevation=0.dp){
  Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
  Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){TextButton(onClick={en=!en}){Text(if(en)"FR" else "EN")};TextButton(onClick={dark=!dark}){Text(tr("Thème","Theme"))}}
- Image(painterResource(R.drawable.zipple_logo),contentDescription="ZIPPLE",modifier=Modifier.height(92.dp).fillMaxWidth())
+ Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.CenterHorizontally){
+ Image(painterResource(R.drawable.zipple_cloche),contentDescription=null,modifier=Modifier.width(96.dp).height(78.dp))
+ Text("ZIPPLE",color=if(dark)Color(0xFFF1E4D8) else navy,fontSize=40.sp,fontWeight=FontWeight.ExtraBold,letterSpacing=6.sp)
+ Spacer(Modifier.height(8.dp));Box(Modifier.width(46.dp).height(3.dp).background(orange,RoundedCornerShape(2.dp)))
+ }
  Text(tr("Servez mieux, gérez en toute sécurité.","Serve better, manage securely."),style=MaterialTheme.typography.headlineSmall,textAlign=TextAlign.Center,modifier=Modifier.fillMaxWidth())
  val current=session
  LaunchedEffect(current?.member){biometricEnabled=current?.member?.let{biometricPrefs.enabled(it)}?:false;unlockedByPin=false}
@@ -50,10 +69,10 @@ class MainActivity:FragmentActivity(){
  DisposableEffect(Unit){onDispose{ZippleSyncSession.current=null}}
  if(current!=null){LaunchedEffect(current.expiresAt){kotlinx.coroutines.delay((current.expiresAt-System.currentTimeMillis()).coerceAtLeast(0));if(session==current){session=null;unlocked=false;site="";message=tr("Session expirée","Session expired")}}}
  if(current==null){
- OutlinedTextField(identifier,{identifier=it},label={Text(tr("Identifiant","Identifier"))},singleLine=true,modifier=Modifier.fillMaxWidth())
- OutlinedTextField(password,{password=it},label={Text(tr("Mot de passe","Password"))},singleLine=true,visualTransformation=if(showPassword)VisualTransformation.None else PasswordVisualTransformation(),trailingIcon={TextButton(onClick={showPassword=!showPassword}){Text(if(showPassword)tr("Masquer","Hide") else tr("Afficher","Show"))}},modifier=Modifier.fillMaxWidth())
+ OutlinedTextField(identifier,{identifier=it},label={Text(tr("Identifiant","Identifier"))},singleLine=true,shape=RoundedCornerShape(12.dp),modifier=Modifier.fillMaxWidth())
+ OutlinedTextField(password,{password=it},label={Text(tr("Mot de passe","Password"))},singleLine=true,visualTransformation=if(showPassword)VisualTransformation.None else PasswordVisualTransformation(),trailingIcon={TextButton(onClick={showPassword=!showPassword}){Text(if(showPassword)tr("Masquer","Hide") else tr("Afficher","Show"))}},shape=RoundedCornerShape(12.dp),modifier=Modifier.fillMaxWidth())
  Row(verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){Checkbox(checked=rememberDevice,onCheckedChange={rememberDevice=it});Text(tr("Rester connecté","Remember me"))}
- Button(enabled=identifier.isNotBlank()&&password.isNotBlank()&&!busy,modifier=Modifier.fillMaxWidth(),onClick={busy=true;message="";scope.launch{try{val authenticated=api.login(identifier,password,rememberDevice);if(rememberDevice&&authenticated.refreshToken!=null)vault.save(authenticated.refreshToken)else vault.clear();session=authenticated;site=authenticated.sites.first().id;unlocked=false}catch(_:Exception){message=tr("Connexion indisponible ou refusée","Connection unavailable or denied")}finally{password="";showPassword=false;busy=false}}}){Text(tr("Se connecter","Sign in"))}
+ Button(enabled=identifier.isNotBlank()&&password.isNotBlank()&&!busy,modifier=Modifier.fillMaxWidth().heightIn(min=52.dp),shape=RoundedCornerShape(12.dp),onClick={busy=true;message="";scope.launch{try{val authenticated=api.login(identifier,password,rememberDevice);if(rememberDevice&&authenticated.refreshToken!=null)vault.save(authenticated.refreshToken)else vault.clear();session=authenticated;site=authenticated.sites.first().id;unlocked=false}catch(_:Exception){message=tr("Connexion indisponible ou refusée","Connection unavailable or denied")}finally{password="";showPassword=false;busy=false}}}){Text(tr("Se connecter","Sign in"))}
  TextButton(enabled=identifier.isNotBlank()&&!busy,onClick={scope.launch{try{api.recovery(identifier);message=tr("Si le compte est reconnu, la demande sera traitée.","If recognized, your request will be processed.")}catch(_:Exception){message=tr("Assistance indisponible","Recovery unavailable")}}}){Text(tr("Mot de passe oublié","Forgot password"))}
  Text(tr("Accès professionnel sécurisé","Secure professional access"))
  }else if(!unlocked){
@@ -74,6 +93,27 @@ class MainActivity:FragmentActivity(){
  }
  }
  }
+ if(splash)ZippleSplash{ splash=false }
+ }
  }
  }
 }
+@Composable private fun ZippleSplash(onFinished:()->Unit){
+ var stage by remember { mutableIntStateOf(0) }
+ LaunchedEffect(Unit){kotlinx.coroutines.delay(650);stage=1;kotlinx.coroutines.delay(750);stage=2;kotlinx.coroutines.delay(1000);onFinished()}
+ val photo by animateFloatAsState(if(stage>=1)1f else 0f,tween(550),label="food")
+ val lift by animateDpAsState(if(stage>=1)(-66).dp else 0.dp,tween(600),label="cloche")
+ val cloche by animateFloatAsState(if(stage>=1)0f else 1f,tween(600),label="clocheOpacity")
+ val brand by animateFloatAsState(if(stage>=2)1f else 0f,tween(650),label="brand")
+ Box(Modifier.fillMaxSize().clipToBounds().background(Color(0xFF2B170E)).clearAndSetSemantics{}){
+  Image(painterResource(R.drawable.zipple_restaurant_bar),contentDescription=null,contentScale=ContentScale.Crop,alignment=Alignment.BottomStart,modifier=Modifier.fillMaxSize().scale(1.4f).alpha(photo))
+  Box(Modifier.fillMaxSize().background(Color(0xFF2B170E).copy(alpha=.34f)))
+  Image(painterResource(R.drawable.zipple_cloche),contentDescription=null,modifier=Modifier.align(Alignment.Center).offset(y=lift).size(124.dp).alpha(cloche))
+  Column(Modifier.align(Alignment.Center).alpha(brand).padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally){
+   Image(painterResource(R.drawable.zipple_cloche),contentDescription=null,modifier=Modifier.size(92.dp))
+   Text("ZIPPLE",color=Color(0xFFFFF3E1),fontSize=43.sp,fontWeight=FontWeight.ExtraBold,letterSpacing=8.sp)
+   Spacer(Modifier.height(14.dp));Text("Servez mieux, gérez en toute sécurité.",color=Color(0xFFFFF3E1),textAlign=TextAlign.Center,fontSize=17.sp,fontWeight=FontWeight.SemiBold)
+  }
+ }
+}
+

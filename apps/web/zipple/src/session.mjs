@@ -20,8 +20,8 @@ export async function authorizedRequest(base,action,body,token,fetcher=fetch){
 }
 
 const MARKER="zipple-remember-v1";
-export function rememberMarker(storage=globalThis.localStorage){try{return storage?.getItem(MARKER)==="yes"}catch{return false}}
-function marker(on,storage=globalThis.localStorage){try{if(on)storage?.setItem(MARKER,"yes");else storage?.removeItem(MARKER)}catch{}}
+export function rememberMarker(storage){try{return (storage??globalThis.localStorage)?.getItem(MARKER)==="yes"}catch{return false}}
+function marker(on,storage){try{const store=storage??globalThis.localStorage;if(on)store?.setItem(MARKER,"yes");else store?.removeItem(MARKER)}catch{}}
 async function cookieRequest(action,body,fetcher=fetch){
  const response=await fetcher("/session/"+action,{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",cache:"no-store",redirect:"error",body:JSON.stringify(body)});
  if(!response.ok)throw Error("ZIPPLE_SESSION_REJECTED");
@@ -42,3 +42,5 @@ export async function restoreRemembered(fetcher=fetch){
 export async function forgetRemembered(access_token,fetcher=fetch){
  marker(false);await cookieRequest("logout",{access_token},fetcher);
 }
+
+export async function clearRemembered(fetcher=fetch){await cookieRequest("forget",{},fetcher);marker(false)}

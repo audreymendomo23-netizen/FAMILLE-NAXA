@@ -18,14 +18,15 @@ class N1DeviceTest {
  @get:Rule val compose=createAndroidComposeRule<MainActivity>()
  private val context get()=InstrumentationRegistry.getInstrumentation().targetContext
  @Test fun loginFormNative(){
-  compose.onNodeWithText("Votre restaurant, bien piloté").assertExists()
+  compose.onNodeWithText("Servez mieux, gérez en toute sécurité.").assertExists()
   compose.onNodeWithText("Se connecter").assertIsNotEnabled()
+  compose.onNode(isToggleable()).assertIsOff()
   compose.onNodeWithText("Identifiant").performTextInput("fixture")
   compose.onNodeWithText("Mot de passe",substring=false).performTextInput("test-only")
   compose.onNodeWithText("Se connecter").assertIsEnabled().performClick()
   compose.waitUntil(10000){compose.onAllNodesWithText("Connexion indisponible ou refusée").fetchSemanticsNodes().isNotEmpty()}
   compose.onNodeWithText("EN",substring=false).performClick()
-  compose.onNodeWithText("Manage your restaurant").assertExists()
+  compose.onNodeWithText("Serve better, manage securely.").assertExists()
  }
  @Test fun pinAndVault(){
   val pin=LocalAccessPinManager(context)
