@@ -195,20 +195,20 @@ fun ServicesCatalogContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle(
-                if (fr) "Catalogue métier des prestations" else "Activity service catalogue",
-                if (fr) "Tarifs, durées, qualifications, forfaits et postes requis pour chaque point de vente." else "Prices, durations, qualifications, packages and required workstations for each site."
+                when (session.account.defaultLocale) { "en" -> "Activity service catalogue"; "ff-CM" -> "Doggol golle"; else -> "Catalogue métier des prestations" },
+                when (session.account.defaultLocale) { "en" -> "Prices, durations, qualifications, packages and required workstations for each site."; "ff-CM" -> "Njoɓdi, sahaa, baawɗe, forfait e nokkuuji golle kala."; else -> "Tarifs, durées, qualifications, forfaits et postes requis pour chaque point de vente." }
             )
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }) {
                 siteId = it
                 resetForm()
             }
-            LocalOnlyNotice(if (fr) "Les modifications de prix sont en attente de confirmation." else "Price changes are pending confirmation.")
+            LocalOnlyNotice(when (session.account.defaultLocale) { "en" -> "Price changes are pending confirmation."; "ff-CM" -> "Waylugol njoɓdi nana fadi tabbitinol."; else -> "Les modifications de prix sont en attente de confirmation." })
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (selectedServiceId.isBlank()) if (fr) "Nouvelle prestation" else "New service" else if (fr) "Modifier la prestation" else "Edit service", fontWeight = FontWeight.Bold)
-                    Text(if (fr) "Type d'activité" else "Service type", fontWeight = FontWeight.SemiBold)
+                    Text(if (selectedServiceId.isBlank()) when (session.account.defaultLocale) { "en" -> "New service"; "ff-CM" -> "Golle kesere"; else -> "Nouvelle prestation" } else when (session.account.defaultLocale) { "en" -> "Edit service"; "ff-CM" -> "Waylu golle"; else -> "Modifier la prestation" }, fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "Service type"; "ff-CM" -> "Fannu golle"; else -> "Type d'activité" }, fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         activityOptions.forEach { value ->
                             OutlinedButton(onClick = { activity = value }) {
@@ -216,7 +216,7 @@ fun ServicesCatalogContent(
                             }
                         }
                     }
-                    Text(if (fr) "Catégorie de gestion" else "Management category", fontWeight = FontWeight.SemiBold)
+                    Text(when (session.account.defaultLocale) { "en" -> "Management category"; "ff-CM" -> "Fannu ɗowtugol"; else -> "Catégorie de gestion" }, fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         categoryOptions.forEach { value ->
                             OutlinedButton(onClick = { category = value }) {
@@ -224,13 +224,13 @@ fun ServicesCatalogContent(
                             }
                         }
                     }
-                    OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Nom de la prestation / produit" else "Service / product name") }, singleLine = true)
-                    OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Description, règles et conditions" else "Description, rules and terms") }, minLines = 2)
-                    OutlinedTextField(duration, { duration = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Durée en minutes (laisser vide si sans durée)" else "Duration in minutes (blank if not applicable)") }, singleLine = true)
-                    OutlinedTextField(price, { price = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Prix unitaire (FCFA)" else "Unit price (XAF)") }, singleLine = true)
-                    OutlinedTextField(providerIds, { providerIds = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "IDs des prestataires habilités (séparés par virgule)" else "Qualified provider IDs (comma separated)") }, minLines = 1)
-                    OutlinedTextField(workstationKinds, { workstationKinds = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Types de postes requis (séparés par virgule)" else "Required workstation kinds (comma separated)") }, minLines = 1)
-                    OutlinedTextField(packageSessions, { packageSessions = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Nombre de séances du forfait (facultatif)" else "Package session count (optional)") }, singleLine = true)
+                    OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Service / product name"; "ff-CM" -> "Innde golle / jawdi"; else -> "Nom de la prestation / produit" }) }, singleLine = true)
+                    OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Description, rules and terms"; "ff-CM" -> "Cifagol, laabi e sarɗi"; else -> "Description, règles et conditions" }) }, minLines = 2)
+                    OutlinedTextField(duration, { duration = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Duration in minutes (blank if not applicable)"; "ff-CM" -> "Sahaa e minit (accu meere so alaa)"; else -> "Durée en minutes (laisser vide si sans durée)" }) }, singleLine = true)
+                    OutlinedTextField(price, { price = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Unit price (XAF)"; "ff-CM" -> "Njoɓdi gootal (FCFA)"; else -> "Prix unitaire (FCFA)" }) }, singleLine = true)
+                    OutlinedTextField(providerIds, { providerIds = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Qualified provider IDs (comma separated)"; "ff-CM" -> "Innol golluɓe yamiraaɓe (seerndu e virgule)"; else -> "IDs des prestataires habilités (séparés par virgule)" }) }, minLines = 1)
+                    OutlinedTextField(workstationKinds, { workstationKinds = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Required workstation kinds (comma separated)"; "ff-CM" -> "Fannu nokkuuji golle soklaaɗi (seerndu e virgule)"; else -> "Types de postes requis (séparés par virgule)" }) }, minLines = 1)
+                    OutlinedTextField(packageSessions, { packageSessions = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Package session count (optional)"; "ff-CM" -> "Limoore golle e forfait (so a yiɗi)"; else -> "Nombre de séances du forfait (facultatif)" }) }, singleLine = true)
                     if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
                     if (!notice.isNullOrBlank()) Text(notice!!, color = MaterialTheme.colorScheme.primary)
                     Button(
@@ -239,7 +239,7 @@ fun ServicesCatalogContent(
                             val parsedDuration = duration.toIntOrNull()
                             val parsedSessions = packageSessions.toIntOrNull()
                             if (name.isBlank() || parsedPrice < 0L || (duration.isNotBlank() && (parsedDuration == null || parsedDuration !in 1..1440)) || (packageSessions.isNotBlank() && parsedSessions == null)) {
-                                error = if (fr) "Vérifie le nom, le tarif, la durée et le forfait." else "Check service name, price, duration and package."
+                                error = when (session.account.defaultLocale) { "en" -> "Check service name, price, duration and package."; "ff-CM" -> "Ƴeewto innde, njoɓdi, sahaa e forfait."; else -> "Vérifie le nom, le tarif, la durée et le forfait." }
                                 return@Button
                             }
                             scope.launch {
@@ -262,22 +262,22 @@ fun ServicesCatalogContent(
                                     }
                                 }.onSuccess {
                                     resetForm()
-                                    notice = if (fr) "Prestation enregistrée sur ce point de vente." else "Service saved for this site."
-                                }.onFailure { error = it.message ?: if (fr) "Enregistrement impossible." else "Save failed." }
+                                    notice = when (session.account.defaultLocale) { "en" -> "Service saved for this site."; "ff-CM" -> "Golle danndaama e nokkuure jaaygol ndee."; else -> "Prestation enregistrée sur ce point de vente." }
+                                }.onFailure { error = it.message ?: when (session.account.defaultLocale) { "en" -> "Save failed."; "ff-CM" -> "Danndugol waawataa."; else -> "Enregistrement impossible." } }
                                 busy = false
                             }
                         },
                         enabled = !busy && siteId.isNotBlank() && name.isNotBlank() && (price.toLongOrNull() ?: -1L) >= 0L,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (busy) if (fr) "Enregistrement…" else "Saving…" else if (selectedServiceId.isBlank()) if (fr) "Ajouter au catalogue" else "Add to catalogue" else if (fr) "Enregistrer les modifications" else "Save changes") }
+                    ) { Text(if (busy) when (session.account.defaultLocale) { "en" -> "Saving…"; "ff-CM" -> "Nana dannda…"; else -> "Enregistrement…" } else if (selectedServiceId.isBlank()) when (session.account.defaultLocale) { "en" -> "Add to catalogue"; "ff-CM" -> "Ɓeydu e doggol"; else -> "Ajouter au catalogue" } else when (session.account.defaultLocale) { "en" -> "Save changes"; "ff-CM" -> "Danndu wayle"; else -> "Enregistrer les modifications" }) }
                     if (selectedServiceId.isNotBlank()) {
-                        TextButton(onClick = { resetForm() }) { Text(if (fr) "Annuler la modification" else "Cancel editing") }
+                        TextButton(onClick = { resetForm() }) { Text(when (session.account.defaultLocale) { "en" -> "Cancel editing"; "ff-CM" -> "Haaytu waylugol"; else -> "Annuler la modification" }) }
                     }
                 }
             }
         }
-        item { Text(if (fr) "Prestations et produits configurés" else "Configured services and products", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (services.isEmpty()) item { Text(if (fr) "Aucune prestation sur ce point de vente." else "No services on this site.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text(when (session.account.defaultLocale) { "en" -> "Configured services and products"; "ff-CM" -> "Golle e jawdi teeltaandi"; else -> "Prestations et produits configurés" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (services.isEmpty()) item { Text(when (session.account.defaultLocale) { "en" -> "No services on this site."; "ff-CM" -> "Alaa golle e nokkuure jaaygol ndee."; else -> "Aucune prestation sur ce point de vente." }, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(services) { service ->
             Card(
                 onClick = { loadService(service) },
@@ -289,8 +289,8 @@ fun ServicesCatalogContent(
                     Text(service.activity.uppercase() + " · " + service.category.uppercase() + " · " + (service.durationMinutes?.toString() ?: "—") + " min")
                     Text(service.priceXaf.toString() + " FCFA", color = MaterialTheme.colorScheme.primary)
                     if (service.description.isNotBlank()) Text(service.description, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (service.packageSessions != null) Text((if (fr) "Forfait : " else "Package: ") + service.packageSessions + (if (fr) " séances" else " sessions"))
-                    Text(if (fr) "Toucher pour modifier" else "Tap to edit", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    if (service.packageSessions != null) Text((when (session.account.defaultLocale) { "en" -> "Package: "; "ff-CM" -> "Forfait : "; else -> "Forfait : " }) + service.packageSessions + (when (session.account.defaultLocale) { "en" -> " sessions"; "ff-CM" -> " golle"; else -> " séances" }))
+                    Text(when (session.account.defaultLocale) { "en" -> "Tap to edit"; "ff-CM" -> "Memtu ngam waylude"; else -> "Toucher pour modifier" }, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }

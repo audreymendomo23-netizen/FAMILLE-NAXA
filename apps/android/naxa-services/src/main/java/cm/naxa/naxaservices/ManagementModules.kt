@@ -232,7 +232,7 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
         scope.launch {
             busy = true
             error = null
-            runCatching { action() }.onFailure { error = it.message ?: if (fr) "Opération impossible." else "Operation failed." }
+            runCatching { action() }.onFailure { error = it.message ?: when (session.account.defaultLocale) { "en" -> "Operation failed."; "ff-CM" -> "Golle ɗee waawataa."; else -> "Opération impossible." } }
             busy = false
         }
     }
@@ -251,36 +251,36 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
         item {
             Spacer(Modifier.height(12.dp))
             Text(if (fr) "Abonnement NAXA SERVICES" else "NAXA SERVICES subscription", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text(if (fr) "Un abonnement par organisation. Les encaissements de votre entreprise sont réalisés hors application." else "One subscription per organization. Your business collects payments outside the app.")
+            Text(when (session.account.defaultLocale) { "en" -> "One subscription per organization. Your business collects payments outside the app."; "ff-CM" -> "Abonman gooto ngam fedde kala. Ceede golle maa keɓetee tawa aplikasiyoŋ alaa."; else -> "Un abonnement par organisation. Les encaissements de votre entreprise sont réalisés hors application." })
             OutlinedButton(enabled = !busy, onClick = { runAction { loadAccess() } }) {
-                Text(if (fr) "Vérifier les droits payés" else "Check paid access")
+                Text(when (session.account.defaultLocale) { "en" -> "Check paid access"; "ff-CM" -> "Ƴeewto abonman maa"; else -> "Vérifier les droits payés" })
             }
             access?.let { paid ->
                 Text(when (paid.optString("state")) {
-                    "active" -> if (fr) "Période payée active" else "Active paid period"
-                    "expired" -> if (fr) "Période payée expirée" else "Paid period expired"
-                    "cancelled" -> if (fr) "Abonnement annulé" else "Subscription cancelled"
-                    "not_started" -> if (fr) "Période payée à venir" else "Upcoming paid period"
-                    else -> if (fr) "Aucune période payée enregistrée" else "No paid period recorded"
+                    "active" -> when (session.account.defaultLocale) { "en" -> "Active paid period"; "ff-CM" -> "Sahaa yoɓaaɗo nana golla"; else -> "Période payée active" }
+                    "expired" -> when (session.account.defaultLocale) { "en" -> "Paid period expired"; "ff-CM" -> "Sahaa yoɓaaɗo timmii"; else -> "Période payée expirée" }
+                    "cancelled" -> when (session.account.defaultLocale) { "en" -> "Subscription cancelled"; "ff-CM" -> "Abonman haaytaama"; else -> "Abonnement annulé" }
+                    "not_started" -> when (session.account.defaultLocale) { "en" -> "Upcoming paid period"; "ff-CM" -> "Sahaa yoɓaaɗo aroowo"; else -> "Période payée à venir" }
+                    else -> when (session.account.defaultLocale) { "en" -> "No paid period recorded"; "ff-CM" -> "Alaa sahaa yoɓaaɗo danndaaɗo"; else -> "Aucune période payée enregistrée" }
                 })
                 paid.optString("period_end_exclusive").takeIf { it.isNotBlank() && it != "null" }?.let {
-                    Text((if (fr) "Échéance exclusive : " else "Exclusive end date: ") + it)
+                    Text((when (session.account.defaultLocale) { "en" -> "Exclusive end date: "; "ff-CM" -> "Ñalnde timmugol : "; else -> "Échéance exclusive : " }) + it)
                 }
             }
             access?.let { paid ->
                 if (paid.has("erp_access")) Text(when (paid.optString("access_reason")) {
-                    "trial" -> if (fr) "Essai de 72 h en cours" else "72-hour trial"
-                    "provisional" -> if (fr) "Accès provisoire de 24 h, paiement non confirmé" else "24-hour provisional access; payment not confirmed"
-                    "paid" -> if (fr) "Votre abonnement est actif" else "Your subscription is active"
-                    else -> if (fr) "Abonnement suspendu. Vos données disponibles restent consultables." else "Subscription suspended. Available records remain accessible."
+                    "trial" -> when (session.account.defaultLocale) { "en" -> "72-hour trial"; "ff-CM" -> "Ƴeewndugol waktuuji 72 nana golla"; else -> "Essai de 72 h en cours" }
+                    "provisional" -> when (session.account.defaultLocale) { "en" -> "24-hour provisional access; payment not confirmed"; "ff-CM" -> "Naatugol waktuuji 24, njoɓdi tabbitinaaka"; else -> "Accès provisoire de 24 h, paiement non confirmé" }
+                    "paid" -> when (session.account.defaultLocale) { "en" -> "Your subscription is active"; "ff-CM" -> "Abonman maa nana golla"; else -> "Votre abonnement est actif" }
+                    else -> when (session.account.defaultLocale) { "en" -> "Subscription suspended. Available records remain accessible."; "ff-CM" -> "Abonman dartinaama. A waawi yiyde humpito keɓeteeɗo."; else -> "Abonnement suspendu. Vos données disponibles restent consultables." }
                 })
             }
             if (session.account.roleCode != "promoter") {
-                Text(if (fr) "Règlement réservé au Promoteur." else "Payment reserved for the promoter.")
+                Text(when (session.account.defaultLocale) { "en" -> "Payment reserved for the promoter."; "ff-CM" -> "Jom golle tan waawi yoɓde."; else -> "Règlement réservé au Promoteur." })
             } else {
-                OutlinedButton(enabled = !busy, onClick = { runAction { load() } }) { Text(if (fr) "Consulter / actualiser" else "Load / refresh") }
+                OutlinedButton(enabled = !busy, onClick = { runAction { load() } }) { Text(when (session.account.defaultLocale) { "en" -> "Load / refresh"; "ff-CM" -> "Yiy / hesɗitin"; else -> "Consulter / actualiser" }) }
                 snapshot?.optJSONObject("subscription")?.let { sub ->
-                    Text(sub.optString("plan_code") + " · " + sub.optString("status") + " · " + (if (fr) "Échéance (exclusive) : " else "End date (exclusive): ") + sub.optString("period_end_exclusive"))
+                    Text(sub.optString("plan_code") + " · " + sub.optString("status") + " · " + (when (session.account.defaultLocale) { "en" -> "End date (exclusive): "; "ff-CM" -> "Ñalnde timmugol : "; else -> "Échéance (exclusive) : " }) + sub.optString("period_end_exclusive"))
                 }
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -288,24 +288,24 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
         if (session.account.roleCode == "promoter" && snapshot != null && current == null) item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (fr) "Choisir une formule" else "Choose plan", fontWeight = FontWeight.Bold)
-                    if (requiresPremium) Text(if (fr) "PREMIUM requis pour le réseau ou plusieurs postes." else "PREMIUM required for multiple workstations or sites.")
+                    Text(when (session.account.defaultLocale) { "en" -> "Choose plan"; "ff-CM" -> "Suɓo fannu abonman"; else -> "Choisir une formule" }, fontWeight = FontWeight.Bold)
+                    if (requiresPremium) Text(when (session.account.defaultLocale) { "en" -> "PREMIUM required for multiple workstations or sites."; "ff-CM" -> "PREMIUM soklaa ngam nokkuuji keewɗi."; else -> "PREMIUM requis pour le réseau ou plusieurs postes." })
                     (if (requiresPremium) listOf("PREMIUM") else listOf("ACCESS","PREMIUM")).forEach { value ->
                         OutlinedButton(onClick = { plan = value }, enabled = !busy) { Text((if (plan == value) "✓ " else "") + value) }
                     }
                     listOf(1,12).forEach { value ->
-                        OutlinedButton(onClick = { months = value }, enabled = !busy) { Text((if (months == value) "✓ " else "") + if (value == 1) (if (fr) "Mensuel" else "Monthly") else (if (fr) "Annuel" else "Annual")) }
+                        OutlinedButton(onClick = { months = value }, enabled = !busy) { Text((if (months == value) "✓ " else "") + if (value == 1) (when (session.account.defaultLocale) { "en" -> "Monthly"; "ff-CM" -> "Lewru"; else -> "Mensuel" }) else (when (session.account.defaultLocale) { "en" -> "Annual"; "ff-CM" -> "Hitaande"; else -> "Annuel" })) }
                     }
                     destinations.forEach { d ->
                         val value = d.optString("channel")
                         OutlinedButton(onClick = { channel = value }, enabled = !busy) { Text((if (channel == value) "✓ " else "") + if (value == "mtn_momo") "MTN MoMo" else "Orange Money") }
                     }
-                    if (destinations.isEmpty()) Text(if (fr) "Aucune destination NAXA activée. Ne payez pas sur un autre compte." else "No NAXA payment destination is enabled.")
+                    if (destinations.isEmpty()) Text(when (session.account.defaultLocale) { "en" -> "No NAXA payment destination is enabled."; "ff-CM" -> "Alaa nokkuure yoɓde NAXA. Hoto yoɓ konte goɗɗo."; else -> "Aucune destination NAXA activée. Ne payez pas sur un autre compte." })
                     Button(enabled = !busy && destinations.any { it.optString("channel") == channel }, onClick = {
                         runAction {
                             intent = api.subscriptionRequest(session.accessToken, JSONObject().put("action","subscription_create").put("plan_code",plan).put("months",months).put("channel",channel))
                         }
-                    }) { Text(if (fr) "Obtenir le montant et la destination" else "Get amount and destination") }
+                    }) { Text(when (session.account.defaultLocale) { "en" -> "Get amount and destination"; "ff-CM" -> "Yiy ceede e nokkuure yoɓde"; else -> "Obtenir le montant et la destination" }) }
                 }
             }
         }
@@ -313,18 +313,18 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(xaf(current.optLong("amount_xaf")) + " · " + current.optString("plan_code"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text((if (fr) "Bénéficiaire : " else "Beneficiary: ") + current.optString("beneficiary") + " · " + current.optString("merchant_code"))
+                    Text((when (session.account.defaultLocale) { "en" -> "Beneficiary: "; "ff-CM" -> "Heɓoowo : "; else -> "Bénéficiaire : " }) + current.optString("beneficiary") + " · " + current.optString("merchant_code"))
                     if (current.optString("status") == "pending") {
-                        Text(if (fr) "Vérifiez le bénéficiaire et le montant chez l'opérateur. Ne communiquez jamais votre PIN." else "Check the merchant and amount with the operator. Never share your PIN.")
+                        Text(when (session.account.defaultLocale) { "en" -> "Check the merchant and amount with the operator. Never share your PIN."; "ff-CM" -> "Ƴeewto heɓoowo e ceede e hokkooɗo njoɓdi. Hoto hokku PIN maa."; else -> "Vérifiez le bénéficiaire et le montant chez l'opérateur. Ne communiquez jamais votre PIN." })
                         if (ussd.isNotEmpty()) {
                             Text(ussd)
                             OutlinedButton(enabled = !busy, onClick = {
                                 runCatching { context.startActivity(Intent(Intent.ACTION_DIAL, Uri.fromParts("tel",ussd,null))) }.onFailure { error = it.message }
-                            }) { Text(if (fr) "Ouvrir le composeur" else "Open dialer") }
+                            }) { Text(when (session.account.defaultLocale) { "en" -> "Open dialer"; "ff-CM" -> "Uddit telefon"; else -> "Ouvrir le composeur" }) }
                         }
-                        OutlinedTextField(payer, { payer = it.take(20) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Numéro du payeur" else "Payer phone") }, singleLine = true)
-                        if (current.optString("channel") == "orange_money") OutlinedTextField(date, { date = it.take(16) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Date et heure Cameroun (AAAA-MM-JJ HH:mm)" else "Cameroon time (YYYY-MM-DD HH:mm)") }, singleLine = true)
-                        OutlinedTextField(sms, { sms = it.take(8000) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "SMS de débit de cette transaction" else "Debit SMS for this transaction") })
+                        OutlinedTextField(payer, { payer = it.take(20) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Payer phone"; "ff-CM" -> "Tonngoode telefon yoɓooɗo"; else -> "Numéro du payeur" }) }, singleLine = true)
+                        if (current.optString("channel") == "orange_money") OutlinedTextField(date, { date = it.take(16) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Cameroon time (YYYY-MM-DD HH:mm)"; "ff-CM" -> "Ñalnde e sahaa Kameruun (AAAA-MM-JJ HH:mm)"; else -> "Date et heure Cameroun (AAAA-MM-JJ HH:mm)" }) }, singleLine = true)
+                        OutlinedTextField(sms, { sms = it.take(8000) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Debit SMS for this transaction"; "ff-CM" -> "SMS njoɓdi ɗee"; else -> "SMS de débit de cette transaction" }) })
                         Button(enabled = !busy && payer.isNotBlank() && sms.isNotBlank() && (current.optString("channel") != "orange_money" || date.length == 16), onClick = {
                             runAction {
                                 val payload = JSONObject().put("action","subscription_declare").put("intent_id",current.optString("id")).put("sms",sms).put("payer_number",payer)
@@ -332,23 +332,23 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
                                 api.subscriptionRequest(session.accessToken,payload)
                                 sms = ""; payer = ""; date = ""; load()
                             }
-                        }) { Text(if (fr) "Déclarer le paiement" else "Declare payment") }
+                        }) { Text(when (session.account.defaultLocale) { "en" -> "Declare payment"; "ff-CM" -> "Hollu njoɓdi"; else -> "Déclarer le paiement" }) }
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             androidx.compose.material3.Checkbox(checked = notPaid, onCheckedChange = { notPaid = it }, enabled = !busy)
-                            Text(if (fr) "Je confirme n’avoir effectué aucun paiement." else "I confirm no payment was made.")
+                            Text(when (session.account.defaultLocale) { "en" -> "I confirm no payment was made."; "ff-CM" -> "Mi tabbitinii mi yoɓaani."; else -> "Je confirme n’avoir effectué aucun paiement." })
                         }
                         OutlinedButton(enabled = !busy && notPaid, onClick = {
                             runAction {
                                 api.subscriptionRequest(session.accessToken, JSONObject().put("action","subscription_cancel").put("intent_id",current.optString("id")).put("not_paid",true))
                                 sms = ""; payer = ""; date = ""; load()
                             }
-                        }) { Text(if (fr) "Abandonner la demande non payée" else "Cancel unpaid request") }
-                    } else Text(if (fr) "Déclaration reçue. En attente du crédit NAXA ; aucun droit activé par une preuve seule." else "Declaration received. Waiting for NAXA credit proof; one proof does not activate access.")
+                        }) { Text(when (session.account.defaultLocale) { "en" -> "Cancel unpaid request"; "ff-CM" -> "Haaytu ɗaɓɓitannde nde yoɓaaka"; else -> "Abandonner la demande non payée" }) }
+                    } else Text(when (session.account.defaultLocale) { "en" -> "Declaration received. Waiting for NAXA credit proof; one proof does not activate access."; "ff-CM" -> "Jaŋtol njoɓdi heɓaama. Nana fadi ceede NAXA; kayit tan udditataa abonman."; else -> "Déclaration reçue. En attente du crédit NAXA ; aucun droit activé par une preuve seule." })
                 }
             }
         }
         if (session.account.roleCode == "promoter") items(arrayObjects(snapshot?.optJSONArray("intents")).filter { it.optString("status") == "confirmed" }) { row ->
-            Text((if (fr) "Reçu " else "Receipt ") + row.optString("receipt_number") + " · " + xaf(row.optLong("amount_xaf")))
+            Text((when (session.account.defaultLocale) { "en" -> "Receipt "; "ff-CM" -> "Kayit "; else -> "Reçu " }) + row.optString("receipt_number") + " · " + xaf(row.optLong("amount_xaf")))
         }
         item { Spacer(Modifier.height(12.dp)) }
     }
@@ -412,41 +412,41 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle(
-                if (fr) "Achats, fournisseurs et comptabilité" else "Purchases, suppliers and accounting",
-                if (fr) "Commandes multi-lignes, réceptions partielles, dettes et règlements fournisseurs, avec journal débit/crédit et impact sur les marges." else "Multi-line orders, partial receiving, supplier payables and payments, with balanced journal entries and margin impact."
+                when (session.account.defaultLocale) { "en" -> "Purchases, suppliers and accounting"; "ff-CM" -> "Soodugol, hokkooɓe jawdi e limtol ceede"; else -> "Achats, fournisseurs et comptabilité" },
+                when (session.account.defaultLocale) { "en" -> "Multi-line orders, partial receiving, supplier payables and payments, with balanced journal entries and margin impact."; "ff-CM" -> "Ɗaɓɓitanɗe jawdi keewɗi, heɓugol seeɗa, ñaawoore e njoɓdi hokkooɓe jawdi, jaŋtol ceede e njariñ."; else -> "Commandes multi-lignes, réceptions partielles, dettes et règlements fournisseurs, avec journal débit/crédit et impact sur les marges." }
             )
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) {
                 siteId = it; selectedSupplierId = ""; selectedItemId = ""; draftLines.clear()
             }
-            LocalOnlyNotice(if (fr) "Consultez vos registres comptables disponibles." else "View your available accounting records.")
+            LocalOnlyNotice(when (session.account.defaultLocale) { "en" -> "View your available accounting records."; "ff-CM" -> "Yiy jaŋte ceede maa."; else -> "Consultez vos registres comptables disponibles." })
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(if (fr) "Compte fournisseur du site" else "Site supplier account", fontWeight = FontWeight.Bold)
-                    Text((if (fr) "Dettes fournisseurs non réglées : " else "Open supplier payables: ") + xaf(payables), style = MaterialTheme.typography.titleLarge)
-                    Text((if (fr) "Commandes ouvertes : " else "Open purchase documents: ") + purchases.count { it.status !in setOf("closed", "cancelled") })
-                    Text((if (fr) "Règlements enregistrés : " else "Payments recorded: ") + payments.size)
+                    Text(when (session.account.defaultLocale) { "en" -> "Site supplier account"; "ff-CM" -> "Konte hokkooɗo jawdi nokkuure"; else -> "Compte fournisseur du site" }, fontWeight = FontWeight.Bold)
+                    Text((when (session.account.defaultLocale) { "en" -> "Open supplier payables: "; "ff-CM" -> "Ñaawoore hokkooɓe jawdi yoɓaaka : "; else -> "Dettes fournisseurs non réglées : " }) + xaf(payables), style = MaterialTheme.typography.titleLarge)
+                    Text((when (session.account.defaultLocale) { "en" -> "Open purchase documents: "; "ff-CM" -> "Ɗaɓɓitanɗe udditiiɗe : "; else -> "Commandes ouvertes : " }) + purchases.count { it.status !in setOf("closed", "cancelled") })
+                    Text((when (session.account.defaultLocale) { "en" -> "Payments recorded: "; "ff-CM" -> "Njoɓdi danndaaɗi : "; else -> "Règlements enregistrés : " }) + payments.size)
                 }
             }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (fr) "Fiche fournisseur" else "Supplier profile", fontWeight = FontWeight.Bold)
-                    if (suppliers.isEmpty()) Text(if (fr) "Aucun fournisseur actif pour ce site." else "No active supplier for this site.")
+                    Text(when (session.account.defaultLocale) { "en" -> "Supplier profile"; "ff-CM" -> "Humpito hokkooɗo jawdi"; else -> "Fiche fournisseur" }, fontWeight = FontWeight.Bold)
+                    if (suppliers.isEmpty()) Text(when (session.account.defaultLocale) { "en" -> "No active supplier for this site."; "ff-CM" -> "Alaa hokkooɗo jawdi e nokkuure ndee."; else -> "Aucun fournisseur actif pour ce site." })
                     suppliers.forEach { supplier ->
                         OutlinedButton(onClick = { selectedSupplierId = supplier.id }, modifier = Modifier.fillMaxWidth()) {
                             Text((if (selectedSupplierId == supplier.id) "✓ " else "") + supplier.name + " · " + supplier.phone)
                         }
                     }
-                    OutlinedTextField(supplierName, { supplierName = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Nom / raison sociale" else "Supplier name") }, singleLine = true)
-                    OutlinedTextField(supplierPhone, { supplierPhone = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Téléphone" else "Phone") }, singleLine = true)
+                    OutlinedTextField(supplierName, { supplierName = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Supplier name"; "ff-CM" -> "Innde / innde fedde"; else -> "Nom / raison sociale" }) }, singleLine = true)
+                    OutlinedTextField(supplierPhone, { supplierPhone = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Phone"; "ff-CM" -> "Telefon"; else -> "Téléphone" }) }, singleLine = true)
                     OutlinedTextField(supplierWhatsApp, { supplierWhatsApp = it }, Modifier.fillMaxWidth(), label = { Text("WhatsApp fournisseur · indicatif pays") }, singleLine = true)
                     OutlinedTextField(supplierEmail, { supplierEmail = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "E-mail" else "Email") }, singleLine = true)
-                    OutlinedTextField(supplierAddress, { supplierAddress = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Adresse" else "Address") }, minLines = 2)
-                    OutlinedTextField(supplierTerms, { supplierTerms = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Délai de paiement (jours)" else "Payment terms (days)") }, singleLine = true)
-                    OutlinedTextField(supplierNotes, { supplierNotes = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Conditions et notes" else "Terms and notes") }, minLines = 2)
+                    OutlinedTextField(supplierAddress, { supplierAddress = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Address"; "ff-CM" -> "Nokkuure"; else -> "Adresse" }) }, minLines = 2)
+                    OutlinedTextField(supplierTerms, { supplierTerms = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Payment terms (days)"; "ff-CM" -> "Sahaa yoɓde (balɗe)"; else -> "Délai de paiement (jours)" }) }, singleLine = true)
+                    OutlinedTextField(supplierNotes, { supplierNotes = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Terms and notes"; "ff-CM" -> "Laabi e ɓatakuuji"; else -> "Conditions et notes" }) }, minLines = 2)
                     Button(
                         onClick = {
                             scope.launch {
@@ -458,26 +458,26 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                                     selectedSupplierId = it.id
                                     supplierName = ""; supplierPhone = ""; supplierWhatsApp = ""; supplierEmail = ""
                                     supplierAddress = ""; supplierNotes = ""; supplierTerms = "30"
-                                    notice = if (fr) "Fiche fournisseur enregistrée." else "Supplier profile saved."
+                                    notice = when (session.account.defaultLocale) { "en" -> "Supplier profile saved."; "ff-CM" -> "Humpito hokkooɗo jawdi danndaama."; else -> "Fiche fournisseur enregistrée." }
                                 }.onFailure { error = it.message ?: "Supplier save failed." }
                                 busy = false
                             }
                         }, enabled = !busy && supplierName.trim().length >= 2 && (supplierTerms.toIntOrNull() ?: -1) in 0..365,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (busy) "Enregistrement…" else if (fr) "Enregistrer le fournisseur" else "Save supplier") }
+                    ) { Text(if (busy) "Enregistrement…" else when (session.account.defaultLocale) { "en" -> "Save supplier"; "ff-CM" -> "Danndu hokkooɗo jawdi"; else -> "Enregistrer le fournisseur" }) }
                 }
             }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (fr) "Nouvelle commande fournisseur multi-lignes" else "New multi-line supplier order", fontWeight = FontWeight.Bold)
-                    Text(if (fr) "1. Sélection du fournisseur" else "1. Select supplier")
-                    if (selectedSupplier == null) Text(if (fr) "Sélectionne d'abord une fiche fournisseur." else "Select an existing supplier profile first.")
+                    Text(when (session.account.defaultLocale) { "en" -> "New multi-line supplier order"; "ff-CM" -> "Ɗaɓɓitannde jawdi hesere keewɗi"; else -> "Nouvelle commande fournisseur multi-lignes" }, fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "1. Select supplier"; "ff-CM" -> "1. Suɓo hokkooɗo jawdi"; else -> "1. Sélection du fournisseur" })
+                    if (selectedSupplier == null) Text(when (session.account.defaultLocale) { "en" -> "Select an existing supplier profile first."; "ff-CM" -> "Suɓo hokkooɗo jawdi tawo."; else -> "Sélectionne d'abord une fiche fournisseur." })
                     else Text(selectedSupplier.name + " · " + selectedSupplier.phone, color = MaterialTheme.colorScheme.primary)
-                    OutlinedTextField(purchaseReference, { purchaseReference = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Référence commande (laisser vide pour générer)" else "Purchase reference (blank to generate)") }, singleLine = true)
-                    OutlinedTextField(supplierInvoice, { supplierInvoice = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Référence facture fournisseur" else "Supplier invoice reference") }, singleLine = true)
-                    Text(if (fr) "2. Ajouter les lignes" else "2. Add purchase lines")
+                    OutlinedTextField(purchaseReference, { purchaseReference = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Purchase reference (blank to generate)"; "ff-CM" -> "Innol ɗaɓɓitannde (accu meere ngam sosde)"; else -> "Référence commande (laisser vide pour générer)" }) }, singleLine = true)
+                    OutlinedTextField(supplierInvoice, { supplierInvoice = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Supplier invoice reference"; "ff-CM" -> "Innol facture hokkooɗo jawdi"; else -> "Référence facture fournisseur" }) }, singleLine = true)
+                    Text(when (session.account.defaultLocale) { "en" -> "2. Add purchase lines"; "ff-CM" -> "2. Ɓeydu jawdi"; else -> "2. Ajouter les lignes" })
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         listOf("stock" to "Stock", "operating_expense" to "Consommable / service", "fixed_asset" to "Immobilisation").forEach { option ->
                             OutlinedButton(onClick = { itemType = option.first; selectedItemId = "" }) {
@@ -494,18 +494,18 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                             }
                         }
                     } else {
-                        OutlinedTextField(lineDescription, { lineDescription = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Désignation de la charge / immobilisation" else "Expense / asset description") })
+                        OutlinedTextField(lineDescription, { lineDescription = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Expense / asset description"; "ff-CM" -> "Innde njoɓdi / jawdi juutndi"; else -> "Désignation de la charge / immobilisation" }) })
                     }
-                    OutlinedTextField(lineUnit, { lineUnit = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Unité" else "Unit") }, singleLine = true)
-                    OutlinedTextField(lineQuantity, { lineQuantity = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Quantité commandée" else "Quantity ordered") }, singleLine = true)
-                    OutlinedTextField(lineUnitCost, { lineUnitCost = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Coût unitaire (FCFA)" else "Unit cost (XAF)") }, singleLine = true)
+                    OutlinedTextField(lineUnit, { lineUnit = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Unit"; "ff-CM" -> "Keewal"; else -> "Unité" }) }, singleLine = true)
+                    OutlinedTextField(lineQuantity, { lineQuantity = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Quantity ordered"; "ff-CM" -> "Keewal ɗaɓɓitaangal"; else -> "Quantité commandée" }) }, singleLine = true)
+                    OutlinedTextField(lineUnitCost, { lineUnitCost = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Unit cost (XAF)"; "ff-CM" -> "Njoɓdi gootal (FCFA)"; else -> "Coût unitaire (FCFA)" }) }, singleLine = true)
                     OutlinedButton(
                         onClick = {
                             val qty = lineQuantity.replace(",", ".").toDoubleOrNull() ?: 0.0
                             val unitCost = lineUnitCost.toLongOrNull() ?: 0L
                             if (lineDescription.isBlank() || qty <= 0 || !qty.isFinite() || unitCost <= 0 ||
                                 (itemType == "stock" && selectedItem == null)
-                            ) error = if (fr) "Désignation, article de stock si requis, quantité et coût unitaire positifs obligatoires." else "Description, linked stock item if required, quantity and unit cost are required."
+                            ) error = when (session.account.defaultLocale) { "en" -> "Description, linked stock item if required, quantity and unit cost are required."; "ff-CM" -> "Innde, jawdi so soklaa, keewal e njoɓdi ɓurɗi 0 ko waajib."; else -> "Désignation, article de stock si requis, quantité et coût unitaire positifs obligatoires." }
                             else {
                                 draftLines.add(SupplierPurchaseLineDraft(
                                     if (itemType == "stock") selectedItem?.id else null,
@@ -516,9 +516,9 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                                 error = null
                             }
                         }, modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (fr) "Ajouter cette ligne à la commande" else "Add line to purchase") }
+                    ) { Text(when (session.account.defaultLocale) { "en" -> "Add line to purchase"; "ff-CM" -> "Ɓeydu jawdi e ɗaɓɓitannde"; else -> "Ajouter cette ligne à la commande" }) }
                     if (draftLines.isNotEmpty()) {
-                        Text(if (fr) "Lignes préparées" else "Prepared lines", fontWeight = FontWeight.SemiBold)
+                        Text(when (session.account.defaultLocale) { "en" -> "Prepared lines"; "ff-CM" -> "Jawdi heblitaandi"; else -> "Lignes préparées" }, fontWeight = FontWeight.SemiBold)
                         draftLines.forEachIndexed { index, line ->
                             Row(horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f)) {
@@ -526,26 +526,26 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                                     Text(line.itemType + " · " + line.quantity + " " + line.unit + " × " + xaf(line.unitCostXaf), style = MaterialTheme.typography.bodySmall)
                                 }
                                 Text(xaf((line.quantity * line.unitCostXaf).roundToLong()))
-                                TextButton(onClick = { draftLines.removeAt(index) }) { Text(if (fr) "Retirer" else "Remove") }
+                                TextButton(onClick = { draftLines.removeAt(index) }) { Text(when (session.account.defaultLocale) { "en" -> "Remove"; "ff-CM" -> "Ittu"; else -> "Retirer" }) }
                             }
                         }
                     }
-                    Text(if (fr) "3. Taxes et frais" else "3. Taxes and fees", fontWeight = FontWeight.SemiBold)
-                    OutlinedTextField(recoverableTax, { recoverableTax = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Taxe récupérable déclarée (FCFA)" else "Recoverable tax entered (XAF)") }, singleLine = true)
-                    OutlinedTextField(nonRecoverableTax, { nonRecoverableTax = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Taxe non récupérable (FCFA)" else "Non-recoverable tax (XAF)") }, singleLine = true)
-                    OutlinedTextField(shipping, { shipping = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Transport / livraison (FCFA)" else "Shipping / delivery (XAF)") }, singleLine = true)
-                    OutlinedTextField(otherFees, { otherFees = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Autres frais imputables (FCFA)" else "Other allocable fees (XAF)") }, singleLine = true)
-                    OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Échéance de paiement dans (jours)" else "Payment due in (days)") }, singleLine = true)
-                    OutlinedTextField(purchaseNotes, { purchaseNotes = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Notes / conditions de réception" else "Notes / receiving conditions") }, minLines = 2)
+                    Text(when (session.account.defaultLocale) { "en" -> "3. Taxes and fees"; "ff-CM" -> "3. Sagalle e njoɓdi"; else -> "3. Taxes et frais" }, fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(recoverableTax, { recoverableTax = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Recoverable tax entered (XAF)"; "ff-CM" -> "Taksa rutteteenga (FCFA)"; else -> "Taxe récupérable déclarée (FCFA)" }) }, singleLine = true)
+                    OutlinedTextField(nonRecoverableTax, { nonRecoverableTax = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Non-recoverable tax (XAF)"; "ff-CM" -> "Taksa nde ruttetaake (FCFA)"; else -> "Taxe non récupérable (FCFA)" }) }, singleLine = true)
+                    OutlinedTextField(shipping, { shipping = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Shipping / delivery (XAF)"; "ff-CM" -> "Yahdugol / jottugol (FCFA)"; else -> "Transport / livraison (FCFA)" }) }, singleLine = true)
+                    OutlinedTextField(otherFees, { otherFees = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Other allocable fees (XAF)"; "ff-CM" -> "Njoɓdi goɗɗi (FCFA)"; else -> "Autres frais imputables (FCFA)" }) }, singleLine = true)
+                    OutlinedTextField(dueDays, { dueDays = it.filter(Char::isDigit).take(3) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Payment due in (days)"; "ff-CM" -> "Yoɓde caggal (balɗe)"; else -> "Échéance de paiement dans (jours)" }) }, singleLine = true)
+                    OutlinedTextField(purchaseNotes, { purchaseNotes = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Notes / receiving conditions"; "ff-CM" -> "Ɓatakuuji / laabi heɓugol"; else -> "Notes / conditions de réception" }) }, minLines = 2)
                     Text("Sous-total : " + xaf(orderSubtotal))
                     Text("Total engagé : " + xaf(orderTotal), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    Text(if (fr) "La commande seule ne modifie ni le stock ni le résultat. La dette et les écritures sont créées au rythme des réceptions effectives." else "An order alone changes neither stock nor profit. Payables and journal entries are created as goods/services are actually received.")
+                    Text(when (session.account.defaultLocale) { "en" -> "An order alone changes neither stock nor profit. Payables and journal entries are created as goods/services are actually received."; "ff-CM" -> "Ɗaɓɓitannde tan waylataa jawdi walla limooje. Ñaawoore e jaŋtol sosetee so jawdi heɓaama."; else -> "La commande seule ne modifie ni le stock ni le résultat. La dette et les écritures sont créées au rythme des réceptions effectives." })
                     Button(
                         onClick = {
                             if (selectedSupplier == null || draftLines.isEmpty() || orderTotal <= 0L ||
                                 listOf(recoverableTaxValue, nonRecoverableTaxValue, shippingValue, otherFeeValue).any { it < 0L } ||
                                 (dueDays.toIntOrNull() ?: -1) !in 0..365
-                            ) error = if (fr) "Fournisseur, lignes et montants valides obligatoires." else "Supplier, lines and valid amounts required."
+                            ) error = when (session.account.defaultLocale) { "en" -> "Supplier, lines and valid amounts required."; "ff-CM" -> "Hokkooɗo jawdi, jawdi e ceede feewɗe ko waajib."; else -> "Fournisseur, lignes et montants valides obligatoires." }
                             else scope.launch {
                                 busy = true; error = null
                                 runCatching {
@@ -560,20 +560,20 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                                 }.onSuccess {
                                     draftLines.clear(); purchaseReference = ""; supplierInvoice = ""; purchaseNotes = ""
                                     recoverableTax = "0"; nonRecoverableTax = "0"; shipping = "0"; otherFees = "0"; dueDays = "30"
-                                    notice = if (fr) "Commande enregistrée. Aucune entrée de stock ou dépense n'est postée avant réception." else "Order saved. No stock entry or expense is posted before receipt."
+                                    notice = when (session.account.defaultLocale) { "en" -> "Order saved. No stock entry or expense is posted before receipt."; "ff-CM" -> "Ɗaɓɓitannde danndaama. Jawdi walla njoɓdi winndaaka hade heɓugol."; else -> "Commande enregistrée. Aucune entrée de stock ou dépense n'est postée avant réception." }
                                 }.onFailure { error = it.message ?: "Purchase creation failed." }
                                 busy = false
                             }
                         }, enabled = !busy && selectedSupplier != null && draftLines.isNotEmpty() && orderTotal > 0L,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (busy) "Enregistrement…" else if (fr) "Valider la commande fournisseur" else "Create supplier order") }
+                    ) { Text(if (busy) "Enregistrement…" else when (session.account.defaultLocale) { "en" -> "Create supplier order"; "ff-CM" -> "Tabbitin ɗaɓɓitannde jawdi"; else -> "Valider la commande fournisseur" }) }
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
                     if (notice != null) Text(notice!!, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
-        item { Text(if (fr) "Commandes, réceptions et dettes fournisseurs" else "Supplier orders, receipts and payables", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (purchases.isEmpty()) item { Text(if (fr) "Aucune commande fournisseur enregistrée." else "No supplier purchase orders yet.") }
+        item { Text(when (session.account.defaultLocale) { "en" -> "Supplier orders, receipts and payables"; "ff-CM" -> "Ɗaɓɓitanɗe, heɓugol e ñaawoore hokkooɓe jawdi"; else -> "Commandes, réceptions et dettes fournisseurs" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (purchases.isEmpty()) item { Text(when (session.account.defaultLocale) { "en" -> "No supplier purchase orders yet."; "ff-CM" -> "Alaa ɗaɓɓitannde jawdi danndaande."; else -> "Aucune commande fournisseur enregistrée." }) }
         items(purchases, key = { it.id }) { purchase ->
             val lines by remember(purchase.id, siteId) { repository.dao.observePurchaseLines(orgId, siteId, purchase.id) }.collectAsState(initial = emptyList())
             val receipts by remember(purchase.id, siteId) { repository.dao.observePurchaseReceipts(orgId, siteId, purchase.id) }.collectAsState(initial = emptyList())
@@ -581,7 +581,7 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                 Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                     Text(purchase.reference + " · " + purchase.supplierNameSnapshot, fontWeight = FontWeight.Bold)
-                    Text("Statut : " + purchase.status + " · " + (purchase.supplierInvoiceNumber.ifBlank { if (fr) "Facture non renseignée" else "Invoice not entered" }))
+                    Text("Statut : " + purchase.status + " · " + (purchase.supplierInvoiceNumber.ifBlank { when (session.account.defaultLocale) { "en" -> "Invoice not entered"; "ff-CM" -> "Facture winndaaka"; else -> "Facture non renseignée" } }))
                     val purchaseSupplier = suppliers.firstOrNull { it.id == purchase.supplierId }
                     if (!purchaseSupplier?.whatsapp.isNullOrBlank()) {
                         OutlinedButton(
@@ -598,11 +598,11 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                                 }.onFailure { error = "WhatsApp ou navigateur indisponible sur cet appareil." }
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (fr) "Envoyer le bon de commande par WhatsApp" else "Send purchase order via WhatsApp") }
+                        ) { Text(when (session.account.defaultLocale) { "en" -> "Send purchase order via WhatsApp"; "ff-CM" -> "Neldu kayit ɗaɓɓitannde e WhatsApp"; else -> "Envoyer le bon de commande par WhatsApp" }) }
                     }
                     Text("Total commandé : " + xaf(purchase.subtotalXaf + purchase.recoverableTaxXaf + purchase.nonRecoverableTaxXaf + purchase.shippingXaf + purchase.otherFeesXaf))
                     Text("Réceptionné : " + xaf(purchase.receivedTotalXaf) + " · réglé : " + xaf(purchase.paidTotalXaf))
-                    Text((if (fr) "Dette fournisseur : " else "Supplier payable: ") + xaf(due.coerceAtLeast(0L)), color = if (due > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                    Text((when (session.account.defaultLocale) { "en" -> "Supplier payable: "; "ff-CM" -> "Ñaawoore hokkooɗo jawdi : "; else -> "Dette fournisseur : " }) + xaf(due.coerceAtLeast(0L)), color = if (due > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                     lines.forEach { line ->
                         val remaining = (line.quantityOrdered - line.quantityReceived).coerceAtLeast(0.0)
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -610,7 +610,7 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                             Text("Commandé : " + line.quantityOrdered + " · reçu : " + line.quantityReceived + " · restant : " + remaining, style = MaterialTheme.typography.bodySmall)
                             if (remaining > 0.000001 && purchase.status !in setOf("cancelled", "closed")) {
                                 val qtyText = receiptQuantities[line.id] ?: remaining.toString()
-                                OutlinedTextField(qtyText, { receiptQuantities[line.id] = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Quantité reçue maintenant" else "Quantity received now") }, singleLine = true)
+                                OutlinedTextField(qtyText, { receiptQuantities[line.id] = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Quantity received now"; "ff-CM" -> "Keewal heɓaangal jooni"; else -> "Quantité reçue maintenant" }) }, singleLine = true)
                                 OutlinedButton(onClick = {
                                     val q = (receiptQuantities[line.id] ?: remaining.toString()).replace(",", ".").toDoubleOrNull() ?: 0.0
                                     scope.launch {
@@ -621,15 +621,15 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                                             ).toString(),
                                             session.account.memberId
                                         ) }
-                                            .onSuccess { receiptQuantities.remove(line.id); notice = if (fr) "Réception enregistrée : stock, dette et journal mis à jour." else "Receipt posted to inventory, payable and journal." }
+                                            .onSuccess { receiptQuantities.remove(line.id); notice = when (session.account.defaultLocale) { "en" -> "Receipt posted to inventory, payable and journal."; "ff-CM" -> "Heɓugol danndaama: jawdi, ñaawoore e jaŋtol hesɗitinaama."; else -> "Réception enregistrée : stock, dette et journal mis à jour." } }
                                             .onFailure { error = it.message ?: "Receiving failed." }
                                     }
-                                }, enabled = remaining > 0.0) { Text(if (fr) "Valider cette réception partielle / complète" else "Post this partial / full receipt") }
+                                }, enabled = remaining > 0.0) { Text(when (session.account.defaultLocale) { "en" -> "Post this partial / full receipt"; "ff-CM" -> "Tabbitin heɓugol seeɗa / fof"; else -> "Valider cette réception partielle / complète" }) }
                             }
                         }
                     }
                     if (receipts.isNotEmpty()) {
-                        Text(if (fr) "Historique des réceptions" else "Receiving history", fontWeight = FontWeight.SemiBold)
+                        Text(when (session.account.defaultLocale) { "en" -> "Receiving history"; "ff-CM" -> "Jaŋtol heɓugol jawdi"; else -> "Historique des réceptions" }, fontWeight = FontWeight.SemiBold)
                         receipts.forEach { receipt ->
                             Text(receipt.quantityReceived.toString() + " · " + xaf(receipt.baseCostXaf + receipt.nonRecoverableCostXaf + receipt.recoverableTaxXaf) +
                                 " · " + java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(receipt.receivedAtMillis)),
@@ -641,8 +641,8 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                         var paymentMethod by rememberSaveable(purchase.id) { mutableStateOf("bank") }
                         var cashSessionId by rememberSaveable(purchase.id) { mutableStateOf("") }
                         var paymentReference by rememberSaveable(purchase.id) { mutableStateOf("") }
-                        Text(if (fr) "Règlement fournisseur" else "Supplier settlement", fontWeight = FontWeight.SemiBold)
-                        OutlinedTextField(amountToPay, { amountToPay = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Montant réglé (FCFA)" else "Payment amount (XAF)") }, singleLine = true)
+                        Text(when (session.account.defaultLocale) { "en" -> "Supplier settlement"; "ff-CM" -> "Njoɓdi hokkooɗo jawdi"; else -> "Règlement fournisseur" }, fontWeight = FontWeight.SemiBold)
+                        OutlinedTextField(amountToPay, { amountToPay = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Payment amount (XAF)"; "ff-CM" -> "Ceede yoɓaaɗe (FCFA)"; else -> "Montant réglé (FCFA)" }) }, singleLine = true)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             listOf("cash" to "Espèces", "bank" to "Banque", "mobile_money" to "Mobile Money", "other" to "Autre").forEach { method ->
                                 OutlinedButton(onClick = { paymentMethod = method.first }) { Text((if (paymentMethod == method.first) "✓ " else "") + method.second) }
@@ -655,11 +655,11 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                                 }
                             }
                         }
-                        OutlinedTextField(paymentReference, { paymentReference = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Référence du règlement" else "Payment reference") }, singleLine = true)
+                        OutlinedTextField(paymentReference, { paymentReference = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Payment reference"; "ff-CM" -> "Innol njoɓdi"; else -> "Référence du règlement" }) }, singleLine = true)
                         Button(
                             onClick = {
                                 val amount = amountToPay.toLongOrNull() ?: 0L
-                                if (amount <= 0L || amount > due || (paymentMethod == "cash" && cashSessionId.isBlank())) error = if (fr) "Montant ou caisse de règlement invalide." else "Invalid amount or cash register."
+                                if (amount <= 0L || amount > due || (paymentMethod == "cash" && cashSessionId.isBlank())) error = when (session.account.defaultLocale) { "en" -> "Invalid amount or cash register."; "ff-CM" -> "Ceede walla keesu njoɓdi feewaani."; else -> "Montant ou caisse de règlement invalide." }
                                 else scope.launch {
                                     runCatching {
                                         repository.recordSupplierPayment(orgId, siteId, purchase.id, amount, paymentMethod,
@@ -668,34 +668,33 @@ fun PurchasesContent(modifier: Modifier, repository: NaxaServicesLocalRepository
                                                 "$orgId|$siteId|${purchase.id}|${purchase.paidTotalXaf}|$amount|$paymentMethod|$cashSessionId|${paymentReference.trim()}"
                                                     .toByteArray(Charsets.UTF_8)
                                             ).toString(), session.account.memberId)
-                                    }.onSuccess { notice = if (fr) "Règlement fournisseur imputé à la dette et au journal." else "Supplier payment applied to payable and journal." }
+                                    }.onSuccess { notice = when (session.account.defaultLocale) { "en" -> "Supplier payment applied to payable and journal."; "ff-CM" -> "Njoɓdi hokkooɗo jawdi ustina ñaawoore e danndaama e jaŋtol."; else -> "Règlement fournisseur imputé à la dette et au journal." } }
                                         .onFailure { error = it.message ?: "Supplier payment failed." }
                                 }
                             }, modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (fr) "Enregistrer le règlement" else "Record supplier payment") }
+                        ) { Text(when (session.account.defaultLocale) { "en" -> "Record supplier payment"; "ff-CM" -> "Danndu njoɓdi"; else -> "Enregistrer le règlement" }) }
                     }
                 }
             }
         }
-        item { Text(if (fr) "Journal comptable de gestion" else "Management accounting journal", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (accounting.isEmpty()) item { Text(if (fr) "Aucune écriture postée pour ce site." else "No journal entry posted for this site.") }
+        item { Text(when (session.account.defaultLocale) { "en" -> "Management accounting journal"; "ff-CM" -> "Jaŋtol limtol ceede"; else -> "Journal comptable de gestion" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (accounting.isEmpty()) item { Text(when (session.account.defaultLocale) { "en" -> "No journal entry posted for this site."; "ff-CM" -> "Alaa winndannde ceede e nokkuure ndee."; else -> "Aucune écriture postée pour ce site." }) }
         items(accounting.take(50), key = { it.id }) { entry ->
             Text(entry.occurredAtMillis.let { java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault()).format(java.util.Date(it)) } +
                 " · Débit " + entry.debitAccount + " / Crédit " + entry.creditAccount + " · " + xaf(entry.amountXaf) +
                 " · " + entry.description, style = MaterialTheme.typography.bodySmall)
         }
         item {
-            LocalOnlyNotice(if (fr) "Le journal utilise des comptes de gestion symboliques (stock, dette fournisseur, trésorerie, ventes, coût des ventes). Il est équilibré débit/crédit mais n'est pas encore un plan de comptes SYSCOHADA certifié ni une déclaration fiscale." else "The balanced double-entry journal uses management account labels; it is not yet a certified SYSCOHADA chart of accounts or a tax filing.")
+            LocalOnlyNotice(when (session.account.defaultLocale) { "en" -> "The balanced double-entry journal uses management account labels; it is not yet a certified SYSCOHADA chart of accounts or a tax filing."; "ff-CM" -> "Jaŋtol huutorta konte ɗowtugol (jawdi, ñaawoore, keesu, jaaygol, njoɓdi jaaygol). Debi e kredi nanndi, kono wonaa plan SYSCOHADA tabbitinaango walla déclaration fiscale."; else -> "Le journal utilise des comptes de gestion symboliques (stock, dette fournisseur, trésorerie, ventes, coût des ventes). Il est équilibré débit/crédit mais n'est pas encore un plan de comptes SYSCOHADA certifié ni une déclaration fiscale." })
         }
 
         if (legacySuppliers.isNotEmpty() || legacyPurchases.isNotEmpty()) {
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(16.dp)) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text(if (fr) "Archives des anciens registres" else "Legacy register archive", fontWeight = FontWeight.Bold)
+                        Text(when (session.account.defaultLocale) { "en" -> "Legacy register archive"; "ff-CM" -> "Jaŋte ɓooyɗe"; else -> "Archives des anciens registres" }, fontWeight = FontWeight.Bold)
                         Text(
-                            if (fr) "Les fournisseurs et commandes saisis dans l'ancien module générique sont conservés ci-dessous. Ils ne sont pas convertis automatiquement pour éviter les doublons de stock ou de dette." 
-                            else "Suppliers and orders from the former generic register remain visible below. They are not auto-converted, to avoid duplicate stock or payables."
+                            when (session.account.defaultLocale) { "en" -> "Suppliers and orders from the former generic register remain visible below. They are not auto-converted, to avoid duplicate stock or payables."; "ff-CM" -> "Hokkooɓe jawdi e ɗaɓɓitanɗe ɓooyɗe ndanndaama les ɗoo. Ɗe wayletaake e hoore mum ngam haɗde jawdi walla ñaawoore ɗiɗol."; else -> "Les fournisseurs et commandes saisis dans l'ancien module générique sont conservés ci-dessous. Ils ne sont pas convertis automatiquement pour éviter les doublons de stock ou de dette." }
                         )
                         legacySuppliers.take(20).forEach { record ->
                             Text("Fournisseur historique · " + record.title + " · " + record.counterparty, style = MaterialTheme.typography.bodySmall)
@@ -1503,7 +1502,7 @@ fun WorkOrdersContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle(
-                (if (fr) "Parcours métier — " else "Business journey — ") + if (fr) workflow.titleFr else workflow.titleEn,
+                (when (session.account.defaultLocale) { "en" -> "Business journey — "; "ff-CM" -> "Golle — "; else -> "Parcours métier — " }) + if (fr) workflow.titleFr else workflow.titleEn,
                 if (fr) workflow.purposeFr else workflow.purposeEn
             )
             AuthorizedSitePicker(
@@ -1511,8 +1510,7 @@ fun WorkOrdersContent(
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
             ) { siteId = it; workstationId = "" }
             LocalOnlyNotice(
-                if (fr) "Suivez vos dossiers. Enregistrez les encaissements dans la caisse." 
-                else "Track your orders. Record payments in the cash register."
+                when (session.account.defaultLocale) { "en" -> "Track your orders. Record payments in the cash register."; "ff-CM" -> "Rewindo golle maa. Danndu ceede keɓaaɗe e keesu."; else -> "Suivez vos dossiers. Enregistrez les encaissements dans la caisse." }
             )
             workflow.notesFr.forEach { note ->
                 Text("• " + note, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
@@ -1522,8 +1520,7 @@ fun WorkOrdersContent(
             }
             if (workflow.journey == "retail") {
                 Text(
-                    if (fr) "Parcours spécial : commande ou réservation uniquement. Une vente réelle doit être créée dans le Point de vente, avec son stock et son paiement distincts."
-                    else "Special-order flow only. A real sale must be created in POS, with separate inventory and payment records.",
+                    when (session.account.defaultLocale) { "en" -> "Special-order flow only. A real sale must be created in POS, with separate inventory and payment records."; "ff-CM" -> "Ɗoo ko ɗaɓɓitannde walla sahaa tan. Jaaygol goonga foti sosaade e nokkuure jaaygol e jawdi e njoɓdi mum."; else -> "Parcours spécial : commande ou réservation uniquement. Une vente réelle doit être créée dans le Point de vente, avec son stock et son paiement distincts." },
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -1532,14 +1529,13 @@ fun WorkOrdersContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (fr) "Nouveau dossier" else "New record", fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "New record"; "ff-CM" -> "Golle kesere"; else -> "Nouveau dossier" }, fontWeight = FontWeight.Bold)
                     Text(
-                        if (fr) "Emplacement / poste (facultatif — le registre reste consolidé au niveau du site)"
-                        else "Workstation (optional — the ledger remains consolidated at site level)",
+                        when (session.account.defaultLocale) { "en" -> "Workstation (optional — the ledger remains consolidated at site level)"; "ff-CM" -> "Nokkuure golle (so a yiɗi — jaŋtol heddotoo e nokkuure jaaygol)"; else -> "Emplacement / poste (facultatif — le registre reste consolidé au niveau du site)" },
                         fontWeight = FontWeight.SemiBold
                     )
                     OutlinedButton(onClick = { workstationId = "" }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (workstationId.isBlank()) (if (fr) "✓ Aucun poste dédié" else "✓ No dedicated workstation") else if (fr) "Aucun poste dédié" else "No dedicated workstation")
+                        Text(if (workstationId.isBlank()) (when (session.account.defaultLocale) { "en" -> "✓ No dedicated workstation"; "ff-CM" -> "✓ Alaa nokkuure golle keeriiɗe"; else -> "✓ Aucun poste dédié" }) else when (session.account.defaultLocale) { "en" -> "No dedicated workstation"; "ff-CM" -> "Alaa nokkuure golle keeriiɗe"; else -> "Aucun poste dédié" })
                     }
                     workstations.filter { it.status == "active" }.forEach { workstation ->
                         OutlinedButton(onClick = { workstationId = workstation.id }, modifier = Modifier.fillMaxWidth()) {
@@ -1549,13 +1545,13 @@ fun WorkOrdersContent(
                     OutlinedTextField(
                         customer, { customer = it },
                         Modifier.fillMaxWidth(),
-                        label = { Text(if (fr) "Client / donneur d'ordre" else "Customer / requester") },
+                        label = { Text(when (session.account.defaultLocale) { "en" -> "Customer / requester"; "ff-CM" -> "Soottotooɗo / ɗaɓɓitotooɗo"; else -> "Client / donneur d'ordre" }) },
                         singleLine = true
                     )
                     OutlinedTextField(
                         title, { title = it },
                         Modifier.fillMaxWidth(),
-                        label = { Text(if (fr) "Intitulé du dossier" else "Record title") },
+                        label = { Text(when (session.account.defaultLocale) { "en" -> "Record title"; "ff-CM" -> "Innde golle"; else -> "Intitulé du dossier" }) },
                         singleLine = true
                     )
 
@@ -1579,7 +1575,7 @@ fun WorkOrdersContent(
                                     Text(labelForField(field) + if (field.required) " *" else "", fontWeight = FontWeight.Medium)
                                     OutlinedButton(onClick = { showDatePicker(field.key) }, modifier = Modifier.fillMaxWidth()) {
                                         Text(if (value.isBlank()) {
-                                            if (fr) "Choisir une date" else "Choose a date"
+                                            when (session.account.defaultLocale) { "en" -> "Choose a date"; "ff-CM" -> "Suɓo ñalnde"; else -> "Choisir une date" }
                                         } else value)
                                     }
                                 }
@@ -1615,21 +1611,21 @@ fun WorkOrdersContent(
                         estimate,
                         { estimate = it.filter(Char::isDigit).take(18) },
                         Modifier.fillMaxWidth(),
-                        label = { Text(if (fr) "Montant estimatif / devis (FCFA)" else "Estimated amount / quote (XAF)") },
+                        label = { Text(when (session.account.defaultLocale) { "en" -> "Estimated amount / quote (XAF)"; "ff-CM" -> "Ceede tanƴaaɗe / devis (FCFA)"; else -> "Montant estimatif / devis (FCFA)" }) },
                         singleLine = true
                     )
                     OutlinedTextField(
                         requestedDeposit,
                         { requestedDeposit = it.filter(Char::isDigit).take(18) },
                         Modifier.fillMaxWidth(),
-                        label = { Text(if (fr) "Acompte demandé (non encaissé ici) (FCFA)" else "Requested deposit (not collected here) (XAF)") },
+                        label = { Text(when (session.account.defaultLocale) { "en" -> "Requested deposit (not collected here) (XAF)"; "ff-CM" -> "Ceede adiiɗe ɗaɓɓitaaɗe (heɓaaka ɗoo) (FCFA)"; else -> "Acompte demandé (non encaissé ici) (FCFA)" }) },
                         singleLine = true
                     )
                     OutlinedTextField(
                         dueDays,
                         { dueDays = it.filter(Char::isDigit).take(3) },
                         Modifier.fillMaxWidth(),
-                        label = { Text(if (fr) "Délai estimé en jours" else "Estimated lead time in days") },
+                        label = { Text(when (session.account.defaultLocale) { "en" -> "Estimated lead time in days"; "ff-CM" -> "Balɗe tanƴaaɗe"; else -> "Délai estimé en jours" }) },
                         singleLine = true
                     )
                     Button(
@@ -1706,9 +1702,9 @@ fun WorkOrdersContent(
                                     requestedDeposit = "0"
                                     dueDays = "3"
                                     error = null
-                                    message = if (fr) "Dossier enregistré. Statut initial : reçu. Aucun encaissement n'a été créé." else "Record saved. Initial status: received. No payment was recorded."
+                                    message = when (session.account.defaultLocale) { "en" -> "Record saved. Initial status: received. No payment was recorded."; "ff-CM" -> "Golle danndaama. Ngonka arande: heɓaama. Alaa ceede keɓaaɗe."; else -> "Dossier enregistré. Statut initial : reçu. Aucun encaissement n'a été créé." }
                                 }.onFailure {
-                                    error = it.message ?: if (fr) "Création impossible." else "Unable to create record."
+                                    error = it.message ?: when (session.account.defaultLocale) { "en" -> "Unable to create record."; "ff-CM" -> "Sosugol waawataa."; else -> "Création impossible." }
                                 }
                                 busy = false
                             }
@@ -1720,9 +1716,9 @@ fun WorkOrdersContent(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Text(if (busy) {
-                            if (fr) "Enregistrement…" else "Saving…"
+                            when (session.account.defaultLocale) { "en" -> "Saving…"; "ff-CM" -> "Nana dannda…"; else -> "Enregistrement…" }
                         } else {
-                            if (fr) "Créer le dossier" else "Create record"
+                            when (session.account.defaultLocale) { "en" -> "Create record"; "ff-CM" -> "Sos golle"; else -> "Créer le dossier" }
                         })
                     }
                     if (error != null) Text(error!!, color = MaterialTheme.colorScheme.error)
@@ -1730,9 +1726,9 @@ fun WorkOrdersContent(
                 }
             }
         }
-        item { Text(if (fr) "Dossiers du point de vente" else "Site records", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(when (session.account.defaultLocale) { "en" -> "Site records"; "ff-CM" -> "Golle nokkuure jaaygol"; else -> "Dossiers du point de vente" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         if (records.isEmpty()) {
-            item { Text(if (fr) "Aucun dossier enregistré." else "No records yet.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text(when (session.account.defaultLocale) { "en" -> "No records yet."; "ff-CM" -> "Alaa golle danndaaɗe."; else -> "Aucun dossier enregistré." }, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         items(records) { item ->
             val events by remember(item.id, siteId) {
@@ -1770,19 +1766,19 @@ fun WorkOrdersContent(
                         if (legacySpecification.isNotBlank()) Text(legacySpecification, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Text(
-                        (if (fr) "Montant estimatif" else "Estimated amount") + " : " + xaf(item.amountXaf) +
-                            " · " + (if (fr) "Acompte demandé" else "Deposit requested") + " : " +
+                        (when (session.account.defaultLocale) { "en" -> "Estimated amount"; "ff-CM" -> "Ceede tanƴaaɗe"; else -> "Montant estimatif" }) + " : " + xaf(item.amountXaf) +
+                            " · " + (when (session.account.defaultLocale) { "en" -> "Deposit requested"; "ff-CM" -> "Ceede adiiɗe ɗaɓɓitaaɗe"; else -> "Acompte demandé" }) + " : " +
                             xaf(metadata.optLong("depositRequestedXaf", 0L)) +
-                            " · " + (if (fr) "Acompte réellement encaissé" else "Deposit actually collected") + " : " + xaf(item.paidXaf)
+                            " · " + (when (session.account.defaultLocale) { "en" -> "Deposit actually collected"; "ff-CM" -> "Ceede adiiɗe keɓaaɗe"; else -> "Acompte réellement encaissé" }) + " : " + xaf(item.paidXaf)
                     )
-                    Text((if (fr) "Statut" else "Status") + " : " + stageLabel(item.status), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
-                    Text((if (fr) "Échéance" else "Due") + " : " + (item.dueAtMillis?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) } ?: "—"))
+                    Text((when (session.account.defaultLocale) { "en" -> "Status"; "ff-CM" -> "Ngonka"; else -> "Statut" }) + " : " + stageLabel(item.status), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    Text((when (session.account.defaultLocale) { "en" -> "Due"; "ff-CM" -> "Ñalnde timmugol"; else -> "Échéance" }) + " : " + (item.dueAtMillis?.let { java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault()).format(java.util.Date(it)) } ?: "—"))
                     if (item.status !in setOf("closed", "cancelled")) {
                         OutlinedTextField(
                             reason,
                             { reason = it.take(500) },
                             Modifier.fillMaxWidth(),
-                            label = { Text(if (fr) "Motif obligatoire pour changer l'étape" else "Reason required for status change") },
+                            label = { Text(when (session.account.defaultLocale) { "en" -> "Reason required for status change"; "ff-CM" -> "Daliilu waajib ngam waylude feere"; else -> "Motif obligatoire pour changer l'étape" }) },
                             minLines = 1
                         )
                         workflow.nextStages(item.status).forEach { nextStage ->
@@ -1797,9 +1793,9 @@ fun WorkOrdersContent(
                                         }.onSuccess {
                                             reason = ""
                                             error = null
-                                            message = if (fr) "Étape mise à jour et journalisée." else "Stage updated."
+                                            message = when (session.account.defaultLocale) { "en" -> "Stage updated."; "ff-CM" -> "Feere hesɗitinaama e danndaama."; else -> "Étape mise à jour et journalisée." }
                                         }.onFailure {
-                                            error = it.message ?: if (fr) "Transition impossible." else "Transition failed."
+                                            error = it.message ?: when (session.account.defaultLocale) { "en" -> "Transition failed."; "ff-CM" -> "Waylugol feere waawataa."; else -> "Transition impossible." }
                                         }
                                     }
                                 },
@@ -1811,7 +1807,7 @@ fun WorkOrdersContent(
                         }
                     }
                     if (events.isNotEmpty()) {
-                        Text(if (fr) "Historique des étapes" else "Activity history", fontWeight = FontWeight.SemiBold)
+                        Text(when (session.account.defaultLocale) { "en" -> "Activity history"; "ff-CM" -> "Jaŋtol feere"; else -> "Historique des étapes" }, fontWeight = FontWeight.SemiBold)
                         events.take(5).forEach { event ->
                             Text(
                                 event.fromStatus + " → " + event.toStatus + " · " + event.reason,
@@ -1863,29 +1859,29 @@ fun TeamPerformanceContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle(
-                if (fr) "Présences, horaires et rémunérations variables" else "Attendance, working hours and variable pay",
-                if (fr) "Pointage chronologique, pauses, affectation par poste, commissions, avances et primes." else "Validated clocking sequence, breaks, workstation assignment, commissions, advances and bonuses."
+                when (session.account.defaultLocale) { "en" -> "Attendance, working hours and variable pay"; "ff-CM" -> "Naatugol, sahaaaji e ceede golluɓe"; else -> "Présences, horaires et rémunérations variables" },
+                when (session.account.defaultLocale) { "en" -> "Validated clocking sequence, breaks, workstation assignment, commissions, advances and bonuses."; "ff-CM" -> "Winndugol naatugol, fooftugol, nokkuuji golle, komisiyoŋ, ceede adiiɗe e bonis."; else -> "Pointage chronologique, pauses, affectation par poste, commissions, avances et primes." }
             )
             AuthorizedSitePicker(siteIds, siteId, session.account.activeSites.associate { it.id to it.name }) {
                 siteId = it
                 attendanceWorkstationId = ""
             }
             LocalOnlyNotice(
-                if (fr) "Suivez les heures de présence. Les pointages restent soumis à validation." else "Track attendance. Time entries remain pending approval."
+                when (session.account.defaultLocale) { "en" -> "Track attendance. Time entries remain pending approval."; "ff-CM" -> "Rewindo sahaaaji naatugol. Winndanɗe ƴeewtetee."; else -> "Suivez les heures de présence. Les pointages restent soumis à validation." }
             )
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (fr) "Pointage et mouvements d’équipe" else "Team time clock", fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "Team time clock"; "ff-CM" -> "Winndanɗe naatugol e golle"; else -> "Pointage et mouvements d’équipe" }, fontWeight = FontWeight.Bold)
                     OutlinedTextField(
                         staff, { staff = it }, Modifier.fillMaxWidth(),
-                        label = { Text(if (fr) "Collaborateur (nom ou identifiant)" else "Staff member (name or ID)") },
+                        label = { Text(when (session.account.defaultLocale) { "en" -> "Staff member (name or ID)"; "ff-CM" -> "Gollotooɗo (innde walla innol)"; else -> "Collaborateur (nom ou identifiant)" }) },
                         singleLine = true
                     )
-                    Text(if (fr) "Emplacement / poste (facultatif)" else "Workstation (optional)", fontWeight = FontWeight.SemiBold)
+                    Text(when (session.account.defaultLocale) { "en" -> "Workstation (optional)"; "ff-CM" -> "Nokkuure golle (so a yiɗi)"; else -> "Emplacement / poste (facultatif)" }, fontWeight = FontWeight.SemiBold)
                     OutlinedButton(onClick = { attendanceWorkstationId = "" }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (attendanceWorkstationId.isBlank()) (if (fr) "✓ Pointage au niveau du site" else "✓ Site-level time clock") else if (fr) "Aucun poste dédié" else "No dedicated workstation")
+                        Text(if (attendanceWorkstationId.isBlank()) (when (session.account.defaultLocale) { "en" -> "✓ Site-level time clock"; "ff-CM" -> "✓ Winndugol naatugol e nokkuure"; else -> "✓ Pointage au niveau du site" }) else when (session.account.defaultLocale) { "en" -> "No dedicated workstation"; "ff-CM" -> "Alaa nokkuure golle keeriiɗe"; else -> "Aucun poste dédié" })
                     }
                     workstations.filter { it.status == "active" }.forEach { workstation ->
                         OutlinedButton(onClick = { attendanceWorkstationId = workstation.id }, modifier = Modifier.fillMaxWidth()) {
@@ -1893,24 +1889,24 @@ fun TeamPerformanceContent(
                         }
                     }
                     listOf(
-                        "staff_clock_in" to (if (fr) "Prise de service" else "Clock in"),
-                        "staff_break_start" to (if (fr) "Début de pause" else "Start break"),
-                        "staff_break_end" to (if (fr) "Fin de pause" else "End break"),
-                        "staff_clock_out" to (if (fr) "Fin de service" else "Clock out")
+                        "staff_clock_in" to (when (session.account.defaultLocale) { "en" -> "Clock in"; "ff-CM" -> "Fuɗɗagol golle"; else -> "Prise de service" }),
+                        "staff_break_start" to (when (session.account.defaultLocale) { "en" -> "Start break"; "ff-CM" -> "Fuɗɗagol fooftugol"; else -> "Début de pause" }),
+                        "staff_break_end" to (when (session.account.defaultLocale) { "en" -> "End break"; "ff-CM" -> "Timmugol fooftugol"; else -> "Fin de pause" }),
+                        "staff_clock_out" to (when (session.account.defaultLocale) { "en" -> "Clock out"; "ff-CM" -> "Timmugol golle"; else -> "Fin de service" })
                     ).forEach { (value, label) ->
                         OutlinedButton(onClick = { attendanceOperation = value }, modifier = Modifier.fillMaxWidth()) {
                             Text(if (attendanceOperation == value) "✓ $label" else label)
                         }
                     }
                     Text(
-                        if (fr) "Séquence : prise de service → pause → reprise → sortie. Les doubles pointages et sorties sans prise de service sont refusés." else "Sequence: clock in → break → resume → clock out. Duplicate clock-ins and clock-outs without a shift are rejected.",
+                        when (session.account.defaultLocale) { "en" -> "Sequence: clock in → break → resume → clock out. Duplicate clock-ins and clock-outs without a shift are rejected."; "ff-CM" -> "Fuɗɗagol → fooftugol → ruttugol → yaltugol. Winndugol ɗiɗol walla yaltugol tawa naataaki jaɓaaka."; else -> "Séquence : prise de service → pause → reprise → sortie. Les doubles pointages et sorties sans prise de service sont refusés." },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
                     Button(
                         onClick = {
                             if (staff.isBlank() || siteId.isBlank()) {
-                                error = if (fr) "Choisis un collaborateur et un point de vente." else "Choose a staff member and site."
+                                error = when (session.account.defaultLocale) { "en" -> "Choose a staff member and site."; "ff-CM" -> "Suɓo gollotooɗo e nokkuure jaaygol."; else -> "Choisis un collaborateur et un point de vente." }
                             } else scope.launch {
                                 runCatching {
                                     repository.recordStaffTimeEvent(
@@ -1919,29 +1915,29 @@ fun TeamPerformanceContent(
                                         attendanceWorkstationId.takeIf { it.isNotBlank() }
                                     )
                                 }.onSuccess {
-                                    message = if (fr) "Pointage enregistré ; séquence validée et historisée." else "Clock event saved; sequence validated and recorded."
+                                    message = when (session.account.defaultLocale) { "en" -> "Clock event saved; sequence validated and recorded."; "ff-CM" -> "Naatugol danndaama; feere tabbitinaama."; else -> "Pointage enregistré ; séquence validée et historisée." }
                                     error = null
-                                }.onFailure { error = it.message ?: if (fr) "Pointage impossible." else "Unable to record time event." }
+                                }.onFailure { error = it.message ?: when (session.account.defaultLocale) { "en" -> "Unable to record time event."; "ff-CM" -> "Winndugol naatugol waawataa."; else -> "Pointage impossible." } }
                             }
                         },
                         enabled = staff.isNotBlank() && siteId.isNotBlank(),
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (fr) "Enregistrer le pointage" else "Record time event") }
+                    ) { Text(when (session.account.defaultLocale) { "en" -> "Record time event"; "ff-CM" -> "Danndu naatugol"; else -> "Enregistrer le pointage" }) }
                 }
             }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (fr) "Commission, avance ou prime" else "Commission, advance or bonus", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(staff, { staff = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Collaborateur" else "Staff member") }, singleLine = true)
-                    OutlinedTextField(detail, { detail = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Prestation / motif" else "Service / reason") }, singleLine = true)
-                    OutlinedTextField(amount, { amount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Montant (FCFA)" else "Amount (XAF)") }, singleLine = true)
+                    Text(when (session.account.defaultLocale) { "en" -> "Commission, advance or bonus"; "ff-CM" -> "Komisiyoŋ, ceede adiiɗe walla bonis"; else -> "Commission, avance ou prime" }, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(staff, { staff = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Staff member"; "ff-CM" -> "Gollotooɗo"; else -> "Collaborateur" }) }, singleLine = true)
+                    OutlinedTextField(detail, { detail = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Service / reason"; "ff-CM" -> "Golle / daliilu"; else -> "Prestation / motif" }) }, singleLine = true)
+                    OutlinedTextField(amount, { amount = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Amount (XAF)"; "ff-CM" -> "Ceede (FCFA)"; else -> "Montant (FCFA)" }) }, singleLine = true)
                     Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                         listOf(
-                            "staff_commission" to (if (fr) "Commission" else "Commission"),
-                            "staff_advance" to (if (fr) "Avance" else "Advance"),
-                            "staff_bonus" to (if (fr) "Prime" else "Bonus")
+                            "staff_commission" to (when (session.account.defaultLocale) { "en" -> "Commission"; "ff-CM" -> "Komisiyoŋ"; else -> "Commission" }),
+                            "staff_advance" to (when (session.account.defaultLocale) { "en" -> "Advance"; "ff-CM" -> "Ceede adiiɗe"; else -> "Avance" }),
+                            "staff_bonus" to (when (session.account.defaultLocale) { "en" -> "Bonus"; "ff-CM" -> "Bonis"; else -> "Prime" })
                         ).forEach { (value, label) ->
                             OutlinedButton(onClick = { payrollOperation = value }) {
                                 Text(if (payrollOperation == value) "✓ $label" else label)
@@ -1952,7 +1948,7 @@ fun TeamPerformanceContent(
                         onClick = {
                             val value = amount.toLongOrNull() ?: 0L
                             if (staff.isBlank() || detail.isBlank() || value <= 0 || siteId.isBlank()) {
-                                error = if (fr) "Collaborateur, motif et montant positif requis." else "Staff, reason and a positive amount are required."
+                                error = when (session.account.defaultLocale) { "en" -> "Staff, reason and a positive amount are required."; "ff-CM" -> "Gollotooɗo, daliilu e ceede ɓurɗe 0 ko waajib."; else -> "Collaborateur, motif et montant positif requis." }
                             } else scope.launch {
                                 runCatching {
                                     repository.createManagementRecord(
@@ -1964,17 +1960,17 @@ fun TeamPerformanceContent(
                                         attendanceWorkstationId.takeIf { it.isNotBlank() }
                                     )
                                 }.onSuccess {
-                                    message = if (fr) "Mouvement de rémunération enregistré en attente de validation." else "Variable pay record saved for approval."
+                                    message = when (session.account.defaultLocale) { "en" -> "Variable pay record saved for approval."; "ff-CM" -> "Njoɓdi gollotooɗo danndaama, nana fadi tabbitinol."; else -> "Mouvement de rémunération enregistré en attente de validation." }
                                     amount = ""; detail = ""; error = null
-                                }.onFailure { error = it.message ?: if (fr) "Enregistrement impossible." else "Unable to save record." }
+                                }.onFailure { error = it.message ?: when (session.account.defaultLocale) { "en" -> "Unable to save record."; "ff-CM" -> "Danndugol waawataa."; else -> "Enregistrement impossible." } }
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (fr) "Enregistrer le mouvement" else "Save variable-pay record") }
+                    ) { Text(when (session.account.defaultLocale) { "en" -> "Save variable-pay record"; "ff-CM" -> "Danndu dirtugol"; else -> "Enregistrer le mouvement" }) }
                 }
             }
         }
-        item { Text(if (fr) "Horaires récents" else "Recent attendance", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(when (session.account.defaultLocale) { "en" -> "Recent attendance"; "ff-CM" -> "Sahaaaji sakkitiiɗi"; else -> "Horaires récents" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(attendance.take(40)) { row ->
             Text(
                 row.counterparty + " · " + row.title + " · " +
@@ -1982,7 +1978,7 @@ fun TeamPerformanceContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        item { Text(if (fr) "Commissions, avances et primes" else "Commissions, advances and bonuses", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(when (session.account.defaultLocale) { "en" -> "Commissions, advances and bonuses"; "ff-CM" -> "Komisiyoŋ, ceede adiiɗe e bonis"; else -> "Commissions, avances et primes" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(payroll.take(40)) { row ->
             var approvalReason by rememberSaveable(row.id) { mutableStateOf("") }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -1994,7 +1990,7 @@ fun TeamPerformanceContent(
                             approvalReason,
                             { approvalReason = it },
                             Modifier.fillMaxWidth(),
-                            label = { Text(if (fr) "Motif de validation ou de rejet obligatoire" else "Reason required to approve or reject") }
+                            label = { Text(when (session.account.defaultLocale) { "en" -> "Reason required to approve or reject"; "ff-CM" -> "Daliilu tabbitinol walla salugol ko waajib"; else -> "Motif de validation ou de rejet obligatoire" }) }
                         )
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
@@ -2005,13 +2001,13 @@ fun TeamPerformanceContent(
                                                 session.account.organizationId, siteId, row.id,
                                                 "approved", approvalReason, session.account.memberId
                                             )
-                                        }.onSuccess { message = if (fr) "Mouvement approuvé et historisé." else "Record approved and audited."; error = null }
+                                        }.onSuccess { message = when (session.account.defaultLocale) { "en" -> "Record approved and audited."; "ff-CM" -> "Njoɓdi jaɓaama e danndaama."; else -> "Mouvement approuvé et historisé." }; error = null }
                                             .onFailure { error = it.message ?: "Approval failed." }
                                     }
                                 },
                                 enabled = approvalReason.trim().length >= 3,
                                 modifier = Modifier.weight(1f)
-                            ) { Text(if (fr) "Approuver" else "Approve") }
+                            ) { Text(when (session.account.defaultLocale) { "en" -> "Approve"; "ff-CM" -> "Jaɓu"; else -> "Approuver" }) }
                             OutlinedButton(
                                 onClick = {
                                     scope.launch {
@@ -2020,13 +2016,13 @@ fun TeamPerformanceContent(
                                                 session.account.organizationId, siteId, row.id,
                                                 "rejected", approvalReason, session.account.memberId
                                             )
-                                        }.onSuccess { message = if (fr) "Mouvement rejeté et historisé." else "Record rejected and audited."; error = null }
+                                        }.onSuccess { message = when (session.account.defaultLocale) { "en" -> "Record rejected and audited."; "ff-CM" -> "Njoɓdi salaama e danndaama."; else -> "Mouvement rejeté et historisé." }; error = null }
                                             .onFailure { error = it.message ?: "Rejection failed." }
                                     }
                                 },
                                 enabled = approvalReason.trim().length >= 3,
                                 modifier = Modifier.weight(1f)
-                            ) { Text(if (fr) "Rejeter" else "Reject") }
+                            ) { Text(when (session.account.defaultLocale) { "en" -> "Reject"; "ff-CM" -> "Sal"; else -> "Rejeter" }) }
                         }
                     }
                 }

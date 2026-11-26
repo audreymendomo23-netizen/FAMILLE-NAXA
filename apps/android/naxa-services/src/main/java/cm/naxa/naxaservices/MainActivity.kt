@@ -1133,23 +1133,23 @@ private fun PressingLocalContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle(
-                if (fr) "Pressing — tickets et retrait" else "Laundry — tickets and pickup",
-                if (fr) "Chaque ticket possède une référence unique, un emplacement d'origine, une date promise et un historique des étapes." else "Follow every ticket from drop-off to pickup."
+                when (session.account.defaultLocale) { "en" -> "Laundry — tickets and pickup"; "ff-CM" -> "Lootugol — kayite e heɓtugol"; else -> "Pressing — tickets et retrait" },
+                when (session.account.defaultLocale) { "en" -> "Follow every ticket from drop-off to pickup."; "ff-CM" -> "Kayit kala e innol mum, nokkuure mum, ñalnde fodoonde e jaŋtol feere mum."; else -> "Chaque ticket possède une référence unique, un emplacement d'origine, une date promise et un historique des étapes." }
             )
             AuthorizedSitePicker(
                 session.account.activeSiteIds,
                 siteId,
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
             ) { siteId = it; workstationId = ""; depositCashSessionId = "" }
-            LocalOnlyNotice(if (fr) "Suivez vos tickets jusqu’au retrait. L'envoi automatique des alertes de retrait est indisponible." else "Track tickets until pickup. Automatic pickup alerts are unavailable.")
+            LocalOnlyNotice(when (session.account.defaultLocale) { "en" -> "Track tickets until pickup. Automatic pickup alerts are unavailable."; "ff-CM" -> "Rewindo kayite maa haa heɓtugol. Tintine heɓtugol neldeteeɗe e hoore mum alaa jooni."; else -> "Suivez vos tickets jusqu’au retrait. L'envoi automatique des alertes de retrait est indisponible." })
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (fr) "Nouveau ticket pressing" else "New laundry ticket", fontWeight = FontWeight.Bold)
-                    Text(if (fr) "Comptoir / atelier" else "Counter / workshop", fontWeight = FontWeight.SemiBold)
+                    Text(when (session.account.defaultLocale) { "en" -> "New laundry ticket"; "ff-CM" -> "Kayit lootugol kesol"; else -> "Nouveau ticket pressing" }, fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "Counter / workshop"; "ff-CM" -> "Jaɓɓorgo / nokkuure golle"; else -> "Comptoir / atelier" }, fontWeight = FontWeight.SemiBold)
                     OutlinedButton(onClick = { workstationId = "" }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (workstationId.isBlank()) (if (fr) "✓ Point de vente (sans poste dédié)" else "✓ Site-wide (no dedicated workstation)") else if (fr) "Aucun poste dédié" else "No dedicated workstation")
+                        Text(if (workstationId.isBlank()) (when (session.account.defaultLocale) { "en" -> "✓ Site-wide (no dedicated workstation)"; "ff-CM" -> "✓ Nokkuure jaaygol (alaa nokkuure golle keeriiɗe)"; else -> "✓ Point de vente (sans poste dédié)" }) else when (session.account.defaultLocale) { "en" -> "No dedicated workstation"; "ff-CM" -> "Alaa nokkuure golle keeriiɗe"; else -> "Aucun poste dédié" })
                     }
                     workstations.filter { it.status == "active" }.forEach { workstation ->
                         OutlinedButton(onClick = { workstationId = workstation.id }, modifier = Modifier.fillMaxWidth()) {
@@ -1158,16 +1158,16 @@ private fun PressingLocalContent(
                     }
                     OutlinedTextField(customer, { customer = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.customer_name)) }, singleLine = true)
                     OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.customer_phone)) }, singleLine = true)
-                    OutlinedTextField(garments, { garments = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Pièces (type, couleur, marque, état/taches et traitement demandé)" else "Garments (type, color, brand, condition/stains and requested treatment)") }, minLines = 3)
+                    OutlinedTextField(garments, { garments = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Garments (type, color, brand, condition/stains and requested treatment)"; "ff-CM" -> "Comci (fannu, noone, marque, ngonka/tache e lootugol ɗaɓɓitaangol)"; else -> "Pièces (type, couleur, marque, état/taches et traitement demandé)" }) }, minLines = 3)
                     OutlinedTextField(total, { total = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.total_amount_xaf)) }, singleLine = true)
                     OutlinedTextField(deposit, { deposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.deposit_amount_xaf)) }, singleLine = true)
                     if (depositXafValue > 0) {
-                        Text(if (fr) "Encaissement de l'acompte" else "Deposit collection method", fontWeight = FontWeight.SemiBold)
+                        Text(when (session.account.defaultLocale) { "en" -> "Deposit collection method"; "ff-CM" -> "Heɓugol ceede adiiɗe"; else -> "Encaissement de l'acompte" }, fontWeight = FontWeight.SemiBold)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             OutlinedButton(
                                 onClick = { depositPaymentMethod = "cash"; depositCashSessionId = "" },
                                 modifier = Modifier.weight(1f)
-                            ) { Text((if (depositPaymentMethod == "cash") "✓ " else "") + if (fr) "Espèces" else "Cash") }
+                            ) { Text((if (depositPaymentMethod == "cash") "✓ " else "") + when (session.account.defaultLocale) { "en" -> "Cash"; "ff-CM" -> "Ceede e juuɗe"; else -> "Espèces" }) }
                             OutlinedButton(
                                 onClick = { depositPaymentMethod = "mobile_money"; depositCashSessionId = "" },
                                 modifier = Modifier.weight(1f)
@@ -1176,16 +1176,16 @@ private fun PressingLocalContent(
                         OutlinedButton(
                             onClick = { depositPaymentMethod = "other"; depositCashSessionId = "" },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text((if (depositPaymentMethod == "other") "✓ " else "") + if (fr) "Virement / autre — à confirmer" else "Bank transfer / other — pending confirmation") }
+                        ) { Text((if (depositPaymentMethod == "other") "✓ " else "") + when (session.account.defaultLocale) { "en" -> "Bank transfer / other — pending confirmation"; "ff-CM" -> "Virement / goɗɗum — tabbitin"; else -> "Virement / autre — à confirmer" }) }
                         if (depositPaymentMethod == "cash") {
                             Text(
-                                if (fr) "Choisis la session de caisse qui reçoit réellement les espèces." else "Select the cash session that actually receives the cash.",
+                                when (session.account.defaultLocale) { "en" -> "Select the cash session that actually receives the cash."; "ff-CM" -> "Suɓo keesu ngu heɓi ceede e juuɗe."; else -> "Choisis la session de caisse qui reçoit réellement les espèces." },
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall
                             )
                             if (openCashSessions.isEmpty()) {
                                 Text(
-                                    if (fr) "Aucune session ouverte sur ce point de vente. Ouvre une caisse avant d'enregistrer cet acompte en espèces." else "No open cash session at this site. Open a register before recording this cash deposit.",
+                                    when (session.account.defaultLocale) { "en" -> "No open cash session at this site. Open a register before recording this cash deposit."; "ff-CM" -> "Alaa keesu udditaangu e nokkuure ndee. Uddit keesu hade danndude ceede adiiɗe."; else -> "Aucune session ouverte sur ce point de vente. Ouvre une caisse avant d'enregistrer cet acompte en espèces." },
                                     color = MaterialTheme.colorScheme.error,
                                     style = MaterialTheme.typography.bodySmall
                                 )
@@ -1204,20 +1204,20 @@ private fun PressingLocalContent(
                             }
                         } else if (depositPaymentMethod in setOf("mobile_money", "other")) {
                             Text(
-                                if (fr) "Saisis uniquement l'acompte déjà reçu hors application ; il n'entre pas dans le solde des espèces." else "Record only a deposit already received outside the app; it is excluded from physical cash.",
+                                when (session.account.defaultLocale) { "en" -> "Record only a deposit already received outside the app; it is excluded from physical cash."; "ff-CM" -> "Winndu tan ceede adiiɗe keɓaaɗe tawa aplikasiyoŋ alaa; ɗe naatataa e keesu."; else -> "Saisis uniquement l'acompte déjà reçu hors application ; il n'entre pas dans le solde des espèces." },
                                 color = MaterialTheme.colorScheme.secondary,
                                 style = MaterialTheme.typography.bodySmall
                             )
                         } else {
                             Text(
-                                if (fr) "Sélectionne le mode d'encaissement ; aucun paiement ne sera supposé." else "Select how the deposit is collected; no payment method is assumed.",
+                                when (session.account.defaultLocale) { "en" -> "Select how the deposit is collected; no payment method is assumed."; "ff-CM" -> "Suɓo laawol heɓugol ceede. Njoɓdi limtaaka so tabbitinaaka."; else -> "Sélectionne le mode d'encaissement ; aucun paiement ne sera supposé." },
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
                     } else {
                         Text(
-                            if (fr) "Aucun acompte à encaisser à la création du ticket." else "No deposit collected when this ticket is created.",
+                            when (session.account.defaultLocale) { "en" -> "No deposit collected when this ticket is created."; "ff-CM" -> "Alaa ceede adiiɗe e sosde kayit."; else -> "Aucun acompte à encaisser à la création du ticket." },
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -1226,7 +1226,7 @@ private fun PressingLocalContent(
                         promisedPickup,
                         { promisedPickup = it },
                         Modifier.fillMaxWidth(),
-                        label = { Text(if (fr) "Retrait promis (AAAA-MM-JJ HH:MM)" else "Promised pickup (YYYY-MM-DD HH:MM)") },
+                        label = { Text(when (session.account.defaultLocale) { "en" -> "Promised pickup (YYYY-MM-DD HH:MM)"; "ff-CM" -> "Heɓtugol fodoonde (AAAA-MM-JJ HH:MM)"; else -> "Retrait promis (AAAA-MM-JJ HH:MM)" }) },
                         singleLine = true
                     )
                     if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
@@ -1239,9 +1239,9 @@ private fun PressingLocalContent(
                                     val promisedAt = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
                                         .apply { isLenient = false }
                                         .parse(promisedPickup)?.time
-                                        ?: throw IllegalArgumentException(if (fr) "Date de retrait invalide." else "Invalid promised pickup date.")
+                                        ?: throw IllegalArgumentException(when (session.account.defaultLocale) { "en" -> "Invalid promised pickup date."; "ff-CM" -> "Ñalnde heɓtugol feewaani."; else -> "Date de retrait invalide." })
                                     require(promisedAt > System.currentTimeMillis()) {
-                                        if (fr) "Le retrait promis doit être dans le futur." else "Promised pickup must be in the future."
+                                        when (session.account.defaultLocale) { "en" -> "Promised pickup must be in the future."; "ff-CM" -> "Ñalnde heɓtugol foti arde caggal hannde."; else -> "Le retrait promis doit être dans le futur." }
                                     }
                                     repository.createPressingOrder(
                                         orgId = session.account.organizationId,
@@ -1268,7 +1268,7 @@ private fun PressingLocalContent(
                                             (if (newOrder.depositPaymentStatus == "confirmed") "received in cash" else if (newOrder.depositPaymentStatus == "pending") "awaiting confirmation" else "not collected")
                                     }
                                     error = null
-                                }.onFailure { error = it.message ?: if (fr) "Création du ticket impossible." else "Unable to create ticket." }
+                                }.onFailure { error = it.message ?: when (session.account.defaultLocale) { "en" -> "Unable to create ticket."; "ff-CM" -> "Sosugol kayit waawataa."; else -> "Création du ticket impossible." } }
                                 busy = false
                             }
                         },
@@ -1280,7 +1280,7 @@ private fun PressingLocalContent(
                 }
             }
         }
-        item { Text(if (fr) "Tickets et retraits" else "Tickets and pickups", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(when (session.account.defaultLocale) { "en" -> "Tickets and pickups"; "ff-CM" -> "Kayite e heɓtugol"; else -> "Tickets et retraits" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         if (orders.isEmpty()) {
             item { Text(stringResource(R.string.no_local_pressing_tickets), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } else {
@@ -1300,7 +1300,7 @@ private fun PressingLocalContent(
                                 repository.advancePressingOrder(order, session.account.memberId, advanceReasons[order.id].orEmpty())
                             }.onSuccess {
                                 advanceReasons = advanceReasons + (order.id to "")
-                                notice = if (fr) "Étape pressing mise à jour et historisée." else "Laundry stage updated and recorded."
+                                notice = when (session.account.defaultLocale) { "en" -> "Laundry stage updated and recorded."; "ff-CM" -> "Feere lootugol hesɗitinaama e danndaama."; else -> "Étape pressing mise à jour et historisée." }
                                 error = null
                             }.onFailure { error = it.message ?: "Status update failed." }
                         }
@@ -1331,9 +1331,9 @@ private fun PressingOrderCard(
     }
     val promised = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(order.promisedAtMillis))
     val nextLabel = when (order.status) {
-        "received" -> if (fr) "Lancer le traitement" else "Start processing"
-        "in_progress" -> if (fr) "Marquer le linge prêt" else "Mark laundry ready"
-        "ready" -> if (fr) "Confirmer le retrait" else "Confirm pickup"
+        "received" -> when (session.account.defaultLocale) { "en" -> "Start processing"; "ff-CM" -> "Fuɗɗo golle"; else -> "Lancer le traitement" }
+        "in_progress" -> when (session.account.defaultLocale) { "en" -> "Mark laundry ready"; "ff-CM" -> "Maanto comci ko hebii"; else -> "Marquer le linge prêt" }
+        "ready" -> when (session.account.defaultLocale) { "en" -> "Confirm pickup"; "ff-CM" -> "Tabbitin heɓtugol"; else -> "Confirmer le retrait" }
         else -> ""
     }
     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -1345,23 +1345,23 @@ private fun PressingOrderCard(
             Text(order.customerName, style = MaterialTheme.typography.titleMedium)
             if (order.customerPhone.isNotBlank()) Text(order.customerPhone, style = MaterialTheme.typography.bodySmall)
             Text(order.itemsSummary, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-            Text((if (fr) "Retrait promis : " else "Promised pickup: ") + promised, style = MaterialTheme.typography.bodySmall)
-            order.workstationId?.let { Text((if (fr) "Poste : " else "Workstation: ") + it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+            Text((when (session.account.defaultLocale) { "en" -> "Promised pickup: "; "ff-CM" -> "Heɓtugol fodoonde : "; else -> "Retrait promis : " }) + promised, style = MaterialTheme.typography.bodySmall)
+            order.workstationId?.let { Text((when (session.account.defaultLocale) { "en" -> "Workstation: "; "ff-CM" -> "Nokkuure golle : "; else -> "Poste : " }) + it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
             Text(stringResource(R.string.pressing_total_and_deposit, order.totalXaf, order.depositXaf), style = MaterialTheme.typography.bodySmall)
             if (order.depositXaf > 0) {
                 val methodLabel = when (order.depositPaymentMethod) {
-                    "cash" -> if (fr) "espèces" else "cash"
+                    "cash" -> when (session.account.defaultLocale) { "en" -> "cash"; "ff-CM" -> "ceede e juuɗe"; else -> "espèces" }
                     "mobile_money" -> "Mobile Money"
-                    "other" -> if (fr) "virement / autre" else "bank transfer / other"
-                    else -> if (fr) "mode non renseigné" else "method not recorded"
+                    "other" -> when (session.account.defaultLocale) { "en" -> "bank transfer / other"; "ff-CM" -> "virement / goɗɗum"; else -> "virement / autre" }
+                    else -> when (session.account.defaultLocale) { "en" -> "method not recorded"; "ff-CM" -> "laawol winndaaka"; else -> "mode non renseigné" }
                 }
                 val paymentState = when (order.depositPaymentStatus) {
-                    "confirmed" -> if (fr) "encaissé · session liée" else "received · session linked"
-                    "pending" -> if (fr) "en attente de confirmation" else "awaiting confirmation"
-                    else -> if (fr) "non rapproché" else "not reconciled"
+                    "confirmed" -> when (session.account.defaultLocale) { "en" -> "received · session linked"; "ff-CM" -> "heɓaama · keesu jokkondiraama"; else -> "encaissé · session liée" }
+                    "pending" -> when (session.account.defaultLocale) { "en" -> "awaiting confirmation"; "ff-CM" -> "nana fadi tabbitinol"; else -> "en attente de confirmation" }
+                    else -> when (session.account.defaultLocale) { "en" -> "not reconciled"; "ff-CM" -> "tabbitinaaka"; else -> "non rapproché" }
                 }
                 Text(
-                    (if (fr) "Acompte : " else "Deposit: ") + methodLabel + " · " + paymentState,
+                    (when (session.account.defaultLocale) { "en" -> "Deposit: "; "ff-CM" -> "Ceede adiiɗe : "; else -> "Acompte : " }) + methodLabel + " · " + paymentState,
                     color = if (order.depositPaymentStatus == "confirmed") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -1371,7 +1371,7 @@ private fun PressingOrderCard(
                     reason,
                     onReasonChange,
                     Modifier.fillMaxWidth(),
-                    label = { Text(if (fr) "Motif obligatoire pour l'étape suivante" else "Reason required for next stage") },
+                    label = { Text(when (session.account.defaultLocale) { "en" -> "Reason required for next stage"; "ff-CM" -> "Daliilu waajib ngam feere aroore"; else -> "Motif obligatoire pour l'étape suivante" }) },
                     minLines = 1
                 )
                 Button(onClick = onAdvance, enabled = reason.trim().length >= 3, modifier = Modifier.fillMaxWidth()) {
@@ -1379,10 +1379,10 @@ private fun PressingOrderCard(
                 }
             }
             if (events.isNotEmpty()) {
-                Text(if (fr) "Historique du ticket" else "Ticket history", fontWeight = FontWeight.SemiBold)
+                Text(when (session.account.defaultLocale) { "en" -> "Ticket history"; "ff-CM" -> "Jaŋtol kayit"; else -> "Historique du ticket" }, fontWeight = FontWeight.SemiBold)
                 events.take(6).forEach { event ->
                     Text(
-                        event.fromStatus + " → " + event.toStatus + " · " + event.reason.ifBlank { if (fr) "Étape initiale" else "Initial stage" },
+                        event.fromStatus + " → " + event.toStatus + " · " + event.reason.ifBlank { when (session.account.defaultLocale) { "en" -> "Initial stage"; "ff-CM" -> "Feere arande"; else -> "Étape initiale" } },
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -1423,22 +1423,22 @@ private fun AgendaLocalContent(
         item {
             Spacer(Modifier.height(12.dp))
             ModulePageTitle(
-                if (fr) "Agenda et rendez-vous" else "Calendar and appointments",
-                if (fr) "Créneaux par point de vente, emplacement et prestataire ; rendez-vous, acomptes, annulations et liste d'attente." else "Slots by site, workstation and provider; appointments, deposits, cancellations and waitlist."
+                when (session.account.defaultLocale) { "en" -> "Calendar and appointments"; "ff-CM" -> "Doggol sahaaaji"; else -> "Agenda et rendez-vous" },
+                when (session.account.defaultLocale) { "en" -> "Slots by site, workstation and provider; appointments, deposits, cancellations and waitlist."; "ff-CM" -> "Sahaaaji nokkuure jaaygol, nokkuure golle e gollotooɗo; ceede adiiɗe, haaytugol e doggol fadotooɓe."; else -> "Créneaux par point de vente, emplacement et prestataire ; rendez-vous, acomptes, annulations et liste d'attente." }
             )
             AuthorizedSitePicker(session.account.activeSiteIds, siteId, session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }) {
                 siteId = it
                 workstationId = ""
             }
-            LocalOnlyNotice(if (fr) "Vérifiez les disponibilités de votre établissement. Les rappels externes sont indisponibles." else "Check availability at your location. External reminders are unavailable.")
+            LocalOnlyNotice(when (session.account.defaultLocale) { "en" -> "Check availability at your location. External reminders are unavailable."; "ff-CM" -> "Ƴeewto sahaaaji golle maa. Tintine goɗɗe alaa jooni."; else -> "Vérifiez les disponibilités de votre établissement. Les rappels externes sont indisponibles." })
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(if (fr) "Nouvelle réservation" else "New booking", fontWeight = FontWeight.Bold)
-                    Text(if (fr) "Emplacement / poste de travail" else "Workstation / service location", fontWeight = FontWeight.SemiBold)
+                    Text(when (session.account.defaultLocale) { "en" -> "New booking"; "ff-CM" -> "Sahaa keso"; else -> "Nouvelle réservation" }, fontWeight = FontWeight.Bold)
+                    Text(when (session.account.defaultLocale) { "en" -> "Workstation / service location"; "ff-CM" -> "Nokkuure golle"; else -> "Emplacement / poste de travail" }, fontWeight = FontWeight.SemiBold)
                     OutlinedButton(onClick = { workstationId = "" }, modifier = Modifier.fillMaxWidth()) {
-                        Text(if (workstationId.isBlank()) (if (fr) "✓ Aucun emplacement imposé" else "✓ No workstation required") else if (fr) "Aucun emplacement imposé" else "No workstation required")
+                        Text(if (workstationId.isBlank()) (when (session.account.defaultLocale) { "en" -> "✓ No workstation required"; "ff-CM" -> "✓ Nokkuure suɓaaka"; else -> "✓ Aucun emplacement imposé" }) else when (session.account.defaultLocale) { "en" -> "No workstation required"; "ff-CM" -> "Nokkuure suɓaaka"; else -> "Aucun emplacement imposé" })
                     }
                     workstations.filter { it.status == "active" }.forEach { workstation ->
                         OutlinedButton(onClick = { workstationId = workstation.id }, modifier = Modifier.fillMaxWidth()) {
@@ -1465,9 +1465,9 @@ private fun AgendaLocalContent(
                                 runCatching {
                                     val dateParser = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).apply { isLenient = false }
                                     val startAt = dateParser.parse(start)?.time
-                                        ?: throw IllegalArgumentException(if (fr) "Date/heure invalide. Format attendu : AAAA-MM-JJ HH:MM." else "Invalid date/time. Expected YYYY-MM-DD HH:MM.")
-                                    val durationMinutes = duration.toLongOrNull() ?: throw IllegalArgumentException(if (fr) "Durée invalide." else "Invalid duration.")
-                                    require(durationMinutes in 5..600) { if (fr) "La durée doit être comprise entre 5 et 600 minutes." else "Duration must be between 5 and 600 minutes." }
+                                        ?: throw IllegalArgumentException(when (session.account.defaultLocale) { "en" -> "Invalid date/time. Expected YYYY-MM-DD HH:MM."; "ff-CM" -> "Ñalnde/sahaa feewaani. Huutoro AAAA-MM-JJ HH:MM."; else -> "Date/heure invalide. Format attendu : AAAA-MM-JJ HH:MM." })
+                                    val durationMinutes = duration.toLongOrNull() ?: throw IllegalArgumentException(when (session.account.defaultLocale) { "en" -> "Invalid duration."; "ff-CM" -> "Sahaa feewaani."; else -> "Durée invalide." })
+                                    require(durationMinutes in 5..600) { when (session.account.defaultLocale) { "en" -> "Duration must be between 5 and 600 minutes."; "ff-CM" -> "Sahaa foti wonde minit 5 haa 600."; else -> "La durée doit être comprise entre 5 et 600 minutes." } }
                                     repository.createAppointment(
                                         orgId = session.account.organizationId,
                                         siteId = siteId,
@@ -1482,8 +1482,8 @@ private fun AgendaLocalContent(
                                     )
                                 }.onSuccess {
                                     customer = ""; service = ""; deposit = "0"
-                                    message = if (fr) "Rendez-vous enregistré — en attente de synchronisation." else "Appointment saved — awaiting synchronization."
-                                }.onFailure { error = it.message ?: if (fr) "Rendez-vous impossible." else "Booking failed." }
+                                    message = when (session.account.defaultLocale) { "en" -> "Appointment saved — awaiting synchronization."; "ff-CM" -> "Sahaa danndaama — nana fadi hesɗitingol."; else -> "Rendez-vous enregistré — en attente de synchronisation." }
+                                }.onFailure { error = it.message ?: when (session.account.defaultLocale) { "en" -> "Booking failed."; "ff-CM" -> "Sahaa waawaa danndeede."; else -> "Rendez-vous impossible." } }
                                 busy = false
                             }
                         },
@@ -1497,10 +1497,10 @@ private fun AgendaLocalContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(if (fr) "Liste d'attente" else "Waitlist", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(waitlistCustomer, { waitlistCustomer = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Nom du client" else "Customer name") }, singleLine = true)
-                    OutlinedTextField(waitlistService, { waitlistService = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Prestation souhaitée" else "Requested service") }, singleLine = true)
-                    OutlinedTextField(waitlistPreference, { waitlistPreference = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Préférence de date / heure" else "Preferred date / time") }, singleLine = true)
+                    Text(when (session.account.defaultLocale) { "en" -> "Waitlist"; "ff-CM" -> "Doggol fadotooɓe"; else -> "Liste d'attente" }, fontWeight = FontWeight.Bold)
+                    OutlinedTextField(waitlistCustomer, { waitlistCustomer = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Customer name"; "ff-CM" -> "Innde soottotooɗo"; else -> "Nom du client" }) }, singleLine = true)
+                    OutlinedTextField(waitlistService, { waitlistService = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Requested service"; "ff-CM" -> "Golle ɗaɓɓitaande"; else -> "Prestation souhaitée" }) }, singleLine = true)
+                    OutlinedTextField(waitlistPreference, { waitlistPreference = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Preferred date / time"; "ff-CM" -> "Ñalnde / sahaa cuɓaaɗo"; else -> "Préférence de date / heure" }) }, singleLine = true)
                     Button(
                         onClick = {
                             scope.launch {
@@ -1514,13 +1514,13 @@ private fun AgendaLocalContent(
                                     )
                                 }.onSuccess {
                                     waitlistCustomer = ""; waitlistService = ""; waitlistPreference = ""
-                                    message = if (fr) "Client ajouté à la liste d'attente." else "Customer added to waitlist."
+                                    message = when (session.account.defaultLocale) { "en" -> "Customer added to waitlist."; "ff-CM" -> "Soottotooɗo ɓeydaama e doggol fadotooɓe."; else -> "Client ajouté à la liste d'attente." }
                                 }.onFailure { error = it.message ?: "Waitlist update failed." }
                             }
                         },
                         enabled = siteId.isNotBlank() && waitlistCustomer.isNotBlank() && waitlistService.isNotBlank(),
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text(if (fr) "Ajouter à la liste d'attente" else "Add to waitlist") }
+                    ) { Text(when (session.account.defaultLocale) { "en" -> "Add to waitlist"; "ff-CM" -> "Ɓeydu e doggol fadotooɓe"; else -> "Ajouter à la liste d'attente" }) }
                 }
             }
         }
@@ -1541,15 +1541,15 @@ private fun AgendaLocalContent(
                     Text(SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault()).format(Date(appointment.startsAtMillis)), color = MaterialTheme.colorScheme.secondary)
                     Text(stringResource(R.string.appointment_local_status, appointment.status), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (appointment.status in setOf("booked", "confirmed")) {
-                        OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Motif de modification obligatoire" else "Reason for change is required") })
-                        val statuses = if (appointment.status == "booked") listOf("confirmed" to (if (fr) "Confirmer" else "Confirm"), "cancelled" to (if (fr) "Annuler" else "Cancel"), "no_show" to (if (fr) "Absent" else "No-show")) else listOf("completed" to (if (fr) "Terminer" else "Complete"), "cancelled" to (if (fr) "Annuler" else "Cancel"), "no_show" to (if (fr) "Absent" else "No-show"))
+                        OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Reason for change is required"; "ff-CM" -> "Daliilu waylugol ko waajib"; else -> "Motif de modification obligatoire" }) })
+                        val statuses = if (appointment.status == "booked") listOf("confirmed" to (when (session.account.defaultLocale) { "en" -> "Confirm"; "ff-CM" -> "Tabbitin"; else -> "Confirmer" }), "cancelled" to (when (session.account.defaultLocale) { "en" -> "Cancel"; "ff-CM" -> "Haaytu"; else -> "Annuler" }), "no_show" to (when (session.account.defaultLocale) { "en" -> "No-show"; "ff-CM" -> "Alaa ɗoo"; else -> "Absent" })) else listOf("completed" to (when (session.account.defaultLocale) { "en" -> "Complete"; "ff-CM" -> "Timmin"; else -> "Terminer" }), "cancelled" to (when (session.account.defaultLocale) { "en" -> "Cancel"; "ff-CM" -> "Haaytu"; else -> "Annuler" }), "no_show" to (when (session.account.defaultLocale) { "en" -> "No-show"; "ff-CM" -> "Alaa ɗoo"; else -> "Absent" }))
                         statuses.forEach { (nextStatus, label) ->
                             OutlinedButton(
                                 onClick = {
                                     scope.launch {
                                         runCatching {
                                             repository.transitionAppointmentStatus(session.account.organizationId, siteId, appointment.id, nextStatus, reason, session.account.memberId)
-                                        }.onSuccess { reason = ""; message = if (fr) "Rendez-vous mis à jour et historisé." else "Appointment updated and audited." }
+                                        }.onSuccess { reason = ""; message = when (session.account.defaultLocale) { "en" -> "Appointment updated and audited."; "ff-CM" -> "Sahaa hesɗitinaama e danndaama."; else -> "Rendez-vous mis à jour et historisé." } }
                                             .onFailure { error = it.message ?: "Appointment update failed." }
                                     }
                                 },
@@ -1557,7 +1557,7 @@ private fun AgendaLocalContent(
                                 modifier = Modifier.fillMaxWidth()
                             ) { Text(label) }
                         }
-                        OutlinedTextField(proposedStart, { proposedStart = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Nouvelle date/heure (AAAA-MM-JJ HH:MM)" else "New date/time (YYYY-MM-DD HH:MM)") }, singleLine = true)
+                        OutlinedTextField(proposedStart, { proposedStart = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "New date/time (YYYY-MM-DD HH:MM)"; "ff-CM" -> "Ñalnde/sahaa keso (AAAA-MM-JJ HH:MM)"; else -> "Nouvelle date/heure (AAAA-MM-JJ HH:MM)" }) }, singleLine = true)
                         OutlinedButton(
                             onClick = {
                                 scope.launch {
@@ -1569,13 +1569,13 @@ private fun AgendaLocalContent(
                                             parsed, parsed + (appointment.endsAtMillis - appointment.startsAtMillis),
                                             reason, session.account.memberId
                                         )
-                                    }.onSuccess { reason = ""; message = if (fr) "Créneau déplacé ; contrôle de conflit effectué." else "Appointment rescheduled after conflict check." }
+                                    }.onSuccess { reason = ""; message = when (session.account.defaultLocale) { "en" -> "Appointment rescheduled after conflict check."; "ff-CM" -> "Sahaa waylaama, ƴeewtaama."; else -> "Créneau déplacé ; contrôle de conflit effectué." } }
                                         .onFailure { error = it.message ?: "Reschedule failed." }
                                 }
                             },
                             enabled = reason.trim().length >= 3 && proposedStart.isNotBlank(),
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (fr) "Reprogrammer" else "Reschedule") }
+                        ) { Text(when (session.account.defaultLocale) { "en" -> "Reschedule"; "ff-CM" -> "Waylu sahaa"; else -> "Reprogrammer" }) }
                     }
                     events.take(5).forEach { event ->
                         Text(event.fromStatus + " → " + event.toStatus + " · " + event.reason, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1583,7 +1583,7 @@ private fun AgendaLocalContent(
                 }
             }
         }
-        item { Text(if (fr) "Clients en attente" else "Waiting customers", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(when (session.account.defaultLocale) { "en" -> "Waiting customers"; "ff-CM" -> "Soottotooɓe fadotooɓe"; else -> "Clients en attente" }, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         items(waitlist) { row ->
             var waitReason by rememberSaveable(row.id) { mutableStateOf("") }
             var waitStart by rememberSaveable(row.id) {
@@ -1595,17 +1595,17 @@ private fun AgendaLocalContent(
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(row.counterparty, fontWeight = FontWeight.Bold)
                     Text(row.title + " · " + row.status)
-                    OutlinedTextField(waitReason, { waitReason = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Motif de mise à jour / conversion" else "Reason for update / conversion") })
+                    OutlinedTextField(waitReason, { waitReason = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Reason for update / conversion"; "ff-CM" -> "Daliilu waylugol"; else -> "Motif de mise à jour / conversion" }) })
                     if (row.status in setOf("open", "contacted")) {
-                        OutlinedTextField(waitStart, { waitStart = it }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Créneau retenu (AAAA-MM-JJ HH:MM)" else "Booked slot (YYYY-MM-DD HH:MM)") }, singleLine = true)
-                        OutlinedTextField(waitDuration, { waitDuration = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Durée (minutes)" else "Duration (minutes)") }, singleLine = true)
-                        OutlinedTextField(waitDeposit, { waitDeposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(if (fr) "Acompte (FCFA)" else "Deposit (XAF)") }, singleLine = true)
+                        OutlinedTextField(waitStart, { waitStart = it }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Booked slot (YYYY-MM-DD HH:MM)"; "ff-CM" -> "Sahaa cuɓaaɗo (AAAA-MM-JJ HH:MM)"; else -> "Créneau retenu (AAAA-MM-JJ HH:MM)" }) }, singleLine = true)
+                        OutlinedTextField(waitDuration, { waitDuration = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Duration (minutes)"; "ff-CM" -> "Sahaa (minit)"; else -> "Durée (minutes)" }) }, singleLine = true)
+                        OutlinedTextField(waitDeposit, { waitDeposit = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(when (session.account.defaultLocale) { "en" -> "Deposit (XAF)"; "ff-CM" -> "Ceede adiiɗe (FCFA)"; else -> "Acompte (FCFA)" }) }, singleLine = true)
                         OutlinedButton(
                             onClick = {
                                 scope.launch {
                                     runCatching {
                                         val parsed = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).apply { isLenient = false }.parse(waitStart)?.time
-                                            ?: throw IllegalArgumentException(if (fr) "Date invalide." else "Invalid date.")
+                                            ?: throw IllegalArgumentException(when (session.account.defaultLocale) { "en" -> "Invalid date."; "ff-CM" -> "Ñalnde feewaani."; else -> "Date invalide." })
                                         repository.convertWaitlistToAppointment(
                                             session.account.organizationId, siteId, row.id,
                                             workstationId.takeIf { it.isNotBlank() },
@@ -1615,13 +1615,13 @@ private fun AgendaLocalContent(
                                         )
                                     }.onSuccess {
                                         waitReason = ""
-                                        message = if (fr) "La liste d'attente a été convertie en rendez-vous réel." else "Waitlist entry converted into a real appointment."
+                                        message = when (session.account.defaultLocale) { "en" -> "Waitlist entry converted into a real appointment."; "ff-CM" -> "Sahaa goonga sosaama e doggol fadotooɓe."; else -> "La liste d'attente a été convertie en rendez-vous réel." }
                                     }.onFailure { error = it.message ?: "Waitlist conversion failed." }
                                 }
                             },
                             enabled = waitReason.trim().length >= 3 && (waitDuration.toIntOrNull()?.let { it in 5..600 } == true),
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (fr) "Créer le rendez-vous et convertir" else "Create appointment and convert") }
+                        ) { Text(when (session.account.defaultLocale) { "en" -> "Create appointment and convert"; "ff-CM" -> "Sos sahaa e waylu"; else -> "Créer le rendez-vous et convertir" }) }
                     }
                     if (row.status == "open") {
                         OutlinedButton(
@@ -1629,13 +1629,13 @@ private fun AgendaLocalContent(
                                 scope.launch {
                                     runCatching {
                                         repository.transitionManagementRecord(session.account.organizationId, siteId, row.id, "contacted", waitReason, session.account.memberId)
-                                    }.onSuccess { waitReason = ""; message = if (fr) "Client marqué comme contacté." else "Customer marked as contacted." }
+                                    }.onSuccess { waitReason = ""; message = when (session.account.defaultLocale) { "en" -> "Customer marked as contacted."; "ff-CM" -> "Maantaama ko jokkondiraama e soottotooɗo."; else -> "Client marqué comme contacté." } }
                                         .onFailure { error = it.message ?: "Waitlist transition failed." }
                                 }
                             },
                             enabled = waitReason.trim().length >= 3,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (fr) "Marquer le client comme contacté" else "Mark customer as contacted") }
+                        ) { Text(when (session.account.defaultLocale) { "en" -> "Mark customer as contacted"; "ff-CM" -> "Maanto ko jokkondiraama e soottotooɗo"; else -> "Marquer le client comme contacté" }) }
                     }
                     if (row.status in setOf("open", "contacted")) {
                         OutlinedButton(
@@ -1643,13 +1643,13 @@ private fun AgendaLocalContent(
                                 scope.launch {
                                     runCatching {
                                         repository.transitionManagementRecord(session.account.organizationId, siteId, row.id, "cancelled", waitReason, session.account.memberId)
-                                    }.onSuccess { waitReason = ""; message = if (fr) "Entrée retirée de la liste." else "Entry removed from waitlist." }
+                                    }.onSuccess { waitReason = ""; message = when (session.account.defaultLocale) { "en" -> "Entry removed from waitlist."; "ff-CM" -> "Ittaama e doggol."; else -> "Entrée retirée de la liste." } }
                                         .onFailure { error = it.message ?: "Waitlist transition failed." }
                                 }
                             },
                             enabled = waitReason.trim().length >= 3,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text(if (fr) "Retirer de la liste" else "Remove from waitlist") }
+                        ) { Text(when (session.account.defaultLocale) { "en" -> "Remove from waitlist"; "ff-CM" -> "Ittu e doggol"; else -> "Retirer de la liste" }) }
                     }
                 }
             }
