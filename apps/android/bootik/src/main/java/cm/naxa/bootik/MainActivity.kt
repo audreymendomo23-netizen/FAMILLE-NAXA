@@ -43,6 +43,7 @@ import androidx.room.Room
 import androidx.room.withTransaction
 import cm.naxa.bootik.data.BootikActivityDraftEntity
 import cm.naxa.bootik.data.BootikLocalDatabase
+import cm.naxa.bootik.data.BOOTIK_MIGRATION_1_2
 import cm.naxa.bootik.data.BootikSiteActivityDraftEntity
 import cm.naxa.bootik.data.BootikSiteDraftEntity
 import cm.naxa.bootik.data.BootikWorkspaceDraftEntity
@@ -57,12 +58,12 @@ class MainActivity : ComponentActivity() {
             applicationContext,
             BootikLocalDatabase::class.java,
             "bootik-local.db"
-        ).build()
+        ).addMigrations(BOOTIK_MIGRATION_1_2).build()
 
         setContent {
             BootikTheme {
                 var connected by remember { mutableStateOf(false) }
-                if (connected) BootikConnectedScreen(BootikApi(BuildConfig.BOOTIK_API_URL)) { connected = false }
+                if (connected) BootikConnectedScreen(BootikApi(BuildConfig.BOOTIK_API_URL),database.scoped()) { connected = false }
                 else Column { Button(onClick = { connected = true }) { Text("Connexion BOOTIK") }; BootikSetupScreen(database = database) }
             }
         }

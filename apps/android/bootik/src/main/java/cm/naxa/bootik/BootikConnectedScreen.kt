@@ -17,7 +17,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
-@Composable fun BootikConnectedScreen(api:BootikApi,onBack:()->Unit){
+@Composable fun BootikConnectedScreen(api:BootikApi,offline:BootikScopedDao,onBack:()->Unit){
  val context=LocalContext.current
  val scope=rememberCoroutineScope()
  val vault=remember{SessionVault(context.applicationContext)}
@@ -91,6 +91,7 @@ import org.json.JSONObject
  Row{RadioButton(plan=="access",{plan="access"},enabled=!busy);Text("ACCÈS");RadioButton(plan=="premium",{plan="premium"},enabled=!busy);Text("PREMIUM")}
  Button(enabled=!busy,onClick={task{val result=api.operation(current,site,"entitlement",JSONObject().put("universe",universe));message=if(result.getBoolean("active"))"Droits actifs" else "Droits inactifs"}}){Text("Vérifier mes droits")}
  Button(enabled=!busy&&current.role!="staff",onClick={task{val result=api.operation(current,site,"trial",JSONObject().put("universe",universe).put("plan",plan));message="Fin d’essai : "+result.getString("expires_at")}}){Text("Activer les 72 heures")}
+ BootikSalesPanel(api,offline,current,site)
  Text("NAXA SECURITY et assistance")
  var consent by remember(site){mutableStateOf(false)}
  Row{Checkbox(consent,{consent=it},enabled=!busy);Text("Je consens à demander une session multimédia")}
