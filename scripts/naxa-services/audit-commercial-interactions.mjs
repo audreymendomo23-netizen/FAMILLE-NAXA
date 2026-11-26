@@ -32,3 +32,20 @@ console.log("Commercial audit:",files.length,"UI source files,",interactions.len
 const login=await readFile("apps/web/naxa-services/src/main.tsx","utf8");
 for(const forbidden of ["Session Web conservée uniquement","Pas d'inscription libre","Les jetons restent en mémoire","JOURNAL SERVEUR","Connecteur à livrer"])if(login.includes(forbidden))throw new Error("Forbidden customer copy: "+forbidden);
 if(interactions.length<100||tests.length<20)throw new Error("Incomplete inventory scope");
+
+// Prevent a missing locale resource or incompatible formatting placeholder from silently falling back.
+const resourceRoot="apps/android/naxa-services/src/main/res";
+const dictionaries=await Promise.all(["values","values-en","values-b+ff+CM"].map(async dir=>{
+ const source=await readFile(path.join(resourceRoot,dir,"strings.xml"),"utf8");
+ const entries=[...source.matchAll(/<string name="([^"]+)"[^>]*>([\\s\\S]*?)<\\/string>/g)];
+ const map=new Map(entries.map(m=>[m[1],m[2]]));
+ if(map.size!==entries.length)throw Error("Duplicate locale key: "+dir);
+ return map;
+}));
+const [fr,en,ff]=dictionaries;
+const format=s=>(s.match(/%[0-9]+\\$[sd]/g)??[]).sort().join(",");
+for(const [index,dict] of dictionaries.entries()){
+ if(dict.size!==fr.size)throw Error("Locale resource count mismatch "+index);
+ for(const [key,value] of fr){if(!dict.has(key)||format(dict.get(key))!==format(value)||Boolean(value.trim())!==Boolean(dict.get(key).trim()))throw Error("Locale key or format mismatch "+index+" "+key);}
+}
+console.log("Locale resource parity FR/EN/ff-CM:",fr.size,en.size,ff.size,"(not a linguistic certification)");

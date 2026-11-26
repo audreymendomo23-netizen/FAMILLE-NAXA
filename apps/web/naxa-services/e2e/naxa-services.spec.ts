@@ -918,3 +918,20 @@ test("Commercial languages: FR, EN and Fulfulde change login, dashboard and menu
   await page.getByRole("combobox",{name:"Ɗemngal",exact:true}).selectOption("fr");
   await expect(page.getByRole("heading",{name:"Une journée bien organisée commence ici."})).toBeVisible();
 });
+
+
+test("Commercial languages: shared ERP screens render translated controls in FR EN and Fulfulde",async({context})=>{
+  await installBackend(context);const page=await context.newPage();await signIn(page);
+  const cases=[
+    {nav:["Agenda & rendez-vous","Calendar & appointments","Ɗaɓɓitanɗe e sahaa"],heading:["Rendez-vous et disponibilité","Appointments and availability","Sahaaaji e heɓugol"]},
+    {nav:["Caisse & ventes","Cash & sales","Ceede e jaaygol"],heading:["Registres et sessions","Registers and shifts","Keesuuji ceede"]},
+    {nav:["Consommables","Supplies","Jawdi golle"],heading:["Référentiel fournisseur","Supplier directory","Doggol hokkooɓe jawdi"]},
+    {nav:["Équipe & commissions","Team & commissions","Golluɓe e ceede"],heading:["Pointage de l'utilisateur connecté","Your attendance","Naatugol maa"]},
+    {nav:["Clients & fidélité","Customers & loyalty","Soottotooɓe"],heading:["Créer un suivi","Create follow-up","Sos rewindo"]},
+  ];
+  const langs=["fr","en","ff-CM"],labels=["Langue","Language","Ɗemngal"];
+  for(let i=0;i<langs.length;i++){
+    if(i>0){await page.getByRole("combobox",{name:labels[i-1],exact:true}).selectOption(langs[i]);await expect(page.locator("html")).toHaveAttribute("lang",langs[i]);}
+    for(const c of cases){await page.locator(".side-nav").getByRole("button",{name:new RegExp(c.nav[i])}).click();await expect(page.getByRole("heading",{name:c.heading[i],exact:true})).toBeVisible();}
+  }
+});
