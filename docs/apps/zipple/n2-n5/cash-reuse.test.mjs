@@ -1,0 +1,2 @@
+import test from "node:test";import assert from "node:assert/strict";import {totalLigne,totalPanier,monnaieARendre,calculerEcartCaisse} from "../../../../apps/web/zipple/src/business/cash-calculations.ts";
+test("NAXA exact FCFA calculations reused unchanged",()=>{assert.equal(totalPanier([totalLigne(2500,1),totalLigne(1000,2)]),4500);assert.equal(monnaieARendre(5000,4500),500);assert.equal(calculerEcartCaisse(10900,11000),-100);assert.throws(()=>totalLigne(1,-1));assert.throws(()=>totalPanier([0.5]));});

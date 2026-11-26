@@ -25,6 +25,8 @@ declare m public.zp_members; begin
 create function public.zp_paid_plan(p_org uuid) returns text language sql stable security invoker set search_path=pg_catalog,public as $$
  select plan from public.zp_subscription_periods where org_id=p_org and starts_at<=now() and ends_at>now() order by starts_at desc limit 1
 $$;
+create function public.zp_business_actor(p_access text,p_site uuid) returns public.zp_members language plpgsql stable security invoker set search_path=pg_catalog,public as $
+declare m public.zp_members;p text;begin m:=public.zp_actor(p_access,p_site);p:=public.zp_paid_plan(m.org_id);if p is null or (p='ACCESS' and m.role_code<>'promoteur') then raise exception 'SUBSCRIPTION_OR_ROLE_REQUIRED';end if;return m;end $;
 create function public.zp_quote_intent(p_access text,p_site uuid,p_plan text,p_cadence text,p_provider text,p_request uuid) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members; c public.zp_plan_catalog; i public.zp_subscription_intents;begin
  m:=public.zp_actor(p_access,p_site);if m.role_code<>'promoteur' then raise exception 'DENIED';end if;
@@ -66,7 +68,7 @@ declare m public.zp_members;begin m:=public.zp_actor(p_access,p_site);if m.role_
  insert into public.zp_site_modes values(p_site,m.org_id,p_space,p_bar,p_delivery) on conflict(site_id) do nothing;
  if not exists(select 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id and space=p_space and bar_enabled=p_bar and delivery_enabled=p_delivery) then raise exception 'MODE_CHANGE_REQUIRES_MIGRATION';end if;end $$;
 create function public.zp_add_menu_item(p_access text,p_site uuid,p_name text,p_post text,p_price int,p_qty int) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
-declare m public.zp_members;s public.zp_site_modes;i uuid;begin m:=public.zp_actor(p_access,p_site);if m.role_code not in ('promoteur','manager') or public.zp_paid_plan(m.org_id) is null then raise exception 'DENIED';end if;
+declare m public.zp_members;s public.zp_site_modes;i uuid;begin m:=public.zp_business_actor(p_access,p_site);if m.role_code not in ('promoteur','manager') then raise exception 'DENIED';end if;
  select * into s from public.zp_site_modes where site_id=p_site and org_id=m.org_id;
  if s.site_id is null or not ((s.space='restaurant' and (p_post='kitchen' or (p_post='bar' and s.bar_enabled))) or (s.space='snack_bar' and p_post='snack')) then raise exception 'POST_DENIED';end if;
  insert into public.zp_menu_items(org_id,site_id,name,post,price_xaf,available_qty) values(m.org_id,p_site,trim(p_name),p_post,p_price,p_qty) returning id into i;return i;end $$;
@@ -81,10 +83,10 @@ declare m public.zp_members;g public.zp_guest_sessions;s public.zp_site_modes;or
  if p_guest_hash is not null then
  select x.* into g from public.zp_guest_sessions x join public.zp_table_sessions ts on ts.id=x.table_session_id join public.zp_sites si on si.id=x.site_id join public.zp_organizations o on o.id=x.org_id where x.token_hash=p_guest_hash and x.expires_at>now() and ts.closed_at is null and si.active and o.active for update of ts;
  if g.id is null or g.site_id<>p_site or p_channel<>'table' or p_table_session is distinct from g.table_session_id then raise exception 'DENIED';end if;org:=g.org_id;
- else m:=public.zp_actor(p_access,p_site);org:=m.org_id;end if;
+ else m:=public.zp_business_actor(p_access,p_site);org:=m.org_id;end if;
  if public.zp_paid_plan(org) is null then raise exception 'SUBSCRIPTION_REQUIRED';end if;
  select * into s from public.zp_site_modes where site_id=p_site and org_id=org;
- if s.site_id is null or p_channel not in ('table','counter','takeaway','delivery') or (p_channel='delivery' and (s.space<>'restaurant' or not s.delivery_enabled)) then raise exception 'CHANNEL_DENIED';end if;
+ if s.site_id is null or p_channel not in ('table','counter','takeaway','delivery') or p_channel='delivery' then raise exception 'CHANNEL_DENIED';end if;
  if p_channel='table' then perform 1 from public.zp_table_sessions where id=p_table_session and org_id=org and site_id=p_site and closed_at is null for update;if not found then raise exception 'TABLE_CLOSED';end if;elsif p_table_session is not null then raise exception 'INVALID_TABLE';end if;
  if jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines) not between 1 and 50 then raise exception 'INVALID_LINES';end if;
  if exists(select 1 from jsonb_to_recordset(p_lines) as x(item_id uuid,qty int) where x.item_id is null or x.qty is null or x.qty not between 1 and 1000) then raise exception 'INVALID_QUANTITY';end if;
@@ -111,6 +113,6 @@ do $$ declare t text;f record;begin
  foreach t in array array['zp_plan_catalog','zp_subscription_periods','zp_subscription_intents','zp_referral_links','zp_referral_rewards','zp_site_modes','zp_menu_items','zp_tables','zp_table_sessions','zp_guest_sessions','zp_orders','zp_order_lines'] loop
  execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from public,anon,authenticated',t);execute format('grant select,insert,update,delete on public.%I to service_role',t);
  end loop;
- for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_actor','zp_paid_plan','zp_quote_intent','zp_confirm_subscription','zp_claim_referral','zp_site_mode','zp_add_menu_item','zp_open_guest','zp_create_order','zp_guest_order') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;
+ for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_actor','zp_paid_plan','zp_business_actor','zp_quote_intent','zp_confirm_subscription','zp_claim_referral','zp_site_mode','zp_add_menu_item','zp_open_guest','zp_create_order','zp_guest_order') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;
 end $$;
 commit;
