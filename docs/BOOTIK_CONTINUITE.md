@@ -407,3 +407,7 @@ Réutilisation des parcours StockOperationsPage (commande, réception, règlemen
 
 ### Achats — recette UI et durcissement
 La réception fournisseur crée un UUID de mouvement serveur distinct, afin de ne jamais rattacher un événement manuel préexistant. Le reçu de mutation reste confirmé même si le rafraîchissement de la liste échoue. Extension Chromium : fournisseur, commande, réception partielle avec frais, dette et règlement. CI à confirmer.
+
+
+### BULK CAISSE — reprise des contrats NAXA SERVICES (candidat)
+Sources auditées : CashOperationsPage et ns_open_cash_session/ns_close_cash_session/ns_record_expense de naxa_services_v4_supplier_accounting_forecast.sql. Caisses par activité/site, une session ouverte par caisse, ouverture avec fonds, panier jusqu'à 20 références (unité de base), réutilisation bk_sell_item/FEFO sans moteur parallèle, transaction atomique avec espèces et monnaie rendue, entrées/sorties/dépenses justifiées, clôture manager avec écart et motif, reçus idempotents, droits et RLS privés. Web/Android raccordés, tests API sur reprise, stock, montant insuffisant, solde, écart et session close. Vente stock historique non rattachée conservée mais ne doit pas être comptée en espèces. Restent caisse offline, modes non espèces et mixte, postes, clients/crédit, retours, documents PDF/thermique et migration des anciens flux, journaux comptables complets. Pas de production ni changement autres apps. CI à confirmer.

@@ -26,3 +26,9 @@ do $$ declare t text;begin foreach t in array array['bk_purchase_orders','bk_pur
 grant select,insert on bootik.bk_purchase_orders,bootik.bk_purchase_receipts,bootik.bk_supplier_payments to bootik_runtime;
 grant update(received_quantity,received_amount_fcfa,paid_amount_fcfa) on bootik.bk_purchase_orders to bootik_runtime;
 grant execute on function bootik.bk_purchase_create(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint),bootik.bk_purchase_receive(uuid,uuid,uuid,uuid,uuid,uuid,numeric,bigint),bootik.bk_purchase_pay(uuid,uuid,uuid,uuid,uuid,uuid,bigint,text,text) to bootik_runtime;
+
+-- Cash test runtime: all public client access remains revoked.
+do $$ declare t text;begin foreach t in array array['bk_registers','bk_cash_sessions','bk_cash_checkouts','bk_cash_movements','bk_cash_operation_receipts'] loop execute format('create policy bk_runtime_access on bootik.%I to bootik_runtime using(true) with check(true)',t);end loop;end $$;
+grant select,insert on bootik.bk_registers,bootik.bk_cash_sessions,bootik.bk_cash_checkouts,bootik.bk_cash_movements,bootik.bk_cash_operation_receipts to bootik_runtime;
+grant update(closed_at,closed_by,expected_close_fcfa,counted_close_fcfa,variance_reason) on bootik.bk_cash_sessions to bootik_runtime;
+grant execute on function bootik.bk_cash_action(uuid,uuid,uuid,uuid,text,jsonb) to bootik_runtime;

@@ -364,4 +364,93 @@ begin
 end $$;
 revoke all on function bootik.bk_purchase_create(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,numeric,bigint),bootik.bk_purchase_receive(uuid,uuid,uuid,uuid,uuid,uuid,numeric,bigint),bootik.bk_purchase_pay(uuid,uuid,uuid,uuid,uuid,uuid,bigint,text,text) from public,anon,authenticated;
 
+-- NAXA SERVICES cash register/session lifecycle, BOOTIK's existing FEFO sales are the sole stock mutation.
+create table bootik.bk_registers(
+ id uuid primary key,organization_id uuid not null,app_id uuid not null,activity_id uuid not null,location_id uuid not null,code text not null,name text not null,actor uuid not null,created_at timestamptz not null default clock_timestamp(),
+ unique(organization_id,app_id,activity_id,location_id,code),foreign key(activity_id,location_id,organization_id,app_id) references bootik.bk_activity_locations(activity_id,location_id,organization_id,app_id)
+);
+create table bootik.bk_cash_sessions(
+ id uuid primary key,register_id uuid not null references bootik.bk_registers(id),opened_by uuid not null,opening_float_fcfa bigint not null check(opening_float_fcfa>=0),
+ opened_at timestamptz not null default clock_timestamp(),closed_at timestamptz,closed_by uuid,expected_close_fcfa bigint,counted_close_fcfa bigint,variance_reason text,
+ check(counted_close_fcfa is null or counted_close_fcfa>=0)
+);
+create unique index bk_register_single_open on bootik.bk_cash_sessions(register_id) where closed_at is null;
+create table bootik.bk_cash_checkouts(
+ id uuid primary key,session_id uuid not null references bootik.bk_cash_sessions(id),actor uuid not null,total_fcfa bigint not null check(total_fcfa>=0),tender_fcfa bigint not null check(tender_fcfa>=total_fcfa),sale_groups jsonb not null,created_at timestamptz not null default clock_timestamp()
+);
+create table bootik.bk_cash_movements(
+ id uuid primary key,session_id uuid not null references bootik.bk_cash_sessions(id),actor uuid not null,kind text not null check(kind in ('in','out','expense')),amount_fcfa bigint not null check(amount_fcfa>0),reason text not null,created_at timestamptz not null default clock_timestamp()
+);
+create table bootik.bk_cash_operation_receipts(
+ id uuid primary key,organization_id uuid not null,app_id uuid not null,activity_id uuid not null,location_id uuid not null,actor uuid not null,kind text not null,payload jsonb not null,result jsonb not null,created_at timestamptz not null default clock_timestamp()
+);
+do $$ declare t text;begin foreach t in array array['bk_registers','bk_cash_sessions','bk_cash_checkouts','bk_cash_movements','bk_cash_operation_receipts'] loop execute format('alter table bootik.%I enable row level security',t);execute format('alter table bootik.%I force row level security',t);execute format('revoke all on bootik.%I from public,anon,authenticated',t);end loop;end $$;
+create function bootik.bk_cash_action(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_kind text,p_data jsonb)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare a uuid;rid uuid;sid uuid;req uuid;u text;reg bootik.bk_registers%rowtype;ses bootik.bk_cash_sessions%rowtype;old bootik.bk_cash_operation_receipts%rowtype;answer jsonb;line jsonb;groups jsonb:='[]'::jsonb;gid uuid;total numeric:=0;amt bigint;expected numeric;why text;category text;
+begin
+ if p_kind not in ('register','open','checkout','movement','close') or jsonb_typeof(p_data) is distinct from 'object' then raise exception 'BOOTIK_CASH_INVALID';end if;
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,p_kind in ('register','movement','close'));
+ a:=(p_data->>'activity_id')::uuid;req:=(p_data->>'request_id')::uuid;
+ if req is null or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ select x.universe_code into u from bootik.bk_activities x join bootik.bk_activity_locations l on (l.activity_id,l.organization_id,l.app_id)=(x.id,x.organization_id,x.app_id) where x.id=a and x.organization_id=p_org and x.app_id=p_app and l.location_id=p_site and x.status='active';
+ if not found or not bootik.bk_has_entitlement(p_org,p_app,u) then raise exception 'BOOTIK_ENTITLEMENT_REQUIRED';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':cash:'||req::text,0));
+ select * into old from bootik.bk_cash_operation_receipts where id=req and organization_id=p_org and app_id=p_app;
+ if found then
+  if (old.activity_id,old.location_id,old.actor,old.kind,old.payload) is distinct from (a,p_site,p_actor,p_kind,p_data) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;return old.result;
+ end if;
+ if p_kind='register' then
+  if length(btrim(coalesce(p_data->>'code',''))) not between 1 and 40 or length(btrim(coalesce(p_data->>'name',''))) not between 1 and 120 then raise exception 'BOOTIK_CASH_INVALID';end if;
+  insert into bootik.bk_registers(id,organization_id,app_id,activity_id,location_id,code,name,actor) values(req,p_org,p_app,a,p_site,upper(btrim(p_data->>'code')),btrim(p_data->>'name'),p_actor);
+  answer:=jsonb_build_object('register_id',req);
+ elsif p_kind='open' then
+  rid:=(p_data->>'register_id')::uuid;amt:=(p_data->>'opening_float_fcfa')::bigint;
+  if amt is null or amt<0 or amt>9007199254740991 then raise exception 'BOOTIK_CASH_INVALID';end if;
+  select * into reg from bootik.bk_registers where id=rid and organization_id=p_org and app_id=p_app and activity_id=a and location_id=p_site for update;
+  if not found then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+  if exists(select 1 from bootik.bk_cash_sessions where register_id=rid and closed_at is null) then raise exception 'BOOTIK_REGISTER_ALREADY_OPEN';end if;
+  insert into bootik.bk_cash_sessions(id,register_id,opened_by,opening_float_fcfa) values(req,rid,p_actor,amt);
+  answer:=jsonb_build_object('session_id',req);
+ else
+  sid:=(p_data->>'session_id')::uuid;
+  select s.* into ses from bootik.bk_cash_sessions s join bootik.bk_registers r on r.id=s.register_id where s.id=sid and r.organization_id=p_org and r.app_id=p_app and r.activity_id=a and r.location_id=p_site for update of s;
+  if not found or (p_kind='checkout' and ses.opened_by<>p_actor) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+  if ses.closed_at is not null then raise exception 'BOOTIK_CASH_SESSION_CLOSED';end if;
+  if p_kind='checkout' then
+   if jsonb_typeof(p_data->'lines') is distinct from 'array' or jsonb_array_length(p_data->'lines') not between 1 and 20 then raise exception 'BOOTIK_CASH_INVALID';end if;
+   if (select count(distinct x.value->>'item_id') from jsonb_array_elements(p_data->'lines') x)<>jsonb_array_length(p_data->'lines') then raise exception 'BOOTIK_CASH_DUPLICATE_ITEM';end if;
+   amt:=(p_data->>'tender_fcfa')::bigint;
+   if amt is null or amt<0 or amt>9007199254740991 then raise exception 'BOOTIK_CASH_INVALID';end if;
+   for line in select x.value from jsonb_array_elements(p_data->'lines') x order by (x.value->>'item_id')::uuid loop
+    if not exists(select 1 from bootik.bk_catalog_items i where i.id=(line->>'item_id')::uuid and i.organization_id=p_org and i.app_id=p_app and i.activity_id=a) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+    gid:=bootik.bk_sell_item(p_org,p_app,p_actor,p_site,(line->>'item_id')::uuid,gen_random_uuid(),line->>'unit_code',(line->>'quantity')::numeric,(line->>'unit_price_fcfa')::bigint);
+    select total+g.quantity*g.base_factor*g.base_price into total from bootik.bk_item_sale_groups g where g.id=gid;
+    groups:=groups||jsonb_build_array(gid);
+   end loop;
+   if total is null or total<>round(total) or total>amt then raise exception 'BOOTIK_CASH_TENDER_INSUFFICIENT';end if;
+   insert into bootik.bk_cash_checkouts(id,session_id,actor,total_fcfa,tender_fcfa,sale_groups) values(req,sid,p_actor,total::bigint,amt,groups);
+   answer:=jsonb_build_object('checkout_id',req,'total_fcfa',total::bigint,'change_fcfa',amt-total::bigint);
+  else
+   expected:=ses.opening_float_fcfa+(select coalesce(sum(total_fcfa),0) from bootik.bk_cash_checkouts where session_id=sid)+(select coalesce(sum(case when kind='in' then amount_fcfa else -amount_fcfa end),0) from bootik.bk_cash_movements where session_id=sid);
+   if expected<0 or expected>9007199254740991 then raise exception 'BOOTIK_CASH_INVALID_BALANCE';end if;
+   why:=btrim(coalesce(p_data->>'reason',''));
+   if p_kind='movement' then
+    category:=p_data->>'movement_kind';amt:=(p_data->>'amount_fcfa')::bigint;
+    if category is null or category not in ('in','out','expense') or amt is null or amt<=0 or amt>9007199254740991 or length(why) not between 3 and 500 or (category<>'in' and amt>expected) or (category='in' and expected+amt>9007199254740991) then raise exception 'BOOTIK_CASH_INVALID';end if;
+    insert into bootik.bk_cash_movements(id,session_id,actor,kind,amount_fcfa,reason) values(req,sid,p_actor,category,amt,why);
+    answer:=jsonb_build_object('movement_id',req);
+   else
+    amt:=(p_data->>'counted_close_fcfa')::bigint;
+    if amt is null or amt<0 or amt>9007199254740991 or length(why)>500 or (amt<>expected and length(why)<3) then raise exception 'BOOTIK_CASH_VARIANCE_REASON_REQUIRED';end if;
+    update bootik.bk_cash_sessions set closed_at=clock_timestamp(),closed_by=p_actor,expected_close_fcfa=expected::bigint,counted_close_fcfa=amt,variance_reason=nullif(why,'') where id=sid;
+    answer:=jsonb_build_object('session_id',sid,'expected_close_fcfa',expected::bigint,'counted_close_fcfa',amt,'variance_fcfa',amt-expected::bigint);
+   end if;
+  end if;
+ end if;
+ insert into bootik.bk_cash_operation_receipts(id,organization_id,app_id,activity_id,location_id,actor,kind,payload,result) values(req,p_org,p_app,a,p_site,p_actor,p_kind,p_data,answer);
+ return answer;
+end $$;
+revoke all on function bootik.bk_cash_action(uuid,uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+
 commit;

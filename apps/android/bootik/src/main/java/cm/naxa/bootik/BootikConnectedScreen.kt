@@ -105,6 +105,7 @@ import org.json.JSONObject
  Button(enabled=!busy&&current.role!="staff",onClick={task{val result=api.operation(current,site,"trial",JSONObject().put("universe",universe).put("plan",plan));message="Fin d’essai : "+result.getString("expires_at")}}){Text("Activer les 72 heures")}
  BootikPaymentPanel(api,current,site,universe,plan)
  if(current.role!="staff")key(current.organization,current.member,site){BootikMasterPanel(api,current,site)}
+ key(current.organization,current.member,site){BootikCashPanel(api,current,site)}
  BootikSalesPanel(api,offline,current,site)
  Text("NAXA SECURITY et assistance")
  var consent by remember(site){mutableStateOf(false)}
