@@ -82,14 +82,26 @@ grant execute on function public.wm_room_read(text,uuid) to service_role;
 -- The trusted gateway calls domain policy before CAS. SQL rejects scope, revoked session and stale version.
 create function public.wm_room_write(p_hash text,p_room uuid,p_expected bigint,p_role text,p_plan text,p_state jsonb)
 returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; v_old public.wm_rooms%rowtype;
+declare a record; v_old public.wm_rooms%rowtype; v_now_ms bigint; v_limit integer;
 begin
  select * into a from public.wm_lock_room_actor(p_hash);
  if not found or a.role is distinct from p_role or a.plan is distinct from p_plan then return false;end if;
+ -- Serialize all room transitions per workspace, including concurrent starts in different rooms.
+ perform pg_advisory_xact_lock(hashtextextended('wm-room-quota:'||a.workspace_id::text,0));
+ v_now_ms:=floor(extract(epoch from clock_timestamp())*1000)::bigint;
  select * into v_old from public.wm_rooms r where r.id=p_room and r.workspace_id=a.workspace_id for update;
  if not found or v_old.revision<>p_expected or not exists(select 1 from jsonb_array_elements(v_old.state->'participants') p where p->>'memberId'=a.account_id::text and p->>'excluded'='false') then return false;end if;
  if p_state is null or p_state->>'id' is distinct from v_old.id::text or p_state->>'workspaceId' is distinct from v_old.workspace_id::text or p_state->>'hostId' is distinct from v_old.host_id::text or (p_state->>'revision')::bigint is distinct from p_expected+1 or jsonb_typeof(p_state->'participants') is distinct from 'array' then return false;end if;
  if p_state->>'recording'='requested' and a.plan<>'premium' then return false;end if;
+ if p_state->>'status' in ('open','paused') then
+  if (p_state->>'endMs')::bigint is null or (p_state->>'endMs')::bigint>least(a.entitlement_end_ms,(p_state->>'hardEndMs')::bigint) then return false;end if;
+  if v_old.state->>'status' not in ('open','paused') then
+   if (p_state->>'endMs')::bigint<=v_now_ms then return false;end if;
+   -- Conservative test-tier capacity: Access=1, Premium=3; negotiated tier not yet configured.
+   v_limit:=case when a.plan='access' then 1 else 3 end;
+   if (select count(*) from public.wm_rooms r where r.workspace_id=a.workspace_id and r.id<>p_room and r.state->>'status' in ('open','paused') and (r.state->>'endMs')::bigint>v_now_ms)>=v_limit then return false;end if;
+  end if;
+ end if;
  if exists(select 1 from jsonb_array_elements(p_state->'participants') p where not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.enabled and m.account_id::text=p->>'memberId') and p->>'excluded' is distinct from 'true') then return false;end if;
  update public.wm_rooms set revision=p_expected+1,state=p_state where id=p_room and revision=p_expected;
  return found;
