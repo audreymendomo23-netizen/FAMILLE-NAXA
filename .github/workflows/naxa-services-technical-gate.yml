@@ -247,6 +247,16 @@ jobs:
       - name: Run static RLS, server-only grants and SECURITY DEFINER checks
         run: deno test --allow-read=supabase/drafts supabase/tests/drafts/naxa_services_static_security_test.ts
 
+  meeting-media-contract:
+    name: NAXA SERVICES media token security contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno test supabase/functions/naxa-services-meeting-media/contract_test.ts
+
   postgres-rls-runtime:
     name: NAXA SERVICES PostgreSQL 17 schema and runtime RLS tests
     runs-on: ubuntu-latest

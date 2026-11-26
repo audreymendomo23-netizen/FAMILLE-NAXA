@@ -29,7 +29,7 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
    try{
     const f="org_id=eq."+encodeURIComponent(account.organization_id);
     const [m,i,t]=await Promise.all([req<Meeting[]>("ns_internal_meetings?select=*&"+f+"&site_id=eq."+encodeURIComponent(siteId)+"&order=scheduled_at.desc&limit=100",undefined,c.signal),req<Invite[]>("ns_internal_meeting_invitees?select=*&"+f+"&limit=2000",undefined,c.signal),req<Target[]>("rpc/ns_roster_targets",{p_org:account.organization_id,p_site:siteId},c.signal)]);
-    if(!c.signal.aborted){setMeetings(m);setInvites(i);setTargets(t);setLoaded(true);setError(false);}
+    if(!c.signal.aborted){setMeetings(m);setInvites(i);setTargets(t);setPost(previous=>t.some(x=>(x.workstation_id??'')===previous)?previous:(t[0]?.workstation_id??''));setLoaded(true);setError(false);}
    }catch{if(!c.signal.aborted){setLoaded(false);setError(true);setMeetings([]);setInvites([]);setTargets([]);}}finally{refreshing=false;}
   }
   void refresh();const timer=window.setInterval(()=>{if(document.visibilityState==="visible")void refresh();},20000);
