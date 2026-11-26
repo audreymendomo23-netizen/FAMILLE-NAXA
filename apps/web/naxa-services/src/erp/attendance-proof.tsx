@@ -28,6 +28,9 @@ export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getTok
   return()=>{live.current=false;c.abort();gen.current++;stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;};
  },[account.organization_id,account.member_id,siteId,reload]);
  useEffect(()=>{gen.current++;stop();setGps(null);setPhoto(null);},[action,reload]);
+ // Backgrounding must not keep the camera alive or leave reusable evidence.
+ useEffect(()=>{function hide(){if(document.visibilityState!=="hidden")return;gen.current++;stop();setGps(null);setPhoto(null);}
+ document.addEventListener("visibilitychange",hide);return()=>document.removeEventListener("visibilitychange",hide);},[]);
  async function obtainGPS(){
   const g=gen.current;setBusy(true);setError(false);setGps(null);
   try{if(!navigator.onLine||!navigator.geolocation)throw Error();
@@ -67,7 +70,7 @@ export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getTok
    const result=await req<{proof_ref:string;staged:boolean}>("rpc/ns_stage_attendance_proof",{p_event_id:id,p_org:account.organization_id,p_site:siteId,p_post:null,p_event:action,p_occurred:occurred,p_revision:policy.revision,p_latitude:policy.require_gps?gps?.latitude:null,p_longitude:policy.require_gps?gps?.longitude:null,p_accuracy:policy.require_gps?gps?.accuracy:null,p_gps_at:policy.require_gps?gps?.at:null,p_selfie_at:policy.require_selfie?photo?.at:null});
    if(!live.current||g!==gen.current||result.proof_ref!==id||!result.staged)throw Error();
    await onSubmit(id,occurred,action);if(live.current&&g===gen.current){setGps(null);setPhoto(null);onClose();}
-  }catch{if(live.current&&g===gen.current)setError(true);}finally{if(live.current)setBusy(false);}
+  }catch{if(live.current&&g===gen.current){setGps(null);setPhoto(null);setError(true);}}finally{if(live.current)setBusy(false);}
  }
  async function save(p:Policy,g:boolean,s:boolean){
   setBusy(true);setError(false);
