@@ -976,7 +976,10 @@ function App() {
   async function recordStaffTimeEvent(eventType:"staff_clock_in"|"staff_break_start"|"staff_break_end"|"staff_clock_out") {
     const session=authSession;if(!session)throw new Error("AUTHENTICATION_REQUIRED");
     const siteId=sharedOperationSiteId(),id=crypto.randomUUID();
-    if(env.VITE_NAXA_SERVICES_ATTENDANCE_ENABLED==="true"&&rosterModeEnabled(session.account.business_mode)){setAttendanceRequest({scope:scopeOf(session)+":"+sessionFence.current.generation,site:siteId,action:eventType});setDialogOpen(false);return;}
+    if(rosterModeEnabled(session.account.business_mode)){
+      if(env.VITE_NAXA_SERVICES_ATTENDANCE_ENABLED!=="true")throw new Error(session.account.default_locale==="en"?"Secure attendance is temporarily unavailable.":session.account.default_locale==="ff-CM"?"Winndugol naatugol kisngol heɓotaake jooni.":"Le pointage sécurisé est temporairement indisponible.");
+      setAttendanceRequest({scope:scopeOf(session)+":"+sessionFence.current.generation,site:siteId,action:eventType});setDialogOpen(false);return;
+    }
     await submitWebBusinessEvent("team",eventType+".recorded",eventType,id,{
       time_event_id:id,staff_member_id:session.account.member_id,staff_name_snapshot:session.account.display_name,
       occurred_at:new Date().toISOString(),workstation_id:null,

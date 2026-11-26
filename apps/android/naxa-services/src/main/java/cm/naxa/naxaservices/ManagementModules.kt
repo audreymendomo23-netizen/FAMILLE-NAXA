@@ -1866,8 +1866,19 @@ fun TeamPerformanceContent(
                 when (session.account.defaultLocale) { "en" -> "Track attendance. Time entries remain pending approval."; "ff-CM" -> "Rewindo sahaaaji naatugol. Winndanɗe ƴeewtetee."; else -> "Suivez les heures de présence. Les pointages restent soumis à validation." }
             )
         }
-        if (BuildConfig.ATTENDANCE_ENABLED && rosterAvailable(session.account.businessMode)) {
-            item { AttendanceEvidenceCard(repository,session,siteId,attendanceWorkstationId.takeIf { it.isNotBlank() }) }
+        if (rosterAvailable(session.account.businessMode)) {
+            if (BuildConfig.ATTENDANCE_ENABLED) {
+                item {
+                    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
+                        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(when(session.account.defaultLocale){"en"->"Attendance workstation";"ff-CM"->"Nokkuure golle";else->"Emplacement du pointage"},fontWeight=FontWeight.SemiBold)
+                            OutlinedButton(onClick={attendanceWorkstationId=""}, modifier=Modifier.fillMaxWidth()){Text((if(attendanceWorkstationId.isBlank())"✓ " else "")+when(session.account.defaultLocale){"en"->"Site-level attendance";"ff-CM"->"Naatugol e nokkuure";else->"Pointage au niveau du site"})}
+                            workstations.filter{it.status=="active"}.forEach{workstation->OutlinedButton(onClick={attendanceWorkstationId=workstation.id},modifier=Modifier.fillMaxWidth()){Text((if(attendanceWorkstationId==workstation.id)"✓ " else "")+workstation.name)}}
+                        }
+                    }
+                }
+                item { AttendanceEvidenceCard(repository,session,siteId,attendanceWorkstationId.takeIf { it.isNotBlank() }) }
+            } else item { LocalOnlyNotice(when(session.account.defaultLocale){"en"->"Secure attendance is temporarily unavailable.";"ff-CM"->"Winndugol naatugol kisngol heɓotaake jooni.";else->"Le pointage sécurisé est temporairement indisponible."}) }
         } else item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(20.dp)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

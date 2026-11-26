@@ -1098,3 +1098,16 @@ test("Activity confirmation: rejected transition cannot present a confirmed new 
  await expect(record.getByTestId("record-confirmation")).toHaveAttribute("data-version","0");
  await expect(record.locator(".activity-transition")).toHaveCount(0);
 });
+
+
+test("Hierarchical attendance: disabling the proof module cannot fall back to unproved clock-in",async({context})=>{
+ const events=await installBackend(context);
+ for(const mode of ["NS-SINGLE","NS-MULTISITE"]){
+  const page=await context.newPage();await signIn(page,mode);
+  await page.locator('.side-nav button[data-module-id="team"]').click();
+  await page.getByRole("button",{name:"Pointer mon arrivée",exact:true}).click();
+  await expect(page.getByText("Le pointage sécurisé est temporairement indisponible.",{exact:true})).toBeVisible();
+  expect(events.filter(x=>x.action_code==="staff_clock_in.recorded")).toHaveLength(0);
+  await page.close();
+ }
+});
