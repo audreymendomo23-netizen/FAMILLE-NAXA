@@ -4,13 +4,14 @@ import {createBootikService} from './service.mjs';
 if(!process.env.BOOTIK_DATABASE_URL)throw Error('BOOTIK_DATABASE_URL required');
 const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL,max:8});
 const securityDb=process.env.BOOTIK_SECURITY_DATABASE_URL?new pg.Pool({connectionString:process.env.BOOTIK_SECURITY_DATABASE_URL,max:2}):null;
-const handle=createBootikService(db,{securityDb});
+const provisionDb=process.env.BOOTIK_PROVISION_DATABASE_URL?new pg.Pool({connectionString:process.env.BOOTIK_PROVISION_DATABASE_URL,max:2}):null;
+const handle=createBootikService(db,{securityDb,provisionDb,provisionToken:process.env.BOOTIK_FAMILY_PROVISION_TOKEN});
 const origin=process.env.BOOTIK_WEB_ORIGIN||'';
 createServer(async(req,res)=>{
  const headers={'Cache-Control':'no-store','Content-Type':'application/json','X-Content-Type-Options':'nosniff'};
  if(origin&&req.headers.origin===origin){headers['Access-Control-Allow-Origin']=origin;headers['Vary']='Origin';headers['Access-Control-Allow-Headers']='Authorization, Content-Type';headers['Access-Control-Allow-Methods']='POST, OPTIONS'}
  if(req.method==='OPTIONS'){res.writeHead(204,headers).end();return}
- if(req.method!=='POST'||!['/login','/logout','/recovery','/refresh','/operation','/change-password'].includes(req.url)){res.writeHead(404,headers).end();return}
+ if(req.method!=='POST'||!['/login','/logout','/recovery','/refresh','/operation','/change-password','/family-provision','/family-pending'].includes(req.url)){res.writeHead(404,headers).end();return}
  try{let data='';for await(const chunk of req){data+=chunk;if(Buffer.byteLength(data)>16384){res.writeHead(413,headers).end();return}}
  const result=await handle(req.url.slice(1),JSON.parse(data),String(req.headers.authorization||'').replace(/^Bearer /,''),req.socket.remoteAddress||'local');
  res.writeHead(result.status,headers).end(result.status===204?'':JSON.stringify(result.body));

@@ -221,4 +221,98 @@ begin
 end $$;
 revoke all on function bootik.bk_complete_recovery(uuid,uuid,uuid,uuid,uuid,text,text,text,text),bootik.bk_change_password(uuid,uuid,uuid,text,bigint,text,text) from public,anon,authenticated;
 
+-- Family provisioning adapter. Only accepts an existing central Auth identity; no local auth.users creation.
+create table bootik.bk_member_profiles(
+ organization_id uuid not null,app_id uuid not null,user_id uuid not null,display_name text not null,central_event_id uuid not null unique,
+ primary key(organization_id,app_id,user_id),foreign key(organization_id,app_id,user_id) references bootik.bk_members(organization_id,app_id,user_id)
+);
+create table bootik.bk_member_requests(
+ id uuid primary key,organization_id uuid not null,app_id uuid not null,location_id uuid not null,requested_by uuid not null,
+ display_name text not null,function_code text not null,activities jsonb not null,reason text not null,state text not null default 'pending' check(state in ('pending','provisioned','refused')),created_at timestamptz not null default clock_timestamp(),completed_at timestamptz,member_id uuid,
+ foreign key(organization_id,app_id,requested_by,location_id) references bootik.bk_member_sites(organization_id,app_id,user_id,location_id)
+);
+create table bootik.bk_family_provision_events(
+ id uuid primary key,organization_id uuid not null,app_id uuid not null,central_actor_id uuid not null,payload jsonb not null,result jsonb not null,created_at timestamptz not null default clock_timestamp()
+);
+do $$ declare n text;begin foreach n in array array['bk_member_profiles','bk_member_requests','bk_family_provision_events'] loop execute format('alter table bootik.%I enable row level security',n);execute format('alter table bootik.%I force row level security',n);execute format('revoke all on bootik.%I from public,anon,authenticated',n);end loop;end $$;
+create function bootik.bk_request_member(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_id uuid,p_name text,p_function text,p_activities jsonb,p_reason text)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare old bootik.bk_member_requests%rowtype;v_act uuid;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
+ if not exists(select 1 from bootik.bk_members m join bootik.bk_member_sites s using(organization_id,app_id,user_id) where m.organization_id=p_org and m.app_id=p_app and m.user_id=p_actor and m.role='promoteur' and s.location_id=p_site and not s.activity_restricted) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ if p_id is null or length(btrim(coalesce(p_name,''))) not between 2 and 160 or length(btrim(coalesce(p_reason,''))) not between 3 and 500 or p_function not in ('director','site_manager','stock_manager','buyer','cashier','accountant','auditor','delivery','territory_manager','sales','picker','collection','crm') or jsonb_typeof(p_activities) is distinct from 'array' or jsonb_array_length(p_activities) not between 1 and 22 then raise exception 'BOOTIK_PROVISION_INVALID';end if;
+ for v_act in select value::uuid from jsonb_array_elements_text(p_activities) loop
+  if not exists(select 1 from bootik.bk_activity_locations al join bootik.bk_activities a on (a.id,a.organization_id,a.app_id)=(al.activity_id,al.organization_id,al.app_id) where al.organization_id=p_org and al.app_id=p_app and al.location_id=p_site and al.activity_id=v_act and a.status='active') or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,v_act) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ end loop;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':member-request:'||p_id::text,0));
+ select * into old from bootik.bk_member_requests where id=p_id and organization_id=p_org and app_id=p_app;
+ if found then
+  if (old.requested_by,old.location_id,old.display_name,old.function_code,old.activities,old.reason) is distinct from (p_actor,p_site,btrim(p_name),p_function,p_activities,btrim(p_reason)) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;return old.id;
+ end if;
+ insert into bootik.bk_member_requests(id,organization_id,app_id,location_id,requested_by,display_name,function_code,activities,reason) values(p_id,p_org,p_app,p_site,p_actor,btrim(p_name),p_function,p_activities,btrim(p_reason));
+ insert into bootik.bk_security_audit(organization_id,app_id,actor,site_id,action,target,details) values(p_org,p_app,p_actor,p_site,'member-request',p_id,jsonb_build_object('function',p_function,'activities',p_activities));
+ return p_id;
+end $$;
+create function bootik.bk_family_provision(p_event uuid,p_central_actor uuid,p_payload jsonb,p_salt text,p_hash text)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare a uuid;o uuid;u uuid;s uuid;v uuid;rid uuid;k text;identifier_value text;name_value text;role_value text;f text;req bootik.bk_member_requests%rowtype;old bootik.bk_family_provision_events%rowtype;answer jsonb;v_act uuid;
+begin
+ if p_event is null or p_central_actor is null or jsonb_typeof(p_payload) is distinct from 'object' then raise exception 'BOOTIK_PROVISION_INVALID';end if;
+ select app_id into a from bootik.bk_app_registration where app_code='bootik';
+ o:=(p_payload->>'organization_id')::uuid;k:=p_payload->>'kind';
+ if o is null or k not in ('organization','employee','refuse') then raise exception 'BOOTIK_PROVISION_INVALID';end if;
+ perform pg_advisory_xact_lock(hashtextextended(o::text||':family-provision:'||p_event::text,0));
+ select * into old from bootik.bk_family_provision_events where id=p_event;
+ if found then
+  if (old.organization_id,old.app_id,old.central_actor_id,old.payload) is distinct from (o,a,p_central_actor,p_payload) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;return old.result||jsonb_build_object('fresh',false);
+ end if;
+ if k in ('employee','refuse') then
+  rid:=(p_payload->>'request_id')::uuid;
+  -- A central event may complete only the exact pending request from this tenant.
+  perform pg_advisory_xact_lock(hashtextextended(o::text||':member-request:'||rid::text,0));
+  select * into req from bootik.bk_member_requests where id=rid and organization_id=o and app_id=a for update;
+  if not found or req.state<>'pending' then raise exception 'BOOTIK_PROVISION_REQUEST_NOT_PENDING';end if;
+  s:=req.location_id;
+  if k='refuse' then
+   if length(btrim(coalesce(p_payload->>'reason',''))) not between 3 and 500 then raise exception 'BOOTIK_PROVISION_INVALID';end if;
+   update bootik.bk_member_requests set state='refused',completed_at=clock_timestamp() where id=rid;
+   answer:=jsonb_build_object('request_id',rid,'state','refused');
+  else
+   if not exists(select 1 from bootik.bk_members m join bootik.bk_member_sites ms using(organization_id,app_id,user_id) where m.organization_id=o and m.app_id=a and m.user_id=req.requested_by and m.active and m.role='promoteur' and ms.location_id=s and not ms.activity_restricted) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+   name_value:=req.display_name;f:=req.function_code;role_value:=case when f in ('cashier','delivery','sales','collection','crm') then 'staff' else 'manager' end;
+  end if;
+ else
+  s:=(p_payload->>'site_id')::uuid;v:=(p_payload->>'activity_id')::uuid;name_value:=btrim(p_payload->>'display_name');role_value:='promoteur';
+  if s is null or v is null or length(btrim(coalesce(p_payload->>'organization_name',''))) not between 2 and 160 or length(btrim(coalesce(p_payload->>'site_name',''))) not between 2 and 160 or length(btrim(coalesce(p_payload->>'activity_name',''))) not between 2 and 160 then raise exception 'BOOTIK_PROVISION_INVALID';end if;
+  insert into bootik.bk_organizations(organization_id,app_id,display_name) values(o,a,btrim(p_payload->>'organization_name'));
+  insert into bootik.bk_locations(id,organization_id,app_id,display_name) values(s,o,a,btrim(p_payload->>'site_name'));
+  insert into bootik.bk_activities(id,app_id,organization_id,universe_code,profile_code,display_name,status) values(v,a,o,p_payload->>'universe',p_payload->>'profile',btrim(p_payload->>'activity_name'),'active');
+  insert into bootik.bk_activity_locations(app_id,organization_id,activity_id,location_id,is_primary) values(a,o,v,s,true);
+ end if;
+ if k<>'refuse' then
+  u:=(p_payload->>'central_user_id')::uuid;identifier_value:=lower(btrim(p_payload->>'identifier'));
+  if u is null or length(coalesce(name_value,'')) not between 2 and 160 or identifier_value is null or identifier_value !~ '^[a-z0-9][a-z0-9._-]{2,159}$' or p_salt !~ '^[0-9a-f]{32}$' or p_hash !~ '^[0-9a-f]{128}$' then raise exception 'BOOTIK_PROVISION_INVALID';end if;
+  -- FK to auth.users requires a central-provisioned identity. No write to auth schema.
+  insert into bootik.bk_members(organization_id,app_id,user_id,role,active) values(o,a,u,role_value,true);
+  insert into bootik.bk_member_sites(organization_id,app_id,user_id,location_id,activity_restricted) values(o,a,u,s,k='employee');
+  if k='employee' then
+   for v_act in select value::uuid from jsonb_array_elements_text(req.activities) loop
+    if not exists(select 1 from bootik.bk_activity_locations al join bootik.bk_activities a1 on (a1.id,a1.organization_id,a1.app_id)=(al.activity_id,al.organization_id,al.app_id) where al.organization_id=o and al.app_id=a and al.location_id=s and al.activity_id=v_act and a1.status='active') then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+   end loop;
+   insert into bootik.bk_member_activity_scopes(organization_id,app_id,user_id,location_id,activity_id) select o,a,u,s,id from (select distinct value::uuid as id from jsonb_array_elements_text(req.activities)) ids;
+   insert into bootik.bk_member_functions(organization_id,app_id,user_id,function_code) values(o,a,u,f);
+   update bootik.bk_member_requests set state='provisioned',completed_at=clock_timestamp(),member_id=u where id=rid;
+  end if;
+  insert into bootik.bk_credentials(organization_id,app_id,user_id,identifier,salt_hex,verifier_hex) values(o,a,u,identifier_value,p_salt,p_hash);
+  insert into bootik.bk_password_controls(organization_id,app_id,user_id,version,requires_change) values(o,a,u,1,true);
+  insert into bootik.bk_member_profiles(organization_id,app_id,user_id,display_name,central_event_id) values(o,a,u,name_value,p_event);
+  answer:=jsonb_build_object('member_id',u,'organization_id',o,'site_id',s,'request_id',rid,'identifier',identifier_value,'state','provisioned');
+ end if;
+ insert into bootik.bk_family_provision_events(id,organization_id,app_id,central_actor_id,payload,result) values(p_event,o,a,p_central_actor,p_payload,answer);
+ insert into bootik.bk_security_audit(organization_id,app_id,actor,site_id,action,target,details) values(o,a,p_central_actor,s,'family-provision-'||k,coalesce(u,rid),jsonb_build_object('event_id',p_event,'result',answer));
+ return answer||jsonb_build_object('fresh',true);
+end $$;
+revoke all on function bootik.bk_request_member(uuid,uuid,uuid,uuid,uuid,text,text,jsonb,text),bootik.bk_family_provision(uuid,uuid,jsonb,text,text) from public,anon,authenticated;
+
 commit;

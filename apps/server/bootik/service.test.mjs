@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import pg from 'pg';import {randomUUID,randomBytes,createHash} from 'node:crypto';import{captureCredit,reconcilePending}from './payment-worker.mjs';import{createBootikService,verifier}from './service.mjs';
 test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, logout',async()=>{
- const admin=new pg.Pool({connectionString:process.env.BOOTIK_TEST_ADMIN_URL});const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL});const securityDb=new pg.Pool({connectionString:process.env.BOOTIK_SECURITY_DATABASE_URL});const handle=createBootikService(db,{securityDb});const paymentDb=new pg.Pool({connectionString:process.env.BOOTIK_TEST_PAYMENT_URL});
+ const admin=new pg.Pool({connectionString:process.env.BOOTIK_TEST_ADMIN_URL});const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL});const securityDb=new pg.Pool({connectionString:process.env.BOOTIK_SECURITY_DATABASE_URL});const provisionDb=new pg.Pool({connectionString:process.env.BOOTIK_PROVISION_DATABASE_URL});const provisionToken=randomBytes(32).toString('hex');const handle=createBootikService(db,{securityDb,provisionDb,provisionToken});const paymentDb=new pg.Pool({connectionString:process.env.BOOTIK_TEST_PAYMENT_URL});
  const one=async(q,p=[]) => (await admin.query(q,p)).rows[0];
  try{
  const {app_id:a}=await one('select app_id from bootik.bk_app_registration');
@@ -270,6 +270,33 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal(Number((await one("select count(*) from bootik.bk_security_audit where organization_id=$1 and action='member-role'",[o])).count),1);
  await assert.rejects(db.query('delete from bootik.bk_security_audit where organization_id=$1',[o]));await assert.rejects(securityDb.query('delete from bootik.bk_security_audit where organization_id=$1',[o]));await assert.rejects(db.query('update bootik.bk_members set role=$1 where organization_id=$2',['promoteur',o]));await assert.rejects(db.query('select bootik.bk_admin_action($1,$2,$3,$4,$5,$6::jsonb)',[o,a,u,s,randomUUID(),'{}']));await assert.rejects(securityDb.query('select * from bootik.bk_credentials'));
  await one("update bootik.bk_members set role='manager' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
+ // Family adapter: an existing Auth identity is mandatory; client cannot self-provision.
+ const centralActor=randomUUID(),centralMember=randomUUID(),centralOrg=randomUUID(),centralSite=randomUUID(),centralAct=randomUUID();
+ const orgEvent={app_id:'BOOTIK',kind:'organization',event_id:randomUUID(),central_actor_id:centralActor,central_user_id:centralMember,organization_id:centralOrg,site_id:centralSite,activity_id:centralAct,universe:'retailer',profile:'boutique',organization_name:'Dossier central',site_name:'Premier site',activity_name:'Commerce',display_name:'Promoteur test',identifier:'central-'+centralMember};
+ assert.equal((await handle('family-provision',orgEvent,token)).status,401);
+ assert.equal((await handle('family-provision',orgEvent,provisionToken)).status,400);
+ assert.equal(Number((await one('select count(*) from bootik.bk_organizations where organization_id=$1',[centralOrg])).count),0);
+ await one('insert into auth.users(id) values($1)',[centralMember]);
+ const central=await handle('family-provision',orgEvent,provisionToken);assert.equal(central.status,200);assert.equal(central.body.member_id,centralMember);assert.ok(central.body.temporary_password);
+ assert.equal((await handle('family-provision',orgEvent,provisionToken)).body.temporary_password,undefined);
+ assert.equal((await handle('family-provision',{...orgEvent,organization_name:'Tampered'},provisionToken)).status,400);
+ const ownerLogin=await handle('login',{app_id:'BOOTIK',installation_id:randomUUID(),platform:'test',identifier:orgEvent.identifier,password:central.body.temporary_password},null,'central-test');assert.equal(ownerLogin.status,200);assert.equal(ownerLogin.body.require_password_change,true);
+ assert.equal((await handle('change-password',{app_id:'BOOTIK',current_password:central.body.temporary_password,new_password:'central-owner-password'},ownerLogin.body.access_token)).status,204);
+ const owner=await handle('login',{app_id:'BOOTIK',installation_id:randomUUID(),platform:'test',identifier:orgEvent.identifier,password:'central-owner-password'},null,'central-test');assert.equal(owner.status,200);
+ const centralCall=(action,payload)=>handle('operation',{app_id:'BOOTIK',site_id:centralSite,action,payload},owner.body.access_token);
+ const memberReq={request_id:randomUUID(),name:'Caissier test',function_code:'cashier',activities:[centralAct],reason:'Recrutement validé'};
+ assert.equal((await centralCall('member-request',memberReq)).status,200);
+ assert.equal((await centralCall('member-request',memberReq)).body.result.request_id,memberReq.request_id);
+ assert.equal((await centralCall('member-request',{...memberReq,request_id:randomUUID(),activities:[v]})).status,403);
+ assert.equal((await handle('family-pending',{app_id:'BOOTIK',organization_id:centralOrg},provisionToken)).body.requests.length,1);
+ const employee=randomUUID();await one('insert into auth.users(id) values($1)',[employee]);
+ const empEvent={app_id:'BOOTIK',kind:'employee',event_id:randomUUID(),central_actor_id:centralActor,central_user_id:employee,organization_id:centralOrg,request_id:memberReq.request_id,identifier:'employee-'+employee};
+ assert.equal((await handle('family-provision',{...empEvent,organization_id:o},provisionToken)).status,400);
+ const emp=await handle('family-provision',empEvent,provisionToken);assert.equal(emp.status,200);assert.ok(emp.body.temporary_password);
+ assert.equal((await centralCall('member-requests',{})).body.result.requests[0].state,'provisioned');
+ assert.equal((await handle('family-provision',empEvent,provisionToken)).body.temporary_password,undefined);
+ await assert.rejects(db.query('insert into bootik.bk_organizations(organization_id,app_id,display_name) values($1,$2,$3)',[randomUUID(),a,'forged']));
+ await assert.rejects(provisionDb.query('insert into auth.users(id) values($1)',[randomUUID()]));
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);
@@ -295,5 +322,5 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await handle('recovery',{app_id:'BOOTIK',identifier},null)).status,204);
  assert.equal((await handle('logout',{app_id:'BOOTIK'},token)).status,204);assert.equal((await call('catalog',{})).status,401);assert.equal((await handle('refresh',{app_id:'BOOTIK',refresh_token:refreshed.body.refresh_token,installation_id:installation},null)).status,401);
  await assert.rejects(db.query('select bootik.bk_confirm_paid_period($1,$2,$3,$4,$5,$6,$7)',[o,a,'retailer','access',1,4000,'forged']));
- }finally{await securityDb.end();await paymentDb.end();await db.end();await admin.end()}
+ }finally{await provisionDb.end();await securityDb.end();await paymentDb.end();await db.end();await admin.end()}
 });

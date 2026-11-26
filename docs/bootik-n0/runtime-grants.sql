@@ -74,3 +74,19 @@ create policy bk_security_access on bootik.bk_device_site_bindings for select to
 grant select,insert on bootik.bk_site_device_policy to bootik_security_runtime;
 grant update(max_devices) on bootik.bk_site_device_policy to bootik_security_runtime;
 grant select on bootik.bk_device_site_bindings to bootik_security_runtime;
+
+-- A separate Family NAXA provisioner may attach pre-existing Auth identities, never create them.
+create role bootik_provision_runtime login password 'bootik-provision-test-only';
+grant usage on schema bootik to bootik_provision_runtime;
+do $$ declare n text;begin foreach n in array array['bk_app_registration','bk_organizations','bk_locations','bk_activities','bk_activity_locations','bk_members','bk_member_sites','bk_member_activity_scopes','bk_member_functions','bk_credentials','bk_password_controls','bk_member_profiles','bk_member_requests','bk_family_provision_events','bk_security_audit'] loop execute format('create policy bk_provision_access on bootik.%I to bootik_provision_runtime using(true) with check(true)',n);end loop;end $$;
+grant select on bootik.bk_app_registration,bootik.bk_organizations,bootik.bk_locations,bootik.bk_activities,bootik.bk_activity_locations,bootik.bk_members,bootik.bk_member_sites,bootik.bk_member_requests,bootik.bk_family_provision_events to bootik_provision_runtime;
+grant insert on bootik.bk_organizations,bootik.bk_locations,bootik.bk_activities,bootik.bk_activity_locations,bootik.bk_members,bootik.bk_member_sites,bootik.bk_member_activity_scopes,bootik.bk_member_functions,bootik.bk_credentials,bootik.bk_password_controls,bootik.bk_member_profiles,bootik.bk_family_provision_events,bootik.bk_security_audit to bootik_provision_runtime;
+grant update(state,completed_at,member_id) on bootik.bk_member_requests to bootik_provision_runtime;
+grant execute on function bootik.bk_family_provision(uuid,uuid,jsonb,text,text) to bootik_provision_runtime;
+create policy bk_security_access on bootik.bk_member_requests to bootik_security_runtime using(true) with check(true);
+create policy bk_security_access on bootik.bk_activities for select to bootik_security_runtime using(true);
+grant select on bootik.bk_activities to bootik_security_runtime;
+grant select,insert on bootik.bk_member_requests to bootik_security_runtime;
+grant execute on function bootik.bk_request_member(uuid,uuid,uuid,uuid,uuid,text,text,jsonb,text) to bootik_security_runtime;
+create policy bk_runtime_access on bootik.bk_member_profiles for select to bootik_runtime using(true);
+grant select on bootik.bk_member_profiles to bootik_runtime;
