@@ -22,8 +22,8 @@ declare m public.zp_members;i public.zp_menu_items;g public.zp_ingredients;u tex
  if i.id is null or g.id is null then raise exception 'DENIED';end if;
  if p_qty is null or p_qty not between 1 and 1000000000 or length(trim(coalesce(p_reason,''))) not between 5 and 500 or i.kind='formula' or exists(select 1 from public.zp_recipe_components where item_id=i.id) or exists(select 1 from public.zp_production_batches where item_id=i.id) or exists(select 1 from public.zp_order_lines where item_id=i.id) then raise exception 'DIRECT_RULE_REQUIRES_UNUSED_ITEM';end if;
  if lower(trim(g.unit))='kg' then u:=p_qty::text||' g';elsif lower(trim(g.unit))='g' and p_qty%1000=0 then u:=(p_qty/1000)::text||' g';else u:=trim(to_char(p_qty::numeric/1000,'FM9999999990.999'))||' '||g.unit;end if;
- insert into public.zp_direct_sale_rules(item_id,org_id,site_id,ingredient_id,qty_milli,member_id,reason) values(i.id,m.org_id,p_site,g.id,p_qty,m.id,trim(p_reason));
  update public.zp_menu_items set sale_unit=u where id=i.id;
+ insert into public.zp_direct_sale_rules(item_id,org_id,site_id,ingredient_id,qty_milli,member_id,reason) values(i.id,m.org_id,p_site,g.id,p_qty,m.id,trim(p_reason));
  return true;end $$;
 create function public.zp_direct_recipe_guard() returns trigger language plpgsql security invoker set search_path=pg_catalog,public as $$
 begin if exists(select 1 from public.zp_direct_sale_rules where item_id=new.item_id) then raise exception 'DIRECT_ITEM_NO_PRODUCTION';end if;return new;end $$;
