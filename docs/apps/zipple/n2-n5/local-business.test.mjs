@@ -100,7 +100,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByLabel("Nom du fournisseur").fill("Grossiste recette");await page.getByRole("button",{name:"Créer le fournisseur"}).click();
   await page.getByRole("combobox",{name:"Fournisseur de la commande",exact:true}).selectOption({label:"Grossiste recette"});
   await page.getByRole("combobox",{name:"Matière commandée",exact:true}).selectOption({label:"Farine recette (kg)"});
-  await page.getByLabel("Référence de commande").fill("ACH-RECETTE");await page.getByLabel("Quantité commandée").fill("2");await page.getByLabel("Coût total commandé FCFA").fill("1000");await page.getByRole("button",{name:"Créer la commande"}).click();
+  await page.getByLabel("Référence de commande",{exact:true}).fill("ACH-RECETTE");await page.getByLabel("Quantité commandée").fill("2");await page.getByLabel("Coût total commandé FCFA").fill("1000");await page.getByRole("button",{name:"Créer la commande"}).click();
   await page.getByRole("combobox",{name:"Commande à traiter",exact:true}).selectOption({label:"ACH-RECETTE"});
   await page.getByLabel("Quantité réceptionnée").fill("1");await page.getByLabel("Lot de réception").fill("ACH-LOT");await page.getByRole("button",{name:"Confirmer la réception",exact:true}).click();
   await page.getByText(/Reçu : 1\/2/).waitFor();
@@ -109,7 +109,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   const purchase=await scalar("select id from zp_purchases where org_id=$1",[org]);assert.equal(Number(await scalar("select paid_xaf from zp_purchases where id=$1",[purchase])),200);
   console.log("ZIPPLE_N5_REAL_EDGE_PROCUREMENT_UI_PASS");
   await page.getByRole("combobox",{name:"Matière commandée",exact:true}).selectOption({label:"Farine recette (kg)"});
-  await page.getByLabel("Référence de commande").fill("ACH-MULTI");await page.getByLabel("Quantité commandée").fill("1");await page.getByLabel("Coût total commandé FCFA").fill("301");
+  await page.getByLabel("Référence de commande",{exact:true}).fill("ACH-MULTI");await page.getByLabel("Quantité commandée").fill("1");await page.getByLabel("Coût total commandé FCFA").fill("301");
   await page.getByRole("button",{name:"Ajouter une autre ligne"}).click();
   await page.getByRole("combobox",{name:"Matière commandée",exact:true}).selectOption({label:"Farine recette (kg)"});
   await page.getByLabel("Quantité commandée").fill("2");await page.getByLabel("Coût total commandé FCFA").fill("700");await page.getByRole("button",{name:"Créer la commande"}).click();
