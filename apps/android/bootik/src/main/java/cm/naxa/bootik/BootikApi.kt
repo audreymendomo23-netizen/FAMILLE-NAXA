@@ -7,7 +7,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 data class BootikSite(val id:String,val name:String)
-data class BootikSession(val token:String,val member:String,val organization:String,val role:String,val sites:List<BootikSite>,val expiresAt:Long,val refreshToken:String?=null) {
+data class BootikSession(val token:String,val member:String,val organization:String,val role:String,val sites:List<BootikSite>,val expiresAt:Long,val refreshToken:String?=null,val requirePasswordChange:Boolean=false) {
  fun permits(site:String,now:Long=System.currentTimeMillis())=expiresAt>now && sites.any{it.id==site}
 }
 object BootikAccess {
@@ -39,13 +39,14 @@ class BootikApi(private val endpoint:String) {
   val sites=j.getJSONArray("sites");val list=(0 until sites.length()).map{val s=sites.getJSONObject(it);BootikSite(s.getString("id"),s.getString("name"))}
   val member=j.getString("member_id");val org=j.getString("organization_id");val role=j.getString("role");val expires=j.getLong("expires_at");val token=j.getString("access_token")
   require(BootikAccess.valid(j.getString("app_id"),member,org,role,list.map{it.id},expires,System.currentTimeMillis())&&token.length>=20)
-  return BootikSession(token,member,org,role,list,expires,j.optString("refresh_token").takeIf{it.length>=20})
+  return BootikSession(token,member,org,role,list,expires,j.optString("refresh_token").takeIf{it.length>=20},j.optBoolean("require_password_change",false))
  }
+ suspend fun changePassword(session:BootikSession,current:String,next:String){require(next.length in 12..128&&current.isNotBlank()&&current!=next);request("change-password",JSONObject().put("current_password",current).put("new_password",next),session.token)}
  suspend fun recovery(identifier:String){require(identifier.isNotBlank());request("recovery",JSONObject().put("identifier",identifier.trim()))}
  suspend fun logout(session:BootikSession){request("logout",JSONObject().put("refresh_token",session.refreshToken),session.token)}
  suspend fun forget(token:String){request("logout",JSONObject().put("refresh_token",token))}
  suspend fun operation(session:BootikSession,site:String,action:String,payload:JSONObject):JSONObject{
-  require(session.permits(site)&&action in setOf("entitlement","trial","sale","support","support-cancel","catalog","payment-intent","payment-current","payment-status","payment-debit","team","activities","master-create","partners","dashboard","count-batch","transfer-ship","transfer-receive","transfers","stock-template","stock-import-preview","stock-import-apply","stock-setup","stock-health","purchases","purchase-create","purchase-receive","purchase-pay","cash-state","cash-action","security-state","security-audit","admin-action"))
+  require(session.permits(site)&&action in setOf("entitlement","trial","sale","support","support-cancel","catalog","payment-intent","payment-current","payment-status","payment-debit","team","activities","master-create","partners","dashboard","count-batch","transfer-ship","transfer-receive","transfers","stock-template","stock-import-preview","stock-import-apply","stock-setup","stock-health","purchases","purchase-create","purchase-receive","purchase-pay","cash-state","cash-action","security-state","security-audit","admin-action","recovery-list","recovery-complete"))
   val response=request("operation",JSONObject().put("site_id",site).put("action",action).put("payload",payload),session.token)
   require(response.getString("app_id")=="BOOTIK"&&response.getString("organization_id")==session.organization&&response.getString("member_id")==session.member&&response.getString("site_id")==site&&response.getString("action")==action&&response.getString("state")=="acknowledged")
   return response.getJSONObject("result")

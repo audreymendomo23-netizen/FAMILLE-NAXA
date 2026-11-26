@@ -431,3 +431,7 @@ Rôles métier restrictifs superposés aux rôles SQL historiques, refus par dé
 
 ### BULK 01 — séparation des privilèges administratifs
 Run 45867656640 : le test historique de refus d'écriture directe sur scopes a détecté une régression de grants. Correction sans affaiblir le test : connexion serveur BOOTIK_SECURITY_DATABASE_URL dédiée, rôle bootik_security_runtime isolé, aucune lecture des credentials, aucun droit de modification des ventes/stock, pas d'UPDATE/DELETE audit ; runtime ERP ne peut ni écrire les scopes ni invoquer bk_admin_action. En l'absence de connexion admin, réponse 503. CI nouvelle à vérifier. Ce contrat de runtime ne constitue pas une connexion effective à l'administration centrale hébergée.
+
+
+### BULK 01 — récupération interne et rotation (candidat)
+Adaptation du contrat NAXA SERVICES Auth provision/complete_recovery/change_password : demande générique anti-énumération, liste uniquement Promoteur autorisé sur toutes affectations de la cible, vérification humaine hors bande, mot de passe aléatoire temporaire affiché une seule fois (pas dans reçu persistant/audit), changement obligatoire, rotation avec version de credentials et verrou commun à l'émission de session, révocation des sessions, absence OTP/email/SMS. Android/Web raccordés. Tests réels sur compte délégué, récupération inconnue, rejeu, refus des opérations avant rotation, révocation et nouveau secret. Réserves : identité centrale et reset Promoteur par support central non raccordés, politique physique appareils à compléter. CI à vérifier.

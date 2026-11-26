@@ -31,6 +31,7 @@ import org.json.JSONObject
  var unlocked by remember{mutableStateOf<String?>(null)}
  var pin by remember{mutableStateOf("")};var confirmation by remember{mutableStateOf("")}
  var universe by remember{mutableStateOf("retailer")};var plan by remember{mutableStateOf("access")}
+ var changing by remember{mutableStateOf(false)};var currentPw by remember{mutableStateOf("")};var newPw by remember{mutableStateOf("")};var confirmPw by remember{mutableStateOf("")}
  var biometricSignal by remember{mutableStateOf<CancellationSignal?>(null)}
  val memberKey=session?.let{it.organization+":"+it.member}
  DisposableEffect(context){
@@ -63,6 +64,14 @@ import org.json.JSONObject
  }
  TextButton(enabled=!busy&&identifier.isNotBlank(),onClick={task{api.recovery(identifier);message="Demande transmise"}}){Text("Mot de passe oublié")}
  TextButton(enabled=!busy,onClick=onBack){Text("Brouillons locaux")}
+ }else if(current.requirePasswordChange||changing){
+ Text("Changer le mot de passe")
+ Text("12 caractères minimum ; les sessions seront révoquées.")
+ OutlinedTextField(currentPw,{currentPw=it},label={Text("Mot de passe actuel")},visualTransformation=PasswordVisualTransformation(),enabled=!busy)
+ OutlinedTextField(newPw,{newPw=it},label={Text("Nouveau mot de passe")},visualTransformation=PasswordVisualTransformation(),enabled=!busy)
+ OutlinedTextField(confirmPw,{confirmPw=it},label={Text("Confirmer le nouveau mot de passe")},visualTransformation=PasswordVisualTransformation(),enabled=!busy)
+ Button(enabled=!busy&&currentPw.isNotBlank()&&newPw.length in 12..128&&newPw==confirmPw&&newPw!=currentPw,onClick={task{try{api.changePassword(current,currentPw,newPw);vault.clear();savedToken=null;session=null;unlocked=null;site="";changing=false;message="Mot de passe changé. Reconnectez-vous."}finally{currentPw="";newPw="";confirmPw=""}}}){Text("Confirmer le changement")}
+ TextButton(enabled=!busy,onClick={changing=false;currentPw="";newPw="";confirmPw="";signOut(current)}){Text("Se déconnecter")}
  }else if(memberKey!=null && unlocked!=memberKey){
  val configured=pinManager.isConfigured(memberKey)
  Text(if(configured)"Déverrouillage sécurisé" else "Créer un PIN personnel à quatre chiffres")
@@ -91,6 +100,7 @@ import org.json.JSONObject
  Row{Checkbox(bioEnabled,{bioEnabled=it;biometricPrefs.edit().putBoolean(memberKey,it).apply()},enabled=!busy);Text("Autoriser le déverrouillage biométrique")}
  }
  TextButton(enabled=!busy,onClick={unlocked=null;pin="";confirmation=""}){Text("Verrouiller")}
+ TextButton(enabled=!busy,onClick={changing=true}){Text("Changer le mot de passe")}
  if(current.refreshToken!=null)TextButton(enabled=!busy,onClick={task{val s=api.refresh(current.refreshToken);vault.clear();savedToken=null;establish(s)}}){Text("Renouveler la session")}
  if(current.role!="staff"){
   var team by remember(site){mutableStateOf<List<String>>(emptyList())}

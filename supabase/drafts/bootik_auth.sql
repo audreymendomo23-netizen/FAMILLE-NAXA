@@ -36,12 +36,20 @@ create table bootik.bk_admin_receipts(
  id uuid primary key,organization_id uuid not null,app_id uuid not null,actor uuid not null,site_id uuid not null,payload jsonb not null,result jsonb not null,created_at timestamptz not null default clock_timestamp()
 );
 do $$ declare n text;begin foreach n in array array['bk_security_settings','bk_security_audit','bk_admin_receipts'] loop execute format('alter table bootik.%I enable row level security',n);execute format('alter table bootik.%I force row level security',n);execute format('revoke all on bootik.%I from public,anon,authenticated',n);end loop;end $$;
-create function bootik.bk_issue_session(p_org uuid,p_app uuid,p_user uuid,p_hash text,p_refresh text)
+-- NAXA SERVICES recovery contract: no OTP, no email, temporary password delivered once.
+alter table bootik.bk_recovery_requests add column processed_at timestamptz,add column handled_by uuid;
+create table bootik.bk_password_controls(
+ organization_id uuid not null,app_id uuid not null,user_id uuid not null,version bigint not null check(version>0),requires_change boolean not null,
+ primary key(organization_id,app_id,user_id),foreign key(organization_id,app_id,user_id) references bootik.bk_members(organization_id,app_id,user_id)
+);
+alter table bootik.bk_password_controls enable row level security;alter table bootik.bk_password_controls force row level security;revoke all on bootik.bk_password_controls from public,anon,authenticated;
+create function bootik.bk_issue_session(p_org uuid,p_app uuid,p_user uuid,p_hash text,p_refresh text,p_version bigint)
 returns table(expires_at timestamptz,device_session_id uuid) language plpgsql security invoker set search_path=pg_catalog,bootik as $$
 declare lim integer;v_id uuid;v_exp timestamptz;
 begin
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':session:'||p_user::text,0));
  if not exists(select 1 from bootik.bk_members where organization_id=p_org and app_id=p_app and user_id=p_user and active) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ if p_version is distinct from coalesce((select version from bootik.bk_password_controls where organization_id=p_org and app_id=p_app and user_id=p_user),0) then raise exception 'BOOTIK_CREDENTIAL_CHANGED';end if;
  select coalesce((select max_member_sessions from bootik.bk_security_settings where organization_id=p_org and app_id=p_app),2) into lim;
  if (select count(*) from bootik.bk_sessions s where s.organization_id=p_org and s.app_id=p_app and s.user_id=p_user and s.revoked_at is null and (s.expires_at>now() or s.refresh_expires_at>now()))>=lim then raise exception 'BOOTIK_DEVICE_LIMIT';end if;
  insert into bootik.bk_sessions as s(token_hash,organization_id,app_id,user_id,expires_at,refresh_hash,refresh_expires_at) values(p_hash,p_org,p_app,p_user,now()+interval '15 minutes',p_refresh,case when p_refresh is null then null else now()+interval '30 days' end) returning s.expires_at,s.device_session_id into v_exp,v_id;
@@ -135,6 +143,39 @@ begin
  insert into bootik.bk_admin_receipts(id,organization_id,app_id,actor,site_id,payload,result) values(p_req,p_org,p_app,p_actor,p_site,p_data,answer);
  return answer;
 end $$;
-revoke all on function bootik.bk_issue_session(uuid,uuid,uuid,text,text),bootik.bk_admin_action(uuid,uuid,uuid,uuid,uuid,jsonb) from public,anon,authenticated;
+revoke all on function bootik.bk_issue_session(uuid,uuid,uuid,text,text,bigint),bootik.bk_admin_action(uuid,uuid,uuid,uuid,uuid,jsonb) from public,anon,authenticated;
+
+create function bootik.bk_complete_recovery(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_request uuid,p_method text,p_note text,p_salt text,p_hash text)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare target_user uuid;identifier_value text;processed timestamptz;target_role text;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
+ if not exists(select 1 from bootik.bk_members where organization_id=p_org and app_id=p_app and user_id=p_actor and role='promoteur' and active) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ if p_method not in ('in_person','verified_internal') or p_note is null or length(btrim(p_note)) not between 10 and 500 or p_salt !~ '^[0-9a-f]{32}$' or p_hash !~ '^[0-9a-f]{128}$' then raise exception 'BOOTIK_RECOVERY_INVALID';end if;
+ select c.user_id,c.identifier,m.role into target_user,identifier_value,target_role from bootik.bk_recovery_requests q join bootik.bk_credentials c on c.identifier=q.identifier join bootik.bk_members m using(organization_id,app_id,user_id) where q.id=p_request and c.organization_id=p_org and c.app_id=p_app and m.active;
+ if not found or target_user=p_actor or target_role='promoteur' or not exists(select 1 from bootik.bk_member_sites where organization_id=p_org and app_id=p_app and user_id=target_user and location_id=p_site) or exists(select 1 from bootik.bk_member_sites ms where ms.organization_id=p_org and ms.app_id=p_app and ms.user_id=target_user and not exists(select 1 from bootik.bk_member_sites mine where mine.organization_id=p_org and mine.app_id=p_app and mine.user_id=p_actor and mine.location_id=ms.location_id and not mine.activity_restricted)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':session:'||target_user::text,0));
+ select processed_at into processed from bootik.bk_recovery_requests where id=p_request;
+ if processed is not null then return false;end if;
+ update bootik.bk_credentials set salt_hex=p_salt,verifier_hex=p_hash where organization_id=p_org and app_id=p_app and user_id=target_user;
+ insert into bootik.bk_password_controls(organization_id,app_id,user_id,version,requires_change) values(p_org,p_app,target_user,1,true) on conflict(organization_id,app_id,user_id) do update set version=bootik.bk_password_controls.version+1,requires_change=true;
+ update bootik.bk_sessions set revoked_at=coalesce(revoked_at,clock_timestamp()) where organization_id=p_org and app_id=p_app and user_id=target_user;
+ update bootik.bk_recovery_requests set processed_at=clock_timestamp(),handled_by=p_actor where identifier=identifier_value and processed_at is null;
+ insert into bootik.bk_security_audit(organization_id,app_id,actor,site_id,action,target,details) values(p_org,p_app,p_actor,p_site,'recovery-complete',target_user,jsonb_build_object('request_id',p_request,'method',p_method,'note',btrim(p_note),'sessions_revoked',true));
+ return true;
+end $$;
+create function bootik.bk_change_password(p_org uuid,p_app uuid,p_actor uuid,p_token_hash text,p_version bigint,p_salt text,p_hash text)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+begin
+ if p_salt !~ '^[0-9a-f]{32}$' or p_hash !~ '^[0-9a-f]{128}$' then raise exception 'BOOTIK_PASSWORD_INVALID';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':session:'||p_actor::text,0));
+ if not exists(select 1 from bootik.bk_sessions s join bootik.bk_members m using(organization_id,app_id,user_id) where s.token_hash=p_token_hash and s.organization_id=p_org and s.app_id=p_app and s.user_id=p_actor and s.revoked_at is null and s.expires_at>now() and m.active) or p_version is distinct from coalesce((select version from bootik.bk_password_controls where organization_id=p_org and app_id=p_app and user_id=p_actor),0) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ update bootik.bk_credentials set salt_hex=p_salt,verifier_hex=p_hash where organization_id=p_org and app_id=p_app and user_id=p_actor;
+ insert into bootik.bk_password_controls(organization_id,app_id,user_id,version,requires_change) values(p_org,p_app,p_actor,1,false) on conflict(organization_id,app_id,user_id) do update set version=bootik.bk_password_controls.version+1,requires_change=false;
+ update bootik.bk_sessions set revoked_at=coalesce(revoked_at,clock_timestamp()) where organization_id=p_org and app_id=p_app and user_id=p_actor;
+ insert into bootik.bk_security_audit(organization_id,app_id,actor,action,target,details) values(p_org,p_app,p_actor,'password-change',p_actor,jsonb_build_object('sessions_revoked',true));
+ return true;
+end $$;
+revoke all on function bootik.bk_complete_recovery(uuid,uuid,uuid,uuid,uuid,text,text,text,text),bootik.bk_change_password(uuid,uuid,uuid,text,bigint,text,text) from public,anon,authenticated;
 
 commit;

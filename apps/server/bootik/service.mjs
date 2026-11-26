@@ -36,7 +36,7 @@ export function createBootikService(db,{now=Date.now,securityDb=null}={}){
  async function sites(s){return (await query('select l.id,l.display_name as name from bootik.bk_member_sites ms join bootik.bk_locations l on l.id=ms.location_id and l.organization_id=ms.organization_id and l.app_id=ms.app_id where ms.organization_id=$1 and ms.app_id=$2 and ms.user_id=$3 order by l.id',[s.organization_id,s.app_id,s.user_id])).rows}
  async function identity(token){
   if(typeof token!=='string'||!/^[0-9a-f]{64}$/.test(token))return null;
-  return first('select s.organization_id,s.app_id,s.user_id,m.role,s.expires_at,s.device_session_id from bootik.bk_sessions s join bootik.bk_members m using(organization_id,app_id,user_id) where s.token_hash=$1 and s.revoked_at is null and s.expires_at>now() and m.active',[digest(token)]);
+  return first('select s.organization_id,s.app_id,s.user_id,m.role,s.expires_at,s.device_session_id,coalesce(pc.requires_change,false) as requires_change from bootik.bk_sessions s join bootik.bk_members m using(organization_id,app_id,user_id) left join bootik.bk_password_controls pc using(organization_id,app_id,user_id) where s.token_hash=$1 and s.revoked_at is null and s.expires_at>now() and m.active',[digest(token)]);
  }
  return async function handle(route,body,token,rateKey='local'){
  try{
@@ -49,18 +49,18 @@ export function createBootikService(db,{now=Date.now,securityDb=null}={}){
    const identifier=body.identifier.trim().toLowerCase();
    if(route==='recovery'){await query('insert into bootik.bk_recovery_requests(identifier) values($1)',[identifier]);return {status:204,body:{}}}
    if(typeof body.password!=='string'||body.password.length<1||body.password.length>256)return reject();
-   const row=await first('select c.*,m.role from bootik.bk_credentials c join bootik.bk_members m using(organization_id,app_id,user_id) where c.identifier=$1 and m.active',[identifier]);
+   const row=await first('select c.*,m.role,coalesce(pc.version,0) as version,coalesce(pc.requires_change,false) as requires_change from bootik.bk_credentials c join bootik.bk_members m using(organization_id,app_id,user_id) left join bootik.bk_password_controls pc using(organization_id,app_id,user_id) where c.identifier=$1 and m.active',[identifier]);
    const actual=await verifier(body.password,row?.salt_hex||'00000000000000000000000000000000');
    if(!row||!timingSafeEqual(Buffer.from(actual,'hex'),Buffer.from(row.verifier_hex,'hex')))return reject(401);
    const permitted=await sites(row);if(!permitted.length)return reject(401);
-   const raw=randomBytes(32).toString('hex'), refresh=body.remember_device===true?randomBytes(32).toString('hex'):null;
-   const s=await first('select * from bootik.bk_issue_session($1,$2,$3,$4,$5)',[row.organization_id,row.app_id,row.user_id,digest(raw),refresh?digest(refresh):null]);
-   return {status:200,body:{app_id:'BOOTIK',access_token:raw,organization_id:row.organization_id,member_id:row.user_id,role:row.role,sites:permitted,device_session_id:s.device_session_id,expires_at:new Date(s.expires_at).getTime(),...(refresh?{refresh_token:refresh}:{})}};
+   const raw=randomBytes(32).toString('hex'), refresh=body.remember_device===true&&!row.requires_change?randomBytes(32).toString('hex'):null;
+   const s=await first('select * from bootik.bk_issue_session($1,$2,$3,$4,$5,$6)',[row.organization_id,row.app_id,row.user_id,digest(raw),refresh?digest(refresh):null,row.version]);
+   return {status:200,body:{app_id:'BOOTIK',access_token:raw,organization_id:row.organization_id,member_id:row.user_id,role:row.role,require_password_change:row.requires_change,sites:permitted,device_session_id:s.device_session_id,expires_at:new Date(s.expires_at).getTime(),...(refresh?{refresh_token:refresh}:{})}};
   }
   if(route==='refresh'){
    if(typeof body.refresh_token!=='string'||!/^[0-9a-f]{64}$/.test(body.refresh_token))return reject(401);
    const raw=randomBytes(32).toString('hex'),refresh=randomBytes(32).toString('hex');
-   const s=await first("update bootik.bk_sessions s set token_hash=$1,expires_at=now()+interval '15 minutes',refresh_hash=$2 from bootik.bk_members m where s.refresh_hash=$3 and s.revoked_at is null and s.refresh_expires_at>now() and m.organization_id=s.organization_id and m.app_id=s.app_id and m.user_id=s.user_id and m.active returning s.organization_id,s.app_id,s.user_id,s.expires_at,s.device_session_id,m.role",[digest(raw),digest(refresh),digest(body.refresh_token)]);
+   const s=await first("update bootik.bk_sessions s set token_hash=$1,expires_at=now()+interval '15 minutes',refresh_hash=$2 from bootik.bk_members m where s.refresh_hash=$3 and s.revoked_at is null and s.refresh_expires_at>now() and m.organization_id=s.organization_id and m.app_id=s.app_id and m.user_id=s.user_id and m.active and not exists(select 1 from bootik.bk_password_controls pc where pc.organization_id=s.organization_id and pc.app_id=s.app_id and pc.user_id=s.user_id and pc.requires_change) returning s.organization_id,s.app_id,s.user_id,s.expires_at,s.device_session_id,m.role",[digest(raw),digest(refresh),digest(body.refresh_token)]);
    if(!s)return reject(401);const permitted=await sites(s);if(!permitted.length)return reject(401);
    return {status:200,body:{app_id:'BOOTIK',access_token:raw,refresh_token:refresh,organization_id:s.organization_id,member_id:s.user_id,role:s.role,sites:permitted,device_session_id:s.device_session_id,expires_at:new Date(s.expires_at).getTime()}};
   }
@@ -71,6 +71,12 @@ export function createBootikService(db,{now=Date.now,securityDb=null}={}){
    await query('update bootik.bk_sessions set revoked_at=now() where revoked_at is null and (token_hash=$1 or refresh_hash=$2)',[raw,refresh]);return {status:204,body:{}};
   }
   const s=await identity(token);if(!s)return reject(401);
+  if(route==='change-password'){
+   if(!securityDb)return reject(503);if(typeof body.current_password!=='string'||body.current_password.length<1||body.current_password.length>256||typeof body.new_password!=='string'||body.new_password.length<12||body.new_password.length>128||body.new_password===body.current_password)return reject();
+   const row=await first('select c.salt_hex,c.verifier_hex,coalesce(pc.version,0) as version from bootik.bk_credentials c left join bootik.bk_password_controls pc using(organization_id,app_id,user_id) where c.organization_id=$1 and c.app_id=$2 and c.user_id=$3',[s.organization_id,s.app_id,s.user_id]);if(!row||!timingSafeEqual(Buffer.from(await verifier(body.current_password,row.salt_hex),'hex'),Buffer.from(row.verifier_hex,'hex')))return reject(401);
+   const salt=randomBytes(16).toString('hex');const result=await securityDb.query('select bootik.bk_change_password($1,$2,$3,$4,$5,$6,$7) as changed',[s.organization_id,s.app_id,s.user_id,digest(token),row.version,salt,await verifier(body.new_password,salt)]);if(!result.rows[0]?.changed)return reject();return {status:204,body:{}};
+  }
+  if(s.requires_change)return reject(403);
   if(route!=='operation'||!validId(body.site_id)||!body.payload||typeof body.payload!=='object'||Array.isArray(body.payload))return reject();
   const site=body.site_id,p=body.payload,action=body.action;
   const scope=[s.organization_id,s.app_id,s.user_id,site];
@@ -81,6 +87,14 @@ export function createBootikService(db,{now=Date.now,securityDb=null}={}){
   else if(action==='security-state'){
    const sessions=(await query("select device_session_id,created_at,expires_at,refresh_expires_at,device_session_id=$4 as current from bootik.bk_sessions where organization_id=$1 and app_id=$2 and user_id=$3 and revoked_at is null and (expires_at>now() or refresh_expires_at>now()) order by created_at desc",[s.organization_id,s.app_id,s.user_id,s.device_session_id])).rows;
    const limit=await first('select coalesce((select max_member_sessions from bootik.bk_security_settings where organization_id=$1 and app_id=$2),2) as max_sessions',[s.organization_id,s.app_id]);result={sessions,...limit};
+  }
+  else if(action==='recovery-list'&&s.role==='promoteur'){
+   if(!securityDb)return reject(503);result={requests:(await securityDb.query("select q.id,q.created_at,c.identifier,c.user_id from bootik.bk_recovery_requests q join bootik.bk_credentials c on c.identifier=q.identifier join bootik.bk_members m using(organization_id,app_id,user_id) where c.organization_id=$1 and c.app_id=$2 and c.user_id<>$3 and m.active and m.role<>'promoteur' and q.processed_at is null and exists(select 1 from bootik.bk_member_sites ms where ms.organization_id=$1 and ms.app_id=$2 and ms.user_id=c.user_id and ms.location_id=$4) and not exists(select 1 from bootik.bk_member_sites ms where ms.organization_id=$1 and ms.app_id=$2 and ms.user_id=c.user_id and not exists(select 1 from bootik.bk_member_sites mine where mine.organization_id=$1 and mine.app_id=$2 and mine.user_id=$3 and mine.location_id=ms.location_id and not mine.activity_restricted)) order by q.created_at desc limit 100",scope)).rows};
+  }
+  else if(action==='recovery-complete'&&s.role==='promoteur'&&validId(p.recovery_id)&&['in_person','verified_internal'].includes(p.method)){
+   if(!securityDb)return reject(503);const note=clean(p.note,500,true);if(note.length<10)return reject();
+   const temporary=randomBytes(18).toString('base64url'),salt=randomBytes(16).toString('hex');const done=(await securityDb.query('select bootik.bk_complete_recovery($1,$2,$3,$4,$5,$6,$7,$8,$9) as completed',[...scope,p.recovery_id,p.method,note,salt,await verifier(temporary,salt)])).rows[0].completed;
+   result={completed:done,...(done?{temporary_password:temporary}:{})};
   }
   else if(action==='security-audit'&&s.role==='promoteur'){
    result={events:(await query("select id,action,target,actor,site_id,created_at from bootik.bk_security_audit where organization_id=$1 and app_id=$2 and (site_id=$4 or (site_id is null and actor=$3)) order by created_at desc limit 200",scope)).rows};

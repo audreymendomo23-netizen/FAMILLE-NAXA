@@ -246,8 +246,23 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  const restricted=await staffLogin();assert.equal((await asStaff(restricted.body.access_token,'catalog',{})).body.result.items.length,0);
  assert.equal((await call('admin-action',{...scopeReq,request_id:randomUUID(),activities:[randomUUID()]})).status,403);
  assert.equal((await call('admin-action',{...scopeReq,request_id:randomUUID(),activities:[v]})).status,200);
+ // Internal recovery: generic response, authorized human verification, one-time temp secret, mandatory rotation.
+ assert.equal((await handle('recovery',{app_id:'BOOTIK',identifier:staffIdentifier},null,'recovery-test')).status,204);
+ assert.equal((await handle('recovery',{app_id:'BOOTIK',identifier:'unknown-'+randomUUID()},null,'recovery-test')).status,204);
+ const requests=await call('recovery-list',{});assert.equal(requests.status,200);assert.equal(requests.body.result.requests.length,1);const recoveryId=requests.body.result.requests[0].id;
+ const rc={recovery_id:recoveryId,method:'in_person',note:'Identité vérifiée en personne'};
+ const reset=await call('recovery-complete',rc);assert.equal(reset.status,200);assert.equal(reset.body.result.completed,true);const temporary=reset.body.result.temporary_password;assert.ok(temporary.length>=12);
+ assert.equal((await call('recovery-complete',rc)).body.result.temporary_password,undefined);
+ assert.equal((await staffLogin()).status,401);
+ const tempSession=await handle('login',{app_id:'BOOTIK',identifier:staffIdentifier,password:temporary,remember_device:true},null,'temp-test');
+ assert.equal(tempSession.status,200);assert.equal(tempSession.body.require_password_change,true);assert.equal(tempSession.body.refresh_token,undefined);
+ assert.equal((await asStaff(tempSession.body.access_token,'catalog',{})).status,403);
+ assert.equal((await handle('change-password',{app_id:'BOOTIK',current_password:'wrong',new_password:'new-delegated-password'},tempSession.body.access_token)).status,401);
+ assert.equal((await handle('change-password',{app_id:'BOOTIK',current_password:temporary,new_password:'new-delegated-password'},tempSession.body.access_token)).status,204);
+ assert.equal((await asStaff(tempSession.body.access_token,'catalog',{})).status,401);
+ const changed=await handle('login',{app_id:'BOOTIK',identifier:staffIdentifier,password:'new-delegated-password'},null,'temp-test');assert.equal(changed.status,200);assert.equal(changed.body.require_password_change,false);assert.equal((await asStaff(changed.body.access_token,'catalog',{})).status,200);
  const disable={kind:'member-disable',request_id:randomUUID(),member_id:staffId,reason:'Fin affectation'};
- assert.equal((await call('admin-action',disable)).status,200);assert.equal((await staffLogin()).status,401);
+ assert.equal((await call('admin-action',disable)).status,200);assert.equal((await handle('login',{app_id:'BOOTIK',identifier:staffIdentifier,password:'new-delegated-password'},null,'temp-test')).status,401);
  assert.ok((await call('security-audit',{})).body.result.events.some(x=>x.action==='member-role'));
  assert.equal(Number((await one("select count(*) from bootik.bk_security_audit where organization_id=$1 and action='member-role'",[o])).count),1);
  await assert.rejects(db.query('delete from bootik.bk_security_audit where organization_id=$1',[o]));await assert.rejects(securityDb.query('delete from bootik.bk_security_audit where organization_id=$1',[o]));await assert.rejects(db.query('update bootik.bk_members set role=$1 where organization_id=$2',['promoteur',o]));await assert.rejects(db.query('select bootik.bk_admin_action($1,$2,$3,$4,$5,$6::jsonb)',[o,a,u,s,randomUUID(),'{}']));await assert.rejects(securityDb.query('select * from bootik.bk_credentials'));
