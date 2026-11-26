@@ -5,6 +5,8 @@ on:
     branches: [work/naxa-services-completion-20261120]
     paths:
       - '.github/workflows/naxa-services-replay-isolated.yml'
+      - 'supabase/drafts/naxa_services_v9_attendance*.sql'
+      - 'supabase/tests/drafts/naxa_services_attendance*.sql'
 permissions:
   contents: read
 concurrency:
@@ -64,6 +66,14 @@ jobs:
           values('ns-profile-photos','ns-profile-photos',false,2097152,array['image/jpeg','image/png','image/webp']);
           notify pgrst, 'reload schema';
           SQL
+      - name: Qualify attendance proof candidate with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_attendance_sync.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regclass('public.ns_attendance_policies') is null and to_regclass('public.ns_attendance_evidence') is null and not exists (select 1 from storage.buckets where id='ns-attendance-selfies')" | grep -Fx t
       - name: Build commercial Web and install Chromium for real Replay
         shell: bash
         run: |
