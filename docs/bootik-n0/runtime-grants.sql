@@ -109,3 +109,8 @@ grant select(organization_id,app_id,user_id) on bootik.bk_credentials to bootik_
 grant update(salt_hex,verifier_hex) on bootik.bk_credentials to bootik_provision_runtime;
 grant select on bootik.bk_password_controls to bootik_provision_runtime;
 grant update(version,requires_change) on bootik.bk_password_controls to bootik_provision_runtime;
+
+create policy bk_runtime_access on bootik.bk_notification_reads to bootik_runtime using(true) with check(true);
+create policy bk_runtime_access on bootik.bk_notification_preferences to bootik_runtime using(true) with check(true);
+grant select,insert on bootik.bk_notification_reads,bootik.bk_notification_preferences to bootik_runtime;
+grant update(approval_enabled) on bootik.bk_notification_preferences to bootik_runtime;

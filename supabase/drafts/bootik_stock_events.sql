@@ -512,7 +512,7 @@ declare kinds text[];
 begin
  select array_agg(resource_kind) into kinds from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site;
  if kinds is null then return true;end if;
- if p_action in ('entitlement','security-state','support','support-cancel','activities','approval-own-state','approval-execute') or (p_action='admin-action' and p_data->>'kind'='session-revoke') then return true;end if;
+ if p_action in ('entitlement','security-state','support','support-cancel','activities','approval-own-state','approval-execute','notification-list','notification-read','notification-preference') or (p_action='admin-action' and p_data->>'kind'='session-revoke') then return true;end if;
  if 'territory'=any(kinds) then return false;end if;
  if p_action='catalog' then return true;end if;
  -- No sale across a restricted stock zone until the FEFO allocation path accepts that scope.
@@ -660,5 +660,32 @@ begin
  return answer;
 end $$;
 revoke all on function bootik.bk_approval_check(uuid,uuid,uuid,uuid,uuid,text,uuid,bigint,jsonb,boolean),bootik.bk_approval_preflight(uuid,uuid,uuid,uuid,text,jsonb),bootik.bk_approval_admin(uuid,uuid,uuid,uuid,uuid,jsonb) from public,anon,authenticated;
+
+-- No secrets, notes, or raw audit payload in notification responses.
+create function bootik.bk_notification_inbox(p_org uuid,p_app uuid,p_actor uuid,p_site uuid)
+returns table(id uuid,event_code text,created_at timestamptz,read_at timestamptz) language sql stable security invoker set search_path=pg_catalog,bootik as $$
+ select e.id,e.action,e.created_at,r.read_at
+ from bootik.bk_security_audit e
+ join bootik.bk_members m on m.organization_id=p_org and m.app_id=p_app and m.user_id=p_actor and m.active
+ join bootik.bk_member_sites ms on ms.organization_id=p_org and ms.app_id=p_app and ms.user_id=p_actor and ms.location_id=p_site
+ left join bootik.bk_notification_reads r on r.organization_id=p_org and r.app_id=p_app and r.user_id=p_actor and r.event_id=e.id
+ left join bootik.bk_notification_preferences pref on pref.organization_id=p_org and pref.app_id=p_app and pref.user_id=p_actor
+ left join bootik.bk_approval_requests q on q.id=e.target and q.organization_id=p_org and q.app_id=p_app and q.location_id=p_site
+ where e.organization_id=p_org and e.app_id=p_app and (e.site_id=p_site or e.site_id is null and e.actor=p_actor)
+ and (
+ (e.action='new-site-device' and (e.actor=p_actor or m.role='promoteur' and not ms.activity_restricted))
+ or (e.action in ('password-change','recovery-complete','family-provision-promoter-recovery','member-role','member-scope','member-disable','resource-assign') and (e.target=p_actor or m.role='promoteur' and not ms.activity_restricted))
+ or (e.action='approval-decide' and coalesce(pref.approval_enabled,true) and (q.actor=p_actor or m.role='promoteur' and not ms.activity_restricted))
+ )
+ order by e.created_at desc,e.id;
+$$;
+create function bootik.bk_notification_read(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_event uuid)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site);
+ if not exists(select 1 from bootik.bk_notification_inbox(p_org,p_app,p_actor,p_site) i where i.id=p_event) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ insert into bootik.bk_notification_reads(organization_id,app_id,user_id,event_id) values(p_org,p_app,p_actor,p_event) on conflict do nothing;return true;
+end $$;
+revoke all on function bootik.bk_notification_inbox(uuid,uuid,uuid,uuid),bootik.bk_notification_read(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
 
 commit;

@@ -93,7 +93,7 @@ declare f text;
 begin
  select function_code into f from bootik.bk_member_functions where organization_id=p_org and app_id=p_app and user_id=p_user;
  if not found then return true;end if;
- if p_action in ('entitlement','security-state','support','support-cancel','approval-own-state','approval-execute') or (p_action='admin-action' and p_payload->>'kind'='session-revoke') then return true;end if;
+ if p_action in ('entitlement','security-state','support','support-cancel','approval-own-state','approval-execute','notification-list','notification-read','notification-preference') or (p_action='admin-action' and p_payload->>'kind'='session-revoke') then return true;end if;
  if f in ('director','site_manager') then return p_action in ('activities','catalog','team','dashboard','stock-health','stock-setup','master-create','partners','stock-template','stock-import-preview','stock-import-apply','sync-stock','sale','sync-sale','sync-item-sale','count-batch','transfer-ship','transfer-receive','transfers','purchases','purchase-create','purchase-receive','purchase-pay','cash-state','cash-action');end if;
  if f in ('stock_manager','picker') then return p_action in ('activities','catalog','stock-health','stock-setup','stock-template','stock-import-preview','stock-import-apply','sync-stock','count-batch','transfers','transfer-ship','transfer-receive') or (p_action='master-create' and p_payload->>'kind'='item');end if;
  if f='buyer' then return p_action in ('activities','catalog','partners','purchases','purchase-create','purchase-receive','stock-health') or (p_action='master-create' and p_payload->>'kind'='supplier');end if;
@@ -384,5 +384,18 @@ begin
  return answer||jsonb_build_object('fresh',true);
 end $$;
 revoke all on function bootik.bk_request_member(uuid,uuid,uuid,uuid,uuid,text,text,jsonb,text),bootik.bk_family_provision(uuid,uuid,jsonb,text,text) from public,anon,authenticated;
+
+-- NAXA Services inbox contract, adapted to a pull-based inbox of immutable BOOTIK audit events.
+create table bootik.bk_notification_reads(
+ organization_id uuid not null,app_id uuid not null,user_id uuid not null,event_id uuid not null references bootik.bk_security_audit(id),
+ read_at timestamptz not null default clock_timestamp(),primary key(organization_id,app_id,user_id,event_id),
+ foreign key(organization_id,app_id,user_id) references bootik.bk_members(organization_id,app_id,user_id)
+);
+create table bootik.bk_notification_preferences(
+ organization_id uuid not null,app_id uuid not null,user_id uuid not null,approval_enabled boolean not null default true,
+ primary key(organization_id,app_id,user_id),foreign key(organization_id,app_id,user_id) references bootik.bk_members(organization_id,app_id,user_id)
+);
+do $$ declare n text;begin foreach n in array array['bk_notification_reads','bk_notification_preferences'] loop execute format('alter table bootik.%I enable row level security',n);execute format('alter table bootik.%I force row level security',n);execute format('revoke all on bootik.%I from public,anon,authenticated',n);end loop;end $$;
+create index bk_security_audit_inbox_idx on bootik.bk_security_audit(organization_id,app_id,site_id,created_at desc);
 
 commit;

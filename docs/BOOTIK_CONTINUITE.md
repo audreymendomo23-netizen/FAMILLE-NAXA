@@ -465,3 +465,6 @@ Adaptation du contrat site/activité de NAXA SERVICES : événements centraux id
 
 ### B01 — affectations cumulatives
 La clé des règles inclut la catégorie de ressource. Les règles caisse et poste sont maintenant intersectées (aucun écrasement implicite), fingerprint cache inclut toutes les règles ; lecture activité et catalogue intersectées. Les zones de stock associées à un poste/caisse restent fermées à la vente FEFO tant que B02/B03 ne garantit pas l'allocation de lot par zone ; territoire interdit aux opérations non encore raccordées B05. Test combiné caisse A+B et poste A : seule caisse A autorisée. Aucune permission élargie.
+
+### B01 — notifications de sécurité
+Réutilisation du principe inbox par destinataire et états lu/non lu de NAXA SERVICES (notification_contract.ts, v6 SQL et NotificationInboxContent.kt). Inbox BOOTIK dérivée des événements immuables, identifiants stables, reçu de lecture unique, accès selon site et identité, préférence d'approbation désactivable, sécurité non désactivable, aucun contenu secret ou motif brut. Android/Web raccordés. Tests réel PostgreSQL de lecture, rejeu, autre tenant et préférence. Pas de prétention de livraison push FCM : configuration BOOTIK dédiée et appareil réels non vérifiés.

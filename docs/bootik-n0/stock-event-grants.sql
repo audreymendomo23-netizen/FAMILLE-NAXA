@@ -52,3 +52,5 @@ create policy bk_security_approval_request on bootik.bk_approval_requests to boo
 grant select,insert on bootik.bk_approval_policies to bootik_security_runtime;grant update(threshold_fcfa) on bootik.bk_approval_policies to bootik_security_runtime;
 grant select on bootik.bk_approval_requests to bootik_security_runtime;grant update(state,approver,decided_at,reason) on bootik.bk_approval_requests to bootik_security_runtime;
 grant execute on function bootik.bk_approval_admin(uuid,uuid,uuid,uuid,uuid,jsonb) to bootik_security_runtime;
+
+grant execute on function bootik.bk_notification_inbox(uuid,uuid,uuid,uuid),bootik.bk_notification_read(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;
