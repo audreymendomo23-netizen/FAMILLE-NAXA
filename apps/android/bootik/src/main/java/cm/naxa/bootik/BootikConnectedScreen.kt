@@ -46,6 +46,12 @@ import org.json.JSONObject
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
  Text("BOOTIK • Connexion et services",style=MaterialTheme.typography.headlineSmall)
  val current=session
+ LaunchedEffect(current?.token){
+  if(current!=null){
+   kotlinx.coroutines.delay((current.expiresAt-System.currentTimeMillis()).coerceAtLeast(0L))
+   if(session?.token==current.token){unlocked=null;session=null;site="";pin="";confirmation="";biometricSignal?.cancel();message="Session expirée. Reconnectez-vous."}
+  }
+ }
  if(current==null){
  OutlinedTextField(identifier,{identifier=it},label={Text("Identifiant")},singleLine=true)
  OutlinedTextField(password,{password=it},label={Text("Mot de passe")},singleLine=true,visualTransformation=PasswordVisualTransformation())
@@ -86,6 +92,12 @@ import org.json.JSONObject
  }
  TextButton(enabled=!busy,onClick={unlocked=null;pin="";confirmation=""}){Text("Verrouiller")}
  if(current.refreshToken!=null)TextButton(enabled=!busy,onClick={task{val s=api.refresh(current.refreshToken);vault.clear();savedToken=null;establish(s)}}){Text("Renouveler la session")}
+ if(current.role!="staff"){
+  var team by remember(site){mutableStateOf<List<String>>(emptyList())}
+  Text("Équipe du site")
+  Button(enabled=!busy,onClick={task{val rows=api.operation(current,site,"team",JSONObject()).getJSONArray("members");team=(0 until rows.length()).map{val row=rows.getJSONObject(it);row.getString("role")+" • "+row.getString("user_id").take(8)+" • "+(if(row.getBoolean("active"))"Actif" else "Inactif")}}}){Text("Actualiser l’équipe")}
+  team.forEach{Text(it)}
+ }
  Text("Abonnement")
  Row{RadioButton(universe=="retailer",{universe="retailer"},enabled=!busy);Text("Détaillants");RadioButton(universe=="distributor",{universe="distributor"},enabled=!busy);Text("Distributeurs")}
  Row{RadioButton(plan=="access",{plan="access"},enabled=!busy);Text("ACCÈS");RadioButton(plan=="premium",{plan="premium"},enabled=!busy);Text("PREMIUM")}
