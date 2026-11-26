@@ -1,0 +1,137 @@
+-- N1 billing draft: no payment provider, transfer, or production activation.
+-- Adapted from NAXA SERVICES intent/cancel/verified settlement separation.
+-- Load after widemeet_n2_n3_rooms.sql because entitlement is defined there.
+begin;
+create table public.wm_billing_intents(
+ id uuid primary key default gen_random_uuid(),
+ request_id uuid not null,
+ workspace_id uuid not null references public.wm_workspaces(id),
+ payer_id uuid not null references public.wm_accounts(id),
+ offer text not null check(offer in ('access','premium','pass')),
+ period text not null check(period in ('month','year','once')),
+ capacity integer not null check(capacity between 1 and 100),
+ channel text not null check(channel in ('OM','MOMO')),
+ amount integer not null check(amount>0),
+ currency text not null default 'XAF' check(currency='XAF'),
+ status text not null default 'pending' check(status in ('pending','cancelled','confirmed')),
+ created_at timestamptz not null default now(),
+ expires_at timestamptz not null default (now()+interval '24 hours'),
+ provider_ref text,
+ proof_hash text check(proof_hash is null or proof_hash ~ '^[a-f0-9]{64}$'),
+ confirmed_at timestamptz,
+ unique(workspace_id,request_id),
+ unique(channel,provider_ref),
+ check((status='confirmed')=(provider_ref is not null and proof_hash is not null and confirmed_at is not null)),
+ check(expires_at>created_at)
+);
+create table public.wm_paid_passes(
+ intent_id uuid primary key references public.wm_billing_intents(id),
+ workspace_id uuid not null references public.wm_workspaces(id),
+ capacity integer not null check(capacity between 1 and 100),
+ issued_at timestamptz not null,
+ -- Paid but not activated here. N2 must atomically consume one pass for one room.
+ consumed_room_id uuid unique references public.wm_rooms(id),
+ consumed_at timestamptz,
+ valid_until timestamptz,
+ check((consumed_at is null)=(consumed_room_id is null)),
+ check((consumed_at is null)=(valid_until is null)),
+ check(valid_until is null or valid_until<=consumed_at+interval '24 hours')
+);
+alter table public.wm_billing_intents enable row level security;
+alter table public.wm_paid_passes enable row level security;
+revoke all on public.wm_billing_intents,public.wm_paid_passes from public,anon,authenticated;
+grant select,insert,update on public.wm_billing_intents,public.wm_paid_passes to service_role;
+create function public.wm_quote(p_kind text,p_offer text,p_period text,p_capacity integer)
+returns integer language sql immutable security invoker set search_path=pg_catalog,public as $wm$
+ select case
+ when p_kind='enterprise' and p_offer='access' and p_capacity=20 and p_period='month' then 5000
+ when p_kind='enterprise' and p_offer='access' and p_capacity=20 and p_period='year' then 50000
+ when p_kind='enterprise' and p_offer='premium' and p_capacity=50 and p_period='month' then 10000
+ when p_kind='enterprise' and p_offer='premium' and p_capacity=50 and p_period='year' then 100000
+ when p_kind='individual' and p_offer='pass' and p_period='once' and p_capacity in (20,50,100) then case p_capacity when 20 then 1000 when 50 then 3000 else 5000 end
+ else null end
+$wm$;
+revoke all on function public.wm_quote(text,text,text,integer) from public,anon,authenticated;
+grant execute on function public.wm_quote(text,text,text,integer) to service_role;
+
+create function public.wm_billing_action(p_hash text,p_action text,p_data jsonb)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare s record; w public.wm_workspaces%rowtype; x public.wm_billing_intents%rowtype; v_role text; v_amount integer; v_capacity integer; v_request uuid; v_result jsonb;
+begin
+ select * into s from public.wm_session_context(p_hash);
+ if not found or s.password_change_required then return null;end if;
+ perform 1 from public.wm_accounts where id=s.account_id and enabled and not password_change_required for update;
+ if not found then return null;end if;
+ if not exists(select 1 from public.wm_session_context(p_hash) c where c.session_id=s.session_id and not c.password_change_required) then return null;end if;
+ perform pg_advisory_xact_lock(hashtextextended('wm-billing:'||s.workspace_id::text,0));
+ select * into w from public.wm_workspaces where id=s.workspace_id and enabled;
+ if not found then return null;end if;
+ select role into v_role from public.wm_memberships where account_id=s.account_id and workspace_id=w.id and enabled;
+ if not found or (w.kind='enterprise' and v_role<>'promoteur') or (w.kind='individual' and v_role<>'owner') then return null;end if;
+ if p_action='billing-list' then
+  select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at desc),'[]'::jsonb) into v_result from (
+   select id,offer,period,capacity,channel,amount,currency,status,created_at,expires_at,confirmed_at from public.wm_billing_intents where workspace_id=w.id order by created_at desc limit 100
+  ) q;
+  return jsonb_build_object('intents',v_result);
+ elsif p_action='billing-create' then
+  if jsonb_typeof(p_data->'capacity') is distinct from 'number' or coalesce(p_data->>'capacity','') !~ '^[0-9]{1,3}$' or coalesce(p_data->>'channel','') not in ('OM','MOMO') then return null;end if;
+  v_capacity:=(p_data->>'capacity')::integer;v_request:=(p_data->>'request_id')::uuid;
+  if v_request is null then return null;end if;
+  v_amount:=public.wm_quote(w.kind,p_data->>'offer',p_data->>'period',v_capacity);
+  if v_amount is null then return null;end if;
+  -- Exact replay returns the existing intent, never a second payable order.
+  select * into x from public.wm_billing_intents where workspace_id=w.id and request_id=v_request;
+  if found then
+   if x.payer_id<>s.account_id or x.offer is distinct from p_data->>'offer' or x.period is distinct from p_data->>'period' or x.capacity<>v_capacity or x.channel is distinct from p_data->>'channel' then return null;end if;
+  else
+   if (select count(*) from public.wm_billing_intents where workspace_id=w.id and status='pending' and expires_at>clock_timestamp())>=3 then return null;end if;
+   insert into public.wm_billing_intents(request_id,workspace_id,payer_id,offer,period,capacity,channel,amount)
+   values(v_request,w.id,s.account_id,p_data->>'offer',p_data->>'period',v_capacity,p_data->>'channel',v_amount) returning * into x;
+  end if;
+  return jsonb_build_object('id',x.id,'amount',x.amount,'currency',x.currency,'status',x.status,'expires_at',x.expires_at);
+ elsif p_action='billing-cancel' then
+  select * into x from public.wm_billing_intents where id=(p_data->>'id')::uuid and workspace_id=w.id and payer_id=s.account_id for update;
+  if not found or x.status='confirmed' then return null;end if;
+  update public.wm_billing_intents set status='cancelled' where id=x.id and status='pending';
+  return jsonb_build_object('id',x.id,'status','cancelled');
+ end if;
+ return null;
+end $wm$;
+revoke all on function public.wm_billing_action(text,text,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_billing_action(text,text,jsonb) to service_role;
+
+-- Internal adapter boundary. No public/client Edge action calls this function.
+-- Only a future qualified central payment verifier may supply an independently
+-- authenticated receipt, never client-declared SMS or a client success boolean.
+create function public.wm_settle_verified_receipt(p_id uuid,p_channel text,p_reference text,p_amount integer,p_currency text,p_proof_hash text,p_paid_at timestamptz)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare x public.wm_billing_intents%rowtype; e public.wm_room_entitlements%rowtype; w uuid; t timestamptz:=clock_timestamp(); start_at timestamptz;
+begin
+ if p_reference is null or length(p_reference) not between 5 and 160 or p_proof_hash is null or p_proof_hash !~ '^[a-f0-9]{64}$' or p_currency is distinct from 'XAF' or p_paid_at is null or p_paid_at>t+interval '5 minutes' then return false;end if;
+ select workspace_id into w from public.wm_billing_intents where id=p_id;
+ if not found then return false;end if;
+ perform pg_advisory_xact_lock(hashtextextended('wm-billing:'||w::text,0));
+ select * into x from public.wm_billing_intents where id=p_id for update;
+ if not found or x.channel is distinct from p_channel or x.amount is distinct from p_amount or p_paid_at<x.created_at-interval '5 minutes' or p_paid_at>x.expires_at then return false;end if;
+ if x.status='confirmed' then return x.provider_ref=p_reference and x.proof_hash=p_proof_hash and x.confirmed_at=p_paid_at;end if;
+ if x.status<>'pending' then return false;end if;
+ if not exists(select 1 from public.wm_accounts a join public.wm_memberships m on m.account_id=a.id and m.enabled join public.wm_workspaces ws on ws.id=m.workspace_id and ws.enabled where a.id=x.payer_id and a.enabled and ws.id=x.workspace_id and ((ws.kind='enterprise' and m.role='promoteur') or (ws.kind='individual' and m.role='owner'))) then return false;end if;
+ if exists(select 1 from public.wm_billing_intents b where b.channel=p_channel and b.provider_ref=p_reference and b.id<>x.id) then return false;end if;
+ if x.offer='pass' then
+  insert into public.wm_paid_passes(intent_id,workspace_id,capacity,issued_at) values(x.id,x.workspace_id,x.capacity,p_paid_at);
+ else
+  if (select count(*) from public.wm_memberships m where m.workspace_id=x.workspace_id and m.enabled and m.role<>'promoteur')>x.capacity then return false;end if;
+  select * into e from public.wm_room_entitlements where workspace_id=x.workspace_id for update;
+  if found and e.enabled and e.valid_until>t and e.plan<>x.offer then return false;end if;
+  start_at:=greatest(t,coalesce(e.valid_until,t));
+  insert into public.wm_room_entitlements(workspace_id,plan,valid_until,enabled)
+  values(x.workspace_id,x.offer,start_at+case when x.period='year' then interval '1 year' else interval '1 month' end,true)
+  on conflict(workspace_id) do update set plan=excluded.plan,valid_until=excluded.valid_until,enabled=true;
+ end if;
+ update public.wm_billing_intents set status='confirmed',provider_ref=p_reference,proof_hash=p_proof_hash,confirmed_at=p_paid_at where id=x.id;
+ return true;
+exception when unique_violation then return false;
+end $wm$;
+revoke all on function public.wm_settle_verified_receipt(uuid,text,text,integer,text,text,timestamptz) from public,anon,authenticated;
+grant execute on function public.wm_settle_verified_receipt(uuid,text,text,integer,text,text,timestamptz) to service_role;
+commit;
