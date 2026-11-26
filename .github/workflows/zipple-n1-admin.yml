@@ -29,3 +29,5 @@ jobs:
           (cd apps/web/admin-console && npx vite preview --host 127.0.0.1 --port 4174) >/tmp/zipple-admin.log 2>&1 &
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4174/ >/dev/null && break; sleep 1; done
           node docs/apps/zipple/n1/admin-browser.mjs
+
+# Trigger dedicated administrator gate after source review.

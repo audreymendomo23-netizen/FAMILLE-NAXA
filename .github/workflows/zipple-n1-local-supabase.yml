@@ -100,3 +100,5 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/zipple-local"
           supabase stop --no-backup
+
+# Revalidate actual MFA before deployment.

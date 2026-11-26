@@ -9,7 +9,7 @@ export function publicKeyAllowed(key){
 export function createRecoveryClient({url,key,fetcher=fetch}){
  if(url!==project||!publicKeyAllowed(key))throw Error("CONFIGURATION");
  async function request(path,method,body,token){
-  const r=await fetcher(project+path,{method,headers:{apikey:key,"content-type":"application/json",...(token?{authorization:"Bearer "+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),redirect:"error",cache:"no-store",signal:AbortSignal.timeout(20000)});
+  const r=await fetcher(project+path,{method,headers:{...(path.startsWith("/auth/v1/")?{apikey:key}:{}),"content-type":"application/json",...(token?{authorization:"Bearer "+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)}),redirect:"error",cache:"no-store",signal:AbortSignal.timeout(20000)});
   if(!r.ok)throw Error("ACCESS_DENIED");const raw=await r.text();return raw?JSON.parse(raw):null;
  }
  const auth=(path,method,body,token)=>request("/auth/v1/"+path,method,body,token);

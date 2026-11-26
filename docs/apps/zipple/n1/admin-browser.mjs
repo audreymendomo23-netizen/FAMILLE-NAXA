@@ -5,7 +5,7 @@ try{
  const ctx=await browser.newContext({viewport:{width:390,height:844}});const p=await ctx.newPage();
  await p.route(base+"/**",async route=>{
   const req=route.request(),path=new URL(req.url()).pathname,token=req.headers().authorization??"",body=req.postDataJSON()??{};
-  const json=(status,data)=>route.fulfill({status,contentType:"application/json",headers:{"access-control-allow-origin":"*","access-control-allow-headers":"*","access-control-allow-methods":"*"},body:JSON.stringify(data)});
+  const json=(status,data)=>route.fulfill({status,contentType:"application/json",headers:{"access-control-allow-origin":"*","access-control-allow-headers":"authorization,content-type,apikey","access-control-allow-methods":"GET,POST,OPTIONS"},body:JSON.stringify(data)});
   if(req.method()==="OPTIONS")return json(200,{});
   calls.push({path,token,body});
   if(path==="/auth/v1/token")return json(200,{access_token:"aal1-fixture"});
