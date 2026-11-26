@@ -4,11 +4,12 @@ on:
   pull_request:
     branches: [test/widemeet-qualification-20261126]
     types: [opened, synchronize, reopened]
+    paths-ignore: ['docs/**']
 permissions:
   contents: read
 concurrency:
   group: widemeet-actual-local-replay
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
   replay:
     runs-on: ubuntu-24.04
