@@ -3,6 +3,9 @@ package cm.naxa.bootik
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -22,6 +25,17 @@ class AppShellInstrumentedTest {
         composeRule.onNodeWithText("Mot de passe").assertExists()
         composeRule.onNodeWithText("Brouillons locaux").performClick()
         composeRule.onNodeWithTag("bootik-setup-list").assertExists()
+    }
+
+    @Test
+    fun loginRequiresBothCredentialsLikeNaxaServices(){
+        composeRule.onNodeWithText("Connexion BOOTIK").performClick()
+        val submit=composeRule.onNodeWithTag("login-submit")
+        submit.assertIsNotEnabled()
+        composeRule.onNodeWithTag("login-identifier").performTextInput("BK-000001")
+        submit.assertIsNotEnabled()
+        composeRule.onNodeWithTag("login-password").performTextInput("test-only-password")
+        submit.assertIsEnabled()
     }
 
     @Test

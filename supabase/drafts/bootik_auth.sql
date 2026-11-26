@@ -403,4 +403,31 @@ create table bootik.bk_notification_preferences(
 do $$ declare n text;begin foreach n in array array['bk_notification_reads','bk_notification_preferences'] loop execute format('alter table bootik.%I enable row level security',n);execute format('alter table bootik.%I force row level security',n);execute format('revoke all on bootik.%I from public,anon,authenticated',n);end loop;end $$;
 create index bk_security_audit_inbox_idx on bootik.bk_security_audit(organization_id,app_id,site_id,created_at desc);
 
+-- NAXA Services first-use routing, scoped to BOOTIK member; no implicit legal acceptance.
+create table bootik.bk_onboarding(
+ organization_id uuid not null,app_id uuid not null,user_id uuid not null,
+ discovery_at timestamptz,tour_at timestamptz,primary key(organization_id,app_id,user_id),
+ foreign key(organization_id,app_id,user_id) references bootik.bk_members(organization_id,app_id,user_id),
+ check(tour_at is null or discovery_at is not null)
+);
+create table bootik.bk_legal_acceptances(
+ organization_id uuid not null,app_id uuid not null,user_id uuid not null,document_kind text not null check(document_kind in ('terms','privacy')),
+ version text not null,sha256 text not null check(sha256~'^[0-9a-f]{64}$'),locale text not null check(locale in ('fr','en','ff-CM')),accepted_at timestamptz not null default clock_timestamp(),
+ primary key(organization_id,app_id,user_id,document_kind,version,sha256),
+ foreign key(organization_id,app_id,user_id) references bootik.bk_members(organization_id,app_id,user_id)
+);
+do $$ declare n text;begin foreach n in array array['bk_onboarding','bk_legal_acceptances'] loop execute format('alter table bootik.%I enable row level security',n);execute format('alter table bootik.%I force row level security',n);execute format('revoke all on bootik.%I from public,anon,authenticated',n);end loop;end $$;
+create function bootik.bk_onboarding_step(p_org uuid,p_app uuid,p_user uuid,p_step text)
+returns void language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+begin
+ if not exists(select 1 from bootik.bk_members where organization_id=p_org and app_id=p_app and user_id=p_user and active) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ if p_step='discovery' then
+  insert into bootik.bk_onboarding(organization_id,app_id,user_id,discovery_at) values(p_org,p_app,p_user,clock_timestamp()) on conflict(organization_id,app_id,user_id) do nothing;
+ elsif p_step='tour' then
+  update bootik.bk_onboarding set tour_at=coalesce(tour_at,clock_timestamp()) where organization_id=p_org and app_id=p_app and user_id=p_user and discovery_at is not null;
+  if not found then raise exception 'BOOTIK_DISCOVERY_REQUIRED';end if;
+ else raise exception 'BOOTIK_INVALID_STEP';end if;
+end $$;
+revoke all on function bootik.bk_onboarding_step(uuid,uuid,uuid,text) from public,anon,authenticated;
+
 commit;

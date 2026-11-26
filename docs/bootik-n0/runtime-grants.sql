@@ -116,3 +116,9 @@ grant select,insert on bootik.bk_notification_reads,bootik.bk_notification_prefe
 grant update(approval_enabled) on bootik.bk_notification_preferences to bootik_runtime;
 
 grant update(valid_from,valid_until) on bootik.bk_member_sites to bootik_security_runtime;
+
+create policy bk_runtime_onboarding on bootik.bk_onboarding to bootik_runtime using(true) with check(true);
+create policy bk_runtime_legal on bootik.bk_legal_acceptances to bootik_runtime using(true) with check(true);
+grant select,insert on bootik.bk_onboarding,bootik.bk_legal_acceptances to bootik_runtime;
+grant update(tour_at) on bootik.bk_onboarding to bootik_runtime;
+grant execute on function bootik.bk_onboarding_step(uuid,uuid,uuid,text) to bootik_runtime;

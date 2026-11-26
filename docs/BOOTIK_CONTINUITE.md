@@ -477,3 +477,6 @@ Début/fin optionnels par employé/site, validation temporelle ISO avec fuseau, 
 
 ### B01 — recette UI et défense SQL
 Recette navigateur réelle sur notifications : nouvel appareil, reçu de lecture, préférence et persistance après reconnexion. Contrôles croisés caisse/zone appliqués aussi dans les fonctions de mutation SQL, pas seulement dans le routeur API. CI à confirmer.
+
+### B01 — parcours de première connexion NAXA SERVICES
+Sources exactes : MainActivity.kt routeAfterAuthentication/LoginScreen, ExperienceScreens.kt DiscoveryScreen/FirstUseTourContent, auth/session.ts (jetons Web jamais persistés), LoginScreenUiInstrumentedTest.kt, commit NS 5e039635. BOOTIK conserve profil central, mot de passe initial à changer et PIN/biométrie Android. Présentation en 4 cartes et visite en 5 étapes, progression serveur par organisation/membre, skip explicite, rejeu, changement de compte isolé. Android/Web raccordés et test navigateur progression/reconnexion + test Compose validation formulaire. Acceptation explicite version/hash du texte BOOTIK si fourni par administration (BOOTIK_LEGAL_DOCUMENTS_JSON), contrôlée serveur, aucune acceptation inventée ; pas de documents juridiques BOOTIK approuvés dans le dépôt, configuration à valider. Pas de persistance navigateur de jetons. Traductions complètes et parcours visuel identique restent à qualifier. CI à vérifier.

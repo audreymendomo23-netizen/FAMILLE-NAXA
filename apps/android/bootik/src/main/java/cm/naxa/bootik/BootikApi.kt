@@ -44,6 +44,8 @@ class BootikApi(private val endpoint:String,private val installationId:String=ja
   val serverNow=j.getLong("server_now");val offlineUntil=j.getLong("offline_until");val stamp=j.getString("scope_stamp");require(serverNow<expires&&offlineUntil in serverNow..expires&&stamp.matches(Regex("[0-9a-f]{32}")))
   return BootikSession(token,member,org,role,list,expires,j.optString("refresh_token").takeIf{it.length>=20},j.optBoolean("require_password_change",false),serverNow,offlineUntil,System.currentTimeMillis(),android.os.SystemClock.elapsedRealtime(),stamp)
  }
+ suspend fun onboarding(session:BootikSession)=request("onboarding-state",JSONObject(),session.token)
+ suspend fun onboardingStep(session:BootikSession,payload:JSONObject)=request("onboarding-step",payload,session.token)
  suspend fun changePassword(session:BootikSession,current:String,next:String){require(next.length in 12..128&&current.isNotBlank()&&current!=next);request("change-password",JSONObject().put("current_password",current).put("new_password",next),session.token)}
  suspend fun recovery(identifier:String){require(identifier.isNotBlank());request("recovery",JSONObject().put("identifier",identifier.trim()))}
  suspend fun logout(session:BootikSession){request("logout",JSONObject().put("refresh_token",session.refreshToken),session.token)}

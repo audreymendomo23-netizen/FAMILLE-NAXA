@@ -23,7 +23,7 @@ export async function login(base,identifier,password,fetcher=fetch){
 }
 
 export async function authorizedRequest(base,action,body,token,fetcher=fetch){
- if(!["logout","recovery","sync","change-password"].includes(action)||!base||!/^https:\/\//.test(base))throw Error("BOOTIK_API_NOT_CONFIGURED");
+ if(!["logout","recovery","sync","change-password","onboarding-state","onboarding-step"].includes(action)||!base||!/^https:\/\//.test(base))throw Error("BOOTIK_API_NOT_CONFIGURED");
  const url=new URL(base.replace(/\/$/,"")+"/"+action);if(url.username||url.password)throw Error("INVALID_API");
  const headers={"Content-Type":"application/json",...(token?{"Authorization":"Bearer "+token}:{})};
  const res=await fetcher(url,{method:"POST",headers,body:JSON.stringify({...body,app_id:"BOOTIK"}),cache:"no-store",redirect:"error"});

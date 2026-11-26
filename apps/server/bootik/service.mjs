@@ -29,8 +29,17 @@ function normalizeMaster(kind,p){
  if(!Number.isInteger(p.terms_days)||p.terms_days<0||p.terms_days>365)throw Error('INVALID_TERMS');
  return {name,phone,email,whatsapp,terms_days:p.terms_days};
 }
-export function createBootikService(db,{now=Date.now,securityDb=null,provisionDb=null,provisionToken=null}={}){
+export function createBootikService(db,{now=Date.now,securityDb=null,provisionDb=null,provisionToken=null,legalDocuments=[]}={}){
  const attempts=new Map();
+ // Legal content must be provided by the authorized BOOTIK owner, never borrowed from another brand.
+ if(!Array.isArray(legalDocuments)||legalDocuments.length!==0&&(legalDocuments.length!==2||new Set(legalDocuments.map(d=>d.kind)).size!==2||legalDocuments.some(d=>!['terms','privacy'].includes(d.kind)||typeof d.version!=='string'||!d.version||d.version.length>80||typeof d.text!=='string'||d.text.length<20||d.text.length>100000||!['fr','en','ff-CM'].includes(d.locale))))throw Error('INVALID_LEGAL_CONFIGURATION');
+ const legal=legalDocuments.map(d=>Object.freeze({kind:d.kind,version:d.version,locale:d.locale,text:d.text,sha256:digest(d.text)}));
+ async function onboarding(s){
+  const scope=[s.organization_id,s.app_id,s.user_id];const row=await first('select discovery_at,tour_at from bootik.bk_onboarding where organization_id=$1 and app_id=$2 and user_id=$3',scope);
+  const accepted=(await query('select document_kind,version,sha256 from bootik.bk_legal_acceptances where organization_id=$1 and app_id=$2 and user_id=$3',scope)).rows;
+  return {discovery_completed:!!row?.discovery_at,tour_completed:!!row?.tour_at,legal_configured:legal.length===2,documents:legal.map(d=>({...d,accepted:accepted.some(a=>a.document_kind===d.kind&&a.version===d.version&&a.sha256===d.sha256)}))};
+ }
+
  const query=(q,p=[])=>db.query(q,p);
  const first=async(q,p)=> (await query(q,p)).rows[0];
  async function sites(s){return (await query('select l.id,l.display_name as name from bootik.bk_member_sites ms join bootik.bk_locations l on l.id=ms.location_id and l.organization_id=ms.organization_id and l.app_id=ms.app_id where ms.organization_id=$1 and ms.app_id=$2 and ms.user_id=$3 and (ms.valid_from is null or ms.valid_from<=now()) and (ms.valid_until is null or ms.valid_until>now()) order by l.id',[s.organization_id,s.app_id,s.user_id])).rows}
@@ -105,6 +114,17 @@ export function createBootikService(db,{now=Date.now,securityDb=null,provisionDb
    const salt=randomBytes(16).toString('hex');const result=await securityDb.query('select bootik.bk_change_password($1,$2,$3,$4,$5,$6,$7) as changed',[s.organization_id,s.app_id,s.user_id,digest(token),row.version,salt,await verifier(body.new_password,salt)]);if(!result.rows[0]?.changed)return reject();return {status:204,body:{}};
   }
   if(s.requires_change)return reject(403);
+  if(route==='onboarding-state')return {status:200,body:await onboarding(s)};
+  if(route==='onboarding-step'){
+   if(body.step==='legal'){
+    const d=legal.find(x=>x.kind===body.kind&&x.version===body.version&&x.sha256===body.sha256&&x.locale===body.locale);if(!d||body.accepted!==true)return reject();
+    await query('insert into bootik.bk_legal_acceptances(organization_id,app_id,user_id,document_kind,version,sha256,locale) values($1,$2,$3,$4,$5,$6,$7) on conflict do nothing',[s.organization_id,s.app_id,s.user_id,d.kind,d.version,d.sha256,d.locale]);
+   }else if(['discovery','tour'].includes(body.step)){
+    if((await onboarding(s)).documents.some(d=>!d.accepted))return reject(403);
+    await query('select bootik.bk_onboarding_step($1,$2,$3,$4)',[s.organization_id,s.app_id,s.user_id,body.step]);
+   }else return reject();return {status:200,body:await onboarding(s)};
+  }
+  if(legal.length&&(await onboarding(s)).documents.some(d=>!d.accepted))return reject(403);
   if(route!=='operation'||!validId(body.site_id)||!body.payload||typeof body.payload!=='object'||Array.isArray(body.payload))return reject();
   const site=body.site_id,p=body.payload,action=body.action;
   const scope=[s.organization_id,s.app_id,s.user_id,site];

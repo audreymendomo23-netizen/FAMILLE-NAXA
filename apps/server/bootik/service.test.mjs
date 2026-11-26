@@ -385,6 +385,13 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  const ownerReset={app_id:'BOOTIK',kind:'promoter-recovery',event_id:randomUUID(),central_actor_id:centralActor,organization_id:centralOrg,central_user_id:centralMember,site_id:centralSite,note:'Identité promoteur vérifiée par administration'};
  const ownerRecovered=await handle('family-provision',ownerReset,provisionToken);assert.equal(ownerRecovered.status,200);assert.ok(ownerRecovered.body.temporary_password);assert.equal((await handle('family-provision',ownerReset,provisionToken)).body.temporary_password,undefined);assert.equal((await centralCall('security-state',{})).status,401);
  const ownerTemp=await handle('login',{app_id:'BOOTIK',installation_id:randomUUID(),platform:'test',identifier:orgEvent.identifier,password:ownerRecovered.body.temporary_password},null,'owner-reset');assert.equal(ownerTemp.status,200);assert.equal(ownerTemp.body.require_password_change,true);assert.equal(ownerTemp.body.sites.length,2);
+ // First-use progression: identity scoped, server persisted, no forged legal receipt.
+ const firstUse=await handle('onboarding-state',{app_id:'BOOTIK'},token);assert.equal(firstUse.status,200);assert.equal(firstUse.body.discovery_completed,false);
+ assert.equal((await handle('onboarding-step',{app_id:'BOOTIK',step:'tour'},token)).status,400);
+ assert.equal((await handle('onboarding-step',{app_id:'BOOTIK',step:'legal',kind:'terms',version:'forged',sha256:'0'.repeat(64),accepted:true,locale:'fr'},token)).status,400);
+ assert.equal((await handle('onboarding-step',{app_id:'BOOTIK',step:'discovery'},token)).body.discovery_completed,true);
+ assert.equal((await handle('onboarding-step',{app_id:'BOOTIK',step:'tour'},token)).body.tour_completed,true);
+ assert.equal((await handle('onboarding-state',{app_id:'BOOTIK'},token)).body.tour_completed,true);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);

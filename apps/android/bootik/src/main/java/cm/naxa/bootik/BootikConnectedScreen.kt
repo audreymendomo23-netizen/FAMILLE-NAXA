@@ -11,6 +11,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -26,6 +28,7 @@ import org.json.JSONObject
  var identifier by remember{mutableStateOf("")};var password by remember{mutableStateOf("")}
  var session by remember{mutableStateOf<BootikSession?>(null)};var site by remember{mutableStateOf("")}
  var message by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)}
+ var firstUseDone by remember{mutableStateOf(false)};var showPassword by remember{mutableStateOf(false)}
  var rememberDevice by remember{mutableStateOf(false)}
  var savedToken by remember{mutableStateOf(vault.loadRefreshToken())}
  var unlocked by remember{mutableStateOf<String?>(null)}
@@ -41,7 +44,7 @@ import org.json.JSONObject
   onDispose{lifecycle?.removeObserver(observer);biometricSignal?.cancel()}
  }
  fun task(block:suspend ()->Unit){if(busy)return;busy=true;scope.launch{try{block()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){message="Opération refusée ou indisponible"}finally{busy=false}}}
- fun establish(s:BootikSession){session=s;site=s.sites.first().id;unlocked=null;pin="";confirmation="";message="Session confirmée. Déverrouillez avec votre PIN."}
+ fun establish(s:BootikSession){firstUseDone=false;session=s;site=s.sites.first().id;unlocked=null;pin="";confirmation="";message="Session confirmée. Déverrouillez avec votre PIN."}
  fun unlock(s:BootikSession,key:String){require(s.expiresAt>System.currentTimeMillis());s.refreshToken?.let{vault.save(it);savedToken=it};unlocked=key;pin="";confirmation="";message="Accès local déverrouillé"}
  fun signOut(s:BootikSession){task{try{api.logout(s);message="Session révoquée"}finally{vault.clear();savedToken=null;session=null;unlocked=null;site="";password="";pin="";confirmation=""}}}
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),verticalArrangement=Arrangement.spacedBy(10.dp)){
@@ -54,10 +57,11 @@ import org.json.JSONObject
   }
  }
  if(current==null){
- OutlinedTextField(identifier,{identifier=it},label={Text("Identifiant")},singleLine=true)
- OutlinedTextField(password,{password=it},label={Text("Mot de passe")},singleLine=true,visualTransformation=PasswordVisualTransformation())
+ Text("Bienvenue",style=MaterialTheme.typography.headlineMedium);Text("Accédez à votre espace professionnel.")
+ OutlinedTextField(identifier,{identifier=it},label={Text("Identifiant")},singleLine=true,modifier=Modifier.fillMaxWidth().testTag("login-identifier"))
+ OutlinedTextField(password,{password=it},label={Text("Mot de passe")},singleLine=true,modifier=Modifier.fillMaxWidth().testTag("login-password"),visualTransformation=if(showPassword)VisualTransformation.None else PasswordVisualTransformation(),trailingIcon={TextButton(onClick={showPassword=!showPassword}){Text(if(showPassword)"Masquer" else "Afficher")}})
  Row{Checkbox(rememberDevice,{rememberDevice=it},enabled=!busy);Text("Rester connecté")}
- Button(enabled=!busy&&identifier.isNotBlank()&&password.isNotBlank(),onClick={task{try{val previous=savedToken;if(previous!=null){api.forget(previous);vault.clear();savedToken=null};establish(api.login(identifier,password,rememberDevice))}finally{password=""}}}){Text("Se connecter")}
+ Button(modifier=Modifier.fillMaxWidth().testTag("login-submit"),enabled=!busy&&identifier.isNotBlank()&&password.isNotBlank(),onClick={task{try{val previous=savedToken;if(previous!=null){api.forget(previous);vault.clear();savedToken=null};establish(api.login(identifier,password,rememberDevice))}finally{password=""}}}){Text("Se connecter")}
  if(savedToken!=null){
  Button(enabled=!busy,onClick={task{val old=savedToken?:return@task;val s=api.refresh(old);vault.clear();savedToken=null;establish(s)}}){Text("Reprendre ma session")}
  TextButton(enabled=!busy,onClick={task{try{savedToken?.let{api.forget(it)};message="Session révoquée"}finally{vault.clear();savedToken=null}}}){Text("Oublier cet appareil")}
@@ -91,6 +95,8 @@ import org.json.JSONObject
  }){Text("Utiliser la biométrie")}
  }
  TextButton(enabled=!busy,onClick={signOut(current)}){Text("Se déconnecter")}
+ }else if(!firstUseDone){
+ key(current.token){BootikFirstUse(api,current,{firstUseDone=true},{signOut(current)})}
  }else{
  Text("Site actif")
  var requestId by remember(site){mutableStateOf("")}
