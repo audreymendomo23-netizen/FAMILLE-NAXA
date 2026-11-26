@@ -492,3 +492,6 @@ Cinq raccourcis fonctionnels vers les sections réellement disponibles, Web/PWA 
 
 ### B01 — recette instrumentée du tutoriel
 La présentation Compose utilisée par le client réel reçoit les fonctions de lecture/confirmation de l'API, sans changer le contrat. Tests instrumentés sur réponses simulées : quatre cartes, cinq étapes, exactement deux confirmations, compte déjà formé sans rejeu. La persistance et l'isolation serveur sont testées séparément en PostgreSQL/Chromium ; ceci n'est pas une recette Android contre un serveur hébergé.
+
+### B01 — textes juridiques candidats BOOTIK
+Adaptation des projets NAXA SERVICES à la V1.1 BOOTIK (univers détaillants/distributeurs, multi-activité, stocks, consignes, B2B, distinction abonnements/encaissements). Documents FR `docs/bootik/legal/` explicitement non approuvés ; ne pas injecter en production dans BOOTIK_LEGAL_DOCUMENTS_JSON. Validation de l'éditeur/conseil, coordonnées, bases, conservation, fournisseurs réellement actifs et traductions contractuelles requises. Le parcours d'acceptation est testé séparément avec documents fictifs.
