@@ -270,6 +270,21 @@ jobs:
               assert.equal(await new Promise((r,j)=>{transport.on('error',j);transport.on('exit',r);}),0,'Deno TLS probe');
               browser=await chromium.launch({headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
               const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:900}});
+              // Chromium's synthetic camera lacks a physical facingMode. Bridge only the test
+              // device constraint, never the commercial implementation or the Storage gateway.
+              await context.addInitScript(()=>{
+                const media=navigator.mediaDevices;if(!media)return;
+                const original=media.getUserMedia.bind(media);
+                window.__nsFrontCameraRequests=0;
+                media.getUserMedia=async constraints=>{
+                  if(constraints?.video?.facingMode?.exact!=='user')return original(constraints);
+                  if(constraints.audio!==false)throw Error('PROOF_UNEXPECTED_AUDIO');
+                  window.__nsFrontCameraRequests++;
+                  const {facingMode,...video}=constraints.video;
+                  const stream=await original({...constraints,video});
+                  return stream;
+                };
+              });
               const page=await context.newPage();page.setDefaultTimeout(15000);
               await page.goto('https://127.0.0.1:8443/');
               await page.getByLabel('Identifiant NAXA Services').fill(f.login);
@@ -456,8 +471,10 @@ jobs:
                 await capture.getByRole('button',{name:/Position obtenue/}).waitFor();
                 proofCheckpoint='front camera capture';await capture.getByRole('button',{name:'Ouvrir la caméra avant'}).click();
                 await capture.getByRole('button',{name:'Prendre le selfie'}).waitFor();
+                assert.equal(await page.evaluate(()=>window.__nsFrontCameraRequests),1,'commercial code requests exact front camera and no microphone');
+                proofCheckpoint='wait for fake camera frame';
                 await page.waitForFunction(()=>Array.from(document.querySelectorAll('video')).some(v=>v.videoWidth>0&&v.videoHeight>0));
-                await capture.getByRole('button',{name:'Prendre le selfie'}).click();
+                proofCheckpoint='capture JPEG from live synthetic video';await capture.getByRole('button',{name:'Prendre le selfie'}).click();
                 await capture.getByRole('button',{name:/Selfie pris/}).waitFor();
                 proofCheckpoint='stage and submit';const evt=await apply('staff_clock_in.recorded',()=>capture.getByRole('button',{name:'Confirmer mon pointage'}).click());
                 assert.equal(evt.payload.attendance_proof_ref,evt.aggregate_id);
@@ -471,6 +488,15 @@ jobs:
                 const own=await fetch(privatePath,{headers:{apikey:anon,Authorization:'Bearer '+auth.access_token}});assert.ok(own.ok);assert.ok((await own.arrayBuffer()).byteLength>0);
                 const projection=await success(base+'/rest/v1/ns_sync_changes?select=projection_json&aggregate_id=eq.'+evt.aggregate_id,undefined,admin,admin,'GET');
                 assert.ok(projection.length>0);assert.ok(projection.every(x=>!('attendance_proof_ref' in x.projection_json)&&!('latitude' in x.projection_json)));
+                proofCheckpoint='review evidence through commercial interface';
+                await page.getByRole('button',{name:'Afficher les preuves autorisées'}).click();
+                const review=page.locator('section').filter({has:page.getByRole('heading',{name:'Consulter les preuves',exact:true})});
+                await review.getByText('Recette PROOF',{exact:true}).waitFor();
+                await review.getByRole('button',{name:'Voir le selfie',exact:true}).click();
+                await review.getByRole('img',{name:'Selfie du pointage'}).waitFor();
+                await page.waitForFunction(()=>Array.from(document.querySelectorAll('img[alt="Selfie du pointage"]')).some(i=>i.complete&&i.naturalWidth>0));
+                await review.getByRole('button',{name:'Fermer',exact:true}).click();
+                assert.equal(await review.getByRole('img',{name:'Selfie du pointage'}).count(),0);
                 await page.getByRole('button',{name:/Déconnexion/}).click();
                 await page.getByLabel('Identifiant NAXA Services').waitFor();
               });
