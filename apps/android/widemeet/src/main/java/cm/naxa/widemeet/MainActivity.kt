@@ -97,7 +97,7 @@ class MainActivity:ComponentActivity(){
  if(switchError)Text(tr("Changement d’espace non confirmé. Reconnectez-vous.","Workspace switch unconfirmed. Sign in again."),color=MaterialTheme.colorScheme.error)
  if(logoutError)Text(tr("Déconnexion locale effectuée ; révocation distante non confirmée.","Local sign-out completed; remote revocation unconfirmed."),color=MaterialTheme.colorScheme.error)
  if(signIn){SignIn(english,BuildConfig.WIDEMEET_AUTH_URL.isNotBlank(),gateway,{session=it;signIn=false;tab=0;detail=""},{signIn=false})}
- else if(session?.requirePasswordChange==true){Text(tr("Votre mot de passe doit être changé avant d’accéder à votre espace.","Change your password before accessing your workspace."));Button(onClick={logout()}){Text(tr("Se déconnecter","Sign out"))}}
+ else if(session?.requirePasswordChange==true){val s=session!!;key(s.deviceId){ChangePassword(english,gateway,s,{session=null;signIn=true;detail=""},{logout()})}}
  else if(current!=null&&session!=null&&(detail in listOf("Nouvelle réunion","New meeting","Programmer","Schedule","Rejoindre","Join")||tab==1&&detail.isEmpty())){
  val s=session!!
  if(detail.isNotEmpty())TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))}
