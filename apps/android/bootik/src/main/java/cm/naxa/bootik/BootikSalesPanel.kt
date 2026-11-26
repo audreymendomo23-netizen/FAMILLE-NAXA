@@ -10,9 +10,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-private data class CachedSaleItem(val balanceId:String,val name:String,val available:Double,val price:Long,val onHand:Double,val version:String,val sku:String,val barcode:String,val lot:String,val location:String,val activity:String,val expiry:String,val serialized:Boolean)
+private data class CachedSaleItem(val balanceId:String,val name:String,val available:Double,val price:Long,val onHand:Double,val version:String,val sku:String,val barcode:String,val lot:String,val location:String,val activity:String,val expiry:String,val serialized:Boolean,val activityId:String)
 private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length()).map{
- val j=a.getJSONObject(it);CachedSaleItem(j.getString("balance_id"),j.getString("display_name"),j.getDouble("available"),j.getLong("unit_price_fcfa"),j.optDouble("quantity_on_hand",Double.NaN),j.optString("stock_version",""),j.optString("sku",""),j.optString("barcode",""),j.optString("lot_code",""),j.optString("storage_label",""),j.optString("activity_name",""),j.optString("expires_at",""),j.optBoolean("is_serialized",false)).also{v->require(v.balanceId.isNotBlank()&&v.available.isFinite()&&v.price>=0)}
+ val j=a.getJSONObject(it);CachedSaleItem(j.getString("balance_id"),j.getString("display_name"),j.getDouble("available"),j.getLong("unit_price_fcfa"),j.optDouble("quantity_on_hand",Double.NaN),j.optString("stock_version",""),j.optString("sku",""),j.optString("barcode",""),j.optString("lot_code",""),j.optString("storage_label",""),j.optString("activity_name",""),j.optString("expires_at",""),j.optBoolean("is_serialized",false),j.optString("activity_id","")).also{v->require(v.balanceId.isNotBlank()&&v.available.isFinite()&&v.price>=0)}
 }
 @Composable fun BootikSalesPanel(api:BootikApi,dao:BootikScopedDao,session:BootikSession,site:String){
  val context=LocalContext.current
@@ -26,6 +26,10 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  val matches=remember(items,search){items.filter{v->listOf(v.name,v.sku,v.barcode,v.lot,v.location,v.activity).any{BootikCatalogSearch.matches(it,search)}}}
  var selected by remember(site){mutableStateOf("")};var quantity by remember(site){mutableStateOf("1")}
  var stockKind by remember(site){mutableStateOf("receipt")};var reason by remember(site){mutableStateOf("")}
+ var batch by remember(org,member,site){mutableStateOf<List<JSONObject>>(emptyList())};var batchReason by remember(site){mutableStateOf("")}
+ var dest by remember(site){mutableStateOf("")};var transfers by remember(site){mutableStateOf<List<JSONObject>>(emptyList())};var transferId by remember(site){mutableStateOf("")};var transferQty by remember(site){mutableStateOf("")};var transferReason by remember(site){mutableStateOf("")}
+ val requests=remember(org,member,site){mutableMapOf<String,Pair<String,String>>()}
+ fun requestId(kind:String,p:JSONObject):String{val fp=p.toString();val old=requests[kind];if(old?.first==fp)return old.second;val id=UUID.randomUUID().toString();requests[kind]=fp to id;return id}
  var status by remember(site){mutableStateOf("")};var busy by remember(site){mutableStateOf(false)};var cacheTime by remember(site){mutableStateOf(0L)}
  suspend fun reload(){events=dao.events(org,member,site)}
  LaunchedEffect(org,member,site){dao.observeEvents(org,member,site).collect{events=it}}
@@ -54,6 +58,21 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
    val payload=JSONObject().put("balance_id",item!!.balanceId).put("quantity",n!!).put("stock_kind",stockKind).put("expected_version",item.version).put("reason",reason.trim()).put("idempotency_key",id)
    dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));reason="";status="Mouvement en attente, aucun stock confirmé";if(automatic)BootikSync.schedule(context,binding)
   }}){Text("Mettre le mouvement en file")}
+ }
+ if(session.role!="staff"){
+  Text("Inventaire groupé (30 lignes maximum)",style=MaterialTheme.typography.titleMedium)
+  Button(enabled=!busy&&item!=null&&item.activityId.isNotBlank()&&item.version.isNotBlank()&&!item.serialized&&n!=null&&n.isFinite()&&n>=0&&batch.size<30&&batch.none{it.optString("balance_id")==item.balanceId}&&(batch.isEmpty()||batch.first().optString("activity_id")==item.activityId),onClick={val it=item!!;batch=batch+JSONObject().put("balance_id",it.balanceId).put("activity_id",it.activityId).put("event_id",UUID.randomUUID().toString()).put("quantity",n!!).put("expected_version",it.version).put("name",it.name)}){Text("Ajouter au comptage groupé")}
+  batch.forEach{x->Row{Text(x.getString("name")+" : "+x.getString("quantity"));TextButton(enabled=!busy,onClick={batch=batch.filter{it.getString("balance_id")!=x.getString("balance_id")}}){Text("Retirer")}}}
+  OutlinedTextField(batchReason,{batchReason=it},label={Text("Motif inventaire groupé")},enabled=!busy)
+  Button(enabled=!busy&&batch.isNotEmpty()&&batchReason.trim().length>=3,onClick={task{val lines=JSONArray();batch.forEach{x->lines.put(JSONObject(x.toString()).apply{remove("name");remove("activity_id")})};val p=JSONObject().put("activity_id",batch.first().getString("activity_id")).put("reason",batchReason.trim()).put("lines",lines);val id=requestId("batch",p);p.put("batch_id",id);check(api.operation(session,site,"count-batch",p).getString("batch_id")==id);requests.remove("batch");batch=emptyList();batchReason="";status="Inventaire groupé confirmé. Actualisez le catalogue."}}){Text("Valider le comptage groupé")}
+  Text("Transferts inter-sites",style=MaterialTheme.typography.titleMedium)
+  session.sites.filter{it.id!=site}.forEach{s->Row{RadioButton(dest==s.id,{dest=s.id},enabled=!busy);Text(s.name)}}
+  OutlinedTextField(transferReason,{transferReason=it},label={Text("Motif transfert")},enabled=!busy)
+  Button(enabled=!busy&&dest.isNotBlank()&&item!=null&&item.version.isNotBlank()&&!item.serialized&&n!=null&&n.isFinite()&&n>0&&transferReason.trim().length>=3,onClick={task{val p=JSONObject().put("destination_site",dest).put("balance_id",item!!.balanceId).put("quantity",n!!).put("expected_version",item.version).put("reason",transferReason.trim());val id=requestId("ship",p);p.put("transfer_id",id);check(api.operation(session,site,"transfer-ship",p).getString("transfer_id")==id);requests.remove("ship");transferReason="";status="Expédition confirmée, stock en transit. Actualisez le catalogue."}}){Text("Expédier la quantité sélectionnée")}
+  Button(enabled=!busy,onClick={task{val a=api.operation(session,site,"transfers",JSONObject()).getJSONArray("transfers");transfers=(0 until a.length()).map{a.getJSONObject(it)};transferId=""}}){Text("Afficher les transferts")}
+  transfers.forEach{x->Text(x.getString("display_name")+" • "+x.getString("source_name")+" → "+x.getString("destination_name")+" • "+x.getString("received")+"/"+x.getString("quantity"));if(x.getString("destination_site")==site&&x.getDouble("received")<x.getDouble("quantity"))Row{RadioButton(transferId==x.getString("id"),{transferId=x.getString("id")},enabled=!busy);Text("Réceptionner")}}
+  OutlinedTextField(transferQty,{transferQty=it},label={Text("Quantité reçue")},enabled=!busy)
+  Button(enabled=!busy&&transferId.isNotBlank()&&(transferQty.toDoubleOrNull()?.let{it.isFinite()&&it>0}==true)&&transferReason.trim().length>=3,onClick={task{val p=JSONObject().put("transfer_id",transferId).put("quantity",transferQty.toDouble()).put("reason",transferReason.trim());val id=requestId("receive",p);p.put("receipt_id",id);check(api.operation(session,site,"transfer-receive",p).getString("receipt_id")==id);requests.remove("receive");transfers=emptyList();transferId="";transferQty="";transferReason="";status="Réception confirmée. Actualisez le catalogue et les transferts."}}){Text("Confirmer la réception")}
  }
  Button(enabled=!busy,onClick={task{val all=dao.events(org,member,site);if(all.any{it.state in setOf("conflict","rejected")}){status="Corrigez le conflit avant de synchroniser";return@task};val count=BootikSync.flush(binding);status="$count réponse(s) traitée(s)"}}){Text("Synchroniser les ventes")}
  Row{Checkbox(automatic,{automatic=it;BootikSync.setAutomatic(binding,it)},enabled=!busy);Text("Synchroniser automatiquement au retour du réseau")}

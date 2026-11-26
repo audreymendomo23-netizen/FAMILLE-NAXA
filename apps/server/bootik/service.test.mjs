@@ -103,6 +103,28 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  let cursor=null,seen=new Set();do{const page=await call('catalog',cursor?{cursor}:{});assert.equal(page.status,200);assert.ok(page.body.result.items.length<=500);for(const row of page.body.result.items){assert.ok(!seen.has(row.balance_id));seen.add(row.balance_id)}cursor=page.body.result.next_cursor}while(cursor);
  assert.equal(seen.size,5103);
  assert.equal((await call('catalog',{cursor:'forged'})).status,400);
+ // Multi-line count rollback and separate transfer shipment/receipt.
+ const currentB=await one('select updated_at::text as stock_version from bootik.bk_inventory_balances where id=$1',[b]);
+ const batch={batch_id:randomUUID(),activity_id:v,reason:'Inventaire collectif',lines:[{balance_id:b,event_id:randomUUID(),quantity:7,expected_version:currentB.stock_version},{balance_id:lotRow.balance_id,event_id:randomUUID(),quantity:2,expected_version:'stale'}]};
+ assert.equal((await call('count-batch',batch)).status,400);assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),6);
+ const good={...batch,lines:[batch.lines[0],{...batch.lines[1],expected_version:lotRow.stock_version}]};
+ assert.equal((await call('count-batch',good)).status,200);assert.equal((await call('count-batch',good)).body.result.batch_id,batch.batch_id);
+ assert.equal((await call('count-batch',{...good,reason:'Different'})).status,400);
+ assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),7);
+ await one('insert into bootik.bk_activity_locations(app_id,organization_id,activity_id,location_id) values($1,$2,$3,$4)',[a,o,v,foreign]);
+ const shipped={destination_site:foreign,balance_id:b,transfer_id:randomUUID(),quantity:3,expected_version:(await one('select updated_at::text as version from bootik.bk_inventory_balances where id=$1',[b])).version,reason:'Transfert test'};
+ assert.equal((await call('transfer-ship',shipped)).status,200);assert.equal((await call('transfer-ship',shipped)).body.result.transfer_id,shipped.transfer_id);
+ assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),4);
+ assert.equal(Number((await one('select count(*) from bootik.bk_inventory_balances where location_id=$1 and item_id=$2',[foreign,i])).count),0);
+ const receivedPart={transfer_id:shipped.transfer_id,receipt_id:randomUUID(),quantity:2,reason:'Réception partielle'};
+ assert.equal((await call('transfer-receive',receivedPart,foreign)).status,403);
+ await one('insert into bootik.bk_member_sites(organization_id,app_id,user_id,location_id) values($1,$2,$3,$4)',[o,a,u,foreign]);
+ assert.equal((await call('transfer-receive',receivedPart,foreign)).status,200);assert.equal((await call('transfer-receive',receivedPart,foreign)).body.result.receipt_id,receivedPart.receipt_id);
+ assert.equal((await call('transfer-receive',{...receivedPart,receipt_id:randomUUID(),quantity:2},foreign)).status,400);
+ assert.equal((await call('transfer-receive',{...receivedPart,receipt_id:randomUUID(),quantity:1},foreign)).status,200);
+ assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where location_id=$1 and item_id=$2',[foreign,i])).quantity_on_hand),3);
+ assert.equal(Number((await call('transfers',{},foreign)).body.result.transfers[0].received),3);
+ await one('delete from bootik.bk_member_sites where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4',[o,a,u,foreign]);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);
