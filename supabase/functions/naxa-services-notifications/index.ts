@@ -397,7 +397,7 @@ Deno.serve(async (request: Request) => {
     const action = String(body.action ?? "");
     if (action === "dispatch_scheduled") {
       const ticket = request.headers.get("x-naxa-dispatch-ticket") ?? "";
-      if (!/^[0-9a-f]{64}$/.test(ticket) ||
+      if (!/^[0-9]{10}\.[0-9a-f]{32}\.[0-9a-f]{64}$/.test(ticket) ||
           await rpc("ns_consume_notification_dispatch_ticket", { p_ticket: ticket }) !== true) {
         return reply(401, { error: "WORKER_AUTHENTICATION_FAILED" }, origin);
       }
