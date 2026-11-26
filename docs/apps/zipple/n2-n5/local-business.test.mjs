@@ -43,8 +43,8 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   assert.ok(await scalar("select guest_served_at from zp_orders where org_id=$1",[org]));
   await page.getByRole("button",{name:"Actualiser"}).click();
   for(let i=0;i<3;i++){const next=page.getByRole("button",{name:"Étape suivante"});await next.waitFor();await next.click();await page.getByText("Plat recette × 1 · kitchen · "+["preparing","ready","served"][i],{exact:true}).waitFor()}
-  await guest.getByRole("heading",{name:"Votre avis (facultatif)"}).waitFor({timeout:15000});await guest.getByRole("combobox",{name:"Note du poste kitchen"}).selectOption("4");await guest.getByRole("button",{name:"Envoyer mon avis"}).click();await guest.getByText("Merci pour votre avis.").waitFor();assert.equal(await scalar("select rating from zp_feedback_posts where org_id=$1 and post='kitchen'",[org]),4);
-  assert.equal(Number(await scalar("select count(*) from zp_feedback where org_id=$1",[org])),1);
+  await guest.getByRole("heading",{name:"Votre avis (facultatif)"}).waitFor({timeout:15000});await guest.getByRole("combobox",{name:"Note du poste kitchen"}).selectOption("4");await guest.getByLabel("Motif facultatif").selectOption("wait");await guest.getByRole("button",{name:"Envoyer mon avis"}).click();await guest.getByText("Merci pour votre avis.").waitFor();assert.equal(await scalar("select rating from zp_feedback_posts where org_id=$1 and post='kitchen'",[org]),4);
+  assert.equal(Number(await scalar("select count(*) from zp_feedback where org_id=$1",[org])),1);assert.equal(await scalar("select reason from zp_feedback where org_id=$1",[org]),"wait");
   assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[item.body.data]),2);
   await page.getByRole("button",{name:"Stocks & finances"}).click();await page.getByRole("heading",{name:"Stocks et finances"}).waitFor();
   await page.getByLabel("Nom de la matière").fill("Farine recette");await page.getByLabel("SKU",{exact:true}).fill("FAR-TEST");await page.getByRole("button",{name:"Ajouter la matière"}).click();
@@ -139,6 +139,14 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[juice]),3);
   await ok("capacity_set",{post:"kitchen",parallel_slots:2});await ok("delay",{order_id:formulaOrder,minutes:18,reason:"Délai cuisine recette"});await ok("order_priority",{order_id:formulaOrder,priority:1,reason:"Priorité recette"});
   for(const component of [main,juice])for(const next of ["preparing","ready","served"])await ok("line_advance",{order_id:formulaOrder,item_id:component,next});
+  const transferTable=await ok("table_create",{label:"Addition transfert recette"});await ok("table_open",{table_id:transferTable.id});
+  const source=await scalar("select table_session_id from zp_orders where id=$1",[formulaOrder]),target=await scalar("select id from zp_table_sessions where table_id=$1 and closed_at is null",[transferTable.id]);
+  const move={order_id:formulaOrder,source_session_id:source,target_session_id:target,request_id:id(),reason:"Répartition addition recette"};
+  await ok("bill_transfer",move);await ok("bill_transfer",move);assert.equal((await ok("table_bill",{table_session_id:target})).total_xaf,2000);
+  assert.equal(await scalar("select table_session_id from zp_orders where id=$1",[formulaOrder]),source);
+  await ok("bill_transfer",{...move,source_session_id:target,target_session_id:source,request_id:id()});
+  await ok("table_close",{table_session_id:target});
+  console.log("ZIPPLE_BULK2_REAL_EDGE_BILL_TRANSFER_PASS");
   await g2.close();await g2ctx.close();
   await ok("cash_open",{opening_xaf:0});await page.getByRole("button",{name:"Actualiser",exact:true}).click();
   await page.getByRole("button",{name:"Afficher l’addition"}).click();
