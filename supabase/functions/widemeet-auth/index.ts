@@ -31,6 +31,33 @@ Deno.serve(async request=>{
  const raw=await request.text();if(raw.length>16384)return send(413,{error:"request_too_large"});
  const body=JSON.parse(raw);
  if(!body||body.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
+ if(action==="register"){
+ if(Deno.env.get("WM_SIGNUP_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ const domain=(Deno.env.get("WM_AUTH_ALIAS_DOMAIN")??"").trim().toLowerCase();
+ if(!/^[a-z0-9.-]{3,100}$/.test(domain)||!domain.includes(".")||domain.startsWith(".")||domain.endsWith("."))return send(503,{error:"unavailable"});
+ const display=typeof body.display_name==="string"?body.display_name.trim():"",kind=body.kind;
+ const workspace=typeof body.workspace_name==="string"?body.workspace_name.trim():"";
+ const password=body.password,version="wm-replay-draft-20261126";
+ if(!uuid.test(body.installation_id??"")||!uuid.test(body.request_id??"")||!["individual","enterprise"].includes(kind)||!display||display.length>120||!workspace||workspace.length>120||typeof password!=="string"||password.length<12||password.length>256||body.accepted_terms!==true||body.terms_version!==version||body.privacy_version!==version)return send(400,{error:"invalid_registration"});
+ const installation=body.installation_id.toLowerCase(),requestId=body.request_id.toLowerCase();
+ const key=await digest("wm-registration:"+installation+":"+requestId);
+ const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-signup-device:"+installation),p_installation_hash:await digest("wm-signup-global")})});
+ if(allowed!==true)return send(429,{error:"too_many_attempts"});
+ // Deterministic technical alias lets a retry recover a successful GoTrue create after a lost response.
+ // No public email delivery, password/alias never persisted in browser or returned.
+ const email="wm-"+key.slice(0,40)+"@"+domain;
+ try{
+ await fetch(url+"/auth/v1/admin/users",{method:"POST",headers:{apikey:service,Authorization:"Bearer "+service,"Content-Type":"application/json"},body:JSON.stringify({email,password,email_confirm:true,app_metadata:{app_code:"widemeet",wm_registration_key:key}}),redirect:"error",cache:"no-store"});
+ }catch{/* A lost response must be verified through GoTrue, never assumed successful. */}
+ const verified=await fetch(url+"/auth/v1/token?grant_type=password",{method:"POST",headers:{apikey:anon,"Content-Type":"application/json"},body:JSON.stringify({email,password}),redirect:"error",cache:"no-store"});
+ if(!verified.ok)return send(409,{error:"registration_unconfirmed"});
+ const identity=(await verified.json()).user;
+ if(!identity||!uuid.test(identity.id??"")||identity.app_metadata?.app_code!=="widemeet"||identity.app_metadata?.wm_registration_key!==key)return send(409,{error:"registration_unconfirmed"});
+ const generated="WM-"+token().slice(0,20).toUpperCase();
+ const loginId=await rest("rpc/wm_register_account",{method:"POST",body:JSON.stringify({p_installation:installation,p_request:requestId,p_auth_user:identity.id,p_login:generated,p_alias:email,p_display:display,p_kind:kind,p_workspace:workspace,p_terms:version,p_privacy:version})});
+ if(typeof loginId!=="string"||!/^WM-[A-Z0-9]{8,24}$/.test(loginId))return send(503,{error:"registration_unconfirmed"});
+ return send(200,{login_id:loginId,kind});
+ }
  if(action==="request-recovery"){
  const identifier=typeof body.identifier==="string"?body.identifier.trim().toUpperCase():"";
  if(!/^WM-[A-Z0-9]{8,24}$/.test(identifier)||!uuid.test(body.installation_id??"")||!["web","android"].includes(body.platform))return send(400,{error:"invalid_request"});
