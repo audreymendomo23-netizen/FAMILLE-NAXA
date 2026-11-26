@@ -52,7 +52,7 @@ declare m public.zp_members;x public.zp_ledger_sources;old public.zp_ledger_entr
 create function public.zp_ledger_close(p_access text,p_site uuid,p_through date,p_reason text) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;i uuid;begin m:=public.zp_ledger_owner(p_access,p_site);
  perform 1 from public.zp_site_modes where site_id=p_site for update;
- if p_through is null or p_through>(now() at time zone 'Africa/Douala')::date or length(trim(coalesce(p_reason,''))) not between 5 and 250 then raise exception 'INVALID_LEDGER_CLOSE';end if;
+ if p_through is null or p_through>=(now() at time zone 'Africa/Douala')::date or length(trim(coalesce(p_reason,''))) not between 5 and 250 then raise exception 'INVALID_LEDGER_CLOSE';end if;
  if exists(select 1 from public.zp_ledger_closures where org_id=m.org_id and site_id=p_site and through_date>=p_through) then raise exception 'LEDGER_PERIOD_CLOSED';end if;
  if exists(select 1 from public.zp_ledger_sources s where s.org_id=m.org_id and s.site_id=p_site and s.entry_date<=p_through and not exists(select 1 from public.zp_ledger_entries e where e.site_id=s.site_id and e.source_kind=s.kind and e.source_id=s.source_id)) then raise exception 'LEDGER_UNPOSTED_SOURCES';end if;
  if exists(select 1 from public.zp_cash_receipts r join public.zp_sale_costs c on c.receipt_id=r.id where r.org_id=m.org_id and r.site_id=p_site and (r.created_at at time zone 'Africa/Douala')::date<=p_through and c.cost_xaf is null) then raise exception 'LEDGER_UNKNOWN_COST';end if;
@@ -68,4 +68,14 @@ do $$ declare t text;f record;begin
  foreach t in array array['zp_ledger_accounts','zp_ledger_entries','zp_ledger_closures'] loop execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from public,anon,authenticated',t);execute format('grant select,insert on public.%I to service_role',t);end loop;
  for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_ledger_owner','zp_ledger_account_add','zp_ledger_post','zp_ledger_close','zp_ledger_snapshot') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;
 end $$;
+-- Expense dates are user supplied: prevent retroactive changes to a closed accounting period.
+create function public.zp_guard_closed_expense() returns trigger language plpgsql security invoker set search_path=pg_catalog,public as $$
+begin
+ perform 1 from public.zp_site_modes where site_id=new.site_id for update;
+ if exists(select 1 from public.zp_ledger_closures where org_id=new.org_id and site_id=new.site_id and through_date>=new.expense_date) then raise exception 'LEDGER_PERIOD_CLOSED';end if;
+ return new;
+end $$;
+create trigger zp_guard_closed_expense before insert on public.zp_expenses for each row execute function public.zp_guard_closed_expense();
+revoke all on function public.zp_guard_closed_expense() from public,anon,authenticated;
+grant execute on function public.zp_guard_closed_expense() to service_role;
 commit;

@@ -374,12 +374,13 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const ledgerSnap=await scalar("select zp_ledger_snapshot($1,$2)",[b.access,b.site]);assert.equal(ledgerSnap.entries.length,1);assert.equal(ledgerSnap.entries[0].amount_xaf,"2500");
  assert.ok(ledgerSnap.pending.some(x=>x.kind==="sale"));assert.ok(!ledgerSnap.pending.some(x=>x.kind==="expense"&&x.source_id===ledgerExpense));
  await assert.rejects(scalar("select zp_ledger_snapshot($1,$2)",[a.access,b.site]),/DENIED/);
- await assert.rejects(scalar("select zp_ledger_close($1,$2,(now() at time zone 'Africa/Douala')::date,'Clôture recette')",[b.access,b.site]),/LEDGER_UNPOSTED_SOURCES/);
+ await assert.rejects(scalar("select zp_ledger_close($1,$2,(now() at time zone 'Africa/Douala')::date,'Clôture recette')",[b.access,b.site]),/INVALID_LEDGER_CLOSE/);
  const cleanLedger=await tenant("Ledger closure");await pay(await intent(cleanLedger,"ACCESS","monthly"));await scalar("select zp_site_mode($1,$2,'restaurant',false,false)",[cleanLedger.access,cleanLedger.site]);
- const closed=await scalar("select zp_ledger_close($1,$2,(now() at time zone 'Africa/Douala')::date,'Clôture vide contrôlée')",[cleanLedger.access,cleanLedger.site]);assert.ok(closed);
+ const closed=await scalar("select zp_ledger_close($1,$2,(now() at time zone 'Africa/Douala')::date-1,'Clôture vide contrôlée')",[cleanLedger.access,cleanLedger.site]);assert.ok(closed);
  const closeDebit=await scalar("select zp_ledger_account_add($1,$2,'D','Charge test','Charges')",[cleanLedger.access,cleanLedger.site]),closeCredit=await scalar("select zp_ledger_account_add($1,$2,'C','Banque test','Trésorerie')",[cleanLedger.access,cleanLedger.site]);
- const lateExpense=await scalar("select zp_record_expense($1,$2,$3,'rent','Loyer tardif',500,'bank','LATE-REF',(now() at time zone 'Africa/Douala')::date)",[cleanLedger.access,cleanLedger.site,uid()]);
- await assert.rejects(scalar("select zp_ledger_post($1,$2,'expense',$3,$4,'OD',$5,$6,'Loyer tardif')",[cleanLedger.access,cleanLedger.site,lateExpense,uid(),closeDebit,closeCredit]),/LEDGER_PERIOD_CLOSED/);
+ await assert.rejects(scalar("select zp_record_expense($1,$2,$3,'rent','Loyer tardif',500,'bank','LATE-REF',(now() at time zone 'Africa/Douala')::date-1)",[cleanLedger.access,cleanLedger.site,uid()]),/LEDGER_PERIOD_CLOSED/);
+ const currentExpense=await scalar("select zp_record_expense($1,$2,$3,'rent','Loyer courant',500,'bank','CURRENT-REF',(now() at time zone 'Africa/Douala')::date)",[cleanLedger.access,cleanLedger.site,uid()]);
+ assert.ok(await scalar("select zp_ledger_post($1,$2,'expense',$3,$4,'OD',$5,$6,'Loyer courant')",[cleanLedger.access,cleanLedger.site,currentExpense,uid(),closeDebit,closeCredit]));
  console.log("ZIPPLE_BULK3_SCOPED_BALANCED_LEDGER_PASS");
  const deskOne=await scalar("select zp_cash_desk_add($1,$2,'Caisse secondaire',$3)",[a.access,a.site,a.member]);
  const deskTwo=await scalar("select zp_cash_desk_add($1,$2,'Caisse troisième',$3)",[a.access,a.site,a.member]);

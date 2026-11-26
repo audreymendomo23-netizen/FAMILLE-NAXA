@@ -65,6 +65,9 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByLabel("Code journal").fill("OD");await page.getByLabel("Compte débit").selectOption({label:"TEST-D · Charges test"});await page.getByLabel("Compte crédit").selectOption({label:"TEST-C · Banque test"});await page.getByLabel("Libellé de l’écriture").fill("Loyer confirmé");
   await page.getByRole("button",{name:"Valider l’écriture équilibrée"}).click();await page.getByText(/Total débit.*2.*500 FCFA.*Total crédit.*2.*500 FCFA/).waitFor();
   assert.equal(Number(await scalar("select amount_xaf from zp_ledger_entries where org_id=$1 and source_id=$2",[org,expenseSource])),2500);
+  const downloadJournal=page.waitForEvent("download");await page.getByRole("button",{name:"Exporter le journal CSV"}).click();const journalFile=await downloadJournal;assert.equal(journalFile.suggestedFilename(),"zipple-journal.csv");const journalText=await readFile(await journalFile.path(),"utf8");assert.match(journalText,/2500/);assert.match(journalText,/TEST-D/);assert.match(journalText,/TEST-C/);
+  const downloadBalance=page.waitForEvent("download");await page.getByRole("button",{name:"Exporter la balance CSV"}).click();const balanceFile=await downloadBalance;assert.equal(balanceFile.suggestedFilename(),"zipple-balance.csv");assert.match(await readFile(await balanceFile.path(),"utf8"),/2500/);
+  console.log("ZIPPLE_BULK3_REAL_EDGE_LEDGER_EXPORT_PASS");
   console.log("ZIPPLE_BULK3_REAL_EDGE_LEDGER_PASS");
   console.log("ZIPPLE_N5_REAL_EDGE_STOCK_EXPENSE_UI_PASS");
   await page.getByRole("button",{name:"Achats",exact:true}).click();
