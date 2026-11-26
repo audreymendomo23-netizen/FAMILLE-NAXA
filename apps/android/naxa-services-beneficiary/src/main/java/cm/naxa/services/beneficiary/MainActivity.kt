@@ -57,7 +57,13 @@ class MainActivity:Activity() {
             }else SecureVault.put(this,"consent","true")
         }
         column.addView(status)
-        button("Actualiser le dernier état de capture"){status.text=SecureVault.get(this,"last_status")?:"Aucune capture signalée."}
+        button("Actualiser le dernier état de capture"){
+            val id=SecureVault.get(this,"device")
+            val last=SecureVault.get(this,"last_status")?:"Aucune capture signalée."
+            val count=id?.let{CaptureIncidents.outstanding(this,it)}
+            status.text=last+"\n"+(count?.let{"Captures sans accusé serveur : "+it+
+                if(it>0) " — rapprochement administratif requis, ne pas demander un second paiement." else ""} ?: "Appareil non enrôlé.")
+        }
         button("Charger les anomalies"){loadReview()}
         reviewRows=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL};column.addView(reviewRows)
         button("Désactiver et déconnecter"){
