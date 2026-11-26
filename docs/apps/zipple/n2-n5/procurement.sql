@@ -72,7 +72,7 @@ create table public.zp_purchase_batches(
  foreign key(supplier_id,org_id,site_id) references public.zp_suppliers(id,org_id,site_id),
  foreign key(member_id,org_id) references public.zp_members(id,org_id));
 create function public.zp_purchase_batch_create(p_access text,p_site uuid,p_supplier uuid,p_request uuid,p_reference text,p_lines jsonb)
-returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;x public.zp_purchase_batches;line jsonb;ids uuid[]:='{}';n int:=0;batch_id uuid;
 begin
  m:=public.zp_erp_actor(p_access,p_site);
@@ -97,7 +97,7 @@ begin
  end loop;
  update public.zp_purchase_batches set purchase_ids=ids where id=batch_id;
  return jsonb_build_object('id',batch_id,'purchase_ids',ids);
-end $;
+end $$;
 alter table public.zp_purchase_batches enable row level security;
 revoke all on public.zp_purchase_batches from public,anon,authenticated;
 grant select,insert,update,delete on public.zp_purchase_batches to service_role;
