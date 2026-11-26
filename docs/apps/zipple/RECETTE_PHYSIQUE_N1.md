@@ -1,0 +1,10 @@
+# ZIPPLE N1 — recette physique et validation hébergée
+Le workflow zipple-n1-device-handoff.yml produit uniquement un APK debug de recette pointant sur le backend ZIPPLE N1 hébergé. Il ne publie pas d'APK de production, ne contient ni compte ni clé privée, ni certificat de confiance de test. Vérifier SHA256 et installer seulement sur appareil de recette autorisé. Un compte ZIPPLE synthétique provisionné par voie Auth Admin officielle est requis (RECETTE_POSITIVE.md); ne pas utiliser de compte NAXA Services ou pharmacie.
+## Recette physique à exécuter et documenter par un opérateur ayant le téléphone
+1. Sur appareil Android compatible, configurer un verrouillage système et une empreinte de recette. Noter modèle, version Android, résultat BIOMETRIC_STRONG (pas de données biométriques ni captures de secrets).
+2. Avec le compte synthétique, vérifier connexion HTTPS, site autorisé, PIN de 4 chiffres. Refuser d'abord consentement biométrique, verrouiller, vérifier que la biométrie n'est pas proposée. Déverrouiller avec PIN, donner consentement explicite.
+3. Verrouiller, ouvrir le prompt système, annuler: accès doit rester verrouillé. Recommencer avec doigt non reconnu, puis empreinte enrôlée: seul le succès du prompt permet l'accès.
+4. Verrouiller et échouer cinq PIN, confirmer que biométrie reste refusée durant verrouillage. À expiration, vérifier PIN valide; biométrie redevient possible si les autres conditions restent vraies.
+5. Désactiver consentement après PIN, verrouiller et contrôler fallback PIN. Tester appareil sans empreinte enrôlée ou avec biométrie indisponible. Tester déconnexion et verrouillage/sessions sur autre membre de recette si disponible. L'empreinte authentifie l'appareil, pas l'identité personnelle du membre.
+6. Déconnecter, révoquer les sessions et désactiver le compte synthétique au terme de la recette. Aucun vrai client ni transaction ERP.
+Le simulateur et les tests unitaires ne certifient pas un capteur matériel. Le test physique est NON EXÉCUTÉ tant qu'aucun rapport d'appareil réel n'est produit.

@@ -1,0 +1,40 @@
+name: ZIPPLE N1 — hosted Android debug handoff
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/zipple-n1-device-handoff.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  hosted-debug:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - name: Compile debug APK with real hosted ZIPPLE endpoint
+        run: gradle --no-daemon :zipple:testDebugUnitTest :zipple:assembleDebug -PZIPPLE_API_URL=https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-n1
+      - name: Record APK hash
+        run: |
+          cd apps/android/zipple/build/outputs/apk/debug
+          test -s zipple-debug.apk
+          sha256sum zipple-debug.apk > SHA256SUMS
+          cat SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZIPPLE-N1-hosted-debug-technical-recipe
+          path: |
+            apps/android/zipple/build/outputs/apk/debug/zipple-debug.apk
+            apps/android/zipple/build/outputs/apk/debug/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
