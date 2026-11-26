@@ -143,6 +143,17 @@ jobs:
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_recording_request.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regclass('public.ns_meeting_recording_requests') is null" | grep -Fx t
+      - name: Activate attendance candidates on disposable DB for actual browser proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql; do
+            test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
+            sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
+          done
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "notify pgrst, 'reload schema'"
       - name: Build commercial Web and install Chromium for real Replay
         shell: bash
         run: |
@@ -152,7 +163,7 @@ jobs:
           npm install --no-audit --no-fund
           npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
           npx playwright install --with-deps chromium
-          VITE_NAXA_SERVICES_AUTH_URL=https://127.0.0.1:8443/functions/v1/naxa-services-auth VITE_SUPABASE_ANON_KEY="$ANON_KEY" npm run build --workspace @famille/naxa-services-web
+          VITE_NAXA_SERVICES_ATTENDANCE_ENABLED=true VITE_NAXA_SERVICES_AUTH_URL=https://127.0.0.1:8443/functions/v1/naxa-services-auth VITE_SUPABASE_ANON_KEY="$ANON_KEY" npm run build --workspace @famille/naxa-services-web
           # Distinct CA and leaf avoid using a CA certificate as the TLS end entity.
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=NAXA Replay disposable CA' -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign' -keyout "$RUNNER_TEMP/ns-replay-ca.key" -out "$RUNNER_TEMP/ns-replay-ca.crt" 2>/dev/null
           openssl req -new -newkey rsa:2048 -nodes -subj '/CN=127.0.0.1' -keyout "$RUNNER_TEMP/ns-replay.key" -out "$RUNNER_TEMP/ns-replay.csr" 2>/dev/null
@@ -208,11 +219,11 @@ jobs:
           }
           const rest=(table,body)=>success(base+'/rest/v1/'+table,body);
           const pass=label=>console.log('PASS '+label);
-          async function fixture(suffix){
+          async function fixture(suffix,mode='solo'){
             const email='ns-replay-'+suffix+'-'+randomUUID()+'@example.test', password='Qa7!'+randomBytes(18).toString('hex');
             const user=await success(base+'/auth/v1/admin/users',{email,password,email_confirm:true,app_metadata:{app_code:'naxa-services'}});
             assert.match(user.id,/^[0-9a-f-]{36}$/);
-            const [org]=await rest('ns_organizations',{display_name:'Replay '+suffix,business_mode:'solo'});
+            const [org]=await rest('ns_organizations',{display_name:'Replay '+suffix,business_mode:mode});
             const login='NS-'+randomBytes(5).toString('hex').toUpperCase();
             const [account]=await rest('ns_accounts',{auth_user_id:user.id,login_id:login,auth_alias:email,password_change_required:false});
             const [member]=await rest('ns_members',{org_id:org.id,account_id:account.id,display_name:'Recette '+suffix,role_code:'promoter'});
@@ -248,7 +259,7 @@ jobs:
               // Prove transport trust with the same Deno runtime before business traffic.
               const transport=spawn('deno',['eval','--cert',process.env.RUNNER_TEMP+'/ns-replay-ca.crt',"const r=await fetch('https://127.0.0.1:8443/auth/v1/user');if(r.status!==401)throw Error('Expected unauthenticated probe HTTP 401, got '+r.status);console.log('PASS Deno trusted HTTPS to local Auth');"],{stdio:'inherit'});
               assert.equal(await new Promise((r,j)=>{transport.on('error',j);transport.on('exit',r);}),0,'Deno TLS probe');
-              browser=await chromium.launch({headless:true});
+              browser=await chromium.launch({headless:true,args:['--use-fake-device-for-media-stream','--use-fake-ui-for-media-stream']});
               const context=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:900}});
               const page=await context.newPage();page.setDefaultTimeout(15000);
               await page.goto('https://127.0.0.1:8443/');
@@ -403,6 +414,51 @@ jobs:
               });
               await page.getByRole('button',{name:/Déconnexion/}).click();
               await page.getByLabel('Identifiant NAXA Services').waitFor();
+              await scenario('attendance proof candidate: real Chromium, simulated GPS/camera, private Storage and atomic receipt',async()=>{
+                const proof=await fixture('PROOF','multi_site_network');
+                await context.grantPermissions(['geolocation','camera'],{origin:'https://127.0.0.1:8443'});
+                await context.setGeolocation({latitude:4.05,longitude:9.7,accuracy:12});
+                await page.getByLabel('Identifiant NAXA Services').fill(proof.login);
+                await page.getByLabel('Mot de passe',{exact:true}).fill(proof.password);
+                const responsePromise=page.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-auth')&&r.request().postDataJSON()?.action==='login');
+                await page.getByRole('button',{name:'Se connecter',exact:true}).click();
+                const auth=await (await responsePromise).json();assert.equal(auth.account.business_mode,'multi_site_network');
+                await page.getByRole('heading',{name:'Une journée bien organisée commence ici.'}).waitFor();
+                await nav('Équipe & commissions');
+                await page.getByRole('heading',{name:'Preuves de service',exact:true}).waitFor();
+                const group=page.getByRole('group',{name:'Prise de service',exact:true});
+                await group.getByRole('checkbox',{name:'GPS'}).check();
+                await group.getByRole('checkbox',{name:'GPS'}).waitFor();
+                await group.getByRole('checkbox',{name:'Selfie'}).check();
+                for(let i=0;i<30;i++){if(await group.getByRole('checkbox',{name:'GPS'}).isChecked()&&await group.getByRole('checkbox',{name:'Selfie'}).isChecked())break;await pause(200);}
+                assert.ok(await group.getByRole('checkbox',{name:'GPS'}).isChecked());
+                assert.ok(await group.getByRole('checkbox',{name:'Selfie'}).isChecked());
+                await page.getByRole('button',{name:'Pointer mon arrivée',exact:true}).click();
+                const capture=page.getByRole('region',{name:'Prise de service',exact:true});
+                assert.equal(await capture.locator('input[type=file]').count(),0);
+                assert.equal(await capture.getByRole('button',{name:'Confirmer mon pointage'}).isDisabled(),true);
+                await capture.getByRole('button',{name:'Obtenir ma position'}).click();
+                await capture.getByRole('button',{name:/Position obtenue/}).waitFor();
+                await capture.getByRole('button',{name:'Ouvrir la caméra avant'}).click();
+                await capture.getByRole('button',{name:'Prendre le selfie'}).waitFor();
+                await page.waitForFunction(()=>Array.from(document.querySelectorAll('video')).some(v=>v.videoWidth>0&&v.videoHeight>0));
+                await capture.getByRole('button',{name:'Prendre le selfie'}).click();
+                await capture.getByRole('button',{name:/Selfie pris/}).waitFor();
+                const evt=await apply('staff_clock_in.recorded',()=>capture.getByRole('button',{name:'Confirmer mon pointage'}).click());
+                assert.equal(evt.payload.attendance_proof_ref,evt.aggregate_id);
+                assert.equal(evt.payload.attendance_evidence,undefined);assert.equal(evt.payload.latitude,undefined);assert.equal(evt.payload.selfie_path,undefined);
+                const ev=await success(base+'/rest/v1/ns_attendance_evidence?select=event_id,required_gps,required_selfie,latitude,selfie_path&event_id=eq.'+evt.aggregate_id,undefined,admin,admin,'GET');
+                assert.equal(ev.length,1);assert.equal(ev[0].required_gps,true);assert.equal(ev[0].required_selfie,true);assert.equal(ev[0].latitude,4.05);
+                const privatePath=base+'/storage/v1/object/authenticated/ns-attendance-selfies/'+ev[0].selfie_path;
+                const foreign=await login(await fixture('PROOF-FOREIGN'));
+                assert.ok(!(await fetch(privatePath,{headers:{apikey:anon,Authorization:'Bearer '+foreign.access_token}})).ok);
+                assert.ok(!(await fetch(privatePath,{headers:{apikey:anon,Authorization:'Bearer '+anon}})).ok);
+                const own=await fetch(privatePath,{headers:{apikey:anon,Authorization:'Bearer '+auth.access_token}});assert.ok(own.ok);assert.ok((await own.arrayBuffer()).byteLength>0);
+                const projection=await success(base+'/rest/v1/ns_sync_changes?select=projection_json&aggregate_id=eq.'+evt.aggregate_id,undefined,admin,admin,'GET');
+                assert.ok(projection.length>0);assert.ok(projection.every(x=>!('attendance_proof_ref' in x.projection_json)&&!('latitude' in x.projection_json)));
+                await page.getByRole('button',{name:/Déconnexion/}).click();
+                await page.getByLabel('Identifiant NAXA Services').waitFor();
+              });
               return failures;
             }finally{
               if(browser)await browser.close();
