@@ -1,7 +1,7 @@
 name: ZIPPLE N1 — SQL-backed integration
 on:
   push:
-    branches: [main]
+    branches: [work/zipple-completion-20261126]
     paths:
       - "docs/apps/zipple/n1/postgres-*"
       - ".github/workflows/zipple-n1-integration.yml"
