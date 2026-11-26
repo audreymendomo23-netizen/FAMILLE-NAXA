@@ -7,6 +7,27 @@ export function RoomPanel({base,session,active,locale,initialMode="list"}){
  const request=(action,body={})=>roomRequest(base,action,body,session.access_token);
  async function refresh(){setBusy(true);setError(false);try{const rows=await request("list");if(!Array.isArray(rows))throw Error("invalid");setList(rows);if(hostRole){const c=await request("contacts");if(!Array.isArray(c))throw Error("invalid");setContacts(c)}}catch{setError(true);setList([]);setContacts([])}finally{setBusy(false)}}
  useEffect(()=>{refresh()},[]);
+ // Refresh authorized room state without overlapping mutations or restoring an old room.
+ useEffect(()=>{
+  const roomId=room?.id;if(mode!=="room"||!roomId||busy||room.status==="ended")return;
+  let cancelled=false,timer;
+  async function tick(){
+   try{
+    const next=await request("read",{room_id:roomId});
+    if(cancelled)return;
+    if(next?.id!==roomId||!Number.isSafeInteger(next.revision))throw Error("invalid");
+    setRoom(current=>current?.id===roomId&&next.revision>=current.revision?next:current);
+    setError(false);
+   }catch{
+    if(cancelled)return;
+    // On uncertain access, remove the displayed private state until explicitly reloaded.
+    setRoom(current=>current?.id===roomId?null:current);setMode("list");setError(true);return;
+   }
+   if(!cancelled)timer=setTimeout(tick,3000);
+  }
+  timer=setTimeout(tick,3000);
+  return()=>{cancelled=true;clearTimeout(timer)};
+ },[mode,room?.id,room?.status,busy,session.device_id]);
  async function execute(action,body){if(busy)return;setBusy(true);setError(false);try{const result=await request(action,body);if(!result||typeof result.id!=="string"||!Number.isSafeInteger(result.revision))throw Error("invalid");setRoom(result);setMode("room");setChat("");setPoll("")}catch{setError(true);if(action==="command")setRoom(null)}finally{setBusy(false)}}
  const command=(action,value=null,target=null)=>room&&execute("command",{room_id:room.id,request_id:crypto.randomUUID(),expected_revision:room.revision,action,value,target});
  const displayName=id=>id===session.member_id?tr("Moi","Me"):contacts.find(c=>c.member_id===id)?.display_name??tr("Participant","Participant");
