@@ -50,5 +50,26 @@ test("Supabase adapter candidate: SQL permissions, alias, rotations, scope, reco
  assert.equal((await req("recovery",{identifier:"fixture"})).status,202);assert.equal((await req("recovery",{identifier:"unknown"})).status,202);
  assert.equal(Number((await pool.query("select count(*) from public.zp_recovery_requests")).rows[0].count),1);
  assert.equal(Number((await pool.query("select count(*) from public.zp_n1_receipts")).rows[0].count),1);
+ // Recovery failure must leave the account locked; retry is explicit and audited.
+ const operator="30000000-0000-4000-8000-000000000002",attempt="50000000-0000-4000-8000-000000000001",retry="50000000-0000-4000-8000-000000000002";
+ await pool.query("insert into auth.users(id) values($1)",[operator]);
+ await pool.query("insert into public.zp_recovery_operators values($1,true)",[operator]);
+ const reqId=(await pool.query("select id from public.zp_recovery_requests where member_id=$1",[id.m])).rows[0].id;
+ await assert.rejects(pool.query("select public.zp_admin_recovery_list($1)",[id.u]),/DENIED/);
+ await assert.rejects(pool.query("select public.zp_admin_recovery_begin($1,$2,$3,$4)",[id.u,reqId,"Fixture identity verified",attempt]),/DENIED/);
+ assert.equal((await pool.query("select public.zp_admin_recovery_begin($1,$2,$3,$4) as target",[operator,reqId,"Fixture identity verified",attempt])).rows[0].target,id.u);
+ assert.equal((await pool.query("select reset_pending from public.zp_members where id=$1",[id.m])).rows[0].reset_pending,true);
+ await assert.rejects(pool.query("select public.zp_issue($1,$2,$3,$4,$5)",[id.m,id.u,0,"stale-test-access",null]),/DENIED/);
+ await pool.query("select public.zp_admin_recovery_finish($1,$2,$3,false)",[operator,reqId,attempt]);
+ assert.equal((await pool.query("select reset_pending from public.zp_members where id=$1",[id.m])).rows[0].reset_pending,true);
+ assert.equal((await pool.query("select state from public.zp_recovery_requests where id=$1",[reqId])).rows[0].state,"failed");
+ await pool.query("select public.zp_admin_recovery_begin($1,$2,$3,$4)",[operator,reqId,"Fixture retry after verified failure",retry]);
+ await assert.rejects(pool.query("select public.zp_admin_recovery_finish($1,$2,$3,true)",[operator,reqId,attempt]),/DENIED/);
+ await pool.query("select public.zp_admin_recovery_finish($1,$2,$3,true)",[operator,reqId,retry]);
+ const recovered=(await pool.query("select reset_pending,credential_epoch from public.zp_members where id=$1",[id.m])).rows[0];
+ assert.equal(recovered.reset_pending,false);assert.equal(recovered.credential_epoch,2);
+ await assert.rejects(pool.query("select public.zp_issue($1,$2,$3,$4,$5)",[id.m,id.u,0,"stale-test-access",null]),/DENIED/);
+ assert.equal(Number((await pool.query("select count(*) from public.zp_recovery_audit where request_id=$1",[reqId])).rows[0].count),4);
+ console.log("ZIPPLE_ADMIN_RECOVERY_FAILURE_CLOSED_PASS");
  console.log("ZIPPLE_SUPABASE_ADAPTER_SQL_PASS");
  }finally{await pool.end()}});

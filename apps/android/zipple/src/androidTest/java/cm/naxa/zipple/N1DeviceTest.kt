@@ -40,6 +40,13 @@ class N1DeviceTest {
   try{vault.save(token);assertEquals(token,vault.loadRefreshToken());assertFalse(context.getSharedPreferences("zipple_secure_session",0).all.values.any{it.toString().contains(token)})}finally{vault.clear()}
   assertNull(vault.loadRefreshToken())
  }
+ @Test fun biometricConsentIsMemberScoped(){
+  val prefs=ZippleBiometricPreferences(context)
+  val one=UUID.randomUUID().toString();val two=UUID.randomUUID().toString()
+  assertFalse(prefs.enabled(one));assertFalse(prefs.enabled(two))
+  prefs.set(one,true);assertTrue(prefs.enabled(one));assertFalse(prefs.enabled(two))
+  prefs.set(one,false);assertFalse(prefs.enabled(one))
+ }
  @Test fun roomQueueAndMigration()=runBlocking{
   val name="zipple-test-"+UUID.randomUUID()+".db"
   val helper=FrameworkSQLiteOpenHelperFactory().create(SupportSQLiteOpenHelper.Configuration.builder(context).name(name).callback(object:SupportSQLiteOpenHelper.Callback(1){
