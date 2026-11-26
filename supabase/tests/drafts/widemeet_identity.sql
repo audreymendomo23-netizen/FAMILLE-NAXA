@@ -140,5 +140,34 @@ begin
 end $wm$;
 reset role;
 
+
+-- Credential epoch fencing and one writer: no GoTrue calls in this SQL-only test.
+set local role service_role;
+do $wm$
+declare
+ a uuid:='10000000-0000-4000-8000-000000000001';
+ w uuid:='20000000-0000-4000-8000-000000000001';
+ i1 uuid:='30000000-0000-4000-8000-000000000021';
+ i2 uuid:='30000000-0000-4000-8000-000000000022';
+ req uuid:='40000000-0000-4000-8000-000000000021';
+begin
+ perform public.wm_issue_verified_session(a,i1,w,repeat('3',64),0);
+ perform public.wm_issue_verified_session(a,i2,w,repeat('4',64),0);
+ if not public.wm_begin_password_change(repeat('3',64),req,0) then raise exception 'rotation begin failed';end if;
+ if public.wm_begin_password_change(repeat('3',64),req,0) then raise exception 'second writer accepted';end if;
+ if exists(select 1 from public.wm_session_context(repeat('4',64))) then raise exception 'other device not revoked';end if;
+ if not exists(select 1 from public.wm_session_context(repeat('3',64)) c where c.password_change_required) then raise exception 'rotation gate missing';end if;
+ begin
+  perform public.wm_issue_verified_session(a,i2,w,repeat('5',64),0);
+  raise exception 'stale epoch issued' using errcode='XX000';
+ exception when raise_exception then null;end;
+ if public.wm_finish_password_change(repeat('4',64),req) then raise exception 'revoked actor completed rotation';end if;
+ if not public.wm_finish_password_change(repeat('3',64),req) then raise exception 'rotation finish failed';end if;
+ if exists(select 1 from public.wm_session_context(repeat('3',64))) then raise exception 'initiating session not revoked';end if;
+ perform public.wm_issue_verified_session(a,i1,w,repeat('5',64),1);
+ if not exists(select 1 from public.wm_session_context(repeat('5',64)) c where not c.password_change_required) then raise exception 'new epoch session failed';end if;
+end $wm$;
+reset role;
+
 rollback;
 select 'WIDEMEET_IDENTITY_SQL_PASS';
