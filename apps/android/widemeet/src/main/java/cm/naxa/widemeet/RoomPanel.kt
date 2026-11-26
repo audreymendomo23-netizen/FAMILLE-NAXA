@@ -26,6 +26,7 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
  var title by remember{mutableStateOf("")};var description by remember{mutableStateOf("")};var date by remember{mutableStateOf("")};var duration by remember{mutableStateOf("30")}
  var invited by remember{mutableStateOf<Set<String>>(emptySet())};var chat by remember{mutableStateOf("")};var poll by remember{mutableStateOf("")}
+ var extension by remember{mutableStateOf("15")};var surveyQuestion by remember{mutableStateOf("")};var surveyOptions by remember{mutableStateOf("")};var surveyMultiple by remember{mutableStateOf(false)};var surveyQuorum by remember{mutableStateOf("50")};var surveyThreshold by remember{mutableStateOf("50")};var surveySelections by remember{mutableStateOf<Map<String,Set<Int>>>(emptyMap())}
  suspend fun refresh(){busy=true;error=false;try{list=rows(gateway.request("list",JSONObject(),session) as JSONArray);if(hostRole)contacts=rows(gateway.request("contacts",JSONObject(),session) as JSONArray)}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true;list=emptyList();contacts=emptyList()}finally{busy=false}}
  LaunchedEffect(session.deviceId){refresh()}
  // Refresh only the selected authorized room. Cancels during writes, selection or session change.
@@ -74,6 +75,7 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  Text(r.optString("title"),style=MaterialTheme.typography.titleLarge);Text(r.optString("description"));Text(stateLabel(status))
  TextButton(enabled=!busy,onClick={execute("read",JSONObject().put("room_id",r.getString("id")))}){Text(tr("Actualiser","Refresh"))}
  if(!isHost&&status in setOf("scheduled","open")){listOf("accepted" to tr("Accepter","Accept"),"maybe" to tr("Peut-être","Maybe"),"declined" to tr("Décliner","Decline")).forEach{(v,l)->TextButton(enabled=!busy,onClick={command("respond",v)}){Text(l)}}}
+ if(isHost&&status in setOf("open","paused")){OutlinedTextField(extension,{extension=it.take(3)},label={Text(tr("Prolongation (minutes)","Extension (minutes)"))},modifier=Modifier.fillMaxWidth());Button(enabled=!busy&&(extension.toIntOrNull()?:0) in 1..480,onClick={command("extend",extension.toInt())}){Text(tr("Prolonger","Extend"))}}
  if(isHost){if(status=="scheduled")Button(enabled=!busy,onClick={command("start")}){Text(tr("Ouvrir la salle","Open room"))};if(status=="open")Button(enabled=!busy,onClick={command("pause")}){Text(tr("Mettre en pause","Pause"))};if(status=="paused")Button(enabled=!busy,onClick={command("resume")}){Text(tr("Reprendre","Resume"))};if(status!="ended")TextButton(enabled=!busy,onClick={command("end")}){Text(tr("Terminer","End"))}}
  if(status=="open"&&r.optString("response")=="accepted"){
  Text(tr("Audio et vidéo indisponibles pour le moment.","Audio and video are currently unavailable."))
@@ -93,8 +95,20 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  OutlinedTextField(poll,{poll=it.take(2000)},label={Text(tr("Choix du vote séparés par |","Poll choices separated by |"))},modifier=Modifier.fillMaxWidth())
  Button(enabled=!busy&&poll.contains("|"),onClick={command("poll",JSONArray(poll.split("|").map{it.trim()}.filter{it.isNotEmpty()}),UUID.randomUUID().toString())}){Text(tr("Créer le vote","Create poll"))}
  }
- rows(r.optJSONArray("polls")).forEach{p->val opts=p.optJSONArray("options")?:JSONArray();val counts=p.optJSONArray("counts")?:JSONArray();Text(tr("Vote","Poll"));for(i in 0 until opts.length())TextButton(enabled=!busy&&p.optBoolean("open")&&!p.optBoolean("voted"),onClick={command("vote",i,p.optString("id"))}){Text(opts.optString(i)+" ("+counts.optInt(i)+")")};if(isHost&&p.optBoolean("open"))TextButton(enabled=!busy,onClick={command("close_poll",null,p.optString("id"))}){Text(tr("Clôturer","Close"))}}
- if(isHost)rows(r.optJSONArray("participants")).filter{it.optString("memberId")!=session.memberId}.forEach{p->val id=p.optString("memberId");Text(displayName(id));TextButton(enabled=!busy,onClick={command("mute",null,id)}){Text(tr("Couper le micro","Mute"))};TextButton(enabled=!busy,onClick={command("screen",!p.optBoolean("screen"),id)}){Text(if(p.optBoolean("screen"))tr("Retirer partage","Revoke share")else tr("Autoriser partage","Allow share"))}}
+ if(isHost){
+ Text(tr("Enquête Premium anonyme","Anonymous Premium survey"))
+ OutlinedTextField(surveyQuestion,{surveyQuestion=it.take(200)},label={Text(tr("Question","Question"))},modifier=Modifier.fillMaxWidth())
+ OutlinedTextField(surveyOptions,{surveyOptions=it.take(2000)},label={Text(tr("Options séparées par |","Options separated by |"))},modifier=Modifier.fillMaxWidth())
+ Row{Checkbox(surveyMultiple,{surveyMultiple=it});Text(tr("Choix multiples","Multiple choices"))}
+ OutlinedTextField(surveyQuorum,{surveyQuorum=it.take(3)},label={Text(tr("Quorum (%)","Quorum (%)"))},modifier=Modifier.fillMaxWidth())
+ OutlinedTextField(surveyThreshold,{surveyThreshold=it.take(3)},label={Text(tr("Seuil (%)","Threshold (%)"))},modifier=Modifier.fillMaxWidth())
+ Button(enabled=!busy&&surveyQuestion.isNotBlank()&&surveyOptions.contains("|")&&(surveyQuorum.toIntOrNull()?:-1) in 0..100&&(surveyThreshold.toIntOrNull()?:0) in 1..100,onClick={command("survey",JSONObject().put("question",surveyQuestion).put("kind",if(surveyMultiple)"multiple" else "single").put("options",JSONArray(surveyOptions.split("|").map{it.trim()}.filter{it.isNotEmpty()})).put("anonymous",true).put("visibility","closed").put("quorum",surveyQuorum.toInt()).put("threshold",surveyThreshold.toInt()),UUID.randomUUID().toString())}){Text(tr("Créer l’enquête","Create survey"))}
+ }
+ rows(r.optJSONArray("polls")).forEach{p->val opts=p.optJSONArray("options")?:JSONArray();val counts=p.optJSONArray("counts");val pid=p.optString("id");val kind=p.optString("kind","simple");val canVote=!busy&&p.optBoolean("open")&&!p.optBoolean("voted");Text(if(p.isNull("question"))tr("Vote","Poll") else p.optString("question"));if(counts==null)Text(tr("Résultats après clôture","Results after closing"));for(i in 0 until opts.length()){
+ val label=opts.optString(i)+(counts?.let{" ("+it.optInt(i)+")"}?:"")
+ if(kind=="multiple"){Row{Checkbox(i in (surveySelections[pid]?:emptySet()),{checked->val old=surveySelections[pid]?:emptySet();surveySelections=surveySelections+(pid to if(checked)old+i else old-i)},enabled=canVote);Text(label)}}else TextButton(enabled=canVote,onClick={command(if(kind=="simple")"vote" else "survey_vote",if(kind=="simple")i else JSONArray(listOf(i)),pid)}){Text(label)}
+ };if(kind=="multiple")TextButton(enabled=canVote&&!(surveySelections[pid]?:emptySet()).isEmpty(),onClick={command("survey_vote",JSONArray((surveySelections[pid]?:emptySet()).toList()),pid)}){Text(tr("Valider mes choix","Submit choices"))};if(!p.isNull("quorumMet"))Text(tr("Quorum","Quorum")+": "+if(p.optBoolean("quorumMet"))tr("atteint","met") else tr("non atteint","not met"));if(isHost&&p.optBoolean("open"))TextButton(enabled=!busy,onClick={command("close_poll",null,pid)}){Text(tr("Clôturer","Close"))}}
+ if(isHost)rows(r.optJSONArray("participants")).filter{it.optString("memberId")!=session.memberId}.forEach{p->val id=p.optString("memberId");Text(displayName(id));TextButton(enabled=!busy,onClick={command(if(p.optBoolean("mic"))"mute" else "allow_mic",null,id)}){Text(if(p.optBoolean("mic"))tr("Couper le micro","Mute") else tr("Autoriser le micro","Allow microphone"))};TextButton(enabled=!busy,onClick={command("screen",!p.optBoolean("screen"),id)}){Text(if(p.optBoolean("screen"))tr("Retirer partage","Revoke share")else tr("Autoriser partage","Allow share"))}}
  }
  }}
  }}
