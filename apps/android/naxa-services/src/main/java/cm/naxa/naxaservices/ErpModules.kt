@@ -72,11 +72,11 @@ fun AuthorizedSitePicker(
 ) {
     var expanded by remember { mutableStateOf(false) }
     if (siteIds.isEmpty()) {
-        Text("Aucun point de vente n’est affecté à ce compte.", color = MaterialTheme.colorScheme.error)
+        Text(localizedLabel("Aucun point de vente n’est affecté à ce compte.","No location assigned to this account.","Konte ngoo alaa nokkuure jaaygol."), color = MaterialTheme.colorScheme.error)
     } else {
         Box {
             OutlinedButton(onClick = { expanded = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Point de vente : " + (siteLabels[selectedSiteId] ?: selectedSiteId))
+                Text(localizedLabel("Point de vente : ","Location: ","Nokkuure jaaygol : ") + (siteLabels[selectedSiteId] ?: selectedSiteId))
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
                 siteIds.forEachIndexed { index, id ->
@@ -418,17 +418,17 @@ fun CustomersContent(
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                     Text(if (editingCustomerId.isBlank()) "Créer une fiche client" else "Modifier la fiche client", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text("Nom complet") }, singleLine = true)
-                    OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text("Téléphone (facultatif)") }, singleLine = true)
-                    OutlinedTextField(notes, { notes = it }, Modifier.fillMaxWidth(), label = { Text("Notes privées (facultatif)") }, minLines = 2)
+                    OutlinedTextField(name, { name = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Nom complet","Full name","Innde fof")) }, singleLine = true)
+                    OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Téléphone (facultatif)","Phone (optional)","Telefon (so a yiɗi)")) }, singleLine = true)
+                    OutlinedTextField(notes, { notes = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Notes privées (facultatif)","Private notes (optional)","Ɓatakuuji sirri (so a yiɗi)")) }, minLines = 2)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = contactConsent, onCheckedChange = { contactConsent = it })
-                        Text("Le client accepte les communications commerciales et de suivi")
+                        Text(localizedLabel("Le client accepte les communications commerciales et de suivi","Customer consents to business communications and follow-up","Soottotooɗo jaɓii jokkondiral jaaygol e rewindo"))
                     }
-                    Text("Adresse de prestation / livraison à domicile", fontWeight = FontWeight.SemiBold)
-                    OutlinedTextField(addressLine, { addressLine = it }, Modifier.fillMaxWidth(), label = { Text("Adresse (facultatif)") }, singleLine = true)
-                    OutlinedTextField(neighborhood, { neighborhood = it }, Modifier.fillMaxWidth(), label = { Text("Quartier") }, singleLine = true)
-                    OutlinedTextField(landmark, { landmark = it }, Modifier.fillMaxWidth(), label = { Text("Repère ou consigne d'accès") }, singleLine = true)
+                    Text(localizedLabel("Adresse de prestation / livraison à domicile","Service / home delivery address","Nokkuure golle / jottugol e suudu"), fontWeight = FontWeight.SemiBold)
+                    OutlinedTextField(addressLine, { addressLine = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Adresse (facultatif)","Address (optional)","Nokkuure (so a yiɗi)")) }, singleLine = true)
+                    OutlinedTextField(neighborhood, { neighborhood = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Quartier","Neighborhood","Wuro")) }, singleLine = true)
+                    OutlinedTextField(landmark, { landmark = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Repère ou consigne d'accès","Landmark or access instructions","Maantore walla laawol naatugol")) }, singleLine = true)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = locationConsent, onCheckedChange = {
                             locationConsent = it
@@ -437,7 +437,7 @@ fun CustomersContent(
                                 locationMessage = "Coordonnées GPS effacées du formulaire."
                             }
                         })
-                        Text("Le client autorise l'enregistrement de sa position pour le service ou la livraison demandée.")
+                        Text(localizedLabel("Le client autorise l'enregistrement de sa position pour le service ou la livraison demandée.","Customer consents to saving their location for the requested service or delivery.","Soottotooɗo yamiri danndude nokkuure mum ngam golle walla jottugol ɗaɓɓitaangol."))
                     }
                     OutlinedButton(
                         onClick = {
@@ -456,13 +456,13 @@ fun CustomersContent(
                         },
                         enabled = locationConsent && !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Récupérer une position GPS récente") }
+                    ) { Text(localizedLabel("Récupérer une position GPS récente","Get recent GPS location","Heɓ nokkuure GPS hesere")) }
                     if (latitude.isNotBlank() && longitude.isNotBlank()) {
-                        Text("Latitude : $latitude · Longitude : $longitude", style = MaterialTheme.typography.bodySmall)
-                        if (locationAccuracy.isNotBlank()) Text("Précision annoncée : $locationAccuracy m", style = MaterialTheme.typography.bodySmall)
+                        Text(localizedLabel("Latitude : $latitude · Longitude : $longitude","Latitude: $latitude · Longitude: $longitude","Latitude : $latitude · Longitude : $longitude"), style = MaterialTheme.typography.bodySmall)
+                        if (locationAccuracy.isNotBlank()) Text(localizedLabel("Précision annoncée : $locationAccuracy m","Reported accuracy: $locationAccuracy m","Feewugol : $locationAccuracy m"), style = MaterialTheme.typography.bodySmall)
                     }
                     if (!locationMessage.isNullOrBlank()) Text(locationMessage!!, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                    Text("La géolocalisation est facultative. Pas de suivi continu du client ; l'adresse peut être saisie sans GPS.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(localizedLabel("La géolocalisation est facultative. Pas de suivi continu du client ; l'adresse peut être saisie sans GPS.","Location is optional. Customers are not tracked continuously; an address can be entered without GPS.","GPS wonaa waajib. Soottotooɗo rewindotaake sahaa fof; nokkuure winndetee tawa GPS alaa."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
                     Button(
                         onClick = {
@@ -540,7 +540,7 @@ fun CustomersContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                    Text("Programmer une relance client", fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Programmer une relance client","Schedule customer follow-up","Teeltu rewindo soottotooɗo"), fontWeight = FontWeight.Bold)
                     Text(
                         selectedCustomer?.displayName?.let { "Client sélectionné : $it" } ?: "Sélectionne d'abord un client dans la liste ci-dessous.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -548,16 +548,16 @@ fun CustomersContent(
                     OutlinedTextField(followUpTitle, { followUpTitle = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Objet du suivi","Follow-up subject","Ko rewindo")) }, singleLine = true)
                     Text(localizedLabel("Fréquence","Frequency","Sahaa"), fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { followUpFrequency = "weekly" }, enabled = followUpFrequency != "weekly") { Text("Chaque semaine") }
-                        OutlinedButton(onClick = { followUpFrequency = "monthly" }, enabled = followUpFrequency != "monthly") { Text("Chaque mois") }
+                        OutlinedButton(onClick = { followUpFrequency = "weekly" }, enabled = followUpFrequency != "weekly") { Text(localizedLabel("Chaque semaine","Every week","Yontere kala")) }
+                        OutlinedButton(onClick = { followUpFrequency = "monthly" }, enabled = followUpFrequency != "monthly") { Text(localizedLabel("Chaque mois","Every month","Lewru kala")) }
                     }
-                    Text("Canal prévu", fontWeight = FontWeight.SemiBold)
+                    Text(localizedLabel("Canal prévu","Planned channel","Laawol jokkondiral"), fontWeight = FontWeight.SemiBold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedButton(onClick = { followUpChannel = "in_person" }, enabled = followUpChannel != "in_person") { Text("Sur place") }
+                        OutlinedButton(onClick = { followUpChannel = "in_person" }, enabled = followUpChannel != "in_person") { Text(localizedLabel("Sur place","In person","E nokkuure")) }
                         OutlinedButton(onClick = { followUpChannel = "phone" }, enabled = followUpChannel != "phone") { Text(localizedLabel("Téléphone","Phone","Telefon")) }
                         OutlinedButton(onClick = { followUpChannel = "whatsapp" }, enabled = followUpChannel != "whatsapp") { Text("WhatsApp") }
                     }
-                    OutlinedTextField(followUpNotes, { followUpNotes = it }, Modifier.fillMaxWidth(), label = { Text("Consignes de relance (facultatif)") }, minLines = 2)
+                    OutlinedTextField(followUpNotes, { followUpNotes = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Consignes de relance (facultatif)","Follow-up instructions (optional)","Yamirooje rewindo (so a yiɗi)")) }, minLines = 2)
                     if (!followUpError.isNullOrBlank()) Text(followUpError!!, color = MaterialTheme.colorScheme.error)
                     Button(
                         onClick = {
@@ -579,13 +579,13 @@ fun CustomersContent(
                         },
                         enabled = selectedCustomer != null && !busy,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Enregistrer la routine") }
+                    ) { Text(localizedLabel("Enregistrer la routine","Save routine","Danndu rewindo")) }
                 }
             }
         }
 
-        item { Text("Clients (" + visible.size + ")", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (visible.isEmpty()) item { Text("Aucun client correspondant sur ce point de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text(localizedLabel("Clients (","Customers (","Soottotooɓe (") + visible.size + ")", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (visible.isEmpty()) item { Text(localizedLabel("Aucun client correspondant sur ce point de vente.","No matching customer at this location.","Alaa soottotooɗo nannduɗo e nokkuure ndee."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(visible) { customer ->
             Card(
                 onClick = { selectedCustomerId = customer.id },
@@ -596,10 +596,10 @@ fun CustomersContent(
                 Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(customer.displayName, fontWeight = FontWeight.Bold)
                     if (customer.phoneContact.isNotBlank()) Text(customer.phoneContact)
-                    if (customer.addressLine.isNotBlank()) Text("Adresse : " + customer.addressLine)
-                    if (customer.neighborhood.isNotBlank()) Text("Quartier : " + customer.neighborhood)
-                    if (customer.landmark.isNotBlank()) Text("Repère : " + customer.landmark)
-                    if (customer.latitude != null && customer.longitude != null) Text("GPS enregistré avec consentement")
+                    if (customer.addressLine.isNotBlank()) Text(localizedLabel("Adresse : ","Address: ","Nokkuure : ") + customer.addressLine)
+                    if (customer.neighborhood.isNotBlank()) Text(localizedLabel("Quartier : ","Neighborhood: ","Wuro : ") + customer.neighborhood)
+                    if (customer.landmark.isNotBlank()) Text(localizedLabel("Repère : ","Landmark: ","Maantore : ") + customer.landmark)
+                    if (customer.latitude != null && customer.longitude != null) Text(localizedLabel("GPS enregistré avec consentement","GPS saved with consent","GPS danndaama e jaɓugol"))
                     if (customer.notesPrivate.isNotBlank()) Text(customer.notesPrivate, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(if (customer.contactConsent) "Consentement de contact enregistré" else "Aucun consentement de contact", style = MaterialTheme.typography.labelSmall)
                     Text(if (customer.locationConsentAtMillis != null) "GPS autorisé pour le service demandé" else "Aucune coordonnée GPS conservée", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -633,8 +633,8 @@ fun CustomersContent(
             }
         }
 
-        item { Text("Routines de relance", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (followUps.isEmpty()) item { Text("Aucune routine de relance sur ce point de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text(localizedLabel("Routines de relance","Follow-up routines","Laabi rewindo"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (followUps.isEmpty()) item { Text(localizedLabel("Aucune routine de relance sur ce point de vente.","No follow-up routine for this location.","Alaa rewindo e nokkuure ndee."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(followUps) { followUp ->
             val owner = customers.firstOrNull { it.id == followUp.customerId }
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
@@ -663,13 +663,13 @@ fun CustomersContent(
                                     .onFailure { followUpError = it.message ?: "Mise à jour impossible." }
                             }
                         }
-                    ) { Text("Marquer comme effectuée") }
+                    ) { Text(localizedLabel("Marquer comme effectuée","Mark as completed","Maanto ko timmii")) }
                 }
             }
         }
 
-        item { Text("Historique des suivis récents", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (contactEvents.isEmpty()) item { Text("Aucun événement de suivi enregistré.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text(localizedLabel("Historique des suivis récents","Recent follow-up history","Jaŋtol rewindo sakkitiiɗo"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (contactEvents.isEmpty()) item { Text(localizedLabel("Aucun événement de suivi enregistré.","No follow-up activity recorded.","Alaa rewindo danndaango."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(contactEvents.take(20)) { event ->
             val owner = customers.firstOrNull { it.id == event.customerId }
             Text(
@@ -809,45 +809,44 @@ fun StockContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Importation des stocks (CSV)", fontWeight = FontWeight.Bold)
-                    Text("Le template adapte ses colonnes aux champs sélectionnés. Colonnes obligatoires : SKU, désignation, unité et quantité initiale.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                    Text(localizedLabel("Importation des stocks (CSV)","Inventory import (CSV)","Naatnugol jawdi (CSV)"), fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Le template adapte ses colonnes aux champs sélectionnés. Colonnes obligatoires : SKU, désignation, unité et quantité initiale.","The template adapts to selected fields. Required columns: SKU, name, unit and initial quantity.","Kayit nanndinta e humpito suɓaango. SKU, innde, unit e keewal arande ko waajib."), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = includeReorderField, onCheckedChange = { includeReorderField = it })
                         Text(localizedLabel("Seuil d'alerte","Alert threshold","Keewal les ngam tintinol"))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = includePurchasePriceField, onCheckedChange = { includePurchasePriceField = it })
-                        Text("Coût d'achat")
+                        Text(localizedLabel("Coût d'achat","Purchase cost","Njoɓdi soodugol"))
                     }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(checked = includeSellingPriceField, onCheckedChange = { includeSellingPriceField = it })
-                        Text("Prix de vente")
+                        Text(localizedLabel("Prix de vente","Sale price","Njoɓdi jaaygol"))
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = { templateLauncher.launch("naxa-services-stock-template.csv") },
                             modifier = Modifier.weight(1f)
-                        ) { Text("Télécharger le template") }
+                        ) { Text(localizedLabel("Télécharger le template","Download template","Heɓ kayit winndugol")) }
                         Button(
                             onClick = { importLauncher.launch(arrayOf("text/*", "application/csv", "application/vnd.ms-excel")) },
                             modifier = Modifier.weight(1f)
-                        ) { Text("Importer le fichier des stocks") }
+                        ) { Text(localizedLabel("Importer le fichier des stocks","Import inventory file","Naatnu fiilde jawdi")) }
                     }
-                    Text("Format pris en charge : CSV UTF-8 (séparateur virgule ou point-virgule). Les lignes et colonnes sont validées avant toute écriture.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(localizedLabel("Format pris en charge : CSV UTF-8 (séparateur virgule ou point-virgule). Les lignes et colonnes sont validées avant toute écriture.","Supported format: UTF-8 CSV (comma or semicolon). Rows and columns are checked before saving.","Format jaɓaangol: CSV UTF-8 (virgule walla point-virgule). Humpito ƴeewtetee hade danndude."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (importPreview.isNotEmpty()) {
-                        Text("Aperçu : $importFileName", fontWeight = FontWeight.SemiBold)
-                        Text("${importPreview.size} ligne(s) valide(s) · $importDuplicateCount SKU déjà présent(s)")
+                        Text(localizedLabel("Aperçu : $importFileName","Preview: $importFileName","Ƴeewndugol : $importFileName"), fontWeight = FontWeight.SemiBold)
+                        Text(localizedLabel("${importPreview.size} ligne(s) valide(s) · $importDuplicateCount SKU déjà présent(s)","${importPreview.size} valid row(s) · $importDuplicateCount existing SKU(s)","${importPreview.size} binndi feewɗi · $importDuplicateCount SKU goodɗi"))
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Checkbox(checked = updateExistingItems, onCheckedChange = { updateExistingItems = it })
-                            Text("Mettre à jour les articles existants (confirmation explicite)")
+                            Text(localizedLabel("Mettre à jour les articles existants (confirmation explicite)","Update existing items (confirm)","Hesɗitin jawdi goodndi (tabbitin)"))
                         }
                         importPreview.take(8).forEach { row ->
-                            Text(
-                                "${row.sku} · ${row.name} · ${row.quantity} ${row.unit} · seuil ${row.reorderLevel}",
+                            Text(localizedLabel("${row.sku} · ${row.name} · ${row.quantity} ${row.unit} · seuil ${row.reorderLevel}","${row.sku} · ${row.name} · ${row.quantity} ${row.unit} · threshold ${row.reorderLevel}","${row.sku} · ${row.name} · ${row.quantity} ${row.unit} · keewal les ${row.reorderLevel}"),
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
-                        if (importPreview.size > 8) Text("… et ${importPreview.size - 8} autre(s) ligne(s)", style = MaterialTheme.typography.bodySmall)
+                        if (importPreview.size > 8) Text(localizedLabel("… et ${importPreview.size - 8} autre(s) ligne(s)","… and ${importPreview.size - 8} other row(s)","… e ${importPreview.size - 8} binndi goɗɗi"), style = MaterialTheme.typography.bodySmall)
                         Button(
                             onClick = {
                                 scope.launch {
@@ -874,7 +873,7 @@ fun StockContent(
                             enabled = !busy && importPreview.isNotEmpty() && (importDuplicateCount == 0 || updateExistingItems),
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (busy) "Import en cours…" else "Confirmer l'import CSV") }
-                        Text("L'import est transactionnel : si une ligne échoue, aucune ligne du lot n'est appliquée. Les quantités initiales et ajustements sont journalisés comme mouvements.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(localizedLabel("L'import est transactionnel : si une ligne échoue, aucune ligne du lot n'est appliquée. Les quantités initiales et ajustements sont journalisés comme mouvements.","If any row fails, none of the batch is saved. Initial quantities and adjustments are recorded as movements.","So gootol jaɓaaka, fof danndaaka. Keewal arande e peewngol ndanndetee e jaŋtol dirtugol."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if (!importMessage.isNullOrBlank()) Text(importMessage!!, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
                 }
@@ -883,16 +882,15 @@ fun StockContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Transferts inter-sites", fontWeight = FontWeight.Bold)
-                    Text(
-                        "Les transferts relient deux points de vente autonomes. La demande et l'approbation ne modifient pas les stocks ; seule la réception confirmée effectue les deux mouvements.",
+                    Text(localizedLabel("Transferts inter-sites","Transfers between locations","Dirtugol hakkunde nokkuuji"), fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Les transferts relient deux points de vente autonomes. La demande et l'approbation ne modifient pas les stocks ; seule la réception confirmée effectue les deux mouvements.","Transfers link two independent locations. Requests and approvals do not change stock; confirmed receipt records both movements.","Dirtugol jokkondirta nokkuuji ɗiɗi. Ɗaɓɓitannde e jaɓugol waylataa jawdi; heɓugol tabbitinaangol tan waylata jawdi ɗiɗi."),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
                     if (session.account.roleCode == "promoter") {
-                        Text("Site source : " + (session.account.activeSites.firstOrNull { it.id == siteId }?.name ?: siteId), fontWeight = FontWeight.SemiBold)
+                        Text(localizedLabel("Site source : ","Source location: ","Nokkuure iwdi : ") + (session.account.activeSites.firstOrNull { it.id == siteId }?.name ?: siteId), fontWeight = FontWeight.SemiBold)
                         if (transferDestinations.isEmpty()) {
-                            Text("Aucun autre point de vente actif n'est disponible dans ce réseau.")
+                            Text(localizedLabel("Aucun autre point de vente actif n'est disponible dans ce réseau.","No other active location in this network.","Alaa nokkuure jaaygol goɗɗere."))
                         } else {
                             transferDestinations.forEach { destination ->
                                 OutlinedButton(
@@ -903,7 +901,7 @@ fun StockContent(
                                 }
                             }
                         }
-                        Text("Article à transférer", fontWeight = FontWeight.SemiBold)
+                        Text(localizedLabel("Article à transférer","Item to transfer","Jawdi dirtetee ndi"), fontWeight = FontWeight.SemiBold)
                         stock.forEach { item ->
                             OutlinedButton(
                                 onClick = { transferItemId = item.id },
@@ -916,7 +914,7 @@ fun StockContent(
                             transferQuantity,
                             { transferQuantity = it },
                             Modifier.fillMaxWidth(),
-                            label = { Text("Quantité à transférer") },
+                            label = { Text(localizedLabel("Quantité à transférer","Quantity to transfer","Keewal dirtetee ngal")) },
                             singleLine = true
                         )
                         if (transferItem != null) {
@@ -961,16 +959,16 @@ fun StockContent(
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(if (transferBusy) "Création…" else "Créer une demande de transfert") }
                     } else {
-                        Text("Les demandes et réceptions inter-sites sont réservées au Promoteur du réseau.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(localizedLabel("Les demandes et réceptions inter-sites sont réservées au Promoteur du réseau.","Only the network owner can request and receive transfers.","Jom nokkuuji tan waawi ɗaɓɓude e jaɓɓude jawdi."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     if (!transferError.isNullOrBlank()) Text(transferError!!, color = MaterialTheme.colorScheme.error)
                     if (!transferMessage.isNullOrBlank()) Text(transferMessage!!, color = MaterialTheme.colorScheme.primary)
                 }
             }
         }
-        item { Text("Demandes de transfert du réseau", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { Text(localizedLabel("Demandes de transfert du réseau","Network transfer requests","Ɗaɓɓitanɗe dirtugol nokkuuji"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
         if (transfers.isEmpty()) {
-            item { Text("Aucune demande de transfert pour ce point de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            item { Text(localizedLabel("Aucune demande de transfert pour ce point de vente.","No transfer requests for this location.","Alaa ɗaɓɓitannde dirtugol e nokkuure ndee."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         items(transfers) { transfer ->
             var transitionReason by rememberSaveable(transfer.id) { mutableStateOf("") }
@@ -994,8 +992,7 @@ fun StockContent(
                             (if (isSourceSite) sourceTransferSiteName else destinationTransferSiteName) +
                             " · Statut : " + transfer.status
                     )
-                    Text(
-                        "Trajet : " + sourceTransferSiteName + " → " + destinationTransferSiteName +
+                    Text(localizedLabel("Trajet : ","Route: ","Laawol : ") + sourceTransferSiteName + " → " + destinationTransferSiteName +
                             " · Quantité : " + (metadata?.optDouble("quantity") ?: 0.0) +
                             " · SKU : " + (metadata?.optString("sku") ?: "—")
                     )
@@ -1008,7 +1005,7 @@ fun StockContent(
                             transitionReason,
                             { transitionReason = it },
                             Modifier.fillMaxWidth(),
-                            label = { Text("Motif obligatoire pour cette étape") }
+                            label = { Text(localizedLabel("Motif obligatoire pour cette étape","Reason required for this step","Daliilu waajib ngam feere ndee")) }
                         )
                         val actions = buildList {
                             if (canApprove) add("approved" to "Approuver la demande")
@@ -1040,7 +1037,7 @@ fun StockContent(
                             ) { Text(label) }
                         }
                     } else if (transfer.status == "approved" && isSourceSite) {
-                        Text("En attente de confirmation physique sur le site destination.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(localizedLabel("En attente de confirmation physique sur le site destination.","Awaiting physical receipt at destination.","Nana fadi tabbitinol heɓugol e nokkuure jaɓɓoore."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     events.take(5).forEach { event ->
                         Text(
@@ -1055,12 +1052,12 @@ fun StockContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant), shape = RoundedCornerShape(18.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Valorisation estimative du point de vente", fontWeight = FontWeight.Bold)
-                    Text("Coût total du stock : " + formatInventoryXaf(stockCostValue))
-                    Text("Valeur de vente théorique : " + formatInventoryXaf(stockSaleValue))
-                    Text("Marge brute potentielle : " + formatInventoryXaf(potentialGrossMargin), fontWeight = FontWeight.Bold)
-                    Text("Articles non valorisés : " + unvaluedItems + " / " + stock.size, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("Estimation fondée sur les coûts et prix saisis. Hors taxes, pertes, remises, frais indirects et mouvements non synchronisés.",
+                    Text(localizedLabel("Valorisation estimative du point de vente","Estimated inventory valuation","Keewal ceede jawdi tanƴaangal"), fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Coût total du stock : ","Total stock cost: ","Njoɓdi jawdi fof : ") + formatInventoryXaf(stockCostValue))
+                    Text(localizedLabel("Valeur de vente théorique : ","Estimated sale value: ","Ceede jaaygol tanƴaaɗe : ") + formatInventoryXaf(stockSaleValue))
+                    Text(localizedLabel("Marge brute potentielle : ","Potential gross margin: ","Ceede heddiiɗe tanƴaaɗe : ") + formatInventoryXaf(potentialGrossMargin), fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Articles non valorisés : ","Items without valuation: ","Jawdi ɗe njoɓdi mum anndaaka : ") + unvaluedItems + " / " + stock.size, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(localizedLabel("Estimation fondée sur les coûts et prix saisis. Hors taxes, pertes, remises, frais indirects et mouvements non synchronisés.","Estimate based on entered costs and prices, excluding taxes, losses, discounts, indirect expenses and unsynced movements.","Tanƴugol e njoɓdi winndaaɗi, alaa sagalle, majjugol, ustugol njoɓdi, njoɓdi goɗɗi e golle ɗe hesɗitinaaka."),
                         color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
             }
@@ -1068,12 +1065,12 @@ fun StockContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Créer un article", fontWeight = FontWeight.Bold)
-                    OutlinedTextField(itemName, { itemName = it }, Modifier.fillMaxWidth(), label = { Text("Désignation") }, singleLine = true)
-                    OutlinedTextField(sku, { sku = it }, Modifier.fillMaxWidth(), label = { Text("Référence / SKU") }, singleLine = true)
-                    OutlinedTextField(unit, { unit = it }, Modifier.fillMaxWidth(), label = { Text("Unité (pièce, litre, kg…)") }, singleLine = true)
-                    OutlinedTextField(reorder, { reorder = it }, Modifier.fillMaxWidth(), label = { Text("Seuil d’alerte") }, singleLine = true)
-                    OutlinedTextField(newSupplierWhatsApp, { newSupplierWhatsApp = it }, Modifier.fillMaxWidth(), label = { Text("WhatsApp fournisseur (indicatif pays + numéro)") }, singleLine = true)
+                    Text(localizedLabel("Créer un article","Create item","Sos jawdi"), fontWeight = FontWeight.Bold)
+                    OutlinedTextField(itemName, { itemName = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Désignation","Item name","Innde jawdi")) }, singleLine = true)
+                    OutlinedTextField(sku, { sku = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Référence / SKU","Reference / SKU","Innol / SKU")) }, singleLine = true)
+                    OutlinedTextField(unit, { unit = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Unité (pièce, litre, kg…)","Unit (piece, litre, kg…)","Unit (gootal, litre, kg…)")) }, singleLine = true)
+                    OutlinedTextField(reorder, { reorder = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Seuil d’alerte","Alert threshold","Keewal les ngam tintinol")) }, singleLine = true)
+                    OutlinedTextField(newSupplierWhatsApp, { newSupplierWhatsApp = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("WhatsApp fournisseur (indicatif pays + numéro)","Supplier WhatsApp (country code + number)","WhatsApp hokkooɗo jawdi (innol leydi + tonngoode)")) }, singleLine = true)
                     Button(
                         onClick = {
                             scope.launch {
@@ -1086,12 +1083,12 @@ fun StockContent(
                         },
                         enabled = !busy && siteId.isNotBlank() && itemName.isNotBlank() && unit.isNotBlank() && (reorder.replace(",", ".").toDoubleOrNull() ?: -1.0) >= 0.0,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Ajouter l’article") }
+                    ) { Text(localizedLabel("Ajouter l’article","Add item","Ɓeydu jawdi")) }
                 }
             }
         }
-        item { Text("Articles du point de vente", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (stock.isEmpty()) item { Text("Aucun article configuré.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text(localizedLabel("Articles du point de vente","Location inventory","Jawdi nokkuure jaaygol"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (stock.isEmpty()) item { Text(localizedLabel("Aucun article configuré.","No items configured.","Alaa jawdi teeltaandi."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(stock) { item ->
             Card(
                 onClick = { selectedItemId = item.id; supplierWhatsApp = item.supplierWhatsApp },
@@ -1103,9 +1100,9 @@ fun StockContent(
                             Text(item.name, fontWeight = FontWeight.Bold)
                             Text(item.sku.ifBlank { "Sans référence" } + " · " + item.unit, style = MaterialTheme.typography.bodySmall)
                             val value = valuations.firstOrNull { it.inventoryItemId == item.id }
-                            Text("Coût unitaire : " + (value?.unitCostXaf?.toString() ?: "—") + " F", style = MaterialTheme.typography.bodySmall)
-                            Text("Prix de vente : " + (value?.sellingPriceXaf?.toString() ?: "—") + " F", style = MaterialTheme.typography.bodySmall)
-                            Text("WhatsApp fournisseur : " + (item.supplierWhatsApp.ifBlank { "Non renseigné" }), style = MaterialTheme.typography.bodySmall)
+                            Text(localizedLabel("Coût unitaire : ","Unit cost: ","Njoɓdi gootal : ") + (value?.unitCostXaf?.toString() ?: "—") + " F", style = MaterialTheme.typography.bodySmall)
+                            Text(localizedLabel("Prix de vente : ","Sale price: ","Njoɓdi jaaygol : ") + (value?.sellingPriceXaf?.toString() ?: "—") + " F", style = MaterialTheme.typography.bodySmall)
+                            Text(localizedLabel("WhatsApp fournisseur : ","Supplier WhatsApp: ","WhatsApp hokkooɗo jawdi : ") + (item.supplierWhatsApp.ifBlank { "Non renseigné" }), style = MaterialTheme.typography.bodySmall)
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text(item.quantity.toString() + " " + item.unit, fontWeight = FontWeight.Bold)
@@ -1133,7 +1130,7 @@ fun StockContent(
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Préparer la commande sur WhatsApp · " + suggestedQty + " " + item.unit) }
+                        ) { Text(localizedLabel("Préparer la commande sur WhatsApp · ","Prepare order on WhatsApp · ","Heblu ɗaɓɓitannde e WhatsApp · ") + suggestedQty + " " + item.unit) }
                     }
                 }
             }
@@ -1142,9 +1139,9 @@ fun StockContent(
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Mouvement : " + selected.name, fontWeight = FontWeight.Bold)
+                        Text(localizedLabel("Mouvement : ","Movement: ","Dirtugol : ") + selected.name, fontWeight = FontWeight.Bold)
                         if (supplierWhatsApp.isBlank()) supplierWhatsApp = selected.supplierWhatsApp
-                        OutlinedTextField(supplierWhatsApp, { supplierWhatsApp = it }, Modifier.fillMaxWidth(), label = { Text("WhatsApp fournisseur (indicatif pays + numéro)") }, singleLine = true)
+                        OutlinedTextField(supplierWhatsApp, { supplierWhatsApp = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("WhatsApp fournisseur (indicatif pays + numéro)","Supplier WhatsApp (country code + number)","WhatsApp hokkooɗo jawdi (innol leydi + tonngoode)")) }, singleLine = true)
                         OutlinedButton(
                             onClick = {
                                 scope.launch {
@@ -1154,12 +1151,12 @@ fun StockContent(
                                 }
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Enregistrer le contact fournisseur") }
+                        ) { Text(localizedLabel("Enregistrer le contact fournisseur","Save supplier contact","Danndu telefon hokkooɗo jawdi")) }
                         val savedValue = valuations.firstOrNull { it.inventoryItemId == selected.id }
                         if (unitCostXaf.isBlank()) unitCostXaf = savedValue?.unitCostXaf?.toString() ?: ""
                         if (sellingPriceXaf.isBlank()) sellingPriceXaf = savedValue?.sellingPriceXaf?.toString() ?: ""
-                        OutlinedTextField(unitCostXaf, { unitCostXaf = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Coût d’achat unitaire (FCFA)") }, singleLine = true)
-                        OutlinedTextField(sellingPriceXaf, { sellingPriceXaf = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text("Prix de vente unitaire (FCFA)") }, singleLine = true)
+                        OutlinedTextField(unitCostXaf, { unitCostXaf = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Coût d’achat unitaire (FCFA)","Unit purchase cost (XAF)","Njoɓdi soodugol gootal (FCFA)")) }, singleLine = true)
+                        OutlinedTextField(sellingPriceXaf, { sellingPriceXaf = it.filter(Char::isDigit) }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Prix de vente unitaire (FCFA)","Unit sale price (XAF)","Njoɓdi jaaygol gootal (FCFA)")) }, singleLine = true)
                         Button(
                             onClick = {
                                 scope.launch {
@@ -1174,14 +1171,14 @@ fun StockContent(
                             },
                             enabled = unitCostXaf.toLongOrNull() != null && sellingPriceXaf.toLongOrNull() != null,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Enregistrer les coûts et la marge brute unitaire") }
+                        ) { Text(localizedLabel("Enregistrer les coûts et la marge brute unitaire","Save costs and unit margin","Danndu njoɓdi e ceede heddiiɗe gootal")) }
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             listOf("in", "consumption", "loss", "adjustment").forEach { type ->
                                 OutlinedButton(onClick = { movementType = type }) { Text(if (movementType == type) "✓ " + type else type) }
                             }
                         }
                         OutlinedTextField(quantity, { quantity = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Quantité","Quantity","Keewal")) }, singleLine = true)
-                        OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text("Motif obligatoire") }, singleLine = true)
+                        OutlinedTextField(reason, { reason = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Motif obligatoire","Reason required","Daliilu waajib")) }, singleLine = true)
                         Button(
                             onClick = {
                                 scope.launch {
@@ -1199,7 +1196,7 @@ fun StockContent(
                             },
                             enabled = !busy && (quantity.replace(",", ".").toDoubleOrNull()?.let { it != 0.0 && (movementType == "adjustment" || it > 0.0) } == true) && reason.trim().length >= 3,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Valider le mouvement") }
+                        ) { Text(localizedLabel("Valider le mouvement","Confirm movement","Tabbitin dirtugol")) }
                     }
                 }
             }
@@ -1394,19 +1391,19 @@ fun ReportsContent(
                 Text(if (busy) "Calcul…" else "Actualiser le rapport du jour")
             }
             if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
-            if (!generatedAt.isNullOrBlank()) Text("Calculé le " + generatedAt!!, style = MaterialTheme.typography.labelSmall)
+            if (!generatedAt.isNullOrBlank()) Text(localizedLabel("Calculé le ","Calculated on ","Limtaama ñalnde ") + generatedAt!!, style = MaterialTheme.typography.labelSmall)
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                    Text("Consolidation indicative des points autorisés", fontWeight = FontWeight.Bold)
-                    Text("Chiffre d'affaires confirmé : " + totalSales + " FCFA")
+                    Text(localizedLabel("Consolidation indicative des points autorisés","Indicative overview of authorized locations","Limooje nokkuuji yamiraaɗi tanƴaaɗe"), fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Chiffre d'affaires confirmé : ","Confirmed revenue: ","Ceede jaaygol tabbitinaaɗe : ") + totalSales + " FCFA")
                     Text(localizedLabel("Coût des ventes connu : ","Known cost of sales: ","Njoɓdi jaaygol anndaaɗi : ") + totalCostOfGoods + " FCFA")
-                    Text("Charges d'exploitation enregistrées : " + totalExpenses + " FCFA")
+                    Text(localizedLabel("Charges d'exploitation enregistrées : ","Recorded operating expenses: ","Njoɓdi golle danndaaɗi : ") + totalExpenses + " FCFA")
                     Text(localizedLabel("Marge brute : ","Gross margin: ","Ceede heddiiɗe : ") + (grossProfit?.let { "$it FCFA" } ?: "non calculable : au moins une vente n'a pas de coût direct documenté"))
                     Text(localizedLabel("Résultat opérationnel indicatif : ","Indicative operating result: ","Limooje golle tanƴaaɗe : ") + (operatingResult?.let { "$it FCFA" } ?: "non déterminable avec les coûts directs manquants"))
-                    Text("Règlements fournisseurs : " + totalSupplierPayments + " FCFA · sortie de dette, pas une charge supplémentaire")
-                    Text("Les règlements fournisseurs restent inclus dans la clôture de caisse lorsqu'ils sont en espèces, mais séparés du résultat. Les caisses, stocks et équipes restent détaillés ci-dessous.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(localizedLabel("Règlements fournisseurs : ","Supplier payments: ","Njoɓdi hokkooɓe jawdi : ") + totalSupplierPayments + " FCFA · sortie de dette, pas une charge supplémentaire")
+                    Text(localizedLabel("Les règlements fournisseurs restent inclus dans la clôture de caisse lorsqu'ils sont en espèces, mais séparés du résultat. Les caisses, stocks et équipes restent détaillés ci-dessous.","Cash supplier payments are included in register closing, separately from profit. Registers, stock and staff are detailed below.","Njoɓdi hokkooɓe jawdi e ceede juuɗe limtetee e uddude keesu, kono seertii e limooje njariñ. Keesuuji, jawdi e golluɓe kollirtee les ɗoo."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -1419,12 +1416,12 @@ fun ReportsContent(
                     Text(localizedLabel("Charges d'exploitation : ","Operating expenses: ","Njoɓdi golle : ") + row.expensesXaf + " FCFA")
                     Text(localizedLabel("Marge brute : ","Gross margin: ","Ceede heddiiɗe : ") + (row.grossProfitXaf?.let { "$it FCFA" } ?: "non calculable : coût direct incomplet"))
                     Text(localizedLabel("Résultat opérationnel indicatif : ","Indicative operating result: ","Limooje golle tanƴaaɗe : ") + (row.operatingResultXaf?.let { "$it FCFA" } ?: "non déterminable"))
-                    Text("Règlements fournisseurs : " + row.supplierPaymentsXaf + " FCFA · hors charges d'exploitation")
-                    Text("Rendez-vous : " + row.appointments + " · Tickets pressing : " + row.pressingTickets)
+                    Text(localizedLabel("Règlements fournisseurs : ","Supplier payments: ","Njoɓdi hokkooɓe jawdi : ") + row.supplierPaymentsXaf + " FCFA · hors charges d'exploitation")
+                    Text(localizedLabel("Rendez-vous : ","Appointments: ","Sahaaaji : ") + row.appointments + " · Tickets pressing : " + row.pressingTickets)
                 }
             }
         }
-        if (rows.isEmpty() && !busy) item { Text("Aucune donnée disponible pour vos points de vente.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (rows.isEmpty() && !busy) item { Text(localizedLabel("Aucune donnée disponible pour vos points de vente.","No data available for your locations.","Alaa humpito e nokkuuji jaaygol maa."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
     }
 }
 
@@ -1515,9 +1512,9 @@ internal fun OrganizationWorkspaceContent(
                 item {
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                         Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text("Brouillon en attente de confirmation", fontWeight = FontWeight.Bold)
+                            Text(localizedLabel("Brouillon en attente de confirmation","Draft awaiting confirmation","Golle heblitteeɗe nana fadi tabbitinol"), fontWeight = FontWeight.Bold)
                             Text(profile!!.displayName + " · " + profile!!.businessMode)
-                            Text("Cette modification est en attente de confirmation.")
+                            Text(localizedLabel("Cette modification est en attente de confirmation.","This change is awaiting confirmation.","Waylugol ngol nana fadi tabbitinol."))
                             OutlinedButton(
                                 onClick = {
                                     displayName = profile!!.displayName
@@ -1525,7 +1522,7 @@ internal fun OrganizationWorkspaceContent(
                                     locale = profile!!.defaultLocale
                                 },
                                 modifier = Modifier.fillMaxWidth()
-                            ) { Text("Reprendre ce brouillon") }
+                            ) { Text(localizedLabel("Reprendre ce brouillon","Resume draft","Jokku e golle heblitteeɗe")) }
                         }
                     }
                 }
@@ -1533,11 +1530,11 @@ internal fun OrganizationWorkspaceContent(
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                        Text("Profil de l’organisation", fontWeight = FontWeight.Bold)
-                        OutlinedTextField(displayName, { displayName = it }, Modifier.fillMaxWidth(), label = { Text("Nom commercial") }, singleLine = true, enabled = canManageNetwork)
-                        Text("Choisir le modèle d’exploitation", fontWeight = FontWeight.SemiBold)
+                        Text(localizedLabel("Profil de l’organisation","Business profile","Humpito fedde"), fontWeight = FontWeight.Bold)
+                        OutlinedTextField(displayName, { displayName = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Nom commercial","Trade name","Innde jaaygol")) }, singleLine = true, enabled = canManageNetwork)
+                        Text(localizedLabel("Choisir le modèle d’exploitation","Choose operating model","Suɓo no golle ɗowtirtee"), fontWeight = FontWeight.SemiBold)
                         if (!canManageNetwork) {
-                            Text("Le modèle d’exploitation est administré par le Promoteur de l’organisation.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(localizedLabel("Le modèle d’exploitation est administré par le Promoteur de l’organisation.","The business owner manages the operating model.","Jom golle ɗowtata laawol golle."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         listOf(
                             "solo" to "PME autonome · un point de vente",
@@ -1552,7 +1549,7 @@ internal fun OrganizationWorkspaceContent(
                             OutlinedButton(onClick = { locale = "fr" }, enabled = canManageNetwork && locale != "fr") { Text(if (locale == "fr") "✓ Français" else "Français") }
                             OutlinedButton(onClick = { locale = "en" }, enabled = canManageNetwork && locale != "en") { Text(if (locale == "en") "✓ English" else "English") }
                             OutlinedButton(onClick = { locale = "ff-CM" }, enabled = canManageNetwork && locale != "ff-CM") { Text(if (locale == "ff-CM") "✓ Fulfulde" else "Fulfulde") }
-                            if (locale == "ff-CM") Text("Traductions Fulfulde en cours de validation ; les contenus non traduits restent en français.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            if (locale == "ff-CM") Text(localizedLabel("Traductions Fulfulde en cours de validation ; les contenus non traduits restent en français.","Fulfulde translations are under review; untranslated content remains in French.","Waylugol ɗemngal Fulfulde nana ƴeewtee; binndi ɗi waylaaka keddii e Français."), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                         }
                         if (!error.isNullOrBlank()) Text(error!!, color = MaterialTheme.colorScheme.error)
                         Button(
@@ -1581,24 +1578,24 @@ internal fun OrganizationWorkspaceContent(
                             },
                             enabled = !busy && canManageNetwork && orgId.isNotBlank() && displayName.isNotBlank(),
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Enregistrer le profil et le modèle") }
+                        ) { Text(localizedLabel("Enregistrer le profil et le modèle","Save profile and operating model","Danndu humpito e laawol golle")) }
                     }
                 }
                 if (!canManageNetwork) {
-                    Text("Lecture seule pour ce rôle : le Promoteur conserve l’arbitrage du modèle d’organisation.")
+                    Text(localizedLabel("Lecture seule pour ce rôle : le Promoteur conserve l’arbitrage du modèle d’organisation.","View-only: the owner controls the operating model.","Yiyde tan: jom golle suɓata laawol golle."))
                 }
             }
             item {
-                Text("Règles d’autonomie", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("PME : caisse, stock, équipe et activité d’un seul établissement.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Responsable multi-emplacements : plusieurs postes et plannings dans un même établissement ; caisse rattachée au site.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Promoteur : chaque point de vente conserve sa caisse, son stock, son équipe et ses opérations. Le réseau consolide seulement les indicateurs autorisés.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(localizedLabel("Règles d’autonomie","Independent operation rules","Laabi golle keeriiɗe"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(localizedLabel("PME : caisse, stock, équipe et activité d’un seul établissement.","Independent business: register, inventory, team and activity at one location.","Golle seeɗa: keesu, jawdi, golluɓe e golle nokkuure wootere."), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(localizedLabel("Responsable multi-emplacements : plusieurs postes et plannings dans un même établissement ; caisse rattachée au site.","Multi-workstation manager: several workstations and schedules in one location; shared location register.","Hooreejo nokkuuji golle: nokkuuji e sahaaaji keewɗi e nokkuure wootere; keesu nokkuure."), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(localizedLabel("Promoteur : chaque point de vente conserve sa caisse, son stock, son équipe et ses opérations. Le réseau consolide seulement les indicateurs autorisés.","Owner: each location keeps its own register, inventory, team and operations. Only authorized indicators are combined.","Jom golle: nokkuure kala e keesu, jawdi, golluɓe e golle mum. Limooje yamiraaɗe tan renndinetee."), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         if (route == AppRoute.NETWORK || route == AppRoute.SITES) {
             item {
-                Text("Vos points de vente", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                if (session.account.activeSites.isEmpty()) Text("Aucun point de vente affecté.")
+                Text(localizedLabel("Vos points de vente","Your locations","Nokkuuji jaaygol maa"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                if (session.account.activeSites.isEmpty()) Text(localizedLabel("Aucun point de vente affecté.","No assigned locations.","Alaa nokkuure jaaygol yamiraande."))
                 else session.account.activeSites.forEachIndexed { index, site ->
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.fillMaxWidth().padding(13.dp)) {
@@ -1610,7 +1607,7 @@ internal fun OrganizationWorkspaceContent(
                 }
             }
             item {
-                Text("Brouillons locaux non activés", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(localizedLabel("Brouillons locaux non activés","Inactive drafts","Golle heblitteeɗe ɗe udditaaka"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 localSites.filter { it.syncStatus != "server_confirmed" }.forEach { site ->
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.fillMaxWidth().padding(13.dp)) {
@@ -1626,9 +1623,9 @@ internal fun OrganizationWorkspaceContent(
                     Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(localizedLabel("Créer un point de vente","Create location","Sos nokkuure jaaygol"), fontWeight = FontWeight.Bold)
-                            Text("Le site sera disponible après confirmation.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                            OutlinedTextField(siteCode, { siteCode = it }, Modifier.fillMaxWidth(), label = { Text("Code interne") }, singleLine = true)
-                            OutlinedTextField(siteName, { siteName = it }, Modifier.fillMaxWidth(), label = { Text("Nom du point de vente") }, singleLine = true)
+                            Text(localizedLabel("Le site sera disponible après confirmation.","The location will be available after confirmation.","Nokkuure ndee maa heɓee caggal tabbitinol."), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                            OutlinedTextField(siteCode, { siteCode = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Code interne","Internal code","Innol")) }, singleLine = true)
+                            OutlinedTextField(siteName, { siteName = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Nom du point de vente","Location name","Innde nokkuure jaaygol")) }, singleLine = true)
                             OutlinedTextField(address, { address = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Adresse","Address","Nokkuure")) }, singleLine = true)
                             OutlinedTextField(phone, { phone = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Téléphone","Phone","Telefon")) }, singleLine = true)
                             Button(
@@ -1651,8 +1648,8 @@ internal fun OrganizationWorkspaceContent(
                                 },
                                 enabled = !busy && canManageNetwork && mode == "multi_site_network" && siteCode.isNotBlank() && siteCode.trim().length >= 2 && siteName.isNotBlank(),
                                 modifier = Modifier.fillMaxWidth()
-                            ) { Text("Créer le brouillon du point de vente") }
-                            if (!canManageNetwork) Text("La création des points de vente est réservée au rôle promoteur.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            ) { Text(localizedLabel("Créer le brouillon du point de vente","Create location draft","Heblu nokkuure jaaygol")) }
+                            if (!canManageNetwork) Text(localizedLabel("La création des points de vente est réservée au rôle promoteur.","Only the business owner can create locations.","Jom golle tan waawi sosde nokkuuji jaaygol."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -1662,22 +1659,22 @@ internal fun OrganizationWorkspaceContent(
         }
         if (route == AppRoute.WORKSTATIONS) {
             item {
-                Text("Emplacement dans un établissement", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(localizedLabel("Emplacement dans un établissement","Workstation at a location","Nokkuure golle e nokkuure jaaygol"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 AuthorizedSitePicker(
                     session.account.activeSiteIds,
                     selectedSite,
                     session.account.activeSites.associate { it.id to it.name }
                 ) { selectedSite = it }
-                Text("Choisissez un point de vente autorisé.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Exemples : fauteuil de coiffure, comptoir pressing, atelier, réception ou caisse.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(localizedLabel("Choisissez un point de vente autorisé.","Choose an authorized location.","Suɓo nokkuure jaaygol yamiraande."), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(localizedLabel("Exemples : fauteuil de coiffure, comptoir pressing, atelier, réception ou caisse.","Examples: hairdressing chair, laundry counter, workshop, reception or register.","Yerɗe: jooɗorgal ñaawugol sukundu, jaɓɓorgo lootugol, nokkuure golle, jaɓɓorgo walla keesu."), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Créer un emplacement dans ce point de vente", fontWeight = FontWeight.Bold)
-                        Text("L'emplacement sera disponible après confirmation.", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
-                        OutlinedTextField(workstationCode, { workstationCode = it }, Modifier.fillMaxWidth(), label = { Text("Code de l’emplacement") }, singleLine = true)
-                        OutlinedTextField(workstationName, { workstationName = it }, Modifier.fillMaxWidth(), label = { Text("Nom de l’emplacement") }, singleLine = true)
+                        Text(localizedLabel("Créer un emplacement dans ce point de vente","Create workstation at this location","Sos nokkuure golle e nokkuure ndee"), fontWeight = FontWeight.Bold)
+                        Text(localizedLabel("L'emplacement sera disponible après confirmation.","The workstation will be available after confirmation.","Nokkuure golle ndee maa heɓee caggal tabbitinol."), color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
+                        OutlinedTextField(workstationCode, { workstationCode = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Code de l’emplacement","Workstation code","Innol nokkuure golle")) }, singleLine = true)
+                        OutlinedTextField(workstationName, { workstationName = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Nom de l’emplacement","Workstation name","Innde nokkuure golle")) }, singleLine = true)
                         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                             listOf("hair_chair", "pressing_counter", "pressing_workshop", "reception", "cashier").forEach { type ->
                                 OutlinedButton(onClick = { workstationType = type }) { Text(if (workstationType == type) "✓ " + type else type) }
@@ -1710,13 +1707,13 @@ internal fun OrganizationWorkspaceContent(
                             },
                             enabled = !busy && canManageWorkstations && selectedSite.isNotBlank() && workstationCode.isNotBlank() && workstationName.isNotBlank() && (capacity.toIntOrNull() ?: 0) in 1..100,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Ajouter l’emplacement") }
-                        if (!canManageWorkstations) Text("Gestion réservée aux responsables autorisés.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        ) { Text(localizedLabel("Ajouter l’emplacement","Add workstation","Ɓeydu nokkuure golle")) }
+                        if (!canManageWorkstations) Text(localizedLabel("Gestion réservée aux responsables autorisés.","Only authorized managers can manage this.","Hooreeɓe yamiraaɓe tan mbaawi ɗowtude."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
-            item { Text("Emplacements locaux du point de vente", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            if (workstations.isEmpty()) item { Text("Aucun emplacement configuré pour ce point de vente.") }
+            item { Text(localizedLabel("Emplacements locaux du point de vente","Location workstations","Nokkuuji golle nokkuure jaaygol"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+            if (workstations.isEmpty()) item { Text(localizedLabel("Aucun emplacement configuré pour ce point de vente.","No workstation configured for this location.","Alaa nokkuure golle teeltaande e nokkuure ndee.")) }
             items(workstations) { item ->
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                     Column(Modifier.fillMaxWidth().padding(13.dp)) {
@@ -1765,9 +1762,9 @@ fun SupportContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Nouvelle demande", fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Nouvelle demande","New request","Ɗaɓɓitannde hesere"), fontWeight = FontWeight.Bold)
                     OutlinedTextField(subject, { subject = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Sujet","Subject","Ko ɗaɓɓitaa")) }, singleLine = true)
-                    OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text("Description détaillée (10 caractères minimum)") }, minLines = 4)
+                    OutlinedTextField(description, { description = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Description détaillée (10 caractères minimum)","Detailed description (at least 10 characters)","Cifagol laaɓtungol (binndi 10 walla ɓuri)")) }, minLines = 4)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf("low", "normal", "high").forEach { value ->
                             OutlinedButton(onClick = { priority = value }) { Text(if (priority == value) "✓ " + value else value) }
@@ -1786,12 +1783,12 @@ fun SupportContent(
                         },
                         enabled = !busy && subject.isNotBlank() && description.trim().length >= 10,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Enregistrer la demande") }
+                    ) { Text(localizedLabel("Enregistrer la demande","Save request","Danndu ɗaɓɓitannde")) }
                 }
             }
         }
-        item { Text("Demandes sur cet appareil", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-        if (requests.isEmpty()) item { Text("Aucune demande enregistrée.", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        item { Text(localizedLabel("Demandes sur cet appareil","Requests on this device","Ɗaɓɓitanɗe e kaɓirgol ngol"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        if (requests.isEmpty()) item { Text(localizedLabel("Aucune demande enregistrée.","No requests recorded.","Alaa ɗaɓɓitannde danndaande."), color = MaterialTheme.colorScheme.onSurfaceVariant) }
         items(requests) { request ->
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.fillMaxWidth().padding(14.dp)) {
@@ -1831,29 +1828,29 @@ fun SettingsContent(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text(localizedLabel("Apparence","Appearance","No hollirtee"), fontWeight = FontWeight.Bold)
                     Text(if (lightTheme) "Thème clair actif" else "Thème sombre actif")
-                    OutlinedButton(onClick = onTheme, modifier = Modifier.fillMaxWidth()) { Text("Basculer le thème") }
-                    Text("Langue : Français / English — les ressources de l’application sont disponibles dans les deux langues.")
+                    OutlinedButton(onClick = onTheme, modifier = Modifier.fillMaxWidth()) { Text(localizedLabel("Basculer le thème","Change theme","Waylu jayngol")) }
+                    Text(localizedLabel("Langue : Français / English — les ressources de l’application sont disponibles dans les deux langues.","Language: French / English / Fulfulde.","Ɗemngal: Français / English / Fulfulde."))
                 }
             }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Notifications du téléphone", fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Notifications du téléphone","Phone notifications","Tintine telefon"), fontWeight = FontWeight.Bold)
                     Text(if (permissionGranted) "Notifications autorisées sur cet appareil." else "Les rappels locaux sont programmés, mais Android n’autorise pas encore leur affichage.")
                     if (Build.VERSION.SDK_INT >= 33 && !permissionGranted) {
                         Button(onClick = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Autoriser les notifications")
+                            Text(localizedLabel("Autoriser les notifications","Allow notifications","Yamir tintine"))
                         }
                     }
-                    Text("Vos briefings sont programmés à 07:00 et 19:00.")
+                    Text(localizedLabel("Vos briefings sont programmés à 07:00 et 19:00.","Your briefings are scheduled at 07:00 and 19:00.","Jaŋte maa teeltaama e 07:00 e 19:00."))
                 }
             }
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("Opérations en attente", fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Opérations en attente","Pending operations","Golle fadotooɗe"), fontWeight = FontWeight.Bold)
                     Text(pending.toString() + " événement(s) en attente ou non synchronisé(s)")
                     if (supplierSyncConfigured) {
                         OutlinedButton(
@@ -1886,11 +1883,11 @@ fun SettingsContent(
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("Sécurité de l’appareil", fontWeight = FontWeight.Bold)
-                    Text("Identifiant interne : " + session.account.memberId)
-                    Text("Organisation : " + session.account.organizationId)
-                    Text("Points de vente affectés : " + session.account.activeSiteIds.size)
-                    Text("La conservation de session dépend de l’option « Rester connecté » choisie à la connexion.")
+                    Text(localizedLabel("Sécurité de l’appareil","Device security","Kisal kaɓirgol"), fontWeight = FontWeight.Bold)
+                    Text(localizedLabel("Identifiant interne : ","Account reference: ","Innol konte : ") + session.account.memberId)
+                    Text(localizedLabel("Organisation : ","Business: ","Fedde : ") + session.account.organizationId)
+                    Text(localizedLabel("Points de vente affectés : ","Assigned locations: ","Nokkuuji jaaygol yamiraaɗi : ") + session.account.activeSiteIds.size)
+                    Text(localizedLabel("La conservation de session dépend de l’option « Rester connecté » choisie à la connexion.","Your session is kept only if you chose Stay signed in.","Naatugol maa heddotoo tan so a suɓii heddude e naatugol."))
                 }
             }
         }

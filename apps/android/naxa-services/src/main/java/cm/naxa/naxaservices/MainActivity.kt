@@ -936,11 +936,11 @@ private fun AccessDeniedContent(modifier: Modifier, onBack: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Accès non autorisé", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(localizedLabel("Accès non autorisé","Access denied","Naatugol salaama"), style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        Text("Ce module n’est pas disponible pour le rôle associé à ce compte.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(localizedLabel("Ce module n’est pas disponible pour le rôle associé à ce compte.","This module is not available for your account role.","Golle ɗee heɓotaake e yamiroore konte maa."), color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onBack) { Text("Retour à l’accueil") }
+        Button(onClick = onBack) { Text(localizedLabel("Retour à l’accueil","Back to home","Rutto to jaɓɓorgo")) }
     }
 }
 
@@ -991,7 +991,7 @@ private fun ErpScreen(
             TopAppBar(
                 title = { Column { Text("NAXA SERVICES", fontWeight = FontWeight.Black); Text(accountName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
                 actions = {
-                    TextButton(onClick = { onNavigate(AppRoute.NOTIFICATIONS) }) { Text("Alertes") }
+                    TextButton(onClick = { onNavigate(AppRoute.NOTIFICATIONS) }) { Text(localizedLabel("Alertes","Alerts","Tintine")) }
                     TextButton(onClick = { onNavigate(AppRoute.PROFILE) }) { Text(localizedLabel("Profil","Profile","Humpito am")) }
                     TextButton(onClick = onTheme) { Text(if (lightTheme) stringResource(R.string.dark_mode) else stringResource(R.string.light_mode)) }
                 }
@@ -1752,7 +1752,7 @@ private fun CashLocalContent(
                             color = MaterialTheme.colorScheme.secondary,
                             style = MaterialTheme.typography.bodySmall
                         )
-                        Text("Vente libre ou article lié au stock", fontWeight = FontWeight.SemiBold)
+                        Text(localizedLabel("Vente libre ou article lié au stock","Direct sale or stock item","Jaaygol walla jawdi e stock"), fontWeight = FontWeight.SemiBold)
                         OutlinedButton(
                             onClick = {
                                 selectedStockItemId = ""
@@ -1783,18 +1783,17 @@ private fun CashLocalContent(
                                     saleTotal = if (amount > 0L) amount.toString() else ""
                                 },
                                 Modifier.fillMaxWidth(),
-                                label = { Text("Quantité vendue (" + selectedStockItem.unit + ")") },
+                                label = { Text(localizedLabel("Quantité vendue (","Quantity sold (","Keewal jaayngal (") + selectedStockItem.unit + ")") },
                                 singleLine = true
                             )
-                            Text(
-                                "Prix unitaire : " + linkedStockPrice + " F · Total calculé : " + linkedStockTotal + " F · Stock disponible : " + selectedStockItem.quantity,
+                            Text(localizedLabel("Prix unitaire : ","Unit price: ","Njoɓdi gootal : ") + linkedStockPrice + " F · Total calculé : " + linkedStockTotal + " F · Stock disponible : " + selectedStockItem.quantity,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 style = MaterialTheme.typography.bodySmall
                             )
                             if (selectedStockValuation == null || linkedStockPrice <= 0L) {
-                                Text("Aucun prix de vente configuré pour cet article. Enregistre sa valorisation dans le module Stock.", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                                Text(localizedLabel("Aucun prix de vente configuré pour cet article. Enregistre sa valorisation dans le module Stock.","No sale price set for this item. Set its valuation in Inventory.","Alaa njoɓdi jaaygol jawdi ndii. Danndu njoɓdi e nokkuure jawdi."), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                             }
-                            Text("Saisis uniquement les paiements déjà reçus hors application. La vente et la sortie de stock sont enregistrées ensemble.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(localizedLabel("Saisis uniquement les paiements déjà reçus hors application. La vente et la sortie de stock sont enregistrées ensemble.","Enter only payments already received outside the app. The sale and stock issue are recorded together.","Winndu tan ceede keɓaaɗe tawa aplikasiyoŋ alaa. Jaaygol e yaltugol jawdi ndanndetee gootum."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         OutlinedTextField(saleDescription, { saleDescription = it }, Modifier.fillMaxWidth(), label = { Text(stringResource(R.string.sale_description)) }, singleLine = true)
                         OutlinedTextField(
@@ -1910,19 +1909,19 @@ private fun CashLocalContent(
                             Text(sale.description, fontWeight = FontWeight.Bold)
                             Text(sale.saleNumber + " · " + sale.status, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                             if (sale.inventoryItemId != null && sale.stockQuantity != null) {
-                                Text("Stock lié : " + sale.stockQuantity + " unité(s)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(localizedLabel("Stock lié : ","Linked stock: ","Jawdi jokkondiraandi : ") + sale.stockQuantity + " unité(s)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             TextButton(onClick = { receiptSale = sale }) { Text(localizedLabel("Reçu","Received","Heɓaama")) }
                         }
                         Text(sale.totalXaf.toString() + " F")
                     }
                     if (sale.paymentMethod == "mobile_money" && sale.status == "pending") {
-                        Text("Réservation en attente de confirmation. Les articles sont réservés.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                        Text(localizedLabel("Réservation en attente de confirmation. Les articles sont réservés.","Awaiting confirmation. The items are reserved.","Nana fadi tabbitinol. Jawdi ndii suuɗaama."), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                         OutlinedTextField(
                             cancellationReason,
                             { cancellationReason = it },
                             Modifier.fillMaxWidth(),
-                            label = { Text("Motif obligatoire pour annuler la vente en attente") },
+                            label = { Text(localizedLabel("Motif obligatoire pour annuler la vente en attente","Reason required to cancel pending sale","Daliilu waajib ngam haaytude jaaygol fadotoongol")) },
                             minLines = 1
                         )
                         OutlinedButton(
@@ -1945,7 +1944,7 @@ private fun CashLocalContent(
                             },
                             enabled = cancellationReason.trim().length >= 3,
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Annuler la vente Mobile Money en attente") }
+                        ) { Text(localizedLabel("Annuler la vente Mobile Money en attente","Cancel pending Mobile Money sale","Haaytu jaaygol Mobile Money fadotoongol")) }
                     }
                 }
             }
@@ -2128,7 +2127,7 @@ private fun TeamManagementContent(
                             modifier = Modifier.fillMaxWidth(),
                             enabled = assignableRoles.isNotEmpty()
                         ) {
-                            Text("Rôle à attribuer : " + role.replace('_', ' '))
+                            Text(localizedLabel("Rôle à attribuer : ","Role to assign: ","Golle suɓeteeɗe : ") + role.replace('_', ' '))
                         }
                         DropdownMenu(
                             expanded = roleMenuExpanded,
@@ -2143,9 +2142,9 @@ private fun TeamManagementContent(
                         }
                     }
                     if (assignableRoles.isEmpty()) {
-                        Text("Ton rôle ne permet pas de créer des comptes collaborateurs.", color = MaterialTheme.colorScheme.error)
+                        Text(localizedLabel("Ton rôle ne permet pas de créer des comptes collaborateurs.","You are not authorized to create staff accounts.","A yamiraaka sosde konte golluɓe."), color = MaterialTheme.colorScheme.error)
                     }
-                    Text("Affectation aux points de vente autorisés", fontWeight = FontWeight.SemiBold)
+                    Text(localizedLabel("Affectation aux points de vente autorisés","Assign authorized locations","Suɓo nokkuuji jaaygol yamiraaɗi"), fontWeight = FontWeight.SemiBold)
                     if (session.account.activeSiteIds.isEmpty()) {
                         Text(stringResource(R.string.no_active_sites), color = MaterialTheme.colorScheme.error)
                     } else {
@@ -2165,8 +2164,7 @@ private fun TeamManagementContent(
                             }
                         }
                     }
-                    Text(
-                        "Un collaborateur peut recevoir plusieurs points de vente. L’accès individuel à un poste précis sera activé après le filtrage dédié de ses données.",
+                    Text(localizedLabel("Un collaborateur peut recevoir plusieurs points de vente. L’accès individuel à un poste précis sera activé après le filtrage dédié de ses données.","Staff can be assigned to multiple locations. Workstation-only access is not available yet.","Gollotooɗo waawi heɓde nokkuuji keewɗi. Naatugol e nokkuure golle wootere alaa tawo."),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -2559,7 +2557,7 @@ private fun DashboardContent(
         }
         item {
             TextButton(onClick = { onNavigate(AppRoute.MENU) }) { Text(stringResource(R.string.nav_more)) }
-            TextButton(onClick = { onNavigate(AppRoute.PROFILE) }) { Text("Mon profil") }
+            TextButton(onClick = { onNavigate(AppRoute.PROFILE) }) { Text(localizedLabel("Mon profil","My profile","Humpito am")) }
             if (canAccessRoute(AppRoute.NETWORK, role)) {
                 TextButton(onClick = { onNavigate(AppRoute.NETWORK) }) { Text(stringResource(R.string.network_overview)) }
             }
