@@ -200,6 +200,7 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
     val context = LocalContext.current
     val fr = session.account.defaultLocale != "en"
     val org = session.account.organizationId
+    var access by remember(org, session.account.memberId, session.deviceId) { mutableStateOf<JSONObject?>(null) }
     var snapshot by remember(org, session.deviceId) { mutableStateOf<JSONObject?>(null) }
     var intent by remember(org, session.deviceId) { mutableStateOf<JSONObject?>(null) }
     var plan by remember(org) { mutableStateOf("ACCESS") }
@@ -213,7 +214,12 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
     var error by remember { mutableStateOf<String?>(null) }
     fun arrayObjects(value: org.json.JSONArray?): List<JSONObject> =
         (0 until (value?.length() ?: 0)).mapNotNull { value?.optJSONObject(it) }
+    suspend fun loadAccess() {
+        access = null
+        access = api.subscriptionAccess(session.accessToken)
+    }
     suspend fun load() {
+        loadAccess()
         notPaid = false
         val result = api.subscriptionRequest(session.accessToken, JSONObject().put("action", "subscription_list"))
         snapshot = result
@@ -245,8 +251,24 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
             Spacer(Modifier.height(12.dp))
             Text(if (fr) "Abonnement NAXA SERVICES" else "NAXA SERVICES subscription", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(if (fr) "Un abonnement par organisation. Les encaissements de votre entreprise sont réalisés hors application." else "One subscription per organization. Your business collects payments outside the app.")
+            OutlinedButton(enabled = !busy, onClick = { runAction { loadAccess() } }) {
+                Text(if (fr) "Vérifier les droits payés" else "Check paid access")
+            }
+            access?.let { paid ->
+                Text(when (paid.optString("state")) {
+                    "active" -> if (fr) "Période payée active" else "Active paid period"
+                    "expired" -> if (fr) "Période payée expirée" else "Paid period expired"
+                    "cancelled" -> if (fr) "Abonnement annulé" else "Subscription cancelled"
+                    "not_started" -> if (fr) "Période payée à venir" else "Upcoming paid period"
+                    else -> if (fr) "Aucune période payée enregistrée" else "No paid period recorded"
+                })
+                paid.optString("period_end_exclusive").takeIf { it.isNotBlank() && it != "null" }?.let {
+                    Text((if (fr) "Échéance exclusive : " else "Exclusive end date: ") + it)
+                }
+            }
+            Text(if (fr) "Information sur la période payée, sans décision de blocage ERP." else "Paid period information, not an ERP access decision.")
             if (session.account.roleCode != "promoter") {
-                Text(if (fr) "Réservé au Promoteur." else "Promoter access only.")
+                Text(if (fr) "Règlement réservé au Promoteur." else "Payment reserved for the promoter.")
             } else {
                 OutlinedButton(enabled = !busy, onClick = { runAction { load() } }) { Text(if (fr) "Consulter / actualiser" else "Load / refresh") }
                 snapshot?.optJSONObject("subscription")?.let { sub ->
