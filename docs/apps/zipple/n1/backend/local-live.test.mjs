@@ -99,7 +99,7 @@ async function browserRecipe({pw,org,member,site}){
     if(req.headers.origin!=="https://127.0.0.1:4443"){res.writeHead(403).end();return}
     const chunks=[];let size=0;for await(const c of req){size+=c.length;if(size>8192){res.writeHead(413).end();return}chunks.push(c)}
     const request=new Request("https://naxa-zipple.pages.dev"+url.pathname,{method:"POST",headers:{origin:"https://naxa-zipple.pages.dev","content-type":"application/json",cookie:req.headers.cookie||""},body:Buffer.concat(chunks)});
-    const response=await sessionRoute(request,(target,options)=>{const u=new URL(target);assert.equal(u.origin,"https://idupfjbkwjcavyisxteo.supabase.co");assert.ok(["login","refresh","logout"].includes(u.pathname.split("/").pop()));return fetch(edge+"/"+u.pathname.split("/").pop(),{...options,headers:{...options.headers,origin:"https://zipple.test"}})});
+    const response=await sessionRoute(request,(target,options)=>{const u=new URL(target);assert.equal(u.origin,"https://idupfjbkwjcavyisxteo.supabase.co");assert.ok(["login","refresh","logout"].includes(u.pathname.split("/").pop()));const isolatedHeaders=new Headers(options.headers);isolatedHeaders.set("origin","https://zipple.test");return fetch(edge+"/"+u.pathname.split("/").pop(),{...options,headers:isolatedHeaders})});
     res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));return;
    }
    if(/^\/gateway\/(login|logout|recovery|sync)$/.test(url.pathname)&&req.method==="POST"){
