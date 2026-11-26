@@ -19,7 +19,7 @@ import org.json.JSONObject
  Text("Bienvenue dans BOOTIK",style=MaterialTheme.typography.headlineSmall)
  if(current==null){Text(if(busy)"Chargement…" else message);Button(enabled=!busy,onClick={task()}){Text("Réessayer")}}
  else if(doc!=null){Text(if(doc.getString("kind")=="terms")"Conditions d’utilisation" else "Politique de confidentialité",style=MaterialTheme.typography.titleLarge);Text("Version "+doc.getString("version")+" • "+doc.getString("locale"));Text(doc.getString("text"));Button(enabled=!busy,onClick={task(JSONObject().put("step","legal").put("kind",doc.getString("kind")).put("version",doc.getString("version")).put("sha256",doc.getString("sha256")).put("locale",doc.getString("locale")).put("accepted",true))}){Text("J’accepte ce document")}}
- else{val first=!current.optBoolean("discovery_completed");val items=if(first)discovery else tour;val item=items[step.coerceIn(0,items.lastIndex)]
+ else{val first=!current.optBoolean("discovery_completed");val items=if(first)discovery else if(session.role=="staff")listOf(Triple("📊","Mon espace","Retrouvez votre site et vos opérations autorisées."))+tour.drop(1) else tour;val item=items[step.coerceIn(0,items.lastIndex)]
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(20.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){Text("${step+1} / ${items.size}",color=MaterialTheme.colorScheme.primary);Text(item.first,style=MaterialTheme.typography.headlineLarge);Text(item.second,style=MaterialTheme.typography.titleLarge);Text(item.third)}}
  if(step>0)TextButton(enabled=!busy,onClick={step--}){Text("Précédent")}
  TextButton(enabled=!busy,onClick={task(JSONObject().put("step",if(first)"discovery" else "tour"))}){Text(if(first)"Passer la découverte" else "Passer le tutoriel")}

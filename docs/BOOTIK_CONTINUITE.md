@@ -486,3 +486,6 @@ Recette Chromium de toutes les cartes et cinq étapes avec persistance SQL ; cor
 
 ### B01 — entrée Android et langue de connexion
 Android ouvre désormais directement la connexion (brouillons accessibles par action explicite), comme NAXA SERVICES. Libellés FR/EN/Fulfulde repris des strings de connexion NAXA SERVICES ; sélection locale et mot de passe masquable. Tests Compose de bascule de langue et formulaire ; Web mêmes libellés à la connexion. Cette adaptation ne couvre pas encore la traduction intégrale des écrans ERP et du tutoriel.
+
+### B01 — navigation après découverte
+Cinq raccourcis fonctionnels vers les sections réellement disponibles, Web/PWA et Android natif, présentation adaptée au rôle staff. Tests navigateur de présence des cinq cibles. Les modules non livrés ne sont pas présentés comme opérationnels.

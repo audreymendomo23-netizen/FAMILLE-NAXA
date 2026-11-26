@@ -6,6 +6,9 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -19,6 +22,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable fun BootikConnectedScreen(api:BootikApi,offline:BootikScopedDao,onBack:()->Unit){
  val context=LocalContext.current
  val scope=rememberCoroutineScope()
@@ -102,7 +106,11 @@ import org.json.JSONObject
  }else if(!firstUseDone){
  key(current.token){BootikFirstUse(api,current,{firstUseDone=true},{signOut(current)})}
  }else{
- Text("Site actif")
+ val overview=remember{BringIntoViewRequester()};val cash=remember{BringIntoViewRequester()};val stock=remember{BringIntoViewRequester()};val security=remember{BringIntoViewRequester()};val help=remember{BringIntoViewRequester()}
+ Text("Rubriques principales",style=MaterialTheme.typography.titleMedium)
+ Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(8.dp)){
+ listOf("Mon espace" to overview,"Caisse et ventes" to cash,"Stock et achats" to stock,"Sécurité et abonnement" to security,"Assistance" to help).forEach{(label,requester)->OutlinedButton(onClick={scope.launch{requester.bringIntoView()}}){Text(label)}}}
+ Text("Site actif",modifier=Modifier.bringIntoViewRequester(overview))
  var requestId by remember(site){mutableStateOf("")}
  current.sites.forEach{s->Row{RadioButton(selected=site==s.id,onClick={site=s.id;message=""},enabled=!busy&&requestId.isBlank());Text(s.name)}}
  if(Build.VERSION.SDK_INT>=28&&memberKey!=null){
@@ -118,7 +126,7 @@ import org.json.JSONObject
   Button(enabled=!busy,onClick={task{val rows=api.operation(current,site,"team",JSONObject()).getJSONArray("members");team=(0 until rows.length()).map{val row=rows.getJSONObject(it);row.getString("role")+" • "+row.getString("user_id").take(8)+" • "+(if(row.getBoolean("active"))"Actif" else "Inactif")}}}){Text("Actualiser l’équipe")}
   team.forEach{Text(it)}
  }
- Text("Abonnement")
+ Text("Abonnement",modifier=Modifier.bringIntoViewRequester(security))
  Row{RadioButton(universe=="retailer",{universe="retailer"},enabled=!busy);Text("Détaillants");RadioButton(universe=="distributor",{universe="distributor"},enabled=!busy);Text("Distributeurs")}
  Row{RadioButton(plan=="access",{plan="access"},enabled=!busy);Text("ACCÈS");RadioButton(plan=="premium",{plan="premium"},enabled=!busy);Text("PREMIUM")}
  Button(enabled=!busy,onClick={task{val result=api.operation(current,site,"entitlement",JSONObject().put("universe",universe));message=if(result.getBoolean("active"))"Droits actifs" else "Droits inactifs"}}){Text("Vérifier mes droits")}
@@ -126,9 +134,11 @@ import org.json.JSONObject
  key(current.organization,current.member,site){BootikSecurityPanel(api,current,site)}
  BootikPaymentPanel(api,current,site,universe,plan)
  if(current.role!="staff")key(current.organization,current.member,site){BootikMasterPanel(api,current,site)}
+ Text("Caisse et ventes",modifier=Modifier.bringIntoViewRequester(cash),style=MaterialTheme.typography.titleMedium)
  key(current.organization,current.member,site){BootikCashPanel(api,current,site)}
+ Text("Stock et achats",modifier=Modifier.bringIntoViewRequester(stock),style=MaterialTheme.typography.titleMedium)
  BootikSalesPanel(api,offline,current,site)
- Text("NAXA SECURITY et assistance")
+ Text("NAXA SECURITY et assistance",modifier=Modifier.bringIntoViewRequester(help))
  var consent by remember(site){mutableStateOf(false)}
  Row{Checkbox(consent,{consent=it},enabled=!busy);Text("Je consens à demander une session multimédia")}
  listOf("ticket" to "Assistance","camera" to "Vidéosurveillance","audio" to "Appel audio","video" to "Visioconférence","screen" to "Partage d’écran").forEach{(kind,label)->
