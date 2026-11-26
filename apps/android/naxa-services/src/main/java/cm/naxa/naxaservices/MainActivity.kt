@@ -1133,14 +1133,14 @@ private fun PressingLocalContent(
             Spacer(Modifier.height(12.dp))
             ModulePageTitle(
                 if (fr) "Pressing — tickets et retrait" else "Laundry — tickets and pickup",
-                if (fr) "Chaque ticket possède une référence unique, un emplacement d'origine, une date promise et un historique des étapes." else "Each ticket has a unique reference, source workstation, promised pickup and workflow history."
+                if (fr) "Chaque ticket possède une référence unique, un emplacement d'origine, une date promise et un historique des étapes." else "Follow every ticket from drop-off to pickup."
             )
             AuthorizedSitePicker(
                 session.account.activeSiteIds,
                 siteId,
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
             ) { siteId = it; workstationId = ""; depositCashSessionId = "" }
-            LocalOnlyNotice(if (fr) "Tickets et historique locaux, en attente de synchronisation. L'alerte automatique WhatsApp/FCM « linge prêt » attend la passerelle serveur." else "Local tickets and history await synchronization. Automatic WhatsApp/FCM ready-for-pickup alerts require the server gateway.")
+            LocalOnlyNotice(if (fr) "Suivez vos tickets jusqu’au retrait. L'envoi automatique des alertes de retrait est indisponible." else "Track tickets until pickup. Automatic pickup alerts are unavailable.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -1429,7 +1429,7 @@ private fun AgendaLocalContent(
                 siteId = it
                 workstationId = ""
             }
-            LocalOnlyNotice(if (fr) "Les conflits sont contrôlés sur ce site et cet appareil. Les rappels externes et la synchronisation serveur restent à raccorder." else "Conflicts are checked locally for this site. External reminders and server synchronization remain to be connected.")
+            LocalOnlyNotice(if (fr) "Vérifiez les disponibilités de votre établissement. Les rappels externes sont indisponibles." else "Check availability at your location. External reminders are unavailable.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface), shape = RoundedCornerShape(18.dp)) {
@@ -1728,7 +1728,7 @@ private fun CashLocalContent(
                                     error = null
                                     runCatching {
                                         repository.openCashSession(session.account.organizationId, siteId, registerId, registerName, openingFloat.toLongOrNull() ?: 0L, session.account.memberId)
-                                    }.onSuccess { notice = "Caisse ouverte localement : " + it.id }
+                                    }.onSuccess { notice = "Caisse ouverte." }
                                         .onFailure { error = it.message ?: "Ouverture de caisse impossible." }
                                     busy = false
                                 }
@@ -1829,7 +1829,7 @@ private fun CashLocalContent(
                                         saleStockQuantity = "1"
                                         receiptSale = pair.first
                                         notice = if (pair.first.status == "pending") {
-                                            "Paiement Mobile Money en attente de confirmation serveur. La quantité liée est réservée, pas encore déduite."
+                                            "Paiement Mobile Money en attente de confirmation. Les articles sont réservés."
                                         } else {
                                             if (pair.first.inventoryItemId != null) {
                                                 "Encaissement enregistré ; sortie de stock et mouvement d'inventaire créés dans la même transaction."
@@ -1916,7 +1916,7 @@ private fun CashLocalContent(
                         Text(sale.totalXaf.toString() + " F")
                     }
                     if (sale.paymentMethod == "mobile_money" && sale.status == "pending") {
-                        Text("Réservation locale en attente de confirmation serveur. Le stock n'est pas encore sorti.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+                        Text("Réservation en attente de confirmation. Les articles sont réservés.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
                         OutlinedTextField(
                             cancellationReason,
                             { cancellationReason = it },
@@ -2519,16 +2519,16 @@ private fun DashboardContent(
                     }
                     if (!syncEnabled) {
                         Text(
-                            if (locale == "en") "ERP sync remains disabled until the dedicated Famille NAXA endpoint and registered device are configured." else "La synchronisation ERP reste désactivée tant que la passerelle dédiée Famille NAXA et l’appareil enregistré ne sont pas configurés.",
+                            if (locale == "en") "ERP sync remains disabled until the dedicated Famille NAXA endpoint and registered device are configured." else "L’actualisation est momentanément indisponible.",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
                     Text(
                         if (locale == "en")
-                            "On-device figures for this location. They may include unsynchronized entries and are not a network-wide or server-confirmed report."
+                            "Available figures for this location, including operations pending confirmation."
                         else
-                            "Chiffres locaux de ce point de vente. Ils peuvent inclure des écritures non synchronisées et ne constituent pas un rapport réseau consolidé ni une confirmation serveur.",
+                            "Chiffres disponibles pour ce point de vente, y compris les opérations en attente de confirmation.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodySmall
                     )
