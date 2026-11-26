@@ -489,3 +489,6 @@ Android ouvre désormais directement la connexion (brouillons accessibles par ac
 
 ### B01 — navigation après découverte
 Cinq raccourcis fonctionnels vers les sections réellement disponibles, Web/PWA et Android natif, présentation adaptée au rôle staff. Tests navigateur de présence des cinq cibles. Les modules non livrés ne sont pas présentés comme opérationnels.
+
+### B01 — recette instrumentée du tutoriel
+La présentation Compose utilisée par le client réel reçoit les fonctions de lecture/confirmation de l'API, sans changer le contrat. Tests instrumentés sur réponses simulées : quatre cartes, cinq étapes, exactement deux confirmations, compte déjà formé sans rejeu. La persistance et l'isolation serveur sont testées séparément en PostgreSQL/Chromium ; ceci n'est pas une recette Android contre un serveur hébergé.
