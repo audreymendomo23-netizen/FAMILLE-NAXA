@@ -107,6 +107,23 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByText(/Historique insuffisant : 28 jours/).waitFor();
   await page.getByText(/Charges enregistrées : 2[\s\u00a0\u202f]500 FCFA/).waitFor();
   console.log("ZIPPLE_N7_REAL_EDGE_PILOTAGE_UI_PASS");
+  // Verify the new boundary through actual GoTrue / PostgREST / Edge, not a mocked RPC.
+  const tableSession=await scalar("select id from zp_table_sessions where table_id=$1 and closed_at is null",[tableId]);
+  assert.equal((await b("snapshot",{site_id:id()})).status,403);
+  assert.equal((await b("snapshot",{}, "a".repeat(64))).status,403);
+  const invalidGuest=await b("guest_open",{qr:"b".repeat(64)},"",true);assert.equal(invalidGuest.status,429);
+  const countBefore=Number(await scalar("select count(*) from zp_guest_sessions where table_session_id=$1",[tableSession]));
+  await db.query("update zp_rate_windows set attempts=60,window_start=now() where bucket=$1",["ZIPPLE:guest-open:"+tableSession]);
+  const blockedGuest=await b("guest_open",{qr},"",true);assert.equal(blockedGuest.status,429);
+  assert.equal(Number(await scalar("select count(*) from zp_guest_sessions where table_session_id=$1",[tableSession])),countBefore);
+  await db.query("update zp_rate_windows set window_start=now()-interval '6 minutes' where bucket=$1",["ZIPPLE:guest-open:"+tableSession]);
+  const reopened=await b("guest_open",{qr},"",true);assert.equal(reopened.status,200);
+  const openedToken=reopened.body.guest_token;assert.equal((await b("guest_order_read",{order_id:orderId},openedToken,true)).status,403);
+  await db.query("update zp_subscription_periods set starts_at=now()-interval '2 days',ends_at=now()-interval '1 day' where org_id=$1",[org]);
+  assert.equal((await b("guest_menu",{},openedToken,true)).status,403);
+  assert.equal((await b("snapshot")).status,403);
+  assert.equal((await b("guest_open",{qr},"",true)).status,429);
+  console.log("ZIPPLE_BULK1_REAL_EDGE_ACCESS_RATE_AND_EXPIRY_PASS");
   await staff.close();await guestCtx.close();
   console.log("ZIPPLE_BUSINESS_REAL_EDGE_PROFESSIONAL_AND_GUEST_BROWSER_PASS");
  }finally{if(browser)await browser.close();if(server)await new Promise(ok=>server.close(ok));await db.end()}

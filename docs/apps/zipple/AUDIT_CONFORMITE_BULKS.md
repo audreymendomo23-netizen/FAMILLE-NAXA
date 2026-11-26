@@ -18,3 +18,5 @@ Preuves : prix canoniques, refus périodicités/pack, paiement synthétique uniq
 Etat : implémenté, preuves de la nouvelle CI à relever.
 
 - Complément Bulk 1 : Access payé ≠ accès métier autorisé si plusieurs promoteurs actifs; refus conservatoire, aucun titulaire choisi implicitement. Manager Access refusé. Contrat Android/API vérifié par égalité des listes d'actions; aucun accès public à une confirmation de paiement. Concordance tarifs SQL/politique famille. Aucun quota de sites ou d'appareils inventé.
+
+- Recette Edge réelle enrichie : accès hors scope/session inconnue, QR invalide, limite persistée sans création de session, réouverture après fenêtre, lecture commande d'un autre invité, expiration d'abonnement et refus des accès. Ces contrôles sont exécutés après les parcours métier existants, sans mocks RPC et exclusivement sur la pile jetable.
