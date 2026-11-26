@@ -1,4 +1,4 @@
-import { normalizeAtomicSyncEvent, normalizeSyncPullRequest, normalizeInventoryItemSyncPayload, normalizeInventoryMovementSyncPayload, normalizeSupplierPurchaseSyncPayload, normalizeSupplierSyncPayload } from "./sync_contract.ts";
+import { normalizeAtomicSyncEvent, normalizeSyncPullRequest } from "./sync_contract.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -187,123 +187,16 @@ export async function handleAccountingRequest(
         }
         break;
       }
-      case "save_inventory_item": {
-        const payload = normalizeInventoryItemSyncPayload(body);
-        result = await postRpc(baseUrl, env.anonKey, token, "ns_save_inventory_item", {
-          p_inventory_item_id: payload.inventory_item_id,
-          p_org_id: payload.org_id,
-          p_site_id: payload.site_id,
-          p_sku: payload.sku,
-          p_name: payload.name,
-          p_unit: payload.unit,
-          p_reorder_level: payload.reorder_level,
-          p_supplier_whatsapp: payload.supplier_whatsapp,
-        });
-        break;
-      }
-      case "record_inventory_movement": {
-        const payload = normalizeInventoryMovementSyncPayload(body);
-        result = await postRpc(baseUrl, env.anonKey, token, "ns_record_inventory_movement", {
-          p_movement_id: payload.movement_id,
-          p_org_id: payload.org_id,
-          p_site_id: payload.site_id,
-          p_inventory_item_id: payload.inventory_item_id,
-          p_movement_type: payload.movement_type,
-          p_quantity_delta: payload.quantity_delta,
-          p_reason: payload.reason,
-        });
-        break;
-      }
-      case "save_supplier": {
-        const payload = normalizeSupplierSyncPayload(body);
-        result = await postRpc(baseUrl, env.anonKey, token, "ns_save_supplier", {
-          p_supplier_id: payload.supplier_id,
-          p_org_id: payload.org_id,
-          p_site_id: payload.site_id,
-          p_name: payload.name,
-          p_phone: payload.phone,
-          p_whatsapp: payload.whatsapp,
-          p_email: payload.email,
-          p_address: payload.address,
-          p_payment_terms_days: payload.payment_terms_days,
-          p_notes: payload.notes,
-        });
-        break;
-      }
-      case "create_supplier_purchase": {
-        const payload = normalizeSupplierPurchaseSyncPayload(body);
-        result = await postRpc(baseUrl, env.anonKey, token, "ns_create_supplier_purchase", {
-          p_org_id: payload.org_id,
-          p_site_id: payload.site_id,
-          p_supplier_id: payload.supplier_id,
-          p_reference: payload.reference,
-          p_supplier_invoice_number: payload.supplier_invoice_number,
-          p_idempotency_key: payload.purchase_id,
-          p_payload_sha256: await sha256(payload),
-          p_lines: payload.lines,
-          p_recoverable_tax_xaf: payload.recoverable_tax_xaf,
-          p_non_recoverable_tax_xaf: payload.non_recoverable_tax_xaf,
-          p_shipping_xaf: payload.shipping_xaf,
-          p_other_fees_xaf: payload.other_fees_xaf,
-          p_due_at: payload.due_at,
-          p_notes: payload.notes,
-        });
-        break;
-      }
-      case "receive_supplier_purchase_line": {
-        const payload = {
-          org_id: requiredString(body.org_id, "org_id"),
-          site_id: requiredString(body.site_id, "site_id"),
-          purchase_id: requiredString(body.purchase_id, "purchase_id"),
-          line_id: requiredString(body.line_id, "line_id"),
-          quantity: body.quantity,
-        };
-        if (typeof payload.quantity !== "number" || !Number.isFinite(payload.quantity) || payload.quantity <= 0) {
-          throw new Error("INVALID_RECEIPT_QUANTITY");
-        }
-        result = await postRpc(baseUrl, env.anonKey, token, "ns_receive_supplier_purchase_line", {
-          p_org_id: payload.org_id,
-          p_site_id: payload.site_id,
-          p_purchase_id: payload.purchase_id,
-          p_line_id: payload.line_id,
-          p_quantity: payload.quantity,
-          p_idempotency_key: requiredString(body.idempotency_key, "idempotency_key"),
-          p_payload_sha256: await sha256(payload),
-        });
-        break;
-      }
-      case "record_supplier_payment": {
-        const payload = {
-          org_id: requiredString(body.org_id, "org_id"),
-          site_id: requiredString(body.site_id, "site_id"),
-          purchase_id: requiredString(body.purchase_id, "purchase_id"),
-          amount_xaf: requiredNumber(body.amount_xaf, "amount_xaf"),
-          payment_method: requiredString(body.payment_method, "payment_method"),
-          cash_session_id: typeof body.cash_session_id === "string" ? body.cash_session_id : null,
-          payment_reference: typeof body.payment_reference === "string" ? body.payment_reference.trim() : "",
-        };
-        result = await postRpc(baseUrl, env.anonKey, token, "ns_record_supplier_payment", {
-          p_org_id: payload.org_id,
-          p_site_id: payload.site_id,
-          p_purchase_id: payload.purchase_id,
-          p_amount_xaf: payload.amount_xaf,
-          p_payment_method: payload.payment_method,
-          p_cash_session_id: payload.cash_session_id,
-          p_payment_reference: payload.payment_reference,
-          p_idempotency_key: requiredString(body.idempotency_key, "idempotency_key"),
-          p_payload_sha256: await sha256(payload),
-        });
-        break;
-      }
-      case "post_sale_inventory": {
-        result = await postRpc(baseUrl, env.anonKey, token, "ns_post_sale_inventory", {
-          p_org_id: requiredString(body.org_id, "org_id"),
-          p_site_id: requiredString(body.site_id, "site_id"),
-          p_sale_id: requiredString(body.sale_id, "sale_id"),
-          p_inventory_posting_key: requiredString(body.idempotency_key, "idempotency_key"),
-        });
-        break;
-      }
+      // These old direct mutations have no authenticated grant. Never widen those grants.
+      // Current Android/Web use the atomic event gateway with device and receipt binding.
+      case "save_inventory_item":
+      case "record_inventory_movement":
+      case "save_supplier":
+      case "create_supplier_purchase":
+      case "receive_supplier_purchase_line":
+      case "record_supplier_payment":
+      case "post_sale_inventory":
+        return reply(409, { error: "ATOMIC_SYNC_REQUIRED", required_action: "apply_sync_event" });
       case "create_performance_objective": {
         result = await postRpc(baseUrl, env.anonKey, token, "ns_create_performance_objective", {
           p_org_id: requiredString(body.org_id, "org_id"),
