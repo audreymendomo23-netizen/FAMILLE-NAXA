@@ -97,6 +97,23 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal(await expense(),await expense());
  const erp=await scalar("select zp_erp_snapshot($1,$2)",[b.access,b.site]);assert.equal(erp.recorded_expenses_xaf,2500);assert.equal(erp.accounting_status,"mapping_required");assert.equal(erp.ingredients.length,2);
  assert.equal(await scalar("select has_function_privilege('authenticated','public.zp_produce(text,uuid,uuid,uuid,integer)','execute')"),false);
+ const supplierId=await scalar("select zp_supplier_add($1,$2,'Fournisseur test','','',30)",[b.access,b.site]);
+ const pk=uid(),purchase=await scalar("select zp_purchase_create($1,$2,$3,$4,$5,'BC-TEST',3000,1000)",[b.access,b.site,supplierId,ingredient,pk]);
+ assert.equal(await scalar("select zp_purchase_create($1,$2,$3,$4,$5,'BC-TEST',3000,1000)",[b.access,b.site,supplierId,ingredient,pk]),purchase);
+ const rk=uid(),rec=(q,k=uid())=>scalar("select zp_purchase_receive($1,$2,$3,$4,$5,'P-LOT',null)",[b.access,b.site,purchase,k,q]);
+ const receipt1=await rec(1000,rk);assert.equal(await rec(1000,rk),receipt1);assert.equal(Number(await scalar("select cost_xaf from zp_purchase_receipts where id=$1",[receipt1])),333);
+ await assert.rejects(rec(3000),/RECEIPT_EXCEEDS_PURCHASE/);
+ await assert.rejects(scalar("select zp_supplier_pay($1,$2,$3,$4,334,'bank','REF-TEST')",[b.access,b.site,purchase,uid()]),/PAYMENT_EXCEEDS_DEBT/);
+ await rec(2000);assert.equal(Number(await scalar("select received_cost from zp_purchases where id=$1",[purchase])),1000);
+ const payKey=uid(),payment=()=>scalar("select zp_supplier_pay($1,$2,$3,$4,600,'bank','REF-TEST')",[b.access,b.site,purchase,payKey]);assert.equal(await payment(),await payment());
+ const purchaseLot=await scalar("select lot_id from zp_purchase_receipts where id=$1",[receipt1]);
+ const countKey=uid(),count=()=>scalar("select zp_count_lot($1,$2,$3,$4,1000,500,'Perte constatée')",[b.access,b.site,purchaseLot,countKey]);assert.equal(await count(),await count());
+ await assert.rejects(scalar("select zp_count_lot($1,$2,$3,$4,1000,0,'Comptage ancien')",[b.access,b.site,purchaseLot,uid()]),/STALE_INVENTORY_COUNT/);
+ await assert.rejects(scalar("select zp_count_lot($1,$2,$3,$4,500,700,'Excédent inventaire')",[b.access,b.site,purchaseLot,uid()]),/COUNT_REQUIRES_REVIEW/);
+ const proc=await scalar("select zp_procurement_snapshot($1,$2)",[b.access,b.site]);assert.equal(proc.debt_xaf,400);assert.equal(proc.loss_cost_xaf,166);
+ await assert.rejects(scalar("select zp_procurement_snapshot($1,$2)",[a.access,b.site]),/DENIED/);
+ assert.equal(await scalar("select has_table_privilege('authenticated','public.zp_supplier_payments','insert')"),false);
+ console.log("ZIPPLE_N5_PROCUREMENT_AND_INVENTORY_PASS");
  console.log("ZIPPLE_N5_LOTS_RECIPE_PRODUCTION_EXPENSE_PASS");
  console.log("ZIPPLE_TABLE_TICKETS_CASH_FEEDBACK_PASS");assert.equal(await scalar("select zp_guest_order($1,$2)",[g1,anonymous.id]),null);await assert.rejects(order(a,"table",[{item_id:drink,qty:1}],uid(),ts,g1),/DENIED/);
  for(let n=0;n<5;n++){const t=await tenant("Referral "+n);await db.query("insert into zp_referral_links(referred_org,referrer_org) values($1,$2)",[t.org,a.org]);await pay(await intent(t,"ACCESS","monthly"));}
