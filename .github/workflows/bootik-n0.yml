@@ -45,6 +45,7 @@ jobs:
           BOOTIK_SECURITY_DATABASE_URL: postgresql://bootik_security_runtime:bootik-security-test-only@localhost:5432/postgres
           BOOTIK_PROVISION_DATABASE_URL: postgresql://bootik_provision_runtime:bootik-provision-test-only@localhost:5432/postgres
           BOOTIK_TEST_PAYMENT_URL: postgresql://bootik_payment_runtime:bootik-payment-test-only@localhost:5432/postgres
+          BOOTIK_TEST_REFUND_URL: postgresql://bootik_refund_runtime:bootik-refund-test-only@localhost:5432/postgres
         run: |
           npm install --prefix apps/server/bootik --workspaces=false --ignore-scripts --no-audit --no-fund
           node --test apps/server/bootik/service.test.mjs
@@ -56,6 +57,7 @@ jobs:
           BOOTIK_SECURITY_DATABASE_URL: postgresql://bootik_security_runtime:bootik-security-test-only@localhost:5432/postgres
           BOOTIK_PROVISION_DATABASE_URL: postgresql://bootik_provision_runtime:bootik-provision-test-only@localhost:5432/postgres
           BOOTIK_TEST_PAYMENT_URL: postgresql://bootik_payment_runtime:bootik-payment-test-only@localhost:5432/postgres
+          BOOTIK_TEST_REFUND_URL: postgresql://bootik_refund_runtime:bootik-refund-test-only@localhost:5432/postgres
           VITE_BOOTIK_API_URL: https://127.0.0.1:8787
         run: |
           npm install --workspace @famille/bootik-web --include-workspace-root=false --ignore-scripts

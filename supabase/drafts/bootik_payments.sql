@@ -8,7 +8,7 @@ create table bootik.bk_payment_intents (
  id uuid primary key default gen_random_uuid(), organization_id uuid not null,app_id uuid not null,user_id uuid not null,location_id uuid not null,
  universe text not null check(universe in ('retailer','distributor')),plan text not null check(plan in ('access','premium')),months integer not null check(months in (1,12)),
  amount_fcfa bigint not null check(amount_fcfa>0),channel text not null check(channel in ('mtn_momo','orange_money')),destination text not null,beneficiary text not null,instructions text not null,
- created_at timestamptz not null default now(),expires_at timestamptz not null,state text not null default 'awaiting_payment' check(state in ('awaiting_payment','awaiting_verification','confirmed','expired')),
+ created_at timestamptz not null default now(),expires_at timestamptz not null,state text not null default 'awaiting_payment' check(state in ('awaiting_payment','awaiting_verification','confirmed','expired','refunded')),
  request_key uuid not null, paid_period_id uuid references bootik.bk_paid_periods(id),unique(organization_id,app_id,request_key),
  foreign key(organization_id,app_id,user_id,location_id) references bootik.bk_member_sites(organization_id,app_id,user_id,location_id)
 );
@@ -100,6 +100,38 @@ begin
  update bootik.bk_payment_intents set state='confirmed',paid_period_id=v where id=p_intent;
  return v;
 end $$;
+-- Full refund confirmation from a separately authorized billing integration.
+-- This records an already verified refund; it never initiates a transfer.
+create table bootik.bk_refund_receipts(
+ intent_id uuid primary key references bootik.bk_payment_intents(id),channel text not null,
+ original_reference text not null,refund_reference text not null,
+ amount_fcfa bigint not null check(amount_fcfa>0),provider_at timestamptz not null,
+ evidence_sha text not null unique check(evidence_sha ~ '^[0-9a-f]{64}$'),
+ created_at timestamptz not null default clock_timestamp(),unique(channel,refund_reference)
+);
+create function bootik.bk_confirm_refund(p_intent uuid,p_channel text,p_original text,p_refund text,p_amount bigint,p_at timestamptz,p_sha text)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
+declare i bootik.bk_payment_intents%rowtype;d bootik.bk_payer_proofs%rowtype;old bootik.bk_refund_receipts%rowtype;
+begin
+ select * into i from bootik.bk_payment_intents where id=p_intent for update;
+ if not found then raise exception 'BOOTIK_REFUND_UNKNOWN';end if;
+ select * into d from bootik.bk_payer_proofs where intent_id=p_intent;
+ if not found or p_channel is distinct from i.channel or p_original is distinct from d.reference or p_amount is distinct from i.amount_fcfa or p_refund is null or p_refund !~ '^[A-Z0-9.-]{5,80}$' or p_refund=p_original or p_sha is null or p_sha !~ '^[0-9a-f]{64}$' or p_sha=d.evidence_sha or p_at is null or p_at<d.provider_at or p_at>now()+interval '5 minutes' then raise exception 'BOOTIK_REFUND_MISMATCH';end if;
+ select * into old from bootik.bk_refund_receipts where intent_id=p_intent;
+ if found then
+  if (old.channel,old.original_reference,old.refund_reference,old.amount_fcfa,old.provider_at,old.evidence_sha) is distinct from (p_channel,p_original,p_refund,p_amount,p_at,p_sha) then raise exception 'BOOTIK_REFUND_CONFLICT';end if;
+  return i.paid_period_id;
+ end if;
+ if i.state<>'confirmed' or i.paid_period_id is null then raise exception 'BOOTIK_REFUND_NOT_CONFIRMED';end if;
+ insert into bootik.bk_refund_receipts(intent_id,channel,original_reference,refund_reference,amount_fcfa,provider_at,evidence_sha) values(p_intent,p_channel,p_original,p_refund,p_amount,p_at,p_sha);
+ update bootik.bk_paid_periods set revoked_at=clock_timestamp() where id=i.paid_period_id and organization_id=i.organization_id and app_id=i.app_id and revoked_at is null;
+ if not found then raise exception 'BOOTIK_REFUND_PERIOD_INVALID';end if;
+ update bootik.bk_payment_intents set state='refunded' where id=p_intent;
+ return i.paid_period_id;
+end $$;
+alter table bootik.bk_refund_receipts enable row level security;
+alter table bootik.bk_refund_receipts force row level security;
+revoke all on bootik.bk_refund_receipts from public,anon,authenticated;
 do $$ declare n text;begin foreach n in array array['bk_payment_destinations','bk_payment_intents','bk_payer_proofs','bk_merchant_devices','bk_merchant_proofs'] loop
  execute format('alter table bootik.%I enable row level security',n);
  execute format('alter table bootik.%I force row level security',n);

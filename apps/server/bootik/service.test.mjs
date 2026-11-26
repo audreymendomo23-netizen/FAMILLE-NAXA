@@ -1,6 +1,6 @@
-import {test} from 'node:test';import assert from 'node:assert/strict';import pg from 'pg';import {randomUUID,randomBytes,createHash} from 'node:crypto';import{captureCredit,reconcilePending}from './payment-worker.mjs';import{createBootikService,verifier}from './service.mjs';
+import {test} from 'node:test';import assert from 'node:assert/strict';import pg from 'pg';import {randomUUID,randomBytes,createHash} from 'node:crypto';import{captureCredit,reconcilePending,confirmRefund}from './payment-worker.mjs';import{createBootikService,verifier}from './service.mjs';
 test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, logout',async()=>{
- const admin=new pg.Pool({connectionString:process.env.BOOTIK_TEST_ADMIN_URL});const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL});const securityDb=new pg.Pool({connectionString:process.env.BOOTIK_SECURITY_DATABASE_URL});const provisionDb=new pg.Pool({connectionString:process.env.BOOTIK_PROVISION_DATABASE_URL});const provisionToken=randomBytes(32).toString('hex');const handle=createBootikService(db,{securityDb,provisionDb,provisionToken});const paymentDb=new pg.Pool({connectionString:process.env.BOOTIK_TEST_PAYMENT_URL});
+ const admin=new pg.Pool({connectionString:process.env.BOOTIK_TEST_ADMIN_URL});const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL});const securityDb=new pg.Pool({connectionString:process.env.BOOTIK_SECURITY_DATABASE_URL});const provisionDb=new pg.Pool({connectionString:process.env.BOOTIK_PROVISION_DATABASE_URL});const provisionToken=randomBytes(32).toString('hex');const handle=createBootikService(db,{securityDb,provisionDb,provisionToken});const paymentDb=new pg.Pool({connectionString:process.env.BOOTIK_TEST_PAYMENT_URL});const refundDb=new pg.Pool({connectionString:process.env.BOOTIK_TEST_REFUND_URL});
  const one=async(q,p=[]) => (await admin.query(q,p)).rows[0];
  try{
  const {app_id:a}=await one('select app_id from bootik.bk_app_registration');
@@ -306,6 +306,7 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  const registerA=await makeRegister('CAISSE-A'),registerB=await makeRegister('CAISSE-B');assert.equal(registerA.status,200);assert.equal(registerB.status,200);
  const station={kind:'workstation',request_id:randomUUID(),activity_id:centralAct,code:'POSTE-A',label:'Poste A',reason:'Affectation poste'};
  assert.equal((await centralCall('resource-admin',station)).status,200);
+ const resources=await centralCall('resource-state',{});assert.equal(resources.status,200);assert.ok(resources.body.result.resources.some(x=>x.id===station.request_id&&x.kind==='workstation'));
  const link={kind:'link-register',request_id:randomUUID(),register_id:registerA.body.result.register_id,workstation_id:station.request_id,reason:'Caisse liée au poste'};
  assert.equal((await centralCall('resource-admin',link)).status,200);
  const assignment={kind:'assign',request_id:randomUUID(),member_id:employee,resource_kind:'workstation',resources:[station.request_id],reason:'Affectation caissier'};
@@ -345,8 +346,15 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal(await reconcilePending(paymentDb),1);assert.equal(await reconcilePending(paymentDb),0);
  const confirmed=await call('payment-status',{intent_id:intent.id});assert.equal(confirmed.body.result.state,'confirmed');assert.ok(confirmed.body.result.paid_period_id);
  assert.equal(Number((await one('select count(*) from bootik.bk_paid_periods where organization_id=$1',[o])).count),1);
+ const refund={app_id:'BOOTIK',intent_id:intent.id,direction:'verified_refund',success:true,channel:'mtn_momo',original_reference:ref,refund_reference:'REFUND-'+randomUUID().slice(0,8).toUpperCase(),amount_fcfa:40000,provider_at:new Date().toISOString(),evidence_sha:'e'.repeat(64)};
+ await assert.rejects(confirmRefund(db,refund));await assert.rejects(confirmRefund(paymentDb,refund));await assert.rejects(confirmRefund(refundDb,{...refund,amount_fcfa:1}));
+ assert.equal(await confirmRefund(refundDb,refund),confirmed.body.result.paid_period_id);assert.equal(await confirmRefund(refundDb,refund),confirmed.body.result.paid_period_id);
+ await assert.rejects(confirmRefund(refundDb,{...refund,refund_reference:'OTHER-REF'}));
+ assert.equal((await call('payment-status',{intent_id:intent.id})).body.result.state,'refunded');
+ assert.ok((await one('select revoked_at from bootik.bk_paid_periods where id=$1',[confirmed.body.result.paid_period_id])).revoked_at);
+ assert.equal(Number((await one('select count(*) from bootik.bk_refund_receipts where intent_id=$1',[intent.id])).count),1);
  assert.equal((await handle('recovery',{app_id:'BOOTIK',identifier},null)).status,204);
  assert.equal((await handle('logout',{app_id:'BOOTIK'},token)).status,204);assert.equal((await call('catalog',{})).status,401);assert.equal((await handle('refresh',{app_id:'BOOTIK',refresh_token:refreshed.body.refresh_token,installation_id:installation},null)).status,401);
  await assert.rejects(db.query('select bootik.bk_confirm_paid_period($1,$2,$3,$4,$5,$6,$7)',[o,a,'retailer','access',1,4000,'forged']));
- }finally{await provisionDb.end();await securityDb.end();await paymentDb.end();await db.end();await admin.end()}
+ }finally{await provisionDb.end();await securityDb.end();await refundDb.end();await paymentDb.end();await db.end();await admin.end()}
 });
