@@ -51,3 +51,5 @@ Candidat achats multi-lignes, réutilisation de la chaîne existante fournisseur
 - Candidat transfert de préparations : portions valorisées et conservation du coût de production entre sites avec écart explicite. Restrictions conservatrices contre stock réservé. Restent dates limites et préparations intermédiaires, transfert multi-lignes, parité native, recette navigateur dédiée. Aucun vert global présumé.
 
 - Candidat ardoises : séparation vente et encaissement réel, plafond et échéance validés, paiements partiels idempotents, aucun double CA ni coût. Reste politique de modification plafond/relances, qualification native, journal multi-lignes et recettes E2E dédiées. Gates des caisses et transferts de portions précédents verts SQL; conformité complète non acquise.
+
+- Braiseur candidat : rendement sur lot réel et perte d'invendus valorisée, intégration des pertes de transfert et braisage au journal; ne couvre pas encore vente directe au poids, prix jour spécifique, report et péremption. Ardoises SQL qualifiées; recette navigateur corrigée après ambiguïté, gate à constater.

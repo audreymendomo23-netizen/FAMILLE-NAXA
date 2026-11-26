@@ -445,6 +445,18 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const creditLedger=await scalar("select zp_ledger_snapshot($1,$2)",[a.access,a.site]);assert.ok(creditLedger.pending.some(x=>x.kind==="credit_sale"));assert.ok(creditLedger.pending.some(x=>x.kind==="credit_payment"));
  await assert.rejects(scalar("select zp_credit_snapshot($1,$2)",[b.access,a.site]),/DENIED/);
  console.log("ZIPPLE_BULK3_CREDIT_SALE_AND_PARTIAL_COLLECTION_PASS");
+ const braiseMeasureKey=uid(),braiseMeasure=(raw=500,key=braiseMeasureKey)=>scalar("select zp_braise_measure($1,$2,$3,$4,$5,$6,400,350,'Pesée contrôlée')",[a.access,a.site,prepBatch.id,srcIng,key,raw]);
+ await assert.rejects(braiseMeasure(501,uid()),/BRAISE_INPUT_MISMATCH/);
+ const yieldId=await braiseMeasure();assert.equal(await braiseMeasure(),yieldId);
+ await assert.rejects(braiseMeasure(501),/IDEMPOTENCY_CONFLICT/);
+ const lossKey=uid(),braiseLoss=()=>scalar("select zp_braise_discard($1,$2,$3,$4,1,'Invendu constaté')",[a.access,a.site,yieldId,lossKey]);
+ const discardId=await braiseLoss();assert.equal(await braiseLoss(),discardId);
+ const braiseSnap=await scalar("select zp_braise_snapshot($1,$2)",[a.access,a.site]),yieldSnap=braiseSnap.yields.find(x=>x.id===yieldId);
+ assert.equal(yieldSnap.remaining_servings,2);assert.equal(yieldSnap.discarded_servings,1);assert.equal(yieldSnap.raw_g,500);assert.equal(yieldSnap.cooked_g,400);
+ assert.equal(await scalar("select available_qty from zp_menu_items where id=$1",[prepSrcItem]),2);
+ assert.ok((await scalar("select zp_ledger_snapshot($1,$2)",[a.access,a.site])).pending.some(x=>x.kind==="braise_loss"&&x.source_id===discardId));
+ await assert.rejects(scalar("select zp_braise_snapshot($1,$2)",[b.access,a.site]),/DENIED/);
+ console.log("ZIPPLE_BULK3_BRAISE_YIELD_AND_LOSS_PASS");
  const issueEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='issued'",[account]);
  const returnEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='returned'",[account]);
  const lostEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='lost'",[account]);
