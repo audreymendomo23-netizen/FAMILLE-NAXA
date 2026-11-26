@@ -1485,7 +1485,7 @@ internal fun OrganizationWorkspaceContent(
                         }
                     }
                 }
-                .onFailure { error = it.message ?: "Chargement des emplacements serveur impossible." }
+                .onFailure { error = it.message ?: "Impossible de charger les emplacements." }
         }
     }
     val canManageNetwork = session.roleCanManageNetwork()
@@ -1760,7 +1760,7 @@ fun SupportContent(
                 siteId,
                 session.account.activeSites.associate { it.id to (it.name + if (it.addressLabel.isBlank()) "" else " · " + it.addressLabel) }
             ) { siteId = it }
-            LocalOnlyNotice("Les demandes restent en brouillon sur l’appareil tant que la passerelle support n’est pas connectée.")
+            LocalOnlyNotice("Les demandes en attente seront transmises dès que le service sera disponible.")
         }
         item {
             Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
