@@ -1,0 +1,60 @@
+name: Family media — isolated SFU replay
+on:
+  pull_request:
+    branches: [test/widemeet-qualification-20261126]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'packages/media-core/**'
+      - 'scripts/widemeet/media-replay.mjs'
+      - '.github/workflows/family-media-replay.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-media:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare pinned test dependencies
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund livekit-client@2.25.0 livekit-server-sdk@2.20.1 ws@8.18.3 @playwright/test@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Start disposable SFU bound to loopback
+        run: |
+          set -euo pipefail
+          KEY="naxareplay"
+          SECRET="$(openssl rand -hex 32)"
+          echo "::add-mask::$SECRET"
+          echo "LK_TEST_KEY=$KEY" >> "$GITHUB_ENV"
+          echo "LK_TEST_SECRET=$SECRET" >> "$GITHUB_ENV"
+          cat > "$RUNNER_TEMP/lk.yaml" <<EOF
+          port: 7880
+          bind_addresses: ["127.0.0.1"]
+          rtc:
+            node_ip: 127.0.0.1
+            use_external_ip: false
+            tcp_port: 7882
+            udp_port: 7883
+          room:
+            auto_create: false
+            enable_remote_unmute: false
+          keys:
+            $KEY: $SECRET
+          EOF
+          chmod 600 "$RUNNER_TEMP/lk.yaml"
+          docker run -d --name naxa-lk --network host -v "$RUNNER_TEMP/lk.yaml:/etc/livekit.yaml:ro" livekit/livekit-server:v1.13.8 --config /etc/livekit.yaml
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:7880/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          docker logs naxa-lk
+          exit 1
+      - name: Exercise actual SFU with two browser sessions and revoked token
+        run: node scripts/widemeet/media-replay.mjs
+      - name: Cleanup
+        if: always()
+        run: docker rm -f naxa-lk || true
