@@ -403,8 +403,8 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByRole("button",{name:"Confirmer la conversion d’achat",exact:true}).click();
   const createResponse=await createdConverted,createBody=await createResponse.json();assert.equal(createResponse.status(),200,"converted purchase HTTP "+JSON.stringify(createBody));
   const convPurchase=await scalar("select id from zp_purchases where site_id=$1 and reference='ACH-CONV-EDGE'",[site]);assert.ok(convPurchase);assert.equal(createBody.data,convPurchase);
-  const conversionEvent=(await ok("purchase_conversion_snapshot")).events.find(x=>x.source_id===convPurchase);assert.ok(conversionEvent,"persisted converted purchase journal");assert.equal(Number(conversionEvent.input_milli),2000);assert.equal(Number(conversionEvent.base_milli),10000);assert.equal(conversionEvent.label,"Sac 5 kg");
-  const purchaseRow=page.getByTestId("purchase-conversion-"+convPurchase);await purchaseRow.waitFor();assert.match(await purchaseRow.innerText(),/Commande · 2 Sac 5 kg → 10 kg/);
+  const conversionEvent=(await ok("purchase_conversion_snapshot")).events.find(x=>x.source_id===convPurchase);assert.ok(conversionEvent,"persisted converted purchase journal");assert.equal(Number(conversionEvent.input_milli),2000);assert.equal(Number(conversionEvent.base_milli),10000);assert.equal(conversionEvent.label,"sac 5 kg");
+  const purchaseRow=page.getByTestId("purchase-conversion-"+convPurchase);await purchaseRow.waitFor();assert.match(await purchaseRow.innerText(),/Commande · 2 sac 5 kg → 10 kg/);
   await page.getByRole("combobox",{name:"Opération en unité alternative",exact:true}).selectOption("receipt");
   await page.getByRole("combobox",{name:"Commande en conditionnement",exact:true}).selectOption(convPurchase);
   await page.getByRole("combobox",{name:"Conditionnement configuré",exact:true}).selectOption(convRule);
@@ -414,7 +414,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByRole("button",{name:"Confirmer la conversion d’achat",exact:true}).click();
   const receiveResponse=await receivedConverted,receiveBody=await receiveResponse.json();assert.equal(receiveResponse.status(),200,"converted receipt HTTP "+JSON.stringify(receiveBody));
   const receiptEvent=(await ok("purchase_conversion_snapshot")).events.find(x=>x.source_id===receiveBody.data);assert.ok(receiptEvent);assert.equal(receiptEvent.kind,"receipt");assert.equal(Number(receiptEvent.base_milli),5000);
-  const receiptRow=page.getByTestId("purchase-conversion-"+receiveBody.data);await receiptRow.waitFor();assert.match(await receiptRow.innerText(),/Réception · 1 Sac 5 kg → 5 kg/);
+  const receiptRow=page.getByTestId("purchase-conversion-"+receiveBody.data);await receiptRow.waitFor();assert.match(await receiptRow.innerText(),/Réception · 1 sac 5 kg → 5 kg/);
   assert.equal(Number(await scalar("select remaining_milli from zp_ingredient_lots where site_id=$1 and lot_label='LOT-CONV-EDGE'",[site])),5000);
   assert.equal(Number(await scalar("select received_cost from zp_purchases where id=$1",[convPurchase])),5000);
   console.log("ZIPPLE_BULK3_REAL_BROWSER_CONVERTED_PURCHASE_PASS");

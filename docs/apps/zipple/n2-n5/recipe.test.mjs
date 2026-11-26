@@ -647,14 +647,14 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal((await scalar("select zp_intermediate_snapshot($1,$2)",[a.access,a.site])).conversions.find(x=>x.id===inter.id).qty_milli,200);
  console.log("ZIPPLE_BULK3_INTERMEDIATE_PREPARATION_COST_CONSERVATION_PASS");
  const convertedSupplier=await scalar("select zp_supplier_add($1,$2,'Grossiste unités','','',30)",[a.access,a.site]);
- const purchaseConversion=await scalar("select zp_unit_conversion_add($1,$2,$3,$4,'carton',2000)",[a.access,a.site,intermediateIng,uid()]);
+ const purchaseConversion=await scalar("select zp_unit_conversion_add($1,$2,$3,$4,'  Carton  ',2000)",[a.access,a.site,intermediateIng,uid()]);
  const convertedPurchaseKey=uid(),convertedPurchase=()=>scalar("select zp_purchase_create_converted($1,$2,$3,$4,$5,$6,'CONV-ACH',3000,1500)",[a.access,a.site,convertedSupplier,intermediateIng,purchaseConversion,convertedPurchaseKey]);
  const convertedPurchaseId=await convertedPurchase();assert.equal(await convertedPurchase(),convertedPurchaseId);
  assert.equal(Number(await scalar("select qty_milli from zp_purchases where id=$1",[convertedPurchaseId])),6000);
  const convertedReceiveKey=uid(),convertedReceive=()=>scalar("select zp_purchase_receive_converted($1,$2,$3,$4,$5,1000,'CONV-LOT',null)",[a.access,a.site,convertedPurchaseId,purchaseConversion,convertedReceiveKey]);
  const convertedReceiptId=await convertedReceive();assert.equal(await convertedReceive(),convertedReceiptId);
  assert.equal(Number(await scalar("select received_milli from zp_purchases where id=$1",[convertedPurchaseId])),2000);assert.equal(Number(await scalar("select received_cost from zp_purchases where id=$1",[convertedPurchaseId])),500);
- assert.equal((await scalar("select zp_purchase_conversion_snapshot($1,$2)",[a.access,a.site])).events.length,2);
+ const purchaseEvents=(await scalar("select zp_purchase_conversion_snapshot($1,$2)",[a.access,a.site])).events;assert.equal(purchaseEvents.length,2);assert.ok(purchaseEvents.every(x=>x.label==="carton"));
  const groupLedger=await scalar("select zp_ledger_group_statement($1,$2,$3,$3)",[a.access,a.site,statementDay]);
  assert.ok(groupLedger.sites_included>=2);assert.ok(groupLedger.sites.some(x=>x.site_id===dest));assert.ok(!groupLedger.sites.some(x=>x.site_id===b.site));
  assert.equal(BigInt(groupLedger.result_xaf),groupLedger.sites.reduce((n,x)=>n+BigInt(x.result_xaf),0n));
