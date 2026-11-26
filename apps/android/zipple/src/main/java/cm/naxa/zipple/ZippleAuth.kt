@@ -27,6 +27,11 @@ class ZippleAuth(private val endpoint:String) {
         request("recovery",JSONObject().put("identifier",identifier.trim()))
     }
     suspend fun logout(token:String){request("logout",JSONObject(),token)}
+    suspend fun sync(session:Session,event:OfflineEvent):String {
+        require(session.permits(event.siteId)&&session.organization==event.organizationId&&session.member==event.memberId&&event.appId=="ZIPPLE")
+        val receipt=request("sync",JSONObject().put("event_id",event.eventId).put("organization_id",event.organizationId).put("member_id",event.memberId).put("site_id",event.siteId).put("sequence",event.deviceSequence).put("aggregate_type",event.aggregateType).put("payload",JSONObject(event.payloadJson)),session.token)
+        return ReceiptPolicy.verify(event.eventId,event.organizationId,event.siteId,receipt.optString("event_id"),receipt.optString("organization_id"),receipt.optString("site_id"),receipt.optString("app_id"),receipt.optString("state"))
+    }
     private fun parse(j:JSONObject):Session{
         val array=j.getJSONArray("sites")
         val sites=(0 until array.length()).map { val x=array.getJSONObject(it);Site(x.getString("id"),x.getString("name")) }

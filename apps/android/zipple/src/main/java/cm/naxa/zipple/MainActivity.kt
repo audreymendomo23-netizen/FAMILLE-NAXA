@@ -39,6 +39,8 @@ class MainActivity:FragmentActivity(){
  Image(painterResource(R.drawable.zipple_logo),contentDescription="ZIPPLE",modifier=Modifier.height(92.dp).fillMaxWidth())
  Text(tr("Votre restaurant, bien piloté","Manage your restaurant"),style=MaterialTheme.typography.headlineSmall)
  val current=session
+ LaunchedEffect(current,unlocked){ZippleSyncSession.current=if(unlocked)current else null;if(unlocked&&current!=null)ZippleSyncSession.schedule(context)}
+ DisposableEffect(Unit){onDispose{ZippleSyncSession.current=null}}
  if(current!=null){LaunchedEffect(current.expiresAt){kotlinx.coroutines.delay((current.expiresAt-System.currentTimeMillis()).coerceAtLeast(0));if(session==current){session=null;unlocked=false;site="";message=tr("Session expirée","Session expired")}}}
  if(current==null){
  OutlinedTextField(identifier,{identifier=it},label={Text(tr("Identifiant","Identifier"))},singleLine=true,modifier=Modifier.fillMaxWidth())
@@ -56,7 +58,8 @@ class MainActivity:FragmentActivity(){
  Text(current.name,style=MaterialTheme.typography.titleLarge);Text(tr("Établissement autorisé","Authorized site"))
  current.sites.forEach { s->OutlinedButton(onClick={if(current.permits(s.id))site=s.id},enabled=current.permits(s.id)){Text((if(site==s.id)"✓ " else "")+s.name)} }
  if(current.permits(site))Text(tr("Espace professionnel — socle N1","Professional workspace — N1 foundation"))else Text(tr("Session expirée","Session expired"))
- TextButton(onClick={unlocked=false}){Text(tr("Verrouiller","Lock"))}
+ TextButton(onClick={ZippleSyncSession.schedule(context)}){Text(tr("Synchroniser","Synchronize"))}
+ TextButton(onClick={unlocked=false;ZippleSyncSession.current=null}){Text(tr("Verrouiller","Lock"))}
  }
  if(current!=null)TextButton(onClick={vault.clear();session=null;site="";pin="";unlocked=false;message="";scope.launch{try{api.logout(current.token)}catch(_:Exception){message=tr("Session locale fermée ; révocation distante non confirmée","Local session closed; remote revocation unconfirmed")}}}){Text(tr("Déconnexion","Sign out"))}
  if(message.isNotEmpty())Text(message,color=MaterialTheme.colorScheme.error)

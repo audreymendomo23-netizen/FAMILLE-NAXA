@@ -4,3 +4,5 @@ dependencies { implementation(platform("androidx.compose:compose-bom:2024.10.01"
 dependencies { testImplementation("junit:junit:4.13.2"); implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1") }
 
 dependencies { implementation("androidx.fragment:fragment-ktx:1.8.5") }
+
+dependencies { implementation("androidx.work:work-runtime-ktx:2.9.1") }
