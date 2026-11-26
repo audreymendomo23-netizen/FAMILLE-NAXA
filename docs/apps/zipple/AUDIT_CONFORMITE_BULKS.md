@@ -110,3 +110,24 @@ Prochaine reprise : lire les journaux exacts des runs 45883380874/45883380969, c
 - Préparations intermédiaires : conversion d'un lot produit disponible en matière réutilisable par recettes, quantité mesurée, coût exact transféré sans vente, date limite et heure source conservées dans les lots/transferts et respectées par FEFO, refus réservations/expiration, audit et idempotence. Interfaces Web/Android, assertions SQL. Gate à constater.
 
 - Conversion achats/réceptions : même règle explicite que lots, trace du conditionnement et quantité de base, coûts et dettes inchangés, réceptions partielles exactes. Consolidation des états de gestion des sites autorisés, distinction du périmètre partiel et transferts internes identifiés hors CA. Export CSV et interface native; SQL à qualifier. Aucun taux fiscal supposé.
+
+## Reprise contradictoire Bulk 3 — bilan vérifié du 26/11/2026
+Candidat code `83da944f237d42d58207c73e037ccd5bb184cecc`, branche `work/zipple-completion-20261126`. Cette section actualise les mentions historiques « candidat » et « gate à constater » ci-dessus sans effacer l'historique.
+- 59dfd52 : avoirs commerciaux/retours physiques et rapprochement : 7/7 workflows SUCCESS, SQL 45888540451 (44/44), navigateur réel 45888540298.
+- b140a8a, fd12195, 051769e : ERP 360° Android natif, formulaires métier, achats et recettes multi-lignes, ventilation comptable et paiements mixtes, justificatifs SAF avec hash et limite 2 Mio. Erreur syntaxe Kotlin constatée au run 45888830587 et corrigée. APK 45889069225 SUCCESS ; qualification 45889069215 SUCCESS (Web, Android, émulateur). Tests Compose à transport de test, pas une recette native hébergée ; test N1LiveDeviceTest.authenticatedNativeAndPersistedSync ignoré faute de configuration, non compté comme réussi.
+- 38789e0 : SQL 45889314167 SUCCESS ; navigateur réel 45889314116 / job 140147761308 SUCCESS : excédents, vente directe, production pesée, états financiers, plafond et relance, avoirs et retours, rapprochement. Aucun skip dans ce scénario intégré.
+- b40dfb7 : préparation intermédiaire réutilisable, quantité et coût conservés, péremption et FEFO ; SQL 45889585770 et navigateur réel 45889585708 SUCCESS.
+- 83da944 : conversion de conditionnement fournisseur et réceptions partielles, consolidation des états des sites autorisés et identification des transferts internes. SQL 45889795475 / job 140149336698 : 44/44, zéro échec, zéro skip ; marqueurs ZIPPLE_BULK3_INTERMEDIATE_PREPARATION_COST_CONSERVATION_PASS et ZIPPLE_BULK3_PURCHASE_CONVERSIONS_AND_GROUP_STATEMENTS_PASS.
+
+### État du dernier candidat observé
+- ZIPPLE N1 — isolated foundation — 45889795323 : IN_PROGRESS
+- ZIPPLE — Cloudflare Pages build qualification — 45889795444 : SUCCESS
+- ZIPPLE business — real local Supabase — 45889795280 : IN_PROGRESS
+- ZIPPLE N1 — live Cloudflare Pages recipe — 45889795533 : SUCCESS
+- ZIPPLE N2–N5 — isolated business candidate — 45889795475 : SUCCESS
+- ZIPPLE N1 — hosted Android debug handoff — 45889795445 : SUCCESS
+- ZIPPLE N1 — PWA multi-browser qualification — 45889795311 : SUCCESS
+
+### Conclusion de conformité
+Les parcours ERP/finance listés dans les preuves sont validés dans leur périmètre local, sans déclaration de déploiement ni de conformité réglementaire. Réutilisation du calcul comptable NAXA (src/lib/compta/calculs.ts), du modèle stock/finance déjà raccordé et de la persistance Room inspirée de NAXA Services, complétée par les contrats ZIPPLE, WorkManager et IndexedDB. Aucun changement sur les applications sœurs, main ou production.
+Réserves conservées : offline couvre production, réception de lot, comptage négatif et dépense confirmée ; conflits bloquants, sans parcours complet de résolution ni synchronisation de toutes les mutations. Les états financiers sont de gestion, sans plan SYSCOHADA/taxes/mappings automatiques validés par professionnel. Justificatifs privés, format/hash et taille contrôlés, sans qualification industrielle antivirus/rétention. Parité exhaustive Android/Web/PWA et recette native hébergée relèvent du Bulk 6 déjà prévu dans le découpage initial. Ces réserves et les workflows non terminés ne sont pas comptés comme verts. Ne pas assimiler le vert des contrôles exécutés à une clôture intégrale de toutes les exigences Bulk 3.
