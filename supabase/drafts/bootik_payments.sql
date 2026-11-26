@@ -13,7 +13,7 @@ create table bootik.bk_payment_intents (
  foreign key(organization_id,app_id,user_id,location_id) references bootik.bk_member_sites(organization_id,app_id,user_id,location_id)
 );
 create table bootik.bk_payer_proofs (
- intent_id uuid primary key references bootik.bk_payment_intents(id),channel text not null,reference text not null check(reference ~ '^[A-Z0-9-]{5,80}$'),
+ intent_id uuid primary key references bootik.bk_payment_intents(id),channel text not null,reference text not null check(reference ~ '^[A-Z0-9.-]{5,80}$'),
  amount_fcfa bigint not null,destination text not null,provider_at timestamptz not null,evidence_sha text not null unique check(evidence_sha ~ '^[0-9a-f]{64}$'),
  created_at timestamptz not null default now(),unique(channel,reference)
 );
@@ -23,7 +23,7 @@ create table bootik.bk_merchant_devices (
 );
 create table bootik.bk_merchant_proofs (
  id uuid primary key default gen_random_uuid(),device_id uuid not null references bootik.bk_merchant_devices(id),channel text not null,
- reference text not null check(reference ~ '^[A-Z0-9-]{5,80}$'),amount_fcfa bigint not null check(amount_fcfa>0),destination text not null,
+ reference text not null check(reference ~ '^[A-Z0-9.-]{5,80}$'),amount_fcfa bigint not null check(amount_fcfa>0),destination text not null,
  provider_at timestamptz not null,evidence_sha text not null unique check(evidence_sha ~ '^[0-9a-f]{64}$'),
  created_at timestamptz not null default now(),unique(channel,reference)
 );
@@ -55,7 +55,7 @@ begin
  select * into i from bootik.bk_payment_intents where id=p_intent and organization_id=p_org and app_id=p_app and user_id=p_user and location_id=p_site for update;
  if not found then raise exception 'BOOTIK_PAYMENT_DENIED';end if;
  r:=upper(btrim(p_reference));
- if r is null or r !~ '^[A-Z0-9-]{5,80}$' or p_sha is null or p_sha !~ '^[0-9a-f]{64}$' or p_amount is distinct from i.amount_fcfa or p_destination is distinct from i.destination or p_at is null or p_at<i.created_at-interval '5 minutes' or p_at>i.expires_at+interval '5 minutes' or p_at>now()+interval '5 minutes' then raise exception 'BOOTIK_DEBIT_MISMATCH';end if;
+ if r is null or r !~ '^[A-Z0-9.-]{5,80}$' or p_sha is null or p_sha !~ '^[0-9a-f]{64}$' or p_amount is distinct from i.amount_fcfa or p_destination is distinct from i.destination or p_at is null or p_at<i.created_at-interval '5 minutes' or p_at>i.expires_at+interval '5 minutes' or p_at>now()+interval '5 minutes' then raise exception 'BOOTIK_DEBIT_MISMATCH';end if;
  select * into old from bootik.bk_payer_proofs where intent_id=p_intent;
  if found then
   if (old.reference,old.amount_fcfa,old.destination,old.provider_at,old.evidence_sha) is distinct from (r,p_amount,p_destination,p_at,p_sha) then raise exception 'BOOTIK_DEBIT_CONFLICT';end if;
@@ -73,7 +73,7 @@ begin
  select * into d from bootik.bk_merchant_devices where token_hash=p_token_hash and channel=p_channel and destination=p_destination and active;
  if not found then raise exception 'BOOTIK_DEVICE_DENIED' using errcode='42501';end if;
  r:=upper(btrim(p_reference));
- if r is null or r !~ '^[A-Z0-9-]{5,80}$' or p_sha is null or p_sha !~ '^[0-9a-f]{64}$' or p_amount is null or p_amount<=0 or p_at is null or p_at<now()-interval '24 hours' or p_at>now()+interval '5 minutes' then raise exception 'BOOTIK_CREDIT_INVALID';end if;
+ if r is null or r !~ '^[A-Z0-9.-]{5,80}$' or p_sha is null or p_sha !~ '^[0-9a-f]{64}$' or p_amount is null or p_amount<=0 or p_at is null or p_at<now()-interval '24 hours' or p_at>now()+interval '5 minutes' then raise exception 'BOOTIK_CREDIT_INVALID';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_channel||':'||r,8));
  select * into old from bootik.bk_merchant_proofs where channel=p_channel and reference=r;
  if found then

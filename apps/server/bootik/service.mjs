@@ -61,6 +61,9 @@ export function createBootikService(db,{now=Date.now}={}){
    const i=await first('select bootik.bk_prepare_subscription($1,$2,$3,$4,$5,$6,$7,$8,$9) as id',[...scope,p.universe,p.plan,p.months,p.channel,p.request_key]);
    result=await first('select id,amount_fcfa,channel,destination,beneficiary,instructions,expires_at,state from bootik.bk_payment_intents where id=$1',[i.id]);
   }
+  else if(action==='payment-current'&&allowed.has(p.universe)){
+   result={intent:await first("select id,amount_fcfa,channel,destination,beneficiary,instructions,expires_at,state,paid_period_id from bootik.bk_payment_intents where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4 and universe=$5 order by created_at desc limit 1",[...scope,p.universe])||null};
+  }
   else if(action==='payment-status'&&validId(p.intent_id)){
    result=await first('select id,amount_fcfa,channel,destination,beneficiary,instructions,expires_at,state,paid_period_id from bootik.bk_payment_intents where id=$1 and organization_id=$2 and app_id=$3 and user_id=$4 and location_id=$5',[p.intent_id,...scope]);
    if(!result)return reject(403);

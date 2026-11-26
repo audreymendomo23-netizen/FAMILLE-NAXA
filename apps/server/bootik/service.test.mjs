@@ -1,6 +1,6 @@
-import {test} from 'node:test';import assert from 'node:assert/strict';import pg from 'pg';import {randomUUID,randomBytes} from 'node:crypto';import{createBootikService,verifier}from './service.mjs';
+import {test} from 'node:test';import assert from 'node:assert/strict';import pg from 'pg';import {randomUUID,randomBytes,createHash} from 'node:crypto';import{captureCredit,reconcilePending}from './payment-worker.mjs';import{createBootikService,verifier}from './service.mjs';
 test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, logout',async()=>{
- const admin=new pg.Pool({connectionString:process.env.BOOTIK_TEST_ADMIN_URL});const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL});const handle=createBootikService(db);
+ const admin=new pg.Pool({connectionString:process.env.BOOTIK_TEST_ADMIN_URL});const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL});const handle=createBootikService(db);const paymentDb=new pg.Pool({connectionString:process.env.BOOTIK_TEST_PAYMENT_URL});
  const one=async(q,p=[]) => (await admin.query(q,p)).rows[0];
  try{
  const {app_id:a}=await one('select app_id from bootik.bk_app_registration');
@@ -31,8 +31,30 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await call('support',{kind:'screen',consent:false})).status,400);
  const req=await call('support',{kind:'video',consent:true});assert.equal(req.status,200);
  assert.equal((await call('support-cancel',{request_id:req.body.result.request_id})).body.result.cancelled,true);
+ const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
+ await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
+ await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);
+ const payKey=randomUUID(),payInput={universe:'retailer',plan:'access',months:12,channel:'mtn_momo',request_key:payKey};
+ const payment=await call('payment-intent',payInput);assert.equal(payment.status,200);const intent=payment.body.result;assert.equal(Number(intent.amount_fcfa),40000);
+ assert.equal((await call('payment-intent',payInput)).body.result.id,intent.id);
+ assert.equal((await call('payment-status',{intent_id:intent.id},foreign)).status,403);
+ const when=new Date().toISOString(),ref='TEST-'+randomUUID().slice(0,8).toUpperCase();
+ const payer={intent_id:intent.id,direction:'payer_debit',success:true,reference:ref,amount_fcfa:40000,destination:merchant,provider_at:when,evidence_sha:'a'.repeat(64)};
+ assert.equal((await call('payment-debit',{...payer,amount_fcfa:1})).status,400);
+ assert.equal((await call('payment-debit',payer)).status,200);
+ assert.equal((await call('payment-debit',payer)).status,200);
+ assert.equal((await call('payment-status',{intent_id:intent.id})).body.result.state,'awaiting_verification');
+ assert.equal(await reconcilePending(paymentDb),0);
+ const credit={channel:'mtn_momo',direction:'merchant_credit',success:true,sender_origin_id:'MobileMoney',reference:ref,amount_fcfa:40000,destination:merchant,provider_at:when,evidence_sha:'b'.repeat(64)};
+ await assert.rejects(captureCredit(paymentDb,'c'.repeat(64),credit));
+ await assert.rejects(captureCredit(paymentDb,deviceToken,{...credit,destination:'OTHER'}));
+ await assert.rejects(db.query('select * from bootik.bk_merchant_proofs'));
+ const creditId=await captureCredit(paymentDb,deviceToken,credit);assert.equal(await captureCredit(paymentDb,deviceToken,credit),creditId);
+ assert.equal(await reconcilePending(paymentDb),1);assert.equal(await reconcilePending(paymentDb),0);
+ const confirmed=await call('payment-status',{intent_id:intent.id});assert.equal(confirmed.body.result.state,'confirmed');assert.ok(confirmed.body.result.paid_period_id);
+ assert.equal(Number((await one('select count(*) from bootik.bk_paid_periods where organization_id=$1',[o])).count),1);
  assert.equal((await handle('recovery',{app_id:'BOOTIK',identifier},null)).status,204);
  assert.equal((await handle('logout',{app_id:'BOOTIK'},token)).status,204);assert.equal((await call('catalog',{})).status,401);assert.equal((await handle('refresh',{app_id:'BOOTIK',refresh_token:refreshed.body.refresh_token},null)).status,401);
  await assert.rejects(db.query('select bootik.bk_confirm_paid_period($1,$2,$3,$4,$5,$6,$7)',[o,a,'retailer','access',1,4000,'forged']));
- }finally{await db.end();await admin.end()}
+ }finally{await paymentDb.end();await db.end();await admin.end()}
 });
