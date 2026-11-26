@@ -61,7 +61,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             BootikTheme {
-                BootikSetupScreen(database = database)
+                var connected by remember { mutableStateOf(false) }
+                if (connected) BootikConnectedScreen(BootikApi(BuildConfig.BOOTIK_API_URL)) { connected = false }
+                else Column { Button(onClick = { connected = true }) { Text("Connexion BOOTIK") }; BootikSetupScreen(database = database) }
             }
         }
     }

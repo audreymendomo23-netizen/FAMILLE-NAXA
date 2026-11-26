@@ -13,6 +13,9 @@ android {
         applicationId = "cm.naxa.bootik"
         minSdk = 26
         targetSdk = 35
+        val apiUrl = providers.gradleProperty("bootikApiUrl").orElse("").get()
+        require(apiUrl.isEmpty() || (apiUrl.startsWith("https://") && apiUrl.none { it == '\"' || it == '\\' || it.isWhitespace() }))
+        buildConfigField("String", "BOOTIK_API_URL", "\"$apiUrl\"")
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -24,7 +27,7 @@ android {
     }
 
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures { compose = true; buildConfig = true }
 }
 
 dependencies {
