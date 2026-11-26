@@ -3,7 +3,7 @@
 import http from "node:http";
 import {WebSocket,WebSocketServer} from "ws";
 import {verifyJoinToken,allowedJoin} from "./signaling-policy.mjs";
-export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigins,onRevoke,onAdmit=async()=>{},checkEveryMs=1000}){
+export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigins,onRevoke,onAdmit=async()=>{},allowNative=false,checkEveryMs=1000}){
  const origin=new URL(upstream);
  if(!["http:","https:"].includes(origin.protocol)||origin.username||origin.password||origin.pathname!=="/"||origin.search||origin.hash)throw Error("invalid upstream");
  if(typeof onRevoke!=="function")throw Error("SFU revocation callback required");
@@ -12,7 +12,7 @@ export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigi
  const checked=async req=>{
   try{
    const u=new URL(req.url,"http://proxy.invalid");
-   if(!["/rtc","/rtc/v1","/rtc/validate"].includes(u.pathname)||!allowedOrigins.has(req.headers.origin??""))return null;
+   if(!["/rtc","/rtc/v1","/rtc/validate"].includes(u.pathname)||!(req.headers.origin?allowedOrigins.has(req.headers.origin):allowNative))return null;
    const raw=u.searchParams.get("access_token")??(req.headers.authorization??"").replace(/^Bearer /i,"");
    const grant=verifyJoinToken(raw,{key,secret});
    if(!grant||leases.get(leaseKey(grant))?.revoking||!allowedJoin(grant,await readAdmission(grant)))return null;
