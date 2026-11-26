@@ -42,6 +42,7 @@ jobs:
         env:
           BOOTIK_TEST_ADMIN_URL: postgresql://postgres:test@localhost:5432/postgres
           BOOTIK_DATABASE_URL: postgresql://bootik_runtime:bootik-test-only@localhost:5432/postgres
+          BOOTIK_SECURITY_DATABASE_URL: postgresql://bootik_security_runtime:bootik-security-test-only@localhost:5432/postgres
           BOOTIK_TEST_PAYMENT_URL: postgresql://bootik_payment_runtime:bootik-payment-test-only@localhost:5432/postgres
         run: |
           npm install --prefix apps/server/bootik --workspaces=false --ignore-scripts --no-audit --no-fund
@@ -51,6 +52,7 @@ jobs:
         env:
           BOOTIK_TEST_ADMIN_URL: postgresql://postgres:test@localhost:5432/postgres
           BOOTIK_DATABASE_URL: postgresql://bootik_runtime:bootik-test-only@localhost:5432/postgres
+          BOOTIK_SECURITY_DATABASE_URL: postgresql://bootik_security_runtime:bootik-security-test-only@localhost:5432/postgres
           BOOTIK_TEST_PAYMENT_URL: postgresql://bootik_payment_runtime:bootik-payment-test-only@localhost:5432/postgres
           VITE_BOOTIK_API_URL: https://127.0.0.1:8787
         run: |

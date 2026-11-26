@@ -3,7 +3,8 @@ import pg from 'pg';
 import {createBootikService} from './service.mjs';
 if(!process.env.BOOTIK_DATABASE_URL)throw Error('BOOTIK_DATABASE_URL required');
 const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL,max:8});
-const handle=createBootikService(db);
+const securityDb=process.env.BOOTIK_SECURITY_DATABASE_URL?new pg.Pool({connectionString:process.env.BOOTIK_SECURITY_DATABASE_URL,max:2}):null;
+const handle=createBootikService(db,{securityDb});
 const origin=process.env.BOOTIK_WEB_ORIGIN||'';
 createServer(async(req,res)=>{
  const headers={'Cache-Control':'no-store','Content-Type':'application/json','X-Content-Type-Options':'nosniff'};

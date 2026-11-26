@@ -1,6 +1,6 @@
 import {test} from 'node:test';import assert from 'node:assert/strict';import pg from 'pg';import {randomUUID,randomBytes,createHash} from 'node:crypto';import{captureCredit,reconcilePending}from './payment-worker.mjs';import{createBootikService,verifier}from './service.mjs';
 test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, logout',async()=>{
- const admin=new pg.Pool({connectionString:process.env.BOOTIK_TEST_ADMIN_URL});const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL});const handle=createBootikService(db);const paymentDb=new pg.Pool({connectionString:process.env.BOOTIK_TEST_PAYMENT_URL});
+ const admin=new pg.Pool({connectionString:process.env.BOOTIK_TEST_ADMIN_URL});const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL});const securityDb=new pg.Pool({connectionString:process.env.BOOTIK_SECURITY_DATABASE_URL});const handle=createBootikService(db,{securityDb});const paymentDb=new pg.Pool({connectionString:process.env.BOOTIK_TEST_PAYMENT_URL});
  const one=async(q,p=[]) => (await admin.query(q,p)).rows[0];
  try{
  const {app_id:a}=await one('select app_id from bootik.bk_app_registration');
@@ -250,7 +250,7 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await call('admin-action',disable)).status,200);assert.equal((await staffLogin()).status,401);
  assert.ok((await call('security-audit',{})).body.result.events.some(x=>x.action==='member-role'));
  assert.equal(Number((await one("select count(*) from bootik.bk_security_audit where organization_id=$1 and action='member-role'",[o])).count),1);
- await assert.rejects(db.query('delete from bootik.bk_security_audit where organization_id=$1',[o]));
+ await assert.rejects(db.query('delete from bootik.bk_security_audit where organization_id=$1',[o]));await assert.rejects(securityDb.query('delete from bootik.bk_security_audit where organization_id=$1',[o]));await assert.rejects(db.query('update bootik.bk_members set role=$1 where organization_id=$2',['promoteur',o]));await assert.rejects(db.query('select bootik.bk_admin_action($1,$2,$3,$4,$5,$6::jsonb)',[o,a,u,s,randomUUID(),'{}']));await assert.rejects(securityDb.query('select * from bootik.bk_credentials'));
  await one("update bootik.bk_members set role='manager' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
@@ -277,5 +277,5 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await handle('recovery',{app_id:'BOOTIK',identifier},null)).status,204);
  assert.equal((await handle('logout',{app_id:'BOOTIK'},token)).status,204);assert.equal((await call('catalog',{})).status,401);assert.equal((await handle('refresh',{app_id:'BOOTIK',refresh_token:refreshed.body.refresh_token},null)).status,401);
  await assert.rejects(db.query('select bootik.bk_confirm_paid_period($1,$2,$3,$4,$5,$6,$7)',[o,a,'retailer','access',1,4000,'forged']));
- }finally{await paymentDb.end();await db.end();await admin.end()}
+ }finally{await securityDb.end();await paymentDb.end();await db.end();await admin.end()}
 });

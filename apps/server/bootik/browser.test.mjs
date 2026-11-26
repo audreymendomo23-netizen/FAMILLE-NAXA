@@ -5,7 +5,7 @@ test('Chromium real API, session, trial, persistent offline queue, payment and s
  const db=new pg.Pool({connectionString:process.env.BOOTIK_DATABASE_URL});
  const paymentDb=new pg.Pool({connectionString:process.env.BOOTIK_TEST_PAYMENT_URL});
  const one=async(q,p=[]) => (await admin.query(q,p)).rows[0];
- const handle=createBootikService(db);
+ const securityDb=new pg.Pool({connectionString:process.env.BOOTIK_SECURITY_DATABASE_URL});const handle=createBootikService(db,{securityDb});
  const srv=createServer({key:readFileSync('/tmp/bootik-test-key.pem'),cert:readFileSync('/tmp/bootik-test-cert.pem')},async(req,res)=>{
   const h={'Access-Control-Allow-Origin':'http://127.0.0.1:4173','Access-Control-Allow-Headers':'Authorization, Content-Type','Access-Control-Allow-Methods':'POST, OPTIONS','Cache-Control':'no-store','Content-Type':'application/json'};
   if(req.method==='OPTIONS'){res.writeHead(204,h).end();return}
@@ -148,5 +148,5 @@ test('Chromium real API, session, trial, persistent offline queue, payment and s
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
  await page.setViewportSize({width:1280,height:800});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true);
  const manifest=await page.evaluate(async()=>await(await fetch('/manifest.webmanifest')).json());assert.equal(manifest.display,'standalone');assert.equal(errors.length,0,errors.join('\n'));await context.close();
- }finally{if(browser)await browser.close();if(srv.listening)await new Promise(resolve=>srv.close(resolve));await paymentDb.end();await db.end();await admin.end()}
+ }finally{if(browser)await browser.close();if(srv.listening)await new Promise(resolve=>srv.close(resolve));await securityDb.end();await paymentDb.end();await db.end();await admin.end()}
 });

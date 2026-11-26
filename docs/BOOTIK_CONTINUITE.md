@@ -427,3 +427,7 @@ Sources réellement lues : NAXA SERVICES scope_contract.ts, naxa-services-device
 
 ### BULK 01 — délégations et sécurité UI (candidat)
 Rôles métier restrictifs superposés aux rôles SQL historiques, refus par défaut pour opérations non prévues des profils spécialisés, contrôles serveur avant mutation, affectation d'activités (vide = aucun accès), désactivation et révocation de sessions après modification. Audit avant/après, raison, acteur/site ; pas d'UPDATE/DELETE sur audit pour runtime. Interfaces Web/Android et tests API (comptable lecture seulement, interdiction vente, scope vide, faux ID, ancienne session refusée, désactivation) et vérification navigateur. Les profils liés à des modules futurs n'ouvrent que catalogue/activités jusqu'à livraison. Le provisionnement central, périmètres poste/caisse/dépôt/territoire, notification physique et preuves hébergées restent ouverts. CI à vérifier.
+
+
+### BULK 01 — séparation des privilèges administratifs
+Run 45867656640 : le test historique de refus d'écriture directe sur scopes a détecté une régression de grants. Correction sans affaiblir le test : connexion serveur BOOTIK_SECURITY_DATABASE_URL dédiée, rôle bootik_security_runtime isolé, aucune lecture des credentials, aucun droit de modification des ventes/stock, pas d'UPDATE/DELETE audit ; runtime ERP ne peut ni écrire les scopes ni invoquer bk_admin_action. En l'absence de connexion admin, réponse 503. CI nouvelle à vérifier. Ce contrat de runtime ne constitue pas une connexion effective à l'administration centrale hébergée.

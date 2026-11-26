@@ -29,7 +29,7 @@ function normalizeMaster(kind,p){
  if(!Number.isInteger(p.terms_days)||p.terms_days<0||p.terms_days>365)throw Error('INVALID_TERMS');
  return {name,phone,email,whatsapp,terms_days:p.terms_days};
 }
-export function createBootikService(db,{now=Date.now}={}){
+export function createBootikService(db,{now=Date.now,securityDb=null}={}){
  const attempts=new Map();
  const query=(q,p=[])=>db.query(q,p);
  const first=async(q,p)=> (await query(q,p)).rows[0];
@@ -90,7 +90,7 @@ export function createBootikService(db,{now=Date.now}={}){
    if(p.kind==='session-revoke'){if(!validId(p.device_session_id))return reject();data.device_session_id=p.device_session_id}
    else if(p.kind==='session-limit'){if(!Number.isInteger(p.limit)||p.limit<1||p.limit>50)return reject();data.limit=p.limit}
    else{if(!validId(p.member_id))return reject();data.member_id=p.member_id;if(p.kind==='member-role'){if(!['director','site_manager','stock_manager','buyer','cashier','accountant','auditor','delivery','territory_manager','sales','picker','collection','crm'].includes(p.function_code))return reject();data.function_code=p.function_code}if(p.kind==='member-scope'){if(!Array.isArray(p.activities)||p.activities.length>22||!p.activities.every(validId))return reject();data.activities=[...new Set(p.activities)].sort()}}
-   result=(await first('select bootik.bk_admin_action($1,$2,$3,$4,$5,$6::jsonb) as result',[...scope,p.request_id,JSON.stringify(data)])).result;
+   if(!securityDb)return reject(503);result=(await securityDb.query('select bootik.bk_admin_action($1,$2,$3,$4,$5,$6::jsonb) as result',[...scope,p.request_id,JSON.stringify(data)])).rows[0].result;
   }
   else if(action==='trial'&&allowed.has(p.universe)&&plans.has(p.plan))result=await first('select bootik.bk_start_trial($1,$2,$3,$4,$5,$6) as expires_at',[...scope,p.universe,p.plan]);
   else if(action==='payment-intent'&&allowed.has(p.universe)&&plans.has(p.plan)&&[1,12].includes(p.months)&&['mtn_momo','orange_money'].includes(p.channel)&&validId(p.request_key)){
