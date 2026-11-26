@@ -184,7 +184,7 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
         require(staged.optBoolean("staged")&&staged.optString("proof_ref")==id)
         repository.recordStaffTimeEvent(current.account.organizationId,siteId,selected,current.account.displayName,current.account.memberId,workstationId,current.account.memberId,id,now,id)
         clear();queued=true
-       }catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}
+       }catch(c:CancellationException){throw c}catch(_:Exception){clear();error=true}finally{busy=false}
       }
      }){Text(tr("Confirmer mon pointage","Confirm my attendance","Tabbitin golle am"))}
     }
