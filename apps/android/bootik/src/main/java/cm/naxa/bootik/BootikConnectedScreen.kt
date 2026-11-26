@@ -49,8 +49,8 @@ import org.json.JSONObject
  val current=session
  LaunchedEffect(current?.token){
   if(current!=null){
-   kotlinx.coroutines.delay((current.expiresAt-System.currentTimeMillis()).coerceAtLeast(0L))
-   if(session?.token==current.token){unlocked=null;session=null;site="";pin="";confirmation="";biometricSignal?.cancel();message="Session expirée. Reconnectez-vous."}
+   while(current.permits(current.sites.first().id))kotlinx.coroutines.delay(1000)
+   if(session?.token==current.token){unlocked=null;session=null;site="";pin="";confirmation="";biometricSignal?.cancel();message="Session expirée ou horloge modifiée. Reconnectez-vous."}
   }
  }
  if(current==null){

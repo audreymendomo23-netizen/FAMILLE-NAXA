@@ -15,7 +15,7 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  await one('insert into bootik.bk_item_units(app_id,organization_id,activity_id,item_id,unit_code,unit_role,to_base_factor) values($1,$2,$3,$4,$5,$6,1)',[a,o,v,i,'unit','base']);
  await one('insert into bootik.bk_inventory_balances(id,app_id,organization_id,activity_id,location_id,item_id,quantity_on_hand) values($1,$2,$3,$4,$5,$6,10)',[b,a,o,v,s,i]);
  await one('insert into bootik.bk_sale_prices values($1,$2,$3,$4,500)',[i,o,v,a]);
- const installation=randomUUID();const login=await handle('login',{app_id:'BOOTIK',installation_id:installation,platform:'test',identifier,password:'test-only-password',remember_device:true},null);assert.equal(login.status,200);assert.equal(login.body.sites.length,1);assert.ok(login.body.refresh_token);
+ const installation=randomUUID();const login=await handle('login',{app_id:'BOOTIK',installation_id:installation,platform:'test',identifier,password:'test-only-password',remember_device:true},null);assert.equal(login.status,200);assert.equal(login.body.sites.length,1);assert.match(login.body.scope_stamp,/^[0-9a-f]{32}$/);assert.ok(login.body.offline_until<=login.body.expires_at);assert.ok(login.body.offline_until>login.body.server_now);assert.ok(login.body.refresh_token);
  assert.equal((await handle('refresh',{app_id:'BOOTIK',refresh_token:login.body.refresh_token,installation_id:randomUUID()},null)).status,401);
  const refreshed=await handle('refresh',{app_id:'BOOTIK',refresh_token:login.body.refresh_token,installation_id:installation},null);assert.equal(refreshed.status,200);
  assert.equal((await handle('refresh',{app_id:'BOOTIK',refresh_token:login.body.refresh_token,installation_id:installation},null)).status,401);
@@ -240,15 +240,16 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await call('admin-action',roleReq)).status,200);assert.equal((await call('admin-action',roleReq)).body.result.function_code,'accountant');
  const asStaff=(token,action,payload)=>handle('operation',{app_id:'BOOTIK',site_id:s,action,payload},token);
  assert.equal((await asStaff(beforeDelegate.body.access_token,'catalog',{})).status,401);
- const accountant=await staffLogin();assert.equal(accountant.status,200);assert.equal((await asStaff(accountant.body.access_token,'dashboard',{})).status,200);
+ const accountant=await staffLogin();assert.equal(accountant.status,200);assert.notEqual(accountant.body.scope_stamp,beforeDelegate.body.scope_stamp);assert.equal((await asStaff(accountant.body.access_token,'dashboard',{})).status,200);
  assert.equal((await call('security-state',{})).body.result.max_site_devices,3);assert.ok((await call('security-state',{})).body.result.site_devices.length>=2);
  assert.equal((await asStaff(accountant.body.access_token,'sale',{...sale,idempotency_key:randomUUID()})).status,403);
  assert.equal((await asStaff(accountant.body.access_token,'admin-action',{kind:'member-role',request_id:randomUUID(),member_id:u,function_code:'accountant',reason:'Tentative'})).status,403);
  const scopeReq={kind:'member-scope',request_id:randomUUID(),member_id:staffId,activities:[],reason:'Retirer accès activité'};
  assert.equal((await call('admin-action',scopeReq)).status,200);assert.equal((await asStaff(accountant.body.access_token,'catalog',{})).status,401);
- const restricted=await staffLogin();assert.equal((await asStaff(restricted.body.access_token,'catalog',{})).body.result.items.length,0);
+ const restricted=await staffLogin();assert.notEqual(restricted.body.scope_stamp,accountant.body.scope_stamp);assert.equal((await asStaff(restricted.body.access_token,'catalog',{})).body.result.items.length,0);
  assert.equal((await call('admin-action',{...scopeReq,request_id:randomUUID(),activities:[randomUUID()]})).status,403);
  assert.equal((await call('admin-action',{...scopeReq,request_id:randomUUID(),activities:[v]})).status,200);
+ assert.equal((await call('admin-action',{kind:'offline-policy',request_id:randomUUID(),minutes:3,reason:'Politique offline test'})).status,403); // promoter fixture lacks the second site: fail closed
  // Internal recovery: generic response, authorized human verification, one-time temp secret, mandatory rotation.
  assert.equal((await handle('recovery',{app_id:'BOOTIK',identifier:staffIdentifier},null,'recovery-test')).status,204);
  assert.equal((await handle('recovery',{app_id:'BOOTIK',identifier:'unknown-'+randomUUID()},null,'recovery-test')).status,204);
@@ -284,6 +285,7 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await handle('change-password',{app_id:'BOOTIK',current_password:central.body.temporary_password,new_password:'central-owner-password'},ownerLogin.body.access_token)).status,204);
  const owner=await handle('login',{app_id:'BOOTIK',installation_id:randomUUID(),platform:'test',identifier:orgEvent.identifier,password:'central-owner-password'},null,'central-test');assert.equal(owner.status,200);
  const centralCall=(action,payload)=>handle('operation',{app_id:'BOOTIK',site_id:centralSite,action,payload},owner.body.access_token);
+ assert.equal((await centralCall('admin-action',{kind:'offline-policy',request_id:randomUUID(),minutes:3,reason:'Politique offline test'})).status,200);
  const memberReq={request_id:randomUUID(),name:'Caissier test',function_code:'cashier',activities:[centralAct],reason:'Recrutement validé'};
  assert.equal((await centralCall('member-request',memberReq)).status,200);
  assert.equal((await centralCall('member-request',memberReq)).body.result.request_id,memberReq.request_id);
@@ -293,6 +295,7 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  const empEvent={app_id:'BOOTIK',kind:'employee',event_id:randomUUID(),central_actor_id:centralActor,central_user_id:employee,organization_id:centralOrg,request_id:memberReq.request_id,identifier:'employee-'+employee};
  assert.equal((await handle('family-provision',{...empEvent,organization_id:o},provisionToken)).status,400);
  const emp=await handle('family-provision',empEvent,provisionToken);assert.equal(emp.status,200);assert.ok(emp.body.temporary_password);
+ const employeeLogin=await handle('login',{app_id:'BOOTIK',installation_id:randomUUID(),platform:'test',identifier:empEvent.identifier,password:emp.body.temporary_password},null,'central-employee');assert.equal(employeeLogin.status,200);assert.ok(employeeLogin.body.offline_until-employeeLogin.body.server_now<=180000);
  assert.equal((await centralCall('member-requests',{})).body.result.requests[0].state,'provisioned');
  assert.equal((await handle('family-provision',empEvent,provisionToken)).body.temporary_password,undefined);
  await assert.rejects(db.query('insert into bootik.bk_organizations(organization_id,app_id,display_name) values($1,$2,$3)',[randomUUID(),a,'forged']));

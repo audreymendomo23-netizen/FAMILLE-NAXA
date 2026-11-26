@@ -19,8 +19,8 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  val binding=remember(session,site,dao,api){BootikSyncScope(api,dao,session,site)}
  var automatic by remember(session.member,site){mutableStateOf(false)}
  DisposableEffect(binding){BootikSync.activate(binding);onDispose{BootikSync.deactivate(binding)}}
- val org=session.organization;val member=session.member;val scope=rememberCoroutineScope()
- var items by remember(org,member,site){mutableStateOf<List<CachedSaleItem>>(emptyList())}
+ val org=session.organization;val member=session.member;val cacheMember=member+"@"+session.scopeStamp;val scope=rememberCoroutineScope()
+ var items by remember(org,cacheMember,site){mutableStateOf<List<CachedSaleItem>>(emptyList())}
  var events by remember(org,member,site){mutableStateOf<List<BootikScopedEvent>>(emptyList())}
  var saleUnit by remember(site){mutableStateOf("")};var setupKind by remember(site){mutableStateOf("lot")};var setupCode by remember(site){mutableStateOf("")};var setupExpiry by remember(site){mutableStateOf("")};var setupOrigin by remember(site){mutableStateOf("")};var setupFactor by remember(site){mutableStateOf("1")}
  var search by remember(org,member,site){mutableStateOf("")};var page by remember(org,member,site){mutableStateOf(0)}
@@ -35,11 +35,12 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  suspend fun reload(){events=dao.events(org,member,site)}
  LaunchedEffect(org,member,site){dao.observeEvents(org,member,site).collect{events=it}}
  LaunchedEffect(binding,automatic){BootikSync.setAutomatic(binding,automatic);if(automatic)BootikSync.schedule(context,binding)}
- LaunchedEffect(org,member,site){try{dao.catalog(org,member,site)?.let{items=decodeItems(JSONArray(it.itemsJson));cacheTime=it.updatedAt};reload()}catch(e:Exception){if(e is kotlinx.coroutines.CancellationException)throw e;status="Stockage local indisponible"}}
+ LaunchedEffect(org,cacheMember,site){try{dao.purgeCatalogVersions(org,member,cacheMember);if(session.permitsOffline(site))dao.catalog(org,cacheMember,site)?.let{items=decodeItems(JSONArray(it.itemsJson));cacheTime=it.updatedAt};reload()}catch(e:Exception){if(e is kotlinx.coroutines.CancellationException)throw e;status="Stockage local indisponible"}}
  fun task(block:suspend ()->Unit){if(busy)return;busy=true;scope.launch{try{block()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){status="Opération non confirmée. Vérifiez la connexion et les droits."}finally{try{reload()}catch(e:Exception){if(e is kotlinx.coroutines.CancellationException)throw e};busy=false}}}
  Text("Catalogue, caisse et synchronisation",style=MaterialTheme.typography.titleMedium)
+ LaunchedEffect(session,site){while(session.permitsOffline(site))kotlinx.coroutines.delay(1000);items=emptyList();selected="";cacheTime=0}
  Text(if(cacheTime>0)"Catalogue local disponible" else "Aucun catalogue local")
- Button(enabled=!busy,onClick={task{val a=api.fetchCatalog(session,site);val decoded=decodeItems(a);val now=System.currentTimeMillis();dao.cache(BootikCatalogCache(org,member,site,a.toString(),now));items=decoded;cacheTime=now;selected="";search="";page=0;status="Catalogue actualisé"}}){Text("Actualiser le catalogue")}
+ Button(enabled=!busy,onClick={task{val a=api.fetchCatalog(session,site);val decoded=decodeItems(a);val now=System.currentTimeMillis();dao.cache(BootikCatalogCache(org,cacheMember,site,a.toString(),now));items=decoded;cacheTime=now;selected="";search="";page=0;status="Catalogue actualisé"}}){Text("Actualiser le catalogue")}
  OutlinedTextField(search,{search=it;page=0;selected=""},label={Text("Nom, SKU, code-barres ou emplacement")},singleLine=true,enabled=!busy)
  Text("${matches.size} référence(s) • page ${page+1} / ${maxOf(1,(matches.size+99)/100)}")
  Row{TextButton(enabled=page>0&&!busy,onClick={page--;selected=""}){Text("Précédent")};TextButton(enabled=(page+1)*100<matches.size&&!busy,onClick={page++;selected=""}){Text("Suivant")}}
@@ -50,7 +51,7 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  item?.units?.forEach{(code,factor)->Row{RadioButton(chosenUnit==code,{saleUnit=code},enabled=!busy);Text("$code × $factor")}}
  if(groupSale)Text("Allocation automatique FEFO. Mouvements et transferts en unité de base.")
  if(item!=null)Text("SKU : ${item.sku} • Activité : ${item.activity} • Lot : ${item.lot} • Péremption : ${item.expiry} • Emplacement : ${item.location}")
- Button(enabled=!busy&&n!=null&&n.isFinite()&&n>0&&item!=null&&!item.serialized,onClick={task{require(session.permits(site));val id=UUID.randomUUID().toString();val payload=JSONObject().put("quantity",n!!).put("unit_price_fcfa",item!!.price).put("idempotency_key",id);if(groupSale){payload.put("item_id",item.itemId).put("unit_code",chosenUnit)}else payload.put("balance_id",item.balanceId);dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));status="Vente en attente, aucune confirmation serveur";if(automatic)BootikSync.schedule(context,binding)}}){Text("Mettre la vente en file")}
+ Button(enabled=!busy&&n!=null&&n.isFinite()&&n>0&&item!=null&&!item.serialized,onClick={task{require(session.permitsOffline(site));val id=UUID.randomUUID().toString();val payload=JSONObject().put("quantity",n!!).put("unit_price_fcfa",item!!.price).put("idempotency_key",id);if(groupSale){payload.put("item_id",item.itemId).put("unit_code",chosenUnit)}else payload.put("balance_id",item.balanceId);dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));status="Vente en attente, aucune confirmation serveur";if(automatic)BootikSync.schedule(context,binding)}}){Text("Mettre la vente en file")}
  if(session.role!="staff"&&item!=null&&item.itemId.isNotBlank()){
   Text("Lots et conditionnements",style=MaterialTheme.typography.titleMedium)
   listOf("lot" to "Nouveau lot","unit" to "Unité de vente").forEach{(k,label)->Row{RadioButton(setupKind==k,{setupKind=k},enabled=!busy);Text(label)}}
@@ -66,7 +67,7 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
   if(stockKind=="receipt")OutlinedTextField(landedCost,{landedCost=it},label={Text("Coût total rendu FCFA (facultatif)")},enabled=!busy,singleLine=true)
   OutlinedTextField(reason,{if(it.length<=500)reason=it},label={Text("Motif / référence de stock")},enabled=!busy)
   Button(enabled=!busy&&item!=null&&item.version.isNotBlank()&&n!=null&&n.isFinite()&&n>=0&&(stockKind=="count"||n>0)&&reason.trim().length>=3&&(stockKind!="receipt"||landedCost.isBlank()||(landedCost.toLongOrNull()?.let{it>=0}==true)),onClick={task{
-   require(session.permits(site));val id=UUID.randomUUID().toString()
+   require(session.permitsOffline(site));val id=UUID.randomUUID().toString()
    val payload=JSONObject().put("balance_id",item!!.balanceId).put("quantity",n!!).put("stock_kind",stockKind).put("expected_version",item.version).put("reason",reason.trim()).put("idempotency_key",id)
    if(stockKind=="receipt"&&landedCost.isNotBlank())payload.put("landed_cost_fcfa",landedCost.toLong());dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));reason="";landedCost="";status="Mouvement en attente, aucun stock confirmé";if(automatic)BootikSync.schedule(context,binding)
   }}){Text("Mettre le mouvement en file")}

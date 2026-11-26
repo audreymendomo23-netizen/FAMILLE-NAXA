@@ -31,3 +31,6 @@ test('grouped FEFO receipt cannot acknowledge a regular sale',async()=>{
  const sender=body=>async(url,opts)=>{assert.equal(JSON.parse(opts.body).action,'sync-item-sale');return {ok:true,json:async()=>body}};
  assert.equal((await syncEvent('https://example.test',s,'s',e,sender(result))).result.sale_group_id,'g');await assert.rejects(syncEvent('https://example.test',s,'s',e,sender({...result,action:'sync-sale'})));
 });
+
+import {permitsSite,permitsOffline} from '../../apps/web/bootik/src/session.mjs';
+test('offline lease expires monotonically and rejects abnormal clock rollback',()=>{const x={sites:[{id:'s'}],server_now:100000,offline_until:160000,expires_at:200000,observed_wall:300000,observed_mono:1000};assert.equal(permitsOffline(x,'s',350000,51000),true);assert.equal(permitsOffline(x,'s',360000,61000),false);assert.equal(permitsSite(x,'s',360000,61000),true);assert.equal(permitsSite(x,'s',300000,61000),false);assert.equal(permitsSite(x,'other',350000,51000),false)});

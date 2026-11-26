@@ -90,3 +90,6 @@ grant select,insert on bootik.bk_member_requests to bootik_security_runtime;
 grant execute on function bootik.bk_request_member(uuid,uuid,uuid,uuid,uuid,text,text,jsonb,text) to bootik_security_runtime;
 create policy bk_runtime_access on bootik.bk_member_profiles for select to bootik_runtime using(true);
 grant select on bootik.bk_member_profiles to bootik_runtime;
+
+grant update(offline_minutes) on bootik.bk_security_settings to bootik_security_runtime;
+grant execute on function bootik.bk_scope_stamp(uuid,uuid,uuid) to bootik_runtime;

@@ -7,8 +7,10 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 data class BootikSite(val id:String,val name:String)
-data class BootikSession(val token:String,val member:String,val organization:String,val role:String,val sites:List<BootikSite>,val expiresAt:Long,val refreshToken:String?=null,val requirePasswordChange:Boolean=false) {
- fun permits(site:String,now:Long=System.currentTimeMillis())=expiresAt>now && sites.any{it.id==site}
+data class BootikSession(val token:String,val member:String,val organization:String,val role:String,val sites:List<BootikSite>,val expiresAt:Long,val refreshToken:String?=null,val requirePasswordChange:Boolean=false,val serverNow:Long=0,val offlineUntil:Long=expiresAt,val observedWall:Long=0,val observedElapsed:Long=0,val scopeStamp:String="legacy") {
+ private fun lease(now:Long,offline:Boolean):Boolean{if(serverNow==0L)return expiresAt>now;val elapsed=android.os.SystemClock.elapsedRealtime()-observedElapsed;return elapsed>=0&&now+5000>=observedWall+elapsed&&serverNow+elapsed<minOf(expiresAt,if(offline)offlineUntil else expiresAt)}
+ fun permits(site:String,now:Long=System.currentTimeMillis())=lease(now,false)&&sites.any{it.id==site}
+ fun permitsOffline(site:String,now:Long=System.currentTimeMillis())=lease(now,true)&&sites.any{it.id==site}
 }
 object BootikAccess {
  fun valid(app:String,member:String,org:String,role:String,sites:List<String>,expiry:Long,now:Long)=
@@ -39,7 +41,8 @@ class BootikApi(private val endpoint:String,private val installationId:String=ja
   val sites=j.getJSONArray("sites");val list=(0 until sites.length()).map{val s=sites.getJSONObject(it);BootikSite(s.getString("id"),s.getString("name"))}
   val member=j.getString("member_id");val org=j.getString("organization_id");val role=j.getString("role");val expires=j.getLong("expires_at");val token=j.getString("access_token")
   require(BootikAccess.valid(j.getString("app_id"),member,org,role,list.map{it.id},expires,System.currentTimeMillis())&&token.length>=20)
-  return BootikSession(token,member,org,role,list,expires,j.optString("refresh_token").takeIf{it.length>=20},j.optBoolean("require_password_change",false))
+  val serverNow=j.getLong("server_now");val offlineUntil=j.getLong("offline_until");val stamp=j.getString("scope_stamp");require(serverNow<expires&&offlineUntil in serverNow..expires&&stamp.matches(Regex("[0-9a-f]{32}")))
+  return BootikSession(token,member,org,role,list,expires,j.optString("refresh_token").takeIf{it.length>=20},j.optBoolean("require_password_change",false),serverNow,offlineUntil,System.currentTimeMillis(),android.os.SystemClock.elapsedRealtime(),stamp)
  }
  suspend fun changePassword(session:BootikSession,current:String,next:String){require(next.length in 12..128&&current.isNotBlank()&&current!=next);request("change-password",JSONObject().put("current_password",current).put("new_password",next),session.token)}
  suspend fun recovery(identifier:String){require(identifier.isNotBlank());request("recovery",JSONObject().put("identifier",identifier.trim()))}
