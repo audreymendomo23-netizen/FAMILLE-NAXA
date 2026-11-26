@@ -8,6 +8,9 @@ on:
       - 'packages/widemeet-domain/**'
       - 'packages/billing-core/**'
       - 'settings.gradle.kts'
+      - 'supabase/drafts/widemeet_*.sql'
+      - 'supabase/tests/drafts/widemeet_*.sql'
+      - 'supabase/functions/widemeet-auth/**'
       - '.github/workflows/widemeet-gate.yml'
   workflow_dispatch:
 permissions:
@@ -54,3 +57,40 @@ jobs:
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - run: gradle --no-daemon --stacktrace :widemeet:testDebugUnitTest :widemeet:assembleDebug
       - run: test -s apps/android/widemeet/build/outputs/apk/debug/widemeet-debug.apk
+
+  identity-sql:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: fixture_password
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: fixture_password
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon;
+          create role authenticated;
+          create role service_role bypassrls;
+          create schema auth;
+          create table auth.users(id uuid primary key);
+          SQL
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_identity.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_identity.sql
+  edge-typecheck:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - run: deno check supabase/functions/widemeet-auth/index.ts

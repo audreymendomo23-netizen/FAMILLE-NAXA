@@ -26,6 +26,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import android.os.SystemClock
+import cm.naxa.widemeet.auth.*
 
 private val Green=Color(0xFF78C800);private val Yellow=Color(0xFFFFE52B)
 private val White=Color(0xFFFFFFFF);private val Black=Color(0xFF121714)
@@ -43,6 +46,13 @@ class MainActivity:ComponentActivity(){
 
 @Composable private fun WideMeetRoot(){
  val context=LocalContext.current
+ val gateway=remember{AuthGateway(context,BuildConfig.WIDEMEET_AUTH_URL)}
+ var session by remember{mutableStateOf<Session?>(null)}
+ var signIn by remember{mutableStateOf(false)}
+ var logoutError by remember{mutableStateOf(false)}
+ val coroutineScope=rememberCoroutineScope()
+ LaunchedEffect(session){while(session!=null){val s=session?:break;if(!validLease(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())){session=null;break};delay(1000)}}
+ val current=session?.let{activeWorkspace(it,System.currentTimeMillis(),SystemClock.elapsedRealtime())}
  val prefs=remember{context.getSharedPreferences("widemeet.appearance.v1",Context.MODE_PRIVATE)}
  var dark by rememberSaveable{mutableStateOf(prefs.getBoolean("dark",false))}
  var english by rememberSaveable{mutableStateOf(prefs.getBoolean("english",false))}
@@ -59,6 +69,7 @@ class MainActivity:ComponentActivity(){
  LaunchedEffect(dark,english,motion){prefs.edit().putBoolean("dark",dark).putBoolean("english",english).putBoolean("motion",motion).apply()}
  LaunchedEffect(animate){if(animate){startup.snapTo(.6f);startup.animateTo(0f,tween(1200))}else startup.snapTo(0f)}
  LaunchedEffect(pulse,animate){if(pulse>0&&animate){alpha.snapTo(.5f);alpha.animateTo(0f,tween(1700))}else alpha.snapTo(0f)}
+ fun logout(){val s=session?:return;session=null;logoutError=false;coroutineScope.launch{try{gateway.logout(s)}catch(e:Exception){logoutError=true}}}
  fun toggle(){if(!dark&&animate)pulse++ else pulse=0;dark=!dark}
  fun tr(fr:String,en:String)=if(english)en else fr
  val labels=if(english)tabsEn else tabs
@@ -75,12 +86,16 @@ class MainActivity:ComponentActivity(){
  },bottomBar={NavigationBar{labels.forEachIndexed{i,l->NavigationBarItem(selected=tab==i&&detail.isEmpty(),onClick={tab=i;detail=""},icon={Text(symbols[i],fontSize=22.sp)},label={Text(l,fontSize=11.sp)},colors=NavigationBarItemDefaults.colors(indicatorColor=Green,selectedIconColor=Black,selectedTextColor=colors.onSurface))}}}){padding->
  Box(Modifier.fillMaxSize().padding(padding)){
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
- if(detail.isNotEmpty()){TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))};Text(detail,style=MaterialTheme.typography.headlineMedium)
+ if(logoutError)Text(tr("Déconnexion locale effectuée ; révocation distante non confirmée.","Local sign-out completed; remote revocation unconfirmed."),color=MaterialTheme.colorScheme.error)
+ if(signIn){SignIn(english,BuildConfig.WIDEMEET_AUTH_URL.isNotBlank(),gateway,{session=it;signIn=false;tab=0;detail=""},{signIn=false})}
+ else if(session?.requirePasswordChange==true){Text(tr("Votre mot de passe doit être changé avant d’accéder à votre espace.","Change your password before accessing your workspace."));Button(onClick={logout()}){Text(tr("Se déconnecter","Sign out"))}}
+ else if(detail.isNotEmpty()){TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))};Text(detail,style=MaterialTheme.typography.headlineMedium)
  if(detail in listOf(menuFr[11],menuFr[12],menuFr[13],menuEn[11],menuEn[12],menuEn[13])){Button(onClick={toggle()}){Text(if(dark)tr("Mode clair","Light mode")else tr("Mode nuit","Dark mode"))};Button(onClick={english=!english;detail=""}){Text(if(english)"Français"else "English")};Row(verticalAlignment=Alignment.CenterVertically){Switch(checked=motion,onCheckedChange={motion=it});Text("Animations")}}else Text(unavailable)
  }else if(tab==0){
  Card(colors=CardDefaults.cardColors(containerColor=Deep,contentColor=White),modifier=Modifier.fillMaxWidth()){
  Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
  Text(tr("Vos réunions, sans frontières.","Your meetings, without borders."),style=MaterialTheme.typography.headlineMedium)
+ if(current!=null)Text(current.name)else Button(onClick={signIn=true}){Text(tr("Se connecter","Sign in"))}
  Text(tr("Découvrez votre espace","Discover your workspace"))
  Button(onClick={tour=0},colors=ButtonDefaults.buttonColors(containerColor=Yellow,contentColor=Black)){Text(tr("Découvrez WideMeet","Discover WideMeet"))}
  }}
@@ -96,7 +111,7 @@ class MainActivity:ComponentActivity(){
  if(alpha.value>0f||startup.value>0f)Box(Modifier.matchParentSize().background(Brush.radialGradient(listOf(Yellow.copy(alpha=maxOf(alpha.value,startup.value)),Color.Transparent),center=Offset(0f,0f),radius=700f)))
  }
  }
- if(menu)AlertDialog(onDismissRequest={menu=false},title={Text(tr("Options","Options"))},text={Column(Modifier.heightIn(max=450.dp).verticalScroll(rememberScrollState())){menuLabels.forEach{item->TextButton(onClick={detail=item;menu=false},modifier=Modifier.fillMaxWidth()){Text(item)}}}},confirmButton={TextButton(onClick={menu=false}){Text(tr("Fermer","Close"))}})
+ if(menu)AlertDialog(onDismissRequest={menu=false},title={Text(tr("Options","Options"))},text={Column(Modifier.heightIn(max=450.dp).verticalScroll(rememberScrollState())){if(session!=null)TextButton(onClick={menu=false;logout()}){Text(tr("Se déconnecter","Sign out"))}else TextButton(onClick={menu=false;signIn=true}){Text(tr("Se connecter","Sign in"))};menuLabels.filter{it!=menuLabels[7]||session?.let{s->mayPay(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())}==true}.forEach{item->TextButton(onClick={detail=item;menu=false},modifier=Modifier.fillMaxWidth()){Text(item)}}}},confirmButton={TextButton(onClick={menu=false}){Text(tr("Fermer","Close"))}})
  if(tour>=0)AlertDialog(onDismissRequest={tour=-1},title={Text("${tour+1}/5 — ${labels[tour]}")},text={Text(unavailable)},confirmButton={TextButton(onClick={if(tour==4){prefs.edit().putBoolean("discovered",true).apply();tour=-1}else tour++}){Text(if(tour==4)tr("Terminer","Done")else tr("Suivant","Next"))}},dismissButton={TextButton(onClick={tour=-1}){Text(tr("Fermer","Close"))}})
  }
 }
