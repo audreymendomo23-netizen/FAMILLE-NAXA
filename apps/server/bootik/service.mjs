@@ -50,17 +50,24 @@ export function createBootikService(db,{now=Date.now,securityDb=null,provisionDb
    if(typeof token!=='string'||!timingSafeEqual(Buffer.from(digest(token),'hex'),Buffer.from(digest(provisionToken),'hex')))return reject(401);
    if(!validId(body.organization_id))return reject();
    if(route==='family-pending'){const rows=(await provisionDb.query("select id,organization_id,location_id,display_name,function_code,activities,created_at from bootik.bk_member_requests where organization_id=$1 and state='pending' order by created_at limit 100",[body.organization_id])).rows;return {status:200,body:{app_id:'BOOTIK',requests:rows}}}
-   if(!validId(body.event_id)||!validId(body.central_actor_id)||!['organization','employee','refuse'].includes(body.kind))return reject();
+   if(!validId(body.event_id)||!validId(body.central_actor_id)||!['organization','employee','refuse','site','activity','member-site','promoter-recovery'].includes(body.kind))return reject();
    const p={kind:body.kind,organization_id:body.organization_id};
-   if(body.kind==='organization'){
+   if(['site','activity','member-site','promoter-recovery'].includes(body.kind)){
+    if(!validId(body.site_id)||!validId(body.central_user_id))return reject();Object.assign(p,{site_id:body.site_id,central_user_id:body.central_user_id});
+    if(['site','activity'].includes(body.kind)){if(!validId(body.activity_id))return reject();p.activity_id=body.activity_id;}
+    if(body.kind==='site')p.site_name=clean(body.site_name,160,true);
+    if(body.kind==='activity'){if(!allowed.has(body.universe))return reject();Object.assign(p,{universe:body.universe,profile:clean(body.profile,60,true),activity_name:clean(body.activity_name,160,true)});}
+    if(body.kind==='member-site'){if(!Array.isArray(body.activities)||body.activities.length<1||body.activities.length>22||!body.activities.every(validId))return reject();p.activities=[...new Set(body.activities)].sort();}
+    if(body.kind==='promoter-recovery')p.note=clean(body.note,500,true);
+   }else if(body.kind==='organization'){
     if(!validId(body.site_id)||!validId(body.activity_id)||!allowed.has(body.universe)||typeof body.profile!=='string')return reject();
     Object.assign(p,{site_id:body.site_id,activity_id:body.activity_id,universe:body.universe,profile:clean(body.profile,60,true),organization_name:clean(body.organization_name,160,true),site_name:clean(body.site_name,160,true),activity_name:clean(body.activity_name,160,true),display_name:clean(body.display_name,160,true)});
    }else{if(!validId(body.request_id))return reject();p.request_id=body.request_id;}
    if(body.kind==='refuse')p.reason=clean(body.reason,500,true);
-   else{if(!validId(body.central_user_id))return reject();p.central_user_id=body.central_user_id;p.identifier=clean(body.identifier,160,true).toLowerCase()}
+   else if(['organization','employee'].includes(body.kind)){if(!validId(body.central_user_id))return reject();p.central_user_id=body.central_user_id;p.identifier=clean(body.identifier,160,true).toLowerCase()}
    const temporary=randomBytes(18).toString('base64url'),salt=randomBytes(16).toString('hex');
    const out=(await provisionDb.query('select bootik.bk_family_provision($1,$2,$3::jsonb,$4,$5) as result',[body.event_id,body.central_actor_id,JSON.stringify(p),salt,await verifier(temporary,salt)])).rows[0].result;
-   return {status:200,body:{app_id:'BOOTIK',...out,...(out.fresh&&body.kind!=='refuse'?{temporary_password:temporary}:{})}};
+   return {status:200,body:{app_id:'BOOTIK',...out,...(out.fresh&&['organization','employee','promoter-recovery'].includes(body.kind)?{temporary_password:temporary}:{})}};
   }
   if(route==='login'||route==='recovery'){
    if(typeof body.identifier!=='string'||body.identifier.trim().length<1||body.identifier.length>160)return reject();

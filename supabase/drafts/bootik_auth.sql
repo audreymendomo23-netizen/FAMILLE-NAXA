@@ -284,16 +284,58 @@ begin
 end $$;
 create function bootik.bk_family_provision(p_event uuid,p_central_actor uuid,p_payload jsonb,p_salt text,p_hash text)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,bootik as $$
-declare a uuid;o uuid;u uuid;s uuid;v uuid;rid uuid;k text;identifier_value text;name_value text;role_value text;f text;req bootik.bk_member_requests%rowtype;old bootik.bk_family_provision_events%rowtype;answer jsonb;v_act uuid;
+declare a uuid;o uuid;u uuid;s uuid;v uuid;rid uuid;k text;identifier_value text;name_value text;role_value text;f text;req bootik.bk_member_requests%rowtype;old bootik.bk_family_provision_events%rowtype;answer jsonb;v_act uuid;member_role text;activities jsonb;
 begin
  if p_event is null or p_central_actor is null or jsonb_typeof(p_payload) is distinct from 'object' then raise exception 'BOOTIK_PROVISION_INVALID';end if;
  select app_id into a from bootik.bk_app_registration where app_code='bootik';
  o:=(p_payload->>'organization_id')::uuid;k:=p_payload->>'kind';
- if o is null or k not in ('organization','employee','refuse') then raise exception 'BOOTIK_PROVISION_INVALID';end if;
+ if o is null or k not in ('organization','employee','refuse','site','activity','member-site','promoter-recovery') then raise exception 'BOOTIK_PROVISION_INVALID';end if;
  perform pg_advisory_xact_lock(hashtextextended(o::text||':family-provision:'||p_event::text,0));
  select * into old from bootik.bk_family_provision_events where id=p_event;
  if found then
   if (old.organization_id,old.app_id,old.central_actor_id,old.payload) is distinct from (o,a,p_central_actor,p_payload) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;return old.result||jsonb_build_object('fresh',false);
+ end if;
+ if k in ('site','activity','member-site','promoter-recovery') then
+  s:=(p_payload->>'site_id')::uuid;u:=(p_payload->>'central_user_id')::uuid;
+  if s is null or u is null or not exists(select 1 from bootik.bk_organizations where organization_id=o and app_id=a) then raise exception 'BOOTIK_PROVISION_INVALID';end if;
+  perform pg_advisory_xact_lock(hashtextextended(o::text||':organization-structure:'||a::text,0));
+  select role into member_role from bootik.bk_members where organization_id=o and app_id=a and user_id=u and active;
+  if not found then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+  if k='site' then
+   v:=(p_payload->>'activity_id')::uuid;
+   if member_role<>'promoteur' or v is null or length(btrim(coalesce(p_payload->>'site_name',''))) not between 2 and 160 or not exists(select 1 from bootik.bk_activities where id=v and organization_id=o and app_id=a and status='active') then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+   insert into bootik.bk_locations(id,organization_id,app_id,display_name) values(s,o,a,btrim(p_payload->>'site_name'));
+   insert into bootik.bk_activity_locations(app_id,organization_id,activity_id,location_id) values(a,o,v,s);
+   insert into bootik.bk_member_sites(organization_id,app_id,user_id,location_id,activity_restricted) values(o,a,u,s,false);
+   answer:=jsonb_build_object('state','provisioned','site_id',s,'activity_id',v,'member_id',u);
+  elsif k='activity' then
+   v:=(p_payload->>'activity_id')::uuid;
+   if member_role<>'promoteur' or v is null or length(btrim(coalesce(p_payload->>'activity_name',''))) not between 2 and 160 or not exists(select 1 from bootik.bk_member_sites where organization_id=o and app_id=a and user_id=u and location_id=s and not activity_restricted) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+   insert into bootik.bk_activities(id,app_id,organization_id,universe_code,profile_code,display_name,status) values(v,a,o,p_payload->>'universe',p_payload->>'profile',btrim(p_payload->>'activity_name'),'active');
+   insert into bootik.bk_activity_locations(app_id,organization_id,activity_id,location_id,is_primary) values(a,o,v,s,true);
+   answer:=jsonb_build_object('state','provisioned','site_id',s,'activity_id',v,'member_id',u);
+  elsif k='member-site' then
+   activities:=p_payload->'activities';
+   if member_role='promoteur' or jsonb_typeof(activities) is distinct from 'array' or jsonb_array_length(activities) not between 1 and 22 or not exists(select 1 from bootik.bk_locations where id=s and organization_id=o and app_id=a) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+   for v_act in select value::uuid from jsonb_array_elements_text(activities) loop
+    if not exists(select 1 from bootik.bk_activity_locations al join bootik.bk_activities ac on (ac.id,ac.organization_id,ac.app_id)=(al.activity_id,al.organization_id,al.app_id) where al.organization_id=o and al.app_id=a and al.location_id=s and al.activity_id=v_act and ac.status='active') then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+   end loop;
+   -- New membership only; existing site restrictions remain under the promoteur's scoped admin contract.
+   insert into bootik.bk_member_sites(organization_id,app_id,user_id,location_id,activity_restricted) values(o,a,u,s,true);
+   insert into bootik.bk_member_activity_scopes(organization_id,app_id,user_id,location_id,activity_id) select o,a,u,s,id from (select distinct value::uuid as id from jsonb_array_elements_text(activities)) ids;
+   answer:=jsonb_build_object('state','provisioned','site_id',s,'member_id',u,'activities',activities);
+  else
+   if member_role<>'promoteur' or not exists(select 1 from bootik.bk_member_sites where organization_id=o and app_id=a and user_id=u and location_id=s and not activity_restricted) or length(btrim(coalesce(p_payload->>'note',''))) not between 10 and 500 or p_salt !~ '^[0-9a-f]{32}$' or p_hash !~ '^[0-9a-f]{128}$' then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+   perform pg_advisory_xact_lock(hashtextextended(o::text||':session:'||u::text,0));
+   update bootik.bk_credentials set salt_hex=p_salt,verifier_hex=p_hash where organization_id=o and app_id=a and user_id=u;
+   if not found then raise exception 'BOOTIK_PROVISION_INVALID';end if;
+   insert into bootik.bk_password_controls(organization_id,app_id,user_id,version,requires_change) values(o,a,u,1,true) on conflict(organization_id,app_id,user_id) do update set version=bootik.bk_password_controls.version+1,requires_change=true;
+   answer:=jsonb_build_object('state','recovered','site_id',s,'member_id',u);
+  end if;
+  if k in ('member-site','promoter-recovery') then update bootik.bk_sessions set revoked_at=coalesce(revoked_at,clock_timestamp()) where organization_id=o and app_id=a and user_id=u;end if;
+  insert into bootik.bk_family_provision_events(id,organization_id,app_id,central_actor_id,payload,result) values(p_event,o,a,p_central_actor,p_payload,answer);
+  insert into bootik.bk_security_audit(organization_id,app_id,actor,site_id,action,target,details) values(o,a,p_central_actor,s,'family-provision-'||k,u,jsonb_build_object('event_id',p_event,'result',answer));
+  return answer||jsonb_build_object('fresh',true);
  end if;
  if k in ('employee','refuse') then
   rid:=(p_payload->>'request_id')::uuid;

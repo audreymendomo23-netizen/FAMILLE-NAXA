@@ -338,6 +338,26 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  await approvalAdmin({kind:'decide',approval_id:sensitivePay.payment_id,decision:'approved',reason:'Vérifié'});
  assert.equal((await call('approval-own-state',{})).body.result.requests.find(x=>x.id===sensitivePay.payment_id).state,'approved');assert.equal((await call('approval-execute',{approval_id:sensitivePay.payment_id})).body.result.state,'executed');assert.equal((await call('approval-execute',{approval_id:sensitivePay.payment_id})).body.result.state,'executed');assert.equal((await call('approval-own-state',{})).body.result.requests.find(x=>x.id===sensitivePay.payment_id).state,'executed');
  assert.equal((await call('purchase-pay',sensitivePay)).body.result.payment_id,sensitivePay.payment_id);assert.equal((await call('purchase-pay',sensitivePay)).body.result.payment_id,sensitivePay.payment_id);
+ // Family central expansion: one organization, one entitlement across two sites, existing member identity.
+ const expansionSite=randomUUID(),newAct=randomUUID();
+ const expand={app_id:'BOOTIK',kind:'site',event_id:randomUUID(),central_actor_id:centralActor,organization_id:centralOrg,central_user_id:centralMember,site_id:expansionSite,activity_id:centralAct,site_name:'Second site'};
+ assert.equal((await handle('family-provision',expand,owner.body.access_token)).status,401);
+ const expanded=await handle('family-provision',expand,provisionToken);assert.equal(expanded.status,200);assert.equal(expanded.body.site_id,expansionSite);assert.equal(expanded.body.temporary_password,undefined);
+ assert.equal((await handle('family-provision',expand,provisionToken)).body.fresh,false);
+ assert.equal((await handle('family-provision',{...expand,event_id:randomUUID(),site_id:randomUUID(),activity_id:v},provisionToken)).status,403);
+ const attach={app_id:'BOOTIK',kind:'activity',event_id:randomUUID(),central_actor_id:centralActor,organization_id:centralOrg,central_user_id:centralMember,site_id:expansionSite,activity_id:newAct,universe:'retailer',profile:'superette',activity_name:'Supérette'};
+ assert.equal((await handle('family-provision',attach,provisionToken)).status,200);
+ const scopeEvent={app_id:'BOOTIK',kind:'member-site',event_id:randomUUID(),central_actor_id:centralActor,organization_id:centralOrg,central_user_id:employee,site_id:expansionSite,activities:[newAct]};
+ assert.equal((await handle('family-provision',{...scopeEvent,activities:[v]},provisionToken)).status,403);
+ assert.equal((await handle('family-provision',scopeEvent,provisionToken)).status,200);
+ assert.equal((await handle('family-provision',scopeEvent,provisionToken)).body.fresh,false);
+ const expandedEmp=await handle('login',{app_id:'BOOTIK',installation_id:randomUUID(),platform:'test',identifier:empEvent.identifier,password:'employee-new-password'},null,'expansion-test');assert.equal(expandedEmp.status,200);assert.equal(expandedEmp.body.sites.length,2);
+ const expandedCall=(action,payload)=>handle('operation',{app_id:'BOOTIK',site_id:expansionSite,action,payload},expandedEmp.body.access_token);
+ assert.deepEqual((await expandedCall('activities',{})).body.result.activities.map(x=>x.id),[newAct]);assert.equal((await expandedCall('entitlement',{universe:'retailer'})).body.result.active,true);
+ assert.equal(Number((await one('select count(*) from bootik.bk_trials where organization_id=$1',[centralOrg])).count),1);
+ const ownerReset={app_id:'BOOTIK',kind:'promoter-recovery',event_id:randomUUID(),central_actor_id:centralActor,organization_id:centralOrg,central_user_id:centralMember,site_id:centralSite,note:'Identité promoteur vérifiée par administration'};
+ const ownerRecovered=await handle('family-provision',ownerReset,provisionToken);assert.equal(ownerRecovered.status,200);assert.ok(ownerRecovered.body.temporary_password);assert.equal((await handle('family-provision',ownerReset,provisionToken)).body.temporary_password,undefined);assert.equal((await centralCall('security-state',{})).status,401);
+ const ownerTemp=await handle('login',{app_id:'BOOTIK',installation_id:randomUUID(),platform:'test',identifier:orgEvent.identifier,password:ownerRecovered.body.temporary_password},null,'owner-reset');assert.equal(ownerTemp.status,200);assert.equal(ownerTemp.body.require_password_change,true);assert.equal(ownerTemp.body.sites.length,2);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);

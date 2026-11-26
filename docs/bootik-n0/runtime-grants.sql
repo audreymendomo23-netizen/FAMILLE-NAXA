@@ -100,3 +100,12 @@ grant select,insert on bootik.bk_member_resource_rules,bootik.bk_workstations,bo
 grant update(resource_kind,resources) on bootik.bk_member_resource_rules to bootik_security_runtime;
 create policy bk_security_access on bootik.bk_storage_locations for select to bootik_security_runtime using(true);
 grant select on bootik.bk_storage_locations to bootik_security_runtime;
+
+-- Central expansion and verified promoteur recovery: no read of password verifier and no auth.users write.
+create policy bk_provision_access on bootik.bk_sessions to bootik_provision_runtime using(true) with check(true);
+grant select(organization_id,app_id,user_id,revoked_at) on bootik.bk_sessions to bootik_provision_runtime;
+grant update(revoked_at) on bootik.bk_sessions to bootik_provision_runtime;
+grant select(organization_id,app_id,user_id) on bootik.bk_credentials to bootik_provision_runtime;
+grant update(salt_hex,verifier_hex) on bootik.bk_credentials to bootik_provision_runtime;
+grant select on bootik.bk_password_controls to bootik_provision_runtime;
+grant update(version,requires_change) on bootik.bk_password_controls to bootik_provision_runtime;
