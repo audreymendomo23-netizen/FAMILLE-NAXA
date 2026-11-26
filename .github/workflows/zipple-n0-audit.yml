@@ -21,3 +21,25 @@ jobs:
         run: node --test docs/apps/zipple/contracts/zipple-policy.test.mjs
       - name: JOBLY read-only source inventory
         run: python3 docs/apps/zipple/contracts/audit_jobly.py
+
+  postgres-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: local_test_only
+          POSTGRES_DB: zipple_n0
+        options: >-
+          --health-cmd "pg_isready -U postgres -d zipple_n0"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build ephemeral ZIPPLE authorization and billing fixture
+        run: docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple_n0 -v ON_ERROR_STOP=1 < docs/apps/zipple/contracts/zipple-n0-schema.sql
+      - name: PostgreSQL 17 isolation and server quotation
+        run: docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple_n0 -v ON_ERROR_STOP=1 < docs/apps/zipple/contracts/zipple-n0-assertions.sql
