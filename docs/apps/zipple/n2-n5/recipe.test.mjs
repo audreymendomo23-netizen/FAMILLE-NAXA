@@ -305,6 +305,12 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  await assert.rejects(scalar("select zp_zone_add($1,$2,'Non autorisée')",[staffAccess,a.site]),/DENIED/);
  await scalar("select zp_operational_grant($1,$2,$3,'cashier',false)",[a.access,a.site,staffId]);
  await assert.rejects(scalar("select zp_business_snapshot($1,$2)",[staffAccess,a.site]),/DENIED/);
+ const limited=await add(a,"Portions limitées","kitchen",1200,5);await scalar("select zp_station_limit($1,$2,$3,1)",[a.access,a.site,limited]);
+ assert.equal(await scalar("select zp_sellable_channel_qty($1,'counter')",[limited]),1);
+ const limitedOrder=await order(a,"counter",[{item_id:limited,qty:1}]);await assert.rejects(order(a,"counter",[{item_id:limited,qty:1}]),/ITEM_UNAVAILABLE/);
+ await scalar("select zp_cancel_unprepared_order($1,$2,$3,'Annulation recette')",[a.access,a.site,limitedOrder.id]);assert.equal(await scalar("select zp_sellable_channel_qty($1,'counter')",[limited]),1);
+ await scalar("select zp_catalog_base_set($1,$2,$3,'Portion renommée','TEST-CODE','verre',1300,'Changement tarif recette')",[a.access,a.site,limited]);assert.equal(await scalar("select zp_current_price($1,'counter')",[limited]),1300);assert.equal(await scalar("select total_xaf::int from zp_orders where id=$1",[limitedOrder.id]),1200);
+ console.log("ZIPPLE_BULK2_SALE_LIMIT_PRICE_HISTORY_PASS");
  console.log("ZIPPLE_BULK2_OPERATIONAL_ROLES_PASS");
  console.log("ZIPPLE_BULK2_QUEUE_CAPACITY_DELAY_PASS");
  console.log("ZIPPLE_BULK2_OPTIONS_PRICING_CHANNELS_PASS");

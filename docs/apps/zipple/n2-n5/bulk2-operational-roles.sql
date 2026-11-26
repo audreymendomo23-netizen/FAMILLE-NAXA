@@ -43,6 +43,25 @@ declare inserted boolean;begin
  if inserted then update public.zp_feedback set reason=p_reason where order_id=p_order;if jsonb_array_length(p_ratings)>0 then perform public.zp_guest_post_feedback(p_guest_hash,p_order,p_ratings);end if;end if;
  return inserted;
 end $$;
+create function public.zp_station_limit(p_access text,p_site uuid,p_item uuid,p_limit int) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$
+declare m public.zp_members;x public.zp_menu_items;y public.zp_menu_items;begin
+ m:=public.zp_business_actor(p_access,p_site);perform 1 from public.zp_site_modes where site_id=p_site for update;
+ select * into x from public.zp_menu_items where id=p_item and org_id=m.org_id and site_id=p_site for update;
+ if x.id is null or x.kind='formula' or (p_limit is not null and p_limit not between 0 and x.available_qty) or (m.role_code not in ('promoteur','manager') and not exists(select 1 from public.zp_station_grants where site_id=p_site and member_id=m.id and post=x.post)) then raise exception 'DENIED';end if;
+ update public.zp_menu_items set sale_limit=p_limit,sale_limit_epoch=gen_random_uuid() where id=x.id returning * into y;
+ insert into public.zp_catalog_events(org_id,site_id,item_id,member_id,before_value,after_value) values(m.org_id,p_site,x.id,m.id,to_jsonb(x),to_jsonb(y));return true;
+end $$;
+create function public.zp_release_sale_limit() returns trigger language plpgsql security invoker set search_path=pg_catalog,public as $$
+begin if old.status<>'cancelled' and new.status='cancelled' then update public.zp_menu_items i set sale_limit=i.sale_limit+l.qty from public.zp_order_lines l where l.order_id=new.id and l.item_id=i.id and i.sale_limit is not null and i.sale_limit_epoch=l.sale_limit_epoch;end if;return new;end $$;
+create trigger zp_release_sale_limit_trigger after update of status on public.zp_orders for each row execute function public.zp_release_sale_limit();
+create function public.zp_catalog_base_set(p_access text,p_site uuid,p_item uuid,p_name text,p_sku text,p_unit text,p_price int,p_reason text) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$
+declare m public.zp_members;x public.zp_menu_items;y public.zp_menu_items;begin
+ m:=public.zp_erp_actor(p_access,p_site);perform 1 from public.zp_site_modes where site_id=p_site for update;
+ if length(trim(coalesce(p_name,''))) not between 1 and 160 or length(coalesce(p_sku,''))>80 or length(trim(coalesce(p_unit,''))) not between 1 and 80 or p_price is null or p_price<1 or length(trim(coalesce(p_reason,''))) not between 5 and 500 then raise exception 'INVALID_PRICE_RULE';end if;
+ select * into x from public.zp_menu_items where id=p_item and org_id=m.org_id and site_id=p_site for update;if x.id is null then raise exception 'DENIED';end if;
+ update public.zp_menu_items set name=trim(p_name),sku=trim(coalesce(p_sku,'')),sale_unit=trim(p_unit),price_xaf=p_price where id=x.id returning * into y;
+ insert into public.zp_catalog_events(org_id,site_id,item_id,member_id,before_value,after_value) values(m.org_id,p_site,x.id,m.id,to_jsonb(x),to_jsonb(y)||jsonb_build_object('reason',trim(p_reason)));return true;
+end $$;
 create or replace function public.zp_close_table(p_access text,p_site uuid,p_table_session uuid) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;begin m:=public.zp_business_actor(p_access,p_site);if not public.zp_can_operate(m.id,p_site,'table') then raise exception 'DENIED';end if;
  perform 1 from public.zp_table_sessions where id=p_table_session and org_id=m.org_id and site_id=p_site and closed_at is null for update;if not found then raise exception 'DENIED';end if;
@@ -176,9 +195,9 @@ declare m public.zp_members;g public.zp_guest_sessions;s public.zp_site_modes;or
  select item_id,sum(qty)::bigint qty,sum(allocation)::bigint allocation,coalesce(jsonb_agg(jsonb_build_object('qty',qty,'note',note)) filter(where note<>''),'[]'::jsonb) instructions from expanded group by item_id order by item_id
  loop
  if line.qty not between 1 and 100000 then raise exception 'INVALID_QUANTITY';end if;
- update public.zp_menu_items set available_qty=available_qty-line.qty::int where id=line.item_id and org_id=org and site_id=p_site and kind<>'formula' and public.zp_item_open(id,p_channel) and available_qty>=line.qty returning * into item;
+ update public.zp_menu_items set available_qty=available_qty-line.qty::int,sale_limit=case when sale_limit is null then null else sale_limit-line.qty::int end where id=line.item_id and org_id=org and site_id=p_site and kind<>'formula' and public.zp_item_open(id,p_channel) and available_qty>=line.qty and (sale_limit is null or sale_limit>=line.qty) returning * into item;
  if not found then raise exception 'ITEM_UNAVAILABLE';end if;
- insert into public.zp_order_lines(order_id,org_id,site_id,item_id,qty,unit_xaf,post,line_total_xaf,instructions) values(oid,org,p_site,item.id,line.qty::int,public.zp_current_price(item.id,p_channel),item.post,line.allocation,line.instructions);
+ insert into public.zp_order_lines(order_id,org_id,site_id,item_id,qty,unit_xaf,post,line_total_xaf,instructions,sale_limit_epoch) values(oid,org,p_site,item.id,line.qty::int,public.zp_current_price(item.id,p_channel),item.post,line.allocation,line.instructions,case when item.sale_limit is null then null else item.sale_limit_epoch end);
  end loop;
  if (select coalesce(sum(line_total_xaf),0) from public.zp_order_lines where order_id=oid)<>total then raise exception 'FORMULA_ALLOCATION_MISMATCH';end if;
  update public.zp_orders set total_xaf=total,commercial_lines=commercial where id=oid;
@@ -205,6 +224,6 @@ declare m public.zp_members;begin m:=public.zp_business_actor(p_access,p_site);i
 
 do $$ declare t text;f record;begin
  foreach t in array array['zp_operational_grants','zp_operational_grant_events','zp_bill_transfers'] loop execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from public,anon,authenticated',t);execute format('grant select,insert,update,delete on public.%I to service_role',t);end loop;
- for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_bill_transfer','zp_feedback_complete','zp_operational_grant','zp_can_operate','zp_open_table','zp_close_table','zp_open_cash','zp_close_cash','zp_record_sale','zp_record_group_sale','zp_reserve_table','zp_reservation_transition','zp_waitlist_add','zp_waitlist_transition','zp_table_bill','zp_call_number','zp_create_order','zp_advance_line','zp_business_snapshot','zp_floor_snapshot') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;
+ for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_station_limit','zp_release_sale_limit','zp_catalog_base_set','zp_bill_transfer','zp_feedback_complete','zp_operational_grant','zp_can_operate','zp_open_table','zp_close_table','zp_open_cash','zp_close_cash','zp_record_sale','zp_record_group_sale','zp_reserve_table','zp_reservation_transition','zp_waitlist_add','zp_waitlist_transition','zp_table_bill','zp_call_number','zp_create_order','zp_advance_line','zp_business_snapshot','zp_floor_snapshot') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;
 end $$;
 commit;
