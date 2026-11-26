@@ -13,7 +13,7 @@ import {
 import { parseWebSession, type WebAuthSession } from "./auth/session";
 import { ProfilePhoto } from "./auth/profile-photo";
 import { BusinessBackdrop, NightTorch } from "./business-visuals";
-import { localeOf, translate, LocaleContext, type Locale } from "./locale";
+import { localeOf, translate, LocaleContext, useTranslation, type Locale } from "./locale";
 import { createRoot } from "react-dom/client";
 import "@famille/design-system/tokens.css";
 import "./naxa-services.css";
@@ -1095,7 +1095,7 @@ function App() {
             <p>{t("Le mot de passe initial doit être remplacé avant tout accès aux pages de gestion.")}</p>
             <div className="auth-proof"><span>01</span> {t("Votre identité est authentifiée")}</div>
           </div>
-          <div className="auth-footer">NAXA SERVICES · COMPTE SÉCURISÉ</div>
+          <div className="auth-footer">{t("NAXA SERVICES · COMPTE SÉCURISÉ")}</div>
         </div>
         <main className="auth-panel"><button className="auth-theme-toggle btn secondary" type="button" onClick={toggleTheme}>{theme==="dark"?t("Mode clair"):t("Mode nuit")}</button><NightTorch active={nightPulse}/>{languagePicker}
           <div className="mobile-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
@@ -1131,7 +1131,7 @@ function App() {
             <div className="auth-proof"><span>02</span> {t("Une autonomie par établissement")}</div>
             <div className="auth-proof"><span>03</span> {t("Une vision réseau sans mélange des caisses")}</div>
           </div>
-          <div className="auth-footer">NAXA SERVICES · ESPACE PROFESSIONNEL</div>
+          <div className="auth-footer">{t("NAXA SERVICES · ESPACE PROFESSIONNEL")}</div>
         </div>
         <main className="auth-panel"><button className="auth-theme-toggle btn secondary" type="button" onClick={toggleTheme}>{theme==="dark"?t("Mode clair"):t("Mode nuit")}</button><NightTorch active={nightPulse}/>{languagePicker}
           <div className="mobile-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
@@ -1157,11 +1157,11 @@ function App() {
 
   return (
     <LocaleContext.Provider value={locale}><div className={"app erp-app " + theme}><NightTorch active={nightPulse}/>
-      {preview && <div className="preview-banner"><strong>DÉMONSTRATION</strong> Essayez les fonctionnalités sans enregistrer d'opérations réelles. <button onClick={() => { setPreview(false); setAuthenticated(false); setActive("overview"); }}>Quitter l'aperçu</button></div>}
+      {preview && <div className="preview-banner"><strong>{t("DÉMONSTRATION")}</strong> Essayez les fonctionnalités sans enregistrer d'opérations réelles. <button onClick={() => { setPreview(false); setAuthenticated(false); setActive("overview"); }}>{t("Quitter l'aperçu")}</button></div>}
       {mobileMenu&&<button className="menu-scrim" aria-label={t("Fermer le menu")} onClick={()=>setMobileMenu(false)}/>}<aside className={"sidebar "+(mobileMenu?"mobile-open":"")} id="ns-navigation">
         <div className="side-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
         <div className="workspace-label">{t("ESPACE DE TRAVAIL")}</div>
-        <div className="site-select"><span className="site-dot" /> <div>{authSession && !preview ? <label>{t("Point de vente actif")}<select aria-label={t("Point de vente actif")} value={activeSiteId || authSession.account.active_site_ids[0] || ""} onChange={event => setActiveSiteId(event.target.value)} disabled={busy}>{authSession.account.active_sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label> : <strong>{siteName}</strong>}<small>{modeLabel(mode)}</small></div></div>
+        <div className="site-select"><span className="site-dot" /> <div>{authSession && !preview ? <label>{t("Point de vente actif")}<select aria-label={t("Point de vente actif")} value={activeSiteId || authSession.account.active_site_ids[0] || ""} onChange={event => setActiveSiteId(event.target.value)} disabled={busy}>{authSession.account.active_sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label> : <strong>{siteName}</strong>}<small>{t(modeLabel(mode))}</small></div></div>
         <nav className="side-nav">
           {grouped.map(([group, groupModules]) => <div className="nav-group" key={group}>
             <div className="nav-heading">{t(group)}</div>
@@ -1196,7 +1196,7 @@ function App() {
               {active !== "workOrders" && active !== "team" && <button className="btn primary" disabled={busy || (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active))} title={!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active) ? "Action indisponible." : undefined} onClick={() => {
                 if (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)) { setAuthMessage("Cette action est indisponible."); return; }
                 setDraftTitle(active==="team"&&authSession?authSession.account.display_name:"");setDraftDetail("");setDraftSku("");setDraftUnit("pièce");setDraftReorderLevel("0");setDraftSupplierWhatsApp("");setDraftPhone("");setDraftAmount("0");setDraftDate("");setDraftEndDate("");setDraftPriority("normal");setDraftActivity("general");setDraftContactConsent(false);setDialogOpen(true);
-              }}>{!preview&&!["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)?"Indisponible":active==="team"?"Pointer mon arrivée":t(selected.action)}</button>}
+              }}>{!preview&&!["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)?"Indisponible":active==="team"?t("Pointer mon arrivée"):t(selected.action)}</button>}
             </div>
           </div>
 
@@ -1245,50 +1245,50 @@ function App() {
       </main>
       {dialogOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <div className="modal-head"><div><span className="eyebrow">{authSession&&!preview?"NOUVELLE OPÉRATION":"NOUVELLE OPÉRATION · DÉMONSTRATION"}</span><h2 id="modal-title">{active==="team"&&authSession&&!preview?"Pointer mon arrivée":t(selected.action)}</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)}>×</button></div>
+          <div className="modal-head"><div><span className="eyebrow">{t(authSession&&!preview?"NOUVELLE OPÉRATION":"NOUVELLE OPÉRATION · DÉMONSTRATION")}</span><h2 id="modal-title">{active==="team"&&authSession&&!preview?t("Pointer mon arrivée"):t(selected.action)}</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)}>×</button></div>
           <form onSubmit={(e) => {e.preventDefault();if(active==="stock"&&authSession)void submitStockItem();else if(authSession&&!preview)void submitModuleOperation().catch(error=>setAuthMessage(error instanceof Error?error.message:"Opération impossible."));else if(preview)addLocalEntry();else{setAuthMessage("Action indisponible.");setDialogOpen(false);}}}>
-            <label>{active==="customers"?t("Nom du client"):active==="pressing"?t("Nom du client"):active==="agenda"?"Nom / référence du client":active==="help"?"Sujet":active==="cash"?"Catégorie de dépense":active==="team"?"Membre":"Nom / référence"}<input autoFocus value={draftTitle} readOnly={active==="team"&&authSession&&!preview} onChange={(e) => setDraftTitle(e.target.value)} required placeholder="Saisir la valeur" /></label>
+            <label>{t(active==="customers"||active==="pressing"?"Nom du client":active==="agenda"?"Nom / référence du client":active==="help"?"Sujet":active==="cash"?"Catégorie de dépense":active==="team"?"Membre":"Nom / référence")}<input autoFocus value={draftTitle} readOnly={active==="team"&&authSession&&!preview} onChange={(e) => setDraftTitle(e.target.value)} required placeholder={t("Saisir la valeur")} /></label>
             {active === "stock" && authSession ? <>
-              <label>Point de vente<select value={activeSiteId} onChange={(e) => setActiveSiteId(e.target.value)} required>{authSession.account.active_site_ids.map((siteId) => <option key={siteId} value={siteId}>{siteId}</option>)}</select></label>
-              <label>SKU (facultatif)<input value={draftSku} onChange={(e) => setDraftSku(e.target.value)} maxLength={80} /></label>
-              <label>Unité<input value={draftUnit} onChange={(e) => setDraftUnit(e.target.value)} required maxLength={40} /></label>
-              <label>Seuil d'alerte<input type="number" min="0" step="0.001" value={draftReorderLevel} onChange={(e) => setDraftReorderLevel(e.target.value)} required /></label>
-              <label>WhatsApp fournisseur<input value={draftSupplierWhatsApp} onChange={(e) => setDraftSupplierWhatsApp(e.target.value)} maxLength={32} placeholder="+237 6xx xx xx xx" /></label>
-              <div className="notice">L'article sera disponible après confirmation.</div>
+              <label>{t("Point de vente")}<select value={activeSiteId} onChange={(e) => setActiveSiteId(e.target.value)} required>{authSession.account.active_site_ids.map((siteId) => <option key={siteId} value={siteId}>{siteId}</option>)}</select></label>
+              <label>{t("SKU (facultatif)")}<input value={draftSku} onChange={(e) => setDraftSku(e.target.value)} maxLength={80} /></label>
+              <label>{t("Unité")}<input value={draftUnit} onChange={(e) => setDraftUnit(e.target.value)} required maxLength={40} /></label>
+              <label>{t("Seuil d'alerte")}<input type="number" min="0" step="0.001" value={draftReorderLevel} onChange={(e) => setDraftReorderLevel(e.target.value)} required /></label>
+              <label>{t("WhatsApp fournisseur")}<input value={draftSupplierWhatsApp} onChange={(e) => setDraftSupplierWhatsApp(e.target.value)} maxLength={32} placeholder="+237 6xx xx xx xx" /></label>
+              <div className="notice">{t("L'article sera disponible après confirmation.")}</div>
             </> : authSession && !preview && active==="customers" ? <>
               <label>{t("Téléphone facultatif")}<input value={draftPhone} onChange={e=>setDraftPhone(e.target.value)} maxLength={32}/></label>
               <label><input type="checkbox" checked={draftContactConsent} onChange={e=>setDraftContactConsent(e.target.checked)}/> Consentement de contact obtenu</label>
             </> : authSession && !preview && active==="services" ? <>
-              <label>Code prestation<input value={draftSku} onChange={e=>setDraftSku(e.target.value)} required maxLength={80}/></label>
-              <label>Activité<select value={draftActivity} onChange={e=>setDraftActivity(e.target.value)}>{["pressing","hair","beauty","treatment","tailoring","perfume","repair","part","manufacturing","vehicle","cleaning","contract","home","printing","event","package","material","service","retail","general"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
-              <label>Tarif FCFA<input type="number" min="0" step="1" value={draftAmount} onChange={e=>setDraftAmount(e.target.value)} required/></label>
-              <label>Description<textarea rows={3} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} maxLength={2000}/></label>
+              <label>{t("Code prestation")}<input value={draftSku} onChange={e=>setDraftSku(e.target.value)} required maxLength={80}/></label>
+              <label>{t("Activité")}<select value={draftActivity} onChange={e=>setDraftActivity(e.target.value)}>{["pressing","hair","beauty","treatment","tailoring","perfume","repair","part","manufacturing","vehicle","cleaning","contract","home","printing","event","package","material","service","retail","general"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
+              <label>{t("Tarif FCFA")}<input type="number" min="0" step="1" value={draftAmount} onChange={e=>setDraftAmount(e.target.value)} required/></label>
+              <label>{t("Description")}<textarea rows={3} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} maxLength={2000}/></label>
             </> : authSession && !preview && active==="pressing" ? <>
-              <label>Téléphone client<input value={draftPhone} onChange={e=>setDraftPhone(e.target.value)} maxLength={32}/></label>
-              <label>Articles déposés<textarea rows={3} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required minLength={2}/></label>
-              <label>Montant total FCFA<input type="number" min="1" step="1" value={draftAmount} onChange={e=>setDraftAmount(e.target.value)} required/></label>
-              <label>Date promise<input type="datetime-local" value={draftDate} onChange={e=>setDraftDate(e.target.value)} required/></label>
-              <div className="notice">Aucun acompte n'est encaissé dans ce parcours de création.</div>
+              <label>{t("Téléphone client")}<input value={draftPhone} onChange={e=>setDraftPhone(e.target.value)} maxLength={32}/></label>
+              <label>{t("Articles déposés")}<textarea rows={3} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required minLength={2}/></label>
+              <label>{t("Montant total FCFA")}<input type="number" min="1" step="1" value={draftAmount} onChange={e=>setDraftAmount(e.target.value)} required/></label>
+              <label>{t("Date promise")}<input type="datetime-local" value={draftDate} onChange={e=>setDraftDate(e.target.value)} required/></label>
+              <div className="notice">{t("Aucun acompte n'est encaissé dans ce parcours de création.")}</div>
             </> : authSession && !preview && active==="agenda" ? <>
-              <label>Prestation (nom ou code)<input value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required/></label>
-              <label>Début<input type="datetime-local" value={draftDate} onChange={e=>setDraftDate(e.target.value)} required/></label>
-              <label>Fin<input type="datetime-local" value={draftEndDate} onChange={e=>setDraftEndDate(e.target.value)} required/></label>
-              <div className="notice">Le rendez-vous sera attribué à votre compte. Vérifiez les horaires.</div>
+              <label>{t("Prestation (nom ou code)")}<input value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required/></label>
+              <label>{t("Début")}<input type="datetime-local" value={draftDate} onChange={e=>setDraftDate(e.target.value)} required/></label>
+              <label>{t("Fin")}<input type="datetime-local" value={draftEndDate} onChange={e=>setDraftEndDate(e.target.value)} required/></label>
+              <div className="notice">{t("Le rendez-vous sera attribué à votre compte. Vérifiez les horaires.")}</div>
             </> : authSession && !preview && active==="cash" ? <>
-              <label>Motif<textarea rows={3} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required minLength={2}/></label>
-              <label>Montant FCFA<input type="number" min="1" step="1" value={draftAmount} onChange={e=>setDraftAmount(e.target.value)} required/></label>
-              <label>Date<input type="datetime-local" value={draftDate} onChange={e=>setDraftDate(e.target.value)}/></label>
-              <div className="notice">Dépense hors caisse. Aucun paiement client ou encaissement n'est créé.</div>
+              <label>{t("Motif")}<textarea rows={3} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required minLength={2}/></label>
+              <label>{t("Montant FCFA")}<input type="number" min="1" step="1" value={draftAmount} onChange={e=>setDraftAmount(e.target.value)} required/></label>
+              <label>{t("Date")}<input type="datetime-local" value={draftDate} onChange={e=>setDraftDate(e.target.value)}/></label>
+              <div className="notice">{t("Dépense hors caisse. Aucun paiement client ou encaissement n'est créé.")}</div>
             </> : authSession && !preview && active==="help" ? <>
-              <label>Description<textarea rows={4} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required minLength={3}/></label>
-              <label>Priorité<select value={draftPriority} onChange={e=>setDraftPriority(e.target.value)}>{["low","normal","high","urgent"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
+              <label>{t("Description")}<textarea rows={4} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required minLength={3}/></label>
+              <label>{t("Priorité")}<select value={draftPriority} onChange={e=>setDraftPriority(e.target.value)}>{["low","normal","high","urgent"].map(v=><option key={v} value={v}>{v}</option>)}</select></label>
             </> : authSession && !preview && active==="team" ? <>
-              <div className="notice">Le pointage est enregistré uniquement pour le membre authentifié.</div>
+              <div className="notice">{t("Le pointage est enregistré uniquement pour le membre authentifié.")}</div>
             </> : <>
-              <label>Détails<textarea rows={3} value={draftDetail} onChange={(e) => setDraftDetail(e.target.value)} placeholder="Informations complémentaires" /></label>
-              <div className="notice">Cette démonstration ne crée aucune opération réelle.</div>
+              <label>{t("Détails")}<textarea rows={3} value={draftDetail} onChange={(e) => setDraftDetail(e.target.value)} placeholder={t("Informations complémentaires")} /></label>
+              <div className="notice">{t("Cette démonstration ne crée aucune opération réelle.")}</div>
             </>}
-            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>{t("Annuler")}</button><button className="btn primary" disabled={busy}>{authSession&&!preview?t("Enregistrer"):"Ajouter à la démonstration"}</button></div>
+            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>{t("Annuler")}</button><button className="btn primary" disabled={busy}>{authSession&&!preview?t("Enregistrer"):t("Ajouter à la démonstration")}</button></div>
           </form>
         </div>
       </div>}
@@ -1349,9 +1349,9 @@ function Overview({ entries, onNavigate, mode, activity, locale }: { entries: Re
       </div>
     </div>
     <aside className="overview-side">
-      <div className="side-card"><div className="section-title"><div><span className="eyebrow">STRUCTURE</span><h3>{t("Mode d'exploitation")}</h3></div></div><strong className="mode-name">{modeLabel(mode)}</strong><p>Les données restent isolées par organisation, site et poste selon les droits attribués.</p><button className="text-action" onClick={() => onNavigate("organization")}>{t("Configurer la structure")} →</button></div>
-      <div className="side-card"><span className="eyebrow">BRIEFING DU MATIN</span><h3>{t("À préparer")}</h3><ul className="brief-list"><li>Vérifier les rendez-vous et les créneaux.</li><li>Contrôler les tickets dont la date promise approche.</li><li>Ouvrir les caisses de chaque poste autorisé.</li><li>Consulter les alertes de consommables.</li></ul></div>
-      <div className="side-card alert-card"><span className="eyebrow">SYNCHRONISATION</span><h3>{t("Indicateurs à venir")}</h3><p>{t("Vos indicateurs apparaîtront dès que les données seront disponibles.")}</p></div>
+      <div className="side-card"><div className="section-title"><div><span className="eyebrow">{t("STRUCTURE")}</span><h3>{t("Mode d'exploitation")}</h3></div></div><strong className="mode-name">{t(modeLabel(mode))}</strong><p>{t("Les données restent isolées par organisation, site et poste selon les droits attribués.")}</p><button className="text-action" onClick={() => onNavigate("organization")}>{t("Configurer la structure")} →</button></div>
+      <div className="side-card"><span className="eyebrow">{t("BRIEFING DU MATIN")}</span><h3>{t("À préparer")}</h3><ul className="brief-list"><li>{t("Vérifier les rendez-vous et les créneaux.")}</li><li>{t("Contrôler les tickets dont la date promise approche.")}</li><li>{t("Ouvrir les caisses de chaque poste autorisé.")}</li><li>{t("Consulter les alertes de consommables.")}</li></ul></div>
+      <div className="side-card alert-card"><span className="eyebrow">{t("SYNCHRONISATION")}</span><h3>{t("Indicateurs à venir")}</h3><p>{t("Vos indicateurs apparaîtront dès que les données seront disponibles.")}</p></div>
     </aside>
   </div>;
 }
@@ -1359,34 +1359,37 @@ function Metric({ label, value, meta }: { label: string; value: string; meta: st
   return <div className="metric-card"><span>{label}</span><strong>{value}</strong><small>{meta}</small></div>;
 }
 function DeviceSecurityPage({authenticated,onLoad,onRevoke}:{authenticated:boolean;onLoad:()=>Promise<WebDevice[]>;onRevoke:(device:WebDevice)=>Promise<void>}) {
+  const t=useTranslation();
   const [devices,setDevices]=useState<WebDevice[]>([]);
   const [loading,setLoading]=useState(false),[loaded,setLoaded]=useState(false);
   const [selected,setSelected]=useState<WebDevice|null>(null),[error,setError]=useState("");
   async function load(){setLoading(true);setError("");try{setDevices(await onLoad());setLoaded(true);}catch(cause){setError(cause instanceof Error?cause.message:"Lecture impossible.");}finally{setLoading(false);}}
   async function revoke(){if(!selected)return;setLoading(true);setError("");try{await onRevoke(selected);setSelected(null);setDevices(await onLoad());setLoaded(true);}catch(cause){setError(cause instanceof Error?cause.message:"Révocation impossible.");}finally{setLoading(false);}}
   return <div className="module-layout"><div className="module-main-card">
-    <span className="eyebrow">SÉCURITÉ DU COMPTE</span><h2>Mes appareils et sessions</h2>
-    <p className="muted">Gérez les appareils connectés à votre compte. Un appareil retiré devra se reconnecter.</p>
-    <button className="btn primary" disabled={!authenticated||loading} onClick={()=>void load()}>Charger mes appareils</button>
+    <span className="eyebrow">{t("SÉCURITÉ DU COMPTE")}</span><h2>{t("Mes appareils et sessions")}</h2>
+    <p className="muted">{t("Gérez les appareils connectés à votre compte. Un appareil retiré devra se reconnecter.")}</p>
+    <button className="btn primary" disabled={!authenticated||loading} onClick={()=>void load()}>{t("Charger mes appareils")}</button>
     {error&&<div role="alert" className="notice">{error}</div>}
-    {loaded&&!devices.length&&<p>Aucun appareil enregistré.</p>}
-    {devices.map(device=><div className="record" key={device.id}><div><strong>{device.label||device.platform}</strong><small>{device.platform} · {device.current?"Cet appareil":device.revoked_at?"Révoqué":"Actif"}</small><small>Dernière activité : {device.last_seen_at?new Date(device.last_seen_at).toLocaleString("fr-FR"):"—"}</small></div>{!device.current&&!device.revoked_at&&<button className="btn secondary" disabled={loading} onClick={()=>setSelected(device)}>Révoquer</button>}</div>)}
-    {selected&&<div className="notice"><p>Révoquer l’appareil {selected.label||selected.platform} ?</p><button className="btn secondary" disabled={loading} onClick={()=>setSelected(null)}>Annuler</button><button className="btn primary" disabled={loading} onClick={()=>void revoke()}>Confirmer la révocation</button></div>}
-  </div><div className="module-main-card"><h2>Protection des accès</h2><p>Pour protéger votre compte, déconnectez les appareils que vous ne reconnaissez pas.</p></div></div>;
+    {loaded&&!devices.length&&<p>{t("Aucun appareil enregistré.")}</p>}
+    {devices.map(device=><div className="record" key={device.id}><div><strong>{device.label||device.platform}</strong><small>{device.platform} · {t(device.current?"Cet appareil":device.revoked_at?"Révoqué":"Actif")}</small><small>Dernière activité : {device.last_seen_at?new Date(device.last_seen_at).toLocaleString("fr-FR"):"—"}</small></div>{!device.current&&!device.revoked_at&&<button className="btn secondary" disabled={loading} onClick={()=>setSelected(device)}>{t("Révoquer")}</button>}</div>)}
+    {selected&&<div className="notice"><p>Révoquer l’appareil {selected.label||selected.platform} ?</p><button className="btn secondary" disabled={loading} onClick={()=>setSelected(null)}>{t("Annuler")}</button><button className="btn primary" disabled={loading} onClick={()=>void revoke()}>{t("Confirmer la révocation")}</button></div>}
+  </div><div className="module-main-card"><h2>{t("Protection des accès")}</h2><p>{t("Pour protéger votre compte, déconnectez les appareils que vous ne reconnaissez pas.")}</p></div></div>;
 }
 function GenericPage({ active, entries, copy, preview, authenticated }: { active: ModuleId; entries: Entry[]; copy: typeof moduleCopy[ModuleId]; preview: boolean; authenticated: boolean }) {
+  const t=useTranslation();
   const serverWriteAvailable = authenticated && ["stock", "services", "customers", "team", "help"].includes(active);
   return <div className="module-layout">
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">VOTRE ACTIVITÉ</span><h2>Fonctionnalités</h2></div><span className="status-tag pending">{preview?"Démonstration":serverWriteAvailable?"Disponible":"Indisponible"}</span></div>
-      <div className="feature-list">{copy.features.map((feature,i)=><div className="feature-row" key={feature}><span className="feature-number">{String(i+1).padStart(2,"0")}</span><span>{feature}</span><span className="feature-check">◇</span></div>)}</div>
-      {!preview&&!serverWriteAvailable&&<div className="notice">Cette fonctionnalité est disponible en consultation uniquement.</div>}
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{t("VOTRE ACTIVITÉ")}</span><h2>{t("Fonctionnalités")}</h2></div><span className="status-tag pending">{t(preview?"Démonstration":serverWriteAvailable?"Disponible":"Indisponible")}</span></div>
+      <div className="feature-list">{copy.features.map((feature,i)=><div className="feature-row" key={feature}><span className="feature-number">{String(i+1).padStart(2,"0")}</span><span>{t(feature)}</span><span className="feature-check">◇</span></div>)}</div>
+      {!preview&&!serverWriteAvailable&&<div className="notice">{t("Cette fonctionnalité est disponible en consultation uniquement.")}</div>}
     </div>
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{preview?"SESSION EN COURS":"HISTORIQUE"}</span><h2>{preview?"Brouillons":"Opérations"}</h2></div><span className="status-tag local">{preview?"Local":serverWriteAvailable?"Historique":"Consultation"}</span></div>
-      {entries.length===0?<Empty text={preview?copy.empty:serverWriteAvailable?"Aucune opération pour le moment.":"Aucun résultat disponible pour le moment."}/>:<div className="record-list">{entries.map(entry=><Record key={entry.id} entry={entry}/>)}</div>}
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{t(preview?"SESSION EN COURS":"HISTORIQUE")}</span><h2>{t(preview?"Brouillons":"Opérations")}</h2></div><span className="status-tag local">{t(preview?"Local":serverWriteAvailable?"Historique":"Consultation")}</span></div>
+      {entries.length===0?<Empty text={t(preview?copy.empty:serverWriteAvailable?"Aucune opération pour le moment.":"Aucun résultat disponible pour le moment.")}/>:<div className="record-list">{entries.map(entry=><Record key={entry.id} entry={entry}/>)}</div>}
     </div>
   </div>;
 }
 function AgendaPage({ entries, authenticated }: { entries: Entry[]; authenticated: boolean }) {
+  const t=useTranslation();
   const today = new Date();
   const monday = new Date(today);
   monday.setDate(today.getDate() - ((today.getDay() + 6) % 7));
@@ -1395,7 +1398,7 @@ function AgendaPage({ entries, authenticated }: { entries: Entry[]; authenticate
     date.setDate(monday.getDate() + index);
     return { label: date.toLocaleDateString("fr-FR", { weekday: "short" }), day: date.getDate(), isToday: date.toDateString() === today.toDateString() };
   });
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue de la semaine</h2></div><span className="status-tag pending">{authenticated?"Rendez-vous":"Démonstration"}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Aucun créneau disponible</strong><p>Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.</p></div></div><div className="module-main-card"><h2>Rendez-vous</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucun rendez-vous dans le périmètre chargé." />}</div></div>;
+  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{t("PLANNING")}</span><h2>{t("Vue de la semaine")}</h2></div><span className="status-tag pending">{t(authenticated?"Rendez-vous":"Démonstration")}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>{t("Aucun créneau disponible")}</strong><p>{t("Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.")}</p></div></div><div className="module-main-card"><h2>{t("Rendez-vous")}</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text={t("Aucun rendez-vous dans le périmètre chargé.")} />}</div></div>;
 }
 function PressingPage({
   entries,onAdvance,onTransition,canPreviewEdit,authenticated,busy,
@@ -1403,34 +1406,35 @@ function PressingPage({
   entries:Entry[];onAdvance:(id:string)=>void;onTransition:(entry:Entry,nextStatus:string,reason:string)=>Promise<void>;
   canPreviewEdit:boolean;authenticated:boolean;busy:boolean;
 }) {
+  const t=useTranslation();
   const [reasons,setReasons]=useState<Record<string,string>>({});
   const [error,setError]=useState("");
   const nextStatus:Record<string,string>={received:"in_progress",in_progress:"ready",ready:"picked_up"};
   const statusLabels:Record<string,string>={received:"Reçu",in_progress:"En cours",ready:"Prêt",picked_up:"Retiré"};
   return <div className="module-layout">
     <div className="module-main-card">
-      <div className="module-card-head"><div><span className="eyebrow">SUIVI DES TICKETS</span><h2>Étapes de traitement</h2></div><span className="status-tag pending">{canPreviewEdit?"Démonstration":authenticated?"Suivi des tickets":"Lecture seule"}</span></div>
-      <div className="pressing-steps">{["Reçu","En cours","Prêt","Retiré"].map((step,i)=><div key={step}><span>{i+1}</span><strong>{step}</strong></div>)}</div>
-      <p className="muted">Suivez les étapes de chaque ticket jusqu'au retrait.</p>
+      <div className="module-card-head"><div><span className="eyebrow">{t("SUIVI DES TICKETS")}</span><h2>{t("Étapes de traitement")}</h2></div><span className="status-tag pending">{t(canPreviewEdit?"Démonstration":authenticated?"Suivi des tickets":"Lecture seule")}</span></div>
+      <div className="pressing-steps">{["Reçu","En cours","Prêt","Retiré"].map((step,i)=><div key={step}><span>{i+1}</span><strong>{t(step)}</strong></div>)}</div>
+      <p className="muted">{t("Suivez les étapes de chaque ticket jusqu'au retrait.")}</p>
     </div>
     <div className="module-main-card">
-      <h2>Tickets</h2>
-      {error&&<div className="notice" role="status">{customerMessage(error)}</div>}
+      <h2>{t("Tickets")}</h2>
+      {error&&<div className="notice" role="status">{t(customerMessage(error))}</div>}
       {entries.length?entries.map(entry=>{
         const status=entry.status??"received";
         const next=nextStatus[status];
         return <div className="activity-record" key={entry.id}>
-          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail}</small><small>{entry.revision?"Confirmé":"En attente de confirmation"}</small></div><span className="status-tag local">{statusLabels[status]??entry.state}</span></div>
-          {canPreviewEdit&&<button className="btn secondary" onClick={()=>onAdvance(entry.id)} disabled={status==="picked_up"}>Avancer l'aperçu</button>}
+          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail}</small><small>{t(entry.revision?"Confirmé":"En attente de confirmation")}</small></div><span className="status-tag local">{t(statusLabels[status]??entry.state)}</span></div>
+          {canPreviewEdit&&<button className="btn secondary" onClick={()=>onAdvance(entry.id)} disabled={status==="picked_up"}>{t("Avancer l'aperçu")}</button>}
           {authenticated&&next&&entry.recordType==="pressing_order"&&entry.siteId&&entry.revision?<div className="activity-transition">
-            <label>Motif du changement d'étape<input value={reasons[entry.id]??""} onChange={e=>setReasons(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500}/></label>
+            <label>{t("Motif du changement d'étape")}<input value={reasons[entry.id]??""} onChange={e=>setReasons(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500}/></label>
             <button className="btn secondary" disabled={busy||(reasons[entry.id]??"").trim().length<3} onClick={()=>void onTransition(entry,next,reasons[entry.id]??"").then(
               ()=>setReasons(previous=>({...previous,[entry.id]:""})),
               cause=>setError(cause instanceof Error?cause.message:"Transition refusée.")
             )}>{busy?"Envoi…":"Passer à "+statusLabels[next]}</button>
-          </div>:authenticated&&next&&<p className="muted">Patientez jusqu'à la confirmation du ticket.</p>}
+          </div>:authenticated&&next&&<p className="muted">{t("Patientez jusqu'à la confirmation du ticket.")}</p>}
         </div>;
-      }):<Empty text="Aucun ticket disponible pour cet établissement."/>}
+      }):<Empty text={t("Aucun ticket disponible pour cet établissement.")}/>}
     </div>
   </div>;
 }
@@ -1446,6 +1450,7 @@ function WorkOrdersPage({
   onCreate: (input:{customer:string;title:string;amountXaf:number;dueDate:string;fields:Record<string,string>})=>Promise<void>;
   onTransition: (entry:Entry,nextStatus:string,reason:string)=>Promise<void>;
 }) {
+  const t=useTranslation();
   const [customer,setCustomer]=useState("");
   const [title,setTitle]=useState("");
   const [amount,setAmount]=useState("0");
@@ -1483,10 +1488,10 @@ function WorkOrdersPage({
       <p className="muted">Services associés : {workflow.sharedModules.join(" · ")}.</p>
     </div>
     <div className="module-main-card">
-      <div className="module-card-head"><div><span className="eyebrow">NOUVEAU DOSSIER</span><h2>Créer une opération métier</h2></div><span className="status-tag local">{siteName}</span></div>
+      <div className="module-card-head"><div><span className="eyebrow">{t("NOUVEAU DOSSIER")}</span><h2>{t("Créer une opération métier")}</h2></div><span className="status-tag local">{siteName}</span></div>
       {authenticated ? <form onSubmit={create}>
-        <label>Client / donneur d'ordre<input value={customer} onChange={e=>setCustomer(e.target.value)} minLength={2} maxLength={180} required /></label>
-        <label>Intitulé du dossier<input value={title} onChange={e=>setTitle(e.target.value)} minLength={2} maxLength={180} required /></label>
+        <label>{t("Client / donneur d'ordre")}<input value={customer} onChange={e=>setCustomer(e.target.value)} minLength={2} maxLength={180} required /></label>
+        <label>{t("Intitulé du dossier")}<input value={title} onChange={e=>setTitle(e.target.value)} minLength={2} maxLength={180} required /></label>
         {workflow.fields.map(field=>{
           const value=fields[field.key]??"";
           const update=(nextValue:string)=>setFields(previous=>({...previous,[field.key]:nextValue}));
@@ -1496,7 +1501,7 @@ function WorkOrdersPage({
               ? <textarea value={value} onChange={e=>update(e.target.value)} maxLength={field.maxLength??1200} rows={3} required={field.required}/>
               : kind==="select"
                 ? <select value={value} onChange={e=>update(e.target.value)} required={field.required}>
-                    <option value="">Sélectionner…</option>
+                    <option value="">{t("Sélectionner…")}</option>
                     {(field.options??[]).map(option=><option key={option.value} value={option.value}>{option.label}</option>)}
                   </select>
                 : <input
@@ -1512,15 +1517,15 @@ function WorkOrdersPage({
             {field.help&&<small className="muted">{field.help}</small>}
           </label>;
         })}
-        <label>Montant estimatif (FCFA)<input type="number" min="0" step="1" value={amount} onChange={e=>setAmount(e.target.value)} required /></label>
-        <label>Date d'échéance globale (facultatif)<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} /></label>
+        <label>{t("Montant estimatif (FCFA)")}<input type="number" min="0" step="1" value={amount} onChange={e=>setAmount(e.target.value)} required /></label>
+        <label>{t("Date d'échéance globale (facultatif)")}<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} /></label>
         <button className="btn primary" disabled={saving||busy}>{saving||busy?"Enregistrement…":"Créer et synchroniser le dossier"}</button>
-      </form> : <div className="notice">Connectez-vous pour créer un dossier.</div>}
-      {error&&<div className="notice" role="status">{customerMessage(error)}</div>}
+      </form> : <div className="notice">{t("Connectez-vous pour créer un dossier.")}</div>}
+      {error&&<div className="notice" role="status">{t(customerMessage(error))}</div>}
     </div>
     <div className="module-main-card activity-record-list">
-      <div className="module-card-head"><div><span className="eyebrow">REGISTRE DU SITE</span><h2>Dossiers enregistrés</h2></div><span className="status-tag local">{entries.length}</span></div>
-      {entries.length===0?<Empty text="Aucun dossier métier reçu pour ce site et cet appareil."/>:entries.map(entry=>{
+      <div className="module-card-head"><div><span className="eyebrow">{t("REGISTRE DU SITE")}</span><h2>{t("Dossiers enregistrés")}</h2></div><span className="status-tag local">{entries.length}</span></div>
+      {entries.length===0?<Empty text={t("Aucun dossier métier reçu pour ce site et cet appareil.")}/>:entries.map(entry=>{
         const entryProfile=entry.activityProfile??workflow.profile;
         const entryWorkflow=getActivityWorkflow(entryProfile);
         const status=entry.status??"received";
@@ -1528,10 +1533,10 @@ function WorkOrdersPage({
         const next=stage?.next??[];
         const detailRows=Object.entries(entry.metadata??{}).filter(([,value])=>Boolean(value));
         return <div className="activity-record" key={entry.id}>
-          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail||entry.createdAt}</small><small data-testid="record-confirmation" data-version={entry.revision??0}>{entry.revision?"Confirmé":"En attente de confirmation"}</small></div><span className="status-tag local">{stage?.label??entry.state}</span></div>
+          <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail||entry.createdAt}</small><small data-testid="record-confirmation" data-version={entry.revision??0}>{t(entry.revision?"Confirmé":"En attente de confirmation")}</small></div><span className="status-tag local">{stage?.label??entry.state}</span></div>
           {detailRows.length>0&&<ul className="brief-list">{detailRows.map(([key,value])=><li key={key}>{key} : {value}</li>)}</ul>}
           {authenticated&&next.length>0&&entry.revision&&entry.siteId&&<div className="activity-transition">
-            <label>Motif du changement d'étape<input value={reasonByEntry[entry.id]??""} onChange={e=>setReasonByEntry(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500} /></label>
+            <label>{t("Motif du changement d'étape")}<input value={reasonByEntry[entry.id]??""} onChange={e=>setReasonByEntry(previous=>({...previous,[entry.id]:e.target.value}))} minLength={3} maxLength={500} /></label>
             <div className="activity-transition-buttons">{next.map(code=><button className="btn secondary" key={code} disabled={busy||transitioning===entry.id||(reasonByEntry[entry.id]??"").trim().length<3} onClick={()=>void transition(entry,code)}>{transitioning===entry.id?"Envoi…":entryWorkflow.stages.find(item=>item.code===code)?.label??code}</button>)}</div>
           </div>}
         </div>;
@@ -1541,7 +1546,8 @@ function WorkOrdersPage({
 }
 
 function CashPage({ entries }: { entries: Entry[] }) {
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">TRÉSORERIE</span><h2>Sessions de caisse</h2></div><span className="status-tag pending">Dépenses</span></div><div className="cash-summary"><div><small>Fonds d'ouverture</small><strong>—</strong></div><div><small>Encaissements confirmés</small><strong>—</strong></div><div><small>Écart de clôture</small><strong>—</strong></div></div><div className="notice">Ce formulaire enregistre une dépense, pas une vente ni un paiement client. Les ouvertures/clôtures, encaissements et reçus ne sont pas encore raccordés à cette vue.</div></div><div className="module-main-card"><h2>Dépenses du journal serveur</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucune dépense dans le périmètre chargé." />}</div></div>;
+  const t=useTranslation();
+  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{t("TRÉSORERIE")}</span><h2>{t("Sessions de caisse")}</h2></div><span className="status-tag pending">{t("Dépenses")}</span></div><div className="cash-summary"><div><small>{t("Fonds d'ouverture")}</small><strong>—</strong></div><div><small>{t("Encaissements confirmés")}</small><strong>—</strong></div><div><small>{t("Écart de clôture")}</small><strong>—</strong></div></div><div className="notice">{t("Ce formulaire enregistre une dépense, pas une vente ni un paiement client. Les ouvertures/clôtures, encaissements et reçus ne sont pas encore raccordés à cette vue.")}</div></div><div className="module-main-card"><h2>{t("Dépenses du journal serveur")}</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text={t("Aucune dépense dans le périmètre chargé.")} />}</div></div>;
 }
 function PerformancePage({
   data, fromDate, setFromDate, loading, error, onLoad, authenticated,
@@ -1549,20 +1555,21 @@ function PerformancePage({
   data: {daily:Record<string,unknown>[];monthly:Record<string,unknown>[];annual:Record<string,unknown>[]} | null;
   fromDate:string;setFromDate:(value:string)=>void;loading:boolean;error:string;onLoad:()=>void;authenticated:boolean;
 }) {
+  const t=useTranslation();
   const fmt=(value:unknown)=>typeof value==="number"?new Intl.NumberFormat("fr-FR").format(value)+" FCFA":value==null?"—":String(value);
-  const rows=(values:Record<string,unknown>[],key:string)=>values.length===0?<Empty text="Aucune donnée disponible pour cette période."/>:
-    <div style={{overflowX:"auto"}}><table className="data-table"><thead><tr><th>Période</th><th>Recettes confirmées</th><th>Coût connu</th><th>Marge brute</th><th>Ventes confirmées</th><th>Coût manquant</th></tr></thead><tbody>
-      {values.map((row,index)=><tr key={String(row[key]??index)}><td>{String(row[key]??"—")}</td><td>{fmt(row.revenue_xaf)}</td><td>{fmt(row.cost_of_goods_xaf??row.known_cost_of_goods_xaf)}</td><td>{fmt(row.gross_profit_xaf)}</td><td>{fmt(row.confirmed_sales_count)}</td><td>{fmt(row.uncosted_sales_count)}</td></tr>)}
+  const rows=(values:Record<string,unknown>[],key:string)=>values.length===0?<Empty text={t("Aucune donnée disponible pour cette période.")}/>:
+    <div style={{overflowX:"auto"}}><table className="data-table"><thead><tr><th>{t("Période")}</th><th>{t("Recettes confirmées")}</th><th>{t("Coût connu")}</th><th>{t("Marge brute")}</th><th>{t("Ventes confirmées")}</th><th>{t("Coût manquant")}</th></tr></thead><tbody>
+      {values.map((row,index)=><tr key={String(row[key]??index)}><td>{String(row[key]??"—")}</td><td>{fmt(row.revenue_xaf)}</td><td>{fmt(row.cost_of_goods_xaf??row.known_cost_of_goods_xaf)}</td><td>{fmt(row.gross_profit_xaf)}</td><td>{row.confirmed_sales_count==null?"—":String(row.confirmed_sales_count)}</td><td>{row.uncosted_sales_count==null?"—":String(row.uncosted_sales_count)}</td></tr>)}
     </tbody></table></div>;
   return <div className="module-layout">
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">ANALYSE FINANCIÈRE</span><h2>Performances financières confirmées</h2></div><span className="status-tag pending">{data?"Données confirmées":"À charger"}</span></div>
-      {authenticated?<><label>À partir du<input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} max={new Date().toISOString().slice(0,10)}/></label><button className="btn primary" disabled={loading} onClick={onLoad}>{loading?"Chargement…":"Charger les rapports"}</button></>:<div className="notice">Connectez-vous pour consulter vos rapports.</div>}
-      {error&&<div className="notice" role="status">{customerMessage(error)}</div>}
-      <p className="muted">Les indicateurs tiennent compte des ventes confirmées.</p>
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{t("ANALYSE FINANCIÈRE")}</span><h2>{t("Performances financières confirmées")}</h2></div><span className="status-tag pending">{t(data?"Données confirmées":"À charger")}</span></div>
+      {authenticated?<><label>{t("À partir du")}<input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} max={new Date().toISOString().slice(0,10)}/></label><button className="btn primary" disabled={loading} onClick={onLoad}>{t(loading?"Chargement…":"Charger les rapports")}</button></>:<div className="notice">{t("Connectez-vous pour consulter vos rapports.")}</div>}
+      {error&&<div className="notice" role="status">{t(customerMessage(error))}</div>}
+      <p className="muted">{t("Les indicateurs tiennent compte des ventes confirmées.")}</p>
     </div>
-    <div className="module-main-card"><h2>Journalier</h2>{rows(data?.daily??[],"performance_day")}</div>
-    <div className="module-main-card"><h2>Mensuel</h2>{rows(data?.monthly??[],"performance_month")}</div>
-    <div className="module-main-card"><h2>Annuel</h2>{rows(data?.annual??[],"performance_year")}</div>
+    <div className="module-main-card"><h2>{t("Journalier")}</h2>{rows(data?.daily??[],"performance_day")}</div>
+    <div className="module-main-card"><h2>{t("Mensuel")}</h2>{rows(data?.monthly??[],"performance_month")}</div>
+    <div className="module-main-card"><h2>{t("Annuel")}</h2>{rows(data?.annual??[],"performance_year")}</div>
   </div>;
 }
 function OrganizationPage({
@@ -1572,6 +1579,7 @@ function OrganizationPage({
   editable: boolean; onSave: (name: string, mode: BusinessMode, locale: "fr" | "en" | "ff-CM") => Promise<void>;
   locale: "fr" | "en" | "ff-CM";
 }) {
+  const t=useTranslation();
   const [selectedLocale, setSelectedLocale] = useState<"fr" | "en" | "ff-CM">(locale);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -1583,21 +1591,21 @@ function OrganizationPage({
   }
   return <div className="structure-grid">
     <div className="module-main-card">
-      <span className="eyebrow">ORGANISATION</span><h2>Modèle d'exploitation</h2>
+      <span className="eyebrow">{t("ORGANISATION")}</span><h2>{t("Modèle d'exploitation")}</h2>
       <div className="mode-options">
-        <button disabled={!editable || saving} className={mode==="solo"?"mode-option selected":"mode-option"} onClick={()=>setMode("solo")}><b>01 · PME autonome</b><strong>Un établissement indépendant</strong><small>Un point de vente, une organisation et ses opérations.</small></button>
-        <button disabled={!editable || saving} className={mode==="single_site_multi_workstation"?"mode-option selected":"mode-option"} onClick={()=>setMode("single_site_multi_workstation")}><b>02 · Responsable multi-emplacements</b><strong>Plusieurs postes dans un même lieu</strong><small>Plusieurs ressources dans un point de vente.</small></button>
-        <button disabled={!editable || saving} className={mode==="multi_site_network"?"mode-option selected":"mode-option"} onClick={()=>setMode("multi_site_network")}><b>03 · Promoteur multi-sites</b><strong>Plusieurs points de vente autonomes</strong><small>Consolidation réseau, opérations isolées.</small></button>
+        <button disabled={!editable || saving} className={mode==="solo"?"mode-option selected":"mode-option"} onClick={()=>setMode("solo")}><b>{t("01 · PME autonome")}</b><strong>{t("Un établissement indépendant")}</strong><small>{t("Un point de vente, une organisation et ses opérations.")}</small></button>
+        <button disabled={!editable || saving} className={mode==="single_site_multi_workstation"?"mode-option selected":"mode-option"} onClick={()=>setMode("single_site_multi_workstation")}><b>{t("02 · Responsable multi-emplacements")}</b><strong>{t("Plusieurs postes dans un même lieu")}</strong><small>{t("Plusieurs ressources dans un point de vente.")}</small></button>
+        <button disabled={!editable || saving} className={mode==="multi_site_network"?"mode-option selected":"mode-option"} onClick={()=>setMode("multi_site_network")}><b>{t("03 · Promoteur multi-sites")}</b><strong>{t("Plusieurs points de vente autonomes")}</strong><small>{t("Consolidation réseau, opérations isolées.")}</small></button>
       </div>
     </div>
     <div className="module-main-card">
-      <span className="eyebrow">PROFIL DE L'ORGANISATION</span><h2>Identité & langue</h2>
-      <label>Nom de l'organisation<input disabled={!editable || saving} value={siteName} onChange={e=>setSiteName(e.target.value)} /></label>
-      <label>Langue par défaut<select disabled={!editable || saving} value={selectedLocale} onChange={e=>setSelectedLocale(e.target.value as "fr"|"en"|"ff-CM")}><option value="fr">Français</option><option value="en">English</option><option value="ff-CM">Fulfulde</option></select></label>
-      {editable && !saving && <button className="btn primary" onClick={()=>void save()}>Enregistrer le profil</button>}
-      {saving && <div className="notice">Enregistrement en cours…</div>}
-      {error && <div className="notice" role="status">{customerMessage(error)}</div>}
-      {!editable && <div className="notice">Lecture seule : seul le Promoteur ayant le périmètre Organisation peut enregistrer ces réglages.</div>}
+      <span className="eyebrow">{t("PROFIL DE L'ORGANISATION")}</span><h2>{t("Identité & langue")}</h2>
+      <label>{t("Nom de l'organisation")}<input disabled={!editable || saving} value={siteName} onChange={e=>setSiteName(e.target.value)} /></label>
+      <label>{t("Langue par défaut")}<select disabled={!editable || saving} value={selectedLocale} onChange={e=>setSelectedLocale(e.target.value as "fr"|"en"|"ff-CM")}><option value="fr">Français</option><option value="en">English</option><option value="ff-CM">Fulfulde</option></select></label>
+      {editable && !saving && <button className="btn primary" onClick={()=>void save()}>{t("Enregistrer le profil")}</button>}
+      {saving && <div className="notice">{t("Enregistrement en cours…")}</div>}
+      {error && <div className="notice" role="status">{t(customerMessage(error))}</div>}
+      {!editable && <div className="notice">{t("Lecture seule : seul le Promoteur ayant le périmètre Organisation peut enregistrer ces réglages.")}</div>}
     </div>
   </div>;
 }
@@ -1608,6 +1616,7 @@ function SitesPage({
   mode: BusinessMode; siteName: string; sites: {id:string;code:string;name:string;address_label:string;phone_contact:string}[];
   canCreate: boolean; onCreateSite: (site:{code:string;name:string;address_label:string;phone_contact:string})=>Promise<unknown>; entries: Entry[];
 }) {
+  const t=useTranslation();
   const [code,setCode]=useState(""); const [name,setName]=useState(""); const [address,setAddress]=useState(""); const [phone,setPhone]=useState("");
   const [saving,setSaving]=useState(false); const [error,setError]=useState("");
   async function submit(e:React.FormEvent) {
@@ -1617,24 +1626,24 @@ function SitesPage({
     finally{setSaving(false);}
   }
   return <div className="module-layout">
-    <div className="module-main-card"><span className="eyebrow">PÉRIMÈTRE RÉSEAU</span><h2>Points de vente sous contrôle</h2>
+    <div className="module-main-card"><span className="eyebrow">{t("PÉRIMÈTRE RÉSEAU")}</span><h2>{t("Points de vente sous contrôle")}</h2>
       <div className="site-list">
-        {sites.length ? sites.map(site=><div className="site-row" key={site.id}><span className="site-dot"/><div><strong>{site.name||site.code}</strong><small>{site.code} · {site.address_label||"Adresse non renseignée"}</small></div><span className="status-tag local">Autorisé</span></div>)
-          : <Empty text="Aucun établissement accessible pour le moment."/>}
+        {sites.length ? sites.map(site=><div className="site-row" key={site.id}><span className="site-dot"/><div><strong>{site.name||site.code}</strong><small>{site.code} · {site.address_label||"Adresse non renseignée"}</small></div><span className="status-tag local">{t("Autorisé")}</span></div>)
+          : <Empty text={t("Aucun établissement accessible pour le moment.")}/>}
       </div>
-      <p className="muted">Organisation : {siteName}. Mode : {modeLabel(mode)}. Retrouvez les établissements auxquels vous avez accès.</p>
+      <p className="muted">Organisation : {siteName}. Mode : {t(modeLabel(mode))}. Retrouvez les établissements auxquels vous avez accès.</p>
     </div>
-    <div className="module-main-card"><h2>Créer un point de vente</h2>
-      {mode!=="multi_site_network" && <div className="notice">Le modèle multi-sites doit d'abord être activé par le Promoteur dans le profil d'organisation.</div>}
+    <div className="module-main-card"><h2>{t("Créer un point de vente")}</h2>
+      {mode!=="multi_site_network" && <div className="notice">{t("Le modèle multi-sites doit d'abord être activé par le Promoteur dans le profil d'organisation.")}</div>}
       {canCreate && mode==="multi_site_network" ? <form onSubmit={submit}>
-        <label>Code du site<input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} required minLength={2} maxLength={20}/></label>
-        <label>Nom du site<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120}/></label>
-        <label>Adresse / repère<input value={address} onChange={e=>setAddress(e.target.value)} maxLength={200}/></label>
-        <label>Téléphone<input value={phone} onChange={e=>setPhone(e.target.value)} maxLength={32}/></label>
-        <button className="btn primary" disabled={saving}>Créer le point de vente</button>
-      </form> : <div className="notice">La création requiert le rôle Promoteur, le périmètre Organisation et le mode multi-sites.</div>}
-      {error&&<div className="notice" role="status">{customerMessage(error)}</div>}
-      <h3>Principes d'autonomie</h3><ul className="brief-list"><li>Caisse et clôture propres à chaque site.</li><li>Stock et historique distincts.</li><li>Équipe et affectations séparées.</li><li>Vue d’ensemble du réseau et gestion indépendante de chaque établissement.</li></ul>
+        <label>{t("Code du site")}<input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} required minLength={2} maxLength={20}/></label>
+        <label>{t("Nom du site")}<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120}/></label>
+        <label>{t("Adresse / repère")}<input value={address} onChange={e=>setAddress(e.target.value)} maxLength={200}/></label>
+        <label>{t("Téléphone")}<input value={phone} onChange={e=>setPhone(e.target.value)} maxLength={32}/></label>
+        <button className="btn primary" disabled={saving}>{t("Créer le point de vente")}</button>
+      </form> : <div className="notice">{t("La création requiert le rôle Promoteur, le périmètre Organisation et le mode multi-sites.")}</div>}
+      {error&&<div className="notice" role="status">{t(customerMessage(error))}</div>}
+      <h3>{t("Principes d'autonomie")}</h3><ul className="brief-list"><li>{t("Caisse et clôture propres à chaque site.")}</li><li>{t("Stock et historique distincts.")}</li><li>{t("Équipe et affectations séparées.")}</li><li>{t("Vue d’ensemble du réseau et gestion indépendante de chaque établissement.")}</li></ul>
       {entries.map(e=><Record key={e.id} entry={e}/>)}
     </div>
   </div>;
@@ -1647,32 +1656,35 @@ function WorkstationsPage({
   onLoad:(siteId:string)=>Promise<unknown>; onCreate:(input:{site_id:string;code:string;name:string;kind:string;capacity:number})=>Promise<unknown>;
   canCreate:boolean;
 }) {
+  const t=useTranslation();
   const [siteId,setSiteId]=useState(selectedSiteId||sites[0]?.id||"");
   const [code,setCode]=useState("");const [name,setName]=useState("");const [kind,setKind]=useState("other");const [capacity,setCapacity]=useState("1");
   const [loading,setLoading]=useState(false);const [saving,setSaving]=useState(false);const [error,setError]=useState("");
   async function load(){if(!siteId){setError("Choisis un site autorisé.");return;}setLoading(true);setError("");try{await onLoad(siteId);}catch(cause){setError(cause instanceof Error?cause.message:"Lecture des postes refusée.");}finally{setLoading(false);}}
   async function create(e:React.FormEvent){e.preventDefault();setSaving(true);setError("");try{await onCreate({site_id:siteId,code,name,kind,capacity:Number(capacity)});setCode("");setName("");setCapacity("1");}catch(cause){setError(cause instanceof Error?cause.message:"Création du poste refusée.");}finally{setSaving(false);}}
   return <div className="module-layout">
-    <div className="module-main-card"><span className="eyebrow">POSTES & RESSOURCES</span><h2>Emplacements d'un même établissement</h2>
-      <label>Point de vente<select value={siteId} onChange={e=>setSiteId(e.target.value)}>{sites.map(site=><option key={site.id} value={site.id}>{site.name||site.code}</option>)}</select></label>
-      <button className="btn secondary" disabled={loading||!siteId} onClick={()=>void load()}>{loading?"Chargement…":"Afficher les postes"}</button>
+    <div className="module-main-card"><span className="eyebrow">{t("POSTES & RESSOURCES")}</span><h2>{t("Emplacements d'un même établissement")}</h2>
+      <label>{t("Point de vente")}<select value={siteId} onChange={e=>setSiteId(e.target.value)}>{sites.map(site=><option key={site.id} value={site.id}>{site.name||site.code}</option>)}</select></label>
+      <button className="btn secondary" disabled={loading||!siteId} onClick={()=>void load()}>{t(loading?"Chargement…":"Afficher les postes")}</button>
       <div className="workstation-grid">{workstations.filter(item=>item.site_id===siteId).map((item,i)=><div className="workstation-card" key={item.id}><span>{String(i+1).padStart(2,"0")}</span><strong>{item.name}</strong><small>{item.code} · {item.kind} · capacité {item.capacity}</small></div>)}</div>
-      {!workstations.some(item=>item.site_id===siteId)&&<Empty text="Aucun emplacement chargé pour ce point de vente."/>}
+      {!workstations.some(item=>item.site_id===siteId)&&<Empty text={t("Aucun emplacement chargé pour ce point de vente.")}/>}
     </div>
-    <div className="module-main-card"><h2>Créer un emplacement</h2>
+    <div className="module-main-card"><h2>{t("Créer un emplacement")}</h2>
       {canCreate&&siteId?<form onSubmit={create}>
-        <label>Code<input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} required minLength={2} maxLength={20}/></label>
-        <label>Nom<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120}/></label>
-        <label>Type<select value={kind} onChange={e=>setKind(e.target.value)}>{["hair_chair","pressing_counter","pressing_workshop","reception","cashier","other"].map(value=><option key={value} value={value}>{value}</option>)}</select></label>
-        <label>Capacité<input type="number" min="1" max="100" step="1" value={capacity} onChange={e=>setCapacity(e.target.value)}/></label>
-        <button className="btn primary" disabled={saving}>Créer le poste</button>
-      </form>:<div className="notice">Seuls les responsables autorisés peuvent créer un poste dans cet établissement.</div>}
-      <p className="muted">Mode : {modeLabel(mode)}. Les droits d'un poste ne sont pas élargis au site entier.</p>
-      {error&&<div className="notice" role="status">{customerMessage(error)}</div>}
+        <label>{t("Code")}<input value={code} onChange={e=>setCode(e.target.value.toUpperCase())} required minLength={2} maxLength={20}/></label>
+        <label>{t("Nom")}<input value={name} onChange={e=>setName(e.target.value)} required maxLength={120}/></label>
+        <label>{t("Type")}<select value={kind} onChange={e=>setKind(e.target.value)}>{["hair_chair","pressing_counter","pressing_workshop","reception","cashier","other"].map(value=><option key={value} value={value}>{value}</option>)}</select></label>
+        <label>{t("Capacité")}<input type="number" min="1" max="100" step="1" value={capacity} onChange={e=>setCapacity(e.target.value)}/></label>
+        <button className="btn primary" disabled={saving}>{t("Créer le poste")}</button>
+      </form>:<div className="notice">{t("Seuls les responsables autorisés peuvent créer un poste dans cet établissement.")}</div>}
+      <p className="muted">Mode : {t(modeLabel(mode))}. Les droits d'un poste ne sont pas élargis au site entier.</p>
+      {error&&<div className="notice" role="status">{t(customerMessage(error))}</div>}
     </div>
   </div>;
 }
-function Empty({ text }: { text: string }) { return <div className="empty-state"><span className="empty-glyph">◌</span><strong>Tout est prêt pour commencer</strong><p>{text}</p></div>; }
-function Record({ entry }: { entry: Entry }) { return <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail || entry.createdAt}</small></div><span className="status-tag local">{entry.state}</span></div>; }
+function Empty({ text }: { text: string }) {
+  const t=useTranslation(); return <div className="empty-state"><span className="empty-glyph">◌</span><strong>{t("Tout est prêt pour commencer")}</strong><p>{t(text)}</p></div>; }
+function Record({ entry }: { entry: Entry }) {
+  const t=useTranslation(); return <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail || entry.createdAt}</small></div><span className="status-tag local">{t(entry.state)}</span></div>; }
 
 createRoot(document.getElementById("root")!).render(<React.StrictMode><App /></React.StrictMode>);

@@ -1,3 +1,4 @@
+import { useTranslation } from "../locale";
 import React, { useEffect, useRef, useState } from "react";
 const MAX_BYTES=2*1024*1024;
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -36,6 +37,7 @@ async function readPhoto(response:Response):Promise<Blob|null>{
 }
 type Props={authEndpoint:string;anonKey:string;orgId:string;memberId:string;getToken:()=>Promise<string>;initials:string};
 export function ProfilePhoto({authEndpoint,anonKey,orgId,memberId,getToken,initials}:Props){
+  const t=useTranslation();
   const [photo,setPhoto]=useState<string|null>(null);
   const [busy,setBusy]=useState(false);const [message,setMessage]=useState("");
   const urlRef=useRef<string|null>(null);const lifetime=useRef<AbortController|null>(null);
@@ -85,10 +87,10 @@ export function ProfilePhoto({authEndpoint,anonKey,orgId,memberId,getToken,initi
     finally{if(!signal.aborted)setBusy(false);}
   }
   return <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-    <div className="avatar">{photo?<img src={photo} alt="Photo de profil" style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"inherit"}}/>:initials}</div>
-    <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" aria-label="Fichier photo de profil" hidden onChange={event=>{const file=event.currentTarget.files?.[0];event.currentTarget.value="";if(file)void change(file);}}/>
-    <button className="btn secondary" type="button" disabled={busy} onClick={()=>input.current?.click()}>Photo de profil</button>
-    {photo&&<button className="btn secondary" type="button" disabled={busy} onClick={()=>{if(window.confirm("Supprimer votre photo de profil ?"))void change();}}>Supprimer la photo</button>}
-    {message&&<small role="status">{message}</small>}
+    <div className="avatar">{photo?<img src={photo} alt={t("Photo de profil")} style={{width:"100%",height:"100%",objectFit:"cover",borderRadius:"inherit"}}/>:initials}</div>
+    <input ref={input} type="file" accept="image/jpeg,image/png,image/webp" aria-label={t("Fichier photo de profil")} hidden onChange={event=>{const file=event.currentTarget.files?.[0];event.currentTarget.value="";if(file)void change(file);}}/>
+    <button className="btn secondary" type="button" disabled={busy} onClick={()=>input.current?.click()}>{t("Photo de profil")}</button>
+    {photo&&<button className="btn secondary" type="button" disabled={busy} onClick={()=>{if(window.confirm("Supprimer votre photo de profil ?"))void change();}}>{t("Supprimer la photo")}</button>}
+    {message&&<small role="status">{t(message)}</small>}
   </div>;
 }
