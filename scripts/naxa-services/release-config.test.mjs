@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { validateReleaseConfig } from "./release-config.mjs";
+import { validateReleaseConfig, verifyApprovedSigner } from "./release-config.mjs";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 const project = "abcdefghijklmnopqrst";
 const valid = {
   NS_PROJECT_REF: project, NS_ANON_KEY: "sb_publishable_ci_fixture",
@@ -33,4 +35,23 @@ test("release configuration rejects missing or inconsistent Firebase app configu
 
 test("release rejects the historical pharmacy Firebase project", () => {
   assert.throws(() => validateReleaseConfig({...valid,NS_FIREBASE_PROJECT_ID:"naxatechnologie"}), /Dedicated Firebase/);
+});
+
+test("approved signer comparison fails closed and accepts only matching independently supplied fingerprint", () => {
+  const cert = Buffer.from("fixture certificate - no key material");
+  const approved = createHash("sha256").update(cert).digest("hex");
+  assert.equal(verifyApprovedSigner(cert, approved.toUpperCase()), approved);
+  for (const invalid of [undefined, "", "x".repeat(64), "0".repeat(63), approved+"\n"]) assert.throws(() => verifyApprovedSigner(cert,invalid),/independently approved/);
+  assert.throws(() => verifyApprovedSigner(Buffer.from("different certificate"),approved),/differs/);
+  assert.throws(() => verifyApprovedSigner(Buffer.alloc(0),approved),/Missing certificate/);
+});
+test("real release workflow enforces independent certificate check before signing, with explicit release trigger only", () => {
+  const release = readFileSync(new URL("../../.github/workflows/naxa-services-release.yml",import.meta.url),"utf8");
+  const ready = readFileSync(new URL("../../.github/workflows/naxa-services-release-readiness.yml",import.meta.url),"utf8");
+  for (const workflow of [release,ready]) {
+    assert.ok(workflow.includes("vars.NAXA_SERVICES_APPROVED_SIGNER_SHA256"));
+    assert.ok(workflow.includes("verifyApprovedSigner(readFileSync"));
+  }
+  assert.ok(release.indexOf("verifyApprovedSigner(readFileSync") < release.indexOf("gradle --no-daemon :naxa-services:assembleRelease"));
+  assert.ok(release.includes("workflow_dispatch:") && !release.includes("branches:"));
 });

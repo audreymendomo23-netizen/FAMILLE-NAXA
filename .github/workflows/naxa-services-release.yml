@@ -3,10 +3,6 @@ name: NAXA SERVICES — signed Android release
 on:
   workflow_dispatch:
   push:
-    branches:
-      - "work/naxa-services-completion-20261120"
-    paths:
-      - ".github/workflows/naxa-services-release.yml"
     tags:
       - "naxa-services-v*"
 
@@ -62,13 +58,16 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Validate keystore and record expected certificate fingerprint
+      - name: Validate keystore against independently approved certificate before signing
         env:
           RELEASE_STORE_PASSWORD: ${{ secrets.NAXA_SERVICES_RELEASE_STORE_PASSWORD }}
           RELEASE_KEY_ALIAS: ${{ secrets.NAXA_SERVICES_RELEASE_KEY_ALIAS }}
+          EXPECTED_FINGERPRINT: ${{ vars.NAXA_SERVICES_APPROVED_SIGNER_SHA256 }}
         run: |
+          set -euo pipefail
           keytool -exportcert -keystore "$RUNNER_TEMP/naxa-services-release.jks" -storepass:env RELEASE_STORE_PASSWORD -alias "$RELEASE_KEY_ALIAS" -file "$RUNNER_TEMP/naxa-services-release.cer"
-          sha256sum "$RUNNER_TEMP/naxa-services-release.cer" | cut -d' ' -f1 > "$RUNNER_TEMP/naxa-services-release.cert.sha256"
+          node --input-type=module -e 'import { readFileSync } from "node:fs"; import { verifyApprovedSigner } from "./scripts/naxa-services/release-config.mjs"; console.log(verifyApprovedSigner(readFileSync(process.argv[1]), process.env.EXPECTED_FINGERPRINT));' "$RUNNER_TEMP/naxa-services-release.cer" > "$RUNNER_TEMP/naxa-services-release.cert.sha256"
+          echo "Independently approved certificate matches."
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.7"

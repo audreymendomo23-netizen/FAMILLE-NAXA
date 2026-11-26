@@ -27,7 +27,7 @@ export function normalizeNotificationPayload(input: Record<string, unknown>): Sa
   const route = typeof input.route === "string" ? input.route.trim() : undefined;
   if (title.length < 1 || title.length > 80) throw new Error("INVALID_NOTIFICATION_TITLE");
   if (body.length < 1 || body.length > 180) throw new Error("INVALID_NOTIFICATION_BODY");
-  if (route !== undefined && !/^\/[A-Za-z0-9/_-]{1,120}$/.test(route)) {
+  if (route !== undefined && (!/^\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)*\/?$/.test(route) || route.length > 121)) {
     throw new Error("INVALID_NOTIFICATION_ROUTE");
   }
   return route === undefined ? { title, body } : { title, body, route };

@@ -274,6 +274,7 @@ async function fcmAccessToken(account: ServiceAccount) {
   const signature = new Uint8Array(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(unsigned)));
   const assertion = unsigned + "." + b64Url(signature);
   const response = await fetch(FCM_OAUTH_TOKEN_URL, {
+    redirect: "error",
     method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion,
@@ -292,6 +293,7 @@ async function sendFcm(accessToken: string, projectId: string, token: string, ev
   };
   if (safe.route) data.route = safe.route;
   const response = await fetch("https://fcm.googleapis.com/v1/projects/" + encodeURIComponent(projectId) + "/messages:send", {
+    redirect: "error",
     method: "POST",
     headers: { Authorization: "Bearer " + accessToken, "Content-Type": "application/json" },
     body: JSON.stringify({ message: { token, notification: { title: safe.title, body: safe.body }, data } }),

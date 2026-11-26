@@ -34,11 +34,14 @@ Deno.test("remote notification payload is reduced to safe title, body and app ro
   if (Object.keys(payload).length !== 3 || payload.title !== "Nouvelle tâche") {
     throw new Error("NOTIFICATION_PAYLOAD_NOT_REDACTED");
   }
-  let rejected = false;
-  try {
-    normalizeNotificationPayload({ title: "x", body: "y", route: "https://evil.example" });
-  } catch { rejected = true; }
-  if (!rejected) throw new Error("EXTERNAL_ROUTE_ACCEPTED");
+  for (const route of ["https://evil.example", "//evil", "///evil", "/\\evil", "/%2f%2fevil", "/operations/../admin", "/operations//tasks", "/operations?next=evil", "/" + "a".repeat(121)]) {
+    let rejected = false;
+    try { normalizeNotificationPayload({ title: "x", body: "y", route }); } catch { rejected = true; }
+    if (!rejected) throw new Error("EXTERNAL_OR_AMBIGUOUS_ROUTE_ACCEPTED");
+  }
+  for (const route of ["/operations/tasks", "/operations/tasks/", "/dashboard", "/meetings/abc-123"]) {
+    if (normalizeNotificationPayload({title:"x",body:"y",route}).route !== route) throw new Error("INTERNAL_ROUTE_REJECTED");
+  }
 });
 
 Deno.test("FCM token errors and retryable errors are classified without exposing provider secrets", () => {

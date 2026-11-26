@@ -1,3 +1,4 @@
+import { createHash, timingSafeEqual } from "node:crypto";
 // Validate only publishable app configuration; never print key material.
 export function validateReleaseConfig(env) {
   const get = name => (env[name] || "").trim();
@@ -36,4 +37,13 @@ export function validateReleaseConfig(env) {
     NS_FIREBASE_API_KEY: get("NS_FIREBASE_API_KEY"), NS_FIREBASE_APP_ID: get("NS_FIREBASE_APP_ID"),
     NS_FIREBASE_PROJECT_ID: get("NS_FIREBASE_PROJECT_ID"), NS_FIREBASE_SENDER_ID: sender,
   };
+}
+
+// The expected SHA-256 is supplied independently by the approved certificate holder.
+export function verifyApprovedSigner(certificate, expectedFingerprint) {
+  if (typeof expectedFingerprint !== "string" || !/^[a-fA-F0-9]{64}$/.test(expectedFingerprint)) throw new Error("Missing or invalid independently approved signer fingerprint");
+  if (!Buffer.isBuffer(certificate) || certificate.length === 0) throw new Error("Missing certificate");
+  const actual = createHash("sha256").update(certificate).digest();
+  if (!timingSafeEqual(actual, Buffer.from(expectedFingerprint, "hex"))) throw new Error("Signer differs from independently approved certificate");
+  return actual.toString("hex");
 }
