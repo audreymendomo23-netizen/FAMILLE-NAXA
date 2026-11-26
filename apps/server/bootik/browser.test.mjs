@@ -41,6 +41,10 @@ test('Chromium real API, session, trial, persistent offline queue, payment and s
  await page.reload();await login();await page.getByText(/1 en attente ·/).waitFor();
  await page.getByRole('button',{name:'Synchroniser',exact:true}).click();await page.getByText(/ — Confirmée/).waitFor();assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),8);
  await page.getByLabel('Article',{exact:true}).selectOption(b);await page.getByLabel('Quantité',{exact:true}).fill('999');await page.getByRole('button',{name:'Mettre la vente en file'}).click();await page.getByText(/1 en attente ·/).waitFor();await page.getByRole('button',{name:'Synchroniser',exact:true}).click();await page.getByText(/Conflit \/ refus/).waitFor();await page.getByRole('button',{name:'Abandonner',exact:true}).click();await page.getByText(/ — Abandonnée/).waitFor();
+ await page.getByLabel('Synchroniser automatiquement au retour du réseau').check();await context.setOffline(true);
+ await page.getByLabel('Article',{exact:true}).selectOption(b);await page.getByLabel('Quantité',{exact:true}).fill('1');await page.getByRole('button',{name:'Mettre la vente en file'}).click();await page.getByText(/1 en attente ·/).waitFor();
+ await context.setOffline(false);await page.getByText(/0 en attente ·/).waitFor();assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where id=$1',[b])).quantity_on_hand),7);
+ await page.getByLabel('Synchroniser automatiquement au retour du réseau').uncheck();
  await page.getByLabel('Canal',{exact:true}).selectOption('orange_money');await page.getByRole('button',{name:'Préparer le paiement',exact:true}).click();await page.getByText('Destination : '+dest,{exact:true}).waitFor();
  const ref='BROWSER-'+randomUUID().slice(0,8).toUpperCase(),when=new Date().toISOString();
  await page.getByLabel('SMS de débit volontairement partagé (sans PIN ni OTP)').fill('SMS de test de paiement '+ref);

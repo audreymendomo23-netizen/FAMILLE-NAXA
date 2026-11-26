@@ -9,6 +9,21 @@ import org.junit.Assert.*
 import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class BootikOutboxInstrumentedTest{
+ @Test fun automaticScopeCannotCrossSession()=runBlocking{
+  val db=Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext,BootikLocalDatabase::class.java).build()
+  val now=System.currentTimeMillis()
+  val session=BootikSession("test-token","member","org","manager",listOf(BootikSite("site","Site")),now+60000)
+  val a=BootikSyncScope(BootikApi("https://example.invalid"),db.scoped(),session,"site")
+  val b=a.copy(workId="second-binding")
+  try{
+   BootikSync.activate(a);assertFalse(BootikSync.automaticAllowed(a))
+   BootikSync.setAutomatic(a,true);assertTrue(BootikSync.automaticAllowed(a))
+   BootikSync.setAutomatic(a,false);assertFalse(BootikSync.automaticAllowed(a))
+   BootikSync.setAutomatic(a,true);BootikSync.activate(b)
+   assertFalse(BootikSync.automaticAllowed(a));assertFalse(BootikSync.automaticAllowed(b))
+   assertTrue(BootikSync.runActive(a.workId));assertEquals(0,BootikSync.flush(a))
+  }finally{BootikSync.deactivate(a);BootikSync.deactivate(b);db.close()}
+ }
  @Test fun scopedQueueAndCache()=runBlocking{
   val db=Room.inMemoryDatabaseBuilder(InstrumentationRegistry.getInstrumentation().targetContext,BootikLocalDatabase::class.java).build()
   try{

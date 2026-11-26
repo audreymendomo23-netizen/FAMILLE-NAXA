@@ -26,7 +26,7 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  var status by remember(site){mutableStateOf("")};var busy by remember(site){mutableStateOf(false)};var cacheTime by remember(site){mutableStateOf(0L)}
  suspend fun reload(){events=dao.events(org,member,site)}
  LaunchedEffect(org,member,site){dao.observeEvents(org,member,site).collect{events=it}}
- LaunchedEffect(binding,automatic){if(automatic)BootikSync.schedule(context,binding)}
+ LaunchedEffect(binding,automatic){BootikSync.setAutomatic(binding,automatic);if(automatic)BootikSync.schedule(context,binding)}
  LaunchedEffect(org,member,site){try{dao.catalog(org,member,site)?.let{items=decodeItems(JSONArray(it.itemsJson));cacheTime=it.updatedAt};reload()}catch(e:Exception){if(e is kotlinx.coroutines.CancellationException)throw e;status="Stockage local indisponible"}}
  fun task(block:suspend ()->Unit){if(busy)return;busy=true;scope.launch{try{block()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){status="Opération non confirmée. Vérifiez la connexion et les droits."}finally{try{reload()}catch(e:Exception){if(e is kotlinx.coroutines.CancellationException)throw e};busy=false}}}
  Text("Catalogue, caisse et synchronisation",style=MaterialTheme.typography.titleMedium)
@@ -37,7 +37,7 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  val n=quantity.toDoubleOrNull();val item=items.firstOrNull{it.balanceId==selected}
  Button(enabled=!busy&&n!=null&&n.isFinite()&&n>0&&item!=null,onClick={task{require(session.permits(site));val id=UUID.randomUUID().toString();val payload=JSONObject().put("balance_id",item!!.balanceId).put("quantity",n!!).put("unit_price_fcfa",item.price).put("idempotency_key",id);dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));status="Vente en attente, aucune confirmation serveur";if(automatic)BootikSync.schedule(context,binding)}}){Text("Mettre la vente en file")}
  Button(enabled=!busy,onClick={task{val all=dao.events(org,member,site);if(all.any{it.state in setOf("conflict","rejected")}){status="Corrigez le conflit avant de synchroniser";return@task};val count=BootikSync.flush(binding);status="$count réponse(s) traitée(s)"}}){Text("Synchroniser les ventes")}
- Row{Checkbox(automatic,{automatic=it},enabled=!busy);Text("Synchroniser automatiquement au retour du réseau")}
+ Row{Checkbox(automatic,{automatic=it;BootikSync.setAutomatic(binding,it)},enabled=!busy);Text("Synchroniser automatiquement au retour du réseau")}
  Text(events.count{it.state=="queued"}.toString()+" en attente")
  events.takeLast(20).reversed().forEach{e->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)){Text(e.eventId.take(8)+" • "+when(e.state){"acknowledged"->"Confirmée";"queued"->"En attente";"discarded"->"Abandonnée";else->"Conflit / refus"});if(e.state in setOf("conflict","rejected"))TextButton(enabled=!busy,onClick={task{check(dao.discard(e.eventId,org,member,site)==1);status="Conflit abandonné localement"}}){Text("Abandonner")}}}
  Text(status)
