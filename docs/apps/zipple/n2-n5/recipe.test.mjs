@@ -75,7 +75,9 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  await assert.rejects(scalar("select zp_record_sale($1,$2,$3,$4,$5,'cash',1,null)",[a.access,a.site,cash,anonymous.id,paymentKey]),/SALE_NOT_SETTLEABLE/);
  const receipt=await scalar("select zp_record_sale($1,$2,$3,$4,$5,'cash',1000,null)",[a.access,a.site,cash,anonymous.id,paymentKey]);
  assert.equal(await scalar("select zp_record_sale($1,$2,$3,$4,$5,'cash',1000,null)",[a.access,a.site,cash,anonymous.id,paymentKey]),receipt);
+ const activeCash=await scalar("select zp_business_snapshot($1,$2)",[a.access,a.site]);assert.equal(activeCash.cash_session.id,cash);assert.equal(activeCash.orders.find(o=>o.id===anonymous.id).paid,true);
  const closing=await scalar("select zp_close_cash($1,$2,$3,10900)",[a.access,a.site,cash]);assert.equal(closing.expected_xaf,11000);assert.equal(closing.variance_xaf,-100);
+ assert.equal((await scalar("select zp_business_snapshot($1,$2)",[a.access,a.site])).cash_session,null);
  assert.equal(await scalar("select zp_close_table($1,$2,$3)",[a.access,a.site,ts]),true);
  const cancel=await order(b,"counter",[{item_id:snack,qty:1}]);assert.equal(await scalar("select zp_cancel_unprepared_order($1,$2,$3,'Client annule')",[b.access,b.site,cancel.id]),true);
  assert.equal(await scalar("select zp_cancel_unprepared_order($1,$2,$3,'Client annule')",[b.access,b.site,cancel.id]),false);
