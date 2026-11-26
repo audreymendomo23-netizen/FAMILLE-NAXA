@@ -109,6 +109,7 @@ Deno.serve(async request=>{
  // If a password update response was lost, only the same change owner can
  // complete the pending operation, after independently proving the new password.
  let verifiedNew=pending?await verify(next):null;
+ if(pending&&!verifiedNew)return send(409,{error:"change_pending"});
  if(!verifiedNew){
  const verified=await verify(old);if(!verified)return send(401,{error:"credentials"});
  const begun=await rest("rpc/wm_begin_password_change",{method:"POST",body:JSON.stringify({p_hash,p_request:requestId,p_epoch:account.credential_epoch})});
