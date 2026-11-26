@@ -2536,6 +2536,9 @@ private fun DashboardContent(
                 }
             }
         }
+        if (BuildConfig.ROSTER_ENABLED && rosterAvailable(session.account.businessMode)) {
+            item { StaffRosterCard(session, siteId) }
+        }
         item {
             Text(stringResource(R.string.quick_actions), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
