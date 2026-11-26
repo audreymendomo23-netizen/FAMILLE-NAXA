@@ -92,3 +92,5 @@ Les 44 tests SQL sont verts sur le candidat 3c01c26, mais une réussite de gate 
 Prochaine reprise : lire les journaux exacts des runs 45883380874/45883380969, corriger les écarts, préserver le périmètre, compléter les six réserves ci-dessus et ne clore qu'après preuves fonctionnelles.
 
 - Candidat excédents physiques : demande de comptage positive sans modification du stock, validation/rejet promoteur et valorisation motivée, contrôle quantité/coût attendus, non-réapplication, journal des gains. Interface Web, contrat Android et assertions SQL. Correction des sélecteurs E2E par libellés accessibles (7b9c5af). Gates à constater.
+
+- Candidat vente directe : unité de matière exacte configurée par promoteur sur article neuf sans recette, disponibilité bornée par matière et plafond de carte, réservation partagée entre articles, garde stock réservé, consommation FEFO et coût lors du reçu confirmé, détail par lot. Unité en grammes possible sur matière kg/g avec prix par quantum (pas vente au poids variable d'un lot braisé). UI Web, contrat Android et assertions SQL. Gate à constater.
