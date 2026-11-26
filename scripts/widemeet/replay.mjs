@@ -130,8 +130,9 @@ try{
  await hp.getByText("Audio et vidéo indisponibles pour le moment.",{exact:true}).waitFor();
  await gp.getByRole("button",{name:"Actualiser",exact:true}).click();await gp.getByLabel("Message",{exact:true}).fill("Bonjour réel");
  await gp.getByRole("button",{name:"Envoyer",exact:true}).click();await gp.getByText(/Bonjour réel/).waitFor();
- await hp.getByRole("button",{name:"Actualiser",exact:true}).click();await hp.getByText(/Bonjour réel/).waitFor();
- pass("two real browser accounts: login, agenda, creation, RSVP, start, chat");
+ // Host must receive the message through automatic polling, not a manual refresh.
+ await hp.getByText(/Bonjour réel/).waitFor({timeout:15000});
+ pass("two real browser accounts: login, agenda, creation, RSVP, start, chat and automatic refresh");
 }finally{
  if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));
  for(const child of children)if(child.exitCode===null){child.kill("SIGTERM");await new Promise(r=>child.once("exit",r));}
