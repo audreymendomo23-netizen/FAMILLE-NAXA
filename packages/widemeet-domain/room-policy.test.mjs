@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {createRoom,applyRoom,mediaPermission} from "./room-policy.mjs";
-const host={memberId:"host00001",workspaceId:"tenant001",enabled:true,passwordChangeRequired:false,role:"promoteur"};
+const host={memberId:"host00001",workspaceId:"tenant001",enabled:true,passwordChangeRequired:false,role:"promoteur",plan:"premium",entitlementEndMs:3601000};
 const guest={...host,memberId:"guest0001",role:"staff"};
 const other={...guest,workspaceId:"tenant002"};
 const base=()=>createRoom(host,{id:"meeting001",startMs:1000,durationMinutes:30,hardEndMs:3601000,invitees:[guest.memberId]});
@@ -19,3 +19,6 @@ test("record intent requires consent; withdrawal and pause stop intent",()=>{let
 test("poll creation and closure host-only, one vote per member",()=>{let r=open();assert.throws(()=>run(r,guest,"poll",["yes","no"],"poll00001"));r=run(r,host,"poll",["yes","no"],"poll00001");assert.throws(()=>run(r,guest,"vote",2,"poll00001"));r=run(r,guest,"vote",0,"poll00001");assert.throws(()=>run(r,guest,"vote",1,"poll00001"));r=run(r,host,"close_poll",null,"poll00001");assert.throws(()=>run(r,host,"vote",0,"poll00001"));assert.equal(r.polls[0].votes[guest.memberId],0);});
 test("password change gate, no admin or record grant, finite lease",()=>{const r=open();assert.equal(mediaPermission(r,{...host,passwordChangeRequired:true},1000),null);const g=mediaPermission(r,guest,1000);assert.equal(g.canAdmin,false);assert.equal(g.canRecord,false);assert.equal(g.expiresMs,91000);});
 test("ending room revokes all subsequent permissions",()=>{let r=open();r=run(r,host,"end");assert.equal(mediaPermission(r,host,1000),null);assert.equal(mediaPermission(r,guest,1000),null);assert.throws(()=>run(r,host,"resume"));});
+test("trusted plan limits cannot be raised by room command and Access cannot record",()=>{const r=open();assert.throws(()=>createRoom({...host,entitlementEndMs:2000},{id:"meeting002",startMs:1000,durationMinutes:30,hardEndMs:3601000,invitees:[]}));assert.throws(()=>run(r,{...host,plan:"access"},"record",true),/premium_required/);assert.equal(mediaPermission(r,{...host,entitlementEndMs:1000},1000),null);});
+test("late acceptance suspends recording until newly accepted participant consents",()=>{let r=base();r=run(r,host,"start");r=run(r,host,"consent",true);r=run(r,host,"record",true);r=run(r,guest,"respond","accepted");assert.equal(r.recording,"off");assert.throws(()=>run(r,host,"record",true),/consent_required/);r=run(r,guest,"consent",true);r=run(r,host,"record",true);assert.equal(r.recording,"requested");});
+test("RSVP can change from declined or maybe before the room starts",()=>{let r=base();r=run(r,guest,"respond","declined");r=run(r,guest,"respond","maybe");r=run(r,guest,"respond","accepted");assert.equal(r.participants[1].response,"accepted");});
