@@ -187,6 +187,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByRole("heading",{name:"Ardoises et créances"}).waitFor();
   await page.getByLabel("Client autorisé au crédit",{exact:true}).selectOption(creditCustomer);
   await page.getByLabel("Plafond de crédit FCFA").fill("1500");await page.getByRole("button",{name:"Autoriser le plafond"}).click();
+  await page.getByText(/Créance : 0 \/ 1500 FCFA/).waitFor();
   const creditAccount=await scalar("select id from zp_credit_accounts where site_id=$1 and customer_id=$2",[site,creditCustomer]);
   await page.getByLabel("Compte d’ardoise",{exact:true}).selectOption(creditAccount);
   await page.getByLabel("Commande servie à crédit",{exact:true}).selectOption(creditTicket.id);
