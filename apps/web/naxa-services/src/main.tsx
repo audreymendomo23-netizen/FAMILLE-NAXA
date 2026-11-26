@@ -12,6 +12,7 @@ import {
 } from "./erp/activity-workflows";
 import { parseWebSession, type WebAuthSession } from "./auth/session";
 import { ProfilePhoto } from "./auth/profile-photo";
+import { BusinessBackdrop, NightTorch } from "./business-visuals";
 import { createRoot } from "react-dom/client";
 import "@famille/design-system/tokens.css";
 import "./naxa-services.css";
@@ -54,23 +55,23 @@ const modules: { id: ModuleId; title: string; description: string; group: string
 ];
 
 const moduleCopy: Record<ModuleId, { eyebrow: string; headline: string; helper: string; empty: string; features: string[] }> = {
-  overview: { eyebrow: "PILOTAGE", headline: "Votre activité, au même endroit.", helper: "Les indicateurs apparaîtront dès qu'un compte et des données métier auront été synchronisés.", empty: "Aucune opération synchronisée pour le moment.", features: ["Rendez-vous du jour", "Tickets pressing à rendre", "Situation de caisse", "Briefing du matin / soir"] },
-  agenda: { eyebrow: "PLANNING", headline: "Un planning lisible par poste et prestataire.", helper: "Les contrôles de chevauchement doivent être appliqués côté serveur avant confirmation.", empty: "Aucun rendez-vous dans cette vue.", features: ["Vues jour et semaine", "Disponibilité du prestataire", "Disponibilité du fauteuil / poste", "Acompte, annulation et liste d'attente"] },
+  overview: { eyebrow: "PILOTAGE", headline: "Votre activité, au même endroit.", helper: "Retrouvez vos chiffres et vos objectifs.", empty: "Aucune opération pour le moment.", features: ["Rendez-vous du jour", "Tickets pressing à rendre", "Situation de caisse", "Briefing du matin / soir"] },
+  agenda: { eyebrow: "PLANNING", headline: "Un planning lisible par poste et prestataire.", helper: "Organisez les horaires de vos rendez-vous.", empty: "Aucun rendez-vous dans cette vue.", features: ["Vues jour et semaine", "Disponibilité du prestataire", "Disponibilité du fauteuil / poste", "Acompte, annulation et liste d'attente"] },
   pressing: { eyebrow: "ATELIER", headline: "Chaque dépôt possède son ticket et son historique.", helper: "Les transitions de statut sont chronologiques et contrôlées.", empty: "Aucun ticket pressing dans la liste locale.", features: ["Pièces et prix par catégorie", "Date promise et acompte", "Reçu → En cours → Prêt → Retiré", "Relance des vêtements non retirés"] },
-  workOrders: { eyebrow: "PARCOURS MÉTIERS", headline: "Un dossier adapté au métier de votre organisation.", helper: "Le profil métier authentifié détermine les champs, le type de registre et les étapes autorisées.", empty: "Aucun dossier métier dans le périmètre autorisé.", features: ["Formulaire spécialisé par activité", "Devis, échéance et ressources", "Étapes métier versionnées côté serveur", "Historique et synchronisation multi-appareils"] },
-  cash: { eyebrow: "ENCAISSEMENTS", headline: "Une caisse traçable, par point de vente.", helper: "Une vente locale de prévisualisation ne constitue pas une preuve de paiement.", empty: "Aucune vente enregistrée dans la session de prévisualisation.", features: ["Espèces et Mobile Money confirmé", "Paiement mixte et reçu", "Ouverture et clôture de caisse", "Dépenses, écarts et justificatifs"] },
-  services: { eyebrow: "CATALOGUE", headline: "Des prestations adaptées à chaque activité.", helper: "Les tarifs effectifs doivent être versionnés et associés au point de vente.", empty: "Le catalogue n'a pas encore été synchronisé.", features: ["Pressing et coiffure distincts", "Durée et prix par prestation", "Habilitations par employé et poste", "Forfaits et produits comptoir"] },
+  workOrders: { eyebrow: "PARCOURS MÉTIERS", headline: "Un dossier adapté au métier de votre organisation.", helper: "Gérez les prestations propres à votre activité.", empty: "Aucun dossier métier dans le périmètre autorisé.", features: ["Formulaire spécialisé par activité", "Devis, échéance et ressources", "Étapes métier versionnées côté serveur", "Historique et synchronisation multi-appareils"] },
+  cash: { eyebrow: "ENCAISSEMENTS", headline: "Une caisse traçable, par point de vente.", helper: "Suivez vos ventes, paiements et dépenses.", empty: "Aucune vente enregistrée dans la session de prévisualisation.", features: ["Espèces et Mobile Money confirmé", "Paiement mixte et reçu", "Ouverture et clôture de caisse", "Dépenses, écarts et justificatifs"] },
+  services: { eyebrow: "CATALOGUE", headline: "Des prestations adaptées à chaque activité.", helper: "Adaptez vos tarifs à votre établissement.", empty: "Le catalogue n'a pas encore été synchronisé.", features: ["Pressing et coiffure distincts", "Durée et prix par prestation", "Habilitations par employé et poste", "Forfaits et produits comptoir"] },
   customers: { eyebrow: "RELATION CLIENT", headline: "Connaître l'historique, respecter les préférences.", helper: "Les coordonnées et notes client sont privées et restent sous le scope autorisé.", empty: "Aucune fiche client disponible.", features: ["Historique des prestations", "Préférences et dernières visites", "Consentement de contact", "Fidélité, QR et anniversaires"] },
   team: { eyebrow: "ÉQUIPE", headline: "Des comptes individuels et des droits précis.", helper: "Chaque membre possède son propre accès ; les comptes partagés sont exclus.", empty: "Aucun membre opérationnel chargé.", features: ["Rôles et permissions", "Affectation site / emplacement", "Présence, avances et primes", "Commissions calculées selon une règle datée"] },
-  stock: { eyebrow: "CONSOMMABLES", headline: "Un stock léger centré sur l'exploitation.", helper: "Les mouvements doivent être append-only et rattachés au site.", empty: "Aucun consommable suivi pour le moment.", features: ["Lessive et produits coiffure", "Entrées et consommation", "Pertes et ajustements motivés", "Alertes de seuil"] },
-  reports: { eyebrow: "ANALYTIQUE", headline: "Piloter les résultats, pas seulement les ventes.", helper: "Le détail du réseau n'est consultable que par les rôles autorisés.", empty: "Les rapports seront calculés à partir des données synchronisées.", features: ["Recettes et dépenses", "Écarts de caisse", "Rentabilité des prestations", "Remplissage agenda et commissions"] },
-  organization: { eyebrow: "STRUCTURE", headline: "Votre organisation détermine les scopes.", helper: "Le mode sélectionné configure les niveaux d'exploitation ; il ne crée pas plusieurs applications.", empty: "Le profil juridique et commercial n'est pas encore paramétré.", features: ["PME autonome", "Responsable multi-emplacements dans un site", "Promoteur multi-sites autonomes", "Rôles et entitlements indépendants"] },
+  stock: { eyebrow: "CONSOMMABLES", headline: "Un stock léger centré sur l'exploitation.", helper: "Consultez l'historique de vos mouvements de stock.", empty: "Aucun consommable suivi pour le moment.", features: ["Lessive et produits coiffure", "Entrées et consommation", "Pertes et ajustements motivés", "Alertes de seuil"] },
+  reports: { eyebrow: "ANALYTIQUE", headline: "Piloter les résultats, pas seulement les ventes.", helper: "Consultez les résultats de vos établissements autorisés.", empty: "Les rapports seront calculés à partir des données synchronisées.", features: ["Recettes et dépenses", "Écarts de caisse", "Rentabilité des prestations", "Remplissage agenda et commissions"] },
+  organization: { eyebrow: "STRUCTURE", headline: "Votre organisation détermine les scopes.", helper: "Organisez votre établissement ou votre réseau.", empty: "Le profil juridique et commercial n'est pas encore paramétré.", features: ["PME autonome", "Responsable multi-emplacements dans un site", "Promoteur multi-sites autonomes", "Rôles et entitlements indépendants"] },
   network: { eyebrow: "RÉSEAU", headline: "Consolider sans mélanger les opérations.", helper: "Chaque point de vente garde ses propres caisses, stocks, équipes et tickets.", empty: "Aucun autre point de vente rattaché à cette organisation.", features: ["Vue consolidée du réseau", "Accès détaillé selon délégation", "Comparaison des sites", "Transferts inter-sites avec validation et audit"] },
   sites: { eyebrow: "POINTS DE VENTE", headline: "Chaque site fonctionne de façon autonome.", helper: "Les opérations d'un point ne sont jamais réaffectées implicitement à un autre.", empty: "Aucun point de vente supplémentaire.", features: ["Responsable et équipe du site", "Caisse et sessions propres", "Stock et consommables propres", "Catalogue et paramètres effectifs"] },
   workstations: { eyebrow: "EMPLACEMENTS", headline: "Organiser plusieurs postes dans le même lieu.", helper: "Les emplacements sont des unités de planning et de ressources à l'intérieur d'un point de vente.", empty: "Aucun emplacement configuré.", features: ["Fauteuils de coiffure", "Atelier / comptoir pressing", "Planning et capacité", "Affectation des prestataires"] },
-  security: { eyebrow: "PROTECTION", headline: "Maîtriser les sessions et les appareils.", helper: "La récupération est administrée après une vérification hors bande ; aucun OTP ni e-mail.", empty: "Aucun événement disponible dans l'aperçu local.", features: ["Sessions et appareils enrôlés", "Révocation à distance", "Demandes de récupération", "Audit des opérations privilégiées"] },
-  settings: { eyebrow: "CONFIGURATION", headline: "Un environnement adapté à l'équipe.", helper: "Les réglages système et les préférences métier sont séparés des permissions.", empty: "Les paramètres de production ne sont pas connectés.", features: ["Français et English", "Thème sombre / clair", "Mode offline et reprise de synchronisation", "Imprimantes et notifications"] },
-  help: { eyebrow: "ASSISTANCE", headline: "Faire remonter les blocages avec contexte.", helper: "Les demandes de support ne doivent contenir aucun mot de passe, PIN ou jeton.", empty: "Aucune demande de support dans cette session.", features: ["FAQ et guides", "Demande d'assistance", "Briefing du matin", "Briefing du soir"] },
+  security: { eyebrow: "PROTECTION", headline: "Maîtriser les sessions et les appareils.", helper: "Contactez votre responsable pour récupérer votre accès.", empty: "Aucun événement disponible dans l'aperçu local.", features: ["Sessions et appareils enrôlés", "Révocation à distance", "Demandes de récupération", "Audit des opérations privilégiées"] },
+  settings: { eyebrow: "CONFIGURATION", headline: "Un environnement adapté à l'équipe.", helper: "Personnalisez votre espace de travail.", empty: "Les paramètres de production ne sont pas connectés.", features: ["Français et English", "Thème sombre / clair", "Mode offline et reprise de synchronisation", "Imprimantes et notifications"] },
+  help: { eyebrow: "ASSISTANCE", headline: "Faire remonter les blocages avec contexte.", helper: "Ne communiquez jamais vos codes confidentiels.", empty: "Aucune demande de support dans cette session.", features: ["FAQ et guides", "Demande d'assistance", "Briefing du matin", "Briefing du soir"] },
 };
 
 function App() {
@@ -110,7 +111,21 @@ function App() {
   const [authMessage, setAuthMessage] = useState("");
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<BusinessMode>("solo");
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [theme, setTheme] = useState<"dark" | "light">(()=>{try{return localStorage.getItem("ns-display-theme")==="light"?"light":"dark";}catch{return "dark";}});
+  const [nightPulse,setNightPulse]=useState(false);
+  const [mobileMenu,setMobileMenu]=useState(false);
+  const previousTheme=useRef(theme);
+  useEffect(()=>{
+    try{localStorage.setItem("ns-display-theme",theme);}catch{}
+    const changed=previousTheme.current!==theme;previousTheme.current=theme;
+    if(theme==="dark"&&changed&&!window.matchMedia("(prefers-reduced-motion: reduce)").matches){
+      setNightPulse(true);const timer=window.setTimeout(()=>setNightPulse(false),1700);return()=>window.clearTimeout(timer);
+    }
+    setNightPulse(false);
+  },[theme]);
+  useEffect(()=>{setMobileMenu(false);},[active,authenticated,preview]);
+  useEffect(()=>{if(!mobileMenu)return;const close=(e:KeyboardEvent)=>{if(e.key==="Escape")setMobileMenu(false);};window.addEventListener("keydown",close);return()=>window.removeEventListener("keydown",close);},[mobileMenu]);
+  const toggleTheme=()=>setTheme(value=>value==="dark"?"light":"dark");
   const [siteName, setSiteName] = useState("Point de vente principal");
   const [entries, setEntries] = useState<Record<ModuleId, Entry[]>>({} as Record<ModuleId, Entry[]>);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -212,7 +227,7 @@ function App() {
         const id=typeof command.aggregate_id==="string"?command.aggregate_id:item.eventId;
         const title=typeof command.display_title==="string"?command.display_title:id;
         const detail=typeof command.display_detail==="string"?command.display_detail:"";
-        const state=item.state==="acknowledged"?"Confirmé par le serveur":item.state==="rejected"?"Rejeté — vérifier le dossier":item.state==="conflict"?"Conflit — résolution nécessaire":"En attente de synchronisation";
+        const state=item.state==="acknowledged"?"Confirmé":item.state==="rejected"?"Rejeté — vérifier le dossier":item.state==="conflict"?"Conflit — résolution nécessaire":"En attente de synchronisation";
         const rows=next[moduleId]??[],existing=rows.findIndex(entry=>entry.id===id);
         const existingEntry=existing>=0?rows[existing]:undefined;
         const payload = command.payload && typeof command.payload === "object" ? command.payload as Record<string,unknown> : {};
@@ -327,7 +342,7 @@ function App() {
       setWorkstationSiteId(nextSession.account.active_site_ids[0] ?? "");
       void hydrateWebRecords(nextSession).catch((error)=>setAuthMessage(error instanceof Error?error.message:"Historique local indisponible."));
       setAuthenticated(true);
-      void syncWebPullChanges(nextSession).then((result) => { if(result.morePending)setAuthMessage("Synchronisation entrante partielle : d'autres pages restent à charger."); }).catch((error) => setAuthMessage(error instanceof Error?error.message:"Lecture du journal serveur impossible."));
+      void syncWebPullChanges(nextSession).then((result) => { if(result.morePending)setAuthMessage("Certaines données restent à actualiser."); }).catch((error) => setAuthMessage(error instanceof Error?error.message:"Actualisation impossible."));
       setPreview(false);
       setPassword("");
       setAuthMessage(nextSession.requirePasswordChange
@@ -570,7 +585,7 @@ function App() {
           const serverRecord=receipt.result&&typeof receipt.result==="object"&&!Array.isArray(receipt.result)?receipt.result as Record<string,unknown>:{};
           const eventPayload=command.payload&&typeof command.payload==="object"&&!Array.isArray(command.payload)?command.payload as Record<string,unknown>:{};
           if(id&&isCurrent())setEntries(prev=>!isCurrent()?prev:({...prev,[moduleId]:(prev[moduleId]??[]).map(x=>x.id===id?{
-            ...x,state:"Confirmé par le serveur",
+            ...x,state:"Confirmé",
             aggregateType:typeof command.aggregate_type==="string"?command.aggregate_type:x.aggregateType,
             actionCode:typeof command.action_code==="string"?command.action_code:x.actionCode,
             siteId:typeof command.site_id==="string"?command.site_id:x.siteId,
@@ -592,7 +607,7 @@ function App() {
     if(!isCurrent())return{acknowledged,retrying,rejected,remaining:remaining.length};
     await hydrateWebRecords(freshSession);
     if(!isCurrent())return{acknowledged,retrying,rejected,remaining:remaining.length};
-    if(acknowledged)setAuthMessage(acknowledged+" opération(s) confirmée(s) par le journal serveur.");
+    if(acknowledged)setAuthMessage(acknowledged+" opération(s) confirmée(s).");
     else if(billingHolds)setAuthMessage("Abonnement à renouveler : les opérations locales sont conservées en attente de synchronisation.");
     else if(retrying)setAuthMessage(retrying+" opération(s) en attente de reprise réseau.");
     else if(rejected)setAuthMessage(rejected+" opération(s) rejetée(s) ou anciennes à ré-enregistrer ; aucun reçu n'a été fabriqué.");
@@ -817,7 +832,7 @@ function App() {
   async function openCashSession(input:{register:Entry;openingFloat:number}) {
     const id=crypto.randomUUID(),siteId=sharedOperationSiteId();
     if(!Number.isSafeInteger(input.openingFloat)||input.openingFloat<0)throw new Error("Fonds d'ouverture invalide.");
-    if(!input.register.state.includes("Confirmé par le serveur")&&!input.register.state.startsWith("Reçu du serveur"))throw new Error("Le registre doit être confirmé par le serveur.");
+    if(!input.register.state.includes("Confirmé")&&!input.register.state.startsWith("Reçu du serveur"))throw new Error("Le registre doit être confirmé par le serveur.");
     await submitWebBusinessEvent("cash","cash_session.opened","cash_session",id,
       {cash_session_id:id,register_id:input.register.id,register_name:String(input.register.data?.name??input.register.title),
        opening_float_xaf:input.openingFloat,opened_at:new Date().toISOString()},
@@ -827,7 +842,7 @@ function App() {
   async function createCashSale(input:{session:Entry;description:string;amount:number;itemId:string;quantity:number;paymentMethod:string}) {
     const session=authSession;if(!session)throw new Error("AUTHENTICATION_REQUIRED");
     const siteId=sharedOperationSiteId(),id=crypto.randomUUID();
-    if(input.session.status!=="open"||(!input.session.state.includes("Confirmé par le serveur")&&!input.session.state.startsWith("Reçu du serveur")))throw new Error("La session doit être ouverte et confirmée par le serveur.");
+    if(input.session.status!=="open"||(!input.session.state.includes("Confirmé")&&!input.session.state.startsWith("Reçu du serveur")))throw new Error("La session doit être ouverte et confirmée par le serveur.");
     if(input.description.trim().length<2||!Number.isSafeInteger(input.amount)||input.amount<=0)throw new Error("Désignation et montant entier positif obligatoires.");
     if(input.itemId&&(!Number.isFinite(input.quantity)||input.quantity<=0))throw new Error("Quantité de sortie stock invalide.");
     await submitWebBusinessEvent("cash","sale.created","sale",id,{
@@ -908,7 +923,7 @@ function App() {
     if(!Number.isSafeInteger(input.amount)||input.amount<=0)throw new Error("Montant de règlement bancaire invalide.");
     const receipts=entries.stock??[];
     if(!receipts.some(x=>x.actionCode==="purchase.receipt.confirmed"&&x.data?.purchase_id===input.purchase.id&&
-      (x.state.includes("Confirmé par le serveur")||x.state.startsWith("Reçu du serveur"))))throw new Error("Un reçu de réception confirmé est requis avant règlement.");
+      (x.state.includes("Confirmé")||x.state.startsWith("Reçu du serveur"))))throw new Error("Un reçu de réception confirmé est requis avant règlement.");
     await submitWebBusinessEvent("stock","supplier.payment.recorded","supplier_payment",key,{
       payment_id:key,idempotency_key:key,purchase_id:input.purchase.id,amount_xaf:input.amount,payment_method:"bank",
       cash_session_id:null,payment_reference:input.reference.trim(),
@@ -936,7 +951,7 @@ function App() {
   async function completeCustomerFollowup(input:{followup:Entry;note:string;nextDue:string}) {
     const siteId=sharedOperationSiteId(),now=new Date(),nextDue=input.nextDue?new Date(input.nextDue):null;
     if(input.followup.aggregateType!=="customer_followup"||input.followup.siteId!==siteId||input.followup.status!=="active"||
-      !(input.followup.state.includes("Confirmé par le serveur")||input.followup.state.startsWith("Reçu du serveur")))throw new Error("Suivi actif et confirmé du site requis.");
+      !(input.followup.state.includes("Confirmé")||input.followup.state.startsWith("Reçu du serveur")))throw new Error("Suivi actif et confirmé du site requis.");
     if(input.note.length>1000||(nextDue&&(!Number.isFinite(nextDue.getTime())||nextDue<=now)))throw new Error("Note ou nouvelle échéance invalide.");
     await submitWebBusinessEvent("customers","customer_followup.completed","customer_followup",input.followup.id,{
       followup_id:input.followup.id,completed_at:now.toISOString(),next_due_at_if_repeating:nextDue?.toISOString()??null,completion_note:input.note.trim(),
@@ -1048,24 +1063,22 @@ function App() {
   if (authenticated && authSession?.requirePasswordChange) {
     return (
       <div className={"app auth-app " + theme}>
-        <div className="auth-art">
+        <div className="auth-art"><BusinessBackdrop kind="auth"/>
           <div className="auth-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
           <div className="auth-copy">
             <span className="eyebrow">PROTECTION DU COMPTE</span>
             <h1>Une dernière<br /><em>étape.</em></h1>
             <p>Le mot de passe initial doit être remplacé avant tout accès aux pages de gestion.</p>
             <div className="auth-proof"><span>01</span> Votre identité est authentifiée</div>
-            <div className="auth-proof"><span>02</span> Le changement est contrôlé côté serveur</div>
-            <div className="auth-proof"><span>03</span> Les jetons restent en mémoire dans cet onglet</div>
           </div>
           <div className="auth-footer">NAXA SERVICES · COMPTE SÉCURISÉ</div>
         </div>
-        <main className="auth-panel">
+        <main className="auth-panel"><button className="auth-theme-toggle btn secondary" type="button" onClick={toggleTheme}>{theme==="dark"?"Mode clair":"Mode nuit"}</button><NightTorch active={nightPulse}/>
           <div className="mobile-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
           <div className="auth-form-wrap">
             <span className="eyebrow">CHANGEMENT OBLIGATOIRE</span>
             <h2>Créer un nouveau mot de passe</h2>
-            <p className="muted">Minimum 10 caractères. Le changement est vérifié par le serveur avant l'ouverture de l'espace.</p>
+            <p className="muted">Choisissez un mot de passe d'au moins 10 caractères.</p>
             <form onSubmit={changeWebPassword} className="auth-form">
               <label>Mot de passe actuel<input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" required /></label>
               <label>Nouveau mot de passe<input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" minLength={10} maxLength={256} required /></label>
@@ -1084,7 +1097,7 @@ function App() {
   if (!authenticated && !preview) {
     return (
       <div className={"app auth-app " + theme}>
-        <div className="auth-art">
+        <div className="auth-art"><BusinessBackdrop kind="auth"/>
           <div className="auth-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
           <div className="auth-copy">
             <span className="eyebrow">GESTION INTELLIGENTE DES PRESTATIONS</span>
@@ -1096,23 +1109,21 @@ function App() {
           </div>
           <div className="auth-footer">NAXA SERVICES · ESPACE PROFESSIONNEL</div>
         </div>
-        <main className="auth-panel">
+        <main className="auth-panel"><button className="auth-theme-toggle btn secondary" type="button" onClick={toggleTheme}>{theme==="dark"?"Mode clair":"Mode nuit"}</button><NightTorch active={nightPulse}/>
           <div className="mobile-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
           <div className="auth-form-wrap">
             <span className="eyebrow">{showRecovery ? "ASSISTANCE D'ACCÈS" : "ESPACE SÉCURISÉ"}</span>
             <h2>{showRecovery ? "Récupérer mon accès" : "Content de vous revoir."}</h2>
-            <p className="muted">{showRecovery ? "Une demande interne sera envoyée au responsable pour vérification." : "Connectez-vous avec l'identifiant fourni par votre responsable."}</p>
+            <p className="muted">{showRecovery ? "Votre responsable vous aidera à retrouver votre accès." : "Accédez à votre espace professionnel."}</p>
             <form onSubmit={showRecovery ? requestRecovery : signIn} className="auth-form">
               <label>Identifiant NAXA Services<input value={identifier} onChange={(e) => setIdentifier(e.target.value.toUpperCase())} placeholder="NS-000000" autoComplete="username" required /></label>
               {!showRecovery && <label>Mot de passe<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></label>}
               {showRecovery && <label>Note au responsable (facultatif)<textarea rows={3} value={recoveryNote} onChange={(e) => setRecoveryNote(e.target.value)} placeholder="Expliquez brièvement votre demande" /></label>}
-              {!showRecovery && <p className="small muted">Session Web conservée uniquement en mémoire dans cet onglet. Aucun jeton n'est enregistré dans le stockage persistant du navigateur.</p>}
               {authMessage && <div className="notice">{authMessage}</div>}
               <button className="btn primary" disabled={busy}>{busy ? "Traitement…" : showRecovery ? "Envoyer la demande" : "Se connecter"}</button>
             </form>
             <button className="link-button" onClick={() => { setShowRecovery(!showRecovery); setAuthMessage(""); }}>{showRecovery ? "Retour à la connexion" : "Mot de passe oublié ?"}</button>
-            <p className="small muted">Pas d'inscription libre, pas d'OTP et pas de boîte mail. Le reset de mot de passe est administré après contrôle d'identité.</p>
-            <button className="preview-link" onClick={() => { setPreview(true); setAuthMessage(""); }}>Ouvrir l'aperçu des pages ERP (données locales uniquement)</button>
+            <button className="preview-link" onClick={() => { setPreview(true); setAuthMessage(""); }}>Découvrir NAXA Services</button>
           </div>
           <div className="panel-bottom"><span>FR · EN</span><span>Mode sécurisé</span></div>
         </main>
@@ -1121,9 +1132,9 @@ function App() {
   }
 
   return (
-    <div className={"app erp-app " + theme}>
-      {preview && <div className="preview-banner"><strong>APERÇU LOCAL</strong> Les opérations de cette session ne sont pas synchronisées et ne constituent pas un registre commercial. <button onClick={() => { setPreview(false); setAuthenticated(false); setActive("overview"); }}>Quitter l'aperçu</button></div>}
-      <aside className="sidebar">
+    <div className={"app erp-app " + theme}><NightTorch active={nightPulse}/>
+      {preview && <div className="preview-banner"><strong>DÉMONSTRATION</strong> Essayez les fonctionnalités sans enregistrer d'opérations réelles. <button onClick={() => { setPreview(false); setAuthenticated(false); setActive("overview"); }}>Quitter l'aperçu</button></div>}
+      {mobileMenu&&<button className="menu-scrim" aria-label="Fermer le menu" onClick={()=>setMobileMenu(false)}/>}<aside className={"sidebar "+(mobileMenu?"mobile-open":"")} id="ns-navigation">
         <div className="side-brand"><img src="/naxa-services-logo.svg" alt="NAXA Services" /></div>
         <div className="workspace-label">ESPACE DE TRAVAIL</div>
         <div className="site-select"><span className="site-dot" /> <div>{authSession && !preview ? <label>Point de vente actif<select aria-label="Point de vente actif" value={activeSiteId || authSession.account.active_site_ids[0] || ""} onChange={event => setActiveSiteId(event.target.value)} disabled={busy}>{authSession.account.active_sites.map(site => <option key={site.id} value={site.id}>{site.name}</option>)}</select></label> : <strong>{siteName}</strong>}<small>{modeLabel(mode)}</small></div></div>
@@ -1134,26 +1145,22 @@ function App() {
           </div>)}
         </nav>
         <div className="side-bottom">
-          <button className="nav-item" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}><span className="nav-glyph">◐</span>{theme === "dark" ? "Mode clair" : "Mode sombre"}</button>
+          <button className="nav-item" onClick={toggleTheme}><span className="nav-glyph">◐</span>{theme === "dark" ? "Mode clair" : "Mode sombre"}</button>
           <button className="nav-item" onClick={signOut} disabled={busy}><span className="nav-glyph">↪</span>Déconnexion</button>
           <div className="user-mini"><div className="avatar">NS</div><div><strong>{preview ? "Aperçu local" : authSession?.account.display_name ?? "Espace connecté"}</strong><small>{authSession ? (authSession.account.organization_name || authSession.account.role_code || "NAXA Services") : "NAXA Services"}</small></div></div>
         </div>
       </aside>
       <main className="main-area">
         <header className="topbar">
-          <div className="crumb"><span>NAXA SERVICES</span><b>/</b>{selected.title}</div>
+          <div className="crumb"><button className="mobile-menu-trigger icon-button" aria-label="Tous les modules" aria-expanded={mobileMenu} aria-controls="ns-navigation" onClick={()=>setMobileMenu(v=>!v)}>☰</button><span>NAXA SERVICES</span><b>/</b>{selected.title}</div>
           <div className="top-actions">
-            <span className="sync-pill"><i /> {preview ? "Données locales" : authSession ? (authSession.requirePasswordChange ? "Changement du mot de passe requis" : "Session authentifiée · reçus serveur") : "Connexion en attente"}</span>
-            <button className="icon-button" title="Aide" onClick={() => setActive("help")}>?</button>
+            <span className="sync-pill"><i /> {preview ? "Démonstration" : authSession ? (authSession.requirePasswordChange ? "Changement du mot de passe requis" : "Connecté") : "Non connecté"}</span>
+            <button className="icon-button mobile-theme-toggle" aria-label={theme==="dark"?"Mode clair":"Mode nuit"} onClick={toggleTheme}>{theme==="dark"?"☀":"☾"}</button><button className="icon-button" title="Aide" onClick={() => setActive("help")}>?</button>
             {authSession && !preview && !authSession.requirePasswordChange ? <ProfilePhoto key={scopeOf(authSession)+":"+sessionFence.current.generation} authEndpoint={authEndpoint} anonKey={anonKey} orgId={authSession.account.organization_id} memberId={authSession.account.member_id} initials={authSession.account.display_name.slice(0,2).toUpperCase()} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("Session expirée.");return fresh.accessToken;}}/> : <div className="avatar">NS</div>}
           </div>
         </header>
         <section className="content-area">
           {authSession && authMessage && <div className="notice">{authMessage}</div>}
-          {authSession && <div className="module-main-card" style={{marginBottom:18}}>
-            <div className="module-card-head"><div><span className="eyebrow">JOURNAL SERVEUR</span><h2>Changements reçus</h2></div><span className="status-tag local">{remoteChanges.length}</span></div>
-            {remoteChanges.length===0?<Empty text="Aucun changement entrant chargé pour cet appareil."/>:<div className="record-list">{remoteChanges.slice(-12).reverse().map(c=><div className="record" key={c.cursor}><div><strong>{c.action_code}</strong><small>{c.aggregate_type} · {c.aggregate_id} · curseur {c.cursor}</small></div><span className="status-tag local">Serveur</span></div>)}</div>}
-          </div>}
           <div className="page-heading">
             <div><span className="eyebrow">{moduleCopy[active].eyebrow}</span><h1>{moduleCopy[active].headline}</h1><p>{moduleCopy[active].helper}</p></div>
             <div className="heading-actions">
@@ -1161,15 +1168,15 @@ function App() {
               {authSession && <button className="btn secondary" disabled={busy} onClick={() => {
                 const operation = pendingSyncCount > 0 ? syncWebOutbox(authSession) : syncWebPullChanges(authSession);
                 void operation.catch((error) => setAuthMessage(error instanceof Error ? error.message : "Synchronisation impossible."));
-              }}>{pendingSyncCount > 0 ? "Synchroniser (" + pendingSyncCount + ")" : "Actualiser depuis le serveur"}</button>}
-              {active !== "workOrders" && active !== "team" && <button className="btn primary" disabled={busy || (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active))} title={!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active) ? "Connecteur métier Web non livré." : undefined} onClick={() => {
-                if (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)) { setAuthMessage("Connecteur métier Web non livré pour ce module."); return; }
+              }}>{pendingSyncCount > 0 ? "Synchroniser (" + pendingSyncCount + ")" : "Actualiser"}</button>}
+              {active !== "workOrders" && active !== "team" && <button className="btn primary" disabled={busy || (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active))} title={!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active) ? "Action indisponible." : undefined} onClick={() => {
+                if (!preview && !["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)) { setAuthMessage("Cette action est indisponible."); return; }
                 setDraftTitle(active==="team"&&authSession?authSession.account.display_name:"");setDraftDetail("");setDraftSku("");setDraftUnit("pièce");setDraftReorderLevel("0");setDraftSupplierWhatsApp("");setDraftPhone("");setDraftAmount("0");setDraftDate("");setDraftEndDate("");setDraftPriority("normal");setDraftActivity("general");setDraftContactConsent(false);setDialogOpen(true);
-              }}>{!preview&&!["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)?"Connecteur à livrer":active==="team"?"Pointer mon arrivée":selected.action}</button>}
+              }}>{!preview&&!["stock","agenda","pressing","cash","services","customers","team","help"].includes(active)?"Indisponible":active==="team"?"Pointer mon arrivée":selected.action}</button>}
             </div>
           </div>
 
-          {active === "overview" ? <Overview entries={entries} onNavigate={setActive} mode={mode} /> :
+          {active === "overview" ? <Overview entries={entries} onNavigate={setActive} mode={mode} activity={authSession?.account.activity_profile} /> :
             active === "organization" ? <><OrganizationPage mode={mode} setMode={setMode} siteName={siteName} setSiteName={setSiteName} editable={preview || authSession?.account.role_code === "promoter"} onSave={saveWebOrganizationProfile} locale={authSession?.account.default_locale ?? "fr"} /><SubscriptionPage key={authSession?.account.organization_id+":"+authSession?.account.member_id+":"+authSession?.deviceId} canRead={Boolean(authSession&&!preview)} requiresPremium={Boolean(authSession&&authSession.account.business_mode!=="solo")} enabled={Boolean(authSession&&!preview&&authSession.account.role_code==="promoter")} request={requestSubscription}/></> :
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
@@ -1207,8 +1214,6 @@ function App() {
             active === "team" ? <TeamOperationsPage memberId={authSession?.account.member_id} entries={(entries.team ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} /> :
             active === "customers" ? <CustomerFollowupsPage entries={(entries.customers ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onCreate={createCustomerFollowup} onComplete={completeCustomerFollowup} /> :
             <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} authenticated={Boolean(authSession && !preview)} />}
-
-          <div className="page-footnote"><span>ⓘ</span> {preview ? "Les créations sont gardées en mémoire dans cette session uniquement." : authSession ? "Les parcours disponibles utilisent le journal serveur et un reçu idempotent. Les fonctions non raccordées restent en lecture seule ou en aperçu." : "Aucun accès opérationnel n'est accordé avant authentification et synchronisation côté serveur."}</div>
         </section>
         <nav className="mobile-tabs">
           {(["overview", "agenda", "pressing", "cash", "services"] as ModuleId[]).map((id) => <button key={id} className={active === id ? "selected" : ""} onClick={() => setActive(id)}><span>{iconFor(id)}</span>{modules.find((m) => m.id === id)?.title.split(" ")[0]}</button>)}
@@ -1216,8 +1221,8 @@ function App() {
       </main>
       {dialogOpen && <div className="modal-backdrop" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setDialogOpen(false); }}>
         <div className="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-          <div className="modal-head"><div><span className="eyebrow">{authSession&&!preview?"OPÉRATION · JOURNAL SERVEUR":"NOUVELLE OPÉRATION · APERÇU LOCAL"}</span><h2 id="modal-title">{active==="team"&&authSession&&!preview?"Pointer mon arrivée":selected.action}</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)}>×</button></div>
-          <form onSubmit={(e) => {e.preventDefault();if(active==="stock"&&authSession)void submitStockItem();else if(authSession&&!preview)void submitModuleOperation().catch(error=>setAuthMessage(error instanceof Error?error.message:"Opération impossible."));else if(preview)addLocalEntry();else{setAuthMessage("Connecteur métier non disponible.");setDialogOpen(false);}}}>
+          <div className="modal-head"><div><span className="eyebrow">{authSession&&!preview?"NOUVELLE OPÉRATION":"NOUVELLE OPÉRATION · DÉMONSTRATION"}</span><h2 id="modal-title">{active==="team"&&authSession&&!preview?"Pointer mon arrivée":selected.action}</h2></div><button className="icon-button" onClick={() => setDialogOpen(false)}>×</button></div>
+          <form onSubmit={(e) => {e.preventDefault();if(active==="stock"&&authSession)void submitStockItem();else if(authSession&&!preview)void submitModuleOperation().catch(error=>setAuthMessage(error instanceof Error?error.message:"Opération impossible."));else if(preview)addLocalEntry();else{setAuthMessage("Action indisponible.");setDialogOpen(false);}}}>
             <label>{active==="customers"?"Nom du client":active==="pressing"?"Nom du client":active==="agenda"?"Nom / référence du client":active==="help"?"Sujet":active==="cash"?"Catégorie de dépense":active==="team"?"Membre":"Nom / référence"}<input autoFocus value={draftTitle} readOnly={active==="team"&&authSession&&!preview} onChange={(e) => setDraftTitle(e.target.value)} required placeholder="Saisir la valeur" /></label>
             {active === "stock" && authSession ? <>
               <label>Point de vente<select value={activeSiteId} onChange={(e) => setActiveSiteId(e.target.value)} required>{authSession.account.active_site_ids.map((siteId) => <option key={siteId} value={siteId}>{siteId}</option>)}</select></label>
@@ -1225,7 +1230,7 @@ function App() {
               <label>Unité<input value={draftUnit} onChange={(e) => setDraftUnit(e.target.value)} required maxLength={40} /></label>
               <label>Seuil d'alerte<input type="number" min="0" step="0.001" value={draftReorderLevel} onChange={(e) => setDraftReorderLevel(e.target.value)} required /></label>
               <label>WhatsApp fournisseur<input value={draftSupplierWhatsApp} onChange={(e) => setDraftSupplierWhatsApp(e.target.value)} maxLength={32} placeholder="+237 6xx xx xx xx" /></label>
-              <div className="notice">La fiche article rejoint l'outbox avec un identifiant et une séquence liés à cet appareil. Elle n'est confirmée qu'après le reçu du journal serveur.</div>
+              <div className="notice">L'article sera disponible après confirmation.</div>
             </> : authSession && !preview && active==="customers" ? <>
               <label>Téléphone facultatif<input value={draftPhone} onChange={e=>setDraftPhone(e.target.value)} maxLength={32}/></label>
               <label><input type="checkbox" checked={draftContactConsent} onChange={e=>setDraftContactConsent(e.target.checked)}/> Consentement de contact obtenu</label>
@@ -1244,7 +1249,7 @@ function App() {
               <label>Prestation (nom ou code)<input value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required/></label>
               <label>Début<input type="datetime-local" value={draftDate} onChange={e=>setDraftDate(e.target.value)} required/></label>
               <label>Fin<input type="datetime-local" value={draftEndDate} onChange={e=>setDraftEndDate(e.target.value)} required/></label>
-              <div className="notice">Le rendez-vous est affecté au membre connecté ; les chevauchements sont vérifiés côté serveur.</div>
+              <div className="notice">Le rendez-vous sera attribué à votre compte. Vérifiez les horaires.</div>
             </> : authSession && !preview && active==="cash" ? <>
               <label>Motif<textarea rows={3} value={draftDetail} onChange={e=>setDraftDetail(e.target.value)} required minLength={2}/></label>
               <label>Montant FCFA<input type="number" min="1" step="1" value={draftAmount} onChange={e=>setDraftAmount(e.target.value)} required/></label>
@@ -1257,9 +1262,9 @@ function App() {
               <div className="notice">Le pointage est enregistré uniquement pour le membre authentifié.</div>
             </> : <>
               <label>Détails<textarea rows={3} value={draftDetail} onChange={(e) => setDraftDetail(e.target.value)} placeholder="Informations complémentaires" /></label>
-              <div className="notice">Aperçu local : aucune opération réelle n'est créée.</div>
+              <div className="notice">Cette démonstration ne crée aucune opération réelle.</div>
             </>}
-            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>Annuler</button><button className="btn primary" disabled={busy}>{authSession&&!preview?"Mettre en file & synchroniser":"Ajouter à l'aperçu"}</button></div>
+            <div className="modal-actions"><button type="button" className="btn secondary" onClick={() => setDialogOpen(false)}>Annuler</button><button className="btn primary" disabled={busy}>{authSession&&!preview?"Enregistrer":"Ajouter à la démonstration"}</button></div>
           </form>
         </div>
       </div>}
@@ -1299,11 +1304,11 @@ function nextPressingState(state: string) {
   if (state === "Prêt") return "Retiré";
   return "Retiré";
 }
-function Overview({ entries, onNavigate, mode }: { entries: Record<ModuleId, Entry[]>; onNavigate: (id: ModuleId) => void; mode: BusinessMode }) {
+function Overview({ entries, onNavigate, mode, activity }: { entries: Record<ModuleId, Entry[]>; onNavigate: (id: ModuleId) => void; mode: BusinessMode; activity?:string }) {
   const totalDrafts = Object.values(entries).reduce((sum, list) => sum + (list?.length ?? 0), 0);
   return <div className="overview-grid">
     <div className="overview-main">
-      <div className="hero-card"><div><span className="hero-kicker">VOTRE ESPACE DE GESTION</span><h2>Une journée bien organisée commence ici.</h2><p>Les chiffres apparaîtront après la première synchronisation de vos données métier.</p></div><div className="hero-symbol">N</div></div>
+      <div className="hero-card"><BusinessBackdrop activity={activity}/><div className="hero-content"><span className="hero-kicker">VOTRE ESPACE DE GESTION</span><h2>Une journée bien organisée commence ici.</h2><p>Retrouvez vos activités, vos objectifs et vos priorités.</p></div></div>
       <div className="metric-grid">
         <Metric label="Rendez-vous aujourd'hui" value="—" meta="En attente de synchronisation" />
         <Metric label="Tickets à rendre" value="—" meta="En attente de synchronisation" />
@@ -1321,7 +1326,7 @@ function Overview({ entries, onNavigate, mode }: { entries: Record<ModuleId, Ent
     <aside className="overview-side">
       <div className="side-card"><div className="section-title"><div><span className="eyebrow">STRUCTURE</span><h3>Mode d'exploitation</h3></div></div><strong className="mode-name">{modeLabel(mode)}</strong><p>Les données restent isolées par organisation, site et poste selon les droits attribués.</p><button className="text-action" onClick={() => onNavigate("organization")}>Configurer la structure →</button></div>
       <div className="side-card"><span className="eyebrow">BRIEFING DU MATIN</span><h3>À préparer</h3><ul className="brief-list"><li>Vérifier les rendez-vous et les créneaux.</li><li>Contrôler les tickets dont la date promise approche.</li><li>Ouvrir les caisses de chaque poste autorisé.</li><li>Consulter les alertes de consommables.</li></ul></div>
-      <div className="side-card alert-card"><span className="eyebrow">SYNCHRONISATION</span><h3>Indicateurs non chargés</h3><p>Aucun chiffre n'est inventé. Les indicateurs restent vides tant qu'une lecture des vues serveur n'a pas été effectuée.</p></div>
+      <div className="side-card alert-card"><span className="eyebrow">SYNCHRONISATION</span><h3>Indicateurs à venir</h3><p>Vos indicateurs apparaîtront dès que les données seront disponibles.</p></div>
     </aside>
   </div>;
 }
@@ -1336,7 +1341,7 @@ function DeviceSecurityPage({authenticated,onLoad,onRevoke}:{authenticated:boole
   async function revoke(){if(!selected)return;setLoading(true);setError("");try{await onRevoke(selected);setSelected(null);setDevices(await onLoad());setLoaded(true);}catch(cause){setError(cause instanceof Error?cause.message:"Révocation impossible.");}finally{setLoading(false);}}
   return <div className="module-layout"><div className="module-main-card">
     <span className="eyebrow">SÉCURITÉ DU COMPTE</span><h2>Mes appareils et sessions</h2>
-    <p className="muted">Seuls les appareils de ton compte sont listés. Révoquer un appareil interdit ses prochains accès serveur ; il devra se reconnecter.</p>
+    <p className="muted">Gérez les appareils connectés à votre compte. Un appareil retiré devra se reconnecter.</p>
     <button className="btn primary" disabled={!authenticated||loading} onClick={()=>void load()}>Charger mes appareils</button>
     {error&&<div role="alert" className="notice">{error}</div>}
     {loaded&&!devices.length&&<p>Aucun appareil enregistré.</p>}
@@ -1347,12 +1352,12 @@ function DeviceSecurityPage({authenticated,onLoad,onRevoke}:{authenticated:boole
 function GenericPage({ active, entries, copy, preview, authenticated }: { active: ModuleId; entries: Entry[]; copy: typeof moduleCopy[ModuleId]; preview: boolean; authenticated: boolean }) {
   const serverWriteAvailable = authenticated && ["stock", "services", "customers", "team", "help"].includes(active);
   return <div className="module-layout">
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PÉRIMÈTRE FONCTIONNEL</span><h2>Fonctions prévues</h2></div><span className="status-tag pending">{preview?"Aperçu fonctionnel":serverWriteAvailable?"Création via journal serveur":"Connecteur à livrer"}</span></div>
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PÉRIMÈTRE FONCTIONNEL</span><h2>Fonctionnalités</h2></div><span className="status-tag pending">{preview?"Aperçu fonctionnel":serverWriteAvailable?"Disponible":"Indisponible"}</span></div>
       <div className="feature-list">{copy.features.map((feature,i)=><div className="feature-row" key={feature}><span className="feature-number">{String(i+1).padStart(2,"0")}</span><span>{feature}</span><span className="feature-check">◇</span></div>)}</div>
       {!preview&&!serverWriteAvailable&&<div className="notice">Les écritures sont désactivées en session réelle jusqu'à livraison du parcours métier correspondant.</div>}
     </div>
     <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{preview?"SESSION EN COURS":"JOURNAL MÉTIER"}</span><h2>{preview?"Brouillons locaux":"Événements reçus et émis"}</h2></div><span className="status-tag local">{preview?"Local":serverWriteAvailable?"File + reçu serveur":"Projection à compléter"}</span></div>
-      {entries.length===0?<Empty text={preview?copy.empty:serverWriteAvailable?"Aucun événement métier pour cette organisation et cet appareil.":"Le journal serveur reste visible dans la zone globale ; la projection métier de ce module est à compléter."}/>:<div className="record-list">{entries.map(entry=><Record key={entry.id} entry={entry}/>)}</div>}
+      {entries.length===0?<Empty text={preview?copy.empty:serverWriteAvailable?"Aucune opération pour le moment.":"Aucun résultat disponible pour le moment."}/>:<div className="record-list">{entries.map(entry=><Record key={entry.id} entry={entry}/>)}</div>}
     </div>
   </div>;
 }
@@ -1365,7 +1370,7 @@ function AgendaPage({ entries, authenticated }: { entries: Entry[]; authenticate
     date.setDate(monday.getDate() + index);
     return { label: date.toLocaleDateString("fr-FR", { weekday: "short" }), day: date.getDate(), isToday: date.toDateString() === today.toDateString() };
   });
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue de la semaine</h2></div><span className="status-tag pending">{authenticated?"Création connectée · calendrier à compléter":"Aperçu local"}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Créneaux détaillés non projetés</strong><p>Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.</p></div></div><div className="module-main-card"><h2>Rendez-vous du journal serveur</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucun rendez-vous dans le périmètre chargé." />}</div></div>;
+  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue de la semaine</h2></div><span className="status-tag pending">{authenticated?"Rendez-vous":"Aperçu local"}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Créneaux détaillés non projetés</strong><p>Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.</p></div></div><div className="module-main-card"><h2>Rendez-vous du journal serveur</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucun rendez-vous dans le périmètre chargé." />}</div></div>;
 }
 function PressingPage({
   entries,onAdvance,onTransition,canPreviewEdit,authenticated,busy,
@@ -1379,12 +1384,12 @@ function PressingPage({
   const statusLabels:Record<string,string>={received:"Reçu",in_progress:"En cours",ready:"Prêt",picked_up:"Retiré"};
   return <div className="module-layout">
     <div className="module-main-card">
-      <div className="module-card-head"><div><span className="eyebrow">SUIVI DES TICKETS</span><h2>Étapes de traitement</h2></div><span className="status-tag pending">{canPreviewEdit?"Aperçu local":authenticated?"Transitions via journal serveur":"Lecture seule"}</span></div>
+      <div className="module-card-head"><div><span className="eyebrow">SUIVI DES TICKETS</span><h2>Étapes de traitement</h2></div><span className="status-tag pending">{canPreviewEdit?"Aperçu local":authenticated?"Suivi des tickets":"Lecture seule"}</span></div>
       <div className="pressing-steps">{["Reçu","En cours","Prêt","Retiré"].map((step,i)=><div key={step}><span>{i+1}</span><strong>{step}</strong></div>)}</div>
-      <p className="muted">Chaque changement exige un reçu serveur, une révision attendue et un motif ; les tickets restent séparés des autres dossiers métier.</p>
+      <p className="muted">Suivez les étapes de chaque ticket jusqu'au retrait.</p>
     </div>
     <div className="module-main-card">
-      <h2>Tickets du journal serveur</h2>
+      <h2>Tickets</h2>
       {error&&<div className="notice">{error}</div>}
       {entries.length?entries.map(entry=>{
         const status=entry.status??"received";
@@ -1398,7 +1403,7 @@ function PressingPage({
               ()=>setReasons(previous=>({...previous,[entry.id]:""})),
               cause=>setError(cause instanceof Error?cause.message:"Transition refusée.")
             )}>{busy?"Envoi…":"Passer à "+statusLabels[next]}</button>
-          </div>:authenticated&&next&&<p className="muted">En attente du reçu de création et de sa révision serveur avant d'autoriser l'étape suivante.</p>}
+          </div>:authenticated&&next&&<p className="muted">Patientez jusqu'à la confirmation du ticket.</p>}
         </div>;
       }):<Empty text="Aucun ticket disponible dans le périmètre chargé."/>}
     </div>
@@ -1446,7 +1451,7 @@ function WorkOrdersPage({
   }
   return <div className="module-layout activity-work-layout">
     <div className="module-main-card">
-      <div className="module-card-head"><div><span className="eyebrow">PARCOURS MÉTIER · {workflow.profile.toUpperCase()}</span><h2>{workflow.label}</h2></div><span className="status-tag pending">{authenticated?"Écriture via journal serveur":"Lecture seule"}</span></div>
+      <div className="module-card-head"><div><span className="eyebrow">PARCOURS MÉTIER · {workflow.profile.toUpperCase()}</span><h2>{workflow.label}</h2></div><span className="status-tag pending">{authenticated?"Gestion des dossiers":"Lecture seule"}</span></div>
       <p className="muted">{workflow.purpose}</p>
       {isRetail && <div className="notice">Le flux principal de parfumerie reste le catalogue produit, le stock, les achats fournisseurs et la vente comptoir. Ce formulaire crée uniquement une réservation ou commande spéciale client ; il ne réalise pas une vente.</div>}
       <div className="feature-list">{workflow.stages.map((stage,index)=><div className="feature-row" key={stage.code}><span className="feature-number">{String(index+1).padStart(2,"0")}</span><span>{stage.label}</span><span className="feature-check">{stage.next.length? "→ "+stage.next.map(code=>workflow.stages.find(item=>item.code===code)?.label??code).join(" / "):"Terminé"}</span></div>)}</div>
@@ -1511,7 +1516,7 @@ function WorkOrdersPage({
 }
 
 function CashPage({ entries }: { entries: Entry[] }) {
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">TRÉSORERIE</span><h2>Sessions de caisse</h2></div><span className="status-tag pending">Dépenses connectées · caisse à compléter</span></div><div className="cash-summary"><div><small>Fonds d'ouverture</small><strong>—</strong></div><div><small>Encaissements confirmés</small><strong>—</strong></div><div><small>Écart de clôture</small><strong>—</strong></div></div><div className="notice">Ce formulaire enregistre une dépense, pas une vente ni un paiement client. Les ouvertures/clôtures, encaissements et reçus ne sont pas encore raccordés à cette vue.</div></div><div className="module-main-card"><h2>Dépenses du journal serveur</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucune dépense dans le périmètre chargé." />}</div></div>;
+  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">TRÉSORERIE</span><h2>Sessions de caisse</h2></div><span className="status-tag pending">Dépenses</span></div><div className="cash-summary"><div><small>Fonds d'ouverture</small><strong>—</strong></div><div><small>Encaissements confirmés</small><strong>—</strong></div><div><small>Écart de clôture</small><strong>—</strong></div></div><div className="notice">Ce formulaire enregistre une dépense, pas une vente ni un paiement client. Les ouvertures/clôtures, encaissements et reçus ne sont pas encore raccordés à cette vue.</div></div><div className="module-main-card"><h2>Dépenses du journal serveur</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucune dépense dans le périmètre chargé." />}</div></div>;
 }
 function PerformancePage({
   data, fromDate, setFromDate, loading, error, onLoad, authenticated,
@@ -1528,7 +1533,7 @@ function PerformancePage({
     <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">ANALYTIQUE SERVEUR</span><h2>Performances financières confirmées</h2></div><span className="status-tag pending">{data?"Données serveur":"À charger"}</span></div>
       {authenticated?<><label>À partir du<input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} max={new Date().toISOString().slice(0,10)}/></label><button className="btn primary" disabled={loading} onClick={onLoad}>{loading?"Chargement…":"Charger les rapports"}</button></>:<div className="notice">Les rapports réels exigent une session Auth.</div>}
       {error&&<div className="notice">{error}</div>}
-      <p className="muted">Seules les ventes dont le paiement est confirmé par le serveur sont comptées. Une marge inconnue reste affichée comme indisponible, sans estimation inventée.</p>
+      <p className="muted">Les indicateurs tiennent compte des ventes confirmées.</p>
     </div>
     <div className="module-main-card"><h2>Journalier</h2>{rows(data?.daily??[],"performance_day")}</div>
     <div className="module-main-card"><h2>Mensuel</h2>{rows(data?.monthly??[],"performance_month")}</div>
