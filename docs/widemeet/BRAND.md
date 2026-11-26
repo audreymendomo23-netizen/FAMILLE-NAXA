@@ -19,3 +19,6 @@ Démarrage : halo jaune/vert qui s'élargit autour du logo original puis dispara
 
 ## Méthode famille
 Avant toute création, inventaire code et tests des sœurs, copie/adaptation du modèle effectivement compatible, isolation des données et droits, qualification et documentation. Reprendre plutôt qu'inventer. Aucune affirmation de parité, de sécurité média ou d'authentification sur le seul socle visuel.
+
+### Traçabilité du logo source
+Le master utilisateur est le PNG 1254×1254 de 246353 octets, SHA-256 1985425c6b7aaec882598ddef70eeaaf268df72532775820f67d590f5d5ccedc, conservé dans la conversation source, non transféré intégralement au dépôt ; les ressources UI dérivent de cette image. Le contrôle de contraste automatisé porte sur les huit couples texte/fond principaux ; cela ne vaut pas audit WCAG exhaustif.

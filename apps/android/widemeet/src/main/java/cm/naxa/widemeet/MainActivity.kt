@@ -22,6 +22,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -84,10 +87,10 @@ class MainActivity:ComponentActivity(){
  Scaffold(contentWindowInsets=WindowInsets.safeDrawing,topBar={
  Row(Modifier.fillMaxWidth().padding(horizontal=12.dp,vertical=8.dp),verticalAlignment=Alignment.CenterVertically){
   Surface(color=White,shape=MaterialTheme.shapes.medium,modifier=Modifier.weight(1f)){Image(painterResource(R.drawable.widemeet_logo),contentDescription="WideMeet",modifier=Modifier.height(44.dp).padding(6.dp))}
-  TextButton(onClick={toggle()}){Text(if(dark)"☀" else "☾",fontSize=22.sp)}
-  TextButton(onClick={menu=true}){Text("☰",fontSize=22.sp)}
+  TextButton(onClick={toggle()},modifier=Modifier.testTag("wm-theme").semantics{contentDescription=tr(if(dark)"Mode clair" else "Mode nuit",if(dark)"Light mode" else "Dark mode")}){Text(if(dark)"☀" else "☾",fontSize=22.sp)}
+  TextButton(onClick={menu=true},modifier=Modifier.testTag("wm-menu").semantics{contentDescription=tr("Options","Options")}){Text("☰",fontSize=22.sp)}
  }
- },bottomBar={NavigationBar{labels.forEachIndexed{i,l->NavigationBarItem(selected=tab==i&&detail.isEmpty(),onClick={tab=i;detail=""},icon={Text(symbols[i],fontSize=22.sp)},label={Text(l,fontSize=11.sp)},colors=NavigationBarItemDefaults.colors(indicatorColor=Green,selectedIconColor=Black,selectedTextColor=colors.onSurface))}}}){padding->
+ },bottomBar={NavigationBar{labels.forEachIndexed{i,l->NavigationBarItem(modifier=Modifier.testTag("wm-tab-$i"),selected=tab==i&&detail.isEmpty(),onClick={tab=i;detail=""},icon={Text(symbols[i],fontSize=22.sp)},label={Text(l,fontSize=11.sp)},colors=NavigationBarItemDefaults.colors(indicatorColor=Green,selectedIconColor=Black,selectedTextColor=colors.onSurface))}}}){padding->
  Box(Modifier.fillMaxSize().padding(padding)){
  Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
  if(switchError)Text(tr("Changement d’espace non confirmé. Reconnectez-vous.","Workspace switch unconfirmed. Sign in again."),color=MaterialTheme.colorScheme.error)
@@ -95,14 +98,14 @@ class MainActivity:ComponentActivity(){
  if(signIn){SignIn(english,BuildConfig.WIDEMEET_AUTH_URL.isNotBlank(),gateway,{session=it;signIn=false;tab=0;detail=""},{signIn=false})}
  else if(session?.requirePasswordChange==true){Text(tr("Votre mot de passe doit être changé avant d’accéder à votre espace.","Change your password before accessing your workspace."));Button(onClick={logout()}){Text(tr("Se déconnecter","Sign out"))}}
  else if(detail.isNotEmpty()){TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))};Text(detail,style=MaterialTheme.typography.headlineMedium)
- if(detail in listOf(menuFr[11],menuFr[12],menuFr[13],menuEn[11],menuEn[12],menuEn[13])){Button(onClick={toggle()}){Text(if(dark)tr("Mode clair","Light mode")else tr("Mode nuit","Dark mode"))};Button(onClick={english=!english;detail=""}){Text(if(english)"Français"else "English")};Row(verticalAlignment=Alignment.CenterVertically){Switch(checked=motion,onCheckedChange={motion=it});Text("Animations")}}else Text(unavailable)
+ if(detail in listOf(menuFr[11],menuFr[12],menuFr[13],menuEn[11],menuEn[12],menuEn[13])){Button(onClick={toggle()}){Text(if(dark)tr("Mode clair","Light mode")else tr("Mode nuit","Dark mode"))};Button(onClick={english=!english;detail=""},modifier=Modifier.testTag("wm-language")){Text(if(english)"Français"else "English")};Row(verticalAlignment=Alignment.CenterVertically){Switch(checked=motion,onCheckedChange={motion=it},modifier=Modifier.testTag("wm-motion"));Text("Animations")}}else Text(unavailable)
  }else if(tab==0){
  Card(colors=CardDefaults.cardColors(containerColor=Deep,contentColor=White),modifier=Modifier.fillMaxWidth()){
  Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
  Text(tr("Vos réunions, sans frontières.","Your meetings, without borders."),style=MaterialTheme.typography.headlineMedium)
- if(current!=null){Text(current.name);if((session?.workspaces?.size?:0)>1)Button(enabled=!switching,onClick={switchDialog=true}){Text(tr("Changer d’espace","Switch workspace"))}}else Button(onClick={signIn=true}){Text(tr("Se connecter","Sign in"))}
+ if(current!=null){Text(current.name);if((session?.workspaces?.size?:0)>1)Button(enabled=!switching,onClick={switchDialog=true}){Text(tr("Changer d’espace","Switch workspace"))}}else Button(onClick={signIn=true},modifier=Modifier.testTag("wm-login")){Text(tr("Se connecter","Sign in"))}
  Text(tr("Découvrez votre espace","Discover your workspace"))
- Button(onClick={tour=0},colors=ButtonDefaults.buttonColors(containerColor=Yellow,contentColor=Black)){Text(tr("Découvrez WideMeet","Discover WideMeet"))}
+ Button(onClick={tour=0},modifier=Modifier.testTag("wm-tour"),colors=ButtonDefaults.buttonColors(containerColor=Yellow,contentColor=Black)){Text(tr("Découvrez WideMeet","Discover WideMeet"))}
  }}
  val actions=listOf(tr("Nouvelle réunion","New meeting"),tr("Programmer","Schedule"),tr("Rejoindre","Join"),tr("Mes rapports","My reports"))
  val marks=listOf("＋","▦","↗","▤");val accents=listOf(Green,Yellow,Blue,Orange)
@@ -117,7 +120,7 @@ class MainActivity:ComponentActivity(){
  }
  }
  if(switchDialog)AlertDialog(onDismissRequest={switchDialog=false},title={Text(tr("Changer d’espace","Switch workspace"))},text={Column{session?.workspaces?.forEach{w->TextButton(enabled=!switching&&w.id!=session?.activeWorkspaceId,onClick={changeWorkspace(w.id)}){Text(w.name)}}}},confirmButton={TextButton(onClick={switchDialog=false}){Text(tr("Fermer","Close"))}})
- if(menu)AlertDialog(onDismissRequest={menu=false},title={Text(tr("Options","Options"))},text={Column(Modifier.heightIn(max=450.dp).verticalScroll(rememberScrollState())){if(session!=null)TextButton(onClick={menu=false;logout()}){Text(tr("Se déconnecter","Sign out"))}else TextButton(onClick={menu=false;signIn=true}){Text(tr("Se connecter","Sign in"))};menuLabels.filter{it!=menuLabels[7]||session?.let{s->mayPay(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())}==true}.forEach{item->TextButton(onClick={detail=item;menu=false},modifier=Modifier.fillMaxWidth()){Text(item)}}}},confirmButton={TextButton(onClick={menu=false}){Text(tr("Fermer","Close"))}})
+ if(menu)AlertDialog(onDismissRequest={menu=false},title={Text(tr("Options","Options"))},text={Column(Modifier.heightIn(max=450.dp).verticalScroll(rememberScrollState())){if(session!=null)TextButton(onClick={menu=false;logout()}){Text(tr("Se déconnecter","Sign out"))}else TextButton(onClick={menu=false;signIn=true}){Text(tr("Se connecter","Sign in"))};menuLabels.filter{it!=menuLabels[7]||session?.let{s->mayPay(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())}==true}.forEach{item->TextButton(onClick={detail=item;menu=false},modifier=Modifier.fillMaxWidth().testTag("wm-menu-item-"+menuLabels.indexOf(item))){Text(item)}}}},confirmButton={TextButton(onClick={menu=false}){Text(tr("Fermer","Close"))}})
  if(tour>=0)AlertDialog(onDismissRequest={tour=-1},title={Text("${tour+1}/5 — ${labels[tour]}")},text={Text(unavailable)},confirmButton={TextButton(onClick={if(tour==4){prefs.edit().putBoolean("discovered",true).apply();tour=-1}else tour++}){Text(if(tour==4)tr("Terminer","Done")else tr("Suivant","Next"))}},dismissButton={TextButton(onClick={tour=-1}){Text(tr("Fermer","Close"))}})
  }
 }

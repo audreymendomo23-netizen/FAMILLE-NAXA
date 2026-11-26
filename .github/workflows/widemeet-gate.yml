@@ -64,6 +64,32 @@ jobs:
       - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
       - run: gradle --no-daemon --stacktrace :widemeet:testDebugUnitTest :widemeet:assembleDebug
       - run: test -s apps/android/widemeet/build/outputs/apk/debug/widemeet-debug.apk
+      - name: Enable KVM for family emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Native Compose and Keystore recipes
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          cores: 2
+          ram-size: 2048M
+          heap-size: 512M
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-linux-hw-accel: false
+          disable-animations: true
+          script: gradle --no-daemon :widemeet:connectedDebugAndroidTest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: widemeet-debug-apk
+          path: apps/android/widemeet/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
 
   identity-sql:
     runs-on: ubuntu-24.04
