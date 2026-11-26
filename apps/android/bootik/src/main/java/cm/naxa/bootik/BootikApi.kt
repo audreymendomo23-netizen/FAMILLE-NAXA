@@ -45,7 +45,7 @@ class BootikApi(private val endpoint:String) {
  suspend fun logout(session:BootikSession){request("logout",JSONObject().put("refresh_token",session.refreshToken),session.token)}
  suspend fun forget(token:String){request("logout",JSONObject().put("refresh_token",token))}
  suspend fun operation(session:BootikSession,site:String,action:String,payload:JSONObject):JSONObject{
-  require(session.permits(site)&&action in setOf("entitlement","trial","sale","support","support-cancel","catalog","payment-intent","payment-current","payment-status","payment-debit","team","activities","master-create","partners","dashboard","count-batch","transfer-ship","transfer-receive","transfers"))
+  require(session.permits(site)&&action in setOf("entitlement","trial","sale","support","support-cancel","catalog","payment-intent","payment-current","payment-status","payment-debit","team","activities","master-create","partners","dashboard","count-batch","transfer-ship","transfer-receive","transfers","stock-template","stock-import-preview","stock-import-apply"))
   val response=request("operation",JSONObject().put("site_id",site).put("action",action).put("payload",payload),session.token)
   require(response.getString("app_id")=="BOOTIK"&&response.getString("organization_id")==session.organization&&response.getString("member_id")==session.member&&response.getString("site_id")==site&&response.getString("action")==action&&response.getString("state")=="acknowledged")
   return response.getJSONObject("result")

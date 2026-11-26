@@ -1,5 +1,5 @@
 import {permitsSite} from './session.mjs';
-const actions=new Set(['entitlement','trial','sale','support','support-cancel','catalog','payment-intent','payment-current','payment-status','payment-debit','team','activities','master-create','partners','dashboard','count-batch','transfer-ship','transfer-receive','transfers']);
+const actions=new Set(['entitlement','trial','sale','support','support-cancel','catalog','payment-intent','payment-current','payment-status','payment-debit','team','activities','master-create','partners','dashboard','count-batch','transfer-ship','transfer-receive','transfers','stock-template','stock-import-preview','stock-import-apply']);
 export async function operation(base,session,site,action,payload,fetcher=fetch){
  if(!permitsSite(session,site)||session.app_id!=='BOOTIK'||!actions.has(action))throw Error('SCOPE_DENIED');
  const url=new URL(base.replace(/\/$/,'')+'/operation');

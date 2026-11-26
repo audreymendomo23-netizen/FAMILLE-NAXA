@@ -195,7 +195,7 @@ begin
  if p_kind='item' then
   sku:=upper(btrim(p_data->>'sku'));unit:=btrim(p_data->>'unit');price:=(p_data->>'price_fcfa')::bigint;
   if sku is null or length(sku) not between 1 and 80 or unit is null or length(unit) not between 1 and 40 or price is null or price<0 or price>9007199254740991 then raise exception 'BOOTIK_MASTER_INVALID';end if;
-  insert into bootik.bk_catalog_items(app_id,organization_id,activity_id,sku,display_name,base_unit_code,barcode) values(p_app,p_org,p_activity,sku,nm,unit,nullif(btrim(p_data->>'barcode'),'')) returning id into v_id;
+  insert into bootik.bk_catalog_items(app_id,organization_id,activity_id,sku,display_name,base_unit_code,barcode,attributes,is_serialized) values(p_app,p_org,p_activity,sku,nm,unit,nullif(btrim(p_data->>'barcode'),''),coalesce(p_data->'attributes','{}'::jsonb),coalesce((p_data->>'is_serialized')::boolean,false)) returning id into v_id;
   insert into bootik.bk_item_units(app_id,organization_id,activity_id,item_id,unit_code,unit_role,to_base_factor,is_default) values(p_app,p_org,p_activity,v_id,unit,'base',1,true);
   v_lot_code:=nullif(btrim(p_data->>'lot_code'),''); v_location_name:=nullif(btrim(p_data->>'location'),'');
   v_expiry:=nullif(p_data->>'expiry','')::date;v_min:=coalesce((p_data->>'minimum_quantity')::numeric,0);v_target:=coalesce((p_data->>'target_quantity')::numeric,0);

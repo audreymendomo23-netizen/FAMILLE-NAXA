@@ -22,3 +22,6 @@ test('catalogue local 5100 fiches: pagination et recherche SKU/code/lot/emplacem
  const result=await fetchCatalog('https://example.test',s,'s',fake);assert.equal(result.length,5100);assert.equal(searchCatalog(result,'0012345678901')[0].sku,'SKU-5100');assert.equal(searchCatalog(result,'etagere z').length,1);
  await assert.rejects(fetchCatalog('https://example.test',s,'s',async()=>({ok:true,json:async()=>({...receipt,action:'catalog',result:{items:[rows[0]],next_cursor:'invalid'}})})));
 });
+
+import {profileColumns,template,parseCsv} from '../../apps/server/bootik/stock-import.mjs';
+test('22 profils CSV et parser strict sans perte des zéros',()=>{assert.equal(Object.keys(profileColumns).length,22);for(const key of Object.keys(profileColumns)){assert.ok(template(key).includes('quantite_initiale'));assert.ok(profileColumns[key].every(x=>template(key).includes(x)))}assert.deepEqual(parseCsv('nom;code\n"Produit; A";00001'),[['nom','code'],['Produit; A','00001']]);assert.throws(()=>parseCsv('nom;code\n"non ferme'));});

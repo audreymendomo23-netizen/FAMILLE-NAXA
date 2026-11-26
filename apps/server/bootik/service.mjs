@@ -1,5 +1,6 @@
 import {randomBytes,createHash,scrypt,timingSafeEqual} from 'node:crypto';
 import {promisify} from 'node:util';
+import {template,previewCsv} from './stock-import.mjs';
 const derive=promisify(scrypt), digest=t=>createHash('sha256').update(t).digest('hex');
 export async function verifier(password,salt){return (await derive(password,Buffer.from(salt,'hex'),64)).toString('hex')}
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -117,6 +118,23 @@ export function createBootikService(db,{now=Date.now}={}){
    result={customers:(await query('select id,display_name,phone,email from bootik.bk_customers where organization_id=$1 and app_id=$2 and activity_id=$3 and status=\'active\' order by display_name,id limit 500',[s.organization_id,s.app_id,p.activity_id])).rows,suppliers:(await query('select id,display_name,phone,whatsapp_phone,email,payment_terms from bootik.bk_suppliers where organization_id=$1 and app_id=$2 and activity_id=$3 and status=\'active\' order by display_name,id limit 500',[s.organization_id,s.app_id,p.activity_id])).rows};
   }
   else if(action==='dashboard'&&s.role!=='staff')result=await first("select count(*)::text as sales_count,coalesce(sum(total_fcfa),0)::text as revenue_fcfa from bootik.bk_sales where organization_id=$1 and app_id=$2 and location_id=$4 and bootik.bk_can_access_activity($1,$2,$3,$4,activity_id) and created_at>=date_trunc('day',now() at time zone 'Africa/Douala') at time zone 'Africa/Douala' and created_at<=now()",scope);
+  else if(['stock-template','stock-import-preview','stock-import-apply'].includes(action)&&validId(p.activity_id)&&s.role!=='staff'){
+   const activity=await first("select a.profile_code,a.universe_code from bootik.bk_activities a join bootik.bk_activity_locations al on (al.activity_id,al.organization_id,al.app_id)=(a.id,a.organization_id,a.app_id) where a.organization_id=$1 and a.app_id=$2 and al.location_id=$4 and a.id=$5 and a.status='active' and bootik.bk_can_access_activity($1,$2,$3,$4,a.id)",[...scope,p.activity_id]);
+   if(!activity)return reject(403);
+   if(action==='stock-template')result={csv:template(activity.profile_code),profile:activity.profile_code};
+   else {
+    if(typeof p.csv!=='string'||p.csv.length>10000)return reject();
+    const rows=previewCsv(activity.profile_code,p.csv,normalizeMaster);
+    if(action==='stock-import-preview'){
+     const valid=rows.filter(x=>x.status==='create'),existing=(await query("select sku,barcode from bootik.bk_catalog_items where organization_id=$1 and app_id=$2 and activity_id=$3 and (sku=any($4::text[]) or barcode=any($5::text[]))",[s.organization_id,s.app_id,p.activity_id,valid.map(x=>x.data.sku),valid.map(x=>x.data.barcode).filter(Boolean)])).rows;
+     result={rows:rows.map(x=>x.status==='create'&&existing.some(v=>v.sku===x.data.sku||(x.data.barcode&&v.barcode===x.data.barcode))?{row:x.row,status:'reject',reason:'REFERENCE_EXISTANTE'}:x)};
+    }else{
+     if(!validId(p.batch_id)||rows.some(x=>x.status!=='create'))return reject();
+     result=await first('select bootik.bk_apply_stock_import($1,$2,$3,$4,$5,$6,$7::jsonb) as report',[...scope,p.activity_id,p.batch_id,JSON.stringify(rows)]);
+     result={...result,batch_id:p.batch_id};
+    }
+   }
+  }
   else if(action==='count-batch'&&validId(p.batch_id)&&validId(p.activity_id)&&typeof p.reason==='string'&&Array.isArray(p.lines)&&p.lines.length>=1&&p.lines.length<=30&&p.lines.every(x=>x&&validId(x.balance_id)&&validId(x.event_id)&&typeof x.quantity==='number'&&Number.isFinite(x.quantity)&&x.quantity>=0&&typeof x.expected_version==='string')){
    result=await first('select bootik.bk_count_batch($1,$2,$3,$4,$5,$6,$7,$8::jsonb) as batch_id',[...scope,p.batch_id,p.activity_id,p.reason,JSON.stringify(p.lines.map(x=>({balance_id:x.balance_id,event_id:x.event_id,quantity:x.quantity,expected_version:x.expected_version})))]);
   }

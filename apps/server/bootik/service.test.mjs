@@ -125,6 +125,18 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where location_id=$1 and item_id=$2',[foreign,i])).quantity_on_hand),3);
  assert.equal(Number((await call('transfers',{},foreign)).body.result.transfers[0].received),3);
  await one('delete from bootik.bk_member_sites where organization_id=$1 and app_id=$2 and user_id=$3 and location_id=$4',[o,a,u,foreign]);
+ // Import uses explicit preview, preserves leading zeros, creates an opening movement only.
+ const csv='nom;sku;unite;prix_fcfa;code_barres;quantite_initiale;categorie\nProduit import;IMP-1;unit;500;000123;4;Epicerie';
+ const tmpl=await call('stock-template',{activity_id:v});assert.equal(tmpl.status,200);assert.ok(tmpl.body.result.csv.includes('quantite_initiale'));
+ const preview=await call('stock-import-preview',{activity_id:v,csv});assert.equal(preview.body.result.rows[0].status,'create');assert.equal(preview.body.result.rows[0].data.barcode,'000123');
+ const imported={activity_id:v,csv,batch_id:randomUUID()};const ir=await call('stock-import-apply',imported);assert.equal(ir.status,200);assert.equal((await call('stock-import-apply',imported)).body.result.report[0].item_id,ir.body.result.report[0].item_id);
+ assert.equal(Number((await one('select quantity_on_hand from bootik.bk_inventory_balances where item_id=$1',[ir.body.result.report[0].item_id])).quantity_on_hand),4);
+ assert.equal((await one('select movement_code from bootik.bk_inventory_movements where item_id=$1',[ir.body.result.report[0].item_id])).movement_code,'opening');
+ assert.equal((await call('stock-import-preview',{activity_id:v,csv})).body.result.rows[0].reason,'REFERENCE_EXISTANTE');
+ assert.equal((await call('stock-import-apply',{...imported,batch_id:randomUUID()})).status,400);
+ const mixed=csv+'\nProduit nouveau;IMP-2;unit;500;000124;2;Epicerie';
+ assert.equal((await call('stock-import-apply',{activity_id:v,csv:mixed,batch_id:randomUUID()})).status,400);
+ assert.equal(Number((await one("select count(*) from bootik.bk_catalog_items where organization_id=$1 and sku='IMP-2'",[o])).count),0);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);
