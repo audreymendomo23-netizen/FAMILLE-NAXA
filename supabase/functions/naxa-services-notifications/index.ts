@@ -170,21 +170,11 @@ async function registerToken(actor: Actor, body: Json) {
   const token = normalizePushToken(body.token);
   const platform = normalizePushPlatform(body.platform);
   const encrypted = await encryptPushToken(token);
-  const existing = await rest(pathQuery("ns_push_tokens", {
-    select: "id", org_id: "eq." + actor.orgId,
-    token_fingerprint: "eq." + encrypted.token_fingerprint, limit: "1",
-  })) as Json[];
-  const values = {
-    org_id: actor.orgId, member_id: actor.memberId, device_id: actor.deviceId, platform,
-    ...encrypted, status: "active", revoked_at: null, last_seen_at: new Date().toISOString(),
-  };
-  if (existing?.[0]?.id) {
-    await rest(pathQuery("ns_push_tokens", { id: "eq." + existing[0].id, org_id: "eq." + actor.orgId }), {
-      method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify(values),
-    });
-  } else {
-    await rest("ns_push_tokens", { method: "POST", headers: { Prefer: "return=minimal" }, body: JSON.stringify(values) });
-  }
+  await rpc("ns_register_bound_push_token", {
+    p_org_id: actor.orgId, p_member_id: actor.memberId, p_device_id: actor.deviceId,
+    p_session_id: actor.sessionId, p_platform: platform, p_ciphertext: encrypted.token_ciphertext,
+    p_iv: encrypted.token_iv, p_fingerprint: encrypted.token_fingerprint, p_tail: encrypted.token_tail,
+  });
   return { registered: true, platform, token_tail: encrypted.token_tail };
 }
 
@@ -333,11 +323,9 @@ async function dispatchBatch(limit: number) {
   for (const item of claims ?? []) {
     try {
       if (!item.recipient_member_id) throw new ApiError(422, "NO_MEMBER_RECIPIENT");
-      const tokens = await rest(pathQuery("ns_push_tokens", {
-        select: "id,token_ciphertext,token_iv",
-        org_id: "eq." + item.org_id, member_id: "eq." + item.recipient_member_id,
-        status: "eq.active", order: "last_seen_at.desc", limit: "20",
-      })) as Json[];
+      const tokens = await rpc("ns_live_push_tokens", {
+        p_org_id: item.org_id, p_member_id: item.recipient_member_id,
+      }) as Json[];
       if (!tokens?.length) throw new ApiError(503, "NO_ACTIVE_PUSH_TOKEN");
       let acceptedReference = "";
       let lastError = "FCM_REJECTED";
