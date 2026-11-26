@@ -187,4 +187,54 @@ begin
 end $wm$;
 revoke all on function public.wm_register_account(uuid,uuid,uuid,text,text,text,text,text,text,text) from public,anon,authenticated;
 grant execute on function public.wm_register_account(uuid,uuid,uuid,text,text,text,text,text,text,text) to service_role;
+-- Credential rotation fence: password verified before session issuance must match the
+-- account epoch observed before GoTrue. A pending change blocks new sessions.
+alter table public.wm_accounts add column credential_epoch bigint not null default 0;
+alter table public.wm_accounts add column password_change_id uuid;
+alter table public.wm_accounts add column password_change_session uuid;
+alter table public.wm_accounts add constraint wm_password_change_pair check ((password_change_id is null)=(password_change_session is null));
+create function public.wm_issue_verified_session(p_account uuid,p_installation uuid,p_workspace uuid,p_hash text,p_epoch bigint)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+begin
+ perform 1 from public.wm_accounts a where a.id=p_account and a.enabled and a.credential_epoch=p_epoch and a.password_change_id is null for update;
+ if not found then raise exception 'credential changed';end if;
+ return public.wm_issue_device_session(p_account,p_installation,p_workspace,p_hash);
+end $wm$;
+revoke all on function public.wm_issue_verified_session(uuid,uuid,uuid,text,bigint) from public,anon,authenticated;
+grant execute on function public.wm_issue_verified_session(uuid,uuid,uuid,text,bigint) to service_role;
+create function public.wm_begin_password_change(p_hash text,p_request uuid,p_epoch bigint)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a public.wm_accounts%rowtype; s record;
+begin
+ if p_request is null or p_epoch is null then return false;end if;
+ select * into s from public.wm_session_context(p_hash);
+ if not found then return false;end if;
+ select * into a from public.wm_accounts where id=s.account_id and enabled for update;
+ if not found then return false;end if;
+ if not exists(select 1 from public.wm_session_context(p_hash) c where c.account_id=a.id and c.session_id=s.session_id) then return false;end if;
+ if a.password_change_id is not null then
+  return a.password_change_id=p_request and a.password_change_session=s.session_id;
+ end if;
+ if a.credential_epoch<>p_epoch then return false;end if;
+ update public.wm_accounts set credential_epoch=credential_epoch+1,password_change_required=true,password_change_id=p_request,password_change_session=s.session_id where id=a.id;
+ update public.wm_device_sessions set revoked_at=clock_timestamp() where account_id=a.id and id<>s.session_id and revoked_at is null;
+ return true;
+end $wm$;
+revoke all on function public.wm_begin_password_change(text,uuid,bigint) from public,anon,authenticated;
+grant execute on function public.wm_begin_password_change(text,uuid,bigint) to service_role;
+create function public.wm_finish_password_change(p_hash text,p_request uuid)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare s record;
+begin
+ select * into s from public.wm_session_context(p_hash);
+ if not found then return false;end if;
+ perform 1 from public.wm_accounts a where a.id=s.account_id and a.enabled and a.password_change_id=p_request and a.password_change_session=s.session_id for update;
+ if not found then return false;end if;
+ if not exists(select 1 from public.wm_session_context(p_hash) c where c.session_id=s.session_id) then return false;end if;
+ update public.wm_accounts set password_change_required=false,password_change_id=null,password_change_session=null where id=s.account_id;
+ update public.wm_device_sessions set revoked_at=clock_timestamp() where account_id=s.account_id and revoked_at is null;
+ return true;
+end $wm$;
+revoke all on function public.wm_finish_password_change(text,uuid) from public,anon,authenticated;
+grant execute on function public.wm_finish_password_change(text,uuid) to service_role;
 commit;
