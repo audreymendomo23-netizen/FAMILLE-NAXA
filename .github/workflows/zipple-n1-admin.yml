@@ -1,0 +1,31 @@
+name: ZIPPLE N1 — administrative recovery console
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/zipple-n1-admin.yml"
+      - "docs/apps/zipple/n1/admin-*"
+      - "docs/apps/zipple/n1/operator-mfa.test.mjs"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  admin-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node --test docs/apps/zipple/n1/operator-mfa.test.mjs docs/apps/zipple/n1/admin-client.test.mjs
+      - run: |
+          npm install --workspace @famille/admin-console --include-workspace-root=false --ignore-scripts
+          npm install --no-save --ignore-scripts playwright@1.51.1
+          npx playwright install --with-deps chromium
+          VITE_ADMIN_SUPABASE_URL=https://idupfjbkwjcavyisxteo.supabase.co VITE_ADMIN_PUBLIC_KEY=sb_publishable_fixture npm run build --workspace @famille/admin-console
+          (cd apps/web/admin-console && npx vite preview --host 127.0.0.1 --port 4174) >/tmp/zipple-admin.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4174/ >/dev/null && break; sleep 1; done
+          node docs/apps/zipple/n1/admin-browser.mjs
