@@ -102,6 +102,7 @@ try{
  await page.getByLabel("Identifiant WideMeet",{exact:true}).fill(f.login);
  await page.getByLabel("Mot de passe",{exact:true}).fill(f.password);
  await page.getByRole("button",{name:"Se connecter",exact:true}).click();
+ await page.getByText("Replay A",{exact:true}).waitFor();
  await page.getByRole("navigation").getByRole("button",{name:"Agenda"}).click();
  await page.getByRole("region",{name:"Réunions"}).waitFor();
  }
