@@ -392,6 +392,11 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await handle('onboarding-step',{app_id:'BOOTIK',step:'discovery'},token)).body.discovery_completed,true);
  assert.equal((await handle('onboarding-step',{app_id:'BOOTIK',step:'tour'},token)).body.tour_completed,true);
  assert.equal((await handle('onboarding-state',{app_id:'BOOTIK'},token)).body.tour_completed,true);
+ const legalHandle=createBootikService(db,{securityDb,legalDocuments:[{kind:'terms',version:'test-1',locale:'fr',text:'Conditions fictives exclusivement pour la recette automatisée.'},{kind:'privacy',version:'test-1',locale:'fr',text:'Notice fictive exclusivement pour la recette automatisée.'}]});
+ const docs=(await legalHandle('onboarding-state',{app_id:'BOOTIK'},token)).body.documents;assert.equal(docs.length,2);assert.ok(docs.every(d=>!d.accepted));
+ assert.equal((await legalHandle('operation',{app_id:'BOOTIK',site_id:s,action:'catalog',payload:{}},token)).status,403);
+ for(const d of docs){const p={app_id:'BOOTIK',step:'legal',kind:d.kind,version:d.version,locale:d.locale,sha256:d.sha256,accepted:true};assert.equal((await legalHandle('onboarding-step',{...p,sha256:'0'.repeat(64)},token)).status,400);assert.equal((await legalHandle('onboarding-step',p,token)).status,200);assert.equal((await legalHandle('onboarding-step',p,token)).status,200);}
+ assert.ok((await legalHandle('onboarding-state',{app_id:'BOOTIK'},token)).body.documents.every(d=>d.accepted));assert.equal(Number((await one('select count(*) from bootik.bk_legal_acceptances where organization_id=$1 and user_id=$2',[o,u])).count),2);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);
