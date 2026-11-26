@@ -169,5 +169,49 @@ begin
 end $wm$;
 reset role;
 
+
+-- N1 profile, monotonic onboarding, invitations, favorites and membership revocation.
+set local role service_role;
+do $wm$ declare
+ a uuid:='10000000-0000-4000-8000-000000000001';
+ b uuid:='10000000-0000-4000-8000-000000000002';
+ w uuid:='20000000-0000-4000-8000-000000000001';
+ z uuid:='20000000-0000-4000-8000-000000000002';
+ i uuid; j jsonb;
+begin
+ perform public.wm_issue_verified_session(a,'30000000-0000-4000-8000-000000000031',w,repeat('6',64),1);
+ perform public.wm_issue_verified_session(b,'30000000-0000-4000-8000-000000000032',z,repeat('7',64),0);
+ if public.wm_identity_action(repeat('6',64),'profile-update',jsonb_build_object('display_name','Updated name','locale','en','account_id',b)) is null then raise exception 'profile update failed';end if;
+ if (select display_name from public.wm_accounts where id=b)<>'Fixture Two' then raise exception 'foreign profile changed';end if;
+ if public.wm_identity_action(repeat('6',64),'onboarding-step','{"step":5}') is not null then raise exception 'onboarding skipped';end if;
+ for k in 1..5 loop
+  j:=public.wm_identity_action(repeat('6',64),'onboarding-step',jsonb_build_object('step',k));
+  if (j->>'step')::integer is distinct from k then raise exception 'onboarding failed';end if;
+ end loop;
+ if (public.wm_identity_action(repeat('6',64),'onboarding-step','{"step":1}')->>'step')::integer is distinct from 5 then raise exception 'onboarding regressed';end if;
+ if public.wm_identity_action(repeat('6',64),'favorite',jsonb_build_object('member_id',b,'enabled',true)) is not null then raise exception 'foreign favorite accepted';end if;
+ if public.wm_identity_action(repeat('6',64),'invite','{"login_id":"WM-FIXTURE2","role":"staff"}') is null then raise exception 'invite failed';end if;
+ if public.wm_identity_action(repeat('6',64),'invite','{"login_id":"WM-FIXTURE2","role":"promoteur"}') is not null then raise exception 'invite escalation';end if;
+ j:=public.wm_identity_action(repeat('7',64),'invitations','{}');
+ i:=(j->'invitations'->0->>'id')::uuid;
+ if i is null then raise exception 'invite not received';end if;
+ if public.wm_identity_action(repeat('6',64),'respond-invite',jsonb_build_object('id',i,'accept',true)) is not null then raise exception 'foreign invite acceptance';end if;
+ if public.wm_identity_action(repeat('7',64),'respond-invite',jsonb_build_object('id',i,'accept',true)) is null then raise exception 'invite acceptance failed';end if;
+ perform public.wm_switch_workspace(repeat('7',64),w,repeat('8',64));
+ if public.wm_identity_action(repeat('8',64),'invite','{"login_id":"WM-REGISTER1","role":"staff"}') is not null then raise exception 'staff invite accepted';end if;
+ if public.wm_identity_action(repeat('6',64),'favorite',jsonb_build_object('member_id',b,'enabled',true)) is null then raise exception 'favorite failed';end if;
+ if (public.wm_identity_action(repeat('6',64),'contacts','{}')->'contacts'->0->>'favorite') is distinct from 'true' then raise exception 'favorite not returned';end if;
+ if public.wm_identity_action(repeat('8',64),'member-role',jsonb_build_object('member_id',a,'role','staff')) is not null then raise exception 'staff changed owner';end if;
+ if public.wm_identity_action(repeat('6',64),'member-role',jsonb_build_object('member_id',b,'role','manager')) is null then raise exception 'manager promotion failed';end if;
+ if exists(select 1 from public.wm_session_context(repeat('8',64))) then raise exception 'old staff session survived role change';end if;
+ if public.wm_identity_action(repeat('6',64),'revoke-member',jsonb_build_object('member_id',b)) is null then raise exception 'revocation failed';end if;
+ if exists(select 1 from public.wm_favorites where contact_id=b and workspace_id=w) then raise exception 'revoked favorite retained';end if;
+ if exists(select 1 from public.wm_memberships where account_id=b and workspace_id=w and enabled) then raise exception 'membership still enabled';end if;
+end $wm$;
+reset role;
+do $wm$ begin
+ if has_function_privilege('anon','public.wm_identity_action(text,text,jsonb)','EXECUTE') or has_table_privilege('authenticated','public.wm_membership_invites','SELECT') or has_table_privilege('anon','public.wm_favorites','SELECT') then raise exception 'identity ACL leak';end if;
+end $wm$;
+
 rollback;
 select 'WIDEMEET_IDENTITY_SQL_PASS';
