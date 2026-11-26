@@ -93,4 +93,33 @@ begin
 end $$;
 revoke all on function public.wm_switch_workspace(text,uuid,text) from public,anon,authenticated;
 grant execute on function public.wm_switch_workspace(text,uuid,text) to service_role;
+-- N1 anti-brute-force: reserve attempt BEFORE credential lookup, including unknown accounts.
+-- Adapted from NAXA SERVICES isLimited; database upsert serializes each bucket.
+create table public.wm_auth_attempt_buckets (
+ bucket_key text primary key check(bucket_key ~ '^[a-f0-9]{64}),
+ window_start timestamptz not null,
+ attempts integer not null check(attempts between 1 and 21)
+);
+alter table public.wm_auth_attempt_buckets enable row level security;
+revoke all on public.wm_auth_attempt_buckets from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_auth_attempt_buckets to service_role;
+create function public.wm_reserve_auth_attempt(p_identifier_hash text,p_installation_hash text)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare
+ k text; n integer; t timestamptz:=clock_timestamp(); allowed boolean:=true;
+begin
+ if p_identifier_hash is null or p_installation_hash is null or p_identifier_hash !~ '^[a-f0-9]{64} or p_installation_hash !~ '^[a-f0-9]{64} or p_identifier_hash=p_installation_hash then raise exception 'invalid bucket'; end if;
+ -- Fixed order prevents deadlocks across concurrent reservations.
+ for k in select unnest(array[p_identifier_hash,p_installation_hash]) order by 1 loop
+  insert into public.wm_auth_attempt_buckets as b(bucket_key,window_start,attempts) values(k,t,1)
+  on conflict(bucket_key) do update set
+   attempts=case when b.window_start<=t-interval '15 minutes' then 1 else least(b.attempts+1,21) end,
+   window_start=case when b.window_start<=t-interval '15 minutes' then t else b.window_start end
+  returning attempts into n;
+  if n>case when k=p_identifier_hash then 5 else 20 end then allowed:=false;end if;
+ end loop;
+ return allowed;
+end $wm$;
+revoke all on function public.wm_reserve_auth_attempt(text,text) from public,anon,authenticated;
+grant execute on function public.wm_reserve_auth_attempt(text,text) to service_role;
 commit;
