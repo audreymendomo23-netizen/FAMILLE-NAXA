@@ -91,6 +91,18 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  await one("update bootik.bk_members set role='staff' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
  assert.equal((await call('master-create',{...newItem,request_id:randomUUID()})).status,403);
  await one("update bootik.bk_members set role='manager' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
+ const lotInput={...newItem,request_id:randomUUID(),sku:'LOT-1',barcode:'56789',lot_code:'L-01',expiry:'2099-12-31',location:'Rayon A',minimum_quantity:2,target_quantity:8};
+ const lotResult=await call('master-create',lotInput);assert.equal(lotResult.status,200);
+ const lotRow=(await call('catalog',{})).body.result.items.find(x=>x.item_id===lotResult.body.result.entity_id);
+ assert.equal(lotRow.lot_code,'L-01');assert.equal(lotRow.storage_label,'Rayon A');assert.equal(Number(lotRow.minimum_quantity),2);assert.equal(Number(lotRow.quantity_on_hand),0);
+ assert.equal((await call('master-create',{...lotInput,request_id:randomUUID(),sku:'BAD-LOT',barcode:'',expiry:'2020-01-01'})).status,400);
+ assert.equal((await call('sync-stock',{...stock,idempotency_key:randomUUID(),quantity:0.5,expected_version:(await call('catalog',{})).body.result.items.find(x=>x.balance_id===b).stock_version})).body.state,'conflict');
+ assert.equal((await call('sync-sale',{...sale,idempotency_key:randomUUID(),quantity:0.5})).body.state,'conflict');
+ // Build real 5,100-item catalogue in one SQL statement, then walk pages without loss.
+ await one("with new_items as (insert into bootik.bk_catalog_items(app_id,organization_id,activity_id,sku,display_name,base_unit_code) select $1,$2,$3,'BULK-'||n,'Reference '||n,'unit' from generate_series(1,5100) n returning id,app_id,organization_id,activity_id), units as (insert into bootik.bk_item_units(app_id,organization_id,activity_id,item_id,unit_code,unit_role,to_base_factor) select app_id,organization_id,activity_id,id,'unit','base',1 from new_items), prices as (insert into bootik.bk_sale_prices(item_id,organization_id,activity_id,app_id,unit_price_fcfa) select id,organization_id,activity_id,app_id,100 from new_items) insert into bootik.bk_inventory_balances(app_id,organization_id,activity_id,location_id,item_id) select app_id,organization_id,activity_id,$4,id from new_items",[a,o,v,s]);
+ let cursor=null,seen=new Set();do{const page=await call('catalog',cursor?{cursor}:{});assert.equal(page.status,200);assert.ok(page.body.result.items.length<=500);for(const row of page.body.result.items){assert.ok(!seen.has(row.balance_id));seen.add(row.balance_id)}cursor=page.body.result.next_cursor}while(cursor);
+ assert.equal(seen.size,5103);
+ assert.equal((await call('catalog',{cursor:'forged'})).status,400);
  const merchant='TEST-DESTINATION',deviceToken=randomBytes(32).toString('hex');
  await one("insert into bootik.bk_payment_destinations(channel,reference,beneficiary,instructions) values('mtn_momo',$1,'Test merchant','Test only')",[merchant]);
  await one("insert into bootik.bk_merchant_devices(token_hash,channel,destination) values($1,'mtn_momo',$2)",[createHash('sha256').update(deviceToken).digest('hex'),merchant]);

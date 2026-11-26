@@ -21,3 +21,9 @@ do $$ declare n text;begin foreach n in array array['bk_activity_locations','bk_
 grant select on bootik.bk_activity_locations,bootik.bk_customers,bootik.bk_suppliers,bootik.bk_master_creation_receipts to bootik_runtime;
 grant insert on bootik.bk_catalog_items,bootik.bk_item_units,bootik.bk_inventory_balances,bootik.bk_sale_prices,bootik.bk_customers,bootik.bk_suppliers,bootik.bk_master_creation_receipts to bootik_runtime;
 grant execute on function bootik.bk_create_master(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb) to bootik_runtime;
+
+-- Catalog metadata grants for isolated BOOTIK runtime; no direct client rights.
+create policy bk_runtime_access on bootik.bk_storage_locations to bootik_runtime using (true) with check (true);
+create policy bk_runtime_access on bootik.bk_reorder_policies to bootik_runtime using (true) with check (true);
+grant select,insert on bootik.bk_storage_locations,bootik.bk_reorder_policies to bootik_runtime;
+grant insert on bootik.bk_product_lots to bootik_runtime;

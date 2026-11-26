@@ -25,3 +25,15 @@ export async function syncEvent(base,session,site,event,fetcher=fetch){
 }
 
 export async function syncSale(base,session,site,event,fetcher=fetch){if(event.aggregateType!=='sale')throw Error('EVENT_MISMATCH');return syncEvent(base,session,site,event,fetcher)}
+
+export async function fetchCatalog(base,session,site,fetcher=fetch){
+ const items=[],seen=new Set();let cursor=null;
+ for(let page=0;page<200;page++){
+  const v=await operation(base,session,site,'catalog',cursor?{cursor}:{},fetcher);
+  if(!Array.isArray(v.items)||v.items.length>500)throw Error('INVALID_CATALOG');
+  for(const i of v.items){if(typeof i.balance_id!=='string'||seen.has(i.balance_id)||typeof i.display_name!=='string'||!Number.isFinite(Number(i.available))||!Number.isSafeInteger(Number(i.unit_price_fcfa)))throw Error('INVALID_CATALOG');seen.add(i.balance_id);items.push(i)}
+  if(v.next_cursor===null)return items;
+  if(typeof v.next_cursor!=='string'||!v.items.length||v.next_cursor!==v.items.at(-1).balance_id||v.next_cursor===cursor)throw Error('INVALID_CATALOG_CURSOR');cursor=v.next_cursor;
+ }throw Error('CATALOG_TOO_LARGE');
+}
+export const searchCatalog=(items,query)=>{const norm=s=>String(s??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();const q=norm(query).trim();return q?items.filter(i=>[i.display_name,i.sku,i.barcode,i.lot_code,i.storage_label,i.location_code,i.activity_name].some(v=>norm(v).includes(q))):items};

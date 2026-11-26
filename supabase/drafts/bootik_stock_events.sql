@@ -32,6 +32,7 @@ begin
  if not bootik.bk_has_entitlement(p_org,p_app,v_universe) then raise exception 'BOOTIK_ENTITLEMENT_REQUIRED';end if;
  select base_unit_code,is_serialized into v_unit,v_serial from bootik.bk_catalog_items where id=b.item_id and organization_id=p_org and app_id=p_app and activity_id=b.activity_id and status='active';
  if not found or v_serial then raise exception 'BOOTIK_ITEM_UNAVAILABLE';end if;
+ if lower(v_unit) in ('unit','unite','unité','piece','pièce','bouteille','carton','pack','sac','casier','palette') and p_qty<>trunc(p_qty) then raise exception 'BOOTIK_STOCK_EVENT_INVALID';end if;
  if b.updated_at::text is distinct from p_version then raise exception 'BOOTIK_STOCK_VERSION_CONFLICT';end if;
  if p_kind='receipt' and b.lot_id is not null and not exists(select 1 from bootik.bk_product_lots l where l.id=b.lot_id and l.quality_state='available' and (l.expires_at is null or l.expires_at>=current_date)) then raise exception 'BOOTIK_LOT_UNAVAILABLE';end if;
  v_next:=case p_kind when 'receipt' then b.quantity_on_hand+p_qty when 'loss' then b.quantity_on_hand-p_qty else p_qty end;

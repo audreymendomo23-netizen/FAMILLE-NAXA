@@ -144,8 +144,9 @@ begin
  if not found or v_price is distinct from p_price then raise exception 'BOOTIK_PRICE_MISMATCH';end if;
  if b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged<p_quantity then raise exception 'BOOTIK_STOCK_INSUFFICIENT';end if;
  if b.lot_id is not null and not exists(select 1 from bootik.bk_product_lots l where l.id=b.lot_id and l.quality_state='available' and (l.expires_at is null or l.expires_at>=current_date)) then raise exception 'BOOTIK_LOT_UNAVAILABLE';end if;
- select base_unit_code into v_unit from bootik.bk_catalog_items where id=b.item_id and status='active' and (not is_serialized or p_quantity=1);
+ select base_unit_code into v_unit from bootik.bk_catalog_items where id=b.item_id and status='active' and not is_serialized;
  if not found then raise exception 'BOOTIK_ITEM_UNAVAILABLE';end if;
+ if lower(v_unit) in ('unit','unite','unité','piece','pièce','bouteille','carton','pack','sac','casier','palette') and p_quantity<>trunc(p_quantity) then raise exception 'BOOTIK_INVALID_SALE';end if;
  v_total:=p_quantity*p_price;if v_total<>round(v_total) then raise exception 'BOOTIK_FRACTIONAL_XAF';end if;
  insert into bootik.bk_sales(organization_id,app_id,activity_id,location_id,actor,idempotency_key,balance_id,quantity,unit_price_fcfa,total_fcfa)
  values(p_org,p_app,b.activity_id,p_site,p_user,p_key,p_balance,p_quantity,p_price,v_total::bigint) returning id into v_id;
@@ -174,7 +175,7 @@ create table bootik.bk_master_creation_receipts (
 );
 create function bootik.bk_create_master(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_request uuid,p_kind text,p_data jsonb)
 returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
-declare v_universe text; v_id uuid; old bootik.bk_master_creation_receipts%rowtype; nm text; sku text; unit text; price bigint; phone text; wa text; mail text; terms integer;
+declare v_universe text; v_id uuid; old bootik.bk_master_creation_receipts%rowtype; nm text; sku text; unit text; price bigint; phone text; wa text; mail text; terms integer; v_lot uuid; v_location uuid; v_lot_code text; v_expiry date; v_location_name text; v_min numeric; v_target numeric;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
  if not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,p_activity) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
@@ -196,7 +197,17 @@ begin
   if sku is null or length(sku) not between 1 and 80 or unit is null or length(unit) not between 1 and 40 or price is null or price<0 or price>9007199254740991 then raise exception 'BOOTIK_MASTER_INVALID';end if;
   insert into bootik.bk_catalog_items(app_id,organization_id,activity_id,sku,display_name,base_unit_code,barcode) values(p_app,p_org,p_activity,sku,nm,unit,nullif(btrim(p_data->>'barcode'),'')) returning id into v_id;
   insert into bootik.bk_item_units(app_id,organization_id,activity_id,item_id,unit_code,unit_role,to_base_factor,is_default) values(p_app,p_org,p_activity,v_id,unit,'base',1,true);
-  insert into bootik.bk_inventory_balances(app_id,organization_id,activity_id,location_id,item_id) values(p_app,p_org,p_activity,p_site,v_id);
+  v_lot_code:=nullif(btrim(p_data->>'lot_code'),''); v_location_name:=nullif(btrim(p_data->>'location'),'');
+  v_expiry:=nullif(p_data->>'expiry','')::date;v_min:=coalesce((p_data->>'minimum_quantity')::numeric,0);v_target:=coalesce((p_data->>'target_quantity')::numeric,0);
+  if length(coalesce(v_lot_code,''))>80 or length(coalesce(v_location_name,''))>160 or (v_expiry is not null and (v_lot_code is null or v_expiry<current_date)) or v_min<0 or v_target<v_min or v_min>1000000000 or v_target>1000000000 or v_min<>round(v_min,6) or v_target<>round(v_target,6) then raise exception 'BOOTIK_MASTER_INVALID';end if;
+  if v_lot_code is not null then
+   insert into bootik.bk_product_lots(app_id,organization_id,activity_id,item_id,lot_code,expires_at) values(p_app,p_org,p_activity,v_id,v_lot_code,v_expiry) returning id into v_lot;
+  end if;
+  if v_location_name is not null then
+   insert into bootik.bk_storage_locations(app_id,organization_id,activity_id,location_id,location_code,location_type,label) values(p_app,p_org,p_activity,p_site,'BK-'||gen_random_uuid()::text,'other',v_location_name) returning id into v_location;
+  end if;
+  insert into bootik.bk_inventory_balances(app_id,organization_id,activity_id,location_id,item_id,lot_id,storage_location_id) values(p_app,p_org,p_activity,p_site,v_id,v_lot,v_location);
+  if v_target>0 then insert into bootik.bk_reorder_policies(app_id,organization_id,activity_id,location_id,item_id,minimum_quantity,target_quantity) values(p_app,p_org,p_activity,p_site,v_id,v_min,v_target);end if;
   insert into bootik.bk_sale_prices(item_id,organization_id,activity_id,app_id,unit_price_fcfa) values(v_id,p_org,p_activity,p_app,price);
  else
   phone:=nullif(btrim(p_data->>'phone'),'');wa:=nullif(btrim(p_data->>'whatsapp'),'');mail:=nullif(btrim(p_data->>'email'),'');

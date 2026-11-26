@@ -14,3 +14,11 @@ test('stock receipts are bound to event type, member and site',async()=>{
  await assert.rejects(syncEvent('https://example.test',session,'s',e,sender({...result,member_id:'other'})));
  await assert.rejects(syncEvent('https://example.test',{...session,role:'staff'},'s',e,sender(result)));
 });
+
+import {fetchCatalog,searchCatalog} from '../../apps/web/bootik/src/operations.mjs';
+test('catalogue local 5100 fiches: pagination et recherche SKU/code/lot/emplacement',async()=>{
+ const rows=Array.from({length:5100},(_,i)=>({balance_id:String(i+1),display_name:'Référence '+(i+1),sku:'SKU-'+(i+1),barcode:i===5099?'0012345678901':'',storage_label:i===5099?'Étagère Z':'',available:1,unit_price_fcfa:100}));
+ const fake=async(url,opts)=>{const req=JSON.parse(opts.body);const offset=Number(req.payload.cursor??0);const items=rows.slice(offset,offset+500);return {ok:true,json:async()=>({...receipt,action:'catalog',result:{items,next_cursor:offset+500<rows.length?items.at(-1).balance_id:null}})}};
+ const result=await fetchCatalog('https://example.test',s,'s',fake);assert.equal(result.length,5100);assert.equal(searchCatalog(result,'0012345678901')[0].sku,'SKU-5100');assert.equal(searchCatalog(result,'etagere z').length,1);
+ await assert.rejects(fetchCatalog('https://example.test',s,'s',async()=>({ok:true,json:async()=>({...receipt,action:'catalog',result:{items:[rows[0]],next_cursor:'invalid'}})})));
+});

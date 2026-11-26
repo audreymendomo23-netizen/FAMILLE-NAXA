@@ -10,9 +10,9 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-private data class CachedSaleItem(val balanceId:String,val name:String,val available:Double,val price:Long,val onHand:Double,val version:String)
+private data class CachedSaleItem(val balanceId:String,val name:String,val available:Double,val price:Long,val onHand:Double,val version:String,val sku:String,val barcode:String,val lot:String,val location:String,val activity:String,val expiry:String,val serialized:Boolean)
 private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length()).map{
- val j=a.getJSONObject(it);CachedSaleItem(j.getString("balance_id"),j.getString("display_name"),j.getDouble("available"),j.getLong("unit_price_fcfa"),j.optDouble("quantity_on_hand",Double.NaN),j.optString("stock_version","")).also{v->require(v.balanceId.isNotBlank()&&v.available.isFinite()&&v.price>=0)}
+ val j=a.getJSONObject(it);CachedSaleItem(j.getString("balance_id"),j.getString("display_name"),j.getDouble("available"),j.getLong("unit_price_fcfa"),j.optDouble("quantity_on_hand",Double.NaN),j.optString("stock_version",""),j.optString("sku",""),j.optString("barcode",""),j.optString("lot_code",""),j.optString("storage_label",""),j.optString("activity_name",""),j.optString("expires_at",""),j.optBoolean("is_serialized",false)).also{v->require(v.balanceId.isNotBlank()&&v.available.isFinite()&&v.price>=0)}
 }
 @Composable fun BootikSalesPanel(api:BootikApi,dao:BootikScopedDao,session:BootikSession,site:String){
  val context=LocalContext.current
@@ -22,6 +22,8 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  val org=session.organization;val member=session.member;val scope=rememberCoroutineScope()
  var items by remember(org,member,site){mutableStateOf<List<CachedSaleItem>>(emptyList())}
  var events by remember(org,member,site){mutableStateOf<List<BootikScopedEvent>>(emptyList())}
+ var search by remember(org,member,site){mutableStateOf("")};var page by remember(org,member,site){mutableStateOf(0)}
+ val matches=remember(items,search){items.filter{v->listOf(v.name,v.sku,v.barcode,v.lot,v.location,v.activity).any{BootikCatalogSearch.matches(it,search)}}}
  var selected by remember(site){mutableStateOf("")};var quantity by remember(site){mutableStateOf("1")}
  var stockKind by remember(site){mutableStateOf("receipt")};var reason by remember(site){mutableStateOf("")}
  var status by remember(site){mutableStateOf("")};var busy by remember(site){mutableStateOf(false)};var cacheTime by remember(site){mutableStateOf(0L)}
@@ -32,11 +34,15 @@ private fun decodeItems(a:JSONArray):List<CachedSaleItem> = (0 until a.length())
  fun task(block:suspend ()->Unit){if(busy)return;busy=true;scope.launch{try{block()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){status="Opération non confirmée. Vérifiez la connexion et les droits."}finally{try{reload()}catch(e:Exception){if(e is kotlinx.coroutines.CancellationException)throw e};busy=false}}}
  Text("Catalogue, caisse et synchronisation",style=MaterialTheme.typography.titleMedium)
  Text(if(cacheTime>0)"Catalogue local disponible" else "Aucun catalogue local")
- Button(enabled=!busy,onClick={task{val a=api.operation(session,site,"catalog",JSONObject()).getJSONArray("items");val decoded=decodeItems(a);val now=System.currentTimeMillis();dao.cache(BootikCatalogCache(org,member,site,a.toString(),now));items=decoded;cacheTime=now;selected="";status="Catalogue actualisé"}}){Text("Actualiser le catalogue")}
- items.take(100).forEach{i->Row{RadioButton(selected==i.balanceId,{selected=i.balanceId},enabled=!busy);Text(i.name+" • "+i.price+" FCFA • stock "+i.available)}}
+ Button(enabled=!busy,onClick={task{val a=api.fetchCatalog(session,site);val decoded=decodeItems(a);val now=System.currentTimeMillis();dao.cache(BootikCatalogCache(org,member,site,a.toString(),now));items=decoded;cacheTime=now;selected="";search="";page=0;status="Catalogue actualisé"}}){Text("Actualiser le catalogue")}
+ OutlinedTextField(search,{search=it;page=0;selected=""},label={Text("Nom, SKU, code-barres ou emplacement")},singleLine=true,enabled=!busy)
+ Text("${matches.size} référence(s) • page ${page+1} / ${maxOf(1,(matches.size+99)/100)}")
+ Row{TextButton(enabled=page>0&&!busy,onClick={page--;selected=""}){Text("Précédent")};TextButton(enabled=(page+1)*100<matches.size&&!busy,onClick={page++;selected=""}){Text("Suivant")}}
+ matches.drop(page*100).take(100).forEach{i->Row{RadioButton(selected==i.balanceId,{selected=i.balanceId},enabled=!busy);Text(i.name+(if(i.lot.isNotBlank()&&i.lot!="null")" / "+i.lot else "")+" • "+i.price+" FCFA • stock "+i.available)}}
  OutlinedTextField(quantity,{quantity=it},label={Text("Quantité")},singleLine=true,enabled=!busy)
  val n=quantity.toDoubleOrNull();val item=items.firstOrNull{it.balanceId==selected}
- Button(enabled=!busy&&n!=null&&n.isFinite()&&n>0&&item!=null,onClick={task{require(session.permits(site));val id=UUID.randomUUID().toString();val payload=JSONObject().put("balance_id",item!!.balanceId).put("quantity",n!!).put("unit_price_fcfa",item.price).put("idempotency_key",id);dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));status="Vente en attente, aucune confirmation serveur";if(automatic)BootikSync.schedule(context,binding)}}){Text("Mettre la vente en file")}
+ if(item!=null)Text("SKU : ${item.sku} • Activité : ${item.activity} • Lot : ${item.lot} • Péremption : ${item.expiry} • Emplacement : ${item.location}")
+ Button(enabled=!busy&&n!=null&&n.isFinite()&&n>0&&item!=null&&!item.serialized,onClick={task{require(session.permits(site));val id=UUID.randomUUID().toString();val payload=JSONObject().put("balance_id",item!!.balanceId).put("quantity",n!!).put("unit_price_fcfa",item.price).put("idempotency_key",id);dao.enqueue(BootikScopedEvent(id,org,member,site,System.currentTimeMillis(),payload.toString()));status="Vente en attente, aucune confirmation serveur";if(automatic)BootikSync.schedule(context,binding)}}){Text("Mettre la vente en file")}
  if(session.role!="staff"){
   Text("Réceptions, pertes et comptages",style=MaterialTheme.typography.titleMedium)
   Text("Sélectionnez un article, actualisez le stock si nécessaire. Quantité ci-dessus ; aucune modification avant confirmation serveur.")

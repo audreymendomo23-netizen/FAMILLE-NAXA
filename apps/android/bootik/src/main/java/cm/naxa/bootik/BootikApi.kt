@@ -51,6 +51,16 @@ class BootikApi(private val endpoint:String) {
   return response.getJSONObject("result")
  }
 
+ suspend fun fetchCatalog(session:BootikSession,site:String):org.json.JSONArray{
+  val all=org.json.JSONArray();val seen=HashSet<String>();var cursor:String?=null
+  repeat(200){
+   val result=operation(session,site,"catalog",JSONObject().apply{cursor?.let{put("cursor",it)}})
+   val rows=result.getJSONArray("items");require(rows.length()<=500)
+   for(i in 0 until rows.length()){val item=rows.getJSONObject(i);require(seen.add(item.getString("balance_id")));all.put(item)}
+   if(result.has("next_cursor")&&result.isNull("next_cursor"))return all
+   val next=result.getString("next_cursor");require(rows.length()>0&&next==rows.getJSONObject(rows.length()-1).getString("balance_id")&&next!=cursor);cursor=next
+  };error("Catalogue trop volumineux")
+ }
  suspend fun syncSale(session:BootikSession,site:String,event:BootikScopedEvent):String{
   require(session.permits(site)&&event.organizationId==session.organization&&event.memberId==session.member&&event.siteId==site&&event.state=="queued")
   val payload=JSONObject(event.payload);require(payload.getString("idempotency_key")==event.eventId)
