@@ -10,3 +10,11 @@ export async function login(base,identifier,password,fetcher=fetch){
  const res=await fetcher(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:"ZIPPLE",identifier:identifier.trim(),password}),cache:"no-store",redirect:"error"});
  if(!res.ok)throw Error("LOGIN_REJECTED");return parseSession(await res.json());
 }
+
+export async function authorizedRequest(base,action,body,token,fetcher=fetch){
+ if(!["logout","recovery","sync"].includes(action)||!base||!/^https:\/\//.test(base))throw Error("ZIPPLE_API_NOT_CONFIGURED");
+ const url=new URL(base.replace(/\/$/,"")+"/"+action);if(url.username||url.password)throw Error("INVALID_API");
+ const headers={"Content-Type":"application/json",...(token?{"Authorization":"Bearer "+token}:{})};
+ const res=await fetcher(url,{method:"POST",headers,body:JSON.stringify({...body,app_id:"ZIPPLE"}),cache:"no-store",redirect:"error"});
+ if(!res.ok)throw Error("REQUEST_REJECTED");return res.status===204?{}:res.json();
+}
