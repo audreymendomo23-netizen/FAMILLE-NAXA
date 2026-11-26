@@ -51,6 +51,7 @@ Deno.serve(async request=>{
  const actor={memberId:a.account_id,workspaceId:a.workspace_id,enabled:true,passwordChangeRequired:false,role:a.role,plan:a.plan,entitlementEndMs:a.entitlement_end_ms};
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
  if(action==="list")return send(200,await rpc("wm_room_list",{p_hash}));
+ if(action==="contacts")return send(200,await rpc("wm_room_contacts",{p_hash}));
  if(!uuid.test(b.room_id??""))return send(400,{error:"invalid_room"});
  const p_room=b.room_id.toLowerCase();
  if(action==="create"){
