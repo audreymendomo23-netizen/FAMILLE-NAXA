@@ -117,5 +117,25 @@ test("actual GoTrue, PostgREST and Edge runtime on isolated local Supabase",asyn
   assert.equal(Number((await db.query("select count(*) from public.zp_n1_receipts")).rows[0].count),1);
   console.log("ZIPPLE_N1_LOCAL_SUPABASE_EDGE_PASS");
   await browserRecipe({pw,org,member,site});
+  // Independent central recovery operator, real GoTrue identity and server-only access.
+  const operatorAlias="operator-"+randomUUID()+"@example.test",operatorPw="Operator-"+randomUUID()+"-Aa9!",operator=await createUser(operatorAlias,operatorPw);
+  await db.query("insert into public.zp_recovery_operators values($1,true)",[operator]);
+  const authOperator=await fetch(base+"/auth/v1/token?grant_type=password",{method:"POST",headers:headers(anon),body:JSON.stringify({email:operatorAlias,password:operatorPw})});
+  assert.ok(authOperator.ok);const operatorJwt=(await authOperator.json()).access_token;
+  const pendingLogin=await call("login",{identifier:"fixture",password:pw,remember_device:true});assert.equal(pendingLogin.status,200);
+  const oldSession=pendingLogin.data;
+  assert.equal((await call("admin/recovery/list",{},oldSession.access_token)).status,403);
+  assert.equal((await call("admin/recovery/list",{},gotrue.access_token)).status,403);
+  const listing=await call("admin/recovery/list",{},operatorJwt);assert.equal(listing.status,200);
+  const reqId=listing.data.requests.find(q=>q.member_id===member&&q.state==="pending").id;
+  const newPw="Replacement-"+randomUUID()+"-Aa9!";
+  assert.equal((await call("admin/recovery/complete",{request_id:reqId,reason:"Fixture identity verified",new_password:newPw},operatorJwt)).status,200);
+  assert.equal((await call("sync",event,oldSession.access_token)).status,403);
+  assert.equal((await call("refresh",{refresh_token:oldSession.refresh_token})).status,401);
+  assert.equal((await call("login",{identifier:"fixture",password:pw})).status,401);
+  assert.equal((await call("login",{identifier:"fixture",password:newPw})).status,200);
+  assert.equal((await db.query("select state from public.zp_recovery_requests where id=$1",[reqId])).rows[0].state,"resolved");
+  assert.equal(Number((await db.query("select count(*) from public.zp_recovery_audit where request_id=$1",[reqId])).rows[0].count),2);
+  console.log("ZIPPLE_N1_REAL_ADMIN_RECOVERY_PASS");
  }finally{await db.end()}
 });

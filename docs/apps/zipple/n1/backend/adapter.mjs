@@ -23,14 +23,14 @@ export function createSupabaseZipple({url,anonKey,serviceKey,origins=[],fetcher=
   rateLimit:async({action,identifier})=>{if(!await rpc("zp_rate_limit",{p_bucket:await hash(action+":"+normalize(identifier??"global"))}))deny()},
   authenticate:async({identifier,password,remember_device})=>{
    if(!loginId(normalize(identifier)))deny();
-   const rows=await call("/rest/v1/zp_members?select=id,auth_user_id,auth_alias&active=eq.true&login_id=eq."+enc(normalize(identifier))+"&limit=2");
+   const rows=await call("/rest/v1/zp_members?select=id,auth_user_id,auth_alias,credential_epoch&active=eq.true&reset_pending=eq.false&login_id=eq."+enc(normalize(identifier))+"&limit=2");
    if(!Array.isArray(rows)||rows.length!==1)deny();const m=rows[0];
    const auth=await call("/auth/v1/token?grant_type=password",{key:anonKey,method:"POST",body:{email:m.auth_alias,password}});
    if(!auth?.access_token||!auth?.user?.id)deny();
    // GoTrue authenticates credentials; its tokens must not leave this gateway.
    await call("/auth/v1/logout?scope=local",{key:anonKey,bearer:auth.access_token,method:"POST"});
    if(auth.user.id!==m.auth_user_id)deny();
-   return issue("zp_issue",{p_member:m.id,p_auth_user:auth.user.id},remember_device);
+   return issue("zp_issue",{p_member:m.id,p_auth_user:auth.user.id,p_epoch:m.credential_epoch},remember_device);
   },
   rotate:async({refresh_token})=>issue("zp_rotate",{p_previous:await hash(refresh_token)}),
   recover:async({identifier})=>{if(loginId(normalize(identifier)))await rpc("zp_recovery",{p_login:normalize(identifier)})},
@@ -43,7 +43,31 @@ export function createSupabaseZipple({url,anonKey,serviceKey,origins=[],fetcher=
   if(origin&&!allowed)return Response.json({error:"DENIED"},{status:403,headers});
   if(req.method==="OPTIONS")return new Response(null,{status:204,headers});
   let res;
-  if(new URL(req.url).pathname.endsWith("/sync")){
+  if(new URL(req.url).pathname.includes("/admin/recovery/")){
+   let claimed=false,operator,requestId,attempt;
+   try{
+    const raw=await req.text(),bearer=req.headers.get("authorization")??"";
+    if(req.method!=="POST"||raw.length>8192||!bearer.startsWith("Bearer "))deny();
+    const body=JSON.parse(raw);if(body.app_id!=="ZIPPLE")deny();
+    const identity=await call("/auth/v1/user",{key:anonKey,bearer:bearer.slice(7)});
+    operator=identity?.id;if(!operator)deny();
+    const action=new URL(req.url).pathname.split("/").pop();
+    if(action==="list"){res=Response.json({requests:await rpc("zp_admin_recovery_list",{p_operator:operator})})}
+    else if(action==="complete"){
+     if(typeof body.request_id!=="string"||typeof body.reason!=="string"||body.reason.trim().length<10||body.reason.length>500||typeof body.new_password!=="string"||body.new_password.length<12||body.new_password.length>128)deny();
+     requestId=body.request_id;attempt=crypto.randomUUID();
+     const target=await rpc("zp_admin_recovery_begin",{p_operator:operator,p_request:requestId,p_reason:body.reason.trim(),p_attempt:attempt});
+     if(!target)deny();claimed=true;
+     // Auth admin update is server-side only; no credential returned or logged.
+     await call("/auth/v1/admin/users/"+enc(target),{method:"PUT",body:{password:body.new_password}});
+     if(!await rpc("zp_admin_recovery_finish",{p_operator:operator,p_request:requestId,p_attempt:attempt,p_success:true}))deny();
+     res=Response.json({resolved:true});
+    }else deny();
+   }catch{
+    if(claimed){try{await rpc("zp_admin_recovery_finish",{p_operator:operator,p_request:requestId,p_attempt:attempt,p_success:false})}catch{/* account stays locked pending operator review */}}
+    res=Response.json({error:"DENIED"},{status:403});
+   }
+  }else if(new URL(req.url).pathname.endsWith("/sync")){
    try{
     const raw=await req.text();if(req.method!=="POST"||raw.length>8192)deny();
     const b=JSON.parse(raw),bearer=req.headers.get("authorization")??"";

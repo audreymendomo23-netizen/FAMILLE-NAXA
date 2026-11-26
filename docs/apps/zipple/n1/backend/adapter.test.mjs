@@ -1,7 +1,7 @@
 import test from "node:test";import assert from "node:assert/strict";import pg from "pg";import {createSupabaseZipple} from "./adapter.mjs";
 const pool=new pg.Pool({connectionString:process.env.DATABASE_URL});
 const id={a:"10000000-0000-4000-8000-000000000001",b:"10000000-0000-4000-8000-000000000002",m:"20000000-0000-4000-8000-000000000001",u:"30000000-0000-4000-8000-000000000001",s:"40000000-0000-4000-8000-000000000001",x:"40000000-0000-4000-8000-000000000002"};
-const rpc={zp_rate_limit:["p_bucket"],zp_issue:["p_member","p_auth_user","p_access","p_refresh"],zp_rotate:["p_previous","p_access","p_refresh"],zp_revoke:["p_access"],zp_recovery:["p_login"],zp_probe_receipt:["p_access","p_org","p_member","p_site","p_event","p_digest"]};
+const rpc={zp_rate_limit:["p_bucket"],zp_issue:["p_member","p_auth_user","p_epoch","p_access","p_refresh"],zp_rotate:["p_previous","p_access","p_refresh"],zp_revoke:["p_access"],zp_recovery:["p_login"],zp_probe_receipt:["p_access","p_org","p_member","p_site","p_event","p_digest"]};
 const response=(x,status=200)=>Response.json(x,{status});
 let gotrueLogout=0;
 async function bridge(input,opt){
@@ -13,7 +13,7 @@ async function bridge(input,opt){
   await db.query("set role service_role");
   if(u.pathname==="/rest/v1/zp_members"){
    const login=u.searchParams.get("login_id").slice(3);
-   return response((await db.query("select id,auth_user_id,auth_alias from public.zp_members where active and login_id=$1 limit 2",[login])).rows)
+   return response((await db.query("select id,auth_user_id,auth_alias,credential_epoch from public.zp_members where active and not reset_pending and login_id=$1 limit 2",[login])).rows)
   }
   const fn=u.pathname.split("/").pop(),params=rpc[fn];assert.ok(params);
   const sql="select public."+fn+"("+params.map((_,i)=>"$"+(i+1)).join(",")+") as value";
