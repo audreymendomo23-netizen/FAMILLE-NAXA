@@ -56,12 +56,12 @@ create function public.zp_probe_receipt(p_access text,p_org uuid,p_member uuid,p
  return case when stored=p_digest then 'acknowledged' else 'conflict' end;
 end $$;
 
-create function public.zp_admin_recovery_list(p_operator uuid) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $
+create function public.zp_admin_recovery_list(p_operator uuid) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
  begin
  if not exists(select 1 from public.zp_recovery_operators where auth_user_id=p_operator and active) then raise exception 'DENIED'; end if;
  return coalesce((select jsonb_agg(to_jsonb(q)) from (select r.id,r.member_id,m.login_id,m.org_id,r.state,r.created_at from public.zp_recovery_requests r join public.zp_members m on m.id=r.member_id where r.state in ('pending','processing','failed') order by r.created_at limit 100) q),'[]'::jsonb);
- end $;
-create function public.zp_admin_recovery_begin(p_operator uuid,p_request uuid,p_reason text,p_attempt uuid) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $
+ end $$;
+create function public.zp_admin_recovery_begin(p_operator uuid,p_request uuid,p_reason text,p_attempt uuid) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
  declare target uuid; auth_id uuid; begin
  if not exists(select 1 from public.zp_recovery_operators where auth_user_id=p_operator and active) or length(trim(p_reason))<10 or length(p_reason)>500 then raise exception 'DENIED'; end if;
  select member_id into target from public.zp_recovery_requests where id=p_request and state in ('pending','failed') for update;
@@ -73,8 +73,8 @@ create function public.zp_admin_recovery_begin(p_operator uuid,p_request uuid,p_
  update public.zp_recovery_requests set state='processing',operator_id=p_operator,attempt_id=p_attempt,reason=p_reason where id=p_request;
  insert into public.zp_recovery_audit(request_id,operator_id,action) values(p_request,p_operator,'begin');
  return auth_id;
- end $;
-create function public.zp_admin_recovery_finish(p_operator uuid,p_request uuid,p_attempt uuid,p_success boolean) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $
+ end $$;
+create function public.zp_admin_recovery_finish(p_operator uuid,p_request uuid,p_attempt uuid,p_success boolean) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$
  declare target uuid; begin
  if not exists(select 1 from public.zp_recovery_operators where auth_user_id=p_operator and active) then raise exception 'DENIED'; end if;
  select member_id into target from public.zp_recovery_requests where id=p_request and state='processing' and operator_id=p_operator and attempt_id=p_attempt for update;
@@ -86,7 +86,7 @@ create function public.zp_admin_recovery_finish(p_operator uuid,p_request uuid,p
  else update public.zp_recovery_requests set state='failed' where id=p_request; end if;
  insert into public.zp_recovery_audit(request_id,operator_id,action) values(p_request,p_operator,case when p_success then 'resolved' else 'failed' end);
  return true;
- end $;
+ end $$;
 
-do $ declare f record; begin for f in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_rate_limit','zp_identity','zp_issue','zp_rotate','zp_revoke','zp_recovery','zp_probe_receipt','zp_admin_recovery_list','zp_admin_recovery_begin','zp_admin_recovery_finish') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;end $$;
+do $$ declare f record; begin for f in select p.oid::regprocedure as sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_rate_limit','zp_identity','zp_issue','zp_rotate','zp_revoke','zp_recovery','zp_probe_receipt','zp_admin_recovery_list','zp_admin_recovery_begin','zp_admin_recovery_finish') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;end $$;
 commit;
