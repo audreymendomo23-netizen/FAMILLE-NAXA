@@ -15,6 +15,7 @@ import { ProfilePhoto } from "./auth/profile-photo";
 import { StaffRoster, rosterModeEnabled } from "./erp/staff-roster";
 import { DailyBriefing } from "./erp/daily-briefing";
 import { InternalMeetings } from "./erp/internal-meetings";
+import { AttendanceProofPanel, type AttendanceAction } from "./erp/attendance-proof";
 import { BusinessBackdrop, NightTorch } from "./business-visuals";
 import { localeOf, translate, LocaleContext, useTranslation, type Locale } from "./locale";
 import { createRoot } from "react-dom/client";
@@ -162,6 +163,7 @@ function App() {
   const [workstations, setWorkstations] = useState<WebWorkstation[]>([]);
   const [workstationSiteId, setWorkstationSiteId] = useState("");
   const [performanceData, setPerformanceData] = useState<{daily: Record<string,unknown>[];monthly:Record<string,unknown>[];annual:Record<string,unknown>[]} | null>(null);
+  const [attendanceRequest,setAttendanceRequest]=useState<{scope:string;site:string;action:AttendanceAction}|null>(null);
   const [performanceFromDate, setPerformanceFromDate] = useState(new Date().toISOString().slice(0,10));
   const [performanceBusy, setPerformanceBusy] = useState(false);
   const [performanceError, setPerformanceError] = useState("");
@@ -182,6 +184,7 @@ function App() {
       VITE_NAXA_SERVICES_ROSTER_ENABLED?: string;
       VITE_NAXA_SERVICES_BRIEFING_ENABLED?: string;
       VITE_NAXA_SERVICES_MEETINGS_ENABLED?: string;
+      VITE_NAXA_SERVICES_ATTENDANCE_ENABLED?: string;
     };
   }).env ?? {};
   const authEndpoint = env.VITE_NAXA_SERVICES_AUTH_URL ?? "";
@@ -833,11 +836,7 @@ function App() {
         await submitWebBusinessEvent("help","support_request.created","support_request",id,{
           request_id:id,subject:title,description:detail,priority:draftPriority,
         },siteId,title,"Assistance · "+draftPriority);return;
-      case "team":
-        await submitWebBusinessEvent("team","staff_clock_in.recorded","staff_clock_in",id,{
-          time_event_id:id,staff_member_id:session.account.member_id,
-          staff_name_snapshot:session.account.display_name,occurred_at:new Date().toISOString(),workstation_id:null,
-        },siteId,session.account.display_name,"Pointage d'arrivée");return;
+      case "team": await recordStaffTimeEvent("staff_clock_in");return;
       default: throw new Error("Aucun parcours métier Web n'est livré pour ce module.");
     }
   }
@@ -963,6 +962,7 @@ function App() {
   async function recordStaffTimeEvent(eventType:"staff_clock_in"|"staff_break_start"|"staff_break_end"|"staff_clock_out") {
     const session=authSession;if(!session)throw new Error("AUTHENTICATION_REQUIRED");
     const siteId=sharedOperationSiteId(),id=crypto.randomUUID();
+    if(env.VITE_NAXA_SERVICES_ATTENDANCE_ENABLED==="true"&&rosterModeEnabled(session.account.business_mode)){setAttendanceRequest({scope:scopeOf(session)+":"+sessionFence.current.generation,site:siteId,action:eventType});setDialogOpen(false);return;}
     await submitWebBusinessEvent("team",eventType+".recorded",eventType,id,{
       time_event_id:id,staff_member_id:session.account.member_id,staff_name_snapshot:session.account.display_name,
       occurred_at:new Date().toISOString(),workstation_id:null,
@@ -1241,7 +1241,7 @@ function App() {
               busy={busy} onCreateSupplier={createSupplier} onMovement={createInventoryMovement}
               onPurchase={createSupplierPurchase} onReceive={receiveSupplierPurchase} onPay={paySupplier}
             /> :
-            active === "team" ? <><TeamOperationsPage memberId={authSession?.account.member_id} entries={(entries.team ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} />{env.VITE_NAXA_SERVICES_ROSTER_ENABLED==="true" && authSession && !preview && !authSession.requirePasswordChange && rosterModeEnabled(authSession.account.business_mode) && <StaffRoster key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+(activeSiteId||authSession.account.active_site_ids[0])} account={authSession.account} siteId={activeSiteId||authSession.account.active_site_ids[0]||""} authEndpoint={authEndpoint} anonKey={anonKey} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("SESSION_CHANGED");return fresh.accessToken;}}/>}</> :
+            active === "team" ? <><TeamOperationsPage memberId={authSession?.account.member_id} entries={(entries.team ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} />{env.VITE_NAXA_SERVICES_ATTENDANCE_ENABLED==="true"&&authSession&&!preview&&!authSession.requirePasswordChange&&rosterModeEnabled(authSession.account.business_mode)&&<AttendanceProofPanel key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+(activeSiteId||authSession.account.active_site_ids[0])} account={authSession.account} siteId={activeSiteId||authSession.account.active_site_ids[0]||""} authEndpoint={authEndpoint} anonKey={anonKey} action={attendanceRequest?.scope===scopeOf(authSession)+":"+sessionFence.current.generation&&attendanceRequest.site===(activeSiteId||authSession.account.active_site_ids[0])?attendanceRequest.action:null} onClose={()=>setAttendanceRequest(null)} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("SESSION_CHANGED");return fresh.accessToken;}} onSubmit={async(id,occurred,eventType)=>{const s=authSession;const current=captureSession(s);if(!current()||!attendanceRequest||attendanceRequest.scope!==scopeOf(s)+":"+sessionFence.current.generation||attendanceRequest.site!==sharedOperationSiteId()||attendanceRequest.action!==eventType)throw new Error("SESSION_CHANGED");await submitWebBusinessEvent("team",eventType+".recorded",eventType,id,{time_event_id:id,staff_member_id:s.account.member_id,staff_name_snapshot:s.account.display_name,occurred_at:occurred,workstation_id:null,attendance_proof_ref:id},attendanceRequest.site,s.account.display_name,eventType.replaceAll("_"," "));}}/>}{env.VITE_NAXA_SERVICES_ROSTER_ENABLED==="true" && authSession && !preview && !authSession.requirePasswordChange && rosterModeEnabled(authSession.account.business_mode) && <StaffRoster key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+(activeSiteId||authSession.account.active_site_ids[0])} account={authSession.account} siteId={activeSiteId||authSession.account.active_site_ids[0]||""} authEndpoint={authEndpoint} anonKey={anonKey} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("SESSION_CHANGED");return fresh.accessToken;}}/>}</> :
             active === "customers" ? <CustomerFollowupsPage entries={(entries.customers ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onCreate={createCustomerFollowup} onComplete={completeCustomerFollowup} /> :
             <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} authenticated={Boolean(authSession && !preview)} />}
         </section>

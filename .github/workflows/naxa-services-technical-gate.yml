@@ -24,6 +24,7 @@ on:
       - "supabase/functions/naxa-services-referrals/**"
       - "supabase/functions/naxa-services-customer-promotions/**"
       - "supabase/functions/naxa-services-notifications/**"
+      - "supabase/functions/naxa-services-meeting-media/**"
       - "supabase/drafts/naxa_services_v1.sql"
       - "supabase/drafts/naxa_services_v2_activity_onboarding_management.sql"
       - "supabase/drafts/naxa_services_referrals_v1.sql"
@@ -34,6 +35,8 @@ on:
       - "supabase/drafts/naxa_services_v7_financial_controls.sql"
       - "supabase/drafts/naxa_services_v8_subscription_payment.sql"
       - "supabase/tests/drafts/**"
+      - "supabase/drafts/naxa_services_v9_*.sql"
+      - "supabase/drafts/naxa_services_v1[0-5]_*.sql"
       - "supabase/functions/naxa-services-accounting/**"
       - "supabase/config.toml"
       - "settings.gradle.kts"
@@ -49,12 +52,15 @@ on:
       - "supabase/functions/naxa-services-referrals/**"
       - "supabase/functions/naxa-services-customer-promotions/**"
       - "supabase/functions/naxa-services-notifications/**"
+      - "supabase/functions/naxa-services-meeting-media/**"
       - "supabase/drafts/naxa_services_v1.sql"
       - "supabase/drafts/naxa_services_v2_activity_onboarding_management.sql"
       - "supabase/drafts/naxa_services_referrals_v1.sql"
       - "supabase/drafts/naxa_services_v3_operations_rewards_sync.sql"
       - "supabase/drafts/naxa_services_v4_supplier_accounting_forecast.sql"
       - "supabase/tests/drafts/**"
+      - "supabase/drafts/naxa_services_v9_*.sql"
+      - "supabase/drafts/naxa_services_v1[0-5]_*.sql"
       - "supabase/functions/naxa-services-accounting/**"
       - "supabase/config.toml"
       - "packages/billing-core/**"
@@ -77,7 +83,7 @@ permissions:
 
 concurrency:
   group: naxa-services-technical-gate-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   auth-contract:
