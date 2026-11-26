@@ -218,6 +218,17 @@ class AuthApi(private val context: Context) {
         return result.optJSONObject("subscription_result") ?: throw AuthApiException("Réponse d'abonnement incomplète.")
     }
 
+    suspend fun subscriptionAccess(accessToken: String): JSONObject {
+        val response = request(JSONObject().put("action", "subscription_access").put("app_code", "naxa-services"), accessToken)
+        val result = response.optJSONObject("subscription_access") ?: throw AuthApiException("État des droits payés indisponible.")
+        val state = result.optString("state")
+        if (state !in setOf("active", "expired", "cancelled", "not_started", "unconfigured") ||
+            result.opt("paid_access") != (state == "active")) {
+            throw AuthApiException("État des droits payés invalide.")
+        }
+        return result
+    }
+
     suspend fun accountingRequest(accessToken: String, body: JSONObject): JSONObject {
         if (accountingEndpoint.isBlank()) {
             throw AuthApiException("La passerelle comptable NAXA Services n'est pas configurée.")
