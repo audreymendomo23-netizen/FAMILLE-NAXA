@@ -320,4 +320,17 @@ class PerformanceEngineTest {
         assertEquals(65_000L, annual.operatingResultXaf)
     }
 
+
+    @Test fun futureDatedRecordsDoNotInflateCurrentConfirmedPerformance() {
+        val actual = sale("today", today, 10000L)
+        val future = sale("future", today.plusDays(1), 90000L)
+        val futureSameDay = sale("later", today, 50000L).copy(createdAtMillis = now + 60000L)
+        val result = NaxaPerformanceEngine.analyze(listOf(actual, future, futureSameDay),
+            listOf(expense(1000L), expense(40000L,today.plusDays(1)), expense(5000L).copy(occurredAtMillis = now + 60000L)),
+            emptyList(),0L,0,now,zone)
+        assertEquals(10000L,result.revenueXaf)
+        assertEquals(1000L,result.operatingExpensesXaf)
+        assertEquals(10000L,result.day.actualXaf)
+        assertEquals(10000L,result.month.actualXaf)
+    }
 }

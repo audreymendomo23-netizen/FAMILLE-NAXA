@@ -64,7 +64,9 @@ object NaxaPerformanceEngine {
         nowMillis: Long, zone: ZoneId = ZoneId.of("Africa/Douala")
     ): PerformanceDashboard {
         val today = Instant.ofEpochMilli(nowMillis).atZone(zone).toLocalDate()
-        val confirmed = sales.filter { it.status == "confirmed" && it.totalXaf > 0L }
+        val confirmed = sales.filter { it.status == "confirmed" && it.totalXaf > 0L && it.createdAtMillis <= nowMillis }
+        val eligibleEntries = accountingEntries.filter { it.occurredAtMillis <= nowMillis }
+        val eligibleObjectives = objectives.filter { it.createdAtMillis <= nowMillis }
         val byDay = confirmed.groupBy { dateOf(it.createdAtMillis, zone) }.mapValues { it.value.sumOf(LocalSale::totalXaf) }
         val revenue = confirmed.sumOf { it.totalXaf }
         val uncosted = confirmed.count { !it.costSnapshotComplete }
@@ -72,10 +74,10 @@ object NaxaPerformanceEngine {
         val costedRevenue = costedSales.sumOf { it.totalXaf }
         val cogs = costedSales.sumOf { it.costOfGoodsXaf.coerceAtLeast(0L) }
         val gross = costedRevenue - cogs
-        val opex = accountingEntries.filter { it.debitAccount.startsWith("OPERATING_EXPENSE") }.sumOf { it.amountXaf }
+        val opex = eligibleEntries.filter { it.debitAccount.startsWith("OPERATING_EXPENSE") }.sumOf { it.amountXaf }
         // Supplier flows are separated so stock receipts and asset acquisitions are not mistaken for
         // operating expenses, while supplier settlements are not expensed a second time.
-        val currentMonthEntries = accountingEntries.filter {
+        val currentMonthEntries = eligibleEntries.filter {
             dateOf(it.occurredAtMillis, zone).let { date ->
                 date.year == today.year && date.monthValue == today.monthValue && !date.isAfter(today)
             }
@@ -103,7 +105,7 @@ object NaxaPerformanceEngine {
         val pace = (todayActual / elapsed).roundToLong()
         val baselineDay = todayActual + (avg14 * (1.0 - elapsed)).roundToLong()
         val dayForecast = if (elapsed >= 0.95) todayActual else (pace * 0.65 + baselineDay * 0.35).roundToLong().coerceAtLeast(todayActual)
-        val dayTarget = targetFor(objectives, "daily", today, zone)
+        val dayTarget = targetFor(eligibleObjectives, "daily", today, zone)
         val day = projection(today.toString(), todayActual, dayForecast, dayTarget,
             byDay[today.minusDays(7)] ?: byDay[today.minusDays(1)] ?: 0L, if (elapsed >= 0.95) 0 else 1)
 
@@ -113,7 +115,7 @@ object NaxaPerformanceEngine {
         val remainMonth = ChronoUnit.DAYS.between(today, monthEnd).toInt().coerceAtLeast(0)
         val previousMonth = monthKey.minusMonths(1)
         val previousMonthComparable = sum(byDay, previousMonth.atDay(1), previousMonth.atDay(today.dayOfMonth.coerceAtMost(previousMonth.lengthOfMonth())))
-        val monthTarget = targetFor(objectives, "monthly", today, zone)
+        val monthTarget = targetFor(eligibleObjectives, "monthly", today, zone)
         val monthForecast = monthActual + avg28 * remainMonth
         val month = projection(monthKey.toString(), monthActual, monthForecast, monthTarget, previousMonthComparable, remainMonth)
 
@@ -122,7 +124,7 @@ object NaxaPerformanceEngine {
         val previousYearDate = today.minusYears(1)
         val previousYearComparable = sum(byDay, LocalDate.of(today.year - 1, 1, 1), previousYearDate)
         val remainYear = ChronoUnit.DAYS.between(today, yearEnd).toInt().coerceAtLeast(0)
-        val yearTarget = targetFor(objectives, "annual", today, zone) ?: targetFor(objectives, "yearly", today, zone)
+        val yearTarget = targetFor(eligibleObjectives, "annual", today, zone) ?: targetFor(eligibleObjectives, "yearly", today, zone)
         val yearForecast = yearActual + avg90 * remainYear
         val year = projection(today.year.toString(), yearActual, yearForecast, yearTarget, previousYearComparable, remainYear)
 
@@ -149,7 +151,7 @@ object NaxaPerformanceEngine {
         // disclosed as treasury flows only; they never become a second expense.
         val dailyFinancial = (13L downTo 0L).map { n ->
             val d = today.minusDays(n)
-            financialPoint(d.toString(), confirmed, accountingEntries, zone, d, d, d.minusDays(1), d.minusDays(1))
+            financialPoint(d.toString(), confirmed, eligibleEntries, zone, d, d, d.minusDays(1), d.minusDays(1))
         }
         val monthlyFinancial = (11L downTo 0L).map { n ->
             val p = monthKey.minusMonths(n)
@@ -159,7 +161,7 @@ object NaxaPerformanceEngine {
                 comparableMonth.atDay(today.dayOfMonth.coerceAtMost(comparableMonth.lengthOfMonth()))
             } else comparableMonth.atEndOfMonth()
             financialPoint(
-                p.toString(), confirmed, accountingEntries, zone,
+                p.toString(), confirmed, eligibleEntries, zone,
                 p.atDay(1), currentEnd, comparableMonth.atDay(1), comparableEnd
             )
         }
@@ -171,7 +173,7 @@ object NaxaPerformanceEngine {
             val previousStart = LocalDate.of(previousYear, 1, 1)
             val previousEnd = if (y == today.year) today.minusYears(1) else LocalDate.of(previousYear, 12, 31)
             financialPoint(
-                y.toString(), confirmed, accountingEntries, zone,
+                y.toString(), confirmed, eligibleEntries, zone,
                 currentStart, currentEnd, previousStart, previousEnd
             )
         }
@@ -201,11 +203,11 @@ object NaxaPerformanceEngine {
         }
         val priorMonthRevenue = previousMonthComparable
         val previousComparableMonthEnd = previousMonth.atDay(today.dayOfMonth.coerceAtMost(previousMonth.lengthOfMonth()))
-        val currentMonthCosts = accountingEntries.filter {
+        val currentMonthCosts = eligibleEntries.filter {
             dateOf(it.occurredAtMillis, zone).let { d -> d.year == today.year && d.monthValue == today.monthValue && !d.isAfter(today) } &&
                 it.debitAccount == "COST_OF_GOODS_SOLD"
         }.sumOf { it.amountXaf }
-        val priorMonthCosts = accountingEntries.filter {
+        val priorMonthCosts = eligibleEntries.filter {
             dateOf(it.occurredAtMillis, zone).let { d -> d.year == previousMonth.year && d.monthValue == previousMonth.monthValue && !d.isAfter(previousComparableMonthEnd) } &&
                 it.debitAccount == "COST_OF_GOODS_SOLD"
         }.sumOf { it.amountXaf }

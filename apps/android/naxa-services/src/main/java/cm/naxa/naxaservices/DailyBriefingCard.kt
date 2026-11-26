@@ -57,6 +57,10 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
   var ready by remember{mutableStateOf(false)}
   var playing by remember{mutableStateOf(false)}
   var activeUtterance by remember{mutableStateOf<String?>(null)}
+  var paused by remember{mutableStateOf(false)}
+  var spokenText by remember{mutableStateOf("")}
+  var spokenOffset by remember{mutableStateOf(0)}
+  var segmentBase by remember{mutableStateOf(0)}
   var busy by remember{mutableStateOf(false)}
   var error by remember{mutableStateOf(false)}
   var report by remember{mutableStateOf<JSONObject?>(null)}
@@ -68,12 +72,22 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
    engine=tts
    tts.setOnUtteranceProgressListener(object:UtteranceProgressListener(){
     override fun onStart(utteranceId:String?){}
-    override fun onDone(utteranceId:String?){handler.post{if(!disposed&&activeUtterance==utteranceId){activeUtterance=null;playing=false}}}
+    override fun onRangeStart(utteranceId:String?,start:Int,end:Int,frame:Int){handler.post{if(!disposed&&activeUtterance==utteranceId)spokenOffset=(segmentBase+start).coerceIn(0,spokenText.length)}}
+    override fun onDone(utteranceId:String?){handler.post{if(!disposed&&activeUtterance==utteranceId){activeUtterance=null;playing=false;paused=false;spokenOffset=0;spokenText=""}}}
     @Deprecated("Deprecated in Java") override fun onError(utteranceId:String?){handler.post{if(!disposed&&activeUtterance==utteranceId){activeUtterance=null;playing=false;error=true}}}
    })
    onDispose{disposed=true;tts.stop();tts.shutdown()}
   }
-  fun stop(){activeUtterance=null;engine?.stop();playing=false}
+  fun stop(){activeUtterance=null;engine?.stop();playing=false;paused=false;spokenText="";spokenOffset=0;segmentBase=0}
+  fun pause(){if(!playing)return;activeUtterance=null;engine?.stop();playing=false;paused=true}
+  fun speakRemaining(){
+   val tts=engine?:return
+   segmentBase=spokenOffset.coerceIn(0,spokenText.length)
+   if(segmentBase>=spokenText.length){stop();return}
+   val id=UUID.randomUUID().toString();activeUtterance=id;paused=false
+   playing=tts.speak(spokenText.substring(segmentBase),TextToSpeech.QUEUE_FLUSH,null,id)==TextToSpeech.SUCCESS
+   if(!playing){activeUtterance=null;paused=true;error=true}else error=false
+  }
   fun play(r:JSONObject){
    val tts=engine
    if(!ready||tts==null){error=true;return}
@@ -83,10 +97,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
    stop()
    if(tts.setVoice(voice)!=TextToSpeech.SUCCESS){error=true;return}
    tts.setSpeechRate(speed)
-   val utteranceId=UUID.randomUUID().toString();activeUtterance=utteranceId
-   playing=tts.speak(briefingText(r,language),TextToSpeech.QUEUE_FLUSH,null,utteranceId)==TextToSpeech.SUCCESS
-   if(!playing)activeUtterance=null
-   error=!playing
+   spokenText=briefingText(r,language);spokenOffset=0;speakRemaining()
   }
   fun load(andPlay:Boolean){
    stop();busy=true;error=false;report=null
@@ -108,7 +119,8 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
      listOf(.8f,1f,1.2f,1.5f).forEach{s->TextButton(onClick={stop();speed=s},enabled=!busy){Text((if(s==speed)"✓ " else "")+s+"×")}}
     }
-    Button(onClick={if(playing)stop() else load(true)},enabled=!busy){Text(if(playing)w.stop else w.play)}
+    Button(onClick={when{playing->pause();paused->speakRemaining();else->load(true)}},enabled=!busy){Text(if(playing)when(language){"en"->"Pause";"ff-CM"->"Fowtu";"es"->"Pausar";"it"->"Pausa";"zh-CN"->"暂停";else->"Pause"}else if(paused)when(language){"en"->"Resume";"ff-CM"->"Jokku";"es"->"Reanudar";"it"->"Riprendi";"zh-CN"->"继续";else->"Reprendre"}else w.play)}
+    if(playing||paused)OutlinedButton(onClick={stop()},enabled=!busy){Text(w.stop)}
     OutlinedButton(onClick={load(false)},enabled=!busy){Text(when(language){"en"->"Refresh";"ff-CM"->"Hesɗitin";"es"->"Actualizar";"it"->"Aggiorna";"zh-CN"->"刷新";else->"Actualiser"})}
     if(error)Text(w.error,color=MaterialTheme.colorScheme.error)
     report?.let{Text(briefingText(it,language))}

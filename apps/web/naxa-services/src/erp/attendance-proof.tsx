@@ -5,12 +5,13 @@ export type AttendanceAction="staff_clock_in"|"staff_break_start"|"staff_break_e
 const actions:AttendanceAction[]=["staff_clock_in","staff_break_start","staff_break_end","staff_clock_out"];
 type Policy={event_type:AttendanceAction;revision:number;require_gps:boolean;require_selfie:boolean};
 type GPS={latitude:number;longitude:number;accuracy:number;at:string};
-type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>;action:AttendanceAction|null;onClose:()=>void;onSubmit:(id:string,occurred:string,action:AttendanceAction)=>Promise<void>};
-export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getToken,action,onClose,onSubmit}:Props){
+type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>;action:AttendanceAction|null;onClose:()=>void;loadWorkstations:(site:string)=>Promise<{id:string;name:string;site_id:string;status:string}[]>;onSubmit:(id:string,occurred:string,action:AttendanceAction,workstationId:string|null)=>Promise<void>};
+export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getToken,action,onClose,onSubmit,loadWorkstations}:Props){
  const tr=(fr:string,en:string,ff:string)=>account.default_locale==="en"?en:account.default_locale==="ff-CM"?ff:fr;
  const labels:Record<AttendanceAction,string>={staff_clock_in:tr("Prise de service","Start shift","Fuɗɗo golle"),staff_break_start:tr("Début de pause","Start break","Fuɗɗo fowtude"),staff_break_end:tr("Fin de pause","End break","Timmin fowtude"),staff_clock_out:tr("Fin de service","End shift","Timmin golle")};
  const [policies,setPolicies]=useState<Policy[]>([]),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(false);
  const [gps,setGps]=useState<GPS|null>(null),[photo,setPhoto]=useState<{blob:Blob;at:string}|null>(null),[camera,setCamera]=useState(false),[reload,setReload]=useState(0);
+ const [posts,setPosts]=useState<{id:string;name:string}[]>([]),[post,setPost]=useState(""),[postsLoaded,setPostsLoaded]=useState(false);
  const live=useRef(false),stream=useRef<MediaStream|null>(null),video=useRef<HTMLVideoElement|null>(null),controller=useRef<AbortController|null>(null),gen=useRef(0),token=useRef(getToken);
  token.current=getToken;
  const manager=["promoter","network_manager","site_manager"].includes(account.role_code);
@@ -28,7 +29,8 @@ export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getTok
   void req<Policy[]>("ns_attendance_policies?select=event_type,revision,require_gps,require_selfie&org_id=eq."+encodeURIComponent(account.organization_id)+"&site_id=eq."+encodeURIComponent(siteId)).then(p=>{if(!c.signal.aborted){setPolicies(p);setLoaded(true);setError(false);}}).catch(()=>{if(!c.signal.aborted){setError(true);setLoaded(false);}});
   return()=>{live.current=false;c.abort();gen.current++;stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;};
  },[account.organization_id,account.member_id,siteId,reload]);
- useEffect(()=>{gen.current++;stop();setGps(null);setPhoto(null);},[action,reload]);
+ useEffect(()=>{gen.current++;stop();setGps(null);setPhoto(null);},[action,reload,post]);
+ async function loadPosts(){const g=gen.current;setBusy(true);setError(false);try{const rows=await loadWorkstations(siteId);if(live.current&&g===gen.current){setPosts(rows.filter(p=>p.site_id===siteId&&p.status==="active"));setPostsLoaded(true);}}catch{if(live.current&&g===gen.current)setError(true);}finally{if(live.current)setBusy(false);}}
  // Backgrounding must not keep the camera alive or leave reusable evidence.
  useEffect(()=>{function hide(){if(document.visibilityState!=="hidden")return;gen.current++;stop();setGps(null);setPhoto(null);}
  document.addEventListener("visibilitychange",hide);return()=>document.removeEventListener("visibilitychange",hide);},[]);
@@ -68,9 +70,9 @@ export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getTok
    if(policy.require_selfie&&photo){const path=[account.organization_id,siteId,account.member_id,id+".jpg"].map(encodeURIComponent).join("/");
     const r=await fetch(rosterApiOrigin(authEndpoint)+"/storage/v1/object/ns-attendance-selfies/"+path,{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"image/jpeg","x-upsert":"false"},body:photo.blob,cache:"no-store",credentials:"omit",redirect:"error",signal:controller.current?.signal});if(!r.ok)throw Error();}
    if(!live.current||g!==gen.current)throw Error();
-   const result=await req<{proof_ref:string;staged:boolean}>("rpc/ns_stage_attendance_proof",{p_event_id:id,p_org:account.organization_id,p_site:siteId,p_post:null,p_event:action,p_occurred:occurred,p_revision:policy.revision,p_latitude:policy.require_gps?gps?.latitude:null,p_longitude:policy.require_gps?gps?.longitude:null,p_accuracy:policy.require_gps?gps?.accuracy:null,p_gps_at:policy.require_gps?gps?.at:null,p_selfie_at:policy.require_selfie?photo?.at:null});
+   const result=await req<{proof_ref:string;staged:boolean}>("rpc/ns_stage_attendance_proof",{p_event_id:id,p_org:account.organization_id,p_site:siteId,p_post:post||null,p_event:action,p_occurred:occurred,p_revision:policy.revision,p_latitude:policy.require_gps?gps?.latitude:null,p_longitude:policy.require_gps?gps?.longitude:null,p_accuracy:policy.require_gps?gps?.accuracy:null,p_gps_at:policy.require_gps?gps?.at:null,p_selfie_at:policy.require_selfie?photo?.at:null});
    if(!live.current||g!==gen.current||result.proof_ref!==id||!result.staged)throw Error();
-   await onSubmit(id,occurred,action);if(live.current&&g===gen.current){setGps(null);setPhoto(null);onClose();}
+   await onSubmit(id,occurred,action,post||null);if(live.current&&g===gen.current){setGps(null);setPhoto(null);onClose();}
   }catch{if(live.current&&g===gen.current){setGps(null);setPhoto(null);setError(true);}}finally{if(live.current)setBusy(false);}
  }
  async function save(p:Policy,g:boolean,s:boolean){
@@ -83,7 +85,7 @@ export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getTok
  <button className="btn secondary" disabled={busy} onClick={()=>setReload(x=>x+1)}>{tr("Actualiser les règles","Refresh rules","Hesɗitin yamirooje")}</button>
  {manager&&loaded&&<div>{actions.map(a=>{const p=rule(a);return <fieldset key={a}><legend>{labels[a]}</legend><label><input type="checkbox" checked={p.require_gps} disabled={busy||!!action||mandatoryGPS(a)} onChange={e=>void save(p,e.target.checked,p.require_selfie)}/> GPS</label><label><input type="checkbox" checked={p.require_selfie} disabled={busy||!!action} onChange={e=>void save(p,p.require_gps,e.target.checked)}/> Selfie</label></fieldset>;})}</div>}
  {action&&<div role="region" aria-label={labels[action]}><h3>{labels[action]}</h3><p>{tr("La preuve est collectée uniquement pour ce pointage. Une connexion est nécessaire.","Evidence is collected only for this attendance event. Connection required.","Seedeeji ko ngam golle ɗee tan. Ceŋol ena sokli.")}</p>
- {loaded&&policy&&<>{policy.require_gps&&<button className="btn secondary" disabled={busy} onClick={()=>void obtainGPS()}>{gps?tr("Position obtenue — reprendre","Position captured — retake","Nokkuure heɓiima"):tr("Obtenir ma position","Get my location","Heɓ nokkuure am")}</button>}
+ {loaded&&policy&&<><button className="btn secondary" disabled={busy} onClick={()=>void loadPosts()}>{tr("Afficher les postes autorisés","Show authorized workstations","Hollu nokkuuji golle jaɓaaɗi")}</button>{postsLoaded&&<label>{tr("Emplacement du pointage","Attendance workstation","Nokkuure golle")}<select disabled={busy} value={post} onChange={e=>setPost(e.target.value)}><option value="">{tr("Site entier","Whole site","Nokkuure fof")}</option>{posts.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>}{policy.require_gps&&<button className="btn secondary" disabled={busy} onClick={()=>void obtainGPS()}>{gps?tr("Position obtenue — reprendre","Position captured — retake","Nokkuure heɓiima"):tr("Obtenir ma position","Get my location","Heɓ nokkuure am")}</button>}
  {policy.require_selfie&&<><video ref={video} autoPlay playsInline muted style={{display:camera?"block":"none",width:"100%",maxWidth:"360px"}}/><button className="btn secondary" disabled={busy} onClick={()=>void (camera?takePhoto():openCamera())}>{camera?tr("Prendre le selfie","Take selfie","Ɓam natal"):photo?tr("Selfie pris — reprendre","Selfie captured — retake","Natal heɓiima"):tr("Ouvrir la caméra avant","Open front camera","Uddit kamera")}</button></>}
  <button className="btn primary" disabled={busy||!navigator.onLine||(policy.require_gps&&!gps)||(policy.require_selfie&&!photo)} onClick={()=>void confirm()}>{tr("Confirmer mon pointage","Confirm my attendance","Tabbitin golle am")}</button></>}
  <button className="btn secondary" disabled={busy} onClick={()=>{stop();onClose();}}>{tr("Annuler","Cancel","Haaytu")}</button></div>}</section>{!action&&<AttendanceReview key={account.organization_id+":"+account.member_id+":"+siteId} account={account} siteId={siteId} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken}/>}</>;
