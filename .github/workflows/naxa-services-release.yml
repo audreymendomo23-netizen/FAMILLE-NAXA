@@ -35,9 +35,9 @@ jobs:
           NS_PROJECT_REF: ${{ vars.NAXA_SERVICES_SUPABASE_PROJECT_REF }}
           NS_ANON_KEY: ${{ secrets.NAXA_SERVICES_SUPABASE_ANON_KEY }}
           NS_FIREBASE_API_KEY: ${{ vars.NAXA_SERVICES_FIREBASE_API_KEY }}
-          NS_FIREBASE_APP_ID: ${{ vars.NAXA_SERVICES_FIREBASE_APP_ID }}
-          NS_FIREBASE_PROJECT_ID: ${{ vars.NAXA_SERVICES_FIREBASE_PROJECT_ID }}
-          NS_FIREBASE_SENDER_ID: ${{ vars.NAXA_SERVICES_FIREBASE_SENDER_ID }}
+          NS_FIREBASE_APP_ID: "1:203144467053:android:35b6db66aa6a85bce1e564"
+          NS_FIREBASE_PROJECT_ID: "naxa-services"
+          NS_FIREBASE_SENDER_ID: "203144467053"
         run: |
           node --input-type=module <<'NODE'
           import { appendFileSync } from 'node:fs';
