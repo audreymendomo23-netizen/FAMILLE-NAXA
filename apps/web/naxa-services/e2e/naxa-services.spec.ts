@@ -1042,3 +1042,28 @@ test("Financial interactions: report scopes, actual XLSX download and print view
  await expect(popup.locator("body")).toHaveAttribute("data-print-invoked","true");await expect(popup.locator("table")).toContainText("3500");await popup.close();
  await page.getByLabel("À partir du").fill("2026-11-25");await expect(excel).toHaveCount(0);
 });
+
+
+test("Financial interactions: delayed period response cannot restore an obsolete export",async({context})=>{
+ await installBackend(context);
+ let release!:()=>void,started!:()=>void;
+ const pending=new Promise<void>(r=>{release=r;}),observed=new Promise<void>(r=>{started=r;});
+ await context.route(ACCOUNTING_URL,async route=>{
+  if(route.request().method()==="OPTIONS")return route.fallback();
+  const request=route.request().postDataJSON();if(request.action!=="performance")return route.fallback();
+  const old=request.from_date==="2026-11-24";
+  if(old){started();await pending;}
+  return json(route,{ok:true,result:{daily:[{performance_day:request.from_date,revenue_xaf:old?999999:2000}],monthly:[],annual:[]}});
+ });
+ const page=await context.newPage();await signIn(page);await page.locator(".side-nav button.nav-item").filter({hasText:"Rapports & comptabilité"}).click();
+ const date=page.getByLabel("À partir du"),load=page.getByRole("button",{name:"Charger les rapports",exact:true});
+ try{
+  await date.fill("2026-11-24");await load.click();await observed;
+  await date.fill("2026-11-25");await expect(load).toBeEnabled();await load.click();
+  await expect(page.getByRole("table").first()).toContainText("2026-11-25");
+  const oldResponse=page.waitForResponse(r=>r.url()===ACCOUNTING_URL&&r.request().method()==="POST"&&r.request().postDataJSON()?.from_date==="2026-11-24");
+  release();await oldResponse;await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+  await expect(page.getByRole("table").first()).toContainText("2026-11-25");await expect(page.getByRole("table").first()).not.toContainText("2026-11-24");
+  await expect(page.getByRole("button",{name:"Exporter Excel",exact:true})).toBeEnabled();
+ }finally{release();}
+});

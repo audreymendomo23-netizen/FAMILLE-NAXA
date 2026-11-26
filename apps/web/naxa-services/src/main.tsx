@@ -165,7 +165,9 @@ function App() {
   const [workstationSiteId, setWorkstationSiteId] = useState("");
   const [performanceData, setPerformanceData] = useState<{daily: Record<string,unknown>[];monthly:Record<string,unknown>[];annual:Record<string,unknown>[]} | null>(null);
   const [attendanceRequest,setAttendanceRequest]=useState<{scope:string;site:string;action:AttendanceAction}|null>(null);
-  const [performanceFromDate, setPerformanceFromDate] = useState(new Date().toISOString().slice(0,10));
+  const [performanceFromDate, setPerformanceFromDate] = useState(new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Douala",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date()));
+  const performanceRequest=useRef(0);
+  function changePerformanceDate(value:string){performanceRequest.current++;setPerformanceData(null);setPerformanceError("");setPerformanceBusy(false);setPerformanceFromDate(value);}
   const [performanceBusy, setPerformanceBusy] = useState(false);
   const [performanceError, setPerformanceError] = useState("");
 
@@ -320,10 +322,12 @@ function App() {
     if (!accountingEndpoint || !anonKey) throw new Error("Service comptable indisponible.");
     const siteIds = authSession.account.active_site_ids;
     if (!siteIds.length) throw new Error("Aucun site de lecture n'est autorisé pour cette session.");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(performanceFromDate) || !Number.isFinite(new Date(performanceFromDate).getTime())) {
-      throw new Error("Date de début invalide.");
+    const parsedDate=new Date(performanceFromDate+"T00:00:00Z");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(performanceFromDate) || performanceFromDate.startsWith("0000-") || !Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0,10)!==performanceFromDate) {
+      setPerformanceError("Date de début invalide.");return;
     }
-    const isCurrent=captureSession(authSession);
+    const sessionCurrent=captureSession(authSession), requestId=++performanceRequest.current;
+    const isCurrent=()=>sessionCurrent()&&performanceRequest.current===requestId;
     setPerformanceBusy(true);
     setPerformanceData(null);
     setPerformanceError("");
@@ -350,6 +354,8 @@ function App() {
       if(!isCurrent())return;
       setPerformanceData({ daily, monthly, annual });
       setAuthMessage("Rapport actualisé pour vos établissements.");
+    } catch(error){
+      if(isCurrent())setPerformanceError(error instanceof Error?error.message:"Chargement du rapport impossible.");
     } finally {
       if(isCurrent())setPerformanceBusy(false);
     }
@@ -579,6 +585,7 @@ function App() {
       setWorkstations([]);
       setWorkstationSiteId("");
       setActiveSiteId("");
+      performanceRequest.current++;
       setPerformanceData(null);
       setPerformanceError("");
       setPerformanceBusy(false);
@@ -1213,7 +1220,7 @@ function App() {
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
             active === "security" ? <DeviceSecurityPage key={authSession?.deviceId??"preview"} authenticated={Boolean(authSession&&!preview)} onLoad={loadOwnDevices} onRevoke={revokeOwnDevice} /> :
-            active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={value=>{setPerformanceData(null);setPerformanceFromDate(value);}} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport().catch(error => setPerformanceError(error instanceof Error ? error.message : "Chargement du rapport impossible.")); }} authenticated={Boolean(authSession&&!preview)} locale={authSession?.account.default_locale??"fr"} /> :
+            active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={changePerformanceDate} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport(); }} authenticated={Boolean(authSession&&!preview)} locale={authSession?.account.default_locale??"fr"} /> :
             active === "agenda" ? <AgendaOperationsPage entries={(entries.agenda ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTransition={transitionWebAppointment} onReschedule={rescheduleWebAppointment} /> :
             active === "pressing" ? <PressingPage
               entries={(entries.pressing ?? []).filter(entry => preview || entry.siteId === (activeSiteId || authSession?.account.active_site_ids[0]))} canPreviewEdit={preview}
@@ -1578,7 +1585,7 @@ function PerformancePage({
     </tbody></table></div>;
   return <div className="module-layout">
     <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{t("ANALYSE FINANCIÈRE")}</span><h2>{t("Performances financières confirmées")}</h2></div><span className="status-tag pending">{t(data?"Données confirmées":"À charger")}</span></div>
-      {authenticated?<><label>{t("À partir du")}<input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} max={new Date().toISOString().slice(0,10)}/></label><button className="btn primary" disabled={loading} onClick={onLoad}>{t(loading?"Chargement…":"Charger les rapports")}</button></>:<div className="notice">{t("Connectez-vous pour consulter vos rapports.")}</div>}
+      {authenticated?<><label>{t("À partir du")}<input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} max={new Intl.DateTimeFormat("en-CA",{timeZone:"Africa/Douala",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}/></label><button className="btn primary" disabled={loading} onClick={onLoad}>{t(loading?"Chargement…":"Charger les rapports")}</button></>:<div className="notice">{t("Connectez-vous pour consulter vos rapports.")}</div>}
       {error&&<div className="notice" role="status">{t(customerMessage(error))}</div>}
       <p className="muted">{t("Les indicateurs tiennent compte des ventes confirmées.")}</p>
       {authenticated&&data&&<><button className="btn secondary" disabled={loading} onClick={()=>exportReport("xlsx")}>{tr("Exporter Excel","Export Excel","Yaltin Excel")}</button><button className="btn secondary" disabled={loading} onClick={()=>exportReport("pdf")}>{tr("Imprimer / enregistrer en PDF","Print / save as PDF","Winndit / danndu PDF")}</button></>}

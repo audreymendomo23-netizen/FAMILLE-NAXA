@@ -23,6 +23,9 @@ on:
       - 'supabase/drafts/naxa_services_v14_recording_request.sql'
       - 'supabase/drafts/naxa_services_v18_meeting_creation.sql'
       - 'supabase/drafts/naxa_services_v19_meeting_series.sql'
+      - 'supabase/drafts/naxa_services_v20_activity_field_parity.sql'
+      - 'supabase/tests/drafts/naxa_services_activity_field_matrix.sql'
+      - 'apps/web/naxa-services/src/**'
       - 'supabase/tests/drafts/naxa_services_meeting_series.sql'
       - 'supabase/tests/drafts/naxa_services_meeting_creation.sql'
       - 'supabase/tests/drafts/naxa_services_recording_request.sql'
@@ -181,13 +184,20 @@ jobs:
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_meeting_series.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -Atc "select to_regclass('public.ns_meeting_series') is null" | grep -Fx t
+      - name: Qualify strict sector fields on disposable DB
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          { sed '$d' supabase/drafts/naxa_services_v20_activity_field_parity.sql; cat supabase/tests/drafts/naxa_services_activity_field_matrix.sql; echo 'rollback;'; } | psql "$DB_URL" -v ON_ERROR_STOP=1
       - name: Activate attendance candidates on disposable DB for actual browser proof
         shell: bash
         run: |
           set -euo pipefail
           set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql; do
+          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql; do
             test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
             sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
           done
@@ -366,6 +376,32 @@ jobs:
                 return response.request().postDataJSON().event;
               };
               const count=async(table,filter)=>{assert.match(table,/^ns_[a-z_]+$/);return (await success(base+'/rest/v1/'+table+'?select=id&org_id=eq.'+f.org.id+'&'+filter,undefined,admin,admin,'GET')).length;};
+              await scenario('real sector form create, reject blank required field and cancel confirmed dossier',async()=>{
+                await nav('Dossiers métier');
+                await page.getByLabel("Client / donneur d'ordre").fill('Client dossier Replay');
+                await page.getByLabel('Intitulé du dossier').fill('Dossier Replay valide');
+                await page.locator('[data-activity-field="service"] input').fill('Service Replay');
+                await page.locator('[data-activity-field="specifications"] textarea').fill('Périmètre de recette');
+                const created=await apply('work_order.created',()=>page.getByRole('button',{name:'Créer et synchroniser le dossier'}).click());
+                assert.equal(await count('ns_management_records','id=eq.'+created.aggregate_id),1);
+                const record=page.locator('.activity-record').filter({has:page.getByText('Dossier Replay valide',{exact:true})});
+                await record.getByTestId('record-confirmation').waitFor();
+                const cancel=record.getByRole('button',{name:'Annulée',exact:true});
+                assert.equal(await cancel.isDisabled(),true);
+                await record.getByLabel("Motif du changement d'étape").fill('Annulation de recette');
+                await apply('work_order.status_changed',()=>cancel.click());
+                await record.locator('.status-tag').getByText('Annulée',{exact:true}).waitFor();
+                assert.equal(await record.locator('.activity-transition').count(),0);
+                const rows=await success(base+'/rest/v1/ns_management_records?select=status,revision&id=eq.'+created.aggregate_id,undefined,admin,admin,'GET');
+                assert.equal(rows[0].status,'cancelled');assert.equal(rows[0].revision,2);
+                await page.getByLabel("Client / donneur d'ordre").fill('Client invalide Replay');
+                await page.getByLabel('Intitulé du dossier').fill('Dossier Replay invalide');
+                await page.locator('[data-activity-field="service"] input').fill('   ');
+                await page.locator('[data-activity-field="specifications"] textarea').fill('Périmètre de recette');
+                await page.getByRole('button',{name:'Créer et synchroniser le dossier'}).click();
+                await page.locator('.activity-work-layout [role="status"]').waitFor();
+                assert.equal(await count('ns_management_records','title=eq.'+encodeURIComponent('Dossier Replay invalide')),0);
+              });
               await scenario('real cash register, opening, cash and external Mobile Money sales, double-open prevention and close',async()=>{
                 await nav('Caisse & ventes');
                 await page.getByLabel('Code unique').fill('REPLAY-CASH');
