@@ -26,6 +26,7 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const k=uid(),i=await intent(a,"PREMIUM","monthly",k);assert.equal((await intent(a,"PREMIUM","monthly",k)).id,i.id);
  await assert.rejects(intent(a,"ACCESS","monthly",k),/IDEMPOTENCY_CONFLICT/);
  await assert.rejects(pay(i,uid(),1),/PAYMENT_MISMATCH/);
+ await assert.rejects(scalar("select zp_confirm_subscription($1,'mtn_momo',$2,$3,null)",[i.id,uid(),i.amount_xaf]),/PAYMENT_MISMATCH/);
  assert.equal(await scalar("select zp_paid_plan($1)",[a.org]),null);
  const ref=uid(),pid=await pay(i,ref);assert.equal(await pay(i,ref),pid);assert.equal(await scalar("select zp_paid_plan($1)",[a.org]),"PREMIUM");
  await pay(await intent(b,"ACCESS","annual"));

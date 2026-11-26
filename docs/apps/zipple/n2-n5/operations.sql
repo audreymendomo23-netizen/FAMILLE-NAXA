@@ -25,7 +25,7 @@ create function public.zp_guest_menu(p_guest_hash text) returns jsonb language s
  from public.zp_guest_sessions g join public.zp_table_sessions t on t.id=g.table_session_id join public.zp_sites s on s.id=g.site_id join public.zp_organizations o on o.id=g.org_id where g.token_hash=p_guest_hash and g.expires_at>now() and t.closed_at is null and s.active and o.active and public.zp_paid_plan(g.org_id) is not null
 $$;
 create function public.zp_set_service_delay(p_access text,p_site uuid,p_order uuid,p_minutes int) returns timestamptz language plpgsql security invoker set search_path=pg_catalog,public as $$
-declare m public.zp_members;d timestamptz;begin m:=public.zp_business_actor(p_access,p_site);if m.role_code not in ('promoteur','manager') or p_minutes not between 1 and 240 then raise exception 'DENIED';end if;
+declare m public.zp_members;d timestamptz;begin m:=public.zp_business_actor(p_access,p_site);if m.role_code not in ('promoteur','manager') or p_minutes is null or p_minutes not between 1 and 240 then raise exception 'DENIED';end if;
  update public.zp_orders set promised_at=clock_timestamp()+make_interval(mins=>p_minutes) where id=p_order and org_id=m.org_id and site_id=p_site and status in ('received','preparing','ready') returning promised_at into d;
  if d is null then raise exception 'DENIED';end if;
  insert into public.zp_order_events(order_id,org_id,site_id,member_id,event_type,payload) values(p_order,m.org_id,p_site,m.id,'delay',jsonb_build_object('minutes',p_minutes,'promised_at',d));return d;end $$;
@@ -68,7 +68,7 @@ declare m public.zp_members;c public.zp_cash_sessions;o public.zp_orders;r publi
  if r.id is not null then if (r.cash_id,r.order_id,r.method,r.amount_xaf,r.reference) is distinct from (p_cash,p_order,p_method,p_amount,p_ref) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return r.id;end if;
  if c.closed_at is not null then raise exception 'CASH_CLOSED';end if;
  select * into o from public.zp_orders where id=p_order and org_id=m.org_id and site_id=p_site for update;
- if o.id is null or o.status<>'served' or p_amount<>o.total_xaf or p_amount<=0 or (p_method<>'cash' and length(trim(coalesce(p_ref,'')))<4) then raise exception 'SALE_NOT_SETTLEABLE';end if;
+ if o.id is null or o.status<>'served' or p_amount is distinct from o.total_xaf or p_amount<=0 or (p_method<>'cash' and length(trim(coalesce(p_ref,'')))<4) then raise exception 'SALE_NOT_SETTLEABLE';end if;
  insert into public.zp_cash_receipts(org_id,site_id,cash_id,order_id,member_id,request_id,method,amount_xaf,reference) values(m.org_id,p_site,c.id,o.id,m.id,p_request,p_method,p_amount,p_ref) returning id into rid;return rid;end $$;
 create function public.zp_close_cash(p_access text,p_site uuid,p_cash uuid,p_counted bigint) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;c public.zp_cash_sessions;expected bigint;begin m:=public.zp_business_actor(p_access,p_site);if m.role_code not in ('promoteur','manager') or p_counted<0 or p_counted is null then raise exception 'DENIED';end if;

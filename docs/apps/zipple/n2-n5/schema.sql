@@ -25,8 +25,8 @@ declare m public.zp_members; begin
 create function public.zp_paid_plan(p_org uuid) returns text language sql stable security invoker set search_path=pg_catalog,public as $$
  select plan from public.zp_subscription_periods where org_id=p_org and starts_at<=now() and ends_at>now() order by starts_at desc limit 1
 $$;
-create function public.zp_business_actor(p_access text,p_site uuid) returns public.zp_members language plpgsql stable security invoker set search_path=pg_catalog,public as $
-declare m public.zp_members;p text;begin m:=public.zp_actor(p_access,p_site);p:=public.zp_paid_plan(m.org_id);if p is null or (p='ACCESS' and m.role_code<>'promoteur') then raise exception 'SUBSCRIPTION_OR_ROLE_REQUIRED';end if;return m;end $;
+create function public.zp_business_actor(p_access text,p_site uuid) returns public.zp_members language plpgsql stable security invoker set search_path=pg_catalog,public as $$
+declare m public.zp_members;p text;begin m:=public.zp_actor(p_access,p_site);p:=public.zp_paid_plan(m.org_id);if p is null or (p='ACCESS' and m.role_code<>'promoteur') then raise exception 'SUBSCRIPTION_OR_ROLE_REQUIRED';end if;return m;end $$;
 create function public.zp_quote_intent(p_access text,p_site uuid,p_plan text,p_cadence text,p_provider text,p_request uuid) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members; c public.zp_plan_catalog; i public.zp_subscription_intents;begin
  m:=public.zp_actor(p_access,p_site);if m.role_code<>'promoteur' then raise exception 'DENIED';end if;
@@ -40,7 +40,7 @@ declare m public.zp_members; c public.zp_plan_catalog; i public.zp_subscription_
 create function public.zp_confirm_subscription(p_intent uuid,p_provider text,p_reference text,p_amount int,p_currency text) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare i public.zp_subscription_intents;c public.zp_plan_catalog;st timestamptz;pid uuid;first_paid boolean;begin
  select * into i from public.zp_subscription_intents where id=p_intent for update;
- if i.id is null or i.provider<>p_provider or i.amount_xaf<>p_amount or p_currency<>'XAF' or length(trim(coalesce(p_reference,'')))<4 then raise exception 'PAYMENT_MISMATCH';end if;
+ if i.id is null or i.provider is distinct from p_provider or i.amount_xaf is distinct from p_amount or p_currency is distinct from 'XAF' or length(trim(coalesce(p_reference,'')))<4 then raise exception 'PAYMENT_MISMATCH';end if;
  if i.status='confirmed' then if i.provider_reference<>p_reference then raise exception 'PAYMENT_MISMATCH';end if;return i.period_id;end if;
  perform 1 from public.zp_organizations where id=i.org_id and active for update;if not found then raise exception 'DENIED';end if;
  select not exists(select 1 from public.zp_subscription_intents where org_id=i.org_id and status='confirmed') into first_paid;
@@ -86,7 +86,7 @@ declare m public.zp_members;g public.zp_guest_sessions;s public.zp_site_modes;or
  else m:=public.zp_business_actor(p_access,p_site);org:=m.org_id;end if;
  if public.zp_paid_plan(org) is null then raise exception 'SUBSCRIPTION_REQUIRED';end if;
  select * into s from public.zp_site_modes where site_id=p_site and org_id=org;
- if s.site_id is null or p_channel not in ('table','counter','takeaway','delivery') or p_channel='delivery' then raise exception 'CHANNEL_DENIED';end if;
+ if s.site_id is null or p_channel is null or p_channel not in ('table','counter','takeaway','delivery') or p_channel='delivery' then raise exception 'CHANNEL_DENIED';end if;
  if p_channel='table' then perform 1 from public.zp_table_sessions where id=p_table_session and org_id=org and site_id=p_site and closed_at is null for update;if not found then raise exception 'TABLE_CLOSED';end if;elsif p_table_session is not null then raise exception 'INVALID_TABLE';end if;
  if jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines) not between 1 and 50 then raise exception 'INVALID_LINES';end if;
  if exists(select 1 from jsonb_to_recordset(p_lines) as x(item_id uuid,qty int) where x.item_id is null or x.qty is null or x.qty not between 1 and 1000) then raise exception 'INVALID_QUANTITY';end if;
