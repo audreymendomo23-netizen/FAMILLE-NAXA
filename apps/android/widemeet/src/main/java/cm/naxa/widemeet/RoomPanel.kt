@@ -6,6 +6,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import cm.naxa.widemeet.auth.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
@@ -27,6 +28,25 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  var invited by remember{mutableStateOf<Set<String>>(emptySet())};var chat by remember{mutableStateOf("")};var poll by remember{mutableStateOf("")}
  suspend fun refresh(){busy=true;error=false;try{list=rows(gateway.request("list",JSONObject(),session) as JSONArray);if(hostRole)contacts=rows(gateway.request("contacts",JSONObject(),session) as JSONArray)}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true;list=emptyList();contacts=emptyList()}finally{busy=false}}
  LaunchedEffect(session.deviceId){refresh()}
+ // Refresh only the selected authorized room. Cancels during writes, selection or session change.
+ LaunchedEffect(session.deviceId,mode,room?.optString("id"),room?.optString("status"),busy){
+  val id=room?.optString("id")?:return@LaunchedEffect
+  if(mode!="room"||busy||room?.optString("status")=="ended")return@LaunchedEffect
+  while(true){
+   delay(3000)
+   try{
+    val next=gateway.request("read",JSONObject().put("room_id",id),session) as JSONObject
+    require(next.optString("id")==id&&next.has("revision"))
+    val current=room
+    if(current?.optString("id")!=id||busy)return@LaunchedEffect
+    if(next.getLong("revision")>=current.getLong("revision"))room=next
+    error=false
+   }catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){
+    if(room?.optString("id")==id){room=null;mode="list";error=true}
+    return@LaunchedEffect
+   }
+  }
+ }
  fun execute(action:String,body:JSONObject){if(busy)return;busy=true;error=false;scope.launch{try{val next=gateway.request(action,body,session) as JSONObject;require(next.has("id")&&next.has("revision"));room=next;mode="room";chat="";poll=""}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true;if(action=="command")room=null}finally{busy=false}}}
  fun command(action:String,value:Any?=null,target:String?=null){val r=room?:return;execute("command",JSONObject().put("room_id",r.getString("id")).put("request_id",UUID.randomUUID().toString()).put("expected_revision",r.getLong("revision")).put("action",action).put("value",value?:JSONObject.NULL).put("target",target?:JSONObject.NULL))}
  fun displayName(id:String)=if(id==session.memberId)tr("Moi","Me") else contacts.firstOrNull{it.optString("member_id")==id}?.optString("display_name")?:tr("Participant","Participant")
