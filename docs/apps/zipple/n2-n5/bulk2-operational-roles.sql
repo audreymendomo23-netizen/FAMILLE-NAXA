@@ -190,7 +190,8 @@ declare m public.zp_members;g public.zp_guest_sessions;s public.zp_site_modes;or
  if public.zp_operational_plan(org) is null then raise exception 'SUBSCRIPTION_REQUIRED';end if;
  select * into s from public.zp_site_modes where site_id=p_site and org_id=org;
  if s.site_id is null or p_channel is null or p_channel not in ('table','counter','takeaway','delivery') or p_channel='delivery' then raise exception 'CHANNEL_DENIED';end if;
- if p_channel='table' or g.id is not null then perform 1 from public.zp_table_sessions where id=p_table_session and org_id=org and site_id=p_site and closed_at is null for update;if not found then raise exception 'TABLE_CLOSED';end if;elsif p_table_session is not null then raise exception 'INVALID_TABLE';end if;
+ if p_channel='table' or g.id is not null then perform 1 from public.zp_table_sessions where id=p_table_session and org_id=org and site_id=p_site and closed_at is null for update;if not found then raise exception 'TABLE_CLOSED';end if;
+ if p_channel='table' and not exists(select 1 from public.zp_table_sessions ts join public.zp_tables t on t.id=ts.table_id where ts.id=p_table_session and t.kind='table') then raise exception 'CHANNEL_DENIED';end if;elsif p_table_session is not null then raise exception 'INVALID_TABLE';end if;
  if jsonb_typeof(p_lines) is distinct from 'array' or jsonb_array_length(p_lines) not between 1 and 50 then raise exception 'INVALID_LINES';end if;
  if exists(select 1 from jsonb_to_recordset(p_lines) as x(item_id uuid,qty int,note text) where x.item_id is null or x.qty is null or x.qty not between 1 and 1000 or length(coalesce(x.note,''))>500) then raise exception 'INVALID_QUANTITY';end if;
  -- Serializes duplicate submissions before stock changes, even for different requests.
@@ -224,6 +225,7 @@ create or replace function public.zp_advance_line(p_access text,p_site uuid,p_or
 declare m public.zp_members;o public.zp_orders;current_state text;overall text;begin m:=public.zp_business_actor(p_access,p_site);
  select * into o from public.zp_orders where id=p_order and org_id=m.org_id and site_id=p_site for update;if o.id is null or o.status='cancelled' then raise exception 'DENIED';end if;
  select state into current_state from public.zp_order_lines where order_id=p_order and item_id=p_item;if current_state is null or (m.role_code not in ('promoteur','manager') and not (p_next='served' and public.zp_can_operate(m.id,p_site,'serve')) and not exists(select 1 from public.zp_station_grants g join public.zp_order_lines l on l.post=g.post where g.site_id=p_site and g.member_id=m.id and l.order_id=p_order and l.item_id=p_item)) then raise exception 'DENIED';end if;
+ if p_next='served' and o.channel='table' and exists(select 1 from public.zp_site_modes sm where sm.site_id=p_site and sm.org_id=m.org_id and sm.space='snack_bar') and not public.zp_can_operate(m.id,p_site,'serve') then raise exception 'DENIED';end if;
  if current_state=p_next then return o.status;end if;
  if not ((current_state='received' and p_next='preparing') or (current_state='preparing' and p_next='ready') or (current_state='ready' and p_next='served')) then raise exception 'INVALID_TRANSITION';end if;
  update public.zp_order_lines set state=p_next where order_id=p_order and item_id=p_item;

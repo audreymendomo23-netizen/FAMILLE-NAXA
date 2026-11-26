@@ -402,9 +402,34 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await ok("operational_grant",{member_id:staffId,role:"server",enabled:true});
   const staffLoginResult=await call("zipple-n1","login",{identifier:staffLogin,password});assert.equal(staffLoginResult.status,200);const staffToken=staffLoginResult.body.access_token;
   assert.ok(staffToken);assert.equal((await b("erp_snapshot",{},staffToken)).status,403);
+  const snackTable=await ok("table_create",{site_id:snackSite,label:"Table Snack 7"});
+  await ok("table_open",{site_id:snackSite,table_id:snackTable.id});
+  const snackGuestCtx=await context(),snackGuest=await snackGuestCtx.newPage();
+  await snackGuest.goto(publicOrigin+"/#table="+snackTable.qr);await snackGuest.getByRole("button",{name:"Voir la carte"}).click();
+  await snackGuest.getByText("Restez à votre table : une serveuse ou un serveur vous apportera votre commande.").waitFor();
+  await snackGuest.getByLabel(/Snack recette/).fill("1");await snackGuest.getByRole("button",{name:"Confirmer ma commande"}).click();
+  await snackGuest.getByRole("heading",{name:"Commande confirmée"}).waitFor();
+  const tableOrder=await scalar("select id from zp_orders where site_id=$1 and channel='table'",[snackSite]);
+  assert.ok(tableOrder);assert.equal((await b("line_advance",{site_id:snackSite,order_id:tableOrder,item_id:snackItem,next:"served"},staffToken)).status,403);
+  await db.query("insert into zp_site_scopes values($1,$2,$3)",[staffId,org,snackSite]);
+  await ok("station_grant",{site_id:snackSite,member_id:staffId,post:"snack",enabled:true});
+  for(const next of ["preparing","ready"])await ok("line_advance",{site_id:snackSite,order_id:tableOrder,item_id:snackItem,next});
+  await snackGuest.getByText("Commande prête — le personnel va vous la remettre à table.").waitFor({timeout:15000});
+  assert.equal(await snackGuest.getByRole("button",{name:"J’ai été servi"}).count(),0);
+  assert.equal((await b("line_advance",{site_id:snackSite,order_id:tableOrder,item_id:snackItem,next:"served"},staffToken)).status,403);
+  await ok("operational_grant",{site_id:snackSite,member_id:staffId,role:"server",enabled:true});
+  // Refresh the staff session after changing the assigned site scopes.
+  const snackStaffLogin=await call("zipple-n1","login",{identifier:staffLogin,password});assert.equal(snackStaffLogin.status,200);
+  const snackStaffToken=snackStaffLogin.body.access_token;
+  const served=await b("line_advance",{site_id:snackSite,order_id:tableOrder,item_id:snackItem,next:"served"},snackStaffToken);assert.equal(served.status,200);
+  await snackGuest.getByRole("button",{name:"J’ai été servi"}).click();await snackGuest.getByText("Service confirmé par vous").waitFor();
+  assert.equal(await scalar("select member_id from zp_order_events where order_id=$1 and event_type='line_state' and payload->>'state'='served'",[tableOrder]),staffId);
+  const snackMetrics=await ok("pilotage",{site_id:snackSite,start:new Intl.DateTimeFormat("sv-SE",{timeZone:"Africa/Douala"}).format(new Date()),end:new Intl.DateTimeFormat("sv-SE",{timeZone:"Africa/Douala"}).format(new Date())});
+  assert.ok(snackMetrics.service_team.some(x=>x.member_id===staffId&&Number(x.completed_orders)===1));
+  await snackGuestCtx.close();console.log("ZIPPLE_SNACK_TABLE_HANDOFF_AND_PERFORMANCE_PASS");
   const worker=await context(),workerPage=await worker.newPage();await workerPage.goto(publicOrigin);await workerPage.getByLabel("Identifiant").fill(staffLogin);await workerPage.getByLabel("Mot de passe",{exact:true}).fill(password);await workerPage.getByRole("button",{name:"Se connecter"}).click();await workerPage.getByRole("heading",{name:"Nouvelle commande"}).waitFor();
   assert.equal(await workerPage.getByRole("button",{name:"Stocks & finances"}).count(),0);assert.equal(await workerPage.getByRole("button",{name:"Caisse",exact:true}).count(),0);
-  await ok("operational_grant",{member_id:staffId,role:"server",enabled:false});assert.equal((await b("snapshot",{},staffToken)).status,403);
+  await ok("operational_grant",{member_id:staffId,role:"server",enabled:false});assert.equal((await b("snapshot",{},snackStaffToken)).status,403);
   await workerPage.getByRole("heading",{name:"Nouvelle commande"}).waitFor({state:"hidden",timeout:15000});await worker.close();
   console.log("ZIPPLE_BULK2_REAL_EDGE_STAFF_REVOCATION_PASS");
   // Verify the new boundary through actual GoTrue / PostgREST / Edge, not a mocked RPC.

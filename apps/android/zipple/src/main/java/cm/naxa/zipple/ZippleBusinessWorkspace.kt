@@ -45,6 +45,8 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
     LaunchedEffect(session.token,site){
         try{load()}catch(c:CancellationException){throw c}catch(_:Exception){snapshot=null}
     }
+    val operationalRoles=snapshot?.optJSONArray("operation_roles")
+    val canServe=canManage||(operationalRoles!=null&&(0 until operationalRoles.length()).any{operationalRoles.optString(it) in setOf("server","floor")})
     val canWrite=canManage&&!busy&&session.permits(site)
     Text(tr("Gestion ZIPPLE","ZIPPLE management"),style=MaterialTheme.typography.titleLarge)
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
@@ -130,7 +132,7 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
             else{
                 Text(tr("Nouvelle commande","New order"),style=MaterialTheme.typography.titleMedium)
                 listOf("counter","takeaway","table").forEach{c->OutlinedButton(enabled=canWrite,onClick={channel=c;tableSession="";orderKey=UUID.randomUUID().toString()}){Text((if(channel==c)"✓ " else "")+when(c){"counter"->tr("Comptoir","Counter");"takeaway"->tr("À emporter","Takeaway");else->tr("À table","Table")})}}
-                if(channel=="table")current.rows("tables").filter{!it.isNull("session_id")}.forEach{x->val ts=x.optString("session_id");OutlinedButton(enabled=canWrite,onClick={tableSession=ts;orderKey=UUID.randomUUID().toString()}){Text((if(tableSession==ts)"✓ " else "")+x.optString("label"))}}
+                if(channel=="table")current.rows("tables").filter{!it.isNull("session_id")&&it.optString("kind")!="pickup"}.forEach{x->val ts=x.optString("session_id");OutlinedButton(enabled=canWrite,onClick={tableSession=ts;orderKey=UUID.randomUUID().toString()}){Text((if(tableSession==ts)"✓ " else "")+x.optString("label"))}}
                 val items=current.rows("items").filter{it.optBoolean("active")&&it.optInt("available_qty")>0}
                 items.forEach{i->
                     val id=i.optString("id");val count=cart[id]?:0;Text(i.optString("name")+" · "+i.optLong("price_xaf")+" FCFA")
@@ -150,13 +152,14 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
                 }}){Text(tr("Envoyer en préparation","Send to preparation"))}
                 Text(tr("Tickets et préparation","Tickets and preparation"),style=MaterialTheme.typography.titleMedium)
                 current.rows("orders").forEach{o->
-                    Text(o.optString("status")+" · "+o.optLong("total_xaf")+" FCFA")
+                    Text("#"+o.optString("number")+" · "+o.optString("status")+" · "+o.optLong("total_xaf")+" FCFA")
+                    if(o.optString("channel")=="table")Text(tr("Table : ","Table: ")+(current.rows("tables").find{it.optString("session_id")==o.optString("table_session_id")}?.optString("label")?:"—"))
                     o.rows("lines").forEach{l->
                         val state=l.optString("state");val next=mapOf("received" to "preparing","preparing" to "ready","ready" to "served")[state]
                         Text(l.optString("name")+" × "+l.optInt("qty")+" · "+l.optString("post")+" · "+state)
-                        if(next!=null&&o.optString("status")!="cancelled")OutlinedButton(enabled=canWrite,onClick={run{
+                        if(next!=null&&o.optString("status")!="cancelled"&&(canManage||(canServe&&next=="served")))OutlinedButton(enabled=!busy&&session.permits(site),onClick={run{
                             api.call(session,site,"line_advance",JSONObject().put("order_id",o.optString("id")).put("item_id",l.optString("item_id")).put("next",next));load()
-                        }}){Text(tr("Étape suivante","Next step"))}
+                        }}){Text(if(current.optJSONObject("mode")?.optString("space")=="snack_bar"&&o.optString("channel")=="table"&&next=="served")tr("Remettre au client","Hand to customer")else tr("Étape suivante","Next step"))}
                     }
                     HorizontalDivider()
                 }
