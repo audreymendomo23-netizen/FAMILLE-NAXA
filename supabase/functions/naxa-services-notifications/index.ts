@@ -395,6 +395,14 @@ Deno.serve(async (request: Request) => {
       return reply(400, { error: "INVALID_BODY_OR_APP" }, origin);
     }
     const action = String(body.action ?? "");
+    if (action === "dispatch_scheduled") {
+      const ticket = request.headers.get("x-naxa-dispatch-ticket") ?? "";
+      if (!/^[0-9a-f]{64}$/.test(ticket) ||
+          await rpc("ns_consume_notification_dispatch_ticket", { p_ticket: ticket }) !== true) {
+        return reply(401, { error: "WORKER_AUTHENTICATION_FAILED" }, origin);
+      }
+      return reply(200, { ok: true, result: await dispatchBatch(10) }, origin);
+    }
     if (action === "dispatch") {
       if (!WORKER_SECRET || !constantTimeEqual(
         request.headers.get("x-naxa-notification-worker-secret") ?? "",
