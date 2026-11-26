@@ -31,6 +31,14 @@ Deno.serve(async request=>{
  const raw=await request.text();if(raw.length>16384)return send(413,{error:"request_too_large"});
  const body=JSON.parse(raw);
  if(!body||body.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
+ if(action==="request-recovery"){
+ const identifier=typeof body.identifier==="string"?body.identifier.trim().toUpperCase():"";
+ if(!/^WM-[A-Z0-9]{8,24}$/.test(identifier)||!uuid.test(body.installation_id??"")||!["web","android"].includes(body.platform))return send(400,{error:"invalid_request"});
+ const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-recovery:"+identifier),p_installation_hash:await digest("wm-recovery-installation:"+body.installation_id.toLowerCase())})});
+ if(allowed!==true)return send(429,{error:"too_many_attempts"});
+ await rest("rpc/wm_request_recovery",{method:"POST",body:JSON.stringify({p_identifier:identifier})});
+ return send(200,{accepted:true});
+ }
  if(action==="login"){
  const identifier=typeof body.identifier==="string"?body.identifier.trim().toUpperCase():"";
  const password=body.password;
