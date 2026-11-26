@@ -145,6 +145,16 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const received=await receive();assert.equal(received.received_cost,499);assert.equal(received.loss_cost,167);assert.deepEqual(await receive(),received);
  assert.equal(Number(await scalar("select sum(remaining_milli) from zp_ingredient_lots where ingredient_id=$1",[dstIng])),1500);
  assert.equal((await scalar("select zp_transfer_snapshot($1,$2)",[a.access,dest])).transfers[0].state,"received");
+ const account=await scalar("select zp_container_account($1,$2,$3,null,'Casiers',500)",[b.access,b.site,supplierId]);
+ const containerKey=uid(),issued=()=>scalar("select zp_container_move($1,$2,$3,$4,'issued',12,'')",[b.access,b.site,account,containerKey]);assert.deepEqual(await issued(),await issued());
+ await assert.rejects(scalar("select zp_container_move($1,$2,$3,$4,'returned',13,'')",[b.access,b.site,account,uid()]),/CONTAINER_BALANCE_EXCEEDED/);
+ await scalar("select zp_container_move($1,$2,$3,$4,'returned',8,'')",[b.access,b.site,account,uid()]);
+ await assert.rejects(scalar("select zp_container_move($1,$2,$3,$4,'lost',1,'')",[b.access,b.site,account,uid()]),/INVALID_CONTAINER_MOVEMENT/);
+ await scalar("select zp_container_move($1,$2,$3,$4,'lost',1,'Casse constatée')",[b.access,b.site,account,uid()]);
+ const packaging=await scalar("select zp_container_snapshot($1,$2)",[b.access,b.site]);assert.equal(packaging.accounts[0].outstanding,3);assert.equal(packaging.accounts[0].reference_exposure_xaf,1500);assert.equal(packaging.events.length,3);
+ assert.equal((await scalar("select zp_procurement_snapshot($1,$2)",[b.access,b.site])).debt_xaf,400);
+ await assert.rejects(scalar("select zp_container_move($1,$2,$3,$4,'returned',1,'')",[a.access,a.site,account,uid()]),/DENIED/);
+ console.log("ZIPPLE_N5_CONTAINER_MOVEMENTS_PASS");
  console.log("ZIPPLE_N5_TRANSFER_LIFECYCLE_PASS");
  console.log("ZIPPLE_N5_PROCUREMENT_AND_INVENTORY_PASS");
  console.log("ZIPPLE_N5_LOTS_RECIPE_PRODUCTION_EXPENSE_PASS");
