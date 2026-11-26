@@ -90,7 +90,7 @@ begin
  values(m.org_id,p_site,p_supplier,m.id,p_request,trim(p_reference),p_lines) returning id into batch_id;
  for line in select value from jsonb_array_elements(p_lines) loop
   if jsonb_typeof(line)<>'object' or not (line ?& array['ingredient_id','qty_milli','total_xaf']) then raise exception 'INVALID_PURCHASE_LINES';end if;
-  if coalesce(line->>'qty_milli','') !~ '^[1-9][0-9]{0,9} or coalesce(line->>'total_xaf','') !~ '^[1-9][0-9]{0,9} then raise exception 'INVALID_PURCHASE_LINES';end if;
+  if coalesce(line->>'qty_milli','') !~ '^[1-9][0-9]{0,9}$' or coalesce(line->>'total_xaf','') !~ '^[1-9][0-9]{0,9}$' then raise exception 'INVALID_PURCHASE_LINES';end if;
   if (line->>'qty_milli')::bigint>1000000000 or (line->>'total_xaf')::bigint>2147483647 then raise exception 'INVALID_PURCHASE_LINES';end if;
   n:=n+1;
   ids:=array_append(ids,public.zp_purchase_create(p_access,p_site,p_supplier,(line->>'ingredient_id')::uuid,gen_random_uuid(),'ML-'||batch_id::text||'-'||n::text,(line->>'qty_milli')::bigint,(line->>'total_xaf')::bigint));
