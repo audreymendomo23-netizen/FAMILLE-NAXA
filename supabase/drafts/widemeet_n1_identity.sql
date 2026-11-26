@@ -213,7 +213,7 @@ begin
  if not found then return false;end if;
  if not exists(select 1 from public.wm_session_context(p_hash) c where c.account_id=a.id and c.session_id=s.session_id) then return false;end if;
  if a.password_change_id is not null then
-  return a.password_change_id=p_request and a.password_change_session=s.session_id;
+  return false; -- one writer; a retry can only prove the already changed password
  end if;
  if a.credential_epoch<>p_epoch then return false;end if;
  update public.wm_accounts set credential_epoch=credential_epoch+1,password_change_required=true,password_change_id=p_request,password_change_session=s.session_id where id=a.id;
