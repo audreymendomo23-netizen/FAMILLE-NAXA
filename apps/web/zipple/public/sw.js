@@ -1,5 +1,5 @@
-const CACHE="zipple-shell-v4";
-const STATIC=["/","/manifest.webmanifest","/zipple-logo.jpg","/zipple-brand.svg","/zipple-cloche.svg","/zipple-restaurant-bar.webp","/icon.svg","/zipple-precache.json"];
+const CACHE="zipple-shell-v5";
+const STATIC=["/","/manifest.webmanifest","/zipple-logo.jpg","/zipple-brand.svg","/zipple-cloche.svg","/zipple-restaurant-bar.webp","/icon.svg","/icon-192.png","/icon-512.png","/zipple-precache.json"];
 self.addEventListener("install",e=>e.waitUntil((async()=>{
  const response=await fetch("/zipple-precache.json",{cache:"no-store"});if(!response.ok)throw Error("ZIPPLE_PRECACHE_MISSING");
  const assets=await response.json();if(!Array.isArray(assets)||!assets.length||assets.some(x=>typeof x!=="string"||!/^\/assets\/[A-Za-z0-9._/-]+$/.test(x)||x.includes("..")))throw Error("ZIPPLE_PRECACHE_INVALID");

@@ -59,6 +59,12 @@ test("Supabase adapter candidate: SQL permissions, alias, rotations, scope, reco
  await assert.rejects(pool.query("select public.zp_admin_recovery_begin($1,$2,$3,$4)",[id.u,reqId,"Fixture identity verified",attempt]),/DENIED/);
  assert.equal((await pool.query("select public.zp_admin_recovery_begin($1,$2,$3,$4) as target",[operator,reqId,"Fixture identity verified",attempt])).rows[0].target,id.u);
  assert.equal((await pool.query("select reset_pending from public.zp_members where id=$1",[id.m])).rows[0].reset_pending,true);
+ // Simulate an interrupted request: no second processing claim, no unauthorized finish, no unlock.
+ assert.equal((await pool.query("select state from public.zp_recovery_requests where id=$1",[reqId])).rows[0].state,"processing");
+ await assert.rejects(pool.query("select public.zp_admin_recovery_begin($1,$2,$3,$4)",[operator,reqId,"Concurrent claim denied",retry]),/DENIED/);
+ await assert.rejects(pool.query("select public.zp_admin_recovery_finish($1,$2,$3,true)",[id.u,reqId,attempt]),/DENIED/);
+ assert.equal((await pool.query("select reset_pending from public.zp_members where id=$1",[id.m])).rows[0].reset_pending,true);
+ console.log("ZIPPLE_INTERRUPTED_RECOVERY_FAIL_CLOSED_PASS");
  await assert.rejects(pool.query("select public.zp_issue($1,$2,$3,$4,$5)",[id.m,id.u,0,"stale-test-access",null]),/DENIED/);
  await pool.query("select public.zp_admin_recovery_finish($1,$2,$3,false)",[operator,reqId,attempt]);
  assert.equal((await pool.query("select reset_pending from public.zp_members where id=$1",[id.m])).rows[0].reset_pending,true);

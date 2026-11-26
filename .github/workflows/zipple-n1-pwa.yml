@@ -1,0 +1,30 @@
+name: ZIPPLE N1 — PWA multi-browser qualification
+on:
+  push:
+    branches: [work/zipple-completion-20261126]
+    paths:
+      - "apps/web/zipple/**"
+      - "docs/apps/zipple/n1/pwa-cross-browser.mjs"
+      - ".github/workflows/zipple-n1-pwa.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  pwa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: |
+          npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
+          npm install --no-save --ignore-scripts playwright@1.51.1
+          npx playwright install --with-deps chromium firefox webkit
+          npm run build --workspace @famille/zipple-web
+          (cd apps/web/zipple && npx vite preview --host 127.0.0.1 --port 4173) >/tmp/zipple-pwa.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          node docs/apps/zipple/n1/pwa-cross-browser.mjs

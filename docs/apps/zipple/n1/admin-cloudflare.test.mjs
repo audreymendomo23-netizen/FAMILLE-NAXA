@@ -1,0 +1,3 @@
+import test from "node:test";import assert from "node:assert/strict";import {validateAdmin} from "../../../../scripts/zipple/admin-cloudflare-build.mjs";
+const valid={VITE_ADMIN_SUPABASE_URL:"https://idupfjbkwjcavyisxteo.supabase.co",VITE_ADMIN_PUBLIC_KEY:"sb_publishable_fixture"};
+test("exact project and public key only",()=>{assert.doesNotThrow(()=>validateAdmin(valid));assert.throws(()=>validateAdmin({...valid,VITE_ADMIN_SUPABASE_URL:"https://other.invalid"}));assert.throws(()=>validateAdmin({...valid,VITE_ADMIN_PUBLIC_KEY:"sb_secret_example"}));assert.throws(()=>validateAdmin({...valid,VITE_SERVICE_ROLE:"anything"}));assert.throws(()=>validateAdmin({...valid,VITE_ZIPPLE_API_URL:"https://example.invalid"}))});
