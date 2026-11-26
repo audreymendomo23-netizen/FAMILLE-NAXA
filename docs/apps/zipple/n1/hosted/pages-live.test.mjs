@@ -21,7 +21,7 @@ test("public Pages UI and exact-origin CORS",async()=>{
   assert.equal(await page.locator("main").getAttribute("data-theme"),"dark");
   assert.ok((await page.locator("main").evaluate(e=>getComputedStyle(e).backgroundImage)).includes("zipple-restaurant-bar.webp"));
   assert.equal(await page.getByRole("checkbox",{name:"Rester connecté"}).isChecked(),false);
-  const noCookie=await fetch(origin+"/session/refresh",{method:"POST",headers:{origin,"Content-Type":"application/json"},body:"{}",redirect:"error"});assert.equal(noCookie.status,401,"Pages session worker must fail closed without cookie");assert.match(noCookie.headers.get("set-cookie")??"",/HttpOnly; SameSite=Strict; Max-Age=0/);
+  let noCookie;for(let i=0;i<24;i++){noCookie=await fetch(origin+"/session/refresh",{method:"POST",headers:{origin,"Content-Type":"application/json"},body:"{}",redirect:"error"});if(noCookie.headers.get("x-zipple-session-revision")==="2")break;await new Promise(r=>setTimeout(r,5000))}assert.equal(noCookie?.headers.get("x-zipple-session-revision"),"2","new session worker not deployed");assert.equal(noCookie.status,401,"Pages session worker must fail closed without cookie");assert.match(noCookie.headers.get("set-cookie")??"",/HttpOnly; SameSite=Strict; Max-Age=0/);
   console.log("ZIPPLE_PAGES_PHOTO_AND_COOKIE_BOUNDARY_PASS");
   await page.waitForFunction(()=>!!navigator.serviceWorker.controller);console.log("ZIPPLE_PAGES_PWA_PRECACHE_DEPLOYED_PASS");
   console.log("ZIPPLE_PAGES_UI_PASS");

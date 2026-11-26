@@ -1,9 +1,11 @@
 const EDGE="https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-n1";
 const COOKIE="__Host-zipple-refresh";
 const HOST="https://naxa-zipple.pages.dev";
-const headers={"Content-Type":"application/json","Cache-Control":"no-store","X-Content-Type-Options":"nosniff"};
+const headers={"Content-Type":"application/json","Cache-Control":"private, no-store","X-Content-Type-Options":"nosniff","X-Zipple-Session-Revision":"2"};
 const cookie=(value,age)=>COOKIE+"="+value+"; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age="+age;
 const clear=cookie("",0);
+// POST requests are never cached; do not use the version-dependent Workers Request.cache option.
+const upstreamHeaders=authorization=>({"Content-Type":"application/json","Cache-Control":"no-store","Origin":HOST,...(authorization?{Authorization:authorization}:{})});
 const tokenOK=t=>typeof t==="string"&&/^[A-Za-z0-9_-]{20,512}$/.test(t);
 const answer=(status,body,setCookie)=>new Response(JSON.stringify(body),{status,headers:{...headers,...(setCookie?{"Set-Cookie":setCookie}:{})}});
 export async function sessionRoute(req,fetcher=fetch){
@@ -12,7 +14,7 @@ export async function sessionRoute(req,fetcher=fetch){
  let body;try{const raw=await req.text();if(raw.length>8192)return answer(413,{error:"INVALID"});body=JSON.parse(raw);if(!body||typeof body!=="object")return answer(400,{error:"INVALID"})}catch{return answer(400,{error:"INVALID"})}
  const old=(req.headers.get("cookie")||"").split(";").map(s=>s.trim()).find(s=>s.startsWith(COOKIE+"="))?.slice(COOKIE.length+1);
  if(action==="forget"){
-  if(tokenOK(old))try{const rotated=await fetcher(EDGE+"/refresh",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({app_id:"ZIPPLE",refresh_token:old}),redirect:"error"});if(rotated.ok){const s=await rotated.json();if(s.app_id==="ZIPPLE"&&tokenOK(s.access_token))await fetcher(EDGE+"/logout",{method:"POST",headers:{"Content-Type":"application/json",Authorization:"Bearer "+s.access_token},body:JSON.stringify({app_id:"ZIPPLE"}),redirect:"error"})}}catch{}
+  if(tokenOK(old))try{const rotated=await fetcher(EDGE+"/refresh",{method:"POST",headers:upstreamHeaders(),body:JSON.stringify({app_id:"ZIPPLE",refresh_token:old}),redirect:"error"});if(rotated.ok){const s=await rotated.json();if(s.app_id==="ZIPPLE"&&tokenOK(s.access_token))await fetcher(EDGE+"/logout",{method:"POST",headers:upstreamHeaders("Bearer "+s.access_token),body:JSON.stringify({app_id:"ZIPPLE"}),redirect:"error"})}}catch{}
   return answer(200,{accepted:true},clear);
  }
  let payload={app_id:"ZIPPLE"},authorization;
@@ -27,7 +29,7 @@ export async function sessionRoute(req,fetcher=fetch){
   authorization="Bearer "+body.access_token;
  }
  try{
-  const upstream=await fetcher(EDGE+"/"+action,{method:"POST",headers:{"Content-Type":"application/json",...(authorization?{Authorization:authorization}:{})},body:JSON.stringify(payload),redirect:"error",cache:"no-store"});
+  const upstream=await fetcher(EDGE+"/"+action,{method:"POST",headers:upstreamHeaders(authorization),body:JSON.stringify(payload),redirect:"error"});
   if(!upstream.ok)return answer(upstream.status>=500?503:401,{error:"DENIED"},action==="logout"||(action==="refresh"&&upstream.status<500)?clear:undefined);
   if(action==="logout")return answer(200,{accepted:true},clear);
   const data=await upstream.json();
