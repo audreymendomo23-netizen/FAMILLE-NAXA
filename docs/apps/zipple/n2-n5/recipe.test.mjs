@@ -560,7 +560,7 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const revisionId=await reviseLimit();assert.equal(await reviseLimit(),revisionId);
  await assert.rejects(scalar("select zp_credit_limit_revise($1,$2,$3,$4,1500,2100,'Révision validée')",[a.access,a.site,creditAccount,uid()]),/STALE_CREDIT_LIMIT/);
  const openCredit=await scalar("select zp_credit_authorize($1,$2,$3,$4,$5,$6,$7,'Crédit après révision')",[a.access,a.site,creditAccount,groupCash,creditOrder2.id,uid(),creditDue]);
- const followKey=uid(),followCredit=()=>scalar("select zp_credit_followup($1,$2,$3,$4,'telephone',$5)",[a.access,a.site,openCredit,followKey,creditDue]);
+ const creditFollowupKey=uid(),followCredit=()=>scalar("select zp_credit_followup($1,$2,$3,$4,'telephone',$5)",[a.access,a.site,openCredit,creditFollowupKey,creditDue]);
  const followCreditId=await followCredit();assert.equal(await followCredit(),followCreditId);
  assert.equal(await scalar("select sale_id from zp_credit_followups where followup_id=$1",[followCreditId]),openCredit);
  await assert.rejects(scalar("select zp_credit_followup($1,$2,$3,$4,'telephone',$5)",[a.access,a.site,creditSale,uid(),creditDue]),/INVALID_CREDIT_FOLLOWUP/);
