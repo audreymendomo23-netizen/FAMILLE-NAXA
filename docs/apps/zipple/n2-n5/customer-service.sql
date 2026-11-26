@@ -64,12 +64,12 @@ create table public.zp_order_support(
 alter table public.zp_order_support enable row level security;
 revoke all on public.zp_order_support from public,anon,authenticated;
 grant select,insert,update on public.zp_order_support to service_role;
-create function public.zp_guest_support_read(p_guest_hash text,p_order uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $
+create function public.zp_guest_support_read(p_guest_hash text,p_order uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $zp_support$
 declare v jsonb;begin
  if public.zp_guest_order(p_guest_hash,p_order) is null then raise exception 'DENIED';end if;
  select jsonb_build_object('message',message,'reply',reply,'created_at',created_at,'replied_at',replied_at) into v from public.zp_order_support where order_id=p_order;
- return coalesce(v,'{}'::jsonb);end $;
-create function public.zp_guest_support_create(p_guest_hash text,p_order uuid,p_message text) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $
+ return coalesce(v,'{}'::jsonb);end $zp_support$;
+create function public.zp_guest_support_create(p_guest_hash text,p_order uuid,p_message text) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $zp_support$
 declare o public.zp_orders;v public.zp_order_support;begin
  if p_message is null or length(trim(p_message)) not between 3 and 500 then raise exception 'INVALID_INPUT';end if;
  select * into o from public.zp_orders where id=p_order for update;
@@ -77,19 +77,19 @@ declare o public.zp_orders;v public.zp_order_support;begin
  insert into public.zp_order_support(order_id,org_id,site_id,guest_id,message) values(o.id,o.org_id,o.site_id,o.guest_id,trim(p_message)) on conflict(order_id) do nothing;
  select * into v from public.zp_order_support where order_id=p_order;
  if v.message is distinct from trim(p_message) then raise exception 'IDEMPOTENCY_CONFLICT';end if;
- return public.zp_guest_support_read(p_guest_hash,p_order);end $;
-create function public.zp_order_support_snapshot(p_access text,p_site uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $
+ return public.zp_guest_support_read(p_guest_hash,p_order);end $zp_support$;
+create function public.zp_order_support_snapshot(p_access text,p_site uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $zp_support$
 declare m public.zp_members;begin m:=public.zp_business_actor(p_access,p_site);
  if not public.zp_can_operate(m.id,p_site,'serve') then raise exception 'DENIED';end if;
- return coalesce((select jsonb_agg(to_jsonb(x)) from (select q.order_id,o.service_number as number,q.message,q.created_at,q.reply,q.replied_at from public.zp_order_support q join public.zp_orders o on o.id=q.order_id and o.org_id=q.org_id and o.site_id=q.site_id where q.org_id=m.org_id and q.site_id=p_site order by (q.replied_at is not null),q.created_at desc limit 100)x),'[]'::jsonb);end $;
-create function public.zp_order_support_reply(p_access text,p_site uuid,p_order uuid,p_reply text) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $
+ return coalesce((select jsonb_agg(to_jsonb(x)) from (select q.order_id,o.service_number as number,q.message,q.created_at,q.reply,q.replied_at from public.zp_order_support q join public.zp_orders o on o.id=q.order_id and o.org_id=q.org_id and o.site_id=q.site_id where q.org_id=m.org_id and q.site_id=p_site order by (q.replied_at is not null),q.created_at desc limit 100)x),'[]'::jsonb);end $zp_support$;
+create function public.zp_order_support_reply(p_access text,p_site uuid,p_order uuid,p_reply text) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $zp_support$
 declare m public.zp_members;v public.zp_order_support;begin m:=public.zp_business_actor(p_access,p_site);
  if not public.zp_can_operate(m.id,p_site,'serve') then raise exception 'DENIED';end if;
  if p_reply is null or length(trim(p_reply)) not between 3 and 500 then raise exception 'INVALID_INPUT';end if;
  select * into v from public.zp_order_support where order_id=p_order and org_id=m.org_id and site_id=p_site for update;
  if v.order_id is null then raise exception 'DENIED';end if;
  if v.reply is not null then if v.reply is distinct from trim(p_reply) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return true;end if;
- update public.zp_order_support set reply=trim(p_reply),replied_by=m.id,replied_at=clock_timestamp() where order_id=p_order;return true;end $;
-do $ declare f record;begin for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_guest_support_read','zp_guest_support_create','zp_order_support_snapshot','zp_order_support_reply') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;end $;
+ update public.zp_order_support set reply=trim(p_reply),replied_by=m.id,replied_at=clock_timestamp() where order_id=p_order;return true;end $zp_support$;
+do $zp_support$ declare f record;begin for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_guest_support_read','zp_guest_support_create','zp_order_support_snapshot','zp_order_support_reply') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;end $zp_support$;
 
 commit;
