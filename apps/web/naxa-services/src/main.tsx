@@ -59,20 +59,26 @@ const moduleCopy: Record<ModuleId, { eyebrow: string; headline: string; helper: 
   agenda: { eyebrow: "PLANNING", headline: "Un planning lisible par poste et prestataire.", helper: "Organisez les horaires de vos rendez-vous.", empty: "Aucun rendez-vous dans cette vue.", features: ["Vues jour et semaine", "Disponibilité du prestataire", "Disponibilité du fauteuil / poste", "Acompte, annulation et liste d'attente"] },
   pressing: { eyebrow: "ATELIER", headline: "Chaque dépôt possède son ticket et son historique.", helper: "Les transitions de statut sont chronologiques et contrôlées.", empty: "Aucun ticket pressing dans la liste locale.", features: ["Pièces et prix par catégorie", "Date promise et acompte", "Reçu → En cours → Prêt → Retiré", "Relance des vêtements non retirés"] },
   workOrders: { eyebrow: "PARCOURS MÉTIERS", headline: "Un dossier adapté au métier de votre organisation.", helper: "Gérez les prestations propres à votre activité.", empty: "Aucun dossier métier dans le périmètre autorisé.", features: ["Formulaire spécialisé par activité", "Devis, échéance et ressources", "Suivi des étapes de traitement", "Historique et synchronisation multi-appareils"] },
-  cash: { eyebrow: "ENCAISSEMENTS", headline: "Une caisse traçable, par point de vente.", helper: "Suivez vos ventes, paiements et dépenses.", empty: "Aucune vente enregistrée dans la session de prévisualisation.", features: ["Espèces et Mobile Money confirmé", "Paiement mixte et reçu", "Ouverture et clôture de caisse", "Dépenses, écarts et justificatifs"] },
+  cash: { eyebrow: "ENCAISSEMENTS", headline: "Une caisse traçable, par point de vente.", helper: "Suivez vos ventes, paiements et dépenses.", empty: "Aucune vente enregistrée.", features: ["Espèces et Mobile Money confirmé", "Paiement mixte et reçu", "Ouverture et clôture de caisse", "Dépenses, écarts et justificatifs"] },
   services: { eyebrow: "CATALOGUE", headline: "Des prestations adaptées à chaque activité.", helper: "Adaptez vos tarifs à votre établissement.", empty: "Le catalogue n'a pas encore été synchronisé.", features: ["Pressing et coiffure distincts", "Durée et prix par prestation", "Habilitations par employé et poste", "Forfaits et produits comptoir"] },
   customers: { eyebrow: "RELATION CLIENT", headline: "Connaître l'historique, respecter les préférences.", helper: "Les coordonnées et notes client sont confidentielles.", empty: "Aucune fiche client disponible.", features: ["Historique des prestations", "Préférences et dernières visites", "Consentement de contact", "Fidélité, QR et anniversaires"] },
   team: { eyebrow: "ÉQUIPE", headline: "Des comptes individuels et des droits précis.", helper: "Chaque membre possède son propre accès ; les comptes partagés sont exclus.", empty: "Aucun membre opérationnel chargé.", features: ["Rôles et permissions", "Affectation site / emplacement", "Présence, avances et primes", "Commissions calculées selon une règle datée"] },
   stock: { eyebrow: "CONSOMMABLES", headline: "Un stock léger centré sur l'exploitation.", helper: "Consultez l'historique de vos mouvements de stock.", empty: "Aucun consommable suivi pour le moment.", features: ["Lessive et produits coiffure", "Entrées et consommation", "Pertes et ajustements motivés", "Alertes de seuil"] },
   reports: { eyebrow: "ANALYTIQUE", headline: "Piloter les résultats, pas seulement les ventes.", helper: "Consultez les résultats de vos établissements autorisés.", empty: "Les rapports seront calculés à partir des données synchronisées.", features: ["Recettes et dépenses", "Écarts de caisse", "Rentabilité des prestations", "Remplissage agenda et commissions"] },
   organization: { eyebrow: "STRUCTURE", headline: "Votre organisation détermine les scopes.", helper: "Organisez votre établissement ou votre réseau.", empty: "Le profil juridique et commercial n'est pas encore paramétré.", features: ["PME autonome", "Responsable multi-emplacements dans un site", "Promoteur multi-sites autonomes", "Rôles et entitlements indépendants"] },
-  network: { eyebrow: "RÉSEAU", headline: "Consolider sans mélanger les opérations.", helper: "Chaque point de vente garde ses propres caisses, stocks, équipes et tickets.", empty: "Aucun autre point de vente rattaché à cette organisation.", features: ["Vue consolidée du réseau", "Accès détaillé selon délégation", "Comparaison des sites", "Transferts inter-sites avec validation et audit"] },
+  network: { eyebrow: "RÉSEAU", headline: "Consolider sans mélanger les opérations.", helper: "Chaque point de vente garde ses propres caisses, stocks, équipes et tickets.", empty: "Aucun autre établissement.", features: ["Vue consolidée du réseau", "Accès détaillé selon délégation", "Comparaison des sites", "Transferts inter-sites avec validation et audit"] },
   sites: { eyebrow: "POINTS DE VENTE", headline: "Chaque site fonctionne de façon autonome.", helper: "Les opérations d'un point ne sont jamais réaffectées implicitement à un autre.", empty: "Aucun point de vente supplémentaire.", features: ["Responsable et équipe du site", "Caisse et sessions propres", "Stock et consommables propres", "Catalogue et paramètres effectifs"] },
   workstations: { eyebrow: "EMPLACEMENTS", headline: "Organiser plusieurs postes dans le même lieu.", helper: "Les emplacements sont des unités de planning et de ressources à l'intérieur d'un point de vente.", empty: "Aucun emplacement configuré.", features: ["Fauteuils de coiffure", "Atelier / comptoir pressing", "Planning et capacité", "Affectation des prestataires"] },
   security: { eyebrow: "PROTECTION", headline: "Maîtriser les sessions et les appareils.", helper: "Contactez votre responsable pour récupérer votre accès.", empty: "Aucune opération disponible.", features: ["Sessions et appareils enrôlés", "Révocation à distance", "Demandes de récupération", "Audit des opérations privilégiées"] },
-  settings: { eyebrow: "CONFIGURATION", headline: "Un environnement adapté à l'équipe.", helper: "Personnalisez votre espace de travail.", empty: "Les paramètres de production ne sont pas connectés.", features: ["Français et English", "Thème sombre / clair", "Mode offline et reprise de synchronisation", "Imprimantes et notifications"] },
+  settings: { eyebrow: "CONFIGURATION", headline: "Un environnement adapté à l'équipe.", helper: "Personnalisez votre espace de travail.", empty: "Personnalisez votre espace.", features: ["Français et English", "Thème sombre / clair", "Mode offline et reprise de synchronisation", "Imprimantes et notifications"] },
   help: { eyebrow: "ASSISTANCE", headline: "Faire remonter les blocages avec contexte.", helper: "Ne communiquez jamais vos codes confidentiels.", empty: "Aucune demande de support dans cette session.", features: ["FAQ et guides", "Demande d'assistance", "Briefing du matin", "Briefing du soir"] },
 };
+
+function customerMessage(value:string):string {
+  const message=value.trim();
+  if(/^(?:[A-Z][A-Z0-9_]{3,})(?:\s*[:|].*)?$/.test(message)||/\b(?:JWT|RLS|RPC|PostgREST|stack trace|service_role|SUPABASE_URL|outbox|idempotence|backend|API key)\b/i.test(message))return "Cette opération est momentanément indisponible. Réessayez ou contactez l’assistance.";
+  return message;
+}
 
 function App() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -227,7 +233,7 @@ function App() {
         const id=typeof command.aggregate_id==="string"?command.aggregate_id:item.eventId;
         const title=typeof command.display_title==="string"?command.display_title:id;
         const detail=typeof command.display_detail==="string"?command.display_detail:"";
-        const state=item.state==="acknowledged"?"Confirmé":item.state==="rejected"?"Rejeté — vérifier le dossier":item.state==="conflict"?"Conflit — résolution nécessaire":"En attente de synchronisation";
+        const state=item.state==="acknowledged"?"Confirmé":item.state==="rejected"?"Rejeté — vérifier le dossier":item.state==="conflict"?"Conflit — résolution nécessaire":"En attente de confirmation";
         const rows=next[moduleId]??[],existing=rows.findIndex(entry=>entry.id===id);
         const existingEntry=existing>=0?rows[existing]:undefined;
         const payload = command.payload && typeof command.payload === "object" ? command.payload as Record<string,unknown> : {};
@@ -1083,7 +1089,7 @@ function App() {
               <label>Mot de passe actuel<input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} autoComplete="current-password" required /></label>
               <label>Nouveau mot de passe<input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} autoComplete="new-password" minLength={10} maxLength={256} required /></label>
               <label>Confirmer le nouveau mot de passe<input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} autoComplete="new-password" minLength={10} maxLength={256} required /></label>
-              {authMessage && <div className="notice">{authMessage}</div>}
+              {authMessage && <div className="notice" role="status">{customerMessage(authMessage)}</div>}
               <button className="btn primary" disabled={busy}>{busy ? "Vérification…" : "Enregistrer le nouveau mot de passe"}</button>
             </form>
             <button className="link-button" onClick={signOut} disabled={busy}>Fermer la session</button>
@@ -1119,7 +1125,7 @@ function App() {
               <label>Identifiant NAXA Services<input value={identifier} onChange={(e) => setIdentifier(e.target.value.toUpperCase())} placeholder="NS-000000" autoComplete="username" required /></label>
               {!showRecovery && <label>Mot de passe<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></label>}
               {showRecovery && <label>Note au responsable (facultatif)<textarea rows={3} value={recoveryNote} onChange={(e) => setRecoveryNote(e.target.value)} placeholder="Expliquez brièvement votre demande" /></label>}
-              {authMessage && <div className="notice">{authMessage}</div>}
+              {authMessage && <div className="notice" role="status">{customerMessage(authMessage)}</div>}
               <button className="btn primary" disabled={busy}>{busy ? "Traitement…" : showRecovery ? "Envoyer la demande" : "Se connecter"}</button>
             </form>
             <button className="link-button" onClick={() => { setShowRecovery(!showRecovery); setAuthMessage(""); }}>{showRecovery ? "Retour à la connexion" : "Mot de passe oublié ?"}</button>
@@ -1147,7 +1153,7 @@ function App() {
         <div className="side-bottom">
           <button className="nav-item" onClick={toggleTheme}><span className="nav-glyph">◐</span>{theme === "dark" ? "Mode clair" : "Mode sombre"}</button>
           <button className="nav-item" onClick={signOut} disabled={busy}><span className="nav-glyph">↪</span>Déconnexion</button>
-          <div className="user-mini"><div className="avatar">NS</div><div><strong>{preview ? "Aperçu local" : authSession?.account.display_name ?? "Espace connecté"}</strong><small>{authSession ? (authSession.account.organization_name || authSession.account.role_code || "NAXA Services") : "NAXA Services"}</small></div></div>
+          <div className="user-mini"><div className="avatar">NS</div><div><strong>{preview ? "Démonstration" : authSession?.account.display_name ?? "Espace connecté"}</strong><small>{authSession ? (authSession.account.organization_name || authSession.account.role_code || "NAXA Services") : "NAXA Services"}</small></div></div>
         </div>
       </aside>
       <main className="main-area">
@@ -1160,7 +1166,7 @@ function App() {
           </div>
         </header>
         <section className="content-area">
-          {authSession && authMessage && <div className="notice">{authMessage}</div>}
+          {authSession && authMessage && <div className="notice" role="status">{customerMessage(authMessage)}</div>}
           <div className="page-heading">
             <div><span className="eyebrow">{moduleCopy[active].eyebrow}</span><h1>{moduleCopy[active].headline}</h1><p>{moduleCopy[active].helper}</p></div>
             <div className="heading-actions">
@@ -1310,12 +1316,12 @@ function Overview({ entries, onNavigate, mode, activity }: { entries: Record<Mod
     <div className="overview-main">
       <div className="hero-card"><BusinessBackdrop activity={activity}/><div className="hero-content"><span className="hero-kicker">VOTRE ESPACE DE GESTION</span><h2>Une journée bien organisée commence ici.</h2><p>Retrouvez vos activités, vos objectifs et vos priorités.</p></div></div>
       <div className="metric-grid">
-        <Metric label="Rendez-vous aujourd'hui" value="—" meta="En attente de synchronisation" />
-        <Metric label="Tickets à rendre" value="—" meta="En attente de synchronisation" />
-        <Metric label="Caisse du jour" value="—" meta="Aucun solde simulé" />
-        <Metric label="Équipe présente" value="—" meta="Pointage non connecté" />
+        <Metric label="Rendez-vous aujourd'hui" value="—" meta="En attente de confirmation" />
+        <Metric label="Tickets à rendre" value="—" meta="En attente de confirmation" />
+        <Metric label="Caisse du jour" value="—" meta="Aucun solde disponible" />
+        <Metric label="Équipe présente" value="—" meta="Aucun pointage disponible" />
       </div>
-      <div className="section-title"><div><span className="eyebrow">VOTRE ACTIVITÉ</span><h2>Accès rapides</h2></div><span className="local-counter">{totalDrafts} brouillon(s) local(aux)</span></div>
+      <div className="section-title"><div><span className="eyebrow">VOTRE ACTIVITÉ</span><h2>Accès rapides</h2></div><span className="local-counter">{totalDrafts} opération(s) enregistrée(s)</span></div>
       <div className="shortcut-grid">
         {(["agenda", "pressing", "cash", "services"] as ModuleId[]).map((id) => {
           const item = modules.find((m) => m.id === id)!;
@@ -1352,9 +1358,9 @@ function DeviceSecurityPage({authenticated,onLoad,onRevoke}:{authenticated:boole
 function GenericPage({ active, entries, copy, preview, authenticated }: { active: ModuleId; entries: Entry[]; copy: typeof moduleCopy[ModuleId]; preview: boolean; authenticated: boolean }) {
   const serverWriteAvailable = authenticated && ["stock", "services", "customers", "team", "help"].includes(active);
   return <div className="module-layout">
-    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">VOTRE ACTIVITÉ</span><h2>Fonctionnalités</h2></div><span className="status-tag pending">{preview?"Aperçu fonctionnel":serverWriteAvailable?"Disponible":"Indisponible"}</span></div>
+    <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">VOTRE ACTIVITÉ</span><h2>Fonctionnalités</h2></div><span className="status-tag pending">{preview?"Démonstration":serverWriteAvailable?"Disponible":"Indisponible"}</span></div>
       <div className="feature-list">{copy.features.map((feature,i)=><div className="feature-row" key={feature}><span className="feature-number">{String(i+1).padStart(2,"0")}</span><span>{feature}</span><span className="feature-check">◇</span></div>)}</div>
-      {!preview&&!serverWriteAvailable&&<div className="notice">Les écritures sont désactivées en session réelle jusqu'à livraison du parcours métier correspondant.</div>}
+      {!preview&&!serverWriteAvailable&&<div className="notice">Cette fonctionnalité est disponible en consultation uniquement.</div>}
     </div>
     <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">{preview?"SESSION EN COURS":"HISTORIQUE"}</span><h2>{preview?"Brouillons":"Opérations"}</h2></div><span className="status-tag local">{preview?"Local":serverWriteAvailable?"Historique":"Consultation"}</span></div>
       {entries.length===0?<Empty text={preview?copy.empty:serverWriteAvailable?"Aucune opération pour le moment.":"Aucun résultat disponible pour le moment."}/>:<div className="record-list">{entries.map(entry=><Record key={entry.id} entry={entry}/>)}</div>}
@@ -1370,7 +1376,7 @@ function AgendaPage({ entries, authenticated }: { entries: Entry[]; authenticate
     date.setDate(monday.getDate() + index);
     return { label: date.toLocaleDateString("fr-FR", { weekday: "short" }), day: date.getDate(), isToday: date.toDateString() === today.toDateString() };
   });
-  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue de la semaine</h2></div><span className="status-tag pending">{authenticated?"Rendez-vous":"Aperçu local"}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Aucun créneau disponible</strong><p>Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.</p></div></div><div className="module-main-card"><h2>Rendez-vous</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucun rendez-vous dans le périmètre chargé." />}</div></div>;
+  return <div className="module-layout"><div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">PLANNING</span><h2>Vue de la semaine</h2></div><span className="status-tag pending">{authenticated?"Rendez-vous":"Démonstration"}</span></div><div className="calendar-strip">{days.map((day) => <div key={day.label} className={day.isToday ? "today" : ""}><small>{day.label}</small><strong>{String(day.day).padStart(2, "0")}</strong></div>)}</div><div className="schedule-empty"><span className="empty-glyph">◷</span><strong>Aucun créneau disponible</strong><p>Les rendez-vous créés ou reçus apparaissent dans le journal ci-dessous. La grille de disponibilité par membre et poste reste à connecter.</p></div></div><div className="module-main-card"><h2>Rendez-vous</h2>{entries.length ? entries.map((e) => <Record key={e.id} entry={e} />) : <Empty text="Aucun rendez-vous dans le périmètre chargé." />}</div></div>;
 }
 function PressingPage({
   entries,onAdvance,onTransition,canPreviewEdit,authenticated,busy,
@@ -1384,13 +1390,13 @@ function PressingPage({
   const statusLabels:Record<string,string>={received:"Reçu",in_progress:"En cours",ready:"Prêt",picked_up:"Retiré"};
   return <div className="module-layout">
     <div className="module-main-card">
-      <div className="module-card-head"><div><span className="eyebrow">SUIVI DES TICKETS</span><h2>Étapes de traitement</h2></div><span className="status-tag pending">{canPreviewEdit?"Aperçu local":authenticated?"Suivi des tickets":"Lecture seule"}</span></div>
+      <div className="module-card-head"><div><span className="eyebrow">SUIVI DES TICKETS</span><h2>Étapes de traitement</h2></div><span className="status-tag pending">{canPreviewEdit?"Démonstration":authenticated?"Suivi des tickets":"Lecture seule"}</span></div>
       <div className="pressing-steps">{["Reçu","En cours","Prêt","Retiré"].map((step,i)=><div key={step}><span>{i+1}</span><strong>{step}</strong></div>)}</div>
       <p className="muted">Suivez les étapes de chaque ticket jusqu'au retrait.</p>
     </div>
     <div className="module-main-card">
       <h2>Tickets</h2>
-      {error&&<div className="notice">{error}</div>}
+      {error&&<div className="notice" role="status">{customerMessage(error)}</div>}
       {entries.length?entries.map(entry=>{
         const status=entry.status??"received";
         const next=nextStatus[status];
@@ -1455,7 +1461,7 @@ function WorkOrdersPage({
       <p className="muted">{workflow.purpose}</p>
       {isRetail && <div className="notice">Le flux principal de parfumerie reste le catalogue produit, le stock, les achats fournisseurs et la vente comptoir. Ce formulaire crée uniquement une réservation ou commande spéciale client ; il ne réalise pas une vente.</div>}
       <div className="feature-list">{workflow.stages.map((stage,index)=><div className="feature-row" key={stage.code}><span className="feature-number">{String(index+1).padStart(2,"0")}</span><span>{stage.label}</span><span className="feature-check">{stage.next.length? "→ "+stage.next.map(code=>workflow.stages.find(item=>item.code===code)?.label??code).join(" / "):"Terminé"}</span></div>)}</div>
-      <p className="muted">Modules communs associés : {workflow.sharedModules.join(" · ")}.</p>
+      <p className="muted">Services associés : {workflow.sharedModules.join(" · ")}.</p>
     </div>
     <div className="module-main-card">
       <div className="module-card-head"><div><span className="eyebrow">NOUVEAU DOSSIER</span><h2>Créer une opération métier</h2></div><span className="status-tag local">{siteName}</span></div>
@@ -1491,7 +1497,7 @@ function WorkOrdersPage({
         <label>Date d'échéance globale (facultatif)<input type="date" value={dueDate} onChange={e=>setDueDate(e.target.value)} /></label>
         <button className="btn primary" disabled={saving||busy}>{saving||busy?"Enregistrement…":"Créer et synchroniser le dossier"}</button>
       </form> : <div className="notice">Connecte-toi avec un compte autorisé pour créer un dossier. Aucun formulaire local n'est présenté comme une opération réelle.</div>}
-      {error&&<div className="notice">{error}</div>}
+      {error&&<div className="notice" role="status">{customerMessage(error)}</div>}
     </div>
     <div className="module-main-card activity-record-list">
       <div className="module-card-head"><div><span className="eyebrow">REGISTRE DU SITE</span><h2>Dossiers enregistrés</h2></div><span className="status-tag local">{entries.length}</span></div>
@@ -1532,7 +1538,7 @@ function PerformancePage({
   return <div className="module-layout">
     <div className="module-main-card"><div className="module-card-head"><div><span className="eyebrow">ANALYSE FINANCIÈRE</span><h2>Performances financières confirmées</h2></div><span className="status-tag pending">{data?"Données confirmées":"À charger"}</span></div>
       {authenticated?<><label>À partir du<input type="date" value={fromDate} onChange={e=>setFromDate(e.target.value)} max={new Date().toISOString().slice(0,10)}/></label><button className="btn primary" disabled={loading} onClick={onLoad}>{loading?"Chargement…":"Charger les rapports"}</button></>:<div className="notice">Les rapports réels exigent une session Auth.</div>}
-      {error&&<div className="notice">{error}</div>}
+      {error&&<div className="notice" role="status">{customerMessage(error)}</div>}
       <p className="muted">Les indicateurs tiennent compte des ventes confirmées.</p>
     </div>
     <div className="module-main-card"><h2>Journalier</h2>{rows(data?.daily??[],"performance_day")}</div>
@@ -1571,7 +1577,7 @@ function OrganizationPage({
       <label>Langue par défaut<select disabled={!editable || saving} value={selectedLocale} onChange={e=>setSelectedLocale(e.target.value as "fr"|"en"|"ff-CM")}><option value="fr">Français</option><option value="en">English</option><option value="ff-CM">Fulfulde</option></select></label>
       {editable && !saving && <button className="btn primary" onClick={()=>void save()}>Enregistrer le profil Auth</button>}
       {saving && <div className="notice">Enregistrement côté serveur…</div>}
-      {error && <div className="notice">{error}</div>}
+      {error && <div className="notice" role="status">{customerMessage(error)}</div>}
       {!editable && <div className="notice">Lecture seule : seul le Promoteur ayant le périmètre Organisation peut enregistrer ces réglages.</div>}
     </div>
   </div>;
@@ -1608,7 +1614,7 @@ function SitesPage({
         <label>Téléphone<input value={phone} onChange={e=>setPhone(e.target.value)} maxLength={32}/></label>
         <button className="btn primary" disabled={saving}>Créer le site avec Auth</button>
       </form> : <div className="notice">La création requiert le rôle Promoteur, le périmètre Organisation et le mode multi-sites.</div>}
-      {error&&<div className="notice">{error}</div>}
+      {error&&<div className="notice" role="status">{customerMessage(error)}</div>}
       <h3>Principes d'autonomie</h3><ul className="brief-list"><li>Caisse et clôture propres à chaque site.</li><li>Stock et historique distincts.</li><li>Équipe et affectations séparées.</li><li>Consolidation réseau sans mutation cross-site implicite.</li></ul>
       {entries.map(e=><Record key={e.id} entry={e}/>)}
     </div>
@@ -1643,7 +1649,7 @@ function WorkstationsPage({
         <button className="btn primary" disabled={saving}>Créer le poste avec Auth</button>
       </form>:<div className="notice">Seuls Promoteur, Network Manager ou Site Manager peuvent tenter la création ; Auth contrôle le périmètre du site.</div>}
       <p className="muted">Mode : {modeLabel(mode)}. Les droits d'un poste ne sont pas élargis au site entier.</p>
-      {error&&<div className="notice">{error}</div>}
+      {error&&<div className="notice" role="status">{customerMessage(error)}</div>}
     </div>
   </div>;
 }
