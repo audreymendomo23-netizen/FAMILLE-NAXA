@@ -537,6 +537,7 @@ jobs:
               await page.getByLabel('Identifiant NAXA Services').waitFor();
               await scenario('attendance proof candidate: real Chromium, simulated GPS/camera, private Storage and atomic receipt',async()=>{
                 proofCheckpoint='create fixture';const proof=await fixture('PROOF','multi_site_network');
+                const [post]=await rest('ns_workstations',{org_id:proof.org.id,site_id:proof.site.id,code:'PROOF-POST',name:'Poste de preuve',kind:'other',capacity:1});
                 proofCheckpoint='grant browser permissions';
                 await context.grantPermissions(['geolocation','camera'],{origin:'https://127.0.0.1:8443'});
                 await context.setGeolocation({latitude:4.05,longitude:9.7,accuracy:12});
@@ -565,6 +566,12 @@ jobs:
                 assert.equal(await capture.getByRole('button',{name:'Confirmer mon pointage'}).isDisabled(),true);
                 proofCheckpoint='GPS capture';await capture.getByRole('button',{name:'Obtenir ma position'}).click();
                 await capture.getByRole('button',{name:/Position obtenue/}).waitFor();
+                proofCheckpoint='select authorized workstation and invalidate old capture';
+                await capture.getByRole('button',{name:'Afficher les postes autorisés',exact:true}).click();
+                const postPicker=capture.getByLabel('Emplacement du pointage',{exact:true});await postPicker.selectOption(post.id);
+                await capture.getByRole('button',{name:'Obtenir ma position',exact:true}).waitFor();
+                assert.equal(await capture.getByRole('button',{name:'Confirmer mon pointage'}).isDisabled(),true);
+                await capture.getByRole('button',{name:'Obtenir ma position'}).click();await capture.getByRole('button',{name:/Position obtenue/}).waitFor();
                 proofCheckpoint='front camera capture';await capture.getByRole('button',{name:'Ouvrir la caméra avant'}).click();
                 await capture.getByRole('button',{name:'Prendre le selfie'}).waitFor();
                 assert.equal(await page.evaluate(()=>window.__nsFrontCameraRequests),1,'commercial code requests exact front camera and no microphone');
@@ -573,7 +580,8 @@ jobs:
                 proofCheckpoint='capture JPEG from live synthetic video';await capture.getByRole('button',{name:'Prendre le selfie'}).click();
                 await capture.getByRole('button',{name:/Selfie pris/}).waitFor();
                 proofCheckpoint='stage and submit';const evt=await apply('staff_clock_in.recorded',()=>capture.getByRole('button',{name:'Confirmer mon pointage'}).click());
-                assert.equal(evt.payload.attendance_proof_ref,evt.aggregate_id);
+                assert.equal(evt.payload.attendance_proof_ref,evt.aggregate_id);assert.equal(evt.workstation_id,post.id);assert.equal(evt.payload.workstation_id,post.id);
+                const clockRows=await success(base+'/rest/v1/ns_staff_time_events?select=workstation_id&id=eq.'+evt.aggregate_id,undefined,admin,admin,'GET');assert.equal(clockRows.length,1);assert.equal(clockRows[0].workstation_id,post.id);
                 assert.equal(evt.payload.attendance_evidence,undefined);assert.equal(evt.payload.latitude,undefined);assert.equal(evt.payload.selfie_path,undefined);
                 proofCheckpoint='verify durable evidence';const ev=await success(base+'/rest/v1/ns_attendance_evidence?select=event_id,required_gps,required_selfie,latitude,selfie_path&event_id=eq.'+evt.aggregate_id,undefined,admin,admin,'GET');
                 assert.equal(ev.length,1);assert.equal(ev[0].required_gps,true);assert.equal(ev[0].required_selfie,true);assert.equal(ev[0].latitude,4.05);
@@ -709,7 +717,12 @@ jobs:
                   await rpc(page,'ns_schedule_meeting_series',()=>hr.getByRole('button',{name:'Créer et inviter',exact:true}).click(),503);
                   assert.ok(committedPayload?.p_id);
                   await hr.getByRole('alert').waitFor();
-                  phase='recurring meeting: retry same request';
+                  phase='recurring meeting: retry same request after tab reload and sign-in';
+                  await signIn(page,host.login,host.password);
+                  await hr.getByRole('checkbox',{name:'Recette Collaborateur',exact:true}).check();
+                  await hr.getByLabel('Intitulé',{exact:true}).fill('Réunion hebdomadaire de recette');
+                  await hr.getByRole('combobox',{name:'Répétition',exact:true}).selectOption('weekly');
+                  await hr.getByLabel('Nombre de réunions',{exact:true}).fill('3');
                   const retryResponse=page.waitForResponse(r=>new URL(r.url()).pathname==='/rest/v1/rpc/ns_schedule_meeting_series'&&r.request().method()==='POST');
                   await hr.getByRole('button',{name:'Créer et inviter',exact:true}).click();
                   const retry=await retryResponse;assert.equal(retry.status(),200);

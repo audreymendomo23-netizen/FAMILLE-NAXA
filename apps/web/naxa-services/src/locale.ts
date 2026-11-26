@@ -2395,6 +2395,11 @@ const catalogue: Record<string, readonly [string,string]> = {
     "NEW DEMO OPERATION",
     "GOLLE ƳEEWNDUGOL"
   ],
+  "Commencer une pause": ["Start break","Fuɗɗo fowtude"],
+  "Terminer la pause": ["End break","Timmin fowtude"],
+  "Pointer mon départ": ["Clock out","Winndu yaltugol am"],
+  "Envoi…": ["Sending…","Neldude…"],
+  "Pointage non enregistré.": ["Attendance not recorded.","Naatugol danndaaka."],
   "Pointer mon arrivée": [
     "Clock in",
     "Winndu naatugol am"

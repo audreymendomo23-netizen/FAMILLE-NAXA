@@ -45,3 +45,25 @@ jobs:
           catch { console.log('Public application configuration: INVALID OR INCOMPLETE'); failed = true; }
           if (failed) process.exitCode = 1;
           NODE
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Check certificate against independently approved signer fingerprint (no APK signing)
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.NAXA_SERVICES_RELEASE_KEYSTORE_BASE64 }}
+          RELEASE_STORE_PASSWORD: ${{ secrets.NAXA_SERVICES_RELEASE_STORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.NAXA_SERVICES_RELEASE_KEY_ALIAS }}
+          EXPECTED_FINGERPRINT: ${{ vars.NAXA_SERVICES_APPROVED_SIGNER_SHA256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ "$EXPECTED_FINGERPRINT" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "::error::Missing or invalid independently approved signer fingerprint"; exit 1; }
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          printf '%s' "$RELEASE_KEYSTORE" | base64 --decode > "$work/signer.jks"
+          keytool -exportcert -keystore "$work/signer.jks" -storepass:env RELEASE_STORE_PASSWORD -alias "$RELEASE_KEY_ALIAS" -file "$work/signer.cer" >/dev/null
+          actual="$(sha256sum "$work/signer.cer" | cut -d' ' -f1)"
+          [[ "$actual" == "${EXPECTED_FINGERPRINT,,}" ]] || { echo "::error::Signer differs from independently approved certificate"; exit 1; }
+          echo "Approved signer certificate matches; no release signed."

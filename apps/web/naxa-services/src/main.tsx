@@ -769,6 +769,7 @@ function App() {
       module_id: moduleId, display_title: title, display_detail: detail,
       action_code: actionCode, aggregate_type: aggregateType,
       aggregate_id: aggregateId, org_id: session.account.organization_id, site_id: siteId,
+      ...(moduleId==="team"&&actionCode.startsWith("staff_")&&typeof payload.workstation_id==="string"?{workstation_id:payload.workstation_id}:{}),
       payload: { ...payload, org_id: session.account.organization_id, site_id: siteId },
     };
     await enqueueOfflineEvent({appId:OFFLINE_APP_ID,eventId,deviceId:session.deviceId,organizationId:session.account.organization_id,payload:JSON.stringify(command),state:"queued",createdAt:Date.now()});

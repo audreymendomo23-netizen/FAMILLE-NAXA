@@ -31,6 +31,24 @@ export BACKUP_FILE="$tmp/naxa-services-ci-drill.dump.gpg"
 export DESTINATION_DATABASE_URL="$target_url"
 export BACKUP_RESTORE_ALLOW_DESTRUCTIVE="true"
 export BACKUP_RESTORE_CONFIRM_DATABASE="$target_name"
+# A failed restore must preserve an existing target marker. No hosted target allowed.
+psql "$target_url" -X -v ON_ERROR_STOP=1 -c "create table public.backup_restore_probe(id integer primary key, marker text not null); insert into public.backup_restore_probe values (1, 'unchanged-before-restore');"
+assert_unchanged() {
+  [[ "$(psql "$target_url" -X -A -t -v ON_ERROR_STOP=1 -c "select marker from public.backup_restore_probe where id=1")" == "unchanged-before-restore" ]]
+}
+expect_rejected() {
+  if "$@" >"$tmp/negative-restore.log" 2>&1; then echo "Unexpected restore acceptance" >&2; exit 1; fi
+  assert_unchanged
+}
+expect_rejected env BACKUP_RESTORE_ALLOW_DESTRUCTIVE=false "$root/infra/backup/restore-postgres.sh"
+expect_rejected env BACKUP_RESTORE_CONFIRM_DATABASE=incorrect "$root/infra/backup/restore-postgres.sh"
+expect_rejected env BACKUP_ENCRYPTION_PASSPHRASE=incorrect-test-phrase "$root/infra/backup/restore-postgres.sh"
+cp "$BACKUP_FILE" "$tmp/tampered.dump.gpg"
+printf 'tampered' >> "$tmp/tampered.dump.gpg"
+# Checksum sidecar deliberately retains the original digest with the new filename.
+sed 's/naxa-services-ci-drill.dump.gpg/tampered.dump.gpg/' "$BACKUP_FILE.sha256" > "$tmp/tampered.dump.gpg.sha256"
+expect_rejected env BACKUP_FILE="$tmp/tampered.dump.gpg" "$root/infra/backup/restore-postgres.sh"
+echo "PASS: refusal of unapproved target, mismatched confirmation, wrong passphrase and tampered ciphertext; target preserved."
 "$root/infra/backup/restore-postgres.sh"
 actual="$(psql "$target_url" -X -A -t -v ON_ERROR_STOP=1 -c "select marker from public.backup_restore_probe where id = 1")"
 [[ "$actual" == "naxa-services-backup-drill-ok" ]]

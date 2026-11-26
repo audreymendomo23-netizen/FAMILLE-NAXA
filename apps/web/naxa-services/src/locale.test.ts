@@ -1,3 +1,5 @@
 import {describe,it,expect} from "vitest";
 import {localeOf,translate,LANGUAGES} from "./locale";
 describe("commercial locale catalogue",()=>{it("recognizes exactly FR EN and Cameroon Fulfulde",()=>{expect(LANGUAGES).toEqual(["fr","en","ff-CM"]);expect(localeOf("ff-CM")).toBe("ff-CM");expect(localeOf("xx")).toBe("fr");});it("translates login, navigation and dashboard in every supported language",()=>{for(const key of ["Se connecter","Mot de passe","Vue d'ensemble","Caisse & ventes","Une journée bien organisée commence ici."]){expect(translate("fr",key)).toBe(key);expect(translate("en",key)).not.toBe(key);expect(translate("ff-CM",key)).not.toBe(key);}expect(translate("ff-CM","user-supplied string")).toBe("user-supplied string");});});
+
+describe("attendance interaction translations",()=>{it("all four actions and pending copy have explicit EN and FF labels",()=>{for(const key of ["Pointer mon arrivée","Commencer une pause","Terminer la pause","Pointer mon départ","Envoi…","Pointage non enregistré."])for(const language of ["en","ff-CM"] as const)expect(translate(language,key)).not.toBe(key);});});
