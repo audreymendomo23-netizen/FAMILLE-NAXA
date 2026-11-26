@@ -132,7 +132,7 @@ async function createCustomer(page: Page, name: string) {
   await page.getByRole("button", { name: "Créer une fiche client" }).click();
   await page.getByLabel("Nom du client").fill(name);
   await page.getByLabel("Téléphone facultatif").fill("+237699000111");
-  await page.getByRole("button", { name: "Mettre en file & synchroniser" }).click();
+  await page.getByRole("button", { name: "Enregistrer" }).click();
 }
 
 
@@ -240,7 +240,7 @@ test("Web: Pressing keeps its dedicated ticket journey and waits for a server re
   await page.getByLabel("Articles déposés").fill("2 chemises — lavage et repassage; 1 costume — nettoyage à sec");
   await page.getByLabel("Montant total FCFA").fill("3500");
   await page.getByLabel("Date promise").fill("2026-11-25T17:00");
-  await page.getByRole("button", { name: "Mettre en file & synchroniser" }).click();
+  await page.getByRole("button", { name: "Enregistrer" }).click();
   await expect.poll(() => appliedEvents.length).toBe(1);
   expect(appliedEvents[0].action_code).toBe("pressing_order.created");
   expect(appliedEvents[0].aggregate_type).toBe("pressing_order");
@@ -293,11 +293,12 @@ test("Web: offline outbox survives tab closure, keeps tenant data isolated and c
 
   let page = await context.newPage();
   await signIn(page);
-  await expect(page.getByText("customer.created").first()).toBeVisible();
+  await page.getByRole("button",{name:/Clients & fidélité/}).first().click();
+  await expect(page.getByText("Client distant Android").first()).toBeVisible();
 
   await context.setOffline(true);
   await createCustomer(page, "Client privé organisation A");
-  await expect(page.getByText(/mise en file hors ligne/i)).toBeVisible();
+  await expect(page.getByText(/enregistré hors connexion/i)).toBeVisible();
   await expect(page.locator(".module-layout .module-main-card").last().locator(".record").filter({ hasText: "Client privé organisation A" })).toBeVisible();
   await page.close();
 
@@ -320,7 +321,7 @@ test("Web: offline outbox survives tab closure, keeps tenant data isolated and c
   expect(appliedEvents[0].action_code).toBe("customer.created");
   expect(appliedEvents[0].org_id).toBe(ORG_A);
   await page.getByRole("button", { name: /Clients & fidélité/ }).first().click();
-  await expect(page.getByText("Confirmé par le serveur")).toBeVisible();
+  await expect(page.locator(".record").filter({hasText:"Client privé organisation A"}).getByText("Confirmé",{exact:true}).first()).toBeVisible();
   await expect(page.locator(".module-layout .module-main-card").last().locator(".record").filter({ hasText: "Client distant Android" })).toBeVisible();
   await expect(page.locator(".module-layout .module-main-card").last().locator(".record").filter({ hasText: "Client privé organisation A" })).toBeVisible();
   await page.close();
@@ -437,7 +438,7 @@ test("Web N4-C: cash register, cash session, cash sale and close require server 
 
   await page.getByLabel("Code unique").fill("E2E-CAISSE");
   await page.getByLabel("Nom du registre").fill("Caisse recette");
-  await page.getByRole("button", { name: "Créer le registre avec reçu serveur" }).click();
+  await page.getByRole("button", { name: "Créer le registre" }).click();
   await expect.poll(() => appliedEvents.length).toBe(1);
   expect(appliedEvents[0].action_code).toBe("cash_register.created");
   expect(appliedEvents[0].aggregate_type).toBe("cash_register");
@@ -466,7 +467,7 @@ test("Web N4-C: cash register, cash session, cash sale and close require server 
   expect((appliedEvents[3].payload as Record<string,unknown>).payment_method).toBe("mobile_money");
   expect((appliedEvents[3].payload as Record<string,unknown>).status).toBe("confirmed");
   await page.getByLabel("Montant compté à la clôture (FCFA)").fill("7500");
-  await page.getByRole("button", { name: "Clôturer et calculer l'écart serveur" }).click();
+  await page.getByRole("button", { name: "Clôturer et calculer l'écart" }).click();
   await expect.poll(() => appliedEvents.length).toBe(5);
   expect(appliedEvents[4].action_code).toBe("cash_session.closed");
   expect((appliedEvents[4].payload as Record<string, unknown>).counted_close_xaf).toBe(7500);
@@ -524,7 +525,7 @@ test("Web: a peer transition preserves the original job and its activity fields"
   await signIn(page, "NS-ACT-GARAGE");
   await page.getByRole("button", { name: "Dossiers métier" }).click();
   const record = page.locator(".activity-record").filter({ hasText: "Entretien véhicule atelier" });
-  await expect(record).toContainText("révision 2");
+  await expect(record.getByTestId("record-confirmation")).toHaveAttribute("data-version","2");
   await expect(record).toContainText("Véhicule de recette");
   await expect(record).toContainText("Client de recette");
   await expect(record.locator(".status-tag")).toHaveText(ACTIVITY_WORKFLOWS.garage.stages.find(s => s.code === "diagnostic")!.label);
@@ -686,7 +687,7 @@ test("Web CRM: create a follow-up, reschedule it with a confirmed completion and
   expect(events[3].aggregate_id).toBe(followupId);
   expect((events[3].payload as Record<string,unknown>).next_due_at_if_repeating).toBeNull();
   await expect(record.locator(".status-tag")).toHaveText("completed");
-  await expect(record).toContainText("Confirmé par le serveur");
+  await expect(record).toContainText("Confirmé");
   await expect(record.getByRole("button",{name:"Clôturer le suivi"})).toHaveCount(0);
 });
 
@@ -766,4 +767,49 @@ test("Web profile photo: private authenticated upload, read, deletion and accoun
   await page.getByRole("button",{name:"Supprimer la photo"}).click();
   await expect(page.getByText("Photo supprimée.",{exact:true})).toBeVisible();
   expect(objects.size).toBe(0);
+});
+
+test("Commercial login: photos load, alternate after four seconds and technical copy is absent",async({context})=>{
+  const page=await context.newPage();await page.goto("/");
+  const photos=page.getByTestId("auth-photos");
+  await expect(photos).toBeVisible();
+  await expect.poll(()=>photos.locator("img.current").evaluate((img:HTMLImageElement)=>img.complete&&img.naturalWidth>0)).toBe(true);
+  await expect(photos).toHaveAttribute("data-photo-index","0");
+  await expect(photos).toHaveAttribute("data-photo-index","1",{timeout:6500});
+  await expect(page.getByText(/Session Web conservée|Pas d'inscription libre|jetons restent en mémoire/)).toHaveCount(0);
+  await page.getByRole("button",{name:"Mode clair",exact:true}).click();
+  await expect(page.locator(".auth-app")).toHaveClass(/light/);
+  await page.getByRole("button",{name:"Mode nuit",exact:true}).click();
+  await expect(page.getByTestId("night-torch")).toBeVisible();
+  await expect(page.getByTestId("night-torch")).toHaveCount(0,{timeout:3000});
+  await expect(page.getByLabel("Identifiant NAXA Services")).toBeEditable();
+});
+test("Commercial responsiveness: all modules are reachable on a 320px screen",async({context})=>{
+  test.setTimeout(90_000);await installBackend(context);
+  const page=await context.newPage();await page.setViewportSize({width:320,height:720});
+  await signIn(page);
+  const labels=await page.locator(".side-nav .nav-item").allTextContents();
+  expect(labels.length).toBeGreaterThan(12);
+  for(let i=0;i<labels.length;i++){
+    await page.getByRole("button",{name:"Tous les modules"}).click();
+    const link=page.locator(".side-nav .nav-item").nth(i);
+    await expect(link).toBeVisible();await link.click();
+    await expect(page.locator(".sidebar")).not.toBeVisible();
+    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  }
+  for(const width of [390,768,1024,1440]){
+    await page.setViewportSize({width,height:900});
+    await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+  }
+  await page.setViewportSize({width:390,height:844});
+  await page.getByRole("button",{name:"Tous les modules"}).click();
+  await expect(page.locator(".sidebar")).toBeVisible();
+  await page.keyboard.press("Escape");await expect(page.locator(".sidebar")).not.toBeVisible();
+});
+test("Reduced motion: photos stay still and torch is suppressed",async({context})=>{
+  const page=await context.newPage();await page.emulateMedia({reducedMotion:"reduce"});await page.goto("/");
+  await expect(page.getByTestId("auth-photos")).toHaveAttribute("data-photo-index","0");
+  await page.getByRole("button",{name:"Mode clair",exact:true}).click();
+  await page.getByRole("button",{name:"Mode nuit",exact:true}).click();
+  await expect(page.getByTestId("night-torch")).toHaveCount(0);
 });
