@@ -799,6 +799,7 @@ test("Commercial responsiveness: all modules are reachable on a 320px screen",as
     await expect(link).toBeVisible();await link.click();
     await expect(page.locator(".sidebar")).not.toBeVisible();
     await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1)).toBe(true);
+    await expect(page.locator("main")).not.toContainText(/détermine les scopes|entitlements indépendants|dans la liste locale/i);
   }
   for(const width of [390,768,1024,1440]){
     await page.setViewportSize({width,height:900});
