@@ -1,3 +1,4 @@
+import {validateMonthlyPrice,packagePrice} from "../billing-core/src/index.js";
 // WideMeet N0 — devis pur, aucun paiement, aucun droit conféré. Capacity = demande commerciale, pas preuve de présence.
 export function quoteWideMeet({kind,capacity,period="monthly",plan}={}){
  if(!Number.isSafeInteger(capacity)||capacity<1) throw new RangeError("invalid_capacity");
@@ -9,6 +10,6 @@ export function quoteWideMeet({kind,capacity,period="monthly",plan}={}){
  if(kind!=="enterprise"||!["monthly","annual"].includes(period)||!["access","premium"].includes(plan))throw new RangeError("invalid_enterprise_plan");
  if(plan==="access"&&capacity>20)return {status:"upgrade_required",amountFcfa:null};
  if(plan==="premium"&&capacity>50)return {status:"manual_quote_required",amountFcfa:null,monthlyCeilingFcfa:20000};
- const monthly=plan==="access"?5000:10000;
- return {status:"quoted",plan,capacityLimit:plan==="access"?20:50,amountFcfa:monthly*(period==="annual"?10:1),period};
+ const monthly=validateMonthlyPrice(plan==="access"?5000:10000);
+ return {status:"quoted",plan,capacityLimit:plan==="access"?20:50,amountFcfa:period==="annual"?packagePrice(monthly,12):monthly,period};
 }

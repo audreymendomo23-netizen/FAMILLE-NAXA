@@ -15,6 +15,7 @@
     "test:contracts": "npm test --workspace @famille/contracts",
     "test:assistant": "npm test --workspace @famille/assistant-rules",
     "test:core-web": "npm test --workspace @naxa/core-web",
-    "test:billing": "npm test --workspace @famille/billing-core"
+    "test:billing": "npm test --workspace @famille/billing-core",
+    "test:widemeet": "npm test --workspace @famille/widemeet-web"
   }
 }

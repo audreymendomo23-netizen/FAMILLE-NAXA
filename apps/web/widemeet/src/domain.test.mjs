@@ -3,3 +3,5 @@ test("palette weights and seven colors",()=>{assert.equal(Object.values(palette)
 test("five stable tabs and localized actions",()=>{assert.equal(tabs.length,5);for(const lang of Object.values(messages))for(const k of [...tabs,...actions,...menu])assert.ok(lang[k],k)});
 test("preferences safe defaults",()=>{assert.deepEqual(normalizePrefs({theme:"invalid",locale:"xx"}),{theme:"light",locale:"fr",motion:true,discovered:false});assert.equal(normalizePrefs({theme:"dark",locale:"en",motion:false,discovered:true}).motion,false)});
 test("only entering night triggers glow",()=>{assert.equal(nightEffect("light","dark"),true);for(const args of [["dark","dark"],["dark","light"],["light","dark",false],["light","dark",true,true]])assert.equal(nightEffect(...args),false)});
+
+test("corrupt preference storage defaults safely",()=>{for(const p of [null,[],false,"dark"])assert.deepEqual(normalizePrefs(p),{theme:"light",locale:"fr",motion:true,discovered:false})});

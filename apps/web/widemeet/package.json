@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite --host 0.0.0.0",
-    "test": "node --test src/domain.test.mjs"
+    "test": "node --test src/domain.test.mjs src/session.test.mjs ../../../packages/widemeet-domain/*.test.mjs"
   },
   "dependencies": {
     "@famille/contracts": "file:../../../packages/contracts",

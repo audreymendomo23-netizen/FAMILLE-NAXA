@@ -9,8 +9,8 @@ export function presentationProfile(preferred,networkCeiling,policyCeiling){
  return {preferred,effective,...PRESENTATION_PROFILES[effective]};
 }
 function assertDisplayContext(ctx,nowMs){
- const {meeting,actor,source,receiver,policy}=ctx;
- if(!Number.isSafeInteger(nowMs)||nowMs<0||!Number.isSafeInteger(meeting.endMs)||nowMs>=meeting.endMs||meeting.status!=="open")throw new Error("meeting_unavailable");
+ const {meeting,actor,source,receiver,policy}=ctx??{};
+ if(!meeting||!meeting.id||!meeting.orgId||!Number.isSafeInteger(nowMs)||nowMs<0||nowMs>Number.MAX_SAFE_INTEGER-60000||!Number.isSafeInteger(meeting.endMs)||nowMs>=meeting.endMs||meeting.status!=="open")throw new Error("meeting_unavailable");
  if(!["standard","confidential"].includes(meeting.confidentiality))throw new Error("display_forbidden");
  if(policy?.displayEnabled!==true||actor?.enabled!==true||actor?.displayAllowed!==true||actor.orgId!==meeting.orgId||actor.meetingId!==meeting.id||!actor.memberId||source?.active!==true||source.memberId!==actor.memberId||source.orgId!==meeting.orgId||source.meetingId!==meeting.id||!source.id)throw new Error("forbidden");
  if(receiver?.approved!==true||receiver?.active!==true||receiver?.kind!=="widemeet_receiver"||receiver.memberId!==actor.memberId||receiver.orgId!==meeting.orgId||!receiver.id||receiver.id===source.id)throw new Error("receiver_forbidden");
