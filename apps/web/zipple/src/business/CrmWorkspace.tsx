@@ -28,7 +28,7 @@ export function CrmWorkspace({orders,call,disabled,en}:Props){
  <h4>{t("Rattacher une commande non réglée","Link an unsettled order")}</h4>
  <label>{t("Commande","Order")}<select aria-label={t("Commande à rattacher","Order to link")} value={order} onChange={e=>O(e.target.value)}><option value="">—</option>{orders.filter(o=>o.status!=="cancelled"&&!history.some(h=>h.order_id===o.id)).map(o=><option key={o.id} value={o.id}>{o.id.slice(0,8)} · {o.total_xaf} FCFA · {o.status}</option>)}</select></label>
  <button disabled={lock||!order} onClick={()=>run(async()=>{await call("customer_attach",{customer_id:customer,order_id:order});O("");await load()})}>{t("Rattacher la commande","Link order")}</button>
- <h4>{t("Historique du site","Site history")}</h4>{history.filter(h=>h.customer_id===customer).map(h=><p key={h.order_id}>{h.order_id.slice(0,8)} · {h.total_xaf} FCFA · {h.paid?t("Réglée","Paid"):t("Non réglée","Unpaid")}</p>)}
+ <h4>{t("Historique du site","Site history")}</h4>{history.filter(h=>h.customer_id===customer).map(h=><p key={h.order_id}>{h.order_id.slice(0,8)} · {h.total_xaf} FCFA · {h.payment_status==="credit_due"?t("À crédit","On credit"):h.paid?t("Réglée","Paid"):t("Non réglée","Unpaid")}</p>)}
  <h4>{t("Planifier un suivi","Schedule a follow-up")}</h4>
  <label>{t("Objet du suivi","Follow-up subject")}<input value={title} onChange={e=>T(e.target.value)} maxLength={160}/></label>
  <label>{t("Canal de suivi","Follow-up channel")}<select value={channel} onChange={e=>CH(e.target.value)}><option value="telephone">{t("Téléphone","Phone")}</option><option value="whatsapp">WhatsApp</option><option value="in_person">{t("Sur place","In person")}</option></select></label>

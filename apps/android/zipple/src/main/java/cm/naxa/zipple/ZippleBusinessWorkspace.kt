@@ -89,7 +89,7 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
                 Text(tr("Règlement déjà reçu, aucun débit API.","Payment already received, no API charge."))
                 listOf("cash","mtn_momo","orange_money","bank","card").forEach{method->OutlinedButton(enabled=canWrite,onClick={cashMethod=method;cashRef=""}){Text((if(cashMethod==method)"✓ " else "")+method)}}
                 if(cashMethod!="cash")OutlinedTextField(cashRef,{cashRef=it.take(160)},label={Text(tr("Référence","Reference"))})
-                snapshot?.rows("orders")?.filter{it.optString("status")=="served"&&!it.optBoolean("paid")}?.forEach{o->
+                snapshot?.rows("orders")?.filter{it.optString("status")=="served"&&!it.optBoolean("settled",it.optBoolean("paid"))}?.forEach{o->
                     val oid=o.optString("id")
                     Text(o.optLong("total_xaf").toString()+" FCFA")
                     Button(enabled=canWrite&&(cashMethod=="cash"||cashRef.trim().length>=4),onClick={run{
@@ -117,7 +117,7 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
                 val qty=i.optLong("available_milli");Text(i.optString("name")+" · "+java.math.BigDecimal.valueOf(qty,3).stripTrailingZeros().toPlainString()+" "+i.optString("unit"))
                 if(qty<=i.optLong("reorder_milli"))Text(tr("Seuil atteint","Reorder threshold reached"))
             }
-            erp?.let{Text(tr("Encaissements enregistrés","Recorded receipts")+" : "+it.optLong("recorded_sales_xaf")+" FCFA");Text(tr("Charges enregistrées","Recorded expenses")+" : "+it.optLong("recorded_expenses_xaf")+" FCFA");if(it.isNull("recorded_cost_xaf"))Text(tr("Marge non déterminée sans coût des ventes.","Margin unavailable without cost of sales."))else{Text(tr("Coût des ventes enregistrées","Cost of recorded sales")+" : "+it.optLong("recorded_cost_xaf")+" FCFA");Text(tr("Marge brute enregistrée","Recorded gross margin")+" : "+(it.optLong("recorded_sales_xaf")-it.optLong("recorded_cost_xaf"))+" FCFA")}}
+            erp?.let{Text(tr("Ventes enregistrées","Recorded sales")+" : "+it.optLong("recorded_sales_xaf")+" FCFA");Text(tr("Encaissements enregistrés","Recorded collections")+" : "+it.optLong("recorded_receipts_xaf",it.optLong("recorded_sales_xaf"))+" FCFA");Text(tr("Charges enregistrées","Recorded expenses")+" : "+it.optLong("recorded_expenses_xaf")+" FCFA");if(it.isNull("recorded_cost_xaf"))Text(tr("Marge non déterminée sans coût des ventes.","Margin unavailable without cost of sales."))else{Text(tr("Coût des ventes enregistrées","Cost of recorded sales")+" : "+it.optLong("recorded_cost_xaf")+" FCFA");Text(tr("Marge brute enregistrée","Recorded gross margin")+" : "+(it.optLong("recorded_sales_xaf")-it.optLong("recorded_cost_xaf"))+" FCFA")}}
         }
         else->{
             val current=snapshot

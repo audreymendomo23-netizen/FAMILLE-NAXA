@@ -15,13 +15,13 @@ export function PilotageWorkspace({call,disabled,en}:Props){
  <button disabled={disabled||busy||!start||!end||start>end} onClick={load}>{t("Calculer les indicateurs","Calculate metrics")}</button>
  {error&&<p role="alert">{error}</p>}{data&&<>
  <p>{data.start} — {data.end} · Africa/Douala</p>
- <div className="business-panel"><strong>{t("Encaissements enregistrés","Recorded receipts")}</strong>{fmt(data.recorded_xaf)} · {data.receipts} {t("reçus","receipts")}</div>
- <p>{t("Coût des ventes connu","Known sale cost")} : {fmt(data.known_cost_xaf)}</p><p>{t("Marge brute sur encaissements","Gross margin on receipts")} : {fmt(data.gross_margin_xaf)}</p>
+ <div className="business-panel"><strong>{t("Ventes enregistrées","Recorded sales")}</strong>{fmt(data.recorded_xaf)} · {data.receipts} {t("reçus","receipts")}</div>
+ <p>{t("Encaissements enregistrés","Recorded collections")} : {fmt(data.collected_xaf??data.recorded_xaf)}</p><p>{t("Coût des ventes connu","Known sale cost")} : {fmt(data.known_cost_xaf)}</p><p>{t("Marge brute sur ventes","Gross margin on sales")} : {fmt(data.gross_margin_xaf)}</p>
  {data.uncosted_receipts>0&&<p>{data.uncosted_receipts} {t("reçus sans coût complet : marge non calculable.","receipts without full cost: margin unavailable.")}</p>}
  <p>{t("Charges enregistrées","Recorded expenses")} : {fmt(data.expenses_xaf)}</p><p>{t("Avis clients","Customer reviews")} : {data.feedback_average??"—"}/5 · {data.feedback_count} {t("avis","reviews")}</p>
  {data.feedback_count<10&&<p>{t("Échantillon insuffisant pour classer les performances.","Insufficient sample for ranking performance.")}</p>}
- <h4>{t("Encaissements par poste","Receipts by station")}</h4>{data.posts.map((p:any)=><p key={p.post}>{p.post} · {fmt(p.recorded_xaf)} · {p.portions} {t("portions","portions")}</p>)}
- <h4>{t("Projection indicative","Indicative projection")}</h4>{forecast?<p>{fmt(forecast.daily_xaf)} / {t("jour — moyenne des 28 jours précédents comportant des reçus. Ce n'est pas un objectif ni une garantie.","day — mean of preceding 28 days with receipts. Not a target or guarantee.")}</p>:<p>{t("Historique insuffisant : 28 jours consécutifs avec encaissements enregistrés requis.","Insufficient history: 28 consecutive days with recorded receipts required.")}</p>}
+ <h4>{t("Ventes par poste","Sales by station")}</h4>{data.posts.map((p:any)=><p key={p.post}>{p.post} · {fmt(p.recorded_xaf)} · {p.portions} {t("portions","portions")}</p>)}
+ <h4>{t("Projection indicative","Indicative projection")}</h4>{forecast?<p>{fmt(forecast.daily_xaf)} / {t("jour — moyenne des 28 jours précédents comportant des reçus. Ce n'est pas un objectif ni une garantie.","day — mean of preceding 28 days with receipts. Not a target or guarantee.")}</p>:<p>{t("Historique insuffisant : 28 jours consécutifs avec ventes enregistrées requis.","Insufficient history: 28 consecutive days with recorded sales required.")}</p>}
  <h4>{t("Points de vigilance","Review signals")}</h4>{recoverySignals(data).map(x=><p key={x.code}>{labels[x.code]} : {x.value}</p>)}<p>{t("Règles explicables, sans décision automatique. Stocks et retards représentent l'état courant ; autres chiffres limités à la période choisie.","Explainable rules, no automatic decision. Stock and overdue orders are current; other figures use the chosen period.")}</p></>}
  </section>
 }

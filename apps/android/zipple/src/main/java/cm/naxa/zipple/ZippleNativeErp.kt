@@ -68,7 +68,7 @@ private class RequestKeys{
   val customers=data?.rows("customers").orEmpty()
   Choice(tr("Client","Customer"),customers.map{it.optString("id") to it.optString("display_name")},selected,{selected=it},canWrite)
   if(selected.isNotBlank()){
-   data?.rows("history")?.filter{it.optString("customer_id")==selected}?.forEach{Text(it.optLong("total_xaf").toString()+" FCFA · "+if(it.optBoolean("paid"))tr("Réglée","Paid")else tr("Non réglée","Unpaid"))}
+   data?.rows("history")?.filter{it.optString("customer_id")==selected}?.forEach{Text(it.optLong("total_xaf").toString()+" FCFA · "+if(it.optString("payment_status")=="credit_due")tr("À crédit","On credit")else if(it.optBoolean("paid"))tr("Réglée","Paid")else tr("Non réglée","Unpaid"))}
    Field(tr("Objet du suivi","Follow-up subject"),title,{title=it.take(160)})
    Choice(tr("Canal","Channel"),listOf("telephone" to tr("Téléphone","Phone"),"whatsapp" to "WhatsApp","in_person" to tr("Sur place","In person")),channel,{channel=it},canWrite)
    Field(tr("Échéance AAAA-MM-JJ","Due YYYY-MM-DD"),due,{due=it.take(10)})
