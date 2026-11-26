@@ -65,7 +65,7 @@ class MainActivity : ComponentActivity() {
         val api=BootikApi(BuildConfig.BOOTIK_API_URL,installation)
         setContent {
             BootikTheme {
-                var connected by remember { mutableStateOf(false) }
+                var connected by remember { mutableStateOf(true) }
                 if (connected) BootikConnectedScreen(api,database.scoped()) { connected = false }
                 else Column { Button(onClick = { connected = true }) { Text("Connexion BOOTIK") }; BootikSetupScreen(database = database) }
             }

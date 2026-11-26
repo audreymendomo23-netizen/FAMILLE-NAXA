@@ -20,7 +20,6 @@ class AppShellInstrumentedTest {
 
     @Test
     fun connectionScreenAndLocalReturnAreVisible() {
-        composeRule.onNodeWithText("Connexion BOOTIK").performClick()
         composeRule.onNodeWithText("Identifiant").assertExists()
         composeRule.onNodeWithText("Mot de passe").assertExists()
         composeRule.onNodeWithText("Brouillons locaux").performClick()
@@ -29,7 +28,6 @@ class AppShellInstrumentedTest {
 
     @Test
     fun loginRequiresBothCredentialsLikeNaxaServices(){
-        composeRule.onNodeWithText("Connexion BOOTIK").performClick()
         val submit=composeRule.onNodeWithTag("login-submit")
         submit.assertIsNotEnabled()
         composeRule.onNodeWithTag("login-identifier").performTextInput("BK-000001")
@@ -39,7 +37,18 @@ class AppShellInstrumentedTest {
     }
 
     @Test
+    fun loginLocaleSwitchUsesNaxaServicesLabels(){
+        composeRule.onNodeWithTag("locale-en").performClick()
+        composeRule.onNodeWithText("Welcome").assertExists()
+        composeRule.onNodeWithTag("locale-ff").performClick()
+        composeRule.onNodeWithText("A jaɓɓaama").assertExists()
+        composeRule.onNodeWithTag("locale-fr").performClick()
+        composeRule.onNodeWithText("Bienvenue").assertExists()
+    }
+
+    @Test
     fun retailFirstSetupAndFourteenProfileEntryPointAreVisible() {
+        composeRule.onNodeWithText("Brouillons locaux").performClick()
         composeRule.onNodeWithText("BOOTIK").assertExists()
         composeRule.onNodeWithText(composeRule.activity.getString(R.string.universe_retailer)).assertExists()
         composeRule.onNodeWithTag("bootik-setup-list").performScrollToIndex(16)

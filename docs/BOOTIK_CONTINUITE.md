@@ -483,3 +483,6 @@ Sources exactes : MainActivity.kt routeAfterAuthentication/LoginScreen, Experien
 
 ### B01 — recette première connexion renforcée
 Recette Chromium de toutes les cartes et cinq étapes avec persistance SQL ; correction du test de préférence de notification (contrôle asynchrone : clic puis attente de la valeur effectivement confirmée, vérification SQL conservée). Recette API documents fictifs de test : refus avant acceptation, hash incorrect refusé, idempotence. Les textes fictifs ne sont pas des CGU de production.
+
+### B01 — entrée Android et langue de connexion
+Android ouvre désormais directement la connexion (brouillons accessibles par action explicite), comme NAXA SERVICES. Libellés FR/EN/Fulfulde repris des strings de connexion NAXA SERVICES ; sélection locale et mot de passe masquable. Tests Compose de bascule de langue et formulaire ; Web mêmes libellés à la connexion. Cette adaptation ne couvre pas encore la traduction intégrale des écrans ERP et du tutoriel.

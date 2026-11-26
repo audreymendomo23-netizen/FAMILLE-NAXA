@@ -25,6 +25,9 @@ import org.json.JSONObject
  val vault=remember{SessionVault(context.applicationContext)}
  val pinManager=remember{LocalAccessPinManager(context.applicationContext)}
  val biometricPrefs=remember{context.getSharedPreferences("bootik_biometric_optin",0)}
+ val localePrefs=remember{context.getSharedPreferences("bootik_login_locale",0)}
+ var locale by remember{mutableStateOf(localePrefs.getString("locale","fr")?:"fr")}
+ fun tr(fr:String,en:String,ff:String)=when(locale){"en"->en;"ff-CM"->ff;else->fr}
  var identifier by remember{mutableStateOf("")};var password by remember{mutableStateOf("")}
  var session by remember{mutableStateOf<BootikSession?>(null)};var site by remember{mutableStateOf("")}
  var message by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)}
@@ -57,16 +60,17 @@ import org.json.JSONObject
   }
  }
  if(current==null){
- Text("Bienvenue",style=MaterialTheme.typography.headlineMedium);Text("Accédez à votre espace professionnel.")
- OutlinedTextField(identifier,{identifier=it},label={Text("Identifiant")},singleLine=true,modifier=Modifier.fillMaxWidth().testTag("login-identifier"))
- OutlinedTextField(password,{password=it},label={Text("Mot de passe")},singleLine=true,modifier=Modifier.fillMaxWidth().testTag("login-password"),visualTransformation=if(showPassword)VisualTransformation.None else PasswordVisualTransformation(),trailingIcon={TextButton(onClick={showPassword=!showPassword}){Text(if(showPassword)"Masquer" else "Afficher")}})
- Row{Checkbox(rememberDevice,{rememberDevice=it},enabled=!busy);Text("Rester connecté")}
- Button(modifier=Modifier.fillMaxWidth().testTag("login-submit"),enabled=!busy&&identifier.isNotBlank()&&password.isNotBlank(),onClick={task{try{val previous=savedToken;if(previous!=null){api.forget(previous);vault.clear();savedToken=null};establish(api.login(identifier,password,rememberDevice))}finally{password=""}}}){Text("Se connecter")}
+ Row(horizontalArrangement=Arrangement.End,modifier=Modifier.fillMaxWidth()){listOf("fr" to "FR","en" to "EN","ff-CM" to "FF").forEach{(code,label)->TextButton(enabled=locale!=code,onClick={locale=code;localePrefs.edit().putString("locale",code).apply()},modifier=Modifier.testTag("locale-"+if(code=="ff-CM")"ff" else code)){Text(label)}}}
+ Text(tr("Bienvenue","Welcome","A jaɓɓaama"),style=MaterialTheme.typography.headlineMedium);Text(tr("Connecte-toi à ton espace professionnel.","Sign in to your professional workspace.","Naatu e nokkuure golle maa."))
+ OutlinedTextField(identifier,{identifier=it},label={Text(tr("Identifiant","ID","Innol"))},singleLine=true,modifier=Modifier.fillMaxWidth().testTag("login-identifier"))
+ OutlinedTextField(password,{password=it},label={Text(tr("Mot de passe","Password","Finnde"))},singleLine=true,modifier=Modifier.fillMaxWidth().testTag("login-password"),visualTransformation=if(showPassword)VisualTransformation.None else PasswordVisualTransformation(),trailingIcon={TextButton(onClick={showPassword=!showPassword}){Text(if(showPassword)tr("Masquer","Hide","Suuɗu") else tr("Afficher","Show","Hollu"))}})
+ Row{Checkbox(rememberDevice,{rememberDevice=it},enabled=!busy);Text(tr("Rester connecté sur cet appareil","Stay signed in on this device","Heddo e naatugol e kaɓirgol ngol"))}
+ Button(modifier=Modifier.fillMaxWidth().testTag("login-submit"),enabled=!busy&&identifier.isNotBlank()&&password.isNotBlank(),onClick={task{try{val previous=savedToken;if(previous!=null){api.forget(previous);vault.clear();savedToken=null};establish(api.login(identifier,password,rememberDevice))}finally{password=""}}}){Text(tr("Se connecter","Sign in","Naatu"))}
  if(savedToken!=null){
  Button(enabled=!busy,onClick={task{val old=savedToken?:return@task;val s=api.refresh(old);vault.clear();savedToken=null;establish(s)}}){Text("Reprendre ma session")}
  TextButton(enabled=!busy,onClick={task{try{savedToken?.let{api.forget(it)};message="Session révoquée"}finally{vault.clear();savedToken=null}}}){Text("Oublier cet appareil")}
  }
- TextButton(enabled=!busy&&identifier.isNotBlank(),onClick={task{api.recovery(identifier);message="Demande transmise"}}){Text("Mot de passe oublié")}
+ TextButton(enabled=!busy&&identifier.isNotBlank(),onClick={task{api.recovery(identifier);message="Demande transmise"}}){Text(tr("Mot de passe oublié","Forgot password?","A yejjitii finnde maa?"))}
  TextButton(enabled=!busy,onClick=onBack){Text("Brouillons locaux")}
  }else if(current.requirePasswordChange||changing){
  Text("Changer le mot de passe")
