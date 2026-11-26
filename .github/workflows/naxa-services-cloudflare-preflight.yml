@@ -7,6 +7,7 @@ on:
       - '.github/workflows/naxa-services-cloudflare-preflight.yml'
 permissions:
   contents: read
+  checks: read
 jobs:
   production-web-build:
     runs-on: ubuntu-24.04
@@ -47,20 +48,91 @@ jobs:
         with:
           name: naxa-services-cloudflare-candidate
           path: candidate
-      - name: Verify public Pages files against exact build candidate (read only)
+      - name: Wait for the Cloudflare deployment of this exact commit
+        id: pages
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          origin='https://famille-naxa.pages.dev'
+          for attempt in $(seq 1 42); do
+            result="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" --jq '.check_runs | map(select(.app.id == 85455 and .app.slug == "cloudflare-workers-and-pages" and .name == "Cloudflare Pages: famille-naxa")) | sort_by(.id) | last // {}')"
+            state="$(jq -r '.status // "pending"' <<< "$result")"
+            if [[ "$state" == completed ]]; then
+              [[ "$(jq -r '.conclusion' <<< "$result")" == success ]] || { echo 'Cloudflare deployment failed'; exit 1; }
+              [[ "$(jq -r '.head_sha' <<< "$result")" == "$GITHUB_SHA" ]] || { echo 'Unexpected commit'; exit 1; }
+              origin="$(jq -r '.output.summary' <<< "$result" | grep -oE 'https://[0-9a-f]{8}\.famille-naxa\.pages\.dev' | head -1)"
+              [[ "$origin" =~ ^https://[0-9a-f]{8}\.famille-naxa\.pages\.dev$ ]] || { echo 'No verified preview URL'; exit 1; }
+              echo "origin=$origin" >> "$GITHUB_OUTPUT"
+              echo "Verified Cloudflare deploy for $GITHUB_SHA: $origin"
+              exit 0
+            fi
+            echo "Waiting for Cloudflare check: $attempt/42"
+            sleep 10
+          done
+          echo 'Cloudflare deployment did not complete within the verification window'
+          exit 1
+      - name: Verify published files against exact build candidate (read only)
+        env:
+          VERIFIED_ORIGIN: ${{ steps.pages.outputs.origin }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          cd candidate
+          failed=0
+          while IFS= read -r -d '' file; do
+            if ! curl --silent --show-error --fail --retry 2 --max-time 30 -H 'Cache-Control: no-cache' "$VERIFIED_ORIGIN/${file#./}" -o "$tmp/remote"; then
+              echo "Missing published file: $file"; failed=1; continue
+            fi
+            if ! cmp -s "$file" "$tmp/remote"; then
+              echo "Published file differs: $file"
+              sha256sum "$file" "$tmp/remote" | cut -d' ' -f1
+              failed=1
+            fi
+          done < <(find . -type f -print0)
+          [[ "$failed" == 0 ]] || exit 1
+          echo 'All files in the exact candidate match the immutable deployment URL.'
+      - name: Verify stable Pages alias (read only)
+        shell: bash
+        run: |
+          set -euo pipefail
           tmp="$(mktemp -d)"
           trap 'rm -rf "$tmp"' EXIT
           cd candidate
           for file in index.html manifest.webmanifest sw.js; do
-            curl --silent --show-error --fail --max-time 30 -H 'Cache-Control: no-cache' "$origin/$file" -o "$tmp/remote"
-            cmp -s "$file" "$tmp/remote" || { echo "Live file differs from candidate: $file"; exit 1; }
+            curl --silent --show-error --fail --retry 2 --max-time 30 -H 'Cache-Control: no-cache' "https://famille-naxa.pages.dev/$file" -o "$tmp/remote"
+            cmp -s "$file" "$tmp/remote" || { echo "Stable alias differs: $file (may be a newer deployment)"; exit 1; }
           done
-          while IFS= read -r -d '' file; do
-            curl --silent --show-error --fail --max-time 30 -H 'Cache-Control: no-cache' "$origin/$file" -o "$tmp/remote"
-            cmp -s "$file" "$tmp/remote" || { echo "Live asset differs from candidate: $file"; exit 1; }
-          done < <(find assets -type f -print0)
-          echo 'Live HTML, PWA files and compiled assets match this exact candidate. This is not a customer acceptance test or proof of a Cloudflare deployment ID.'
+          echo 'Stable Pages alias matches candidate shell.'
+  hosted-edge-preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check five live Edge gateways without mutation
+        run: |
+          python3 - <<'PY'
+          import urllib.request, urllib.error
+          origin = 'https://famille-naxa.pages.dev'
+          foreign = 'https://untrusted.invalid'
+          base = 'https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/'
+          failed = False
+          for name in ['auth', 'accounting', 'referrals', 'customer-promotions', 'notifications']:
+              for request_origin in [origin, foreign]:
+                  req = urllib.request.Request(base + 'naxa-services-' + name, method='OPTIONS', headers={
+                      'Origin': request_origin, 'Access-Control-Request-Method': 'POST',
+                      'Access-Control-Request-Headers': 'authorization,apikey,content-type',
+                  })
+                  try:
+                      response = urllib.request.urlopen(req, timeout=20)
+                  except urllib.error.HTTPError as exc:
+                      response = exc
+                  with response:
+                      status, allowed = response.status, response.headers.get('Access-Control-Allow-Origin')
+                      methods = response.headers.get('Access-Control-Allow-Methods', '')
+                      headers = response.headers.get('Access-Control-Allow-Headers', '').lower()
+                      good = status in (200, 204) and 'POST' in methods and all(h in headers for h in ['authorization','apikey','content-type']) and (allowed == origin if request_origin == origin else allowed in (None, 'null'))
+                      print(f'{name}: {"official" if request_origin == origin else "foreign"} status={status} allow={allowed} {"PASS" if good else "FAIL"}', flush=True)
+                      failed |= not good
+          if failed: raise SystemExit(1)
+          PY
