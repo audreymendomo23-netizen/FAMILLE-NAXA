@@ -47,6 +47,19 @@ try{
  assert.equal(code.split(anchor).length,2);
  await writeFile(roomCopy,code.replace(anchor,"Deno.serve({port:8001},async request=>{"));
  await launch("supabase/functions/widemeet-auth/index.ts",8000);await launch(roomCopy,8001);
+ // Register real GoTrue accounts through the product gateway (test-only policy versions).
+ for(const kind of ["individual","enterprise"]){
+ const password="Qa7!"+randomBytes(18).toString("hex"),registration={installation_id:randomUUID(),request_id:randomUUID(),kind,display_name:"Replay "+kind,workspace_name:"Registration "+kind,password,accepted_terms:true,terms_version:"wm-replay-draft-20261126",privacy_version:"wm-replay-draft-20261126"};
+ const registered=await ok(auth+"/register",registration);
+ assert.match(registered.login_id,/^WM-[A-Z0-9]{8,24}$/);
+ assert.deepEqual(await ok(auth+"/register",registration),registered);
+ const session=await login({login:registered.login_id,password});
+ assert.equal(session.workspaces.length,1);
+ assert.equal(session.workspaces[0].kind,kind);
+ assert.equal((await request(room+"/list",{},session.access_token)).status,403);
+ assert.ok((await request(auth+"/register",{...registration,display_name:"Changed"})).status>=400);
+ }
+ pass("actual autonomous individual and enterprise registration, stable retry, no automatic entitlement");
  const hs=await login(h),gs=await login(g),os=await login(o);
  assert.equal(hs.member_id,h.id);assert.equal(gs.member_id,g.id);assert.equal(os.active_workspace_id,other);
  const denied=await request(auth+"/login",{identifier:h.login,password:"wrong",installation_id:randomUUID(),platform:"web"});assert.equal(denied.status,401);
