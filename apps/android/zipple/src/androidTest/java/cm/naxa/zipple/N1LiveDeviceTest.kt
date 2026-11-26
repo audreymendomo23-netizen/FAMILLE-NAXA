@@ -17,10 +17,10 @@ class N1LiveDeviceTest {
  @Test fun authenticatedNativeAndPersistedSync(){
   val args=InstrumentationRegistry.getArguments()
   val password=args.getString("zippleFixturePassword")
-  assumeTrue("Only the isolated configured CI recipe",password!=null && BuildConfig.ZIPPLE_API_URL=="https://127.0.0.1:4443/gateway")
+  assumeTrue("Only the isolated configured CI recipe",password!=null && BuildConfig.ZIPPLE_API_URL in setOf("https://127.0.0.1:4443/gateway","https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-n1"))
   val eventId=requireNotNull(args.getString("zippleFixtureEvent"))
   val context=InstrumentationRegistry.getInstrumentation().targetContext
-  compose.onNodeWithText("Identifiant").performTextInput("fixture")
+  compose.onNodeWithText("Identifiant").performTextInput(args.getString("zippleFixtureLogin") ?: "fixture")
   compose.onNodeWithText("Mot de passe",substring=false).performTextInput(requireNotNull(password))
   compose.onNodeWithText("Se connecter").performClick()
   compose.waitUntil(20000){compose.onAllNodesWithText("Configurer votre code local").fetchSemanticsNodes().isNotEmpty()}

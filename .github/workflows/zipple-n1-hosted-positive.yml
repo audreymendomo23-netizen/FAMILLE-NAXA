@@ -1,0 +1,50 @@
+name: ZIPPLE N1 — hosted positive end-to-end
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/apps/zipple/n1/hosted/positive.test.mjs"
+      - ".github/workflows/zipple-n1-hosted-positive.yml"
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  hosted-positive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.7"
+      - name: Build only ZIPPLE browser test
+        run: |
+          npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
+          npm install --no-save --ignore-scripts playwright@1.51.1
+          npx playwright install --with-deps chromium
+          VITE_ZIPPLE_API_URL=https://127.0.0.1:4443/gateway npm run build --workspace @famille/zipple-web
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 -subj "/CN=localhost" -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" -keyout "$RUNNER_TEMP/zipple-ci.key" -out "$RUNNER_TEMP/zipple-ci.crt" >/dev/null 2>&1
+          echo "ZIPPLE_TLS_KEY=$RUNNER_TEMP/zipple-ci.key" >> "$GITHUB_ENV"
+          echo "ZIPPLE_TLS_CERT=$RUNNER_TEMP/zipple-ci.crt" >> "$GITHUB_ENV"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Real hosted API, Web and Android
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: node docs/apps/zipple/n1/hosted/positive.test.mjs
