@@ -1,0 +1,75 @@
+name: ZIPPLE N1 — real local Supabase
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/apps/zipple/n1/backend/local*"
+      - ".github/workflows/zipple-n1-local-supabase.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  local-supabase:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: supabase/setup-cli@v3
+        with:
+          version: 2.75.0
+      - name: Create disposable isolated Supabase project
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase --version
+          supabase init --help >/dev/null
+          supabase start --help >/dev/null
+          mkdir -p "$RUNNER_TEMP/zipple-local"
+          cd "$RUNNER_TEMP/zipple-local"
+          supabase init
+          sed -i 's/^project_id = .*/project_id = "zipple-n1-ci"/' supabase/config.toml
+          sed -i 's/^major_version = .*/major_version = 17/' supabase/config.toml
+          cat >> supabase/config.toml <<'TOML'
+          [functions.zipple-n1]
+          verify_jwt = false
+          TOML
+          mkdir -p supabase/functions/zipple-n1
+          cp "$GITHUB_WORKSPACE/docs/apps/zipple/n1/backend/local-index.ts" supabase/functions/zipple-n1/index.ts
+          cp "$GITHUB_WORKSPACE/docs/apps/zipple/n1/backend/adapter.mjs" supabase/functions/zipple-n1/adapter.mjs
+          cp "$GITHUB_WORKSPACE/docs/apps/zipple/n1/auth-boundary.mjs" supabase/functions/auth-boundary.mjs
+          printf 'ZIPPLE_ALLOWED_ORIGINS=https://zipple.test\n' > supabase/functions/.env
+          supabase start -x studio,imgproxy,inbucket,logflare,vector,supavisor
+          supabase status -o env > "$RUNNER_TEMP/zipple-local.env"
+          chmod 600 "$RUNNER_TEMP/zipple-local.env"
+      - name: Apply draft only to local database
+        run: |
+          set -euo pipefail
+          set -a
+          source "$RUNNER_TEMP/zipple-local.env"
+          set +a
+          case "$DB_URL" in *127.0.0.1*|*localhost*) ;; *) exit 1;; esac
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f docs/apps/zipple/n1/backend/schema.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema'"
+      - name: Real Auth + REST + Edge integration
+        run: |
+          set -euo pipefail
+          npm install --no-save --ignore-scripts pg@8.13.3
+          set -a
+          source "$RUNNER_TEMP/zipple-local.env"
+          set +a
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS "$API_URL/functions/v1/zipple-n1/login" -H 'Origin: https://zipple.test' || true)
+            if [ "$code" = 204 ]; then break; fi
+            sleep 2
+          done
+          node --test docs/apps/zipple/n1/backend/local-live.test.mjs
+      - name: Stop only local stack
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP/zipple-local"
+          supabase stop --no-backup

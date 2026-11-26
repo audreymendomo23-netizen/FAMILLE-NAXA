@@ -5,6 +5,7 @@ const hash=async x=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-25
 const token=()=>Array.from(crypto.getRandomValues(new Uint8Array(32))).map(x=>x.toString(16).padStart(2,"0")).join("");
 const deny=()=>{throw Error("DENIED")};
 const normalize=x=>x.trim().toLowerCase();
+const loginId=x=>/^[a-z0-9][a-z0-9._+@-]{0,179}$/.test(x);
 export function createSupabaseZipple({url,anonKey,serviceKey,origins=[],fetcher=fetch}){
  if(!url||!anonKey||!serviceKey)throw Error("MISSING_SERVER_CONFIG");
  const base=url.replace(/\/$/,"");
@@ -21,6 +22,7 @@ export function createSupabaseZipple({url,anonKey,serviceKey,origins=[],fetcher=
  const provider={
   rateLimit:async({action,identifier})=>{if(!await rpc("zp_rate_limit",{p_bucket:await hash(action+":"+normalize(identifier??"global"))}))deny()},
   authenticate:async({identifier,password,remember_device})=>{
+   if(!loginId(normalize(identifier)))deny();
    const rows=await call("/rest/v1/zp_members?select=id,auth_user_id,auth_alias&active=eq.true&login_id=eq."+enc(normalize(identifier))+"&limit=2");
    if(!Array.isArray(rows)||rows.length!==1)deny();const m=rows[0];
    const auth=await call("/auth/v1/token?grant_type=password",{key:anonKey,method:"POST",body:{email:m.auth_alias,password}});
@@ -31,7 +33,7 @@ export function createSupabaseZipple({url,anonKey,serviceKey,origins=[],fetcher=
    return issue("zp_issue",{p_member:m.id,p_auth_user:auth.user.id},remember_device);
   },
   rotate:async({refresh_token})=>issue("zp_rotate",{p_previous:await hash(refresh_token)}),
-  recover:async({identifier})=>{await rpc("zp_recovery",{p_login:normalize(identifier)})},
+  recover:async({identifier})=>{if(loginId(normalize(identifier)))await rpc("zp_recovery",{p_login:normalize(identifier)})},
   revoke:async({access_token})=>{if(!await rpc("zp_revoke",{p_access:await hash(access_token)}))deny()}
  };
  const auth=createAuthHandler(provider);
