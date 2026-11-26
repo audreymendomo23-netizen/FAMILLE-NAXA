@@ -300,9 +300,9 @@ jobs:
               const records=await success(base+'/rest/v1/ns_customers?select=id&org_id=eq.'+f.org.id+'&display_name=eq.'+encodeURIComponent(customer),undefined,admin,admin,'GET');
               assert.equal(records.length,1);
               pass('real Chromium customer creation, offline queue, accounting receipt and persisted PostgreSQL row');
-              const failures=[];
+              const failures=[];let proofCheckpoint='not started';
               async function scenario(label,run){
-                try{await run();pass(label);}catch(e){failures.push(label);console.log('FAIL independent browser scenario:',label, e instanceof Error?e.name:'Error');}
+                try{await run();pass(label);}catch(e){failures.push(label);console.log('FAIL independent browser scenario:',label,e instanceof Error?e.name:'Error');if(label.startsWith('attendance proof'))console.log('Attendance replay last checkpoint:',proofCheckpoint);}
               }
               const nav=async label=>{await page.locator('.side-nav button.nav-item').filter({hasText:label}).click();};
               const apply=async(action,click)=>{
@@ -415,42 +415,48 @@ jobs:
               await page.getByRole('button',{name:/Déconnexion/}).click();
               await page.getByLabel('Identifiant NAXA Services').waitFor();
               await scenario('attendance proof candidate: real Chromium, simulated GPS/camera, private Storage and atomic receipt',async()=>{
-                const proof=await fixture('PROOF','multi_site_network');
+                proofCheckpoint='create fixture';const proof=await fixture('PROOF','multi_site_network');
+                proofCheckpoint='grant browser permissions';
                 await context.grantPermissions(['geolocation','camera'],{origin:'https://127.0.0.1:8443'});
                 await context.setGeolocation({latitude:4.05,longitude:9.7,accuracy:12});
+                proofCheckpoint='login hierarchical fixture';
                 await page.getByLabel('Identifiant NAXA Services').fill(proof.login);
                 await page.getByLabel('Mot de passe',{exact:true}).fill(proof.password);
                 const responsePromise=page.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-auth')&&r.request().postDataJSON()?.action==='login');
                 await page.getByRole('button',{name:'Se connecter',exact:true}).click();
-                const auth=await (await responsePromise).json();assert.equal(auth.account.business_mode,'multi_site_network');
+                const loginProof=await responsePromise;assert.equal(loginProof.status(),200);const auth=await loginProof.json();assert.equal(auth.account.business_mode,'multi_site_network');
+                proofCheckpoint='navigate team and load policies';
                 await page.getByRole('heading',{name:'Une journée bien organisée commence ici.'}).waitFor();
                 await nav('Équipe & commissions');
                 await page.getByRole('heading',{name:'Preuves de service',exact:true}).waitFor();
                 const group=page.getByRole('group',{name:'Prise de service',exact:true});
-                await group.getByRole('checkbox',{name:'GPS'}).check();
-                await group.getByRole('checkbox',{name:'GPS'}).waitFor();
-                await group.getByRole('checkbox',{name:'Selfie'}).check();
-                for(let i=0;i<30;i++){if(await group.getByRole('checkbox',{name:'GPS'}).isChecked()&&await group.getByRole('checkbox',{name:'Selfie'}).isChecked())break;await pause(200);}
+                proofCheckpoint='save GPS policy';
+                const gpsRule=group.getByRole('checkbox',{name:'GPS'}),selfieRule=group.getByRole('checkbox',{name:'Selfie'});
+                await gpsRule.click();
+                for(let i=0;i<40;i++){if(await gpsRule.isChecked().catch(()=>false)&&await selfieRule.isEnabled().catch(()=>false))break;await pause(200);}
+                assert.ok(await gpsRule.isChecked());
+                proofCheckpoint='save selfie policy';await selfieRule.click();
+                for(let i=0;i<30;i++){if(await gpsRule.isChecked().catch(()=>false)&&await selfieRule.isChecked().catch(()=>false)&&await selfieRule.isEnabled().catch(()=>false))break;await pause(200);}
                 assert.ok(await group.getByRole('checkbox',{name:'GPS'}).isChecked());
                 assert.ok(await group.getByRole('checkbox',{name:'Selfie'}).isChecked());
-                await page.getByRole('button',{name:'Pointer mon arrivée',exact:true}).click();
+                proofCheckpoint='open proof panel';await page.getByRole('button',{name:'Pointer mon arrivée',exact:true}).click();
                 const capture=page.getByRole('region',{name:'Prise de service',exact:true});
                 assert.equal(await capture.locator('input[type=file]').count(),0);
                 assert.equal(await capture.getByRole('button',{name:'Confirmer mon pointage'}).isDisabled(),true);
-                await capture.getByRole('button',{name:'Obtenir ma position'}).click();
+                proofCheckpoint='GPS capture';await capture.getByRole('button',{name:'Obtenir ma position'}).click();
                 await capture.getByRole('button',{name:/Position obtenue/}).waitFor();
-                await capture.getByRole('button',{name:'Ouvrir la caméra avant'}).click();
+                proofCheckpoint='front camera capture';await capture.getByRole('button',{name:'Ouvrir la caméra avant'}).click();
                 await capture.getByRole('button',{name:'Prendre le selfie'}).waitFor();
                 await page.waitForFunction(()=>Array.from(document.querySelectorAll('video')).some(v=>v.videoWidth>0&&v.videoHeight>0));
                 await capture.getByRole('button',{name:'Prendre le selfie'}).click();
                 await capture.getByRole('button',{name:/Selfie pris/}).waitFor();
-                const evt=await apply('staff_clock_in.recorded',()=>capture.getByRole('button',{name:'Confirmer mon pointage'}).click());
+                proofCheckpoint='stage and submit';const evt=await apply('staff_clock_in.recorded',()=>capture.getByRole('button',{name:'Confirmer mon pointage'}).click());
                 assert.equal(evt.payload.attendance_proof_ref,evt.aggregate_id);
                 assert.equal(evt.payload.attendance_evidence,undefined);assert.equal(evt.payload.latitude,undefined);assert.equal(evt.payload.selfie_path,undefined);
-                const ev=await success(base+'/rest/v1/ns_attendance_evidence?select=event_id,required_gps,required_selfie,latitude,selfie_path&event_id=eq.'+evt.aggregate_id,undefined,admin,admin,'GET');
+                proofCheckpoint='verify durable evidence';const ev=await success(base+'/rest/v1/ns_attendance_evidence?select=event_id,required_gps,required_selfie,latitude,selfie_path&event_id=eq.'+evt.aggregate_id,undefined,admin,admin,'GET');
                 assert.equal(ev.length,1);assert.equal(ev[0].required_gps,true);assert.equal(ev[0].required_selfie,true);assert.equal(ev[0].latitude,4.05);
                 const privatePath=base+'/storage/v1/object/authenticated/ns-attendance-selfies/'+ev[0].selfie_path;
-                const foreign=await login(await fixture('PROOF-FOREIGN'));
+                proofCheckpoint='private storage access';const foreign=await login(await fixture('PROOF-FOREIGN'));
                 assert.ok(!(await fetch(privatePath,{headers:{apikey:anon,Authorization:'Bearer '+foreign.access_token}})).ok);
                 assert.ok(!(await fetch(privatePath,{headers:{apikey:anon,Authorization:'Bearer '+anon}})).ok);
                 const own=await fetch(privatePath,{headers:{apikey:anon,Authorization:'Bearer '+auth.access_token}});assert.ok(own.ok);assert.ok((await own.arrayBuffer()).byteLength>0);
