@@ -7,14 +7,15 @@ export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigi
  const origin=new URL(upstream);
  if(!["http:","https:"].includes(origin.protocol)||origin.username||origin.password||origin.pathname!=="/"||origin.search||origin.hash)throw Error("invalid upstream");
  if(typeof onRevoke!=="function")throw Error("SFU revocation callback required");
- const active=new Set(),wss=new WebSocketServer({noServer:true,maxPayload:1024*1024});
+ const active=new Set(),leases=new Map(),wss=new WebSocketServer({noServer:true,maxPayload:1024*1024});
+ const leaseKey=g=>g.room+'\n'+g.identity;
  const checked=async req=>{
   try{
    const u=new URL(req.url,"http://proxy.invalid");
    if(!["/rtc","/rtc/v1","/rtc/validate"].includes(u.pathname)||!allowedOrigins.has(req.headers.origin??""))return null;
    const raw=u.searchParams.get("access_token")??(req.headers.authorization??"").replace(/^Bearer /i,"");
    const grant=verifyJoinToken(raw,{key,secret});
-   if(!grant||!allowedJoin(grant,await readAdmission(grant)))return null;
+   if(!grant||leases.get(leaseKey(grant))?.revoking||!allowedJoin(grant,await readAdmission(grant)))return null;
    return {u,grant};
   }catch{return null}
  };
@@ -39,6 +40,7 @@ export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigi
    const target=new URL(access.u.pathname+access.u.search,origin);target.protocol=origin.protocol==="https:"?"wss:":"ws:";
    const peer=new WebSocket(target,{maxPayload:1024*1024,handshakeTimeout:5000,headers:{...(req.headers.authorization?{authorization:req.headers.authorization}:{})}});
    const entry={client,peer,grant:access.grant};active.add(entry);
+   leases.set(leaseKey(access.grant),{grant:access.grant,revoking:false});
    const queue=[];let queuedBytes=0;
    const close=()=>{active.delete(entry);client.terminate();peer.terminate()};
    client.on("error",close);peer.on("error",close);client.on("close",close);peer.on("close",close);
@@ -57,11 +59,16 @@ export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigi
  let running=false;
  const timer=setInterval(async()=>{
   if(running)return;running=true;
-  try{await Promise.all([...active].map(async e=>{
-   let allowed=false;try{allowed=allowedJoin({...e.grant,expiresAt:Date.now()+1000},await readAdmission(e.grant))}catch{}
-   if(!allowed){disconnect(e.grant.room,e.grant.identity);await onRevoke(e.grant).catch(()=>{/* owner must independently reconcile SFU state */})}
+  try{await Promise.all([...leases.entries()].map(async ([k,e])=>{
+   let allowed=false;if(!e.revoking)try{allowed=allowedJoin({...e.grant,expiresAt:Date.now()+1000},await readAdmission(e.grant))}catch{}
+   if(leases.get(k)!==e)return; // a newer confirmed connection superseded this lease
+   if(!allowed){
+    e.revoking=true;disconnect(e.grant.room,e.grant.identity);
+    try{await onRevoke(e.grant);if(leases.get(k)===e)leases.delete(k)}
+    catch{ /* retain revocation fence and retry on next tick */ }
+   }
   }))}finally{running=false}
  },checkEveryMs);timer.unref();
- server.on("close",()=>{clearInterval(timer);for(const e of active){e.client.terminate();e.peer.terminate()}wss.close()});
+ server.on("close",()=>{clearInterval(timer);leases.clear();for(const e of active){e.client.terminate();e.peer.terminate()}wss.close()});
  return {server,disconnect};
 }
