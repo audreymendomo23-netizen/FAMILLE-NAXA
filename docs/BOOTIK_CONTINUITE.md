@@ -474,3 +474,6 @@ Version explicite de la grille serveur ACCÈS/PREMIUM (16 capacités), sans chan
 
 ### B01 — périodes d’affectation
 Début/fin optionnels par employé/site, validation temporelle ISO avec fuseau, révocation des anciennes sessions après modification, contrôle SQL avant opérations et filtre login, bail offline plafonné par la première échéance d’affectation. Aucun effet sur les autres sites actifs. UI Android/Web, journal et recette réelle (période active, expiration et rejet site expiré).
+
+### B01 — recette UI et défense SQL
+Recette navigateur réelle sur notifications : nouvel appareil, reçu de lecture, préférence et persistance après reconnexion. Contrôles croisés caisse/zone appliqués aussi dans les fonctions de mutation SQL, pas seulement dans le routeur API. CI à confirmer.

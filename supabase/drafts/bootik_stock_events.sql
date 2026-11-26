@@ -20,7 +20,7 @@ begin
  if p_event is null or p_kind is null or p_kind not in ('receipt','loss','count','opening') or p_qty is null or p_qty<0 or p_qty>1000000000 or p_qty<>round(p_qty,6) or (p_kind<>'count' and p_qty=0) or p_version is null or length(p_version)>100 or p_reason is null or length(btrim(p_reason)) not between 3 and 500 then raise exception 'BOOTIK_STOCK_EVENT_INVALID';end if;
  if p_landed_cost is not null and (p_kind not in ('receipt','opening') or p_landed_cost<0 or p_landed_cost>9007199254740991) then raise exception 'BOOTIK_STOCK_EVENT_INVALID';end if;
  if not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,(select activity_id from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
- if not bootik.bk_resource_allowed(p_org,p_app,p_actor,p_site,'storage',(select storage_location_id from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ if not bootik.bk_resource_gate(p_org,p_app,p_actor,p_site,'sync-stock','{}'::jsonb) or not bootik.bk_resource_allowed(p_org,p_app,p_actor,p_site,'storage',(select storage_location_id from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':stock:'||p_event::text,0));
  select * into old from bootik.bk_stock_event_receipts where organization_id=p_org and app_id=p_app and event_id=p_event;
  if found then
@@ -397,6 +397,7 @@ begin
  if req is null or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,a) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  select x.universe_code into u from bootik.bk_activities x join bootik.bk_activity_locations l on (l.activity_id,l.organization_id,l.app_id)=(x.id,x.organization_id,x.app_id) where x.id=a and x.organization_id=p_org and x.app_id=p_app and l.location_id=p_site and x.status='active';
  if not found or not bootik.bk_has_entitlement(p_org,p_app,u) then raise exception 'BOOTIK_ENTITLEMENT_REQUIRED';end if;
+ if not bootik.bk_resource_gate(p_org,p_app,p_actor,p_site,'cash-action',p_data||jsonb_build_object('kind',p_kind)) or not bootik.bk_resource_activity_access(p_org,p_app,p_actor,p_site,a) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  if p_kind='register' then
   if exists(select 1 from bootik.bk_member_resource_rules where organization_id=p_org and app_id=p_app and user_id=p_actor and location_id=p_site) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  else
