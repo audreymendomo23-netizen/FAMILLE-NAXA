@@ -6,6 +6,7 @@ import {chromium} from "playwright";
 import {createServer} from "node:https";
 import {readFile} from "node:fs/promises";
 import {resolve,extname,sep} from "node:path";
+import {spawn} from "node:child_process";
 const base=process.env.API_URL,anon=process.env.ANON_KEY,service=process.env.SERVICE_ROLE_KEY;
 const db=new pg.Pool({connectionString:process.env.DB_URL});
 const edge=base+"/functions/v1/zipple-n1";
@@ -63,6 +64,15 @@ async function browserRecipe({pw,org,member,site}){
   await page.getByRole("button",{name:"Se connecter"}).waitFor();
   await page.reload();await page.getByRole("button",{name:"Se connecter"}).waitFor();
   console.log("ZIPPLE_N1_BROWSER_REAL_EDGE_PASS");
+  if(process.env.ZIPPLE_ANDROID_LIVE==="1"){
+   const nativeEvent=randomUUID();
+   await new Promise((ok,fail)=>{
+    const proc=spawn("gradle",["--no-daemon",":zipple:connectedDebugAndroidTest","-PZIPPLE_API_URL=https://127.0.0.1:4443/gateway","-Pandroid.testInstrumentationRunnerArguments.class=cm.naxa.zipple.N1LiveDeviceTest","-Pandroid.testInstrumentationRunnerArguments.zippleFixturePassword="+pw,"-Pandroid.testInstrumentationRunnerArguments.zippleFixtureEvent="+nativeEvent],{stdio:"inherit"});
+    proc.on("error",fail);proc.on("exit",code=>code===0?ok():fail(Error("native connected recipe exit "+code)));
+   });
+   assert.equal(Number((await db.query("select count(*) from public.zp_n1_receipts where event_id=$1",[nativeEvent])).rows[0].count),1);
+   console.log("ZIPPLE_N1_ANDROID_REAL_EDGE_PASS");
+  }
  }finally{if(browser)await browser.close();await new Promise(ok=>server.close(ok))}
 }
 
