@@ -12,7 +12,7 @@ class AuthGateway(private val context:Context,private val base:String){
  private fun endpoint(action:String):URI{
   val u=URI(base)
   require(u.scheme=="https" && !u.host.isNullOrBlank() && u.userInfo==null && u.query==null && u.fragment==null && u.path.trimEnd('/').endsWith("/widemeet-auth"))
-  require(action in setOf("login","logout"))
+  require(action in setOf("login","logout","switch-workspace"))
   return URI(base.trimEnd('/')+"/"+action)
  }
  private fun installation():String{
@@ -36,10 +36,19 @@ class AuthGateway(private val context:Context,private val base:String){
  suspend fun login(identifier:String,password:String):Session=withContext(Dispatchers.IO){
   require(identifier.isNotBlank()&&password.isNotBlank()&&password.length<=256)
   val j=request("login",JSONObject().put("app_id","WIDEMEET").put("identifier",identifier.trim()).put("password",password).put("installation_id",installation()).put("platform","android"))
+  parse(j)
+ }
+ private fun parse(j:JSONObject):Session{
   val a=j.getJSONArray("workspaces")
   val ws=List(a.length()){i->val w=a.getJSONObject(i);Workspace(w.getString("id"),w.getString("kind"),w.getString("name"),w.getString("role"),w.getBoolean("enabled"))}
   val s=Session(j.getString("app_id"),j.getString("access_token"),j.getString("member_id"),j.getString("device_id"),j.getLong("expires_at"),j.getLong("server_now"),System.currentTimeMillis(),SystemClock.elapsedRealtime(),j.getBoolean("require_password_change"),j.getString("active_workspace_id"),ws)
-  require(validSession(s));s
+  require(validSession(s));return s
+ }
+ suspend fun switchWorkspace(s:Session,id:String):Session=withContext(Dispatchers.IO){
+  require(activeWorkspace(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())!=null && s.workspaces.any{it.id==id&&it.enabled})
+  val next=parse(request("switch-workspace",JSONObject().put("app_id","WIDEMEET").put("workspace_id",id),s.accessToken))
+  require(next.memberId==s.memberId && next.activeWorkspaceId==id && next.expiresAt<=s.expiresAt)
+  next
  }
  suspend fun logout(s:Session)=withContext(Dispatchers.IO){request("logout",JSONObject().put("app_id","WIDEMEET"),s.accessToken);Unit}
 }
