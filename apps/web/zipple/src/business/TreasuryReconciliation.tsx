@@ -1,0 +1,16 @@
+import React,{useEffect,useState,useRef} from "react";
+type Props={call:(a:string,b?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean;refresh:()=>Promise<void>};
+export function TreasuryReconciliation({call,disabled,en,refresh}:Props){
+ const t=(fr:string,eng:string)=>en?eng:fr;const [d,D]=useState<any>(null),[busy,B]=useState(false),[err,E]=useState(""),[source,S]=useState(""),[cash,C]=useState(""),[proof,P]=useState("");
+ const key=useRef<{body:string,id:string}|null>(null),lock=disabled||busy,event=d?.pending.find((x:any)=>x.kind+":"+x.source_id===source);
+ const kinds:Record<string,string>={supplier_payment:t("Règlement fournisseur","Supplier payment"),container_finance:t("Consigne","Deposit")};
+ async function load(){D(await call("treasury_snapshot"))}
+ async function run(fn:()=>Promise<void>){if(lock)return;B(true);E("");try{await fn()}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}
+ useEffect(()=>{let live=true;call("treasury_snapshot").then(v=>{if(live)D(v)}).catch(e=>{if(live)E(String(e.message))});return()=>{live=false}},[]);
+ return <section><h4>{t("Rapprochement de trésorerie","Treasury reconciliation")}</h4><p>{t("Rapprochez les règlements fournisseurs et consignes déjà enregistrés avec la caisse ou un justificatif de relevé. Aucun nouveau paiement ni charge n’est créé.","Reconcile existing supplier and deposit settlements with the cash desk or statement evidence. No duplicate payment or expense is created.")}</p>{err&&<p role="alert">{err}</p>}<button disabled={lock} onClick={()=>run(load)}>{t("Actualiser le rapprochement","Refresh reconciliation")}</button>
+ {d&&<><label>{t("Règlement à rapprocher","Settlement to reconcile")}<select aria-label={t("Règlement à rapprocher","Settlement to reconcile")} value={source} onChange={e=>{S(e.target.value);C("")}}><option value="">—</option>{d.pending.map((x:any)=><option key={x.kind+":"+x.source_id} value={x.kind+":"+x.source_id}>{kinds[x.kind]} · {x.reference} · {x.amount_xaf} FCFA · {x.method}</option>)}</select></label>
+ {event&&<p>{event.direction==="in"?t("Entrée","Inflow"):t("Sortie","Outflow")} · {event.amount_xaf} FCFA · {event.method}</p>}
+ {event?.method==="cash"&&<label>{t("Caisse du rapprochement","Reconciliation cash desk")}<select aria-label={t("Caisse du rapprochement","Reconciliation cash desk")} value={cash} onChange={e=>C(e.target.value)}><option value="">—</option>{d.sessions.map((x:any)=><option key={x.id} value={x.id}>{x.label} · {x.expected_xaf} FCFA</option>)}</select></label>}
+ <label>{t("Justification du rapprochement","Reconciliation evidence")}<input value={proof} onChange={e=>P(e.target.value)}/></label><button disabled={lock||!event||(event.method==="cash"&&!cash)||proof.trim().length<5} onClick={()=>run(async()=>{const body={kind:event.kind,source_id:event.source_id,cash_id:event.method==="cash"?cash:null,proof},encoded=JSON.stringify(body);if(key.current?.body!==encoded)key.current={body:encoded,id:crypto.randomUUID()};await call("treasury_reconcile",{...body,request_id:key.current.id});key.current=null;S("");C("");P("");await load();await refresh()})}>{t("Confirmer le rapprochement","Confirm reconciliation")}</button>{d.links.map((x:any)=><p key={x.id}>{kinds[x.source_kind]} · {x.reference} · {x.amount_xaf} FCFA · {x.method} · {x.proof}</p>)}</>}
+ </section>
+}

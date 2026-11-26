@@ -611,6 +611,14 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal(depSnap.accounts.find(x=>x.id===account).outstanding,3);
  await assert.rejects(scalar("select zp_container_finance_record($1,$2,$3,$4,6000,'bank','CROSS-DEP')",[a.access,a.site,issueEvent,uid()]),/DENIED/);
  console.log("ZIPPLE_BULK3_CONTAINER_FINANCE_PASS");
+ const reconKey=uid(),reconDeposit=()=>scalar("select zp_treasury_reconcile($1,$2,$3,'container_finance',$4,null,'Relevé bancaire vérifié')",[b.access,b.site,reconKey,depId]);
+ const reconId=await reconDeposit();assert.equal(await reconDeposit(),reconId);
+ await assert.rejects(scalar("select zp_treasury_reconcile($1,$2,$3,'container_finance',$4,null,'Autre relevé vérifié')",[b.access,b.site,uid(),depId]),/TREASURY_ALREADY_RECONCILED/);
+ const reconSupplier=await scalar("select id from zp_supplier_payments where org_id=$1 and reference='REF-TEST'",[b.org]);
+ await scalar("select zp_treasury_reconcile($1,$2,$3,'supplier_payment',$4,null,'Relevé fournisseur vérifié')",[b.access,b.site,uid(),reconSupplier]);
+ const reconSnap=await scalar("select zp_treasury_snapshot($1,$2)",[b.access,b.site]);assert.ok(reconSnap.links.some(x=>x.id===reconId));assert.ok(!reconSnap.pending.some(x=>x.source_id===depId));
+ await assert.rejects(scalar("select zp_treasury_snapshot($1,$2)",[a.access,b.site]),/DENIED/);
+ console.log("ZIPPLE_BULK3_TREASURY_RECONCILIATION_PASS");
  console.log("ZIPPLE_N5_PROCUREMENT_AND_INVENTORY_PASS");
  console.log("ZIPPLE_N5_LOTS_RECIPE_PRODUCTION_EXPENSE_PASS");
  console.log("ZIPPLE_TABLE_TICKETS_CASH_FEEDBACK_PASS");assert.equal(await scalar("select zp_guest_order($1,$2)",[g1,anonymous.id]),null);await assert.rejects(order(a,"table",[{item_id:drink,qty:1}],uid(),ts,g1),/DENIED/);

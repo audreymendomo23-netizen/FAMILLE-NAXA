@@ -1,3 +1,4 @@
+import {TreasuryReconciliation} from "./TreasuryReconciliation";
 import React,{useEffect,useRef,useState} from "react";
 type Props={call:(action:string,body?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean;refresh:()=>Promise<void>};
 export function CashOutflows({call,disabled,en,refresh}:Props){
@@ -15,5 +16,6 @@ export function CashOutflows({call,disabled,en,refresh}:Props){
  <label>{t("Montant de la sortie FCFA","Outflow amount XAF")}<input inputMode="numeric" value={amount} readOnly={kind==="expense"} onChange={e=>A(e.target.value)}/></label><label>{t("Référence de sortie","Outflow reference")}<input value={reference} onChange={e=>R(e.target.value)}/></label><label>{t("Motif de sortie","Outflow reason")}<input value={reason} onChange={e=>RS(e.target.value)}/></label>
  <button disabled={lock||!cash||(kind!=="withdrawal"&&!selected)||!/^\d+$/.test(amount)||Number(amount)<1||reference.trim().length<4||reason.trim().length<5} onClick={()=>run(async()=>{const body={cash_id:cash,kind,source_id:kind==="withdrawal"?null:source,method,amount_xaf:Number(amount),reference,reason},encoded=JSON.stringify(body);if(key.current?.body!==encoded)key.current={body:encoded,id:crypto.randomUUID()};await call("cash_outflow_record",{...body,request_id:key.current.id});key.current=null;A("");R("");RS("");S("");await load();await refresh()})}>{t("Confirmer la sortie effectuée","Confirm completed outflow")}</button>
  {data.outflows.map((x:any)=><p key={x.id}>{kinds[x.kind]} · {x.amount_xaf} FCFA · {x.method} · {x.reference} · {x.reason}</p>)}</>}
+ <TreasuryReconciliation call={call} disabled={lock} en={en} refresh={async()=>{await load();await refresh()}}/>
  </section>
 }
