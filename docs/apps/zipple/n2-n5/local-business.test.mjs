@@ -314,7 +314,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   const directIngredient=await ok("ingredient_add",{name:"Boisson directe navigateur",sku:"DIRECT-EDGE",unit:"kg",reorder_milli:0,supplier_whatsapp:""});
   const directLot=await ok("lot_receive",{ingredient_id:directIngredient,request_id:id(),label:"DIRECT-LOT",supplier:"Fournisseur",qty_milli:1000,cost_xaf:1000,expires_on:null});
   const directItem=await ok("menu_add",{name:"Boisson 250g navigateur",post:"bar",price_xaf:300,qty:10});
-  await page.getByRole("button",{name:"Actualiser",exact:true}).click();await page.getByRole("button",{name:"Vente directe",exact:true}).click();
+  await page.getByRole("button",{name:"Actualiser",exact:true}).click();await page.getByRole("button",{name:"Actualiser le stock",exact:true}).click();await page.getByRole("button",{name:"Vente directe",exact:true}).click();
   await page.getByLabel("Article de vente directe",{exact:true}).selectOption(directItem);
   await page.getByLabel("Matière consommée directement",{exact:true}).selectOption(directIngredient);
   await page.getByLabel(/Quantité de base par unité vendue/).fill("0.25");await page.getByLabel("Justification de l’unité").fill("Unité exacte recette");
@@ -353,7 +353,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByLabel("Créance à encaisser",{exact:true}).selectOption(creditSale);
   await page.getByLabel("Date de relance de créance").fill(creditDue);
   await page.getByRole("button",{name:"Planifier la relance dans les suivis clients"}).click();
-  await page.getByLabel("Date de relance de créance").waitFor();await page.waitForFunction(()=>[...document.querySelectorAll('input[type=date]')].some(x=>x.value===""));
+  await page.waitForFunction(()=>[...document.querySelectorAll("label")].some(x=>x.textContent.includes("Date de relance de créance")&&x.querySelector("input")?.value===""));
   assert.ok(await scalar("select followup_id from zp_credit_followups where sale_id=$1",[creditSale]));
   console.log("ZIPPLE_BULK3_REAL_EDGE_CREDIT_REVISION_FOLLOWUP_PASS");
   await page.getByRole("button",{name:"Caisse",exact:true}).click();
