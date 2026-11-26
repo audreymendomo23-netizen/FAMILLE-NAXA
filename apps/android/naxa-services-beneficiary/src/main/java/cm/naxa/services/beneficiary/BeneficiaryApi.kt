@@ -62,7 +62,7 @@ internal object BeneficiaryApi {
         val result=call(context,"subscription_admin_capture",device,JSONObject()
             .put("capture_source","sms_receiver").put("sender_origin_id",origin)
             .put("captured_at",java.time.Instant.ofEpochMilli(received).toString()).put("sms",sms))
-        check(result.optJSONObject("capture_result")!=null) { "Réponse de capture incomplète." }
+        check(CapturePolicy.acknowledged(result.optJSONObject("capture_result")?.optString("status"))) { "Réponse de capture incomplète." }
     }
     fun sessionReference(context:Context):String {
         val token=SupabaseSession.getAccessToken(context)
