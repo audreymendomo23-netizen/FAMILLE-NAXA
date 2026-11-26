@@ -11,6 +11,7 @@ import {
   validateActivityFields, type ActivityProfile,
 } from "./erp/activity-workflows";
 import { parseWebSession, type WebAuthSession } from "./auth/session";
+import { ProfilePhoto } from "./auth/profile-photo";
 import { createRoot } from "react-dom/client";
 import "@famille/design-system/tokens.css";
 import "./naxa-services.css";
@@ -1144,7 +1145,7 @@ function App() {
           <div className="top-actions">
             <span className="sync-pill"><i /> {preview ? "Données locales" : authSession ? (authSession.requirePasswordChange ? "Changement du mot de passe requis" : "Session authentifiée · reçus serveur") : "Connexion en attente"}</span>
             <button className="icon-button" title="Aide" onClick={() => setActive("help")}>?</button>
-            <div className="avatar">NS</div>
+            {authSession && !preview && !authSession.requirePasswordChange ? <ProfilePhoto key={scopeOf(authSession)+":"+sessionFence.current.generation} authEndpoint={authEndpoint} anonKey={anonKey} orgId={authSession.account.organization_id} memberId={authSession.account.member_id} initials={authSession.account.display_name.slice(0,2).toUpperCase()} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("Session expirée.");return fresh.accessToken;}}/> : <div className="avatar">NS</div>}
           </div>
         </header>
         <section className="content-area">
