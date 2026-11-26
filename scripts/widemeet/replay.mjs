@@ -103,6 +103,25 @@ try{
  // Original foreign session remains confined to its own company.
  assert.equal((await identity(os.access_token,"profile")).workspace_name,"Replay B");
  pass("actual N1 profile and onboarding persistence, scoped favorites, payer-only billing, invitation and membership revocation");
+ const renewable=await fixture(other,"manager"),installation=randomUUID();
+ const first=await ok(auth+"/login",{identifier:renewable.login,password:renewable.password,installation_id:installation,platform:"android",remember_me:true});
+ assert.match(first.refresh_token,/^[a-f0-9]{64}$/);
+ const renewed=await ok(auth+"/refresh",{refresh_token:first.refresh_token,installation_id:installation,platform:"android"});
+ assert.notEqual(renewed.refresh_token,first.refresh_token);
+ assert.notEqual(renewed.access_token,first.access_token);
+ assert.equal(renewed.member_id,renewable.id);
+ assert.equal((await identityRequest(first.access_token,"profile")).status,403);
+ assert.equal((await request(auth+"/refresh",{refresh_token:first.refresh_token,installation_id:installation,platform:"android"})).status,401);
+ assert.equal((await request(auth+"/refresh",{refresh_token:renewed.refresh_token,installation_id:randomUUID(),platform:"android"})).status,401);
+ const second=await ok(auth+"/login",{identifier:renewable.login,password:renewable.password,installation_id:randomUUID(),platform:"android",remember_me:true});
+ const devices=(await identity(renewed.access_token,"devices")).devices;
+ assert.ok(devices.some(d=>d.id===second.device_id&&!d.current));
+ await identity(renewed.access_token,"revoke-device",{id:second.device_id});
+ assert.equal((await identityRequest(second.access_token,"profile")).status,403);
+ await ok(auth+"/logout",{},renewed.access_token);
+ assert.equal((await request(auth+"/refresh",{refresh_token:renewed.refresh_token,installation_id:installation,platform:"android"})).status,401);
+ pass("actual N1 native refresh rotation, old secret and wrong installation denial, device revocation and logout");
+
 
  const contacts=await ok(room+"/contacts",{},hs.access_token);assert.equal(contacts.length,1);assert.equal(contacts[0].member_id,g.id);
  const rid=randomUUID(),create={room_id:rid,title:"Replay real meeting",description:"Scoped control plane",scheduled_ms:Date.now(),duration_minutes:30,invitees:[g.id]};
@@ -156,17 +175,18 @@ try{
  await new Promise((r,reject)=>{server.once("error",reject);server.listen(8443,"127.0.0.1",r)});
  browser=await chromium.launch({headless:true});
  const hc=await browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"}),gc=await browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"}),hp=await hc.newPage(),gp=await gc.newPage();
- async function sign(page,f){
+ async function sign(page,f,remember=false){
  await page.goto("https://127.0.0.1:8443");
  await page.getByRole("button",{name:"Se connecter",exact:true}).click();
  await page.getByLabel("Identifiant WideMeet",{exact:true}).fill(f.login);
  await page.getByLabel("Mot de passe",{exact:true}).fill(f.password);
+ if(remember)await page.getByLabel("Rester connecté",{exact:true}).check();
  await page.getByRole("button",{name:"Se connecter",exact:true}).click();
  await page.getByText("Replay A",{exact:true}).waitFor();
  await page.getByRole("navigation").getByRole("button",{name:"Agenda"}).click();
  await page.getByRole("region",{name:"Réunions"}).waitFor();
  }
- await sign(hp,h);await hp.getByRole("region",{name:"Réunions"}).getByRole("button",{name:"Nouvelle réunion",exact:true}).click();
+ await sign(hp,h,true);await hp.getByRole("region",{name:"Réunions"}).getByRole("button",{name:"Nouvelle réunion",exact:true}).click();
  await hp.getByLabel("Titre",{exact:true}).fill("Replay browser room");
  await hp.getByLabel("Replay staff",{exact:true}).check();
  await hp.getByRole("button",{name:"Créer",exact:true}).click();
@@ -180,6 +200,12 @@ try{
  // Host must receive the message through automatic polling, not a manual refresh.
  await hp.getByText(/Bonjour réel/).waitFor({timeout:15000});
  pass("two real browser accounts: login, agenda, creation, RSVP, start, chat and automatic refresh");
+ const cookies=await hc.cookies();const refreshCookie=cookies.find(c=>c.name==="__Host-widemeet_refresh");assert.ok(refreshCookie?.httpOnly&&refreshCookie?.secure&&refreshCookie?.sameSite==="Strict");
+ await hp.reload();await hp.getByText("Replay A",{exact:true}).waitFor({timeout:20000});
+ assert.equal(await hp.evaluate(()=>localStorage.getItem("widemeet.remember.preference")),"yes");
+ assert.equal(await hp.evaluate(()=>Object.values(localStorage).some(v=>/^[a-f0-9]{64}$/.test(v))),false);
+ assert.equal(await hp.evaluate(()=>document.cookie.includes("__Host-widemeet_refresh")),false);
+ pass("actual remembered Web session restored after reload using HttpOnly secure cookie without exposed refresh token");
 }finally{
  if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));
  for(const child of children)if(child.exitCode===null){child.kill("SIGTERM");await new Promise(r=>child.once("exit",r));}
