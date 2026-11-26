@@ -658,6 +658,15 @@ jobs:
                   const guestSeries=gr.getByRole('article').filter({has:guest.getByText('Réunion hebdomadaire de recette',{exact:true})});
                   await guestSeries.filter({hasText:'Réunion récurrente · 3'}).waitFor();
                   assert.equal(await guestSeries.count(),3);
+                  phase='recurring meeting: edit invitees and agenda';
+                  await hostSeries.filter({hasText:'Réunion récurrente · 3'}).getByRole('button',{name:'Modifier',exact:true}).click();
+                  assert.equal(await hr.getByRole('checkbox',{name:'Recette Collaborateur',exact:true}).isChecked(),true);
+                  await hr.getByLabel('Ordre du jour',{exact:true}).fill('Ordre du jour révisé');
+                  const revised=await rpc(page,'ns_revise_meeting_invitees',()=>hr.getByRole('button',{name:'Enregistrer et notifier',exact:true}).click());
+                  assert.equal(revised.revision,2);
+                  await hostSeries.filter({hasText:'Réunion récurrente · 3'}).getByText('Ordre du jour révisé',{exact:true}).waitFor();
+                  await gr.getByRole('button',{name:'Actualiser',exact:true}).click();
+                  await guestSeries.filter({hasText:'Réunion récurrente · 3'}).getByText('Ordre du jour révisé',{exact:true}).waitFor();
                   phase='recurring meeting: individual cancellation';
                   await rpc(page,'ns_transition_internal_meeting',()=>hostSeries.filter({hasText:'Réunion récurrente · 2'}).getByRole('button',{name:'Annuler',exact:true}).click());
                   await hostSeries.filter({hasText:'Réunion récurrente · 2'}).getByText(/Annulée/).waitFor();
@@ -668,8 +677,8 @@ jobs:
                   const cancelled=await rpc(page,'ns_cancel_meeting_series',()=>hostSeries.filter({hasText:'Réunion récurrente · 1'}).getByRole('button',{name:'Annuler la série',exact:true}).click());
                   assert.equal(cancelled.cancelled_count,2);
                   await hostSeries.filter({hasText:'Réunion récurrente · 1'}).getByText(/Annulée/).waitFor();
-                  const finalOccurrences=await success(base+'/rest/v1/ns_internal_meetings?select=status,revision&series_id=eq.'+series.id,undefined,admin,admin,'GET');
-                  assert.equal(finalOccurrences.length,3);assert.ok(finalOccurrences.every(x=>x.status==='cancelled'&&x.revision===2));
+                  const finalOccurrences=await success(base+'/rest/v1/ns_internal_meetings?select=status,revision,series_occurrence&series_id=eq.'+series.id,undefined,admin,admin,'GET');
+                  assert.equal(finalOccurrences.length,3);assert.ok(finalOccurrences.every(x=>x.status==='cancelled'&&x.revision===(x.series_occurrence===3?3:2)));
                   pass('real browser recurring series, lost acknowledgement retry without duplicates, guest visibility, individual and series cancellation');
                   phase='scoped daily briefing';
                   const hb=page.getByRole('region',{name:'Mon bilan',exact:true}),gb=guest.getByRole('region',{name:'Mon bilan',exact:true});
