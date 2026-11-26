@@ -1,0 +1,78 @@
+// Candidate API: reuse the N1 opaque-session contract. No service key on clients.
+const hex=/^[0-9a-f]{64}$/;
+const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const toHex=b=>Array.from(b,x=>x.toString(16).padStart(2,"0")).join("");
+const digest=async s=>toHex(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(s))));
+const token=()=>toHex(crypto.getRandomValues(new Uint8Array(32)));
+const isObject=v=>v&&typeof v==="object"&&!Array.isArray(v);
+const text=(v,max=160)=>typeof v==="string"&&v.trim().length>0&&v.length<=max?v.trim():null;
+const integer=(v,min,max)=>Number.isSafeInteger(v)&&v>=min&&v<=max;
+function invalid(){throw new Error("INVALID_INPUT")}
+function id(v){if(typeof v!=="string"||!uuid.test(v))invalid();return v}
+function choice(v,allowed){if(!allowed.includes(v))invalid();return v}
+function amount(v,min=0){if(!integer(v,min,2147483647))invalid();return v}
+function lineItems(v){if(!Array.isArray(v)||!v.length||v.length>50)invalid();return v.map(x=>{if(!isObject(x)||!integer(x.qty,1,1000))invalid();return {item_id:id(x.item_id),qty:x.qty}})}
+const publicActions=new Set(["guest_open","guest_menu","guest_order_create","guest_order_read","guest_feedback"]);
+const professionalActions=new Set(["quote","referral_claim","snapshot","mode","menu_add","table_create","table_open","table_close","order_create","line_advance","delay","cancel","cash_open","cash_record","cash_close"]);
+export function createBusinessGateway({rpc,origins,allowGuestOpen=false}){
+ if(typeof rpc!=="function"||!Array.isArray(origins))throw Error("CONFIGURATION");
+ return async req=>{
+  const origin=req.headers.get("origin"),action=new URL(req.url).pathname.split("/").pop();
+  const permitted=origin&&origins.includes(origin);
+  const headers={"Content-Type":"application/json","Cache-Control":"no-store","Vary":"Origin",...(permitted?{"Access-Control-Allow-Origin":origin,"Access-Control-Allow-Headers":"authorization,content-type","Access-Control-Allow-Methods":"POST,OPTIONS"}:{})};
+  const result=(status,body)=>new Response(JSON.stringify(body),{status,headers});
+  if(origin&&!permitted)return result(403,{error:"DENIED"});
+  if(req.method==="OPTIONS")return new Response(null,{status:permitted?204:403,headers});
+  if(req.method!=="POST"||!req.headers.get("content-type")?.startsWith("application/json")||(!professionalActions.has(action)&&!publicActions.has(action)))return result(403,{error:"DENIED"});
+  try{
+   const raw=await req.text();if(raw.length>16000)invalid();const b=JSON.parse(raw);if(!isObject(b)||b.app_id!=="ZIPPLE")invalid();
+   if(publicActions.has(action)){
+    if(!permitted)return result(403,{error:"DENIED"});
+    if(action==="guest_open"){
+     // Not enabled on hosted infrastructure before rate limits and public QR acceptance.
+     if(!allowGuestOpen)return result(503,{error:"GUEST_OPEN_NOT_CONFIGURED"});
+     if(typeof b.qr!=="string"||!hex.test(b.qr))invalid();
+     const guest=token();await rpc("zp_open_guest",{p_qr_hash:await digest(b.qr),p_guest_hash:await digest(guest)});
+     const menu=await rpc("zp_guest_menu",{p_guest_hash:await digest(guest)});
+     if(!menu)return result(403,{error:"DENIED"});
+     return result(200,{guest_token:guest,menu});
+    }
+    const bearer=req.headers.get("authorization")??"";if(!bearer.startsWith("Guest ")||!hex.test(bearer.slice(6)))return result(401,{error:"DENIED"});
+    const p_guest_hash=await digest(bearer.slice(6));let value;
+    if(action==="guest_menu")value=await rpc("zp_guest_menu",{p_guest_hash});
+    if(action==="guest_order_create")value=await rpc("zp_create_order",{p_access:null,p_guest_hash,p_site:id(b.site_id),p_channel:"table",p_table_session:id(b.table_session_id),p_request:id(b.request_id),p_lines:lineItems(b.lines)});
+    if(action==="guest_order_read")value=await rpc("zp_guest_order",{p_guest_hash,p_order:id(b.order_id)});
+    if(action==="guest_feedback"){if(!integer(b.rating,1,5)||typeof b.comment!=="string"||b.comment.length>1000)invalid();value=await rpc("zp_submit_feedback",{p_guest_hash,p_order:id(b.order_id),p_rating:b.rating,p_comment:b.comment})}
+    if(value==null)return result(403,{error:"DENIED"});return result(200,{data:value});
+   }
+   const bearer=req.headers.get("authorization")??"";if(!bearer.startsWith("Bearer ")||!hex.test(bearer.slice(7)))return result(401,{error:"DENIED"});
+   const scope={p_access:await digest(bearer.slice(7)),p_site:id(b.site_id)};let name,args,value;
+   switch(action){
+    case "quote":name="zp_quote_intent";args={...scope,p_plan:choice(b.plan,["ACCESS","PREMIUM"]),p_cadence:choice(b.cadence,["monthly","annual"]),p_provider:choice(b.provider,["mtn_momo","orange_money"]),p_request:id(b.request_id)};break;
+    case "referral_claim":name="zp_claim_referral";args=scope;break;
+    case "snapshot":name="zp_business_snapshot";args=scope;break;
+    case "mode":if(typeof b.bar!=="boolean"||typeof b.delivery!=="boolean")invalid();name="zp_site_mode";args={...scope,p_space:choice(b.space,["restaurant","snack_bar"]),p_bar:b.bar,p_delivery:b.delivery};break;
+    case "menu_add":if(!text(b.name))invalid();name="zp_add_menu_item";args={...scope,p_name:text(b.name),p_post:choice(b.post,["kitchen","bar","snack"]),p_price:amount(b.price_xaf,1),p_qty:amount(b.qty)};break;
+    case "table_create":{if(!text(b.label,80))invalid();const qr=token();value=await rpc("zp_manage_table",{...scope,p_label:text(b.label,80),p_qr_hash:await digest(qr)});return result(200,{data:{id:value,qr}})}
+    case "table_open":name="zp_open_table";args={...scope,p_table:id(b.table_id)};break;
+    case "table_close":name="zp_close_table";args={...scope,p_table_session:id(b.table_session_id)};break;
+    case "order_create":name="zp_create_order";args={...scope,p_guest_hash:null,p_channel:choice(b.channel,["table","counter","takeaway"]),p_table_session:b.table_session_id==null?null:id(b.table_session_id),p_request:id(b.request_id),p_lines:lineItems(b.lines)};break;
+    case "line_advance":name="zp_advance_line";args={...scope,p_order:id(b.order_id),p_item:id(b.item_id),p_next:choice(b.next,["preparing","ready","served"])};break;
+    case "delay":if(!integer(b.minutes,1,240))invalid();name="zp_set_service_delay";args={...scope,p_order:id(b.order_id),p_minutes:b.minutes};break;
+    case "cancel":if(!text(b.reason,500)||b.reason.trim().length<5)invalid();name="zp_cancel_unprepared_order";args={...scope,p_order:id(b.order_id),p_reason:text(b.reason,500)};break;
+    case "cash_open":name="zp_open_cash";args={...scope,p_opening:amount(b.opening_xaf)};break;
+    case "cash_record":name="zp_record_sale";args={...scope,p_cash:id(b.cash_id),p_order:id(b.order_id),p_request:id(b.request_id),p_method:choice(b.method,["cash","mtn_momo","orange_money","bank","card"]),p_amount:amount(b.amount_xaf,1),p_ref:b.reference==null?null:text(b.reference,160)};break;
+    case "cash_close":name="zp_close_cash";args={...scope,p_cash:id(b.cash_id),p_counted:amount(b.counted_xaf)};break;
+    default:return result(403,{error:"DENIED"});
+   }
+   value=await rpc(name,args);
+   return result(200,{data:value??null});
+  }catch(error){
+   const safe=["DENIED","SUBSCRIPTION_OR_ROLE_REQUIRED","SUBSCRIPTION_REQUIRED","OFFER_DENIED","ITEM_UNAVAILABLE","IDEMPOTENCY_CONFLICT","TABLE_HAS_OPEN_ORDERS","INVALID_TRANSITION","CASH_CLOSED","SALE_NOT_SETTLEABLE","CHANNEL_DENIED","TABLE_CLOSED","POST_DENIED","CANCELLATION_REQUIRES_REVIEW","MODE_CHANGE_REQUIRES_MIGRATION"];
+   const code=String(error?.message??"");if(code==="INVALID_INPUT"||error instanceof SyntaxError)return result(400,{error:"INVALID_INPUT"});
+   if(safe.includes(code))return result(code==="DENIED"||code.includes("REQUIRED")?403:409,{error:code});
+   return result(503,{error:"OPERATION_UNAVAILABLE"});
+  }
+ };
+}
+// Deliberately absent: subscription confirmation, privileged SQL, user provisioning.

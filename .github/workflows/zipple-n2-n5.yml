@@ -46,4 +46,4 @@ jobs:
           docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple -v ON_ERROR_STOP=1 < docs/apps/zipple/n2-n5/schema.sql
           docker exec -i "${{ job.services.postgres.id }}" psql -X -U postgres -d zipple -v ON_ERROR_STOP=1 < docs/apps/zipple/n2-n5/operations.sql
       - run: npm install --no-save --ignore-scripts pg@8.13.3
-      - run: node --experimental-strip-types --test docs/apps/zipple/contracts/zipple-policy.test.mjs docs/apps/zipple/n2-n5/recipe.test.mjs docs/apps/zipple/n2-n5/cash-reuse.test.mjs
+      - run: node --experimental-strip-types --test docs/apps/zipple/contracts/zipple-policy.test.mjs docs/apps/zipple/n2-n5/recipe.test.mjs docs/apps/zipple/n2-n5/cash-reuse.test.mjs docs/apps/zipple/n2-n5/business-gateway.test.mjs
