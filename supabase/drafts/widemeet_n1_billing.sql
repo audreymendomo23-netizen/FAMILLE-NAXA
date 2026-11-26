@@ -134,4 +134,24 @@ exception when unique_violation then return false;
 end $wm$;
 revoke all on function public.wm_settle_verified_receipt(uuid,text,text,integer,text,text,timestamptz) from public,anon,authenticated;
 grant execute on function public.wm_settle_verified_receipt(uuid,text,text,integer,text,text,timestamptz) to service_role;
+
+-- Enforce paid enterprise collaborator capacity on membership activation,
+-- including direct trusted writes. The promoter is excluded from "added members".
+create function public.wm_guard_member_capacity()
+returns trigger language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare lim integer;
+begin
+ if not new.enabled or new.role in ('owner','promoteur') then return new;end if;
+ perform pg_advisory_xact_lock(hashtextextended('wm-billing:'||new.workspace_id::text,0));
+ select case when e.plan='access' then 20 else 50 end into lim
+ from public.wm_room_entitlements e join public.wm_workspaces w on w.id=e.workspace_id and w.kind='enterprise'
+ where e.workspace_id=new.workspace_id and e.enabled and e.valid_until>clock_timestamp();
+ if found and (select count(*) from public.wm_memberships m where m.workspace_id=new.workspace_id and m.enabled and m.role not in ('owner','promoteur') and m.account_id<>new.account_id)>=lim then
+  raise exception 'workspace collaborator capacity reached' using errcode='23514';
+ end if;
+ return new;
+end $wm$;
+revoke all on function public.wm_guard_member_capacity() from public,anon,authenticated;
+grant execute on function public.wm_guard_member_capacity() to service_role;
+create trigger wm_membership_capacity_guard before insert or update of enabled,role,workspace_id on public.wm_memberships for each row execute function public.wm_guard_member_capacity();
 commit;
