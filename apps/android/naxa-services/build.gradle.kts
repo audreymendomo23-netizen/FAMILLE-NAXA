@@ -43,6 +43,8 @@ android {
         val supplierSyncEnabled = (project.findProperty("NS_ENABLE_SUPPLIER_SYNC") as? String ?: "false")
             .equals("true", ignoreCase = true)
         buildConfigField("boolean", "SUPPLIER_SYNC_ENABLED", supplierSyncEnabled.toString())
+        val rosterEnabled = (project.findProperty("NS_ENABLE_ROSTER") as? String ?: "false").equals("true", ignoreCase = true)
+        buildConfigField("boolean", "ROSTER_ENABLED", rosterEnabled.toString())
         val configuredProjectRef = (project.findProperty("NS_SUPABASE_PROJECT_REF") as? String ?: "").trim()
             .replace("\\", "\\\\").replace("\"", "\\\"")
         val familyProjectRef = (project.findProperty("NS_FAMILY_SUPABASE_PROJECT_REF") as? String ?: "").trim()
