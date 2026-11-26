@@ -209,7 +209,9 @@ test("Web: every non-Pressing activity completes its own server-backed métier j
     expect(((event.payload as Record<string, unknown>).metadata_json as Record<string, unknown>).activity).toBe(recipe.profile);
     const workflow = ACTIVITY_WORKFLOWS[recipe.profile];
     const path = activityCompletionPath(recipe.profile);
-    const currentRecord = page.locator(".activity-record").filter({ hasText: "Dossier " + recipe.profile });
+    const currentRecord = page.locator(".activity-record[data-record-id=\"" + event.aggregate_id + "\"]");
+    await expect(currentRecord.getByTestId("record-confirmation")).toHaveAttribute("data-version","1");
+    await expect(currentRecord.locator(".record strong")).toHaveText("Dossier " + recipe.profile);
     await expect(currentRecord.locator(".status-tag")).toHaveText(workflow.stages.find((stage) => stage.code === "received")!.label);
     let currentStatus = "received";
     let expectedRevision = 1;
@@ -227,6 +229,8 @@ test("Web: every non-Pressing activity completes its own server-backed métier j
       expect(transitionPayload.from_status).toBe(currentStatus);
       expect(transitionPayload.to_status).toBe(nextStatus);
       expect(transitionPayload.expected_version).toBe(expectedRevision);
+      await expect(currentRecord.getByTestId("record-confirmation")).toHaveAttribute("data-version",String(expectedRevision+1));
+      await expect(currentRecord.locator(".record strong")).toHaveText("Dossier " + recipe.profile);
       await expect(currentRecord.locator(".status-tag")).toHaveText(nextStage!.label);
       if (nextStage!.next.length > 0) {
         await expect(currentRecord.locator(".activity-transition input")).toHaveValue("");
@@ -971,7 +975,8 @@ for(const profile of Object.keys(ACTIVITY_WORKFLOWS) as ActivityProfile[]){
   await expect(page.locator(".activity-record")).toHaveCount(cases.length);
   let sent=0;
   for(const c of cases){
-   const record=page.locator(".activity-record").filter({has:page.getByText(c.title,{exact:true})});
+   const record=page.locator(".activity-record[data-record-id=\"" + c.id + "\"]");
+   await expect(record.locator(".record strong")).toHaveText(c.title);
    const stage=workflow.stages.find(s=>s.code===c.from)!;
    await expect(record.getByTestId("record-confirmation")).toHaveAttribute("data-version",String(c.revision));
    await expect(record.locator(".status-tag")).toHaveText(stage.label);

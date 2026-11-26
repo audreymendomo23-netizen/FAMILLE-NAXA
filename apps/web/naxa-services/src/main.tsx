@@ -260,7 +260,8 @@ function App() {
         const moduleId=typeof command.module_id==="string"?command.module_id as ModuleId:"stock";
         if(!modules.some(module=>module.id===moduleId))continue;
         const id=typeof command.aggregate_id==="string"?command.aggregate_id:item.eventId;
-        const title=typeof command.display_title==="string"?command.display_title:id;
+        const storedPayload=command.payload && typeof command.payload==="object" && !Array.isArray(command.payload)?command.payload as Record<string,unknown>:{};
+        const title=moduleId==="workOrders"&&typeof storedPayload.title==="string"&&storedPayload.title.trim()?storedPayload.title.trim():typeof command.display_title==="string"?command.display_title:id;
         const detail=typeof command.display_detail==="string"?command.display_detail:"";
         const state=item.state==="acknowledged"?"Confirmé":item.state==="rejected"?"Rejeté — vérifier le dossier":item.state==="conflict"?"Conflit — résolution nécessaire":"En attente de confirmation";
         const rows=next[moduleId]??[],existing=rows.findIndex(entry=>entry.id===id);
@@ -1038,7 +1039,7 @@ function App() {
         amount_xaf: input.amountXaf, paid_xaf: 0, due_at: dueAt,
         status: "received", workstation_id: null, metadata_json: metadata,
       },
-      siteId, workflow.label + " · " + input.title.trim(),
+      siteId, input.title.trim(),
       input.customer.trim() + " · " + displayDetail,
       {
         recordType, status: "received", siteId,
@@ -1547,7 +1548,7 @@ function WorkOrdersPage({
         const stage=getActivityStage(entryProfile,status);
         const next=stage?.next??[];
         const detailRows=Object.entries(entry.metadata??{}).filter(([,value])=>Boolean(value));
-        return <div className="activity-record" key={entry.id}>
+        return <div className="activity-record" key={entry.id} data-record-id={entry.id}>
           <div className="record"><div><strong>{entry.title}</strong><small>{entry.detail||entry.createdAt}</small><small data-testid="record-confirmation" data-version={entry.revision??0}>{t(entry.revision?"Confirmé":"En attente de confirmation")}</small></div><span className="status-tag local">{stage?.label??entry.state}</span></div>
           {detailRows.length>0&&<ul className="brief-list">{detailRows.map(([key,value])=><li key={key}>{key} : {value}</li>)}</ul>}
           {authenticated&&next.length>0&&entry.revision&&entry.siteId&&<div className="activity-transition">

@@ -363,9 +363,9 @@ jobs:
               const records=await success(base+'/rest/v1/ns_customers?select=id&org_id=eq.'+f.org.id+'&display_name=eq.'+encodeURIComponent(customer),undefined,admin,admin,'GET');
               assert.equal(records.length,1);
               pass('real Chromium customer creation, offline queue, accounting receipt and persisted PostgreSQL row');
-              const failures=[];let proofCheckpoint='not started';
+              const failures=[];let proofCheckpoint='not started',sectorCheckpoint='not started';
               async function scenario(label,run){
-                try{await run();pass(label);}catch(e){failures.push(label);console.log('FAIL independent browser scenario:',label,e instanceof Error?e.name:'Error');if(label.startsWith('attendance proof'))console.log('Attendance replay last checkpoint:',proofCheckpoint);}
+                try{await run();pass(label);}catch(e){failures.push(label);console.log('FAIL independent browser scenario:',label,e instanceof Error?e.name:'Error');if(label.startsWith('attendance proof'))console.log('Attendance replay last checkpoint:',proofCheckpoint);if(label.startsWith('real sector form'))console.log('Sector replay last checkpoint:',sectorCheckpoint);}
               }
               const nav=async label=>{await page.locator('.side-nav button.nav-item').filter({hasText:label}).click();};
               const apply=async(action,click)=>{
@@ -377,29 +377,39 @@ jobs:
               };
               const count=async(table,filter)=>{assert.match(table,/^ns_[a-z_]+$/);return (await success(base+'/rest/v1/'+table+'?select=id&org_id=eq.'+f.org.id+'&'+filter,undefined,admin,admin,'GET')).length;};
               await scenario('real sector form create, reject blank required field and cancel confirmed dossier',async()=>{
-                await nav('Dossiers métier');
+                sectorCheckpoint='open form';await nav('Dossiers métier');
                 await page.getByLabel("Client / donneur d'ordre").fill('Client dossier Replay');
                 await page.getByLabel('Intitulé du dossier').fill('Dossier Replay valide');
                 await page.locator('[data-activity-field="service"] input').fill('Service Replay');
                 await page.locator('[data-activity-field="specifications"] textarea').fill('Périmètre de recette');
-                const created=await apply('work_order.created',()=>page.getByRole('button',{name:'Créer et synchroniser le dossier'}).click());
+                sectorCheckpoint='create and server receipt';const created=await apply('work_order.created',()=>page.getByRole('button',{name:'Créer et synchroniser le dossier'}).click());
                 assert.equal(await count('ns_management_records','id=eq.'+created.aggregate_id),1);
-                const record=page.locator('.activity-record').filter({has:page.getByText('Dossier Replay valide',{exact:true})});
-                await record.getByTestId('record-confirmation').waitFor();
+                sectorCheckpoint='locate confirmed dossier by immutable id';
+                assert.match(created.aggregate_id,/^[0-9a-f-]{36}$/);
+                const record=page.locator('.activity-record[data-record-id="'+created.aggregate_id+'"]');
+                await record.locator('[data-testid="record-confirmation"][data-version="1"]').waitFor();
+                assert.equal(await record.locator('.record strong').textContent(),'Dossier Replay valide');
+                await page.getByRole('button',{name:'Créer et synchroniser le dossier'}).waitFor();
                 const cancel=record.getByRole('button',{name:'Annulée',exact:true});
                 assert.equal(await cancel.isDisabled(),true);
+                sectorCheckpoint='cancel with explicit revision';
                 await record.getByLabel("Motif du changement d'étape").fill('Annulation de recette');
-                await apply('work_order.status_changed',()=>cancel.click());
-                await record.locator('.status-tag').getByText('Annulée',{exact:true}).waitFor();
-                assert.equal(await record.locator('.activity-transition').count(),0);
+                const transition=await apply('work_order.status_changed',()=>cancel.click());
+                assert.equal(transition.aggregate_id,created.aggregate_id);assert.equal(transition.payload.expected_version,1);assert.equal(transition.payload.to_status,'cancelled');
+                sectorCheckpoint='wait for final server revision';
+                await record.locator('[data-testid="record-confirmation"][data-version="2"]').waitFor();
+                await record.locator('.status-tag').filter({hasText:/^Annulée$/}).waitFor();
+                await record.locator('.activity-transition').waitFor({state:'detached'});
                 const rows=await success(base+'/rest/v1/ns_management_records?select=status,revision&id=eq.'+created.aggregate_id,undefined,admin,admin,'GET');
                 assert.equal(rows[0].status,'cancelled');assert.equal(rows[0].revision,2);
+                sectorCheckpoint='blank field rejection';
                 await page.getByLabel("Client / donneur d'ordre").fill('Client invalide Replay');
                 await page.getByLabel('Intitulé du dossier').fill('Dossier Replay invalide');
                 await page.locator('[data-activity-field="service"] input').fill('   ');
                 await page.locator('[data-activity-field="specifications"] textarea').fill('Périmètre de recette');
                 await page.getByRole('button',{name:'Créer et synchroniser le dossier'}).click();
                 await page.locator('.activity-work-layout [role="status"]').waitFor();
+                sectorCheckpoint='verify invalid record absent';
                 assert.equal(await count('ns_management_records','title=eq.'+encodeURIComponent('Dossier Replay invalide')),0);
               });
               await scenario('real cash register, opening, cash and external Mobile Money sales, double-open prevention and close',async()=>{
