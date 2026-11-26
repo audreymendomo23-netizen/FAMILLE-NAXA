@@ -415,3 +415,7 @@ Sources auditées : CashOperationsPage et ns_open_cash_session/ns_close_cash_ses
 
 ### Caisse — durcissement et recette UI
 Verrou d'ouverture par caisse (sans élargir les droits d'UPDATE sur les registres), validation stricte des identifiants de reçus côté Android/Web, tests de panier avec seconde ligne invalide et doublon (rollback total), recette Chromium de caisse, panier deux articles, espèces, mouvement, clôture et écart. Les runs stock 45864871421 5/5 et achats 45865240235 contrats PostgreSQL/Chromium et compilations réussis à la dernière vérification ; CI caisse finale à confirmer.
+
+
+### Audit contradictoire et plan de clôture — 26 novembre 2026
+Baseline 2c22759a173e01555dd148b0e434561630982fc7, run 45865644483 SUCCESS 5/5, achats 45865240235 SUCCESS 5/5. La CI verte ne signifie pas conformité intégrale. Référentiel de finalisation : [BOOTIK_AUDIT_CONFORMITE_6_BULK.md](BOOTIK_AUDIT_CONFORMITE_6_BULK.md). Six lots restants maximum : B01 fondations/administration/entitlements ; B02 stock/14 profils ; B03 ERP Détaillants ; B04 ERP Distributeurs/WMS/logistique ; B05 CRM B2B/réseau/réapprovisionnement ; B06 pilotage/intégrations/recette finale. Aucun changement du cahier V1.1 ni du code métier dans cette passe d'audit. Recettes progressives obligatoires, aucun vert sans preuve.
