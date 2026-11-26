@@ -1,0 +1,39 @@
+begin;
+create table public.zp_erp_sync_receipts(
+ event_id uuid primary key,org_id uuid not null,site_id uuid not null,member_id uuid not null,
+ action text not null,payload jsonb not null,state text not null check(state in ('acknowledged','conflict','rejected')),
+ outcome jsonb,created_at timestamptz not null default now(),
+ foreign key(site_id,org_id) references public.zp_sites(id,org_id)
+);
+alter table public.zp_erp_sync_receipts enable row level security;
+revoke all on public.zp_erp_sync_receipts from public,anon,authenticated;
+grant select,insert on public.zp_erp_sync_receipts to service_role;
+create function public.zp_offline_erp_apply(p_access text,p_site uuid,p_org uuid,p_member uuid,p_event uuid,p_action text,p_payload jsonb) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
+declare m public.zp_members;old public.zp_erp_sync_receipts;st text:='acknowledged';outcome jsonb;v int;item uuid;servings int;begin
+ m:=public.zp_erp_actor(p_access,p_site);
+ if m.org_id is distinct from p_org or m.id is distinct from p_member then raise exception 'DENIED';end if;
+ if p_event is null or p_action is distinct from 'produce' or p_payload is null or jsonb_typeof(p_payload)<>'object' or length(p_payload::text)>500 then raise exception 'INVALID_INPUT';end if;
+ perform 1 from public.zp_site_modes where site_id=p_site for update;
+ select * into old from public.zp_erp_sync_receipts where event_id=p_event;
+ if old.event_id is not null then
+  if (old.org_id,old.site_id,old.member_id) is distinct from (p_org,p_site,p_member) then raise exception 'DENIED';end if;
+  if (old.action,old.payload) is distinct from (p_action,p_payload) then raise exception 'IDEMPOTENCY_CONFLICT';end if;
+  return jsonb_build_object('app_id','ZIPPLE','event_id',p_event,'organization_id',p_org,'site_id',p_site,'state',old.state,'outcome',old.outcome);
+ end if;
+ begin
+  item:=(p_payload->>'item_id')::uuid;servings:=(p_payload->>'servings')::int;v:=(p_payload->>'expected_version')::int;
+  if item is null or servings is null or servings not between 1 and 10000 or v is null or v<1 or p_payload<>jsonb_build_object('item_id',item,'servings',servings,'expected_version',v) then raise exception 'INVALID_INPUT';end if;
+  if not exists(select 1 from public.zp_menu_items where id=item and org_id=p_org and site_id=p_site) then raise exception 'DENIED';end if;
+  if v is distinct from (select max(version) from public.zp_recipe_versions where item_id=item and org_id=p_org and site_id=p_site) then raise exception 'STALE_RECIPE_VERSION';end if;
+  outcome:=public.zp_produce(p_access,p_site,item,p_event,servings);
+ exception when invalid_text_representation or numeric_value_out_of_range then st:='rejected';outcome:=jsonb_build_object('code','INVALID_INPUT');
+ when raise_exception then
+  if sqlerrm in ('STALE_RECIPE_VERSION','INGREDIENT_SHORTAGE','IDEMPOTENCY_CONFLICT') then st:='conflict';outcome:=jsonb_build_object('code',sqlerrm);
+  elsif sqlerrm in ('INVALID_INPUT','INVALID_PRODUCTION','DENIED') then st:='rejected';outcome:=jsonb_build_object('code',sqlerrm);else raise;end if;
+ end;
+ insert into public.zp_erp_sync_receipts(event_id,org_id,site_id,member_id,action,payload,state,outcome) values(p_event,p_org,p_site,p_member,p_action,p_payload,st,outcome);
+ return jsonb_build_object('app_id','ZIPPLE','event_id',p_event,'organization_id',p_org,'site_id',p_site,'state',st,'outcome',outcome);
+end $$;
+revoke all on function public.zp_offline_erp_apply(text,uuid,uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+grant execute on function public.zp_offline_erp_apply(text,uuid,uuid,uuid,uuid,text,jsonb) to service_role;
+commit;

@@ -457,6 +457,16 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.ok((await scalar("select zp_ledger_snapshot($1,$2)",[a.access,a.site])).pending.some(x=>x.kind==="braise_loss"&&x.source_id===discardId));
  await assert.rejects(scalar("select zp_braise_snapshot($1,$2)",[b.access,a.site]),/DENIED/);
  console.log("ZIPPLE_BULK3_BRAISE_YIELD_AND_LOSS_PASS");
+ const offlineEvent=uid(),offlinePayload={item_id:versionedItem,servings:1,expected_version:1};
+ const memberB=await scalar("select member_id from zp_production_batches where id=$1",[newProduction.id]),orgB=await scalar("select org_id from zp_production_batches where id=$1",[newProduction.id]);
+ const applyOffline=(event,payload)=>scalar("select zp_offline_erp_apply($1,$2,$3,$4,$5,'produce',$6)",[b.access,b.site,orgB,memberB,event,JSON.stringify(payload)]);
+ const staleOffline=await applyOffline(offlineEvent,offlinePayload);assert.equal(staleOffline.state,"conflict");assert.deepEqual(await applyOffline(offlineEvent,offlinePayload),staleOffline);
+ await assert.rejects(applyOffline(offlineEvent,{...offlinePayload,servings:2}),/IDEMPOTENCY_CONFLICT/);
+ const validOffline=uid(),validPayload={...offlinePayload,expected_version:2};const offlineReceipt=await applyOffline(validOffline,validPayload);
+ assert.equal(offlineReceipt.state,"acknowledged");assert.deepEqual(await applyOffline(validOffline,validPayload),offlineReceipt);
+ assert.equal(Number(await scalar("select count(*) from zp_production_batches where request_id=$1",[validOffline])),1);
+ await assert.rejects(scalar("select zp_offline_erp_apply($1,$2,$3,$4,$5,'produce',$6)",[a.access,a.site,orgB,memberB,uid(),JSON.stringify(validPayload)]),/DENIED/);
+ console.log("ZIPPLE_BULK3_OFFLINE_PRODUCTION_RECEIPT_PASS");
  const issueEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='issued'",[account]);
  const returnEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='returned'",[account]);
  const lostEvent=await scalar("select id from zp_container_events where account_id=$1 and kind='lost'",[account]);

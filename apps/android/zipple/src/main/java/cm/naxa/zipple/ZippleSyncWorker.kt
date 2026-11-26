@@ -28,7 +28,12 @@ class ZippleSyncWorker(context:Context,params:WorkerParameters):CoroutineWorker(
     if(dao.blocked(session.organization,session.member,site.id)>0)continue
     for(event in dao.queued(session.organization,session.member,site.id)){
      if(ZippleSyncSession.current!==session||!session.permits(site.id))return Result.success()
-     val state=api.sync(session,event)
+     val state=if(event.aggregateType=="erp_produce"){
+      val business=ZippleBusiness(BuildConfig.ZIPPLE_BUSINESS_API_URL,BuildConfig.DEBUG)
+      val payload=org.json.JSONObject().put("organization_id",session.organization).put("member_id",session.member).put("event_id",event.eventId).put("action","produce").put("payload",org.json.JSONObject(event.payloadJson))
+      val receipt=business.call(session,site.id,"offline_erp_apply",payload) as? org.json.JSONObject?:error("INVALID_RECEIPT")
+      ReceiptPolicy.verify(event.eventId,session.organization,site.id,receipt.getString("event_id"),receipt.getString("organization_id"),receipt.getString("site_id"),receipt.getString("app_id"),receipt.getString("state"))
+     }else api.sync(session,event)
      if(ZippleSyncSession.current!==session)return Result.success()
      if(!dao.applyReceipt(event.eventId,session.organization,session.member,site.id,state))return Result.retry()
      // Conflict/rejected records are retained and block later mutations for review.
