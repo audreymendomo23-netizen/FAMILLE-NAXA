@@ -11,6 +11,26 @@ create table bootik.bk_member_sites (
  foreign key(organization_id,app_id,user_id) references bootik.bk_members(organization_id,app_id,user_id),
  foreign key(location_id,organization_id,app_id) references bootik.bk_locations(id,organization_id,app_id)
 );
+-- Site-wide assignments remain explicit; restricted assignments need a matching activity.
+alter table bootik.bk_member_sites add column activity_restricted boolean not null default false;
+create table bootik.bk_member_activity_scopes (
+ organization_id uuid not null, app_id uuid not null, user_id uuid not null, location_id uuid not null, activity_id uuid not null,
+ primary key(organization_id,app_id,user_id,location_id,activity_id),
+ foreign key(organization_id,app_id,user_id,location_id) references bootik.bk_member_sites(organization_id,app_id,user_id,location_id),
+ foreign key(activity_id,location_id,organization_id,app_id) references bootik.bk_activity_locations(activity_id,location_id,organization_id,app_id)
+);
+alter table bootik.bk_member_activity_scopes enable row level security;
+alter table bootik.bk_member_activity_scopes force row level security;
+revoke all on bootik.bk_member_activity_scopes from public,anon,authenticated;
+create function bootik.bk_can_access_activity(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid)
+returns boolean language sql stable security invoker set search_path=pg_catalog,bootik as $$
+ select p_activity is not null and exists (
+ select 1 from bootik.bk_member_sites s join bootik.bk_members m using(organization_id,app_id,user_id)
+ where s.organization_id=p_org and s.app_id=p_app and s.user_id=p_actor and s.location_id=p_site and m.active
+ and (not s.activity_restricted or exists (
+ select 1 from bootik.bk_member_activity_scopes a where a.organization_id=p_org and a.app_id=p_app and a.user_id=p_actor and a.location_id=p_site and a.activity_id=p_activity)));
+$$;
+revoke all on function bootik.bk_can_access_activity(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
 create table bootik.bk_trials (
  organization_id uuid not null,app_id uuid not null,universe text not null check(universe in ('retailer','distributor')),
  plan text not null check(plan in ('access','premium')), activated_at timestamptz not null default now(),
@@ -109,6 +129,7 @@ declare b bootik.bk_inventory_balances%rowtype; old bootik.bk_sales%rowtype; v_i
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_user,p_site);
  if p_quantity is null or p_quantity<=0 or p_quantity<>round(p_quantity,6) or p_price is null or p_price<0 or nullif(btrim(p_key),'') is null then raise exception 'BOOTIK_INVALID_SALE';end if;
+ if not bootik.bk_can_access_activity(p_org,p_app,p_user,p_site,(select activity_id from bootik.bk_inventory_balances where id=p_balance and organization_id=p_org and app_id=p_app and location_id=p_site)) then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_key,0));
  select * into old from bootik.bk_sales where organization_id=p_org and app_id=p_app and idempotency_key=p_key;
  if found then
