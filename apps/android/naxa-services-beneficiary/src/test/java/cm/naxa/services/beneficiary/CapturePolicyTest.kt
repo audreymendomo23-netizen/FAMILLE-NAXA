@@ -2,6 +2,18 @@ package cm.naxa.services.beneficiary
 import org.junit.Assert.*
 import org.junit.Test
 class CapturePolicyTest {
+    @Test fun failedCaptureSurvivesLaterSuccessfulCapture() {
+        val failed=CapturePolicy.nextOutstanding(0,false)!!
+        val second=CapturePolicy.nextOutstanding(failed,false)!!
+        assertEquals(1,CapturePolicy.nextOutstanding(second,true))
+        assertNull(CapturePolicy.nextOutstanding(0,true))
+        assertNull(CapturePolicy.nextOutstanding(Int.MAX_VALUE,false))
+    }
+    @Test fun onlyRecognizedCandidateStatesAcknowledgeTransmission() {
+        for(status in listOf("pending","matched","review","rejected")) assertTrue(CapturePolicy.acknowledged(status))
+        for(status in listOf(null,"","confirmed","error","unknown")) assertFalse(CapturePolicy.acknowledged(status))
+    }
+
     @Test fun exactOriginAndEnrolledChannelRequired() {
         assertTrue(CapturePolicy.allowed("mtn_momo",true,true,"MobileMoney"))
         assertTrue(CapturePolicy.allowed("orange_money",true,true,"OrangeMoney"))
