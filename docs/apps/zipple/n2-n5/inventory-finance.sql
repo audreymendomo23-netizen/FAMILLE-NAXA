@@ -27,6 +27,15 @@ declare m public.zp_members;l public.zp_ingredient_lots;i uuid;begin m:=public.z
  if not exists(select 1 from public.zp_ingredients where id=p_ingredient and org_id=m.org_id and site_id=p_site) then raise exception 'DENIED';end if;
  insert into public.zp_ingredient_lots(org_id,site_id,ingredient_id,member_id,request_id,lot_label,supplier,received_milli,remaining_milli,received_cost,remaining_cost,expires_on) values(m.org_id,p_site,p_ingredient,m.id,p_request,trim(p_label),trim(p_supplier),p_qty,p_qty,p_cost,p_cost,p_expires) returning id into i;return i;end $$;
 -- Recipe immutable in this initial version. Never silently replace a recipe or mix historical cost.
+create table public.zp_recipe_versions(
+ id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,item_id uuid not null,
+ version int not null check(version>0),components jsonb not null,reason text not null check(length(trim(reason)) between 5 and 500),
+ member_id uuid not null,request_id uuid,created_at timestamptz not null default now(),
+ unique(item_id,version),unique(member_id,request_id),unique(id,org_id,site_id),
+ foreign key(item_id,org_id,site_id) references public.zp_menu_items(id,org_id,site_id),
+ foreign key(member_id,org_id) references public.zp_members(id,org_id));
+alter table public.zp_production_batches add column recipe_version_id uuid;
+alter table public.zp_production_batches add foreign key(recipe_version_id,org_id,site_id) references public.zp_recipe_versions(id,org_id,site_id);
 create function public.zp_define_recipe(p_access text,p_site uuid,p_item uuid,p_components jsonb) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;c record;begin m:=public.zp_erp_actor(p_access,p_site);
  perform 1 from public.zp_site_modes where site_id=p_site for update;
@@ -37,14 +46,43 @@ declare m public.zp_members;c record;begin m:=public.zp_erp_actor(p_access,p_sit
  for c in select * from jsonb_to_recordset(p_components) as x(ingredient_id uuid,qty_milli bigint) loop
  if c.ingredient_id is null or c.qty_milli is null or c.qty_milli not between 1 and 1000000000 or not exists(select 1 from public.zp_ingredients where id=c.ingredient_id and org_id=m.org_id and site_id=p_site) then raise exception 'INVALID_COMPONENTS';end if;
  insert into public.zp_recipe_components values(m.org_id,p_site,p_item,c.ingredient_id,c.qty_milli);
- end loop;return true;end $$;
+ end loop;
+ insert into public.zp_recipe_versions(org_id,site_id,item_id,version,components,reason,member_id)
+ values(m.org_id,p_site,p_item,1,p_components,'Initial recipe',m.id);
+ return true;end $$;
+create function public.zp_revise_recipe(p_access text,p_site uuid,p_item uuid,p_request uuid,p_expected int,p_components jsonb,p_reason text) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
+declare m public.zp_members;v public.zp_recipe_versions;cur int;c record;new_id uuid;why text:=trim(coalesce(p_reason,''));begin
+ m:=public.zp_erp_actor(p_access,p_site);
+ perform 1 from public.zp_site_modes where site_id=p_site for update;
+ select * into v from public.zp_recipe_versions where member_id=m.id and request_id=p_request;
+ if v.id is not null then
+  if (v.site_id,v.item_id,v.version,v.components,v.reason) is distinct from (p_site,p_item,p_expected+1,p_components,why) then raise exception 'IDEMPOTENCY_CONFLICT';end if;
+  return jsonb_build_object('id',v.id,'version',v.version);
+ end if;
+ if not exists(select 1 from public.zp_menu_items where id=p_item and org_id=m.org_id and site_id=p_site and active) then raise exception 'DENIED';end if;
+ select max(version) into cur from public.zp_recipe_versions where item_id=p_item and org_id=m.org_id and site_id=p_site;
+ if cur is null or p_expected is distinct from cur then raise exception 'STALE_RECIPE_VERSION';end if;
+ if p_request is null or length(why) not between 5 and 500 or jsonb_typeof(p_components) is distinct from 'array' then raise exception 'INVALID_COMPONENTS';end if;
+ if jsonb_array_length(p_components) not between 1 and 30 then raise exception 'INVALID_COMPONENTS';end if;
+ if exists(select 1 from public.zp_order_lines l join public.zp_orders o on o.id=l.order_id where l.item_id=p_item and o.status<>'cancelled' and not exists(select 1 from public.zp_cash_receipts r where r.order_id=o.id)) then raise exception 'RECIPE_REQUIRES_NO_OPEN_ORDERS';end if;
+ if exists(select 1 from public.zp_menu_items where id=p_item and available_qty<>0) or exists(select 1 from public.zp_production_batches where item_id=p_item and remaining_servings>0) then raise exception 'RECIPE_REQUIRES_EMPTY_ITEM';end if;
+ if (select count(distinct x.ingredient_id) from jsonb_to_recordset(p_components) as x(ingredient_id uuid,qty_milli bigint))<>jsonb_array_length(p_components) then raise exception 'INVALID_COMPONENTS';end if;
+ delete from public.zp_recipe_components where item_id=p_item and org_id=m.org_id and site_id=p_site;
+ for c in select * from jsonb_to_recordset(p_components) as x(ingredient_id uuid,qty_milli bigint) loop
+  if c.ingredient_id is null or c.qty_milli is null or c.qty_milli not between 1 and 1000000000 or not exists(select 1 from public.zp_ingredients where id=c.ingredient_id and org_id=m.org_id and site_id=p_site) then raise exception 'INVALID_COMPONENTS';end if;
+  insert into public.zp_recipe_components values(m.org_id,p_site,p_item,c.ingredient_id,c.qty_milli);
+ end loop;
+ insert into public.zp_recipe_versions(org_id,site_id,item_id,version,components,reason,member_id,request_id)
+ values(m.org_id,p_site,p_item,cur+1,p_components,why,m.id,p_request) returning id into new_id;
+ return jsonb_build_object('id',new_id,'version',cur+1);
+end $$;
 create function public.zp_produce(p_access text,p_site uuid,p_item uuid,p_request uuid,p_servings int) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;b public.zp_production_batches;c record;l record;need bigint;take bigint;cost bigint;total bigint:=0;bid uuid;begin m:=public.zp_erp_actor(p_access,p_site);
  perform 1 from public.zp_site_modes where site_id=p_site for update;
  select * into b from public.zp_production_batches where member_id=m.id and request_id=p_request;
  if b.id is not null then if (b.site_id,b.item_id,b.servings) is distinct from (p_site,p_item,p_servings) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return jsonb_build_object('id',b.id,'servings',b.servings,'cost_xaf',b.cost_xaf);end if;
  if p_servings is null or p_servings not between 1 and 10000 or not exists(select 1 from public.zp_menu_items where id=p_item and org_id=m.org_id and site_id=p_site and active) or not exists(select 1 from public.zp_recipe_components where item_id=p_item and org_id=m.org_id and site_id=p_site) then raise exception 'INVALID_PRODUCTION';end if;
- insert into public.zp_production_batches(org_id,site_id,item_id,member_id,request_id,servings) values(m.org_id,p_site,p_item,m.id,p_request,p_servings) returning id into bid;
+ insert into public.zp_production_batches(org_id,site_id,item_id,member_id,request_id,servings,recipe_version_id) values(m.org_id,p_site,p_item,m.id,p_request,p_servings,(select id from public.zp_recipe_versions where item_id=p_item and org_id=m.org_id and site_id=p_site order by version desc limit 1)) returning id into bid;
  for c in select * from public.zp_recipe_components where item_id=p_item and org_id=m.org_id and site_id=p_site order by ingredient_id loop
  need:=c.qty_milli*p_servings;
  for l in select * from public.zp_ingredient_lots where ingredient_id=c.ingredient_id and org_id=m.org_id and site_id=p_site and remaining_milli>0 and (expires_on is null or expires_on>=(now() at time zone 'Africa/Douala')::date) order by expires_on nulls last,received_at,id for update loop
@@ -91,14 +129,14 @@ create function public.zp_erp_snapshot(p_access text,p_site uuid) returns jsonb 
 declare m public.zp_members;ingredients jsonb;lots jsonb;batches jsonb;expenses jsonb;recipes jsonb;begin m:=public.zp_erp_actor(p_access,p_site);
  select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'name',i.name,'sku',i.sku,'unit',i.unit,'reorder_milli',i.reorder_milli,'supplier_whatsapp',i.supplier_whatsapp,'available_milli',coalesce((select sum(l.remaining_milli) from public.zp_ingredient_lots l where l.ingredient_id=i.id and (l.expires_on is null or l.expires_on>=(now() at time zone 'Africa/Douala')::date)),0)) order by i.name),'[]'::jsonb) into ingredients from public.zp_ingredients i where i.org_id=m.org_id and i.site_id=p_site;
  select coalesce(jsonb_agg(to_jsonb(l) order by l.received_at desc),'[]'::jsonb) into lots from (select id,ingredient_id,lot_label,supplier,remaining_milli,remaining_cost,expires_on,received_at from public.zp_ingredient_lots where org_id=m.org_id and site_id=p_site order by received_at desc limit 200) l;
- select coalesce(jsonb_agg(to_jsonb(b) order by b.created_at desc),'[]'::jsonb) into batches from (select id,item_id,servings,cost_xaf,created_at from public.zp_production_batches where org_id=m.org_id and site_id=p_site order by created_at desc limit 100) b;
+ select coalesce(jsonb_agg(to_jsonb(b) order by b.created_at desc),'[]'::jsonb) into batches from (select id,item_id,servings,cost_xaf,recipe_version_id,created_at from public.zp_production_batches where org_id=m.org_id and site_id=p_site order by created_at desc limit 100) b;
  select coalesce(jsonb_agg(to_jsonb(e) order by e.created_at desc),'[]'::jsonb) into expenses from (select id,category,label,amount_xaf,method,reference,expense_date,created_at from public.zp_expenses where org_id=m.org_id and site_id=p_site order by created_at desc limit 100) e;
  select coalesce(jsonb_agg(to_jsonb(c)),'[]'::jsonb) into recipes from (select item_id,ingredient_id,qty_milli from public.zp_recipe_components where org_id=m.org_id and site_id=p_site) c;
- return jsonb_build_object('ingredients',ingredients,'lots',lots,'batches',batches,'expenses',expenses,'recipes',recipes,'recorded_expenses_xaf',(select coalesce(sum(amount_xaf),0) from public.zp_expenses where org_id=m.org_id and site_id=p_site),'recorded_sales_xaf',(select coalesce(sum(amount_xaf),0) from public.zp_cash_receipts where org_id=m.org_id and site_id=p_site),'recorded_cost_xaf',case when exists(select 1 from public.zp_cash_receipts r where r.org_id=m.org_id and r.site_id=p_site)
+ return jsonb_build_object('ingredients',ingredients,'lots',lots,'batches',batches,'expenses',expenses,'recipes',recipes,'recipe_versions',coalesce((select jsonb_agg(jsonb_build_object('id',v.id,'item_id',v.item_id,'version',v.version,'components',v.components,'reason',v.reason,'created_at',v.created_at) order by v.version desc) from public.zp_recipe_versions v where v.org_id=m.org_id and v.site_id=p_site),'[]'::jsonb),'recorded_expenses_xaf',(select coalesce(sum(amount_xaf),0) from public.zp_expenses where org_id=m.org_id and site_id=p_site),'recorded_sales_xaf',(select coalesce(sum(amount_xaf),0) from public.zp_cash_receipts where org_id=m.org_id and site_id=p_site),'recorded_cost_xaf',case when exists(select 1 from public.zp_cash_receipts r where r.org_id=m.org_id and r.site_id=p_site)
  and not exists(select 1 from public.zp_cash_receipts r join public.zp_order_lines l on l.order_id=r.order_id left join public.zp_sale_costs c on c.receipt_id=r.id and c.item_id=l.item_id where r.org_id=m.org_id and r.site_id=p_site and c.cost_xaf is null)
  then (select sum(cost_xaf) from public.zp_sale_costs where org_id=m.org_id and site_id=p_site) else null end,'accounting_status','mapping_required');end $$;
 do $$ declare t text;f record;begin
- foreach t in array array['zp_ingredients','zp_ingredient_lots','zp_recipe_components','zp_production_batches','zp_production_consumption','zp_sale_costs','zp_sale_cost_allocations','zp_expenses'] loop execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from public,anon,authenticated',t);execute format('grant select,insert,update,delete on public.%I to service_role',t);end loop;
- for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_erp_actor','zp_add_ingredient','zp_receive_lot','zp_define_recipe','zp_produce','zp_allocate_sale_cost','zp_record_expense','zp_erp_snapshot') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;
+ foreach t in array array['zp_ingredients','zp_ingredient_lots','zp_recipe_components','zp_recipe_versions','zp_production_batches','zp_production_consumption','zp_sale_costs','zp_sale_cost_allocations','zp_expenses'] loop execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from public,anon,authenticated',t);execute format('grant select,insert,update,delete on public.%I to service_role',t);end loop;
+ for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_erp_actor','zp_add_ingredient','zp_receive_lot','zp_define_recipe','zp_revise_recipe','zp_produce','zp_allocate_sale_cost','zp_record_expense','zp_erp_snapshot') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;
 end $$;
 commit;
