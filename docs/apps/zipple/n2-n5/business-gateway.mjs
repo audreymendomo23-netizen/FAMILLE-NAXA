@@ -13,7 +13,7 @@ function choice(v,allowed){if(!allowed.includes(v))invalid();return v}
 function amount(v,min=0){if(!integer(v,min,2147483647))invalid();return v}
 function lineItems(v){if(!Array.isArray(v)||!v.length||v.length>50)invalid();return v.map(x=>{if(!isObject(x)||!integer(x.qty,1,1000))invalid();if(x.note!==undefined&&(typeof x.note!=="string"||x.note.length>500))invalid();return {item_id:id(x.item_id),qty:x.qty,...(x.note?{note:x.note.trim()}: {})}})}
 const publicActions=new Set(["guest_open","guest_menu","guest_order_create","guest_order_read","guest_feedback","guest_served","guest_post_feedback"]);
-const professionalActions=new Set(["quote","referral_claim","snapshot","mode","menu_add","table_create","table_open","table_close","order_create","line_advance","delay","cancel","cash_open","cash_record","cash_close","erp_snapshot","ingredient_add","lot_receive","recipe_define","produce","expense_record","supplier_add","purchase_create","purchase_receive","supplier_pay","count_lot","procurement_snapshot","customer_add","customer_attach","followup_create","followup_complete","crm_snapshot","transfer_snapshot","transfer_request","transfer_decide","transfer_dispatch","transfer_receive","container_account","container_move","container_snapshot","pilotage","zone_add","table_config","reserve_table","reservation_transition","catalog_update","floor_snapshot","station_grant","station_snapshot","station_availability","table_bill","table_rotate_qr","formula_define","formula_snapshot","group_pay"]);
+const professionalActions=new Set(["quote","referral_claim","snapshot","mode","menu_add","table_create","table_open","table_close","order_create","line_advance","delay","cancel","cash_open","cash_record","cash_close","erp_snapshot","ingredient_add","lot_receive","recipe_define","produce","expense_record","supplier_add","purchase_create","purchase_receive","supplier_pay","count_lot","procurement_snapshot","customer_add","customer_attach","followup_create","followup_complete","crm_snapshot","transfer_snapshot","transfer_request","transfer_decide","transfer_dispatch","transfer_receive","container_account","container_move","container_snapshot","pilotage","zone_add","table_config","reserve_table","reservation_transition","catalog_update","floor_snapshot","station_grant","station_snapshot","station_availability","table_bill","table_rotate_qr","formula_define","formula_snapshot","group_pay","pickup_create","waitlist_add","waitlist_transition"]);
 export function createBusinessGateway({rpc,origins,allowGuestOpen=false}){
  if(typeof rpc!=="function"||!Array.isArray(origins))throw Error("CONFIGURATION");
  return async req=>{
@@ -41,7 +41,7 @@ export function createBusinessGateway({rpc,origins,allowGuestOpen=false}){
     const bearer=req.headers.get("authorization")??"";if(!bearer.startsWith("Guest ")||!hex.test(bearer.slice(6)))return result(401,{error:"DENIED"});
     const p_guest_hash=await digest(bearer.slice(6));let value;
     if(action==="guest_menu")value=await rpc("zp_guest_menu",{p_guest_hash});
-    if(action==="guest_order_create")value=await rpc("zp_create_order",{p_access:null,p_guest_hash,p_site:id(b.site_id),p_channel:"table",p_table_session:id(b.table_session_id),p_request:id(b.request_id),p_lines:lineItems(b.lines)});
+    if(action==="guest_order_create")value=await rpc("zp_create_order",{p_access:null,p_guest_hash,p_site:id(b.site_id),p_channel:b.channel===undefined?"table":choice(b.channel,["table","counter"]),p_table_session:id(b.table_session_id),p_request:id(b.request_id),p_lines:lineItems(b.lines)});
     if(action==="guest_order_read")value=await rpc("zp_guest_order",{p_guest_hash,p_order:id(b.order_id)});
     if(action==="guest_served")value=await rpc("zp_guest_served",{p_guest_hash,p_order:id(b.order_id)});
     if(action==="guest_post_feedback"){if(!Array.isArray(b.ratings)||b.ratings.length<1||b.ratings.length>5)invalid();value=await rpc("zp_guest_post_feedback",{p_guest_hash,p_order:id(b.order_id),p_ratings:b.ratings.map(x=>{if(!isObject(x)||!integer(x.rating,1,5))invalid();return {post:choice(x.post,["kitchen","bar","snack","service","counter"]),rating:x.rating}})})}
@@ -57,6 +57,7 @@ export function createBusinessGateway({rpc,origins,allowGuestOpen=false}){
     case "mode":if(typeof b.bar!=="boolean"||typeof b.delivery!=="boolean")invalid();name="zp_site_mode";args={...scope,p_space:choice(b.space,["restaurant","snack_bar"]),p_bar:b.bar,p_delivery:b.delivery};break;
     case "menu_add":if(!text(b.name))invalid();name="zp_add_menu_item";args={...scope,p_name:text(b.name),p_post:choice(b.post,["kitchen","bar","snack"]),p_price:amount(b.price_xaf,1),p_qty:amount(b.qty)};break;
     case "table_create":{if(!text(b.label,80))invalid();const qr=token();value=await rpc("zp_manage_table",{...scope,p_label:text(b.label,80),p_qr_hash:await digest(qr)});return result(200,{data:{id:value,qr}})}
+    case "pickup_create":{if(!text(b.label,80))invalid();const qr=token();value=await rpc("zp_pickup_create",{...scope,p_label:text(b.label,80),p_hash:await digest(qr)});return result(200,{data:{id:value,qr}})}
     case "table_rotate_qr":{const qr=token();const table=id(b.table_id);await rpc("zp_table_rotate_qr",{...scope,p_table:table,p_hash:await digest(qr)});return result(200,{data:{id:table,qr}})}
     case "table_open":name="zp_open_table";args={...scope,p_table:id(b.table_id)};break;
     case "table_close":name="zp_close_table";args={...scope,p_table_session:id(b.table_session_id)};break;
@@ -106,6 +107,8 @@ export function createBusinessGateway({rpc,origins,allowGuestOpen=false}){
     case "formula_snapshot":name="zp_formula_snapshot";args=scope;break;
     case "formula_define":if(!Array.isArray(b.components)||b.components.length<2||b.components.length>20)invalid();name="zp_formula_define";args={...scope,p_formula:id(b.formula_id),p_components:b.components.map(x=>{if(!isObject(x)||!integer(x.qty,1,100))invalid();return {component_id:id(x.component_id),qty:x.qty}})};break;
     case "group_pay":if(!Array.isArray(b.order_ids)||!b.order_ids.length||b.order_ids.length>50)invalid();name="zp_record_group_sale";args={...scope,p_cash:id(b.cash_id),p_session:id(b.table_session_id),p_orders:b.order_ids.map(id),p_request:id(b.request_id),p_method:choice(b.method,["cash","mtn_momo","orange_money","bank","card"]),p_amount:amount(b.amount_xaf,1),p_ref:b.reference==null?null:text(b.reference)};break;
+    case "waitlist_add":if(!text(b.guest_name)||!integer(b.party_size,1,100))invalid();name="zp_waitlist_add";args={...scope,p_request:id(b.request_id),p_guest:text(b.guest_name),p_party:b.party_size};break;
+    case "waitlist_transition":name="zp_waitlist_transition";args={...scope,p_wait:id(b.waitlist_id),p_next:choice(b.next,["seated","cancelled"]),p_table:b.table_id==null?null:id(b.table_id)};break;
     default:return result(403,{error:"DENIED"});
    }
    value=await rpc(name,args);

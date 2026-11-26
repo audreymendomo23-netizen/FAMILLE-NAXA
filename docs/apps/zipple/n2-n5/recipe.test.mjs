@@ -249,6 +249,17 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  await assert.rejects(group([go1.id],2000,uid(),uid()),/SALE_NOT_SETTLEABLE/);
  const third=await order(a,"counter",[{item_id:fFood,qty:1}]);for(const state of ["preparing","ready","served"])await scalar("select zp_advance_line($1,$2,$3,$4,$5)",[a.access,a.site,third.id,fFood,state]);
  await assert.rejects(scalar("select zp_record_sale($1,$2,$3,$4,$5,'mtn_momo',2000,$6)",[a.access,a.site,groupCash,third.id,uid()," "+groupRef+" "]),/duplicate key/);
+ const pq=hash(),pg=hash(),pick=await scalar("select zp_pickup_create($1,$2,'Retrait',$3)",[b.access,b.site,pq]);
+ await assert.rejects(scalar("select zp_pickup_create($1,$2,'Retrait',$3)",[a.access,a.site,hash()]),/CHANNEL_DENIED/);
+ const pts=await scalar("select zp_open_table($1,$2,$3)",[b.access,b.site,pick]);await scalar("select zp_open_guest($1,$2)",[pq,pg]);
+ assert.equal((await scalar("select zp_guest_menu($1)",[pg])).channel,"counter");
+ await assert.rejects(order(b,"table",[{item_id:snack,qty:1}],uid(),pts,pg),/DENIED/);
+ const pickup=await order(b,"counter",[{item_id:snack,qty:1}],uid(),pts,pg);assert.equal((await scalar("select zp_guest_order($1,$2)",[pg,pickup.id])).channel,"counter");
+ const free=await scalar("select zp_manage_table($1,$2,'Table attente',$3)",[a.access,a.site,hash()]),wk=uid();
+ const wait=()=>scalar("select zp_waitlist_add($1,$2,$3,'Client attente',2)",[a.access,a.site,wk]);const wid=await wait();assert.equal(await wait(),wid);
+ assert.equal(await scalar("select zp_waitlist_transition($1,$2,$3,'seated',$4)",[a.access,a.site,wid,free]),"seated");
+ const ws=await scalar("select session_id from zp_waitlist where id=$1",[wid]);await scalar("select zp_close_table($1,$2,$3)",[a.access,a.site,ws]);assert.equal(await scalar("select state from zp_waitlist where id=$1",[wid]),"completed");
+ console.log("ZIPPLE_BULK2_PICKUP_AND_WAITLIST_PASS");
  console.log("ZIPPLE_BULK2_GROUP_SETTLEMENT_PASS");
  console.log("ZIPPLE_BULK2_COMPOSITE_FORMULA_PASS");
  console.log("ZIPPLE_N7_RECORDED_METRICS_PASS");
