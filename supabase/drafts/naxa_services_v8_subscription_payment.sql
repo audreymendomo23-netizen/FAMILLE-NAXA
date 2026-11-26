@@ -117,6 +117,8 @@ begin
  if auth.uid() is null or not public.ns_subscription_can_manage(p_org) then raise exception 'NS_SUBSCRIPTION_FORBIDDEN' using errcode='42501'; end if;
  perform 1 from public.ns_organizations where id=p_org and status='active' for update;
  if not found then raise exception 'NS_ORGANIZATION_INACTIVE'; end if;
+ -- ACCESS is single-operator; network/multi-workstation organizations require PREMIUM.
+ if p_plan='ACCESS' and exists(select 1 from public.ns_organizations where id=p_org and business_mode<>'solo') then raise exception 'NS_PREMIUM_REQUIRED'; end if;
  select * into d from public.ns_subscription_destinations where channel=p_channel and active;
  if not found then raise exception 'NS_DESTINATION_NOT_CONFIGURED'; end if;
  select * into s from public.ns_subscriptions where org_id=p_org;

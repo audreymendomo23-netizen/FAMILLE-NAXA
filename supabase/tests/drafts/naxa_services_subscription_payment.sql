@@ -52,6 +52,15 @@ declare i public.ns_subscription_intents%rowtype; r jsonb; r2 jsonb; begin
  if r->>'status' is distinct from 'confirmed' or r->>'receipt_number' is null or r<>r2 or (select count(*) from public.ns_subscription_credit_proofs where intent_id=i.id)<>1 then raise exception 'CONFIRMATION_OR_IDEMPOTENCE_FAILED'; end if;
  if exists(select 1 from public.ns_payments where org_id=i.org_id) then raise exception 'SUBSCRIPTION_LEAKED_INTO_TENANT_CASH'; end if;
 end $f$;
+-- ACCESS is unavailable to a network at the point of a new payment request.
+update public.ns_organizations set business_mode='multi_site_network' where id='20000000-0000-4000-8000-000000000071';
+set local role authenticated;
+do $f$ begin
+ begin perform public.ns_subscription_create('20000000-0000-4000-8000-000000000071','ACCESS',1,'mtn_momo'); raise exception 'NETWORK_ACCESS_ALLOWED';
+ exception when raise_exception then if sqlerrm<>'NS_PREMIUM_REQUIRED' then raise; end if; end;
+end $f$;
+reset role;
+update public.ns_organizations set business_mode='solo' where id='20000000-0000-4000-8000-000000000071';
 -- Credit may arrive first; it must remain pending without a debit declaration.
 set local role authenticated;
 do $f$ declare j jsonb; begin
@@ -73,6 +82,23 @@ end $f$;
 reset role;
 do $f$ begin
  if not exists(select 1 from public.ns_subscription_credit_candidates where transaction_reference='RENEWALTX71' and status='matched') then raise exception 'CREDIT_CANDIDATE_NOT_CONSUMED'; end if;
+end $f$;
+-- Orange: actual debit parser + independent beneficiary credit + receipt.
+insert into public.ns_subscription_destinations values ('orange_money','654321','CI ORANGE','237690000073',true);
+insert into public.ns_subscription_admin_devices(id,auth_user_id,channel,session_id,destination_reference,sms_capture_allowed,active) values ('80000000-0000-4000-8000-000000000073','10000000-0000-4000-8000-000000000072','orange_money','admin-ci','237690000073',true,true);
+set local role authenticated;
+do $f$ declare i jsonb; j jsonb; begin
+ i:=public.ns_subscription_create('20000000-0000-4000-8000-000000000071','ACCESS',1,'orange_money');
+ j:=public.ns_subscription_declare_sms((i->>'id')::uuid,'Paiement de CI ORANGE reussi par 237690000071 Fixture. ID transaction: OR.FIXTURE71, montant: '||(i->>'amount_xaf')||' FCFA','690000071',now());
+ if j->>'status' is distinct from 'submitted' or j->>'receipt_number' is not null then raise exception 'ORANGE_DEBIT_ALONE_CONFIRMED'; end if;
+end $f$;
+reset role;
+do $f$ declare i public.ns_subscription_intents%rowtype; v jsonb; begin
+ select * into i from public.ns_subscription_intents where org_id='20000000-0000-4000-8000-000000000071' and status='submitted';
+ begin perform public.ns_subscription_ingest_credit('80000000-0000-4000-8000-000000000073','10000000-0000-4000-8000-000000000072','wrong-session','orange_money','ORFIXTURE71','237690000073',i.amount_xaf,'690000071',now(),now(),repeat('e',64),'OrangeMoney'); raise exception 'STALE_DEVICE_ACCEPTED'; exception when insufficient_privilege then null; end;
+ begin perform public.ns_subscription_ingest_credit('80000000-0000-4000-8000-000000000072','10000000-0000-4000-8000-000000000072','admin-ci','orange_money','ORFIXTURE71','237690000073',i.amount_xaf,'690000071',now(),now(),repeat('e',64),'OrangeMoney'); raise exception 'WRONG_CHANNEL_DEVICE_ACCEPTED'; exception when insufficient_privilege then null; end;
+ v:=public.ns_subscription_ingest_credit('80000000-0000-4000-8000-000000000073','10000000-0000-4000-8000-000000000072','admin-ci','orange_money','ORFIXTURE71','237690000073',i.amount_xaf,'690000071',now(),now(),repeat('e',64),'OrangeMoney');
+ if v->>'status' is distinct from 'matched' or not exists(select 1 from public.ns_subscription_intents where id=i.id and status='confirmed' and receipt_number is not null) then raise exception 'ORANGE_PAIRED_PROOF_FAILED'; end if;
 end $f$;
 -- Entitlement status is derived from dates, not a mutable client flag.
 set local role authenticated;

@@ -357,3 +357,12 @@ jobs:
           path: apps/android/naxa-services/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
+
+      - name: Upload isolated beneficiary debug APK for technical review
+        if: ${{ always() && steps.assemble_debug_apk.outcome == 'success' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: naxa-services-beneficiary-debug-apk
+          path: apps/android/naxa-services-beneficiary/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7

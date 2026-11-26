@@ -14,7 +14,12 @@ internal object BeneficiaryApi {
             "Configuration NAXA SERVICES dédiée requise."
         }
         val key=BuildConfig.ANON_KEY.trim()
-        require(key.isNotBlank() && !key.startsWith("sb_secret_")) { "Clé publique non configurée." }
+        val publicKey = if (key.startsWith("sb_publishable_")) true else runCatching {
+            val part=key.split(".").getOrNull(1) ?: error("Clé invalide")
+            val decoded=android.util.Base64.decode(part,android.util.Base64.URL_SAFE or android.util.Base64.NO_WRAP or android.util.Base64.NO_PADDING)
+            JSONObject(String(decoded,Charsets.UTF_8)).optString("role")=="anon"
+        }.getOrDefault(false)
+        require(publicKey) { "Clé publique non configurée." }
         return endpoint to key
     }
     fun login(context:Context,email:String,password:String) {

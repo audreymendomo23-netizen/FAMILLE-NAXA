@@ -203,7 +203,8 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
     var access by remember(org, session.account.memberId, session.deviceId) { mutableStateOf<JSONObject?>(null) }
     var snapshot by remember(org, session.deviceId) { mutableStateOf<JSONObject?>(null) }
     var intent by remember(org, session.deviceId) { mutableStateOf<JSONObject?>(null) }
-    var plan by remember(org) { mutableStateOf("ACCESS") }
+    val requiresPremium = session.account.businessMode != "solo"
+    var plan by remember(org, requiresPremium) { mutableStateOf(if (requiresPremium) "PREMIUM" else "ACCESS") }
     var months by remember(org) { mutableStateOf(1) }
     var channel by remember(org) { mutableStateOf("") }
     var payer by remember(org, session.deviceId) { mutableStateOf("") }
@@ -281,7 +282,8 @@ fun SubscriptionsContent(modifier: Modifier, api: AuthApi, session: AuthSession)
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(if (fr) "Choisir une formule" else "Choose plan", fontWeight = FontWeight.Bold)
-                    listOf("ACCESS","PREMIUM").forEach { value ->
+                    if (requiresPremium) Text(if (fr) "PREMIUM requis pour le réseau ou plusieurs postes." else "PREMIUM required for multiple workstations or sites.")
+                    (if (requiresPremium) listOf("PREMIUM") else listOf("ACCESS","PREMIUM")).forEach { value ->
                         OutlinedButton(onClick = { plan = value }, enabled = !busy) { Text((if (plan == value) "✓ " else "") + value) }
                     }
                     listOf(1,12).forEach { value ->
