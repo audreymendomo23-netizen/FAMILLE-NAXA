@@ -26,3 +26,12 @@ export function extendMeeting(meeting, command, actor, serverNowMs, priorReceipt
   const receipt={requestId:command.requestId,meetingId:meeting.id,actorId:actor.memberId,minutes:command.minutes,expectedRevision:command.expectedRevision,revision:meeting.revision+1,previousEndMs:meeting.endMs,endMs};
   return {meeting:{...meeting,endMs,revision:receipt.revision},receipt,replayed:false,event:{type:"meeting_extended",meetingId:meeting.id,orgId:meeting.orgId,requestId:command.requestId,previousEndMs:meeting.endMs,endMs,revision:receipt.revision,actorId:actor.memberId,atMs:serverNowMs}};
 }
+
+/** Initial deadline from the actual authorized start, not the scheduled date. */
+export function initialDeadline(startMs, durationMinutes, hardEndMs) {
+  if (!Number.isSafeInteger(startMs) || startMs < 0 || !Number.isSafeInteger(hardEndMs) || hardEndMs < startMs) throw new RangeError("invalid_clock");
+  if (!Number.isSafeInteger(durationMinutes) || durationMinutes < 5 || durationMinutes > 480) throw new RangeError("invalid_duration");
+  const endMs = startMs + durationMinutes * 60000;
+  if (!Number.isSafeInteger(endMs) || endMs > hardEndMs) throw new Error("limit_exceeded");
+  return endMs;
+}

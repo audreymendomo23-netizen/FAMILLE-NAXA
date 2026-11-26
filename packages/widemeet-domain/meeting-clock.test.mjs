@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {remainingSeconds,timerView,extendMeeting} from "./meeting-clock.mjs";
+import {remainingSeconds,timerView,extendMeeting,initialDeadline} from "./meeting-clock.mjs";
 const M={id:"m1",orgId:"o1",organizerId:"host",status:"open",startMs:100000,endMs:3700000,hardEndMs:10900000,revision:1};
 const A={orgId:"o1",memberId:"host",enabled:true};
 const cmd=(minutes=15,extra={})=>({meetingId:"m1",requestId:"request_123456789",expectedRevision:1,minutes,...extra});
@@ -18,3 +18,7 @@ test("expired or closed cannot reopen",()=>{assert.throws(()=>extendMeeting(M,cm
 test("pass and quota ceiling not exceeded",()=>{const m={...M,hardEndMs:M.endMs+15*60000};assert.equal(extendMeeting(m,cmd(),A,now).meeting.endMs,m.hardEndMs);assert.throws(()=>extendMeeting(m,cmd(30),A,now),/limit_exceeded/)});
 test("invalid minutes and request id",()=>{for(const n of [0,-1,1.5,481,NaN,"15"])assert.throws(()=>extendMeeting(M,cmd(n),A,now),/invalid_request/);assert.throws(()=>extendMeeting(M,cmd(15,{requestId:"x"}),A,now),/invalid_request/)});
 test("remaining time rounding and bad clock",()=>{assert.equal(remainingSeconds(1001,1000),1);assert.equal(remainingSeconds(1000,1001),0);assert.throws(()=>remainingSeconds(NaN,0),/invalid_clock/)});
+
+test("initial duration based on actual start; no silent truncation",()=>{assert.equal(initialDeadline(100000,30,3000000),1900000);assert.equal(initialDeadline(100000,5,400000),400000);assert.throws(()=>initialDeadline(100000,30,1800000),/limit_exceeded/)});
+test("initial duration validates family bounds",()=>{for(const n of [0,4,481,2.5,"30",NaN])assert.throws(()=>initialDeadline(0,n,30000000),/invalid_duration/);assert.equal(initialDeadline(0,480,30000000),28800000)});
+test("another warning after extension, then a second extension",()=>{const r=extendMeeting(M,cmd(15),A,now);assert.equal(timerView(r.meeting,now,A).warning,false);assert.equal(timerView(r.meeting,r.meeting.endMs-300000,A).warning,true);const r2=extendMeeting(r.meeting,cmd(30,{requestId:"second_req_123456",expectedRevision:2}),A,r.meeting.endMs-300000);assert.equal(r2.meeting.endMs,M.endMs+45*60000);assert.equal(r2.meeting.revision,3)});
