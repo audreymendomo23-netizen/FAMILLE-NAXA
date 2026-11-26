@@ -7,7 +7,7 @@ create table public.zp_transfers(
  requested_by uuid not null,request_id uuid not null,qty_milli bigint not null check(qty_milli between 1 and 1000000000),
  state text not null default 'requested' check(state in ('requested','approved','in_transit','received','cancelled')),
  approved_by uuid,approved_at timestamptz,dispatched_by uuid,dispatched_at timestamptz,received_by uuid,received_at timestamptz,
- transferred_cost bigint check(transferred_cost>=0),expires_on date,source_label text,
+ transferred_cost bigint check(transferred_cost>=0),expires_on date,usable_until timestamptz,source_label text,
  received_milli bigint check(received_milli between 0 and qty_milli),received_cost bigint check(received_cost between 0 and transferred_cost),
  destination_lot uuid unique,discrepancy_reason text,cancelled_by uuid,cancelled_at timestamptz,
  created_at timestamptz not null default now(),check(source_site<>destination_site),unique(requested_by,request_id),
@@ -53,10 +53,10 @@ declare m public.zp_members;x public.zp_transfers;l public.zp_ingredient_lots;c 
  if x.state='in_transit' then return x.state;end if;if x.state<>'approved' then raise exception 'INVALID_TRANSITION';end if;
  if not exists(select 1 from public.zp_sites where id=x.destination_site and org_id=m.org_id and active) then raise exception 'DENIED';end if;
  select * into l from public.zp_ingredient_lots where id=x.source_lot and org_id=m.org_id and site_id=p_site for update;
- if l.id is null or l.remaining_milli<x.qty_milli or (l.expires_on is not null and l.expires_on<(now() at time zone 'Africa/Douala')::date) then raise exception 'INGREDIENT_SHORTAGE';end if;
+ if l.id is null or l.remaining_milli<x.qty_milli or ((l.expires_on is not null and l.expires_on<(now() at time zone 'Africa/Douala')::date) or l.usable_until<=now()) then raise exception 'INGREDIENT_SHORTAGE';end if;
  c:=case when l.remaining_milli=x.qty_milli then l.remaining_cost else floor(l.remaining_cost::numeric*x.qty_milli/l.remaining_milli)::bigint end;
  update public.zp_ingredient_lots set remaining_milli=remaining_milli-x.qty_milli,remaining_cost=remaining_cost-c where id=l.id;
- update public.zp_transfers set state='in_transit',transferred_cost=c,expires_on=l.expires_on,source_label=l.lot_label,dispatched_at=now(),dispatched_by=m.id where id=x.id;return 'in_transit';end $$;
+ update public.zp_transfers set state='in_transit',transferred_cost=c,expires_on=l.expires_on,usable_until=l.usable_until,source_label=l.lot_label,dispatched_at=now(),dispatched_by=m.id where id=x.id;return 'in_transit';end $$;
 create function public.zp_transfer_receive(p_access text,p_site uuid,p_transfer uuid,p_qty bigint,p_reason text) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;x public.zp_transfers;c bigint;l uuid;why text:=trim(coalesce(p_reason,''));begin m:=public.zp_transfer_actor(p_access,p_site);
  perform 1 from public.zp_site_modes where site_id=p_site for update;
@@ -64,11 +64,11 @@ declare m public.zp_members;x public.zp_transfers;c bigint;l uuid;why text:=trim
  if x.state='received' then if (x.received_milli,x.discrepancy_reason) is distinct from (p_qty,why) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return jsonb_build_object('id',x.id,'received_milli',x.received_milli,'received_cost',x.received_cost,'loss_cost',x.transferred_cost-x.received_cost);end if;
  if x.state<>'in_transit' then raise exception 'INVALID_TRANSITION';end if;
  if p_qty is null or p_qty not between 0 and x.qty_milli or length(why)>500 or (p_qty<>x.qty_milli and length(why)<5) then raise exception 'TRANSFER_COUNT_REVIEW';end if;
- if p_qty>0 and x.expires_on is not null and x.expires_on<(now() at time zone 'Africa/Douala')::date then raise exception 'EXPIRED_LOT';end if;
+ if p_qty>0 and ((x.expires_on is not null and x.expires_on<(now() at time zone 'Africa/Douala')::date) or x.usable_until<=now()) then raise exception 'EXPIRED_LOT';end if;
  c:=case when p_qty=x.qty_milli then x.transferred_cost else floor(x.transferred_cost::numeric*p_qty/x.qty_milli)::bigint end;
  if p_qty>0 then
- insert into public.zp_ingredient_lots(org_id,site_id,ingredient_id,member_id,request_id,lot_label,supplier,received_milli,remaining_milli,received_cost,remaining_cost,expires_on)
- values(m.org_id,p_site,x.destination_ingredient,m.id,gen_random_uuid(),left('TR-'||x.id::text||'-'||x.source_label,100),'Transfert interne',p_qty,p_qty,c,c,x.expires_on) returning id into l;
+ insert into public.zp_ingredient_lots(org_id,site_id,ingredient_id,member_id,request_id,lot_label,supplier,received_milli,remaining_milli,received_cost,remaining_cost,expires_on,usable_until)
+ values(m.org_id,p_site,x.destination_ingredient,m.id,gen_random_uuid(),left('TR-'||x.id::text||'-'||x.source_label,100),'Transfert interne',p_qty,p_qty,c,c,x.expires_on,x.usable_until) returning id into l;
  end if;
  update public.zp_transfers set state='received',received_milli=p_qty,received_cost=c,destination_lot=l,discrepancy_reason=why,received_at=now(),received_by=m.id where id=x.id;
  return jsonb_build_object('id',x.id,'received_milli',p_qty,'received_cost',c,'loss_cost',x.transferred_cost-c);end $$;

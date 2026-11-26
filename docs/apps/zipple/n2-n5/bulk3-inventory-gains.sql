@@ -22,7 +22,7 @@ declare m public.zp_members;l public.zp_ingredient_lots;x public.zp_inventory_ga
  select * into l from public.zp_ingredient_lots where id=p_lot and org_id=m.org_id and site_id=p_site for update;if l.id is null then raise exception 'DENIED';end if;
  if p_expected is distinct from l.remaining_milli then raise exception 'STALE_INVENTORY_COUNT';end if;
  if p_request is null or p_counted is null or p_counted<=p_expected or p_counted>1000000000 or length(why) not between 5 and 500 then raise exception 'INVALID_INVENTORY_GAIN';end if;
- if l.expires_on<(now() at time zone 'Africa/Douala')::date then raise exception 'INVALID_INVENTORY_GAIN';end if;
+ if l.expires_on<(now() at time zone 'Africa/Douala')::date or l.usable_until<=now() then raise exception 'INVALID_INVENTORY_GAIN';end if;
  insert into public.zp_inventory_gains(org_id,site_id,lot_id,member_id,request_id,before_milli,before_cost,counted_milli,reason) values(m.org_id,p_site,l.id,m.id,p_request,l.remaining_milli,l.remaining_cost,p_counted,why) returning id into i;return i;end $$;
 create function public.zp_inventory_gain_decide(p_access text,p_site uuid,p_id uuid,p_decision text,p_value bigint,p_evidence text) returns text language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;x public.zp_inventory_gains;l public.zp_ingredient_lots;proof text:=trim(coalesce(p_evidence,''));begin
@@ -34,7 +34,7 @@ declare m public.zp_members;x public.zp_inventory_gains;l public.zp_ingredient_l
  if p_decision='approved' then
   select * into l from public.zp_ingredient_lots where id=x.lot_id and org_id=m.org_id and site_id=p_site for update;
   if (l.remaining_milli,l.remaining_cost) is distinct from (x.before_milli,x.before_cost) then raise exception 'STALE_INVENTORY_COUNT';end if;
-  if l.expires_on<(now() at time zone 'Africa/Douala')::date then raise exception 'INVALID_INVENTORY_GAIN';end if;
+  if l.expires_on<(now() at time zone 'Africa/Douala')::date or l.usable_until<=now() then raise exception 'INVALID_INVENTORY_GAIN';end if;
   update public.zp_ingredient_lots set remaining_milli=x.counted_milli,remaining_cost=remaining_cost+p_value,gain_milli=gain_milli+(x.counted_milli-x.before_milli),gain_cost=gain_cost+p_value where id=l.id;
  end if;
  update public.zp_inventory_gains set state=p_decision,approved_value=p_value,evidence=proof,decided_by=m.id,decided_at=clock_timestamp() where id=x.id;return p_decision;end $$;

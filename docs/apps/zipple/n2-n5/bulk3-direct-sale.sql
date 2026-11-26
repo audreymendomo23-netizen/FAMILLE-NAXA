@@ -8,7 +8,7 @@ create table public.zp_direct_sale_allocations(
  receipt_id uuid not null,item_id uuid not null,lot_id uuid not null,org_id uuid not null,site_id uuid not null,qty_milli bigint not null check(qty_milli>0),cost_xaf bigint not null check(cost_xaf>=0),
  primary key(receipt_id,item_id,lot_id),foreign key(receipt_id,item_id) references public.zp_sale_costs(receipt_id,item_id),foreign key(lot_id,org_id,site_id) references public.zp_ingredient_lots(id,org_id,site_id),foreign key(receipt_id,org_id,site_id) references public.zp_cash_receipts(id,org_id,site_id));
 create function public.zp_direct_free(p_ingredient uuid) returns numeric language sql stable security invoker set search_path=pg_catalog,public as $$
- select coalesce((select sum(remaining_milli) from public.zp_ingredient_lots where ingredient_id=p_ingredient and (expires_on is null or expires_on>=(now() at time zone 'Africa/Douala')::date)),0)-coalesce((select sum(l.qty::numeric*r.qty_milli) from public.zp_direct_sale_rules r join public.zp_order_lines l on l.item_id=r.item_id join public.zp_orders o on o.id=l.order_id where r.ingredient_id=p_ingredient and o.status<>'cancelled' and not exists(select 1 from public.zp_cash_receipts x where x.order_id=o.id)),0);
+ select coalesce((select sum(remaining_milli) from public.zp_ingredient_lots where ingredient_id=p_ingredient and (expires_on is null or expires_on>=(now() at time zone 'Africa/Douala')::date) and (usable_until is null or usable_until>now())),0)-coalesce((select sum(l.qty::numeric*r.qty_milli) from public.zp_direct_sale_rules r join public.zp_order_lines l on l.item_id=r.item_id join public.zp_orders o on o.id=l.order_id where r.ingredient_id=p_ingredient and o.status<>'cancelled' and not exists(select 1 from public.zp_cash_receipts x where x.order_id=o.id)),0);
 $$;
 create function public.zp_direct_capacity(p_item uuid) returns int language sql stable security invoker set search_path=pg_catalog,public as $$
  select coalesce((select least(2147483647,greatest(0,floor(public.zp_direct_free(r.ingredient_id)/r.qty_milli)))::int from public.zp_direct_sale_rules r where r.item_id=p_item),2147483647);
@@ -34,8 +34,8 @@ declare g uuid;begin
  if g is not null and public.zp_direct_free(g)<0 then raise exception 'DIRECT_STOCK_SHORTAGE';end if;return new;end $$;
 create trigger zp_direct_reservation_guard after insert on public.zp_order_lines for each row execute function public.zp_direct_reservation_guard();
 create function public.zp_direct_lot_guard() returns trigger language plpgsql security invoker set search_path=pg_catalog,public as $$
-begin if (new.remaining_milli<old.remaining_milli or new.expires_on is distinct from old.expires_on) and exists(select 1 from public.zp_direct_sale_rules where ingredient_id=new.ingredient_id) and public.zp_direct_free(new.ingredient_id)<0 then raise exception 'DIRECT_STOCK_RESERVED';end if;return new;end $$;
-create trigger zp_direct_lot_guard after update of remaining_milli,expires_on on public.zp_ingredient_lots for each row execute function public.zp_direct_lot_guard();
+begin if (new.remaining_milli<old.remaining_milli or new.expires_on is distinct from old.expires_on or new.usable_until is distinct from old.usable_until) and exists(select 1 from public.zp_direct_sale_rules where ingredient_id=new.ingredient_id) and public.zp_direct_free(new.ingredient_id)<0 then raise exception 'DIRECT_STOCK_RESERVED';end if;return new;end $$;
+create trigger zp_direct_lot_guard after update of remaining_milli,expires_on,usable_until on public.zp_ingredient_lots for each row execute function public.zp_direct_lot_guard();
 create or replace function public.zp_component_capacity(p_item uuid,p_channel text,p_qty int) returns int language sql stable security invoker set search_path=pg_catalog,public as $$
  select case when i.kind<>'formula' and public.zp_item_open(i.id,p_channel) then least(i.available_qty,coalesce(i.sale_limit,i.available_qty),public.zp_direct_capacity(i.id))/p_qty else 0 end from public.zp_menu_items i where i.id=p_item
 $$;
@@ -52,7 +52,7 @@ declare l record;b record;raw record;lot record;raw_need bigint;raw_take bigint;
  select * into raw from public.zp_direct_sale_rules where item_id=l.item_id and org_id=new.org_id and site_id=new.site_id;
  if found then
   raw_need:=raw.qty_milli*l.qty;total:=0;
-  for lot in select * from public.zp_ingredient_lots where ingredient_id=raw.ingredient_id and org_id=new.org_id and site_id=new.site_id and remaining_milli>0 and (expires_on is null or expires_on>=(now() at time zone 'Africa/Douala')::date) order by expires_on nulls last,received_at,id for update loop
+  for lot in select * from public.zp_ingredient_lots where ingredient_id=raw.ingredient_id and org_id=new.org_id and site_id=new.site_id and remaining_milli>0 and (expires_on is null or expires_on>=(now() at time zone 'Africa/Douala')::date) and (usable_until is null or usable_until>now()) order by least(usable_until,(expires_on+1)::timestamp at time zone 'Africa/Douala') nulls last,received_at,id for update loop
    exit when raw_need=0;raw_take:=least(raw_need,lot.remaining_milli);
    cost:=case when raw_take=lot.remaining_milli then lot.remaining_cost else floor(lot.remaining_cost::numeric*raw_take/lot.remaining_milli)::bigint end;
    update public.zp_ingredient_lots set remaining_milli=remaining_milli-raw_take,remaining_cost=remaining_cost-cost where id=lot.id;
