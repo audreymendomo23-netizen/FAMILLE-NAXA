@@ -413,19 +413,19 @@ async function logout(body: Record<string, unknown>, token: string) {
   const installationId = String((body.device as Record<string, unknown> | undefined)?.installation_id ?? "");
   const sessionId = jwtClaim(token, "session_id");
   if (account && installationId && sessionId) {
-    await rest(
-      "ns_devices?account_id=eq." + encodeURIComponent(String(account.id)) +
+    const revoked = await rest(
+      "ns_devices?select=id&account_id=eq." + encodeURIComponent(String(account.id)) +
         "&installation_id=eq." + encodeURIComponent(installationId) +
         "&session_id=eq." + encodeURIComponent(sessionId),
       {
         method: "PATCH",
-        headers: serviceHeaders({ Prefer: "return=minimal" }),
+        headers: serviceHeaders({ Prefer: "return=representation" }),
         body: JSON.stringify({ revoked_at: new Date().toISOString(), remember_device: false }),
       },
-    );
+    ) as Record<string, unknown>[];
     const member = await activeMember(String(account.id));
-    if (member) {
-      await auditAction(String(member.org_id), String(user.data.id), String(member.id), "session.logout", "device", installationId, "Déconnexion de l'appareil");
+    if (member && revoked?.[0]?.id) {
+      await auditAction(String(member.org_id), String(user.data.id), String(member.id), "session.logout", "device", String(revoked[0].id), "Déconnexion de l'appareil");
     }
   }
   const result = await authCall("logout?scope=local", { method: "POST" }, token);
@@ -797,9 +797,16 @@ async function acceptLegalDocument(body: Record<string, unknown>, token: string)
       accepted_at: new Date().toISOString(),
     }),
   });
+  const acceptances = await rest("ns_legal_acceptances?select=id&org_id=eq." + encodeURIComponent(String(actor.member.org_id)) +
+    "&member_id=eq." + encodeURIComponent(String(actor.member.id)) +
+    "&document_type=eq." + encodeURIComponent(documentType) +
+    "&document_version=eq." + encodeURIComponent(documentVersion) + "&limit=1",
+    { headers: serviceHeaders() }) as Record<string, unknown>[];
+  const acceptance = acceptances?.[0];
+  if (!acceptance?.id) throw new Error("LEGAL_ACCEPTANCE_NOT_FOUND");
   await auditAction(
     String(actor.member.org_id), actor.authUserId, String(actor.member.id),
-    "legal.document_accepted", "legal_document", documentType + ":" + documentVersion,
+    "legal.document_accepted", "legal_document", String(acceptance.id),
     "Acceptation du document légal " + documentType + " (" + locale + ")",
   );
   return { status: 200, body: { saved: true, document_type: documentType, document_version: documentVersion } };
@@ -1113,7 +1120,7 @@ async function revokeDevice(body: Record<string, unknown>, token: string) {
     body: JSON.stringify({ revoked_at: new Date().toISOString(), remember_device: false }),
   }) as Record<string, unknown>[];
   if (!revoked?.length) return { status: 404, body: { message: "Appareil introuvable ou déjà révoqué." } };
-  await auditAction(String(actor.member.org_id), actor.authUserId, String(actor.member.id), "device.revoked", "device", targetAccountId, "Révocation d'un appareil");
+  await auditAction(String(actor.member.org_id), actor.authUserId, String(actor.member.id), "device.revoked", "device", String(revoked[0].id), "Révocation d'un appareil");
   return { status: 200, body: { revoked: true } };
 }
 
