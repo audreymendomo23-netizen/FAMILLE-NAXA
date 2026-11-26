@@ -10,7 +10,7 @@ declare m public.zp_members;v public.zp_menu_items;c record;begin m:=public.zp_e
  select * into v from public.zp_menu_items where id=p_formula and org_id=m.org_id and site_id=p_site for update;
  if v.id is null or v.kind<>'formula' or v.available_qty<>0 or exists(select 1 from public.zp_order_lines where item_id=v.id) or exists(select 1 from public.zp_recipe_components where item_id=v.id) or exists(select 1 from public.zp_formula_components where component_id=v.id) then raise exception 'FORMULA_REQUIRES_EMPTY_ITEM';end if;
  if exists(select 1 from public.zp_formula_components where formula_id=v.id) then raise exception 'FORMULA_VERSION_REQUIRED';end if;
- if jsonb_typeof(p_components) is distinct from 'array' or jsonb_array_length(p_components) not between 2 and 20 then raise exception 'INVALID_COMPONENTS';end if;
+ if jsonb_typeof(p_components) is distinct from 'array' or jsonb_array_length(p_components) not between 1 and 20 then raise exception 'INVALID_COMPONENTS';end if;
  for c in select * from jsonb_to_recordset(p_components) as x(component_id uuid,qty int) loop
  if c.component_id is null or c.qty is null or c.qty not between 1 and 100 or not exists(select 1 from public.zp_menu_items where id=c.component_id and org_id=m.org_id and site_id=p_site and kind<>'formula') then raise exception 'INVALID_COMPONENTS';end if;
  insert into public.zp_formula_components values(m.org_id,p_site,v.id,c.component_id,c.qty);
