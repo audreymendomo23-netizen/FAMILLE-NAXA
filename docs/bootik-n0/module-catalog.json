@@ -1,0 +1,44 @@
+{
+  "retailer": [
+    "boutique",
+    "superette",
+    "poissonnerie",
+    "boulangerie",
+    "shopping",
+    "alimentation",
+    "cave",
+    "quincaillerie",
+    "parfumerie",
+    "boucherie",
+    "ferme",
+    "depot_gaz",
+    "supermarche",
+    "brocante"
+  ],
+  "distributor": [
+    "boissons_brasseries",
+    "gaz_energie",
+    "alimentaire_fmcg",
+    "frais_surgeles",
+    "hygiene_entretien",
+    "beaute_soins",
+    "importateur_marques",
+    "agro_intrants"
+  ],
+  "modules": [
+    "dashboard",
+    "catalog",
+    "stock",
+    "pos",
+    "purchases",
+    "crm",
+    "finance",
+    "staff",
+    "b2b",
+    "delivery",
+    "ai",
+    "security",
+    "support",
+    "billing"
+  ]
+}
