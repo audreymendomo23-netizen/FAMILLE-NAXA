@@ -1,12 +1,12 @@
 name: Famille NAXA — validation groupée 0.1/0.2
 
 concurrency:
-  group: famille-naxa-main-validation
+  group: famille-naxa-validation-${{ github.ref }}
   cancel-in-progress: true
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'work/naxa-security-completion-20261128']
     paths:
       - "supabase/drafts/**"
       - "supabase/tests/**"

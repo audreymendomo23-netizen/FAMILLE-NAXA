@@ -10,9 +10,12 @@ import androidx.compose.ui.unit.dp
  if(id in listOf("B1.17","B1.18")){
  var plan by remember(id){mutableStateOf("Essentiel")}
  var annual by remember(id){mutableStateOf(false)}
+ var siteCount by remember(id){mutableStateOf("1")}
  listOf("Essentiel","Business","Professional").forEach{p->FilterChip(selected=p==plan,onClick={plan=p},label={Text(p)})}
  Row{Checkbox(annual,{annual=it});Text("Annuel")}
+ OutlinedTextField(siteCount,{siteCount=it.filter{c->c.isDigit()}.take(9)},label={Text("Nombre de sites envisagés")},modifier=Modifier.fillMaxWidth())
  Text("${SecurityDomain.quote(plan,annual)} FCFA")
+ Text(if(SecurityDomain.siteEligibility(plan,siteCount.toIntOrNull()?:0))"Éligible sous réserve des quotas et de la validation serveur" else "Nombre de sites incompatible")
  }else if(incident||work){
  var subject by remember(id){mutableStateOf("")}
  var option by remember(id){mutableStateOf(if(incident)"P2" else "preventive")}

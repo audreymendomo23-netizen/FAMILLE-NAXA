@@ -1,7 +1,7 @@
 name: NAXA SECURITY — business contracts B1–B6
 on:
   push:
-    branches: [main]
+    branches: [main, 'work/naxa-security-completion-20261128']
     paths:
       - 'apps/web/naxa-security/**'
       - 'apps/android/naxa-security/**'

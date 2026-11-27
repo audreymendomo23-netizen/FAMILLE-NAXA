@@ -1,7 +1,7 @@
 name: NAXA SECURITY — Chromium replay isolated
 on:
   push:
-    branches: [main]
+    branches: [main, 'work/naxa-security-completion-20261128']
     paths:
       - 'apps/web/naxa-security/**'
       - 'docs/naxa-security/contracts/**'
