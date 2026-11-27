@@ -1,4 +1,4 @@
-name: WideMeet — N0–N3 isolated gate
+name: WideMeet — N0–N4 isolated gate
 on:
   push:
     branches: [work/widemeet-n0-20261126]
@@ -8,6 +8,7 @@ on:
       - 'packages/widemeet-domain/**'
       - 'packages/billing-core/**'
       - 'settings.gradle.kts'
+      - 'scripts/widemeet/**'
       - 'supabase/drafts/widemeet_*.sql'
       - 'supabase/tests/drafts/widemeet_*.sql'
       - 'supabase/functions/widemeet-auth/**'
@@ -16,11 +17,12 @@ on:
   pull_request:
     branches: [test/widemeet-qualification-20261126]
     types: [opened, synchronize, reopened]
+    paths-ignore: ['docs/**']
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: widemeet-gate-${{ github.ref }}
+  group: widemeet-gate-${{ github.event.pull_request.head.sha || github.sha }}-${{ github.event_name }}
   cancel-in-progress: false
 jobs:
   contracts:
