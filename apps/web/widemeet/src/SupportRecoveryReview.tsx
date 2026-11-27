@@ -1,0 +1,15 @@
+import React,{useEffect,useRef,useState}from"react";
+import{identityAction}from"./session.mjs";
+export function SupportRecoveryReview({base,session,locale}){
+ const tr=(fr,en)=>locale==="en"?en:fr;
+ const [items,I]=useState([]),[selected,S]=useState(""),[ref,F]=useState(""),[decision,D]=useState(""),[busy,B]=useState(false),[error,E]=useState(false);
+ const alive=useRef(false),inflight=useRef(false);
+ const req=(a,data={})=>identityAction(base,session,"support-recovery-"+a,data);
+ async function work(fn){if(inflight.current)return;inflight.current=true;B(true);E(false);try{await fn()}catch{if(alive.current){I([]);S("");F("");D("");E(true)}}finally{inflight.current=false;if(alive.current)B(false)}}
+ async function refresh(){const v=await req("queue");if(alive.current)I(v.items)}
+ useEffect(()=>{alive.current=true;void work(refresh);return()=>{alive.current=false}},[]);
+ const valid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(ref)&&["escalate","reject"].includes(decision);
+ return <section className="card"><h3>{tr("Examen supervisé","Supervised review")}</h3><p>{tr("Examen administratif uniquement. Une référence de dossier vérifié hors application ne constitue pas une preuve d’identité ni une autorisation de réinitialisation. Ne saisissez aucun mot de passe ou document personnel.","Administrative review only. An externally reviewed case reference is not identity proof or reset authority. Never enter passwords or personal documents.")}</p><button disabled={busy} onClick={()=>work(refresh)}>{tr("Actualiser les dossiers","Refresh cases")}</button>{error&&<p role="alert">{tr("Accès ou action non confirmé.","Access or action unconfirmed.")}</p>}
+ {items.map(x=><article key={x.id}><p>{x.id} · {new Date(x.requested_at).toLocaleString(locale)} · {tr("Escalades","Escalations")}: {x.escalations} · {tr("Objections","Objections")}: {x.objections}</p>{x.reviewed?<p>{tr("Examen enregistré","Review recorded")}</p>:<button disabled={busy} onClick={()=>{S(x.id);F("");D("")}}>{tr("Examiner","Review")}</button>}</article>)}
+ {selected&&items.some(x=>x.id===selected&&!x.reviewed)&&<form onSubmit={e=>{e.preventDefault();if(valid&&confirm(tr("Confirmer cet examen sans réinitialiser le compte ?","Record this review without resetting the account?")))void work(async()=>{await req("review",{request_id:selected,evidence_ref:ref,decision});S("");F("");D("");await refresh()})}}><label>{tr("Référence de dossier (UUID)","Case reference (UUID)")}<input value={ref} maxLength={36} disabled={busy} onChange={e=>F(e.target.value)}/></label><label>{tr("Décision d’examen","Review decision")}<select value={decision} disabled={busy} onChange={e=>D(e.target.value)}><option value="">{tr("Choisir","Choose")}</option><option value="escalate">{tr("Transmettre au niveau supérieur","Escalate")}</option><option value="reject">{tr("Émettre une objection","Record objection")}</option></select></label><button disabled={busy||!valid}>{tr("Enregistrer l’examen","Record review")}</button></form>}</section>
+}
