@@ -37,14 +37,27 @@ export function applyRoom(room,a,c,now){
  const needHost=()=>{if(!host)fail("forbidden")};
  const target=()=>{const t=n.participants.find(x=>x.memberId===c.target&&!x.excluded);if(!t||t.memberId===n.hostId)fail("invalid_target");return t};
  switch(c.action){
- case "respond":if(!["scheduled","open"].includes(n.status)||!["accepted","declined","maybe"].includes(c.value)||host||n.status==="open"&&(now>=n.endMs||n.admissionLocked===true&&self.response!=="accepted"&&c.value==="accepted"))fail("invalid_response");self.response=c.value;if(c.value==="accepted"&&!self.consent||c.value!=="accepted")n.recording="off";break;
+ case "respond":if(!["scheduled","open"].includes(n.status)||!["accepted","declined","maybe"].includes(c.value)||host||n.status==="open"&&(now>=n.endMs||n.admissionLocked===true&&self.response!=="accepted"&&c.value==="accepted"))fail("invalid_response");self.response=c.value;if(c.value!=="accepted")delete self.lobbyStatus;if(c.value==="accepted"&&!self.consent||c.value!=="accepted")n.recording="off";break;
  case "reschedule":{
  needHost();if(n.status!=="scheduled")fail("invalid_state");
  const v=c.value;
  if(!v||typeof v.title!=="string"||!v.title.trim()||v.title.length>120||typeof v.description!=="string"||v.description.length>2000||!Number.isSafeInteger(v.scheduledMs)||v.scheduledMs<now||!Number.isInteger(v.durationMinutes)||v.durationMinutes<5||v.durationMinutes>480||v.scheduledMs+v.durationMinutes*60000>Math.min(n.hardEndMs,a.entitlementEndMs))fail("invalid_room");
  n.title=v.title.trim();n.description=v.description.trim();n.scheduledMs=v.scheduledMs;n.durationMinutes=v.durationMinutes;
- for(const x of n.participants)if(x.memberId!==n.hostId&&!x.excluded){x.response="pending";x.consent=false}
+ for(const x of n.participants)if(x.memberId!==n.hostId&&!x.excluded){x.response="pending";x.consent=false;delete x.lobbyStatus}
  break;
+ }
+ case "lobby_config":{
+ needHost();if(n.status!=="scheduled"||typeof c.value!=="boolean")fail("invalid_state");
+ n.lobbyRequired=c.value;for(const x of n.participants)if(x.memberId!==n.hostId)delete x.lobbyStatus;break;
+ }
+ case "lobby_request":{
+ live(n,now);if(n.status!=="open"||n.lobbyRequired!==true||host||self.response!=="accepted"||n.admissionLocked===true||self.lobbyStatus==="admitted")fail("forbidden");
+ self.lobbyStatus="waiting";break;
+ }
+ case "lobby_admit":case "lobby_reject":{
+ needHost();live(n,now);const t=target();
+ if(n.status!=="open"||n.lobbyRequired!==true||t.response!=="accepted"||t.lobbyStatus!=="waiting"||c.action==="lobby_admit"&&n.admissionLocked===true)fail("invalid_state");
+ t.lobbyStatus=c.action==="lobby_admit"?"admitted":"rejected";t.consent=false;n.recording="off";break;
  }
  case "invite_member":{
  needHost();if(!["scheduled","open"].includes(n.status)||n.status==="open"&&now>=n.endMs||!id(c.target)||n.participants.some(x=>x.memberId===c.target)||n.participants.length>=Math.min(n.capacity??50,100,a.capacity??(a.plan==="access"?20:50)))fail("invalid_target");
@@ -62,7 +75,7 @@ export function applyRoom(room,a,c,now){
  case "resume":needHost();live(n,now);if(n.status!=="paused")fail("invalid_state");n.status="open";break;
  case "end":needHost();if(!["scheduled","open","paused"].includes(n.status))fail("invalid_state");n.status="ended";n.recording="off";break;
  default:
- live(n,now);if(n.status!=="open"||self.response!=="accepted")fail("room_unavailable");
+ live(n,now);if(n.status!=="open"||self.response!=="accepted"||n.lobbyRequired===true&&!host&&self.lobbyStatus!=="admitted")fail("room_unavailable");
  switch(c.action){
  case "chat":if(!self.chat||typeof c.value!=="string"||!c.value.trim()||c.value.length>2000)fail("invalid_chat");if(n.events.filter(e=>e.actor===member&&["chat","private_chat"].includes(e.action)&&e.at>now-10000).length>=5)fail("rate_limit");break;
  case "private_chat":{
@@ -101,7 +114,7 @@ export function applyRoom(room,a,c,now){
  return {room:n,replayed:false};
 }
 export function mediaPermission(room,a,now){
- try{live(room,now);if(!["access","premium"].includes(a.plan)||!Number.isSafeInteger(a.entitlementEndMs)||now>=a.entitlementEndMs)return null;const p=participant(room,a);if(room.status!=="open"||p.response!=="accepted")return null;return {room:"wm-"+room.id,memberId:p.memberId,canSubscribe:true,canPublish:true,microphone:p.mic===true,screen:p.screen===true,canRecord:false,canAdmin:false,expiresMs:Math.min(room.endMs,a.entitlementEndMs,now+90000)};}catch{return null;}
+ try{live(room,now);if(!["access","premium"].includes(a.plan)||!Number.isSafeInteger(a.entitlementEndMs)||now>=a.entitlementEndMs)return null;const p=participant(room,a);if(room.status!=="open"||p.response!=="accepted"||room.lobbyRequired===true&&p.memberId!==room.hostId&&p.lobbyStatus!=="admitted")return null;return {room:"wm-"+room.id,memberId:p.memberId,canSubscribe:true,canPublish:true,microphone:p.mic===true,screen:p.screen===true,canRecord:false,canAdmin:false,expiresMs:Math.min(room.endMs,a.entitlementEndMs,now+90000)};}catch{return null;}
 }
 
 export function pollSummary(p,memberId){
