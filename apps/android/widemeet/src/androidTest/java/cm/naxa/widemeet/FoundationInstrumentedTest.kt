@@ -42,6 +42,16 @@ class FoundationInstrumentedTest {
   rule.onNodeWithTag("wm-signin-title").assertTextEquals(if(previousLanguage)"Connexion" else "Sign in").assertIsDisplayed()
   rule.onNodeWithTag("wm-signin-submit").assertIsNotEnabled()
  }
+ @Test fun nativeFaqNavigation(){
+  rule.onNodeWithTag("wm-menu").performClick()
+  rule.onNodeWithTag("wm-menu-item-10").performScrollTo().performClick()
+  val context=ApplicationProvider.getApplicationContext<Context>()
+  val english=context.getSharedPreferences("widemeet.appearance.v1",Context.MODE_PRIVATE).getBoolean("english",false)
+  val question=if(english)"How do I secure my account?" else "Comment protéger mon compte ?"
+  rule.onNodeWithText(question).performScrollTo().performClick()
+  rule.onNodeWithText(if(english)"Open this area" else "Ouvrir cet espace").performScrollTo().performClick()
+  rule.onNodeWithTag("wm-signin-title").assertExists()
+ }
  @Test fun keystoreRememberMeRoundTrip(){
   val context=ApplicationProvider.getApplicationContext<Context>()
   val vault=SessionVault(context)

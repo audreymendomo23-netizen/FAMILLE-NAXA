@@ -461,6 +461,27 @@ try{
  await hp.getByRole("button",{name:"Supprimer la photo",exact:true}).click();
  await photoPreview.waitFor({state:"detached",timeout:15000});
  pass("actual Web profile photo selection, re-encoding, private preview and removal");
+ // All new meeting centers must render real authorized data, not placeholder navigation.
+ await hp.getByRole("navigation").getByRole("button",{name:"Chat",exact:true}).click();
+ const search=hp.getByLabel("Rechercher une réunion",{exact:true});
+ await search.fill("Replay browser room");
+ await hp.getByRole("button",{name:/Replay browser room/}).click();
+ await hp.getByRole("heading",{name:"Replay browser room",exact:true}).waitFor();
+ await hp.getByText(/Bonjour réel/).waitFor();
+ async function menuPage(label){
+  await hp.getByRole("button",{name:"Options",exact:true}).click();
+  await hp.getByRole("button",{name:label+" ›",exact:true}).click();
+ }
+ for(const label of ["Réunions simultanées","Votes et enquêtes","Statistiques"]){
+  await menuPage(label);
+  await hp.getByRole("heading",{name:label,exact:true}).first().waitFor();
+  await hp.getByLabel("Rechercher une réunion",{exact:true}).fill("Replay browser room");
+  await hp.getByRole("button",{name:/Replay browser room/}).waitFor();
+ }
+ await hp.getByRole("navigation").getByRole("button",{name:"Accueil",exact:true}).click();
+ await hp.getByRole("button",{name:"Mes rapports",exact:true}).click();
+ await hp.getByRole("heading",{name:"Archives et comptes rendus",exact:true}).waitFor();
+ pass("real browser workspace chat, concurrent rooms, polls, visible statistics and reports routes backed by GoTrue and Edge");
  // Exercise the external invitation deep link through real GoTrue, Edge and Chromium.
  const deepGuest=await fixture(other,"staff");
  const deepHost=await login(h),deepRoomId=randomUUID(),deepToken=randomBytes(32).toString("hex"),deepInviteId=randomUUID();

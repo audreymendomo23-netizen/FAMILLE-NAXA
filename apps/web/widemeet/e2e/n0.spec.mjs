@@ -38,3 +38,14 @@ test("no fake authentication or billing",async({page})=>{
  await expect(page.getByRole("button",{name:"Se connecter",exact:true})).toBeDisabled();
  await page.getByRole("button",{name:"Options",exact:true}).click();await expect(page.getByRole("button",{name:"Abonnements ›",exact:true})).toHaveCount(0);
 });
+
+test("public bilingual help and safe links to implemented features",async({page})=>{
+ await page.goto("/");
+ await page.getByRole("button",{name:"Options",exact:true}).click();
+ await page.getByRole("button",{name:"FAQ ›",exact:true}).click();
+ await page.getByLabel("Rechercher dans l’aide").fill("compte");
+ await page.getByText("Comment protéger mon compte ?",{exact:true}).click();
+ await expect(page.getByText(/Conservez votre clé/)).toBeVisible();
+ await page.getByRole("button",{name:"Ouvrir cet espace",exact:true}).click();
+ await expect(page.getByRole("heading",{name:"Connexion",exact:true})).toBeVisible();
+});

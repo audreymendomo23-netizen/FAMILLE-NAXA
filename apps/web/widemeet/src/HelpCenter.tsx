@@ -8,7 +8,7 @@ export const helpTopics=[
 export function HelpCenter({mode,locale,onOpen,onTab,authenticated,onSignIn}){
  const tr=(fr,en)=>locale==="en"?en:fr;
  const [query,Q]=useState("");
- const go=(key)=>{if(!authenticated){onSignIn();return}if(["agenda","archives","profile"].includes(key))onTab(key);else onOpen(key)};
+ const go=(key)=>{if(!authenticated&&key!=="faq"){onSignIn();return}if(["agenda","archives","profile"].includes(key))onTab(key);else onOpen(key)};
  const link=(key,fr,en)=><button onClick={()=>go(key)}>{tr(fr,en)}</button>;
  if(mode==="faq")return <section className="card"><label>{tr("Rechercher dans l’aide","Search help")}<input value={query} onChange={e=>Q(e.target.value)}/></label>{helpTopics.filter(t=>t.slice(0,4).some(v=>v.toLowerCase().includes(query.trim().toLowerCase()))).map(t=><details key={t[0]}><summary>{tr(t[0],t[1])}</summary><p>{tr(t[2],t[3])}</p>{link(t[4],"Ouvrir cet espace","Open this area")}</details>)}</section>;
  const info={
