@@ -24,8 +24,10 @@ export function mergeB4Data(prior:Record<string,unknown>|undefined, payload:Reco
  if(typeof result.paid_xaf==="number")next.paid_xaf=result.paid_xaf;
  return next;
 }
-export function staleChargeReceipt(action:unknown,prior:Record<string,unknown>|undefined,recordedAt:unknown):boolean{
- if(typeof action!=="string"||!action.startsWith("recurring_charge.")||typeof recordedAt!=="string"||typeof prior?.server_recorded_at!=="string")return false;
+export function staleChargeReceipt(action:unknown,prior:Record<string,unknown>|undefined,recordedAt:unknown,cursor?:unknown):boolean{
+ if(typeof action!=="string"||!action.startsWith("recurring_charge."))return false;
+ if(typeof cursor==="number"&&Number.isSafeInteger(cursor)&&cursor>0&&typeof prior?.server_sync_cursor==="number"&&Number.isSafeInteger(prior.server_sync_cursor))return cursor<prior.server_sync_cursor;
+ if(typeof recordedAt!=="string"||typeof prior?.server_recorded_at!=="string")return false;
  const previous=Date.parse(prior.server_recorded_at),incoming=Date.parse(recordedAt);
  return Number.isFinite(previous)&&Number.isFinite(incoming)&&incoming<previous;
 }
@@ -39,3 +41,6 @@ export function objectivePeriod(period:string,now=new Date()){
  const end=new Date(endExclusive.getTime()-86400000);
  return {period_start:start.toISOString().slice(0,10),period_end:end.toISOString().slice(0,10),due_at:new Date(endExclusive.getTime()-3600001).toISOString()};
 }
+
+// The atomic RPC receipt includes a commit-ordered cursor, even when it omits recorded_at.
+export function chargeReceiptCursor(action:unknown,cursor:unknown):Record<string,unknown>{return typeof action==="string"&&action.startsWith("recurring_charge.")&&typeof cursor==="number"&&Number.isSafeInteger(cursor)&&cursor>0?{server_sync_cursor:cursor}:{};}

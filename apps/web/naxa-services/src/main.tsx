@@ -3,7 +3,7 @@ import { SubscriptionPage } from "./erp/subscription";
 import { BillingPanel } from "./erp/billing-panel";
 import { B4PlanningPanel } from "./erp/b4-planning-panel";
 import { B4TransferPanel,B4LoyaltyPanel } from "./erp/b4-interactions-panel";
-import { mergeB4Data, staleChargeReceipt } from "./erp/b4-planning";
+import { mergeB4Data, staleChargeReceipt, chargeReceiptCursor } from "./erp/b4-planning";
 import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, listAppEvents, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
 import { normalizeInventoryItemDraft } from "./erp/inventory";
 import { financialRows,downloadFinancialXlsx,printFinancialReport } from "./erp/performance-export";
@@ -296,7 +296,7 @@ function App() {
           ? serverRecord.revision : null;
         const existingRevision = typeof existingEntry?.revision === "number" ? existingEntry.revision : 0;
         if (incomingRevision !== null && incomingRevision < existingRevision) continue;
-        if(item.state==="acknowledged"&&staleChargeReceipt(command.action_code,existingEntry?.data,storedReceipt.recorded_at))continue;
+        if(item.state==="acknowledged"&&staleChargeReceipt(command.action_code,existingEntry?.data,storedReceipt.recorded_at,storedReceipt.sync_cursor))continue;
         const receiptIsNewer = incomingRevision !== null && incomingRevision >= existingRevision;
         const record:Entry={
           ...existingEntry,
@@ -305,7 +305,7 @@ function App() {
             ? command.aggregate_type : existingEntry?.recordType,
           aggregateType: typeof command.aggregate_type === "string" ? command.aggregate_type : existingEntry?.aggregateType,
           actionCode: typeof command.action_code === "string" ? command.action_code : existingEntry?.actionCode,
-          data: { ...mergeB4Data(existingEntry?.data,payload,serverRecord,command.action_code), server_result: serverRecord, server_recorded_at: typeof storedReceipt.recorded_at === "string" ? storedReceipt.recorded_at : typeof payload.server_recorded_at === "string" ? payload.server_recorded_at : undefined },
+          data: { ...mergeB4Data(existingEntry?.data,payload,serverRecord,command.action_code), ...chargeReceiptCursor(command.action_code,storedReceipt.sync_cursor), server_result: serverRecord, server_recorded_at: typeof storedReceipt.recorded_at === "string" ? storedReceipt.recorded_at : typeof payload.server_recorded_at === "string" ? payload.server_recorded_at : existingEntry?.data?.server_recorded_at },
           status: receiptIsNewer && typeof serverRecord.status === "string" ? serverRecord.status
             : item.state!=="acknowledged"&&existingRevision>0 ? existingEntry?.status
             : typeof payload.to_status === "string" ? payload.to_status
@@ -686,12 +686,12 @@ function App() {
           const id=typeof command.aggregate_id==="string"?command.aggregate_id:"";
           const serverRecord=receipt.result&&typeof receipt.result==="object"&&!Array.isArray(receipt.result)?receipt.result as Record<string,unknown>:{};
           const eventPayload=command.payload&&typeof command.payload==="object"&&!Array.isArray(command.payload)?command.payload as Record<string,unknown>:{};
-          if(id&&isCurrent())setEntries(prev=>!isCurrent()?prev:({...prev,[moduleId]:(prev[moduleId]??[]).map(x=>x.id===id?{
+          if(id&&isCurrent())setEntries(prev=>!isCurrent()?prev:({...prev,[moduleId]:(prev[moduleId]??[]).map(x=>x.id===id&&!staleChargeReceipt(command.action_code,x.data,receipt.recorded_at,receipt.sync_cursor)?{
             ...x,state:"Confirmé",
             aggregateType:typeof command.aggregate_type==="string"?command.aggregate_type:x.aggregateType,
             actionCode:typeof command.action_code==="string"?command.action_code:x.actionCode,
             siteId:typeof command.site_id==="string"?command.site_id:x.siteId,
-            data:{...mergeB4Data(x.data,eventPayload,serverRecord,command.action_code),server_result:serverRecord,server_recorded_at:typeof receipt.recorded_at==="string"?receipt.recorded_at:x.data?.server_recorded_at},
+            data:{...mergeB4Data(x.data,eventPayload,serverRecord,command.action_code),...chargeReceiptCursor(command.action_code,receipt.sync_cursor),server_result:serverRecord,server_recorded_at:typeof receipt.recorded_at==="string"?receipt.recorded_at:x.data?.server_recorded_at},
             revision:typeof serverRecord.revision==="number"?serverRecord.revision:x.revision,
             status:typeof serverRecord.status==="string"?serverRecord.status:x.status,
           }:x)}));
@@ -757,13 +757,13 @@ function App() {
         const profileValue = metadata.activity ?? metadata.activity_profile;
         const revision=typeof serverRecord.revision==="number"?serverRecord.revision:undefined;
         if(revision!==undefined && prior?.revision!==undefined && revision<prior.revision)continue;
-        if(staleChargeReceipt(change.action_code,prior?.data,change.recorded_at))continue;
+        if(staleChargeReceipt(change.action_code,prior?.data,change.recorded_at,change.cursor))continue;
         const record:Entry={
           id:change.aggregate_id,title,detail,state:"Confirmé · autre appareil",createdAt:new Date(change.recorded_at).toLocaleString("fr-FR"),
           recordType: change.aggregate_type === "work_order" || change.aggregate_type === "repair_order" || change.aggregate_type === "service_order" || change.aggregate_type === "pressing_order" ? change.aggregate_type : undefined,
           aggregateType: change.aggregate_type,
           actionCode: change.action_code,
-          data: { ...mergeB4Data(prior?.data,payload,serverRecord,change.action_code), server_result: serverRecord, server_recorded_at: change.recorded_at },
+          data: { ...mergeB4Data(prior?.data,payload,serverRecord,change.action_code), ...chargeReceiptCursor(change.action_code,change.cursor), server_result: serverRecord, server_recorded_at: change.recorded_at },
           status: typeof serverRecord.status === "string" ? serverRecord.status
             : typeof payload.to_status === "string" ? payload.to_status
             : typeof payload.status === "string" ? payload.status : prior?.status,

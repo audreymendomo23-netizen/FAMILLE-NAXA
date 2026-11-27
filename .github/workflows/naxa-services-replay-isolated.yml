@@ -390,9 +390,9 @@ jobs:
               const records=await success(base+'/rest/v1/ns_customers?select=id&org_id=eq.'+f.org.id+'&display_name=eq.'+encodeURIComponent(customer),undefined,admin,admin,'GET');
               assert.equal(records.length,1);
               pass('real Chromium customer creation, offline queue, accounting receipt and persisted PostgreSQL row');
-              const failures=[];let proofCheckpoint='not started',sectorCheckpoint='not started';
+              const failures=[];let proofCheckpoint='not started',sectorCheckpoint='not started',b4ChargeCheckpoint='not started';
               async function scenario(label,run){
-                try{await run();pass(label);}catch(e){failures.push(label);console.log('FAIL independent browser scenario:',label,e instanceof Error?e.name:'Error');if(label.startsWith('attendance proof'))console.log('Attendance replay last checkpoint:',proofCheckpoint);if(label.startsWith('real sector form'))console.log('Sector replay last checkpoint:',sectorCheckpoint);}
+                try{await run();pass(label);}catch(e){failures.push(label);console.log('FAIL independent browser scenario:',label,e instanceof Error?e.name:'Error');if(label.startsWith('attendance proof'))console.log('Attendance replay last checkpoint:',proofCheckpoint);if(label.startsWith('real sector form'))console.log('Sector replay last checkpoint:',sectorCheckpoint);if(label.startsWith('B4 real browser recurring charge'))console.log('B4 charge checkpoint:',b4ChargeCheckpoint);}
               }
               const nav=async label=>{await page.locator('.side-nav button.nav-item').filter({hasText:label}).click();};
               const apply=async(action,click)=>{
@@ -438,25 +438,26 @@ jobs:
                 await doc.getByText(/réglé 400 · restant 600/).waitFor();
               });
               await scenario('B4 real browser recurring charge and immutable revenue target',async()=>{
-                await nav('Rapports & comptabilité');
+                b4ChargeCheckpoint='open planning panel';await nav('Rapports & comptabilité');
                 const panel=page.getByRole('region',{name:'B4 charges et objectifs'});
                 await panel.getByLabel('B4 charge nom').fill('Loyer B4 Web');
                 await panel.getByLabel('B4 charge catégorie').fill('rent');
                 await panel.getByLabel('B4 charge montant').fill('1000');
                 await panel.getByLabel('B4 charge échéance').fill('2027-01-10');
-                const charge=await apply('recurring_charge.saved',()=>panel.getByRole('button',{name:'Enregistrer la charge B4'}).click());
+                b4ChargeCheckpoint='create charge';const charge=await apply('recurring_charge.saved',()=>panel.getByRole('button',{name:'Enregistrer la charge B4'}).click());
                 const row=panel.locator('[data-b4-charge="'+charge.aggregate_id+'"]');
-                await row.getByLabel('B4 charge règlement').fill('400');
+                b4ChargeCheckpoint='first payment';await row.getByLabel('B4 charge règlement').fill('400');
                 await apply('recurring_charge.payment_recorded',()=>row.getByRole('button',{name:'Déclarer règlement charge B4'}).click());
-                await row.getByText(/Solde de l'échéance : 600 FCFA/).waitFor();
+                b4ChargeCheckpoint='verify first balance';await row.getByText(/Solde de l'échéance : 600 FCFA/).waitFor();
                 await row.getByText(/Montant contractuel : 1000 FCFA/).waitFor();
-                await row.getByLabel('B4 charge règlement').fill('600');
+                b4ChargeCheckpoint='second payment after form unlock';await row.getByLabel('B4 charge règlement').fill('600');
+                assert.equal(await row.getByLabel('B4 charge règlement').inputValue(),'600');
                 await apply('recurring_charge.payment_recorded',()=>row.getByRole('button',{name:'Déclarer règlement charge B4'}).click());
-                const [saved]=await success(base+'/rest/v1/ns_recurring_charges?id=eq.'+charge.aggregate_id+'&select=amount_xaf,next_due_at',undefined,admin,admin,'GET');
+                b4ChargeCheckpoint='verify persisted second payment';const [saved]=await success(base+'/rest/v1/ns_recurring_charges?id=eq.'+charge.aggregate_id+'&select=amount_xaf,next_due_at',undefined,admin,admin,'GET');
                 assert.equal(saved.amount_xaf,1000);assert.equal(new Date(saved.next_due_at).toISOString(),'2027-02-09T23:00:00.000Z');
                 const payRows=await success(base+'/rest/v1/ns_charge_payments?charge_id=eq.'+charge.aggregate_id+'&select=amount_xaf',undefined,admin,admin,'GET');
                 assert.equal(payRows.length,2);assert.equal(payRows.reduce((s,p)=>s+p.amount_xaf,0),1000);
-                await panel.getByLabel('B4 objectif nom').fill('Objectif B4 Web');
+                b4ChargeCheckpoint='create objective';await panel.getByLabel('B4 objectif nom').fill('Objectif B4 Web');
                 await panel.getByLabel('B4 objectif montant').fill('25000');
                 const goal=await apply('business_goal.created',()=>panel.getByRole('button',{name:'Enregistrer objectif B4'}).click());
                 const [baseline]=await success(base+'/rest/v1/ns_management_records?id=eq.'+goal.aggregate_id+'&select=record_type,amount_xaf,counterparty',undefined,admin,admin,'GET');
