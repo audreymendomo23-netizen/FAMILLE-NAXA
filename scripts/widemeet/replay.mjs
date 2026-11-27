@@ -679,10 +679,33 @@ try{
  await sk(browserAgent.access_token,"claim",{ticket_id:browserSupportTicket.id});
  await sk(browserAgent.access_token,"reply",{ticket_id:browserSupportTicket.id,message_id:randomUUID(),body:"Synthetic agent browser answer"});
  await hp.getByText("Synthetic agent browser answer",{exact:true}).waitFor({timeout:20000});
- await hp.getByLabel("Votre message",{exact:true}).fill("Synthetic requester acknowledgement");
- await hp.getByRole("button",{name:"Envoyer",exact:true}).click();
- await hp.getByText("Synthetic requester acknowledgement",{exact:true}).waitFor();
- assert.equal((await sk(browserAgent.access_token,"read",{ticket_id:browserSupportTicket.id})).messages.length,3);
+ const requesterBody="Synthetic requester acknowledgement";
+ await hp.getByLabel("Votre message",{exact:true}).fill(requesterBody);
+ // Observe the actual mutation and its exact id, not merely a matching UI string.
+ const [replyResponse]=await Promise.all([
+  hp.waitForResponse(response=>{
+   if(!response.url().endsWith("/widemeet-auth/identity")||response.request().method()!=="POST")return false;
+   const payload=response.request().postDataJSON();
+   return payload?.action==="support-reply"&&payload?.data?.ticket_id===browserSupportTicket.id&&payload?.data?.body===requesterBody;
+  },{timeout:20000}),
+  hp.getByRole("button",{name:"Envoyer",exact:true}).click()
+ ]);
+ assert.equal(replyResponse.status(),200,"support reply must be acknowledged by Edge");
+ assert.equal((await replyResponse.json()).sent,true,"support reply must be committed");
+ const requesterMessageId=replyResponse.request().postDataJSON().data.message_id;
+ assert.match(requesterMessageId,/^[0-9a-f-]{36}$/i);
+ await hp.locator("article").getByText(requesterBody,{exact:true}).waitFor({timeout:20000});
+ // Read only (never retry the mutation). Retain exact cardinality, identity and author checks.
+ const supportReadDeadline=Date.now()+5000;
+ let agentRead;
+ do{
+  agentRead=await sk(browserAgent.access_token,"read",{ticket_id:browserSupportTicket.id});
+  if(agentRead.messages.some(m=>m.id===requesterMessageId))break;
+  await wait(100);
+ }while(Date.now()<supportReadDeadline);
+ assert.equal(agentRead.id,browserSupportTicket.id);
+ assert.equal(agentRead.messages.length,3,"support reply must persist exactly once");
+ assert.equal(agentRead.messages.filter(m=>m.id===requesterMessageId&&m.body===requesterBody&&m.author_kind==="requester").length,1,"agent must read the exact committed requester reply");
  hp.once("dialog",d=>d.accept());await hp.getByRole("button",{name:"Clôturer",exact:true}).click();
  await hp.getByText("Clôturée",{exact:true}).waitFor();
  pass("real browser support intake, agent claim/reply, automatic refresh, requester message and closure");
