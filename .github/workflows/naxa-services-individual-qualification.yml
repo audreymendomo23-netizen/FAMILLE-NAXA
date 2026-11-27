@@ -1,0 +1,41 @@
+name: NAXA SERVICES — 43 individual qualification criteria
+on:
+  workflow_dispatch:
+  push:
+    branches: [work/naxa-services-completion-20261120]
+    paths:
+      - '.github/workflows/naxa-services-individual-qualification.yml'
+      - '.github/scripts/naxa-services/qualify-one.mjs'
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: ns-individual-qualification-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  criterion:
+    name: ${{ matrix.criterion }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      max-parallel: 43
+      matrix:
+        criterion: [B1-01, B1-02, B1-03, B1-04, B1-05, B1-06, B1-07, B2-01, B2-02, B2-03, B2-04, B2-05, B3-01, B3-02, B3-03, B3-04, B3-05, B3-06, B3-07, B3-08, B4-01, B4-02, B4-03, B4-04, B4-05, B4-06, B4-07, B5-01, B5-02, B5-03, B5-04, B5-05, B5-06, B5-07, B5-08, B5-09, B6-01, B6-02, B6-03, B6-04, B6-05, B6-06, B6-07]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Execute isolated criterion and verify exact campaign evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NS_CRITERION: ${{ matrix.criterion }}
+        run: node .github/scripts/naxa-services/qualify-one.mjs
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: qualification-${{ matrix.criterion }}
+          path: artifacts/individual-qualification/${{ matrix.criterion }}.json
+          if-no-files-found: error
+          retention-days: 14

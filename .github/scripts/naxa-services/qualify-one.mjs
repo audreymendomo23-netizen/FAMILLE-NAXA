@@ -1,0 +1,542 @@
+import {readFile,mkdir,writeFile,appendFile} from "node:fs/promises";
+import {execFileSync,spawnSync} from "node:child_process";
+const baseline="ed6aee82f55cb4c8cbcd7fd4cd3442377a9091cf";
+const matrix=JSON.parse(await readFile("docs/naxa-services/NAXA_SERVICES_GLOBAL_QUALIFICATION_2026-11-27.json","utf8"));
+const jobs={
+  "replay": {
+    "run": 46031027073,
+    "job": 140614552184,
+    "name": "Real GoTrue sessions, Storage and tenant isolation"
+  },
+  "finance": {
+    "run": 46031027081,
+    "job": 140614551803,
+    "name": "NAXA SERVICES payment, commission and fiscal policy tests"
+  },
+  "web": {
+    "run": 46031027081,
+    "job": 140614552220,
+    "name": "NAXA SERVICES Web build"
+  },
+  "android": {
+    "run": 46031027081,
+    "job": 140614552361,
+    "name": "Assemble NAXA SERVICES Android debug APK"
+  },
+  "sql": {
+    "run": 46031027081,
+    "job": 140614552479,
+    "name": "NAXA SERVICES PostgreSQL 17 schema and runtime RLS tests"
+  },
+  "inventory": {
+    "run": 46031027081,
+    "job": 140614552315,
+    "name": "Cross-application offline synchronization contract"
+  },
+  "media": {
+    "run": 46031027081,
+    "job": 140614552639,
+    "name": "NAXA SERVICES media token security contract"
+  },
+  "push": {
+    "run": 46031027081,
+    "job": 140614552323,
+    "name": "NAXA SERVICES remote notifications and FCM contract"
+  },
+  "promo": {
+    "run": 46031027081,
+    "job": 140614552358,
+    "name": "NAXA SERVICES customer referral and promotion contract"
+  },
+  "reboot": {
+    "run": 46031027216,
+    "job": 140614551363,
+    "name": "actual-emulator-reboot"
+  },
+  "pwa": {
+    "run": 46031027216,
+    "job": 140614551854,
+    "name": "hosted-pwa"
+  },
+  "backup": {
+    "run": 46031027093,
+    "job": 140614550244,
+    "name": "PostgreSQL 17 encrypted backup and clean restore"
+  },
+  "build": {
+    "run": 46031027225,
+    "job": 140614550649,
+    "name": "production-web-build"
+  },
+  "edge": {
+    "run": 46031027225,
+    "job": 140614551082,
+    "name": "hosted-edge-preflight"
+  },
+  "match": {
+    "run": 46031027225,
+    "job": 140614765266,
+    "name": "cloudflare-live-match"
+  },
+  "apk": {
+    "run": 46031027429,
+    "job": 140614551425,
+    "name": "hosted-debug"
+  },
+  "signer": {
+    "run": 46031027123,
+    "job": 140614550265,
+    "name": "release-readiness"
+  }
+};
+const evidence={
+  "B1-01": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS real subordinate roles: no organization offline grant",
+        "PASS B4 payroll role site_manager / other site"
+      ]
+    }
+  ],
+  "B1-02": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS two browser accounts: published roster",
+        "PASS Bulk B1 real browser: roster lost response exact retry",
+        "PASS Bulk B1 real browser: leave request, conflict refusal, atomic substitute"
+      ]
+    }
+  ],
+  "B1-03": [
+    {
+      "job": "reboot",
+      "markers": []
+    }
+  ],
+  "B1-04": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS real offline customer creation",
+        "PASS real offline recovery after durable commit",
+        "PASS real offline scope proof B/C"
+      ]
+    }
+  ],
+  "B1-05": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS expired staged attendance rejected",
+        "PASS Bulk B real stage retry immutable UUID/time",
+        "PASS commercial proof review"
+      ]
+    }
+  ],
+  "B1-06": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS expired staged attendance rejected"
+      ]
+    }
+  ],
+  "B1-07": [
+    {
+      "job": "apk",
+      "markers": []
+    }
+  ],
+  "B2-01": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS real browser recurring series, lost acknowledgement retry",
+        "PASS two browser accounts: initial agenda, RSVP"
+      ]
+    }
+  ],
+  "B2-02": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS real media authorization: host/guest bound to one room",
+        "PASS two browser accounts: initial agenda, RSVP, language preference, chat, hand, reaction, moderator restriction"
+      ]
+    }
+  ],
+  "B2-03": [
+    {
+      "job": "media",
+      "markers": []
+    }
+  ],
+  "B2-04": [
+    {
+      "job": "media",
+      "markers": []
+    }
+  ],
+  "B2-05": [
+    {
+      "job": "apk",
+      "markers": []
+    }
+  ],
+  "B3-01": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS two browser accounts: initial agenda, RSVP, language preference, chat, hand, reaction, moderator restriction and recording consent withdrawal; no media capture"
+      ]
+    }
+  ],
+  "B3-02": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS two browser accounts: initial agenda, RSVP"
+      ]
+    }
+  ],
+  "B3-03": [],
+  "B3-04": [],
+  "B3-05": [],
+  "B3-06": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS B3 historical daily briefing: previous day, scope isolation, cleared old report and FR/EN labels"
+      ]
+    }
+  ],
+  "B3-07": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS real scoped partial briefing text and language selection"
+      ]
+    }
+  ],
+  "B3-08": [
+    {
+      "job": "apk",
+      "markers": []
+    }
+  ],
+  "B4-01": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS B4 real Chromium exhaustive profile/mode matrix: 39/39 complete lifecycles",
+        "PASS B4 finance: five document types",
+        "PASS B4 stock transfer:",
+        "PASS B4 loyalty:",
+        "PASS B4 objective:",
+        "PASS B4 charges:",
+        "PASS B4 appointments:"
+      ]
+    }
+  ],
+  "B4-02": [
+    {
+      "job": "finance",
+      "markers": [
+        "# pass 14",
+        "# fail 0"
+      ]
+    },
+    {
+      "job": "replay",
+      "markers": [
+        "PASS B4 payroll role network_manager / source / manage=true permissions verified",
+        "PASS B4 payroll role site_manager / source / manage=true permissions verified",
+        "PASS B4 payroll role workstation_manager / source / manage=false permissions verified",
+        "PASS B4 payroll role receptionist / source / manage=false permissions verified",
+        "PASS B4 payroll role hair_stylist / source / manage=false permissions verified",
+        "PASS B4 payroll role pressing_operator / source / manage=false permissions verified",
+        "PASS B4 payroll role stock_manager / source / manage=false permissions verified",
+        "PASS B4 payroll role accountant / source / manage=false permissions verified",
+        "PASS B4 payroll role site_manager / other site / manage=true permissions verified",
+        "PASS B4 payroll role site_manager / source / manage=false permissions verified"
+      ]
+    }
+  ],
+  "B4-03": [
+    {
+      "job": "finance",
+      "markers": [
+        "# pass 14"
+      ]
+    }
+  ],
+  "B4-04": [
+    {
+      "job": "finance",
+      "markers": [
+        "# pass 14"
+      ]
+    }
+  ],
+  "B4-05": [
+    {
+      "job": "web",
+      "markers": []
+    },
+    {
+      "job": "android",
+      "markers": []
+    },
+    {
+      "job": "replay",
+      "markers": [
+        "PASS B4 peer sync: second device settlement"
+      ]
+    }
+  ],
+  "B4-06": [
+    {
+      "job": "apk",
+      "markers": []
+    }
+  ],
+  "B4-07": [],
+  "B5-01": [
+    {
+      "job": "edge",
+      "markers": []
+    }
+  ],
+  "B5-02": [
+    {
+      "job": "replay",
+      "markers": [
+        "PASS official Auth Admin first promoter bootstrap"
+      ]
+    }
+  ],
+  "B5-03": [
+    {
+      "job": "finance",
+      "markers": []
+    },
+    {
+      "job": "replay",
+      "markers": [
+        "PASS real JWT MTN and Orange intent lifecycle"
+      ]
+    }
+  ],
+  "B5-04": [
+    {
+      "job": "push",
+      "markers": []
+    },
+    {
+      "job": "replay",
+      "markers": [
+        "PASS real notification registration, encryption, inbox, revocation; no FCM send"
+      ]
+    }
+  ],
+  "B5-05": [],
+  "B5-06": [
+    {
+      "job": "backup",
+      "markers": [
+        "PASS: refusal of unapproved target",
+        "Restore verified structurally into database:",
+        "NAXA SERVICES schema, restored permissions and runtime regression drill passed."
+      ]
+    }
+  ],
+  "B5-07": [
+    {
+      "job": "backup",
+      "markers": []
+    }
+  ],
+  "B5-08": [
+    {
+      "job": "build",
+      "markers": []
+    },
+    {
+      "job": "match",
+      "markers": [
+        "All files in the exact candidate match the immutable deployment URL.",
+        "Stable Pages alias matches candidate shell."
+      ]
+    },
+    {
+      "job": "edge",
+      "markers": [
+        "auth: official status=204",
+        "auth: foreign status=204",
+        "accounting: official status=204",
+        "accounting: foreign status=204",
+        "referrals: official status=204",
+        "referrals: foreign status=204",
+        "customer-promotions: official status=204",
+        "customer-promotions: foreign status=204",
+        "notifications: official status=204",
+        "notifications: foreign status=204"
+      ]
+    }
+  ],
+  "B5-09": [
+    {
+      "job": "promo",
+      "markers": []
+    },
+    {
+      "job": "replay",
+      "markers": [
+        "PASS R19-R21: all three actual gateways admit the unlocked promoter"
+      ]
+    }
+  ],
+  "B6-01": [
+    {
+      "job": "inventory",
+      "markers": [
+        "Commercial audit:",
+        "Locale resource parity FR/EN/ff-CM:"
+      ]
+    }
+  ],
+  "B6-02": [],
+  "B6-03": [
+    {
+      "job": "pwa",
+      "markers": [
+        "PASS hosted PWA shell and offline navigation at 320px",
+        "PASS hosted PWA shell and offline navigation at 390px",
+        "PASS hosted PWA shell and offline navigation at 1440px"
+      ]
+    }
+  ],
+  "B6-04": [
+    {
+      "job": "sql",
+      "markers": [
+        "PASS: strict site scope",
+        "PASS: 22 callable SECURITY DEFINER functions reject unbound authenticated identity"
+      ]
+    },
+    {
+      "job": "web",
+      "markers": []
+    },
+    {
+      "job": "android",
+      "markers": []
+    }
+  ],
+  "B6-05": [
+    {
+      "job": "apk",
+      "markers": []
+    }
+  ],
+  "B6-06": [
+    {
+      "job": "signer",
+      "markers": [
+        "Approved signer certificate matches; no release signed."
+      ]
+    }
+  ],
+  "B6-07": []
+};
+const direct={
+  "B4-02": [
+    [
+      "node",
+      "--test",
+      "packages/finance-core/test/finance.test.js"
+    ]
+  ],
+  "B4-03": [
+    [
+      "node",
+      "--test",
+      "--test-name-pattern=commission",
+      "packages/finance-core/test/finance.test.js"
+    ]
+  ],
+  "B4-04": [
+    [
+      "node",
+      "--test",
+      "--test-name-pattern=commission|reversal",
+      "packages/finance-core/test/finance.test.js"
+    ]
+  ],
+  "B5-03": [
+    [
+      "node",
+      "--test",
+      "--test-name-pattern=payment|provider",
+      "packages/finance-core/test/finance.test.js"
+    ]
+  ],
+  "B6-01": [
+    [
+      "node",
+      "scripts/naxa-services/audit-commercial-interactions.mjs"
+    ]
+  ]
+};
+const id=process.env.NS_CRITERION;
+const item=matrix.items.find(x=>x.id===id);
+if(!item||!Object.hasOwn(evidence,id)||matrix.items.length!==43)throw Error("Unknown criterion or incomplete matrix");
+const repo=process.env.GITHUB_REPOSITORY;
+if(!repo||!process.env.GH_TOKEN)throw Error("GitHub context required");
+const result={id,title:item.title,acceptance:item.acceptance,classification:item.status,campaignCommit:baseline,orchestrationCommit:process.env.GITHUB_SHA??null,checks:[],status:"UNVERIFIED"};
+const api=(path)=>execFileSync("gh",["api",path],{encoding:"utf8",maxBuffer:20*1024*1024,timeout:60000});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+async function verify(spec){
+ const source=jobs[spec.job];
+ const run=JSON.parse(api("repos/"+repo+"/actions/runs/"+source.run));
+ if(run.head_sha!==baseline)throw Error("Unexpected campaign SHA");
+ let job;
+ for(let i=0;i<65;i++){
+  job=JSON.parse(api("repos/"+repo+"/actions/jobs/"+source.job));
+  if(job.run_id!==source.run||job.head_sha!==baseline||job.name!==source.name)throw Error("Unexpected job identity");
+  if(job.status==="completed")break;
+  await sleep(10000);
+ }
+ if(job.status!=="completed")return {source:spec.job,jobId:source.job,status:"PENDING",passed:false};
+ if(job.conclusion!=="success")return {source:spec.job,jobId:source.job,status:job.conclusion,passed:false};
+ if(!spec.markers.length)return {source:spec.job,jobId:source.job,status:"SUCCESS",passed:true,markers:[]};
+ // gh api follows the GitHub log download redirect. Only actual uncoloured
+ // timestamped output is accepted, not the echoed workflow command source.
+ const raw=api("repos/"+repo+"/actions/jobs/"+source.job+"/logs");
+ const output=raw.split("\n").filter(line=>!line.includes("\u001b[36;1m")).map(line=>line.replace(/^\d{4}-\d{2}-\d{2}T[^ ]+Z\s*/,"").trim());
+ const markers=spec.markers.map(m=>({marker:m,found:output.some(l=>l.startsWith(m))}));
+ return {source:spec.job,jobId:source.job,status:"SUCCESS",passed:markers.every(m=>m.found),markers};
+}
+try{
+ for(const cmd of direct[id]??[]){
+  const p=spawnSync(cmd[0],cmd.slice(1),{encoding:"utf8",timeout:120000});
+  console.log(p.stdout??"");if(p.stderr)console.error(p.stderr);
+  result.checks.push({direct:cmd.join(" "),passed:p.status===0});
+ }
+ const checks=await Promise.all(evidence[id].map(async spec=>{try{return await verify(spec)}catch(e){return {source:spec.job,passed:false,status:"EVIDENCE_ERROR",error:String(e.message).slice(0,300)}}}));
+ result.checks.push(...checks);
+ const passing=result.checks.length>0&&result.checks.every(x=>x.passed);
+ if(item.status==="development")result.status="BLOCKED_DEVELOPMENT";
+ else if(item.status==="external")result.status="BLOCKED_EXTERNAL";
+ else if(!passing)result.status="FAILED_OR_UNVERIFIED";
+ else if(item.status==="partial")result.status="PARTIAL_PROOF";
+ else result.status="PASS_SCOPED";
+}catch(e){result.status="FAILED_OR_UNVERIFIED";result.error=String(e.message).slice(0,300);}
+await mkdir("artifacts/individual-qualification",{recursive:true});
+await writeFile("artifacts/individual-qualification/"+id+".json",JSON.stringify(result,null,2));
+const summary="### "+id+" — "+result.status+"\n\n"+item.title+"\n\nCondition: "+item.acceptance+"\n\n"+result.checks.map(c=>"- "+(c.source??c.direct)+": "+(c.passed?"proof verified":"not verified")).join("\n")+"\n";
+if(process.env.GITHUB_STEP_SUMMARY)await appendFile(process.env.GITHUB_STEP_SUMMARY,summary);
+console.log(id,result.status);
+if(result.status!=="PASS_SCOPED"){console.error("::error::"+id+" "+result.status+" — "+item.acceptance);process.exitCode=1;}
