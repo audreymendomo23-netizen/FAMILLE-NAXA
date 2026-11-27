@@ -230,6 +230,8 @@ private fun RecordingAnnouncement(active: Boolean, english: Boolean) {
  TextButton(enabled=!busy,onClick={command("record",false)}){Text(tr("Arrêter la demande","Stop request"))}
  }
  if(may("poll")){
+ TextButton(enabled=!busy,onClick={poll=tr("Oui|Non|Abstention","Yes|No|Abstain")}){Text(tr("Oui / Non / Abstention","Yes / No / Abstain"))}
+ TextButton(enabled=!busy,onClick={poll=tr("Pour|Contre|Abstention","For|Against|Abstain")}){Text(tr("Pour / Contre / Abstention","For / Against / Abstain"))}
  OutlinedTextField(poll,{poll=it.take(2000)},label={Text(tr("Choix du vote séparés par |","Poll choices separated by |"))},modifier=Modifier.fillMaxWidth())
  OutlinedTextField(pollSeconds,{pollSeconds=it.take(4)},label={Text(tr("Durée du vote (secondes, facultative)","Poll duration (seconds, optional)"))})
  Button(enabled=!busy&&poll.contains("|")&&(pollSeconds.isBlank()||(pollSeconds.toIntOrNull()?:0) in 15..3600),onClick={command("poll",JSONObject().put("options",JSONArray(poll.split("|").map{it.trim()}.filter{it.isNotEmpty()})).put("durationSeconds",pollSeconds.toIntOrNull()?:JSONObject.NULL),UUID.randomUUID().toString())}){Text(tr("Créer le vote","Create poll"))}

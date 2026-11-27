@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 const [suite,entry]=process.argv.slice(2);
 const allowed={replay:["replay.mjs"],sfu:["media-replay.mjs","media-product-replay.mjs"],audio:["media-replay.mjs","media-product-replay.mjs"]};
 assert.ok(allowed[suite]?.includes(entry),"unsupported isolated suite");
-const wave=JSON.parse(readFileSync(new URL("./qualification-wave-03.json",import.meta.url),"utf8"));
+const wave=JSON.parse(readFileSync(new URL("./qualification-wave-04.json",import.meta.url),"utf8"));
 const expected=new Set(wave.entries.flatMap(e=>(e.markers||[]).filter(m=>m.suite===suite).map(m=>m.marker)));
 const out=process.env.WM_WAVE_RECEIPTS,sha=process.env.GITHUB_SHA;
 assert.ok(out&&/^[a-f0-9]{40}$/.test(sha||""),"receipt destination and commit required");
