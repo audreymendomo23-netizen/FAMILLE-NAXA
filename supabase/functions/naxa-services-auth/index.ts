@@ -1,6 +1,6 @@
 import { hasActiveDeviceSession, verifiedTokenSessionId } from "../_shared/naxa-services-device-session.ts";
 import { parseSubscriptionCredit } from "./subscription_credit_contract.ts";
-import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, isNaxaSiteCode, isNaxaWorkstationCode, isNaxaWorkstationKind, nativeSiteIdsForScopes } from "./scope_contract.ts";
+import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, isNaxaSiteCode, isNaxaWorkstationCode, isNaxaWorkstationKind, nativeSiteIdsForScopes, allowsOrganizationOffline } from "./scope_contract.ts";
 // NAXA SERVICES authentication gateway — source only, NOT deployed.
 // Required server-side secrets: SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
 // Never set SUPABASE_SERVICE_ROLE_KEY in Android/Web build variables.
@@ -1174,7 +1174,20 @@ async function subscriptionAccess(token:string) {
   const actor=await actorContext(token);
   if(!actor)return {status:403,body:{message:"Session non autorisée."}};
   const data=await rest("rpc/ns_subscription_access_state",{method:"POST",headers:{...anonHeaders(),Authorization:"Bearer "+token},body:JSON.stringify({p_org:actor.member.org_id})});
-  return {status:200,body:{subscription_access:data}};
+  // This is only a fresh scope proof, not a paid entitlement or a longer session.
+  // Keep the normal subscription response intact for existing clients.
+  let offlineScope: Record<string, unknown> | null = null;
+  const role=String(actor.member.role_code), memberId=String(actor.member.id), orgId=String(actor.member.org_id);
+  const sessionId=verifiedTokenSessionId(token);
+  if(sessionId && actor.account.password_change_required !== true && allowsOrganizationOffline(role,actor.scopes)) {
+    const orgs=await rest("ns_organizations?select=business_mode&id=eq."+encodeURIComponent(orgId)+"&status=eq.active&limit=1",{headers:serviceHeaders()}) as Record<string,unknown>[];
+    const mode=String(orgs?.[0]?.business_mode??"");
+    if(isNaxaBusinessMode(mode)) {
+      const siteIds=await activeSiteIds(memberId,orgId);
+      if(siteIds.length>0) offlineScope={version:1,level:"organization",member_id:memberId,organization_id:orgId,role_code:role,business_mode:mode,session_id:sessionId,site_ids:siteIds};
+    }
+  }
+  return {status:200,body:{subscription_access:data,offline_scope:offlineScope}};
 }
 async function subscriptionAction(action:string,body:Record<string,unknown>,token:string) {
   const actor=await actorContext(token);

@@ -227,6 +227,7 @@ class AuthApi(private val context: Context) {
             result.opt("paid_access") != (state == "active")) {
             throw AuthApiException("État des droits payés invalide.")
         }
+        response.optJSONObject("offline_scope")?.let{result.put("offline_scope",it)}
         return result
     }
 

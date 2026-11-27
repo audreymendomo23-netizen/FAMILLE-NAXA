@@ -27,6 +27,7 @@ on:
       - 'supabase/drafts/naxa_services_v20_activity_field_parity.sql'
       - 'supabase/tests/drafts/naxa_services_activity_field_matrix.sql'
       - 'apps/web/naxa-services/src/**'
+      - 'supabase/functions/naxa-services-auth/**'
       - 'apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/SecureLocalDatabase.kt'
       - 'apps/android/naxa-services/src/androidTest/java/cm/naxa/naxaservices/data/SecureLocalDatabaseInstrumentedTest.kt'
       - 'supabase/tests/drafts/naxa_services_meeting_series.sql'
@@ -863,6 +864,21 @@ jobs:
             assert.ok(!(await read(A,anon)).ok,'anonymous Storage read denied');
             pass('real Storage upload, read, upsert and cross-tenant/anonymous denial');
             const d=await act('subscription_access',{},a.access_token);assert.equal(d.status,200);
+            for(const mode of ['single_site_multi_workstation','multi_site_network']){
+              const f=await fixture('OFFLINE-'+mode,mode),s=await login(f);
+              const rights=await act('subscription_access',{},s.access_token);
+              assert.equal(rights.status,200);
+              const proof=rights.data.offline_scope;
+              assert.equal(proof.level,'organization');assert.equal(proof.member_id,f.member.id);
+              assert.equal(proof.organization_id,f.org.id);assert.equal(proof.business_mode,mode);
+              assert.equal(proof.session_id,JSON.parse(Buffer.from(s.access_token.split('.')[1],'base64url').toString()).session_id);
+              assert.deepEqual(proof.site_ids,[f.site.id]);
+              await success(base+'/rest/v1/ns_member_scopes?member_id=eq.'+f.member.id,{can_operate:false},admin,admin,'PATCH');
+              const denied=await act('subscription_access',{},s.access_token);
+              assert.equal(denied.status,200);assert.equal(denied.data.offline_scope,null);
+              await act('logout',{device:f.device},s.access_token);
+            }
+            pass('real offline scope proof B/C, exact organization and site/session binding, revoked operation right denied');
             await rest('ns_subscription_destinations',{channel:'mtn_momo',merchant_code:'123456',beneficiary:'REPLAY ONLY',destination_reference:'237690000072',active:true});
             const intent=await act('subscription_create',{plan_code:'ACCESS',months:1,channel:'mtn_momo'},a.access_token);
             assert.equal(intent.status,200);assert.equal(intent.data.subscription_result.status,'pending');assert.ok(intent.data.subscription_result.amount_xaf>0);

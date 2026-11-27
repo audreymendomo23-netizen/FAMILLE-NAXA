@@ -1,6 +1,6 @@
 import { hasActiveDeviceSession, verifiedTokenSessionId } from "../_shared/naxa-services-device-session.ts";
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, isNaxaSiteCode, isNaxaWorkstationCode, isNaxaWorkstationKind, nativeSiteIdsForScopes } from "./scope_contract.ts";
+import { isLegalDocumentVersion, isNaxaActivityProfile, isNaxaBusinessMode, isNaxaLocale, isNaxaSiteCode, isNaxaWorkstationCode, isNaxaWorkstationKind, nativeSiteIdsForScopes, allowsOrganizationOffline } from "./scope_contract.ts";
 
 // Pure contract checks. Integration tests require an ephemeral Supabase project
 // with a proven internal Auth alias format and seeded NAXA Services identities.
@@ -103,4 +103,15 @@ Deno.test("Auth and referral gateways require an active device bound to the veri
     assertEquals(await hasActiveDeviceSession(jwt,"account-a",async()=>result),false);
   }
   assertEquals(await hasActiveDeviceSession("invalid","account-a",async()=>{throw new Error("must not query");}),false);
+});
+
+Deno.test("offline organization authority never widens site or workstation grants", () => {
+  const full={scope_type:"organization",can_read:true,can_operate:true,can_manage:true};
+  assertEquals(allowsOrganizationOffline("promoter",[full]),true);
+  assertEquals(allowsOrganizationOffline("network_manager",[full]),true);
+  for(const role of ["cashier","site_manager","workstation_manager","unknown"]) assertEquals(allowsOrganizationOffline(role,[full]),false);
+  for(const scope of [{...full,scope_type:"site"},{...full,scope_type:"workstation"},{...full,can_operate:false},{...full,can_manage:false},{...full,can_read:false}]) {
+    assertEquals(allowsOrganizationOffline("promoter",[scope]),false);
+  }
+  assertEquals(allowsOrganizationOffline("promoter",[{...full,can_operate:false},{...full,can_read:false}]),false);
 });

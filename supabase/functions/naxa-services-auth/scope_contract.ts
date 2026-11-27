@@ -69,3 +69,11 @@ export function nativeSiteIdsForScopes(
   );
   return [...new Set(explicitSiteIds)];
 }
+
+/** Only a genuine organization-wide manager grant may authorize the shared offline ERP. */
+export function allowsOrganizationOffline(role: string, scopes: readonly Record<string, unknown>[]): boolean {
+  return ["promoter", "network_manager"].includes(role) && scopes.some(s =>
+    s.scope_type === "organization" && s.can_read === true &&
+    s.can_operate === true && s.can_manage === true
+  );
+}

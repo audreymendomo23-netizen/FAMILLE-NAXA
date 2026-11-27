@@ -7,6 +7,7 @@ import android.util.Base64
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.json.JSONObject
+import org.json.JSONArray
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -71,7 +72,7 @@ class OfflineSessionVaultInstrumentedTest {
         val vault=SessionVault(context)
         try {
             val now=System.currentTimeMillis()/1000
-            val jwt="eyJhbGciOiJIUzI1NiJ9."+Base64.encodeToString(JSONObject().put("iat",now).put("exp",now+600).toString().toByteArray(),Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)+".fixture"
+            val jwt="eyJhbGciOiJIUzI1NiJ9."+Base64.encodeToString(JSONObject().put("iat",now).put("exp",now+600).put("session_id","fixture-session").toString().toByteArray(),Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING)+".fixture"
             val account=AuthAccount("fixture-member","Fixture name","promoter","fixture-org","Fixture org","solo","fr",
                 listOf("fixture-site"),listOf(AuthSite("fixture-site","S1","Fixture site","","")),"pressing",
                 setOf("terms:2026-11-v1","privacy:2026-11-v1"),true,true)
@@ -97,6 +98,20 @@ class OfflineSessionVaultInstrumentedTest {
             assertNotNull(SessionVault(context).loadOfflineSnapshot())
             vault.clear()
             assertNull(SessionVault(context).loadOfflineSnapshot())
+            for(mode in listOf("single_site_multi_workstation","multi_site_network")){
+                val sites=if(mode=="multi_site_network") account.activeSites+AuthSite("second-site","S2","Second site","","") else account.activeSites
+                val scoped=session.copy(account=account.copy(businessMode=mode,activeSites=sites,activeSiteIds=sites.map{it.id}))
+                val proof=JSONObject().put("version",1).put("level","organization").put("member_id",account.memberId)
+                    .put("organization_id",account.organizationId).put("role_code","promoter").put("business_mode",mode)
+                    .put("session_id","fixture-session").put("site_ids",JSONArray(sites.map{it.id}))
+                vault.save(scoped)
+                vault.saveOfflineSnapshot(scoped,access)
+                assertNull(vault.loadOfflineSnapshot())
+                val paid=JSONObject(access.toString()).put("offline_scope",proof)
+                vault.saveOfflineSnapshot(scoped,paid)
+                assertEquals(scoped.account,SessionVault(context).loadOfflineSnapshot()?.account)
+                vault.clear()
+            }
         }finally{vault.clear()}
     }
 }
