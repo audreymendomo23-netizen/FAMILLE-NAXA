@@ -1,26 +1,6 @@
 begin;
 
 -- B4.7: private opt-in snapshots. The same identity lock order protects authorization.
-create table public.wm_periodic_preferences(
- account_id uuid not null references public.wm_accounts(id), workspace_id uuid not null references public.wm_workspaces(id),
- member_role text not null check(member_role in ('promoteur','manager')),
- cadence text not null check(cadence in ('daily','weekly','monthly','quarterly','yearly')),
- enabled boolean not null, next_start date not null,
- primary key(account_id,workspace_id,member_role,cadence)
-);
-create table public.wm_periodic_reports(
- account_id uuid not null,workspace_id uuid not null,member_role text not null,cadence text not null,
- period_start date not null,period_end date not null check(period_end>period_start),
- generated_at timestamptz not null default clock_timestamp(),metrics jsonb not null check(jsonb_typeof(metrics)='object'),
- primary key(account_id,workspace_id,member_role,cadence,period_start),
- foreign key(account_id,workspace_id,member_role,cadence) references public.wm_periodic_preferences(account_id,workspace_id,member_role,cadence)
-);
-create index wm_periodic_due on public.wm_periodic_preferences(next_start) where enabled;
-alter table public.wm_periodic_preferences enable row level security;
-alter table public.wm_periodic_reports enable row level security;
-revoke all on public.wm_periodic_preferences,public.wm_periodic_reports from public,anon,authenticated;
-grant select,insert,update on public.wm_periodic_preferences to service_role;
-grant select,insert on public.wm_periodic_reports to service_role;
 create function public.wm_periodic_next(p_start date,p_cadence text) returns date
 language sql immutable security invoker set search_path=pg_catalog,public as $wm$
  select (p_start+case p_cadence when 'daily' then interval '1 day' when 'weekly' then interval '1 week' when 'monthly' then interval '1 month' when 'quarterly' then interval '3 months' when 'yearly' then interval '1 year' end)::date

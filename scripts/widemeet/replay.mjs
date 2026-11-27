@@ -686,7 +686,9 @@ try{
  await hp.getByRole("navigation").getByRole("button",{name:"Profil",exact:true}).click();
  const picker=hp.getByLabel("Choisir une photo",{exact:true});
  await picker.waitFor();
- await picker.setInputFiles({name:"synthetic-profile.jpg",mimeType:"image/jpeg",buffer:Buffer.from(photo,"base64")});
+ await hp.waitForFunction(()=>{const x=document.querySelector('input[type=file][accept="image/jpeg,image/png,image/webp"]');return x&&!x.disabled});
+ const browserPhoto=await hp.evaluate(()=>{const canvas=document.createElement("canvas");canvas.width=16;canvas.height=16;const ctx=canvas.getContext("2d");ctx.fillStyle="#3178c6";ctx.fillRect(0,0,16,16);return canvas.toDataURL("image/jpeg").split(",")[1]});
+ await picker.setInputFiles({name:"synthetic-profile.jpg",mimeType:"image/jpeg",buffer:Buffer.from(browserPhoto,"base64")});
  const photoPreview=hp.getByRole("img",{name:"Votre photo de profil",exact:true});
  await photoPreview.waitFor({timeout:15000});
  assert.ok(await photoPreview.evaluate(img=>img.complete&&img.naturalWidth>0));
@@ -766,6 +768,7 @@ try{
  assert.equal(await period.inputValue(),"7");
  const periodicRegion=hp.getByRole("region",{name:"Bilans automatiques",exact:true});
  const periodicToggle=periodicRegion.getByLabel("Hebdomadaire",{exact:true});await periodicToggle.waitFor();
+ await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&!x.disabled});
  await periodicToggle.check();await periodicRegion.getByRole("button",{name:"Actualiser l’historique",exact:true}).waitFor();
  await hp.waitForFunction(()=>[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].some(x=>x.checked));
  const periodic=await identity(hs.access_token,"center-periodic-list");assert.equal(periodic.timezone,"Africa/Douala");assert.ok(periodic.preferences.some(p=>p.cadence==="weekly"&&p.enabled===true));
