@@ -1,5 +1,9 @@
 package cm.naxa.zipple
 import androidx.compose.ui.test.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.json.JSONObject
@@ -13,12 +17,14 @@ class Bulk3DeviceTest {
  @get:Rule val compose=createComposeRule()
  @Test fun nativeSupplierFormAndServerConfirmation(){
   val calls=mutableListOf<Pair<String,JSONObject>>()
-  compose.setContent{Bulk3Screen("promoteur",true,false){a,b->calls.add(a to JSONObject(b.toString()));if(a=="supplier_add")"fixture-id" else JSONObject()}}
+  compose.setContent{Column(Modifier.verticalScroll(rememberScrollState())){Bulk3Screen("promoteur",true,false){a,b->calls.add(a to JSONObject(b.toString()));if(a=="supplier_add")"fixture-id" else JSONObject()}}}
   compose.onNodeWithText("Confirmer",substring=false).assertIsNotEnabled()
-  compose.onNodeWithText("Nom",substring=false).performTextInput("Grossiste test")
-  compose.onNodeWithText("Délai en jours").performTextInput("30")
-  compose.onNodeWithText("Confirmer",substring=false).assertIsEnabled().performClick()
-  compose.waitUntil(5000){compose.onAllNodesWithText("Opération confirmée").fetchSemanticsNodes().isNotEmpty()}
+  compose.waitUntil(10000){compose.onAllNodes(hasText("Nom",substring=false) and isEnabled()).fetchSemanticsNodes().size==1}
+  compose.onNodeWithText("Nom",substring=false).performScrollTo().performTextInput("Grossiste test")
+  compose.onNodeWithText("Délai en jours").performScrollTo().performTextInput("30")
+  compose.onNodeWithText("Confirmer",substring=false).assertIsEnabled().performScrollTo().performClick()
+  compose.waitUntil(10000){compose.onAllNodesWithText("Opération confirmée",substring=false).fetchSemanticsNodes().isNotEmpty()}
+  compose.onNodeWithText("Opération confirmée",substring=false).performScrollTo().assertIsDisplayed()
   compose.runOnIdle{val saved=calls.single{it.first=="supplier_add"}.second;assertEquals("Grossiste test",saved.getString("name"));assertEquals(30,saved.getInt("terms_days"));assertTrue(saved.getString("request_id").isNotBlank())}
  }
  @Test fun nativeBalancedAllocationAndQuantityValidation(){
