@@ -71,6 +71,25 @@ begin
  if (v#>>'{finance,connect_ca}')::int<>2000 or (v#>>'{finance,ca}')::int<>2000 or (v->'items'->0->>'remaining')::int<>3 then raise exception 'connect accounting';end if;
 end $$;
 reset role;
+-- Network report and surveillance, explicit independent default.
+set role authenticated;
+do $$
+declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;v jsonb;
+begin
+ v:=public.grillad_report(o,s,d,d,false,null,null,null);
+ if (v->>'ca')::int<>2000 or (v->>'connect_ca')::int<>2000 or (v->>'sales_count')::int<>1 then raise exception 'report accounting';end if;
+ v:=public.grillad_report(o,s,d,d,false,'Poulet',null,null);
+ if (v->>'ca')::int<>2000 or v->'expenses'<>'null'::jsonb then raise exception 'report filtered expense allocation';end if;
+ begin perform public.grillad_report(o,s,d,d,true,null,null,null);raise exception 'network must be explicit';exception when insufficient_privilege then null;end;
+ if (public.grillad_security_list(o,s)->>'available')::boolean then raise exception 'unlinked camera available';end if;
+end $$;
+reset role;
+insert into grillad_private.pilotage_policy values('b2000000-0000-0000-0000-000000000001',true);
+set role authenticated;
+do $$
+declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;
+begin if (public.grillad_report(o,s,d,d,true,null,null,null)->>'ca')::int<>2000 then raise exception 'network total';end if;end $$;
+reset role;
 -- Service across midnight, using an explicit fixture policy only.
 insert into grillad_private.service_policy values('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',1080,current_date-2,true);
 set role service_role;
@@ -99,6 +118,8 @@ select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000002'
 select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000012","app_metadata":{}}',true);
 do $$begin
  if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'bound session failed';end if;
+ begin perform public.grillad_security_list('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001');raise exception 'seller camera leak';exception when insufficient_privilege then null;end;
+ begin perform public.grillad_report('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',current_date,current_date,false,null,null,null);raise exception 'seller report leak';exception when insufficient_privilege then null;end;
  begin perform public.grillad_daily_list('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001');raise exception 'seller daily leak';exception when insufficient_privilege then null;end;
  begin perform public.grillad_auth_begin(repeat('b',64),false);raise exception 'service-only auth bridge leaked';exception when insufficient_privilege then null;end;
 end $$;

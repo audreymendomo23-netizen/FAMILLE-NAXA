@@ -65,6 +65,9 @@ export async function handle(request,env,fetcher=fetch){
   if(body.action==='workspace')return upstream(await post('/rest/v1/rpc/grillad_workspace',{},token));
   if(!uuid.test(body.org)||!uuid.test(body.site))return reply(400,{error:'SCOPE'});
   const scope={p_org:body.org,p_site:body.site};
+  if(body.action==='security_list')return upstream(await post('/rest/v1/rpc/grillad_security_list',scope,token));
+  if(body.action==='pilotage_status')return upstream(await post('/rest/v1/rpc/grillad_pilotage_status',scope,token));
+  if(body.action==='report'&&date.test(body.from)&&date.test(body.to)&&typeof body.network==='boolean'&&(body.family==null||['Porc','Poulet','Poisson','Brochettes','Omelettes'].includes(body.family))&&(body.actor==null||uuid.test(body.actor))&&(body.item==null||uuid.test(body.item)))return upstream(await post('/rest/v1/rpc/grillad_report',{...scope,p_from:body.from,p_to:body.to,p_network:body.network,p_family:body.family??null,p_actor:body.actor??null,p_item:body.item??null},token));
   if(body.action==='connect_list')return upstream(await post('/rest/v1/rpc/grillad_connect_list',scope,token));
   if(body.action==='connect_transition'&&uuid.test(body.order)&&uuid.test(body.event)&&['accepted','preparing','ready','handed','refused','cancelled'].includes(body.next))return upstream(await post('/rest/v1/rpc/grillad_connect_transition',{...scope,p_order:body.order,p_event:body.event,p_next:body.next,p_received:body.received??null,p_reason:body.reason??null},token));
   if(body.action==='daily_list')return upstream(await post('/rest/v1/rpc/grillad_daily_list',scope,token));
