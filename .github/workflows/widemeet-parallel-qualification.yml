@@ -9,6 +9,10 @@ on:
       - '.github/workflows/family-media-replay.yml'
       - '.github/workflows/family-audio-replay.yml'
       - 'scripts/widemeet/**'
+      - 'apps/android/widemeet/**'
+      - 'apps/web/widemeet/**'
+      - 'supabase/drafts/widemeet_*.sql'
+      - 'supabase/functions/widemeet-*/**'
       - 'docs/widemeet/REGISTRE_RECETTES_ACTIONS_B1_B6.md'
   workflow_dispatch:
 permissions:
