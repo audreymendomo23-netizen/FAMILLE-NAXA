@@ -16,10 +16,10 @@ private fun supportRows(x:JSONObject,key:String):List<JSONObject>{val a=x.getJSO
  val scope=rememberCoroutineScope()
  var agent by remember{mutableStateOf(false)};var queue by remember{mutableStateOf(false)};var ready by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
  var items by remember{mutableStateOf<List<JSONObject>>(emptyList())};var ticket by remember{mutableStateOf<JSONObject?>(null)}
- var subject by remember{mutableStateOf("")};var category by remember{mutableStateOf("account")};var body by remember{mutableStateOf("")};var reply by remember{mutableStateOf("")};var pending by remember{mutableStateOf<JSONObject?>(null)};var closeConfirm by remember{mutableStateOf(false)};var releaseConfirm by remember{mutableStateOf(false)};var rating by remember{mutableIntStateOf(0)};var reviewer by remember{mutableStateOf(false)};var reviewMode by remember{mutableStateOf(false)}
+ var subject by remember{mutableStateOf("")};var category by remember{mutableStateOf("account")};var body by remember{mutableStateOf("")};var reply by remember{mutableStateOf("")};var pending by remember{mutableStateOf<JSONObject?>(null)};var closeConfirm by remember{mutableStateOf(false)};var releaseConfirm by remember{mutableStateOf(false)};var rating by remember{mutableIntStateOf(0)};var reviewer by remember{mutableStateOf(false)};var reviewMode by remember{mutableStateOf(false)};var mediaReady by remember{mutableStateOf(false)}
  suspend fun req(action:String,data:JSONObject=JSONObject())=gateway.identity(session,"support-"+action,data)
  suspend fun refresh(q:Boolean=queue){try{items=supportRows(req(if(q)"queue" else "list"),"items")}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();ticket=null;reply="";agent=false;queue=false;ready=false;throw e}}
- suspend fun load(){val c=req("capabilities");agent=c.optBoolean("agent");reviewer=c.optBoolean("recovery_reviewer");refresh(false);ready=true}
+ suspend fun load(){val c=req("capabilities");agent=c.optBoolean("agent");reviewer=c.optBoolean("recovery_reviewer");mediaReady=c.optBoolean("transport_ready");refresh(false);ready=true}
  suspend fun open(id:String){try{ticket=req("read",JSONObject().put("ticket_id",id));reply="";rating=0;pending=null}catch(e:CancellationException){throw e}catch(e:Exception){ticket=null;items=emptyList();reply="";agent=false;queue=false;ready=false;throw e}}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
  fun status(s:String)=when(s){"open"->tr("Ouverte","Open");"assigned"->tr("Prise en charge","Assigned");"waiting"->tr("En attente de réponse","Waiting for response");"closed"->tr("Clôturée","Closed");else->s}
@@ -41,6 +41,7 @@ private fun supportRows(x:JSONObject,key:String):List<JSONObject>{val a=x.getJSO
  Text(t.getString("subject"),style=MaterialTheme.typography.titleMedium);Text(status(t.getString("status")))
  TextButton(enabled=!busy&&pending==null,onClick={work{open(id)}}){Text(tr("Actualiser","Refresh"))}
  for(m in supportRows(t,"messages")){Text(if(m.optString("author_kind")=="agent")tr("Assistance","Support") else tr("Demandeur","Requester"),style=MaterialTheme.typography.labelLarge);Text(m.getString("body"))}
+ if(mediaReady&&t.optString("status")!="closed")key(id,session.deviceId){SupportMediaPanel(english,gateway,session,t)}
  if(t.optString("viewer")=="agent"&&t.optString("status")!="closed"){TextButton(enabled=!busy&&pending==null,onClick={releaseConfirm=true}){Text(tr("Remettre dans la file","Release to queue"))}}
  if(releaseConfirm)AlertDialog(onDismissRequest={releaseConfirm=false},title={Text(tr("Remettre cette demande dans la file ?","Release this request to the queue?"))},confirmButton={TextButton(onClick={releaseConfirm=false;work{req("release",JSONObject().put("ticket_id",id).put("assignment_version",t.optString("assignment_version")));ticket=null;reply="";refresh(true);queue=true}}){Text(tr("Confirmer","Confirm"))}},dismissButton={TextButton(onClick={releaseConfirm=false}){Text(tr("Annuler","Cancel"))}})
  if(t.optString("viewer")=="requester"&&t.optString("status")=="closed"){
@@ -59,6 +60,6 @@ private fun supportRows(x:JSONObject,key:String):List<JSONObject>{val a=x.getJSO
  OutlinedTextField(body,{body=it.take(4000)},enabled=!busy&&pending==null,label={Text(tr("Description du problème","Issue description"))},modifier=Modifier.fillMaxWidth())
  Button(enabled=!busy&&subject.isNotBlank()&&body.isNotBlank(),onClick={work{val p=pending?:JSONObject().put("ticket_id",UUID.randomUUID().toString()).put("message_id",UUID.randomUUID().toString()).put("subject",subject.trim()).put("category",category).put("body",body.trim()).also{pending=it};req("create",p);pending=null;subject="";body="";refresh(false);open(p.getString("ticket_id"))}}){Text(tr("Envoyer la demande","Submit request"))}}
  }}
- Text(tr("Les appels audio et le partage d’écran avec un agent ne sont pas encore disponibles.","Audio calls and screen sharing with an agent are not yet available."))
+ if(!mediaReady)Text(tr("Les appels audio et le partage d’écran avec un agent ne sont pas encore disponibles.","Audio calls and screen sharing with an agent are not yet available."))
  }}
 }
