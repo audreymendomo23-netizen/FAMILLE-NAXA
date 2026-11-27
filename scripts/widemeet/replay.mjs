@@ -159,6 +159,20 @@ try{
  assert.equal((await centerReq(gs.access_token,"statistics",{days:30})).status,403);
  const consolidated=await centerOk(hs.access_token,"statistics",{days:30});assert.equal(consolidated.scope,"enterprise");assert.ok(Number.isInteger(consolidated.polls_closed)&&consolidated.polls_closed>=0);assert.ok(Number.isInteger(consolidated.tasks_done)&&consolidated.tasks_done>=0);
  assert.equal((await centerReq(hs.access_token,"statistics",{days:999})).status,403);
+ const page=await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"workspace",page_size:1});assert.equal(page.items[0].id,privateData.message_id);assert.equal(page.next_before,null);
+ assert.deepEqual((await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"workspace",page_size:1,before_id:privateData.message_id})).items,[]);
+ assert.equal((await centerReq(os.access_token,"thread",{peer_id:g.id,before_id:privateData.message_id})).status,403);
+ assert.equal((await centerReq(gs.access_token,"thread",{peer_id:h.id,before_id:"invalid"})).status,403);
+ pass("B2 actual direct chat scoped keyset page and invalid cursor denial");
+ const directReply={peer_id:h.id,message_id:randomUUID(),body:"Synthetic threaded answer",reply_to:privateData.message_id};
+ await centerOk(gs.access_token,"send",directReply);await centerOk(gs.access_token,"send",directReply);
+ const answer=(await centerOk(hs.access_token,"thread",{peer_id:g.id,query:"threaded answer"})).items;
+ assert.equal(answer.length,1);assert.equal(answer[0].reply_to,privateData.message_id);assert.equal(answer[0].reply_excerpt,privateData.body);
+ assert.equal((await centerReq(gs.access_token,"send",{...directReply,reply_to:directReply.message_id})).status,403);
+ const {reply_to,...noReply}=directReply;assert.equal((await centerReq(gs.access_token,"send",noReply)).status,403);
+ assert.equal((await centerReq(hs.access_token,"send",{peer_id:o.id,message_id:randomUUID(),body:"forbidden reference",reply_to:privateData.message_id})).status,403);
+ assert.equal((await centerReq(gs.access_token,"send",{...directReply,message_id:randomUUID(),reply_to:randomUUID()})).status,403);
+ pass("B2 actual direct reply source excerpt, exact retry and forbidden reference denial");
  pass("workspace private chat exact retry, peer/tenant denial, search, explicit read acknowledgement and role-scoped summary");
 
 
@@ -668,6 +682,10 @@ try{
  const [opened]=await Promise.all([roomCommandResponse(hp,"start"),hp.getByRole("button",{name:"Ouvrir la salle",exact:true}).click()]);
  assert.equal(opened.status(),200);assert.equal((await opened.json()).status,"open");
  await hp.getByText("Audio et vidéo indisponibles pour le moment.",{exact:true}).waitFor();
+ await hp.getByRole("button",{name:"Oui / Non / Abstention",exact:true}).click();
+ assert.equal(await hp.getByLabel("Choix du vote, séparés par |",{exact:true}).inputValue(),"Oui|Non|Abstention");
+ await hp.getByLabel("Choix du vote, séparés par |",{exact:true}).fill("");
+ pass("WAVE05 real host simple vote preset does not submit");
  await gp.getByRole("button",{name:"Actualiser",exact:true}).click();await gp.getByLabel("Message",{exact:true}).fill("Bonjour réel");
  await gp.getByRole("button",{name:"Envoyer",exact:true}).click();await gp.getByText(/Bonjour réel/).waitFor();
  // Host must receive the message through automatic polling, not a manual refresh.
@@ -707,12 +725,19 @@ try{
   await hp.getByRole("button",{name:/Replay browser room/}).waitFor();
  }
  await hp.getByRole("navigation").getByRole("button",{name:"Accueil",exact:true}).click();
+ const waveInbox=hp.getByRole("region",{name:"Notifications",exact:true});
+ await waveInbox.getByLabel("Filtrer les notifications").waitFor();
+ await waveInbox.getByLabel("Filtrer les notifications").selectOption("unread");
+ await waveInbox.getByRole("status").filter({hasText:/Non lues : /}).waitFor();
+ await waveInbox.getByLabel("Filtrer les notifications").selectOption("read");
+ await waveInbox.getByLabel("Filtrer les notifications").selectOption("all");
+ pass("WAVE03 notification filter and authorized inbox view");
  await hp.getByRole("button",{name:"Mes rapports",exact:true}).click();
  await hp.getByRole("heading",{name:"Archives et comptes rendus",exact:true}).waitFor();
  pass("real browser workspace chat, concurrent rooms, polls, visible statistics and reports routes backed by GoTrue and Edge");
  await hp.getByRole("navigation").getByRole("button",{name:"Chat",exact:true}).click();
  await hp.getByRole("button",{name:"Messages privés",exact:true}).click();
- await hp.getByLabel("Rechercher un contact",{exact:true}).fill("staff");await hp.getByRole("button",{name:"Rechercher",exact:true}).click();await hp.getByRole("button",{name:"Replay staff",exact:true}).click();
+ await hp.getByLabel("Rechercher un contact",{exact:true}).fill("staff");await hp.getByRole("button",{name:"Rechercher",exact:true}).click();const staffContact=hp.locator(`button[data-member-id="${g.id}"]`);await staffContact.waitFor();assert.match(await staffContact.innerText(),/^Replay staff(?: · \d+ non lus)?$/);await staffContact.click();
  await hp.getByText("Synthetic private workspace message",{exact:true}).waitFor();
  await hp.getByLabel("Votre message",{exact:true}).fill("Synthetic private browser message");
  await hp.getByRole("button",{name:"Envoyer",exact:true}).click();

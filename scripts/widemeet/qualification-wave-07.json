@@ -1,0 +1,125 @@
+{
+  "wave": 7,
+  "total": 15,
+  "actions": 2,
+  "recipes": 13,
+  "base": "b6efc772555e526200a5d108cf1aaf4b415ed68c",
+  "entries": [
+    {
+      "id": "B6.09-A01",
+      "bulk": "B6",
+      "kind": "action",
+      "description": "Qualifier restauration, durcissement et exploitation."
+    },
+    {
+      "id": "B6.09-R01",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Archive chiffrée, manifeste SHA/taille, chemins sûrs et refus clé erronée/altération.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.09-R02",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "pg_dump/pg_restore réels, ACL/RLS et Storage privé restaurés dans environnement jetable.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.09-R03",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Ancienne archive contenant objet expiré : registre courant avant/après, refus indisponible, suppression compensatoire.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.09-R04",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Reprise crash et historique complet SQL : aucune résurrection d'accès/purge, stratégie WAL/backups tiers.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.09-R05",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "XSS/CSRF/injection, limites payload, analyse dépendances/secrets, antivirus/validation contenu.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.09-R06",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Chiffrement transport/stockage, clés, MFA sensible si validée, audit, supervision, incident et récupération.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.09-R07",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Plan backup/restore autorisé, RPO/RTO et tests charge; aucune restauration production non autorisée.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.10-A01",
+      "bulk": "B6",
+      "kind": "action",
+      "description": "Clore informations, droits et validation juridique sans promesse non qualifiée."
+    },
+    {
+      "id": "B6.10-R01",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "FR/EN exhaustif : interface, erreurs, notifications, CGU, FAQ, PDF, consentement et sécurité.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.10-R02",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Langues premium/locales par capacité (UI/ASR/traduction/TTS/PDF) et validation locuteurs natifs.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.10-R03",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Registre finalités/sous-traitants/transferts, consentement, durée et droit de retrait; validation juridique avant release.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.10-R04",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Demandes confidentialité via support et rôle habilité, pas de transmission de secrets.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.10-R05",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Information honnête sur capture, E2EE non revendiqué, copies exportées non rappelables.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.10-R06",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Gate release : revue loi applicable/CGU/PC, accessibilité, appareils physiques, coûts et autorisation propriétaire; B7–B12 exclus.",
+      "markers": [],
+      "complete": false
+    }
+  ]
+}

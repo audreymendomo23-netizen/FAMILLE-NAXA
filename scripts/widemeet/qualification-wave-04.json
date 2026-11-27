@@ -1,0 +1,435 @@
+{
+  "wave": 4,
+  "total": 50,
+  "actions": 7,
+  "recipes": 43,
+  "base": "309e33e6f5a360ca2e126eb21d080be9d173b0a1",
+  "entries": [
+    {
+      "id": "B1.2-A01",
+      "bulk": "B1",
+      "kind": "action",
+      "description": "Assurer build installable et matrice native reproductible."
+    },
+    {
+      "id": "B1.2-R01",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Gradle SDK35/Java17/KVM : assembleDebug et assembleDebugAndroidTest produisent APK non vide.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.2-R02",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Instrumentation Compose API35 : navigation, connexion, profil, accès par rôle, absence de crash.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.2-R03",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Installation APK, lancement à froid, rotation, reprise arrière-plan et restauration sûre d'état.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.2-R04",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Keystore/PIN quatre chiffres et biométrie : stockage chiffré, refus mauvais code, invalidation; physique pour biométrie.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.2-R05",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Responsive natif sur tailles et versions supportées, clavier, lecteurs d'écran, zones tactiles et reduced motion.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.2-R06",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "APK archivé avec SHA/taille, installable et signé selon circuit autorisé; ne pas assimiler debug à release.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.3-A01",
+      "bulk": "B2",
+      "kind": "action",
+      "description": "Qualifier collaboration en salle sans contourner modération."
+    },
+    {
+      "id": "B2.3-R01",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Chat salle et privé entre admis, refus tiers même admis au privé; politique d'envoi et lecture.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N2 late invitation, admission lock/unlock and private chat denied to admitted third member"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.3-R02",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Réactions et main levée via événements réels, ordre, latence et reconnexion.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.3-R03",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Mentions/réponses/signalement, recherche/pagination, modération et rate limit.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.3-R04",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Pause/reprise, exclusion, clôture : aucun envoi hors état, visibilité historique selon droit.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 actual agenda and room media: host upload, RSVP and tenant scope, chat permission, pause and closure"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.3-R05",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Parité native/Web/PWA, notifications liées sans fuite de contenu.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.5-A01",
+      "bulk": "B2",
+      "kind": "action",
+      "description": "Terminer récepteur distinct source Android vers ordinateur/TV compatible."
+    },
+    {
+      "id": "B2.5-R01",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Code/QR aléatoire à usage unique, expiré/réutilisé/mauvais appareil, confirmation source et politique hôte.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.5-R02",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Appairage produit réel entre deux installations, autorisation salle/tenant/session, hash exact et refus malformés.",
+      "markers": [
+        {
+          "suite": "sfu",
+          "marker": "actual B2 Connect same-account distinct installation, host policy, confirmation, decoded SFU RTP, renewal and revocation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.5-R03",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "RTP décodé sur récepteur subscribe-only, aucune publication, data/chat/enregistrement ou commande.",
+      "markers": [
+        {
+          "suite": "sfu",
+          "marker": "actual B2 display-only SFU receiver decodes video and cannot publish; source retains transport"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.5-R04",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Un récepteur actif, remplacement, renouvellement bail et refus de l'ancien jeton.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.5-R05",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Filigrane nominatif, indicateur source, arrêt distant et historique.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.5-R06",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Pas de double présence/vote, choix sortie audio sans écho, source conserve commandes.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.5-R07",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Pause/reprise, fin, perte droits, sortie source, reconnexion, purge buffers; politique réactivée ne ressuscite rien.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.5-R08",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Refus mode strict et confidentialité non qualifiée; Android→Web/PWA et TV physique, interop et charge.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.2-R03",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Job durable claim/lease, retry/crash/multi-instance, aucun doublon et diagnostic non sensible.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.2-R04",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "SHA/segment/durée/ordre/incertitude; fichier corrompu, vide, accès interdit et retrait consentement.",
+      "markers": [
+        {
+          "suite": "audio",
+          "marker": "actual N3 private Storage upload/readback, host-only export after closure, forbidden guest and SHA-256 integrity"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B3.2-R05",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "UI Android/Web/PWA : états en traitement, erreur/retry et texte horodaté, insertion brouillon non approuvé.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.4-A01",
+      "bulk": "B3",
+      "kind": "action",
+      "description": "Construire synthèse vérifiable, bilans et questions sur archives autorisées."
+    },
+    {
+      "id": "B3.4-R01",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Résumé exécutif et thèmes, chaque affirmation reliée au segment/source horodatée.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.4-R02",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Contradictions, incertitude, négations, contenu vide et refus de conclure sans preuve.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.4-R03",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Briefing réunions précédentes, recherche sémantique et glossaire dans archives autorisées uniquement.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.4-R04",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Synthèse personnalisée écrite/vocale, bilan périodique IA et questions vocales selon rôle.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.4-R05",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Tests injection de consignes via transcript, fuite tenant, hallucination, contenu supprimé et citation invalide.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.4-R06",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Brouillon modifiable par humain, aucun envoi/validation automatique; coût/latence et qualité FR/EN mesurés.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.2-A01",
+      "bulk": "B4",
+      "kind": "action",
+      "description": "Garantir vote simple serveur autoritaire."
+    },
+    {
+      "id": "B4.2-R01",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Oui/non, pour/contre/abstention, éligibles, un vote par personne et rejeu exact.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual Edge/PostgREST room create, RSVP, chat, moderation, consent, vote, exclusion, tenant isolation; no media capture"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.2-R02",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Clôture manuelle/temporisée, refus après échéance, modification selon politique.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.2-R03",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Anonymat et visibilité, compte agrégé exact et aucun nom exposé.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.2-R04",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Organisateur/modérateur autorisé seulement, refus non admis/tiers et concurrence.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.2-R05",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "UI réelle Android/Web/PWA et résultat intégré au rapport sans altération.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "real browser workspace chat, concurrent rooms, polls, visible statistics and reports routes backed by GoTrue and Edge"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B5.5-A01",
+      "bulk": "B5",
+      "kind": "action",
+      "description": "Qualifier capture explicitement consentie, jamais invisible."
+    },
+    {
+      "id": "B5.5-R01",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Demande/acceptation/refus et sélection écran par utilisateur, aucun audio système.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.5-R02",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Flux réel reçu, refus publication par agent, aucune lecture réunion.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.5-R03",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Arrêt/retrait, nouvelle autorisation sans résurrection ancien grant, clôture et révocation.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.5-R04",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Web getDisplayMedia et Android MediaProjection sur appareil physique, course callback/polling et nettoyage.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.5-R05",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Audit et limites Web/capture externe, compatibilité sécurité B6.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.05-A01",
+      "bulk": "B6",
+      "kind": "action",
+      "description": "Qualifier modes et limites réelles de protection."
+    },
+    {
+      "id": "B6.05-R01",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Standard/confidentiel/strict : politique serveur, refus mode non qualifié et restrictions partage.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual structured agenda progression and confidential screen restriction"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.05-R02",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "FLAG_SECURE Android écran complet, rotation/recreation, screenshot/record/casting physiques.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.05-R03",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Web/PWA filigrane dynamique nominatif et avertissement; aucune promesse blocage OS.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.05-R04",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Connect refus strict, politique renforcée et appareil qualifié en confidentiel.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.05-R05",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Détection et réaction aux pertes de capacité, droits restreints, annonce et audit; caméra externe non bloquable.",
+      "markers": [],
+      "complete": false
+    }
+  ]
+}

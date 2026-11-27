@@ -45,6 +45,20 @@ begin
  endms:=floor(extract(epoch from clock_timestamp()+interval '30 minutes')*1000)::bigint;
  state:=jsonb_build_object('id',rid,'workspaceId',w,'hostId',host,'revision',1,'status','open','endMs',endms,'hardEndMs',endms,'recording','off','confidentiality','standard','participants',jsonb_build_array(jsonb_build_object('memberId',host,'response','accepted','excluded',false),jsonb_build_object('memberId',guest,'response','accepted','excluded',false)));
  insert into public.wm_rooms(id,workspace_id,host_id,revision,state) values(rid,w,host,1,state);
+ -- Stable keyset pagination, including identical timestamps and unauthorized cursor.
+ insert into public.wm_direct_messages(id,workspace_id,sender_id,recipient_id,body,created_at) values
+ (mid,w,host,guest,'pagination one','2024-01-01T00:00:00Z'),(mid2,w,host,guest,'pagination two','2024-01-01T00:00:00Z');
+ x:=public.wm_workspace_center(h,'center-thread',jsonb_build_object('peer_id',guest,'query','pagination','page_size',1));
+ if x->>'next_before' is distinct from mid2::text or x->'items'->0->>'id' is distinct from mid2::text then raise exception 'pagination first';end if;
+ x:=public.wm_workspace_center(h,'center-thread',jsonb_build_object('peer_id',guest,'query','pagination','page_size',1,'before_id',mid2));
+ if x->'items'->0->>'id' is distinct from mid::text or x->>'next_before' is not null then raise exception 'pagination second';end if;
+ if public.wm_workspace_center(t,'center-thread',jsonb_build_object('peer_id',host,'before_id',mid2)) is not null
+ or public.wm_workspace_center(o,'center-thread',jsonb_build_object('peer_id',guest,'before_id',mid2)) is not null
+ or public.wm_workspace_center(h,'center-thread',jsonb_build_object('peer_id',guest,'before_id','malformed')) is not null
+ or public.wm_workspace_center(h,'center-thread',jsonb_build_object('peer_id',guest,'query','missing','before_id',mid2)) is not null
+ or public.wm_workspace_center(h,'center-thread',jsonb_build_object('peer_id',guest,'page_size',201)) is not null then raise exception 'pagination scope';end if;
+ delete from public.wm_direct_messages where id in (mid,mid2);
+ raise notice 'B2_DIRECT_PAGINATION_SQL_PASS: stable ties, cursor scope, bounds and search';
  d:=jsonb_build_object('room_id',rid,'code_hash',code,'receiver_name','Display','lease_id',lid);
  -- Reject malformed hashes before INSERT (RPC must fail closed, not raise a CHECK error).
  if public.wm_display_action(r,'offer',jsonb_build_object('code_hash',repeat('a',63),'name','Invalid')) is not null
