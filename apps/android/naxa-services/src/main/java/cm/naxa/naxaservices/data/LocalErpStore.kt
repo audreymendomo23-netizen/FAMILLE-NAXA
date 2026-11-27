@@ -24,6 +24,10 @@ import java.time.Instant
 import org.json.JSONArray
 import org.json.JSONObject
 
+/** Minimal operational projections, excluding customer contact details and finances. */
+data class ScopedPressingTicket(val id:String,val ticketNumber:String,val status:String,val promisedAtMillis:Long)
+data class ScopedAppointment(val id:String,val serviceName:String,val startsAtMillis:Long,val endsAtMillis:Long,val status:String)
+
 @Entity(tableName = "local_pressing_orders", indices = [
     Index(value = ["siteId"]),
     Index(value = ["ticketNumber"], unique = true),
@@ -678,6 +682,13 @@ data class SupplierPurchaseLineDraft(
 interface NaxaServicesDao {
     @Query("SELECT * FROM local_pressing_orders WHERE orgId = :orgId AND siteId = :siteId ORDER BY createdAtMillis DESC")
     fun observePressingOrders(orgId: String, siteId: String): Flow<List<LocalPressingOrder>>
+
+    // Dedicated workstation queries: never infer whole-site access from a workstation grant.
+    @Query("SELECT id, ticketNumber, status, promisedAtMillis FROM local_pressing_orders WHERE orgId = :orgId AND siteId = :siteId AND workstationId = :workstationId AND :workstationId <> '' ORDER BY createdAtMillis DESC")
+    fun observeWorkstationPressingTickets(orgId:String,siteId:String,workstationId:String):Flow<List<ScopedPressingTicket>>
+
+    @Query("SELECT id, serviceName, startsAtMillis, endsAtMillis, status FROM local_appointments WHERE orgId = :orgId AND siteId = :siteId AND workstationId = :workstationId AND assignedMemberId = :memberId AND :workstationId <> '' AND :memberId <> '' ORDER BY startsAtMillis ASC")
+    fun observeAssignedWorkstationAppointments(orgId:String,siteId:String,workstationId:String,memberId:String):Flow<List<ScopedAppointment>>
 
     @Query("SELECT * FROM local_pressing_orders WHERE id = :id AND orgId = :orgId AND siteId = :siteId LIMIT 1")
     suspend fun findPressingOrder(id: String, orgId: String, siteId: String): LocalPressingOrder?
@@ -2403,6 +2414,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             .put("order_id", current.id)
             .put("org_id", current.orgId)
             .put("site_id", current.siteId)
+            .put("workstation_id", current.workstationId)
             .put("from_status", current.status)
             .put("to_status", next)
             .put("reason", reason.trim())

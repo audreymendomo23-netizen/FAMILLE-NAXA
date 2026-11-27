@@ -6,6 +6,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -56,6 +57,24 @@ class SecureLocalDatabaseInstrumentedTest {
             context.deleteDatabase(name)
             key.delete()
         }
+    }
+
+    @Test fun workstationProjectionsDoNotExposeOtherPostsSitesOrganizationsOrAssignedStaff()=runBlocking<Unit>(Dispatchers.IO){
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val name="secure-scope-qa-"+UUID.randomUUID()+".db"
+        try {
+            SecureLocalDatabase.open(context,name).withDatabase { db ->
+                val dao=db.naxaServicesDao()
+                val ticket=LocalPressingOrder(id="t1",orgId="org-a",siteId="site-a",workstationId="post-a",ticketNumber="T1",customerName="private",customerPhone="600000000",itemsSummary="fixture",totalXaf=1000,depositXaf=0,promisedAtMillis=100,actorMemberId="member-a",createdAtMillis=1,updatedAtMillis=1)
+                for(row in listOf(ticket,ticket.copy(id="t2",ticketNumber="T2",workstationId="post-b"),ticket.copy(id="t3",ticketNumber="T3",siteId="site-b"),ticket.copy(id="t4",ticketNumber="T4",orgId="org-b"),ticket.copy(id="t5",ticketNumber="T5",workstationId=null)))dao.insertPressingOrder(row)
+                val appointment=LocalAppointment("a1","org-a","site-a","post-a","private","service","member-a",1,2,0,actorMemberId="member-a",createdAtMillis=1)
+                for(row in listOf(appointment,appointment.copy(id="a2",assignedMemberId="member-b"),appointment.copy(id="a3",workstationId="post-b"),appointment.copy(id="a4",siteId="site-b"),appointment.copy(id="a5",orgId="org-b"),appointment.copy(id="a6",workstationId=null)))dao.insertAppointment(row)
+                assertEquals(listOf("t1"),dao.observeWorkstationPressingTickets("org-a","site-a","post-a").first().map{it.id})
+                assertTrue(dao.observeWorkstationPressingTickets("org-a","site-a","").first().isEmpty())
+                assertEquals(listOf("a1"),dao.observeAssignedWorkstationAppointments("org-a","site-a","post-a","member-a").first().map{it.id})
+                assertTrue(dao.observeAssignedWorkstationAppointments("org-a","site-a","post-a","").first().isEmpty())
+            }
+        }finally{context.deleteDatabase(name);File(context.noBackupFilesDir,"$name.wrapped-key").delete()}
     }
 
     @Test fun newDatabaseIsEncryptedFromFirstWrite()=runBlocking<Unit>(Dispatchers.IO){

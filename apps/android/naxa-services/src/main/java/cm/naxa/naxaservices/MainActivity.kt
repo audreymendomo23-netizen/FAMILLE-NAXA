@@ -292,6 +292,9 @@ private fun NaxaServicesRoot(
 
     LaunchedEffect(recoveryAttempt) {
         if(session!=null)return@LaunchedEffect
+        // Process death can restore a saved ERP/onboarding route without its session.
+        // Restart authentication rather than waiting forever for a login route.
+        route=AppRoute.LOGIN.name
         pendingRefresh = vault.loadRefreshToken()
         val saved = pendingRefresh
         val binding=vault.binding()
