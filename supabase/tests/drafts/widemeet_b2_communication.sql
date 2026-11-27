@@ -53,7 +53,7 @@ begin
  perform public.wm_periodic_action(m,'center-periodic-save','{"cadence":"daily","enabled":true}');
  if (select count(*) from public.wm_periodic_preferences where workspace_id=w)<>2 then raise exception 'preferences not saved';end if;
  update public.wm_periodic_preferences set next_start=(clock_timestamp() at time zone 'Africa/Douala')::date-1 where workspace_id=w;
- update public.wm_rooms set state=state||jsonb_build_object('scheduledMs',floor(extract(epoch from (((clock_timestamp() at time zone 'Africa/Douala')::date-1)::timestamp at time zone 'Africa/Douala'))*1000)::bigint,'durationMinutes',30) where id=rid;
+ update public.wm_rooms as room_fixture set state=room_fixture.state||jsonb_build_object('scheduledMs',floor(extract(epoch from (((clock_timestamp() at time zone 'Africa/Douala')::date-1)::timestamp at time zone 'Africa/Douala'))*1000)::bigint,'durationMinutes',30) where id=rid;
  if public.wm_periodic_run(10)<>2 or public.wm_periodic_run(10)<>0 then raise exception 'periodic retry';end if;
  if (public.wm_periodic_action(h,'center-periodic-list','{}')->'items'->0->'metrics'->>'total') is distinct from '1' then raise exception 'promoter total';end if;
  if (public.wm_periodic_action(m,'center-periodic-list','{}')->'items'->0->'metrics'->>'total') is distinct from '0' then raise exception 'manager scope';end if;
@@ -63,7 +63,7 @@ begin
  update public.wm_memberships set enabled=false where account_id=manager and workspace_id=w;
  if public.wm_periodic_action(m,'center-periodic-list','{}') is not null then raise exception 'revoked report access';end if;
  update public.wm_memberships set enabled=true where account_id=manager and workspace_id=w;
- update public.wm_rooms set state=state-'scheduledMs'-'durationMinutes' where id=rid;
+ update public.wm_rooms as room_fixture set state=room_fixture.state-'scheduledMs'-'durationMinutes' where id=rid;
  raise notice 'B4_PERIODIC_SQL_PASS: calendar, preference, snapshot, retry, roles, isolation, disable and revocation';
  d:=jsonb_build_object('room_id',rid,'code_hash',code,'receiver_name','Display','lease_id',lid);
  -- Reject malformed hashes before INSERT (RPC must fail closed, not raise a CHECK error).
