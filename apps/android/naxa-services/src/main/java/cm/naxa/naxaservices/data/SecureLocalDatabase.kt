@@ -8,7 +8,7 @@ import android.util.AtomicFile
 import androidx.room.Room
 import net.zetetic.database.DatabaseErrorHandler
 import net.zetetic.database.sqlcipher.SQLiteDatabase
-import net.zetetic.database.sqlcipher.SupportOpenHelperFactory
+import cm.naxa.naxaservices.data.PreservingCipherFactory
 import java.io.File
 import java.io.FileOutputStream
 import java.security.KeyStore
@@ -42,7 +42,7 @@ internal object SecureLocalDatabase {
             }
         }
         val db=Room.databaseBuilder(app,NsServicesDatabase::class.java,name)
-            .openHelperFactory(SupportOpenHelperFactory(passphrase))
+            .openHelperFactory(PreservingCipherFactory(passphrase))
             .addMigrations(NS_SERVICES_MIGRATION_1_2,NS_SERVICES_MIGRATION_2_3,NS_SERVICES_MIGRATION_3_4,
                 NS_SERVICES_MIGRATION_4_5,NS_SERVICES_MIGRATION_5_6,NS_SERVICES_MIGRATION_6_7,
                 NS_SERVICES_MIGRATION_7_8,NS_SERVICES_MIGRATION_8_9,NS_SERVICES_MIGRATION_9_10,

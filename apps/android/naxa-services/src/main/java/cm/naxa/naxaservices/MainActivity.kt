@@ -98,6 +98,7 @@ import cm.naxa.naxaservices.auth.RecoveryReset
 import cm.naxa.naxaservices.auth.SessionVault
 import cm.naxa.naxaservices.auth.RememberedSessionChanged
 import cm.naxa.naxaservices.auth.discardRememberedSession
+import cm.naxa.naxaservices.auth.isTemporarySessionFailure
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -146,6 +147,8 @@ internal enum class AppRoute {
     PROFILE, APPEARANCE, BILLING, SUBSCRIPTIONS, PURCHASES, TAXES, CHARGES, OBJECTIVES, TEAM_PERFORMANCE,
     AI_INSIGHTS, LIVECHAT
 }
+
+private val offlineLocalRoutes = setOf(AppRoute.DASHBOARD,AppRoute.MENU,AppRoute.AGENDA,AppRoute.PRESSING,AppRoute.WORK_ORDERS,AppRoute.CASH,AppRoute.SERVICES,AppRoute.CUSTOMERS,AppRoute.STOCK,AppRoute.REPORTS,AppRoute.PURCHASES,AppRoute.CHARGES,AppRoute.OBJECTIVES)
 
 private const val TERMS_VERSION = "2026-11-v1"
 private const val PRIVACY_VERSION = "2026-11-v1"
@@ -206,10 +209,11 @@ private fun NaxaServicesRoot(
         pushRegistration.token,
         pushRegistration.retryNonce,
         session?.accessToken,
-        session?.account?.memberId
+        session?.account?.memberId,
+        offlineRestored
     ) {
         val activeSession = session
-        if (!pushRegistration.enabled || activeSession == null) return@LaunchedEffect
+        if (!pushRegistration.enabled || activeSession == null || offlineRestored) return@LaunchedEffect
         if (
             android.os.Build.VERSION.SDK_INT >= 33 &&
             androidx.core.content.ContextCompat.checkSelfPermission(
@@ -238,6 +242,7 @@ private fun NaxaServicesRoot(
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var pendingRefresh by remember { mutableStateOf<String?>(null) }
+    var recoveryAttempt by remember { mutableIntStateOf(0) }
     var rememberSession by rememberSaveable { mutableStateOf(false) }
     var locale by rememberSaveable { mutableStateOf(preferences.locale()) }
     var lightTheme by rememberSaveable { mutableStateOf(preferences.isLightNow()) }
@@ -285,7 +290,8 @@ private fun NaxaServicesRoot(
         return AppRoute.DASHBOARD.name
     }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(recoveryAttempt) {
+        if(session!=null)return@LaunchedEffect
         pendingRefresh = vault.loadRefreshToken()
         val saved = pendingRefresh
         val binding=vault.binding()
@@ -313,7 +319,7 @@ private fun NaxaServicesRoot(
                         // A transport failure is not a revocation. Keep the encrypted token and retry.
                         message = "Connexion indisponible. Votre session mémorisée est conservée."
                         val status=(failure as? AuthApiException)?.statusCode
-                        val cached=if(status==null||status==408||status==429||(status!=null&&status>=500))vault.loadOfflineSnapshot() else null
+                        val cached=if(isTemporarySessionFailure(status))vault.loadOfflineSnapshot() else null
                         if(cached!=null && localPinManager.isConfigured(cached.account.memberId)){
                             offlineRestored=true;session=cached;pendingRefresh=null;localPinUnlockedMemberId=null
                             route=AppRoute.DASHBOARD.name;tourActive=false
@@ -386,6 +392,7 @@ private fun NaxaServicesRoot(
             if(vault.loadOfflineSnapshot()==null){
                 offlineRestored=false;session=null;localPinUnlockedMemberId=null;route=AppRoute.LOGIN.name
                 message="Autorisation locale expirée. Reconnectez-vous pour reprendre."
+                if(rememberSession)recoveryAttempt++
                 break
             }
             delay(1000L)
@@ -432,7 +439,23 @@ private fun NaxaServicesRoot(
                             route = AppRoute.LOGIN.name
                             message = "Session expirée ou révoquée. Connecte-toi à nouveau."
                             activeSession = null
-                        } else {
+                        } else if(!offlineRestored) {
+                            // Once renewal fails, no unbounded authenticated UI remains visible.
+                            val cached=if(rememberSession && isTemporarySessionFailure(authError?.statusCode))vault.loadOfflineSnapshot() else null
+                            val previous=activeSession
+                            if(cached!=null && previous!=null && cached.account.memberId==previous.account.memberId &&
+                                cached.account.organizationId==previous.account.organizationId && cached.deviceId==previous.deviceId &&
+                                localPinManager.isConfigured(cached.account.memberId)){
+                                offlineRestored=true;session=cached;localPinUnlockedMemberId=null
+                                route=AppRoute.DASHBOARD.name;tourActive=false
+                                message=localizedLabel("Accès local temporaire.","Temporary local access.","Naatgol nokkuure sahaa seeɗa.")
+                            }else{
+                                session=null;localPinUnlockedMemberId=null;route=AppRoute.LOGIN.name
+                                message=localizedLabel("Connexion requise pour reprendre.","Connection required to resume.","Ceŋol soklaa ngam jokkude.")
+                                if(rememberSession)recoveryAttempt++
+                            }
+                            return@LaunchedEffect
+                        }else{
                             retry += 1
                             delay(30_000L)
                         }
@@ -634,12 +657,14 @@ private fun NaxaServicesRoot(
                             val current = session
                             if (current == null) {
                                 route = AppRoute.LOGIN.name
-                            } else if(offlineRestored&&localPinUnlockedMemberId!=current.account.memberId){
+                            } else if(localPinUnlockedMemberId!=current.account.memberId){
                                 Box(Modifier.fillMaxSize())
-                            } else if(offlineRestored&&AppRoute.valueOf(route) !in setOf(AppRoute.DASHBOARD,AppRoute.MENU,AppRoute.AGENDA,AppRoute.PRESSING,AppRoute.WORK_ORDERS,AppRoute.CASH,AppRoute.SERVICES,AppRoute.CUSTOMERS,AppRoute.STOCK,AppRoute.REPORTS,AppRoute.PURCHASES,AppRoute.CHARGES,AppRoute.OBJECTIVES)){
+                            } else if(offlineRestored&&AppRoute.valueOf(route) !in offlineLocalRoutes){
                                 AccessDeniedContent(Modifier.fillMaxSize()){route=AppRoute.DASHBOARD.name}
                             } else {
+                                key(current.account.memberId,current.account.organizationId,current.account.roleCode,current.account.activeSiteIds,current.deviceId,offlineRestored){
                                 ErpScreen(
+                                    offlineLocal=offlineRestored,
                                     route = AppRoute.valueOf(route),
                                     authApi = api,
                                     activeSession = current,
@@ -723,6 +748,7 @@ private fun NaxaServicesRoot(
                                         }
                                     }
                                 )
+                                }
                             }
                         }
                     }
@@ -1017,6 +1043,7 @@ private fun AccessDeniedContent(modifier: Modifier, onBack: () -> Unit) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ErpScreen(
+    offlineLocal: Boolean,
     route: AppRoute,
     authApi: AuthApi,
     activeSession: AuthSession,
@@ -1041,7 +1068,8 @@ private fun ErpScreen(
     onTourSkip: () -> Unit
 ) {
     val reminderContext = androidx.compose.ui.platform.LocalContext.current
-    LaunchedEffect(activeSession.account.organizationId) {
+    LaunchedEffect(activeSession.account.organizationId,offlineLocal) {
+        if(offlineLocal)return@LaunchedEffect
         val request = androidx.work.PeriodicWorkRequestBuilder<RecurringChargeReminderWorker>(
             24, java.util.concurrent.TimeUnit.HOURS
         ).setInputData(
@@ -1089,12 +1117,12 @@ private fun ErpScreen(
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
-        if (!canAccessConfiguredRoute(route, roleCode, activityProfile)) {
+        if (!canAccessConfiguredRoute(route, roleCode, activityProfile) || (offlineLocal && route !in offlineLocalRoutes)) {
             AccessDeniedContent(Modifier.padding(padding)) { onNavigate(AppRoute.DASHBOARD) }
         } else if (route == AppRoute.DASHBOARD) {
-            DashboardContent(Modifier.padding(padding), accountName, roleCode, locale, activityProfile, localRepository, activeSession, onNavigate, onLogout, tourActive, tourStep, onTourNext, onTourSkip)
+            DashboardContent(Modifier.padding(padding), accountName, roleCode, locale, activityProfile, localRepository, activeSession, onNavigate, onLogout, tourActive, tourStep, onTourNext, onTourSkip,offlineLocal)
         } else if (route == AppRoute.MENU) {
-            ModuleMenu(Modifier.padding(padding), roleCode, activityProfile, onNavigate, onLogout)
+            ModuleMenu(Modifier.padding(padding), roleCode, activityProfile, onNavigate, onLogout,offlineLocal)
         } else if (route == AppRoute.PRESSING) {
             PressingLocalContent(Modifier.padding(padding), localRepository, activeSession)
         } else if (route == AppRoute.AGENDA) {
@@ -1152,7 +1180,7 @@ private fun ErpScreen(
         } else if (currentSpec != null) {
             ModuleContent(Modifier.padding(padding), currentSpec, onNavigate)
         } else {
-            ModuleMenu(Modifier.padding(padding), roleCode, activityProfile, onNavigate, onLogout)
+            ModuleMenu(Modifier.padding(padding), roleCode, activityProfile, onNavigate, onLogout,offlineLocal)
         }
     }
 }
@@ -2430,14 +2458,15 @@ private fun DashboardContent(
     tourActive: Boolean,
     tourStep: Int,
     onTourNext: () -> Unit,
-    onTourSkip: () -> Unit
+    onTourSkip: () -> Unit,
+    offlineLocal:Boolean
 ) {
     val dashboardContext = androidx.compose.ui.platform.LocalContext.current
     val syncApi = remember(dashboardContext) { AuthApi(dashboardContext) }
     val syncScope = rememberCoroutineScope()
     var syncBusy by remember { mutableStateOf(false) }
     var syncMessage by remember { mutableStateOf<String?>(null) }
-    val syncEnabled = SupplierSyncCoordinator.isConfigured() && session.deviceId.isNotBlank()
+    val syncEnabled = !offlineLocal && SupplierSyncCoordinator.isConfigured() && session.deviceId.isNotBlank()
     var hour by remember { mutableIntStateOf(Calendar.getInstance(java.util.TimeZone.getTimeZone("Africa/Douala")).get(Calendar.HOUR_OF_DAY)) }
     var nowMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) {
@@ -2606,15 +2635,15 @@ private fun DashboardContent(
                 }
             }
         }
-        if (BuildConfig.BRIEFING_ENABLED) { item { DailyBriefingCard(session, siteId) } }
-        if (BuildConfig.MEETINGS_ENABLED && rosterAvailable(session.account.businessMode)) { item { InternalMeetingsCard(session, siteId) } }
-        if (BuildConfig.ROSTER_ENABLED && rosterAvailable(session.account.businessMode)) {
+        if (!offlineLocal && BuildConfig.BRIEFING_ENABLED) { item { DailyBriefingCard(session, siteId) } }
+        if (!offlineLocal && BuildConfig.MEETINGS_ENABLED && rosterAvailable(session.account.businessMode)) { item { InternalMeetingsCard(session, siteId) } }
+        if (!offlineLocal && BuildConfig.ROSTER_ENABLED && rosterAvailable(session.account.businessMode)) {
             item { StaffRosterCard(session, siteId) }
         }
         item {
             Text(stringResource(R.string.quick_actions), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
         }
-        items(visibleModuleSpecs(role, activityProfile).map { it.route }
+        items(visibleModuleSpecs(role, activityProfile).map { it.route }.filter { !offlineLocal || it in offlineLocalRoutes }
             .filter { it !in setOf(AppRoute.NETWORK, AppRoute.SITES, AppRoute.WORKSTATIONS, AppRoute.ORGANIZATION, AppRoute.SECURITY, AppRoute.SETTINGS, AppRoute.HELP, AppRoute.PROFILE, AppRoute.APPEARANCE, AppRoute.LIVECHAT, AppRoute.SUBSCRIPTIONS, AppRoute.TAXES, AppRoute.AI_INSIGHTS) }
             .distinct().take(8)) { target ->
             val spec = modules.firstOrNull { it.route == target }
@@ -2723,8 +2752,8 @@ private fun ModuleContent(modifier: Modifier, spec: ModuleSpec, onNavigate: (App
 }
 
 @Composable
-private fun ModuleMenu(modifier: Modifier, roleCode: String, activityProfile: String?, onNavigate: (AppRoute) -> Unit, onLogout: () -> Unit) {
-    val visibleModules = visibleModuleSpecs(roleCode, activityProfile)
+private fun ModuleMenu(modifier: Modifier, roleCode: String, activityProfile: String?, onNavigate: (AppRoute) -> Unit, onLogout: () -> Unit,offlineLocal:Boolean) {
+    val visibleModules = visibleModuleSpecs(roleCode, activityProfile).filter { !offlineLocal || it.route in offlineLocalRoutes }
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item {
             Spacer(Modifier.height(12.dp))
