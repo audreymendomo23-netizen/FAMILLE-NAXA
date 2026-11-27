@@ -30,6 +30,9 @@ internal data class NF(val key:String,val fr:String,val en:String,val type:Strin
 internal data class NA(val action:String,val fr:String,val en:String,val fields:List<NF>,val owner:Boolean=false,val build:(JSONObject,ND,Map<String,String>)->JSONObject={b,_,_->b},val repeatFields:List<NF> = emptyList(),val arrayKey:String="",val minRows:Int=1,val maxRows:Int=30)
 internal data class NG(val id:String,val fr:String,val en:String,val loads:List<String>,val summaries:List<Triple<String,String,String>>,val forms:List<NA>,val owner:Boolean=false)
 internal val bulk3Groups=listOf(
+ NG("tax","Fiscalité de gestion","Tax management",listOf("tax_snapshot"),listOf(Triple("tax_snapshot","rules","name")),listOf(
+  NA("tax_rule_set","Valider un taux TTC par article","Approve gross-inclusive item rate",listOf(NF("item_id","Article","Item","select",options={d,_->opts(d.rows("tax_snapshot","items"),"id","name")}),NF("category","Catégorie fiscale","Tax category","text"),NF("rate_bps","Taux en points de base (100 = 1 %)","Rate in basis points (100 = 1%)","zero"),NF("valid_from","Date d'effet","Effective date","date"),NF("validation_reference","Référence du comptable","Accountant reference","reason")),owner=true,build={b,d,v->b.put("expected_version",d.find("tax_snapshot","items",v["item_id"]).optInt("version"))}),
+  NA("tax_report","Calculer un état fiscal de gestion","Calculate management tax report",listOf(NF("from","Début","From","date"),NF("to","Fin","To","date")),owner=true)),owner=true),
  NG("supplier_returns","Retours fournisseurs","Supplier returns",listOf("supplier_return_snapshot"),listOf(Triple("supplier_return_snapshot","returns","reference"),Triple("supplier_return_snapshot","refunds","reference"),Triple("supplier_return_snapshot","credits","reference")),listOf(
   NA("supplier_return","Enregistrer un retour avec avoir","Record supplier return with credit",listOf(NF("receipt_id","Réception d'origine","Original receipt","select",options={d,_->opts(d.rows("supplier_return_snapshot","receipts"),"id","lot_label")}),NF("qty_milli","Quantité retournée","Returned quantity","milli"),NF("reference","Référence avoir fournisseur","Supplier credit reference","text"),NF("reason","Motif","Reason","reason")),owner=true,build={b,d,v->b.put("expected_milli",d.find("supplier_return_snapshot","receipts",v["receipt_id"]).optLong("remaining_milli"))}),
   NA("supplier_refund","Confirmer un remboursement reçu","Record received supplier refund",listOf(NF("purchase_id","Avoir à recouvrer","Supplier credit","select",options={d,_->opts(d.rows("supplier_return_snapshot","credits"),"id","reference")}),NF("amount_xaf","Montant reçu FCFA","Amount received XAF","int"),NF("method","Moyen","Method","select",options={_,_->listOf("cash","bank","mtn_momo","orange_money","card").map{it to it}}),NF("reference","Référence justificative","Evidence reference","text"),NF("reason","Justification","Reason","reason")),owner=true)),owner=true),
@@ -215,6 +218,14 @@ internal fun bulk3Body(form:NA,data:ND,values:Map<String,String>,repeated:List<M
  result?.let{r->
   val fields=listOf("assets_xaf" to tr("Actifs","Assets"),"liabilities_xaf" to tr("Dettes","Liabilities"),"equity_xaf" to tr("Capitaux propres","Equity"),"revenue_xaf" to tr("Produits","Revenue"),"expenses_xaf" to tr("Charges","Expenses"),"result_xaf" to tr("Résultat","Result"),"variance_xaf" to tr("Écart caisse","Cash variance"),"unclassified" to tr("Comptes non classés","Unclassified accounts"),"pending_sources" to tr("Sources non comptabilisées","Unposted sources"))
   fields.forEach{(k,label)->if(r.has(k))Text(label+" : "+r.optString(k))}
+  if(r.has("statutory_ready")){
+   Text(tr("Gestion uniquement — aucune déclaration fiscale.","Management only — no tax filing."))
+   Text(tr("Ventes brutes FCFA","Gross sales XAF")+" : "+r.optString("gross_xaf"))
+   Text(tr("Reçus non couverts","Uncovered receipts")+" : "+r.optString("missing_receipts"))
+   Text(tr("Lignes non classées","Unclassified lines")+" : "+r.optString("unclassified_lines"))
+   Text(tr("Ajustements non ventilés FCFA","Unallocated adjustments XAF")+" : "+r.optString("unallocated_adjustments_xaf"))
+   r.rows("categories").forEach{Text(it.optString("category")+" · "+it.optString("rate_bps")+" bps · "+it.optString("gross_xaf")+" FCFA · "+tr("Taxe","Tax")+" "+it.optString("tax_xaf"))}
+  }
   if(r.has("sites_included")){Text(tr("Établissements couverts","Included sites")+" : "+r.optString("sites_included")+"/"+r.optString("sites_total"));r.rows("sites").forEach{Text(it.optString("site_name")+" · "+it.optString("result_xaf")+" FCFA")};if(!r.optBoolean("complete_scope")||!r.optBoolean("all_closed"))Text(tr("Consolidation provisoire ou partielle","Provisional or partial consolidation"))}
   if(r.has("closed_through")&&(r.isNull("closed_through")||r.optString("closed_through")<r.optString("to")))Text(tr("États provisoires, période non clôturée.","Provisional statements, period not closed."))
  }

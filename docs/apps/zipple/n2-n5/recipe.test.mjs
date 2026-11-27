@@ -829,6 +829,17 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal(Number(await scalar("select amount_xaf from zp_ledger_sources where kind='supplier_return' and source_id=$1",[returned])),500);
  assert.equal(Number(await scalar("select amount_xaf from zp_ledger_sources where kind='supplier_refund' and source_id=$1",[rf])),500);
  await scalar("select zp_treasury_reconcile($1,$2,$3,'supplier_refund',$4,null,'Statement verified')",[ctl.access,ctl.site,uid(),rf]);
+ const taxable=await add(ctl,"Tax fixture","kitchen",1200,5),taxDay=await scalar("select (now() at time zone 'Africa/Douala')::date::text");
+ const taxKey=uid(),taxArgs=[ctl.access,ctl.site,taxable,taxKey,taxDay];
+ const taxId=await scalar("select zp_tax_rule_set($1,$2,$3,$4,0,'Fixture tax',2000,$5,'Synthetic accountant reference')",taxArgs);
+ assert.equal(await scalar("select zp_tax_rule_set($1,$2,$3,$4,0,'Fixture tax',2000,$5,'Synthetic accountant reference')",taxArgs),taxId);
+ const txTicket=await order(ctl,"counter",[{item_id:taxable,qty:1}]);for(const state of ["preparing","ready","served"])await scalar("select zp_advance_line($1,$2,$3,$4,$5)",[ctl.access,ctl.site,txTicket.id,taxable,state]);
+ const txCash=await scalar("select zp_open_cash($1,$2,0)",[ctl.access,ctl.site]),txReceipt=await scalar("select zp_record_sale($1,$2,$3,$4,$5,'cash',1200,null)",[ctl.access,ctl.site,txCash,txTicket.id,uid()]);
+ assert.equal(Number(await scalar("select tax_xaf from zp_sale_tax_lines where receipt_id=$1",[txReceipt])),200);
+ await scalar("select zp_tax_rule_set($1,$2,$3,$4,1,'Revised fixture',1000,$5,'New synthetic reference')",[ctl.access,ctl.site,taxable,uid(),taxDay]);
+ const txReport=await scalar("select zp_tax_report($1,$2,$3,$3)",[ctl.access,ctl.site,taxDay]);assert.equal(txReport.categories[0].tax_xaf,"200");assert.equal(txReport.categories[0].net_xaf,"1000");assert.equal(txReport.statutory_ready,false);assert.equal(txReport.missing_receipts,0);
+ await assert.rejects(scalar("select zp_tax_report($1,$2,$3,$3)",[a.access,ctl.site,taxDay]),/DENIED/);
+ console.log("ZIPPLE_BULK3_VERSIONED_GROSS_TAX_REPORT_PASS");
  console.log("ZIPPLE_BULK3_SUPPLIER_RETURN_CREDIT_REFUND_PASS");
  console.log("ZIPPLE_BULK3_ERP_APPROVAL_AND_QUALITY_CONTROL_PASS");
  }
