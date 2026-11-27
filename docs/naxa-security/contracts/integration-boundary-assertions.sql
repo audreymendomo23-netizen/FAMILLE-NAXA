@@ -1,0 +1,26 @@
+begin;
+insert into auth.users values ('00000000-0000-0000-0000-000000000061'),('00000000-0000-0000-0000-000000000062');
+insert into public.sec_organizations(id,name) values ('10000000-0000-0000-0000-000000000061','QA integration');
+insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000061','00000000-0000-0000-0000-000000000061','owner',true),('10000000-0000-0000-0000-000000000061','00000000-0000-0000-0000-000000000062','viewer',true);
+insert into public.sec_sites(id,organization_id,name) values ('20000000-0000-0000-0000-000000000061','10000000-0000-0000-0000-000000000061','QA site');
+insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000061','20000000-0000-0000-0000-000000000061','00000000-0000-0000-0000-000000000061',true),('10000000-0000-0000-0000-000000000061','20000000-0000-0000-0000-000000000061','00000000-0000-0000-0000-000000000062',true);
+insert into public.sec_devices(id,organization_id,site_id,label,kind) values ('40000000-0000-0000-0000-000000000061','10000000-0000-0000-0000-000000000061','20000000-0000-0000-0000-000000000061','QA camera','camera');
+insert into public.sec_media_grants(organization_id,site_id,device_id,user_id,media,playback_url,expires_at) values ('10000000-0000-0000-0000-000000000061','20000000-0000-0000-0000-000000000061','40000000-0000-0000-0000-000000000061','00000000-0000-0000-0000-000000000061','video','https://media.example.invalid/security/media/qa',now()+interval '2 minutes');
+insert into public.sec_payment_receipts(organization_id,site_id,channel,reference,amount_fcfa,provider_confirmed_at) values ('10000000-0000-0000-0000-000000000061','20000000-0000-0000-0000-000000000061','bank','qa-payment',5000,now());
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000061',true);
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000061','20000000-0000-0000-0000-000000000061','00000000-0000-0000-0000-000000000061',gen_random_uuid(),'payment','{"channel":"bank","reference":"qa-payment","amount_fcfa":5000}'),('10000000-0000-0000-0000-000000000061','20000000-0000-0000-0000-000000000061','00000000-0000-0000-0000-000000000061',gen_random_uuid(),'payment','{"channel":"bank","reference":"qa-payment","amount_fcfa":6000}'),('10000000-0000-0000-0000-000000000061','20000000-0000-0000-0000-000000000061','00000000-0000-0000-0000-000000000061',gen_random_uuid(),'payment','{"channel":"bank","reference":"unknown","amount_fcfa":5000}');
+do $qa$begin
+ if (select count(*) from public.sec_media_grants)<>1 then raise exception 'grant missing';end if;
+ if (select count(*) from public.sec_payment_reconciliation where reconciliation_state='matched')<>1 or (select count(*) from public.sec_payment_reconciliation where reconciliation_state='amount_mismatch')<>1 or (select count(*) from public.sec_payment_reconciliation where reconciliation_state='unmatched')<>1 then raise exception 'match incorrect';end if;
+ if has_table_privilege(current_user,'public.sec_media_grants','INSERT') or has_table_privilege(current_user,'public.sec_media_grants','UPDATE') then raise exception 'grant writable';end if;
+end $qa$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000062',true);
+do $qa$begin if (select count(*) from public.sec_media_grants)<>0 or (select count(*) from public.sec_payment_reconciliation)<>0 then raise exception 'private data leaked';end if;end $qa$;
+reset role;
+update public.sec_media_grants set revoked_at=now();
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000061',true);
+do $qa$begin if (select count(*) from public.sec_media_grants)<>0 then raise exception 'revoked media visible';end if;end $qa$;
+reset role;
+rollback;
