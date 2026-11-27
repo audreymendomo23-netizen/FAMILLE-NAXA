@@ -149,3 +149,28 @@ Décision promoteur : « La livraison doit être incluse dans Snack-bar. Quand l
 - 19920aa : build Pages 45906118180, PWA 45906118119 et APK debug 45906118077 SUCCESS. SQL 45906118446 FAILURE (délimiteurs SQL réduits à un dollar lors de l'insertion). Correction 35908ad : balises nommées PostgreSQL explicites, SQL 45906242099 SUCCESS.
 - Recettes navigateur complémentaires achats par conditionnement fournisseur, réception partielle et consolidation/CSV ajoutées dans 9861d33, fixture fournisseur corrigée dans 4edaea7.
 - Dernier candidat 4edaea7bab82704cbf573608471286772b01855c : SQL 45906353467 et Edge/navigateur 45906353485 en cours au relevé. Aucun vert final présumé. Reprendre ces deux résultats et les éventuels runs Android en cours. Pas de déploiement métier hébergé ni modification main.
+
+
+## Reprise intégrée Bulk 3 — 27/11/2026
+Branche `work/zipple-completion-20261126`, candidat fonctionnel `3d559581920d63f59cd1b5564e0671fc364b0fd9`. Préservation du Bulk 2 validé sur 55e8424.
+- d6e9226 : réutilisation du modèle APPEND_ONLY_REVIEW de Famille NAXA, files IndexedDB/Room et WorkManager. Revue motivée d'un événement refusé, historique immuable, reçu authentifié et contrôlé par organisation/site/membre, refus des événements déjà exécutés, déblocage ordonné de la file sans appliquer le mouvement obsolète. Comptage négatif natif et UI de revue Web/Android. SQL 45964015701 SUCCESS.
+- f48cec7 : affectations comptables par nature de source, comptes distincts et classifiés, version et validation explicite par responsable, journal et motif, écriture seulement sur action autorisée, montant issu de la source, unicité et rejeu stable même après révision, version périmée interdite pour une nouvelle écriture. UI Web et Compose. Aucun compte SYSCOHADA ni taux fiscal inventé. SQL 45964163739 SUCCESS 45/45, 0 échec/skip.
+- a7ad1cf : recette navigateur de conflit de comptage réel après changement de stock concurrent ; extension de la recette Android sur session authentifiée et Supabase local réel, fournisseur créé par UI, achat/réceptions/règlement, production et coût, journal affecté, états et preuve privée, blocage puis revue UI Room/WorkManager ; maintien des assertions Bulk 2. SQL 45964333844 SUCCESS, 45/45, 0 échec/skip.
+- 3d55958 : correction des clés React adjacentes identiques (workspace/revue) causant des doublons DOM au changement de site (runs 45964015746 et 45964333578 en échec) ; sérialisation et déclenchement automatique du sync Web au retour réseau ; ordonnancement stable des événements ; WorkManager APPEND_OR_REPLACE et isolement des conflits par site. Aucun changement backend SQL entre a7ad1cf et 3d55958.
+
+### Matrice locale de qualification
+| Contrôle | Run | État constaté au relevé |
+|---|---|---|
+| SQL / assertions métier et régression | [45964333844](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45964333844) | SUCCESS 45/45, 0 échec, 0 skip |
+| Build Pages | [45964598500](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45964598500) | SUCCESS |
+| Pages live (version déjà publiée, pas un déploiement du nouveau candidat) | [45964598459](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45964598459) | SUCCESS |
+| PWA multi-browser | [45964598438](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45964598438) | SUCCESS |
+| APK debug | [45964598482](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45964598482) | SUCCESS |
+| Socle Web/Android/émulateur | [45964598596](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45964598596) | à relever définitivement |
+| E2E métier Web et Android avec Supabase local | [45964598520](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45964598520) | à relever définitivement ; ne pas compter comme vert sans résultat |
+
+Marqueurs SQL confirmés : achats multi-lignes, recettes versionnées, conversions, multi-caisses, transferts préparations, créances et encaissements partiels, braisage et rendement, offline production/lot/comptage/dépense, revue append-only, justificatifs privés, ventilations/contrepassation, remboursements, péremption, inventaire positif, vente directe et pondérale, états de gestion, affectations comptables validées, consignes, trésorerie, avoirs/retours, préparations intermédiaires et consolidation multi-sites.
+
+### Arbitrages et limites de la clôture
+Une revue refuse définitivement l'opération obsolète et permet une nouvelle opération distincte après actualisation ; aucun écrasement automatique de stock. Les affectations comptables sont configurables, pas une certification SYSCOHADA ni une déclaration fiscale. Le CDC sections 9–12, 17.3, 17.5 et 23.7 conserve des écarts fonctionnels fins à qualifier : workflow complet d'approbation des dépenses et achats/contrôle qualité/retours fournisseur, fiscalité/taxes et exports réglementaires, inventaire par scan, couverture de toutes mutations hors ligne autorisées. Justificatifs privés contrôlés mais antivirus/rétention/stockage industriel non qualifiés. Les preuves natives de cette passe ciblent les parcours réels spécifiés, pas la parité exhaustive, le matériel physique ou la recette hébergée (Bulk 6). Aucun changement main, production, migration hébergée ou application sœur.
+Ne déclarer vert que la matrice exécutée et effectivement réussie ; ne pas assimiler au vert exhaustif du CDC.
