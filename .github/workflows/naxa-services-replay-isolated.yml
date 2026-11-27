@@ -106,6 +106,13 @@ jobs:
           values('ns-profile-photos','ns-profile-photos',false,2097152,array['image/jpeg','image/png','image/webp']);
           notify pgrst, 'reload schema';
           SQL
+      - name: Qualify optional commission configuration with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          { sed '$d' supabase/drafts/naxa_services_v24_commission_configuration.sql; cat supabase/tests/drafts/naxa_services_commission_configuration.sql; echo 'rollback;'; } | psql "$DB_URL" -v ON_ERROR_STOP=1
       - name: Qualify attendance proof candidate with rollback
         shell: bash
         run: |

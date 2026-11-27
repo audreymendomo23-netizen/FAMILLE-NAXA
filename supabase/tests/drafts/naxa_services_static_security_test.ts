@@ -7,6 +7,7 @@ type DraftSpec = {
 };
 
 const DRAFTS: DraftSpec[] = [
+  {file:"naxa_services_v24_commission_configuration.sql",tablesWithoutPolicy:["ns_automatic_commission_settings"],restrictedTables:["ns_automatic_commission_settings"]},
   {
     file: "naxa_services_v1.sql",
     tablesWithoutPolicy: [
