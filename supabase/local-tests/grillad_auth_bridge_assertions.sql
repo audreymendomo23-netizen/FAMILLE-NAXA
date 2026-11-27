@@ -99,6 +99,30 @@ do $$
 declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;
 begin if (public.grillad_report(o,s,d,d,true,null,null,null)->>'ca')::int<>2000 then raise exception 'network total';end if;end $$;
 reset role;
+-- Existing activated seller assignment to a second GRILLAD site, then revocation.
+set role authenticated;
+do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';s2 uuid:='b3000000-0000-0000-0000-000000000003';u uuid:='b1000000-0000-0000-0000-000000000002';e uuid:=gen_random_uuid();p jsonb:=jsonb_build_object('user',u,'role','seller','reason','Renfort');v jsonb;
+begin
+ perform public.grillad_action(o,s,s2,'create_site','{"name":"Second GRILLAD","reason":"Extension"}');
+ if not exists(select 1 from jsonb_array_elements(public.grillad_pilotage_status(o,s2)->'team_candidates') x where x->>'id'=u::text and x->>'role'='none') then raise exception 'candidate roster';end if;
+ v:=public.grillad_action(o,s2,e,'set_team_assignment',p);
+ if v->>'role'<>'seller' or public.grillad_action(o,s2,e,'set_team_assignment',p)<>v then raise exception 'assignment replay';end if;
+ begin perform public.grillad_action(o,s2,gen_random_uuid(),'set_team_assignment',jsonb_build_object('user',gen_random_uuid(),'role','manager','reason','Test'));raise exception 'external user assigned';exception when insufficient_privilege then null;end;
+end $$;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000002',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000012","app_metadata":{}}',true);
+do $$begin if jsonb_array_length(public.grillad_workspace())<>2 then raise exception 'second site access';end if;
+ begin perform public.grillad_action('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000003',gen_random_uuid(),'set_team_assignment','{"user":"b1000000-0000-0000-0000-000000000003","role":"manager","reason":"Test"}');raise exception 'seller assignment';exception when insufficient_privilege then null;end;
+end $$;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
+do $$begin perform public.grillad_action('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000003',gen_random_uuid(),'set_team_assignment','{"user":"b1000000-0000-0000-0000-000000000002","role":"none","reason":"Fin renfort"}');end $$;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000002',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000012","app_metadata":{}}',true);
+do $$begin if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'assignment revocation';end if;
+ begin perform public.grillad_snapshot('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000003',current_date,current_date);raise exception 'revoked access';exception when insufficient_privilege then null;end;
+end $$;
+reset role;
 -- Service across midnight, using an explicit fixture policy only.
 -- Fixture backdating only to exercise historical summaries; not available via API.
 update grillad_private.service_policy set effective_from=current_date-2 where org='b2000000-0000-0000-0000-000000000001' and site='b3000000-0000-0000-0000-000000000001';

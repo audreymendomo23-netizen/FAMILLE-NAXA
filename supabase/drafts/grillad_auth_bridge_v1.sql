@@ -57,4 +57,33 @@ grant execute on function public.grillad_auth_begin(text,boolean),public.grillad
 create function public.grillad_purge_attendance_photos() returns bigint language sql security invoker set search_path=pg_catalog as $$select grillad_private.purge_attendance_photos()$$;
 revoke all on function public.grillad_purge_attendance_photos() from public,anon,authenticated;
 grant execute on function public.grillad_purge_attendance_photos(),grillad_private.purge_attendance_photos() to service_role;
+-- Owner may assign only an already active GRILLAD collaborator in the same organization.
+-- No new auth user, no change to the central user lifecycle or other app.
+create function grillad_private.set_team_assignment(p_org uuid,p_site uuid,p_payload jsonb) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare u uuid:=auth.uid();target_user uuid;app uuid;member uuid;desired text;why text;source_grant famille_private.account_app_access%rowtype;site_grant famille_private.account_app_access%rowtype;
+begin
+ if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+ target_user:=(p_payload->>'user')::uuid;desired:=p_payload->>'role';why:=btrim(p_payload->>'reason');
+ if target_user is null or target_user=u or desired is null or desired not in ('seller','manager','none') or why is null or length(why) not between 1 and 300 then raise exception 'GRILLAD_ASSIGNMENT' using errcode='22023';end if;
+ perform pg_advisory_xact_lock(hashtextextended('grillad-network:'||p_org::text,0));
+ select id into app from famille_core.applications where code='grillad' and status='active';
+ select m.id into member from famille_core.memberships m join famille_core.client_app_access a on a.user_id=m.user_id and a.app_id=m.app_id and a.status='granted' where m.user_id=target_user and m.organization_id=p_org and m.app_id=app and m.status='active';
+ if member is null or exists(select 1 from famille_core.role_assignments r where r.membership_id=member and r.app_id=app and r.organization_id=p_org and r.role_code='owner' and r.status='active') then raise exception 'GRILLAD_COLLABORATOR_DENIED' using errcode='42501';end if;
+ if desired<>'none' then
+  select g.* into source_grant from famille_private.account_app_access g where g.user_id=target_user and g.app_code='grillad' and g.organization_id=p_org and g.status='active' and g.starts_at<=now() and (g.ends_at is null or g.ends_at>now()) order by g.ends_at desc nulls first limit 1;
+  if not found then raise exception 'GRILLAD_COLLABORATOR_DENIED' using errcode='42501';end if;
+  select g.* into site_grant from famille_private.account_app_access g where g.user_id=target_user and g.app_code='grillad' and g.organization_id=p_org and g.location_id=p_site;
+  if found and (site_grant.status<>'active' or site_grant.starts_at>now() or site_grant.ends_at<=now()) then raise exception 'GRILLAD_CENTRAL_GRANT_DENIED' using errcode='42501';end if;
+  if not exists(select 1 from famille_private.account_app_access g where g.user_id=target_user and g.app_code='grillad' and g.organization_id=p_org and (g.location_id is null or g.location_id=p_site) and g.status='active' and g.starts_at<=now() and (g.ends_at is null or g.ends_at>now())) then
+   insert into famille_private.account_app_access(user_id,app_code,account_kind,organization_id,location_id,role_code,starts_at,ends_at,granted_by) values(target_user,'grillad',source_grant.account_kind,p_org,p_site,desired,now(),source_grant.ends_at,u);
+  end if;
+ end if;
+ update famille_core.role_assignments set status='revoked',revoked_by=u,revoked_at=now() where membership_id=member and app_id=app and organization_id=p_org and location_id=p_site and role_code in ('seller','manager') and status='active';
+ if desired<>'none' then
+  insert into famille_core.role_assignments(membership_id,app_id,organization_id,role_code,location_id,granted_by,expires_at) values(member,app,p_org,desired,p_site,u,source_grant.ends_at);
+ end if;
+ return jsonb_build_object('user',target_user,'site',p_site,'role',desired);
+end $$;
+revoke all on function grillad_private.set_team_assignment(uuid,uuid,jsonb) from public,anon,authenticated;
+
 commit;

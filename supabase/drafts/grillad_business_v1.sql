@@ -254,6 +254,8 @@ begin
   insert into famille_core.locations(id,organization_id,name) values(p_event,p_org,label);
   insert into grillad_private.enabled_sites(org,site) values(p_org,p_event);
   result:=jsonb_build_object('id',p_event,'name',label,'enabled',true);
+ when 'set_team_assignment' then
+  result:=grillad_private.set_team_assignment(p_org,p_site,p_payload);
  when 'set_network_mode' then
   if r<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
   reason:=btrim(p_payload->>'reason');
