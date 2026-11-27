@@ -203,9 +203,11 @@ Deno.serve(async request=>{
  const ent=(await rest("wm_room_entitlements?select=plan,enabled,valid_until&workspace_id=eq."+eq(context.workspace_id)+"&limit=1"))?.[0];
  const valid=ent?.enabled===true&&Date.parse(ent.valid_until)>Date.now();
  if(name==="billing")return send(200,{plan:valid?ent.plan:null,valid_until:valid?ent.valid_until:null,kind:profile.workspace_kind,payment_available:false,intent_available:Deno.env.get("WM_BILLING_TEST")==="true"});
+ const metrics=await rest("rpc/wm_identity_action",{method:"POST",body:JSON.stringify({p_hash,p_action:"dashboard-identity",p_data:{}})});
+ if(!metrics)return send(403,{error:"scope"});
  const rows=valid?await rest("rpc/wm_room_list",{method:"POST",body:JSON.stringify({p_hash})}):[];
  const upcoming=Array.isArray(rows)?rows.filter((r:any)=>r.status==="scheduled"&&r.scheduled_ms>=Date.now()).sort((a:any,b:any)=>a.scheduled_ms-b.scheduled_ms):[];
- return send(200,{display_name:profile.display_name,role:profile.role,next_meeting:upcoming[0]??null,upcoming_count:upcoming.length,active_count:Array.isArray(rows)?rows.filter((r:any)=>r.status==="open"||r.status==="paused").length:0,subscription_active:valid});
+ return send(200,{display_name:profile.display_name,role:profile.role,next_meeting:upcoming[0]??null,upcoming_count:upcoming.length,active_count:Array.isArray(rows)?rows.filter((r:any)=>r.status==="open"||r.status==="paused").length:0,subscription_active:valid,team_count:metrics.team_count,pending_invitation_count:metrics.pending_invitation_count,favorite_count:metrics.favorite_count,group_count:metrics.group_count});
  }
  if(name==="invite"){
  const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-invite:"+context.account_id),p_installation_hash:await digest("wm-invite-device:"+context.installation_id)})});
