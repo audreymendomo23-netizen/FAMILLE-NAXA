@@ -787,6 +787,34 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const amountPart=await collectSplit(uid(),"Solde",1500,[],"orange_money","SPLIT-"+uid(),amountTicket.id);assert.equal(amountPart.balance_xaf,0);
  const splitClose=await scalar("select zp_close_cash($1,$2,$3,1600)",[splitTenant.access,splitTenant.site,splitDrawer]);assert.equal(splitClose.expected_xaf,1600);assert.equal(splitClose.variance_xaf,0);
  console.log("ZIPPLE_BULK2_ITEM_QUANTITY_PARTIAL_SETTLEMENT_AND_CASH_PASS");
+
+ // Approval and quality policy: isolated fresh tenant, direct RPC bypasses rejected.
+ const ctl=await tenant("ERP controls");await pay(await intent(ctl,"PREMIUM","monthly"));await scalar("select zp_site_mode($1,$2,'restaurant',false,false)",[ctl.access,ctl.site]);
+ const cm=uid(),cauth=uid(),ctoken=hash();await db.query("insert into auth.users(id) values($1)",[cauth]);await db.query("insert into zp_members(id,org_id,auth_user_id,login_id,auth_alias,role_code) values($1,$2,$3,$4,$5,'manager')",[cm,ctl.org,cauth,uid(),uid()+"@example.test"]);await db.query("insert into zp_site_scopes values($1,$2,$3)",[cm,ctl.org,ctl.site]);await db.query("insert into zp_sessions(member_id,access_hash,access_until) values($1,$2,now()+interval '1 hour')",[cm,ctoken]);
+ assert.equal(await scalar("select zp_erp_control_set($1,$2,0,1000,1000,true,true,'Policy test')",[ctl.access,ctl.site]),1);
+ await assert.rejects(scalar("select zp_erp_control_set($1,$2,0,0,0,false,false,'Stale policy')",[ctl.access,ctl.site]),/STALE_CONTROL_POLICY/);
+ const ci=await scalar("select zp_add_ingredient($1,$2,'Flour','FLOUR','kg',0,'')",[ctoken,ctl.site]),cs=await scalar("select zp_supplier_add($1,$2,'Supplier controls','','',30)",[ctoken,ctl.site]);
+ const cp=await scalar("select zp_purchase_create($1,$2,$3,$4,$5,'CONTROL-PO',3000,3000)",[ctoken,ctl.site,cs,ci,uid()]);
+ const receipt=key=>scalar("select zp_purchase_receive($1,$2,$3,$4,1000,'CTL-LOT',null)",[ctoken,ctl.site,cp,key]);
+ await assert.rejects(receipt(uid()),/PURCHASE_APPROVAL_REQUIRED/);
+ await assert.rejects(scalar("select zp_purchase_decide($1,$2,$3,'approved','Not owner')",[ctoken,ctl.site,cp]),/DENIED/);
+ await scalar("select zp_purchase_decide($1,$2,$3,'approved','Verified request')",[ctl.access,ctl.site,cp]);
+ await assert.rejects(receipt(uid()),/PURCHASE_QUALITY_REQUIRED/);
+ const bad=uid(),good=uid(),checked=(key,decision)=>scalar("select zp_purchase_receive_checked($1,$2,$3,$4,1000,'CTL-LOT',null,null,$5,'Quality checked')",[ctoken,ctl.site,cp,key,decision]);
+ assert.equal((await checked(bad,"rejected")).receipt_id,null);
+ assert.equal(Number(await scalar("select received_milli from zp_purchases where id=$1",[cp])),0);
+ await assert.rejects(receipt(bad),/PURCHASE_QUALITY_REQUIRED/);
+ const got=await checked(good,"accepted");assert.ok(got.receipt_id);assert.deepEqual(await checked(good,"accepted"),got);
+ assert.equal(Number(await scalar("select received_milli from zp_purchases where id=$1",[cp])),1000);
+ const ek=uid(),ea=[ctoken,ctl.site,ek];
+ await assert.rejects(scalar("select zp_record_expense($1,$2,$3,'rent','Rent',2000,'bank','CTL-EXP',current_date)",ea),/EXPENSE_APPROVAL_REQUIRED/);
+ const er=await scalar("select zp_expense_submit($1,$2,$3,'rent','Rent',2000,'bank','CTL-EXP',current_date)",ea);
+ await assert.rejects(scalar("select zp_expense_apply($1,$2,$3)",[ctoken,ctl.site,er]),/EXPENSE_APPROVAL_REQUIRED/);
+ await scalar("select zp_expense_decide($1,$2,$3,'approved','Verified invoice')",[ctl.access,ctl.site,er]);
+ await assert.rejects(scalar("select zp_record_expense($1,$2,$3,'rent','Rent',2001,'bank','CTL-EXP',current_date)",ea),/EXPENSE_APPROVAL_REQUIRED/);
+ const recorded=await scalar("select zp_expense_apply($1,$2,$3)",[ctoken,ctl.site,er]);assert.equal(await scalar("select zp_expense_apply($1,$2,$3)",[ctoken,ctl.site,er]),recorded);
+ await assert.rejects(scalar("select zp_erp_control_snapshot($1,$2)",[a.access,ctl.site]),/DENIED/);
+ console.log("ZIPPLE_BULK3_ERP_APPROVAL_AND_QUALITY_CONTROL_PASS");
  assert.equal(await scalar("select count(*)::int from pg_tables where schemaname='public' and tablename like 'zp_%' and not rowsecurity"),0);
  assert.equal(await scalar("select has_function_privilege('authenticated','public.zp_confirm_subscription(uuid,text,text,integer,text)','execute')"),false);
  assert.equal(await scalar("select has_table_privilege('anon','public.zp_orders','select')"),false);

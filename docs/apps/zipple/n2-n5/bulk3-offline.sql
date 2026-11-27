@@ -37,7 +37,7 @@ declare m public.zp_members;old public.zp_erp_sync_receipts;st text:='acknowledg
  exception when invalid_text_representation or numeric_value_out_of_range or invalid_datetime_format or datetime_field_overflow or check_violation or not_null_violation then st:='rejected';outcome:=jsonb_build_object('code','INVALID_INPUT');
  when unique_violation then st:='conflict';outcome:=jsonb_build_object('code','DUPLICATE_RECORD');
  when raise_exception then
-  if sqlerrm in ('STALE_RECIPE_VERSION','INGREDIENT_SHORTAGE','IDEMPOTENCY_CONFLICT','STALE_INVENTORY_COUNT','DIRECT_STOCK_RESERVED','LEDGER_PERIOD_CLOSED','COUNT_REQUIRES_REVIEW','EXPIRED_LOT','WEIGHED_PRODUCTION_REQUIRED') then st:='conflict';outcome:=jsonb_build_object('code',sqlerrm);
+  if sqlerrm in ('EXPENSE_APPROVAL_REQUIRED','STALE_RECIPE_VERSION','INGREDIENT_SHORTAGE','IDEMPOTENCY_CONFLICT','STALE_INVENTORY_COUNT','DIRECT_STOCK_RESERVED','LEDGER_PERIOD_CLOSED','COUNT_REQUIRES_REVIEW','EXPIRED_LOT','WEIGHED_PRODUCTION_REQUIRED') then st:='conflict';outcome:=jsonb_build_object('code',sqlerrm);
   elsif sqlerrm in ('INVALID_INPUT','INVALID_PRODUCTION','DENIED','INVALID_EXPENSE_DATE') then st:='rejected';outcome:=jsonb_build_object('code',sqlerrm);else raise;end if;
  end;
  insert into public.zp_erp_sync_receipts(event_id,org_id,site_id,member_id,action,payload,state,outcome) values(p_event,p_org,p_site,p_member,p_action,p_payload,st,outcome);
