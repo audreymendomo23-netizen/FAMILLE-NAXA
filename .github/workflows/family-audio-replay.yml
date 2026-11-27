@@ -60,6 +60,10 @@ jobs:
           mkdir -p "$OUT"
           chmod 777 "$OUT"
           echo "WM_EGRESS_OUT=$OUT" >> "$GITHUB_ENV"
+          ACTIVE="$RUNNER_TEMP/wm-egress-active"
+          mkdir -p "$ACTIVE"
+          chmod 777 "$ACTIVE"
+          echo "WM_EGRESS_ACTIVE=$ACTIVE" >> "$GITHUB_ENV"
           docker run -d --name wm-audio-redis --network host redis:7.4.1-alpine redis-server --bind 127.0.0.1 --port 6381 --save "" --appendonly no
           # Egress Go SDK does not reliably pair loopback-only ICE candidates. Keep
           # signaling and Redis private; advertise the isolated runner interface for RTP.
@@ -101,7 +105,7 @@ jobs:
           docker run -d --name wm-audio-lk --network host -v "$RUNNER_TEMP/wm-audio-lk.yaml:/etc/livekit.yaml:ro" livekit/livekit-server:v1.13.9 --config /etc/livekit.yaml
           for i in $(seq 1 60); do if curl -fsS http://127.0.0.1:7880/ >/dev/null; then break; fi; sleep 1; done
           curl -fsS http://127.0.0.1:7880/
-          docker run -d --name wm-audio-egress --network host --cap-add SYS_ADMIN -e EGRESS_CONFIG_FILE=/etc/egress.yaml -v "$RUNNER_TEMP/wm-egress.yaml:/etc/egress.yaml:ro" -v "$OUT:/out" livekit/egress:v1.14.1
+          docker run -d --name wm-audio-egress --network host --cap-add SYS_ADMIN -e EGRESS_CONFIG_FILE=/etc/egress.yaml -v "$RUNNER_TEMP/wm-egress.yaml:/etc/egress.yaml:ro" -v "$OUT:/out" -v "$ACTIVE:/home/egress/tmp" livekit/egress:v1.14.1
           for i in $(seq 1 90); do if curl -fsS http://127.0.0.1:7990/ >/dev/null; then exit 0; fi; sleep 1; done
           echo "Egress readiness failed"
           exit 1
@@ -202,4 +206,4 @@ jobs:
         if: always()
         run: |
           docker rm -f wm-audio-egress wm-audio-lk wm-audio-redis || true
-          rm -rf "$RUNNER_TEMP/wm-egress-out" "$RUNNER_TEMP/wm-audio-lk.yaml" "$RUNNER_TEMP/wm-egress.yaml"
+          rm -rf "$RUNNER_TEMP/wm-egress-active" "$RUNNER_TEMP/wm-egress-out" "$RUNNER_TEMP/wm-audio-lk.yaml" "$RUNNER_TEMP/wm-egress.yaml"
