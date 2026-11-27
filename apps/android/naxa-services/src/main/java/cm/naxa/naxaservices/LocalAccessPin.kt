@@ -204,10 +204,10 @@ internal fun LocalAccessPinGate(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var mode by rememberSaveable(memberId, isSetup) { mutableStateOf(if (isSetup) "setup" else "unlock") }
-    var pin by rememberSaveable(memberId, isSetup) { mutableStateOf("") }
-    var confirm by rememberSaveable(memberId, isSetup) { mutableStateOf("") }
+    var pin by remember(memberId, isSetup) { mutableStateOf("") }
+    var confirm by remember(memberId, isSetup) { mutableStateOf("") }
     var loginId by rememberSaveable(memberId) { mutableStateOf("") }
-    var password by rememberSaveable(memberId) { mutableStateOf("") }
+    var password by remember(memberId) { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var retryAt by rememberSaveable(memberId) { mutableLongStateOf(0L) }

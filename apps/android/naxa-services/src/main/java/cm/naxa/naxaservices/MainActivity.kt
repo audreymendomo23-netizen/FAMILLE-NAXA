@@ -318,8 +318,7 @@ private fun NaxaServicesRoot(
                     } else {
                         // A transport failure is not a revocation. Keep the encrypted token and retry.
                         message = "Connexion indisponible. Votre session mémorisée est conservée."
-                        val status=(failure as? AuthApiException)?.statusCode
-                        val cached=if(isTemporarySessionFailure(status))vault.loadOfflineSnapshot() else null
+                        val cached=if(isTemporarySessionFailure(failure))vault.loadOfflineSnapshot() else null
                         if(cached!=null && localPinManager.isConfigured(cached.account.memberId)){
                             offlineRestored=true;session=cached;pendingRefresh=null;localPinUnlockedMemberId=null
                             route=AppRoute.DASHBOARD.name;tourActive=false
@@ -441,17 +440,17 @@ private fun NaxaServicesRoot(
                             activeSession = null
                         } else if(!offlineRestored) {
                             // Once renewal fails, no unbounded authenticated UI remains visible.
-                            val cached=if(rememberSession && isTemporarySessionFailure(authError?.statusCode))vault.loadOfflineSnapshot() else null
+                            val cached=if(rememberSession && isTemporarySessionFailure(error))vault.loadOfflineSnapshot() else null
                             val previous=activeSession
                             if(cached!=null && previous!=null && cached.account.memberId==previous.account.memberId &&
                                 cached.account.organizationId==previous.account.organizationId && cached.deviceId==previous.deviceId &&
                                 localPinManager.isConfigured(cached.account.memberId)){
                                 offlineRestored=true;session=cached;localPinUnlockedMemberId=null
                                 route=AppRoute.DASHBOARD.name;tourActive=false
-                                message=localizedLabel("Accès local temporaire.","Temporary local access.","Naatgol nokkuure sahaa seeɗa.")
+                                message=when(locale){"en"->"Temporary local access.";"ff-CM"->"Naatgol nokkuure sahaa seeɗa.";else->"Accès local temporaire."}
                             }else{
                                 session=null;localPinUnlockedMemberId=null;route=AppRoute.LOGIN.name
-                                message=localizedLabel("Connexion requise pour reprendre.","Connection required to resume.","Ceŋol soklaa ngam jokkude.")
+                                message=when(locale){"en"->"Connection required to resume.";"ff-CM"->"Ceŋol soklaa ngam jokkude.";else->"Connexion requise pour reprendre."}
                                 if(rememberSession)recoveryAttempt++
                             }
                             return@LaunchedEffect

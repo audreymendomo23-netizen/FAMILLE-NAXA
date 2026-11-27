@@ -4,4 +4,8 @@ package cm.naxa.naxaservices.auth
 internal fun discardRememberedSession(status: Int?): Boolean = status == 401 || status == 403
 
 /** Explicit HTTP rejections never authorize local recovery. */
-internal fun isTemporarySessionFailure(status:Int?):Boolean = status==null || status==408 || status==429 || status in 500..599
+internal fun isTemporarySessionFailure(error:Throwable):Boolean {
+    val failure=error as? AuthApiException ?: return false
+    val status=failure.statusCode
+    return if(status==null)failure.transportFailure else status==408 || status==429 || status in 500..599
+}

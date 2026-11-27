@@ -720,7 +720,7 @@ class AuthApi(private val context: Context) {
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            throw AuthApiException("Impossible de joindre le service. Vérifie la connexion Internet.")
+            throw AuthApiException("Impossible de joindre le service. Vérifie la connexion Internet.", transportFailure = e is java.io.IOException && e !is javax.net.ssl.SSLException && e !is java.net.MalformedURLException)
         } finally {
             connection?.disconnect()
         }
@@ -738,4 +738,4 @@ class AuthApi(private val context: Context) {
     }
 }
 
-class AuthApiException(message: String, val statusCode: Int? = null) : Exception(message)
+class AuthApiException(message: String, val statusCode: Int? = null, val transportFailure:Boolean=false) : Exception(message)
