@@ -587,6 +587,8 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   assert.ok(lostSplitRequest);
   assert.equal(Number(await scalar("select paid_xaf from zp_credit_sales where order_id=$1",[splitUIOrder.id])),1000);
   await page.unroute("**/split_collect",loseAck);
+  await page.getByRole("button",{name:"Commandes",exact:true}).click();
+  await page.getByRole("button",{name:"Caisse",exact:true}).click();
   await page.getByRole("button",{name:"Réessayer le même règlement"}).click();
   await page.getByText("Règlement confirmé — solde : 2000 FCFA",{exact:true}).waitFor();
   assert.equal(Number(await scalar("select count(*) from zp_credit_payments where request_id=$1",[lostSplitRequest])),1);

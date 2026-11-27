@@ -17,6 +17,10 @@ import javax.crypto.spec.GCMParameterSpec
  */
 class SessionVault(context: Context) {
     private val preferences = context.getSharedPreferences("zipple_secure_session", Context.MODE_PRIVATE)
+    private val pendingPayments = context.getSharedPreferences("zipple_secure_split_payments", Context.MODE_PRIVATE)
+    fun savePendingSplit(scope:String,body:String,request:String){val envelope=org.json.JSONObject().put("scope",scope).put("body",body).put("request",request);check(pendingPayments.edit().putString(scope,encrypt(envelope.toString())).commit())}
+    fun loadPendingSplit(scope:String):Pair<String,String>?{val value=pendingPayments.getString(scope,null)?:return null;val envelope=org.json.JSONObject(checkNotNull(decrypt(value)));check(envelope.getString("scope")==scope);return envelope.getString("body") to envelope.getString("request")}
+    fun clearPendingSplit(scope:String){check(pendingPayments.edit().remove(scope).commit())}
 
     fun save(refreshToken: String) {
         require(refreshToken.length >= 20)

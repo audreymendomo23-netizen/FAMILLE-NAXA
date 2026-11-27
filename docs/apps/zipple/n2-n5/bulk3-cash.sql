@@ -78,7 +78,7 @@ declare m public.zp_members;c public.zp_cash_sessions;o public.zp_orders;r publi
  if r.id is not null then if (r.cash_id,r.order_id,r.method,r.amount_xaf,r.reference) is distinct from (p_cash,p_order,p_method,p_amount,p_ref) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return r.id;end if;
  if c.closed_at is not null then raise exception 'CASH_CLOSED';end if;
  select * into o from public.zp_orders where id=p_order and org_id=m.org_id and site_id=p_site for update;
- if o.id is null or o.status<>'served' or p_amount is distinct from o.total_xaf or p_amount<=0 or (p_method<>'cash' and length(trim(coalesce(p_ref,'')))<4) then raise exception 'SALE_NOT_SETTLEABLE';end if;
+ if o.id is null or o.status<>'served' or exists(select 1 from public.zp_cash_receipts where order_id=p_order) or p_amount is distinct from o.total_xaf or p_amount<=0 or (p_method<>'cash' and length(trim(coalesce(p_ref,'')))<4) then raise exception 'SALE_NOT_SETTLEABLE';end if;
  if p_method<>'cash' then insert into public.zp_settlement_references values(m.org_id,p_method,p_ref);end if;
  insert into public.zp_cash_receipts(org_id,site_id,cash_id,order_id,member_id,request_id,method,amount_xaf,reference) values(m.org_id,p_site,c.id,o.id,m.id,p_request,p_method,p_amount,p_ref) returning id into rid;return rid;end $$;
 create or replace function public.zp_record_group_sale(p_access text,p_site uuid,p_cash uuid,p_session uuid,p_orders uuid[],p_request uuid,p_method text,p_amount bigint,p_ref text) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$

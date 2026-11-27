@@ -5,7 +5,7 @@ const db=new pg.Pool({connectionString:dbUrl}),origin="https://zipple.test",id=(
 const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0]??{})[0];
 async function call(fn,action,body,token){const res=await fetch(base+"/functions/v1/"+fn+"/"+action,{method:"POST",headers:{origin,"content-type":"application/json",...(token?{authorization:"Bearer "+token}:{})},body:JSON.stringify({app_id:"ZIPPLE",...body})});const result=await res.json();assert.equal(res.status,200,action+" "+JSON.stringify(result));return fn==="zipple-business"?result.data:result}
 test("native Android business screen reaches disposable GoTrue and Edge, posts unique split sale",async()=>{
- let server;
+ let server;let lostRequest=null;
  try{
  const org=id(),site=id(),member=id(),login="zipple-native-"+id(),email=id()+"@example.test",password="Fixture-"+id()+"-Aa9!";
  const created=await fetch(base+"/auth/v1/admin/users",{method:"POST",headers:{apikey:service,authorization:"Bearer "+service,"content-type":"application/json"},body:JSON.stringify({email,password,email_confirm:true})});assert.ok(created.ok);
@@ -31,12 +31,15 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
   if(req.method!=="POST"||!m){res.writeHead(404).end();return}
   const chunks=[];for await(const chunk of req)chunks.push(chunk);
   const response=await fetch(base+"/functions/v1/"+(m[1]==="gateway"?"zipple-n1":"zipple-business")+"/"+m[2],{method:"POST",headers:{origin,"content-type":"application/json",...(req.headers.authorization?{authorization:req.headers.authorization}:{})},body:Buffer.concat(chunks)});
-  res.writeHead(response.status,{"content-type":"application/json","cache-control":"no-store"});res.end(Buffer.from(await response.arrayBuffer()));
+  const responseBytes=Buffer.from(await response.arrayBuffer());
+  if(m[1]==="zipple-business"&&m[2]==="split_collect"&&response.ok&&lostRequest===null){lostRequest=JSON.parse(Buffer.concat(chunks).toString()).request_id;res.destroy();return}
+  res.writeHead(response.status,{"content-type":"application/json","cache-control":"no-store"});res.end(responseBytes);
   }catch{res.writeHead(503).end()}
  });
  await new Promise((ok,fail)=>{server.once("error",fail);server.listen(4443,"127.0.0.1",ok)});
  const firstNo=await scalar("select service_number from zp_orders where id=$1",[order.id]),secondNo=await scalar("select service_number from zp_orders where id=$1",[secondOrder.id]);
  await new Promise((resolve,reject)=>{const proc=spawn("gradle",["--no-daemon",":zipple:connectedDebugAndroidTest","-PZIPPLE_API_URL=https://127.0.0.1:4443/gateway","-PZIPPLE_BUSINESS_API_URL=https://127.0.0.1:4443/zipple-business","-Pandroid.testInstrumentationRunnerArguments.class=cm.naxa.zipple.Bulk2LiveDeviceTest","-Pandroid.testInstrumentationRunnerArguments.zippleBulk2Local=1","-Pandroid.testInstrumentationRunnerArguments.zippleFixtureLogin="+login,"-Pandroid.testInstrumentationRunnerArguments.zippleFixturePassword="+password,"-Pandroid.testInstrumentationRunnerArguments.zippleSplitNumber="+firstNo,"-Pandroid.testInstrumentationRunnerArguments.zippleAmountNumber="+secondNo],{stdio:"inherit"});proc.on("error",reject);proc.on("exit",code=>code===0?resolve():reject(Error("Android real business recipe failed: "+code)))});
+ assert.ok(lostRequest);assert.equal(Number(await scalar("select count(*) from zp_credit_payments where request_id=$1",[lostRequest])),1);
  for(const [oid,expected,count] of [[order.id,3000,2],[secondOrder.id,800,2]]){
  assert.equal(Number(await scalar("select count(*) from zp_cash_receipts where order_id=$1",[oid])),1);
  assert.equal(Number(await scalar("select paid_xaf from zp_credit_sales where order_id=$1",[oid])),expected);
