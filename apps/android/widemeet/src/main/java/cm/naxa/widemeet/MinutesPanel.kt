@@ -49,6 +49,7 @@ private fun minuteRows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() e
  for(m in minuteRows(p.optJSONArray("recipients"))){val id=m.getString("member_id");Row{Checkbox(id in recipients,{checked->recipients=if(checked)recipients+id else recipients-id},enabled=!busy);Text(m.optString("display_name"),Modifier.padding(top=12.dp))}}
  Button(enabled=!busy&&recipients.isNotEmpty()&&body==v.optString("body")&&pending==null,onClick={mutate("publish")}){Text(tr("Publier aux destinataires choisis","Publish to selected recipients"))}
  }
+ if(v!=null&&!v.isNull("published_at"))key(v.getString("version_id")){TasksPanel(english,gateway,session,current.getString("room_id"),v.getString("version_id"),p.optJSONArray("recipients"))}
  if(v!=null)TextButton(enabled=!busy,onClick={revokeConfirm=true}){Text(tr("Révoquer","Revoke"))}
  }else if(v!=null)Text(v.getString("body"))else Text(tr("Aucun compte rendu publié.","No published minutes."))
  }
