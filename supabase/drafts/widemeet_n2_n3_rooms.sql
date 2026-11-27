@@ -212,8 +212,10 @@ begin
  or not exists(select 1 from public.wm_session_context(ss.token_hash) x where not x.password_change_required)
  or not exists(select 1 from public.wm_session_context(rs.token_hash) x where not x.password_change_required) then return null;end if;
  select * into r from public.wm_rooms where id=l.room_id and workspace_id=ss.workspace_id;
- if not found or r.state->>'status' is distinct from 'open' or coalesce(r.state->>'confidentiality','standard')<>'standard'
- or not exists(select 1 from public.wm_display_policy d where d.room_id=r.id and d.enabled) then return null;end if;
+ if not found then return null; end if;
+ if jsonb_extract_path_text(r.state,'status') is distinct from 'open' then return null; end if;
+ if coalesce(jsonb_extract_path_text(r.state,'confidentiality'),'standard') <> 'standard' then return null; end if;
+ if not exists(select 1 from public.wm_display_policy d where d.room_id=r.id and d.enabled) then return null; end if;
  select * into a from public.wm_room_actor_for(ss.token_hash,r.id);if not found or a.account_id<>ss.account_id or a.workspace_id<>r.workspace_id then return null;end if;
  now_ms:=floor(extract(epoch from clock_timestamp())*1000)::bigint;
  if coalesce((r.state->>'endMs')::bigint,0)<=now_ms or a.entitlement_end_ms<=now_ms then return null;end if;
@@ -278,8 +280,9 @@ begin
   update public.wm_display_leases set revoked_at=coalesce(revoked_at,now_at) where source_session=s.session_id and room_id=rid;
   return jsonb_build_object('stopped',true);
  end if;
- if r.state->>'status' is distinct from 'open' or coalesce(r.state->>'confidentiality','standard')<>'standard'
- or coalesce((r.state->>'endMs')::bigint,0)<=floor(extract(epoch from now_at)*1000)::bigint then return null;end if;
+ if jsonb_extract_path_text(r.state,'status') is distinct from 'open' then return null; end if;
+ if coalesce(jsonb_extract_path_text(r.state,'confidentiality'),'standard') <> 'standard' then return null; end if;
+ if coalesce(jsonb_extract_path_text(r.state,'endMs')::bigint,0)<=floor(extract(epoch from now_at)*1000)::bigint then return null; end if;
  if not exists(select 1 from jsonb_array_elements(r.state->'participants') x where x->>'memberId'=s.account_id::text and x->>'excluded'='false' and x->>'response'='accepted' and (coalesce(r.state->>'lobbyRequired','false')<>'true' or s.account_id=r.host_id or x->>'lobbyStatus'='admitted')) then return null;end if;
  if p_action='policy' then
   if s.account_id<>r.host_id or jsonb_typeof(p_data->'enabled') is distinct from 'boolean' then return null;end if;
