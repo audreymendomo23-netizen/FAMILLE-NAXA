@@ -435,6 +435,16 @@ $fn$;
 revoke all on function public.ns_request_roster_availability(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text,text),public.ns_decide_roster_availability(uuid,text,text),public.ns_replace_roster_shift(uuid,bigint,uuid,uuid,text),public.ns_save_roster_template(uuid,uuid,uuid,uuid,uuid,text,integer,integer,integer,integer,integer,integer),public.ns_archive_roster_template(uuid),public.ns_roster_alerts(uuid,uuid),public.ns_roster_guard_availability(),public.ns_roster_schedule_reminders() from public,anon,authenticated;
 grant execute on function public.ns_request_roster_availability(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text,text),public.ns_decide_roster_availability(uuid,text,text),public.ns_replace_roster_shift(uuid,bigint,uuid,uuid,text),public.ns_save_roster_template(uuid,uuid,uuid,uuid,uuid,text,integer,integer,integer,integer,integer,integer),public.ns_archive_roster_template(uuid),public.ns_roster_alerts(uuid,uuid) to authenticated;
 
+create function public.ns_roster_own_posts(p_org uuid,p_site uuid)
+returns table(workstation_id uuid,workstation_name text) language sql stable security definer set search_path='' as $fn$
+ select null::uuid,null::text where public.ns_roster_enabled(p_org) and public.ns_can_operate_site(p_org,p_site)
+ and exists(select 1 from public.ns_sites where org_id=p_org and id=p_site and status='active')
+ union all select w.id,w.name from public.ns_workstations w where w.org_id=p_org and w.site_id=p_site and w.status='active' and public.ns_roster_enabled(p_org) and public.ns_can_operate_workstation(p_org,p_site,w.id)
+ order by 2 nulls first
+$fn$;
+revoke all on function public.ns_roster_own_posts(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.ns_roster_own_posts(uuid,uuid) to authenticated;
+
 
 
 -- Scoped target directory: only assignable members and posts, no personal contact information.
@@ -581,6 +591,7 @@ do $qa$ declare x uuid:='70000000-0000-4000-8000-000000000105'; o uuid:='2000000
  if public.ns_request_roster_availability(x,o,s,null,t,t+interval '1 day','leave','QA personal request') is distinct from a then raise exception 'QA AVAILABILITY RETRY'; end if;
  begin perform public.ns_decide_roster_availability(x,'approved','Self'); raise exception 'QA AVAILABILITY SELF DECISION'; exception when others then if sqlerrm not like '%NS_ROSTER_AVAILABILITY_FORBIDDEN%' then raise; end if; end;
  if exists(select 1 from public.ns_roster_alerts(o,s)) then raise exception 'QA EMPLOYEE ALERT LEAK'; end if;
+ if (select count(*) from public.ns_roster_own_posts(o,s) where workstation_id is null)<>1 then raise exception 'QA OWN POST SCOPE'; end if;
 end $qa$;
 reset role;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000091',true);

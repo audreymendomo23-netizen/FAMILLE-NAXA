@@ -293,6 +293,16 @@ $fn$;
 revoke all on function public.ns_request_roster_availability(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text,text),public.ns_decide_roster_availability(uuid,text,text),public.ns_replace_roster_shift(uuid,bigint,uuid,uuid,text),public.ns_save_roster_template(uuid,uuid,uuid,uuid,uuid,text,integer,integer,integer,integer,integer,integer),public.ns_archive_roster_template(uuid),public.ns_roster_alerts(uuid,uuid),public.ns_roster_guard_availability(),public.ns_roster_schedule_reminders() from public,anon,authenticated;
 grant execute on function public.ns_request_roster_availability(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text,text),public.ns_decide_roster_availability(uuid,text,text),public.ns_replace_roster_shift(uuid,bigint,uuid,uuid,text),public.ns_save_roster_template(uuid,uuid,uuid,uuid,uuid,text,integer,integer,integer,integer,integer,integer),public.ns_archive_roster_template(uuid),public.ns_roster_alerts(uuid,uuid) to authenticated;
 
+create function public.ns_roster_own_posts(p_org uuid,p_site uuid)
+returns table(workstation_id uuid,workstation_name text) language sql stable security definer set search_path='' as $fn$
+ select null::uuid,null::text where public.ns_roster_enabled(p_org) and public.ns_can_operate_site(p_org,p_site)
+ and exists(select 1 from public.ns_sites where org_id=p_org and id=p_site and status='active')
+ union all select w.id,w.name from public.ns_workstations w where w.org_id=p_org and w.site_id=p_site and w.status='active' and public.ns_roster_enabled(p_org) and public.ns_can_operate_workstation(p_org,p_site,w.id)
+ order by 2 nulls first
+$fn$;
+revoke all on function public.ns_roster_own_posts(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.ns_roster_own_posts(uuid,uuid) to authenticated;
+
 
 
 rollback;

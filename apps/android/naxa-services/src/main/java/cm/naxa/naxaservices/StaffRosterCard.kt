@@ -84,6 +84,19 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
         var targets by remember{mutableStateOf<List<JSONObject>>(emptyList())}
         var shifts by remember{mutableStateOf<List<JSONObject>>(emptyList())}
         var acks by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+        var availability by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+        var ownPosts by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+        var templates by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+        var alerts by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+        var leavePost by remember{mutableStateOf("")};var leaveKind by remember{mutableStateOf("leave")}
+        var leaveStart by remember{mutableStateOf("")};var leaveEnd by remember{mutableStateOf("")};var leaveReason by remember{mutableStateOf("")}
+        var templateDate by remember{mutableStateOf("")};var templateName by remember{mutableStateOf("")}
+        val pendingExtensions=remember{mutableMapOf<String,Pair<String,String>>()}
+        fun extensionId(kind:String,body:JSONObject):String{
+            val fingerprint=body.toString();val previous=pendingExtensions[kind]
+            if(previous?.first==fingerprint)return previous.second
+            return UUID.randomUUID().toString().also{pendingExtensions[kind]=fingerprint to it}
+        }
         var justifications by remember{mutableStateOf<List<JSONObject>>(emptyList())}
         var pendingPublish by remember{mutableStateOf<Pair<String,List<String>>?>(null)}
         var comparisons by remember{mutableStateOf<List<JSONObject>>(emptyList())}
@@ -108,8 +121,12 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                 val seen=JSONArray(StaffRosterApi.call(current,"ns_roster_acknowledgements?select=shift_id,revision,acknowledged_at&"+filter+"&limit=1000")).rows()
                 val report=JSONArray(StaffRosterApi.call(current,"ns_roster_service_comparison?select=*&"+filter+"&limit=200")).rows()
                 val explanations=JSONArray(StaffRosterApi.call(current,"ns_roster_justifications?select=shift_id,baseline_revision,explanation,decision,decision_reason&"+filter+"&limit=200")).rows()
-                shifts=next;targets=people;acks=seen;comparisons=report;justifications=explanations;loaded=true;error=false
-            }catch(c:CancellationException){throw c}catch(_:Exception){loaded=false;error=true;targets=emptyList();shifts=emptyList();acks=emptyList();comparisons=emptyList();justifications=emptyList()}
+                val absences=JSONArray(StaffRosterApi.call(current,"ns_roster_availability?select=*&"+filter+"&order=starts_at.desc&limit=200")).rows()
+                val posts=JSONArray(StaffRosterApi.call(current,"rpc/ns_roster_own_posts",JSONObject().put("p_org",org).put("p_site",siteId))).rows()
+                val models=JSONArray(StaffRosterApi.call(current,"ns_roster_templates?select=*&"+filter+"&archived_at=is.null&limit=100")).rows()
+                val issues=JSONArray(StaffRosterApi.call(current,"rpc/ns_roster_alerts",JSONObject().put("p_org",org).put("p_site",siteId))).rows()
+                shifts=next;targets=people;acks=seen;comparisons=report;justifications=explanations;availability=absences;ownPosts=posts;templates=models;alerts=issues;loaded=true;error=false
+            }catch(c:CancellationException){throw c}catch(_:Exception){loaded=false;error=true;targets=emptyList();shifts=emptyList();acks=emptyList();comparisons=emptyList();justifications=emptyList();availability=emptyList();ownPosts=emptyList();templates=emptyList();alerts=emptyList()}
         }
         LaunchedEffect(reload,session.accessToken){while(true){if(!busy)refresh();delay(30000)}}
         fun targetFor(row:JSONObject)=targets.firstOrNull{it.optString("member_id")==row.optString("member_id")&&it.nullable("workstation_id")==row.nullable("workstation_id")}
@@ -153,6 +170,55 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                 Text(tr("Heure de Douala (UTC+1)","Douala time (UTC+1)","Sahaa Duwaala (UTC+1)"))
                 OutlinedButton(onClick={reload++},enabled=!busy){Text(tr("Actualiser","Refresh","Hesɗitin"))}
                 if(error)Text(tr("Planning ou modification non confirmé. Actualisez et réessayez.","Schedule or change not confirmed. Refresh and retry.","Feere golle walla baylugol tabbitinaaka. Hesɗitin, eto."),color=MaterialTheme.colorScheme.error)
+                if(loaded&&ownPosts.isNotEmpty()){
+                    Text(tr("Congés et indisponibilités","Leave and availability","Heddaade e alaa"),fontWeight=FontWeight.Bold)
+                    ownPosts.forEach{p->val id=p.nullable("workstation_id")?:"";OutlinedButton(enabled=!busy,onClick={leavePost=id}){Text((if(leavePost==id)"✓ " else "")+(p.nullable("workstation_name")?:tr("Site","Site","Nokkuure")))}}
+                    listOf("leave" to tr("Congé","Leave","Heddaade"),"unavailable" to tr("Indisponibilité","Unavailable","Alaa")).forEach{(id,label)->OutlinedButton(enabled=!busy,onClick={leaveKind=id}){Text((if(leaveKind==id)"✓ " else "")+label)}}
+                    OutlinedTextField(leaveStart,{leaveStart=it},label={Text(tr("Début de la demande (AAAA-MM-JJ HH:mm)","Request start (YYYY-MM-DD HH:mm)","Fuɗɗagol ɗaɓɓitannde"))},modifier=Modifier.fillMaxWidth(),enabled=!busy,singleLine=true)
+                    OutlinedTextField(leaveEnd,{leaveEnd=it},label={Text(tr("Fin de la demande (AAAA-MM-JJ HH:mm)","Request end (YYYY-MM-DD HH:mm)","Timmugol ɗaɓɓitannde"))},modifier=Modifier.fillMaxWidth(),enabled=!busy,singleLine=true)
+                    OutlinedTextField(leaveReason,{leaveReason=it.take(500)},label={Text(tr("Motif de la demande","Request reason","Sabu ɗaɓɓitannde"))},modifier=Modifier.fillMaxWidth(),enabled=!busy)
+                    Button(enabled=!busy&&leaveReason.isNotBlank()&&leaveStart.isNotBlank()&&leaveEnd.isNotBlank()&&ownPosts.any{(it.nullable("workstation_id")?:"")==leavePost},onClick={perform{
+                        val body=JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_post",leavePost.takeIf{it.isNotBlank()}?:JSONObject.NULL).put("p_start",rosterInstant(leaveStart)).put("p_end",rosterInstant(leaveEnd)).put("p_kind",leaveKind).put("p_reason",leaveReason.trim())
+                        val id=extensionId("availability",body);body.put("p_id",id)
+                        val receipt=JSONObject(StaffRosterApi.call(latest,"rpc/ns_request_roster_availability",body))
+                        require(receipt.getString("id")==id&&receipt.getString("status") in listOf("pending","approved","rejected"));pendingExtensions.remove("availability");leaveStart="";leaveEnd="";leaveReason=""
+                    }}){Text(tr("Envoyer la demande","Submit request","Neldu ɗaɓɓitannde"))}
+                }
+                availability.forEach{a->key(a.getString("id")){
+                    var decisionReason by remember{mutableStateOf("")}
+                    val editable=targetFor(a)!=null
+                    HorizontalDivider()
+                    Text((if(a.optString("kind")=="leave")tr("Congé","Leave","Heddaade")else tr("Indisponibilité","Unavailable","Alaa"))+" · "+(if(a.optString("member_id")==session.account.memberId)tr("Ma demande","My request","Ɗaɓɓitannde am")else targetFor(a)?.optString("display_name")?:tr("Collaborateur","Employee","Gollotooɗo")))
+                    Text(rosterDisplay(a.nullable("starts_at"))+" — "+rosterDisplay(a.nullable("ends_at")));Text(a.optString("reason"))
+                    Text(when(a.optString("status")){"approved"->tr("Approuvée","Approved","Jaɓaama");"rejected"->tr("Refusée","Rejected","Jaɓaaka");else->tr("À examiner","Awaiting review","Ƴeewto")})
+                    a.nullable("decision_reason")?.let{Text(it)}
+                    if(editable&&a.optString("status")=="pending"){
+                        OutlinedTextField(decisionReason,{decisionReason=it.take(500)},label={Text(tr("Motif de la décision","Decision reason","Sabu ñaawol"))},enabled=!busy)
+                        listOf("approved" to tr("Approuver la demande","Approve request","Jaɓ ɗaɓɓitannde"),"rejected" to tr("Refuser la demande","Reject request","Sal ɗaɓɓitannde")).forEach{(status,label)->OutlinedButton(enabled=!busy&&decisionReason.isNotBlank(),onClick={perform{
+                            val r=JSONObject(StaffRosterApi.call(latest,"rpc/ns_decide_roster_availability",JSONObject().put("p_id",a.getString("id")).put("p_status",status).put("p_reason",decisionReason.trim())))
+                            require(r.getString("id")==a.getString("id")&&r.getString("status")==status);decisionReason=""
+                        }}){Text(label)}}
+                    }
+                }}
+                if(loaded&&targets.isNotEmpty()&&templates.isNotEmpty()){
+                    Text(tr("Modèles de service","Shift templates","Leɗɗe golle"),fontWeight=FontWeight.Bold)
+                    OutlinedTextField(templateDate,{templateDate=it},label={Text(tr("Date du premier service (AAAA-MM-JJ)","First shift date (YYYY-MM-DD)","Ñalngu golle aranere"))},enabled=!busy,singleLine=true)
+                    templates.forEach{t->
+                        Text(t.optString("name")+" · "+t.optInt("repeat_count"))
+                        OutlinedButton(enabled=!busy&&templateDate.isNotBlank()&&targetFor(t)!=null,onClick={
+                            try{
+                                val p=targetFor(t);val date=java.time.LocalDate.parse(templateDate).atStartOfDay().toInstant(rosterOffset)
+                                val first=date.plusSeconds(t.getLong("start_minute")*60);val last=first.plusSeconds(t.getLong("duration_minutes")*60)
+                                clear();selected=p;start=rosterDisplay(first.toString());end=rosterDisplay(last.toString());pause=t.getInt("break_minutes").toString();tolerance=t.getInt("tolerance_minutes").toString();repeat=if(t.getInt("repeat_count")==1)"once" else if(t.getInt("repeat_days")==7)"weekly" else "daily";repeatCount=t.getInt("repeat_count").toString();reason=t.getString("name")
+                            }catch(_:Exception){error=true}
+                        }){Text(tr("Utiliser le modèle","Use template","Huutoro leydi"))}
+                        var archiveConfirm by remember(t.getString("id")){mutableStateOf(false)}
+                        TextButton(enabled=!busy,onClick={archiveConfirm=true}){Text(tr("Archiver","Archive","Resnu"))}
+                        if(archiveConfirm)AlertDialog(onDismissRequest={archiveConfirm=false},title={Text(tr("Archiver ce modèle ?","Archive this template?","Resnude ndee leydi?"))},confirmButton={TextButton(onClick={archiveConfirm=false;perform{
+                            val r=JSONObject(StaffRosterApi.call(latest,"rpc/ns_archive_roster_template",JSONObject().put("p_id",t.getString("id"))));require(r.getString("id")==t.getString("id")&&r.getBoolean("archived"))
+                        }}){Text(tr("Archiver","Archive","Resnu"))}},dismissButton={TextButton(onClick={archiveConfirm=false}){Text(tr("Annuler","Cancel","Haaytu"))}})
+                    }
+                }
                 if(loaded&&targets.isNotEmpty()){
                     Text(tr("Publier ou modifier un service","Publish or edit a shift","Bayyin walla waylu golle"),fontWeight=FontWeight.Bold)
                     if(edited==null&&cancelShift==null)targets.forEach{p->
@@ -175,6 +241,15 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                     }
                     OutlinedTextField(reason,{reason=it},label={Text(tr("Motif","Reason","Sabu"))},modifier=Modifier.fillMaxWidth())
                     Button(onClick={publish(cancelShift)},enabled=!busy&&reason.isNotBlank()&&(selected!=null||cancelShift!=null)){Text(if(cancelShift!=null)tr("Confirmer l'annulation","Confirm cancellation","Tabbitin haaytugol") else tr("Publier et notifier","Publish and notify","Bayyin e tintin"))}
+                    if(edited==null&&cancelShift==null&&selected!=null){
+                        OutlinedTextField(templateName,{templateName=it.take(80)},label={Text(tr("Nom du modèle","Template name","Innde leydi"))},enabled=!busy,singleLine=true)
+                        OutlinedButton(enabled=!busy&&templateName.isNotBlank()&&start.isNotBlank()&&end.isNotBlank(),onClick={perform{
+                            val p=requireNotNull(selected);val first=Instant.parse(rosterInstant(start));val last=Instant.parse(rosterInstant(end));val local=first.atOffset(rosterOffset)
+                            val body=JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_post",p.nullable("workstation_id")?:JSONObject.NULL).put("p_member",p.getString("member_id")).put("p_name",templateName.trim()).put("p_start",local.hour*60+local.minute).put("p_duration",java.time.Duration.between(first,last).toMinutes()).put("p_break",pause.toInt()).put("p_tolerance",tolerance.toInt()).put("p_step",if(repeat=="weekly")7 else 1).put("p_count",if(repeat=="once")1 else repeatCount.toInt())
+                            val id=extensionId("template",body);body.put("p_id",id)
+                            val r=JSONObject(StaffRosterApi.call(latest,"rpc/ns_save_roster_template",body));require(r.getString("id")==id&&r.getBoolean("saved"));pendingExtensions.remove("template");templateName=""
+                        }}){Text(tr("Enregistrer comme modèle","Save as template","Resnu leydi"))}
+                    }
                     if(edited!=null||cancelShift!=null)TextButton(onClick={clear()}){Text(tr("Abandonner","Discard","Accu"))}
                 }
                 if(loaded&&shifts.isEmpty())Text(tr("Aucun service planifié.","No scheduled shifts.","Alaa golle e feere."))
@@ -191,6 +266,23 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                     if(p!=null&&row.optString("status")=="published"){
                         OutlinedButton(onClick={clear();edited=row;selected=p;start=rosterDisplay(row.nullable("starts_at"));end=rosterDisplay(row.nullable("ends_at"));pause=row.optInt("planned_break_minutes").toString();tolerance=row.optInt("tolerance_minutes").toString()},enabled=!busy){Text(tr("Modifier","Edit","Waylu"))}
                         TextButton(onClick={clear();cancelShift=row},enabled=!busy){Text(tr("Annuler le service","Cancel shift","Haaytu golle"))}
+                    }
+                    if(p!=null){
+                        alerts.filter{it.optString("shift_id")==row.optString("id")&&it.optLong("revision")==row.optLong("revision")}.forEach{a->
+                            if(a.optBoolean("unacknowledged_due"))Text(tr("Accusé en retard","Acknowledgement overdue","Jaɓgol leelii"),color=MaterialTheme.colorScheme.error)
+                            if(a.optLong("appointment_conflicts")>0)Text(tr("Rendez-vous à réaffecter ou vérifier","Appointments to reassign or review","Ɗe njiillooje ƴeewtetee")+": "+a.optLong("appointment_conflicts"),color=MaterialTheme.colorScheme.error)
+                        }
+                        val substitutes=targets.filter{it.optString("member_id")!=row.optString("member_id")&&it.nullable("workstation_id")==row.nullable("workstation_id")}
+                        if(row.optString("status")=="published"&&runCatching{Instant.parse(row.getString("starts_at")).isAfter(Instant.now())}.getOrDefault(false)&&substitutes.isNotEmpty())key(row.getString("id")){
+                            var substitute by remember{mutableStateOf("")};var replacementReason by remember{mutableStateOf("")}
+                            Text(tr("Remplaçant","Substitute","Lomtinɗo"))
+                            substitutes.forEach{t->val id=t.getString("member_id");OutlinedButton(enabled=!busy,onClick={substitute=id}){Text((if(substitute==id)"✓ " else "")+t.getString("display_name"))}}
+                            OutlinedTextField(replacementReason,{replacementReason=it.take(500)},label={Text(tr("Motif du remplacement","Replacement reason","Sabu lomtingol"))},enabled=!busy)
+                            Button(enabled=!busy&&substitute.isNotBlank()&&replacementReason.isNotBlank(),onClick={perform{
+                                val shift=row.getString("id");val body=JSONObject().put("p_shift",shift).put("p_revision",row.getLong("revision")).put("p_member",substitute).put("p_reason",replacementReason.trim());val id=extensionId("replacement:"+shift,body);body.put("p_new_shift",id)
+                                val r=JSONObject(StaffRosterApi.call(latest,"rpc/ns_replace_roster_shift",body));require(r.getString("original_shift_id")==shift&&r.getString("replacement_shift_id")==id&&r.getBoolean("replaced"));pendingExtensions.remove("replacement:"+shift);replacementReason=""
+                            }}){Text(tr("Remplacer le collaborateur","Replace employee","Lomtin gollotooɗo"))}
+                        }
                     }
                     comparisons.filter{it.optString("shift_id")==row.optString("id")}.forEach{c->
                         Text(tr("Arrivée","Arrival","Naatugol")+": "+rosterDisplay(c.nullable("actual_start"))+" · "+tr("Départ","Departure","Yaltugol")+": "+rosterDisplay(c.nullable("actual_end")))
