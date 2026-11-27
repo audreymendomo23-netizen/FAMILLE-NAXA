@@ -10,7 +10,8 @@
 
 - [GRILLAD — Continuité de construction et audit transversal](grillad/GRILLAD_CONTINUITE.md)
 - [Continuité GRILLAD — audit, décisions et passation](passations/GRILLAD_CONTINUITE_2026-11-21.md)
-- [Cahier des charges GRILLAD V1.3 — tarifs validés et architecture multi-points](cahiers-des-charges/GRILLAD_V1_3.md)
+- [Cahier des charges GRILLAD V1.4 — application légère, pointage GPS/photo et ZIPPLE Snack-Bar](cahiers-des-charges/GRILLAD_V1_4.md)
+- [Cahier GRILLAD V1.3 — historique remplacé](cahiers-des-charges/GRILLAD_V1_3.md)
 - [Cahier GRILLAD V1.2 — version historique remplacée](cahiers-des-charges/GRILLAD_V1_2.md)
 - [Cahier GRILLAD V1.1 — historique remplacé](cahiers-des-charges/GRILLAD_V1_1.md)
 - [Cahier des charges ZIPPLE V2.0 — référence gelée](cahiers-des-charges/ZIPPLE_V2_0.md)
