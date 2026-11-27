@@ -34,7 +34,9 @@ class Bulk2LiveDeviceTest {
   click("Confirmer le règlement partiel reçu");awaitText("Règlement confirmé — solde : 0 FCFA")
   click("#"+amountNo+" · 800 FCFA");click("Montant libre")
   input("Personne ou groupe","Groupe A");input("Montant partiel FCFA","300")
-  click("Confirmer le règlement partiel reçu");awaitText("Règlement confirmé — solde : 500 FCFA")
+  click("Confirmer le règlement partiel reçu")
+  step("socket-loss recovery or already confirmed"){val confirmed=hasText("Règlement confirmé — solde : 500 FCFA",substring=false);val retry=hasText("Réessayer le même règlement",substring=false) and hasClickAction() and isEnabled();compose.waitUntil(30000){compose.onAllNodes(confirmed).fetchSemanticsNodes().isNotEmpty()||compose.onAllNodes(retry).fetchSemanticsNodes().size==1};if(compose.onAllNodes(confirmed).fetchSemanticsNodes().isEmpty()){click("Réessayer le même règlement")};awaitText("Règlement confirmé — solde : 500 FCFA")}
+
   input("Personne ou groupe","Groupe B");input("Montant partiel FCFA","500")
   click("Confirmer le règlement partiel reçu");awaitText("Règlement confirmé — solde : 0 FCFA")
   click("#"+mixedNo+" · 1000 FCFA");click("Paiement complet multi-moyens")
