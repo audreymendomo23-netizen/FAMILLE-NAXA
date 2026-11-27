@@ -13,7 +13,8 @@ internal fun receiptLines(r:JSONObject):List<String> = buildList {
 internal fun reportPdfLines(r:JSONObject):List<String> = buildList {
  fun amount(k:String)=if(r.isNull(k))"Non attribué / inconnu" else r.optString(k)+" FCFA"
  add("Période : "+r.optString("from")+" / "+r.optString("to"))
- listOf("ca" to "CA","direct_ca" to "Direct","connect_ca" to "Connect","cost" to "Coût","expenses" to "Dépenses").forEach{(k,v)->add("$v : "+amount(k))}
+ listOf("ca" to "CA","direct_ca" to "Direct","connect_ca" to "Connect","cost" to "Coût","expenses" to "Dépenses","encaissements" to "Encaissements espèces","purchase_amount" to "Achats documentaires (non imputés)").forEach{(k,v)->add("$v : "+amount(k))}
+ rows(r.optJSONArray("purchases_by_supplier")).forEach{x->add(x.optString("supplier")+" : "+x.optString("amount")+" FCFA")}
  add("Ventes : "+r.optString("sales_count")+" / Unités : "+r.optString("quantity"))
  rows(r.optJSONArray("sites")).forEach{x->add(x.optString("name")+" : CA "+x.optString("ca")+" FCFA")}
  add("Données confirmées serveur uniquement")

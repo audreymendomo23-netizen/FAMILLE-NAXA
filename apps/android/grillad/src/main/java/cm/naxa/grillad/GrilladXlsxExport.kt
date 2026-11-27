@@ -9,10 +9,11 @@ internal fun grilladReportRows(r:JSONObject):List<List<Any?>> = buildList {
  fun value(k:String)=if(r.isNull(k))"Non attribué / inconnu" else r.opt(k)
  fun item(x:JSONObject,k:String)=if(x.isNull(k))"Non attribué / inconnu" else x.opt(k)
  add(listOf("GRILLAD — Rapport financier"));add(listOf("Du",r.optString("from"),"Au",r.optString("to")));add(listOf("Indicateur","FCFA / quantité"))
- listOf("ca" to "CA","direct_ca" to "Direct","connect_ca" to "Connect","cost" to "Coût","expenses" to "Dépenses","sales_count" to "Ventes","quantity" to "Unités").forEach{(k,v)->add(listOf(v,value(k)))}
+ listOf("ca" to "CA","direct_ca" to "Direct","connect_ca" to "Connect","cost" to "Coût","expenses" to "Dépenses","encaissements" to "Encaissements espèces","purchase_amount" to "Achats documentaires (non imputés)","sales_count" to "Ventes","quantity" to "Unités").forEach{(k,v)->add(listOf(v,value(k)))}
  add(emptyList());add(listOf("Point","CA FCFA","Dépenses FCFA"));rows(r.optJSONArray("sites")).forEach{x->add(listOf(x.optString("name"),item(x,"ca"),item(x,"expenses")))}
  add(emptyList());add(listOf("Famille","CA FCFA","Quantité"));rows(r.optJSONArray("by_family")).forEach{x->add(listOf(x.optString("family"),item(x,"ca"),item(x,"quantity")))}
  add(emptyList());add(listOf("Vendeur (référence)","CA FCFA","Quantité"));rows(r.optJSONArray("by_seller")).forEach{x->add(listOf(x.optString("actor"),item(x,"ca"),item(x,"quantity")))}
+ add(emptyList());add(listOf("Fournisseur","Achats documentaires FCFA","Nombre"));rows(r.optJSONArray("purchases_by_supplier")).forEach{x->add(listOf(x.optString("supplier"),item(x,"amount"),item(x,"count")))}
  add(listOf("Données confirmées serveur uniquement"))
 }
 internal fun writeGrilladXlsx(context:Context,uri:Uri,table:List<List<Any?>>){

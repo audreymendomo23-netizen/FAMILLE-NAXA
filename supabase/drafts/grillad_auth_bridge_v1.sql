@@ -252,7 +252,7 @@ grant execute on function public.grillad_central_resolve(uuid,text,text) to serv
 -- Reconcile only existing, uniquely matched central evidence. This job never
 -- creates accounts, invites, payments, subscriptions or grants.
 create function grillad_private.central_reconcile(p_limit integer) returns jsonb
-language plpgsql security definer set search_path=pg_catalog as $
+language plpgsql security definer set search_path=pg_catalog as $$
 declare q record; n integer:=0; deferred integer:=0;
 begin
  if p_limit is null or p_limit not between 1 and 100 then raise exception 'GRILLAD_LIMIT' using errcode='22023';end if;
@@ -291,10 +291,10 @@ begin
   end;
  end loop;
  return jsonb_build_object('processed',n,'deferred',deferred);
-end $;
+end $$;
 revoke all on function grillad_private.central_reconcile(integer) from public,anon,authenticated;
 grant execute on function grillad_private.central_reconcile(integer) to service_role;
-create function public.grillad_central_reconcile(p_limit integer) returns jsonb language sql security invoker set search_path=pg_catalog as $select grillad_private.central_reconcile(p_limit)$;
+create function public.grillad_central_reconcile(p_limit integer) returns jsonb language sql security invoker set search_path=pg_catalog as $$select grillad_private.central_reconcile(p_limit)$$;
 revoke all on function public.grillad_central_reconcile(integer) from public,anon,authenticated;
 grant execute on function public.grillad_central_reconcile(integer) to service_role;
 

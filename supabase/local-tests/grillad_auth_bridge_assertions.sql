@@ -121,7 +121,7 @@ begin if (public.grillad_report(o,s,d,d,true,null,null,null)->>'ca')::int<>2000 
 reset role;
 -- Purchases remain documentary and never inflate expenses or cost of sold goods.
 set role authenticated;
-do $declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;b jsonb;v jsonb;e uuid:=gen_random_uuid();
+do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;b jsonb;v jsonb;e uuid:=gen_random_uuid();
 begin
  b:=public.grillad_report(o,s,d,d,false,null,null,null);
  perform public.grillad_action(o,s,e,'record_purchase','{"supplier":"GRILLAD test fournisseur","input_name":"Charbon","unit":"kg","quantity":2,"amount":1000}');
@@ -129,7 +129,7 @@ begin
  if (v->>'purchase_amount')::bigint<>(b->>'purchase_amount')::bigint+1000 or v->'expenses'<>b->'expenses' or v->'cost'<>b->'cost' or v->'ca'<>b->'ca' or not exists(select 1 from jsonb_array_elements(v->'purchases_by_supplier') x where x->>'supplier'='GRILLAD test fournisseur' and (x->>'amount')::bigint=1000) then raise exception 'documentary purchase report';end if;
  perform public.grillad_action(o,s,gen_random_uuid(),'cancel_purchase',jsonb_build_object('purchase',e,'reason','Test annulation'));
  v:=public.grillad_report(o,s,d,d,false,null,null,null);if v->'purchase_amount'<>b->'purchase_amount' or v->'expenses'<>b->'expenses' then raise exception 'cancelled purchase report';end if;
-end $;
+end $$;
 reset role;
 -- Central resolution must match real payment evidence and cannot be set by a client.
 set role service_role;
@@ -169,7 +169,7 @@ reset role;
 insert into famille_private.account_invites(id,request_id,user_id,token_hash,app_code,account_kind,organization_id,location_id,role_code,status,created_by,expires_at,accepted_at,accepted_by)
  values('b8000000-0000-0000-0000-000000000004','b8000000-0000-0000-0000-000000000003','b1000000-0000-0000-0000-000000000002',decode(repeat('a1',32),'hex'),'grillad','employee','b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','seller','accepted','b1000000-0000-0000-0000-000000000001',now()+interval '1 day',now(),'b1000000-0000-0000-0000-000000000002');
 set role service_role;
-do $begin if (public.grillad_central_reconcile(20)->>'processed')::int<>1 then raise exception 'accepted employee reconciliation';end if;if (public.grillad_central_reconcile(20)->>'processed')::int<>0 or not public.grillad_central_resolve('b8000000-0000-0000-0000-000000000003','processed','b8000000-0000-0000-0000-000000000004') then raise exception 'accepted employee replay';end if;end $;
+do $$begin if (public.grillad_central_reconcile(20)->>'processed')::int<>1 then raise exception 'accepted employee reconciliation';end if;if (public.grillad_central_reconcile(20)->>'processed')::int<>0 or not public.grillad_central_resolve('b8000000-0000-0000-0000-000000000003','processed','b8000000-0000-0000-0000-000000000004') then raise exception 'accepted employee replay';end if;end $$;
 reset role;
 -- Expired subscription grants billing only; no access to transactions.
 update famille_core.subscriptions set status='expired',ends_at=now()-interval '1 hour' where organization_id='b2000000-0000-0000-0000-000000000001';

@@ -35,3 +35,6 @@ Total après extension : 174 tests nommés (115 GRC + 34 existants + 21 parcours
 | 39 | service et daily_tick idempotent | minuit, corrections versionnées, état provisoire et cron |
 
 Aucune recette produit n'est certifiée intégralement ici. Les tests HTTP simulent l'amont, les SQL utilisent PostgreSQL jetable ; pas de paiement, caméra, FCM, déploiement ou migration hébergée.
+
+## Extension de reprise — sections 21–23
+Trois tests nommés ajoutés aux jobs existants : récupération uniforme, export PDF achats, export XLSX achats. Assertions SQL complémentaires (même suite lifecycle). Nouveau total : 177 tests nommés + 3 suites SQL + 1 drill = 181 unités ; lot 04 : 34 unités (complément exécuté par infrastructure/Web unitaires). Les autres lots restent 50/50/47. Pas de qualification produit présumée.

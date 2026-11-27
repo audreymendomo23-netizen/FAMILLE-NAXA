@@ -349,3 +349,6 @@ Baseline cccb107 ; les 12 campagnes de la section 20 sont terminées : 11/12 ent
 
 ## 22. Rapports financiers et achats documentaires
 - B3 : agrégat achats et ventilation fournisseur sur le même périmètre temporel/site/réseau que le rapport autorisé ; achats annulés exclus. Filtres article/vendeur/famille rendent les achats non attribués plutôt que de leur imputer un montant fictif. Aucun impact automatique sur CA, dépenses, coût des ventes ni caisse. Affichage natif et Web, exports Web PDF/XLSX avec distinction explicite et encaissements espèces. SQL : preuve de non-double-comptage, annulation et filtre, à qualifier. Exports natifs à compléter. La valorisation automatique des stocks d'intrants et charges indirectes reste conditionnée à l'arbitrage métier. Pas de déploiement ni migration hébergée.
+
+## 23. Correction CI et parité des exports
+- Run 46084181458 (c2049e5) : échec syntaxique PostgreSQL dans backup/lifecycle (délimiteurs dollar), identifié dans les logs ; correction des corps SQL et assertions, conservation des autres preuves. Exports Android PDF/XLSX alignés sur les rapports achats, deux nouveaux tests Web d'exports. 181 unités à qualifier (177 tests nommés, 3 suites SQL, 1 drill). Aucun vert global déclaré sur la nouvelle révision avant résultat. Aucun déploiement ni merge main.
