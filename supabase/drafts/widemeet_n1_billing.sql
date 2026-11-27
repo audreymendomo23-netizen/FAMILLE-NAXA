@@ -29,7 +29,7 @@ create table public.wm_paid_passes(
  workspace_id uuid not null references public.wm_workspaces(id),
  capacity integer not null check(capacity between 1 and 100),
  issued_at timestamptz not null,
- -- Paid but not activated here. N2 must atomically consume one pass for one room.
+ -- A paid pass is atomically bound to a single room by wm_pass_room_create.
  consumed_room_id uuid unique references public.wm_rooms(id),
  consumed_at timestamptz,
  valid_until timestamptz,
@@ -154,4 +154,68 @@ end $wm$;
 revoke all on function public.wm_guard_member_capacity() from public,anon,authenticated;
 grant execute on function public.wm_guard_member_capacity() to service_role;
 create trigger wm_membership_capacity_guard before insert or update of enabled,role,workspace_id on public.wm_memberships for each row execute function public.wm_guard_member_capacity();
+-- A paid individual pass is bound to exactly one room at creation, not to an
+-- unrestricted workspace entitlement. Clock starts at binding (conservative).
+create function public.wm_pass_list(p_hash text)
+returns jsonb language sql security invoker stable set search_path=pg_catalog,public as $wm$
+ select coalesce(jsonb_agg(jsonb_build_object('id',p.intent_id,'capacity',p.capacity,'room_id',p.consumed_room_id,'valid_until',p.valid_until) order by p.issued_at),'[]'::jsonb)
+ from public.wm_session_context(p_hash) s join public.wm_workspaces w on w.id=s.workspace_id and w.kind='individual' and w.enabled
+ join public.wm_memberships m on m.account_id=s.account_id and m.workspace_id=w.id and m.role='owner' and m.enabled
+ join public.wm_paid_passes p on p.workspace_id=w.id
+ where not s.password_change_required and (p.consumed_at is null or p.valid_until>now())
+$wm$;
+revoke all on function public.wm_pass_list(text) from public,anon,authenticated;
+grant execute on function public.wm_pass_list(text) to service_role;
+create function public.wm_pass_actor(p_hash text,p_intent uuid)
+returns table(account_id uuid,workspace_id uuid,role text,plan text,entitlement_end_ms bigint,capacity integer)
+language sql security invoker stable set search_path=pg_catalog,public as $wm$
+ select s.account_id,s.workspace_id,m.role,'premium'::text,floor(extract(epoch from now()+interval '24 hours')*1000)::bigint,p.capacity
+ from public.wm_session_context(p_hash) s join public.wm_workspaces w on w.id=s.workspace_id and w.kind='individual' and w.enabled
+ join public.wm_memberships m on m.account_id=s.account_id and m.workspace_id=w.id and m.role='owner' and m.enabled
+ join public.wm_paid_passes p on p.workspace_id=w.id and p.intent_id=p_intent and p.consumed_at is null
+ where not s.password_change_required
+$wm$;
+revoke all on function public.wm_pass_actor(text,uuid) from public,anon,authenticated;
+grant execute on function public.wm_pass_actor(text,uuid) to service_role;
+create function public.wm_pass_room_create(p_hash text,p_intent uuid,p_state jsonb)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a record; p public.wm_paid_passes%rowtype; rid uuid; t timestamptz; until_at timestamptz;
+begin
+ select * into a from public.wm_pass_actor(p_hash,p_intent);
+ if not found then return false;end if;
+ perform 1 from public.wm_accounts where id=a.account_id and enabled and not password_change_required for share;
+ if not found then return false;end if;
+ perform 1 from public.wm_workspaces where id=a.workspace_id and enabled and kind='individual' for share;
+ if not found then return false;end if;
+ perform 1 from public.wm_memberships where account_id=a.account_id and workspace_id=a.workspace_id and role='owner' and enabled for share;
+ if not found then return false;end if;
+ perform 1 from public.wm_device_sessions where token_hash=p_hash and revoked_at is null and expires_at>clock_timestamp() for share;
+ if not found then return false;end if;
+ select * into p from public.wm_paid_passes where intent_id=p_intent and workspace_id=a.workspace_id for update;
+ if not found or p.consumed_at is not null then return false;end if;
+ t:=clock_timestamp();until_at:=to_timestamp((p_state->>'hardEndMs')::bigint/1000.0);
+ if p_state is null or p_state->>'workspaceId' is distinct from a.workspace_id::text or p_state->>'hostId' is distinct from a.account_id::text or p_state->>'status' is distinct from 'scheduled' or p_state->>'revision' is distinct from '1' or jsonb_typeof(p_state->'participants') is distinct from 'array' or until_at is null or until_at<=t or until_at>t+interval '24 hours' then return false;end if;
+ if jsonb_array_length(p_state->'participants')>p.capacity or not exists(select 1 from jsonb_array_elements(p_state->'participants') x where x->>'memberId'=a.account_id::text and x->>'response'='accepted') then return false;end if;
+ if exists(select 1 from jsonb_array_elements(p_state->'participants') x where not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.enabled and m.account_id::text=x->>'memberId')) then return false;end if;
+ rid:=(p_state->>'id')::uuid;
+ insert into public.wm_rooms(id,workspace_id,host_id,revision,state) values(rid,a.workspace_id,a.account_id,1,p_state) on conflict(id) do nothing;
+ if not found then return false;end if;
+ update public.wm_paid_passes set consumed_room_id=rid,consumed_at=t,valid_until=until_at where intent_id=p_intent;
+ return true;
+end $wm$;
+revoke all on function public.wm_pass_room_create(text,uuid,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_pass_room_create(text,uuid,jsonb) to service_role;
+create or replace function public.wm_room_actor_for(p_hash text,p_room uuid)
+returns table(account_id uuid,workspace_id uuid,role text,plan text,entitlement_end_ms bigint)
+language sql security invoker stable set search_path=pg_catalog,public as $wm$
+ select * from public.wm_room_actor(p_hash)
+ union all
+ select s.account_id,s.workspace_id,m.role,'premium'::text,floor(extract(epoch from p.valid_until)*1000)::bigint
+ from public.wm_session_context(p_hash) s join public.wm_workspaces w on w.id=s.workspace_id and w.kind='individual' and w.enabled
+ join public.wm_memberships m on m.account_id=s.account_id and m.workspace_id=w.id and m.enabled
+ join public.wm_paid_passes p on p.workspace_id=w.id and p.consumed_room_id=p_room and p.valid_until>now()
+ where not s.password_change_required and not exists(select 1 from public.wm_room_actor(p_hash))
+$wm$;
+revoke all on function public.wm_room_actor_for(text,uuid) from public,anon,authenticated;
+grant execute on function public.wm_room_actor_for(text,uuid) to service_role;
 commit;
