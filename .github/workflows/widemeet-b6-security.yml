@@ -15,7 +15,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test packages/media-core/widemeet-b6-audio-purge.test.mjs
+      - run: node --test packages/media-core/widemeet-b6-*.test.mjs
       - run: node --check packages/media-core/widemeet-recorder.mjs && node --check scripts/widemeet/media-product-replay.mjs
   web:
     runs-on: ubuntu-24.04
