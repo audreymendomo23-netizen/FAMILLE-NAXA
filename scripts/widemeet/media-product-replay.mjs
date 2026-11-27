@@ -100,6 +100,12 @@ try{
  console.log("PASS actual participant consent withdrawal fences recording, stops Egress and discards private segment");
  await cmd(gs.access_token,"consent",true);await cmd(hs.access_token,"record",true);
  await until(()=>phase("active"),"second recording active",90000);await delay(3000);
+ await cmd(hs.access_token,"record_pause");assert.equal(state.status,"open");assert.equal(state.recordingPaused,true);
+ await cmd(gs.access_token,"chat","Meeting continues during recording pause");
+ await until(()=>phase("complete"),"verified independent recording pause",90000);
+ assert.ok(await inbound(a)&&await inbound(b));
+ console.log("PASS actual independent recording pause preserves verified segment while meeting audio/video remains connected");
+ await cmd(hs.access_token,"record",true);await until(()=>phase("active"),"resumed recording active",90000);await delay(3000);
  await cmd(hs.access_token,"record",false);
  await until(()=>phase("complete"),"verified normal recording completion",90000);
  assert.equal((await good(roomApi+"/read",{room_id:rid},hs.access_token)).recordingStatus.phase,"complete");
