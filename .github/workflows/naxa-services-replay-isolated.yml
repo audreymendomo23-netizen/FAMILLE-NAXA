@@ -28,6 +28,7 @@ on:
       - 'supabase/drafts/naxa_services_v19_meeting_series.sql'
       - 'supabase/drafts/naxa_services_v20_activity_field_parity.sql'
       - 'supabase/tests/drafts/naxa_services_activity_field_matrix.sql'
+      - 'scripts/naxa-services/b4-real-erp-recipe.mjs'
       - 'apps/web/naxa-services/src/**'
       - 'packages/offline-web/**'
       - 'supabase/functions/naxa-services-auth/**'
