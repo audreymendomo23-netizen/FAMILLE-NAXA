@@ -4,6 +4,7 @@ on:
   push:
     branches: [work/naxa-services-completion-20261120]
     paths:
+      - 'docs/naxa-services/NAXA_SERVICES_GLOBAL_QUALIFICATION_2026-11-27.json'
       - '.github/workflows/naxa-services-replay-isolated.yml'
       - '.github/workflows/naxa-services-technical-gate.yml'
       - 'supabase/drafts/naxa_services_v[1-9][0-9]_*.sql'

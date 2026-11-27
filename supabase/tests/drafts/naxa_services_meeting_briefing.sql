@@ -364,6 +364,11 @@ do $qa$ declare v jsonb; begin
  if not exists(select 1 from public.ns_internal_meeting_invitees where meeting_id='70000000-0000-4000-8000-000000000105' and member_id='60000000-0000-4000-8000-000000000092' and listening_locale='ff-CM' and recording_consent=false) then raise exception 'QA PERSONAL SETTINGS'; end if;
  v:=public.ns_daily_briefing('20000000-0000-4000-8000-000000000091','30000000-0000-4000-8000-000000000091',(now() at time zone 'Africa/Douala')::date);
  if v->>'scope'<>'personal' or v->'finance'<>'null'::jsonb then raise exception 'QA REPORT LEAK'; end if;
+ -- Historical boundary and negative dates must enforce the same server rule.
+ v:=public.ns_daily_briefing('20000000-0000-4000-8000-000000000091','30000000-0000-4000-8000-000000000091',(now() at time zone 'Africa/Douala')::date-366);
+ if v->>'scope'<>'personal' or v->'finance'<>'null'::jsonb or v->>'day'<>((now() at time zone 'Africa/Douala')::date-366)::text then raise exception 'QA BRIEFING HISTORICAL BOUNDARY'; end if;
+ begin perform public.ns_daily_briefing('20000000-0000-4000-8000-000000000091','30000000-0000-4000-8000-000000000091',(now() at time zone 'Africa/Douala')::date+1); raise exception 'QA BRIEFING FUTURE ACCEPTED'; exception when others then if sqlerrm not like '%NS_BRIEFING_FORBIDDEN%' then raise; end if; end;
+ begin perform public.ns_daily_briefing('20000000-0000-4000-8000-000000000091','30000000-0000-4000-8000-000000000091',(now() at time zone 'Africa/Douala')::date-367); raise exception 'QA BRIEFING EXPIRED DATE ACCEPTED'; exception when others then if sqlerrm not like '%NS_BRIEFING_FORBIDDEN%' then raise; end if; end;
 end $qa$;
 reset role;
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000091',true); select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000091","session_id":"qa-91-session","role":"authenticated"}',true);

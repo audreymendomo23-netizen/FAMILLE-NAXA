@@ -4,6 +4,7 @@ on:
   push:
     branches: [work/naxa-services-completion-20261120]
     paths:
+      - 'docs/naxa-services/NAXA_SERVICES_GLOBAL_QUALIFICATION_2026-11-27.json'
       - '.github/workflows/naxa-services-cloudflare-preflight.yml'
       - 'apps/web/naxa-services/**'
       - 'scripts/naxa-services/cloudflare-pages-build.mjs'

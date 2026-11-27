@@ -5,6 +5,7 @@ on:
     branches:
       - work/naxa-services-completion-20261120
     paths:
+      - 'docs/naxa-services/NAXA_SERVICES_GLOBAL_QUALIFICATION_2026-11-27.json'
       - "assets/naxa-services/**"
       - "apps/android/naxa-services/**"
       - "apps/android/naxa-services-beneficiary/**"
@@ -155,6 +156,8 @@ jobs:
         run: node scripts/naxa-services/verify-outbox-registry.mjs
       - name: Inventory commercial UI interactions and copy
         run: node scripts/naxa-services/audit-commercial-interactions.mjs
+      - name: Verify consolidated residual qualification inventory
+        run: node scripts/naxa-services/verify-global-qualification.mjs
       - uses: actions/upload-artifact@v6
         with:
           name: naxa-services-commercial-interaction-inventory

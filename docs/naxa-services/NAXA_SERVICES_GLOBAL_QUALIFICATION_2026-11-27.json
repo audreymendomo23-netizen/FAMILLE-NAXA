@@ -1,0 +1,366 @@
+{
+  "date": "2026-11-27",
+  "baseline": "79643ea1b29464b60e7e706e2caff67b086540e5",
+  "scope": "Registre des recettes résiduelles connues d'après continuité §22.119 et §22.129–130, audit fermeture, contradictions C01–C24, red gates et workflows. Ce n'est pas un audit exhaustif de tout le code ni la preuve d'absence d'autres défauts.",
+  "policy": {
+    "replay": "Recette existante relancée ; succès à constater, périmètre limité.",
+    "partial": "Recette partielle relancée ; reste non qualifié.",
+    "development": "Critère documenté, implémentation/recette E2E manquante ; workflow voisin ne peut pas le déclarer vert.",
+    "external": "Preuve réelle, autorisation ou expertise externe requise ; workflow voisin ne peut pas le déclarer vert."
+  },
+  "workflows": [
+    "technical-gate",
+    "replay-isolated",
+    "independent-reserves",
+    "backup-restore",
+    "cloudflare-preflight",
+    "hosted-device-test",
+    "release-readiness"
+  ],
+  "items": [
+    {
+      "id": "B1-01",
+      "bulk": "B1",
+      "title": "Droits positifs/négatifs des 10 rôles, site, poste, hiérarchie",
+      "workflow": "replay-isolated",
+      "status": "partial",
+      "acceptance": "JWT de chaque rôle, deux sites et deux postes ; lecture/écriture/compteurs limités ; aucun accès transversal ; compléter matrice poste/DAO."
+    },
+    {
+      "id": "B1-02",
+      "bulk": "B1",
+      "title": "Planning, congés, remplacements, rotations et conflit concurrent",
+      "workflow": "replay-isolated",
+      "status": "replay",
+      "acceptance": "Deux comptes ; publication, accusé, justification, refus conflit, remplacement atomique, congé, modèle et archivage."
+    },
+    {
+      "id": "B1-03",
+      "bulk": "B1",
+      "title": "Cache chiffré et reprise Android après redémarrage",
+      "workflow": "independent-reserves",
+      "status": "partial",
+      "acceptance": "Redémarrage OS émulateur ; journal intact, preuve ancienne rejetée ; reprise autorisée après preuve temps/session fiable reste à tester."
+    },
+    {
+      "id": "B1-04",
+      "bulk": "B1",
+      "title": "Offline prolongé et révocation des droits",
+      "workflow": "replay-isolated",
+      "status": "partial",
+      "acceptance": "Déconnexion, perte de reçu, replay identique, scope B/C et droit révoqué ; compléter coupure longue et cache subordonné."
+    },
+    {
+      "id": "B1-05",
+      "bulk": "B1",
+      "title": "GPS/selfie par site/poste/rôle, politique et historique",
+      "workflow": "replay-isolated",
+      "status": "partial",
+      "acceptance": "Preuve simulée, expiration, revue privée et anti-rejeu ; développer/qualifier héritage de politique par poste/rôle."
+    },
+    {
+      "id": "B1-06",
+      "bulk": "B1",
+      "title": "Nettoyage automatique hébergé des preuves temporaires",
+      "workflow": "replay-isolated",
+      "status": "external",
+      "acceptance": "Staging jetable puis vérification du cron et objets orphelins sur cible autorisée ; aucune suppression réelle sans périmètre."
+    },
+    {
+      "id": "B1-07",
+      "bulk": "B1",
+      "title": "Capteurs et permissions physiques",
+      "workflow": "hosted-device-test",
+      "status": "external",
+      "acceptance": "Deux téléphones autorisés ; refus permission, GPS mock, caméra avant, arrière-plan, reprise, révocation ; fournir logs expurgés."
+    },
+    {
+      "id": "B2-01",
+      "bulk": "B2",
+      "title": "Agenda, récurrences, invitations et rappels",
+      "workflow": "replay-isolated",
+      "status": "partial",
+      "acceptance": "Deux JWT, création/rejeu, RSVP, modification, annulation ; compléter persistance native, calendrier, documents et remise réelle des rappels."
+    },
+    {
+      "id": "B2-02",
+      "bulk": "B2",
+      "title": "Autorisation média, exclusion, chat, main et réactions",
+      "workflow": "replay-isolated",
+      "status": "replay",
+      "acceptance": "Invité/hôte même salle, anonyme/étranger/salle fermée refusés ; modération et consentement ; plan de contrôle seulement."
+    },
+    {
+      "id": "B2-03",
+      "bulk": "B2",
+      "title": "Transport SFU/TURN et présence effective",
+      "workflow": "technical-gate",
+      "status": "development",
+      "acceptance": "Réutiliser WideMeet après audit compatibilité ; deux appareils/réseaux, ICE/relay, audio bidirectionnel, caméra et quitter."
+    },
+    {
+      "id": "B2-04",
+      "bulk": "B2",
+      "title": "Partage écran, micro/caméra, exclusion effective",
+      "workflow": "technical-gate",
+      "status": "development",
+      "acceptance": "Vérifier flux effectivement retirés, publication/interdiction, reconnexion et révocation active ; permissions SQL seules insuffisantes."
+    },
+    {
+      "id": "B2-05",
+      "bulk": "B2",
+      "title": "Parité native/Web/PWA et réseau dégradé",
+      "workflow": "hosted-device-test",
+      "status": "external",
+      "acceptance": "Deux appareils réels et navigateur ; coupure, reprise, caméra/micro/écran et consommation ; dépend du transport livré."
+    },
+    {
+      "id": "B3-01",
+      "bulk": "B3",
+      "title": "Consentement et demande d'enregistrement",
+      "workflow": "replay-isolated",
+      "status": "replay",
+      "acceptance": "Hôte et invité, consentement, retrait, demande annulée ; aucun fichier audio revendiqué."
+    },
+    {
+      "id": "B3-02",
+      "bulk": "B3",
+      "title": "Enregistrement egress, annonce, retrait et clôture",
+      "workflow": "technical-gate",
+      "status": "development",
+      "acceptance": "Démarrer seulement après accord requis ; arrêt effectif, fichier mixé vérifiable ; aucun enregistrement clandestin."
+    },
+    {
+      "id": "B3-03",
+      "bulk": "B3",
+      "title": "Stockage privé audio, lecture et expiration",
+      "workflow": "replay-isolated",
+      "status": "development",
+      "acceptance": "Fichier véritable, contrôle locataire, URL courte, retrait/expiration/rétention, lecture sur clients ; dépend egress."
+    },
+    {
+      "id": "B3-04",
+      "bulk": "B3",
+      "title": "Traduction/transcription vocale six langues",
+      "workflow": "technical-gate",
+      "status": "development",
+      "acceptance": "FR/EN/FF/ES/IT/mandarin, original conservé, streaming, mesures latence/qualité et échantillons consentis ; aucun faux résultat."
+    },
+    {
+      "id": "B3-05",
+      "bulk": "B3",
+      "title": "Résumé IA et validation humaine",
+      "workflow": "technical-gate",
+      "status": "development",
+      "acceptance": "Résumé sourcé, décisions éditables, refus de fabrication, validation humaine, isolation et consentement."
+    },
+    {
+      "id": "B3-06",
+      "bulk": "B3",
+      "title": "Bilan historique daté et cloisonnement",
+      "workflow": "replay-isolated",
+      "status": "replay",
+      "acceptance": "Promoteur/invité, veille, limite 366 jours, dates future/ancienne refusées ; aucune finance pour personnel."
+    },
+    {
+      "id": "B3-07",
+      "bulk": "B3",
+      "title": "Bilan complet multi-périodes, archives, notifications et Q&A vocal",
+      "workflow": "technical-gate",
+      "status": "development",
+      "acceptance": "Consolidations autorisées, rubriques complètes, archive, notification et interaction vocale ; aucune donnée inventée."
+    },
+    {
+      "id": "B3-08",
+      "bulk": "B3",
+      "title": "Six voix et lecture sur appareils",
+      "workflow": "hosted-device-test",
+      "status": "external",
+      "acceptance": "Voix locales qualifiées, arrêt arrière-plan, consentement, voix indisponible signalée ; revue Fulfulde."
+    },
+    {
+      "id": "B4-01",
+      "bulk": "B4",
+      "title": "39 combinaisons activité/mode et interactions ERP",
+      "workflow": "replay-isolated",
+      "status": "replay",
+      "acceptance": "39 cycles Chromium ; facturation/avoirs, stocks/transferts, CRM/fidélité, objectifs, charges et concurrence déjà testés."
+    },
+    {
+      "id": "B4-02",
+      "bulk": "B4",
+      "title": "Confidentialité des rémunérations et moteur financier",
+      "workflow": "technical-gate",
+      "status": "replay",
+      "acceptance": "Dix cas supplémentaires REST/sync dans replay ; moteur fixe/proportionnel, part, bornes et règle manquante ; pas de virement."
+    },
+    {
+      "id": "B4-03",
+      "bulk": "B4",
+      "title": "Configuration facultative des commissions, défaut désactivé",
+      "workflow": "technical-gate",
+      "status": "development",
+      "acceptance": "Promoteur uniquement ; règles par collaborateur/prestation/activité/site, aucune valeur par défaut, absence de règle sans commission ; contrôle priorités explicites."
+    },
+    {
+      "id": "B4-04",
+      "bulk": "B4",
+      "title": "Raccordement automatique prestations/exécutants/encaissements",
+      "workflow": "replay-isolated",
+      "status": "development",
+      "acceptance": "Cas terminé + paiement confirmé + allocation explicite ; idempotence, concurrence, annulation et extournes transactionnelles ; sans taux universel."
+    },
+    {
+      "id": "B4-05",
+      "bulk": "B4",
+      "title": "Parité Android/Web/PWA, rôles et deux appareils",
+      "workflow": "technical-gate",
+      "status": "partial",
+      "acceptance": "Builds, Chromium et instrumentation existants ; compléter toutes opérations par rôle, mode et poste, exports natifs et conflits."
+    },
+    {
+      "id": "B4-06",
+      "bulk": "B4",
+      "title": "Impression et export matériel",
+      "workflow": "hosted-device-test",
+      "status": "external",
+      "acceptance": "PDF/reçu, Bluetooth/imprimante réelle, pas de doublon ni perte, rapprochement des totaux et exports natifs."
+    },
+    {
+      "id": "B4-07",
+      "bulk": "B4",
+      "title": "Fiscalité SYSCOHADA, paie et commissions réglementaires",
+      "workflow": "release-readiness",
+      "status": "external",
+      "acceptance": "Visa professionnel daté, comptes et taux validés ; tests moteur ne valent pas certification."
+    },
+    {
+      "id": "B5-01",
+      "bulk": "B5",
+      "title": "Alignement des cinq sources Edge actives",
+      "workflow": "cloudflare-preflight",
+      "status": "development",
+      "acceptance": "Diff source dépôt/déployé, analyse de divergence, alignement autorisé et test authentifié ; OPTIONS n'est pas la parité."
+    },
+    {
+      "id": "B5-02",
+      "bulk": "B5",
+      "title": "Premier promoteur et authentification cible",
+      "workflow": "replay-isolated",
+      "status": "external",
+      "acceptance": "Auth Admin officiel en local déjà prouvé ; compte de recette hébergé autorisé, rotation, révocation et séparation ; aucun compte réel créé automatiquement."
+    },
+    {
+      "id": "B5-03",
+      "bulk": "B5",
+      "title": "OM/MoMo abonnement et rapprochement",
+      "workflow": "technical-gate",
+      "status": "external",
+      "acceptance": "Contrats/intentions testés ; sandbox marchand autorisée, callbacks signés, montants et bénéficiaires ; aucun argent réel ni PIN/OTP."
+    },
+    {
+      "id": "B5-04",
+      "bulk": "B5",
+      "title": "FCM livraison et révocation réelles",
+      "workflow": "hosted-device-test",
+      "status": "external",
+      "acceptance": "Enregistrement et contrats existants ; deux appareils, reçu physique, permission refusée, token réattribué, logout et notifications ciblées."
+    },
+    {
+      "id": "B5-05",
+      "bulk": "B5",
+      "title": "NAXA SECURITY matériel, WhatsApp, support/partage écran",
+      "workflow": "hosted-device-test",
+      "status": "external",
+      "acceptance": "Matériel et comptes autorisés, permissions, alerte, escalade, message et partage effectif ; pas de simulation déclarée réelle."
+    },
+    {
+      "id": "B5-06",
+      "bulk": "B5",
+      "title": "Sauvegarde chiffrée/restauration isolée",
+      "workflow": "backup-restore",
+      "status": "replay",
+      "acceptance": "Bases jetables PostgreSQL, contrôle manifeste/intégrité/ACL, restauration et validation."
+    },
+    {
+      "id": "B5-07",
+      "bulk": "B5",
+      "title": "Restauration hébergée base et Storage",
+      "workflow": "backup-restore",
+      "status": "external",
+      "acceptance": "Sauvegarde cible autorisée et restauration sur environnement distinct, objets/ACL/chiffrement, aucune destruction production."
+    },
+    {
+      "id": "B5-08",
+      "bulk": "B5",
+      "title": "Contrôle public PWA et cinq passerelles",
+      "workflow": "cloudflare-preflight",
+      "status": "replay",
+      "acceptance": "Build exact, correspondance preview/alias si disponible, CORS officiel/refus origine tierce ; pas de test métier hébergé."
+    },
+    {
+      "id": "B5-09",
+      "bulk": "B5",
+      "title": "Roue promotionnelle et parrainage en exploitation",
+      "workflow": "replay-isolated",
+      "status": "external",
+      "acceptance": "Contrats et isolation en local ; validation juridique applicable, activation autorisée et parcours cible ; aucune dépense."
+    },
+    {
+      "id": "B6-01",
+      "bulk": "B6",
+      "title": "Inventaire interactions et traductions FR/EN/FF",
+      "workflow": "technical-gate",
+      "status": "partial",
+      "acceptance": "Catalogue, ressources et placeholders ; compléter textes indirects, PDF/erreurs, voix et revue linguistique."
+    },
+    {
+      "id": "B6-02",
+      "bulk": "B6",
+      "title": "CGU/PC Fulfulde et consentement versionné",
+      "workflow": "technical-gate",
+      "status": "external",
+      "acceptance": "Relecture juridique FR/EN/FF ; implémenter version FF et parcours acceptation si manquant ; aucune approbation inventée."
+    },
+    {
+      "id": "B6-03",
+      "bulk": "B6",
+      "title": "Accessibilité et responsive Web/PWA/Android",
+      "workflow": "independent-reserves",
+      "status": "partial",
+      "acceptance": "Playwright, shell public, tailles et navigation ; compléter lecteur d'écran, contraste, focus, tactile et appareils physiques."
+    },
+    {
+      "id": "B6-04",
+      "bulk": "B6",
+      "title": "Sécurité, performance et audit CDC final",
+      "workflow": "technical-gate",
+      "status": "partial",
+      "acceptance": "13 jobs, RLS, session, SQL et compilation ; compléter charge, mesures, couverture exhaustive CDC et audit indépendant."
+    },
+    {
+      "id": "B6-05",
+      "bulk": "B6",
+      "title": "APK debug connecté et recette propriétaire",
+      "workflow": "hosted-device-test",
+      "status": "partial",
+      "acceptance": "APK debug vérifié et hash/commit ; installation et acceptation physique restent distinctes."
+    },
+    {
+      "id": "B6-06",
+      "bulk": "B6",
+      "title": "Préparation certificat de signature",
+      "workflow": "release-readiness",
+      "status": "replay",
+      "acceptance": "Présence coffre + empreinte indépendante ; ne jamais générer ou auto-approuver le certificat."
+    },
+    {
+      "id": "B6-07",
+      "bulk": "B6",
+      "title": "Release signée, distribution et autorisation finale",
+      "workflow": "release-readiness",
+      "status": "external",
+      "acceptance": "Signature commerciale uniquement après autorisation, même SHA, installation et distribution contrôlées ; workflow release non déclenché."
+    }
+  ]
+}

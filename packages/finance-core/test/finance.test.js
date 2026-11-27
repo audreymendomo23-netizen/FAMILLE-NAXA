@@ -163,3 +163,13 @@ test("cumulative commission reversals cannot exceed original posted amount", () 
   assert.throws(()=>reverseCommission({...input,alreadyReversedXaf:-1,refundAmountXaf:1}),/INVALID_PRIOR_COMMISSION_REVERSAL/);
   assert.throws(()=>reverseCommission({...input,sourceEntryId:"",refundAmountXaf:1}),/INVALID_COMMISSION_SOURCE_ENTRY/);
 });
+
+test("commission engine never supplies a missing policy or rate and rejects unfinished work", () => {
+  const input={rule:approvedRule,saleLine,allocations,calculationDate:"2026-11-21",sourceEventId:"60000000-0000-4000-8000-000000000001"};
+  assert.throws(()=>calculateCommission({...input,rule:undefined}),/INVALID_COMMISSION_RULE/);
+  assert.throws(()=>calculateCommission({...input,rule:{...approvedRule,rateBps:undefined}}),/INVALID_COMMISSION_RATE/);
+  assert.throws(()=>calculateCommission({...input,saleLine:{...saleLine,status:"scheduled"}}),/SERVICE_NOT_COMPLETED/);
+  assert.throws(()=>calculateCommission({...input,rule:{...approvedRule,effectiveFrom:"2026-11-22"}}),/COMMISSION_RULE_NOT_EFFECTIVE/);
+  const fullyRefunded=calculateCommission({...input,saleLine:{...saleLine,refundedXaf:saleLine.confirmedPaidXaf}});
+  assert.equal(fullyRefunded.status,"no_commission");assert.deepEqual(fullyRefunded.entries,[]);
+});

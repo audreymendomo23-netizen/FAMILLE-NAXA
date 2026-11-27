@@ -5,6 +5,7 @@ on:
     branches:
       - "work/naxa-services-completion-20261120"
     paths:
+      - 'docs/naxa-services/NAXA_SERVICES_GLOBAL_QUALIFICATION_2026-11-27.json'
       - ".github/workflows/naxa-services-release-readiness.yml"
       - ".github/workflows/naxa-services-release.yml"
 permissions:
