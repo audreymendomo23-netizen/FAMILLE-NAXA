@@ -381,3 +381,6 @@ Preuves précédentes : jobs Web/Android 46076389708 et 46076501881, SQL 4607650
 
 ## Campagne parallèle B1–B6
 Révision de départ ec93719 : Android/Web 46077049114 SUCCESS, SQL 46077049211 SUCCESS; gate famille 46077049238 échec E2E/axe et matrice RLS commune. Registre exécutable 543 recettes de navigation (181 destinations × 3 largeurs), 11 lots (10×50 + 43), matrice fail-fast false max-parallel 11 et rapports individuels. Ces recettes ne sont pas des preuves métier. Les workflows SQL et Android restent distincts. Aucun déploiement.
+
+## Développement simultané des six bulks
+Contrats métier JS B1 prix, B2 fraîcheur, B3 priorités/états/déclaration, B4 preuve GPS et checkpoints, B5 brouillon de maintenance, B6 délégation en lecture. Kotlin : règles correspondantes partielles. 36 tests unitaires JS en six jobs parallèles. Interfaces interactives calcul tarifaire et brouillons incident/maintenance sur Android et Web (8 destinations), sans persistance ni transmission ; les autres écrans restent à développer. Critères GPS de 100m proposés uniquement pour cette recette et non validés comme seuil métier global. Aucun connecteur matériel ni Auth réelle, aucun déploiement/migration. Tous les bulks restent PARTIEL jusqu'aux preuves E2E.
