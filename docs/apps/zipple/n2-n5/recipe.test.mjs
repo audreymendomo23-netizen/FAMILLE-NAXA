@@ -872,6 +872,32 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.ok((await portal("intelligence")).metrics);await assert.rejects(scalar("select zp_workspace_snapshot($1,$2,'team')",[b.access,a.site]),/DENIED/);
  console.log("ZIPPLE_BULK45_CONNECTED_WORKSPACES_PASS");
  }
+ {
+ const loy=await tenant("Loyalty isolated");await pay(await intent(loy,"PREMIUM","monthly"));await scalar("select zp_site_mode($1,$2,'restaurant',false,false)",[loy.access,loy.site]);
+ const lw=(act,p,key=uid())=>scalar("select zp_loyalty_write($1,$2,$3,$4,$5)",[loy.access,loy.site,act,key,JSON.stringify(p)]);
+ const ls=()=>scalar("select zp_loyalty_snapshot($1,$2)",[loy.access,loy.site]);
+ await lw("configure",{expected_version:0,step_xaf:100,points_per_step:1,referrer_points:10,new_customer_points:5,enabled:true,reason:"Synthetic test points"});
+ const sponsor=await scalar("select zp_customer_add($1,$2,'Parrain recette',null)",[loy.access,loy.site]),newCustomer=await scalar("select zp_customer_add($1,$2,'Filleul recette',null)",[loy.access,loy.site]);
+ const code=(await lw("issue_code",{customer_id:sponsor})).id;
+ await assert.rejects(lw("apply_code",{customer_id:sponsor,code}),/INVALID_REFERRAL/);
+ await lw("apply_code",{customer_id:newCustomer,code});
+ const otherCode=(await lw("issue_code",{customer_id:newCustomer})).id;await assert.rejects(lw("apply_code",{customer_id:sponsor,code:otherCode}),/INVALID_REFERRAL/);
+ const menu=await add(loy,"Loyalty item","kitchen",1000,3),ord=await order(loy,"counter",[{item_id:menu,qty:1}]);
+ await scalar("select zp_customer_attach($1,$2,$3,$4)",[loy.access,loy.site,newCustomer,ord.id]);
+ for(const state of ["preparing","ready","served"])await scalar("select zp_advance_line($1,$2,$3,$4,$5)",[loy.access,loy.site,ord.id,menu,state]);
+ const cash=await scalar("select zp_open_cash($1,$2,0)",[loy.access,loy.site]),receipt=await scalar("select zp_record_sale($1,$2,$3,$4,$5,'cash',1000,null)",[loy.access,loy.site,cash,ord.id,uid()]);
+ const key=uid(),award=await lw("claim_receipt",{receipt_id:receipt},key);assert.deepEqual(await lw("claim_receipt",{receipt_id:receipt},key),award);await lw("claim_receipt",{receipt_id:receipt});
+ const snap=await ls();assert.equal(snap.customers.find(x=>x.id===sponsor).points,"10");assert.equal(snap.customers.find(x=>x.id===newCustomer).points,"15");assert.equal(snap.awards.length,3);
+ await scalar("select zp_cash_outflow_record($1,$2,$3,$4,'refund',$5,'cash',1000,'LOY-REFUND','Loyalty refund test')",[loy.access,loy.site,cash,uid(),receipt]);
+ assert.equal((await ls()).customers.find(x=>x.id===sponsor).points,"0");assert.ok((await ls()).awards.every(x=>x.reversal==="refund"));
+ const cw=(act,p)=>scalar("select zp_connection_write($1,$2,$3,$4,$5)",[loy.access,loy.site,act,uid(),JSON.stringify(p)]);
+ await cw("zone_save",{label:"Zone test",instructions:"Périmètre test",fee_xaf:500,enabled:true});await cw("courier_set",{member_id:loy.member,enabled:true});
+ const delivery=await scalar("select zp_connection_snapshot($1,$2,'delivery')",[loy.access,loy.site]);assert.equal(delivery.service_active,false);assert.equal(delivery.zones[0].fee_xaf,500);
+ const link=await cw("request_link",{partner:"naxa_security",external_reference:"TEST-SITE",reason:"Demande synthétique"});await cw("cancel_link",{link_id:link.id});
+ assert.equal((await scalar("select zp_connection_snapshot($1,$2,'connections')",[loy.access,loy.site])).rows[0].state,"cancelled");
+ await assert.rejects(scalar("select zp_connection_snapshot($1,$2,'connections')",[a.access,loy.site]),/DENIED/);
+ console.log("ZIPPLE_BULK4_LOYALTY_REVERSAL_AND_CONNECTION_SETUP_PASS");
+ }
  assert.equal(await scalar("select count(*)::int from pg_tables where schemaname='public' and tablename like 'zp_%' and not rowsecurity"),0);
  assert.equal(await scalar("select has_function_privilege('authenticated','public.zp_confirm_subscription(uuid,text,text,integer,text)','execute')"),false);
  assert.equal(await scalar("select has_table_privilege('anon','public.zp_orders','select')"),false);
