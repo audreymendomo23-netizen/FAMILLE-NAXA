@@ -14,7 +14,7 @@ export function validate(env){
   const u=new URL(env.VITE_GRILLAD_API_URL);
   if(u.protocol!=='https:'||u.username||u.password||u.search||u.hash||u.port||!u.hostname.endsWith('.supabase.co')||u.pathname!=='/functions/v1/grillad')throw Error('GRILLAD_API_SCOPE');
  }
- if(env.GRILLAD_RELEASE==='1'&&!env.VITE_GRILLAD_API_URL)throw Error('GRILLAD_API_REQUIRED');
+ if(env.GRILLAD_RELEASE==='1')throw Error('GRILLAD_RELEASE_BLOCKED_UNTIL_REAL_AUTH_AND_BACKEND');
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  validate(process.env);
