@@ -14,7 +14,7 @@ object ZippleSyncSession {
  @Volatile var current:Session?=null
  fun schedule(context:Context){
   val work=OneTimeWorkRequestBuilder<ZippleSyncWorker>().setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()).setBackoffCriteria(BackoffPolicy.EXPONENTIAL,30,TimeUnit.SECONDS).build()
-  WorkManager.getInstance(context).enqueueUniqueWork("zipple-scoped-outbox",ExistingWorkPolicy.KEEP,work)
+  WorkManager.getInstance(context).enqueueUniqueWork("zipple-scoped-outbox",ExistingWorkPolicy.APPEND_OR_REPLACE,work)
  }
 }
 class ZippleSyncWorker(context:Context,params:WorkerParameters):CoroutineWorker(context,params){
@@ -37,7 +37,7 @@ class ZippleSyncWorker(context:Context,params:WorkerParameters):CoroutineWorker(
      if(ZippleSyncSession.current!==session)return Result.success()
      if(!dao.applyReceipt(event.eventId,session.organization,session.member,site.id,state))return Result.retry()
      // Conflict/rejected records are retained and block later mutations for review.
-     if(state!="acknowledged")return Result.success()
+     if(state!="acknowledged")break
     }
    }
    return Result.success()
