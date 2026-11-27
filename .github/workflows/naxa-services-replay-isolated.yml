@@ -1097,11 +1097,18 @@ jobs:
                   await rpc(page,'ns_set_automatic_commission_settings',()=>commissionPanel.getByRole('button',{name:'Activer',exact:true}).click());
                   await commissionPanel.getByRole('button',{name:'Désactiver',exact:true}).waitFor();
                   phase='commission configuration fill form';
+                  phase='commission configuration field code';
                   await commissionPanel.getByLabel('Code de règle',{exact:true}).fill('QA-B4-COMMISSION');
+                  phase='commission configuration field site';
+                  assert.ok(config.sites.some(s=>s.id===host.site.id),'catalog contains exact host site');
                   await commissionPanel.getByLabel('Établissement',{exact:true}).selectOption(host.site.id);
+                  phase='commission configuration field rate';
                   await commissionPanel.getByLabel('Taux (%)',{exact:true}).fill('10');
+                  phase='commission configuration field date';
                   await commissionPanel.getByLabel('Date de début',{exact:true}).fill(hd.day);
+                  phase='commission configuration field reference';
                   await commissionPanel.getByLabel('Référence de la décision',{exact:true}).fill('QA explicit promoter approval');
+                  phase='commission configuration field approval';
                   await commissionPanel.getByLabel('J’approuve cette règle',{exact:true}).check();
                   phase='commission configuration publish';
                   const policyId=await rpc(page,'ns_publish_automatic_commission_policy',()=>commissionPanel.getByRole('button',{name:'Publier la règle',exact:true}).click());

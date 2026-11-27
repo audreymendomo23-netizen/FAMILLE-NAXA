@@ -27,7 +27,11 @@ export function validateBriefing(value:unknown,day:string):Report {
  if(f!==null&&(!object(f)||!count(f.revenue_xaf)||!count(f.confirmed_sales_count)||!count(f.uncosted_sales_count)||f.uncosted_sales_count>f.confirmed_sales_count))throw Error("INVALID_BRIEFING");
  if(value.scope==="personal"&&f!==null)throw Error("INVALID_BRIEFING");
  if(p!==null&&(!object(p)||!count(p.event_count)))throw Error("INVALID_BRIEFING");
- return value as Report;
+ return {day,generated_at:value.generated_at,coverage:value.coverage,scope:value.scope,
+  appointments:{scheduled_count:a.scheduled_count as number,completed_count:a.completed_count as number},
+  finance:f===null?null:{revenue_xaf:(f as Record<string,unknown>).revenue_xaf as number,confirmed_sales_count:(f as Record<string,unknown>).confirmed_sales_count as number,uncosted_sales_count:(f as Record<string,unknown>).uncosted_sales_count as number},
+  personal_clock_events:p===null?null:{event_count:(p as Record<string,unknown>).event_count as number}};
+
 }
 export function briefingDateBounds(now=Date.now()){
  const today=new Date(now+3600000).toISOString().slice(0,10);

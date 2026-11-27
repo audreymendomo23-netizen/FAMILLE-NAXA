@@ -15,6 +15,7 @@ export function MeetingCollaboration({account,meetingId,host,authEndpoint,anonKe
  const [text,setText]=useState(""),[busy,setBusy]=useState(false),[ready,setReady]=useState(false),[error,setError]=useState(false);
  const token=useRef(getToken);token.current=getToken;const unavailable=useRef(onUnavailable);unavailable.current=onUnavailable;
  const active=useRef(false),controller=useRef<AbortController|null>(null),running=useRef(false),writing=useRef(false);
+ const pendingAction=useRef<{key:string;id:string}|null>(null);
  async function req<T>(path:string,body?:Record<string,unknown>):Promise<T>{
   const scope=controller.current;
   if(!anonKey)throw Error("SESSION_CHANGED");
@@ -44,7 +45,11 @@ export function MeetingCollaboration({account,meetingId,host,authEndpoint,anonKe
  },[meetingId,account.member_id,authEndpoint,anonKey]);
  async function act(action:string,value:string|null=null,target?:string){
   if(writing.current||!ready)return;writing.current=true;setBusy(true);
-  try{await req(target?"rpc/ns_moderate_meeting":"rpc/ns_meeting_action",target?{p_id:meetingId,p_event:crypto.randomUUID(),p_target:target,p_action:action}:{p_id:meetingId,p_event:crypto.randomUUID(),p_action:action,p_value:value});if(active.current){if(action==="chat"&&!target)setText("");await refresh();}}catch{if(active.current)setError(true);}finally{writing.current=false;if(active.current)setBusy(false);}
+  const scope=controller.current;const current=()=>active.current&&controller.current===scope&&Boolean(scope&&!scope.signal.aborted)&&document.visibilityState!=="hidden";
+  const key=JSON.stringify([meetingId,account.member_id,action,value,target??null]);
+  const event=pendingAction.current?.key===key?pendingAction.current.id:crypto.randomUUID();
+  pendingAction.current={key,id:event};
+  try{await req(target?"rpc/ns_moderate_meeting":"rpc/ns_meeting_action",target?{p_id:meetingId,p_event:event,p_target:target,p_action:action}:{p_id:meetingId,p_event:event,p_action:action,p_value:value});if(current()){pendingAction.current=null;if(action==="chat"&&!target)setText("");await refresh();}}catch{if(current())setError(true);}finally{writing.current=false;if(active.current)setBusy(false);}
  }
  async function requestRecording(id:string,action:"start"|"stop"){
   if(writing.current||!ready||!host)return;writing.current=true;setBusy(true);

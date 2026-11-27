@@ -91,11 +91,13 @@ function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props)
   document.addEventListener("visibilitychange",onVisibility);
   return()=>{alive.current=false;abort.abort();window.clearInterval(interval);document.removeEventListener("visibilitychange",onVisibility);};
  },[account.organization_id,account.member_id,account.business_mode,siteId,authEndpoint,anonKey,version]);
+ function commandScope(){const scope=requestScope.current;return ()=>alive.current&&foreground.current&&requestScope.current===scope&&Boolean(scope&&!scope.signal.aborted);}
  function edit(s:Shift){
   const target=targets.find(t=>t.member_id===s.member_id&&t.workstation_id===s.workstation_id);if(!target)return;
   setForm({id:s.id,target:key(target),start:localInput(s.starts_at),end:localInput(s.ends_at),pause:String(s.planned_break_minutes),tolerance:String(s.tolerance_minutes),revision:s.revision,reason:"",repeat:"once",count:"1"});
  }
  async function save(cancel?:Shift){
+  const current=commandScope();if(!current())return;
   if(busy||!loaded)return;
   const selected=cancel?targets.find(t=>t.member_id===cancel.member_id&&t.workstation_id===cancel.workstation_id):targets.find(t=>key(t)===form.target);
   if(!selected)return;
@@ -118,16 +120,18 @@ function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props)
    const receipts=count===1?[await request<Receipt>("rpc/ns_publish_roster_shift",{p_id:ids[0],...commands[0]})]:(await request<{receipts:Receipt[]}>("rpc/ns_publish_roster_batch",{p_commands:commands.map((c,i)=>({p_id:ids[i],...c}))})).receipts;
    if(!Array.isArray(receipts)||receipts.length!==count||!ids.every(id=>receipts.filter(r=>r.id===id&&r.revision===command.p_expected_revision+1&&r.status===command.p_status).length===1))throw new Error("ROSTER_RECEIPT_INVALID");
    pendingPublish.current=null;
-   if(alive.current){setForm(blank());setVersion(v=>v+1);}
-  }catch{if(alive.current)setError(tr("Modification non confirmée. Actualisez le planning et vérifiez les horaires.","Change not confirmed. Refresh the schedule and check the hours.","Baylugol tabbitinaaka. Hesɗitin feere golle, ƴeewto sahaa."));}
-  finally{if(alive.current)setBusy(false);}
+   if(current()){setForm(blank());setVersion(v=>v+1);}
+  }catch{if(current())setError(tr("Modification non confirmée. Actualisez le planning et vérifiez les horaires.","Change not confirmed. Refresh the schedule and check the hours.","Baylugol tabbitinaaka. Hesɗitin feere golle, ƴeewto sahaa."));}
+  finally{if(current())setBusy(false);}
  }
  async function acknowledge(s:Shift){
+  const current=commandScope();if(!current())return;
   if(busy||!loaded)return;setBusy(true);setError("");
-  try{await request("rpc/ns_ack_roster_shift",{p_id:s.id,p_revision:s.revision});if(alive.current)setVersion(v=>v+1);}
-  catch{if(alive.current)setError(textError);}finally{if(alive.current)setBusy(false);}
+  try{await request("rpc/ns_ack_roster_shift",{p_id:s.id,p_revision:s.revision});if(current())setVersion(v=>v+1);}
+  catch{if(current())setError(textError);}finally{if(current())setBusy(false);}
  }
  async function explain(s:Shift,c:Comparison,decision?:"accepted"|"rejected"){
+  const current=commandScope();if(!current())return;
   if(busy||!loaded)return;
   const reason=window.prompt(decision?tr("Motif de la décision","Decision reason","Sabu ñaawol"):tr("Expliquez l'écart","Explain the variance","Humpit ceertugol"));
   if(!reason?.trim()||reason.trim().length>1000)return;
@@ -136,15 +140,16 @@ function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props)
    const body={p_shift:s.id,p_revision:c.baseline_revision};
    const response=decision?await request<{decision:string}>("rpc/ns_decide_roster_justification",{...body,p_decision:decision,p_reason:reason.trim()}):await request<{submitted:boolean}>("rpc/ns_submit_roster_justification",{...body,p_explanation:reason.trim()});
    if(decision?!("decision" in response&&response.decision===decision):!("submitted" in response&&response.submitted===true))throw new Error("ROSTER_JUSTIFICATION_RECEIPT");
-   if(alive.current)setVersion(v=>v+1);
-  }catch{if(alive.current)setError(textError);}finally{if(alive.current)setBusy(false);}
+   if(current())setVersion(v=>v+1);
+  }catch{if(current())setError(textError);}finally{if(current())setBusy(false);}
  }
  async function extension(action:()=>Promise<void>){
+  const current=commandScope();if(!current())return;
   if(busy||!loaded)return;
   setBusy(true);setError("");
-  try{await action();if(alive.current)setVersion(v=>v+1);}
-  catch{if(alive.current)setError(tr("Opération non confirmée. Vérifiez les droits, les horaires et les services en conflit.","Operation not confirmed. Check permissions, times and conflicting shifts.","Golle tabbitinaaka. Ƴeewto yamirooje e sahaa."));}
-  finally{if(alive.current)setBusy(false);}
+  try{await action();if(current())setVersion(v=>v+1);}
+  catch{if(current())setError(tr("Opération non confirmée. Vérifiez les droits, les horaires et les services en conflit.","Operation not confirmed. Check permissions, times and conflicting shifts.","Golle tabbitinaaka. Ƴeewto yamirooje e sahaa."));}
+  finally{if(current())setBusy(false);}
  }
  async function requestLeave(){await extension(async()=>{
   const body={p_org:account.organization_id,p_site:siteId,p_post:leave.post||null,p_kind:leave.kind,p_start:toIso(leave.start),p_end:toIso(leave.end),p_reason:leave.reason.trim()};

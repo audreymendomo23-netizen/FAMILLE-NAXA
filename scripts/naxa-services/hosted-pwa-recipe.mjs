@@ -17,7 +17,9 @@ try {
    const submit=page.getByRole('button',{name:'Se connecter',exact:true});
    for(const control of [identifier,password,submit]){assert.ok(await control.isVisible());assert.ok(await control.isEnabled());}
    await identifier.focus();assert.ok(await identifier.evaluate(el=>document.activeElement===el));
-   await password.focus();assert.ok(await password.evaluate(el=>document.activeElement===el));
+   await identifier.press('Tab');
+   assert.ok(await password.evaluate(el=>document.activeElement===el),'keyboard focus moves from login to password');
+   assert.ok(await page.evaluate(()=>{const el=document.activeElement;return el instanceof HTMLElement&&el.getBoundingClientRect().width>0&&el.getBoundingClientRect().height>0;}),'focused password control is visible');
    assert.equal(await password.getAttribute('type'),'password');
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'no horizontal overflow at '+width);
    await page.evaluate(()=>navigator.serviceWorker.ready.then(()=>true));

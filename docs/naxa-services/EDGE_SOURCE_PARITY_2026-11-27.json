@@ -1,0 +1,44 @@
+{
+  "date": "2026-11-27",
+  "repositoryCommit": "5c9974ca4758609e927a39c8a7e083ccf955e635",
+  "project": "idupfjbkwjcavyisxteo",
+  "comparison": "index.ts only; CRLF normalized, trimmed; no secrets, no deploy; shared dependency parity not established",
+  "functions": [
+    {
+      "slug": "naxa-services-auth",
+      "version": 27,
+      "hostedCharacters": 68404,
+      "repositoryCharacters": 69634,
+      "equal": false
+    },
+    {
+      "slug": "naxa-services-accounting",
+      "version": 20,
+      "hostedCharacters": 10499,
+      "repositoryCharacters": 11492,
+      "equal": false
+    },
+    {
+      "slug": "naxa-services-referrals",
+      "version": 18,
+      "hostedCharacters": 12249,
+      "repositoryCharacters": 12320,
+      "equal": false
+    },
+    {
+      "slug": "naxa-services-customer-promotions",
+      "version": 19,
+      "hostedCharacters": 22982,
+      "repositoryCharacters": 23053,
+      "equal": false
+    },
+    {
+      "slug": "naxa-services-notifications",
+      "version": 38,
+      "hostedCharacters": 21420,
+      "repositoryCharacters": 21206,
+      "equal": false
+    }
+  ],
+  "conclusion": "5/5 mismatched; do not overwrite hosted source without differential review"
+}
