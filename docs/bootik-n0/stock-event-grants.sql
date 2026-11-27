@@ -56,3 +56,8 @@ grant execute on function bootik.bk_approval_admin(uuid,uuid,uuid,uuid,uuid,json
 grant execute on function bootik.bk_notification_inbox(uuid,uuid,uuid,uuid),bootik.bk_notification_read(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;
 
 grant execute on function bootik.bk_assert_sale_resource(uuid,uuid,uuid,uuid,uuid,uuid) to bootik_runtime;
+
+-- Transverse CRM ledger: immutable event rows, no UPDATE or DELETE.
+create policy bk_runtime_followups on bootik.bk_followup_events to bootik_runtime using(true) with check(true);
+grant select,insert on bootik.bk_followup_events to bootik_runtime;
+grant execute on function bootik.bk_assert_business_scope(uuid,uuid,uuid,uuid,uuid,text),bootik.bk_business_overview(uuid,uuid,uuid,uuid,uuid,integer),bootik.bk_followup_action(uuid,uuid,uuid,uuid,uuid,uuid,jsonb),bootik.bk_followup_list(uuid,uuid,uuid,uuid,uuid) to bootik_runtime;

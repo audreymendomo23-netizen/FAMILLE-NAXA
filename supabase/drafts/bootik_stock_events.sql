@@ -714,4 +714,171 @@ begin
 end $$;
 revoke all on function bootik.bk_assert_sale_resource(uuid,uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
 
+
+-- Transverse business operations: exact activity and site; no cross-universe totals.
+create function bootik.bk_assert_business_scope(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_operation text)
+returns text language plpgsql stable security invoker set search_path=pg_catalog,bootik as $
+declare u text; f text;
+begin
+ perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
+ if p_operation not in ('dashboard','partners') or not bootik.bk_can_access_activity(p_org,p_app,p_actor,p_site,p_activity)
+ or not bootik.bk_resource_activity_access(p_org,p_app,p_actor,p_site,p_activity)
+ or not bootik.bk_resource_gate(p_org,p_app,p_actor,p_site,p_operation,'{}'::jsonb)
+ or not bootik.bk_permits_operation(p_org,p_app,p_actor,p_operation,'{}'::jsonb) then
+  raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';
+ end if;
+ select a.universe_code into u from bootik.bk_activities a join bootik.bk_activity_locations al
+ on (al.activity_id,al.organization_id,al.app_id)=(a.id,a.organization_id,a.app_id)
+ where a.id=p_activity and a.organization_id=p_org and a.app_id=p_app and a.status='active' and al.location_id=p_site;
+ if not found or not bootik.bk_has_capability(p_org,p_app,u,case when p_operation='dashboard' then 'finance' else 'crm' end)
+ then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ if p_operation='partners' then
+  select function_code into f from bootik.bk_member_functions where organization_id=p_org and app_id=p_app and user_id=p_actor;
+  if found and f not in ('director','site_manager') then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ end if;
+ return u;
+end $;
+
+create function bootik.bk_business_overview(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_days integer)
+returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,bootik as $
+declare u text; answer jsonb; local_day date; start_at timestamptz;
+begin
+ u:=bootik.bk_assert_business_scope(p_org,p_app,p_actor,p_site,p_activity,'dashboard');
+ if p_days is null or p_days not in (1,7,30) then raise exception 'BOOTIK_INVALID_PERIOD';end if;
+ local_day:=(now() at time zone 'Africa/Douala')::date;
+ start_at:=(local_day-(p_days-1))::timestamp at time zone 'Africa/Douala';
+ with sold as (
+  select count(*) as lines,coalesce(sum(total_fcfa),0) as revenue,
+   count(*) filter(where cost_of_goods_fcfa is null) as missing_cost,
+   case when count(*) filter(where cost_of_goods_fcfa is null)=0 then coalesce(sum(cost_of_goods_fcfa),0) end as cost,
+   case when count(*) filter(where gross_margin_fcfa is null)=0 then coalesce(sum(gross_margin_fcfa),0) end as margin
+  from bootik.bk_sales where organization_id=p_org and app_id=p_app and location_id=p_site and activity_id=p_activity
+   and created_at>=start_at and created_at<=now()
+ ), orders as (
+  select count(*) filter(where received_quantity<quantity) as open_orders,
+   coalesce(sum(received_amount_fcfa-paid_amount_fcfa),0) as payable
+  from bootik.bk_purchase_orders where organization_id=p_org and app_id=p_app and location_id=p_site and activity_id=p_activity
+ ), incoming as (
+  select b.item_id,sum(o.quantity-o.received_quantity) as remaining
+  from bootik.bk_purchase_orders o join bootik.bk_inventory_balances b on b.id=o.balance_id
+   and (b.organization_id,b.app_id,b.location_id,b.activity_id)=(o.organization_id,o.app_id,o.location_id,o.activity_id)
+  where o.organization_id=p_org and o.app_id=p_app and o.location_id=p_site and o.activity_id=p_activity and o.received_quantity<o.quantity
+  group by b.item_id
+ ), onhand as (
+  select c.id,c.sku,c.display_name,c.base_unit_code,r.minimum_quantity,r.target_quantity,r.safety_quantity,
+   coalesce(sum(case when b.id is null or c.is_serialized or (b.lot_id is not null and
+   (l.quality_state is distinct from 'available' or l.expires_at<local_day)) then 0
+   else greatest(0,b.quantity_on_hand-b.quantity_reserved-b.quantity_damaged) end),0) as available,
+   c.is_serialized
+  from bootik.bk_catalog_items c
+  join bootik.bk_reorder_policies r on (r.item_id,r.organization_id,r.app_id,r.activity_id)=(c.id,c.organization_id,c.app_id,c.activity_id) and r.location_id=p_site
+  left join bootik.bk_inventory_balances b on (b.item_id,b.organization_id,b.app_id,b.activity_id)=(c.id,c.organization_id,c.app_id,c.activity_id) and b.location_id=p_site
+  left join bootik.bk_product_lots l on (l.id,l.item_id,l.organization_id,l.app_id,l.activity_id)=(b.lot_id,b.item_id,b.organization_id,b.app_id,b.activity_id)
+  where c.organization_id=p_org and c.app_id=p_app and c.activity_id=p_activity and c.status='active'
+  group by c.id,c.sku,c.display_name,c.base_unit_code,r.minimum_quantity,r.target_quantity,r.safety_quantity,c.is_serialized
+ ), shortages as (
+  select s.id,s.sku,s.display_name,s.base_unit_code,s.available,
+   coalesce(i.remaining,0) as open_purchase_quantity,s.minimum_quantity,s.target_quantity,
+   greatest(0,s.target_quantity-s.available-coalesce(i.remaining,0)) as suggested_quantity
+  from onhand s left join incoming i on i.item_id=s.id
+  where not s.is_serialized and s.available<=greatest(s.minimum_quantity,s.safety_quantity)
+ ), first_rows as (select * from shortages order by suggested_quantity desc,sku,id limit 200)
+ select jsonb_build_object('activity_id',p_activity,'universe',u,'days',p_days,'as_of',now(),
+  'sales_lines',sold.lines,'revenue_fcfa',sold.revenue::text,'missing_cost_lines',sold.missing_cost,
+  'cost_fcfa',sold.cost::text,'gross_margin_fcfa',sold.margin::text,
+  'open_purchase_orders',orders.open_orders,'supplier_payable_fcfa',orders.payable::text,
+  'low_stock_count',(select count(*) from shortages),
+  'replenishment',(select coalesce(jsonb_agg(jsonb_build_object('item_id',id,'sku',sku,'name',display_name,
+    'unit',base_unit_code,'available',available::text,'open_purchase_quantity',open_purchase_quantity::text,
+    'minimum',minimum_quantity::text,'target',target_quantity::text,'suggested_quantity',suggested_quantity::text)
+    order by suggested_quantity desc,sku,id),'[]'::jsonb) from first_rows))
+ into answer from sold cross join orders;
+ return answer;
+end $;
+
+-- Append-only CRM follow-up register (no message delivery, payment or external side effect).
+create table bootik.bk_followup_events(
+ id uuid primary key,organization_id uuid not null,app_id uuid not null,activity_id uuid not null,location_id uuid not null,
+ actor uuid not null,task_id uuid not null references bootik.bk_followup_events(id),
+ kind text not null check(kind in ('create','complete')),
+ partner_kind text not null check(partner_kind in ('customer','supplier')),partner_id uuid not null,
+ due_date date not null, note text not null check(length(note) between 3 and 500),
+ created_at timestamptz not null default clock_timestamp(),
+ foreign key(activity_id,location_id,organization_id,app_id) references bootik.bk_activity_locations(activity_id,location_id,organization_id,app_id),
+ foreign key(organization_id,app_id,actor) references bootik.bk_members(organization_id,app_id,user_id),
+ check((kind='create' and id=task_id) or (kind='complete' and id<>task_id))
+);
+create unique index bk_followup_one_completion on bootik.bk_followup_events(task_id) where kind='complete';
+create index bk_followup_scope on bootik.bk_followup_events(organization_id,app_id,activity_id,location_id,due_date);
+alter table bootik.bk_followup_events enable row level security;
+alter table bootik.bk_followup_events force row level security;
+revoke all on bootik.bk_followup_events from public,anon,authenticated;
+
+create function bootik.bk_followup_action(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_id uuid,p_data jsonb)
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $
+declare old bootik.bk_followup_events%rowtype; src bootik.bk_followup_events%rowtype;
+ k text; pk text; pid uuid; tid uuid; due date; msg text; d date;
+begin
+ perform bootik.bk_assert_business_scope(p_org,p_app,p_actor,p_site,p_activity,'partners');
+ if p_id is null or jsonb_typeof(p_data) is distinct from 'object' then raise exception 'BOOTIK_FOLLOWUP_INVALID';end if;
+ k:=p_data->>'kind';msg:=btrim(coalesce(p_data->>'note',''));
+ if k is null or k not in ('create','complete') or length(msg) not between 3 and 500 then raise exception 'BOOTIK_FOLLOWUP_INVALID';end if;
+ tid:=case when k='create' then p_id else (p_data->>'task_id')::uuid end;
+ if tid is null then raise exception 'BOOTIK_FOLLOWUP_INVALID';end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':followup:'||tid::text,0));
+ if k='create' then
+  pk:=p_data->>'partner_kind';pid:=(p_data->>'partner_id')::uuid;
+  if coalesce(p_data->>'due_date','') !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2} then raise exception 'BOOTIK_FOLLOWUP_INVALID';end if;
+  due:=(p_data->>'due_date')::date;
+  if pk is null or pk not in ('customer','supplier') or pid is null or due is null then raise exception 'BOOTIK_FOLLOWUP_INVALID';end if;
+ else
+  select * into src from bootik.bk_followup_events where id=tid and kind='create' and organization_id=p_org and app_id=p_app and activity_id=p_activity and location_id=p_site;
+  if not found then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+  pk:=src.partner_kind;pid:=src.partner_id;due:=src.due_date;
+ end if;
+ select * into old from bootik.bk_followup_events where id=p_id and organization_id=p_org and app_id=p_app;
+ if found then
+  if (old.actor,old.activity_id,old.location_id,old.task_id,old.kind,old.partner_kind,old.partner_id,old.due_date,old.note)
+   is distinct from (p_actor,p_activity,p_site,tid,k,pk,pid,due,msg) then raise exception 'BOOTIK_IDEMPOTENCY_CONFLICT';end if;
+  return old.id;
+ end if;
+ if k='create' then
+  d:=(now() at time zone 'Africa/Douala')::date;
+  if due<d or due>d+365 then raise exception 'BOOTIK_FOLLOWUP_INVALID';end if;
+  if not ((pk='customer' and exists(select 1 from bootik.bk_customers where id=pid and organization_id=p_org and app_id=p_app and activity_id=p_activity and status='active'))
+  or (pk='supplier' and exists(select 1 from bootik.bk_suppliers where id=pid and organization_id=p_org and app_id=p_app and activity_id=p_activity and status='active')))
+  then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
+ elsif exists(select 1 from bootik.bk_followup_events where task_id=tid and kind='complete') then
+  raise exception 'BOOTIK_FOLLOWUP_CLOSED';
+ end if;
+ insert into bootik.bk_followup_events(id,organization_id,app_id,activity_id,location_id,actor,task_id,kind,partner_kind,partner_id,due_date,note)
+ values(p_id,p_org,p_app,p_activity,p_site,p_actor,tid,k,pk,pid,due,msg);
+ return p_id;
+end $;
+
+create function bootik.bk_followup_list(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid)
+returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,bootik as $
+declare u text; answer jsonb;
+begin
+ u:=bootik.bk_assert_business_scope(p_org,p_app,p_actor,p_site,p_activity,'partners');
+ with tasks as (
+ select t.id,t.partner_kind,t.partner_id,
+ case when t.partner_kind='customer' then c.display_name else s.display_name end as partner_name,
+ t.due_date,t.note,t.created_at,e.created_at as completed_at,e.note as outcome,
+ case when e.id is not null then 'completed' when t.due_date<(now() at time zone 'Africa/Douala')::date then 'overdue' else 'open' end as state
+ from bootik.bk_followup_events t left join bootik.bk_followup_events e on e.task_id=t.id and e.kind='complete'
+ and (e.organization_id,e.app_id,e.activity_id,e.location_id)=(t.organization_id,t.app_id,t.activity_id,t.location_id)
+ left join bootik.bk_customers c on t.partner_kind='customer' and (c.id,c.organization_id,c.app_id,c.activity_id)=(t.partner_id,t.organization_id,t.app_id,t.activity_id)
+ left join bootik.bk_suppliers s on t.partner_kind='supplier' and (s.id,s.organization_id,s.app_id,s.activity_id)=(t.partner_id,t.organization_id,t.app_id,t.activity_id)
+ where t.organization_id=p_org and t.app_id=p_app and t.activity_id=p_activity and t.location_id=p_site and t.kind='create'
+ ), shown as (select * from tasks order by (completed_at is not null),due_date,id limit 200)
+ select jsonb_build_object('activity_id',p_activity,'universe',u,'total',(select count(*) from tasks),
+ 'items',(select coalesce(jsonb_agg(to_jsonb(shown) order by (completed_at is not null),due_date,id),'[]'::jsonb) from shown)) into answer;
+ return answer;
+end $;
+revoke all on function bootik.bk_assert_business_scope(uuid,uuid,uuid,uuid,uuid,text),
+ bootik.bk_business_overview(uuid,uuid,uuid,uuid,uuid,integer),
+ bootik.bk_followup_action(uuid,uuid,uuid,uuid,uuid,uuid,jsonb),
+ bootik.bk_followup_list(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
+
 commit;

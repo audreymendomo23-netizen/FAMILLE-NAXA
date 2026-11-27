@@ -104,6 +104,23 @@ test('Chromium real API, session, trial, persistent offline queue, payment and s
  await page.getByRole('button',{name:'Enregistrer le règlement effectué',exact:true}).click();
  await page.getByText('Reçu 3.000000/5.000000 · Dette 180 FCFA',{exact:true}).waitFor();
  assert.equal(Number((await one('select paid_amount_fcfa from bootik.bk_purchase_orders where id=$1',[order.id])).paid_amount_fcfa),120);
+
+ await page.getByRole('button',{name:'Actualiser le pilotage métier',exact:true}).click();
+ await page.getByText('Commandes ouvertes : 1 · Dette fournisseurs : 180 FCFA',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'Charger le suivi CRM',exact:true}).click();
+ await page.getByLabel('Tiers du suivi',{exact:true}).selectOption('supplier:'+supplier.id);
+ const due=(await one("select (now() at time zone 'Africa/Douala')::date::text as d")).d;
+ await page.getByLabel('Échéance du suivi',{exact:true}).fill(due);
+ await page.getByLabel('Objet du suivi',{exact:true}).fill('Rappeler le fournisseur');
+ await page.getByRole('button',{name:'Planifier le suivi CRM',exact:true}).click();
+ const taskRow=page.getByText(/Fournisseur navigateur · .* · À faire · Rappeler le fournisseur/);
+ await taskRow.waitFor();
+ const follow=await one("select id from bootik.bk_followup_events where organization_id=$1 and kind='create'",[o]);
+ await page.getByLabel('Résultat du suivi '+follow.id,{exact:true}).fill('Appel effectué');
+ await page.getByRole('button',{name:'Clôturer le suivi CRM',exact:true}).click();
+ await page.getByText('Résultat : Appel effectué',{exact:true}).waitFor();
+ assert.equal(Number((await one("select count(*) from bootik.bk_followup_events where task_id=$1",[follow.id])).count),2);
+
  // Register lifecycle and cash basket through the real web interface.
  await page.getByRole('button',{name:'Charger les activités caisse',exact:true}).click();await page.getByLabel('Activité caisse',{exact:true}).selectOption(v);
  await page.getByRole('button',{name:'Charger les caisses et articles',exact:true}).click();

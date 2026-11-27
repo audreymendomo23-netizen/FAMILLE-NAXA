@@ -202,6 +202,54 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  assert.equal((await call('purchase-receive',{...receiptP,receipt_id:randomUUID(),quantity:7})).status,400);
  assert.equal((await call('purchase-pay',pay)).status,200);assert.equal((await call('purchase-pay',pay)).body.result.payment_id,pay.payment_id);
  assert.equal((await call('purchase-pay',{...pay,payment_id:randomUUID(),reference:'OVERPAY',amount_fcfa:151})).status,400);
+
+ // Shared business operations: retailer and distributor have isolated records and separate entitlements.
+ const today=(await one("select (now() at time zone 'Africa/Douala')::date::text as d")).d;
+ const overview=await call('business-overview',{activity_id:v,days:7});assert.equal(overview.status,200);
+ assert.equal(overview.body.result.universe,'retailer');assert.equal(Number(overview.body.result.supplier_payable_fcfa),150);
+ assert.equal(Number(overview.body.result.open_purchase_orders),1);
+ assert.equal((await call('business-overview',{activity_id:v,days:2})).status,400);
+ assert.equal((await call('business-overview',{activity_id:randomUUID(),days:7})).status,403);
+ assert.equal((await call('business-overview',{activity_id:v,days:7},foreign)).status,403);
+ const task={activity_id:v,request_id:randomUUID(),kind:'create',partner_kind:'supplier',partner_id:supplier,due_date:today,note:'Relancer la livraison'};
+ assert.equal((await call('followup-action',task)).body.result.event_id,task.request_id);
+ assert.equal((await call('followup-action',task)).body.result.event_id,task.request_id);
+ assert.equal((await call('followup-action',{...task,note:'Autre objet'})).status,400);
+ assert.equal((await call('followup-action',{...task,request_id:randomUUID(),partner_id:randomUUID()})).status,403);
+ const listed=await call('followup-list',{activity_id:v});assert.equal(listed.status,200);assert.equal(listed.body.result.items.find(x=>x.id===task.request_id).state,'open');
+ const done={activity_id:v,request_id:randomUUID(),kind:'complete',task_id:task.request_id,note:'Livraison confirmée par téléphone'};
+ assert.equal((await call('followup-action',done)).body.result.event_id,done.request_id);
+ assert.equal((await call('followup-action',done)).body.result.event_id,done.request_id);
+ assert.equal((await call('followup-action',{...done,request_id:randomUUID()})).status,400);
+ assert.equal((await call('followup-list',{activity_id:v})).body.result.items.find(x=>x.id===task.request_id).state,'completed');
+ await assert.rejects(db.query('delete from bootik.bk_followup_events where id=$1',[task.request_id]));
+ const dist=randomUUID(),distSupplier=randomUUID(),distItem=randomUUID(),distBal=randomUUID();
+ await one("insert into bootik.bk_activities(id,app_id,organization_id,universe_code,profile_code,display_name,status) values($1,$2,$3,'distributor','alimentaire_fmcg','Distribution test','active')",[dist,a,o]);
+ await one('insert into bootik.bk_activity_locations(app_id,organization_id,activity_id,location_id) values($1,$2,$3,$4)',[a,o,dist,s]);
+ assert.equal((await call('business-overview',{activity_id:dist,days:7})).status,403);
+ await one("insert into bootik.bk_paid_periods(organization_id,app_id,universe,plan,months,amount_fcfa,provider_reference,starts_at,ends_at) values($1,$2,'distributor','access',1,10000,$3,now()-interval '1 minute',now()+interval '1 month')",[o,a,'TEST-DIST-'+dist]);
+ await one("insert into bootik.bk_suppliers(id,app_id,organization_id,activity_id,display_name) values($1,$2,$3,$4,'Fournisseur distribution')",[distSupplier,a,o,dist]);
+ await one("insert into bootik.bk_catalog_items(id,app_id,organization_id,activity_id,sku,display_name,base_unit_code) values($1,$2,$3,$4,'DIST-TEST','Article distribution','unit')",[distItem,a,o,dist]);
+ await one("insert into bootik.bk_item_units(app_id,organization_id,activity_id,item_id,unit_code,unit_role,to_base_factor) values($1,$2,$3,$4,'unit','base',1)",[a,o,dist,distItem]);
+ await one('insert into bootik.bk_inventory_balances(id,app_id,organization_id,activity_id,location_id,item_id,quantity_on_hand) values($1,$2,$3,$4,$5,$6,2)',[distBal,a,o,dist,s,distItem]);
+ await one("insert into bootik.bk_reorder_policies(app_id,organization_id,activity_id,location_id,item_id,minimum_quantity,target_quantity) values($1,$2,$3,$4,$5,3,10)",[a,o,dist,s,distItem]);
+ const distOrder={order_id:randomUUID(),supplier_id:distSupplier,balance_id:distBal,reference:'DIST-ACHAT',quantity:5,unit_cost_fcfa:100};
+ assert.equal((await call('purchase-create',distOrder)).status,200);
+ const dview=await call('business-overview',{activity_id:dist,days:7});assert.equal(dview.status,200);assert.equal(dview.body.result.universe,'distributor');
+ assert.equal(Number(dview.body.result.supplier_payable_fcfa),0);assert.equal(Number(dview.body.result.replenishment[0].suggested_quantity),3);
+ assert.equal(Number(dview.body.result.replenishment[0].open_purchase_quantity),5);
+ assert.equal((await call('followup-list',{activity_id:dist})).body.result.total,0);
+ assert.equal((await call('followup-action',{...task,activity_id:dist,request_id:randomUUID()})).status,403);
+ const dTask={...task,activity_id:dist,request_id:randomUUID(),partner_id:distSupplier};
+ assert.equal((await call('followup-action',dTask)).status,200);
+ assert.equal((await call('followup-list',{activity_id:dist})).body.result.total,1);
+ assert.equal((await call('followup-action',{...done,activity_id:dist,request_id:randomUUID()})).status,403);
+ assert.equal((await call('followup-list',{activity_id:v})).body.result.total,1);
+ await one("update bootik.bk_members set role='staff' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
+ assert.equal((await call('business-overview',{activity_id:v,days:7})).status,403);assert.equal((await call('followup-list',{activity_id:v})).status,403);
+ await one("update bootik.bk_members set role='manager' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);
+
+
  assert.equal((await call('purchase-receive',{...receiptP,receipt_id:randomUUID(),quantity:6,freight_fcfa:0})).status,200);
  const po=(await call('purchases',{activity_id:v})).body.result.orders.find(x=>x.id===purchase.order_id);assert.equal(po.state,'received');assert.equal(Number(po.payable_fcfa),750);
  await one("update bootik.bk_members set role='staff' where organization_id=$1 and app_id=$2 and user_id=$3",[o,a,u]);assert.equal((await call('purchase-receive',receiptP)).status,403);
@@ -435,7 +483,7 @@ test('real PostgreSQL scoped API: login, trial, catalog, sale, consent, revoke, 
  const creditId=await captureCredit(paymentDb,deviceToken,credit);assert.equal(await captureCredit(paymentDb,deviceToken,credit),creditId);
  assert.equal(await reconcilePending(paymentDb),1);assert.equal(await reconcilePending(paymentDb),0);
  const confirmed=await call('payment-status',{intent_id:intent.id});assert.equal(confirmed.body.result.state,'confirmed');assert.ok(confirmed.body.result.paid_period_id);
- assert.equal(Number((await one('select count(*) from bootik.bk_paid_periods where organization_id=$1',[o])).count),1);
+ assert.equal(Number((await one("select count(*) from bootik.bk_paid_periods where organization_id=$1 and universe='retailer'",[o])).count),1);
  const refund={app_id:'BOOTIK',intent_id:intent.id,direction:'verified_refund',success:true,channel:'mtn_momo',original_reference:ref,refund_reference:'REFUND-'+randomUUID().slice(0,8).toUpperCase(),amount_fcfa:40000,provider_at:new Date().toISOString(),evidence_sha:'e'.repeat(64)};
  await assert.rejects(confirmRefund(db,refund));await assert.rejects(confirmRefund(paymentDb,refund));await assert.rejects(confirmRefund(refundDb,{...refund,amount_fcfa:1}));
  assert.equal(await confirmRefund(refundDb,refund),confirmed.body.result.paid_period_id);assert.equal(await confirmRefund(refundDb,refund),confirmed.body.result.paid_period_id);

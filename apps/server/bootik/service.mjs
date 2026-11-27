@@ -130,10 +130,23 @@ export function createBootikService(db,{now=Date.now,securityDb=null,provisionDb
   const scope=[s.organization_id,s.app_id,s.user_id,site];
   await query('select bootik.bk_assert_scope($1,$2,$3,$4)',scope);
   if(!['security-state','admin-action','security-audit','recovery-list','recovery-complete','member-request','member-requests','notification-list','notification-read','notification-preference'].includes(action))await query('select bootik.bk_bind_device_site($1,$2,$3,$4,$5)',[...scope,s.device_session_id]);
-  const permission=await first('select bootik.bk_permits_operation($1,$2,$3,$4,$5::jsonb) as allowed',[s.organization_id,s.app_id,s.user_id,action,JSON.stringify(p)]);if(!permission?.allowed)return reject(403);
-  const resource=await first('select bootik.bk_resource_gate($1,$2,$3,$4,$5,$6::jsonb) as allowed',[...scope,action,JSON.stringify(p)]);if(!resource?.allowed){if(['sync-sale','sync-item-sale','sync-stock'].includes(action)&&validId(p.idempotency_key))return {status:200,body:{app_id:'BOOTIK',organization_id:s.organization_id,member_id:s.user_id,site_id:site,action,event_id:p.idempotency_key,state:'rejected',result:{reason:'BOOTIK_SCOPE_DENIED'}}};return reject(403)}
+  const permissionAction=action==='business-overview'?'dashboard':['followup-list','followup-action'].includes(action)?'partners':action;
+  const permission=await first('select bootik.bk_permits_operation($1,$2,$3,$4,$5::jsonb) as allowed',[s.organization_id,s.app_id,s.user_id,permissionAction,JSON.stringify(p)]);if(!permission?.allowed)return reject(403);
+  const resource=await first('select bootik.bk_resource_gate($1,$2,$3,$4,$5,$6::jsonb) as allowed',[...scope,permissionAction,JSON.stringify(p)]);if(!resource?.allowed){if(['sync-sale','sync-item-sale','sync-stock'].includes(action)&&validId(p.idempotency_key))return {status:200,body:{app_id:'BOOTIK',organization_id:s.organization_id,member_id:s.user_id,site_id:site,action,event_id:p.idempotency_key,state:'rejected',result:{reason:'BOOTIK_SCOPE_DENIED'}}};return reject(403)}
   let result;
   if(action==='entitlement'&&allowed.has(p.universe))result=await first("select bootik.bk_has_entitlement($1,$2,$3) as active,bootik.bk_effective_plan($1,$2,$3) as plan,bootik.bk_has_capability($1,$2,$3,'consolidation') as consolidation,bootik.bk_has_capability($1,$2,$3,'automated_reorder') as automated_reorder,'BOOTIK-V1.1-20261126' as matrix_version,(select jsonb_object_agg(k,bootik.bk_has_capability($1,$2,$3,k)) from unnest(array['sales','stock','purchases','crm','finance','delivery','profile','exports','audit','security','ai_basic','consolidation','advanced_delegation','advanced_forecast','automated_reorder','advanced_analytics']) k) as capabilities",[s.organization_id,s.app_id,p.universe]);
+  else if(action==='business-overview'&&validId(p.activity_id)&&[1,7,30].includes(p.days)){
+   result=(await first('select bootik.bk_business_overview($1,$2,$3,$4,$5,$6) as data',[...scope,p.activity_id,p.days])).data;
+  }
+  else if(action==='followup-list'&&validId(p.activity_id)){
+   result=(await first('select bootik.bk_followup_list($1,$2,$3,$4,$5) as data',[...scope,p.activity_id])).data;
+  }
+  else if(action==='followup-action'&&validId(p.activity_id)&&validId(p.request_id)&&['create','complete'].includes(p.kind)){
+   const data={kind:p.kind,note:clean(p.note,500,true)};
+   if(p.kind==='create'){if(!validId(p.partner_id)||!['customer','supplier'].includes(p.partner_kind)||typeof p.due_date!=='string')return reject();Object.assign(data,{partner_kind:p.partner_kind,partner_id:p.partner_id,due_date:p.due_date});}
+   else{if(!validId(p.task_id))return reject();data.task_id=p.task_id;}
+   result=await first('select bootik.bk_followup_action($1,$2,$3,$4,$5,$6,$7::jsonb) as event_id',[...scope,p.activity_id,p.request_id,JSON.stringify(data)]);
+  }
   else if(action==='security-state'){
    const sessions=(await query("select device_session_id,installation_id,platform,created_at,expires_at,refresh_expires_at,device_session_id=$4 as current from bootik.bk_sessions where organization_id=$1 and app_id=$2 and user_id=$3 and revoked_at is null and (expires_at>now() or refresh_expires_at>now()) order by created_at desc",[s.organization_id,s.app_id,s.user_id,s.device_session_id])).rows;
    const limit=await first('select coalesce((select max_member_sessions from bootik.bk_security_settings where organization_id=$1 and app_id=$2),2) as max_sessions,coalesce((select offline_minutes from bootik.bk_security_settings where organization_id=$1 and app_id=$2),15) as offline_minutes',[s.organization_id,s.app_id]);const siteLimit=await first('select coalesce((select max_devices from bootik.bk_site_device_policy where organization_id=$1 and app_id=$2 and location_id=$3),2) as max_site_devices',[s.organization_id,s.app_id,site]);

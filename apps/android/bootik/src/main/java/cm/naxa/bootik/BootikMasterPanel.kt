@@ -43,6 +43,7 @@ import java.util.UUID
  }}){Text("Enregistrer la fiche")}
  Button(enabled=!busy&&activity.isNotBlank(),onClick={task{val v=api.operation(session,site,"partners",JSONObject().put("activity_id",activity));partners=listOf("customers" to "Client","suppliers" to "Fournisseur").flatMap{(k,label)->val a=v.getJSONArray(k);(0 until a.length()).map{val j=a.getJSONObject(it);label+" • "+j.getString("display_name")+" • "+j.optString("phone","—")}}}}){Text("Afficher clients et fournisseurs")}
  partners.forEach{Text(it)}
+ if(activity.isNotBlank())key("business:"+activity){BootikBusinessPanel(api,session,site,activity)}
  if(activity.isNotBlank())key("purchase:"+activity){BootikPurchasePanel(api,session,site,activity)}
  if(activity.isNotBlank())key(activity){BootikStockImportPanel(api,session,site,activity)}
  Text("Ventes du jour (Douala)",style=MaterialTheme.typography.titleMedium)
