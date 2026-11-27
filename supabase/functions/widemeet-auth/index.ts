@@ -150,7 +150,7 @@ Deno.serve(async request=>{
  const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
  if(!/^[a-f0-9]{64}$/.test(access))return send(401,{error:"credentials"});
  const name=body.action,data=body.data??{};
- if(!["profile","profile-update","onboarding-step","contacts","favorite","invite","invitations","respond-invite","member-role","revoke-member","billing","billing-list","billing-create","billing-cancel","devices","revoke-device","dashboard"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
+ if(!["profile","profile-update","onboarding-step","contacts","favorite","groups","group-save","group-delete","invite","invitations","respond-invite","member-role","revoke-member","billing","billing-list","billing-create","billing-cancel","devices","revoke-device","dashboard"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
  const p_hash=await digest(access);
  const context=(await rest("rpc/wm_session_context",{method:"POST",body:JSON.stringify({p_hash})}))?.[0];
  if(!context||context.password_change_required)return send(403,{error:"scope"});
