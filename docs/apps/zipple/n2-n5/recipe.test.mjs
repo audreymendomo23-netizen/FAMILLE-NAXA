@@ -922,7 +922,7 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.deepEqual(await hr("submit",payload,key),absence);await assert.rejects(hr("submit",payload),/ABSENCE_OVERLAP/);
  await hr("decide",{id:absence.id,decision:"approved",reason:"Planning vérifié"});await assert.rejects(hr("decide",{id:absence.id,decision:"rejected",reason:"Déjà validé"}),/INVALID_TRANSITION/);
  for(const kind of ["bonus","commission","advance"]){const item=await hr("submit",{...payload,kind,amount_xaf:5000});await hr("decide",{id:item.id,decision:"approved",reason:"Montant contrôlé"});}
- const snap=await scalar("select zp_hr_snapshot($1,$2)",[a.access,a.site]);assert.equal(snap.rows.filter(x=>x.state==="approved").length,4);await assert.rejects(scalar("select zp_hr_snapshot($1,$2)",[b.access,a.site]),/DENIED/);
+ const snap=await scalar("select zp_hr_snapshot($1,$2)",[a.access,a.site]);assert.equal(snap.rows.filter(x=>x.state==="approved").length,4);const hrInbox=await scalar("select zp_workspace_inbox($1,$2)",[a.access,a.site]);assert.ok(hrInbox.some(x=>x.code==="hr"&&x.target==="hr"));await assert.rejects(scalar("select zp_hr_snapshot($1,$2)",[b.access,a.site]),/DENIED/);
  console.log("ZIPPLE_BULK5_HR_APPROVAL_AND_GPS_BREAK_PASS");
  }
  assert.equal(await scalar("select count(*)::int from pg_tables where schemaname='public' and tablename like 'zp_%' and not rowsecurity"),0);

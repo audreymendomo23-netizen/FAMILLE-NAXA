@@ -682,3 +682,6 @@ Recette navigateur dédiée étendue aux approbations RH, carte fidélité QR in
 
 ### Préférences et messagerie préparée
 Application effective de la préférence FR/EN enregistrée au profil sur les clients Web/Android. Préparation d'un message WhatsApp CRM seulement pour numéro camerounais validé et consentement opérateur, ouverture explicite du canal externe sans envoi automatique ni donnée sensible dans le texte. Pas de revendication de push, API WhatsApp Business ou Fulfulde exhaustif.
+
+### Notifications métier enrichies
+In-app : commandes prêtes/en retard, ruptures/seuils, caisses ouvertes de jours précédents, suivis CRM dus, événements RH sans montant ni motif sensible, échéance abonnement, dépenses et tickets. Autorisations par site/rôle, navigation vers l'espace lié, lectures persistées. Les rappels push/WhatsApp automatiques restent distincts.
