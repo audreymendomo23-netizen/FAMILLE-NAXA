@@ -16,6 +16,7 @@ import cm.naxa.naxaservices.auth.AuthApi
 import cm.naxa.naxaservices.auth.AuthApiException
 import cm.naxa.naxaservices.auth.AuthSession
 import cm.naxa.naxaservices.auth.SessionVault
+import cm.naxa.naxaservices.auth.RememberedSessionChanged
 import cm.naxa.naxaservices.auth.discardRememberedSession
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_1_2
 import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_2_3
@@ -145,18 +146,18 @@ class NaxaServicesSyncWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val vault = SessionVault(applicationContext)
-        val refreshToken = vault.loadRefreshToken()?.takeIf { it.isNotBlank() } ?: return Result.success()
+        val binding = vault.binding() ?: return Result.success()
         if (!SupplierSyncCoordinator.isConfigured()) return Result.success()
 
         val api = AuthApi(applicationContext)
         val session = try {
-            api.refresh(refreshToken, rememberDevice = true)
+            vault.refreshRemembered(binding){api.refresh(it,rememberDevice=true)}
         } catch (cancelled: CancellationException) {
             throw cancelled
+        } catch (_: RememberedSessionChanged) {
+            return Result.success()
         } catch (failure: AuthApiException) {
             if (discardRememberedSession(failure.statusCode)) {
-                vault.clear()
-                NaxaServicesSyncScheduler.cancel(applicationContext)
                 return Result.success()
             }
             return Result.retry()
@@ -165,7 +166,7 @@ class NaxaServicesSyncWorker(
         }
 
         if (session.deviceId.isBlank()) return Result.retry()
-        vault.save(session)
+        if(vault.binding()!=binding)return Result.success()
 
         val database = Room.databaseBuilder(
             applicationContext,
@@ -190,6 +191,7 @@ class NaxaServicesSyncWorker(
         ).build()
 
         return try {
+            if(vault.binding()!=binding)return Result.success()
             val repository = NaxaServicesLocalRepository(database)
             val summary = runNaxaServicesSyncCycle(repository, api, session)
             if (shouldRetrySyncWorker(summary.outgoing.retried, summary.hasMore)) Result.retry() else Result.success()

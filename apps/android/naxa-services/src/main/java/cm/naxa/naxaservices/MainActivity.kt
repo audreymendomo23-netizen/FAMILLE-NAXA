@@ -107,6 +107,7 @@ import cm.naxa.naxaservices.auth.ProvisionScope
 import cm.naxa.naxaservices.auth.RecoveryRequestItem
 import cm.naxa.naxaservices.auth.RecoveryReset
 import cm.naxa.naxaservices.auth.SessionVault
+import cm.naxa.naxaservices.auth.RememberedSessionChanged
 import cm.naxa.naxaservices.auth.discardRememberedSession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -282,16 +283,16 @@ private fun NaxaServicesRoot(
     LaunchedEffect(Unit) {
         pendingRefresh = vault.loadRefreshToken()
         val saved = pendingRefresh
-        if (!saved.isNullOrBlank()) {
+        val binding=vault.binding()
+        if (!saved.isNullOrBlank() && binding!=null) {
             rememberSession = true
             while (pendingRefresh == saved && session == null) {
                 if (route != AppRoute.LOGIN.name || busy) { delay(15_000L); continue }
                 busy = true
                 try {
-                    val restored = api.refresh(saved, rememberDevice = true)
+                    val restored = vault.refreshRemembered(binding){api.refresh(it, rememberDevice=true)}
                     if (pendingRefresh != saved || session != null || route != AppRoute.LOGIN.name) break
                     session = restored
-                    vault.save(restored)
                     pendingRefresh = null
                     message = null
                     route = if (restored.requirePasswordChange) AppRoute.CHANGE_PASSWORD.name else routeAfterAuthentication(restored)
@@ -299,8 +300,7 @@ private fun NaxaServicesRoot(
                     throw cancelled
                 } catch (failure: Exception) {
                     if (pendingRefresh != saved || session != null) break
-                    if (discardRememberedSession((failure as? AuthApiException)?.statusCode)) {
-                        vault.clear()
+                    if (failure is RememberedSessionChanged || discardRememberedSession((failure as? AuthApiException)?.statusCode)) {
                         pendingRefresh = null
                         rememberSession = false
                         message = "Session expirée ou révoquée. Connecte-toi à nouveau."
@@ -387,6 +387,7 @@ private fun NaxaServicesRoot(
     }
     LaunchedEffect(session?.refreshToken,offlineRestored) {
         var activeSession = session
+        val binding=if(rememberSession)vault.binding()else null
         while (activeSession != null) {
             val waitSeconds = if(offlineRestored) 15L else (activeSession.expiresIn - 60L).coerceAtLeast(30L)
             delay(waitSeconds * 1000L)
@@ -394,7 +395,13 @@ private fun NaxaServicesRoot(
             var refreshed = false
             while (retry < 5 && !refreshed) {
                 val token = activeSession?.refreshToken ?: break
-                runCatching { api.refresh(token, rememberDevice = rememberSession) }
+                runCatching {
+                    if(rememberSession){
+                        val expected=binding?:throw RememberedSessionChanged()
+                        if(expected.memberId!=activeSession?.account?.memberId||expected.deviceId!=activeSession?.deviceId)throw RememberedSessionChanged()
+                        vault.refreshRemembered(expected){api.refresh(it,rememberDevice=true)}
+                    }else api.refresh(token,rememberDevice=false)
+                }
                     .onSuccess { next ->
                         if(offlineRestored){
                             localPinUnlockedMemberId=null
@@ -402,17 +409,16 @@ private fun NaxaServicesRoot(
                             offlineRestored=false
                         }
                         session = next
-                        if (vault.loadRefreshToken() != null) vault.save(next)
                         activeSession = next
                         refreshed = true
                     }
                     .onFailure { error ->
                         val authError = error as? AuthApiException
                         if (error is CancellationException) throw error
-                        if (discardRememberedSession(authError?.statusCode)) {
+                        if (error is RememberedSessionChanged || discardRememberedSession(authError?.statusCode)) {
                             runCatching { api.revokeCurrentDevicePushTokens(activeSession?.accessToken.orEmpty()) }
                             PushTokenRegistry.disable(context)
-                            vault.clear()
+                            if(!rememberSession)vault.clear()
                             rememberSession = false
                             localPinUnlockedMemberId = null
                             session = null
@@ -438,7 +444,8 @@ private fun NaxaServicesRoot(
     val onLogin: (String, String, Boolean) -> Unit = { identifier, password, rememberMe ->
         pendingRefresh = null
         offlineRestored=false
-        vault.clearOfflineSnapshot()
+        // An explicit login starts a new generation, even for the same member/device.
+        vault.clear()
         scope.launch {
             busy = true
             message = null

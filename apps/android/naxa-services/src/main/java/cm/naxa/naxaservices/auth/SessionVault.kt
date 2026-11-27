@@ -9,6 +9,9 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import java.security.KeyStore
+import java.util.UUID
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -19,16 +22,54 @@ import javax.crypto.spec.GCMParameterSpec
  * "Rester connecté". The AES key is non-exportable and lives in Android Keystore.
  * Passwords are never persisted.
  */
+internal data class RememberedBinding(val generation:String,val memberId:String,val deviceId:String)
+internal class RememberedSessionChanged : IllegalStateException("REMEMBERED_SESSION_CHANGED")
+
 class SessionVault(private val context: Context) {
     private val preferences = context.getSharedPreferences("naxa_services_secure_session", Context.MODE_PRIVATE)
 
-    fun save(session: AuthSession) {
+    fun save(session: AuthSession) = synchronized(vaultLock) {
+        val previous=binding()
+        val generation=if(previous?.memberId==session.account.memberId&&previous.deviceId==session.deviceId)previous.generation else UUID.randomUUID().toString()
         preferences.edit()
             .putString("access", encrypt(session.accessToken))
             .putString("refresh", encrypt(session.refreshToken))
             .putString("member_id", session.account.memberId)
             .putString("device_id", encrypt(session.deviceId))
+            .putString("generation",generation)
             .apply()
+    }
+
+    internal fun binding():RememberedBinding?=synchronized(vaultLock){
+        val member=preferences.getString("member_id",null)?.takeIf{it.isNotBlank()}?:return@synchronized null
+        val device=loadDeviceId()?.takeIf{it.isNotBlank()}?:return@synchronized null
+        if(loadRefreshToken().isNullOrBlank())return@synchronized null
+        val generation=preferences.getString("generation",null)?:UUID.randomUUID().toString().also{preferences.edit().putString("generation",it).apply()}
+        RememberedBinding(generation,member,device)
+    }
+
+    // One network refresh at a time across foreground, startup and WorkManager.
+    // A login/logout during the network request invalidates its response.
+    internal suspend fun refreshRemembered(expected:RememberedBinding,request:suspend (String)->AuthSession):AuthSession=refreshMutex.withLock{
+        val token=synchronized(vaultLock){
+            if(binding()!=expected)throw RememberedSessionChanged()
+            loadRefreshToken()?:throw RememberedSessionChanged()
+        }
+        val next=try{request(token)}catch(failure:AuthApiException){
+            synchronized(vaultLock){
+                if(binding()!=expected||loadRefreshToken()!=token)throw RememberedSessionChanged()
+                if(discardRememberedSession(failure.statusCode))clear()
+            }
+            throw failure
+        }
+        synchronized(vaultLock){
+            if(binding()!=expected||loadRefreshToken()!=token)throw RememberedSessionChanged()
+            if(next.account.memberId!=expected.memberId||next.deviceId!=expected.deviceId){
+                clear();throw RememberedSessionChanged()
+            }
+            save(next)
+            next
+        }
     }
 
     fun loadRefreshToken(): String? = preferences.getString("refresh", null)?.let(::decrypt)
@@ -70,7 +111,7 @@ class SessionVault(private val context: Context) {
             json.getString("device"))
     }.getOrNull()
 
-    fun clear() {
+    fun clear() = synchronized(vaultLock) {
         preferences.edit().clear().apply()
     }
 
@@ -111,5 +152,7 @@ class SessionVault(private val context: Context) {
 
     private companion object {
         const val KEY_ALIAS = "naxa-services-session-v1"
+        val vaultLock=Any()
+        val refreshMutex=Mutex()
     }
 }
