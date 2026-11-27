@@ -1,0 +1,14 @@
+// CI-only alternate source for ZIPPLE's pinned ZXing artifact.
+settingsEvaluated { settings ->
+    settings.dependencyResolutionManagement.repositories {
+        exclusiveContent {
+            forRepository {
+                maven {
+                    name = "ZippleZxingCentralMirror"
+                    url = uri("https://maven-central.storage-download.googleapis.com/maven2/")
+                }
+            }
+            filter { includeModule("com.google.zxing", "core") }
+        }
+    }
+}

@@ -136,7 +136,7 @@ class Bulk2LiveDeviceTest {
   click("Filtrer par statut : Tous");click("À valider");awaitText("Aucune demande correspondante.")
   click("Réinitialiser les filtres");awaitText("Absence · Profil ERP natif · Approuvé")
   click("Type de demande : Absence");click("Prime")
-  input("Montant FCFA","4500");input("Motif professionnel","Prime ERP native");click("Soumettre la demande");awaitText("Prime · Profil ERP natif · À valider")
+  input("Montant FCFA","4500");step("replace and verify bonus reason"){val matcher=hasText("Motif professionnel",substring=false) and hasSetTextAction();compose.onNode(matcher).performScrollTo().performTextReplacement("Prime ERP native");compose.onNode(matcher).assert(hasText("Prime ERP native"))};click("Soumettre la demande");awaitText("Prime · Profil ERP natif · À valider")
   input("Motif de décision","Prime contrôlée native");click("Approuvé");awaitText("Prime · Profil ERP natif · Approuvé")
   click("Filtrer par type : Tous");click("Prime");awaitText("Montants approuvés dans cette sélection (hors absences, non versés automatiquement) : 4500 FCFA")
   click("Réinitialiser les filtres")

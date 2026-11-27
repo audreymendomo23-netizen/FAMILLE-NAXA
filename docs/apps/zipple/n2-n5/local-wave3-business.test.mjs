@@ -138,3 +138,17 @@ test("B4-034 private inbox read persistence and independent member state",async(
  assert.equal(Number(await scalar("select count(*) from zp_inbox_reads where site_id=$1 and event_key=$2",[site,event.event_key])),1);
  console.log("ZIPPLE_QA_CASE_PARTIAL B4-034 PRIVATE_READ_PERSISTENCE_PASS");
 });
+
+
+test("B5-004 absence request approval persists exactly once",async()=>{
+ const {org,site,ok}=await fixture();const employee=await actor(org,site,"staff"),manager=await actor(org,site,"manager");
+ const request={operation:"submit",request_id:id(),payload:{kind:"absence",member_id:employee.member,from_day:"2027-06-01",to_day:"2027-06-02",amount_xaf:null,reason:"Congé vérifié QA"}};
+ const row=await employee.ok("hr_write",request);assert.equal((await employee.ok("hr_write",request)).id,row.id);
+ const decision={operation:"decide",request_id:id(),payload:{id:row.id,decision:"approved",reason:"Planning vérifié QA"}};
+ assert.equal((await employee.b("hr_write",decision)).status,403);assert.equal((await manager.ok("hr_write",decision)).id,row.id);
+ assert.equal((await manager.ok("hr_write",decision)).id,row.id);
+ const read=(await employee.ok("hr_snapshot")).rows.find(x=>x.id===row.id);assert.equal(read.state,"approved");assert.equal(read.reason,request.payload.reason);
+ assert.equal(Number(await scalar("select count(*) from zp_hr_requests where id=$1 and site_id=$2 and member_id=$3",[row.id,site,employee.member])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_hr_decisions where request_id=$1 and decision='approved'",[row.id])),1);
+ console.log("ZIPPLE_QA_CASE_PARTIAL B5-004 HR_APPROVAL_PERSISTENCE_PASS");
+});

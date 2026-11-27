@@ -4,7 +4,9 @@ set -euo pipefail
 for attempt in 1 2 3; do
   log="$(mktemp)"
   set +e
-  gradle --no-daemon :zipple:connectedDebugAndroidTest 2>&1 | tee "$log"
+  args=()
+  if [ "$attempt" -gt 1 ]; then args+=(--init-script docs/apps/zipple/n1/zipple-zxing-mirror.init.gradle); fi
+  gradle --no-daemon "${args[@]}" :zipple:connectedDebugAndroidTest 2>&1 | tee "$log"
   rc=${PIPESTATUS[0]}
   set -e
   if [ "$rc" -eq 0 ]; then rm -f "$log"; exit 0; fi
