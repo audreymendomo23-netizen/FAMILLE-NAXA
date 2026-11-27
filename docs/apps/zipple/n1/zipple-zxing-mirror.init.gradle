@@ -8,7 +8,7 @@ settingsEvaluated { settings ->
                     url = uri("https://maven-central.storage-download.googleapis.com/maven2/")
                 }
             }
-            filter { includeModule("com.google.zxing", "core") }
+            filter { includeGroup("com.google.zxing") }
         }
     }
 }

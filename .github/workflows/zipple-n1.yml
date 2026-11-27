@@ -56,7 +56,7 @@ jobs:
         with:
           gradle-version: "8.7"
       - name: Build and unit-test ZIPPLE native only
-        run: gradle --no-daemon :zipple:testDebugUnitTest :zipple:assembleDebug
+        run: gradle --no-daemon --init-script docs/apps/zipple/n1/zipple-zxing-mirror.init.gradle :zipple:testDebugUnitTest :zipple:assembleDebug
       - name: Verify APK exists without publishing
         run: test -s apps/android/zipple/build/outputs/apk/debug/zipple-debug.apk
   android-device:
