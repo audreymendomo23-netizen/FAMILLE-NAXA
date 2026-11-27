@@ -67,6 +67,7 @@ begin
  l:=grillad_private.connect_qr(p_hash);
  if p_order is null or p_lines is null or jsonb_typeof(p_lines)<>'array' or jsonb_array_length(p_lines) not between 1 and 20 or octet_length(p_lines::text)>10000 then raise exception 'GRILLAD_ORDER' using errcode='22023';end if;
  perform pg_advisory_xact_lock(hashtextextended(l.org::text||':'||l.site::text,0));
+ l:=grillad_private.connect_qr(p_hash);
  select * into o from grillad_private.connect_orders where id=p_order;
  if found then
   if o.link<>l.id or o.request<>p_lines then raise exception 'GRILLAD_REPLAY_CONFLICT' using errcode='22023';end if;
@@ -112,6 +113,7 @@ begin
  r:=grillad_private.scope(p_org,p_site);if r='seller' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
  if p_event is null or p_next not in ('accepted','preparing','ready','handed','refused','cancelled') or p_next is null then raise exception 'GRILLAD_STATUS' using errcode='22023';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
+ r:=grillad_private.scope(p_org,p_site);if r='seller' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
  select * into o from grillad_private.connect_orders where id=p_order and org=p_org and site=p_site;
  if not found then raise exception 'GRILLAD_ORDER_DENIED' using errcode='42501';end if;
  req:=jsonb_build_object('next',p_next,'received',p_received,'reason',p_reason);

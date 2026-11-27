@@ -55,6 +55,8 @@ begin
  if p_event is null or p_kind is null or p_kind not in ('arrival','departure') or p_at is null or p_lat is null or p_lon is null or p_accuracy is null or not(p_lat between -90 and 90) or not(p_lon between -180 and 180) or not(p_accuracy>0 and p_accuracy<=1000) or p_photo is null or length(p_photo)>480000 then raise exception 'GRILLAD_PROOF' using errcode='22023';end if;
  bytes:=decode(p_photo,'base64');if octet_length(bytes) not between 16 and 350000 or substring(bytes from 1 for 3)<>decode('ffd8ff','hex') or substring(bytes from octet_length(bytes)-1 for 2)<>decode('ffd9','hex') then raise exception 'GRILLAD_PHOTO' using errcode='22023';end if;
  h:=encode(sha256(bytes),'hex');
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
+ r:=grillad_private.scope(p_org,p_site);
  perform pg_advisory_xact_lock(hashtextextended('grillad-attendance:'||p_org::text||':'||u::text,0));
  select * into old from grillad_private.attendance where id=p_event;
  if found then

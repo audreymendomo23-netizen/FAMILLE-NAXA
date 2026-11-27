@@ -123,6 +123,23 @@ do $$begin if jsonb_array_length(public.grillad_workspace())<>1 then raise excep
  begin perform public.grillad_snapshot('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000003',current_date,current_date);raise exception 'revoked access';exception when insufficient_privilege then null;end;
 end $$;
 reset role;
+-- Pause a second point without changing shared location or losing data.
+set role authenticated;
+select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
+do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';a uuid:='b3000000-0000-0000-0000-000000000001';b uuid:='b3000000-0000-0000-0000-000000000003';e uuid:=gen_random_uuid();v jsonb;p jsonb:=jsonb_build_object('site',b,'enabled',false,'reason','Pause');d date:=(now() at time zone 'Africa/Douala')::date;
+begin
+ perform public.grillad_action(o,b,gen_random_uuid(),'open_cash','{"opening":0}');
+ begin perform public.grillad_action(o,a,e,'set_site_enabled',p);raise exception 'site with open cash suspended';exception when invalid_parameter_value then null;end;
+ perform public.grillad_action(o,b,gen_random_uuid(),'close_cash','{"counted":0}');
+ v:=public.grillad_action(o,a,e,'set_site_enabled',p);
+ if (v->>'enabled')::boolean or public.grillad_action(o,a,e,'set_site_enabled',p)<>v or jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'site suspension replay';end if;
+ begin perform public.grillad_snapshot(o,b,d,d);raise exception 'suspended access';exception when insufficient_privilege then null;end;
+ if not exists(select 1 from jsonb_array_elements(public.grillad_pilotage_status(o,a)->'site_directory') x where x->>'site'=b::text and not(x->>'enabled')::boolean) then raise exception 'suspended directory';end if;
+ perform public.grillad_action(o,a,gen_random_uuid(),'set_site_enabled',jsonb_build_object('site',b,'enabled',true,'reason','Reprise'));
+ if jsonb_array_length(public.grillad_workspace())<>2 or jsonb_array_length(public.grillad_snapshot(o,b,d,d)->'cash_history')<>1 then raise exception 'reactivation/history';end if;
+end $$;
+reset role;
 -- Service across midnight, using an explicit fixture policy only.
 -- Fixture backdating only to exercise historical summaries; not available via API.
 update grillad_private.service_policy set effective_from=current_date-2 where org='b2000000-0000-0000-0000-000000000001' and site='b3000000-0000-0000-0000-000000000001';

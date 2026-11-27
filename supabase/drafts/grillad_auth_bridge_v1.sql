@@ -86,4 +86,30 @@ begin
 end $$;
 revoke all on function grillad_private.set_team_assignment(uuid,uuid,jsonb) from public,anon,authenticated;
 
+-- Suspension GRILLAD only. Keep historical rows, other applications and their locations unchanged.
+create function grillad_private.set_site_enabled(p_org uuid,p_anchor uuid,p_payload jsonb) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare target uuid;desired boolean;why text;before_state boolean;
+begin
+ if grillad_private.scope(p_org,p_anchor)<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+ target:=(p_payload->>'site')::uuid;why:=btrim(p_payload->>'reason');
+ if target is null or target=p_anchor or jsonb_typeof(p_payload->'enabled') is distinct from 'boolean' or why is null or length(why) not between 1 and 300 then raise exception 'GRILLAD_SITE_STATE' using errcode='22023';end if;
+ desired:=(p_payload->>'enabled')::boolean;
+ perform pg_advisory_xact_lock(hashtextextended('grillad-network:'||p_org::text,0));
+ -- Do not wait for another site while holding an anchor and network lock.
+ if not pg_try_advisory_xact_lock(hashtextextended(p_org::text||':'||target::text,0)) then raise exception 'GRILLAD_SITE_BUSY' using errcode='22023';end if;
+ if not famille_core.can_access_outlet(p_org,famille_core.current_app_id(),target) or not exists(select 1 from famille_private.account_app_access g where g.user_id=auth.uid() and g.app_code='grillad' and g.organization_id=p_org and (g.location_id is null or g.location_id=target) and g.status='active' and g.starts_at<=now() and (g.ends_at is null or g.ends_at>now())) then raise exception 'GRILLAD_SITE_DENIED' using errcode='42501';end if;
+ select enabled into before_state from grillad_private.enabled_sites where org=p_org and site=target for update;
+ if not found then raise exception 'GRILLAD_SITE_DENIED' using errcode='42501';end if;
+ if desired and not before_state and not exists(select 1 from famille_core.subscriptions s join famille_core.plans p on p.id=s.plan_id and p.app_id=s.app_id where s.organization_id=p_org and s.app_id=famille_core.current_app_id() and p.status='active' and ((s.status='active' and (s.starts_at is null or s.starts_at<=now()) and (s.ends_at is null or s.ends_at>=now())) or (s.status='past_due' and s.grace_until>=now())) and ((p.code='grillad_premium_month' and p.amount_fcfa=6000 and p.billing_period='monthly') or (p.code='grillad_premium_year' and p.amount_fcfa=60000 and p.billing_period='yearly'))) then raise exception 'GRILLAD_PREMIUM_REQUIRED' using errcode='42501';end if;
+ if not desired and before_state then
+  if exists(select 1 from grillad_private.cash c where c.org=p_org and c.site=target and c.closed_at is null)
+  or exists(select 1 from grillad_private.attendance a where a.org=p_org and a.site=target and a.kind='arrival' and not exists(select 1 from grillad_private.attendance b where b.paired_arrival=a.id))
+  or exists(select 1 from grillad_private.connect_orders o where o.org=p_org and o.site=target and o.status in ('submitted','accepted','preparing','ready'))
+  then raise exception 'GRILLAD_SITE_OPEN_OPERATIONS' using errcode='22023';end if;
+ end if;
+ update grillad_private.enabled_sites set enabled=desired where org=p_org and site=target;
+ return jsonb_build_object('site',target,'enabled',desired,'previous',before_state);
+end $$;
+revoke all on function grillad_private.set_site_enabled(uuid,uuid,jsonb) from public,anon,authenticated;
+
 commit;

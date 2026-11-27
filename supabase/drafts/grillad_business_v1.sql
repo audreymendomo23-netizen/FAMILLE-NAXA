@@ -113,6 +113,8 @@ begin
  if r='seller' and p_action not in ('sell','sell_basket','prepare','attendance_request') then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
  -- Serialize all mutations for the same site; no cross-site stock or drawer race.
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
+ r:=grillad_private.scope(p_org,p_site);
+ if r='seller' and p_action not in ('sell','sell_basket','prepare','attendance_request') then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
  select * into old from grillad_private.events where org=p_org and site=p_site and id=p_event;
  if found then
   if old.actor is distinct from u or old.action is distinct from p_action or old.payload is distinct from p_payload then raise exception 'GRILLAD_REPLAY_CONFLICT' using errcode='22023'; end if;
@@ -259,6 +261,8 @@ begin
   insert into famille_core.locations(id,organization_id,name) values(p_event,p_org,label);
   insert into grillad_private.enabled_sites(org,site) values(p_org,p_event);
   result:=jsonb_build_object('id',p_event,'name',label,'enabled',true);
+ when 'set_site_enabled' then
+  result:=grillad_private.set_site_enabled(p_org,p_site,p_payload);
  when 'set_team_assignment' then
   result:=grillad_private.set_team_assignment(p_org,p_site,p_payload);
  when 'set_network_mode' then
