@@ -114,3 +114,5 @@ test("timed polls reject boundary votes and reveal closed survey only at the ser
 });
 
 test("B6 unsupported confidentiality modes fail closed instead of issuing media grants",()=>{const r=open();for(const confidentiality of ["strict","highly_confidential","unknown",false,{}])assert.equal(mediaPermission({...r,confidentiality},host,1000),null);assert.equal(mediaPermission({...r,confidentiality:"confidential"},host,1000).screen,false);assert.equal(mediaPermission(r,host,1000).screen,true);});
+
+test("B6 unsupported confidentiality fails closed for room mutations except safe closure",()=>{const r={...open(),confidentiality:"highly_confidential"};assert.throws(()=>run(r,host,"chat","private"),/unsupported_confidentiality/);assert.throws(()=>run(r,host,"record",true),/unsupported_confidentiality/);assert.equal(run(r,host,"end").status,"ended");});
