@@ -169,6 +169,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_reports.sql
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_support.sql
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_workspace_centers.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_b2_communication.sql
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_transcription.sql
   edge-typecheck:
     runs-on: ubuntu-24.04
