@@ -24,15 +24,16 @@ import java.util.UUID
 @Composable fun RecoveryEnrollment(english:Boolean,gateway:AuthGateway,session:Session){
  fun tr(fr:String,en:String)=if(english)en else fr
  var password by remember{mutableStateOf("")};var recoveryKey by remember{mutableStateOf("")}
- var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
+ var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var supervised by remember{mutableStateOf(false)}
  val scope=rememberCoroutineScope()
  Text(tr("Clé de récupération","Recovery key"),style=MaterialTheme.typography.titleMedium)
  Text(tr("Conservez la clé hors ligne et ne la partagez pas. Une nouvelle clé invalide la précédente.","Keep the key offline and do not share it. A new key invalidates the previous one."))
  if(recoveryKey.isNotEmpty()){
   ProtectSecretScreen();Text(recoveryKey);Button(onClick={recoveryKey=""}){Text(tr("J’ai conservé ma clé","I saved my key"))}
  }else{
+  Row{Checkbox(checked=supervised,onCheckedChange={supervised=it},enabled=!busy);Text(tr("Code de secours supervisé (sur environnement qualifié)","Supervised backup code (qualified environment)"))}
   OutlinedTextField(password,{password=it.take(256)},enabled=!busy,label={Text(tr("Mot de passe actuel","Current password"))},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
-  Button(enabled=!busy&&password.isNotEmpty(),onClick={busy=true;error=false;scope.launch{try{recoveryKey=gateway.enrollRecoveryKey(session,password)}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{password="";busy=false}}}){Text(tr("Générer une clé","Generate key"))}
+  Button(enabled=!busy&&password.isNotEmpty(),onClick={busy=true;error=false;scope.launch{try{recoveryKey=gateway.enrollRecoveryKey(session,password,supervised)}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{password="";busy=false}}}){Text(tr("Générer une clé","Generate key"))}
  }
  if(error)Text(tr("Action non confirmée.","Action not confirmed."),color=MaterialTheme.colorScheme.error)
 }
@@ -40,18 +41,20 @@ import java.util.UUID
  fun tr(fr:String,en:String)=if(english)en else fr
  var identifier by remember{mutableStateOf(initialIdentifier)}
  var recoveryKey by remember{mutableStateOf("")};var password by remember{mutableStateOf("")};var confirm by remember{mutableStateOf("")}
- var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var requestId by remember{mutableStateOf<String?>(null)}
+ var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var requestId by remember{mutableStateOf<String?>(null)};var supervised by remember{mutableStateOf(false)}
  val scope=rememberCoroutineScope()
  val locked=busy||requestId!=null
  val valid=Regex("^WM-[A-Z0-9]{8,24}$").matches(identifier.trim().uppercase())&&Regex("^[a-fA-F0-9]{64}$").matches(recoveryKey.trim())&&password.length in 12..256&&password==confirm
  ProtectSecretScreen()
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
  Text(tr("Récupérer mon compte","Recover account"),style=MaterialTheme.typography.titleLarge)
+ Row{Checkbox(checked=supervised,onCheckedChange={supervised=it},enabled=!locked);Text(tr("Utiliser mon code de secours supervisé","Use my supervised backup code"))}
+ if(supervised)Text(tr("Une demande préalable, deux examens et votre code préenregistré sont requis. Ne partagez jamais ce code.","A prior request, two reviews and your pre-enrolled code are required. Never share the code."))
  OutlinedTextField(identifier,{identifier=it.take(27)},enabled=!locked,label={Text(tr("Identifiant WideMeet","WideMeet ID"))},modifier=Modifier.fillMaxWidth())
  OutlinedTextField(recoveryKey,{recoveryKey=it.take(64)},enabled=!locked,label={Text(tr("Clé de récupération","Recovery key"))},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
  OutlinedTextField(password,{password=it.take(256)},enabled=!locked,label={Text(tr("Nouveau mot de passe","New password"))},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
  OutlinedTextField(confirm,{confirm=it.take(256)},enabled=!locked,label={Text(tr("Confirmer","Confirm"))},visualTransformation=PasswordVisualTransformation(),modifier=Modifier.fillMaxWidth())
- Button(enabled=valid&&!busy,onClick={busy=true;error=false;val id=requestId?:UUID.randomUUID().toString();requestId=id;scope.launch{try{gateway.recoverWithKey(identifier,recoveryKey,password,id);recoveryKey="";password="";confirm="";onRecovered(identifier.trim().uppercase())}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}){Text(if(error)tr("Réessayer la même demande","Retry same request")else tr("Récupérer","Recover"))}
+ Button(enabled=valid&&!busy,onClick={busy=true;error=false;val id=requestId?:UUID.randomUUID().toString();requestId=id;scope.launch{try{gateway.recoverWithKey(identifier,recoveryKey,password,id,supervised);recoveryKey="";password="";confirm="";onRecovered(identifier.trim().uppercase())}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}){Text(if(error)tr("Réessayer la même demande","Retry same request")else tr("Récupérer","Recover"))}
  if(error)Text(tr("Récupération non confirmée. Réessayez la même demande ou contactez le support.","Recovery not confirmed. Retry the same request or contact support."),color=MaterialTheme.colorScheme.error)
  TextButton(enabled=!busy,onClick=onBack){Text(tr("Retour","Back"))}
  }}
