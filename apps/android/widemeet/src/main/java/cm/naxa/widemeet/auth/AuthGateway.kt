@@ -90,6 +90,12 @@ class AuthGateway(private val context:Context,private val base:String){
   val response=request("recovery-enroll",JSONObject().put("app_id","WIDEMEET").put("current_password",password).put("supervised",supervised),s.accessToken)
   response.getString("recovery_key").also{require(Regex("^[a-f0-9]{64}$").matches(it))}
  }
+ suspend fun requestSupervisedRecovery(identifier:String,key:String):String=withContext(Dispatchers.IO){
+  val id=identifier.trim().uppercase(java.util.Locale.ROOT);val code=key.trim().lowercase(java.util.Locale.ROOT)
+  require(Regex("^WM-[A-Z0-9]{8,24}$").matches(id)&&Regex("^[a-f0-9]{64}$").matches(code))
+  val j=request("request-recovery",JSONObject().put("app_id","WIDEMEET").put("identifier",id).put("recovery_key",code).put("supervised",true).put("installation_id",installation()).put("platform","android"))
+  j.getString("case_id").also{require(UUID.fromString(it).toString()==it)}
+ }
  suspend fun recoverWithKey(identifier:String,key:String,password:String,requestId:String,supervised:Boolean=false):Unit=withContext(Dispatchers.IO){lifecycle.withLock{
   val id=identifier.trim().uppercase(java.util.Locale.ROOT);val recovery=key.trim().lowercase(java.util.Locale.ROOT)
   require(Regex("^WM-[A-Z0-9]{8,24}$").matches(id)&&Regex("^[a-f0-9]{64}$").matches(recovery)&&password.length in 12..256&&UUID.fromString(requestId).toString()==requestId)
