@@ -49,6 +49,7 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
     val operationalRoles=snapshot?.optJSONArray("operation_roles")
     val canServe=canManage||(operationalRoles!=null&&(0 until operationalRoles.length()).any{operationalRoles.optString(it) in setOf("server","floor")})
     val canWrite=canManage&&!busy&&session.permits(site)
+    val canCash=canManage||(operationalRoles!=null&&(0 until operationalRoles.length()).any{operationalRoles.optString(it)=="cashier"})
     Text(tr("Gestion ZIPPLE","ZIPPLE management"),style=MaterialTheme.typography.titleLarge)
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
         OutlinedButton(onClick={tab="orders"}){Text(tr("Commandes","Orders"))}
@@ -67,12 +68,14 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
         OutlinedButton(onClick={tab="crm"}){Text(tr("Clients","Customers"))}
     }
     OutlinedButton(onClick={tab="stations"}){Text(tr("Postes de préparation","Preparation stations"))}
+    if(canCash)OutlinedButton(onClick={tab="split"}){Text(tr("Addition fractionnée","Split bill"))}
     if(canManage)OutlinedButton(onClick={tab="bulk3"}){Text(tr("ERP 360° — gestion complète","ERP 360° — management"))}
     if(canServe)OutlinedButton(onClick={tab="support"}){Text(tr("Assistance commandes","Order assistance"))}
     if(canManage)OutlinedButton(onClick={tab="pilotage"}){Text(tr("Performance service","Service performance"))}
     if(canManage)OutlinedButton(onClick={tab="documents"}){Text(tr("Justificatifs","Documents"))}
     OutlinedButton(onClick={tab="attendance"}){Text(tr("Pointage","Attendance"))}
     when(tab){
+        "split"->{key(session.member,site){ZippleNativeSplitBill(api,session,site,en)}}
         "stations"->{key(session.member,site){ZippleNativeStations(api,session,site,en)}}
         "attendance"->{key(session.member,site){ZippleAttendance(api,session,site,en)}}
         "support"->{key(session.member,site){ZippleNativeOrderSupport(api,session,site,en)}}

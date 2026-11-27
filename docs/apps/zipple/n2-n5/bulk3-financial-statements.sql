@@ -43,7 +43,7 @@ create table public.zp_credit_followups(
 create function public.zp_credit_followup(p_access text,p_site uuid,p_sale uuid,p_request uuid,p_channel text,p_due date) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;s public.zp_credit_sales;x public.zp_credit_followups;customer uuid;i uuid;begin
  m:=public.zp_erp_actor(p_access,p_site);perform 1 from public.zp_site_modes where site_id=p_site for update;
- select * into s from public.zp_credit_sales where id=p_sale and org_id=m.org_id and site_id=p_site;if s.id is null then raise exception 'DENIED';end if;
+ select * into s from public.zp_credit_sales where id=p_sale and org_id=m.org_id and site_id=p_site;if s.id is null or s.split_mode is not null then raise exception 'DENIED';end if;
  select * into x from public.zp_credit_followups where member_id=m.id and request_id=p_request;
  if x.followup_id is not null then
  if (x.site_id,x.sale_id) is distinct from (p_site,p_sale) or not exists(select 1 from public.zp_customer_followups where id=x.followup_id and channel=p_channel and due_on=p_due) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return x.followup_id;end if;
