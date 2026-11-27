@@ -290,4 +290,24 @@ exception when invalid_text_representation or unique_violation then return null;
 end $wm$;
 revoke all on function public.wm_support_action(text,text,jsonb) from public,anon,authenticated;
 grant execute on function public.wm_support_action(text,text,jsonb) to service_role;
+-- Service-only admission lookup for the dedicated support SFU proxy.
+create function public.wm_support_media_admission(p_hash text,p_call uuid)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare s record; c public.wm_support_calls%rowtype; t public.wm_support_tickets%rowtype; av bigint; requester boolean;
+begin
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ select * into s from public.wm_session_context(p_hash);
+ if not found or s.password_change_required then return null;end if;
+ select * into c from public.wm_support_calls where id=p_call and state='active';
+ if not found or c.deadline<=clock_timestamp() or c.requester_lease<=clock_timestamp() or c.agent_lease<=clock_timestamp() then return null;end if;
+ select * into t from public.wm_support_tickets where id=c.ticket_id;
+ if not found or t.status not in ('assigned','waiting') or t.agent_id is null or not coalesce((select enabled from public.wm_support_agents where account_id=t.agent_id),false) then return null;end if;
+ select max(id) into av from public.wm_support_assignment_events where ticket_id=t.id and actor_id=t.agent_id and action='claim';
+ if av is distinct from c.assignment_id or not public.wm_support_session_live(c.requester_session) or not public.wm_support_session_live(c.agent_session) then return null;end if;
+ requester:=s.account_id=t.requester_id and s.workspace_id=t.workspace_id and s.session_id=c.requester_session;
+ if not requester and not (s.account_id=t.agent_id and s.session_id=c.agent_session) then return null;end if;
+ return jsonb_build_object('app','wm','room','wm-support-'||c.id::text,'identity',s.account_id,'enabled',true,'admitted',true,'status','open','endMs',floor(extract(epoch from least(c.deadline,c.requester_lease,c.agent_lease))*1000)::bigint,'sources',case when requester and c.screen_state in ('consented','active') then jsonb_build_array('microphone','screen_share') else jsonb_build_array('microphone') end,'canPublish',true);
+end $wm$;
+revoke all on function public.wm_support_media_admission(text,uuid) from public,anon,authenticated;
+grant execute on function public.wm_support_media_admission(text,uuid) to service_role;
 commit;
