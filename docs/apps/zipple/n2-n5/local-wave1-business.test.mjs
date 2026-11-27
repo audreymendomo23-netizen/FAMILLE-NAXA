@@ -50,7 +50,7 @@ test("B2-022 repeated justified ETA changes preserve original and history",async
  const second=await ok("delay",{order_id:order,minutes:30,reason:"Deuxième prolongation"});
  assert.ok(Date.parse(second)>Date.parse(first));
  assert.equal(await scalar("select initial_promised_at::text from zp_orders where id=$1",[order]),initial);
- const events=(await db.query("select payload from zp_order_events where order_id=$1 and event_type='delay_explained' order by created_at",[order])).rows.map(x=>x.payload);
+ const events=(await db.query("select payload from zp_order_events where order_id=$1 and event_type='delay_explained' order by at,id",[order])).rows.map(x=>x.payload);
  assert.equal(events.length,2);assert.equal(events[0].reason,"Première prolongation");assert.equal(events[1].reason,"Deuxième prolongation");assert.equal(Date.parse(events[1].previous),Date.parse(first));assert.equal(Date.parse(events[1].initial),Date.parse(initial));
  assert.equal((await b("delay",{order_id:order,minutes:0,reason:"Interdit"})).status,400);
  assert.equal(Number(await scalar("select count(*) from zp_order_events where order_id=$1 and event_type='delay_explained'",[order])),2);

@@ -23,7 +23,7 @@ id,bulk,cdc,statut,action_resultat_attendu,preuve_ou_reserve
 "B2-022","2","4.3,4.4","P","Prolongations répétées motivées, historique initial/nouveau, horloges divergentes, zéro et retard persistant","WEB-OP : clock ; cas limites et historique complet à vérifier"
 "B2-023","2","4.5,4.6","P","Confirmer servi avant/après délai, séparer événement personnel/client, excuse, feedback facultatif","WEB-OP : CHECKOUT_FEEDBACK, SNACK_TABLE_HANDOFF ; tous cas temporels à qualifier"
 "B2-024","2","4.7","V","Coupure réseau poste puis reprise sans double mutation ; accusé perdu sur paiement fractionné","STATION_OFFLINE_RESYNC, REAL_SPLIT_UI_LOST_ACK_RETRY, NATIVE_RETRY_IDEMPOTENCE"
-"B2-025","2","4.7","P","Panier invité conservé durant coupure, nouvelle tentative contrôlée, pas de confirmation locale trompeuse","Contrat idempotence présent ; parcours invité hors ligne dédié requis"
+"B2-025","2","4.7","V","Panier invité conservé durant coupure, nouvelle tentative contrôlée, pas de confirmation locale trompeuse","46034554117/job/140626550957 : ZIPPLE_QA_CASE_PASS B2-025 ; Chromium réel, reprise même clé sans double commande/stock"
 "B2-026","2","5.1,5.3","V","Restaurant-Bar : plat et boisson vers postes dédiés ; option Bar désactivable","WEB-OP : commande multi-postes"
 "B2-027","2","5.1,5.4","P","Catalogue Bar par verre/bouteille/pack/casier, prix, ventes et indicateurs par période","SQL : conversions et coûts ; UI Bar exhaustive à qualifier avec B3"
 "B2-028","2","6.1,6.3","V","Snack comptoir/retrait : numéro, file, appel, non-retrait et disponibilité","REAL_EDGE_SNACK_PICKUP, SQL : NO_SHOW_STATION_WINDOW"

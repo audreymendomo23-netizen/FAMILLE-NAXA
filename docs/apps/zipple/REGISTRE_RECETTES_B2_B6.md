@@ -8,12 +8,12 @@ Sources : [CDC V2.0](../../cahiers-des-charges/ZIPPLE_V2_0.md), [audit](AUDIT_CO
 
 | Bulk | Total | V | P | A | D | Restant à qualifier |
 |---|---:|---:|---:|---:|---:|---:|
-| B2 | 37 | 26 | 11 | 0 | 0 | 11 |
+| B2 | 37 | 27 | 10 | 0 | 0 | 10 |
 | B3 | 46 | 31 | 13 | 0 | 2 | 15 |
 | B4 | 36 | 8 | 10 | 6 | 12 | 28 |
 | B5 | 29 | 3 | 22 | 4 | 0 | 26 |
 | B6 | 31 | 6 | 16 | 0 | 9 | 25 |
-| **TOTAL** | **179** | **74** | **72** | **10** | **23** | **105** |
+| **TOTAL** | **179** | **75** | **71** | **10** | **23** | **104** |
 
 V = scénario local couvert par preuves existantes, périmètre explicitement indiqué (pas preuve hébergée/physique); P = preuve partielle ou couverture exhaustive non établie; A = action/parcours à compléter ou qualification dédiée sans preuve; D = dépendance réelle, arbitrage ou autorisation nécessaire. Pour toute recette P/A/D, conserver les assertions existantes, construire ou compléter l'action, jouer le positif et les refus, vérifier la persistance et archiver run/commit/rapport. Une absence de preuve ne prouve pas absence de code. B2 reste clôturé sur son gate local; les compléments identifiés sont des réserves de couverture et non une réouverture automatique des parcours déjà verts. Aucune fausse confirmation opérateur, aucun skip d'un parcours exigé, aucun secret publié, aucun main ni production sans autorisation.
 
@@ -54,7 +54,7 @@ V = scénario local couvert par preuves existantes, périmètre explicitement in
 | B2-022 | 4.3,4.4 | Prolongations répétées motivées, historique initial/nouveau, horloges divergentes, zéro et retard persistant | P | WEB-OP : clock ; cas limites et historique complet à vérifier |
 | B2-023 | 4.5,4.6 | Confirmer servi avant/après délai, séparer événement personnel/client, excuse, feedback facultatif | P | WEB-OP : CHECKOUT_FEEDBACK, SNACK_TABLE_HANDOFF ; tous cas temporels à qualifier |
 | B2-024 | 4.7 | Coupure réseau poste puis reprise sans double mutation ; accusé perdu sur paiement fractionné | V | STATION_OFFLINE_RESYNC, REAL_SPLIT_UI_LOST_ACK_RETRY, NATIVE_RETRY_IDEMPOTENCE |
-| B2-025 | 4.7 | Panier invité conservé durant coupure, nouvelle tentative contrôlée, pas de confirmation locale trompeuse | P | Contrat idempotence présent ; parcours invité hors ligne dédié requis |
+| B2-025 | 4.7 | Panier invité conservé durant coupure, nouvelle tentative contrôlée, pas de confirmation locale trompeuse | V | 46034554117/job/140626550957 : ZIPPLE_QA_CASE_PASS B2-025, Chromium réel, reprise même clé sans double commande/stock |
 | B2-026 | 5.1,5.3 | Restaurant-Bar : plat et boisson vers postes dédiés ; option Bar désactivable | V | WEB-OP : commande multi-postes |
 | B2-027 | 5.1,5.4 | Catalogue Bar par verre/bouteille/pack/casier, prix, ventes et indicateurs par période | P | SQL : conversions et coûts ; UI Bar exhaustive à qualifier avec B3 |
 | B2-028 | 6.1,6.3 | Snack comptoir/retrait : numéro, file, appel, non-retrait et disponibilité | V | REAL_EDGE_SNACK_PICKUP, SQL : NO_SHOW_STATION_WINDOW |
@@ -423,3 +423,7 @@ Extraction des allowlists `professionalActions` / `publicActions` de `n2-n5/busi
 ## Règle d'exécution en bulk
 
 Lancer les lots indépendants en parallèle sans fail-fast, conserver B2 en régression. Chaque réserve P/A/D reçoit un responsable technique, preuve de fermeture (commit, run, job, test/assertion, artefact), date et état final. Ne jamais convertir P/A/D en V par simple compilation ou présence de code. B3 traite ERP/finance, B4 raccordements et commerce, B5 RH/IA, B6 matrice transversale et livraison; les validations externes sont explicites. Les recettes dont les conditions ne sont pas disponibles restent bloquées, pas ignorées. Le passage au vert global exige toutes les lignes applicables prouvées, arbitrages tracés et gates finaux réussis.
+
+
+## Qualification et développement parallèle — vague 2 / RH / commerce
+Candidat f62b4c8 run 46034554117 : 4 jobs API verts (50+50+50+30), Web opérations vert avec B3-010 PDF/message préparé, B2-025 vert (job 140626550957, marqueur ZIPPLE_QA_CASE_PASS), registre mis à 75 V / 71 P / 10 A / 23 D = 179, 104 non clos. Wave1 job 140626551365 : B2-019, B2-032 et B3-003 assertions partielles réussies; B2-022 échoue sur colonne inexistante created_at, correction par vraie colonne at de zp_order_events (operations.sql). N1 Android job 140626551844 et ancien E2E 140625369510 : Maven 429 ZXing, pas de modification de version ni dépôt global. Pages live redevient vert. Nouveau job wave2-business : B3-016 FEFO/FIFO, coût/trace et concurrence; B3-019 comptage concurrent, pertes, rejeu. Web B4-017 édition/désactivation zone et retrait livreur, test réel persistance sans activation livraison. Web B5-005/B5-007 filtres historique RH et synthèse des montants approuvés (sélection reçue max 200), sans automatiser paie ni virement, test Chromium. Recettes nouvelles/étendues à qualifier, statuts partiels préservés; aucun changement main/production.

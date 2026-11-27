@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [web-workspaces, web-operations, web-guest-offline, wave1-business, android-native, api-1, api-2, api-3, api-4]
+        suite: [web-workspaces, web-operations, web-guest-offline, wave1-business, wave2-business, android-native, api-1, api-2, api-3, api-4]
     runs-on: ubuntu-24.04
     timeout-minutes: 38
     steps:
@@ -156,8 +156,10 @@ jobs:
             web-guest-offline) node --test docs/apps/zipple/n2-n5/local-guest-offline.test.mjs ;;
             *) exit 2 ;;
           esac
-      - name: Wave 1 authenticated independent business scenarios
-        if: matrix.suite == 'wave1-business'
+      - name: Authenticated independent business scenarios by wave
+        if: startsWith(matrix.suite, 'wave')
+        env:
+          ZIPPLE_SUITE: ${{ matrix.suite }}
         run: |
           set -euo pipefail
           set -a
@@ -165,7 +167,11 @@ jobs:
           set +a
           bash docs/apps/zipple/n2-n5/local-edge-ready.sh
           npm install --no-save --ignore-scripts pg@8.13.3
-          node --test docs/apps/zipple/n2-n5/local-wave1-business.test.mjs
+          case "$ZIPPLE_SUITE" in
+            wave1-business) node --test docs/apps/zipple/n2-n5/local-wave1-business.test.mjs ;;
+            wave2-business) node --test docs/apps/zipple/n2-n5/local-wave2-business.test.mjs ;;
+            *) exit 2 ;;
+          esac
       - name: Independent real Edge action boundaries
         if: startsWith(matrix.suite, 'api-')
         env:
