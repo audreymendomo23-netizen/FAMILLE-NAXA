@@ -19,7 +19,7 @@ internal fun JSONObject.rows(key:String):List<JSONObject> {
 }
 
 @Composable
-fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Boolean){
+fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Boolean,onLanguage:(Boolean)->Unit={}){
     val tr:(String,String)->String={fr,eng->if(en)eng else fr}
     val scope=rememberCoroutineScope()
     var snapshot by remember { mutableStateOf<JSONObject?>(null) }
@@ -79,7 +79,7 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
     if(canManage)for(page in commercePages)OutlinedButton(onClick={tab=page.id}){Text(if(en)page.en else page.fr)}
     when(tab){
         "loyalty","delivery","connections"->{if(canManage)key(session.member,site,tab){ZippleCommerceWorkspace(api,session,site,en,tab)}}
-        "hr","profile","tickets","notifications","team","planning","objectives","training","incidents","intelligence"->{key(session.member,site,tab){ZipplePortalWorkspace(api,session,site,en,tab)}}
+        "hr","profile","tickets","notifications","team","planning","objectives","training","incidents","intelligence"->{key(session.member,site,tab){ZipplePortalWorkspace(api,session,site,en,tab,onLanguage)}}
         "split"->{key(session.member,site){ZippleNativeSplitBill(api,session,site,en)}}
         "stations"->{key(session.member,site){ZippleNativeStations(api,session,site,en)}}
         "offline_review"->{key(session.member,site){ZippleNativeOfflineReview(api,session,site,en)}}

@@ -679,3 +679,6 @@ Carte opaque distincte du parrainage, révocable; rattachement volontaire d'une 
 
 ### Recettes supplémentaires
 Recette navigateur dédiée étendue aux approbations RH, carte fidélité QR invitée, attribution sur reçu réel local et consommation sur reçu ultérieur; recette native étendue au dossier absence et approbation. Captures et assertions de persistance. Aucun nouveau service externe ni publication.
+
+### Préférences et messagerie préparée
+Application effective de la préférence FR/EN enregistrée au profil sur les clients Web/Android. Préparation d'un message WhatsApp CRM seulement pour numéro camerounais validé et consentement opérateur, ouverture explicite du canal externe sans envoi automatique ni donnée sensible dans le texte. Pas de revendication de push, API WhatsApp Business ou Fulfulde exhaustif.

@@ -2,11 +2,11 @@ import React,{useEffect,useRef,useState} from "react";
 import {HrWorkspace} from "./HrWorkspace";
 import {PilotageWorkspace} from "./PilotageWorkspace";
 export const portalPages=[{"id":"hr","fr":"Absences et rémunérations","en":"Leave and compensation","manager":false},{"id":"profile","fr":"Profil","en":"Profile","manager":false},{"id":"tickets","fr":"Support professionnel","en":"Professional support","manager":false},{"id":"notifications","fr":"Notifications","en":"Notifications","manager":false},{"id":"team","fr":"Équipe","en":"Team","manager":true},{"id":"planning","fr":"Plannings","en":"Schedules","manager":false},{"id":"objectives","fr":"Objectifs","en":"Objectives","manager":false},{"id":"training","fr":"Formation","en":"Training","manager":false},{"id":"incidents","fr":"Feedback interne","en":"Internal feedback","manager":false},{"id":"intelligence","fr":"ZIPPLE Intelligence","en":"ZIPPLE Intelligence","manager":true}];
-type Props={page:string;call:(a:string,b?:Record<string,unknown>)=>Promise<any>;en:boolean;online:boolean};
+type Props={page:string;call:(a:string,b?:Record<string,unknown>)=>Promise<any>;en:boolean;online:boolean;onLanguage?:(en:boolean)=>void};
 const kinds:Record<string,string>={tickets:"ticket",planning:"shift",objectives:"objective",training:"training",incidents:"incident"};
 const localDate=(v:string)=>v?new Date(v+":00+01:00").toISOString():null;
 export function PortalWorkspace(props:Props){return props.page==="hr"?<HrWorkspace {...props}/>:<StandardPortal {...props}/>}
-function StandardPortal({page,call,en,online}:Props){
+function StandardPortal({page,call,en,online,onLanguage}:Props){
  const t=(fr:string,eng:string)=>en?eng:fr;const spec=portalPages.find(x=>x.id===page)!;
  const [d,D]=useState<any>(null),[busy,B]=useState(false),[err,E]=useState(""),[notice,N]=useState("");
  const [v,V]=useState<Record<string,string>>({}),[selected,S]=useState(""),[reply,R]=useState("");
@@ -14,7 +14,7 @@ function StandardPortal({page,call,en,online}:Props){
  const change=(k:string,x:string)=>V(old=>({...old,[k]:x}));
  async function load(){const x=await call("workspace_snapshot",{page});D(x);if(page==="profile")V({display_name:x.profile.display_name,phone:x.profile.phone,language:x.profile.language})}
  useEffect(()=>{if(online)load().catch(()=>E(t("Données indisponibles","Data unavailable")))},[online]);
- async function write(operation:string,payload:Record<string,unknown>){if(!online||active.current)return;active.current=true;B(true);E("");N("");try{const body=JSON.stringify(payload);if(keys.current[operation]?.body!==body)keys.current[operation]={body,id:crypto.randomUUID()};const out=await call("workspace_write",{operation,payload,request_id:keys.current[operation].id});if(!out.confirmed)throw Error("UNCONFIRMED");delete keys.current[operation];N(t("Opération enregistrée","Operation saved"));if(operation==="work_create"){V({});S("")}if(operation==="work_reply")R("");await load()}catch(e){E(e instanceof Error?e.message:t("Opération non confirmée","Operation unconfirmed"))}finally{active.current=false;B(false)}}
+ async function write(operation:string,payload:Record<string,unknown>){if(!online||active.current)return;active.current=true;B(true);E("");N("");try{const body=JSON.stringify(payload);if(keys.current[operation]?.body!==body)keys.current[operation]={body,id:crypto.randomUUID()};const out=await call("workspace_write",{operation,payload,request_id:keys.current[operation].id});if(!out.confirmed)throw Error("UNCONFIRMED");delete keys.current[operation];if(operation==="profile_save")onLanguage?.(payload.language==="en");N(operation==="profile_save"?(payload.language==="en"?"Operation saved":"Opération enregistrée"):t("Opération enregistrée","Operation saved"));if(operation==="work_create"){V({});S("")}if(operation==="work_reply")R("");await load()}catch(e){E(e instanceof Error?e.message:t("Opération non confirmée","Operation unconfirmed"))}finally{active.current=false;B(false)}}
  const locked=!online||busy||!d,manage=!!d?.can_manage,rows:any[]=d?.rows??[],members:any[]=d?.members??[],row=rows.find(x=>x.id===selected),kind=kinds[page];
  const state=(x:string)=>({open:t("Ouvert","Open"),in_progress:t("En cours","In progress"),done:t("Terminé","Done"),cancelled:t("Annulé","Cancelled")} as Record<string,string>)[x]??x;
  const field=(k:string,label:string,type="text",maxLength=160)=><label>{label}<input aria-label={label} type={type} maxLength={maxLength} value={v[k]??""} disabled={locked} onChange={e=>change(k,e.target.value)}/></label>;

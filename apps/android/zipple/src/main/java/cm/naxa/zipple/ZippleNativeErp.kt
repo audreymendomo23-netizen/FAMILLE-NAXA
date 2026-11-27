@@ -55,7 +55,7 @@ internal class RequestKeys{
  var name by remember{mutableStateOf("")};var sku by remember{mutableStateOf("")};var unit by remember{mutableStateOf("kg")};var threshold by remember{mutableStateOf("0")};var phone by remember{mutableStateOf("")}
  var selected by remember{mutableStateOf("")};var lot by remember{mutableStateOf("")};var supplier by remember{mutableStateOf("")};var quantity by remember{mutableStateOf("")};var cost by remember{mutableStateOf("")};var expiry by remember{mutableStateOf("")}
  var category by remember{mutableStateOf("rent")};var method by remember{mutableStateOf("cash")};var reference by remember{mutableStateOf("")};var date by remember{mutableStateOf(LocalDate.now(ZoneId.of("Africa/Douala")).toString())}
- var consent by remember{mutableStateOf(false)};var title by remember{mutableStateOf("")};var channel by remember{mutableStateOf("telephone")};var due by remember{mutableStateOf("")}
+ var consent by remember{mutableStateOf(false)};var contactConsent by remember(selected){mutableStateOf(false)};var title by remember{mutableStateOf("")};var channel by remember{mutableStateOf("telephone")};var due by remember{mutableStateOf("")}
  val canWrite=session.role in setOf("promoteur","manager")&&!busy&&session.permits(site)
  suspend fun call(action:String,body:JSONObject=JSONObject())=api.call(session,site,action,body)
  suspend fun write(action:String,body:JSONObject){call(action,keys.apply(action,body));keys.confirmed(action)}
@@ -84,6 +84,10 @@ internal class RequestKeys{
    Button(enabled=canWrite&&title.isNotBlank()&&runCatching{LocalDate.parse(due)}.isSuccess,onClick={run{
     write("followup_create",JSONObject().put("customer_id",selected).put("title",title.trim()).put("channel",channel).put("due_on",due));title="";due="";load()
    }}){Text(tr("Créer le suivi","Create follow-up"))}
+   val rawPhone=customers.firstOrNull{it.optString("id")==selected}?.optString("phone").orEmpty()
+   val waPhone=when{Regex("[67][0-9]{8}").matches(rawPhone)->"237"+rawPhone;Regex("237[67][0-9]{8}").matches(rawPhone)->rawPhone;else->null}
+   if(waPhone!=null){Row{Checkbox(checked=contactConsent,onCheckedChange={contactConsent=it});Text(tr("Je confirme être autorisé à contacter ce client.","I confirm permission to contact this customer."))}
+   OutlinedButton(enabled=canWrite&&contactConsent,onClick={try{val link="https://wa.me/"+waPhone+"?text="+android.net.Uri.encode(tr("Bonjour, nous vous contactons au sujet de votre demande auprès de notre établissement. Merci.","Hello, we are contacting you about your request with our establishment. Thank you."));context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse(link)).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))}catch(_:Exception){message=tr("WhatsApp indisponible","WhatsApp unavailable")}}){Text(tr("Ouvrir WhatsApp — vérifier avant envoi","Open WhatsApp — review before sending"))}}
    data?.rows("followups")?.filter{it.optString("customer_id")==selected}?.forEach{x->
     Text(x.optString("title")+" · "+x.optString("due_on"))
     if(x.isNull("completed_at"))OutlinedButton(enabled=canWrite,onClick={run{call("followup_complete",JSONObject().put("followup_id",x.optString("id")));load()}}){Text(tr("Clôturer le suivi","Complete follow-up"))}

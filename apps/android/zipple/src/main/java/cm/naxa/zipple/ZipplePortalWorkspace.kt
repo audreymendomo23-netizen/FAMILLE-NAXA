@@ -15,7 +15,7 @@ internal val portalPages=listOf(PortalPage("hr","Absences et rémunérations","L
  Box{OutlinedButton(enabled=enabled&&options.isNotEmpty(),onClick={open=true}){Text(label+" : "+(options.find{it.first==value}?.second?:"—"))}
  DropdownMenu(expanded=open,onDismissRequest={open=false}){options.forEach{(id,name)->DropdownMenuItem(text={Text(name)},onClick={change(id);open=false})}}}
 }
-@Composable internal fun ZipplePortalWorkspace(api:ZippleBusiness,session:Session,site:String,en:Boolean,page:String){
+@Composable internal fun ZipplePortalWorkspace(api:ZippleBusiness,session:Session,site:String,en:Boolean,page:String,onLanguage:(Boolean)->Unit={}){
  if(page=="hr"){ZippleHrWorkspace(api,session,site,en);return}
  val t:(String,String)->String={fr,eng->if(en)eng else fr}
  val spec=portalPages.first{it.id==page};val scope=rememberCoroutineScope();val keys=remember{RequestKeys()}
@@ -26,7 +26,7 @@ internal val portalPages=listOf(PortalPage("hr","Absences et rémunérations","L
  fun set(k:String,x:String){values=values+(k to x)}
  suspend fun load(){val d=api.call(session,site,"workspace_snapshot",JSONObject().put("page",page)) as? JSONObject?:error("DATA");data=d;if(page=="profile"){val p=d.getJSONObject("profile");values=mapOf("display_name" to p.optString("display_name"),"phone" to p.optString("phone"),"language" to p.optString("language"))}}
  fun run(block:suspend()->Unit){if(!allowed)return;busy=true;msg="";scope.launch{try{block()}catch(c:CancellationException){throw c}catch(_:Exception){msg=t("Opération non confirmée","Operation unconfirmed")}finally{busy=false}}}
- fun write(operation:String,payload:JSONObject){run{val body=JSONObject().put("operation",operation).put("payload",payload);val out=api.call(session,site,"workspace_write",keys.apply(operation,body)) as? JSONObject?:error("UNCONFIRMED");require(out.optBoolean("confirmed"));keys.confirmed(operation);if(operation=="work_create")values=emptyMap();if(operation=="work_reply")reply="";load();msg=t("Opération enregistrée","Operation saved")}}
+ fun write(operation:String,payload:JSONObject){run{val body=JSONObject().put("operation",operation).put("payload",payload);val out=api.call(session,site,"workspace_write",keys.apply(operation,body)) as? JSONObject?:error("UNCONFIRMED");require(out.optBoolean("confirmed"));keys.confirmed(operation);if(operation=="profile_save")onLanguage(payload.optString("language")=="en");if(operation=="work_create")values=emptyMap();if(operation=="work_reply")reply="";load();msg=if(operation=="profile_save")if(payload.optString("language")=="en")"Operation saved" else "Opération enregistrée" else t("Opération enregistrée","Operation saved")}}
  LaunchedEffect(session.member,site,page){try{load()}catch(c:CancellationException){throw c}catch(_:Exception){msg=t("Données indisponibles","Data unavailable")}}
  val rows=data?.rows("rows").orEmpty();val members=data?.rows("members").orEmpty();val options=members.map{it.optString("id") to it.optString("label")}
  val kind=mapOf("tickets" to "ticket","planning" to "shift","objectives" to "objective","training" to "training","incidents" to "incident")[page]

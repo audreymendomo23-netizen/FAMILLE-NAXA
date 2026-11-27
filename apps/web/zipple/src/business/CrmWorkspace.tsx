@@ -5,11 +5,12 @@ export function CrmWorkspace({orders,call,disabled,en}:Props){
  const t=(fr:string,eng:string)=>en?eng:fr;
  const [data,D]=useState<any>(null),[busy,B]=useState(false),[error,E]=useState("");
  const [name,N]=useState(""),[phone,P]=useState(""),[consent,C]=useState(false),[customer,CU]=useState(""),[order,O]=useState("");
+ const [contactConsent,CC]=useState(false);
  const [title,T]=useState(""),[channel,CH]=useState("telephone"),[due,DU]=useState("");
  const pending=useRef<{body:string,id:string}|null>(null);
  const lock=disabled||busy;
  const customers:any[]=data?.customers??[],followups:any[]=data?.followups??[],history:any[]=data?.history??[];
- const selected=customers.find(c=>c.id===customer);
+ const selected=customers.find(c=>c.id===customer);useEffect(()=>CC(false),[customer]);const rawPhone=String(selected?.phone??"");const waPhone=/^[67][0-9]{8}$/.test(rawPhone)?"237"+rawPhone:/^237[67][0-9]{8}$/.test(rawPhone)?rawPhone:null;
  async function load(){D(await call("crm_snapshot"))}
  async function run(fn:()=>Promise<void>){if(lock)return;B(true);E("");try{await fn()}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}
  useEffect(()=>{let live=true;call("crm_snapshot").then(v=>{if(live)D(v)}).catch(()=>{if(live)E("OPERATION_UNAVAILABLE")});return()=>{live=false}},[]);
@@ -29,6 +30,7 @@ export function CrmWorkspace({orders,call,disabled,en}:Props){
  <label>{t("Commande","Order")}<select aria-label={t("Commande à rattacher","Order to link")} value={order} onChange={e=>O(e.target.value)}><option value="">—</option>{orders.filter(o=>o.status!=="cancelled"&&!history.some(h=>h.order_id===o.id)).map(o=><option key={o.id} value={o.id}>{o.id.slice(0,8)} · {o.total_xaf} FCFA · {o.status}</option>)}</select></label>
  <button disabled={lock||!order} onClick={()=>run(async()=>{await call("customer_attach",{customer_id:customer,order_id:order});O("");await load()})}>{t("Rattacher la commande","Link order")}</button>
  <h4>{t("Historique du site","Site history")}</h4>{history.filter(h=>h.customer_id===customer).map(h=><p key={h.order_id}>{h.order_id.slice(0,8)} · {h.total_xaf} FCFA · {h.payment_status==="credit_due"?t("À crédit","On credit"):h.paid?t("Réglée","Paid"):t("Non réglée","Unpaid")}</p>)}
+ <h4>{t("Préparer un message WhatsApp","Prepare a WhatsApp message")}</h4>{waPhone?<><label><input type="checkbox" checked={contactConsent} onChange={e=>CC(e.target.checked)}/>{t("Je confirme être autorisé à contacter ce client.","I confirm permission to contact this customer.")}</label>{contactConsent&&<a href={"https://wa.me/"+waPhone+"?text="+encodeURIComponent(t("Bonjour, nous vous contactons au sujet de votre demande auprès de notre établissement. Merci.","Hello, we are contacting you about your request with our establishment. Thank you."))} target="_blank" rel="noopener noreferrer">{t("Ouvrir WhatsApp — message à vérifier avant envoi","Open WhatsApp — review message before sending")}</a>}</>:<p>{t("Numéro camerounais valide nécessaire.","A valid Cameroon phone number is required.")}</p>}
  <h4>{t("Planifier un suivi","Schedule a follow-up")}</h4>
  <label>{t("Objet du suivi","Follow-up subject")}<input value={title} onChange={e=>T(e.target.value)} maxLength={160}/></label>
  <label>{t("Canal de suivi","Follow-up channel")}<select value={channel} onChange={e=>CH(e.target.value)}><option value="telephone">{t("Téléphone","Phone")}</option><option value="whatsapp">WhatsApp</option><option value="in_person">{t("Sur place","In person")}</option></select></label>

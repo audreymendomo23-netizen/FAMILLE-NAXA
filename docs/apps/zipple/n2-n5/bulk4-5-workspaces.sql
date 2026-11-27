@@ -58,7 +58,7 @@ declare m public.zp_members;manage boolean;kind_filter text;rows jsonb:='[]';mem
  if p_page not in ('profile','team','planning','objectives','training','incidents','tickets','notifications','intelligence') or p_page is null then raise exception 'INVALID_INPUT';end if;
  if p_page in ('team','intelligence') and not manage then raise exception 'DENIED';end if;
  if p_page='profile' then
- select jsonb_build_object('display_name',coalesce(d.display_name,m.login_id),'phone',coalesce(d.phone,''),'language',coalesce(d.language,'fr'),'login',m.login_id,'role',m.role_code,'organization',(select name from public.zp_organizations where id=m.org_id),'site',(select name from public.zp_sites where id=p_site)) into profile from (select 1) z left join public.zp_profile_details d on d.member_id=m.id;
+ select jsonb_build_object('display_name',coalesce(d.display_name,m.login_id),'phone',coalesce(d.phone,''),'language',coalesce(d.language,'fr'),'has_preference',d.member_id is not null,'login',m.login_id,'role',m.role_code,'organization',(select name from public.zp_organizations where id=m.org_id),'site',(select name from public.zp_sites where id=p_site)) into profile from (select 1) z left join public.zp_profile_details d on d.member_id=m.id;
  elsif p_page='notifications' then rows:=public.zp_workspace_inbox(p_access,p_site);
  elsif p_page='intelligence' then metrics:=public.zp_pilotage(p_access,p_site,today-27,today);
  else

@@ -858,7 +858,7 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  {
  const portal=(page,who=a)=>scalar("select zp_workspace_snapshot($1,$2,$3)",[who.access,who.site,page]);
  const write=(op,payload,key=uid(),who=a)=>scalar("select zp_workspace_write($1,$2,$3,$4,$5)",[who.access,who.site,op,key,JSON.stringify(payload)]);
- const profile={display_name:"Promoteur recette",phone:"699000000",language:"fr"},prKey=uid();assert.deepEqual(await write("profile_save",profile,prKey),await write("profile_save",profile,prKey));assert.equal((await portal("profile")).profile.display_name,profile.display_name);
+ const profile={display_name:"Promoteur recette",phone:"699000000",language:"fr"},prKey=uid();assert.deepEqual(await write("profile_save",profile,prKey),await write("profile_save",profile,prKey));assert.equal((await portal("profile")).profile.display_name,profile.display_name);assert.equal((await portal("profile")).profile.has_preference,true);
  await assert.rejects(write("profile_save",{...profile,language:"en"},prKey),/IDEMPOTENCY_CONFLICT/);
  await write("team_save",{member_id:a.member,job_title:"Responsable",skills:"Service et caisse"});assert.equal((await portal("team")).rows.find(x=>x.id===a.member).job_title,"Responsable");
  await assert.rejects(write("team_save",{member_id:b.member,job_title:"Interdit",skills:""}),/DENIED/);

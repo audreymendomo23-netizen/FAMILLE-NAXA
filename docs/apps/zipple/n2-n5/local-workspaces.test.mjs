@@ -96,6 +96,9 @@ test("ZIPPLE professional workspace pages on real GoTrue, Edge, PostgreSQL and b
   const connections=await openCommerce("NAXA SECURITY et partenaires","connections");await connections.getByLabel("Solution",{exact:true}).selectOption("naxa_security");await connections.getByLabel("Référence de l'établissement partenaire",{exact:true}).fill("SITE-TEST");await connections.getByLabel("Motif du raccordement",{exact:true}).fill("Demande navigateur de test");await connections.getByRole("button",{name:"Enregistrer la demande de raccordement",exact:true}).click();await connections.getByText(/SITE-TEST · Demande enregistrée — non connectée/).waitFor();await shot("12-connections");
   await connections.getByRole("button",{name:"Annuler la demande",exact:true}).click();await connections.getByText(/SITE-TEST · Annulée/).waitFor();
   console.log("ZIPPLE_BULK4_REAL_BROWSER_LOYALTY_DELIVERY_CONNECTIONS_PASS");
+  const locale=await openPortal("Profil","profile");await locale.getByLabel("Langue préférée",{exact:true}).selectOption("en");await locale.getByRole("button",{name:"Enregistrer le profil",exact:true}).click();await page.getByRole("heading",{name:"ZIPPLE management",exact:true}).waitFor();
+  await page.getByRole("button",{name:"Sign out",exact:true}).click();await page.getByLabel("Identifier",{exact:true}).fill(login);await page.getByLabel("Password",{exact:true}).fill(password);await page.getByRole("button",{name:"Sign in",exact:true}).click();await page.getByRole("heading",{name:"ZIPPLE management",exact:true}).waitFor();
+  assert.equal(await scalar("select language from zp_profile_details where member_id=$1",[member]),"en");console.log("ZIPPLE_PROFILE_LANGUAGE_APPLIED_PASS");
   await staff.close();
  }finally{if(browser)await browser.close();if(server)await new Promise(ok=>server.close(ok));await db.end()}
 });
