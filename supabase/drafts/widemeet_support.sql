@@ -9,7 +9,7 @@ create table public.wm_support_tickets(
  requester_id uuid not null references public.wm_accounts(id),
  agent_id uuid references public.wm_support_agents(account_id),
  subject text not null check(length(subject) between 1 and 120),
- category text not null check(category in ('account','meeting','billing','other')),
+ category text not null check(category in ('account','meeting','billing','privacy','other')),
  status text not null default 'open' check(status in ('open','assigned','waiting','closed')),
  created_at timestamptz not null default clock_timestamp(),
  updated_at timestamptz not null default clock_timestamp()
@@ -62,7 +62,7 @@ begin
  if tid is null then return null;end if;
  if p_action='support-create' then
   subj:=btrim(p_data->>'subject');cat:=p_data->>'category';b:=btrim(p_data->>'body');mid:=(p_data->>'message_id')::uuid;
-  if subj is null or length(subj) not between 1 and 120 or cat is null or cat not in ('account','meeting','billing','other') or b is null or length(b) not between 1 and 4000 or mid is null then return null;end if;
+  if subj is null or length(subj) not between 1 and 120 or cat is null or cat not in ('account','meeting','billing','privacy','other') or b is null or length(b) not between 1 and 4000 or mid is null then return null;end if;
   select * into t from public.wm_support_tickets where id=tid for update;
   if found then
    if t.requester_id<>aid or t.workspace_id<>s.workspace_id or t.subject<>subj or t.category<>cat or not exists(select 1 from public.wm_support_messages x where x.id=mid and x.ticket_id=tid and x.actor_id=aid and x.body=b and x.author_kind='requester') then return null;end if;
