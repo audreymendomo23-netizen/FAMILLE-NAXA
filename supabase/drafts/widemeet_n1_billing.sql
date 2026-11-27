@@ -223,7 +223,7 @@ grant execute on function public.wm_room_actor_for(text,uuid) to service_role;
 create function public.wm_room_creation_replay(p_hash text,p_room uuid,p_digest text,p_intent uuid)
 returns jsonb language sql security invoker stable set search_path=pg_catalog,public as $wm$
  select r.state from public.wm_rooms r join lateral public.wm_room_actor_for(p_hash,r.id) a on a.workspace_id=r.workspace_id and a.account_id=r.host_id
- where r.id=p_room and a.role in ('owner','promoteur','manager') and p_digest~'^[a-f0-9]{64} and r.state->>'creationDigest'=p_digest
+ where r.id=p_room and a.role in ('owner','promoteur','manager') and p_digest~'^[a-f0-9]{64}$' and r.state->>'creationDigest'=p_digest
  and (p_intent is null and not exists(select 1 from public.wm_paid_passes p where p.consumed_room_id=r.id) or p_intent is not null and exists(select 1 from public.wm_paid_passes p where p.consumed_room_id=r.id and p.intent_id=p_intent))
 $wm$;
 revoke all on function public.wm_room_creation_replay(text,uuid,text,uuid) from public,anon,authenticated;
