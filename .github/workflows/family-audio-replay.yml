@@ -192,10 +192,10 @@ jobs:
           docker rm -f wm-audio-egress wm-audio-lk wm-audio-redis || true
           rm -rf "$RUNNER_TEMP/wm-egress-out" "$RUNNER_TEMP/wm-audio-lk.yaml" "$RUNNER_TEMP/wm-egress.yaml"
 
-      - name: Upload sanitized Wave 02 evidence (audio)
+      - name: Upload sanitized Wave 03 evidence (audio)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wave02-evidence-audio
+          name: wave03-evidence-audio
           path: ${{ runner.temp }}/wm-wave-audio.jsonl
           if-no-files-found: warn

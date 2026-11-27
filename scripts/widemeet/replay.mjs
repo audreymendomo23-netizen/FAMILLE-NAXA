@@ -707,6 +707,13 @@ try{
   await hp.getByRole("button",{name:/Replay browser room/}).waitFor();
  }
  await hp.getByRole("navigation").getByRole("button",{name:"Accueil",exact:true}).click();
+ const waveInbox=hp.getByRole("region",{name:"Notifications",exact:true});
+ await waveInbox.getByLabel("Filtrer les notifications").waitFor();
+ await waveInbox.getByLabel("Filtrer les notifications").selectOption("unread");
+ await waveInbox.getByRole("status").filter({hasText:/Non lues : /}).waitFor();
+ await waveInbox.getByLabel("Filtrer les notifications").selectOption("read");
+ await waveInbox.getByLabel("Filtrer les notifications").selectOption("all");
+ pass("WAVE03 notification filter and authorized inbox view");
  await hp.getByRole("button",{name:"Mes rapports",exact:true}).click();
  await hp.getByRole("heading",{name:"Archives et comptes rendus",exact:true}).waitFor();
  pass("real browser workspace chat, concurrent rooms, polls, visible statistics and reports routes backed by GoTrue and Edge");

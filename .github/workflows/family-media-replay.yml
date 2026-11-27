@@ -109,10 +109,10 @@ jobs:
         if: always()
         run: docker rm -f naxa-lk || true
 
-      - name: Upload sanitized Wave 02 evidence (sfu)
+      - name: Upload sanitized Wave 03 evidence (sfu)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wave02-evidence-sfu
+          name: wave03-evidence-sfu
           path: ${{ runner.temp }}/wm-wave-sfu.jsonl
           if-no-files-found: warn
