@@ -21,13 +21,21 @@ export async function handle(request,env,fetcher=fetch){
  function upstream(x){return x.ok?reply(200,{result:x.result}):reply(x.status===401?401:x.status===403||x.result?.code==='42501'?403:x.status===429?429:x.status>=500?503:400,{error:x.result?.code==='42501'?'ACCESS_DENIED':'OPERATION_REFUSED'});}
  try{
   if(body.action==='login'||body.action==='recovery'){
+   if(!env.service)return reply(503,{error:'AUTH_NOT_CONFIGURED'});
    const phone=String(body.phone||'').replace(/[\s().-]/g,'');
    if(!/^\+[1-9]\d{7,14}$/.test(phone))return reply(400,{error:'INVALID_PHONE'});
-   if(body.action==='recovery'){const x=await post('/functions/v1/famille-account-lifecycle',{action:'request_recovery',app_code:'grillad',phone});return x.ok?reply(200,{result:{requested:true}}):upstream(x)}
-   if(typeof body.password!=='string'||body.password.length<1||body.password.length>256||!uuid.test(body.installation)||!['web','android'].includes(body.platform))return reply(400,{error:'INVALID_LOGIN'});
-   const x=await post('/functions/v1/famille-account-lifecycle',{action:'login',app_code:'grillad',phone,password:body.password,installation_id:body.installation,platform:body.platform,device_label:'GRILLAD '+body.platform});
-   if(!x.ok)return upstream(x);
-   const s=x.result?.session;if(!s?.access_token||!s?.refresh_token||x.result?.user?.must_change_password)return reply(403,{error:'ACCOUNT_SETUP_REQUIRED'});
+   const recovery=body.action==='recovery';
+   if(!recovery&&(typeof body.password!=='string'||body.password.length<1||body.password.length>256||!uuid.test(body.installation)||!['web','android'].includes(body.platform)))return reply(400,{error:'INVALID_LOGIN'});
+   const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('grillad:'+phone));const hash=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
+   async function control(path,data){const r=await fetcher(base+'/rest/v1/rpc/'+path,{method:'POST',headers:{apikey:env.service,Authorization:'Bearer '+env.service,'Content-Type':'application/json'},body:JSON.stringify(data),redirect:'error',signal:AbortSignal.timeout(15000)});return r.ok&&await r.json()===true}
+   const allowed=await control('grillad_auth_begin',{p_hash:hash,p_recovery:recovery});
+   if(recovery)return reply(200,{result:{requested:true}});
+   if(!allowed)return reply(429,{error:'TEMPORARILY_LOCKED'});
+   const x=await post('/auth/v1/token?grant_type=password',{phone,password:body.password});
+   if(!x.ok)return reply(401,{error:'INVALID_CREDENTIALS'});
+   const s=x.result;if(!s?.access_token||!s?.refresh_token||!uuid.test(s.user?.id)||s.user?.app_metadata?.must_change_password)return reply(403,{error:'ACCOUNT_SETUP_REQUIRED'});
+   let sid;try{sid=JSON.parse(atob(s.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).session_id}catch{return reply(403,{error:'SESSION'})}
+   if(!uuid.test(sid)||!await control('grillad_auth_finish',{p_hash:hash,p_user:s.user.id,p_session:sid,p_installation:body.installation,p_platform:body.platform}))return reply(403,{error:'DEVICE_OR_GRANT_DENIED'});
    const w=await post('/rest/v1/rpc/grillad_workspace',{},s.access_token);
    if(!w.ok||!Array.isArray(w.result)||!w.result.length)return reply(403,{error:'NO_WORKSPACE'});
    return reply(200,{result:{access:s.access_token,refresh:s.refresh_token,sites:w.result}});

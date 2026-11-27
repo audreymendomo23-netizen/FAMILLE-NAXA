@@ -107,3 +107,7 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_business_v1_assertions.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_attendance_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_attendance_v1_assertions.sql
+          psql -X -v ON_ERROR_STOP=1 -c 'create role service_role nologin bypassrls'
+          psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0004_prompt_0_4_account_lifecycle.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_auth_bridge_v1.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_auth_bridge_assertions.sql
