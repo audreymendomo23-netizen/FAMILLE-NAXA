@@ -60,13 +60,13 @@ private class ChatAudio{
   val (bytes,name,mime)=withContext(Dispatchers.IO){
    val resolver=context.contentResolver;val mime=resolver.getType(uri).orEmpty();require(mime in setOf("application/pdf","image/jpeg","image/png"))
    val name=resolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use{if(it.moveToFirst())it.getString(0) else null}?:"document"
-   val bytes=resolver.openInputStream(uri)?.use{boundedRead(it)}?:error("unavailable")
+   val bytes=resolver.openInputStream(uri)?.use{boundedRead(it)}?:throw IllegalStateException("unavailable")
    Triple(bytes,name,mime)
   };prepare(bytes,name,mime,"file")
  }}
  val saver=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")){uri:Uri?->
   val b=saveBytes;saveBytes=null
-  if(uri!=null&&b!=null)work{withContext(Dispatchers.IO){context.contentResolver.openOutputStream(uri,"w")?.use{it.write(b)}?:error("unavailable")}}
+  if(uri!=null&&b!=null)work{withContext(Dispatchers.IO){context.contentResolver.openOutputStream(uri,"w")?.use{it.write(b)}?:throw IllegalStateException("unavailable")}}
  }
  fun finishRecording(){
   val r=resources.recorder?:return;resources.recorder=null;val f=resources.capture;resources.capture=null

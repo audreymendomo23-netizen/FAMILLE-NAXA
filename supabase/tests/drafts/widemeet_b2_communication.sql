@@ -8,8 +8,10 @@ begin
  or has_function_privilege('authenticated','public.wm_display_action(text,text,jsonb)','EXECUTE')
  or has_function_privilege('anon','public.wm_display_transport_revoke(uuid)','EXECUTE')
  or has_function_privilege('authenticated','public.wm_group_chat(text,text,jsonb)','EXECUTE')
- or has_table_privilege('authenticated','public.wm_chat_group_messages','SELECT') then raise exception 'B2 unauthorized direct access';end if;
- if (select count(*) from pg_class where relname in ('wm_display_policy','wm_display_offers','wm_display_leases','wm_chat_groups','wm_chat_group_members','wm_chat_group_messages','wm_chat_group_reads') and relrowsecurity)<>7 then raise exception 'B2 RLS missing';end if;
+ or has_table_privilege('authenticated','public.wm_chat_group_messages','SELECT')
+ or has_table_privilege('authenticated','public.wm_chat_media','SELECT')
+ or has_function_privilege('anon','public.wm_chat_media_action(text,text,jsonb)','EXECUTE') then raise exception 'B2 unauthorized direct access';end if;
+ if (select count(*) from pg_class where relname in ('wm_display_policy','wm_display_offers','wm_display_leases','wm_chat_groups','wm_chat_group_members','wm_chat_group_messages','wm_chat_group_reads','wm_chat_media') and relrowsecurity)<>8 then raise exception 'B2 RLS missing';end if;
 end $wm$;
 insert into auth.users(id) values
  ('00000000-0000-4000-8000-0000000000b1'),('00000000-0000-4000-8000-0000000000b2'),
@@ -104,6 +106,27 @@ begin
  if public.wm_group_chat(h,'group-chat-send',jsonb_build_object('group_id',gid,'message_id',mid2,'body','After admission')) is null then raise exception 'new send refused';end if;
  if jsonb_array_length(public.wm_group_chat(m,'group-chat-thread',jsonb_build_object('group_id',gid))->'items') is distinct from 1 then raise exception 'new member delivery';end if;
  raise notice 'B2_GROUP_SQL_PASS: ACL, exact retry, privacy, rename, remove/rejoin and history boundary';
+ -- B2 files and voice share the same conversation ACL, not a public bucket or admin grant.
+ d:=jsonb_build_object('group_id',gid,'id','80000000-0000-4000-8000-0000000000b1','kind','file','mime','application/pdf','name','test.pdf','bytes',20,'sha256',repeat('a',64));
+ if public.wm_chat_media_action(h,'reserve',d) is null then raise exception 'media reserve refused';end if;
+ if public.wm_chat_media_action(h,'reserve',d) is null then raise exception 'media exact retry refused';end if;
+ if public.wm_chat_media_action(h,'reserve',jsonb_set(d,'{name}','"changed.pdf"')) is not null then raise exception 'media conflicting retry accepted';end if;
+ if public.wm_chat_media_action(t,'read',d) is not null then raise exception 'staged media visible';end if;
+ if public.wm_chat_media_action(t,'publish',d) is not null then raise exception 'foreign sender publish';end if;
+ if public.wm_chat_media_action(h,'publish',d)->>'state' is distinct from 'ready' then raise exception 'media publish refused';end if;
+ if public.wm_chat_media_action(t,'read',d) is null or public.wm_chat_media_action(o,'read',d) is not null then raise exception 'media group isolation';end if;
+ if public.wm_chat_media_action(t,'revoke',d) is not null then raise exception 'member revoked sender media';end if;
+ if public.wm_group_chat(h,'group-chat-remove',jsonb_build_object('group_id',gid,'member_id',third)) is null then raise exception 'media remove member';end if;
+ if public.wm_chat_media_action(t,'read',d) is not null then raise exception 'removed member read';end if;
+ if public.wm_group_chat(h,'group-chat-add',jsonb_build_object('group_id',gid,'member_id',third)) is null then raise exception 'media rejoin member';end if;
+ if public.wm_chat_media_action(t,'read',d) is not null or jsonb_array_length(public.wm_chat_media_action(t,'list',d)->'items') is distinct from 0 then raise exception 'media pre-admission leak';end if;
+ if public.wm_chat_media_action(h,'revoke',d)->>'state' is distinct from 'revoked' or public.wm_chat_media_action(h,'publish',d) is not null or public.wm_chat_media_action(h,'reserve',d) is not null or public.wm_chat_media_action(m,'read',d) is not null then raise exception 'revoked media revived';end if;
+ d:=jsonb_build_object('peer_id',guest,'id','80000000-0000-4000-8000-0000000000b2','kind','voice','mime','audio/ogg','name','voice.ogg','bytes',20,'sha256',repeat('b',64));
+ if public.wm_chat_media_action(h,'reserve',d) is null or public.wm_chat_media_action(h,'publish',d) is null then raise exception 'voice reserve/publish failed';end if;
+ if public.wm_chat_media_action(g,'read',jsonb_set(d,'{peer_id}',to_jsonb(host))) is null then raise exception 'voice peer refused';end if;
+ if public.wm_chat_media_action(m,'read',jsonb_set(d,'{peer_id}',to_jsonb(host))) is not null then raise exception 'voice manager leak';end if;
+ if public.wm_chat_media_action(o,'read',jsonb_set(d,'{peer_id}',to_jsonb(host))) is not null then raise exception 'voice tenant leak';end if;
+ raise notice 'B2_CHAT_MEDIA_SQL_PASS: service-only ACL, staging, exact retry, publish, direct/group access, revoke and history fence';
 end $wm$;
 reset role;
 rollback;
