@@ -58,3 +58,5 @@ Nouvelle campagne limitée à B3, révision code 2c406170d4e141ad1ea344c1173747d
 | B3.6 | 0 | Rouge |
 | B3.7 | 0 | Rouge |
 Total 2,5/7 = 35,7 %, +14,3 points vs 21,4 %. Indicateur de progression mixte (code partiel + qualification), couverture entièrement verte = 1/7 = 14,3 %. Objectif 25 points non atteint : ne pas modifier la méthode pour masquer les réserves. Prochaine priorité : résultats CI, correction des échecs B3, preuve du worker durable, UI réelle et synthèse/décisions contextualisées ; puis diarisation, traduction et sous-titres.
+
+Addendum de suivi : les quatre recettes de la révision technique 2c406170 sont maintenant visibles, toutes QUEUED au dernier contrôle : [gate 45994452464](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45994452464), [Replay 45994452353](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45994452353), [audio B3 45994452354](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45994452354), [SFU 45994452355](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45994452355). Aucun résultat terminal, jauge 35,7 % inchangée.
