@@ -34,13 +34,14 @@ export function ConnectReceiver({base,session,locale,onExit}){
  const g=await req("receive",{code});if(dead||n!==serial.current)return;if(g.pending===true)return;
  if(!Number.isSafeInteger(g.expires_at)||g.expires_at<=Date.now()||typeof g.identity!=="string"||!g.identity.startsWith("wm-display-")||typeof g.token!=="string")throw Error("invalid grant");
  if(room.current)return;const u=new URL(g.url);if(u.protocol!=="wss:"||u.username||u.password||u.pathname!=="/"||u.search||u.hash)throw Error("invalid endpoint");
- const r=new Room({adaptiveStream:true,dynacast:true});room.current=r;
+ // Read-only receiver: keep subscriptions active even while the first video tile is not visible.
+ const r=new Room({adaptiveStream:false,dynacast:false});room.current=r;
  r.on(RoomEvent.TrackSubscribed,t=>{if(room.current!==r||n!==serial.current)return;const el=t.attach();el.autoplay=true;el.muted=true;el.playsInline=true;if(t.kind==="video"){el.style.width="100%";el.style.maxHeight="75vh";el.style.objectFit="contain"}tiles.current?.appendChild(el)});
  r.on(RoomEvent.TrackUnsubscribed,t=>{for(const el of t.detach())el.remove()});
  r.on(RoomEvent.Disconnected,()=>{if(room.current===r&&n===serial.current){void stop();E(true)}});
  r.on(RoomEvent.Reconnecting,()=>{if(room.current===r&&n===serial.current){void stop();E(true)}});
  await r.connect(u.origin,g.token);if(n!==serial.current||dead){await r.disconnect();return}I(g.identity);S("connected");C(code);
- }catch{if(!dead&&n===serial.current){await stop();E(true)}}finally{poll=false}}
+ }catch(e){if(!dead&&n===serial.current){const kind=String(e?.name??"");const msg=String(e?.message??"");const category=/ICE|peer connection|negotiat/i.test(msg)?"peer":/timed? out|timeout/i.test(msg)?"timeout":/signal|websocket/i.test(msg)?"signaling":"other";console.warn("WM_CONNECT_RECEIVER_FAILURE",["ConnectionError","Error","DOMException"].includes(kind)?kind:"Other",category);await stop();E(true)}}finally{poll=false}}
  void tick();const t=setInterval(tick,5000);return()=>{dead=true;clearInterval(t)}},[code,session.access_token]);
  return <section className="card" aria-label={tr("Récepteur WideMeet","WideMeet receiver")}><button onClick={()=>{void stop();onExit?.()}}>{tr("Quitter le récepteur","Exit receiver")}</button><h2>{tr("Écran distant (lecture seule)","Remote display (view only)")}</h2><p>{tr("Connectez-vous sur un autre appareil avec le même compte. L’écran est muet : le son reste sur la source.","Sign in on another device with the same account. The display is muted: sound stays on the source.")}</p>
  {error&&<p role="alert">{tr("Appairage ou affichage terminé/non confirmé. Créez un nouveau code.","Pairing or display ended/unconfirmed. Create a new code.")}</p>}

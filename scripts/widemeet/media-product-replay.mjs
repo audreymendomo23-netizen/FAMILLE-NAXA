@@ -85,7 +85,7 @@ try{
  assert.equal(hg.url,connectUi?connectUiWss:"wss://127.0.0.1:7881");assert.equal(gg.url,hg.url);
  // Test private signaling on loopback only; TLS/public routing separately qualified.
  await listen(proxy.server,7881);await listen(app,4173);
- browser=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream","--autoplay-policy=no-user-gesture-required"]});
+ browser=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream","--autoplay-policy=no-user-gesture-required","--disable-features=WebRtcHideLocalIpsWithMdns"]});
  const ctx=await browser.newContext({permissions:["camera","microphone"]}),a=await ctx.newPage(),b=await ctx.newPage();
  async function joinMedia(page,t){await page.goto(origin);await page.evaluate(async token=>{
  const lk=window.LivekitClient,r=new lk.Room({adaptiveStream:false,dynacast:false});window.r=r;window.received=[];

@@ -11,6 +11,7 @@ import java.net.URI
 import java.util.UUID
 import javax.crypto.Cipher
 
+internal class AuthRequestRejected(val status:Int):IllegalStateException("request_rejected")
 class AuthGateway(private val context:Context,private val base:String){
  private val lifecycle=Mutex()
  private val vault=SessionVault(context)
@@ -41,7 +42,7 @@ class AuthGateway(private val context:Context,private val base:String){
    c.setRequestProperty("Content-Type","application/json");c.setRequestProperty("Cache-Control","no-store")
    if(token!=null)c.setRequestProperty("Authorization","Bearer "+token)
    c.outputStream.use{it.write(body.toString().toByteArray(Charsets.UTF_8))}
-   require(c.responseCode in 200..299){"request_rejected"}
+   val status=c.responseCode;if(status !in 200..299)throw AuthRequestRejected(status)
    if(c.responseCode==204)return JSONObject()
    val limit=if(action=="chat-media")1405000 else 131072
    val raw=c.inputStream.bufferedReader().use{reader->val out=StringBuilder();val buf=CharArray(8192);while(true){val n=reader.read(buf);if(n<0)break;require(out.length+n<=limit);out.append(buf,0,n)};out.toString()};return JSONObject(raw)

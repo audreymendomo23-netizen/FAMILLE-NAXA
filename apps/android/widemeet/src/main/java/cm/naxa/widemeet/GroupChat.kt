@@ -26,16 +26,16 @@ private fun groupRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("items
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
  fun close(){group=null;members=emptyList();messages=emptyList();body="";query="";pending=null;before=null;next=null;reply=null;mentions=emptySet();reports=emptyList()}
  LaunchedEffect(session.deviceId){work{load()}}
- LaunchedEffect(group?.optString("id"),query,before,busy,session.deviceId,session.accessToken){
-  val id=group?.optString("id")?:return@LaunchedEffect;if(busy)return@LaunchedEffect
+ LaunchedEffect(group?.optString("id"),query,before,session.deviceId,session.accessToken){
+  val id=group?.optString("id")?:return@LaunchedEffect
   var version:String?=null
-  while(true){if(busy)return@LaunchedEffect
+  while(true){if(busy){version=null;delay(150);continue}
    try{
     val v=req("watch",JSONObject().put("group_id",id).put("query",query).put("before_id",before?:JSONObject.NULL).put("limit",50).put("after",version?:JSONObject.NULL))
-    if(busy)return@LaunchedEffect
+    if(busy){version=null;continue}
     version=v.getString("version");require(Regex("^[a-f0-9]{64}$").matches(version))
     if(v.getBoolean("changed")){val p=v.getJSONObject("thread");messages=groupRows(p);val a=v.getJSONArray("members");members=(0 until a.length()).map{a.getJSONObject(it)};next=if(p.isNull("next_before_id"))null else p.getString("next_before_id")}
-   }catch(e:CancellationException){throw e}catch(e:Exception){messages=emptyList();members=emptyList();next=null;reply=null;mentions=emptySet();reports=emptyList();error=true;version=null;delay(1200)}
+   }catch(e:CancellationException){throw e}catch(e:Exception){if(busy){version=null;continue};if(e is AuthRequestRejected&&e.status==429){try{thread(id,query,before);version=null;delay(750);continue}catch(c:CancellationException){throw c}catch(_:Exception){}};messages=emptyList();members=emptyList();next=null;reply=null;mentions=emptySet();reports=emptyList();error=true;version=null;delay(1200)}
   }
  }
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
