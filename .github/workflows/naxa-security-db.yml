@@ -1,0 +1,32 @@
+name: NAXA SECURITY — isolated database contract
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/naxa-security/contracts/**'
+      - '.github/workflows/naxa-security-db.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  sql:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: security_test
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready" --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: security_test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: psql -v ON_ERROR_STOP=1 -f docs/naxa-security/contracts/db-fixture.sql -f docs/naxa-security/contracts/backend-candidate.sql -f docs/naxa-security/contracts/backend-assertions.sql

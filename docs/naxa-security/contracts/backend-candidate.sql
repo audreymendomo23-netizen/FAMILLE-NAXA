@@ -1,0 +1,23 @@
+-- NAXA SECURITY candidate schema. Isolated test only; not a production migration.
+begin;
+create table public.sec_organizations(id uuid primary key default gen_random_uuid(), name text not null check(length(name) between 1 and 200), active boolean not null default true);
+create table public.sec_memberships(organization_id uuid not null references public.sec_organizations(id), user_id uuid not null references auth.users(id), role text not null check(role in ('owner','manager','operator','viewer')), active boolean not null default true, primary key(organization_id,user_id));
+create table public.sec_sites(id uuid primary key default gen_random_uuid(), organization_id uuid not null references public.sec_organizations(id), name text not null check(length(name) between 1 and 200), active boolean not null default true, unique(organization_id,id));
+create table public.sec_site_memberships(organization_id uuid not null,site_id uuid not null,user_id uuid not null,active boolean not null default true, primary key(organization_id,site_id,user_id),foreign key(organization_id,site_id) references public.sec_sites(organization_id,id),foreign key(organization_id,user_id) references public.sec_memberships(organization_id,user_id));
+create table public.sec_devices(id uuid primary key default gen_random_uuid(),organization_id uuid not null,site_id uuid not null,label text not null,kind text not null check(kind in ('camera','gateway','smoke','fire','audio','tracker','access','environment')),observed_at timestamptz,foreign key(organization_id,site_id) references public.sec_sites(organization_id,id),unique(organization_id,site_id,id));
+create table public.sec_incidents(id uuid primary key default gen_random_uuid(),organization_id uuid not null,site_id uuid not null,device_id uuid,subject text not null,priority text not null check(priority in ('P1','P2','P3','P4')),state text not null check(state in ('new','review','confirmed','assigned','in_progress','resolved','closed','reopened')),occurred_at timestamptz not null default now(),foreign key(organization_id,site_id) references public.sec_sites(organization_id,id),foreign key(organization_id,site_id,device_id) references public.sec_devices(organization_id,site_id,id));
+alter table public.sec_organizations enable row level security;
+alter table public.sec_memberships enable row level security;
+alter table public.sec_sites enable row level security;
+alter table public.sec_site_memberships enable row level security;
+alter table public.sec_devices enable row level security;
+alter table public.sec_incidents enable row level security;
+revoke all on public.sec_organizations,public.sec_memberships,public.sec_sites,public.sec_site_memberships,public.sec_devices,public.sec_incidents from public,anon,authenticated;
+grant select on public.sec_organizations,public.sec_memberships,public.sec_sites,public.sec_site_memberships,public.sec_devices,public.sec_incidents to authenticated;
+create policy sec_member_self on public.sec_memberships for select to authenticated using(user_id=(select auth.uid()) and active);
+create policy sec_org_member on public.sec_organizations for select to authenticated using(active and exists(select 1 from public.sec_memberships m where m.organization_id=sec_organizations.id and m.user_id=(select auth.uid()) and m.active));
+create policy sec_site_member_self on public.sec_site_memberships for select to authenticated using(user_id=(select auth.uid()) and active and exists(select 1 from public.sec_memberships m where m.organization_id=sec_site_memberships.organization_id and m.user_id=(select auth.uid()) and m.active));
+create policy sec_site_read on public.sec_sites for select to authenticated using(active and exists(select 1 from public.sec_organizations o where o.id=sec_sites.organization_id) and exists(select 1 from public.sec_site_memberships sm where sm.organization_id=sec_sites.organization_id and sm.site_id=sec_sites.id and sm.user_id=(select auth.uid())));
+create policy sec_device_read on public.sec_devices for select to authenticated using(exists(select 1 from public.sec_sites s where s.organization_id=sec_devices.organization_id and s.id=sec_devices.site_id));
+create policy sec_incident_read on public.sec_incidents for select to authenticated using(exists(select 1 from public.sec_sites s where s.organization_id=sec_incidents.organization_id and s.id=sec_incidents.site_id));
+commit;

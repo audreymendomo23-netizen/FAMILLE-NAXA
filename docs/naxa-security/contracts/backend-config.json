@@ -1,0 +1,15 @@
+{
+  "projectRef": "idupfjbkwjcavyisxteo",
+  "url": "https://idupfjbkwjcavyisxteo.supabase.co",
+  "appId": "naxa-security",
+  "mode": "unprovisioned",
+  "resources": [
+    "sec_organizations",
+    "sec_memberships",
+    "sec_sites",
+    "sec_site_memberships",
+    "sec_devices",
+    "sec_incidents"
+  ],
+  "auth": "Dedicated SECURITY account provisioning required; do not reuse other application identities or accept a password before provisioning."
+}
