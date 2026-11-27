@@ -85,3 +85,12 @@ test("N2 lobby separates RSVP from admission and fences all live collaboration",
  assert.ok(mediaPermission(r,guest,1000));r=run(r,guest,"chat","admitted");assert.equal(r.events.at(-1).action,"chat");
  r=run(r,guest,"respond","declined");assert.equal(mediaPermission(r,guest,1000),null);
 });
+
+test("temporary moderator delegation grants only explicit permissions and cannot record or delegate",()=>{
+ let r=open();const third={...guest,memberId:"other0003"};r=run(r,host,"invite_member",null,third.memberId);r=run(r,third,"respond","accepted");
+ r=run(r,host,"set_moderator",["microphone","poll"],guest.memberId);
+ r=run(r,guest,"mute",null,third.memberId);assert.equal(mediaPermission(r,third,1000).microphone,false);
+ assert.throws(()=>run(r,guest,"exclude",null,third.memberId),/forbidden/);assert.throws(()=>run(r,guest,"record",true),/forbidden/);assert.throws(()=>run(r,guest,"set_moderator",["end"],third.memberId),/forbidden/);assert.throws(()=>run(r,guest,"end"),/forbidden/);
+ r=run(r,guest,"poll",["Yes","No"],"poll00001");r=run(r,guest,"close_poll",null,"poll00001");
+ r=run(r,host,"set_moderator",[],guest.memberId);assert.throws(()=>run(r,guest,"allow_mic",null,third.memberId),/forbidden/);
+});

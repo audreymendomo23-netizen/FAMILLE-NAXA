@@ -298,6 +298,11 @@ try{
  assert.ok((await ok(room+"/read",{room_id:mid},mhs.access_token)).events.some(e=>e.value==="Private among two of three"));
  assert.ok(!(await ok(room+"/read",{room_id:mid},mos.access_token)).events.some(e=>e.value==="Private among two of three"));
  pass("actual N2 late invitation, admission lock/unlock and private chat denied to admitted third member");
+ await mcmd(mhs.access_token,"set_moderator",["microphone"],mg.id);await mcmd(mgs.access_token,"mute",null,mo.id);
+ assert.equal((await ok(room+"/read",{room_id:mid},mos.access_token)).participants.find(p=>p.memberId===mo.id).mic,false);
+ const forbiddenMod={room_id:mid,request_id:randomUUID(),expected_revision:ms.revision,action:"exclude",target:mo.id};assert.equal((await request(room+"/command",forbiddenMod,mgs.access_token)).status,409);
+ await mcmd(mhs.access_token,"set_moderator",[],mg.id);assert.equal((await request(room+"/command",{...forbiddenMod,request_id:randomUUID(),expected_revision:ms.revision,action:"allow_mic"},mgs.access_token)).status,409);
+ pass("actual N2 temporary moderator permission, denied escalation and immediate revocation");
  await mcmd(mhs.access_token,"end");
  await success(base+"/rest/v1/wm_room_entitlements?workspace_id=eq."+minuteW,{valid_until:new Date(Date.now()+60*86400000).toISOString()},service,service,"PATCH");
  const series={series_id:randomUUID(),room_ids:[randomUUID(),randomUUID(),randomUUID()],title:"Series fixture",description:"UTC recurring",scheduled_ms:Date.now()+60000,duration_minutes:10,invitees:[mg.id],recurrence:"weekly",interval:1};
