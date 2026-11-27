@@ -19,7 +19,7 @@ class Bulk2LiveDeviceTest {
   val password=requireNotNull(args.getString("zippleFixturePassword"));val login=requireNotNull(args.getString("zippleFixtureLogin"))
   val itemNo=requireNotNull(args.getString("zippleSplitNumber"));val amountNo=requireNotNull(args.getString("zippleAmountNumber"));val mixedNo=requireNotNull(args.getString("zippleMixedNumber"))
   fun awaitText(text:String){compose.waitUntil(30000){compose.onAllNodesWithText(text,substring=false).fetchSemanticsNodes().isNotEmpty()}}
-  fun click(text:String){awaitText(text);compose.onNodeWithText(text,substring=false).performScrollTo().performClick()}
+  fun click(text:String){val matcher=hasText(text,substring=false) and hasClickAction() and isEnabled();compose.waitUntil(30000){compose.onAllNodes(matcher).fetchSemanticsNodes().size==1};compose.onNode(matcher).performScrollTo().performClick()}
   fun input(text:String,value:String){awaitText(text);compose.onNodeWithText(text,substring=false).performScrollTo().performTextInput(value)}
   input("Identifiant",login);input("Mot de passe",password);click("Se connecter")
   awaitText("Configurer votre code local");input("PIN","1234");click("Continuer")

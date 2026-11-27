@@ -82,8 +82,8 @@ declare m public.zp_members;x public.zp_menu_items;y public.zp_menu_items;begin
 end $$;
 create or replace function public.zp_close_table(p_access text,p_site uuid,p_table_session uuid) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;begin m:=public.zp_business_actor(p_access,p_site);if not public.zp_can_operate(m.id,p_site,'table') then raise exception 'DENIED';end if;
- perform 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id for update;
  perform 1 from public.zp_table_sessions where id=p_table_session and org_id=m.org_id and site_id=p_site and closed_at is null for update;if not found then raise exception 'DENIED';end if;
+ perform 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id for update;
  if exists(select 1 from public.zp_orders o where (o.table_session_id=p_table_session or o.billing_session_id=p_table_session) and o.status<>'cancelled' and (o.status<>'served' or not exists(select 1 from public.zp_cash_receipts r where r.order_id=o.id) or exists(select 1 from public.zp_credit_sales s where s.order_id=o.id and s.split_mode is not null and s.balance_xaf>0))) then raise exception 'TABLE_HAS_OPEN_ORDERS';end if;
  update public.zp_table_sessions set closed_at=now() where id=p_table_session;return true;end $$;
 create or replace function public.zp_open_cash(p_access text,p_site uuid,p_opening bigint) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
