@@ -41,7 +41,12 @@ export async function startConnectUiReplay({browser,sourceSession,receiverSessio
   });
   await Promise.all([listen(signaling,7884),listen(app,4174)]);
   context=await browser.newContext({ignoreHTTPSErrors:true});
-  const source=await context.newPage(),receiver=await context.newPage();
+  const source=await context.newPage(),receiver=await context.newPage(),diagnostics=[];
+  for(const [label,page] of [["source",source],["receiver",receiver]]){
+   page.on("response",r=>{const u=new URL(r.url());if(u.pathname.endsWith("/widemeet-room/connect")){let action="unknown";try{action=r.request().postDataJSON()?.action??"unknown"}catch{}if(["offer","preview","confirm","receive","source-status","source-stop","receiver-stop","policy"].includes(action))diagnostics.push(label+" "+action+" HTTP "+r.status())}else if(u.pathname==="/rtc/validate")diagnostics.push(label+" rtc validate HTTP "+r.status())});
+   page.on("requestfailed",r=>{const u=new URL(r.url());if(u.port==="7884"||u.port==="4174")diagnostics.push(label+" request failed "+u.pathname+" "+(r.failure()?.errorText??"unknown"))});
+   page.on("websocket",ws=>{const u=new URL(ws.url());if(u.port==="7884"){diagnostics.push(label+" WSS created "+u.pathname);ws.on("close",()=>diagnostics.push(label+" WSS closed"));ws.on("socketerror",()=>diagnostics.push(label+" WSS error"))}});
+  }
   for(const [page,kind,session] of [[source,"source",sourceSession],[receiver,"receiver",receiverSession]]){
    await page.goto(connectUiOrigin);await page.waitForFunction(()=>typeof window.mountConnect==="function");
    await page.evaluate(({kind,session,roomId})=>window.mountConnect(kind,session,roomId),{kind,session,roomId});
@@ -53,8 +58,12 @@ export async function startConnectUiReplay({browser,sourceSession,receiverSessio
   await source.getByLabel("Code de l’écran",{exact:true}).fill("wm-connect:"+code);
   await source.getByRole("button",{name:"Vérifier l’écran",exact:true}).click();
   await source.getByText("Confirmer cet écran : B2 écran interface",{exact:true}).waitFor();
-  await source.getByRole("button",{name:"Confirmer l’appairage",exact:true}).click();
-  await receiver.getByRole("status").filter({hasText:/^Affichage connecté$/}).waitFor({timeout:20000});
+  const [confirmResponse]=await Promise.all([source.waitForResponse(r=>r.url().endsWith("/widemeet-room/connect")&&r.request().postDataJSON()?.action==="confirm"),source.getByRole("button",{name:"Confirmer l’appairage",exact:true}).click()]);
+  assert.equal(confirmResponse.status(),200);assert.equal((await confirmResponse.json()).confirmed,true);
+  try{await receiver.getByRole("status").filter({hasText:/^Affichage connecté$/}).waitFor({timeout:20000})}catch(e){
+   // Only fixed UI status/HTTP diagnostics, no token, code, full request URL or private data.
+   console.error("B2_CONNECT_UI_DIAGNOSTICS",JSON.stringify({events:diagnostics.slice(-35),alert:await receiver.getByRole("alert").count(),waiting:await receiver.getByText("En attente de confirmation",{exact:true}).count(),idle:await receiver.getByRole("button",{name:"Créer un code",exact:true}).count(),displayCount:(await sfu.listParticipants("wm-"+roomId)).filter(p=>p.identity.startsWith("wm-display-")).length}));throw e
+  }
   await receiver.waitForFunction(()=>[...document.querySelectorAll("video")].some(v=>v.videoWidth>0&&v.readyState>=2),{},{timeout:20000});
   assert.equal(await receiver.getByRole("button",{name:/micro|caméra|partager|chat/i}).count(),0);
   assert.equal(await receiver.locator("audio").evaluateAll(els=>els.every(a=>a.muted)),true);
