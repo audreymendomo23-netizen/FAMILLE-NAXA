@@ -85,4 +85,4 @@ jobs:
           arch: x86_64
           target: google_apis
           disable-animations: true
-          script: gradle --no-daemon :zipple:connectedDebugAndroidTest
+          script: bash docs/apps/zipple/n1/android-device-recipe.sh
