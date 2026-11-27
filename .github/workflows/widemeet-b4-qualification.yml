@@ -1,0 +1,157 @@
+name: WideMeet B4 — isolated reporting qualification
+on:
+  pull_request:
+    branches: [test/widemeet-b4-qualification-20261127]
+    types: [opened, synchronize, reopened]
+    paths-ignore: ['docs/**']
+permissions:
+  contents: read
+concurrency:
+  group: widemeet-b4-qualification-${{ github.event.pull_request.head.sha }}
+  cancel-in-progress: false
+jobs:
+  identity-sql:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: fixture_password
+        ports: [5432:5432]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: fixture_password
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+          create role anon;
+          create role authenticated;
+          create role service_role bypassrls;
+          create schema auth;
+          create table auth.users(id uuid primary key);
+          SQL
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_identity.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_identity.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_n3_rooms.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_rooms.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_billing.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_billing.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_external.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n3_recording.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_recording.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n3_recording_archive.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_minutes.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_minutes.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_tasks.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_tasks.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_series.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_presence.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_expiry.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_expiry.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_notifications.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_reports.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_support.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_workspace_centers.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_b4.sql
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm run build --workspace @famille/widemeet-web
+      - run: node scripts/widemeet/pdf-replay.mjs
+      - name: Validate actual Excel workbook with independent reader
+        run: |
+          node scripts/widemeet/xlsx-replay.mjs "$RUNNER_TEMP/wm-report.xlsx"
+          python -m pip install --quiet openpyxl==3.1.5
+          python -c 'import os,openpyxl; w=openpyxl.load_workbook(os.environ["RUNNER_TEMP"]+"/wm-report.xlsx"); assert len(w.sheetnames)==4; assert w["Synthèse"]["B2"].value=="=1+1 & réunion"; assert w["Synthèse"]["B2"].data_type=="s"; assert w["Présences"]["D2"].value==1000; print("WIDEMEET_XLSX_PASS")'
+      - run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
+          # Hosted Ubuntu runner already supplies Chromium libraries; verify by launching.
+          npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch(); await b.close();'
+      - run: npx playwright test --config apps/web/widemeet/playwright.config.mjs
+      - run: |
+          test -s apps/web/widemeet/dist/index.html
+          test -s apps/web/widemeet/dist/sw.js
+          test -s apps/web/widemeet/dist/manifest.webmanifest
+  replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+      - name: Start disposable Supabase, never linked
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wm-replay"
+          cd "$RUNNER_TEMP/wm-replay"
+          supabase init
+          supabase start
+          supabase status -o env > "$RUNNER_TEMP/wm-replay.env"
+          chmod 600 "$RUNNER_TEMP/wm-replay.env"
+      - name: Install only WideMeet drafts into disposable PostgreSQL
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/wm-replay.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          if ! command -v psql >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y postgresql-client
+          fi
+          psql --version
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_identity.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_n3_rooms.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_billing.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_external.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_minutes.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_tasks.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_series.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_presence.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_expiry.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_notifications.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_reports.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_support.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_workspace_centers.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "notify pgrst, 'reload schema'"
+      - name: Build Web and prepare isolated browser TLS
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
+          npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch(); await b.close();'
+          VITE_WIDEMEET_AUTH_URL=https://127.0.0.1:8443/functions/v1/widemeet-auth VITE_WIDEMEET_SIGNUP_TEST=true VITE_WIDEMEET_RECOVERY_ENABLED=true VITE_WIDEMEET_MINUTES_ENABLED=true VITE_WIDEMEET_SERIES_ENABLED=true VITE_WIDEMEET_PRESENCE_ENABLED=true VITE_WIDEMEET_NOTICES_ENABLED=true VITE_WIDEMEET_REPORTS_ENABLED=true VITE_WIDEMEET_EXTERNAL_ENABLED=true npm run build --workspace @famille/widemeet-web
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=127.0.0.1' -addext 'subjectAltName=IP:127.0.0.1' -keyout "$RUNNER_TEMP/wm-replay.key" -out "$RUNNER_TEMP/wm-replay.crt" 2>/dev/null
+          chmod 600 "$RUNNER_TEMP/wm-replay.key"
+      - name: Execute real two-account Edge and Chromium Replay
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/wm-replay.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export WM_WORKSPACE_CENTERS_QUALIFIED=true WM_SUPPORT_QUALIFIED=true WM_AUTH_QUALIFIED=true WM_SERIES_QUALIFIED=true WM_MINUTES_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_NOTICES_QUALIFIED=true WM_REPORTS_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_RECOVERY_KEY_QUALIFIED=true WM_BILLING_TEST=true WM_SIGNUP_QUALIFIED=true WM_AUTH_ALIAS_DOMAIN=example.test WM_ROOM_QUALIFIED=true WM_MEDIA_QUALIFIED=false WM_ALLOWED_ORIGINS=https://127.0.0.1:8443
+          export WM_REPLAY_KEY="$RUNNER_TEMP/wm-replay.key" WM_REPLAY_CERT="$RUNNER_TEMP/wm-replay.crt"
+          node scripts/widemeet/replay.mjs
+      - name: Stop disposable stack
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP/wm-replay" && supabase stop --no-backup
