@@ -295,6 +295,12 @@ begin
   if exists(select 1 from grillad_private.service_policy where org=p_org and site=p_site) then raise exception 'GRILLAD_SERVICE_ALREADY_CONFIGURED' using errcode='22023';end if;
   insert into grillad_private.service_policy(org,site,start_minute,effective_from,enabled) values(p_org,p_site,n::integer,d,true);
   result:=jsonb_build_object('start_minute',n,'effective_from',d,'enabled',true);
+ when 'employee_request' then
+  result:=grillad_private.central_request(p_org,p_site,p_event,p_action,p_payload);
+ when 'renewal_request' then
+  result:=grillad_private.central_request(p_org,p_site,p_event,p_action,p_payload);
+ when 'central_request_cancel' then
+  result:=grillad_private.central_request(p_org,p_site,p_event,p_action,p_payload);
  when 'schedule_service_hours' then
   if r<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
   n:=(p_payload->>'start_minute')::bigint;d:=(p_payload->>'effective_from')::date;reason:=btrim(p_payload->>'reason');

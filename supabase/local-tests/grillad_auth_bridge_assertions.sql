@@ -95,6 +95,13 @@ begin
  v:=public.grillad_action(o,s,gen_random_uuid(),'schedule_service_hours',jsonb_build_object('start_minute',1200,'effective_from',today+2,'reason','Horaire futur'));
  if not(v->>'scheduled')::boolean or (public.grillad_pilotage_status(o,s)#>>'{service,start_minute}')::int<>1080 or jsonb_array_length(public.grillad_pilotage_status(o,s)->'service_revisions')<>1 then raise exception 'future schedule';end if;
  begin perform public.grillad_action(o,s,gen_random_uuid(),'schedule_service_hours',jsonb_build_object('start_minute',0,'effective_from',today,'reason','Rewrite'));raise exception 'retroactive schedule';exception when invalid_parameter_value then null;end;
+ e:=gen_random_uuid();p:='{"phone":"+237699000009","name":"Collaborateur test","role":"seller"}';v:=public.grillad_action(o,s,e,'employee_request',p);
+ if v->>'status'<>'pending' or public.grillad_action(o,s,e,'employee_request',p)<>v then raise exception 'employee request replay';end if;
+ begin perform public.grillad_action(o,s,gen_random_uuid(),'employee_request',p);raise exception 'duplicate employee request';exception when invalid_parameter_value then null;end;
+ v:=public.grillad_action(o,s,gen_random_uuid(),'renewal_request','{"plan":"grillad_premium_year"}');
+ if v->>'status'<>'pending' or not exists(select 1 from jsonb_array_elements(public.grillad_pilotage_status(o,s)->'central_requests') x where x->>'kind'='renewal' and (x->>'amount')::int=60000) then raise exception 'renewal quote';end if;
+ begin perform public.grillad_central_queue(10);raise exception 'central queue leaked';exception when insufficient_privilege then null;end;
+ perform public.grillad_action(o,s,gen_random_uuid(),'central_request_cancel',jsonb_build_object('request',e,'reason','Annulé'));
 end $$;
 reset role;
 set role authenticated;

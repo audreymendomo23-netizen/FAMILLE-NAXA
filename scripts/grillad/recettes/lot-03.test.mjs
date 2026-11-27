@@ -16,4 +16,5 @@ mutate('dimension_target',{day:'2026-11-27',kind:'family',subject:'Poulet',amoun
 mutate('set_site_enabled',{site:item,enabled:false,reason:'Pause'});
 mutate('missing_departure_request',{arrival:item,seconds:30,reason:'Oubli'});mutate('missing_departure_decide',{request:item,decision:'approved',reason:'Vérifié'});
 mutate('schedule_service_hours',{start_minute:1200,effective_from:'2026-12-01',reason:'Horaire futur'});
+mutate('employee_request',{phone:'+237699000009',name:'Collaborateur test',role:'seller'});mutate('renewal_request',{plan:'grillad_premium_year'});mutate('central_request_cancel',{request:item,reason:'Annulation'});
 for(const [i,c] of cases.entries()){test('GRC-'+String(64+i*2).padStart(3,'0')+' '+c.name+' caller',route(c));test('GRC-'+String(65+i*2).padStart(3,'0')+' '+c.name+' anonymous denied',anonymous(c))}

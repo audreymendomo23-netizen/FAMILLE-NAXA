@@ -112,4 +112,62 @@ begin
 end $$;
 revoke all on function grillad_private.set_site_enabled(uuid,uuid,jsonb) from public,anon,authenticated;
 
+-- Owner requests central onboarding or renewal; never grants access or confirms money locally.
+create table grillad_private.central_requests(
+ id uuid primary key,org uuid not null,site uuid not null,actor uuid not null,
+ kind text not null check(kind in ('employee','renewal')), details jsonb not null,
+ status text not null default 'pending' check(status in ('pending','cancelled','processed','rejected')),
+ created_at timestamptz not null default now(),resolved_at timestamptz,resolution text,
+ foreign key(org,site) references grillad_private.enabled_sites(org,site));
+create unique index grillad_central_pending_employee on grillad_private.central_requests(org,site,(details->>'phone')) where kind='employee' and status='pending';
+create unique index grillad_central_pending_renewal on grillad_private.central_requests(org) where kind='renewal' and status='pending';
+alter table grillad_private.central_requests enable row level security;
+revoke all on grillad_private.central_requests from public,anon,authenticated;
+create function grillad_private.central_request(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare u uuid:=auth.uid();k text;d jsonb;phone text;desired text;why text;price bigint;r grillad_private.central_requests%rowtype;
+begin
+ if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+ perform pg_advisory_xact_lock(hashtextextended('grillad-network:'||p_org::text,0));
+ if p_action='central_request_cancel' then
+  select * into r from grillad_private.central_requests where id=(p_payload->>'request')::uuid and org=p_org and site=p_site for update;
+  if not found then raise exception 'GRILLAD_REQUEST_DENIED' using errcode='42501';end if;
+  why:=btrim(p_payload->>'reason');
+  if r.status<>'pending' or why is null or length(why) not between 1 and 300 then raise exception 'GRILLAD_REQUEST_STATE' using errcode='22023';end if;
+  update grillad_private.central_requests set status='cancelled',resolved_at=now(),resolution=why where id=r.id;
+  return jsonb_build_object('id',r.id,'status','cancelled');
+ elsif p_action='employee_request' then
+  k:='employee';phone:=p_payload->>'phone';desired:=p_payload->>'role';why:=btrim(p_payload->>'name');
+  if phone is null or phone !~ '^\+[1-9][0-9]{7,14}$' or desired is null or desired not in ('seller','manager') or why is null or length(why) not between 2 and 100 then raise exception 'GRILLAD_EMPLOYEE_INPUT' using errcode='22023';end if;
+  d:=jsonb_build_object('phone',phone,'name',why,'role',desired);
+ elsif p_action='renewal_request' then
+  k:='renewal';desired:=p_payload->>'plan';
+  price:=case desired when 'grillad_access_month' then 2000 when 'grillad_access_year' then 24000 when 'grillad_premium_month' then 6000 when 'grillad_premium_year' then 60000 else null end;
+  if price is null or not exists(select 1 from famille_core.plans p join famille_core.applications a on a.id=p.app_id where a.code='grillad' and p.code=desired and p.status='active' and p.amount_fcfa=price) then raise exception 'GRILLAD_PLAN' using errcode='22023';end if;
+  d:=jsonb_build_object('plan',desired,'amount',price,'currency','FCFA');
+ else raise exception 'GRILLAD_ACTION' using errcode='22023';end if;
+ if exists(select 1 from grillad_private.central_requests x where x.org=p_org and x.status='pending' and x.kind=k and (k='renewal' or (x.site=p_site and x.details->>'phone'=phone))) then raise exception 'GRILLAD_REQUEST_PENDING' using errcode='22023';end if;
+ insert into grillad_private.central_requests(id,org,site,actor,kind,details) values(p_event,p_org,p_site,u,k,d);
+ return jsonb_build_object('id',p_event,'status','pending','kind',k);
+end $$;
+revoke all on function grillad_private.central_request(uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+-- Central service integration contract. Only central service may read unmasked requests.
+create function public.grillad_central_queue(p_limit integer) returns jsonb language plpgsql security invoker set search_path=pg_catalog as $$
+begin
+ if p_limit is null or p_limit not between 1 and 100 then raise exception 'GRILLAD_LIMIT' using errcode='22023';end if;
+ return (select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at),'[]'::jsonb) from (select id,org,site,kind,details,created_at from grillad_private.central_requests where status='pending' order by created_at limit p_limit)x);
+end $$;
+revoke all on function public.grillad_central_queue(integer) from public,anon,authenticated;
+grant select on grillad_private.central_requests to service_role;
+grant execute on function public.grillad_central_queue(integer) to service_role;
+-- A central acknowledgement is not a grant or a payment confirmation. Require the central workflow reference.
+create function public.grillad_central_resolve(p_request uuid,p_status text,p_reference text) returns boolean language plpgsql security invoker set search_path=pg_catalog as $$
+begin
+ if p_status is null or p_status not in ('processed','rejected') or p_reference is null or length(btrim(p_reference)) not between 1 and 160 then raise exception 'GRILLAD_RESOLUTION' using errcode='22023';end if;
+ update grillad_private.central_requests set status=p_status,resolved_at=now(),resolution=btrim(p_reference) where id=p_request and status='pending';
+ return found;
+end $$;
+revoke all on function public.grillad_central_resolve(uuid,text,text) from public,anon,authenticated;
+grant update(status,resolved_at,resolution) on grillad_private.central_requests to service_role;
+grant execute on function public.grillad_central_resolve(uuid,text,text) to service_role;
+
 commit;
