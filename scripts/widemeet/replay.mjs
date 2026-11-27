@@ -939,15 +939,25 @@ try{
  pass("B6 real authenticated privacy rights and truthful security notices");
  await menuPage("Livechat et support");
  await hp.getByLabel("Sujet",{exact:true}).fill("Replay support browser");
-  await hp.getByLabel("Catégorie",{exact:true}).selectOption("privacy");
+  await hp.getByLabel("Catégorie",{exact:true}).selectOption("privacy_access");
  await hp.getByLabel("Description du problème",{exact:true}).fill("Synthetic browser issue");
  await hp.getByRole("button",{name:"Envoyer la demande",exact:true}).click();
  await hp.getByRole("heading",{name:"Replay support browser",exact:true}).waitFor({timeout:20000});
  const browserSupportHost=periodicHost;
  const browserSupportList=await sk(browserSupportHost.access_token,"list");
- const browserSupportTicket=browserSupportList.items.find(x=>x.subject==="Replay support browser");assert.ok(browserSupportTicket);assert.equal(browserSupportTicket.category,"privacy");assert.equal((await identityRequest(gs.access_token,"support-read",{ticket_id:browserSupportTicket.id})).status,403);
+ const browserSupportTicket=browserSupportList.items.find(x=>x.subject==="Replay support browser");assert.ok(browserSupportTicket);assert.equal(browserSupportTicket.category,"privacy_access");assert.equal((await identityRequest(gs.access_token,"support-read",{ticket_id:browserSupportTicket.id})).status,403);
  const browserAgent=await login(sa);
+ assert.equal((await sr(browserAgent.access_token,"claim",{ticket_id:browserSupportTicket.id})).status,403,"ordinary agent must not claim a privacy case");
+ assert.ok(!(await sk(browserAgent.access_token,"queue")).items.some(x=>x.id===browserSupportTicket.id),"privacy case must not appear in ordinary agent queue");
+ await rest("wm_privacy_reviewers",{account_id:sa.id,workspace_id:w,enabled:true});
+ const privacyQueue=(await sk(browserAgent.access_token,"queue")).items.find(x=>x.id===browserSupportTicket.id);assert.ok(privacyQueue);assert.equal(privacyQueue.subject,null,"unassigned queue subject remains private");
  await sk(browserAgent.access_token,"claim",{ticket_id:browserSupportTicket.id});
+ const review={ticket_id:browserSupportTicket.id,event_id:randomUUID(),decision:"needs_information"};
+ assert.equal((await sr(browserSupportHost.access_token,"privacy-review",review)).status,403,"requester cannot perform privacy review");
+ assert.equal((await sk(browserAgent.access_token,"privacy-review",review)).recorded,true);
+ assert.equal((await sk(browserAgent.access_token,"privacy-review",review)).recorded,true);
+ const history=(await sk(browserSupportHost.access_token,"read",{ticket_id:browserSupportTicket.id})).privacy_history;
+ assert.equal(history.filter(e=>e.id===review.event_id&&e.decision===review.decision).length,1,"review retry must not duplicate history");
  await sk(browserAgent.access_token,"reply",{ticket_id:browserSupportTicket.id,message_id:randomUUID(),body:"Synthetic agent browser answer"});
  await hp.getByText("Synthetic agent browser answer",{exact:true}).waitFor({timeout:20000});
  const requesterBody="Synthetic requester acknowledgement";
@@ -984,6 +994,18 @@ try{
  await hp.getByText("Note enregistrée : 4/5",{exact:true}).waitFor();
  assert.equal((await sk(browserSupportHost.access_token,"read",{ticket_id:browserSupportTicket.id})).feedback,4);
  pass("B5 real browser requester feedback persisted on closed ticket");
+ await hp.getByRole("button",{name:"Retour aux demandes",exact:true}).click();
+ const ticketRow=hp.getByText(/Replay support browser · Clôturée/);
+ await ticketRow.waitFor({timeout:20000});
+ await hp.getByLabel("État des demandes",{exact:true}).selectOption("open");await ticketRow.waitFor({state:"hidden"});
+ await hp.getByLabel("État des demandes",{exact:true}).selectOption("closed");await ticketRow.waitFor();
+ await hp.getByLabel("Catégorie des demandes",{exact:true}).selectOption("meeting");await ticketRow.waitFor({state:"hidden"});
+ await hp.getByLabel("Catégorie des demandes",{exact:true}).selectOption("privacy_access");await ticketRow.waitFor();
+ await hp.getByLabel("Rechercher une demande",{exact:true}).fill("no-match-"+randomUUID());await ticketRow.waitFor({state:"hidden"});
+ await hp.getByRole("button",{name:"Réinitialiser les filtres",exact:true}).click();await ticketRow.waitFor();
+ assert.equal(await hp.getByLabel("État des demandes",{exact:true}).inputValue(),"all");assert.equal(await hp.getByLabel("Catégorie des demandes",{exact:true}).inputValue(),"all");assert.equal(await hp.getByLabel("Rechercher une demande",{exact:true}).inputValue(),"");
+ assert.equal((await sk(browserSupportHost.access_token,"read",{ticket_id:browserSupportTicket.id})).feedback,4,"list filters must not alter saved rating");
+ pass("B5 real browser support status/category/search/reset independently of persisted satisfaction; privacy reviewer scope, masked queue and idempotent review");
  pass("real browser support intake, agent claim/reply, automatic refresh, requester message and closure");
 
  // Exercise the external invitation deep link through real GoTrue, Edge and Chromium.
