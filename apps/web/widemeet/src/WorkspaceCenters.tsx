@@ -6,8 +6,8 @@ export function WorkspaceChat({base,session,locale,onBack}){
  const pending=useRef(null),running=useRef(false),epoch=useRef(0);
  const req=(action,data={})=>identityAction(base,session,"center-"+action,data);
  async function work(fn){if(running.current)return;running.current=true;epoch.current++;W(true);E(false);try{await fn()}catch{E(true)}finally{running.current=false;W(false)}}
- async function contactsLoad(){const v=await req("contacts");C(v.items)}
- async function thread(id,q=""){const v=await req("thread",{peer_id:id,query:q});M(v.items)}
+ async function contactsLoad(){try{const v=await req("contacts");C(v.items)}catch(e){C([]);throw e}}
+ async function thread(id,q=""){try{const v=await req("thread",{peer_id:id,query:q});M(v.items)}catch(e){P(null);M([]);C([]);B("");pending.current=null;throw e}}
  async function open(c){await thread(c.member_id);P(c);S("");B("");pending.current=null}
  useEffect(()=>{void work(contactsLoad)},[]);
  useEffect(()=>{if(!peer||busy||pending.current)return;let dead=false,poll=false;const timer=setInterval(async()=>{if(dead||poll||running.current)return;poll=true;const serial=epoch.current;try{const v=await req("thread",{peer_id:peer.member_id,query:search});if(!dead&&!running.current&&epoch.current===serial)M(v.items)}catch{if(!dead&&!running.current&&epoch.current===serial){P(null);M([]);C([]);B("");E(true)}}finally{poll=false}},5000);return()=>{dead=true;clearInterval(timer)}},[peer?.member_id,search,busy,session.access_token]);

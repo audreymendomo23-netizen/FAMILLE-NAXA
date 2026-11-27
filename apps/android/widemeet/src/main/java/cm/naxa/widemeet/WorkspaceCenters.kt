@@ -17,8 +17,8 @@ private fun centerRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("item
  var contacts by remember{mutableStateOf<List<JSONObject>>(emptyList())};var peer by remember{mutableStateOf<JSONObject?>(null)};var messages by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var query by remember{mutableStateOf("")};var body by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var pending by remember{mutableStateOf<JSONObject?>(null)}
  suspend fun req(action:String,data:JSONObject=JSONObject())=gateway.identity(session,"center-"+action,data)
- suspend fun refresh(){contacts=centerRows(req("contacts"))}
- suspend fun thread(id:String,q:String=""){messages=centerRows(req("thread",JSONObject().put("peer_id",id).put("query",q)))}
+ suspend fun refresh(){try{contacts=centerRows(req("contacts"))}catch(e:CancellationException){throw e}catch(e:Exception){contacts=emptyList();throw e}}
+ suspend fun thread(id:String,q:String=""){try{messages=centerRows(req("thread",JSONObject().put("peer_id",id).put("query",q)))}catch(e:CancellationException){throw e}catch(e:Exception){peer=null;messages=emptyList();contacts=emptyList();body="";pending=null;throw e}}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
  LaunchedEffect(session.deviceId){work{refresh()}}
  LaunchedEffect(peer?.optString("member_id"),query,busy,session.deviceId){val id=peer?.optString("member_id")?:return@LaunchedEffect;if(busy||pending!=null)return@LaunchedEffect;while(true){delay(5000);if(busy||pending!=null)return@LaunchedEffect;try{val data=centerRows(req("thread",JSONObject().put("peer_id",id).put("query",query)));if(!busy&&peer?.optString("member_id")==id)messages=data}catch(e:CancellationException){throw e}catch(e:Exception){peer=null;contacts=emptyList();messages=emptyList();body="";error=true;return@LaunchedEffect}}}
