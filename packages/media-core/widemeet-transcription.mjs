@@ -9,6 +9,15 @@ import {fileURLToPath} from "node:url";
 const execute=promisify(execFile);
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const script=fileURLToPath(new URL("../../scripts/widemeet/local-asr.py",import.meta.url));
+// One execution path for the worker and the isolated synthetic preflight.
+export async function runLocalAsr({python,modelDir,path,home}){
+ const {stdout}=await execute(resolve(python),[script,resolve(modelDir),resolve(path)],{timeout:480000,maxBuffer:1048576,env:{PATH:process.env.PATH??"/usr/bin:/bin",HOME:home,HF_HOME:join(home,"hf"),HF_HUB_OFFLINE:"1",TRANSFORMERS_OFFLINE:"1",PYTHONUTF8:"1",PYTHONNOUSERSITE:"1",OMP_NUM_THREADS:"2",TOKENIZERS_PARALLELISM:"false"}});
+ return JSON.parse(stdout);
+}
+export function localAsrFailure(e){
+ const marker=typeof e?.stderr==="string"?e.stderr.match(/^WM_ASR_ERROR:(import|input|model|decode|segments|output):(ImportError|ModuleNotFoundError|ValueError|RuntimeError|OSError|FileNotFoundError|TypeError|AttributeError|other)$/m):null;
+ return marker?marker[1]+":"+marker[2]:e?.code==="ENOENT"?"executable-missing":e?.killed?"subprocess-terminated":typeof e?.code==="number"?"subprocess-exit":"operation-failed";
+}
 export function createWideMeetTranscription({supabaseUrl,serviceKey,python,modelDir,fetcher=fetch}){
  const base=new URL(supabaseUrl);if(!["http:","https:"].includes(base.protocol)||base.username||base.password||base.pathname!=="/"||base.search||base.hash||!serviceKey||!python||!modelDir)throw Error("invalid ASR configuration");
  const headers={apikey:serviceKey,Authorization:"Bearer "+serviceKey};
@@ -31,11 +40,11 @@ export function createWideMeetTranscription({supabaseUrl,serviceKey,python,model
    dir=await mkdtemp(join(tmpdir(),"wm-asr-"));const path=join(dir,"source.ogg");await writeFile(path,Buffer.concat(chunks),{mode:0o600});
    // No service credentials or remote model downloads in the subprocess.
    stage="inference";
-   const {stdout}=await execute(resolve(python),[script,resolve(modelDir),path],{timeout:480000,maxBuffer:1048576,env:{PATH:process.env.PATH??"/usr/bin:/bin",HOME:dir,HF_HUB_OFFLINE:"1",TRANSFORMERS_OFFLINE:"1",PYTHONUTF8:"1",OMP_NUM_THREADS:"2"}});
-   stage="result-json";const result=JSON.parse(stdout);stage="result-persist";const saved=await rpc("finish",source.recording_id,lease,result);
+   const result=await runLocalAsr({python,modelDir,path,home:dir});
+   stage="result-persist";const saved=await rpc("finish",source.recording_id,lease,result);
    if(saved?.status!=="complete")throw Error("ASR unconfirmed");
    return {claimed:true,completed:true};
-  }catch(e){const reason=e?.code==="ENOENT"?"executable-missing":e?.killed?"subprocess-terminated":typeof e?.code==="number"?"subprocess-exit":"operation-failed";await rpc("fail",source.recording_id,lease).catch(()=>{});return {claimed:true,completed:false,stage,reason}}
+  }catch(e){const reason=stage==="inference"?localAsrFailure(e):"operation-failed";await rpc("fail",source.recording_id,lease).catch(()=>{});return {claimed:true,completed:false,stage,reason}}
   finally{if(dir)await rm(dir,{recursive:true,force:true})}
  }
  return {runOne};
