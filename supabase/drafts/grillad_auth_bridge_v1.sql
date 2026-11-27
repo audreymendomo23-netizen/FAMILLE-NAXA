@@ -231,7 +231,7 @@ begin
     join famille_core.role_assignments ra on ra.membership_id=m.id and ra.app_id=a.id and ra.organization_id=q.org and ra.location_id=q.site and ra.role_code=q.details->>'role' and ra.status='active' and ra.starts_at<=now() and (ra.expires_at is null or ra.expires_at>now())
     join famille_core.client_app_access ca on ca.user_id=u.id and ca.app_id=a.id and ca.status='granted'
     join famille_private.account_app_access g on g.user_id=u.id and g.app_code='grillad' and g.organization_id=q.org and g.location_id=q.site and g.status='active' and g.starts_at<=now() and (g.ends_at is null or g.ends_at>now())
-    where i.id=ref_id and i.request_id=q.id and i.app_code='grillad' and i.organization_id=q.org and i.location_id=q.site and i.role_code=q.details->>'role' and i.status='accepted' and i.accepted_by=u.id and i.accepted_at>=q.created_at and to_jsonb(u)->>'phone'=q.details->>'phone') then raise exception 'GRILLAD_CENTRAL_EVIDENCE' using errcode='22023';end if;
+    where i.id=ref_id and i.request_id=q.id and i.app_code='grillad' and i.organization_id=q.org and i.location_id=q.site and i.role_code=q.details->>'role' and i.status='accepted' and i.accepted_by=u.id and i.accepted_at>=q.created_at and ltrim(to_jsonb(u)->>'phone','+')=ltrim(q.details->>'phone','+')) then raise exception 'GRILLAD_CENTRAL_EVIDENCE' using errcode='22023';end if;
   else
    if not exists(select 1 from famille_core.payment_matches pm join famille_core.payment_intents pi on pi.id=pm.payment_intent_id join famille_core.subscriptions s on s.id=pi.subscription_id
     join famille_core.plans p on p.id=s.plan_id and p.app_id=s.app_id join famille_core.applications a on a.id=s.app_id and a.code='grillad'
@@ -248,5 +248,54 @@ grant execute on function grillad_private.central_resolve(uuid,text,text) to ser
 create function public.grillad_central_resolve(p_request uuid,p_status text,p_reference text) returns boolean language sql security invoker set search_path=pg_catalog as $$select grillad_private.central_resolve(p_request,p_status,p_reference)$$;
 revoke all on function public.grillad_central_resolve(uuid,text,text) from public,anon,authenticated;
 grant execute on function public.grillad_central_resolve(uuid,text,text) to service_role;
+
+-- Reconcile only existing, uniquely matched central evidence. This job never
+-- creates accounts, invites, payments, subscriptions or grants.
+create function grillad_private.central_reconcile(p_limit integer) returns jsonb
+language plpgsql security definer set search_path=pg_catalog as $
+declare q record; n integer:=0; deferred integer:=0;
+begin
+ if p_limit is null or p_limit not between 1 and 100 then raise exception 'GRILLAD_LIMIT' using errcode='22023';end if;
+ perform pg_advisory_xact_lock(hashtextextended('grillad-central-reconcile',0));
+ for q in
+  with evidence as (
+   select c.id request_id,i.id proof_id,c.kind,c.created_at
+   from grillad_private.central_requests c join famille_private.account_invites i on i.request_id=c.id
+   join auth.users u on u.id=i.user_id
+   join famille_core.applications a on a.code='grillad' and a.status='active'
+   join famille_core.memberships m on m.user_id=u.id and m.app_id=a.id and m.organization_id=c.org and m.status='active'
+   where c.status='pending' and c.kind='employee' and i.app_code='grillad' and i.organization_id=c.org and i.location_id=c.site
+   and i.role_code=c.details->>'role' and i.status='accepted' and i.accepted_by=u.id and i.accepted_at>=c.created_at
+   and ltrim(to_jsonb(u)->>'phone','+')=ltrim(c.details->>'phone','+')
+   and exists(select 1 from famille_core.role_assignments ra where ra.membership_id=m.id and ra.app_id=a.id and ra.organization_id=c.org and ra.location_id=c.site and ra.role_code=c.details->>'role' and ra.status='active' and ra.starts_at<=now() and (ra.expires_at is null or ra.expires_at>now()))
+   and exists(select 1 from famille_core.client_app_access ca where ca.user_id=u.id and ca.app_id=a.id and ca.status='granted')
+   and exists(select 1 from famille_private.account_app_access g where g.user_id=u.id and g.app_code='grillad' and g.organization_id=c.org and g.location_id=c.site and g.status='active' and g.starts_at<=now() and (g.ends_at is null or g.ends_at>now()))
+   union
+   select c.id,pm.id,c.kind,c.created_at
+   from grillad_private.central_requests c
+   join famille_core.subscriptions s on s.organization_id=c.org and s.status='active' and s.ends_at>now()
+   join famille_core.applications a on a.id=s.app_id and a.code='grillad'
+   join famille_core.plans p on p.id=s.plan_id and p.app_id=s.app_id and p.code=c.details->>'plan'
+   join famille_core.payment_intents pi on pi.subscription_id=s.id and pi.status='matched' and pi.created_at>=c.created_at and pi.currency='FCFA'
+   join famille_core.payment_matches pm on pm.payment_intent_id=pi.id and pm.status='confirmed' and pm.verified_at>=c.created_at
+   where c.status='pending' and c.kind='renewal' and pi.expected_amount_fcfa=(c.details->>'amount')::bigint and pm.amount_fcfa=pi.expected_amount_fcfa and p.amount_fcfa=pi.expected_amount_fcfa
+  ), unused as (
+   select e.* from evidence e where not exists(select 1 from grillad_private.central_requests x where x.kind=e.kind and x.status='processed' and x.resolution=e.proof_id::text)
+  )
+  select request_id,(array_agg(proof_id order by proof_id))[1] proof_id
+  from unused group by request_id having count(distinct proof_id)=1 order by min(created_at),request_id limit p_limit
+ loop
+  begin
+   if grillad_private.central_resolve(q.request_id,'processed',q.proof_id::text) then n:=n+1;else deferred:=deferred+1;end if;
+  exception when invalid_parameter_value or unique_violation then deferred:=deferred+1;
+  end;
+ end loop;
+ return jsonb_build_object('processed',n,'deferred',deferred);
+end $;
+revoke all on function grillad_private.central_reconcile(integer) from public,anon,authenticated;
+grant execute on function grillad_private.central_reconcile(integer) to service_role;
+create function public.grillad_central_reconcile(p_limit integer) returns jsonb language sql security invoker set search_path=pg_catalog as $select grillad_private.central_reconcile(p_limit)$;
+revoke all on function public.grillad_central_reconcile(integer) from public,anon,authenticated;
+grant execute on function public.grillad_central_reconcile(integer) to service_role;
 
 commit;

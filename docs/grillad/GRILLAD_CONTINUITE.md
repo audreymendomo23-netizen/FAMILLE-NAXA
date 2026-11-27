@@ -338,3 +338,11 @@ Registre actuel : 178 unités exécutables (174 tests nommés : 115 GRC, 34 hist
 - Parrainage, assistant IA étendu, langues et Livechat, règles commerciales non arbitrées : hors activation, selon V1.5. Ne pas assimiler vert CI à vert intégral des 39 REC produit.
 
 Prochaine reprise : contrôler HEAD exécutable 43b034a et tous les runs ci-dessus ; examiner les échecs de lifecycle/backup et Chromium/Android avant toute nouvelle déclaration de vert global.
+
+## 21. Reprise métier — rapprochement central automatisé et récupération
+Baseline cccb107 ; les 12 campagnes de la section 20 sont terminées : 11/12 entièrement vertes, 166/168 jobs réussis. Les deux échecs historiques de 46082274662 (backup/lifecycle) sont corrigés ; 46083105568 = 14/14, aucune campagne de ce lot encore en cours.
+- B1/B5 : rapprochement central service-only des demandes pendantes sur preuve existante unique, acceptation d'invitation liée à la demande ou paiement confirmé concordant, contrôle des droits et du montant, réutilisation du résolveur transactionnel, exclusion des preuves consommées, reprise idempotente. Téléphone normalisé avec ou sans préfixe + pour la comparaison de preuve. Aucune création de compte, invitation, transaction, grant ou abonnement dans ce rapprochement.
+- B1 : réponse de récupération uniforme, clients Web/Android sans promesse d'envoi effectif. Le canal de récupération et le contrôle d'identité restent à raccorder.
+- B6 : tâche journalière candidate exécute indépendamment synthèse, purge et rapprochement ; retour sans données privées. Aucun cron hébergé ni activation Cloudflare/Firebase.
+- Qualification ajoutée : assertions SQL de refus client, montant erroné, preuve correcte, idempotence, téléphone sans + ; un test API nommé de récupération uniforme. 179 unités recensées (175 tests nommés, 3 suites SQL, 1 drill) à confirmer en CI. Aucune recette produit intégrale certifiée par ces seuls tests.
+- Réserves : provisionnement et récupération réels via service central, paiement externe et règles caisse/valorisation/pointage encore ouvertes, offline étendu, ZIPPLE et vidéo réels, qualification appareil et hébergement. Aucun merge main, aucune modification d'autre application. Nouvelle campagne attendue sur le commit de code ; ne pas la déclarer verte avant résultat.

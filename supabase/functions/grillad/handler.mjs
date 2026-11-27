@@ -36,7 +36,7 @@ export async function handle(request,env,fetcher=fetch){
    const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode('grillad:'+phone));const hash=Array.from(new Uint8Array(digest),x=>x.toString(16).padStart(2,'0')).join('');
    async function control(path,data){const r=await fetcher(base+'/rest/v1/rpc/'+path,{method:'POST',headers:{apikey:env.service,Authorization:'Bearer '+env.service,'Content-Type':'application/json'},body:JSON.stringify(data),redirect:'error',signal:AbortSignal.timeout(15000)});return r.ok&&await r.json()===true}
    const allowed=await control('grillad_auth_begin',{p_hash:hash,p_recovery:recovery});
-   if(recovery)return reply(200,{result:{requested:true}});
+   if(recovery)return reply(200,{result:{received:true}}); // uniform response; not proof of delivery or account existence
    if(!allowed)return reply(429,{error:'TEMPORARILY_LOCKED'});
    const x=await post('/auth/v1/token?grant_type=password',{phone,password:body.password});
    if(!x.ok)return reply(401,{error:'INVALID_CREDENTIALS'});

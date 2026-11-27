@@ -109,6 +109,7 @@ begin
  v:=public.grillad_action(o,s,gen_random_uuid(),'renewal_request','{"plan":"grillad_premium_year"}');
  if v->>'status'<>'pending' or not exists(select 1 from jsonb_array_elements(public.grillad_pilotage_status(o,s)->'central_requests') x where x->>'kind'='renewal' and (x->>'amount')::int=60000) then raise exception 'renewal quote';end if;
  begin perform public.grillad_central_queue(10);raise exception 'central queue leaked';exception when insufficient_privilege then null;end;
+ begin perform public.grillad_central_reconcile(10);raise exception 'central reconcile leaked';exception when insufficient_privilege then null;end;
  perform public.grillad_action(o,s,gen_random_uuid(),'central_request_cancel',jsonb_build_object('request',e,'reason','Annulé'));
 end $$;
 reset role;
@@ -132,19 +133,21 @@ update famille_core.subscriptions set plan_id=(select id from famille_core.plans
 set role service_role;
 do $$declare q uuid;begin select (x->>'id')::uuid into q from jsonb_array_elements(public.grillad_central_queue(20)) x where x->>'kind'='renewal';
  begin perform public.grillad_central_resolve(q,'processed','b8000000-0000-0000-0000-000000000002');raise exception 'wrong amount accepted';exception when invalid_parameter_value then null;end;
+ if (public.grillad_central_reconcile(20)->>'processed')::int<>0 then raise exception 'reconciled wrong amount';end if;
 end $$;
 reset role;
 update famille_core.payment_matches set amount_fcfa=60000 where id='b8000000-0000-0000-0000-000000000002';
 set role service_role;
 do $$declare q uuid;begin select (x->>'id')::uuid into q from jsonb_array_elements(public.grillad_central_queue(20)) x where x->>'kind'='renewal';
- if not public.grillad_central_resolve(q,'processed','b8000000-0000-0000-0000-000000000002') or not public.grillad_central_resolve(q,'processed','b8000000-0000-0000-0000-000000000002') then raise exception 'central payment proof or replay';end if;
+ if (public.grillad_central_reconcile(20)->>'processed')::int<>1 then raise exception 'central payment reconciliation';end if;
+ if (public.grillad_central_reconcile(20)->>'processed')::int<>0 or not public.grillad_central_resolve(q,'processed','b8000000-0000-0000-0000-000000000002') then raise exception 'central payment replay';end if;
 end $$;
 reset role;
 -- Restore fixture plan so expiry notice and existing test cases stay applicable.
 update famille_core.subscriptions set plan_id=(select id from famille_core.plans where code='grillad_premium_month'),ends_at=now()+interval '1 day' where organization_id='b2000000-0000-0000-0000-000000000001';
 -- Test-only auth stub lacks phone; this adds the real field only within the rollback fixture.
 alter table auth.users add column if not exists phone text;
-update auth.users set phone='+237699000009' where id='b1000000-0000-0000-0000-000000000002';
+update auth.users set phone='237699000009' where id='b1000000-0000-0000-0000-000000000002';
 set role authenticated;
 do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';e uuid:='b8000000-0000-0000-0000-000000000003';begin
  perform public.grillad_action(o,s,e,'employee_request','{"phone":"+237699000009","name":"Collaborateur test","role":"seller"}');
@@ -153,7 +156,7 @@ reset role;
 insert into famille_private.account_invites(id,request_id,user_id,token_hash,app_code,account_kind,organization_id,location_id,role_code,status,created_by,expires_at,accepted_at,accepted_by)
  values('b8000000-0000-0000-0000-000000000004','b8000000-0000-0000-0000-000000000003','b1000000-0000-0000-0000-000000000002',decode(repeat('a1',32),'hex'),'grillad','employee','b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','seller','accepted','b1000000-0000-0000-0000-000000000001',now()+interval '1 day',now(),'b1000000-0000-0000-0000-000000000002');
 set role service_role;
-do $$begin if not public.grillad_central_resolve('b8000000-0000-0000-0000-000000000003','processed','b8000000-0000-0000-0000-000000000004') then raise exception 'accepted employee evidence';end if;end $$;
+do $begin if (public.grillad_central_reconcile(20)->>'processed')::int<>1 then raise exception 'accepted employee reconciliation';end if;if (public.grillad_central_reconcile(20)->>'processed')::int<>0 or not public.grillad_central_resolve('b8000000-0000-0000-0000-000000000003','processed','b8000000-0000-0000-0000-000000000004') then raise exception 'accepted employee replay';end if;end $;
 reset role;
 -- Expired subscription grants billing only; no access to transactions.
 update famille_core.subscriptions set status='expired',ends_at=now()-interval '1 hour' where organization_id='b2000000-0000-0000-0000-000000000001';
