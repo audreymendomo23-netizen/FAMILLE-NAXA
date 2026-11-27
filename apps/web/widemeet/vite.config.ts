@@ -4,7 +4,7 @@ import {defineConfig,loadEnv} from "vite";import react from "@vitejs/plugin-reac
 export default defineConfig(({mode})=>{
  const env={...loadEnv(mode,process.cwd(),"VITE_"),...process.env};
  const config={apiKey:env.VITE_WIDEMEET_FIREBASE_API_KEY,appId:env.VITE_WIDEMEET_FIREBASE_APP_ID,projectId:env.VITE_WIDEMEET_FIREBASE_PROJECT_ID,messagingSenderId:env.VITE_WIDEMEET_FIREBASE_SENDER_ID};
- const push=env.VITE_WIDEMEET_PUSH_ENABLED==="true"&&Object.values(config).every(Boolean)&&/^widemeet-[a-z0-9-]{1,20}[a-z0-9]$/.test(config.projectId??"");
+ const push=env.VITE_WIDEMEET_PUSH_ENABLED==="true"&&Object.values(config).every(Boolean)&&config.projectId==="naxameet"&&config.messagingSenderId==="404923635551"&&/^1:404923635551:web:[a-f0-9]+$/.test(config.appId??"");
  return {plugins:[react(),{name:"widemeet-shell",async generateBundle(_o,bundle){
  const urls=["/","/manifest.webmanifest","/brand/logo.png","/brand/icon.svg",...Object.keys(bundle).filter(x=>x.startsWith("assets/")).map(x=>"/"+x)];
  const cache="widemeet-shell-"+Object.keys(bundle).filter(x=>x.startsWith("assets/")).sort().join("|");

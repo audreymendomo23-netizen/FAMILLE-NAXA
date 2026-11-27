@@ -2,7 +2,7 @@ import React,{useEffect,useRef,useState}from"react";
 import{authorizedRequest}from"./session.mjs";
 const config={apiKey:import.meta.env.VITE_WIDEMEET_FIREBASE_API_KEY,appId:import.meta.env.VITE_WIDEMEET_FIREBASE_APP_ID,projectId:import.meta.env.VITE_WIDEMEET_FIREBASE_PROJECT_ID,messagingSenderId:import.meta.env.VITE_WIDEMEET_FIREBASE_SENDER_ID};
 const vapid=import.meta.env.VITE_WIDEMEET_FIREBASE_VAPID_KEY;
-const configured=Object.values(config).every(Boolean)&&/^widemeet-[a-z0-9-]{1,20}[a-z0-9]$/.test(config.projectId??"")&&typeof vapid==="string"&&vapid.length>30;
+const configured=Object.values(config).every(Boolean)&&config.projectId==="naxameet"&&config.messagingSenderId==="404923635551"&&/^1:404923635551:web:[a-f0-9]+$/.test(config.appId??"")&&typeof vapid==="string"&&vapid.length>30;
 async function sdk(){
  if(!configured||!navigator.serviceWorker||!("Notification" in window))throw Error("unconfigured");
  const app=await import("firebase/app"),m=await import("firebase/messaging");if(!await m.isSupported())throw Error("unsupported");

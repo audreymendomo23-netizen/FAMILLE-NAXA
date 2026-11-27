@@ -1,5 +1,8 @@
 // Adapted from NAXA SERVICES notification_contract.ts + notifications/index.ts.
 export const OAUTH="https://oauth2.googleapis.com/token";
+// Exact project selected by the owner; no prefix-wide trust.
+export const FIREBASE_PROJECT_ID="naxameet";
+export const FIREBASE_SENDER_ID="404923635551";
 const b64=b=>{let v="";for(let i=0;i<b.length;i+=16384)v+=String.fromCharCode(...b.subarray(i,i+16384));return btoa(v)};
 const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
 const enc=new TextEncoder();
@@ -19,7 +22,7 @@ export async function decryptToken(row,raw){
  const token=new TextDecoder().decode(bytes);if(!validPushToken(token)||await fingerprint(token)!==row.fingerprint)throw Error("PUSH_TOKEN_INTEGRITY");return token;
 }
 export function serviceAccount(raw,project){
- if(typeof project!=="string"||!/^widemeet-[a-z0-9-]{1,20}[a-z0-9]$/.test(project))throw Error("WIDEMEET_FCM_PROJECT_REQUIRED");
+ if(project!==FIREBASE_PROJECT_ID)throw Error("WIDEMEET_FCM_PROJECT_REQUIRED");
  const a=JSON.parse(raw);if(a.project_id!==project||typeof a.client_email!=="string"||!a.client_email.endsWith("@"+project+".iam.gserviceaccount.com")||typeof a.private_key!=="string"||!a.private_key.includes("-----BEGIN PRIVATE KEY-----")||(a.token_uri!=null&&a.token_uri!==OAUTH))throw Error("FCM_SCOPE");
  return a;
 }
@@ -32,7 +35,7 @@ export async function accessToken(a,fetcher=fetch){
 }
 export async function sendPush({project,access,token,id,fetcher=fetch}){
  // Generic lock-screen message, no meeting title, account, room, transcript, token or URL in payload.
- if(!/^widemeet-[a-z0-9-]{1,20}[a-z0-9]$/.test(project)||!validPushToken(token)||!/^[0-9a-f-]{36}$/.test(id))throw Error("FCM_SCOPE");
+ if(project!==FIREBASE_PROJECT_ID||!validPushToken(token)||!/^[0-9a-f-]{36}$/.test(id))throw Error("FCM_SCOPE");
  try{
  const r=await fetcher("https://fcm.googleapis.com/v1/projects/"+project+"/messages:send",{method:"POST",headers:{Authorization:"Bearer "+access,"Content-Type":"application/json"},body:JSON.stringify({message:{token,notification:{title:"WideMeet",body:"Nouvelle notification / New notification"},data:{app_id:"WIDEMEET",notification_id:id},android:{notification:{tag:id},ttl:"120s"},webpush:{headers:{TTL:"120"},notification:{tag:id}}}}),redirect:"error",signal:AbortSignal.timeout(10000)});
  const j=await r.json().catch(()=>null);const prefix="projects/"+project+"/messages/";
@@ -44,6 +47,7 @@ export async function sendPush({project,access,token,id,fetcher=fetch}){
  }catch{return {status:"uncertain",reference:null,error:"PROVIDER_UNCONFIRMED",revoke:false}}
 }
 export async function dispatchPush({rpc,encryptionKey,project,access,fetcher=fetch,limit=25}){
+ if(project!==FIREBASE_PROJECT_ID)throw Error("FCM_SCOPE");
  const batch=await rpc("wm_push_claim",{p_limit:limit});if(!Array.isArray(batch?.items)||batch.items.length>limit)throw Error("INVALID_CLAIMS");
  let accepted=0,uncertain=0,rejected=0,cancelled=0;
  for(const row of batch.items){
