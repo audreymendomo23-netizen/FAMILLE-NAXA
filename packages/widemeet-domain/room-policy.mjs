@@ -37,6 +37,15 @@ export function applyRoom(room,a,c,now){
  const target=()=>{const t=n.participants.find(x=>x.memberId===c.target&&!x.excluded);if(!t||t.memberId===n.hostId)fail("invalid_target");return t};
  switch(c.action){
  case "respond":if(!["scheduled","open"].includes(n.status)||!["accepted","declined","maybe"].includes(c.value)||host||n.status==="open"&&now>=n.endMs)fail("invalid_response");self.response=c.value;if(c.value==="accepted"&&!self.consent||c.value!=="accepted")n.recording="off";break;
+ case "reschedule":{
+ needHost();if(n.status!=="scheduled")fail("invalid_state");
+ const v=c.value;
+ if(!v||typeof v.title!=="string"||!v.title.trim()||v.title.length>120||typeof v.description!=="string"||v.description.length>2000||!Number.isSafeInteger(v.scheduledMs)||v.scheduledMs<now||!Number.isInteger(v.durationMinutes)||v.durationMinutes<5||v.durationMinutes>480||v.scheduledMs+v.durationMinutes*60000>Math.min(n.hardEndMs,a.entitlementEndMs))fail("invalid_room");
+ n.title=v.title.trim();n.description=v.description.trim();n.scheduledMs=v.scheduledMs;n.durationMinutes=v.durationMinutes;
+ for(const x of n.participants)if(x.memberId!==n.hostId&&!x.excluded){x.response="pending";x.consent=false}
+ break;
+ }
+ case "cancel":needHost();if(n.status!=="scheduled")fail("invalid_state");n.status="ended";n.cancelled=true;n.recording="off";break;
  case "start":needHost();if(n.status!=="scheduled"||now+n.durationMinutes*60000>Math.min(n.hardEndMs,a.entitlementEndMs))fail("room_unavailable");n.status="open";n.startedMs=now;n.endMs=now+n.durationMinutes*60000;break;
  case "extend":{
  needHost();live(n,now);
@@ -49,14 +58,18 @@ export function applyRoom(room,a,c,now){
  default:
  live(n,now);if(n.status!=="open"||self.response!=="accepted")fail("room_unavailable");
  switch(c.action){
- case "chat":if(!self.chat||typeof c.value!=="string"||!c.value.trim()||c.value.length>2000)fail("invalid_chat");if(n.events.filter(e=>e.actor===member&&e.action==="chat"&&e.at>now-10000).length>=5)fail("rate_limit");break;
+ case "chat":if(!self.chat||typeof c.value!=="string"||!c.value.trim()||c.value.length>2000)fail("invalid_chat");if(n.events.filter(e=>e.actor===member&&["chat","private_chat"].includes(e.action)&&e.at>now-10000).length>=5)fail("rate_limit");break;
+ case "private_chat":{
+ if(!self.chat||typeof c.value!=="string"||!c.value.trim()||c.value.length>2000||c.target===member||!n.participants.some(x=>x.memberId===c.target&&!x.excluded&&x.response==="accepted"))fail("invalid_chat");
+ if(n.events.filter(e=>e.actor===member&&["chat","private_chat"].includes(e.action)&&e.at>now-10000).length>=5)fail("rate_limit");break;
+ }
  case "reaction":if(!reactions.has(c.value))fail("invalid_reaction");if(n.events.filter(e=>e.actor===member&&e.action==="reaction"&&e.at>now-10000).length>=5)fail("rate_limit");break;
  case "hand":if(typeof c.value!=="boolean")fail("invalid_hand");self.hand=c.value;break;
  case "mute":needHost();target().mic=false;break;
  case "allow_mic":needHost();target().mic=true;break;
  case "screen":needHost();if(typeof c.value!=="boolean")fail("invalid_screen");target().screen=c.value;break;
  case "chat_permission":needHost();if(typeof c.value!=="boolean")fail("invalid_chat");target().chat=c.value;break;
- case "exclude":needHost();target().excluded=true;break;
+ case "exclude":needHost();target().excluded=true;n.recording="off";break;
  case "consent":if(typeof c.value!=="boolean")fail("invalid_consent");self.consent=c.value;if(!c.value)n.recording="off";break;
  case "record":needHost();if(c.value===true&&a.plan!=="premium")fail("premium_required");if(typeof c.value!=="boolean")fail("invalid_record");if(c.value&&n.participants.some(x=>!x.excluded&&x.response==="accepted"&&!x.consent))fail("consent_required");n.recording=c.value?"requested":"off";break;
  case "poll":needHost();if(!id(c.target)||n.polls.some(x=>x.id===c.target)||!Array.isArray(c.value)||c.value.length<2||c.value.length>10||!c.value.every(x=>typeof x==="string"&&x.trim()&&x.length<=200)||new Set(c.value).size!==c.value.length)fail("invalid_poll");n.polls.push({id:c.target,options:c.value,open:true,votes:{}});break;
@@ -64,13 +77,13 @@ export function applyRoom(room,a,c,now){
  case "survey":{
  needHost();if(a.plan!=="premium")fail("premium_required");
  const v=c.value;
- if(!id(c.target)||n.polls.some(x=>x.id===c.target)||!v||typeof v!=="object"||typeof v.question!=="string"||!v.question.trim()||v.question.length>200||!Array.isArray(v.options)||v.options.length<2||v.options.length>10||!v.options.every(x=>typeof x==="string"&&x.trim()&&x.length<=200)||new Set(v.options.map(x=>x.trim())).size!==v.options.length||!["single","multiple","rating"].includes(v.kind)||typeof v.anonymous!=="boolean"||!["live","closed"].includes(v.visibility)||!Number.isInteger(v.quorum)||v.quorum<0||v.quorum>100||!Number.isInteger(v.threshold)||v.threshold<1||v.threshold>100||v.kind==="rating"&&![5,10].includes(v.options.length))fail("invalid_poll");
+ if(!id(c.target)||n.polls.some(x=>x.id===c.target)||!v||typeof v!=="object"||typeof v.question!=="string"||!v.question.trim()||v.question.length>200||!Array.isArray(v.options)||v.options.length<2||v.options.length>10||!v.options.every(x=>typeof x==="string"&&x.trim()&&x.length<=200)||new Set(v.options.map(x=>x.trim())).size!==v.options.length||!["single","multiple","rating"].includes(v.kind)||typeof v.anonymous!=="boolean"||v.editable!==undefined&&typeof v.editable!=="boolean"||!["live","closed"].includes(v.visibility)||!Number.isInteger(v.quorum)||v.quorum<0||v.quorum>100||!Number.isInteger(v.threshold)||v.threshold<1||v.threshold>100||v.kind==="rating"&&![5,10].includes(v.options.length))fail("invalid_poll");
  const eligible=n.participants.filter(x=>!x.excluded&&x.response==="accepted").map(x=>x.memberId);
- n.polls.push({id:c.target,question:v.question.trim(),kind:v.kind,options:v.options.map(x=>x.trim()),anonymous:v.anonymous,visibility:v.visibility,quorum:v.quorum,threshold:v.threshold,eligible,open:true,votes:{}});break;
+ n.polls.push({id:c.target,question:v.question.trim(),kind:v.kind,options:v.options.map(x=>x.trim()),anonymous:v.anonymous,editable:v.editable===true,visibility:v.visibility,quorum:v.quorum,threshold:v.threshold,eligible,open:true,votes:{}});break;
  }
  case "survey_vote":{
  const poll=n.polls.find(x=>x.id===c.target&&x.open&&x.kind);
- if(!poll||!poll.eligible.includes(member)||Object.hasOwn(poll.votes,member)||!Array.isArray(c.value)||!c.value.length||new Set(c.value).size!==c.value.length||!c.value.every(i=>Number.isInteger(i)&&i>=0&&i<poll.options.length)||poll.kind!=="multiple"&&c.value.length!==1)fail("invalid_vote");
+ if(!poll||!poll.eligible.includes(member)||Object.hasOwn(poll.votes,member)&&!poll.editable||!Array.isArray(c.value)||!c.value.length||new Set(c.value).size!==c.value.length||!c.value.every(i=>Number.isInteger(i)&&i>=0&&i<poll.options.length)||poll.kind!=="multiple"&&c.value.length!==1)fail("invalid_vote");
  Object.defineProperty(poll.votes,member,{value:[...c.value].sort((x,y)=>x-y),enumerable:true,writable:true,configurable:true});break;
  }
  case "close_poll":{needHost();const poll=n.polls.find(x=>x.id===c.target&&x.open);if(!poll)fail("invalid_poll");poll.open=false;break;}
@@ -90,5 +103,5 @@ export function pollSummary(p,memberId){
  const eligible=p.eligible?.length??null;
  const responseRate=eligible===null?null:eligible?100*voters.length/eligible:0;
  const quorumMet=eligible===null?null:responseRate>=p.quorum;
- return {id:p.id,question:p.question??null,kind:p.kind??"simple",options:p.options,open:p.open,anonymous:p.anonymous??true,counts,voted:Object.hasOwn(p.votes,memberId),eligible,responses:visible?voters.length:null,responseRate:visible?responseRate:null,quorumMet:visible?quorumMet:null,threshold:p.threshold??null,accepted:visible&&!p.open&&quorumMet&&voters.length?counts.map(n=>n*100/voters.length>=p.threshold):null};
+ return {id:p.id,question:p.question??null,kind:p.kind??"simple",options:p.options,open:p.open,anonymous:p.anonymous??true,editable:p.editable===true,ownSelection:p.kind&&Object.hasOwn(p.votes,memberId)?p.votes[memberId]:null,nominativeResponses:visible&&p.kind&&p.anonymous===false?Object.entries(p.votes).map(([memberId,selection])=>({memberId,selection})):null,counts,voted:Object.hasOwn(p.votes,memberId),eligible,responses:visible?voters.length:null,responseRate:visible?responseRate:null,quorumMet:visible?quorumMet:null,threshold:p.threshold??null,accepted:visible&&!p.open&&quorumMet&&voters.length?counts.map(n=>n*100/voters.length>=p.threshold):null};
 }
