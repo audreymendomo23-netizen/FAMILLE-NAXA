@@ -214,6 +214,177 @@ create table public.zp_partner_link_requests(
  foreign key(site_id,org_id) references public.zp_sites(id,org_id),foreign key(member_id,org_id) references public.zp_members(id,org_id));
 create unique index zp_partner_one_pending on public.zp_partner_link_requests(site_id,partner) where state='requested';
 do $g$ declare n text;begin foreach n in array array['zp_delivery_zones','zp_delivery_couriers','zp_partner_link_requests'] loop execute format('alter table public.%I enable row level security',n);execute format('revoke all on public.%I from public,anon,authenticated',n);execute format('grant select,insert,update on public.%I to service_role',n);end loop;end $g$;
+-- Internal delivery rehearsal only: no public ordering, customer location, actual dispatch or payment.
+create table public.zp_delivery_missions(
+ id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,zone_id uuid not null references public.zp_delivery_zones(id),created_by uuid not null,courier_id uuid,
+ reference text not null check(reference~'^[A-Za-z0-9_-]{4,80}p_access text,p_site uuid,p_page text) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $f$
+declare m public.zp_members;restaurant boolean;begin m:=public.zp_business_actor(p_access,p_site);
+ if p_page='missions' then
+ select space='restaurant' into restaurant from public.zp_site_modes where site_id=p_site and org_id=m.org_id;
+ return jsonb_build_object('restaurant',coalesce(restaurant,false),'service_active',false,'can_configure',m.role_code='promoteur','can_courier',exists(select 1 from public.zp_delivery_couriers c where c.org_id=m.org_id and c.site_id=p_site and c.member_id=m.id and c.active),
+ 'zones',case when m.role_code='promoteur' and restaurant then coalesce((select jsonb_agg(jsonb_build_object('id',z.id,'label',z.label,'fee_xaf',z.fee_xaf) order by z.label) from public.zp_delivery_zones z where z.org_id=m.org_id and z.site_id=p_site and z.active),'[]') else '[]'::jsonb end,
+ 'couriers',case when m.role_code='promoteur' and restaurant then coalesce((select jsonb_agg(jsonb_build_object('id',u.id,'label',coalesce(p.display_name,u.login_id)) order by u.login_id) from public.zp_delivery_couriers c join public.zp_members u on u.id=c.member_id and u.org_id=c.org_id join public.zp_site_scopes sc on sc.member_id=u.id and sc.org_id=c.org_id and sc.site_id=c.site_id left join public.zp_profile_details p on p.member_id=u.id where c.org_id=m.org_id and c.site_id=p_site and c.active and u.active and not u.reset_pending),'[]') else '[]'::jsonb end,
+ 'missions',coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc) from (select q.id,q.reference,q.zone_label,q.subtotal_xaf,q.fee_xaf,q.total_xaf,q.state,q.courier_id,(q.courier_id=m.id) mine,q.created_at,q.updated_at,coalesce((select jsonb_agg(jsonb_build_object('event',e.event,'from_state',e.from_state,'to_state',e.to_state,'reason',e.reason,'created_at',e.created_at) order by e.created_at,e.id) from public.zp_delivery_mission_events e where e.mission_id=q.id and e.org_id=m.org_id and e.site_id=p_site),'[]') events from public.zp_delivery_missions q where q.org_id=m.org_id and q.site_id=p_site and restaurant and (m.role_code in ('promoteur','manager') or (q.courier_id=m.id and exists(select 1 from public.zp_delivery_couriers c where c.org_id=m.org_id and c.site_id=p_site and c.member_id=m.id and c.active))) order by q.created_at desc limit 200)x),'[]'));
+ end if;
+ if m.role_code not in ('promoteur','manager') then raise exception 'DENIED';end if;
+ if p_page='delivery' then
+ select space='restaurant' into restaurant from public.zp_site_modes where site_id=p_site and org_id=m.org_id;
+ return jsonb_build_object('can_configure',m.role_code='promoteur','restaurant',coalesce(restaurant,false),'service_active',false,
+ 'zones',coalesce((select jsonb_agg(to_jsonb(x) order by x.label) from (select id,label,instructions,fee_xaf,active from public.zp_delivery_zones where org_id=m.org_id and site_id=p_site limit 200)x),'[]'),
+ 'members',coalesce((select jsonb_agg(to_jsonb(x) order by x.label) from (select u.id,coalesce(d.display_name,u.login_id) label,coalesce(c.active,false) enabled from public.zp_site_scopes s join public.zp_members u on u.id=s.member_id and u.org_id=s.org_id left join public.zp_profile_details d on d.member_id=u.id left join public.zp_delivery_couriers c on c.member_id=u.id and c.site_id=p_site where s.org_id=m.org_id and s.site_id=p_site and u.active and not u.reset_pending limit 200)x),'[]'));
+ elsif p_page='connections' then return jsonb_build_object('can_configure',m.role_code='promoteur','rows',coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc) from (select id,partner,external_reference,reason,state,created_at from public.zp_partner_link_requests where org_id=m.org_id and site_id=p_site order by created_at desc limit 200)x),'[]'));
+ else raise exception 'INVALID_INPUT';end if;
+end $f$;
+create function public.zp_connection_write(p_access text,p_site uuid,p_action text,p_request uuid,p_payload jsonb) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $f$
+declare m public.zp_members;old public.zp_workspace_requests;rid uuid;target uuid;name text;why text;partner_code text;fee int;enabled boolean;outcome jsonb;z public.zp_delivery_zones;q public.zp_delivery_missions;subtotal bigint;next_state text;begin
+ m:=public.zp_business_actor(p_access,p_site);if p_action='mission_step' then if not exists(select 1 from public.zp_delivery_couriers c where c.org_id=m.org_id and c.site_id=p_site and c.member_id=m.id and c.active) then raise exception 'DENIED';end if;elsif m.role_code<>'promoteur' then raise exception 'DENIED';end if;
+ if p_request is null or p_payload is null or jsonb_typeof(p_payload)<>'object' or length(p_payload::text)>4000 then raise exception 'INVALID_INPUT';end if;
+ perform 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id for update;
+ select * into old from public.zp_workspace_requests where member_id=m.id and request_id=p_request;
+ if old.request_id is not null then if (old.site_id,old.action,old.payload) is distinct from (p_site,'connection:'||p_action,p_payload) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return old.outcome;end if;
+ if p_action in ('mission_create','mission_assign','mission_step','mission_cancel','mission_close') then
+ if not exists(select 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id and space='restaurant') then raise exception 'CHANNEL_DENIED';end if;
+ if p_action='mission_create' then
+ name:=trim(coalesce(p_payload->>'reference',''));subtotal:=(p_payload->>'subtotal_xaf')::bigint;
+ select * into z from public.zp_delivery_zones where id=(p_payload->>'zone_id')::uuid and org_id=m.org_id and site_id=p_site and active;
+ if z.id is null then raise exception 'DENIED';end if;
+ if name!~'^[A-Za-z0-9_-]{4,80}
+ if not exists(select 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id and space='restaurant') then raise exception 'CHANNEL_DENIED';end if;
+ enabled:=(p_payload->>'enabled')::boolean;if enabled is null then raise exception 'INVALID_INPUT';end if;
+ if p_action='zone_save' then
+ name:=trim(coalesce(p_payload->>'label',''));why:=trim(coalesce(p_payload->>'instructions',''));fee:=(p_payload->>'fee_xaf')::int;
+ if length(name) not between 1 and 120 or length(why) not between 1 and 500 or fee is null or fee<0 then raise exception 'INVALID_INPUT';end if;
+ insert into public.zp_delivery_zones(org_id,site_id,member_id,label,instructions,fee_xaf,active) values(m.org_id,p_site,m.id,name,why,fee,enabled) on conflict(site_id,label) do update set instructions=excluded.instructions,fee_xaf=excluded.fee_xaf,active=excluded.active returning id into rid;
+ else target:=(p_payload->>'member_id')::uuid;
+ if not exists(select 1 from public.zp_site_scopes s join public.zp_members u on u.id=s.member_id and u.org_id=s.org_id where s.org_id=m.org_id and s.site_id=p_site and s.member_id=target and u.active and not u.reset_pending) then raise exception 'DENIED';end if;
+ insert into public.zp_delivery_couriers(org_id,site_id,member_id,configured_by,active) values(m.org_id,p_site,target,m.id,enabled) on conflict(site_id,member_id) do update set active=excluded.active,configured_by=excluded.configured_by,updated_at=now();rid:=target;
+ end if;
+ elsif p_action='request_link' then
+ partner_code:=p_payload->>'partner';name:=trim(coalesce(p_payload->>'external_reference',''));why:=trim(coalesce(p_payload->>'reason',''));
+ if partner_code is null or partner_code not in ('naxa_security','naxa_hotel','grillad') or length(name) not between 4 and 160 or length(why) not between 5 and 500 then raise exception 'INVALID_INPUT';end if;
+ if exists(select 1 from public.zp_partner_link_requests x where x.site_id=p_site and x.org_id=m.org_id and x.partner=partner_code and x.state='requested') then raise exception 'LINK_ALREADY_REQUESTED';end if;
+ insert into public.zp_partner_link_requests(org_id,site_id,member_id,partner,external_reference,reason) values(m.org_id,p_site,m.id,partner_code,name,why) returning id into rid;
+ elsif p_action='cancel_link' then
+ update public.zp_partner_link_requests set state='cancelled' where id=(p_payload->>'link_id')::uuid and org_id=m.org_id and site_id=p_site and state='requested' returning id into rid;if rid is null then raise exception 'DENIED';end if;
+ else raise exception 'INVALID_INPUT';end if;
+ outcome:=jsonb_build_object('id',rid,'confirmed',true);
+ insert into public.zp_workspace_requests(member_id,org_id,site_id,request_id,action,payload,outcome) values(m.id,m.org_id,p_site,p_request,'connection:'||p_action,p_payload,outcome);return outcome;
+end $f$;
+do $g$ declare f record;begin for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_loyalty_eligible','zp_loyalty_reverse','zp_loyalty_snapshot','zp_loyalty_write','zp_connection_snapshot','zp_connection_write') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;end $g$;
+commit;
+),zone_label text not null,subtotal_xaf bigint not null check(subtotal_xaf between 1 and 2147483647),fee_xaf int not null check(fee_xaf>=0),total_xaf bigint generated always as (subtotal_xaf+fee_xaf) stored check(total_xaf<=2147483647),
+ state text not null default 'draft' check(state in ('draft','assigned','accepted','picked_up','en_route','handed_over','closed','cancelled')),created_at timestamptz not null default clock_timestamp(),updated_at timestamptz not null default clock_timestamp(),
+ unique(site_id,reference),unique(id,org_id,site_id),foreign key(site_id,org_id) references public.zp_sites(id,org_id),foreign key(created_by,org_id) references public.zp_members(id,org_id),foreign key(courier_id,org_id) references public.zp_members(id,org_id));
+create table public.zp_delivery_mission_events(
+ id uuid primary key default gen_random_uuid(),mission_id uuid not null,org_id uuid not null,site_id uuid not null,actor_id uuid not null,
+ event text not null,from_state text,to_state text not null,courier_id uuid,reason text not null default '',created_at timestamptz not null default clock_timestamp(),
+ foreign key(mission_id,org_id,site_id) references public.zp_delivery_missions(id,org_id,site_id),foreign key(actor_id,org_id) references public.zp_members(id,org_id));
+alter table public.zp_delivery_missions enable row level security;alter table public.zp_delivery_mission_events enable row level security;
+revoke all on public.zp_delivery_missions,public.zp_delivery_mission_events from public,anon,authenticated;
+grant select,insert,update on public.zp_delivery_missions to service_role;
+grant select,insert on public.zp_delivery_mission_events to service_role;
+create function public.zp_connection_snapshot(p_access text,p_site uuid,p_page text) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $f$
+declare m public.zp_members;restaurant boolean;begin m:=public.zp_erp_actor(p_access,p_site);
+ if p_page='delivery' then
+ select space='restaurant' into restaurant from public.zp_site_modes where site_id=p_site and org_id=m.org_id;
+ return jsonb_build_object('can_configure',m.role_code='promoteur','restaurant',coalesce(restaurant,false),'service_active',false,
+ 'zones',coalesce((select jsonb_agg(to_jsonb(x) order by x.label) from (select id,label,instructions,fee_xaf,active from public.zp_delivery_zones where org_id=m.org_id and site_id=p_site limit 200)x),'[]'),
+ 'members',coalesce((select jsonb_agg(to_jsonb(x) order by x.label) from (select u.id,coalesce(d.display_name,u.login_id) label,coalesce(c.active,false) enabled from public.zp_site_scopes s join public.zp_members u on u.id=s.member_id and u.org_id=s.org_id left join public.zp_profile_details d on d.member_id=u.id left join public.zp_delivery_couriers c on c.member_id=u.id and c.site_id=p_site where s.org_id=m.org_id and s.site_id=p_site and u.active and not u.reset_pending limit 200)x),'[]'));
+ elsif p_page='connections' then return jsonb_build_object('can_configure',m.role_code='promoteur','rows',coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc) from (select id,partner,external_reference,reason,state,created_at from public.zp_partner_link_requests where org_id=m.org_id and site_id=p_site order by created_at desc limit 200)x),'[]'));
+ else raise exception 'INVALID_INPUT';end if;
+end $f$;
+create function public.zp_connection_write(p_access text,p_site uuid,p_action text,p_request uuid,p_payload jsonb) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $f$
+declare m public.zp_members;old public.zp_workspace_requests;rid uuid;target uuid;name text;why text;partner_code text;fee int;enabled boolean;outcome jsonb;begin
+ m:=public.zp_erp_actor(p_access,p_site);if m.role_code<>'promoteur' then raise exception 'DENIED';end if;
+ if p_request is null or p_payload is null or jsonb_typeof(p_payload)<>'object' or length(p_payload::text)>4000 then raise exception 'INVALID_INPUT';end if;
+ perform 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id for update;
+ select * into old from public.zp_workspace_requests where member_id=m.id and request_id=p_request;
+ if old.request_id is not null then if (old.site_id,old.action,old.payload) is distinct from (p_site,'connection:'||p_action,p_payload) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return old.outcome;end if;
+ if p_action in ('zone_save','courier_set') then
+ if not exists(select 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id and space='restaurant') then raise exception 'CHANNEL_DENIED';end if;
+ enabled:=(p_payload->>'enabled')::boolean;if enabled is null then raise exception 'INVALID_INPUT';end if;
+ if p_action='zone_save' then
+ name:=trim(coalesce(p_payload->>'label',''));why:=trim(coalesce(p_payload->>'instructions',''));fee:=(p_payload->>'fee_xaf')::int;
+ if length(name) not between 1 and 120 or length(why) not between 1 and 500 or fee is null or fee<0 then raise exception 'INVALID_INPUT';end if;
+ insert into public.zp_delivery_zones(org_id,site_id,member_id,label,instructions,fee_xaf,active) values(m.org_id,p_site,m.id,name,why,fee,enabled) on conflict(site_id,label) do update set instructions=excluded.instructions,fee_xaf=excluded.fee_xaf,active=excluded.active returning id into rid;
+ else target:=(p_payload->>'member_id')::uuid;
+ if not exists(select 1 from public.zp_site_scopes s join public.zp_members u on u.id=s.member_id and u.org_id=s.org_id where s.org_id=m.org_id and s.site_id=p_site and s.member_id=target and u.active and not u.reset_pending) then raise exception 'DENIED';end if;
+ insert into public.zp_delivery_couriers(org_id,site_id,member_id,configured_by,active) values(m.org_id,p_site,target,m.id,enabled) on conflict(site_id,member_id) do update set active=excluded.active,configured_by=excluded.configured_by,updated_at=now();rid:=target;
+ end if;
+ elsif p_action='request_link' then
+ partner_code:=p_payload->>'partner';name:=trim(coalesce(p_payload->>'external_reference',''));why:=trim(coalesce(p_payload->>'reason',''));
+ if partner_code is null or partner_code not in ('naxa_security','naxa_hotel','grillad') or length(name) not between 4 and 160 or length(why) not between 5 and 500 then raise exception 'INVALID_INPUT';end if;
+ if exists(select 1 from public.zp_partner_link_requests x where x.site_id=p_site and x.org_id=m.org_id and x.partner=partner_code and x.state='requested') then raise exception 'LINK_ALREADY_REQUESTED';end if;
+ insert into public.zp_partner_link_requests(org_id,site_id,member_id,partner,external_reference,reason) values(m.org_id,p_site,m.id,partner_code,name,why) returning id into rid;
+ elsif p_action='cancel_link' then
+ update public.zp_partner_link_requests set state='cancelled' where id=(p_payload->>'link_id')::uuid and org_id=m.org_id and site_id=p_site and state='requested' returning id into rid;if rid is null then raise exception 'DENIED';end if;
+ else raise exception 'INVALID_INPUT';end if;
+ outcome:=jsonb_build_object('id',rid,'confirmed',true);
+ insert into public.zp_workspace_requests(member_id,org_id,site_id,request_id,action,payload,outcome) values(m.id,m.org_id,p_site,p_request,'connection:'||p_action,p_payload,outcome);return outcome;
+end $f$;
+do $g$ declare f record;begin for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_loyalty_eligible','zp_loyalty_reverse','zp_loyalty_snapshot','zp_loyalty_write','zp_connection_snapshot','zp_connection_write') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;end $g$;
+commit;
+ or subtotal is null or subtotal not between 1 and 2147483647 or subtotal+z.fee_xaf>2147483647 then raise exception 'INVALID_INPUT';end if;
+ if (p_payload->>'fee_xaf')::bigint is distinct from z.fee_xaf::bigint then raise exception 'INVALID_INPUT';end if;
+ if exists(select 1 from public.zp_delivery_missions where org_id=m.org_id and site_id=p_site and reference=name) then raise exception 'INVALID_INPUT';end if;
+ insert into public.zp_delivery_missions(org_id,site_id,zone_id,created_by,reference,zone_label,subtotal_xaf,fee_xaf) values(m.org_id,p_site,z.id,m.id,name,z.label,subtotal,z.fee_xaf) returning id into rid;
+ insert into public.zp_delivery_mission_events(mission_id,org_id,site_id,actor_id,event,to_state) values(rid,m.org_id,p_site,m.id,p_action,'draft');
+ else
+ select * into q from public.zp_delivery_missions where id=(p_payload->>'mission_id')::uuid and org_id=m.org_id and site_id=p_site for update;if q.id is null then raise exception 'DENIED';end if;
+ target:=q.courier_id;why:='';
+ if p_action='mission_assign' then
+ if q.state not in ('draft','assigned') then raise exception 'INVALID_INPUT';end if;
+ target:=(p_payload->>'courier_id')::uuid;
+ if not exists(select 1 from public.zp_delivery_couriers c join public.zp_members u on u.id=c.member_id and u.org_id=c.org_id join public.zp_site_scopes sc on sc.member_id=u.id and sc.org_id=c.org_id and sc.site_id=c.site_id where c.org_id=m.org_id and c.site_id=p_site and c.member_id=target and c.active and u.active and not u.reset_pending) then raise exception 'DENIED';end if;
+ next_state:='assigned';
+ elsif p_action='mission_step' then
+ if q.courier_id is distinct from m.id then raise exception 'DENIED';end if;
+ next_state:=case q.state when 'assigned' then 'accepted' when 'accepted' then 'picked_up' when 'picked_up' then 'en_route' when 'en_route' then 'handed_over' else null end;
+ if next_state is null or next_state is distinct from p_payload->>'next' then raise exception 'INVALID_INPUT';end if;
+ elsif p_action='mission_cancel' then
+ if q.state not in ('draft','assigned','accepted') then raise exception 'INVALID_INPUT';end if;
+ why:=trim(coalesce(p_payload->>'reason',''));if length(why) not between 5 and 200 then raise exception 'INVALID_INPUT';end if;next_state:='cancelled';
+ elsif p_action='mission_close' then
+ if q.state<>'handed_over' then raise exception 'INVALID_INPUT';end if;next_state:='closed';
+ end if;
+ update public.zp_delivery_missions set courier_id=target,state=next_state,updated_at=clock_timestamp() where id=q.id returning id into rid;
+ insert into public.zp_delivery_mission_events(mission_id,org_id,site_id,actor_id,event,from_state,to_state,courier_id,reason) values(rid,m.org_id,p_site,m.id,p_action,q.state,next_state,target,why);
+ end if;
+ elsif p_action in ('zone_save','courier_set') then
+ if not exists(select 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id and space='restaurant') then raise exception 'CHANNEL_DENIED';end if;
+ enabled:=(p_payload->>'enabled')::boolean;if enabled is null then raise exception 'INVALID_INPUT';end if;
+ if p_action='zone_save' then
+ name:=trim(coalesce(p_payload->>'label',''));why:=trim(coalesce(p_payload->>'instructions',''));fee:=(p_payload->>'fee_xaf')::int;
+ if length(name) not between 1 and 120 or length(why) not between 1 and 500 or fee is null or fee<0 then raise exception 'INVALID_INPUT';end if;
+ insert into public.zp_delivery_zones(org_id,site_id,member_id,label,instructions,fee_xaf,active) values(m.org_id,p_site,m.id,name,why,fee,enabled) on conflict(site_id,label) do update set instructions=excluded.instructions,fee_xaf=excluded.fee_xaf,active=excluded.active returning id into rid;
+ else target:=(p_payload->>'member_id')::uuid;
+ if not exists(select 1 from public.zp_site_scopes s join public.zp_members u on u.id=s.member_id and u.org_id=s.org_id where s.org_id=m.org_id and s.site_id=p_site and s.member_id=target and u.active and not u.reset_pending) then raise exception 'DENIED';end if;
+ insert into public.zp_delivery_couriers(org_id,site_id,member_id,configured_by,active) values(m.org_id,p_site,target,m.id,enabled) on conflict(site_id,member_id) do update set active=excluded.active,configured_by=excluded.configured_by,updated_at=now();rid:=target;
+ end if;
+ elsif p_action='request_link' then
+ partner_code:=p_payload->>'partner';name:=trim(coalesce(p_payload->>'external_reference',''));why:=trim(coalesce(p_payload->>'reason',''));
+ if partner_code is null or partner_code not in ('naxa_security','naxa_hotel','grillad') or length(name) not between 4 and 160 or length(why) not between 5 and 500 then raise exception 'INVALID_INPUT';end if;
+ if exists(select 1 from public.zp_partner_link_requests x where x.site_id=p_site and x.org_id=m.org_id and x.partner=partner_code and x.state='requested') then raise exception 'LINK_ALREADY_REQUESTED';end if;
+ insert into public.zp_partner_link_requests(org_id,site_id,member_id,partner,external_reference,reason) values(m.org_id,p_site,m.id,partner_code,name,why) returning id into rid;
+ elsif p_action='cancel_link' then
+ update public.zp_partner_link_requests set state='cancelled' where id=(p_payload->>'link_id')::uuid and org_id=m.org_id and site_id=p_site and state='requested' returning id into rid;if rid is null then raise exception 'DENIED';end if;
+ else raise exception 'INVALID_INPUT';end if;
+ outcome:=jsonb_build_object('id',rid,'confirmed',true);
+ insert into public.zp_workspace_requests(member_id,org_id,site_id,request_id,action,payload,outcome) values(m.id,m.org_id,p_site,p_request,'connection:'||p_action,p_payload,outcome);return outcome;
+end $f$;
+do $g$ declare f record;begin for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_loyalty_eligible','zp_loyalty_reverse','zp_loyalty_snapshot','zp_loyalty_write','zp_connection_snapshot','zp_connection_write') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;end $g$;
+commit;
+),zone_label text not null,subtotal_xaf bigint not null check(subtotal_xaf between 1 and 2147483647),fee_xaf int not null check(fee_xaf>=0),total_xaf bigint generated always as (subtotal_xaf+fee_xaf) stored check(total_xaf<=2147483647),
+ state text not null default 'draft' check(state in ('draft','assigned','accepted','picked_up','en_route','handed_over','closed','cancelled')),created_at timestamptz not null default clock_timestamp(),updated_at timestamptz not null default clock_timestamp(),
+ unique(site_id,reference),unique(id,org_id,site_id),foreign key(site_id,org_id) references public.zp_sites(id,org_id),foreign key(created_by,org_id) references public.zp_members(id,org_id),foreign key(courier_id,org_id) references public.zp_members(id,org_id));
+create table public.zp_delivery_mission_events(
+ id uuid primary key default gen_random_uuid(),mission_id uuid not null,org_id uuid not null,site_id uuid not null,actor_id uuid not null,
+ event text not null,from_state text,to_state text not null,courier_id uuid,reason text not null default '',created_at timestamptz not null default clock_timestamp(),
+ foreign key(mission_id,org_id,site_id) references public.zp_delivery_missions(id,org_id,site_id),foreign key(actor_id,org_id) references public.zp_members(id,org_id));
+alter table public.zp_delivery_missions enable row level security;alter table public.zp_delivery_mission_events enable row level security;
+revoke all on public.zp_delivery_missions,public.zp_delivery_mission_events from public,anon,authenticated;
+grant select,insert,update on public.zp_delivery_missions to service_role;
+grant select,insert on public.zp_delivery_mission_events to service_role;
 create function public.zp_connection_snapshot(p_access text,p_site uuid,p_page text) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $f$
 declare m public.zp_members;restaurant boolean;begin m:=public.zp_erp_actor(p_access,p_site);
  if p_page='delivery' then

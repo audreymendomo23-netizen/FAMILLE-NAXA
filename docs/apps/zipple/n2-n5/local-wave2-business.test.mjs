@@ -97,3 +97,19 @@ test("B4-017 owner-only delivery draft changes and courier scope",async()=>{
  assert.equal(await scalar("select delivery_enabled from zp_site_modes where site_id=$1",[site]),false);
  console.log("ZIPPLE_QA_CASE_PARTIAL B4-017 DELIVERY_DRAFT_SCOPE_PASS");
 });
+
+
+test("B4-020 B4-022 B4-023 rehearsal fee, scoped courier transitions and immutable history",async()=>{
+ const {org,site,b,ok}=await fixture();const courier=await actor(org,site,"staff"),other=await actor(org,site,"staff");const write=(operation,payload,request_id=id())=>({operation,payload,request_id});
+ const zone=await ok("connection_write",write("zone_save",{label:"QA mission zone",instructions:"Secteur test",fee_xaf:500,enabled:true}));await ok("connection_write",write("courier_set",{member_id:courier.member,enabled:true}));await ok("connection_write",write("courier_set",{member_id:other.member,enabled:true}));
+ const request=write("mission_create",{zone_id:zone.id,reference:"QA-"+id(),subtotal_xaf:2500,fee_xaf:500});assert.equal((await courier.b("connection_write",request)).status,403);assert.notEqual((await b("connection_write",write("mission_create",{...request.payload,fee_xaf:1}))).status,200);
+ const mission=await ok("connection_write",request);assert.equal((await ok("connection_write",request)).id,mission.id);
+ const initial=(await ok("connection_snapshot",{page:"missions"})).missions.find(x=>x.id===mission.id);assert.equal(Number(initial.total_xaf),3000);assert.equal(initial.state,"draft");
+ const assign=write("mission_assign",{mission_id:mission.id,courier_id:courier.member});await ok("connection_write",assign);
+ assert.equal((await other.ok("connection_snapshot",{page:"missions"})).missions.length,0);assert.equal((await courier.ok("connection_snapshot",{page:"missions"})).missions[0].mine,true);
+ assert.equal((await other.b("connection_write",write("mission_step",{mission_id:mission.id,next:"accepted"}))).status,403);assert.notEqual((await courier.b("connection_write",write("mission_step",{mission_id:mission.id,next:"en_route"}))).status,200);
+ for(const next of ["accepted","picked_up","en_route","handed_over"]){const op=write("mission_step",{mission_id:mission.id,next});assert.equal((await courier.ok("connection_write",op)).id,mission.id);assert.equal((await courier.ok("connection_write",op)).id,mission.id)}
+ await ok("connection_write",write("mission_close",{mission_id:mission.id}));const row=(await ok("connection_snapshot",{page:"missions"})).missions.find(x=>x.id===mission.id);assert.equal(row.state,"closed");assert.equal(row.events.length,7);assert.equal(Number(await scalar("select count(*) from zp_delivery_missions where id=$1",[mission.id])),1);assert.equal(Number(await scalar("select count(*) from zp_cash_receipts where site_id=$1",[site])),0);
+ await ok("connection_write",write("courier_set",{member_id:courier.member,enabled:false}));assert.equal((await courier.ok("connection_snapshot",{page:"missions"})).missions.length,0);
+ console.log("ZIPPLE_QA_CASE_PARTIAL B4-020 SIMULATED_FEE_PASS");console.log("ZIPPLE_QA_CASE_PARTIAL B4-022 REHEARSAL_LIFECYCLE_PASS");console.log("ZIPPLE_QA_CASE_PARTIAL B4-023 COURIER_SCOPE_PASS");
+});

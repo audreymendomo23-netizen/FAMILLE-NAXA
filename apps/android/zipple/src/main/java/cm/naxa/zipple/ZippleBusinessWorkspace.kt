@@ -84,8 +84,10 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
     if(canManage)OutlinedButton(onClick={tab="offline_review"}){Text(tr("Revue hors connexion","Offline review"))}
     OutlinedButton(onClick={tab="attendance"}){Text(tr("Pointage","Attendance"))}
     for(page in portalPages.filter{!it.manager||canManage})OutlinedButton(onClick={tab=page.id}){Text(if(en)page.en else page.fr)}
+    OutlinedButton(onClick={tab="missions"}){Text(if(en)"Delivery missions" else "Missions livraison")}
     if(canManage)for(page in commercePages)OutlinedButton(onClick={tab=page.id}){Text(if(en)page.en else page.fr)}
     when(tab){
+        "missions"->{key(session.member,site,tab){ZippleMissionWorkspace(api,session,site,en)}}
         "loyalty","delivery","connections"->{if(canManage)key(session.member,site,tab){ZippleCommerceWorkspace(api,session,site,en,tab)}}
         "hr","profile","tickets","notifications","team","planning","objectives","training","incidents","intelligence"->{key(session.member,site,tab){ZipplePortalWorkspace(api,session,site,en,tab,onLanguage){next->when(next){"station"->tab="stations";"erp"->if(canManage)tab="bulk3";"cash"->if(canCash)tab="cash";"crm","billing"->if(canManage)tab=next;else->if(portalPages.any{it.id==next&&(!it.manager||canManage)})tab=next}}}}
         "split"->{key(session.member,site){ZippleNativeSplitBill(api,session,site,en)}}

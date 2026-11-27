@@ -8,7 +8,7 @@ assert len(rows)==179 and len({r["id"] for r in rows})==179
 # Explicit executable scenario bindings; never equate a partial marker with exhaustive acceptance.
 bindings={
  "B2-019":1,"B2-022":1,"B2-032":1,"B3-003":1,
- "B3-016":2,"B3-019":2,"B4-017":2,
+ "B3-016":2,"B3-019":2,"B4-017":2,"B4-020":2,"B4-022":2,"B4-023":2,
  "B4-034":3,"B5-003":3,"B5-004":3,"B5-005":3,"B5-006":3,"B5-007":3,"B5-008":3,"B5-009":3
 }
 selected=rows[(wave-1)*50:wave*50]
