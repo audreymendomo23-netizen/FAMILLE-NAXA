@@ -13,7 +13,7 @@ function projection(room:any,actor:any){
  const self=room.participants.find((p:any)=>p.memberId===actor.memberId&&!p.excluded);
  if(!self)throw Error("forbidden");
  const admitted=self.response==="accepted";
- const result={id:room.id,title:room.title,description:room.description,hostId:room.hostId,status:room.status,revision:room.revision,scheduledMs:room.scheduledMs,durationMinutes:room.durationMinutes,endMs:room.endMs??null,response:self.response,cancelled:room.cancelled===true,recording:admitted?room.recording:"off",participants:admitted?room.participants.filter((p:any)=>!p.excluded).map((p:any)=>({memberId:p.memberId,response:p.response,hand:p.hand===true,mic:p.mic===true,screen:p.screen===true})):[],events:admitted?room.events.filter((e:any)=>["chat","reaction"].includes(e.action)||e.action==="private_chat"&&(e.actor===actor.memberId||JSON.parse(e.payload)[1]===actor.memberId)).slice(-100).map((e:any)=>({id:e.id,actor:e.actor,action:e.action,target:e.action==="private_chat"?JSON.parse(e.payload)[1]:null,value:JSON.parse(e.payload)[2],at:e.at})):[],polls:admitted?room.polls.map((p:any)=>pollSummary(p,actor.memberId)):[]};
+ const result={id:room.id,title:room.title,description:room.description,hostId:room.hostId,status:room.status,revision:room.revision,scheduledMs:room.scheduledMs,durationMinutes:room.durationMinutes,endMs:room.endMs??null,response:self.response,cancelled:room.cancelled===true,admissionLocked:room.admissionLocked===true,serverNowMs:Date.now(),recording:admitted?room.recording:"off",participants:admitted?room.participants.filter((p:any)=>!p.excluded).map((p:any)=>({memberId:p.memberId,response:p.response,hand:p.hand===true,mic:p.mic===true,screen:p.screen===true})):[],events:admitted?room.events.filter((e:any)=>["chat","reaction"].includes(e.action)||e.action==="private_chat"&&(e.actor===actor.memberId||JSON.parse(e.payload)[1]===actor.memberId)).slice(-100).map((e:any)=>({id:e.id,actor:e.actor,action:e.action,target:e.action==="private_chat"?JSON.parse(e.payload)[1]:null,value:JSON.parse(e.payload)[2],at:e.at})):[],polls:admitted?room.polls.map((p:any)=>pollSummary(p,actor.memberId)):[]};
  // Do not return raw receipts, votes, consent ledger, or provider recording state.
  return result;
 }
@@ -77,7 +77,7 @@ Deno.serve(async request=>{
  if(passId!==null&&!uuid.test(passId))return send(400,{error:"invalid_pass"});
  const a=(await rpc(passId!==null?"wm_pass_actor":"wm_room_actor_for",passId!==null?{p_hash,p_intent:passId}:{p_hash,p_room:action==="create"?null:p_room}))?.[0];
  if(!a||!["owner","promoteur","manager","staff"].includes(a.role)||!["access","premium"].includes(a.plan)||!Number.isSafeInteger(a.entitlement_end_ms)||a.entitlement_end_ms<=now)return send(403,{error:"forbidden"});
- const actor={memberId:a.account_id,workspaceId:a.workspace_id,enabled:true,passwordChangeRequired:false,role:a.role,plan:a.plan,entitlementEndMs:a.entitlement_end_ms};
+ const actor={memberId:a.account_id,workspaceId:a.workspace_id,enabled:true,passwordChangeRequired:false,role:a.role,plan:a.plan,entitlementEndMs:a.entitlement_end_ms,capacity:Number.isInteger(a.capacity)?a.capacity:undefined};
  if(action==="create"){
  if(!Array.isArray(b.invitees)||b.invitees.length>100||!b.invitees.every((id:unknown)=>typeof id==="string"&&uuid.test(id)))return send(400,{error:"invalid_invitees"});
  const state=createRoom(actor,{id:p_room,title:b.title,description:b.description??"",startMs:b.scheduled_ms,durationMinutes:b.duration_minutes,hardEndMs:actor.entitlementEndMs,invitees:b.invitees.map((id:string)=>id.toLowerCase())});
@@ -90,6 +90,7 @@ Deno.serve(async request=>{
  if(action==="read")return send(200,await project(room,actor,p_hash));
  if(action==="command"){
  const command={roomId:p_room,requestId:b.request_id,expectedRevision:b.expected_revision,action:b.action,target:b.target,value:b.value};
+ if(command.action==="invite_member"&&!uuid.test(command.target??""))return send(400,{error:"invalid_invitees"});
  const next=applyRoom(room,actor,command,now);
  if(!next.replayed&&await rpc("wm_room_write",{p_hash,p_room,p_expected:room.revision,p_role:actor.role,p_plan:actor.plan,p_state:next.room})!==true)return send(409,{error:"revision_or_scope_changed"});
  return send(200,await project(next.room,actor,p_hash));
