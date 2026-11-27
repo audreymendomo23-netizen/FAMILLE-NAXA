@@ -18,8 +18,8 @@ internal object SecurityNativeContract {
   fun s(k:String)=input.getValue(k).trim()
   return when(m.kind){
    "media"->mapOf("reference" to s("device"),"purpose" to s("purpose"),"consent" to s("consent"),"media" to if(m.id=="NS-02")"video" else "audio")
-   "access","visitor","vehicle","assignment"->mapOf("reference" to s("reference"),"purpose" to s("purpose"),"duration_minutes" to s("duration").toLong())
-   "payment"->mapOf("reference" to s("reference"),"amount_fcfa" to s("amount").toLong(),"channel" to s("channel"))
+   "access","visitor","vehicle","assignment"->mapOf("reference" to s("reference"),"purpose" to s("purpose"),"duration_minutes" to s("duration").toDouble().toLong())
+   "payment"->mapOf("reference" to s("reference"),"amount_fcfa" to s("amount").toDouble().toLong(),"channel" to s("channel"))
    "evidence"->mapOf("reference" to s("reference"),"digest" to s("digest").lowercase())
    else->input.mapValues{it.value.trim()}
   }

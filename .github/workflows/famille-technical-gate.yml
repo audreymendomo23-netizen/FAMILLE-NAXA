@@ -153,9 +153,8 @@ jobs:
           set -euo pipefail
           gradle wrapper --gradle-version 8.11.1 --distribution-type bin
           sed -i '/^distributionSha256Sum=/d' gradle/wrapper/gradle-wrapper.properties
-          checksum=$(curl -fsS https://services.gradle.org/distributions/gradle-8.11.1-bin.zip.sha256)
-          [[ "$checksum" =~ ^[a-f0-9]{64}$ ]]
-          printf 'distributionSha256Sum=%s\n' "$checksum" >> gradle/wrapper/gradle-wrapper.properties
+          # Official binary checksum: https://gradle.org/release-checksums/ (8.11.1).
+          printf '%s\n' 'distributionSha256Sum=f397b287023acdba1e9f6fc5ea72d22dd63669d59ed4a289a29b1a76eee151c6' >> gradle/wrapper/gradle-wrapper.properties
           chmod +x gradlew
           ./gradlew --no-daemon --version
       - name: Compiler dix APK debug et release et exécuter les tests unitaires
