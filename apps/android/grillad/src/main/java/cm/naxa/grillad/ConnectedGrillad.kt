@@ -1,5 +1,6 @@
 package cm.naxa.grillad
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
@@ -24,7 +25,7 @@ internal fun bounds(period:String):Pair<String,String>{val d=LocalDate.parse(day
  fun reset(){session=null;site=null;data=null;pending=null;password="";page="Accueil"}
  suspend fun call(body:JSONObject):Any{val s=session;return try{api.call(body,s?.optString("access"))}catch(e:GrilladApiError){if(e.status!=401||s==null||body.optString("action") in listOf("login","refresh","logout"))throw e;val next=api.call(obj("action" to "refresh","refresh" to s.optString("refresh"))) as JSONObject;session=next;api.call(body,next.optString("access"))}}
  fun run(action:suspend ()->Unit){if(busy)return;busy=true;msg="";scope.launch{try{action()}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){msg=e.message?:"Opération refusée";if(e is GrilladApiError&&e.status in listOf(401,403)){data=null;if(e.status==401)reset()}}finally{busy=false}}}
- suspend fun load(s:JSONObject,p:String=period){data=null;val (from,to)=bounds(p);data=call(obj("action" to "snapshot","org" to s.optString("org"),"site" to s.optString("site"),"from" to from,"to" to to)) as JSONObject}
+ suspend fun load(s:JSONObject,p:String=period){data=null;val (from,to)=bounds(p);val snapshot=call(obj("action" to "snapshot","org" to s.optString("org"),"site" to s.optString("site"),"from" to from,"to" to to)) as JSONObject;val attendance=try{call(obj("action" to "attendance_status","org" to s.optString("org"),"site" to s.optString("site"))) as JSONObject}catch(e:GrilladApiError){if(e.status in listOf(401,403))throw e;null};snapshot.put("attendance",attendance?:JSONObject.NULL);data=snapshot}
  suspend fun submit(req:JSONObject){pending=req;try{call(req);pending=null;msg="Opération confirmée par le serveur";site?.let{load(it)}}catch(e:GrilladApiError){if(e.status in listOf(400,401,403))pending=null;throw e}}
  fun mutate(operation:String,payload:JSONObject){val s=site?:return;if(pending!=null){msg="Vérifier la requête en attente";return};run{submit(obj("action" to "mutate","org" to s.optString("org"),"site" to s.optString("site"),"event" to UUID.randomUUID().toString(),"operation" to operation,"payload" to payload))}}
  if(!validGrilladConfig(BuildConfig.GRILLAD_API_URL,BuildConfig.GRILLAD_PUBLIC_KEY)){Text("Configuration GRILLAD invalide. Aucun accès.");return}
@@ -52,7 +53,7 @@ internal fun bounds(period:String):Pair<String,String>{val d=LocalDate.parse(day
     "Dépenses"->{OutlinedTextField(name,{name=it},label={Text("Libellé")});OutlinedTextField(amount,{amount=it},label={Text("Montant")});Button({mutate("expense",obj("label" to name,"value" to amount.toLongOrNull()))},enabled=enabled){Text("Enregistrer")};rows(d.optJSONArray("expenses")).forEach{x->Text(x.optString("label")+" · "+x.optString("value")+" F")}}
     "Prévisions"->{rows(d.optJSONArray("forecasts")).forEach{x->Text(x.optString("name")+" · "+if(x.isNull("quantity"))"Historique insuffisant" else x.optString("quantity")+" unités estimées")}}
     "Notifications"->{rows(d.optJSONArray("notices")).forEach{x->Text(x.optString("text"))};Text("Push distant à qualifier.")}
-    "Équipe"->Text("Pointage privé à raccorder.")
+    "Équipe"->{GrilladAttendance(d.optJSONObject("attendance"),enabled){proof->val s=site;if(s!=null&&pending==null)run{proof.put("action","attendance_capture").put("org",s.optString("org")).put("site",s.optString("site")).put("event",UUID.randomUUID().toString());submit(proof)}}}
     "Vidéosurveillance"->Text("Passerelle NAXA SECURITY non configurée.")
     "ZIPPLE Connect"->Text("Partenariat ZIPPLE Snack-Bar non raccordé.")
     "Abonnement"->Text("ACCÈS : 2 000 F/mois ou 24 000 F/an. PREMIUM : 6 000 F/mois ou 60 000 F/an.")

@@ -1,5 +1,5 @@
 import React,{useState,useEffect,useRef,useMemo} from 'react';
-import {client,periodBounds} from './connected-api.mjs';import {dayKey,families} from './domain.mjs';
+import {AttendanceCapture} from './AttendanceCapture';import {client,periodBounds} from './connected-api.mjs';import {dayKey,families} from './domain.mjs';
 const money=(n:any)=>n==null?'Non calculable':new Intl.NumberFormat('fr-CM').format(n)+' F';
 const field=(f:FormData,k:string)=>String(f.get(k)??'');const number=(f:FormData,k:string)=>Number(field(f,k));
 export function ConnectedApp({url,publicKey}:{url:string,publicKey:string}){
@@ -11,7 +11,7 @@ export function ConnectedApp({url,publicKey}:{url:string,publicKey:string}){
  async function call(body:any,s=sessionRef.current){try{return await api(body,s?.access)}catch(e:any){if(e.status!==401||!s?.refresh||['login','refresh','logout'].includes(body.action))throw e;const next=await api({action:'refresh',refresh:s.refresh});setSession(next);return await api(body,next.access)}}
  function reset(){epoch.current++;setSession(null);Site(null);Data(null);Pending(null);Page('Accueil')}
  async function guarded(fn:()=>Promise<void>){if(lock.current)return;lock.current=true;Busy(true);Msg('');try{await fn()}catch(e:any){Msg(e.message||'Opération refusée');if(e.status===401||e.status===403){Data(null);if(e.status===401)reset()}}finally{lock.current=false;Busy(false)}}
- async function load(s:any,p=period){const e=epoch.current;Data(null);const bounds=periodBounds(dayKey(),p);const result=await call({action:'snapshot',org:s.org,site:s.site,...bounds});if(epoch.current===e)Data(result)}
+ async function load(s:any,p=period){const e=epoch.current;Data(null);const bounds=periodBounds(dayKey(),p);const result=await call({action:'snapshot',org:s.org,site:s.site,...bounds});let attendance=null;try{attendance=await call({action:'attendance_status',org:s.org,site:s.site})}catch(e:any){if(e.status===401||e.status===403)throw e}if(epoch.current===e)Data({...result,attendance})}
  function changeSite(s:any){if(pending){Msg('Résoudre la requête en attente avant de changer de site');return}void guarded(async()=>{Site(s);Page('Accueil');await load(s)})}
  function mutate(operation:string,payload:any){if(pending){Msg('Une requête reste à vérifier. Réessayez la même opération.');return}const req={action:'mutate',org:site.org,site:site.site,event:crypto.randomUUID(),operation,payload};void submit(req)}
  async function submit(req:any){await guarded(async()=>{Pending(req);try{await call(req);Pending(null);Msg('Opération confirmée par le serveur');await load(site)}catch(e:any){if(e.status===400||e.status===401||e.status===403)Pending(null);throw e}})}
@@ -29,7 +29,7 @@ export function ConnectedApp({url,publicKey}:{url:string,publicKey:string}){
  {page==='Dépenses'&&<><form onSubmit={form(f=>mutate('expense',{label:field(f,'label'),value:number(f,'value')}))}>{input('label','Libellé')}{input('value','Montant','number')}<button>Enregistrer</button></form>{(data.expenses??[]).map((x:any)=><article key={x.id}>{x.label} · {money(x.value)}</article>)}</>}
  {page==='Prévisions'&&<>{(data.forecasts??[]).map((x:any)=><article key={x.item}>{x.name} · {x.quantity==null?'Historique insuffisant':x.quantity+' unités estimées'}</article>)}{!data.forecasts?.length&&<p>Historique insuffisant.</p>}</>}
  {page==='Notifications'&&<>{(data.notices??[]).map((x:any)=><article key={x.id}>{x.text}</article>)}<p>Push distant à qualifier.</p></>}
- {page==='Équipe'&&<p>Pointage sécurisé à activer après raccordement de la preuve privée et des paramètres de site.</p>}
+ {page==='Équipe'&&<AttendanceCapture attendance={data.attendance} disabled={busy||!!pending} onCapture={proof=>void submit({action:'attendance_capture',org:site.org,site:site.site,event:crypto.randomUUID(),...proof})}/>}
  {page==='Vidéosurveillance'&&<p>Passerelle NAXA SECURITY non configurée ; aucun flux disponible.</p>}
  {page==='ZIPPLE Connect'&&<p>Partenariat ZIPPLE Snack-Bar non raccordé.</p>}
  {page==='Abonnement'&&<p>ACCÈS : 2 000 F/mois ou 24 000 F/an. PREMIUM : 6 000 F/mois ou 60 000 F/an. Paiement à raccorder.</p>}
