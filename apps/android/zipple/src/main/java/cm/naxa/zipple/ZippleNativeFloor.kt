@@ -90,7 +90,7 @@ internal fun zippleBookingTime(value:String):String? = try {
         }}){Text(t("Réserver la table","Book table"))}
         d.rows("reservations").forEach{x->
             val state=x.optString("state");val label=x.optString("guest_name")
-            Text(label+" · "+when(state){"booked"->t("Réservée","Booked");"seated"->t("Installée","Seated");"cancelled"->t("Annulée","Cancelled");else->state})
+            Text(label+" · "+when(state){"booked"->t("Réservée","Booked");"seated"->t("Installée","Seated");"cancelled"->t("Annulée","Cancelled");"completed"->t("Terminée","Completed");"expired"->t("Expirée","Expired");else->state})
             fun localTime(value:String)=runCatching{java.time.Instant.parse(value).atOffset(doualaOffset).format(java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm"))}.getOrDefault(value)
             Text(localTime(x.optString("starts_at"))+" / "+localTime(x.optString("ends_at")))
             if(state=="booked")for((next,fr,english) in listOf(Triple("seated","Accueillir","Seat"),Triple("cancelled","Annuler","Cancel"),Triple("expired","Expirer","Expire"))){

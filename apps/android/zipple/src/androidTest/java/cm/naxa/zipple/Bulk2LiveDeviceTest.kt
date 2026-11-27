@@ -164,8 +164,10 @@ class Bulk2LiveDeviceTest {
   step("seated booking opened actual session"){runBlocking{
    val snap=business.call(session,site,"snapshot") as JSONObject
    val table=snap.rows("tables").single{it.optString("label")=="Table QR native"}
-   assertFalse(table.isNull("session_id"))
-   business.call(session,site,"table_close",body("table_session_id" to table.getString("session_id")))
+   assertFalse("reservation must open session",table.isNull("session_id"))
+   val openRooms=business.call(session,site,"floor_snapshot") as JSONObject
+   assertTrue("booking is seated before closing",openRooms.rows("reservations").any{it.optString("guest_name")=="Accueil natif"&&it.optString("state")=="seated"})
+   assertEquals("close reservation table",true,business.call(session,site,"table_close",body("table_session_id" to table.getString("session_id"))))
   }}
   input("Nom en attente","Attente native");click("Ajouter à l’attente");awaitText("Attente native · 2");click("Retirer de l’attente : Attente native")
   step("wait for cancelled waiting entry"){compose.waitUntil(30000){compose.onAllNodesWithText("Attente native · 2",substring=false).fetchSemanticsNodes().isEmpty()}}
@@ -173,8 +175,8 @@ class Bulk2LiveDeviceTest {
   step("waitlist seated opens actual table"){compose.waitUntil(30000){compose.onAllNodesWithText("Installation native · 2",substring=false).fetchSemanticsNodes().isEmpty()};runBlocking{
     val snap=business.call(session,site,"snapshot") as JSONObject
     val table=snap.rows("tables").single{it.optString("label")=="Table QR native"}
-    assertFalse(table.isNull("session_id"))
-    business.call(session,site,"table_close",body("table_session_id" to table.getString("session_id")))
+    assertFalse("waitlist must open session",table.isNull("session_id"))
+    assertEquals("close waiting table",true,business.call(session,site,"table_close",body("table_session_id" to table.getString("session_id"))))
   }}
   step("native room persistence"){runBlocking{
    val rooms=business.call(session,site,"floor_snapshot") as JSONObject
@@ -183,8 +185,8 @@ class Bulk2LiveDeviceTest {
    assertEquals("persisted table zone",zone.getString("id"),table.getString("zone_id"));assertEquals("persisted seating capacity",6,table.getInt("seats"))
    assertTrue("cancelled booking must persist",rooms.rows("reservations").any{it.optString("guest_name")=="Réservation native"&&it.optString("state")=="cancelled"})
    assertFalse("cancelled waiting entry must disappear",rooms.rows("waitlist").any{it.optString("guest_name")=="Attente native"})
-   assertTrue("seated booking must persist",rooms.rows("reservations").any{it.optString("guest_name")=="Accueil natif"&&it.optString("state")=="seated"})
-   assertFalse("seated waiting entry must disappear",rooms.rows("waitlist").any{it.optString("guest_name")=="Installation native"})
+   assertTrue("completed booking must persist after table close",rooms.rows("reservations").any{it.optString("guest_name")=="Accueil natif"&&it.optString("state")=="completed"})
+   assertFalse("completed waiting entry must disappear",rooms.rows("waitlist").any{it.optString("guest_name")=="Installation native"})
   }}
   android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_FLOOR_RESERVATIONS_WAITLIST_PASS")
   var firstNumber="";var secondNumber=""
@@ -210,6 +212,13 @@ class Bulk2LiveDeviceTest {
   click("Table source : Addition source native");click("Addition cible native");awaitText("Reste à régler : 1000 FCFA")
   click("Sélectionner #"+firstNumber);click("Sélectionner #"+secondNumber);awaitText("Total sélectionné : 1000 FCFA")
   click("Confirmer le règlement groupé reçu");awaitText("Règlement groupé confirmé");awaitText("Reste à régler : 0 FCFA")
+  step("close settled transferred table sessions"){runBlocking{
+    val snap=business.call(session,site,"snapshot") as JSONObject
+    for(label in listOf("Addition source native","Addition cible native")){
+      val table=snap.rows("tables").single{it.optString("label")==label}
+      assertEquals(true,business.call(session,site,"table_close",body("table_session_id" to table.getString("session_id"))))
+    }
+  }}
   android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_TABLE_BILL_TRANSFER_AND_GROUP_PASS")
   click("Fidélité et parrainage");awaitText("Points non monétaires ; avantages sur commande ultérieure réglée.")
   click("Client : —");click("Client QR natif")

@@ -74,8 +74,8 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
  assert.equal(Number(await scalar("select count(*) from zp_reservations where site_id=$1 and guest_name='Réservation native' and state='cancelled'",[site])),1);
  assert.equal(Number(await scalar("select count(*) from zp_waitlist where site_id=$1 and guest_name='Attente native' and state='cancelled'",[site])),1);
  assert.equal(Number(await scalar("select count(*) from zp_reservations where site_id=$1 and guest_name='Conflit natif'",[site])),0);
- assert.equal(Number(await scalar("select count(*) from zp_reservations r join zp_table_sessions s on s.id=r.session_id where r.site_id=$1 and r.guest_name='Accueil natif' and r.state='seated' and s.closed_at is not null",[site])),1);
- assert.equal(Number(await scalar("select count(*) from zp_waitlist w join zp_table_sessions s on s.id=w.session_id where w.site_id=$1 and w.guest_name='Installation native' and w.state='seated' and s.closed_at is not null",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_reservations r join zp_table_sessions s on s.id=r.session_id where r.site_id=$1 and r.guest_name='Accueil natif' and r.state='completed' and s.closed_at is not null",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_waitlist w join zp_table_sessions s on s.id=w.session_id where w.site_id=$1 and w.guest_name='Installation native' and w.state='completed' and s.closed_at is not null",[site])),1);
  console.log("ZIPPLE_NATIVE_FLOOR_PERSISTENCE_PASS");
  const nativeCustomer=await scalar("select id from zp_customers where org_id=$1 and display_name='Client QR natif'",[org]);assert.ok(nativeCustomer);
  const card=await scalar("select id from zp_loyalty_cards where customer_id=$1 and org_id=$2 and revoked_at is null",[nativeCustomer,org]);
@@ -85,6 +85,7 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
  console.log("ZIPPLE_BULK3_ANDROID_REAL_ERP_LEDGER_EVIDENCE_OFFLINE_REVIEW_PASS");
  assert.equal(Number(await scalar("select count(*) from zp_bill_transfers where site_id=$1 and reason='Transfert natif contrôlé'",[site])),1);
  assert.equal(Number(await scalar("select count(*) from zp_payment_groups where site_id=$1 and amount_xaf=1000 and cardinality(order_ids)=2",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_table_sessions s join zp_tables t on t.id=s.table_id where s.site_id=$1 and t.label in ('Addition source native','Addition cible native') and s.closed_at is not null",[site])),2);
  console.log("ZIPPLE_NATIVE_GROUP_BILL_PERSISTENCE_PASS");
  const closed=await ok("cash_close",{cash_id:cash,counted_xaf:5900});assert.equal(closed.variance_xaf,0);
  console.log("ZIPPLE_BULK2_ANDROID_REAL_EDGE_SPLIT_QUANTITY_AMOUNT_AND_CASH_PASS");

@@ -25,5 +25,9 @@ for file in root.rglob("*.xml"):
                 if not re.fullmatch(r"[\w .,:—’/()\-]+",step): step="unclassified"
                 cause=re.search(r"Caused by: ([\w.$]+)",raw)
                 print("ANDROID_FAILURE",case.get("name","unknown"),step,"cause="+(cause.group(1) if cause else "not captured"))
+                # Whitelist test-authored assertion labels, never raw actual values or request data.
+                for label in ("persisted table zone","persisted seating capacity","cancelled booking must persist","cancelled waiting entry must disappear","seated booking must persist","completed booking must persist after table close","completed waiting entry must disappear","booking is seated before closing","reservation must open session","waitlist must open session","close reservation table","close waiting table"):
+                    if label in raw:
+                        print("ANDROID_ASSERTION_LABEL",label)
     except (OSError,ET.ParseError):
         print("ANDROID_REPORT_UNREADABLE")
