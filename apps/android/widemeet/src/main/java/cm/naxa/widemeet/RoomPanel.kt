@@ -108,7 +108,13 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  Text(tr("Consentement audio","Audio consent"))
  TextButton(enabled=!busy,onClick={command("consent",true)}){Text(tr("Donner mon accord","Give consent"))}
  TextButton(enabled=!busy,onClick={command("consent",false)}){Text(tr("Retirer mon accord","Withdraw consent"))}
- if(r.optString("recording")=="requested")Text(tr("Demande d’enregistrement non confirmée par le moteur audio.","Recording request not confirmed by the audio engine."))
+ when(r.optJSONObject("recordingStatus")?.optString("phase")){
+ "active"->Text(tr("● Enregistrement audio en cours","● Audio recording active"),color=MaterialTheme.colorScheme.error)
+ "stopping"->Text(tr("Arrêt de la capture en cours","Stopping recording"))
+ "complete"->Text(tr("Enregistrement audio terminé et vérifié","Audio recording completed and verified"))
+ "discarded"->Text(tr("Segment audio supprimé par sécurité","Audio segment discarded for safety"))
+ else->if(r.optString("recording")=="requested")Text(tr("Demande d’enregistrement non confirmée par le moteur audio.","Recording request not confirmed by the audio engine."))
+ }
  if(isHost){
  TextButton(enabled=!busy,onClick={command("record",true)}){Text(tr("Demander l’enregistrement audio","Request audio recording"))}
  TextButton(enabled=!busy,onClick={command("record",false)}){Text(tr("Arrêter la demande","Stop request"))}
