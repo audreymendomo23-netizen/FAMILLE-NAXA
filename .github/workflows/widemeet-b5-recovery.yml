@@ -1,5 +1,10 @@
 name: WideMeet B5 — isolated recovery and support UI
 on:
+  push:
+    branches: [test/widemeet-wave02-b5-20261127]
+    paths:
+      - 'apps/web/widemeet/src/RecoveryKey.tsx'
+      - '.github/workflows/widemeet-b5-recovery.yml'
   workflow_dispatch:
   pull_request:
     branches: [test/widemeet-qualification-20261126]

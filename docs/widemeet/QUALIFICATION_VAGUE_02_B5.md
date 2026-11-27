@@ -1,0 +1,2 @@
+# Vague 02 — candidat B5 récupération
+Base c8deaf0c3fc1fd8c01c29e96673c6fcc0e492327. Incident confirmé par build Web RecoveryKey.tsx:17:296 Expected > but found }. Une accolade excédentaire dans onChange; correction minimale, aucune modification de droits, deux examens, preuve de possession ou flags. Workflow spécialisé relancé sur branche test isolée, sans réouvrir la PR B5 ni prétendre vert avant résultat. ID B5.3-R06 partiel jusqu'à parité Android/Web/PWA et preuve réelle; B5.3-A01 engagé, non clos.
