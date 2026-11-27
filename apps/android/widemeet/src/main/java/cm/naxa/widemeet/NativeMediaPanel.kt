@@ -43,6 +43,22 @@ import java.net.URI
  var mic by remember{mutableStateOf(false)};var camera by remember{mutableStateOf(false)};var screen by remember{mutableStateOf(false)};var screenRequestGeneration by remember{mutableIntStateOf(-1)}
  var tracks by remember{mutableStateOf<List<VideoTrack>>(emptyList())}
  var generation by remember{mutableIntStateOf(0)}
+ var captionLanguage by remember(roomId,session.deviceId){mutableStateOf("off")}
+ var caption by remember(roomId,session.deviceId,captionLanguage,status){mutableStateOf<JSONObject?>(null)}
+ var captionState by remember(roomId,session.deviceId,captionLanguage,status){mutableStateOf("idle")}
+ var captionMenu by remember{mutableStateOf(false)}
+ LaunchedEffect(roomId,session.deviceId,captionLanguage,status){
+  if(status!="connected"||captionLanguage=="off")return@LaunchedEffect
+  while(true){
+   try{
+    val response=gateway.request("transcription",JSONObject().put("action","live-captions").put("data",JSONObject().put("room_id",roomId).put("language",captionLanguage)),session) as JSONObject
+    captionState=response.optString("status");caption=if(captionState=="ready"&&response.optLong("ttl_ms")>0)response else null
+    kotlinx.coroutines.delay(minOf(1500L,response.optLong("ttl_ms",1500L).coerceAtLeast(1L)))
+    caption=null
+   }catch(e:CancellationException){throw e}catch(e:Exception){caption=null;captionState="unavailable";kotlinx.coroutines.delay(1500)}
+  }
+ }
+
  fun disposeRoom(r:Room){runCatching{r.disconnect()};runCatching{r.release()}}
  fun leave(){generation++;val r=room;room=null;tracks=emptyList();mic=false;camera=false;screen=false;busy=false;status="idle";if(r!=null)disposeRoom(r)}
  DisposableEffect(session.deviceId,roomId){onDispose{generation++;room?.let{disposeRoom(it)};room=null}}
@@ -110,6 +126,15 @@ import java.net.URI
  Text(when(status){"connecting"->tr("Connexion…","Connecting…");"connected"->tr("Connecté à la réunion","Connected to meeting");"reconnecting"->tr("Reconnexion…","Reconnecting…");"disconnected"->tr("Connexion terminée","Connection ended");else->tr("Prêt à rejoindre","Ready to join")})
  val r=room;if(r!=null)tracks.forEach{track->key(track){RemoteVideo(r,track)}}
  if(status=="connected"){
+ val languages=listOf("off" to tr("Désactivés","Off"),"original" to tr("Original","Original"),"fr" to "Français","en" to "English","ff" to "Fulfulde","es" to "Español","it" to "Italiano","zh" to "中文")
+ Text(tr("Sous-titres (audio consenti)","Captions (consented audio)"))
+ Box{OutlinedButton(onClick={captionMenu=true}){Text(languages.firstOrNull{it.first==captionLanguage}?.second?:captionLanguage)};DropdownMenu(expanded=captionMenu,onDismissRequest={captionMenu=false}){for((code,name) in languages)DropdownMenuItem(text={Text(name)},onClick={captionLanguage=code;captionMenu=false})}}
+ if(captionLanguage!="off"){val c=caption
+ Text(if(c!=null)c.optString("text").ifBlank{tr("Silence","Silence")}else if(captionState=="unavailable")tr("Sous-titres indisponibles ou consentement absent.","Captions unavailable or consent missing.")else tr("En attente de parole enregistrée avec consentement.","Waiting for consented recorded speech."))
+ if(c?.optBoolean("fallback")==true)Text(tr("Traduction indisponible : langue originale.","Translation unavailable: original language."))
+ if(c?.optBoolean("uncertain")==true)Text(tr("Texte à vérifier.","Text needs review."))
+ if(c!=null&&c.optString("language")!=c.optString("source_language"))Text(c.optString("original"))
+ }
  Button(enabled=!busy&&micAllowed,onClick={if(mic||ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED)toggle("mic")else micPermission.launch(Manifest.permission.RECORD_AUDIO)}){Text(if(mic)tr("Couper mon micro","Mute my microphone")else tr("Activer mon micro","Enable my microphone"))}
  Button(enabled=!busy,onClick={if(camera||ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)toggle("camera")else cameraPermission.launch(Manifest.permission.CAMERA)}){Text(if(camera)tr("Couper ma caméra","Disable my camera")else tr("Activer ma caméra","Enable my camera"))}
  Button(enabled=!busy&&(screen||screenAllowed),onClick={if(screen)share(null)else{screenRequestGeneration=generation;val manager=context.getSystemService(MediaProjectionManager::class.java);if(manager==null){error=true;screenRequestGeneration=-1}else screenPermission.launch(manager.createScreenCaptureIntent())}}){Text(if(screen)tr("Arrêter le partage","Stop sharing")else tr("Partager mon écran","Share my screen"))}
