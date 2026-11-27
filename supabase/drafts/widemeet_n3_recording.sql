@@ -34,7 +34,7 @@ returns jsonb language sql security invoker stable set search_path=pg_catalog,pu
     and (exists(select 1 from public.wm_room_entitlements e where e.workspace_id=r.workspace_id and e.enabled and e.plan='premium' and e.valid_until>now())
       or exists(select 1 from public.wm_paid_passes p where p.consumed_room_id=r.id and p.workspace_id=r.workspace_id and p.valid_until>now()))
     and not exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'response'='accepted' and p->>'excluded'='false' and (p->>'consent' is distinct from 'true' or not exists(select 1 from public.wm_accounts a join public.wm_memberships m on m.account_id=a.id and m.workspace_id=r.workspace_id and m.enabled where a.id::text=p->>'memberId' and a.enabled))),
-  'normal_stop',coalesce((select (e->>'action'='record_pause' or e->>'action'='record' and (e->>'payload')::jsonb->2='false'::jsonb) and e->>'actor'=r.host_id::text from jsonb_array_elements(r.state->'events') with ordinality as x(e,n) where e->>'action' in ('record','record_pause','consent','respond','exclude','pause','end','cancel') order by n desc limit 1),false)
+  'normal_stop',coalesce((select (e->>'action'='record_pause' or e->>'action'='record' and (e->>'payload')::jsonb->2='false'::jsonb) and e->>'actor'=r.host_id::text from jsonb_array_elements(r.state->'events') with ordinality as x(e,n) where e->>'action' in ('record','record_pause','consent','respond','exclude','pause','end','cancel','lobby_admit','lobby_reject') order by n desc limit 1),false)
  ) from public.wm_rooms r where r.id=p_room
 $wm$;
 revoke all on function public.wm_recording_policy(uuid) from public,anon,authenticated;
@@ -85,7 +85,7 @@ begin
  r:=public.wm_room_read(p_hash,p_room);
  if r is null then return null;end if;
  select * into a from public.wm_room_actor_for(p_hash,p_room);
- if not found or not exists(select 1 from jsonb_array_elements(r->'participants') as member_row(participant) where member_row.participant->>'memberId'=a.account_id::text and member_row.participant->>'response'='accepted' and member_row.participant->>'excluded'='false') then return null;end if;
+ if not found or not exists(select 1 from jsonb_array_elements(r->'participants') as member_row(participant) where member_row.participant->>'memberId'=a.account_id::text and member_row.participant->>'response'='accepted' and member_row.participant->>'excluded'='false' and (r->>'lobbyRequired' is distinct from 'true' or r->>'hostId'=a.account_id::text or member_row.participant->>'lobbyStatus'='admitted')) then return null;end if;
  select * into x from public.wm_recording_runs where room_id=p_room order by created_at desc limit 1;
  if not found then return jsonb_build_object('phase','off');end if;
  p:=public.wm_recording_policy(p_room);
