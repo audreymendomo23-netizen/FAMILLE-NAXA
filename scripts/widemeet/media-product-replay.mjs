@@ -130,7 +130,7 @@ try{
  if(liveEnabled){
   await b.evaluate(()=>window.r.localParticipant.setMicrophoneEnabled(false));
   await delay(12000);
-  const liveWorker=createLiveCaptions({supabaseUrl:base,serviceKey,outputDirectory:process.env.WM_EGRESS_OUT,python:process.env.WM_ASR_PYTHON,modelDir:process.env.WM_ASR_MODEL});
+  const liveWorker=createLiveCaptions({supabaseUrl:base,serviceKey,activeDirectory:process.env.WM_EGRESS_ACTIVE,python:process.env.WM_ASR_PYTHON,modelDir:process.env.WM_ASR_MODEL,onDiagnostic:({stage,reason})=>console.log("CAPTION_DIAGNOSTIC "+stage+" "+reason)});
   await until(async()=>await liveWorker.tick()>0,"actual caption before consent withdrawal",45000);
   const live=await good(roomApi+"/transcription",{action:"live-captions",data:{room_id:rid,language:"original"}},hs.access_token);assert.equal(live.status,"ready");
  }else await delay(2500);
@@ -158,7 +158,7 @@ try{
   if(qualifySpeech)await b.evaluate(()=>window.r.localParticipant.setMicrophoneEnabled(false));
   await cmd(hs.access_token,"record",true);await until(()=>phase("active"),"resumed recording active",90000);await delay(qualifySpeech?16000:3000);
   if(process.env.WM_LIVE_CAPTIONS_QUALIFIED==="true"){
-   const liveWorker=createLiveCaptions({supabaseUrl:base,serviceKey,outputDirectory:process.env.WM_EGRESS_OUT,python:process.env.WM_ASR_PYTHON,modelDir:process.env.WM_ASR_MODEL});
+   const liveWorker=createLiveCaptions({supabaseUrl:base,serviceKey,activeDirectory:process.env.WM_EGRESS_ACTIVE,python:process.env.WM_ASR_PYTHON,modelDir:process.env.WM_ASR_MODEL,onDiagnostic:({stage,reason})=>console.log("CAPTION_DIAGNOSTIC "+stage+" "+reason)});
    const cap=(token,language,room_id=rid)=>request(roomApi+"/transcription",{action:"live-captions",data:{room_id,language}},token);
    await until(async()=>await liveWorker.tick()>0,"actual live caption inference while Egress still active",45000);
    const original=await cap(hs.access_token,"original");assert.equal(original.status,200);assert.equal(original.data.status,"ready");
