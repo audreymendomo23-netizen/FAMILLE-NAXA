@@ -28,3 +28,53 @@ export function forecastBacktest(snapshot){
  if(!Number.isSafeInteger(Math.round(error))||!Number.isSafeInteger(actual))return null;
  return {daily:Math.round(next),mae:Math.round(error/21),wape:actual>0?Math.round(error/actual*1000)/10:null,observations:21};
 }
+
+/** Estimate material cost using only the visible, non-expired lots, not a full production quote. */
+export function recipePlan(erp,catalog,weighted,itemId,portions,change,today,now){
+ if(!Array.isArray(erp?.recipes)||!Array.isArray(erp?.ingredients)||!Array.isArray(erp?.lots)||!Array.isArray(catalog?.items)||!Array.isArray(weighted?.rules)||!Number.isInteger(portions)||portions<1||portions>10000||!Number.isInteger(change)||change< -100||change>500||!Number.isFinite(dayNumber(today))||!Number.isFinite(now))return null;
+ const item=catalog.items.find(i=>i.id===itemId),components=erp.recipes.filter(c=>c.item_id===itemId);
+ if(!item||!components.length||weighted.rules.some(r=>r.item_id===itemId))return null;
+ const detail=[];let total=0;let complete=true;
+ for(const c of components){
+  const ingredient=erp.ingredients.find(i=>i.id===c.ingredient_id);
+  if(!ingredient||!whole(c.qty_milli)||c.qty_milli===0||!whole(ingredient.available_milli))return null;
+  const needed=c.qty_milli*portions;if(!Number.isSafeInteger(needed))return null;
+  const lots=erp.lots.filter(l=>l.ingredient_id===c.ingredient_id&&whole(l.remaining_milli)&&l.remaining_milli>0&&whole(l.remaining_cost)&&(!l.expires_on||Number.isFinite(dayNumber(l.expires_on))&&l.expires_on>=today)&&(!l.usable_until||Number.isFinite(Date.parse(l.usable_until))&&Date.parse(l.usable_until)>now));
+  const available=lots.reduce((n,l)=>n+l.remaining_milli,0),cost=lots.reduce((n,l)=>n+l.remaining_cost,0);
+  const reliable=Number.isSafeInteger(available)&&Number.isSafeInteger(cost)&&available===ingredient.available_milli&&available>=needed&&available>0;
+  const estimate=reliable?cost/available*needed:null;
+  if(estimate===null)complete=false;else total+=estimate;
+  detail.push({id:ingredient.id,name:ingredient.name,unit:ingredient.unit,needed,available:ingredient.available_milli,shortage:Math.max(0,needed-ingredient.available_milli),estimate:estimate===null?null:Math.round(estimate)});
+ }
+ const historical=(Array.isArray(erp.batches)?erp.batches:[]).filter(b=>b.item_id===itemId&&whole(b.cost_xaf)&&whole(b.servings)&&b.servings>0).sort((x,y)=>String(y.created_at).localeCompare(String(x.created_at)))[0];
+ const valid=complete&&Number.isSafeInteger(Math.round(total))&&Number.isSafeInteger(Math.round(total*(1+change/100)));
+ const price=whole(item.price_xaf)?item.price_xaf:null;
+ return {detail,basePrice:price,materialCost:valid?Math.round(total):null,unitCost:valid?Math.round(total/portions):null,scenarioUnit:valid?Math.round(total*(1+change/100)/portions):null,historicalUnit:historical?Math.round(historical.cost_xaf/historical.servings):null,historicalDate:historical?.created_at??null};
+}
+export function wasteSummary(expiry,braise,procurement,start,end){
+ if(!Number.isFinite(dayNumber(start))||!Number.isFinite(dayNumber(end))||start>end)return null;
+ const inPeriod=x=>{const timestamp=Date.parse(x);if(!Number.isFinite(timestamp))return false;const local=new Date(timestamp+3600000).toISOString().slice(0,10);return local>=start&&local<=end};
+ const expired=Array.isArray(expiry?.losses)?expiry.losses.filter(x=>inPeriod(x.created_at)&&whole(x.loss_cost)&&whole(x.servings)):null;
+ // Braise yields aggregate losses over their entire life, not loss-event date; do not label as period losses.
+ const yields=Array.isArray(braise?.yields)?braise.yields.filter(x=>whole(x.loss_cost)&&whole(x.discarded_servings)):null;
+ const atRisk=Array.isArray(expiry?.batches)?expiry.batches.filter(b=>b.expired===true&&whole(b.remaining_cost_xaf)&&whole(b.remaining_servings)):null;
+ return {expired:expired?{count:expired.length,servings:expired.reduce((a,b)=>a+b.servings,0),cost:expired.reduce((a,b)=>a+b.loss_cost,0)}:null,
+ braise:yields?{servings:yields.reduce((a,b)=>a+b.discarded_servings,0),cost:yields.reduce((a,b)=>a+b.loss_cost,0)}:null,
+ atRisk:atRisk?{count:atRisk.length,cost:atRisk.reduce((a,b)=>a+b.remaining_cost_xaf,0)}:null,
+ inventory:whole(procurement?.loss_cost_xaf)?procurement.loss_cost_xaf:null};
+}
+export function workforceDay(planning,day){
+ if(!Array.isArray(planning?.rows)||!Number.isFinite(dayNumber(day)))return null;
+ const start=Date.parse(day+"T00:00:00+01:00"),end=start+86400000;
+ const shifts=planning.rows.filter(r=>["open","in_progress","done"].includes(r.state)&&r.assignee_id&&Number.isFinite(Date.parse(r.starts_at))&&Number.isFinite(Date.parse(r.due_at))&&Date.parse(r.starts_at)<end&&Date.parse(r.due_at)>start&&Date.parse(r.due_at)>Date.parse(r.starts_at));
+ const hours=Array.from({length:24},(_,h)=>({hour:h,staff:new Set(shifts.filter(r=>Date.parse(r.starts_at)<start+(h+1)*3600000&&Date.parse(r.due_at)>start+h*3600000).map(r=>r.assignee_id)).size}));
+ return {shifts:shifts.length,people:new Set(shifts.map(r=>r.assignee_id)).size,hours};
+}
+export function anomalyReview(metrics){
+ if(!metrics)return null;
+ const rows=[];
+ for(const [key,code,unit] of [["absolute_cash_variance_xaf","CASH","XAF"],["refunds_xaf","REFUNDS","XAF"],["credit_notes_xaf","CREDIT_NOTES","XAF"],["uncosted_receipts","COST","count"],["current_late_orders","LATE","count"]]){
+  const value=metrics[key];rows.push({code,unit,value:whole(value)?value:null});
+ }
+ return rows;
+}

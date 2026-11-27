@@ -19,7 +19,7 @@ import kotlin.math.roundToLong
  var data by remember{mutableStateOf<Map<String,JSONObject>>(emptyMap())};var busy by remember{mutableStateOf(false)}
  var cost by remember{mutableStateOf("")};var price by remember{mutableStateOf("")};var target by remember{mutableStateOf("30")}
  suspend fun load(){busy=true;data=emptyMap();try{
-  for((key,action,body) in listOf(Triple("erp","erp_snapshot",JSONObject()),Triple("credit","credit_snapshot",JSONObject()),Triple("morning","pilotage",JSONObject().put("start",today.minusDays(1).toString()).put("end",today.minusDays(1).toString())),Triple("evening","pilotage",JSONObject().put("start",today.toString()).put("end",today.toString())))){
+  for((key,action,body) in listOf(Triple("erp","erp_snapshot",JSONObject()),Triple("credit","credit_snapshot",JSONObject()),Triple("morning","pilotage",JSONObject().put("start",today.minusDays(1).toString()).put("end",today.minusDays(1).toString())),Triple("evening","pilotage",JSONObject().put("start",today.toString()).put("end",today.toString())),Triple("catalog","snapshot",JSONObject()),Triple("weighted","weighted_snapshot",JSONObject()),Triple("expiry","preparation_expiry_snapshot",JSONObject()),Triple("braise","braise_snapshot",JSONObject()),Triple("procurement","procurement_snapshot",JSONObject()),Triple("planning","workspace_snapshot",JSONObject().put("page","planning")))){
    try{val x=api.call(session,site,action,body) as? JSONObject?:continue;data=data+(key to x)}catch(c:CancellationException){throw c}catch(_:Exception){}
   }
  }finally{busy=false}}
@@ -57,4 +57,5 @@ import kotlin.math.roundToLong
  val c=cost.toLongOrNull();val p=price.toLongOrNull();val g=target.toIntOrNull()
  if(c!=null&&p!=null&&g!=null&&c in 0..2147483647L&&p in 1..2147483647L&&g in 0..99){val suggested=(c*100+99-g)/(100-g);if(suggested<=2147483647L){Text(t("Marge unitaire simulée","Simulated unit margin")+" : "+(p-c)+" FCFA · "+"%.2f".format(java.util.Locale.ROOT,(p-c)*100.0/p)+" %");Text(t("Prix minimum pour la cible","Minimum price for target")+" : "+suggested+" FCFA")}}
  Text(t("Hypothèses manuelles, aucune modification automatique du catalogue.","Manual assumptions, no automatic catalogue change."))
+ ZippleAdvancedIntelligence(data,today,en,mode)
 }
