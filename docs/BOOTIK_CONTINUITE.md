@@ -506,3 +506,6 @@ Baseline 32cad945d43d77c4e0dcb0b3b2f6098eb061bde4 : run 45891154929 SUCCESS 5/5 
 
 ### Passe métier transversale — commandes fournisseur multi-articles
 Commande de 2 à 20 lignes, en-tête immuable, même fournisseur/activité/site, validation et transaction atomique utilisant bk_purchase_create ; aucune mutation de stock ou dette à la création. Références de lignes dérivées, reçus idempotents et lecture des montants agrégés sans double comptage. Réception et paiement restent les opérations canoniques par ligne. Android/Web : panier achat, retrait ligne, envoi confirmé, liste groupée. Recettes API rollback sur seconde ligne hors activité, rejeu, conflit, isolation et privilèges ; Chromium panier multi-articles. Restent réception groupée, avoirs, avances, litiges et échéances. Qualification CI à confirmer.
+
+### Correction de qualification transversale
+Run 46066641443 : échec PostgreSQL de syntaxe sur délimiteurs dollar des fonctions ajoutées (substitution JavaScript). Correction des quatorze délimiteurs des sept fonctions ajoutées, aucune réduction des tests. Nouvelle CI requise.

@@ -717,7 +717,7 @@ revoke all on function bootik.bk_assert_sale_resource(uuid,uuid,uuid,uuid,uuid,u
 
 -- Transverse business operations: exact activity and site; no cross-universe totals.
 create function bootik.bk_assert_business_scope(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_operation text)
-returns text language plpgsql stable security invoker set search_path=pg_catalog,bootik as $
+returns text language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
 declare u text; f text;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
@@ -737,10 +737,10 @@ begin
   if found and f not in ('director','site_manager') then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
  end if;
  return u;
-end $;
+end $$;
 
 create function bootik.bk_business_overview(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_days integer)
-returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,bootik as $
+returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
 declare u text; answer jsonb; local_day date; start_at timestamptz;
 begin
  u:=bootik.bk_assert_business_scope(p_org,p_app,p_actor,p_site,p_activity,'dashboard');
@@ -794,7 +794,7 @@ begin
     order by suggested_quantity desc,sku,id),'[]'::jsonb) from first_rows))
  into answer from sold cross join orders;
  return answer;
-end $;
+end $$;
 
 -- Append-only CRM follow-up register (no message delivery, payment or external side effect).
 create table bootik.bk_followup_events(
@@ -815,7 +815,7 @@ alter table bootik.bk_followup_events force row level security;
 revoke all on bootik.bk_followup_events from public,anon,authenticated;
 
 create function bootik.bk_followup_action(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_id uuid,p_data jsonb)
-returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
 declare old bootik.bk_followup_events%rowtype; src bootik.bk_followup_events%rowtype;
  k text; pk text; pid uuid; tid uuid; due date; msg text; d date;
 begin
@@ -854,10 +854,10 @@ begin
  insert into bootik.bk_followup_events(id,organization_id,app_id,activity_id,location_id,actor,task_id,kind,partner_kind,partner_id,due_date,note)
  values(p_id,p_org,p_app,p_activity,p_site,p_actor,tid,k,pk,pid,due,msg);
  return p_id;
-end $;
+end $$;
 
 create function bootik.bk_followup_list(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid)
-returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,bootik as $
+returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
 declare u text; answer jsonb;
 begin
  u:=bootik.bk_assert_business_scope(p_org,p_app,p_actor,p_site,p_activity,'partners');
@@ -875,7 +875,7 @@ begin
  select jsonb_build_object('activity_id',p_activity,'universe',u,'total',(select count(*) from tasks),
  'items',(select coalesce(jsonb_agg(to_jsonb(shown) order by (completed_at is not null),due_date,id),'[]'::jsonb) from shown)) into answer;
  return answer;
-end $;
+end $$;
 revoke all on function bootik.bk_assert_business_scope(uuid,uuid,uuid,uuid,uuid,text),
  bootik.bk_business_overview(uuid,uuid,uuid,uuid,uuid,integer),
  bootik.bk_followup_action(uuid,uuid,uuid,uuid,uuid,uuid,jsonb),
@@ -896,7 +896,7 @@ alter table bootik.bk_purchase_groups enable row level security;
 alter table bootik.bk_purchase_groups force row level security;
 revoke all on bootik.bk_purchase_groups from public,anon,authenticated;
 create function bootik.bk_purchase_group_scope(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_op text)
-returns void language plpgsql stable security invoker set search_path=pg_catalog,bootik as $
+returns void language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
 declare u text;
 begin
  perform bootik.bk_assert_scope(p_org,p_app,p_actor,p_site,true);
@@ -909,9 +909,9 @@ begin
  on (l.activity_id,l.organization_id,l.app_id)=(a.id,a.organization_id,a.app_id)
  where a.id=p_activity and a.organization_id=p_org and a.app_id=p_app and a.status='active' and l.location_id=p_site;
  if not found or not bootik.bk_has_capability(p_org,p_app,u,'purchases') then raise exception 'BOOTIK_SCOPE_DENIED' using errcode='42501';end if;
-end $;
+end $$;
 create function bootik.bk_purchase_group_create(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid,p_id uuid,p_supplier uuid,p_reference text,p_lines jsonb)
-returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $
+returns uuid language plpgsql security invoker set search_path=pg_catalog,bootik as $$
 declare old bootik.bk_purchase_groups%rowtype; line jsonb; idx integer:=0; bid uuid; lid uuid; ids uuid[]:=array[]::uuid[]; balances uuid[]:=array[]::uuid[]; q numeric; cost bigint; total numeric:=0; ref text;
 begin
  perform bootik.bk_purchase_group_scope(p_org,p_app,p_actor,p_site,p_activity,'purchase-create');
@@ -939,9 +939,9 @@ begin
  insert into bootik.bk_purchase_groups(id,organization_id,app_id,activity_id,location_id,actor,supplier_id,reference,payload,line_ids)
  values(p_id,p_org,p_app,p_activity,p_site,p_actor,p_supplier,ref,p_lines,ids);
  return p_id;
-end $;
+end $$;
 create function bootik.bk_purchase_group_list(p_org uuid,p_app uuid,p_actor uuid,p_site uuid,p_activity uuid)
-returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,bootik as $
+returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,bootik as $$
 declare answer jsonb;
 begin
  perform bootik.bk_purchase_group_scope(p_org,p_app,p_actor,p_site,p_activity,'purchases');
@@ -960,7 +960,7 @@ begin
  ), shown as (select * from groups limit 200)
  select jsonb_build_object('items',coalesce((select jsonb_agg(to_jsonb(shown) order by created_at desc,id) from shown),'[]'::jsonb),'truncated',(select count(*)>200 from groups)) into answer;
  return answer;
-end $;
+end $$;
 revoke all on function bootik.bk_purchase_group_scope(uuid,uuid,uuid,uuid,uuid,text),bootik.bk_purchase_group_create(uuid,uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb),bootik.bk_purchase_group_list(uuid,uuid,uuid,uuid,uuid) from public,anon,authenticated;
 
 commit;
