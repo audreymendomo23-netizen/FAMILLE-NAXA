@@ -120,6 +120,10 @@ try{
  assert.equal((await identityRequest(so.access_token,"manager-assign",{member_id:scopeStaff.id,manager_id:o.id})).status,403);
  await identity(so.access_token,"manager-assign",{member_id:scopeStaff.id,manager_id:scopeManager.id});
  const scopedContacts=(await identity(sm.access_token,"contacts")).contacts;
+ assert.equal((await identity(so.access_token,"dashboard")).team_count,3);
+ assert.equal((await identity(sm.access_token,"dashboard")).team_count,1);
+ assert.equal((await identity(ss.access_token,"dashboard")).team_count,null);
+
  assert.deepEqual(scopedContacts.filter(c=>c.can_revoke).map(c=>c.member_id),[scopeStaff.id]);
  assert.equal((await identityRequest(sm.access_token,"revoke-member",{member_id:scopeOther.id})).status,403);
  assert.equal((await identityRequest(sm.access_token,"revoke-member",{member_id:scopeOwner.id})).status,403);
@@ -129,6 +133,9 @@ try{
  await identity(sm.access_token,"revoke-member",{member_id:scopeStaff.id});
  assert.equal((await identityRequest(ss.access_token,"profile")).status,403);
  assert.equal((await identity(su.access_token,"profile")).role,"staff");
+ assert.equal((await identity(sm.access_token,"dashboard")).team_count,0);
+ assert.equal((await identity(so.access_token,"dashboard")).team_count,2);
+ pass("actual N1 role-scoped dashboard counters after assignment and revocation");
  assert.ok(!(await identity(so.access_token,"contacts")).contacts.some(c=>c.member_id===scopeStaff.id));
  pass("actual N1 manager scope, promoter-only assignment, foreign and unassigned denials, scoped revocation");
 
