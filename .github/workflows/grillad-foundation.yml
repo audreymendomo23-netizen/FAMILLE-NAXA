@@ -1,0 +1,66 @@
+name: GRILLAD — construction locale et qualification
+on:
+  push:
+    branches: [work/grillad-foundation-20261127]
+    paths:
+      - 'apps/android/grillad/**'
+      - 'apps/web/grillad/**'
+      - 'scripts/grillad/**'
+      - '.github/workflows/grillad-foundation.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  infrastructure:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test scripts/grillad/infrastructure.test.mjs
+  web:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --workspace @famille/grillad-web --include-workspace-root=false --ignore-scripts
+      - run: npm test --workspace @famille/grillad-web
+      - run: node scripts/grillad/cloudflare-pages-build.mjs
+      - run: test -s apps/web/grillad/dist/index.html && test -s apps/web/grillad/dist/_headers
+      - run: npx --workspace @famille/grillad-web playwright install --with-deps chromium
+      - run: npm run test:e2e --workspace @famille/grillad-web
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: grillad-web-test-results
+          path: apps/web/grillad/test-results/
+          if-no-files-found: ignore
+  android:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - run: gradle --no-daemon :grillad:testDebugUnitTest :grillad:assembleDebug
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: grillad-android-test-results
+          path: apps/android/grillad/build/test-results/
+          if-no-files-found: ignore
