@@ -20,12 +20,13 @@ import androidx.compose.ui.unit.dp
   for(topic in topics.filter{t->t.take(4).any{it.contains(query.trim(),ignoreCase=true)}}){var expanded by remember(topic[0]){mutableStateOf(false)};TextButton(onClick={expanded=!expanded}){Text(tr(topic[0],topic[1]))};if(expanded){Text(tr(topic[2],topic[3]));Button(onClick={go(topic[4])}){Text(tr("Ouvrir cet espace","Open this area"))}}}
  }else{
  val info=when(mode){
- "support"->listOf("Les tickets et le Livechat ne sont pas encore connectés. Consultez l’aide sans transmettre votre mot de passe.","Tickets and live chat are not connected yet. Browse help without sharing your password.","faq","Consulter la FAQ","Read FAQ")
+ "support"->listOf("Connectez-vous pour accéder à vos demandes et au Livechat texte. Ne transmettez jamais votre mot de passe.","Sign in to access your requests and text live chat. Never share your password.","faq","Consulter la FAQ","Read FAQ")
  "connect"->listOf("Le récepteur sécurisé n’est pas encore disponible. Rejoignez vos réunions sur cet appareil.","Secure receiver is not yet available. Join meetings on this device.","agenda","Ouvrir mon agenda","Open calendar")
  "transcription"->listOf("La transcription automatique n’est pas disponible. Les comptes rendus manuels restent accessibles selon vos droits.","Automatic transcription is unavailable. Manual minutes remain accessible according to your permissions.","archives","Ouvrir mes comptes rendus","Open minutes")
  else->listOf("Interface français et anglais. La traduction vocale simultanée n’est pas disponible.","French and English interface. Simultaneous voice translation is unavailable.","language","Changer la langue","Change language")
  }
  Text(tr(info[0],info[1]));Button(onClick={go(info[2])}){Text(tr(info[3],info[4]))}
+ if(mode=="support"&&!authenticated)Button(onClick={onOpen("signin")}){Text(tr("Se connecter","Sign in"))}
  if(mode=="support")TextButton(onClick={go("security")}){Text(tr("Sécuriser mon compte","Secure my account"))}
  }
  }}
