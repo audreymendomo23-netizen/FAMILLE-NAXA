@@ -44,6 +44,12 @@ begin
  begin perform public.grillad_action(o,a,gen_random_uuid(),'adjust_stock',jsonb_build_object('item',i,'delta',-3,'reason','Perte'));raise exception 'negative stock adjustment';exception when invalid_parameter_value then null;end;
  perform public.grillad_action(o,a,gen_random_uuid(),'adjust_stock',jsonb_build_object('item',i,'delta',1,'reason','Correction'));
 
+ perform public.grillad_action(o,a,gen_random_uuid(),'dimension_target',jsonb_build_object('day',day,'kind','family','subject','Poulet','amount',5000,'reason','Objectif'));
+ perform public.grillad_action(o,a,gen_random_uuid(),'dimension_target',jsonb_build_object('day',day,'kind','item','subject',i,'amount',4000,'reason','Objectif'));
+ perform public.grillad_action(o,a,gen_random_uuid(),'dimension_target',jsonb_build_object('day',day,'kind','seller','subject','91000000-0000-0000-0000-000000000002','amount',3000,'reason','Objectif'));
+ begin perform public.grillad_action(o,b,gen_random_uuid(),'dimension_target',jsonb_build_object('day',day,'kind','item','subject',i,'amount',1,'reason','Test'));raise exception 'target scope';exception when insufficient_privilege then null;end;
+ v:=public.grillad_snapshot(o,a,day,day);
+ if jsonb_array_length(v->'dimension_targets')<>3 or not exists(select 1 from jsonb_array_elements(v->'dimension_targets') x where x->>'kind'='family' and (x->>'actual')::int=2000) or not exists(select 1 from jsonb_array_elements(v->'dimension_targets') x where x->>'kind'='seller' and (x->>'actual')::int=0) then raise exception 'dimension targets';end if;
  v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,ca}')::int<>2000 or (v#>>'{finance,charges}')::int<>200 or jsonb_array_length(v->'expenses')<>2 or jsonb_array_length(v->'stock_adjustments')<>2 or (v->'items'->0->>'price')::int<>1200 then raise exception 'finance';end if;
  perform public.grillad_action(o,a,j,'add_item','{"name":"Porc","family":"Porc","price":800,"cost":300}');
  perform public.grillad_action(o,a,gen_random_uuid(),'prepare',jsonb_build_object('item',j,'qty',4));
@@ -83,6 +89,7 @@ declare o uuid:='92000000-0000-0000-0000-000000000001';a uuid:='93000000-0000-00
 begin
  if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'workspace seller';end if;
  v:=public.grillad_snapshot(o,a,day,day);
+ if jsonb_array_length(v->'dimension_targets')<>0 then raise exception 'seller target leak';end if;
  if v->'finance'<>'null'::jsonb or jsonb_array_length(v->'sales')<>0 or (v->'items'->0)?'cost' or jsonb_array_length(v->'cash_history')<>0 or jsonb_array_length(v->'inactive_items')<>0 then raise exception 'seller leak';end if;
  begin perform public.grillad_snapshot(o,b,day,day);raise exception 'expected site denial';exception when insufficient_privilege then null;end;
  begin perform public.grillad_receipt(o,a,'94000000-0000-0000-0000-000000000003');raise exception 'receipt other seller';exception when insufficient_privilege then null;end;
