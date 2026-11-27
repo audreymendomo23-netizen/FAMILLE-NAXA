@@ -104,7 +104,7 @@ declare r text; u uuid:=auth.uid(); old grillad_private.events%rowtype; x grilla
 begin
  r:=grillad_private.scope(p_org,p_site);
  if p_event is null or p_action is null or p_payload is null or jsonb_typeof(p_payload)<>'object' or octet_length(p_payload::text)>8192 then raise exception 'GRILLAD_INPUT' using errcode='22023';end if;
- if r='seller' and p_action not in ('sell','sell_basket','prepare') then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+ if r='seller' and p_action not in ('sell','sell_basket','prepare','attendance_request') then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
  -- Serialize all mutations for the same site; no cross-site stock or drawer race.
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
  select * into old from grillad_private.events where org=p_org and site=p_site and id=p_event;
@@ -237,6 +237,10 @@ begin
   if exists(select 1 from grillad_private.service_policy where org=p_org and site=p_site) then raise exception 'GRILLAD_SERVICE_ALREADY_CONFIGURED' using errcode='22023';end if;
   insert into grillad_private.service_policy(org,site,start_minute,effective_from,enabled) values(p_org,p_site,n::integer,d,true);
   result:=jsonb_build_object('start_minute',n,'effective_from',d,'enabled',true);
+ when 'attendance_request' then
+  result:=grillad_private.attendance_correct(p_org,p_site,p_event,p_action,p_payload);
+ when 'attendance_decide' then
+  result:=grillad_private.attendance_correct(p_org,p_site,p_event,p_action,p_payload);
  when 'target' then
   d:=(p_payload->>'day')::date;n:=(p_payload->>'amount')::bigint;
   if d is null or n is null or n not between 0 and 1000000000 then raise exception 'GRILLAD_TARGET' using errcode='22023';end if;

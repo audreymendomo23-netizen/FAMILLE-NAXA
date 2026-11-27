@@ -9,4 +9,5 @@ function route(c){return async()=>{let calls=0;const r=await handle(req(c.body,'
 function anonymous(c){return async()=>{let calls=0;const r=await handle(req(c.body),env,async()=>{calls++;throw Error()});assert.equal(r.status,401);assert.equal(calls,0)}}
 
 mutate('set_network_mode',{centralized:true,reason:'Pilotage'});mutate('set_service_hours',{start_minute:1080,effective_from:'2026-11-27',reason:'Service soir'});
+mutate('attendance_request',{departure:item,seconds:30,reason:'Pause'});mutate('attendance_decide',{request:item,decision:'approved',reason:'Contrôle'});
 for(const [i,c] of cases.entries()){test('GRC-'+String(64+i*2).padStart(3,'0')+' '+c.name+' caller',route(c));test('GRC-'+String(65+i*2).padStart(3,'0')+' '+c.name+' anonymous denied',anonymous(c))}

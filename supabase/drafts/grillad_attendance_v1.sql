@@ -15,22 +15,37 @@ create table grillad_private.attendance(
  foreign key(org,site) references grillad_private.enabled_sites(org,site),
  check((kind='departure')=(paired_arrival is not null))
 );
+-- Approved regularization is distinct from captured evidence; no synthetic GPS or photo.
+create table grillad_private.attendance_corrections(
+ id uuid primary key,org uuid not null,site uuid not null,departure uuid not null references grillad_private.attendance(id),
+ requester uuid not null,proposed_seconds bigint not null check(proposed_seconds>=0),reason text not null check(length(reason) between 1 and 300),
+ requested_at timestamptz not null default now(),status text not null default 'pending' check(status in ('pending','approved','rejected')),
+ decided_by uuid,decided_at timestamptz,decision_reason text,decision_event uuid,
+ foreign key(org,site) references grillad_private.enabled_sites(org,site),
+ check((status='pending' and decided_by is null and decided_at is null and decision_reason is null and decision_event is null) or
+ (status in ('approved','rejected') and decided_by is not null and decided_by<>requester and decided_at is not null and decision_reason is not null and decision_event is not null))
+);
+create unique index grillad_pending_attendance_correction on grillad_private.attendance_corrections(departure) where status in ('pending','approved');
+alter table grillad_private.attendance_corrections enable row level security;
+revoke all on grillad_private.attendance_corrections from public,anon,authenticated;
 create unique index grillad_attendance_pair on grillad_private.attendance(paired_arrival) where paired_arrival is not null;
 create index grillad_attendance_actor on grillad_private.attendance(org,actor,captured_at desc);
 alter table grillad_private.attendance_policy enable row level security;
 alter table grillad_private.attendance enable row level security;
 revoke all on grillad_private.attendance_policy,grillad_private.attendance from public,anon,authenticated;
 create function grillad_private.attendance_status(p_org uuid,p_site uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
-declare r text;enabled boolean;out jsonb;
+declare r text;enabled boolean;out jsonb;corrections jsonb;
 begin
  r:=grillad_private.scope(p_org,p_site);
  select p.enabled into enabled from grillad_private.attendance_policy p where org=p_org and site=p_site;
  select coalesce(jsonb_agg(to_jsonb(x) order by x.captured_at desc),'[]'::jsonb) into out from (
  select a.id,a.actor,a.kind,a.captured_at,a.received_at,a.paired_arrival,a.photo is not null and a.photo_until>now() as photo_available,
- case when a.kind='departure' then extract(epoch from a.captured_at-b.captured_at)::bigint else null end as duration_seconds
- from grillad_private.attendance a left join grillad_private.attendance b on b.id=a.paired_arrival
+ case when a.kind='departure' then extract(epoch from a.captured_at-b.captured_at)::bigint else null end as duration_seconds,
+ case when a.kind='departure' then coalesce(c.proposed_seconds,extract(epoch from a.captured_at-b.captured_at)::bigint) else null end as effective_duration_seconds
+ from grillad_private.attendance a left join grillad_private.attendance b on b.id=a.paired_arrival left join grillad_private.attendance_corrections c on c.departure=a.id and c.org=a.org and c.site=a.site and c.status='approved'
  where a.org=p_org and a.site=p_site and (r in ('owner','manager') or a.actor=auth.uid()) order by a.captured_at desc limit 100) x;
- return jsonb_build_object('enabled',coalesce(enabled,false),'history',out);
+ select coalesce(jsonb_agg(to_jsonb(c) order by c.requested_at desc),'[]'::jsonb) into corrections from (select id,departure,requester,proposed_seconds,reason,requested_at,status,decided_by,decided_at,decision_reason from grillad_private.attendance_corrections where org=p_org and site=p_site and (r in ('owner','manager') or requester=auth.uid()) order by requested_at desc limit 100)c;
+ return jsonb_build_object('enabled',coalesce(enabled,false),'history',out,'corrections',corrections);
 end $$;
 create function grillad_private.attendance_capture(p_org uuid,p_site uuid,p_event uuid,p_kind text,p_at timestamptz,p_lat double precision,p_lon double precision,p_accuracy double precision,p_photo text)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
@@ -84,4 +99,34 @@ revoke all on function grillad_private.attendance_status(uuid,uuid),grillad_priv
 grant execute on function grillad_private.attendance_status(uuid,uuid),grillad_private.attendance_capture(uuid,uuid,uuid,text,timestamptz,double precision,double precision,double precision,text),grillad_private.attendance_photo(uuid,uuid,uuid) to authenticated;
 revoke all on function public.grillad_attendance_status(uuid,uuid),public.grillad_attendance_capture(uuid,uuid,uuid,text,timestamptz,double precision,double precision,double precision,text) from public,anon,authenticated;
 grant execute on function public.grillad_attendance_status(uuid,uuid),public.grillad_attendance_capture(uuid,uuid,uuid,text,timestamptz,double precision,double precision,double precision,text) to authenticated;
+create function grillad_private.attendance_correct(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb)
+returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare r text;u uuid:=auth.uid();dep grillad_private.attendance%rowtype;arr grillad_private.attendance%rowtype;c grillad_private.attendance_corrections%rowtype;seconds bigint;why text;decision text;
+begin
+ r:=grillad_private.scope(p_org,p_site);
+ why:=btrim(p_payload->>'reason');if why is null or length(why) not between 1 and 300 then raise exception 'GRILLAD_REASON' using errcode='22023';end if;
+ if p_action='attendance_request' then
+  select * into dep from grillad_private.attendance where id=(p_payload->>'departure')::uuid and org=p_org and site=p_site and kind='departure' and actor=u;
+  if not found then raise exception 'GRILLAD_PROOF_DENIED' using errcode='42501';end if;
+  select * into arr from grillad_private.attendance where id=dep.paired_arrival and org=p_org and site=p_site and actor=u and kind='arrival';
+  if not found then raise exception 'GRILLAD_PROOF_DENIED' using errcode='42501';end if;
+  seconds:=(p_payload->>'seconds')::bigint;
+  -- Conservative candidate: only reduce a closed, confirmed interval; no missing-punch or extension fabricated.
+  if seconds is null or seconds<0 or seconds>=extract(epoch from dep.captured_at-arr.captured_at)::bigint then raise exception 'GRILLAD_CORRECTION_DURATION' using errcode='22023';end if;
+  if exists(select 1 from grillad_private.attendance_corrections where departure=dep.id and status in ('pending','approved')) then raise exception 'GRILLAD_CORRECTION_EXISTS' using errcode='22023';end if;
+  insert into grillad_private.attendance_corrections(id,org,site,departure,requester,proposed_seconds,reason) values(p_event,p_org,p_site,dep.id,u,seconds,why);
+  return jsonb_build_object('id',p_event,'status','pending','proposed_seconds',seconds);
+ elsif p_action='attendance_decide' then
+  if r not in ('owner','manager') then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+  decision:=p_payload->>'decision';if decision is null or decision not in ('approved','rejected') then raise exception 'GRILLAD_CORRECTION_DECISION' using errcode='22023';end if;
+  select * into c from grillad_private.attendance_corrections where id=(p_payload->>'request')::uuid and org=p_org and site=p_site for update;
+  if not found or c.requester=u then raise exception 'GRILLAD_CORRECTION_DENIED' using errcode='42501';end if;
+  if c.status<>'pending' then raise exception 'GRILLAD_CORRECTION_CLOSED' using errcode='22023';end if;
+  update grillad_private.attendance_corrections set status=decision,decided_by=u,decided_at=now(),decision_reason=why,decision_event=p_event where id=c.id;
+  return jsonb_build_object('id',c.id,'status',decision,'proposed_seconds',c.proposed_seconds);
+ else raise exception 'GRILLAD_ACTION' using errcode='22023';end if;
+end $$;
+-- Called only inside the already scoped, locked and idempotent business RPC.
+revoke all on function grillad_private.attendance_correct(uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+
 commit;
