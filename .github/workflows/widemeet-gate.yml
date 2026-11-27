@@ -41,6 +41,11 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run build --workspace @famille/widemeet-web
       - run: node scripts/widemeet/pdf-replay.mjs
+      - name: Validate actual Excel workbook with independent reader
+        run: |
+          node scripts/widemeet/xlsx-replay.mjs "$RUNNER_TEMP/wm-report.xlsx"
+          python -m pip install --quiet openpyxl==3.1.5
+          python -c 'import os,openpyxl; w=openpyxl.load_workbook(os.environ["RUNNER_TEMP"]+"/wm-report.xlsx"); assert len(w.sheetnames)==4; assert w["Synthèse"]["B2"].value=="=1+1 & réunion"; assert w["Synthèse"]["B2"].data_type=="s"; assert w["Présences"]["D2"].value==1000; print("WIDEMEET_XLSX_PASS")'
       - run: |
           npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
           # Hosted Ubuntu runner already supplies Chromium libraries; verify by launching.
@@ -148,6 +153,7 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_expiry.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_expiry.sql
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_notifications.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_reports.sql
   edge-typecheck:
     runs-on: ubuntu-24.04
     steps:

@@ -1,5 +1,6 @@
 // WideMeet room gateway candidate. Uses NS media grant design and the WideMeet domain policy.
 import {createRoom,applyRoom,mediaPermission,pollSummary} from "../../../packages/widemeet-domain/room-policy.mjs";
+import {buildReportXlsx} from "../../../packages/widemeet-domain/report-xlsx.mjs";
 import {seriesDates} from "../../../packages/widemeet-domain/series.mjs";
 const base=(Deno.env.get("SUPABASE_URL")??"").replace(/\/$/,"");
 const service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??"";
@@ -68,6 +69,12 @@ Deno.serve(async request=>{
  const object=await fetch(base+"/storage/v1/object/authenticated/wm-recordings/"+result.key,{headers:{apikey:service,Authorization:"Bearer "+service},redirect:"error",cache:"no-store"});
  if(!object.ok||!object.body||object.headers.has("content-length")&&Number(object.headers.get("content-length"))!==result.bytes)return send(503,{error:"unavailable"});
  return new Response(object.body,{status:200,headers:{...cors,"Content-Type":"audio/ogg","Cache-Control":"private, no-store","Content-Disposition":"attachment; filename=widemeet-"+b.recording_id.toLowerCase()+".ogg","X-Content-Type-Options":"nosniff"}});
+ }
+ if(action==="report-xlsx"){
+ if(Deno.env.get("WM_REPORTS_QUALIFIED")!=="true"||!uuid.test(b.room_id??"")||!uuid.test(b.request_id??""))return send(403,{error:"forbidden"});
+ const report=await rpc("wm_report_export",{p_hash,p_room:b.room_id.toLowerCase(),p_request:b.request_id.toLowerCase()});if(!report)return send(403,{error:"forbidden"});
+ const bytes=buildReportXlsx(report,b.locale==="en"?"en":"fr");
+ return new Response(bytes.buffer as ArrayBuffer,{status:200,headers:{...cors,"Content-Type":"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","Cache-Control":"private, no-store","Content-Disposition":"attachment; filename=widemeet-report.xlsx","X-Content-Type-Options":"nosniff"}});
  }
  if(action==="external-invite"){
  if(Deno.env.get("WM_EXTERNAL_GUESTS_QUALIFIED")!=="true"||!["issue","list","redeem","revoke"].includes(b.action)||!b.data||typeof b.data!=="object"||Array.isArray(b.data))return send(403,{error:"forbidden"});

@@ -385,6 +385,7 @@ try{
  await tok(mhs.access_token,"approve",{id:task.id,expected_revision:4});
  assert.equal((await tok(mgs.access_token,"list")).items[0].state,"done");
  pass("actual N4 task assignment, evidence, correction, approval, idempotence and tenant/recipient isolation");
+ const reportBody={app_id:"WIDEMEET",room_id:mid,request_id:randomUUID(),locale:"fr"};const reportReq=token=>fetch(room+"/report-xlsx",{method:"POST",headers:{apikey:anon,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(reportBody)});assert.equal((await reportReq(mgs.access_token)).status,403);const excel=await reportReq(mhs.access_token);assert.equal(excel.status,200);const xlsx=Buffer.from(await excel.arrayBuffer());assert.equal(xlsx.subarray(0,2).toString(),"PK");assert.ok(xlsx.includes(Buffer.from("Verify human decision")));pass("actual N4 authorized Excel report, real OOXML and recipient denial");
 
  assert.ok((await mok(mgs.access_token,"list")).items.some(x=>x.room_id===mid&&!x.unread));
  const mv2=randomUUID(),rev={room_id:mid,version_id:mv2,expected_version:1,body:"Revised synthetic human minutes"};
