@@ -1019,13 +1019,13 @@ test("Web access: failed login and recovery stay in the customer journey",async(
 test("Commercial languages: FR, EN and Fulfulde change login, dashboard and menu; member choice survives login",async({context})=>{
   await installBackend(context);
   const page=await context.newPage();await page.goto("/");
-  await page.locator('header').getByRole("combobox",{name:"Langue",exact:true}).selectOption("en");
+  await page.locator('.auth-panel').getByRole("combobox",{name:"Langue",exact:true}).selectOption("en");
   await expect(page.getByLabel("NAXA Services ID")).toBeVisible();await expect(page.getByRole("button",{name:"Sign in",exact:true})).toBeVisible();
   await page.reload();await expect(page.getByRole("button",{name:"Sign in",exact:true})).toBeVisible();
-  await page.locator('header').getByRole("combobox",{name:"Language",exact:true}).selectOption("ff-CM");
+  await page.locator('.auth-panel').getByRole("combobox",{name:"Language",exact:true}).selectOption("ff-CM");
   await expect(page.getByLabel("Innol NAXA Services")).toBeVisible();await expect(page.getByRole("button",{name:"Naatu",exact:true})).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang","ff-CM");
-  await page.locator('header').getByRole("combobox",{name:"Ɗemngal",exact:true}).selectOption("fr");
+  await page.locator('.auth-panel').getByRole("combobox",{name:"Ɗemngal",exact:true}).selectOption("fr");
   await signIn(page);
   await page.locator('header').getByRole("combobox",{name:"Langue",exact:true}).selectOption("en");
   await expect(page.getByRole("heading",{name:"A well-organized day starts here."})).toBeVisible();

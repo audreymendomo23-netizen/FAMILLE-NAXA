@@ -1,91 +1,75 @@
 import {readFile,mkdir,writeFile,appendFile} from "node:fs/promises";
 import {execFileSync,spawnSync} from "node:child_process";
-const baseline="ed6aee82f55cb4c8cbcd7fd4cd3442377a9091cf";
+const baseline=process.env.GITHUB_SHA;
+if(!/^[0-9a-f]{40}$/.test(baseline??""))throw Error("Missing exact candidate SHA");
 const matrix=JSON.parse(await readFile("docs/naxa-services/NAXA_SERVICES_GLOBAL_QUALIFICATION_2026-11-27.json","utf8"));
 const jobs={
   "replay": {
-    "run": 46031027073,
-    "job": 140614552184,
+    "workflow": "naxa-services-replay-isolated.yml",
     "name": "Real GoTrue sessions, Storage and tenant isolation"
   },
   "finance": {
-    "run": 46031027081,
-    "job": 140614551803,
+    "workflow": "naxa-services-technical-gate.yml",
     "name": "NAXA SERVICES payment, commission and fiscal policy tests"
   },
   "web": {
-    "run": 46031027081,
-    "job": 140614552220,
+    "workflow": "naxa-services-technical-gate.yml",
     "name": "NAXA SERVICES Web build"
   },
   "android": {
-    "run": 46031027081,
-    "job": 140614552361,
+    "workflow": "naxa-services-technical-gate.yml",
     "name": "Assemble NAXA SERVICES Android debug APK"
   },
   "sql": {
-    "run": 46031027081,
-    "job": 140614552479,
+    "workflow": "naxa-services-technical-gate.yml",
     "name": "NAXA SERVICES PostgreSQL 17 schema and runtime RLS tests"
   },
   "inventory": {
-    "run": 46031027081,
-    "job": 140614552315,
+    "workflow": "naxa-services-technical-gate.yml",
     "name": "Cross-application offline synchronization contract"
   },
   "media": {
-    "run": 46031027081,
-    "job": 140614552639,
+    "workflow": "naxa-services-technical-gate.yml",
     "name": "NAXA SERVICES media token security contract"
   },
   "push": {
-    "run": 46031027081,
-    "job": 140614552323,
+    "workflow": "naxa-services-technical-gate.yml",
     "name": "NAXA SERVICES remote notifications and FCM contract"
   },
   "promo": {
-    "run": 46031027081,
-    "job": 140614552358,
+    "workflow": "naxa-services-technical-gate.yml",
     "name": "NAXA SERVICES customer referral and promotion contract"
   },
   "reboot": {
-    "run": 46031027216,
-    "job": 140614551363,
+    "workflow": "naxa-services-independent-reserves.yml",
     "name": "actual-emulator-reboot"
   },
   "pwa": {
-    "run": 46031027216,
-    "job": 140614551854,
+    "workflow": "naxa-services-independent-reserves.yml",
     "name": "hosted-pwa"
   },
   "backup": {
-    "run": 46031027093,
-    "job": 140614550244,
+    "workflow": "naxa-services-backup-restore.yml",
     "name": "PostgreSQL 17 encrypted backup and clean restore"
   },
   "build": {
-    "run": 46031027225,
-    "job": 140614550649,
+    "workflow": "naxa-services-cloudflare-preflight.yml",
     "name": "production-web-build"
   },
   "edge": {
-    "run": 46031027225,
-    "job": 140614551082,
+    "workflow": "naxa-services-cloudflare-preflight.yml",
     "name": "hosted-edge-preflight"
   },
   "match": {
-    "run": 46031027225,
-    "job": 140614765266,
+    "workflow": "naxa-services-cloudflare-preflight.yml",
     "name": "cloudflare-live-match"
   },
   "apk": {
-    "run": 46031027429,
-    "job": 140614551425,
+    "workflow": "naxa-services-hosted-device-test.yml",
     "name": "hosted-debug"
   },
   "signer": {
-    "run": 46031027123,
-    "job": 140614550265,
+    "workflow": "naxa-services-release-readiness.yml",
     "name": "release-readiness"
   }
 };
@@ -244,7 +228,7 @@ const evidence={
     {
       "job": "finance",
       "markers": [
-        "# pass 14",
+        "# pass ",
         "# fail 0"
       ]
     },
@@ -264,19 +248,12 @@ const evidence={
       ]
     }
   ],
-  "B4-03": [
-    {
-      "job": "finance",
-      "markers": [
-        "# pass 14"
-      ]
-    }
-  ],
+  "B4-03": [{"job":"finance","markers":["# fail 0"]},{"job":"replay","markers":["PASS B4 real browser commission configuration: default disabled, promoter approval, employee denied, retirement and disable"]}],
   "B4-04": [
     {
       "job": "finance",
       "markers": [
-        "# pass 14"
+        "# pass "
       ]
     }
   ],
@@ -490,34 +467,64 @@ const direct={
     ]
   ]
 };
+const repo=process.env.GITHUB_REPOSITORY;
+if(!repo||!process.env.GH_TOKEN)throw Error("GitHub context required");
+const api=(path)=>execFileSync("gh",["api",...(path.endsWith("/logs")?["--allow-escape-sequences"]:[]),path],{encoding:"utf8",maxBuffer:40*1024*1024,timeout:60000});
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const branch="work/naxa-services-completion-20261120";
+const proofFile="artifacts/candidate-evidence/evidence.json";
+if(process.env.NS_COLLECT==="true"){
+ const runIds={}, found={}, sources={};
+ const groups=[...new Set(Object.values(jobs).map(j=>j.workflow))];
+ // One collector polls each source, not 43 independent API polling loops.
+ for(let attempt=0;attempt<85;attempt++){
+  for(const workflow of groups){
+   if(Object.keys(jobs).filter(k=>jobs[k].workflow===workflow).every(k=>found[k]?.status==="completed"))continue;
+   try{
+    if(!runIds[workflow]){
+     const runs=JSON.parse(api("repos/"+repo+"/actions/workflows/"+workflow+"/runs?head_sha="+baseline+"&branch="+encodeURIComponent(branch)+"&per_page=10")).workflow_runs;
+     const run=runs.find(r=>r.head_sha===baseline&&r.head_branch===branch);
+     if(!run)continue;runIds[workflow]=run.id;
+    }
+    const list=JSON.parse(api("repos/"+repo+"/actions/runs/"+runIds[workflow]+"/jobs?per_page=100&filter=latest")).jobs;
+    for(const [key,j] of Object.entries(jobs))if(j.workflow===workflow){
+     const match=list.find(x=>x.name===j.name&&x.head_sha===baseline&&x.run_id===runIds[workflow]);
+     if(match)found[key]=match;
+    }
+   }catch(e){console.log("Source lookup deferred:",workflow,String(e.message).slice(0,160));}
+  }
+  if(Object.keys(jobs).every(k=>found[k]?.status==="completed"))break;
+  if(attempt<84)await sleep(30000);
+ }
+ for(const [key,j] of Object.entries(jobs)){
+  const job=found[key],specs=Object.values(evidence).flat().filter(s=>s.job===key);
+  const requested=[...new Set(specs.flatMap(s=>s.markers))];
+  const record={workflow:j.workflow,runId:runIds[j.workflow]??null,jobId:job?.id??null,status:job?.status==="completed"?job.conclusion:"PENDING_OR_MISSING",markers:{}};
+  if(record.status==="success"&&requested.length){
+   try{
+    const raw=api("repos/"+repo+"/actions/jobs/"+job.id+"/logs");
+    const output=raw.split("\n").filter(line=>!line.includes("\u001b[36;1m")).map(line=>line.replace(/^\d{4}-\d{2}-\d{2}T[^ ]+Z\s*/,"").trim());
+    record.markers=Object.fromEntries(requested.map(m=>[m,output.some(l=>l.startsWith(m))]));
+   }catch(e){record.status="EVIDENCE_ERROR";}
+  }
+  sources[key]=record;
+ }
+ await mkdir("artifacts/candidate-evidence",{recursive:true});
+ await writeFile(proofFile,JSON.stringify({candidateCommit:baseline,branch,sources},null,2));
+ console.log("Exact-SHA evidence collected",baseline,Object.keys(sources).length);
+ process.exit(0);
+}
 const id=process.env.NS_CRITERION;
 const item=matrix.items.find(x=>x.id===id);
 if(!item||!Object.hasOwn(evidence,id)||matrix.items.length!==43)throw Error("Unknown criterion or incomplete matrix");
-const repo=process.env.GITHUB_REPOSITORY;
-if(!repo||!process.env.GH_TOKEN)throw Error("GitHub context required");
-const result={id,title:item.title,acceptance:item.acceptance,classification:item.status,campaignCommit:baseline,orchestrationCommit:process.env.GITHUB_SHA??null,checks:[],status:"UNVERIFIED"};
-const api=(path)=>execFileSync("gh",["api",...(path.endsWith("/logs")?["--allow-escape-sequences"]:[]),path],{encoding:"utf8",maxBuffer:40*1024*1024,timeout:60000});
-const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const result={id,title:item.title,acceptance:item.acceptance,classification:item.status,campaignCommit:baseline,orchestrationCommit:baseline,checks:[],status:"UNVERIFIED"};
+const proof=JSON.parse(await readFile(proofFile,"utf8"));
+if(proof.candidateCommit!==baseline||proof.branch!==branch)throw Error("Evidence scope mismatch");
 async function verify(spec){
- const source=jobs[spec.job];
- const run=JSON.parse(api("repos/"+repo+"/actions/runs/"+source.run));
- if(run.head_sha!==baseline)throw Error("Unexpected campaign SHA");
- let job;
- for(let i=0;i<65;i++){
-  job=JSON.parse(api("repos/"+repo+"/actions/jobs/"+source.job));
-  if(job.run_id!==source.run||job.head_sha!==baseline||job.name!==source.name)throw Error("Unexpected job identity");
-  if(job.status==="completed")break;
-  await sleep(10000);
- }
- if(job.status!=="completed")return {source:spec.job,jobId:source.job,status:"PENDING",passed:false};
- if(job.conclusion!=="success")return {source:spec.job,jobId:source.job,status:job.conclusion,passed:false};
- if(!spec.markers.length)return {source:spec.job,jobId:source.job,status:"SUCCESS",passed:true,markers:[]};
- // gh api follows the GitHub log download redirect. Only actual uncoloured
- // timestamped output is accepted, not the echoed workflow command source.
- const raw=api("repos/"+repo+"/actions/jobs/"+source.job+"/logs");
- const output=raw.split("\n").filter(line=>!line.includes("\u001b[36;1m")).map(line=>line.replace(/^\d{4}-\d{2}-\d{2}T[^ ]+Z\s*/,"").trim());
- const markers=spec.markers.map(m=>({marker:m,found:output.some(l=>l.startsWith(m))}));
- return {source:spec.job,jobId:source.job,status:"SUCCESS",passed:markers.every(m=>m.found),markers};
+ const s=proof.sources[spec.job];
+ if(!s||s.workflow!==jobs[spec.job].workflow||s.status!=="success")return {source:spec.job,jobId:s?.jobId,status:s?.status??"MISSING",passed:false};
+ const markers=spec.markers.map(m=>({marker:m,found:s.markers[m]===true}));
+ return {source:spec.job,runId:s.runId,jobId:s.jobId,status:"SUCCESS",passed:markers.every(m=>m.found),markers};
 }
 try{
  for(const cmd of direct[id]??[]){

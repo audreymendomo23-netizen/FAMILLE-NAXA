@@ -6,7 +6,8 @@
     "replay": "Recette existante relancée ; succès à constater, périmètre limité.",
     "partial": "Recette partielle relancée ; reste non qualifié.",
     "development": "Critère documenté, implémentation/recette E2E manquante ; workflow voisin ne peut pas le déclarer vert.",
-    "external": "Preuve réelle, autorisation ou expertise externe requise ; workflow voisin ne peut pas le déclarer vert."
+    "external": "Preuve réelle, autorisation ou expertise externe requise ; workflow voisin ne peut pas le déclarer vert.",
+    "exactCandidate": "Campagne de qualification : SHA GitHub courant, mêmes branche et workflows ; aucune preuve historique substituée. Les preuves partielles, développement et externes ne deviennent pas PASS_SCOPED automatiquement."
   },
   "workflows": [
     "technical-gate",

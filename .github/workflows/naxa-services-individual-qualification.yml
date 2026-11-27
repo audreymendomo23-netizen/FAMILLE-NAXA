@@ -13,7 +13,27 @@ concurrency:
   group: ns-individual-qualification-${{ github.sha }}
   cancel-in-progress: false
 jobs:
+  collect:
+    name: Collect exact candidate evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - name: Collect only matching branch and SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NS_COLLECT: 'true'
+        run: node .github/scripts/naxa-services/qualify-one.mjs
+      - uses: actions/upload-artifact@v6
+        with:
+          name: exact-candidate-evidence
+          path: artifacts/candidate-evidence/evidence.json
+          if-no-files-found: error
   criterion:
+    needs: collect
     name: ${{ matrix.criterion }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -27,6 +47,10 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
+      - uses: actions/download-artifact@v5
+        with:
+          name: exact-candidate-evidence
+          path: artifacts/candidate-evidence
       - name: Execute isolated criterion and verify exact campaign evidence
         env:
           GH_TOKEN: ${{ github.token }}
