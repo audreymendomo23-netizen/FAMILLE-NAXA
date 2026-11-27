@@ -1070,9 +1070,9 @@ jobs:
                   await historicalGuest.getByLabel('Report date').fill(yesterday);
                   assert.equal(await hb.getByText('Voici votre bilan partiel',{exact:false}).count(),0);
                   assert.equal(await historicalGuest.getByText('Here is your partial report',{exact:false}).count(),0);
-                  const pastHost=await rpc(page,'ns_daily_briefing',()=>hb.getByRole('button',{name:'Actualiser',exact:true}).click());
+                  const pastHostReport=await rpc(page,'ns_daily_briefing',()=>hb.getByRole('button',{name:'Actualiser',exact:true}).click());
                   const pastGuestReport=await rpc(guest,'ns_daily_briefing',()=>historicalGuest.getByRole('button',{name:'Refresh',exact:true}).click());
-                  assert.equal(pastHost.day,yesterday);assert.equal(pastHost.scope,'site');
+                  assert.equal(pastHostReport.day,yesterday);assert.equal(pastHostReport.scope,'site');
                   assert.equal(pastGuestReport.day,yesterday);assert.equal(pastGuestReport.scope,'personal');assert.equal(pastGuestReport.finance,null);
                   await historicalGuest.getByText('Here is your partial report',{exact:false}).waitFor();
                   pass('B3 historical daily briefing: previous day, scope isolation, cleared old report and FR/EN labels');
