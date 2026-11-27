@@ -169,4 +169,76 @@ exception when invalid_text_representation or numeric_value_out_of_range then re
 end $wm$;
 revoke all on function public.wm_transcription_worker(text,uuid,uuid,jsonb) from public,anon,authenticated;
 grant execute on function public.wm_transcription_worker(text,uuid,uuid,jsonb) to service_role;
+
+-- Ephemeral captions from an already-consented active audio recording only.
+-- One latest window per room; no caption archive and no client write privilege.
+create table public.wm_live_captions(
+ room_id uuid primary key references public.wm_rooms(id) on delete cascade,
+ recording_id uuid not null references public.wm_recording_runs(id) on delete cascade,
+ offset_ms bigint not null check(offset_ms between 0 and 28800000),
+ end_ms bigint not null check(end_ms>offset_ms and end_ms-offset_ms<=12000),
+ language text not null check(language ~ '^[a-z]{2,3}$'),
+ original_text text not null check(length(original_text)<=4000),
+ english_text text check(length(english_text)<=4000),
+ uncertain boolean not null,
+ expires_at timestamptz not null
+);
+alter table public.wm_live_captions enable row level security;
+revoke all on public.wm_live_captions from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_live_captions to service_role;
+create function public.wm_live_caption_guard()
+returns trigger language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+begin
+ if new.phase<>'active' or new.disposition<>'retain' then
+  delete from public.wm_live_captions where recording_id=new.id;
+ end if;
+ return new;
+end $wm$;
+revoke all on function public.wm_live_caption_guard() from public,anon,authenticated;
+create trigger wm_live_caption_guard after update of phase,disposition on public.wm_recording_runs for each row execute function public.wm_live_caption_guard();
+create function public.wm_live_caption_write(p_room uuid,p_recording uuid,p_offset bigint,p_end bigint,p_language text,p_original text,p_english text,p_uncertain boolean)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare policy jsonb; r public.wm_recording_runs%rowtype;
+begin
+ -- Same room lock as mutations; recheck policy after inference, before exposure.
+ perform 1 from public.wm_rooms where id=p_room for update;
+ if not found then return false;end if;
+ policy:=public.wm_recording_policy(p_room);
+ select * into r from public.wm_recording_runs where id=p_recording and room_id=p_room and phase='active' and disposition='retain' for share;
+ if not found or policy->>'permitted' is distinct from 'true' or policy->>'request_id' is distinct from r.request_id::text then return false;end if;
+ if p_offset is null or p_end is null or p_offset<0 or p_end<=p_offset or p_end-p_offset>12000 or p_end>28800000
+ or p_language is null or p_language!~'^[a-z]{2,3}$' or p_original is null or length(p_original)>4000
+ or length(p_english)>4000 or p_uncertain is null then return false;end if;
+ insert into public.wm_live_captions(room_id,recording_id,offset_ms,end_ms,language,original_text,english_text,uncertain,expires_at)
+ values(p_room,p_recording,p_offset,p_end,p_language,p_original,p_english,p_uncertain,clock_timestamp()+interval '15 seconds')
+ on conflict(room_id) do update set recording_id=excluded.recording_id,offset_ms=excluded.offset_ms,end_ms=excluded.end_ms,
+ language=excluded.language,original_text=excluded.original_text,english_text=excluded.english_text,uncertain=excluded.uncertain,expires_at=excluded.expires_at
+ where wm_live_captions.recording_id<>excluded.recording_id or wm_live_captions.end_ms<excluded.end_ms;
+ return found;
+end $wm$;
+revoke all on function public.wm_live_caption_write(uuid,uuid,bigint,bigint,text,text,text,boolean) from public,anon,authenticated;
+grant execute on function public.wm_live_caption_write(uuid,uuid,bigint,bigint,text,text,text,boolean) to service_role;
+create function public.wm_live_caption_read(p_hash text,p_room uuid,p_language text)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a record; state jsonb; policy jsonb; c public.wm_live_captions%rowtype; chosen text;
+begin
+ if p_language is null or p_language not in ('original','fr','en','ff','es','it','zh','wes','ewo','dua','bas','bbj','bum','bax','ybb','mhk','ar','pt','de') then return null;end if;
+ select * into a from public.wm_room_actor_for(p_hash,p_room);
+ if not found then return null;end if;
+ state:=public.wm_room_read(p_hash,p_room);
+ if state is null or state->>'status' is distinct from 'open' or (state->>'endMs')::bigint<=floor(extract(epoch from clock_timestamp())*1000)::bigint
+ or not exists(select 1 from jsonb_array_elements(state->'participants') p where p->>'memberId'=a.account_id::text and p->>'response'='accepted'
+ and p->>'excluded'='false' and p->>'consent'='true' and (state->>'lobbyRequired' is distinct from 'true' or a.account_id::text=state->>'hostId' or p->>'lobbyStatus'='admitted')) then return null;end if;
+ policy:=public.wm_recording_policy(p_room);
+ if policy->>'permitted' is distinct from 'true' then return jsonb_build_object('status','unavailable');end if;
+ select x.* into c from public.wm_live_captions x join public.wm_recording_runs r on r.id=x.recording_id and r.room_id=x.room_id
+ where x.room_id=p_room and x.expires_at>clock_timestamp() and r.phase='active' and r.disposition='retain' and r.request_id::text=policy->>'request_id';
+ if not found then return jsonb_build_object('status','waiting');end if;
+ chosen:=case when p_language='en' and c.english_text is not null and c.english_text<>'' then 'en' else c.language end;
+ return jsonb_build_object('status','ready','recording_id',c.recording_id,'start_ms',c.offset_ms,'end_ms',c.end_ms,'source_language',c.language,
+ 'language',chosen,'original',c.original_text,'text',case when chosen='en' and c.language<>'en' then c.english_text else c.original_text end,
+ 'fallback',p_language<>'original' and p_language<>chosen,'uncertain',c.uncertain,'ttl_ms',greatest(0,least(15000,floor(extract(epoch from(c.expires_at-clock_timestamp()))*1000)::integer)));
+end $wm$;
+revoke all on function public.wm_live_caption_read(text,uuid,text) from public,anon,authenticated;
+grant execute on function public.wm_live_caption_read(text,uuid,text) to service_role;
 commit;
