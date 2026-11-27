@@ -107,6 +107,7 @@ class MainActivity:ComponentActivity(){
  key(s.deviceId,detail,tab){RoomPanel(english,roomGateway,s,current,detail in listOf("Nouvelle réunion","New meeting","Programmer","Schedule"))}
  }
  else if(current!=null&&session!=null&&detail in (menuFr.take(3)+menuEn.take(3)+listOf(menuFr[7],menuEn[7],menuFr[8],menuEn[8]))){val s=session!!;val mode=when(detail){menuFr[0],menuEn[0]->"contacts";menuFr[1],menuEn[1]->"company";menuFr[2],menuEn[2]->"team";menuFr[8],menuEn[8]->"security";else->"billing"};TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))};key(s.deviceId,mode){IdentityPanel(english,gateway,s,mode)}}
+ else if(current!=null&&session!=null&&detail in listOf(menuFr[6],menuEn[6])&&BuildConfig.WIDEMEET_MINUTES_ENABLED){val s=session!!;TextButton(onClick={detail=""}){Text(tr("Retour","Back"))};key(s.deviceId,"tasks"){TasksPanel(english,roomGateway,s)}}
  else if(current!=null&&session!=null&&tab==3&&detail.isEmpty()&&BuildConfig.WIDEMEET_MINUTES_ENABLED){val s=session!!;key(s.deviceId,"minutes"){MinutesPanel(english,roomGateway,s)}}
  else if(current!=null&&session!=null&&tab==4&&detail.isEmpty()){val s=session!!;key(s.deviceId,"profile"){IdentityPanel(english,gateway,s,"profile",{english=it})}}
  else if(detail.isNotEmpty()){TextButton(onClick={detail=""}){Text(tr("← Retour","← Back"))};Text(detail,style=MaterialTheme.typography.headlineMedium)
