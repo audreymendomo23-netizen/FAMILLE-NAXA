@@ -151,7 +151,7 @@ try{
    assert.equal(original.data.source_language,"en");assert.match(original.data.text,/project|meeting/i);assert.ok(original.data.end_ms>original.data.start_ms&&original.data.ttl_ms>0);
    const english=await cap(hs.access_token,"en");assert.equal(english.data.text,original.data.text);assert.equal(english.data.fallback,false);
    const unavailable=await cap(hs.access_token,"ff");assert.equal(unavailable.data.fallback,true);assert.equal(unavailable.data.text,original.data.original);
-   assert.equal((await cap(hs.access_token,"en",randomUUID())).status,403);assert.equal((await cap("invalid","en")).status,403);
+   assert.equal((await cap(hs.access_token,"en",randomUUID())).status,403);assert.equal((await cap("invalid","en")).status,401);assert.equal((await cap("0".repeat(64),"en")).status,403);
    assert.equal((await getRuns())[0].phase,"active");console.log("PASS actual consented active Egress -> local inference -> live captions, language switch and explicit fallback before recording stops");
    const activeId=(await getRuns())[0].id;
    await cmd(hs.access_token,"record",false);
