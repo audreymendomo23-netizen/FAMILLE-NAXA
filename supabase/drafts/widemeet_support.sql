@@ -36,8 +36,10 @@ create table public.wm_support_assignment_events(
  ticket_id uuid not null references public.wm_support_tickets(id),
  actor_id uuid not null references public.wm_accounts(id),
  action text not null check(action in ('claim','release')),
+ assignment_id bigint references public.wm_support_assignment_events(id),
  created_at timestamptz not null default clock_timestamp()
 );
+create unique index wm_support_release_once on public.wm_support_assignment_events(assignment_id) where action='release';
 alter table public.wm_support_feedback enable row level security;
 alter table public.wm_support_assignment_events enable row level security;
 revoke all on public.wm_support_feedback,public.wm_support_assignment_events from public,anon,authenticated;
@@ -50,7 +52,7 @@ revoke all on public.wm_support_agents,public.wm_support_tickets,public.wm_suppo
 grant select,insert,update,delete on public.wm_support_agents,public.wm_support_tickets,public.wm_support_messages to service_role;
 create function public.wm_support_action(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare s record; t public.wm_support_tickets%rowtype; m public.wm_support_messages%rowtype; aid uuid; tid uuid; mid uuid; b text; subj text; cat text; agent boolean:=false; own boolean:=false; kind text; result jsonb; score integer; prior_score integer;
+declare s record; t public.wm_support_tickets%rowtype; m public.wm_support_messages%rowtype; aid uuid; tid uuid; mid uuid; b text; subj text; cat text; agent boolean:=false; own boolean:=false; kind text; result jsonb; score integer; prior_score integer; assignment bigint;
 begin
  select * into s from public.wm_session_context(p_hash);
  if not found or s.password_change_required then return null;end if;
@@ -106,8 +108,79 @@ begin
  end if;
  if p_action='support-release' then
   if not agent or t.requester_id=aid or t.status='closed' then return null;end if;
-  if t.agent_id is null and exists(select 1 from public.wm_support_assignment_events e where e.ticket_id=tid and e.actor_id=aid and e.action='release' and e.id=(select max(id) from public.wm_support_assignment_events where ticket_id=tid)) then return jsonb_build_object('released',true);end if;
-  if t.agent_id is distinct from aid then return null;end if;
+  if jsonb_typeof(p_data->'assignment_version') is distinct from 'string' or coalesce(p_data->>'assignment_version','') !~ '^[1-9][0-9]{0,17}
+  update public.wm_support_tickets set agent_id=null,status='open',updated_at=clock_timestamp() where id=tid;
+  insert into public.wm_support_assignment_events(ticket_id,actor_id,action,assignment_id) values(tid,aid,'release',assignment);
+  return jsonb_build_object('released',true);
+ end if;
+ if not own and not (agent and coalesce(t.agent_id=aid,false)) then return null;end if;
+ kind:=case when own then 'requester' else 'agent' end;
+ if p_action='support-read' then
+  select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at,q.id),'[]'::jsonb) into result from
+  (select id,author_kind,body,created_at from public.wm_support_messages where ticket_id=tid order by created_at,id limit 500) q;
+  return jsonb_build_object('id',tid,'subject',t.subject,'category',t.category,'status',t.status,'messages',result,'viewer',kind,'assignment_version',case when kind='agent' then (select max(id)::text from public.wm_support_assignment_events where ticket_id=tid and action='claim') else null end,'feedback',case when own then (select rating from public.wm_support_feedback where ticket_id=tid) else null end);
+ end if;
+ if p_action='support-feedback' then
+  if not own or t.status<>'closed' or jsonb_typeof(p_data->'rating') is distinct from 'number' or coalesce(p_data->>'rating','') !~ '^[1-5]
+  mid:=(p_data->>'message_id')::uuid;b:=btrim(p_data->>'body');
+  if mid is null or b is null or length(b) not between 1 and 4000 then return null;end if;
+  select * into m from public.wm_support_messages where id=mid;
+  if found then
+   if m.ticket_id=tid and m.actor_id=aid and m.body=b and m.author_kind=kind then return jsonb_build_object('sent',true);end if;return null;
+  end if;
+  if t.status='closed' or (select count(*) from public.wm_support_messages where ticket_id=tid)>=500 or (select count(*) from public.wm_support_messages where actor_id=aid and created_at>clock_timestamp()-interval '1 minute')>=20 then return null;end if;
+  insert into public.wm_support_messages(id,ticket_id,actor_id,author_kind,body) values(mid,tid,aid,kind,b);
+  update public.wm_support_tickets set status=case when kind='agent' then 'waiting' when agent_id is not null then 'assigned' else 'open' end,updated_at=clock_timestamp() where id=tid;
+  return jsonb_build_object('sent',true);
+ end if;
+ if p_action='support-close' then
+  update public.wm_support_tickets set status='closed',updated_at=clock_timestamp() where id=tid and status<>'closed';
+  return jsonb_build_object('closed',true);
+ end if;
+ return null;
+exception when invalid_text_representation or unique_violation then return null;
+end $wm$;
+revoke all on function public.wm_support_action(text,text,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_support_action(text,text,jsonb) to service_role;
+commit;
+ then return null;end if;
+  score:=(p_data->>'rating')::integer;
+  select rating into prior_score from public.wm_support_feedback where ticket_id=tid;
+  if found then
+   if prior_score=score then return jsonb_build_object('saved',true,'rating',score);end if;
+   return null;
+  end if;
+  insert into public.wm_support_feedback(ticket_id,requester_id,rating) values(tid,aid,score);
+  return jsonb_build_object('saved',true,'rating',score);
+ end if;
+ if p_action='support-reply' then
+  mid:=(p_data->>'message_id')::uuid;b:=btrim(p_data->>'body');
+  if mid is null or b is null or length(b) not between 1 and 4000 then return null;end if;
+  select * into m from public.wm_support_messages where id=mid;
+  if found then
+   if m.ticket_id=tid and m.actor_id=aid and m.body=b and m.author_kind=kind then return jsonb_build_object('sent',true);end if;return null;
+  end if;
+  if t.status='closed' or (select count(*) from public.wm_support_messages where ticket_id=tid)>=500 or (select count(*) from public.wm_support_messages where actor_id=aid and created_at>clock_timestamp()-interval '1 minute')>=20 then return null;end if;
+  insert into public.wm_support_messages(id,ticket_id,actor_id,author_kind,body) values(mid,tid,aid,kind,b);
+  update public.wm_support_tickets set status=case when kind='agent' then 'waiting' when agent_id is not null then 'assigned' else 'open' end,updated_at=clock_timestamp() where id=tid;
+  return jsonb_build_object('sent',true);
+ end if;
+ if p_action='support-close' then
+  update public.wm_support_tickets set status='closed',updated_at=clock_timestamp() where id=tid and status<>'closed';
+  return jsonb_build_object('closed',true);
+ end if;
+ return null;
+exception when invalid_text_representation or unique_violation then return null;
+end $wm$;
+revoke all on function public.wm_support_action(text,text,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_support_action(text,text,jsonb) to service_role;
+commit;
+ then return null;end if;
+  assignment:=(p_data->>'assignment_version')::bigint;
+  if exists(select 1 from public.wm_support_assignment_events e where e.ticket_id=tid and e.actor_id=aid and e.action='release' and e.assignment_id=assignment) then
+   if t.agent_id is null then return jsonb_build_object('released',true);end if;return null;
+  end if;
+  if t.agent_id is distinct from aid or not exists(select 1 from public.wm_support_assignment_events e where e.ticket_id=tid and e.actor_id=aid and e.action='claim' and e.id=assignment and e.id=(select max(id) from public.wm_support_assignment_events where ticket_id=tid)) then return null;end if;
   update public.wm_support_tickets set agent_id=null,status='open',updated_at=clock_timestamp() where id=tid;
   insert into public.wm_support_assignment_events(ticket_id,actor_id,action) values(tid,aid,'release');
   return jsonb_build_object('released',true);
