@@ -25,7 +25,7 @@ internal fun ZippleNativeOrderSupport(api:ZippleBusiness,session:Session,site:St
  if(loaded){Text(tr("Demandes sans réponse (liste chargée)","Unanswered requests (loaded list)")+": "+tickets.count{it.isNull("replied_at")});FilterChip(selected=pendingOnly,onClick={pendingOnly=!pendingOnly},label={Text(tr("Sans réponse uniquement","Unanswered only"))});if(tickets.none{!pendingOnly||it.isNull("replied_at")})Text(tr("Aucune demande dans cette vue.","No requests in this view."))}
  tickets.filter{!pendingOnly||it.isNull("replied_at")}.forEach{x->val id=x.optString("order_id");Text("#"+x.optString("number")+" · "+x.optString("message"));if(!x.isNull("reply"))Text(x.optString("reply"))else{
  OutlinedTextField(value=drafts[id]?:"",onValueChange={if(it.length<=500)drafts=drafts+(id to it)},label={Text(tr("Réponse","Reply"))})
- Button(enabled=!busy&&(drafts[id]?:"").trim().length>=3,onClick={run{api.call(session,site,"order_support_reply",JSONObject().put("order_id",id).put("reply",drafts[id]?.trim()));load();pendingOnly=false}}){Text(tr("Envoyer la réponse","Send reply"))}
+ Button(enabled=!busy&&(drafts[id]?:"").trim().length>=3,onClick={run{api.call(session,site,"order_support_reply",JSONObject().put("order_id",id).put("reply",drafts[id]?.trim()));load()}}){Text(tr("Envoyer la réponse","Send reply"))}
  }}
  if(status.isNotBlank())Text(status)
 }

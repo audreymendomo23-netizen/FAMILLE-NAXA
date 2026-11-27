@@ -438,3 +438,6 @@ Cause du timeout ligne 403 identifiée dans le code : zp_unit_conversion_add nor
 
 ### Relevé CI de reprise
 394b356 : socle N1 45910550765 SUCCESS également ; les six workflows du candidat sont terminés et verts. Nouveau candidat 1170a35fc9a70673c0421e91f9ddc7dca39976e1 : SQL 45911012147, Edge navigateur 45911012091, Android APK 45911012124, PWA 45911012093, Pages build 45911012082, Pages live 45911012090, socle 45911012098, tous lancés (en file au relevé). Les nouvelles fonctionnalités restent candidates jusqu'aux résultats. Le statut local vert des recettes précédentes n'équivaut pas à la clôture des bulks 2–6. Les modifications de schéma sont sur le candidat jetable uniquement ; pas de migration hébergée.
+
+### Relevé 1170a35 et correction de la file d'assistance
+6/7 workflows SUCCESS (SQL 45911012147, Android 45911012124, socle 45911012098, PWA 45911012093, Pages build 45911012082, Pages live 45911012090). E2E 45911012091 FAILURE ligne 479 : filtre sans réponse réinitialisé automatiquement après envoi, en concurrence avec la vérification navigateur. Correction : garder le choix de filtre sur Web/Android, vérifier disparition en vue ouverte puis réaffichage en historique, sans supprimer les assertions DB. Nouveau candidat à qualifier.
