@@ -245,6 +245,14 @@ grant execute on function public.wm_finish_password_change(text,uuid) to service
 -- N1 private account profile and onboarding. The profile belongs to the identity,
 -- favorites belong to an identity within a particular workspace.
 alter table public.wm_accounts add column locale text not null default 'fr' check(locale in ('fr','en'));
+-- Account-wide declared preferences, not evidence of language support.
+alter table public.wm_accounts
+ add column spoken_language text not null default 'auto' check(spoken_language in ('auto','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de')),
+ add column listening_language text not null default 'original' check(listening_language in ('original','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de')),
+ add column subtitle_language text not null default 'original' check(subtitle_language in ('original','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de')),
+ add column pdf_language text not null default 'fr' check(pdf_language in ('fr','en')),
+ add column speech_rate text not null default '1' check(speech_rate in ('0.75','1','1.25','1.5'));
+
 alter table public.wm_accounts add column onboarding_step integer not null default 0 check(onboarding_step between 0 and 5);
 create table public.wm_favorites(
  account_id uuid not null, workspace_id uuid not null, contact_id uuid not null,
@@ -339,6 +347,19 @@ begin
    'group_count',(select count(*) from public.wm_contact_groups g where g.account_id=a.id and g.workspace_id=w.id),
    'team_count',case when v_role='promoteur' then (select count(*) from public.wm_memberships m join public.wm_accounts c on c.id=m.account_id and c.enabled where m.workspace_id=w.id and m.enabled and m.role in ('manager','staff'))
     when v_role='manager' then (select count(*) from public.wm_manager_assignments ma join public.wm_memberships m on m.workspace_id=ma.workspace_id and m.account_id=ma.staff_id and m.enabled and m.role='staff' join public.wm_accounts c on c.id=m.account_id and c.enabled where ma.workspace_id=w.id and ma.manager_id=a.id) else null end);
+ when 'language-preferences' then
+  if p_data is distinct from '{}'::jsonb then return null;end if;
+  return jsonb_build_object('interface',a.locale,'spoken',a.spoken_language,'listening',a.listening_language,'subtitles',a.subtitle_language,'pdf',a.pdf_language,'rate',a.speech_rate);
+ when 'language-save' then
+  if jsonb_typeof(p_data) is distinct from 'object' or (select count(*) from jsonb_object_keys(p_data))<>6 or not (p_data ?& array['interface','spoken','listening','subtitles','pdf','rate']) then return null;end if;
+  if exists(select 1 from jsonb_each(p_data) x where jsonb_typeof(x.value) is distinct from 'string') then return null;end if;
+  if p_data->>'interface' not in ('fr','en') or p_data->>'spoken' not in ('auto','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de') or p_data->>'listening' not in ('original','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de') or p_data->>'subtitles' not in ('original','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de') or p_data->>'pdf' not in ('fr','en') or p_data->>'rate' not in ('0.75','1','1.25','1.5') then return null;end if;
+  update public.wm_accounts set locale=p_data->>'interface',spoken_language=p_data->>'spoken',listening_language=p_data->>'listening',subtitle_language=p_data->>'subtitles',pdf_language=p_data->>'pdf',speech_rate=p_data->>'rate' where id=a.id;
+  return p_data;
+ when 'language-reset' then
+  if p_data is distinct from '{}'::jsonb then return null;end if;
+  update public.wm_accounts set spoken_language='auto',listening_language='original',subtitle_language='original',pdf_language=locale,speech_rate='1' where id=a.id;
+  return jsonb_build_object('interface',a.locale,'spoken','auto','listening','original','subtitles','original','pdf',a.locale,'rate','1');
  when 'profile-update' then
   v_name:=btrim(p_data->>'display_name');
   if v_name is null or length(v_name) not between 1 and 120 or p_data->>'locale' not in ('fr','en') or p_data->>'locale' is null then return null;end if;

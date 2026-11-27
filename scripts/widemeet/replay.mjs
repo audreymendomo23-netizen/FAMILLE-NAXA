@@ -183,6 +183,16 @@ try{
  const identity=(token,action,data={})=>ok(auth+"/identity",{action,data},token);
  const identityRequest=(token,action,data={})=>request(auth+"/identity",{action,data},token);
  const original=await identity(hs.access_token,"profile");
+ const languagePref={interface:"fr",spoken:"ff",listening:"en",subtitles:"original",pdf:"en",rate:"1.25"};
+ assert.deepEqual(await identity(hs.access_token,"language-save",languagePref),languagePref);
+ assert.deepEqual(await identity(hs.access_token,"language-preferences"),languagePref);
+ assert.equal((await identity(gs.access_token,"language-preferences")).spoken,"auto");
+ assert.equal((await identityRequest(gs.access_token,"language-preferences",{account_id:h.id})).status,403);
+ assert.equal((await identityRequest(hs.access_token,"language-save",{...languagePref,interface:"ff"})).status,403);
+ assert.equal((await identityRequest(hs.access_token,"language-save",{...languagePref,rate:1.25})).status,403);
+ assert.equal((await identityRequest(hs.access_token,"language-save",{...languagePref,account_id:g.id})).status,403);
+ assert.equal((await identity(hs.access_token,"language-reset")).listening,"original");
+ pass("actual individual language preferences persisted, strict validation, reset and account isolation");
  // Synthetic 8x8 JPEG; no real personal data. Private self-profile only.
  const photo="/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAAIAAgBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAAP/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AP//Z";
  assert.equal((await identity(hs.access_token,"photo-read")).jpeg,null);
@@ -549,6 +559,20 @@ try{
  await hp.getByText("Toutes les réunions de votre entreprise",{exact:true}).waitFor();
  pass("real two-browser direct chat, explicit read acknowledgement, automatic refresh and consolidated statistics period");
 
+ await menuPage("Traduction et écoute");
+ await hp.getByLabel("Langue parlée préférée",{exact:true}).selectOption("ff");
+ await hp.getByLabel("Langue d’écoute préférée",{exact:true}).selectOption("en");
+ await hp.getByLabel("Vitesse de lecture",{exact:true}).selectOption("1.25");
+ await hp.getByRole("button",{name:"Enregistrer mes préférences",exact:true}).click();
+ await hp.getByText("Préférences enregistrées.",{exact:true}).waitFor();
+ await menuPage("Langue");
+ await hp.getByLabel("Langue parlée préférée",{exact:true}).waitFor();
+ assert.equal(await hp.getByLabel("Langue parlée préférée",{exact:true}).inputValue(),"ff");
+ assert.equal(await hp.getByLabel("Vitesse de lecture",{exact:true}).inputValue(),"1.25");
+ hp.once("dialog",d=>d.accept());await hp.getByRole("button",{name:"Réinitialiser",exact:true}).click();
+ await hp.getByText("Préférences enregistrées.",{exact:true}).waitFor();
+ assert.equal(await hp.getByLabel("Langue d’écoute préférée",{exact:true}).inputValue(),"original");
+ pass("real browser language and listening preference pages persist and reset account settings");
  await menuPage("Livechat et support");
  await hp.getByLabel("Sujet",{exact:true}).fill("Replay support browser");
  await hp.getByLabel("Description du problème",{exact:true}).fill("Synthetic browser issue");
