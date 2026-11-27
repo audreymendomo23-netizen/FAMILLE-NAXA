@@ -1,12 +1,13 @@
 // Real WideMeet product authorization + real SFU in a disposable runner only.
 import assert from "node:assert/strict";
-import {randomUUID,randomBytes} from "node:crypto";
+import {randomUUID,randomBytes,createHash} from "node:crypto";
 import {spawn} from "node:child_process";
 import {createServer} from "node:http";
 import {readFile,writeFile,unlink} from "node:fs/promises";
 import {chromium} from "@playwright/test";
 import {RoomServiceClient,EgressClient} from "livekit-server-sdk";
 import {createWideMeetPresence} from "../../packages/media-core/widemeet-presence.mjs";
+import {createWideMeetRecordingStorage} from "../../packages/media-core/widemeet-recording-storage.mjs";
 import {createWideMeetRecorder} from "../../packages/media-core/widemeet-recorder.mjs";
 import {execFileSync} from "node:child_process";
 import {stat} from "node:fs/promises";
@@ -80,7 +81,10 @@ try{
  const presence=createWideMeetPresence({supabaseUrl:base,serviceKey,sfu});
  if(process.env.WM_PRESENCE_QUALIFIED==="true"){assert.equal((await presence.observe(rid)).persisted,true);await delay(1100);assert.equal((await presence.observe(rid)).persisted,true);}
  if(process.env.WM_RECORDING_QUALIFIED==="true"){
- const recorder=createWideMeetRecorder({supabaseUrl:base,serviceKey,egress:new EgressClient(upstream,key,secret),outputDirectory:process.env.WM_EGRESS_OUT,verifyAudio:async file=>{
+ const enableStorage=process.env.WM_RECORDING_STORAGE_QUALIFIED==="true";
+ if(enableStorage)await ok(base+"/storage/v1/bucket",{id:"wm-recordings",name:"wm-recordings",public:false,file_size_limit:134217728,allowed_mime_types:["audio/ogg"]});
+ const storage=enableStorage?createWideMeetRecordingStorage({supabaseUrl:base,serviceKey}):null;
+ const recorder=createWideMeetRecorder({supabaseUrl:base,serviceKey,storage,egress:new EgressClient(upstream,key,secret),outputDirectory:process.env.WM_EGRESS_OUT,verifyAudio:async file=>{
  const p=JSON.parse(execFileSync("ffprobe",["-v","error","-show_streams","-show_format","-of","json",file],{encoding:"utf8"}));
  assert.ok(p.streams.some(x=>x.codec_type==="audio")&&p.streams.every(x=>x.codec_type!=="video")&&Number(p.format.duration)>1);
  execFileSync("ffmpeg",["-v","error","-xerror","-i",file,"-map","0:a:0","-f","null","-"]);
@@ -115,6 +119,7 @@ try{
  const final=(await getRuns())[0];assert.match(final.content_sha256,/^[a-f0-9]{64}$/);assert.ok(final.bytes>1000);
  const st=await stat(process.env.WM_EGRESS_OUT+"/"+final.object_name);assert.equal(st.mode&0o777,0o600);
  console.log("PASS actual consent-driven recording normal stop, private audio-only verified file and SHA-256 ledger");
+ if(enableStorage){assert.equal(final.storage_key,rid+"/"+final.id+".ogg");assert.ok(final.stored_at);const unauth=await fetch(base+"/storage/v1/object/public/wm-recordings/"+final.storage_key);assert.ok(!unauth.ok);assert.equal((await request(roomApi+"/recordings",{room_id:rid},hs.access_token)).status,403);}
  }
  const freshGuest=await good(roomApi+"/media-grant",{room_id:rid},gs.access_token);
  await cmd(hs.access_token,"exclude",null,g.id);
@@ -129,6 +134,7 @@ try{
  await cmd(hs.access_token,"end");
  await until(async()=>evicted.has(h.id),"room closure eviction");
  console.log("PASS room closure revokes host transport");
+ if(process.env.WM_RECORDING_STORAGE_QUALIFIED==="true"){const archive=await good(roomApi+"/recordings",{room_id:rid},hs.access_token);assert.equal(archive.items.length,2);assert.equal((await request(roomApi+"/recordings",{room_id:rid},gs.access_token)).status,403);const file=archive.items.at(-1),body={app_id:"WIDEMEET",room_id:rid,recording_id:file.recording_id,request_id:randomUUID()};const download=async token=>fetch(roomApi+"/recording-download",{method:"POST",headers:{apikey:anon,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});assert.equal((await download(gs.access_token)).status,403);const res=await download(hs.access_token);assert.equal(res.status,200);const data=Buffer.from(await res.arrayBuffer());assert.equal(data.length,file.bytes);assert.equal(createHash("sha256").update(data).digest("hex"),file.sha256);console.log("PASS actual N3 private Storage upload/readback, host-only export after closure, forbidden guest and SHA-256 integrity");}
  if(process.env.WM_PRESENCE_QUALIFIED==="true"){const report=await good(roomApi+"/presence",{room_id:rid},hs.access_token);assert.equal(report.basis,"sfu_samples_not_continuous_presence");assert.ok(report.samples>=4&&report.coverage_ms>0);const hr=report.rows.find(x=>x.member_id===h.id),gr=report.rows.find(x=>x.member_id===g.id);assert.ok(hr.samples_seen>=4&&gr.samples_seen===2&&gr.estimated_ms>0&&hr.estimated_ms>=gr.estimated_ms);assert.equal((await request(roomApi+"/presence",{room_id:rid},gs.access_token)).status,403);console.log("PASS actual N4 SFU active transport samples, exclusion and restricted closed meeting report");}
 }finally{
  if(browser)await browser.close();if(rid)await sfu.deleteRoom("wm-"+rid).catch(()=>{});

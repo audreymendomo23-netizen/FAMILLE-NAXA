@@ -57,6 +57,18 @@ Deno.serve(async request=>{
  const b=JSON.parse(text);if(b?.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
  const p_hash=await hash(token),now=Date.now();
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
+ if(action==="recordings"||action==="recording-download"){
+ if(Deno.env.get("WM_RECORDING_STORAGE_QUALIFIED")!=="true"||!uuid.test(b.room_id??""))return send(403,{error:"forbidden"});
+ const room_id=b.room_id.toLowerCase(),reading=action==="recording-download";
+ if(reading&&(!uuid.test(b.recording_id??"")||!uuid.test(b.request_id??"")))return send(400,{error:"invalid_request"});
+ const result=await rpc("wm_recording_archive",{p_hash,p_room:room_id,p_action:reading?"read":"list",p_recording:reading?b.recording_id.toLowerCase():null,p_request:reading?b.request_id.toLowerCase():null});
+ if(!result)return send(403,{error:"forbidden"});
+ if(!reading)return send(200,result);
+ if(result.key!==room_id+"/"+b.recording_id.toLowerCase()+".ogg"||!Number.isSafeInteger(result.bytes)||result.bytes<1000||result.bytes>128*1024*1024)return send(503,{error:"unavailable"});
+ const object=await fetch(base+"/storage/v1/object/authenticated/wm-recordings/"+result.key,{headers:{apikey:service,Authorization:"Bearer "+service},redirect:"error",cache:"no-store"});
+ if(!object.ok||!object.body||object.headers.has("content-length")&&Number(object.headers.get("content-length"))!==result.bytes)return send(503,{error:"unavailable"});
+ return new Response(object.body,{status:200,headers:{...cors,"Content-Type":"audio/ogg","Cache-Control":"private, no-store","Content-Disposition":"attachment; filename=widemeet-"+b.recording_id.toLowerCase()+".ogg","X-Content-Type-Options":"nosniff"}});
+ }
  if(action==="presence"){
  if(Deno.env.get("WM_PRESENCE_QUALIFIED")!=="true"||!uuid.test(b.room_id??""))return send(403,{error:"forbidden"});
  const result=await rpc("wm_presence_report",{p_hash,p_room:b.room_id.toLowerCase()});

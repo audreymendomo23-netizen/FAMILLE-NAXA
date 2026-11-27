@@ -7,7 +7,7 @@ import {resolve,basename} from "node:path";
 import {EncodedFileOutput,EncodedFileType,EgressStatus} from "livekit-server-sdk";
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const terminal=s=>[EgressStatus.EGRESS_COMPLETE,EgressStatus.EGRESS_FAILED,EgressStatus.EGRESS_ABORTED,EgressStatus.EGRESS_LIMIT_REACHED].includes(s);
-export function createWideMeetRecorder({supabaseUrl,serviceKey,egress,outputDirectory,verifyAudio,fetcher=fetch}){
+export function createWideMeetRecorder({supabaseUrl,serviceKey,egress,outputDirectory,verifyAudio,storage=null,fetcher=fetch}){
  const base=new URL(supabaseUrl);
  if(!["http:","https:"].includes(base.protocol)||base.username||base.password||base.pathname!=="/"||base.search||base.hash||!serviceKey||typeof verifyAudio!=="function")throw Error("invalid recorder configuration");
  const root=resolve(outputDirectory),headers={apikey:serviceKey,Authorization:"Bearer "+serviceKey,"Content-Type":"application/json",Prefer:"return=representation"};
@@ -28,15 +28,18 @@ export function createWideMeetRecorder({supabaseUrl,serviceKey,egress,outputDire
   const current=await ledger(row.id);if(!current)return;
   const file=pathFor(current);let retain=current.disposition==="retain"&&current.phase==="stopping"&&info?.status===EgressStatus.EGRESS_COMPLETE;
   if(retain){
+   let storedKey=null;
    try{
     await chmod(file,0o600);
     const size=(await stat(file)).size;if(size<1000||size>128*1024*1024)throw Error("invalid size");
     await verifyAudio(file);
-    const sha=createHash("sha256").update(await readFile(file)).digest("hex");
+    const bytes=await readFile(file),sha=createHash("sha256").update(bytes).digest("hex");
+    if(storage)storedKey=await storage.put(current,bytes,sha);
     // Compare disposition again to avoid publishing a segment quarantined during verification.
-    const rows=await db("wm_recording_runs?id=eq."+row.id+"&phase=eq.stopping&disposition=eq.retain","PATCH",{phase:"complete",finished_at:new Date().toISOString(),bytes:size,content_sha256:sha});
+    const rows=await db("wm_recording_runs?id=eq."+row.id+"&phase=eq.stopping&disposition=eq.retain","PATCH",{phase:"complete",finished_at:new Date().toISOString(),bytes:size,content_sha256:sha,...(storedKey?{storage_key:storedKey,stored_at:new Date().toISOString()}:{})});
     if(rows?.length===1){local.delete(row.room_id);return}
    }catch{retain=false}
+   if(storedKey){const after=await ledger(row.id).catch(()=>null);if(after&&after.phase!=="complete")await storage.remove(storedKey).catch(()=>{});}
   }
   await discard(current);
   await patch(row.id,["starting","active","stopping"],{phase:"discarded",disposition:"discard",finished_at:new Date().toISOString()});

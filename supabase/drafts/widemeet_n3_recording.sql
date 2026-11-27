@@ -12,6 +12,10 @@ create table public.wm_recording_runs(
  finished_at timestamptz,
  content_sha256 text,
  bytes bigint,
+ stored_at timestamptz,
+ storage_key text unique,
+ check((stored_at is null)=(storage_key is null)),
+ check(storage_key is null or storage_key=room_id::text||'/'||id::text||'.ogg'),
  created_at timestamptz not null default clock_timestamp(),
  unique(room_id,request_id),
  check(phase<>'complete' or (content_sha256 is not null and length(content_sha256)=64 and bytes>0 and finished_at is not null and disposition='retain'))
