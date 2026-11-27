@@ -26,7 +26,7 @@ class AuthGateway(private val context:Context,private val base:String){
  private fun endpoint(action:String):URI{
   val u=URI(base)
   require(u.scheme=="https" && !u.host.isNullOrBlank() && u.userInfo==null && u.query==null && u.fragment==null && u.path.trimEnd('/').endsWith("/widemeet-auth"))
-  require(action in setOf("login","logout","switch-workspace","request-recovery","change-password","identity","register","refresh","recovery-enroll","recover-key","chat-media"))
+  require(action in setOf("login","logout","switch-workspace","request-recovery","change-password","identity","register","refresh","recovery-enroll","recover-key","chat-media","push"))
   return URI(base.trimEnd('/')+"/"+action)
  }
  private fun installation():String{
@@ -102,6 +102,12 @@ class AuthGateway(private val context:Context,private val base:String){
   require(current.isNotBlank()&&next.length in 12..256&&current!=next)
   val result=request("change-password",JSONObject().put("app_id","WIDEMEET").put("current_password",current).put("new_password",next).put("request_id",requestId),s.accessToken)
   require(result.optBoolean("changed",false)&&result.optBoolean("reconnect",false));clearLocalSession()
+ }
+ suspend fun push(s:Session,action:String,token:String?=null):JSONObject=withContext(Dispatchers.IO){
+  require(action in setOf("register","status","revoke")&&activeWorkspace(s,System.currentTimeMillis(),SystemClock.elapsedRealtime())!=null)
+  val data=JSONObject().put("app_id","WIDEMEET").put("action",action)
+  if(action=="register")data.put("platform","android").put("token",token?:throw IllegalArgumentException("token"))
+  request("push",data,s.accessToken)
  }
  suspend fun chatMedia(s:Session,action:String,data:JSONObject):JSONObject=withContext(Dispatchers.IO){require(action in setOf("list","upload","download","revoke"));request("chat-media",JSONObject().put("app_id","WIDEMEET").put("action",action).put("data",data),s.accessToken)}
  suspend fun identity(s:Session,action:String,data:JSONObject=JSONObject()):JSONObject=withContext(Dispatchers.IO){
