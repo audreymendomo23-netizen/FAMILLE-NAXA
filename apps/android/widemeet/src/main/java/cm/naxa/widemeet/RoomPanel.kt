@@ -80,6 +80,14 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  if(!busy&&!error&&list.isEmpty())Text(tr("Aucune réunion dans cet espace.","No meetings in this workspace."))
  }else{val r=room
  if(r!=null){val status=r.optString("status");val isHost=r.optString("hostId")==session.memberId&&hostRole
+ var remaining by remember(r.optLong("endMs"),r.optLong("serverNowMs")){mutableStateOf(0L)}
+ LaunchedEffect(r.optLong("endMs"),r.optLong("serverNowMs"),status){val end=r.optLong("endMs");val base=r.optLong("serverNowMs",System.currentTimeMillis());val start=android.os.SystemClock.elapsedRealtime();while(status in setOf("open","paused")){remaining=((end-base-(android.os.SystemClock.elapsedRealtime()-start)+999)/1000).coerceAtLeast(0);delay(1000)}}
+ if(isHost&&status in setOf("scheduled","open")){
+ Text(tr("Inviter un membre","Invite a member"))
+ contacts.filter{c->rows(r.optJSONArray("participants")).none{it.optString("memberId")==c.optString("member_id")}}.forEach{c->TextButton(enabled=!busy,onClick={command("invite_member",null,c.optString("member_id"))}){Text(c.optString("display_name"))}}
+ if(status=="open")TextButton(enabled=!busy,onClick={command("lock_admission",!r.optBoolean("admissionLocked"))}){Text(if(r.optBoolean("admissionLocked"))tr("Déverrouiller les admissions","Unlock admissions")else tr("Verrouiller les admissions","Lock admissions"))}
+ }
+ if(isHost&&status in setOf("open","paused")&&remaining in 1L..300L){Text(tr("Temps restant","Time remaining")+" "+(remaining/60)+":"+ (remaining%60).toString().padStart(2,'0'));Row{listOf(15,30,60).forEach{m->TextButton(enabled=!busy,onClick={command("extend",m)}){Text("+$m min")}}}}
  Text(r.optString("title"),style=MaterialTheme.typography.titleLarge);Text(r.optString("description"));Text(if(r.optBoolean("cancelled"))tr("Annulée","Cancelled")else stateLabel(status))
  TextButton(enabled=!busy,onClick={execute("read",JSONObject().put("room_id",r.getString("id")))}){Text(tr("Actualiser","Refresh"))}
  if(!isHost&&status in setOf("scheduled","open")){listOf("accepted" to tr("Accepter","Accept"),"maybe" to tr("Peut-être","Maybe"),"declined" to tr("Décliner","Decline")).forEach{(v,l)->TextButton(enabled=!busy,onClick={command("respond",v)}){Text(l)}}}
@@ -121,7 +129,8 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  else->if(r.optString("recording")=="requested")Text(tr("Demande d’enregistrement non confirmée par le moteur audio.","Recording request not confirmed by the audio engine."))
  }
  if(isHost){
- TextButton(enabled=!busy,onClick={command("record",true)}){Text(tr("Demander l’enregistrement audio","Request audio recording"))}
+ TextButton(enabled=!busy&&r.optString("recording")!="requested"&&r.optJSONObject("recordingStatus")?.optString("phase") !in setOf("active","starting","stopping"),onClick={command("record",true)}){Text(if(r.optBoolean("recordingPaused"))tr("Reprendre la capture","Resume recording")else tr("Demander l’enregistrement audio","Request audio recording"))}
+ if(r.optString("recording")=="requested")TextButton(enabled=!busy,onClick={command("record_pause")}){Text(tr("Pause audio uniquement","Pause recording only"))}
  TextButton(enabled=!busy,onClick={command("record",false)}){Text(tr("Arrêter la demande","Stop request"))}
  OutlinedTextField(poll,{poll=it.take(2000)},label={Text(tr("Choix du vote séparés par |","Poll choices separated by |"))},modifier=Modifier.fillMaxWidth())
  Button(enabled=!busy&&poll.contains("|"),onClick={command("poll",JSONArray(poll.split("|").map{it.trim()}.filter{it.isNotEmpty()}),UUID.randomUUID().toString())}){Text(tr("Créer le vote","Create poll"))}
