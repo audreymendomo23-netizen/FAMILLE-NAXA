@@ -22,6 +22,33 @@ async function workspaces(accountId:string){
  const rows=await rest("wm_memberships?select=workspace_id,role,enabled,wm_workspaces!inner(id,kind,name,enabled)&account_id=eq."+eq(accountId)+"&enabled=eq.true&wm_workspaces.enabled=eq.true");
  return rows.flatMap((r:any)=>{const w=r.wm_workspaces;return w&&((w.kind==="individual"&&r.role==="owner")||(w.kind==="enterprise"&&["promoteur","manager","staff"].includes(r.role)))?[{id:w.id,kind:w.kind,name:w.name,role:r.role,enabled:true}]:[]});
 }
+// Accept only a bounded JPEG thumbnail with a valid frame header. The private
+// binary is never served as HTML/SVG or exposed through a public URL.
+function thumbnail(v:unknown){
+ if(typeof v!=="string"||v.length>87384||v.length%4!==0||!/^[A-Za-z0-9+/]+={0,2}$/.test(v))return false;
+ try{
+ const b=Uint8Array.from(atob(v),c=>c.charCodeAt(0));
+ if(b.length<16||b.length>65536||b[0]!==255||b[1]!==216||b.at(-2)!==255||b.at(-1)!==217)return false;
+ let pos=2,frame=false;
+ while(pos<b.length-2){
+  if(b[pos++]!==255)return false;
+  while(b[pos]===255)pos++;
+  const marker=b[pos++];
+  if(pos+2>b.length)return false;
+  const size=b[pos]*256+b[pos+1];
+  if(size<2||pos+size>b.length-2)return false;
+  if([192,193,194].includes(marker)){
+   if(frame||size<11||b[pos+2]!==8)return false;
+   const h=b[pos+3]*256+b[pos+4],w=b[pos+5]*256+b[pos+6],n=b[pos+7];
+   if(!w||!h||w>512||h>512||![1,3].includes(n)||size!==8+3*n)return false;
+   frame=true;
+  }
+  if(marker===218)return frame;
+  pos+=size;
+ }
+ return false;
+ }catch{return false}
+}
 Deno.serve(async request=>{
  const origin=request.headers.get("origin");
  const cors:Record<string,string>=origin&&origins.has(origin)?{"Access-Control-Allow-Origin":origin,"Vary":"Origin","Access-Control-Allow-Headers":"content-type,authorization,apikey","Access-Control-Allow-Methods":"POST,OPTIONS","Access-Control-Allow-Credentials":"true"}:{};
@@ -32,7 +59,7 @@ Deno.serve(async request=>{
  if(request.method!=="POST")return send(405,{error:"method"});
  try{
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
- const raw=await request.text();if(raw.length>16384)return send(413,{error:"request_too_large"});
+ const raw=await request.text();if(raw.length>(action==="identity"?90000:16384))return send(413,{error:"request_too_large"});
  const body=JSON.parse(raw);
  if(!body||body.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
  if(action==="register"){
@@ -150,10 +177,20 @@ Deno.serve(async request=>{
  const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,"");
  if(!/^[a-f0-9]{64}$/.test(access))return send(401,{error:"credentials"});
  const name=body.action,data=body.data??{};
- if(!["profile","profile-update","onboarding-step","contacts","favorite","groups","group-save","group-delete","invite","invitations","respond-invite","member-role","revoke-member","billing","billing-list","billing-create","billing-cancel","devices","revoke-device","dashboard"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
+ if(name!=="photo-save"&&raw.length>16384)return send(413,{error:"request_too_large"});
+ if(!["profile","profile-update","photo-read","photo-save","photo-delete","onboarding-step","contacts","favorite","groups","group-save","group-delete","invite","invitations","respond-invite","member-role","revoke-member","billing","billing-list","billing-create","billing-cancel","devices","revoke-device","dashboard"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
  const p_hash=await digest(access);
  const context=(await rest("rpc/wm_session_context",{method:"POST",body:JSON.stringify({p_hash})}))?.[0];
  if(!context||context.password_change_required)return send(403,{error:"scope"});
+ if(["photo-read","photo-save","photo-delete"].includes(name)){
+ if(name==="photo-save"){
+ if(!thumbnail(data.jpeg))return send(400,{error:"invalid_photo"});
+ const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-photo:"+context.account_id),p_installation_hash:await digest("wm-photo-device:"+context.installation_id)})});
+ if(allowed!==true)return send(429,{error:"too_many_attempts"});
+ }
+ const result=await rest("rpc/wm_profile_photo",{method:"POST",body:JSON.stringify({p_hash,p_action:name,p_data:data})});
+ return result?send(200,result):send(403,{error:"scope"});
+ }
  if(["billing-list","billing-create","billing-cancel"].includes(name)){
  if(Deno.env.get("WM_BILLING_TEST")!=="true")return send(503,{error:"unavailable"});
  const result=await rest("rpc/wm_billing_action",{method:"POST",body:JSON.stringify({p_hash,p_action:name,p_data:data})});
