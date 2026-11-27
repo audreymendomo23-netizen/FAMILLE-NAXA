@@ -188,12 +188,31 @@ try{
    const captured={room_id:rid,recording_id:speechRecordingId};
    assert.equal((await tr(gs.access_token,"request",captured)).status,403);
    assert.equal((await tk(hs.access_token,"request",captured)).status,"queued");
+   const rpcWorker=(action,recording,lease,result=null)=>ok(base+"/rest/v1/rpc/wm_transcription_worker",{p_action:action,p_recording:recording,p_lease:lease,p_result:result});
+   const staleLease=randomUUID(),otherLease=randomUUID();
+   const claim=await rpcWorker("claim",null,staleLease);assert.equal(claim.recording_id,speechRecordingId);
+   assert.equal(await rpcWorker("claim",null,otherLease),null);
+   assert.equal(await rpcWorker("fail",speechRecordingId,otherLease),null);
+   const expire=await fetch(base+"/rest/v1/wm_transcription_jobs?recording_id=eq."+speechRecordingId,{method:"PATCH",headers:{apikey:serviceKey,Authorization:"Bearer "+serviceKey,"Content-Type":"application/json"},body:JSON.stringify({lease_until:new Date(Date.now()-1000).toISOString()})});assert.ok(expire.ok);
+   assert.equal(await rpcWorker("fail",speechRecordingId,staleLease),null);
+   console.log("PASS exclusive worker claim, stale lease fencing and crash recovery fixture");
    const shutdown=new AbortController(),workerStates=[];
    await runAsrLoop({worker:engine,signal:shutdown.signal,report:state=>{workerStates.push(state);shutdown.abort()},wait:async()=>{throw Error("unexpected worker wait")}});
    assert.deepEqual(workerStates,["completed"]);
    console.log("PASS resilient consumer loop drains a real leased transcription job");
    const live=await tk(hs.access_token,"read",captured);
    assert.equal(live.status,"complete");assert.equal(live.result.language,"en");
+   const captions=live.result.captions;assert.equal(captions.method,"source-cues-v1");assert.equal(captions.recording_id,speechRecordingId);assert.equal(captions.language,live.result.language);
+   assert.equal(captions.cues.length,live.result.segments.length);
+   for(const cue of captions.cues){const {segment_index,speaker_id,speaker_status,...source}=cue;assert.equal(speaker_id,null);assert.equal(speaker_status,"unknown");assert.deepEqual(source,live.result.segments[segment_index]);}
+   const q={...captured,query:"project"};
+   const hits=await tk(hs.access_token,"search",q);assert.equal(hits.recording_id,speechRecordingId);assert.ok(hits.matches.length>0);
+   for(const hit of hits.matches){const {segment_index,...source}=hit;assert.deepEqual(source,live.result.segments[segment_index]);assert.match(source.text,/project/i);}
+   assert.deepEqual((await tk(hs.access_token,"search",{...captured,query:"%_never_present"})).matches,[]);
+   assert.equal((await tr(gs.access_token,"search",q)).status,403);
+   assert.equal((await tr(hs.access_token,"search",{...q,query:"x"})).status,403);
+   assert.equal((await tr(hs.access_token,"search",{...q,recording_id:randomUUID()})).status,403);
+   console.log("PASS canonical original-language archive cues, unknown speaker, literal source search and room/role denial");
    const review=live.result.review;assert.equal(review.method,"extractive-review-v1");assert.equal(review.recording_id,speechRecordingId);assert.ok(review.excerpts.length>0);
    for(const item of [...review.excerpts,...review.decision_candidates]){const {segment_index,...source}=item;assert.deepEqual(source,live.result.segments[segment_index]);}
    const seg=(text,uncertain=false)=>({start_ms:0,end_ms:1000,text,uncertain});
