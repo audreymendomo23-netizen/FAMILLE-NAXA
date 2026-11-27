@@ -3,6 +3,9 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 import android.location.Location
 import android.location.LocationManager
 import android.os.Build
@@ -38,8 +41,8 @@ private suspend fun freshPosition(context:Context):Location=withTimeout(16000){
   require(loc.hasAccuracy()&&!loc.isFromMockProvider&&SystemClock.elapsedRealtimeNanos()-loc.elapsedRealtimeNanos in 0..15_000_000_000L){"Position trop ancienne"};loc
  }
 }
-@Composable internal fun GrilladAttendance(attendance:JSONObject?,enabled:Boolean,onProof:(JSONObject)->Unit){
- val context=LocalContext.current;val scope=rememberCoroutineScope();var kind by remember{mutableStateOf("arrival")};var working by remember{mutableStateOf(false)};var msg by remember{mutableStateOf("")}
+@Composable internal fun GrilladAttendance(attendance:JSONObject?,enabled:Boolean,onPhoto:suspend(String)->String,onProof:(JSONObject)->Unit){
+ val context=LocalContext.current;val scope=rememberCoroutineScope();var kind by remember{mutableStateOf("arrival")};var working by remember{mutableStateOf(false)};var msg by remember{mutableStateOf("")};var photo by remember{mutableStateOf<Pair<String,Bitmap>?>(null)}
  val capture=rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()){bitmap->
   if(bitmap==null){working=false;msg="Photo annulée. Aucun pointage envoyé."}else scope.launch{try{
    val at=Instant.now().toString();val pos=freshPosition(context);val output=ByteArrayOutputStream()
@@ -57,5 +60,5 @@ private suspend fun freshPosition(context:Context):Location=withTimeout(16000){
  Button({working=true;if(context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==PackageManager.PERMISSION_GRANTED)openCamera()else permission.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION,Manifest.permission.ACCESS_COARSE_LOCATION))},enabled=enabled&&!working,modifier=Modifier.fillMaxWidth().heightIn(min=52.dp)){Text(if(working)"Capture en cours…" else "Prendre la photo et pointer")}
  if(msg.isNotBlank())Text(msg)
  Text("Historique confirmé",style=MaterialTheme.typography.titleMedium)
- rows(attendance.optJSONArray("history")).forEach{x->OutlinedCard(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp)){Text((if(x.optString("kind")=="arrival")"Arrivée" else "Départ")+" · "+x.optString("captured_at"));if(!x.isNull("duration_seconds"))Text("Durée : "+(x.optLong("duration_seconds")/60)+" min");Text(if(x.optBoolean("photo_available"))"Preuve privée" else "Preuve expirée ou indisponible")}}}
+ rows(attendance.optJSONArray("history")).forEach{x->OutlinedCard(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp)){Text((if(x.optString("kind")=="arrival")"Arrivée" else "Départ")+" · "+x.optString("captured_at"));if(!x.isNull("duration_seconds"))Text("Durée : "+(x.optLong("duration_seconds")/60)+" min");Text(if(x.optBoolean("photo_available"))"Preuve privée" else "Preuve expirée ou indisponible");if(x.optBoolean("photo_available"))TextButton({working=true;photo=null;scope.launch{try{val bytes=Base64.decode(onPhoto(x.optString("id")),Base64.DEFAULT);try{val bitmap=BitmapFactory.decodeByteArray(bytes,0,bytes.size)?:error("Photo invalide");photo=x.optString("id") to bitmap}finally{bytes.fill(0)}}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){msg="Preuve non disponible ou accès refusé"}finally{working=false}}},enabled=enabled&&!working){Text("Consulter la preuve")};photo?.takeIf{it.first==x.optString("id")}?.let{p->Image(p.second.asImageBitmap(),contentDescription="Preuve de pointage autorisée",modifier=Modifier.fillMaxWidth().heightIn(max=350.dp));TextButton({photo=null}){Text("Fermer la preuve")}}}}}
 }

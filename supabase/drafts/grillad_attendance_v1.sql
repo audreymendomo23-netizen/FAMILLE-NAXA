@@ -60,21 +60,28 @@ begin
  return jsonb_build_object('id',p_event,'confirmed',true,'kind',p_kind);
 end $$;
 -- No public direct table access, and no photos or coordinates in routine lists.
-create function grillad_private.attendance_photo(p_org uuid,p_site uuid,p_id uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
+create table grillad_private.attendance_photo_access(id bigint generated always as identity primary key,org uuid not null,site uuid not null,proof_id uuid not null references grillad_private.attendance(id),viewer uuid not null,viewed_at timestamptz not null default now(),foreign key(org,site) references grillad_private.enabled_sites(org,site));
+alter table grillad_private.attendance_photo_access enable row level security;
+revoke all on grillad_private.attendance_photo_access from public,anon,authenticated;
+create function grillad_private.attendance_photo(p_org uuid,p_site uuid,p_id uuid) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare r text;proof grillad_private.attendance%rowtype;
 begin
  r:=grillad_private.scope(p_org,p_site);
  select * into proof from grillad_private.attendance where id=p_id and org=p_org and site=p_site and photo_until>now() and photo is not null and (r in ('owner','manager') or actor=auth.uid());
  if not found then raise exception 'GRILLAD_PROOF_DENIED' using errcode='42501';end if;
+ insert into grillad_private.attendance_photo_access(org,site,proof_id,viewer) values(p_org,p_site,proof.id,auth.uid());
  return jsonb_build_object('id',proof.id,'jpeg',encode(proof.photo,'base64'));
 end $$;
 create function grillad_private.purge_attendance_photos() returns bigint language plpgsql security definer set search_path=pg_catalog as $$
 declare n bigint;begin update grillad_private.attendance set photo=null where photo is not null and photo_until<=now();get diagnostics n=row_count;return n;end $$;
 create function public.grillad_attendance_status(p_org uuid,p_site uuid) returns jsonb language sql stable security invoker set search_path=pg_catalog as $$select grillad_private.attendance_status(p_org,p_site)$$;
 create function public.grillad_attendance_capture(p_org uuid,p_site uuid,p_event uuid,p_kind text,p_at timestamptz,p_lat double precision,p_lon double precision,p_accuracy double precision,p_photo text) returns jsonb language sql security invoker set search_path=pg_catalog as $$select grillad_private.attendance_capture(p_org,p_site,p_event,p_kind,p_at,p_lat,p_lon,p_accuracy,p_photo)$$;
--- Photo viewing remains not exposed until access audit and retention automation are implemented.
+-- Explicit audited photo access; caller scope is enforced before returning bytes.
+create function public.grillad_attendance_photo(p_org uuid,p_site uuid,p_id uuid) returns jsonb language sql security invoker set search_path=pg_catalog as $select grillad_private.attendance_photo(p_org,p_site,p_id)$;
+revoke all on function public.grillad_attendance_photo(uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.grillad_attendance_photo(uuid,uuid,uuid) to authenticated;
 revoke all on function grillad_private.attendance_status(uuid,uuid),grillad_private.attendance_capture(uuid,uuid,uuid,text,timestamptz,double precision,double precision,double precision,text),grillad_private.attendance_photo(uuid,uuid,uuid),grillad_private.purge_attendance_photos() from public,anon,authenticated;
-grant execute on function grillad_private.attendance_status(uuid,uuid),grillad_private.attendance_capture(uuid,uuid,uuid,text,timestamptz,double precision,double precision,double precision,text) to authenticated;
+grant execute on function grillad_private.attendance_status(uuid,uuid),grillad_private.attendance_capture(uuid,uuid,uuid,text,timestamptz,double precision,double precision,double precision,text),grillad_private.attendance_photo(uuid,uuid,uuid) to authenticated;
 revoke all on function public.grillad_attendance_status(uuid,uuid),public.grillad_attendance_capture(uuid,uuid,uuid,text,timestamptz,double precision,double precision,double precision,text) from public,anon,authenticated;
 grant execute on function public.grillad_attendance_status(uuid,uuid),public.grillad_attendance_capture(uuid,uuid,uuid,text,timestamptz,double precision,double precision,double precision,text) to authenticated;
 commit;

@@ -30,7 +30,12 @@ begin
  perform public.grillad_attendance_capture(o,s,j,'departure',now(),0,0,10,q);
  v:=public.grillad_attendance_status(o,s);
  if jsonb_array_length(v->'history')<>2 or (v->'history'->0->>'duration_seconds')::int<>60 or (v->'history'->0)?'photo' then raise exception 'history or privacy';end if;
+ if (public.grillad_attendance_photo(o,s,i)->>'jpeg')<>p then raise exception 'own photo';end if;
+ begin perform public.grillad_attendance_photo(o,s,gen_random_uuid());raise exception 'unknown proof must fail';exception when insufficient_privilege then null;end;
  begin perform count(*) from grillad_private.attendance;raise exception 'expected table denial';exception when insufficient_privilege then null;end;
 end $$;
 reset role;
+do $begin if (select count(*) from grillad_private.attendance_photo_access)<>1 then raise exception 'photo access audit';end if;end $;
+update grillad_private.attendance set photo_until=now()-interval '1 second';
+do $begin if grillad_private.purge_attendance_photos()<>2 or exists(select 1 from grillad_private.attendance where photo is not null) then raise exception 'photo retention';end if;end $;
 rollback;
