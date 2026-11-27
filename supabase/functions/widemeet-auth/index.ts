@@ -107,6 +107,8 @@ Deno.serve(async request=>{
  return send(200,{login_id:loginId,kind});
  }
  if(action==="recovery-enroll"){
+ const supervised=body.supervised===true;
+ if(supervised&&Deno.env.get("WM_SUPPORT_RECOVERY_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
  if(Deno.env.get("WM_RECOVERY_KEY_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
  const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,""),password=body.current_password;
  if(!/^[a-f0-9]{64}$/.test(access)||typeof password!=="string"||!password||password.length>256)return send(400,{error:"invalid_request"});
@@ -119,20 +121,22 @@ Deno.serve(async request=>{
  const proof=await fetch(url+"/auth/v1/token?grant_type=password",{method:"POST",headers:{apikey:anon,"Content-Type":"application/json"},body:JSON.stringify({email:account.auth_alias,password}),redirect:"error",cache:"no-store"});
  if(!proof.ok||(await proof.json()).user?.id!==account.auth_user_id)return send(401,{error:"credentials"});
  const recoveryKey=token();
- const enrolled=await rest("rpc/wm_enroll_recovery_key",{method:"POST",body:JSON.stringify({p_hash,p_key_hash:await digest("wm-offline-recovery:"+recoveryKey),p_epoch:account.credential_epoch})});
+ const enrolled=await rest(supervised?"rpc/wm_support_enroll_fallback":"rpc/wm_enroll_recovery_key",{method:"POST",body:JSON.stringify({p_hash,p_key_hash:await digest((supervised?"wm-supervised-recovery:":"wm-offline-recovery:")+recoveryKey),p_epoch:account.credential_epoch})});
  if(enrolled!==true)return send(409,{error:"unconfirmed"});
  return send(200,{recovery_key:recoveryKey});
  }
  if(action==="recover-key"){
+ const supervised=body.supervised===true;
+ if(supervised&&Deno.env.get("WM_SUPPORT_RECOVERY_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
  if(Deno.env.get("WM_RECOVERY_KEY_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
  const identifier=typeof body.identifier==="string"?body.identifier.trim().toUpperCase():"";
  const recoveryKey=typeof body.recovery_key==="string"?body.recovery_key.trim().toLowerCase():"",next=body.new_password,requestId=body.request_id;
  if(!/^WM-[A-Z0-9]{8,24}$/.test(identifier)||! /^[a-f0-9]{64}$/.test(recoveryKey)||!uuid.test(requestId??"")||!uuid.test(body.installation_id??"")||!["web","android"].includes(body.platform)||typeof next!=="string"||next.length<12||next.length>256)return send(400,{error:"invalid_request"});
  const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-key-recovery:"+identifier),p_installation_hash:await digest("wm-key-recovery-device:"+body.installation_id.toLowerCase())})});
  if(allowed!==true)return send(429,{error:"too_many_attempts"});
- const p_key_hash=await digest("wm-offline-recovery:"+recoveryKey),p_commitment=await digest("wm-recovery-commit:"+recoveryKey+":"+requestId.toLowerCase()+":"+next);
+ const p_key_hash=await digest((supervised?"wm-supervised-recovery:":"wm-offline-recovery:")+recoveryKey),p_commitment=await digest("wm-recovery-commit:"+recoveryKey+":"+requestId.toLowerCase()+":"+next);
  const p_request=requestId.toLowerCase();
- const op=await rest("rpc/wm_begin_key_recovery",{method:"POST",body:JSON.stringify({p_identifier:identifier,p_key_hash,p_request,p_commitment})});
+ const op=await rest(supervised?"rpc/wm_support_begin_fallback":"rpc/wm_begin_key_recovery",{method:"POST",body:JSON.stringify({p_identifier:identifier,p_key_hash,p_request,p_commitment})});
  if(!op||!["start","verify"].includes(op.mode)||!uuid.test(op.auth_user_id??"")||!uuid.test(op.account_id??""))return send(401,{error:"credentials"});
  async function verify(){
   const proof=await fetch(url+"/auth/v1/token?grant_type=password",{method:"POST",headers:{apikey:anon,"Content-Type":"application/json"},body:JSON.stringify({email:op.auth_alias,password:next}),redirect:"error",cache:"no-store"});
@@ -257,9 +261,10 @@ Deno.serve(async request=>{
  const mediaReady=Deno.env.get("WM_SUPPORT_MEDIA_QUALIFIED")==="true";
  if(name==="support-call-grant"){
   if(!mediaReady||!uuid.test(data.call_id??""))return send(503,{error:"unavailable"});
-  const admission=await rest("rpc/wm_support_media_admission",{method:"POST",body:JSON.stringify({p_hash,p_call:data.call_id})});
+  const handle=token();
+  const admission=await rest("rpc/wm_support_issue_media",{method:"POST",body:JSON.stringify({p_hash,p_call:data.call_id,p_handle:handle})});
   if(!admission||admission.identity!==context.account_id||admission.room!=="wm-support-"+data.call_id.toLowerCase())return send(403,{error:"scope"});
-  return send(200,await supportGrant(admission,p_hash));
+  return send(200,await supportGrant(admission,handle));
  }
  const result=await rest("rpc/wm_support_action",{method:"POST",body:JSON.stringify({p_hash,p_action:name,p_data:data})});
  if(result&&(name==="support-capabilities"||name.startsWith("support-call-")||name.startsWith("support-screen-")))result.transport_ready=mediaReady;
