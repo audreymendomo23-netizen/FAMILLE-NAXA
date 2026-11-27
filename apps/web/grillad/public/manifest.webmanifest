@@ -1,0 +1,19 @@
+{
+  "id": "/",
+  "name": "GrillaD",
+  "short_name": "GrillaD",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FBF6EF",
+  "theme_color": "#A43C0C",
+  "lang": "fr",
+  "icons": [
+    {
+      "src": "/grillad-placeholder.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
