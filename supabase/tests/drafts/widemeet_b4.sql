@@ -44,7 +44,13 @@ begin
   jsonb_build_object('open',true,'closesMs',floor(extract(epoch from clock_timestamp()+interval '1 hour')*1000)::bigint),
   jsonb_build_object('open',true)));
  insert into public.wm_rooms(id,workspace_id,host_id,revision,state) values(r,w,h,1,s);
+ insert into public.wm_presence_samples(id,room_id,observed_at,observed) values
+ (gen_random_uuid(),r,clock_timestamp()-interval '30 seconds',array[h,g]),
+ (gen_random_uuid(),r,clock_timestamp()-interval '28 seconds',array[h]),
+ (gen_random_uuid(),r,clock_timestamp()-interval '26 seconds',array[h,g]),
+ (gen_random_uuid(),r,clock_timestamp()-interval '2 seconds',array[h,g]);
  metrics:=public.wm_workspace_center(repeat('a',64),'center-statistics','{"period":"yearly"}');
+ if metrics->>'invitees' is distinct from '2' or metrics->>'accepted_invites' is distinct from '2' or metrics->>'rooms_with_observations' is distinct from '1' or metrics->'by_organizer'->0->>'meetings' is distinct from '1' then raise exception 'B4 scoped KPI mismatch: %',metrics;end if;
  if metrics->>'polls_closed' is distinct from '1' or metrics->>'polls_effectively_closed' is distinct from '2' or metrics->>'total' is distinct from '1' then raise exception 'B4 effective vote closure mismatch: %',metrics;end if;
  if public.wm_workspace_center(repeat('b',64),'center-statistics','{"period":"yearly"}') is not null then raise exception 'B4 staff access';end if;
  if public.wm_workspace_center(repeat('a',64),'center-statistics','{"period":"weekly","days":7}') is not null then raise exception 'B4 ambiguous period';end if;
@@ -52,6 +58,9 @@ begin
  if not exists(select 1 from public.wm_minutes_eligibility where room_id=r and premium) then raise exception 'missing closure eligibility';end if;
  metrics:=public.wm_workspace_center(repeat('a',64),'center-statistics','{"days":7}');
  if metrics->>'polls_effectively_closed' is distinct from '4' then raise exception 'B4 ended room closure mismatch: %',metrics;end if;
+ rr:=public.wm_presence_report(repeat('a',64),r);
+ if rr->>'unobserved_gap_count' is distinct from '1' or rr->'summary'->>'unknown' is distinct from '1' or not exists(select 1 from jsonb_array_elements(rr->'rows') x where x->>'member_id'=g::text and x->>'observed_arrivals'='1' and x->>'observed_departures'='1') then raise exception 'B4 presence transitions mismatch: %',rr;end if;
+ if jsonb_array_length(public.wm_presence_report(repeat('b',64),r)->'rows')<>1 then raise exception 'B4 staff attendance leaked';end if;
  update public.wm_room_entitlements set valid_until=clock_timestamp()-interval '1 hour' where workspace_id=w;
  d:=jsonb_build_object('room_id',r,'version_id',v1,'expected_version',0,'body','Human draft');
  if public.wm_minutes_action(repeat('b',64),'draft',d) is not null then raise exception 'staff drafted minutes';end if;
@@ -93,6 +102,12 @@ begin
  if public.wm_task_action(repeat('b',64),'submit',p||jsonb_build_object('expected_revision',3))->>'revision' is distinct from '4' then raise exception 'resubmission failed';end if;
  if public.wm_task_action(repeat('a',64),'approve',p||jsonb_build_object('expected_revision',4))->>'revision' is distinct from '5' then raise exception 'approve failed';end if;
  if (public.wm_task_action(repeat('b',64),'list','{}')->'items'->0->>'state') is distinct from 'done' then raise exception 'task not done';end if;
+ rr:=public.wm_task_action(repeat('b',64),'list','{}')->'items'->0;
+ if jsonb_array_length(rr->'history')<>5 or rr->'history'->0->>'action' is distinct from 'create' or rr->'history'->4->>'action' is distinct from 'approve' or rr->'history'->4 ? 'actor_id' then raise exception 'B4 task history mismatch: %',rr;end if;
+ if has_table_privilege('authenticated','public.wm_task_history','SELECT') or has_table_privilege('service_role','public.wm_task_history','UPDATE') then raise exception 'B4 history ACL';end if;
+ update public.wm_room_entitlements set valid_until=clock_timestamp()+interval '1 hour' where workspace_id=w;
+ metrics:=public.wm_workspace_center(repeat('a',64),'center-statistics','{"days":7}');
+ if metrics->>'tasks_done' is distinct from '1' or metrics->'by_assignee'->0->>'done' is distinct from '1' then raise exception 'B4 assignee KPI mismatch: %',metrics;end if;
  rr:=public.wm_report_export(repeat('a',64),r,gen_random_uuid());
  metrics:=rr->'polls'->0;
  if metrics->>'eligible' is distinct from '3' or metrics->>'responses' is distinct from '2' or metrics->>'nonresponses' is distinct from '1' or (metrics->>'response_rate')::numeric is distinct from 66.67::numeric or metrics->>'quorum_met' is distinct from 'true' or metrics->'options'->0->>'accepted' is distinct from 'true' or (metrics->'options'->1->>'share_pct')::numeric is distinct from 50::numeric then raise exception 'B4 survey export metrics mismatch: %',metrics;end if;
