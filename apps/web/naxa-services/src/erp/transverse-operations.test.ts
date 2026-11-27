@@ -1,0 +1,3 @@
+import {expect,it} from "vitest";
+import {validateOperations} from "./transverse-operations";
+it("rejects other sites, impossible counts and missing amounts",()=>{const counts={open:2,overdue:1,ready:1};const v={site_id:"site",generated_at:"2026-11-27T12:00:00Z",orders:counts,pressing:counts,appointments:counts,receivables:{open:1,overdue:0,balance_xaf:500}};expect(validateOperations(v,"site")).toEqual(v);expect(()=>validateOperations(v,"other")).toThrow();expect(()=>validateOperations({...v,orders:{...counts,overdue:3}},"site")).toThrow();expect(()=>validateOperations({...v,receivables:{open:1,overdue:0}},"site")).toThrow();});
