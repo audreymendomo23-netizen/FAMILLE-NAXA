@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SubscriptionPage } from "./erp/subscription";
+import { BillingPanel } from "./erp/billing-panel";
 import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, listAppEvents, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
 import { normalizeInventoryItemDraft } from "./erp/inventory";
 import { financialRows,downloadFinancialXlsx,printFinancialReport } from "./erp/performance-export";
@@ -194,6 +195,7 @@ function App() {
       VITE_NAXA_SERVICES_BRIEFING_ENABLED?: string;
       VITE_NAXA_SERVICES_MEETINGS_ENABLED?: string;
       VITE_NAXA_SERVICES_ATTENDANCE_ENABLED?: string;
+      VITE_NAXA_SERVICES_BILLING_V23_ENABLED?: string;
     };
   }).env ?? {};
   const authEndpoint = env.VITE_NAXA_SERVICES_AUTH_URL ?? "";
@@ -299,7 +301,7 @@ function App() {
             ? command.aggregate_type : existingEntry?.recordType,
           aggregateType: typeof command.aggregate_type === "string" ? command.aggregate_type : existingEntry?.aggregateType,
           actionCode: typeof command.action_code === "string" ? command.action_code : existingEntry?.actionCode,
-          data: { ...(existingEntry?.data ?? {}), ...payload, server_result: serverRecord, server_recorded_at: typeof storedReceipt.recorded_at === "string" ? storedReceipt.recorded_at : typeof payload.server_recorded_at === "string" ? payload.server_recorded_at : undefined },
+          data: { ...(existingEntry?.data ?? {}), ...payload, ...(typeof serverRecord.paid_xaf==="number"?{paid_xaf:serverRecord.paid_xaf}:{}), server_result: serverRecord, server_recorded_at: typeof storedReceipt.recorded_at === "string" ? storedReceipt.recorded_at : typeof payload.server_recorded_at === "string" ? payload.server_recorded_at : undefined },
           status: receiptIsNewer && typeof serverRecord.status === "string" ? serverRecord.status
             : item.state!=="acknowledged"&&existingRevision>0 ? existingEntry?.status
             : typeof payload.to_status === "string" ? payload.to_status
@@ -685,7 +687,7 @@ function App() {
             aggregateType:typeof command.aggregate_type==="string"?command.aggregate_type:x.aggregateType,
             actionCode:typeof command.action_code==="string"?command.action_code:x.actionCode,
             siteId:typeof command.site_id==="string"?command.site_id:x.siteId,
-            data:{...(x.data??{}),...eventPayload,server_result:serverRecord,server_recorded_at:typeof receipt.recorded_at==="string"?receipt.recorded_at:x.data?.server_recorded_at},
+            data:{...(x.data??{}),...eventPayload,...(typeof serverRecord.paid_xaf==="number"?{paid_xaf:serverRecord.paid_xaf}:{}),server_result:serverRecord,server_recorded_at:typeof receipt.recorded_at==="string"?receipt.recorded_at:x.data?.server_recorded_at},
             revision:typeof serverRecord.revision==="number"?serverRecord.revision:x.revision,
             status:typeof serverRecord.status==="string"?serverRecord.status:x.status,
           }:x)}));
@@ -756,7 +758,7 @@ function App() {
           recordType: change.aggregate_type === "work_order" || change.aggregate_type === "repair_order" || change.aggregate_type === "service_order" || change.aggregate_type === "pressing_order" ? change.aggregate_type : undefined,
           aggregateType: change.aggregate_type,
           actionCode: change.action_code,
-          data: { ...prior?.data, ...payload, server_result: serverRecord, server_recorded_at: change.recorded_at },
+          data: { ...prior?.data, ...payload, ...(typeof serverRecord.paid_xaf==="number"?{paid_xaf:serverRecord.paid_xaf}:{}), server_result: serverRecord, server_recorded_at: change.recorded_at },
           status: typeof serverRecord.status === "string" ? serverRecord.status
             : typeof payload.to_status === "string" ? payload.to_status
             : typeof payload.status === "string" ? payload.status : prior?.status,
@@ -1298,13 +1300,13 @@ function App() {
               onCreate={createWebWorkOrder}
               onTransition={transitionWebWorkOrder}
             /> :
-            active === "cash" ? <CashOperationsPage
+            active === "cash" ? <><CashOperationsPage
               entries={(entries.cash ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} stockEntries={(entries.stock ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))}
               authenticated={Boolean(authSession && !preview)}
               canManage={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))}
               busy={busy} onCreateRegister={createCashRegister} onOpenSession={openCashSession}
               onCreateSale={createCashSale} onCloseSession={closeCashSession}
-            /> :
+            />{authSession&&!preview&&env.VITE_NAXA_SERVICES_BILLING_V23_ENABLED==="true"&&<BillingPanel key={scopeOf(authSession)+":"+activeSiteId} entries={(entries.cash??[]).filter(e=>e.siteId===(activeSiteId||authSession.account.active_site_ids[0]))} busy={busy} onSubmit={async(action,id,payload,title,detail)=>{await submitWebBusinessEvent("cash",action,action.split(".")[0],id,payload,activeSiteId||authSession.account.active_site_ids[0],title,detail);}}/>}</> :
             active === "stock" ? <StockOperationsPage
               entries={(entries.stock ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)}
               canManage={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))}
@@ -1373,6 +1375,9 @@ function App() {
 }
 
 function moduleForSyncAction(action: string): ModuleId | null {
+  if(/^(quote|invoice|credit_note|refund_due|customer_receivable)\./.test(action))return "cash";
+  if(action.startsWith("recurring_charge.")||action.startsWith("business_goal."))return "reports";
+  if(action.startsWith("inventory_transfer."))return "stock";
   if(action.startsWith("inventory_item.")||action.startsWith("inventory_movement.")||action.startsWith("supplier.")||action.startsWith("purchase."))return "stock";
   if(action.startsWith("cash_register.")||action.startsWith("cash_session.")||action.startsWith("sale.")||action.startsWith("expense."))return "cash";
   if(action.startsWith("customer_followup.")||action.startsWith("loyalty_"))return "customers";

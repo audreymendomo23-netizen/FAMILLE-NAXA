@@ -248,7 +248,7 @@ internal object NaxaServicesPeerSyncApplier {
             "recurring_charge.payment_recorded" -> {
                 if(site==null||actor.isBlank())return false
                 val pid=p.sText("payment_id");val cid=p.sText("charge_id",id);if(pid.isBlank()||cid.isBlank())return false
-                val charge=dao.findRecurringCharge(org,site,cid)?:return false
+                val charge=dao.findRecurringCharge(cid,org,site)?:return false
                 dao.upsertRemoteChargePayment(LocalChargePayment(
                     pid,org,site,cid,p.sMillis("reference_due_at",now),p.sMillis("paid_at",now),p.sLong("amount_xaf"),actor
                 ))
