@@ -218,7 +218,7 @@ do $g$ declare n text;begin foreach n in array array['zp_delivery_zones','zp_del
 create table public.zp_delivery_missions(
  id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,zone_id uuid not null references public.zp_delivery_zones(id),created_by uuid not null,courier_id uuid,
  reference text not null check(reference~'^[A-Za-z0-9_-]{4,80}$'),zone_label text not null,subtotal_xaf bigint not null check(subtotal_xaf between 1 and 2147483647),fee_xaf int not null check(fee_xaf>=0),total_xaf bigint generated always as (subtotal_xaf+fee_xaf) stored check(total_xaf<=2147483647),
- state text not null default 'draft' check(state in ('draft','assigned','accepted','picked_up','en_route','handed_over','closed','cancelled')),created_at timestamptz not null default clock_timestamp(),updated_at timestamptz not null default clock_timestamp(),
+ state text not null default 'draft' check(state in ('draft','preparing','ready','assigned','accepted','picked_up','en_route','handed_over','closed','cancelled')),created_at timestamptz not null default clock_timestamp(),updated_at timestamptz not null default clock_timestamp(),
  unique(site_id,reference),unique(id,org_id,site_id),foreign key(site_id,org_id) references public.zp_sites(id,org_id),foreign key(created_by,org_id) references public.zp_members(id,org_id),foreign key(courier_id,org_id) references public.zp_members(id,org_id));
 create table public.zp_delivery_mission_events(
  id uuid primary key default gen_random_uuid(),mission_id uuid not null,org_id uuid not null,site_id uuid not null,actor_id uuid not null,
@@ -253,7 +253,7 @@ declare m public.zp_members;old public.zp_workspace_requests;rid uuid;target uui
  perform 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id for update;
  select * into old from public.zp_workspace_requests where member_id=m.id and request_id=p_request;
  if old.request_id is not null then if (old.site_id,old.action,old.payload) is distinct from (p_site,'connection:'||p_action,p_payload) then raise exception 'IDEMPOTENCY_CONFLICT';end if;return old.outcome;end if;
- if p_action in ('mission_create','mission_assign','mission_step','mission_cancel','mission_close') then
+ if p_action in ('mission_create','mission_prepare','mission_assign','mission_step','mission_cancel','mission_close') then
  if not exists(select 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id and space='restaurant') then raise exception 'CHANNEL_DENIED';end if;
  if p_action='mission_create' then
  name:=trim(coalesce(p_payload->>'reference',''));subtotal:=(p_payload->>'subtotal_xaf')::bigint;
@@ -267,20 +267,27 @@ declare m public.zp_members;old public.zp_workspace_requests;rid uuid;target uui
  else
  select * into q from public.zp_delivery_missions where id=(p_payload->>'mission_id')::uuid and org_id=m.org_id and site_id=p_site for update;if q.id is null then raise exception 'DENIED';end if;
  target:=q.courier_id;why:='';
- if p_action='mission_assign' then
- if q.state not in ('draft','assigned') then raise exception 'INVALID_INPUT';end if;
+ if p_action='mission_prepare' then
+ next_state:=case q.state when 'draft' then 'preparing' when 'preparing' then 'ready' else null end;
+ if next_state is null or next_state is distinct from (p_payload->>'next') then raise exception 'INVALID_INPUT';end if;
+ elsif p_action='mission_assign' then
+ if q.state not in ('ready','assigned','accepted') then raise exception 'INVALID_INPUT';end if;
  target:=(p_payload->>'courier_id')::uuid;
  if not exists(select 1 from public.zp_delivery_couriers c join public.zp_members u on u.id=c.member_id and u.org_id=c.org_id join public.zp_site_scopes sc on sc.member_id=u.id and sc.org_id=c.org_id and sc.site_id=c.site_id where c.org_id=m.org_id and c.site_id=p_site and c.member_id=target and c.active and u.active and not u.reset_pending) then raise exception 'DENIED';end if;
+ if q.state='accepted' and target=q.courier_id then raise exception 'INVALID_INPUT';end if;
+ if q.state in ('assigned','accepted') then why:=trim(coalesce(p_payload->>'reason',''));if length(why) not between 5 and 200 then raise exception 'INVALID_INPUT';end if;end if;
  next_state:='assigned';
  elsif p_action='mission_step' then
  if q.courier_id is distinct from m.id then raise exception 'DENIED';end if;
  next_state:=case q.state when 'assigned' then 'accepted' when 'accepted' then 'picked_up' when 'picked_up' then 'en_route' when 'en_route' then 'handed_over' else null end;
  if next_state is null or next_state is distinct from p_payload->>'next' then raise exception 'INVALID_INPUT';end if;
  elsif p_action='mission_cancel' then
- if q.state not in ('draft','assigned','accepted') then raise exception 'INVALID_INPUT';end if;
+ if q.state not in ('draft','preparing','ready','assigned','accepted') then raise exception 'INVALID_INPUT';end if;
  why:=trim(coalesce(p_payload->>'reason',''));if length(why) not between 5 and 200 then raise exception 'INVALID_INPUT';end if;next_state:='cancelled';
  elsif p_action='mission_close' then
- if q.state<>'handed_over' then raise exception 'INVALID_INPUT';end if;next_state:='closed';
+ if q.state<>'handed_over' then raise exception 'INVALID_INPUT';end if;
+ if q.courier_id=m.id then raise exception 'DENIED';end if;
+ why:=trim(coalesce(p_payload->>'reason',''));if length(why) not between 5 and 200 then raise exception 'INVALID_INPUT';end if;next_state:='closed';
  end if;
  update public.zp_delivery_missions set courier_id=target,state=next_state,updated_at=clock_timestamp() where id=q.id returning id into rid;
  insert into public.zp_delivery_mission_events(mission_id,org_id,site_id,actor_id,event,from_state,to_state,courier_id,reason) values(rid,m.org_id,p_site,m.id,p_action,q.state,next_state,target,why);
@@ -294,6 +301,7 @@ declare m public.zp_members;old public.zp_workspace_requests;rid uuid;target uui
  insert into public.zp_delivery_zones(org_id,site_id,member_id,label,instructions,fee_xaf,active) values(m.org_id,p_site,m.id,name,why,fee,enabled) on conflict(site_id,label) do update set instructions=excluded.instructions,fee_xaf=excluded.fee_xaf,active=excluded.active returning id into rid;
  else target:=(p_payload->>'member_id')::uuid;
  if not exists(select 1 from public.zp_site_scopes s join public.zp_members u on u.id=s.member_id and u.org_id=s.org_id where s.org_id=m.org_id and s.site_id=p_site and s.member_id=target and u.active and not u.reset_pending) then raise exception 'DENIED';end if;
+ if not enabled and exists(select 1 from public.zp_delivery_missions q where q.org_id=m.org_id and q.site_id=p_site and q.courier_id=target and q.state in ('assigned','accepted','picked_up','en_route','handed_over')) then raise exception 'INVALID_INPUT';end if;
  insert into public.zp_delivery_couriers(org_id,site_id,member_id,configured_by,active) values(m.org_id,p_site,target,m.id,enabled) on conflict(site_id,member_id) do update set active=excluded.active,configured_by=excluded.configured_by,updated_at=now();rid:=target;
  end if;
  elsif p_action='request_link' then
