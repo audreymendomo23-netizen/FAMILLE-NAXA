@@ -155,10 +155,13 @@ export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
 export async function runB4BrowserProfiles({browser,fixture,success,base,admin,pass}) {
  const profiles=['pressing',...Object.keys(B4_PROFILE_STAGES)];
  const modes=['solo','single_site_multi_workstation','multi_site_network'];
- async function one(profile,index){
+ const cases=profiles.flatMap((profile)=>modes.map((mode)=>({profile,mode})));
+ assert.equal(cases.length,39,'13 profiles × 3 modes');
+ assert.equal(new Set(cases.map(({profile,mode})=>profile+'/'+mode)).size,cases.length);
+ async function one({profile,mode},index){
   let checkpoint='fixture',ctx;
   try{
-   const f=await fixture('B4-UI-'+profile,modes[index%modes.length]);
+   const f=await fixture('B4-UI-'+index,mode);
    await success(base+'/rest/v1/ns_organizations?id=eq.'+f.org.id,{activity_profile:profile,activity_profile_selected_at:new Date().toISOString(),activity_profile_selected_by:f.member.id},admin,admin,'PATCH');
    ctx=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:900}});
    const page=await ctx.newPage();page.setDefaultTimeout(20000);
@@ -216,15 +219,19 @@ export async function runB4BrowserProfiles({browser,fixture,success,base,admin,p
    checkpoint='database verification';const table=kind==='pressing_order'?'ns_pressing_orders':'ns_management_records';
    const records=await success(base+'/rest/v1/'+table+'?id=eq.'+created.aggregate_id+'&select=status,revision',undefined,admin,admin,'GET');
    assert.equal(records.length,1);assert.equal(records[0].status,stages.at(-1));assert.equal(records[0].revision,stages.length);
-   pass('B4 real Chromium profile '+profile+' / '+modes[index%modes.length]+' complete lifecycle and PostgreSQL revision');
-  }catch(e){console.log('B4 profile browser failure:',profile,checkpoint,e instanceof Error?e.name:'Error');throw new Error(profile+' at '+checkpoint);}
+   pass('B4 real Chromium profile '+profile+' / '+mode+' complete lifecycle and PostgreSQL revision');
+   return profile+'/'+mode;
+  }catch(e){console.log('B4 profile browser failure:',profile,mode,checkpoint,e instanceof Error?e.name:'Error');throw new Error(profile+'/'+mode+' at '+checkpoint);}
   finally{if(ctx)await ctx.close();}
  }
- const failures=[];
+ const failures=[], completed=[];
  // Bound concurrency to avoid Chromium memory starvation; each fixture has its own org and browser context.
- for(let start=0;start<profiles.length;start+=4){
-  const result=await Promise.allSettled(profiles.slice(start,start+4).map((profile,index)=>one(profile,start+index)));
+ for(let start=0;start<cases.length;start+=4){
+  const result=await Promise.allSettled(cases.slice(start,start+4).map((entry,index)=>one(entry,start+index)));
   failures.push(...result.filter(x=>x.status==='rejected').map(x=>x.reason.message));
+  completed.push(...result.filter(x=>x.status==='fulfilled').map(x=>x.value));
  }
- assert.deepEqual(failures,[],'B4 all 13 browser profiles');
+ assert.deepEqual(failures,[],'B4 all 39 browser profile/mode combinations');
+ assert.deepEqual(completed.slice().sort(),cases.map(({profile,mode})=>profile+'/'+mode).sort());
+ pass('B4 real Chromium exhaustive profile/mode matrix: 39/39 complete lifecycles');
 }
