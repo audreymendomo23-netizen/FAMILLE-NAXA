@@ -51,6 +51,13 @@ begin
  begin perform public.grillad_action(o,b,gen_random_uuid(),'dimension_target',jsonb_build_object('day',day,'kind','item','subject',i,'amount',1,'reason','Test'));raise exception 'target scope';exception when insufficient_privilege then null;end;
  v:=public.grillad_snapshot(o,a,day,day);
  if jsonb_array_length(v->'dimension_targets')<>3 or not exists(select 1 from jsonb_array_elements(v->'dimension_targets') x where x->>'kind'='family' and (x->>'actual')::int=2000) or not exists(select 1 from jsonb_array_elements(v->'dimension_targets') x where x->>'kind'='seller' and (x->>'actual')::int=0) then raise exception 'dimension targets';end if;
+ payload:='{"supplier":"Marché test","input_name":"Poulet","unit":"kg","quantity":2.5,"amount":5000,"receipt_reference":"ACH-1"}';j:=gen_random_uuid();
+ v:=public.grillad_action(o,a,j,'record_purchase',payload);
+ if (v->>'unit_cost_estimate')::numeric<>2000 or public.grillad_action(o,a,j,'record_purchase',payload)<>v then raise exception 'purchase unit price or replay';end if;
+ v:=public.grillad_snapshot(o,a,day,day);if jsonb_array_length(v->'purchases')<>1 or (v#>>'{finance,charges}')::int<>200 then raise exception 'purchase double count';end if;
+ perform public.grillad_action(o,a,gen_random_uuid(),'cancel_purchase',jsonb_build_object('purchase',j,'reason','Erreur de document'));
+ v:=public.grillad_snapshot(o,a,day,day);if v->'purchases'->0->>'cancel_reason'<>'Erreur de document' then raise exception 'purchase audit';end if;
+ j:=gen_random_uuid();
  v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,ca}')::int<>2000 or (v#>>'{finance,charges}')::int<>200 or not exists(select 1 from jsonb_array_elements(v->'expenses') q where q->>'category'='Combustible' and q->>'receipt_reference'='BOIS-001' and q->>'status'='paid' and q->>'actor'='91000000-0000-0000-0000-000000000001') or jsonb_array_length(v->'expenses')<>2 or jsonb_array_length(v->'stock_adjustments')<>2 or (v->'items'->0->>'price')::int<>1200 then raise exception 'finance';end if;
  perform public.grillad_action(o,a,j,'add_item','{"name":"Porc","family":"Porc","price":800,"cost":300}');
  perform public.grillad_action(o,a,gen_random_uuid(),'prepare',jsonb_build_object('item',j,'qty',4));
@@ -111,6 +118,7 @@ declare o uuid:='92000000-0000-0000-0000-000000000001';a uuid:='93000000-0000-00
 begin
  if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'workspace seller';end if;
  v:=public.grillad_snapshot(o,a,day,day);
+ if jsonb_array_length(v->'purchases')<>0 then raise exception 'seller purchase leak';end if;
  if jsonb_array_length(v->'cash_receipts')<>0 then raise exception 'seller cash receipt leak';end if;
  if jsonb_array_length(v->'dimension_targets')<>0 then raise exception 'seller target leak';end if;
  if v->'finance'<>'null'::jsonb or jsonb_array_length(v->'sales')<>0 or (v->'items'->0)?'cost' or jsonb_array_length(v->'cash_history')<>0 or jsonb_array_length(v->'inactive_items')<>0 then raise exception 'seller leak';end if;

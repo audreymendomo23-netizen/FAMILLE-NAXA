@@ -9,4 +9,5 @@ function route(c){return async()=>{let calls=0;const r=await handle(req(c.body,'
 function anonymous(c){return async()=>{let calls=0;const r=await handle(req(c.body),env,async()=>{calls++;throw Error()});assert.equal(r.status,401);assert.equal(calls,0)}}
 
 mutate('cash_recount_request',{cash:item,counted:1850,reason:'Recomptage'});mutate('cash_recount_decide',{request:item,decision:'approved',reason:'Vérifié'});
+mutate('record_purchase',{supplier:'Marché test',input_name:'Poulet',unit:'kg',quantity:2.5,amount:5000});mutate('cancel_purchase',{purchase:item,reason:'Erreur'});
 for(const [i,c] of cases.entries()){test('GRC-'+String(94+i*2).padStart(3,'0')+' '+c.name+' caller',route(c));test('GRC-'+String(95+i*2).padStart(3,'0')+' '+c.name+' anonymous denied',anonymous(c))}
