@@ -570,7 +570,8 @@ try{
  assert.deepEqual(await push(mgs.access_token,"status"),{enabled:false});
  assert.deepEqual(await push(mgs.access_token,"register",{platform:"web",token:syntheticToken}),{enabled:true});
  assert.equal((await request(auth+"/push",{action:"register",platform:"web",token:syntheticToken},mos.access_token)).status,403);
- const rpc=(name,args)=>ok(base+"/rest/v1/rpc/"+name,args,service,service);
+ // Direct service-role RPC: unlike product ok(), success() does not inject app_id or use anon apikey.
+ const rpc=(name,args)=>success(base+"/rest/v1/rpc/"+name,args,service,service);
  let sends=0;const project="widemeet-qualification";
  const provider=async(url,opts)=>{assert.equal(url,"https://fcm.googleapis.com/v1/projects/"+project+"/messages:send");const b=JSON.parse(opts.body).message;assert.equal(b.token,syntheticToken);assert.deepEqual(Object.keys(b.data).sort(),["app_id","notification_id"]);assert.equal(b.notification.title,"WideMeet");sends++;return new Response(JSON.stringify({name:"projects/"+project+"/messages/fixture-"+sends}),{status:200})};
  const outcome=await dispatchPush({rpc,encryptionKey:pushKey,project,access:"fixture",fetcher:provider,limit:25});
