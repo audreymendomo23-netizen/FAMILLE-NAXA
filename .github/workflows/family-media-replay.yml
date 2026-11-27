@@ -10,6 +10,7 @@ on:
       - 'supabase/functions/widemeet-room/**'
       - '.github/workflows/family-media-replay.yml'
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 jobs:

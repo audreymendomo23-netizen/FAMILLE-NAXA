@@ -1,0 +1,69 @@
+name: WideMeet — parallel qualification pilot
+on:
+  push:
+    branches: [test/widemeet-parallel-20261127]
+    paths:
+      - '.github/workflows/widemeet-parallel-qualification.yml'
+      - '.github/workflows/widemeet-gate.yml'
+      - '.github/workflows/widemeet-replay-isolated.yml'
+      - '.github/workflows/family-media-replay.yml'
+      - '.github/workflows/family-audio-replay.yml'
+      - 'scripts/widemeet/**'
+      - 'docs/widemeet/REGISTRE_RECETTES_ACTIONS_B1_B6.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: widemeet-parallel-pilot-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  registry:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/widemeet/qualification-registry.mjs "$RUNNER_TEMP/widemeet-registry.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: widemeet-registry-${{ github.sha }}
+          path: ${{ runner.temp }}/widemeet-registry.json
+          if-no-files-found: error
+  gate:
+    uses: ./.github/workflows/widemeet-gate.yml
+  replay:
+    uses: ./.github/workflows/widemeet-replay-isolated.yml
+  sfu:
+    uses: ./.github/workflows/family-media-replay.yml
+  audio:
+    uses: ./.github/workflows/family-audio-replay.yml
+  summary:
+    if: always()
+    needs: [registry, gate, replay, sfu, audio]
+    runs-on: ubuntu-24.04
+    env:
+      REGISTRY: ${{ needs.registry.result }}
+      GATE: ${{ needs.gate.result }}
+      REPLAY: ${{ needs.replay.result }}
+      SFU: ${{ needs.sfu.result }}
+      AUDIO: ${{ needs.audio.result }}
+    steps:
+      - name: Report actual suite outcomes without promoting unverified registry entries
+        run: |
+          {
+            echo '## WideMeet — isolated parallel qualification pilot'
+            echo "Revision: $GITHUB_SHA"
+            echo '| Suite | Result |'
+            echo '|---|---|'
+            printf '| Registry integrity | %s |\n' "$REGISTRY"
+            printf '| Global gate | %s |\n' "$GATE"
+            printf '| Product GoTrue/Chromium replay | %s |\n' "$REPLAY"
+            printf '| SFU | %s |\n' "$SFU"
+            printf '| Egress/ASR | %s |\n' "$AUDIO"
+            echo 'Suite success is not per-recipe qualification. Registry artifact entries remain NOT_EVALUATED until linked to exact evidence.'
+            echo 'This snapshot is common code, not a merge of isolated B3-B6 candidates. No live FCM, real payments, production migrations or physical device claims.'
+          } >> "$GITHUB_STEP_SUMMARY"
+          for result in "$REGISTRY" "$GATE" "$REPLAY" "$SFU" "$AUDIO"; do
+            test "$result" = success || exit 1
+          done

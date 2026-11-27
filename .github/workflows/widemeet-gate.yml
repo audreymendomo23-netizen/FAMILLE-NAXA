@@ -22,6 +22,7 @@ on:
     types: [opened, synchronize, reopened]
     paths-ignore: ['docs/**']
   workflow_dispatch:
+  workflow_call:
 permissions:
   contents: read
 concurrency:
