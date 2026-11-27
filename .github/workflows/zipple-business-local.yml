@@ -11,12 +11,26 @@ on:
 permissions:
   contents: read
 jobs:
+  qa-plan:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Index every acceptance ID without inventing test results
+        run: python3 docs/apps/zipple/n2-n5/qa-plan.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zipple-qa-plan
+          path: ${{ runner.temp }}/zipple-qa-plan.json
+          if-no-files-found: error
+          retention-days: 14
   local-business:
     name: Local business — ${{ matrix.suite }}
     strategy:
       fail-fast: false
       matrix:
-        suite: [web-workspaces, web-operations, android-native]
+        suite: [web-workspaces, web-operations, web-guest-offline, android-native, api-0, api-1, api-2, api-3]
     runs-on: ubuntu-24.04
     timeout-minutes: 38
     steps:
@@ -117,7 +131,7 @@ jobs:
           psql "$DB_URL" -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema'"
       - name: Prepare Web and isolated Edge test environment
         id: web_setup
-        if: matrix.suite != 'android-native'
+        if: startsWith(matrix.suite, 'web-')
         run: |
           set -euo pipefail
           npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
@@ -126,7 +140,7 @@ jobs:
           VITE_ZIPPLE_API_URL=https://127.0.0.1:4443/gateway VITE_ZIPPLE_BUSINESS_API_URL=https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-business npm run build --workspace @famille/zipple-web
           openssl req -x509 -nodes -newkey rsa:2048 -days 1 -subj "/CN=localhost" -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" -addext "basicConstraints=critical,CA:TRUE" -keyout "$RUNNER_TEMP/zipple-ci.key" -out "$RUNNER_TEMP/zipple-ci.crt" >/dev/null 2>&1
       - name: Qualify real business UI via isolated Edge
-        if: matrix.suite != 'android-native'
+        if: startsWith(matrix.suite, 'web-')
         env:
           ZIPPLE_SUITE: ${{ matrix.suite }}
         run: |
@@ -139,8 +153,22 @@ jobs:
           case "$ZIPPLE_SUITE" in
             web-workspaces) node --test docs/apps/zipple/n2-n5/local-workspaces.test.mjs ;;
             web-operations) node --test docs/apps/zipple/n2-n5/local-business.test.mjs ;;
+            web-guest-offline) node --test docs/apps/zipple/n2-n5/local-guest-offline.test.mjs ;;
             *) exit 2 ;;
           esac
+      - name: Independent real Edge action boundaries
+        if: startsWith(matrix.suite, 'api-')
+        env:
+          ZIPPLE_SUITE: ${{ matrix.suite }}
+          ZIPPLE_API_SHARDS: "4"
+        run: |
+          set -euo pipefail
+          set -a
+          source "$RUNNER_TEMP/zipple-business.env"
+          set +a
+          bash docs/apps/zipple/n2-n5/local-edge-ready.sh
+          export ZIPPLE_API_SHARD="${ZIPPLE_SUITE#api-}"
+          node --test docs/apps/zipple/n2-n5/local-api-boundaries.test.mjs
       - name: Prepare Android isolated Edge dependencies
         if: matrix.suite == 'android-native'
         run: |
