@@ -37,6 +37,34 @@ export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
  const ap1=randomUUID(),ap2=randomUUID(),concurrent=await Promise.all([send(a,event(a,'appointment.created',ap1,appointment(ap1))),send(b,event(b,'appointment.created',ap2,appointment(ap2)))]);
  assert.equal(concurrent.filter(r=>r.status===200&&r.data.status==='applied').length,1,JSON.stringify(concurrent));assert.equal(concurrent.filter(r=>r.status>=400).length,1);
  pass('B4 appointments: simultaneous reservation of one provider and interval, one acceptance only');
+
+ const fields={
+ coiffure:{style:'coupe',technique:'Recette'},couture:{garment:'Vêtement recette',measurements:'Mesures recette'},
+ beaute:{treatment:'soin_visage',protocol:'Recette'},parfumerie:{product:'Parfum recette',format:'30ml'},
+ reparation:{device:'Appareil recette',fault:'Panne recette'},menuiserie:{piece:'Meuble recette',dimensions:'Mesures recette'},
+ garage:{vehicle:'Véhicule recette',fault:'Panne recette'},nettoyage:{site:'Site recette',tasks:'Tâches recette'},
+ domicile:{address:'Adresse recette',service:'Prestation recette'},impression:{format:'A6',quantity:'1'},
+ photo_evenementiel:{event:'Événement recette',date:'2028-02-29',deliverables:'Livrables recette'},
+ autre:{service:'Service recette',specifications:'Recette'}
+ };
+ const paths={"coiffure":["received","approved","in_progress","quality_check","ready","delivered","closed"],"beaute":["received","approved","in_progress","quality_check","ready","delivered","closed"],"couture":["received","measurement","fitting","ready","delivered","closed"],"parfumerie":["received","quote_pending","approved","in_progress","quality_check","ready","delivered","closed"],"reparation":["received","diagnostic","quote_pending","approved","in_progress","quality_check","ready","delivered","closed"],"garage":["received","diagnostic","quote_pending","approved","in_progress","quality_check","ready","delivered","closed"],"menuiserie":["received","diagnostic","quote_pending","approved","fabrication","quality_check","ready","delivered","closed"],"nettoyage":["received","approved","planning","on_site","in_progress","quality_check","ready","delivered","closed"],"domicile":["received","approved","planning","on_site","in_progress","quality_check","ready","delivered","closed"],"impression":["received","proof_ready","production","quality_check","ready","delivered","closed"],"photo_evenementiel":["received","planning","shooting","post_production","quality_check","ready","delivered","closed"],"autre":["received","approved","in_progress","quality_check","ready","delivered","closed"]};
+ for(const [profile,stages] of Object.entries(paths)){
+   const kind=['coiffure','beaute','nettoyage','domicile'].includes(profile)?'service_order':['garage','reparation'].includes(profile)?'repair_order':'work_order';
+   const id=randomUUID(), payload={...document(id,kind,1000,0,'received'),metadata_json:{activity_profile:profile,fields:fields[profile]}};
+   const invalidId=randomUUID();await denied(a,event(a,kind+'.created',invalidId,{...payload,record_id:invalidId,metadata_json:{activity_profile:profile,fields:{}}}));
+   await applied(a,event(a,kind+'.created',id,payload));
+   await denied(a,event(a,kind+'.status_changed',id,transition(id,kind,'received','closed',1)));
+   for(let v=1;v<stages.length;v++)await applied(a,event(a,kind+'.status_changed',id,transition(id,kind,stages[v-1],stages[v],v)));
+   const [r]=await rows('ns_management_records','id=eq.'+id+'&select=status,revision,metadata_json');
+   assert.equal(r.status,'closed',profile);assert.equal(r.revision,stages.length,profile);assert.deepEqual(r.metadata_json.fields,fields[profile],profile);
+   assert.equal((await rows('ns_management_record_events','record_id=eq.'+id+'&select=id')).length,stages.length,profile);
+   pass('B4 profile '+profile+' full lifecycle, durable fields, invalid stage refused');
+ }
+ const pressing=randomUUID(),pp={order_id:pressing,ticket_number:'B4-'+pressing,customer_name:'Client recette',items_summary:'1 chemise',total_xaf:1000,deposit_xaf:0,promised_at:'2027-03-10T12:00:00Z'};
+ await applied(a,event(a,'pressing_order.created',pressing,pp));
+ for(const [i,from,to] of [[1,'received','in_progress'],[2,'in_progress','ready'],[3,'ready','picked_up']]) await applied(a,event(a,'pressing_order.status_changed:'+to,pressing,{order_id:pressing,from_status:from,expected_version:i,reason:'Recette pressing'}));
+ pass('B4 profile pressing: receipt through collection');
+
  const peer=await success(base+'/rest/v1/rpc/ns_pull_sync_changes',{p_org_id:org,p_device_id:a.device_id,p_after_cursor:0,p_limit:200},a.access_token,anon);
  assert.ok(Array.isArray(peer.changes));assert.ok(peer.changes.some(x=>x.aggregate_id===invoice&&x.action_code==='invoice.status_changed'));
  pass('B4 peer sync: second device settlement visible through authenticated pull');

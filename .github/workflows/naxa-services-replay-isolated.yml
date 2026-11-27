@@ -402,6 +402,22 @@ jobs:
                 return response.request().postDataJSON().event;
               };
               const count=async(table,filter)=>{assert.match(table,/^ns_[a-z_]+$/);return (await success(base+'/rest/v1/'+table+'?select=id&org_id=eq.'+f.org.id+'&'+filter,undefined,admin,admin,'GET')).length;};
+              await scenario('B4 real browser invoice and settlement',async()=>{
+                await nav('Caisse & ventes');
+                const panel=page.getByRole('region',{name:'B4 facturation'});
+                await panel.getByLabel('B4 client pièce').fill('Client B4 Web');
+                await panel.getByLabel('B4 libellé pièce').fill('Facture B4 Web');
+                await panel.getByLabel('B4 montant pièce').fill('1000');
+                const evt=await apply('invoice.created',()=>panel.getByRole('button',{name:'Enregistrer la pièce B4'}).click());
+                const doc=panel.locator('[data-b4-record="'+evt.aggregate_id+'"]');
+                await doc.getByRole('button',{name:'Traiter la pièce B4'}).click();
+                await doc.getByLabel('B4 motif').fill('Règlement externe déclaré');
+                await doc.getByLabel('B4 total cumulé').fill('400');
+                await apply('invoice.status_changed',()=>doc.getByRole('button',{name:'Déclarer règlement B4'}).click());
+                const [row]=await success(base+'/rest/v1/ns_management_records?id=eq.'+evt.aggregate_id+'&select=paid_xaf,status',undefined,admin,admin,'GET');
+                assert.equal(row.paid_xaf,400);assert.equal(row.status,'partial');
+                await doc.getByText(/réglé 400 · restant 600/).waitFor();
+              });
               await scenario('real sector form create, reject blank required field and cancel confirmed dossier',async()=>{
                 sectorCheckpoint='open form';await nav('Dossiers métier');
                 await page.getByLabel("Client / donneur d'ordre").fill('Client dossier Replay');
