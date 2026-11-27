@@ -1,5 +1,6 @@
 import React,{useEffect,useRef,useState} from "react";
 import {privateRequest} from "./private-request";
+import {downloadLocal} from "./calendar-export";
 import type {WebAuthAccount} from "../auth/session";
 import {rosterApiOrigin} from "./staff-roster";
 export type Report={day:string;generated_at:string;scope:"site"|"personal";finance:{revenue_xaf:number;confirmed_sales_count:number;uncosted_sales_count:number}|null;appointments:{scheduled_count:number;completed_count:number};personal_clock_events:{event_count:number}|null;coverage:string};
@@ -57,6 +58,11 @@ export function summarizeBriefingPeriod(dates:string[],values:unknown[]){
  const financeDays=rows.filter(r=>r.finance!==null).length;
  return {rows,scope:rows[0].scope,financeDays,appointments:sum(rows.map(r=>r.appointments.scheduled_count)),completed:sum(rows.map(r=>r.appointments.completed_count)),revenue:financeDays===rows.length?sum(rows.map(r=>r.finance!.revenue_xaf)):null,clocks:rows.every(r=>r.personal_clock_events!==null)?sum(rows.map(r=>r.personal_clock_events!.event_count)):null};
 }
+export function briefingPeriodCsv(report:ReturnType<typeof summarizeBriefingPeriod>){
+ const rows=report.rows;const site=report.scope==="site";
+ const header=["date","appointments","completed","personal_clock_events",...(site?["revenue_xaf","confirmed_sales","uncosted_sales"]:[])];
+ return [header,...rows.map(r=>[r.day,r.appointments.scheduled_count,r.appointments.completed_count,r.personal_clock_events?.event_count??"",...(site?[r.finance?.revenue_xaf??"",r.finance?.confirmed_sales_count??"",r.finance?.uncosted_sales_count??""]:[])])].map(r=>r.join(",")).join("\r\n")+"\r\n";
+}
 type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>};
 const periodCopy:Record<Lang,[string,string,string,string,string,string,string,string]>={
  fr:["Bilan par période","Durée du bilan","Calculer la période","Jours","Données financières incomplètes : total indisponible","Chiffre d’affaires confirmé (FCFA)","Données journalières partielles.","Période indisponible"],
@@ -93,7 +99,7 @@ function PeriodBriefing({account,siteId,authEndpoint,anonKey,getToken,day,lang}:
  <label>{duration}<select value={days} disabled={busy} onChange={e=>{clear();setDays(Number(e.target.value));}}>{[2,7,30].map(d=><option key={d} value={d}>{d} {unit}</option>)}</select></label>
  <button className="btn secondary" disabled={busy||!briefingDayAllowed(day)} onClick={()=>void load()}>{calculate}</button>
  {error&&<p role="alert">{unavailable}</p>}
- {report&&<div data-briefing-period-result={report.rows.length}><p>{report.rows[0].day} — {report.rows[report.rows.length-1].day}</p>
+ {report&&<div data-briefing-period-result={report.rows.length}><button type="button" className="btn secondary" onClick={()=>downloadLocal(briefingPeriodCsv(report),"naxa-bilan-"+day+".csv","text/csv;charset=utf-8")}>{({fr:"Exporter le bilan CSV",en:"Export report CSV","ff-CM":"Yaltin jaŋtol CSV",es:"Exportar informe CSV",it:"Esporta resoconto CSV","zh-CN":"导出 CSV 报告"})[lang]}</button><p>{report.rows[0].day} — {report.rows[report.rows.length-1].day}</p>
  <p>{t.appointments}: {report.appointments} · {t.completed}: {report.completed}</p>
  {report.scope==="site"&&<p>{report.revenue===null?missing:revenue+": "+report.revenue} ({report.financeDays}/{report.rows.length} {unit})</p>}
  {report.clocks!==null&&<p>{t.clocks}: {report.clocks}</p>}
