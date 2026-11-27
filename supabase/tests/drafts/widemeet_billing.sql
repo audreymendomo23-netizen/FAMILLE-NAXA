@@ -18,7 +18,7 @@ set local role service_role;
 do $wm$ declare
  a text:=repeat('a',64); b text:=repeat('b',64); c text:=repeat('c',64);
  w uuid:='20000000-0000-4000-8000-000000000061'; z uuid:='20000000-0000-4000-8000-000000000062';
- d jsonb; r jsonb; id uuid; pid uuid; deadline timestamptz; t timestamptz:=clock_timestamp();
+ d jsonb; r jsonb; id uuid; pid uuid; rid uuid:=gen_random_uuid(); state jsonb; next_state jsonb; deadline timestamptz; t timestamptz:=clock_timestamp();
 begin
  perform public.wm_issue_verified_session('10000000-0000-4000-8000-000000000061','30000000-0000-4000-8000-000000000061',w,a,0);
  perform public.wm_issue_verified_session('10000000-0000-4000-8000-000000000062','30000000-0000-4000-8000-000000000062',w,b,0);
@@ -44,6 +44,19 @@ begin
  if pid is null or (r->>'amount')::integer is distinct from 3000 then raise exception 'pass quote failed';end if;
  if not public.wm_settle_verified_receipt(pid,'MOMO','fixture-receipt-2',3000,'XAF',repeat('e',64),t) then raise exception 'pass settlement failed';end if;
  if not exists(select 1 from public.wm_paid_passes where intent_id=pid and consumed_at is null and valid_until is null) or exists(select 1 from public.wm_room_entitlements where workspace_id=z) then raise exception 'unconsumed pass granted unrestricted access';end if;
+ if exists(select 1 from public.wm_pass_actor(a,pid)) or not exists(select 1 from public.wm_pass_actor(c,pid) where capacity=50) then raise exception 'pass actor scope';end if;
+ state:=jsonb_build_object('id',rid::text,'workspaceId',z::text,'hostId','10000000-0000-4000-8000-000000000062','status','scheduled','revision',1,'scheduledMs',floor(extract(epoch from clock_timestamp())*1000)::bigint,'durationMinutes',30,'hardEndMs',floor(extract(epoch from clock_timestamp()+interval '23 hours')*1000)::bigint,'recording','off','participants',jsonb_build_array(jsonb_build_object('memberId','10000000-0000-4000-8000-000000000062','response','accepted','excluded',false)));
+ if public.wm_pass_room_create(a,pid,state) then raise exception 'foreign pass consumed';end if;
+ if public.wm_pass_room_create(c,pid,jsonb_set(state,'{hardEndMs}',to_jsonb(floor(extract(epoch from clock_timestamp()+interval '25 hours')*1000)::bigint))) then raise exception 'pass deadline bypass';end if;
+ if not public.wm_pass_room_create(c,pid,state) then raise exception 'pass binding failed';end if;
+ if public.wm_pass_room_create(c,pid,jsonb_set(state,'{id}',to_jsonb(gen_random_uuid()::text))) then raise exception 'pass reused';end if;
+ if exists(select 1 from public.wm_room_actor(c)) or exists(select 1 from public.wm_room_actor_for(c,gen_random_uuid())) or public.wm_room_read(c,rid) is distinct from state or public.wm_room_read(a,rid) is not null then raise exception 'pass room scope failed';end if;
+ if (select count(*) from public.wm_room_list(c))<>1 then raise exception 'paid room not in agenda';end if;
+ next_state:=jsonb_set(jsonb_set(jsonb_set(state,'{revision}','2'::jsonb),'{status}','"open"'::jsonb),'{endMs}',to_jsonb(floor(extract(epoch from clock_timestamp()+interval '30 minutes')*1000)::bigint));
+ if not public.wm_room_write(c,rid,1,'owner','premium',next_state) then raise exception 'paid room start refused';end if;
+ update public.wm_paid_passes set consumed_at=clock_timestamp()-interval '25 hours',valid_until=clock_timestamp()-interval '1 hour' where intent_id=pid;
+ if public.wm_room_read(c,rid) is not null or exists(select 1 from public.wm_room_actor_for(c,rid)) or (select count(*) from public.wm_room_list(c))<>0 then raise exception 'expired pass retained access';end if;
+ if public.wm_pass_room_create(c,pid,state) then raise exception 'expired pass reused';end if;
 end $wm$;
 reset role;
 rollback;
