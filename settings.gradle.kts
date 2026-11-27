@@ -1,5 +1,5 @@
 pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
-dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); mavenCentral(); maven { url = uri("https://jitpack.io"); content { includeGroupByRegex("com\\.github\\..*") } } } }
+dependencyResolutionManagement { repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS); repositories { google(); if (System.getenv("WM_CI_CENTRAL_ALTERNATE") == "true") maven { url = uri("https://repo1.maven.org/maven2/") } else mavenCentral(); maven { url = uri("https://jitpack.io"); content { includeGroupByRegex("com\\.github\\..*") } } } }
 rootProject.name = "FamilleNAXA"
 include(":core-android", ":kiosko", ":bootik", ":zipple", ":naxa-services", ":cotiz", ":loyable", ":naxa-hotel", ":campus237", ":naxa-security", ":grillad")
 
