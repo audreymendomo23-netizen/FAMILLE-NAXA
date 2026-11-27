@@ -208,7 +208,7 @@ grant execute on function public.wm_pass_room_create(text,uuid,jsonb) to service
 create or replace function public.wm_room_actor_for(p_hash text,p_room uuid)
 returns table(account_id uuid,workspace_id uuid,role text,plan text,entitlement_end_ms bigint)
 language sql security invoker stable set search_path=pg_catalog,public as $wm$
- select a.* from public.wm_room_actor(p_hash) a join public.wm_workspaces w on w.id=a.workspace_id and w.kind='enterprise' where p_room is null or exists(select 1 from public.wm_rooms rr where rr.id=p_room and rr.workspace_id=a.workspace_id)
+ select a.* from public.wm_room_actor(p_hash) a join public.wm_workspaces w on w.id=a.workspace_id and w.kind='enterprise' where p_room is null or not public.wm_external_guest_valid(p_room,a.account_id) or exists(select 1 from public.wm_rooms rr where rr.id=p_room and rr.workspace_id=a.workspace_id)
  union all
  select s.account_id,s.workspace_id,m.role,'premium'::text,floor(extract(epoch from p.valid_until)*1000)::bigint
  from public.wm_session_context(p_hash) s join public.wm_workspaces w on w.id=s.workspace_id and w.kind='individual' and w.enabled

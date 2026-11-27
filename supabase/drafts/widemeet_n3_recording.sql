@@ -38,7 +38,7 @@ returns jsonb language sql security invoker stable set search_path=pg_catalog,pu
     and (exists(select 1 from public.wm_room_entitlements e where e.workspace_id=r.workspace_id and e.enabled and e.plan='premium' and e.valid_until>now())
       or exists(select 1 from public.wm_paid_passes p where p.consumed_room_id=r.id and p.workspace_id=r.workspace_id and p.valid_until>now()))
     and not exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'response'='accepted' and p->>'excluded'='false' and (p->>'consent' is distinct from 'true' or not exists(select 1 from public.wm_accounts a join public.wm_memberships m on m.account_id=a.id and m.workspace_id=r.workspace_id and m.enabled where a.id::text=p->>'memberId' and a.enabled) and not public.wm_external_guest_valid(r.id,(p->>'memberId')::uuid))),
-  'normal_stop',coalesce((select (e->>'action' in ('record_pause','end') or e->>'action'='record' and (e->>'payload')::jsonb->2='false'::jsonb) and e->>'actor'=r.host_id::text from jsonb_array_elements(r.state->'events') with ordinality as x(e,n) where e->>'action' in ('record','record_pause','consent','respond','exclude','pause','end','cancel','lobby_admit','lobby_reject','external_revoke') order by n desc limit 1),false)
+  'normal_stop',coalesce((select (e->>'action' in ('record_pause','end') or e->>'action'='record' and (e->>'payload')::jsonb->2='false'::jsonb) and e->>'actor'=r.host_id::text from jsonb_array_elements(r.state->'events') with ordinality as x(e,n) where e->>'action' in ('record','record_pause','consent','respond','exclude','pause','end','cancel','lobby_admit','lobby_reject','external_revoke','external_redeem') order by n desc limit 1),false)
    and not exists(select 1 from jsonb_array_elements(r.state->'participants') q where q->>'response'='accepted' and q->>'excluded'='false' and (q->>'consent' is distinct from 'true' or not exists(select 1 from public.wm_accounts ac join public.wm_memberships m on m.account_id=ac.id and m.workspace_id=r.workspace_id and m.enabled where ac.id::text=q->>'memberId' and ac.enabled) and not public.wm_external_guest_valid(r.id,(q->>'memberId')::uuid)))
  ) from public.wm_rooms r where r.id=p_room
 $wm$;
@@ -65,12 +65,13 @@ grant execute on function public.wm_recording_claim(uuid,uuid) to service_role;
 -- immediately in the same transaction. Provider stop is handled by the worker.
 create function public.wm_recording_room_guard()
 returns trigger language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare p jsonb;
+declare p jsonb;unsafe boolean;
 begin
  p:=public.wm_recording_policy(new.id);
+ unsafe:=exists(select 1 from jsonb_array_elements(new.state->'participants') q where q->>'excluded'='true' and exists(select 1 from jsonb_array_elements(old.state->'participants') z where z->>'memberId'=q->>'memberId' and z->>'excluded'='false'));
  if p->>'permitted' is distinct from 'true' then
   update public.wm_recording_runs
-   set phase='stopping',disposition=case when disposition='discard' or p->>'normal_stop' is distinct from 'true' then 'discard' else 'retain' end
+   set phase='stopping',disposition=case when disposition='discard' or unsafe or p->>'normal_stop' is distinct from 'true' then 'discard' else 'retain' end
    where room_id=new.id and phase in ('starting','active','stopping');
  else
   update public.wm_recording_runs set phase='stopping',disposition='discard'

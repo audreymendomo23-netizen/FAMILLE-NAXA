@@ -79,7 +79,6 @@ begin
  perform 1 from public.wm_device_sessions x where x.token_hash=p_hash and x.revoked_at is null and x.expires_at>clock_timestamp() for share;
  if not found then return;end if;
  -- A guest's target workspace grant must remain active through the write.
- perform 1 from public.wm_external_guests g where g.room_id=p_room and g.account_id=a and g.redeemed_at is not null and g.revoked_at is null for share;
  perform 1 from public.wm_workspaces x where x.id=(select r.workspace_id from public.wm_rooms r where r.id=p_room) and x.enabled for share;
  perform 1 from public.wm_room_entitlements x where x.workspace_id=(select r.workspace_id from public.wm_rooms r where r.id=p_room) and x.enabled and x.valid_until>clock_timestamp() for share;
  -- A global subscription can change only after its shared lock is released.
@@ -125,6 +124,8 @@ begin
  if not found or v_old.revision<>p_expected or not exists(select 1 from jsonb_array_elements(v_old.state->'participants') p where p->>'memberId'=a.account_id::text and p->>'excluded'='false') then return false;end if;
  if p_state is null or p_state->>'id' is distinct from v_old.id::text or p_state->>'workspaceId' is distinct from v_old.workspace_id::text or p_state->>'hostId' is distinct from v_old.host_id::text or (p_state->>'revision')::bigint is distinct from p_expected+1 or jsonb_typeof(p_state->'participants') is distinct from 'array' then return false;end if;
  if p_state->>'recording'='requested' and a.plan<>'premium' then return false;end if;
+ if p_state->>'lobbyRequired' is distinct from 'true' and exists(select 1 from public.wm_external_guests g where g.room_id=p_room and g.revoked_at is null and (g.redeemed_at is not null or g.expires_at>clock_timestamp())) then return false;end if;
+ if a.workspace_id<> (select s.workspace_id from public.wm_session_context(p_hash) s) and not public.wm_external_guest_valid(p_room,a.account_id) then return false;end if;
  -- A revoked participant must not block every subsequent legitimate transition.
  select jsonb_set(p_state,'{participants}',coalesce(jsonb_agg(case when p->>'memberId'<>v_old.host_id::text and not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.enabled and m.account_id::text=p->>'memberId') and not public.wm_external_guest_valid(v_old.id,(p->>'memberId')::uuid) and exists(select 1 from jsonb_array_elements(v_old.state->'participants') oldp where oldp->>'memberId'=p->>'memberId') then p||jsonb_build_object('excluded',true,'consent',false,'moderatorPermissions','[]'::jsonb) else p end order by ord),'[]'::jsonb)) into p_state from jsonb_array_elements(p_state->'participants') with ordinality as x(p,ord);
  if exists(select 1 from jsonb_array_elements(p_state->'participants') p where p->>'excluded'='true' and exists(select 1 from jsonb_array_elements(v_old.state->'participants') oldp where oldp->>'memberId'=p->>'memberId' and oldp->>'excluded'='false')) then p_state:=p_state||jsonb_build_object('recording','off');end if;

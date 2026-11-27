@@ -31,7 +31,7 @@ begin
   if g.expires_at<=t or jsonb_array_length(r.state->'participants')>=coalesce((r.state->>'capacity')::integer,20) or exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'memberId'=s.account_id::text) then return null;end if;
   update public.wm_external_guests set redeemed_at=t where id=gid;
   next_state:=jsonb_set(r.state,'{participants}',r.state->'participants'||jsonb_build_array(jsonb_build_object('memberId',s.account_id,'response','accepted','excluded',false,'chat',true,'mic',true,'screen',false,'consent',false,'lobbyStatus',case when r.state->>'status'='open' then 'waiting' else 'pending' end)));
-  update public.wm_rooms set revision=r.revision+1,state=next_state||jsonb_build_object('revision',r.revision+1,'recording','off') where id=rid;
+  update public.wm_rooms set revision=r.revision+1,state=next_state||jsonb_build_object('revision',r.revision+1,'recording','off','events',coalesce(next_state->'events','[]'::jsonb)||jsonb_build_array(jsonb_build_object('id',gen_random_uuid(),'actor',s.account_id,'action','external_redeem','payload',jsonb_build_array('external_redeem',null,null,r.revision)::text,'at',floor(extract(epoch from t)*1000)::bigint))) where id=rid;
   return jsonb_build_object('room_id',rid);
  end if;
  select * into a from public.wm_lock_room_actor_for(p_hash,rid);
