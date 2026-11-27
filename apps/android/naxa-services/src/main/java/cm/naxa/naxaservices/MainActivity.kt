@@ -331,11 +331,11 @@ private fun NaxaServicesRoot(
         }
     }
 
-    LaunchedEffect(session?.deviceId, rememberSession,offlineRestored) {
+    LaunchedEffect(session?.deviceId, rememberSession,offlineRestored,session?.requirePasswordChange) {
         val activeSession = session
         if (
             rememberSession && !offlineRestored &&
-            activeSession != null &&
+            activeSession != null && !activeSession.requirePasswordChange &&
             activeSession.deviceId.isNotBlank() &&
             SupplierSyncCoordinator.isConfigured()
         ) {
@@ -397,7 +397,8 @@ private fun NaxaServicesRoot(
             delay(1000L)
         }
     }
-    LaunchedEffect(session?.refreshToken,offlineRestored) {
+    LaunchedEffect(session?.refreshToken,offlineRestored,session?.requirePasswordChange) {
+        if(session?.requirePasswordChange==true)return@LaunchedEffect
         var activeSession = session
         val binding=if(rememberSession)vault.binding()else null
         while (activeSession != null) {
@@ -415,6 +416,12 @@ private fun NaxaServicesRoot(
                     }else api.refresh(token,rememberDevice=false)
                 }
                     .onSuccess { next ->
+                        if(next.requirePasswordChange){
+                            vault.clearOfflineSnapshot()
+                            localPinUnlockedMemberId=null;offlineRestored=false
+                            route=AppRoute.CHANGE_PASSWORD.name;session=next;activeSession=next
+                            return@LaunchedEffect
+                        }
                         if(offlineRestored){
                             localPinUnlockedMemberId=null
                             route=if(next.requirePasswordChange)AppRoute.CHANGE_PASSWORD.name else routeAfterAuthentication(next)
@@ -661,6 +668,7 @@ private fun NaxaServicesRoot(
                             } else if(offlineRestored&&AppRoute.valueOf(route) !in offlineLocalRoutes){
                                 AccessDeniedContent(Modifier.fillMaxSize()){route=AppRoute.DASHBOARD.name}
                             } else {
+                                val capturedBinding=if(rememberSession)vault.binding() else null
                                 key(current.account.memberId,current.account.organizationId,current.account.roleCode,current.account.activeSiteIds,current.deviceId,offlineRestored){
                                 ErpScreen(
                                     offlineLocal=offlineRestored,
@@ -705,13 +713,13 @@ private fun NaxaServicesRoot(
                                                     preferences.saveLocale(selectedLocale)
                                                     preferences.saveMemberLocale(current.account.memberId, selectedLocale)
                                                     locale = selectedLocale
-                                                    session = current.copy(account = current.account.copy(defaultLocale = selectedLocale))
+                                                    if(session==current) session = current.copy(account = current.account.copy(defaultLocale = selectedLocale))
                                                 }
                                                 .onFailure {
                                                     preferences.saveLocale(selectedLocale)
                                                     preferences.saveMemberLocale(current.account.memberId, selectedLocale)
                                                     locale = selectedLocale
-                                                    session = current.copy(account = current.account.copy(defaultLocale = selectedLocale))
+                                                    if(session==current) session = current.copy(account = current.account.copy(defaultLocale = selectedLocale))
                                                     message = "Langue enregistrée sur cet appareil. La synchronisation du profil sera réessayée à la prochaine connexion."
                                                 }
                                             busy = false
@@ -719,8 +727,13 @@ private fun NaxaServicesRoot(
                                     },
                                     activityProfile = current.account.activityProfile,
                                     onSessionUpdated = { updated ->
-                                        session = updated
-                                        if (rememberSession) vault.save(updated)
+                                        // A site creation changes account metadata, never credentials.
+                                        if(session==current && updated.account.memberId==current.account.memberId &&
+                                            updated.account.organizationId==current.account.organizationId &&
+                                            updated.deviceId==current.deviceId){
+                                            if(capturedBinding!=null)vault.invalidateOfflineSnapshot(capturedBinding)
+                                            session=current.copy(account=updated.account)
+                                        }
                                     },
                                     tourActive = tourActive,
                                     tourStep = tourStep,
@@ -729,7 +742,7 @@ private fun NaxaServicesRoot(
                                             scope.launch {
                                                 runCatching { api.completeOnboardingStep(current.accessToken, "tour") }
                                                     .onSuccess {
-                                                        session = current.copy(account = current.account.copy(tourCompleted = true))
+                                                        if(session==current) session = current.copy(account = current.account.copy(tourCompleted = true))
                                                         tourActive = false
                                                     }
                                                     .onFailure { message = it.message ?: "Le guide n’a pas pu être marqué comme terminé." }
@@ -740,7 +753,7 @@ private fun NaxaServicesRoot(
                                         scope.launch {
                                             runCatching { api.completeOnboardingStep(current.accessToken, "tour") }
                                                 .onSuccess {
-                                                    session = current.copy(account = current.account.copy(tourCompleted = true))
+                                                    if(session==current) session = current.copy(account = current.account.copy(tourCompleted = true))
                                                     tourActive = false
                                                 }
                                                 .onFailure { message = it.message ?: "Le guide n’a pas pu être marqué comme terminé." }
@@ -777,8 +790,10 @@ private fun NaxaServicesRoot(
                                     localPinUnlockedMemberId = null
                                     session = updated
                                     offlineRestored=false
-                                    if (rememberSession) vault.save(updated) else vault.clear()
-                                    if (updated.requirePasswordChange) route = AppRoute.CHANGE_PASSWORD.name
+                                    // Reauthentication is a new generation, even on the same device.
+                                    vault.clear()
+                                    if (rememberSession) vault.save(updated)
+                                    route=if(updated.requirePasswordChange)AppRoute.CHANGE_PASSWORD.name else routeAfterAuthentication(updated)
                                 }
                             )
                         }
@@ -816,7 +831,7 @@ private fun LoginScreen(
     onToggleTheme: () -> Unit
 ) {
     var identifier by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
     var rememberMe by rememberSaveable { mutableStateOf(false) }
     var showPassword by rememberSaveable { mutableStateOf(false) }
 
@@ -909,9 +924,9 @@ private fun ChangePasswordScreen(
     message: String?,
     onSubmit: (String, String) -> Unit
 ) {
-    var current by rememberSaveable { mutableStateOf("") }
-    var next by rememberSaveable { mutableStateOf("") }
-    var confirm by rememberSaveable { mutableStateOf("") }
+    var current by remember { mutableStateOf("") }
+    var next by remember { mutableStateOf("") }
+    var confirm by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.Center) {
         NaxaServicesWordmark()
         Spacer(Modifier.height(30.dp))

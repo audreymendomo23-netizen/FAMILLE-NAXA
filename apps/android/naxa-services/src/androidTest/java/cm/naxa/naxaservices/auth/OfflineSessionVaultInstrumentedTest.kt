@@ -96,6 +96,11 @@ class OfflineSessionVaultInstrumentedTest {
             assertNull(SessionVault(context).loadOfflineSnapshot())
             vault.saveOfflineSnapshot(session,access,vault.binding())
             assertNotNull(SessionVault(context).loadOfflineSnapshot())
+            assertFalse(vault.invalidateOfflineSnapshot(originalBinding))
+            assertNotNull(SessionVault(context).loadOfflineSnapshot())
+            assertTrue(vault.invalidateOfflineSnapshot(vault.binding()!!))
+            assertNull(SessionVault(context).loadOfflineSnapshot())
+            assertEquals(session.refreshToken,vault.loadRefreshToken())
             vault.clear()
             assertNull(SessionVault(context).loadOfflineSnapshot())
             for(mode in listOf("single_site_multi_workstation","multi_site_network")){

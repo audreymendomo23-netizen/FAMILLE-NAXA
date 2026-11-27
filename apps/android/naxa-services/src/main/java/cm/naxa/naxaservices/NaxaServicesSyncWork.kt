@@ -152,7 +152,7 @@ class NaxaServicesSyncWorker(
         }
 
         if (session.deviceId.isBlank()) return Result.retry()
-        if(vault.binding()!=binding)return Result.success()
+        if(vault.binding()!=binding||session.requirePasswordChange)return Result.success()
         // A worker rotation invalidates the old snapshot; renew only with fresh paid rights.
         if (LocalAccessPinManager(applicationContext).isConfigured(session.account.memberId)) {
             try { vault.saveOfflineSnapshot(session, api.subscriptionAccess(session.accessToken), binding) }

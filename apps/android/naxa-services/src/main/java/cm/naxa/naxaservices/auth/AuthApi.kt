@@ -628,6 +628,8 @@ class AuthApi(private val context: Context) {
         val json = request(body, bearer)
         val account = json.optJSONObject("account")
             ?: throw AuthApiException("Réponse Auth invalide : compte absent.")
+        val businessMode=account.optString("business_mode")
+        if(businessMode !in setOf("solo","single_site_multi_workstation","multi_site_network"))throw AuthApiException("Modèle de compte invalide.")
         val siteIds = mutableListOf<String>()
         val siteArray: JSONArray? = account.optJSONArray("active_site_ids")
         if (siteArray != null) {
@@ -665,8 +667,8 @@ class AuthApi(private val context: Context) {
                 roleCode = account.optString("role_code"),
                 organizationId = account.optString("organization_id"),
                 organizationName = account.optString("organization_name").ifBlank { account.optString("display_name") },
-                businessMode = account.optString("business_mode").takeIf { it in setOf("solo", "single_site_multi_workstation", "multi_site_network") } ?: "solo",
-                defaultLocale = account.optString("default_locale").takeIf { it in setOf("fr", "en") } ?: "fr",
+                businessMode = businessMode,
+                defaultLocale = account.optString("default_locale").takeIf { it in setOf("fr", "en", "ff-CM") } ?: "fr",
                 activeSiteIds = siteIds,
                 activeSites = activeSites,
                 activityProfile = account.optString("activity_profile").takeIf { it.isNotBlank() },

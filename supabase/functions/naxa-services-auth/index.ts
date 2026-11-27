@@ -129,7 +129,8 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
       { headers: serviceHeaders() },
     ) as Record<string, unknown>[];
   }
-  const organization = organizationRows?.[0] ?? {};
+  const organization = organizationRows?.[0];
+  if(!organization||!isNaxaBusinessMode(String(organization.business_mode??"")))throw new Error("ORGANIZATION_MODE_INVALID");
   let legalRows: Record<string, unknown>[] = [];
   try {
     legalRows = await rest(
@@ -164,7 +165,7 @@ async function sessionPayload(authData: Record<string, unknown>, account: Record
       role_code: member.role_code,
       organization_id: member.org_id,
       organization_name: organization.display_name ?? "",
-      business_mode: organization.business_mode ?? "solo",
+      business_mode: organization.business_mode,
       default_locale: member.preferred_locale ?? organization.default_locale ?? "fr",
       activity_profile: organization.activity_profile ?? null,
       accepted_legal_documents: acceptedLegalDocuments,

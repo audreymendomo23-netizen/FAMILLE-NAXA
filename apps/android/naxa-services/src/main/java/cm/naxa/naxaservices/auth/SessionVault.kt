@@ -89,6 +89,10 @@ class SessionVault(private val context: Context) {
 
     private fun bootCount():Int = Settings.Global.getInt(context.contentResolver,"boot_count",-1)
     internal fun clearOfflineSnapshot(){synchronized(vaultLock){preferences.edit().remove("offline_snapshot").apply()}}
+    internal fun invalidateOfflineSnapshot(expected:RememberedBinding):Boolean=synchronized(vaultLock){
+        if(binding()!=expected)return@synchronized false
+        clearOfflineSnapshot();true
+    }
     internal fun saveOfflineSnapshot(session:AuthSession,access:JSONObject,expected:RememberedBinding?=binding()) {
         synchronized(vaultLock){
         if(expected==null||binding()!=expected||expected.memberId!=session.account.memberId||expected.deviceId!=session.deviceId||expected.organizationId!=session.account.organizationId)return
