@@ -74,6 +74,9 @@ begin
  v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,cost}')::int<>800 then raise exception 'historical cost must not change';end if;
  v:=public.grillad_action(o,a,gen_random_uuid(),'set_cost_composition',jsonb_build_object('item',i,'reason','Estimation','components',jsonb_build_array(jsonb_build_object('label','Viande','amount',400),jsonb_build_object('label','Charbon','amount',50))));
  if (v->>'new_cost')::int<>450 or v->>'quality'<>'estimated' then raise exception 'complete composition';end if;
+ v:=public.grillad_action(o,a,gen_random_uuid(),'set_cost_composition',jsonb_build_object('item',i,'reason','Lot de production','batch_units',3,'components',jsonb_build_array(jsonb_build_object('label','Viande','amount',1000),jsonb_build_object('label','Charbon','amount',100))));
+ if (v->>'new_cost')::int<>367 or (v->>'batch_total')::int<>1100 or (v->>'batch_units')::int<>3 then raise exception 'batch cost round up';end if;
+ begin perform public.grillad_action(o,a,gen_random_uuid(),'set_cost_composition',jsonb_build_object('item',i,'reason','Test','batch_units',0,'components',jsonb_build_array(jsonb_build_object('label','Viande','amount',1000))));raise exception 'zero yield accepted';exception when invalid_parameter_value then null;end;
  v:=public.grillad_action(o,a,gen_random_uuid(),'set_cost_composition',jsonb_build_object('item',i,'reason','Estimation','components',jsonb_build_array(jsonb_build_object('label','Viande','amount',400),jsonb_build_object('label','Charbon','amount',null))));
  if v->'new_cost'<>'null'::jsonb or v->>'quality'<>'incomplete' then raise exception 'incomplete composition';end if;
  v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,cost}')::int<>800 then raise exception 'composition rewrote history';end if;

@@ -18,7 +18,7 @@ create table grillad_private.items(
  id uuid primary key, org uuid not null, site uuid not null, name text not null check(length(name) between 1 and 160),
  family text not null check(family in ('Porc','Poulet','Poisson','Brochettes','Omelettes')),
  price bigint not null check(price between 1 and 1000000000), cost bigint check(cost between 0 and 1000000000),
- cost_basis text not null default 'manual' check(cost_basis in ('manual','composition_estimate')),cost_components jsonb,
+ cost_basis text not null default 'manual' check(cost_basis in ('manual','composition_estimate')),cost_components jsonb,cost_batch_units integer not null default 1 check(cost_batch_units between 1 and 1000000),
  adjustment_net bigint not null default 0,
  prepared bigint not null default 0 check(prepared>=0), sold bigint not null default 0 check(sold between 0 and prepared),connect_reserved bigint not null default 0 check(connect_reserved>=0 and sold+connect_reserved<=prepared),
  active boolean not null default true, unique(id,org,site),
@@ -156,7 +156,7 @@ begin
   if not(p_payload?'cost') or (new_cost_value is not null and new_cost_value not between 0 and 1000000000) or reason is null or length(reason) not between 1 and 300 then raise exception 'GRILLAD_COST' using errcode='22023';end if;
   select * into x from grillad_private.items where id=item_id and org=p_org and site=p_site and active;
   if not found then raise exception 'GRILLAD_ITEM' using errcode='42501';end if;
-  update grillad_private.items set cost=new_cost_value,cost_basis='manual',cost_components=null where id=x.id;
+  update grillad_private.items set cost=new_cost_value,cost_basis='manual',cost_components=null,cost_batch_units=1 where id=x.id;
   result:=jsonb_build_object('id',x.id,'old_cost',x.cost,'new_cost',new_cost_value,'effective_at',now());
  when 'set_cost_composition' then
   item_id:=(p_payload->>'item')::uuid;reason:=btrim(p_payload->>'reason');
@@ -164,6 +164,8 @@ begin
   if jsonb_array_length(p_payload->'components') not between 1 and 30 then raise exception 'GRILLAD_COST_COMPOSITION' using errcode='22023';end if;
   select * into x from grillad_private.items where id=item_id and org=p_org and site=p_site and active;
   if not found then raise exception 'GRILLAD_ITEM' using errcode='42501';end if;
+  qty:=1;if p_payload?'batch_units' then if jsonb_typeof(p_payload->'batch_units') is distinct from 'number' or (p_payload->>'batch_units') !~ '^[0-9]{1,7}$' then raise exception 'GRILLAD_COST_BATCH' using errcode='22023';end if;qty:=(p_payload->>'batch_units')::bigint;end if;
+  if qty not between 1 and 1000000 then raise exception 'GRILLAD_COST_BATCH' using errcode='22023';end if;
   component_total:=0;component_unknown:=false;
   for line in select value from jsonb_array_elements(p_payload->'components') loop
    if jsonb_typeof(line) is distinct from 'object' or jsonb_typeof(line->'label') is distinct from 'string' or length(btrim(line->>'label')) not between 1 and 160 or not(line?'amount') or jsonb_typeof(line->'amount') not in ('number','null') then raise exception 'GRILLAD_COST_COMPONENT' using errcode='22023';end if;
@@ -175,9 +177,9 @@ begin
    end if;
   end loop;
   if component_total>1000000000 then raise exception 'GRILLAD_COST_COMPONENT' using errcode='22023';end if;
-  new_cost_value:=case when component_unknown then null else component_total end;
-  update grillad_private.items set cost=new_cost_value,cost_basis='composition_estimate',cost_components=p_payload->'components' where id=x.id;
-  result:=jsonb_build_object('id',x.id,'old_cost',x.cost,'new_cost',new_cost_value,'quality',case when component_unknown then 'incomplete' else 'estimated' end);
+  new_cost_value:=case when component_unknown then null else (component_total+qty-1)/qty end;
+  update grillad_private.items set cost=new_cost_value,cost_basis='composition_estimate',cost_components=p_payload->'components',cost_batch_units=qty::integer where id=x.id;
+  result:=jsonb_build_object('id',x.id,'old_cost',x.cost,'new_cost',new_cost_value,'batch_units',qty,'batch_total',case when component_unknown then null else component_total end,'quality',case when component_unknown then 'incomplete' else 'estimated' end);
  when 'set_item_active' then
   item_id:=(p_payload->>'item')::uuid;reason:=btrim(p_payload->>'reason');
   if jsonb_typeof(p_payload->'active') is distinct from 'boolean' or reason is null or length(reason) not between 1 and 300 then raise exception 'GRILLAD_ITEM_STATE' using errcode='22023';end if;
@@ -345,7 +347,7 @@ declare r text;u uuid:=auth.uid();v_items jsonb;v_sales jsonb;v_finance jsonb;v_
 begin
  r:=grillad_private.scope(p_org,p_site);
  if p_from is null or p_to is null or p_to<p_from or p_to-p_from>366 then raise exception 'GRILLAD_PERIOD' using errcode='22023';end if;
- select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'name',i.name,'family',i.family,'price',i.price,'prepared',i.prepared-i.adjustment_net,'adjustment_net',i.adjustment_net,'sold',i.sold,'remaining',i.prepared-i.sold-i.connect_reserved)||case when r='seller' then '{}'::jsonb else jsonb_build_object('cost',i.cost,'cost_basis',i.cost_basis,'cost_components',i.cost_components,'cost_quality',case when i.cost is null then 'incomplete' else 'estimated' end) end order by i.name),'[]'::jsonb) into v_items from grillad_private.items i where org=p_org and site=p_site and active;
+ select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'name',i.name,'family',i.family,'price',i.price,'prepared',i.prepared-i.adjustment_net,'adjustment_net',i.adjustment_net,'sold',i.sold,'remaining',i.prepared-i.sold-i.connect_reserved)||case when r='seller' then '{}'::jsonb else jsonb_build_object('cost',i.cost,'cost_basis',i.cost_basis,'cost_components',i.cost_components,'cost_batch_units',i.cost_batch_units,'cost_quality',case when i.cost is null then 'incomplete' else 'estimated' end) end order by i.name),'[]'::jsonb) into v_items from grillad_private.items i where org=p_org and site=p_site and active;
  select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'item',s.item,'qty',s.qty,'total',s.total,'actor',s.actor,'at',s.created_at,'cancelled',s.cancelled_at is not null,'source',s.source,'direct_order',s.direct_order) order by s.created_at desc),'[]'::jsonb) into v_sales from (select * from grillad_private.sales where org=p_org and site=p_site and (r<>'seller' or actor=u) and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) s;
  if r<>'seller' then
  select coalesce(jsonb_agg(to_jsonb(a) order by a.created_at desc),'[]'::jsonb) into v_adjustments from (select id,item,delta,reason,actor,created_at from grillad_private.stock_adjustments where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) a;
