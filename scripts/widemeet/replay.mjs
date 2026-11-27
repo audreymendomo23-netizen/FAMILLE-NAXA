@@ -158,29 +158,31 @@ try{
 
 
  // B2 collective conversations: three genuine accounts, no implicit administrator or tenant access.
- const gc=await fixture(w,"staff"),gd=await fixture(w,"staff"),gcs=await login(gc),gds=await login(gd);
+ const groupW=await createWorkspace("B2 dedicated group workspace");
+ const gh=await fixture(groupW,"promoteur"),ga=await fixture(groupW,"staff"),gc=await fixture(groupW,"staff"),gd=await fixture(groupW,"manager");
+ const ghs=await login(gh),gas=await login(ga),gcs=await login(gc),gds=await login(gd);
  const groupReq=(token,action,data={})=>request(auth+"/identity",{action:"group-chat-"+action,data},token);
  const groupOk=(token,action,data={})=>ok(auth+"/identity",{action:"group-chat-"+action,data},token);
- const chatGroupId=randomUUID(),groupPayload={group_id:chatGroupId,name:"B2 discussion",member_ids:[g.id,gc.id]};
- assert.equal((await groupReq(hs.access_token,"create",{...groupPayload,member_ids:[g.id,o.id]})).status,403);
- await groupOk(hs.access_token,"create",groupPayload);
- await groupOk(hs.access_token,"create",{...groupPayload,member_ids:[gc.id,g.id]});
- assert.equal((await groupReq(hs.access_token,"create",{...groupPayload,name:"Changed"})).status,403);
+ const chatGroupId=randomUUID(),groupPayload={group_id:chatGroupId,name:"B2 discussion",member_ids:[ga.id,gc.id]};
+ assert.equal((await groupReq(ghs.access_token,"create",{...groupPayload,member_ids:[ga.id,o.id]})).status,403);
+ await groupOk(ghs.access_token,"create",groupPayload);
+ await groupOk(ghs.access_token,"create",{...groupPayload,member_ids:[gc.id,ga.id]});
+ assert.equal((await groupReq(ghs.access_token,"create",{...groupPayload,name:"Changed"})).status,403);
  const groupMessage={group_id:chatGroupId,message_id:randomUUID(),body:"B2 group message"};
- await groupOk(gs.access_token,"send",groupMessage);await groupOk(gs.access_token,"send",groupMessage);
- assert.equal((await groupReq(gs.access_token,"send",{...groupMessage,body:"Changed"})).status,403);
- for(const s of [hs,gcs]){const t=await groupOk(s.access_token,"thread",{group_id:chatGroupId});assert.equal(t.items.length,1);assert.equal(t.items[0].body,groupMessage.body)}
+ await groupOk(gas.access_token,"send",groupMessage);await groupOk(gas.access_token,"send",groupMessage);
+ assert.equal((await groupReq(gas.access_token,"send",{...groupMessage,body:"Changed"})).status,403);
+ for(const s of [ghs,gcs]){const t=await groupOk(s.access_token,"thread",{group_id:chatGroupId});assert.equal(t.items.length,1);assert.equal(t.items[0].body,groupMessage.body)}
  assert.ok((await groupOk(gcs.access_token,"list")).items.some(x=>x.id===chatGroupId));
- assert.equal((await groupOk(hs.access_token,"members",{group_id:chatGroupId})).items.length,3);
+ assert.equal((await groupOk(ghs.access_token,"members",{group_id:chatGroupId})).items.length,3);
  for(const s of [gds,os]){assert.equal((await groupReq(s.access_token,"thread",{group_id:chatGroupId})).status,403);assert.equal((await groupReq(s.access_token,"send",groupMessage)).status,403);assert.ok(!(await groupOk(s.access_token,"list")).items.some(x=>x.id===chatGroupId))}
- assert.equal((await groupReq(gs.access_token,"seen",groupMessage)).status,403);
+ assert.equal((await groupReq(gas.access_token,"seen",groupMessage)).status,403);
  await groupOk(gcs.access_token,"seen",groupMessage);
  assert.ok((await groupOk(gcs.access_token,"thread",{group_id:chatGroupId})).items[0].read_at);
- assert.equal((await groupReq(gs.access_token,"remove",{group_id:chatGroupId,member_id:gc.id})).status,403);
- await groupOk(hs.access_token,"remove",{group_id:chatGroupId,member_id:gc.id});
+ assert.equal((await groupReq(gas.access_token,"remove",{group_id:chatGroupId,member_id:gc.id})).status,403);
+ await groupOk(ghs.access_token,"remove",{group_id:chatGroupId,member_id:gc.id});
  assert.equal((await groupReq(gcs.access_token,"thread",{group_id:chatGroupId})).status,403);
  assert.equal((await groupReq(gcs.access_token,"send",{...groupMessage,message_id:randomUUID()})).status,403);
- assert.equal((await groupOk(hs.access_token,"members",{group_id:chatGroupId})).items.length,2);
+ assert.equal((await groupOk(ghs.access_token,"members",{group_id:chatGroupId})).items.length,2);
  pass("B2 collective group: three accounts, exact retry, explicit read, nonmember/tenant denial and removal");
 
  // Dedicated support agents, no implicit rights for a tenant promoter.

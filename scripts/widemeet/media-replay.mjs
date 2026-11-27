@@ -6,6 +6,8 @@ import {execFileSync} from "node:child_process";
 import {chromium} from "@playwright/test";
 import {RoomServiceClient,EgressClient,EncodedFileOutput,EncodedFileType,EgressStatus} from "livekit-server-sdk";
 import {createMediaProxy} from "../../packages/media-core/signaling-proxy.mjs";
+import {makeDisplayIntent,redeemDisplayIntent} from "../../packages/widemeet-domain/presentation-display.mjs";
+import {createReceiverAdmission,isWideMeetReceiver,signReceiverGrant} from "../../packages/media-core/widemeet-receiver.mjs";
 const key=process.env.LK_TEST_KEY,secret=process.env.LK_TEST_SECRET;
 assert.ok(key&&secret&&secret.length>=32);
 const room="wm-"+randomUUID(),origin="http://127.0.0.1:4173",upstream="http://127.0.0.1:7880";
@@ -17,8 +19,9 @@ function token(identity,roomName=room){
  const a=encode({alg:"HS256",typ:"JWT"})+"."+encode({iss:key,sub:identity,nbf:now-2,exp:now+90,video:{room:roomName,roomJoin:true,canPublish:true,canSubscribe:true,canPublishData:false,canUpdateOwnMetadata:false,canPublishSources:["camera","microphone","screen_share"],roomCreate:false,roomAdmin:false,roomRecord:false,roomList:false}});
  return a+"."+createHmac("sha256",secret).update(a).digest("base64url");
 }
-const evicted=new Set();
-const proxy=createMediaProxy({upstream,key,secret,allowedOrigins:new Set([origin]),readAdmission:async g=>admissions.get(g.identity),onRevoke:async g=>{await service.removeParticipant(g.room,g.identity);evicted.add(g.identity)},checkEveryMs:500});
+const evicted=new Set(),displayLeases=new Map();
+const readReceiver=createReceiverAdmission({readLease:async id=>displayLeases.get(id)});
+const proxy=createMediaProxy({upstream,key,secret,allowedOrigins:new Set([origin]),readAdmission:async g=>isWideMeetReceiver(g.identity)?readReceiver(g):admissions.get(g.identity),onRevoke:async g=>{await service.removeParticipant(g.room,g.identity);evicted.add(g.identity)},checkEveryMs:500});
 const bundle=await readFile("node_modules/livekit-client/dist/livekit-client.umd.js");
 const app=createServer((req,res)=>{if(req.url==="/sdk.js"){res.writeHead(200,{"Content-Type":"application/javascript"});res.end(bundle)}else{res.writeHead(200,{"Content-Type":"text/html"});res.end('<!doctype html><title>Media replay</title><script src="/sdk.js"></script><body></body>')}});
 const listen=(s,p)=>new Promise((resolve,reject)=>{s.once("error",reject);s.listen(p,"127.0.0.1",resolve)});
@@ -27,7 +30,7 @@ let browser;
 async function until(fn,label,ms=25000){const end=Date.now()+ms;while(Date.now()<end){if(await fn())return;await delay(250)}throw Error("timeout: "+label)}
 try{
  await listen(proxy.server,7881);await listen(app,4173);
- await service.createRoom({name:room,emptyTimeout:300,maxParticipants:process.env.WM_TEST_EGRESS==="true"?4:2});
+ await service.createRoom({name:room,emptyTimeout:300,maxParticipants:process.env.WM_TEST_EGRESS==="true"?4:3});
  browser=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream","--autoplay-policy=no-user-gesture-required"]});
  const context=await browser.newContext({permissions:["camera","microphone"]});
  const a=await context.newPage(),b=await context.newPage();
@@ -52,6 +55,27 @@ try{
  await a.evaluate(async()=>{const lk=window.LivekitClient,c=document.createElement("canvas");c.width=640;c.height=360;document.body.appendChild(c);let n=0;setInterval(()=>{const ctx=c.getContext("2d");ctx.fillStyle=n++%2?"red":"blue";ctx.fillRect(0,0,640,360)},100);const t=c.captureStream(10).getVideoTracks()[0];await window.r.localParticipant.publishTrack(t,{source:lk.Track.Source.ScreenShare})});
  await until(()=>b.evaluate(()=>window.received.some(t=>t.source===window.LivekitClient.Track.Source.ScreenShare)),"screen track");
  console.log("PASS screen-share track routed by SFU");
+ if(process.env.WM_TEST_EGRESS!=="true"){
+  const now=Date.now(),displayCtx={meeting:{id:room.slice(3),orgId:"replay",status:"open",endMs:now+300000,confidentiality:"standard"},actor:{enabled:true,displayAllowed:true,orgId:"replay",meetingId:room.slice(3),memberId:"host"},source:{active:true,memberId:"host",orgId:"replay",meetingId:room.slice(3),id:"phone"},receiver:{approved:true,active:true,kind:"widemeet_receiver",memberId:"host",orgId:"replay",id:"display"},policy:{displayEnabled:true,confidentialDisplayAllowed:false}};
+  const intent=makeDisplayIntent(displayCtx,now,randomBytes(24).toString("base64url")),lease=redeemDisplayIntent(displayCtx,intent,now,randomBytes(24).toString("base64url")).lease;
+  displayLeases.set(lease.id,{ctx:displayCtx,lease});
+  const display=signReceiverGrant({ctx:displayCtx,lease,key,secret,now});
+  const receiver=await context.newPage();await receiver.goto(origin);
+  await receiver.evaluate(async token=>{const lk=window.LivekitClient,r=new lk.Room({adaptiveStream:false,dynacast:false});window.r=r;window.received=[];r.on(lk.RoomEvent.TrackSubscribed,t=>{window.received.push(t);const el=t.attach();el.autoplay=true;el.muted=true;document.body.appendChild(el)});await r.connect("ws://127.0.0.1:7881",token)},display.token);
+  await until(()=>receiver.evaluate(async()=>{for(const t of window.received){if(t.kind!=="video")continue;const s=await t.getRTCStatsReport();if(s&&[...s.values()].some(x=>x.type==="inbound-rtp"&&(x.framesDecoded??0)>0))return true}return false}),"receiver real decoded video");
+  const p=(await service.listParticipants(room)).find(x=>x.identity===display.identity);assert.ok(p);assert.equal(p.permission.canPublish,false);assert.equal(p.permission.canPublishData,false);assert.equal(p.tracks.length,0);
+  // Attempt a forbidden publication; regardless of SDK rejection shape the SFU must never expose a track.
+  await receiver.evaluate(async()=>{try{await window.r.localParticipant.setCameraEnabled(true)}catch{}});
+  const receiverInfo=(await service.listParticipants(room)).find(x=>x.identity===display.identity);assert.ok(receiverInfo);assert.equal(receiverInfo.tracks.length,0);
+  assert.ok((await service.listParticipants(room)).some(x=>x.identity==="host"));
+  lease.revoked=true;
+  await until(async()=>evicted.has(display.identity)&&!(await service.listParticipants(room)).some(x=>x.identity===display.identity),"receiver revocation");
+  const rejoin=await context.newPage();await rejoin.goto(origin);
+  assert.equal(await rejoin.evaluate(async token=>{const r=new window.LivekitClient.Room();try{await r.connect("ws://127.0.0.1:7881",token);await r.disconnect();return false}catch{return true}},display.token),true);
+  assert.ok((await service.listParticipants(room)).some(x=>x.identity==="host"));
+  await receiver.close();await rejoin.close();
+  console.log("PASS B2 receiver actual decoded SFU video, no publication, revocation and source remains connected (trusted fixture, not product pairing)");
+ }
  if(process.env.WM_TEST_EGRESS==="true"){
  const egress=new EgressClient(upstream,key,secret);
  const started=await egress.startRoomCompositeEgress(room,new EncodedFileOutput({fileType:EncodedFileType.OGG,filepath:"/out/"+room+".ogg"}),{audioOnly:true});
