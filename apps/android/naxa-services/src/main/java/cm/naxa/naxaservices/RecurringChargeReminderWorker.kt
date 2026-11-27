@@ -11,22 +11,14 @@ import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
-import androidx.room.Room
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_1_2
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_2_3
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_3_4
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_4_5
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_5_6
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_6_7
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_7_8
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_8_9
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_9_10
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_10_11
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_11_12
-import cm.naxa.naxaservices.data.NsServicesDatabase
 import java.util.Calendar
+import cm.naxa.naxaservices.data.SecureLocalDatabase
+import cm.naxa.naxaservices.auth.SessionVault
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class RecurringChargeReminderWorker(
     context: Context,
@@ -39,23 +31,12 @@ class RecurringChargeReminderWorker(
             ContextCompat.checkSelfPermission(applicationContext, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
         if (!permitted || !NotificationManagerCompat.from(applicationContext).areNotificationsEnabled()) return Result.success()
 
-        val database = Room.databaseBuilder(
-            applicationContext,
-            NsServicesDatabase::class.java,
-            "naxa-services-local.db"
-        ).addMigrations(
-            NS_SERVICES_MIGRATION_1_2,
-            NS_SERVICES_MIGRATION_2_3,
-            NS_SERVICES_MIGRATION_3_4,
-            NS_SERVICES_MIGRATION_4_5,
-            NS_SERVICES_MIGRATION_5_6,
-            NS_SERVICES_MIGRATION_6_7,
-            NS_SERVICES_MIGRATION_7_8,
-            NS_SERVICES_MIGRATION_8_9,
-            NS_SERVICES_MIGRATION_9_10,
-            NS_SERVICES_MIGRATION_10_11,
-            NS_SERVICES_MIGRATION_11_12
-        ).build()
+        val vault = SessionVault(applicationContext)
+        val binding = vault.binding() ?: return Result.success()
+        if (!vault.matchesOrganization(binding, orgId)) return Result.success()
+        val database = try { withContext(Dispatchers.IO) { SecureLocalDatabase.open(applicationContext) } }
+        catch (c: CancellationException) { throw c }
+        catch (_: Exception) { return Result.retry() }
 
         return try {
             ensureChannel()
@@ -69,6 +50,7 @@ class RecurringChargeReminderWorker(
             }.timeInMillis
             val charges = database.naxaServicesDao().findActiveRecurringCharges(orgId)
             charges.forEach { charge ->
+                if (!vault.matchesOrganization(binding, orgId)) return Result.success()
                 val paid = database.naxaServicesDao().sumChargePaymentsForCycle(charge.id, charge.nextDueAtMillis)
                 val balance = (charge.amountXaf - paid).coerceAtLeast(0L)
                 val reminderStartsAt = charge.nextDueAtMillis - charge.reminderDays * DAY_MILLIS
@@ -91,12 +73,9 @@ class RecurringChargeReminderWorker(
                     )
                     val notification = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
                         .setSmallIcon(android.R.drawable.ic_dialog_info)
-                        .setContentTitle(timing + " · " + charge.name)
-                        .setContentText("Solde " + "%,d FCFA".format(balance).replace(',', ' ') + " · " + dueDate)
-                        .setStyle(NotificationCompat.BigTextStyle().bigText(
-                            charge.name + " (" + charge.category + ") : " + "%,d FCFA".format(balance).replace(',', ' ') +
-                                " à régler avant le " + dueDate + "."
-                        ))
+                        .setContentTitle("NAXA SERVICES")
+                        .setContentText("Une échéance nécessite votre attention.")
+                        .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
                         .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                         .setAutoCancel(true)
                         .setContentIntent(open)
@@ -108,6 +87,7 @@ class RecurringChargeReminderWorker(
                 }
             }
             Result.success()
+        } catch (c: CancellationException) { throw c
         } catch (failure: Exception) {
             Result.retry()
         } finally {

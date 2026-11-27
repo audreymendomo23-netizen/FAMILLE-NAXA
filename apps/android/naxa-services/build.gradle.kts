@@ -94,6 +94,7 @@ dependencies {
     implementation(platform("com.google.firebase:firebase-bom:35.2.0"))
     implementation("com.google.firebase:firebase-messaging")
     implementation("androidx.room:room-runtime:2.8.5")
+    implementation("net.zetetic:sqlcipher-android:4.10.0")
     implementation("androidx.room:room-ktx:2.8.5")
     implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")

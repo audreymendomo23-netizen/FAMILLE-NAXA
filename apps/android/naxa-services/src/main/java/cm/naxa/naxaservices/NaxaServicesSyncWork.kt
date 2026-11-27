@@ -1,7 +1,6 @@
 package cm.naxa.naxaservices
 
 import android.content.Context
-import androidx.room.Room
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -18,23 +17,10 @@ import cm.naxa.naxaservices.auth.AuthSession
 import cm.naxa.naxaservices.auth.SessionVault
 import cm.naxa.naxaservices.auth.RememberedSessionChanged
 import cm.naxa.naxaservices.auth.discardRememberedSession
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_1_2
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_2_3
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_3_4
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_4_5
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_5_6
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_6_7
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_7_8
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_8_9
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_9_10
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_10_11
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_11_12
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_12_13
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_13_14
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_14_15
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_15_16
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
-import cm.naxa.naxaservices.data.NsServicesDatabase
+import cm.naxa.naxaservices.data.SecureLocalDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CancellationException
 import java.util.concurrent.TimeUnit
 import org.json.JSONObject
@@ -167,28 +153,16 @@ class NaxaServicesSyncWorker(
 
         if (session.deviceId.isBlank()) return Result.retry()
         if(vault.binding()!=binding)return Result.success()
+        // A worker rotation invalidates the old snapshot; renew only with fresh paid rights.
+        if (LocalAccessPinManager(applicationContext).isConfigured(session.account.memberId)) {
+            try { vault.saveOfflineSnapshot(session, api.subscriptionAccess(session.accessToken), binding) }
+            catch (c: CancellationException) { throw c }
+            catch (_: Exception) { /* No new offline authorization on an unconfirmed response. */ }
+        }
 
-        val database = Room.databaseBuilder(
-            applicationContext,
-            NsServicesDatabase::class.java,
-            "naxa-services-local.db"
-        ).addMigrations(
-            NS_SERVICES_MIGRATION_1_2,
-            NS_SERVICES_MIGRATION_2_3,
-            NS_SERVICES_MIGRATION_3_4,
-            NS_SERVICES_MIGRATION_4_5,
-            NS_SERVICES_MIGRATION_5_6,
-            NS_SERVICES_MIGRATION_6_7,
-            NS_SERVICES_MIGRATION_7_8,
-            NS_SERVICES_MIGRATION_8_9,
-            NS_SERVICES_MIGRATION_9_10,
-            NS_SERVICES_MIGRATION_10_11,
-            NS_SERVICES_MIGRATION_11_12,
-            NS_SERVICES_MIGRATION_12_13,
-            NS_SERVICES_MIGRATION_13_14,
-            NS_SERVICES_MIGRATION_14_15,
-            NS_SERVICES_MIGRATION_15_16
-        ).build()
+        val database = try { withContext(Dispatchers.IO) { SecureLocalDatabase.open(applicationContext) } }
+        catch (c: CancellationException) { throw c }
+        catch (_: Exception) { return Result.retry() }
 
         return try {
             if(vault.binding()!=binding)return Result.success()

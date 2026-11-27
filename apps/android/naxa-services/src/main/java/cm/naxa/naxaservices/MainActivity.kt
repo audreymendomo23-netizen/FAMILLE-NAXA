@@ -4,25 +4,8 @@ import android.os.Bundle
 import android.content.res.Configuration
 import org.json.JSONObject
 
-import androidx.room.Room
 import androidx.compose.runtime.collectAsState
-import cm.naxa.naxaservices.data.NsServicesDatabase
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_1_2
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_2_3
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_3_4
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_4_5
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_5_6
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_6_7
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_7_8
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_8_9
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_9_10
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_10_11
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_11_12
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_12_13
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_13_14
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_14_15
-import cm.naxa.naxaservices.data.NS_SERVICES_MIGRATION_15_16
 import cm.naxa.naxaservices.data.LocalPressingOrder
 import cm.naxa.naxaservices.data.LocalPressingStatusEvent
 import cm.naxa.naxaservices.data.LocalAppointment
@@ -74,6 +57,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.produceState
+import cm.naxa.naxaservices.data.SecureLocalDatabase
+import cm.naxa.naxaservices.data.NsServicesDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -172,12 +161,28 @@ private fun NaxaServicesRoot(
     val preferences = remember { NaxaServicesPreferences(context) }
     val localPinManager = remember(context) { LocalAccessPinManager(context) }
     val lockGenerationValue by lockGeneration.collectAsState()
-    val localDatabase = remember {
-        Room.databaseBuilder(context, NsServicesDatabase::class.java, "naxa-services-local.db")
-            .addMigrations(NS_SERVICES_MIGRATION_1_2, NS_SERVICES_MIGRATION_2_3, NS_SERVICES_MIGRATION_3_4, NS_SERVICES_MIGRATION_4_5, NS_SERVICES_MIGRATION_5_6, NS_SERVICES_MIGRATION_6_7, NS_SERVICES_MIGRATION_7_8, NS_SERVICES_MIGRATION_8_9, NS_SERVICES_MIGRATION_9_10, NS_SERVICES_MIGRATION_10_11, NS_SERVICES_MIGRATION_11_12, NS_SERVICES_MIGRATION_12_13, NS_SERVICES_MIGRATION_13_14, NS_SERVICES_MIGRATION_14_15, NS_SERVICES_MIGRATION_15_16)
-            .build()
+    var databaseRetry by remember { mutableIntStateOf(0) }
+    val databaseResult by produceState<Result<NsServicesDatabase>?>(null, databaseRetry) {
+        value = null
+        value = withContext(Dispatchers.IO) {
+            try { Result.success(SecureLocalDatabase.open(context)) }
+            catch (c: CancellationException) { throw c }
+            catch (failure: Exception) { Result.failure(failure) }
+        }
     }
-    val localRepository = remember { NaxaServicesLocalRepository(localDatabase) }
+    val localDatabase = databaseResult?.getOrNull()
+    if (localDatabase == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            if (databaseResult == null) CircularProgressIndicator()
+            else Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
+                Text(localizedLabel("Données locales indisponibles. Aucune donnée effacée automatiquement.", "Local data unavailable. No data automatically erased.", "Keɓe nokkuure heɓotaako. Keɓe momtaaka."))
+                Button(onClick = { databaseRetry++ }) { Text(localizedLabel("Réessayer", "Retry", "Fuɗɗito")) }
+            }
+        }
+        return
+    }
+    DisposableEffect(localDatabase) { onDispose { localDatabase.close() } }
+    val localRepository = remember(localDatabase) { NaxaServicesLocalRepository(localDatabase) }
     val scope = rememberCoroutineScope()
 
     var route by rememberSaveable { mutableStateOf(AppRoute.LOGIN.name) }

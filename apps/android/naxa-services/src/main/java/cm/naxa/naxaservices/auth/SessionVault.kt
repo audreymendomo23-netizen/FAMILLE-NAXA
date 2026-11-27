@@ -37,6 +37,7 @@ class SessionVault(private val context: Context) {
             .putString("access", encrypt(session.accessToken))
             .putString("refresh", encrypt(session.refreshToken))
             .putString("member_id", session.account.memberId)
+            .putString("organization_id", session.account.organizationId)
             .putString("device_id", encrypt(session.deviceId))
             .putString("generation",generation)
             .apply()
@@ -48,6 +49,10 @@ class SessionVault(private val context: Context) {
         if(loadRefreshToken().isNullOrBlank())return@synchronized null
         val generation=preferences.getString("generation",null)?:UUID.randomUUID().toString().also{preferences.edit().putString("generation",it).apply()}
         RememberedBinding(generation,member,device)
+    }
+
+    internal fun matchesOrganization(expected:RememberedBinding,orgId:String):Boolean = synchronized(vaultLock){
+        orgId.isNotBlank() && binding()==expected && preferences.getString("organization_id",null)==orgId
     }
 
     // One network refresh at a time across foreground, startup and WorkManager.
