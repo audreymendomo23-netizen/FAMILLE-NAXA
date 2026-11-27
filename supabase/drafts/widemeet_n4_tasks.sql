@@ -10,6 +10,16 @@ create table public.wm_tasks(
  revision integer not null default 1 check(revision>0), created_at timestamptz not null default clock_timestamp(),
  changed_at timestamptz not null default clock_timestamp()
 );
+-- Append-only action history; no old evidence or recipient access is broadened.
+create table public.wm_task_history(
+ task_id uuid not null references public.wm_tasks(id),revision integer not null,
+ actor_id uuid not null references public.wm_accounts(id),action text not null check(action in ('create','submit','approve','return','cancel')),
+ state text not null check(state in ('assigned','submitted','done','cancelled')),
+ occurred_at timestamptz not null default clock_timestamp(),primary key(task_id,revision)
+);
+alter table public.wm_task_history enable row level security;
+revoke all on public.wm_task_history from public,anon,authenticated;
+grant select,insert on public.wm_task_history to service_role;
 create index wm_tasks_assignee on public.wm_tasks(assignee_id,due_at);
 alter table public.wm_tasks enable row level security;
 revoke all on public.wm_tasks from public,anon,authenticated;
@@ -31,7 +41,9 @@ begin
  if p_action='list' then
   return jsonb_build_object('items',coalesce((select jsonb_agg(to_jsonb(q)) from (
    select k.id,k.room_id,k.version_id,k.title,k.due_at,k.state,k.evidence,k.revision,k.assignee_id,ac.display_name as assignee_name,rr.state->>'title' as meeting_title,
-   rr.host_id=s.account_id and role_name in ('owner','promoteur','manager') as can_manage
+   rr.host_id=s.account_id and role_name in ('owner','promoteur','manager') as can_manage,
+   (k.state='assigned' and k.due_at<=clock_timestamp()) as overdue,
+   coalesce((select jsonb_agg(jsonb_build_object('revision',j.revision,'action',j.action,'state',j.state,'at',j.occurred_at) order by j.revision) from public.wm_task_history j where j.task_id=k.id),'[]'::jsonb) as history
    from public.wm_tasks k join public.wm_rooms rr on rr.id=k.room_id join public.wm_minutes_eligibility e on e.room_id=rr.id
    join public.wm_minutes_versions mv on mv.id=k.version_id and mv.revoked_at is null
    join public.wm_accounts ac on ac.id=k.assignee_id
@@ -63,6 +75,7 @@ begin
   end if;
   if (select count(*) from public.wm_tasks where room_id=rid)>=100 then return null;end if;
   insert into public.wm_tasks(id,room_id,version_id,assignee_id,created_by,title,due_at) values(tid,rid,vid,assignee,s.account_id,title_text,deadline);
+  insert into public.wm_task_history(task_id,revision,actor_id,action,state) values(tid,1,s.account_id,'create','assigned');
   return jsonb_build_object('id',tid,'revision',1);
  end if;
  select * into t from public.wm_tasks where id=tid and room_id=rid for update;
@@ -78,6 +91,8 @@ begin
  elsif p_action='cancel' and host and t.state in ('assigned','submitted') then
   update public.wm_tasks set state='cancelled',revision=revision+1,changed_at=clock_timestamp() where id=tid;
  else return null;end if;
+ insert into public.wm_task_history(task_id,revision,actor_id,action,state)
+ select id,revision,s.account_id,p_action,state from public.wm_tasks where id=tid;
  return jsonb_build_object('id',tid,'revision',t.revision+1);
 end $wm$;
 revoke all on function public.wm_task_action(text,text,jsonb) from public,anon,authenticated;
