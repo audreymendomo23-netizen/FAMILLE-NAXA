@@ -4,6 +4,17 @@ import org.junit.Assert.*
 import cm.naxa.widemeet.auth.*
 
 class FoundationTest {
+ @Test fun supportFiltersCombineWithoutUnmaskingSubjects(){
+  assertTrue(supportMatches("closed","privacy_access","Demande test","closed","privacy_access","  DEMANDE "))
+  assertFalse(supportMatches("closed","privacy_access","Demande test","open","privacy_access","demande"))
+  assertFalse(supportMatches("closed","privacy_access","Demande test","closed","meeting","demande"))
+  assertFalse(supportMatches("closed","privacy_access","Demande test","closed","privacy_access","absent"))
+  assertTrue(supportMatches("open","privacy_erase",null,"all","privacy_erase",""))
+  assertFalse(supportMatches("open","privacy_erase",null,"all","all","null"))
+  assertFalse(supportMatches("open","privacy_erase",null,"all","all","secret"))
+  assertTrue(supportMatches("assigned","meeting","Un ticket","all","all",""))
+ }
+
  @Test fun meetingCountdownBoundaryAndPermission(){
   assertFalse(meetingClockView(301000,600000,0,"open",true).warning)
   assertTrue(meetingClockView(300000,600000,0,"open",true).warning)
