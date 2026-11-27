@@ -6,6 +6,8 @@ on:
       - 'apps/android/grillad/**'
       - 'apps/web/grillad/**'
       - 'scripts/grillad/**'
+      - 'supabase/drafts/grillad_business_v1.sql'
+      - 'supabase/local-tests/grillad_business_v1_assertions.sql'
       - '.github/workflows/grillad-foundation.yml'
   workflow_dispatch:
 permissions:
@@ -64,3 +66,34 @@ jobs:
           name: grillad-android-test-results
           path: apps/android/grillad/build/test-results/
           if-no-files-found: ignore
+  server:
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: grillad_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d grillad_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: grillad_test
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/0002_bootstrap_local_auth.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0001_famille_core_proposed.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/0002_famille_core_rls.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0003_prompt_0_3_contextual_rls.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_business_v1.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_business_v1_assertions.sql
