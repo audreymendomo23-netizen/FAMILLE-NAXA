@@ -94,7 +94,7 @@ jobs:
           echo "Egress readiness failed"
           exit 1
       - name: Verify actual audio-only capture (synthetic devices only)
-        run: node scripts/widemeet/media-replay.mjs
+        run: WM_WAVE_RECEIPTS="$RUNNER_TEMP/wm-wave-audio.jsonl" node scripts/widemeet/qualification-wave-capture.mjs audio media-replay.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
@@ -175,7 +175,7 @@ jobs:
           export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
           export WM_AUTH_QUALIFIED=true WM_ROOM_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_MEDIA_QUALIFIED=true WM_RECORDING_QUALIFIED=true WM_RECORDING_STORAGE_QUALIFIED=true WM_TRANSCRIPTION_QUALIFIED=true WM_ALLOWED_ORIGINS=http://127.0.0.1:4173
           export WM_LIVEKIT_URL=wss://127.0.0.1:7881 WM_LIVEKIT_API_KEY="$LK_TEST_KEY" WM_LIVEKIT_API_SECRET="$LK_TEST_SECRET"
-          node scripts/widemeet/media-product-replay.mjs
+          WM_WAVE_RECEIPTS="$RUNNER_TEMP/wm-wave-audio.jsonl" node scripts/widemeet/qualification-wave-capture.mjs audio media-product-replay.mjs
       - name: Stop isolated recording database
         if: always()
         run: |
@@ -191,3 +191,11 @@ jobs:
         run: |
           docker rm -f wm-audio-egress wm-audio-lk wm-audio-redis || true
           rm -rf "$RUNNER_TEMP/wm-egress-out" "$RUNNER_TEMP/wm-audio-lk.yaml" "$RUNNER_TEMP/wm-egress.yaml"
+
+      - name: Upload sanitized Wave 01 evidence (audio)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wave01-evidence-audio
+          path: ${{ runner.temp }}/wm-wave-audio.jsonl
+          if-no-files-found: warn

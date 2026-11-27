@@ -32,6 +32,30 @@ jobs:
           mkdir -p "$RUNNER_TEMP/wm-replay"
           cd "$RUNNER_TEMP/wm-replay"
           supabase init
+          # Only the unused fixture mail catcher needs a distinct port; keep API/DB fixed.
+          python3 - <<'PY'
+          import pathlib, re, socket, tomllib
+          path = pathlib.Path("supabase/config.toml")
+          text = path.read_text()
+          config = tomllib.loads(text)
+          names = [name for name in ("local_smtp", "inbucket") if name in config]
+          if len(names) != 1:
+              raise SystemExit("Expected exactly one isolated local mail configuration")
+          name = names[0]
+          section = re.search(r"(?ms)^\[" + re.escape(name) + r"\][ \t]*\n.*?(?=^\[|\Z)", text)
+          if section is None:
+              raise SystemExit("Expected isolated local mail section")
+          with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+              sock.bind(("0.0.0.0", 0))
+              port = sock.getsockname()[1]
+          updated, count = re.subn(r"(?m)^port[ \t]*=[ \t]*\d+[ \t]*(?:#[^\n]*)?$", f"port = {port}", section.group())
+          if count != 1:
+              raise SystemExit("Expected exactly one isolated mail port")
+          result = text[:section.start()] + updated + text[section.end():]
+          assert tomllib.loads(result)[name]["port"] == port
+          path.write_text(result)
+          print(f"Isolated fixture mail catcher port: {port}")
+          PY
           supabase start
           supabase status -o env > "$RUNNER_TEMP/wm-replay.env"
           chmod 600 "$RUNNER_TEMP/wm-replay.env"
@@ -78,8 +102,16 @@ jobs:
           export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
           export WM_WORKSPACE_CENTERS_QUALIFIED=true WM_SUPPORT_QUALIFIED=true WM_AUTH_QUALIFIED=true WM_SERIES_QUALIFIED=true WM_MINUTES_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_NOTICES_QUALIFIED=true WM_REPORTS_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_RECOVERY_KEY_QUALIFIED=true WM_BILLING_TEST=true WM_SIGNUP_QUALIFIED=true WM_AUTH_ALIAS_DOMAIN=example.test WM_ROOM_QUALIFIED=true WM_MEDIA_QUALIFIED=false WM_ALLOWED_ORIGINS=https://127.0.0.1:8443
           export WM_REPLAY_KEY="$RUNNER_TEMP/wm-replay.key" WM_REPLAY_CERT="$RUNNER_TEMP/wm-replay.crt"
-          node scripts/widemeet/replay.mjs
+          WM_WAVE_RECEIPTS="$RUNNER_TEMP/wm-wave-replay.jsonl" node scripts/widemeet/qualification-wave-capture.mjs replay replay.mjs
       - name: Stop disposable stack
         if: always()
         run: |
           cd "$RUNNER_TEMP/wm-replay" && supabase stop --no-backup
+
+      - name: Upload sanitized Wave 01 evidence (replay)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wave01-evidence-replay
+          path: ${{ runner.temp }}/wm-wave-replay.jsonl
+          if-no-files-found: warn

@@ -159,6 +159,10 @@ try{
  assert.equal((await centerReq(gs.access_token,"statistics",{days:30})).status,403);
  const consolidated=await centerOk(hs.access_token,"statistics",{days:30});assert.equal(consolidated.scope,"enterprise");assert.ok(Number.isInteger(consolidated.polls_closed)&&consolidated.polls_closed>=0);assert.ok(Number.isInteger(consolidated.tasks_done)&&consolidated.tasks_done>=0);
  assert.equal((await centerReq(hs.access_token,"statistics",{days:999})).status,403);
+ const waveDirect=(await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"workspace"})).items;
+ assert.equal(waveDirect.length,1);assert.equal(waveDirect[0].id,privateData.message_id);assert.equal(waveDirect[0].body,privateData.body);
+ assert.deepEqual((await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"workspace"})).items,waveDirect);
+ pass("WAVE01 direct thread exact message identity and stable read");
  pass("workspace private chat exact retry, peer/tenant denial, search, explicit read acknowledgement and role-scoped summary");
 
 
@@ -333,6 +337,7 @@ try{
  const identity=(token,action,data={})=>ok(auth+"/identity",{action,data},token);
  const identityRequest=(token,action,data={})=>request(auth+"/identity",{action,data},token);
  const original=await identity(hs.access_token,"profile");
+ const waveOtherLanguage=await identity(gs.access_token,"language-preferences");
  const languagePref={interface:"fr",spoken:"ff",listening:"en",subtitles:"original",pdf:"en",rate:"1.25"};
  assert.deepEqual(await identity(hs.access_token,"language-save",languagePref),languagePref);
  assert.deepEqual(await identity(hs.access_token,"language-preferences"),languagePref);
@@ -341,7 +346,10 @@ try{
  assert.equal((await identityRequest(hs.access_token,"language-save",{...languagePref,interface:"ff"})).status,403);
  assert.equal((await identityRequest(hs.access_token,"language-save",{...languagePref,rate:1.25})).status,403);
  assert.equal((await identityRequest(hs.access_token,"language-save",{...languagePref,account_id:g.id})).status,403);
- assert.equal((await identity(hs.access_token,"language-reset")).listening,"original");
+ const waveReset=await identity(hs.access_token,"language-reset");
+ assert.equal(waveReset.listening,"original");assert.deepEqual(await identity(hs.access_token,"language-preferences"),waveReset);
+ assert.deepEqual(await identity(gs.access_token,"language-preferences"),waveOtherLanguage);
+ pass("WAVE01 language reset persists and other account remains unchanged");
  pass("actual individual language preferences persisted, strict validation, reset and account isolation");
  // Synthetic 8x8 JPEG; no real personal data. Private self-profile only.
  const photo="/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAAIAAgBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAAP/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AP//Z";
@@ -618,6 +626,8 @@ try{
  assert.equal((await tok(mgs.access_token,"list")).items.length,0);
  assert.equal((await mok(mgs.access_token,"read",rev)).body,rev.body);
  await mok(mhs.access_token,"revoke",rev);assert.equal((await mreq(mgs.access_token,"read",rev)).status,403);
+ assert.equal((await mreq(mgs.access_token,"export",{...rev,request_id:randomUUID()})).status,403);
+ pass("WAVE01 revoked minutes export denied for previously authorized recipient");
  pass("actual N4 closed-room minutes versioning, expiry-independent archives, approval, selected recipients, read audit and revocation");
 
  assert.equal((await request(room+"/media-grant",{room_id:rid},hs.access_token)).status,403);
@@ -865,6 +875,13 @@ try{
  assert.equal(agentRead.messages.filter(m=>m.id===requesterMessageId&&m.body===requesterBody&&m.author_kind==="requester").length,1,"agent must read the exact committed requester reply");
  hp.once("dialog",d=>d.accept());await hp.getByRole("button",{name:"Clôturer",exact:true}).click();
  await hp.getByText("Clôturée",{exact:true}).waitFor();
+ const waveClosed=await sk(browserAgent.access_token,"read",{ticket_id:browserSupportTicket.id});
+ assert.equal(waveClosed.status,"closed");assert.equal(waveClosed.messages.length,3);
+ const waveLate={ticket_id:browserSupportTicket.id,message_id:randomUUID(),body:"Synthetic forbidden post-close reply"};
+ assert.equal((await identityRequest(browserAgent.access_token,"support-reply",waveLate)).status,403);
+ assert.equal((await identityRequest(browserSupportHost.access_token,"support-reply",waveLate)).status,403);
+ assert.equal((await identityRequest(os.access_token,"support-read",{ticket_id:browserSupportTicket.id})).status,403);
+ pass("WAVE01 closed support ticket denies new replies and outsider read");
  pass("real browser support intake, agent claim/reply, automatic refresh, requester message and closure");
 
  // Exercise the external invitation deep link through real GoTrue, Edge and Chromium.

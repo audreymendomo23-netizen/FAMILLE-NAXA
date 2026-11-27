@@ -1,0 +1,608 @@
+{
+  "wave": 1,
+  "total": 50,
+  "actions": 6,
+  "recipes": 44,
+  "base": "b1e5a0841c6fa81e8efbcb0d65f11d9018435b3e",
+  "entries": [
+    {
+      "id": "B1.6-A01",
+      "bulk": "B1",
+      "kind": "action",
+      "description": "Piloter une qualification commune cohérente et éliminer les relances redondantes.",
+      "work": "Isolation des ports et preuve individuelle"
+    },
+    {
+      "id": "B1.6-R01",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Gate PR et Push sur SHA identique, déclencheurs paths media-core/audio/scripts/SQL; les deux gates terminaux.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.6-R02",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Replay GoTrue/Edge/Chromium réel complet avec comptes distincts et absence de mock métier.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "two real browser accounts: login, agenda, creation, RSVP, start, chat and automatic refresh"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B1.6-R03",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Replay SFU réel : RTP, média bidirectionnel, screen-share, preuve paquet/décodage, éviction et non-régression.",
+      "markers": [
+        {
+          "suite": "sfu",
+          "marker": "actual bidirectional SFU audio/video RTP with synthetic browser devices"
+        },
+        {
+          "suite": "sfu",
+          "marker": "screen-share track routed by SFU"
+        },
+        {
+          "suite": "sfu",
+          "marker": "actual WideMeet moderation mutation evicts guest from SFU and rejects old unexpired grant"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B1.6-R04",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Préparation CI isolée : ports mail TOML local_smtp/inbucket, boucle locale, cleanup même en échec.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.6-R05",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Perte réponse, lecture agent et session fixture : exact message_id, HTTP 200, trois messages uniques, pas de nouveau login inutile.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 direct chat committed lost response, polling remains active and retry stays idempotent"
+        },
+        {
+          "suite": "replay",
+          "marker": "real browser support intake, agent claim/reply, automatic refresh, requester message and closure"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B1.6-R06",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Audit contradictoire des logs, premier point causal, preuve SHA/run/job/artifact, aucun skip ou vert historique transféré.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.6-R07",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Intégration B1–B6 par hunks et comparaison des branches, vérifier tous workflows spécialisés avant clôture commune.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.2-A01",
+      "bulk": "B2",
+      "kind": "action",
+      "description": "Terminer échange direct temps réel et historique parité.",
+      "work": "Identité exacte et stabilité lecture du message"
+    },
+    {
+      "id": "B2.2-R01",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Deux comptes autorisés : envoi, réception, lecture explicite, recherche et pagination.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "workspace private chat exact retry, peer/tenant denial, search, explicit read acknowledgement and role-scoped summary"
+        },
+        {
+          "suite": "replay",
+          "marker": "WAVE01 direct thread exact message identity and stable read"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.2-R02",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Idempotence, réponse perdue, reconnexion, ordre stable, aucun doublon.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 direct chat committed lost response, polling remains active and retry stays idempotent"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.2-R03",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Réponses, mentions, signalement et résolution par rôle autorisé; refus de références hors scope.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.2-R04",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Watch authentifié : changements reçus, arrêt sur révocation, isolement tenant, reprise sans ancienne fuite.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 actual authenticated bounded watch: change delivery, tenant denial, in-flight revocation and readmission history"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.2-R05",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Web/Android/PWA E2E sur compte individuel/entreprise selon politique, latence mesurée et offline explicite.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "real two-browser direct chat, explicit read acknowledgement, automatic refresh and consolidated statistics period"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.7-R01",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Créer/renommer, ajouter/retirer/réadmettre; rôle, tenant et refus membre tiers.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 group rename, add/rejoin, exact original retry and pre-admission history isolation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.7-R02",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Trois comptes réels : envoi, réception, accusés, retry et ordre stable.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 collective group: three accounts, exact retry, explicit read, nonmember/tenant denial and removal"
+        },
+        {
+          "suite": "replay",
+          "marker": "B2 three browser group creation, message delivery, read and revoked member purge"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.7-R03",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Historique pré-admission interdit, curseur/pagination et reprise sans fuite.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 group cursor, reply/mention scope, idempotent report and owner resolution"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.7-R04",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Mentions/réponses/signalements autorisés et résolution, refus identifiant étranger.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 browser group reply, mention and report resolution"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.7-R05",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Watch temps réel, révocation en vol, purge UI et accès réadmission.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 actual authenticated bounded watch: change delivery, tenant denial, in-flight revocation and readmission history"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B3.1-A01",
+      "bulk": "B3",
+      "kind": "action",
+      "description": "Finaliser préférences persistantes et capacités affichées.",
+      "work": "Persistance du reset et isolation compte"
+    },
+    {
+      "id": "B3.1-R01",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "FR/EN interface, langue parlée, écoute, PDF, sous-titres et vitesse mémorisées par compte.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual individual language preferences persisted, strict validation, reset and account isolation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B3.1-R02",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Réinitialiser/restaurer sur changement appareil, isolation et validation codes langues.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "WAVE01 language reset persists and other account remains unchanged"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B3.1-R03",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Langue non qualifiée : repli explicite par capacité, aucune clé technique ou support fictif.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual individual language preferences persisted, strict validation, reset and account isolation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B3.1-R04",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Préférence PDF et langue en appel appliquées, parité Android/Web/PWA, pas de profilage ethnique.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "real browser language and listening preference pages persist and reset account settings"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B3.2-R01",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Micro réel synthétique Chromium→SFU→Egress→Storage→ASR, identité source et horodatage conservés.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.2-R02",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "FR/EN corpus représentatif, bruit/silence, accents, chevauchements et mesure erreur/latence; autres langues par corpus validé.",
+      "markers": [
+        {
+          "suite": "audio",
+          "marker": "actual local Whisper ASR on separate synthetic speech fixture in private Storage; host-only queue, hash verification and timestamped output"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.5-A01",
+      "bulk": "B4",
+      "kind": "action",
+      "description": "Compléter rapport structuré et cycle de validation.",
+      "work": "Refus export après révocation"
+    },
+    {
+      "id": "B4.5-R01",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Rapport identité/date/durée/agenda, participants, discussions, décisions/votes/quorum, enquêtes, actions, pièces, points ouverts.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.5-R02",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Brouillon manuel/IA sourcé, correction humaine, approbation exacte et auteur/heure/version.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N4 closed-room minutes versioning, expiry-independent archives, approval, selected recipients, read audit and revocation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.5-R03",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Sélection destinataires, publication idempotente, notification individuelle, refus autres comptes.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N4 recipient-scoped in-app notice, read receipt and forbidden third party"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.5-R04",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Versions immuables, remplacée/révoquée, concurrence et historique, accès après pass selon droits.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N4 closed-room minutes versioning, expiry-independent archives, approval, selected recipients, read audit and revocation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.5-R05",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "PDF multipage Unicode, filigrane nominatif/identifiant vérification, langue, contrôle pagination et contenu.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N4 exact published PDF export payload, recipient watermark identity and audit request isolation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.5-R06",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "XLSX indépendant openpyxl, données typées, chaînes non-formules, anonymat, agrégats/extractions consolidées.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N4 authorized Excel report, real OOXML and recipient denial"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.5-R07",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Archives recherche/filtres, consultation/téléchargement réellement audités, accès révoqué et export non rappelable.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "WAVE01 revoked minutes export denied for previously authorized recipient"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.5-R08",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Parité native/Web/PWA : génération/téléchargement, erreur/retry, fichier exact et droits au moment de lecture.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.2-A01",
+      "bulk": "B5",
+      "kind": "action",
+      "description": "Stabiliser cycle support et habilitations.",
+      "work": "Clôture et refus des réponses tardives"
+    },
+    {
+      "id": "B5.2-R01",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Demande privée, catégories, file masquée, claim atomique et affectation/réaffectation.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "private support ticket: exact retry, cross-account denial, atomic agent claim, isolated reply and closure"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B5.2-R02",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Deux acteurs : réponse réelle, HTTP 200 sent:true, même message_id, trois messages exactement et auteur; lecture agent.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "real browser support intake, agent claim/reply, automatic refresh, requester message and closure"
+        }
+      ],
+      "complete": true
+    },
+    {
+      "id": "B5.2-R03",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Retry après réponse perdue, polling/reconnexion, aucun doublon et contrôle latence.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "private support ticket: exact retry, cross-account denial, atomic agent claim, isolated reply and closure"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B5.2-R04",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Refus tiers, agent non affecté, révocation, clôture et état inaccessible si droits perdus.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "WAVE01 closed support ticket denies new replies and outsider read"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B5.2-R05",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Feedback, suivi, provisionnement/révocation agents, audit et quotas.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.2-R06",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Android/Web/PWA E2E, accessibilité et aucune donnée réunion/secret visible.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.04-A01",
+      "bulk": "B6",
+      "kind": "action",
+      "description": "Fermer droits réellement dans SFU et stockage associé.",
+      "work": "Refus grant après fin réelle"
+    },
+    {
+      "id": "B6.04-R01",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Exclusion participant, révocation délégation/session, fin salle : éviction effective.",
+      "markers": [
+        {
+          "suite": "sfu",
+          "marker": "actual WideMeet moderation mutation evicts guest from SFU and rejects old unexpired grant"
+        },
+        {
+          "suite": "sfu",
+          "marker": "room closure revokes host transport"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.04-R02",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Ancien jeton non expiré refusé, renouvellement et reconnexion interdits.",
+      "markers": [
+        {
+          "suite": "sfu",
+          "marker": "revoked participant cannot reconnect with unexpired signed token"
+        },
+        {
+          "suite": "sfu",
+          "marker": "WAVE01 closed room denies fresh media grants"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.04-R03",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Retrait politique/consentement et pause : fence capture/grant, reprise autorisée distincte.",
+      "markers": [
+        {
+          "suite": "audio",
+          "marker": "actual participant consent withdrawal fences recording, stops Egress and discards private segment"
+        },
+        {
+          "suite": "audio",
+          "marker": "actual independent recording pause preserves verified segment while meeting audio/video remains connected"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.04-R04",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Tests proxy/SFU sous concurrence et crash, pas de fenêtre de réadmission silencieuse.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.04-R05",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Historique autorisé indépendant de flux, purge client et droits export contrôlés.",
+      "markers": [
+        {
+          "suite": "audio",
+          "marker": "actual N3 private Storage upload/readback, host-only export after closure, forbidden guest and SHA-256 integrity"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.01-R01",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Jeton opaque haché, login/refresh/rotation/logout, expiration et ancien secret refusé.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N1 native refresh rotation, old secret and wrong installation denial, device revocation and logout"
+        },
+        {
+          "suite": "replay",
+          "marker": "real opaque session logout and revocation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.01-R02",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Mauvaise installation, autre produit, compte désactivé et espace retiré : refus.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N1 native refresh rotation, old secret and wrong installation denial, device revocation and logout"
+        },
+        {
+          "suite": "sfu",
+          "marker": "cross-product room denied"
+        }
+      ],
+      "complete": false
+    }
+  ]
+}

@@ -49,6 +49,22 @@ jobs:
       SFU: ${{ needs.sfu.result }}
       AUDIO: ${{ needs.audio.result }}
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: mkdir -p "$RUNNER_TEMP/wm-wave-evidence"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wave01-evidence-*
+          path: ${{ runner.temp }}/wm-wave-evidence
+      - name: Produce individual Wave 01 evidence ledger
+        run: node scripts/widemeet/qualification-wave-report.mjs "$RUNNER_TEMP/wm-wave-evidence" "$RUNNER_TEMP/wm-wave01.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wave01-results-${{ github.sha }}
+          path: ${{ runner.temp }}/wm-wave01.json
+          if-no-files-found: error
       - name: Report actual suite outcomes without promoting unverified registry entries
         run: |
           {

@@ -196,6 +196,9 @@ try{
  if(process.env.WM_PRESENCE_QUALIFIED==="true"){await delay(1100);assert.equal((await presence.observe(rid)).observed,1);await delay(1100);assert.equal((await presence.observe(rid)).persisted,true);}
  if(finishAtEnd)await finishAtEnd();else await cmd(hs.access_token,"end");
  await until(async()=>evicted.has(h.id),"room closure eviction");
+ assert.ok([403,404].includes((await request(roomApi+"/media-grant",{room_id:rid},hs.access_token)).status));
+ assert.ok([403,404].includes((await request(roomApi+"/media-grant",{room_id:rid},gs.access_token)).status));
+ console.log("PASS WAVE01 closed room denies fresh media grants");
  console.log("PASS room closure revokes host transport");
  if(process.env.WM_RECORDING_STORAGE_QUALIFIED==="true"){const archive=await good(roomApi+"/recordings",{room_id:rid},hs.access_token);assert.equal(archive.items.length,3);assert.equal((await request(roomApi+"/recordings",{room_id:rid},gs.access_token)).status,403);const file=archive.items.at(-1),body={app_id:"WIDEMEET",room_id:rid,recording_id:file.recording_id,request_id:randomUUID()};const download=async token=>fetch(roomApi+"/recording-download",{method:"POST",headers:{apikey:anon,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});assert.equal((await download(gs.access_token)).status,403);const res=await download(hs.access_token);assert.equal(res.status,200);const data=Buffer.from(await res.arrayBuffer());assert.equal(data.length,file.bytes);assert.equal(createHash("sha256").update(data).digest("hex"),file.sha256);console.log("PASS actual N3 private Storage upload/readback, host-only export after closure, forbidden guest and SHA-256 integrity");}
  if(process.env.WM_TRANSCRIPTION_QUALIFIED==="true"){

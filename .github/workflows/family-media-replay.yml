@@ -60,7 +60,7 @@ jobs:
           docker logs naxa-lk
           exit 1
       - name: Exercise actual SFU with two browser sessions and revoked token
-        run: node scripts/widemeet/media-replay.mjs
+        run: WM_WAVE_RECEIPTS="$RUNNER_TEMP/wm-wave-sfu.jsonl" node scripts/widemeet/qualification-wave-capture.mjs sfu media-replay.mjs
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
@@ -73,6 +73,30 @@ jobs:
           mkdir -p "$RUNNER_TEMP/wm-media-db"
           cd "$RUNNER_TEMP/wm-media-db"
           supabase init
+          # Only the unused fixture mail catcher needs a distinct port; keep API/DB fixed.
+          python3 - <<'PY'
+          import pathlib, re, socket, tomllib
+          path = pathlib.Path("supabase/config.toml")
+          text = path.read_text()
+          config = tomllib.loads(text)
+          names = [name for name in ("local_smtp", "inbucket") if name in config]
+          if len(names) != 1:
+              raise SystemExit("Expected exactly one isolated local mail configuration")
+          name = names[0]
+          section = re.search(r"(?ms)^\[" + re.escape(name) + r"\][ \t]*\n.*?(?=^\[|\Z)", text)
+          if section is None:
+              raise SystemExit("Expected isolated local mail section")
+          with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+              sock.bind(("0.0.0.0", 0))
+              port = sock.getsockname()[1]
+          updated, count = re.subn(r"(?m)^port[ \t]*=[ \t]*\d+[ \t]*(?:#[^\n]*)?$", f"port = {port}", section.group())
+          if count != 1:
+              raise SystemExit("Expected exactly one isolated mail port")
+          result = text[:section.start()] + updated + text[section.end():]
+          assert tomllib.loads(result)[name]["port"] == port
+          path.write_text(result)
+          print(f"Isolated fixture mail catcher port: {port}")
+          PY
           supabase start
           supabase status -o env > "$RUNNER_TEMP/wm-media.env"
           chmod 600 "$RUNNER_TEMP/wm-media.env"
@@ -100,7 +124,7 @@ jobs:
           export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
           export WM_AUTH_QUALIFIED=true WM_ROOM_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_MEDIA_QUALIFIED=true WM_CONNECT_QUALIFIED=true WM_ALLOWED_ORIGINS=http://127.0.0.1:4173
           export WM_LIVEKIT_URL=wss://127.0.0.1:7881 WM_LIVEKIT_API_KEY="$LK_TEST_KEY" WM_LIVEKIT_API_SECRET="$LK_TEST_SECRET"
-          node scripts/widemeet/media-product-replay.mjs
+          WM_WAVE_RECEIPTS="$RUNNER_TEMP/wm-wave-sfu.jsonl" node scripts/widemeet/qualification-wave-capture.mjs sfu media-product-replay.mjs
       - name: Stop disposable product database
         if: always()
         run: |
@@ -108,3 +132,11 @@ jobs:
       - name: Cleanup
         if: always()
         run: docker rm -f naxa-lk || true
+
+      - name: Upload sanitized Wave 01 evidence (sfu)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wave01-evidence-sfu
+          path: ${{ runner.temp }}/wm-wave-sfu.jsonl
+          if-no-files-found: warn
