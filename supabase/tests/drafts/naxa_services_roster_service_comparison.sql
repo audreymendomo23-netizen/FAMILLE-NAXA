@@ -261,6 +261,181 @@ end $fn$;
 revoke all on function public.ns_submit_roster_justification(uuid,bigint,text),public.ns_decide_roster_justification(uuid,bigint,text,text) from public,anon,authenticated;
 grant execute on function public.ns_submit_roster_justification(uuid,bigint,text),public.ns_decide_roster_justification(uuid,bigint,text,text) to authenticated;
 
+-- B1 operational extensions: scoped availability, atomic replacement and reusable shift templates.
+create table public.ns_roster_availability(
+ id uuid primary key, org_id uuid not null, site_id uuid not null, workstation_id uuid, member_id uuid not null,
+ starts_at timestamptz not null, ends_at timestamptz not null, kind text not null check(kind in ('leave','unavailable')),
+ reason text not null check(length(trim(reason)) between 1 and 500),
+ status text not null default 'pending' check(status in ('pending','approved','rejected')),
+ submitted_at timestamptz not null default clock_timestamp(), decided_by uuid, decided_at timestamptz, decision_reason text,
+ foreign key(site_id,org_id) references public.ns_sites(id,org_id),
+ foreign key(workstation_id,site_id,org_id) references public.ns_workstations(id,site_id,org_id),
+ foreign key(member_id,org_id) references public.ns_members(id,org_id),
+ foreign key(decided_by,org_id) references public.ns_members(id,org_id),
+ check(ends_at>starts_at and ends_at<=starts_at+interval '366 days'),
+ check((status='pending' and decided_by is null and decided_at is null and decision_reason is null)
+ or (status<>'pending' and decided_by is not null and decided_at is not null and length(trim(decision_reason)) between 1 and 500)));
+create index ns_roster_availability_period on public.ns_roster_availability(org_id,member_id,starts_at,ends_at) where status in ('pending','approved');
+alter table public.ns_roster_availability enable row level security;
+revoke all on public.ns_roster_availability from public,anon,authenticated;
+grant select on public.ns_roster_availability to authenticated;
+create policy ns_roster_availability_read on public.ns_roster_availability for select to authenticated using(public.ns_roster_can_read(org_id,site_id,workstation_id,member_id));
+create function public.ns_request_roster_availability(p_id uuid,p_org uuid,p_site uuid,p_post uuid,p_start timestamptz,p_end timestamptz,p_kind text,p_reason text)
+returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare m uuid; a public.ns_roster_availability%rowtype;
+begin
+ m:=public.ns_current_member_id(p_org);
+ if m is null or not public.ns_roster_enabled(p_org) or not exists(select 1 from public.ns_sites where id=p_site and org_id=p_org and status='active')
+ or (p_post is null and not public.ns_can_operate_site(p_org,p_site))
+ or (p_post is not null and (not public.ns_can_operate_workstation(p_org,p_site,p_post) or not exists(select 1 from public.ns_workstations where id=p_post and org_id=p_org and site_id=p_site and status='active')))
+ then raise exception 'NS_ROSTER_AVAILABILITY_FORBIDDEN'; end if;
+ if p_id is null or p_start is null or p_end is null or p_end<=p_start or p_end>p_start+interval '366 days' or p_kind is null or p_kind not in ('leave','unavailable') or p_reason is null or length(trim(p_reason)) not between 1 and 500 then raise exception 'NS_ROSTER_AVAILABILITY_INVALID'; end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||m::text||':roster',0));
+ select * into a from public.ns_roster_availability where id=p_id;
+ if found then
+  if (a.org_id,a.site_id,a.workstation_id,a.member_id,a.starts_at,a.ends_at,a.kind,a.reason) is distinct from (p_org,p_site,p_post,m,p_start,p_end,p_kind,trim(p_reason)) then raise exception 'NS_ROSTER_AVAILABILITY_CONFLICT'; end if;
+ else
+  if p_start<clock_timestamp() then raise exception 'NS_ROSTER_AVAILABILITY_PAST'; end if;
+  if exists(select 1 from public.ns_roster_availability x where x.org_id=p_org and x.member_id=m and x.status in ('pending','approved') and x.starts_at<p_end and p_start<x.ends_at) then raise exception 'NS_ROSTER_AVAILABILITY_OVERLAP'; end if;
+  insert into public.ns_roster_availability(id,org_id,site_id,workstation_id,member_id,starts_at,ends_at,kind,reason)
+  values(p_id,p_org,p_site,p_post,m,p_start,p_end,p_kind,trim(p_reason)) returning * into a;
+ end if;
+ return jsonb_build_object('id',a.id,'status',a.status);
+end $fn$;
+create function public.ns_decide_roster_availability(p_id uuid,p_status text,p_reason text)
+returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare a public.ns_roster_availability%rowtype; actor uuid;
+begin
+ select * into a from public.ns_roster_availability where id=p_id;
+ if not found or not public.ns_roster_can_manage(a.org_id,a.site_id,a.workstation_id,a.member_id) then raise exception 'NS_ROSTER_AVAILABILITY_FORBIDDEN'; end if;
+ actor:=public.ns_current_member_id(a.org_id);
+ if p_status is null or p_status not in ('approved','rejected') or p_reason is null or length(trim(p_reason)) not between 1 and 500 then raise exception 'NS_ROSTER_AVAILABILITY_INVALID'; end if;
+ perform pg_advisory_xact_lock(hashtextextended(a.org_id::text||':'||a.member_id::text||':roster',0));
+ select * into a from public.ns_roster_availability where id=p_id for update;
+ if a.status<>'pending' then
+  if (a.status,a.decided_by,a.decision_reason) is distinct from (p_status,actor,trim(p_reason)) then raise exception 'NS_ROSTER_AVAILABILITY_CONFLICT'; end if;
+ else
+  if p_status='approved' and (a.starts_at<clock_timestamp() or exists(select 1 from public.ns_roster_shifts s where s.org_id=a.org_id and s.member_id=a.member_id and s.status='published' and s.starts_at<a.ends_at and a.starts_at<s.ends_at)) then raise exception 'NS_ROSTER_AVAILABILITY_SHIFT_CONFLICT'; end if;
+  update public.ns_roster_availability set status=p_status,decided_by=actor,decided_at=clock_timestamp(),decision_reason=trim(p_reason) where id=p_id returning * into a;
+ end if;
+ return jsonb_build_object('id',a.id,'status',a.status);
+end $fn$;
+create function public.ns_roster_guard_availability() returns trigger language plpgsql security definer set search_path='' as $fn$
+begin
+ if new.status='published' and exists(select 1 from public.ns_roster_availability a where a.org_id=new.org_id and a.member_id=new.member_id and a.status='approved' and a.starts_at<new.ends_at and new.starts_at<a.ends_at) then raise exception 'NS_ROSTER_MEMBER_UNAVAILABLE'; end if;
+ return new;
+end $fn$;
+create trigger ns_roster_guard_availability before insert or update on public.ns_roster_shifts for each row execute function public.ns_roster_guard_availability();
+
+-- Original shift, acknowledgement and revisions remain intact; replace only a future unstarted shift.
+create table public.ns_roster_replacements(
+ original_shift_id uuid primary key references public.ns_roster_shifts(id), replacement_shift_id uuid not null unique references public.ns_roster_shifts(id),
+ original_revision bigint not null, org_id uuid not null, site_id uuid not null, workstation_id uuid, original_member_id uuid not null,
+ replacement_member_id uuid not null, actor_member_id uuid not null, reason text not null, created_at timestamptz not null default clock_timestamp(),
+ foreign key(original_shift_id,original_revision) references public.ns_roster_revisions(shift_id,revision));
+alter table public.ns_roster_replacements enable row level security;
+revoke all on public.ns_roster_replacements from public,anon,authenticated;
+create function public.ns_replace_roster_shift(p_shift uuid,p_revision bigint,p_new_shift uuid,p_member uuid,p_reason text)
+returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare s public.ns_roster_shifts%rowtype; r public.ns_roster_replacements%rowtype; actor uuid;
+begin
+ select * into s from public.ns_roster_shifts where id=p_shift;
+ if not found or not public.ns_roster_can_manage(s.org_id,s.site_id,s.workstation_id,s.member_id) or not public.ns_roster_can_manage(s.org_id,s.site_id,s.workstation_id,p_member) then raise exception 'NS_ROSTER_REPLACEMENT_FORBIDDEN'; end if;
+ actor:=public.ns_current_member_id(s.org_id);
+ if p_new_shift is null or p_new_shift=p_shift or p_member=s.member_id or p_revision is null or p_reason is null or length(trim(p_reason)) not between 1 and 500 then raise exception 'NS_ROSTER_REPLACEMENT_INVALID'; end if;
+ perform pg_advisory_xact_lock(hashtextextended(s.org_id::text||':'||least(s.member_id,p_member)::text||':roster',0));
+ perform pg_advisory_xact_lock(hashtextextended(s.org_id::text||':'||greatest(s.member_id,p_member)::text||':roster',0));
+ select * into s from public.ns_roster_shifts where id=p_shift for update;
+ if not public.ns_roster_can_manage(s.org_id,s.site_id,s.workstation_id,s.member_id) or not public.ns_roster_can_manage(s.org_id,s.site_id,s.workstation_id,p_member) then raise exception 'NS_ROSTER_REPLACEMENT_FORBIDDEN'; end if;
+ select * into r from public.ns_roster_replacements where original_shift_id=p_shift;
+ if found then
+  if (r.original_revision,r.replacement_shift_id,r.replacement_member_id,r.actor_member_id,r.reason) is distinct from (p_revision,p_new_shift,p_member,actor,trim(p_reason)) then raise exception 'NS_ROSTER_REPLACEMENT_CONFLICT'; end if;
+ else
+  if s.revision<>p_revision or s.status<>'published' or s.starts_at<=clock_timestamp() or exists(select 1 from public.ns_roster_clock_links where shift_id=p_shift) then raise exception 'NS_ROSTER_REPLACEMENT_CONFLICT'; end if;
+  perform public.ns_publish_roster_shift(s.id,s.org_id,s.site_id,s.workstation_id,s.member_id,s.starts_at,s.ends_at,s.planned_break_minutes,s.tolerance_minutes,'cancelled',p_revision,trim(p_reason));
+  perform public.ns_publish_roster_shift(p_new_shift,s.org_id,s.site_id,s.workstation_id,p_member,s.starts_at,s.ends_at,s.planned_break_minutes,s.tolerance_minutes,'published',0,trim(p_reason));
+  insert into public.ns_roster_replacements(original_shift_id,replacement_shift_id,original_revision,org_id,site_id,workstation_id,original_member_id,replacement_member_id,actor_member_id,reason)
+  values(p_shift,p_new_shift,p_revision,s.org_id,s.site_id,s.workstation_id,s.member_id,p_member,actor,trim(p_reason));
+ end if;
+ return jsonb_build_object('original_shift_id',p_shift,'replacement_shift_id',p_new_shift,'replaced',true);
+end $fn$;
+
+create table public.ns_roster_templates(
+ id uuid primary key, org_id uuid not null, site_id uuid not null, workstation_id uuid, member_id uuid not null,
+ name text not null check(length(trim(name)) between 1 and 80),
+ start_minute integer not null check(start_minute between 0 and 1439), duration_minutes integer not null check(duration_minutes between 1 and 1440),
+ break_minutes integer not null check(break_minutes>=0 and break_minutes<duration_minutes), tolerance_minutes integer not null check(tolerance_minutes between 0 and 120),
+ repeat_days integer not null check(repeat_days in (1,7)), repeat_count integer not null check(repeat_count between 1 and 31),
+ created_by uuid not null, created_at timestamptz not null default clock_timestamp(), archived_at timestamptz,
+ foreign key(site_id,org_id) references public.ns_sites(id,org_id),
+ foreign key(workstation_id,site_id,org_id) references public.ns_workstations(id,site_id,org_id),
+ foreign key(member_id,org_id) references public.ns_members(id,org_id),
+ foreign key(created_by,org_id) references public.ns_members(id,org_id));
+alter table public.ns_roster_templates enable row level security;
+revoke all on public.ns_roster_templates from public,anon,authenticated;
+grant select on public.ns_roster_templates to authenticated;
+create policy ns_roster_template_read on public.ns_roster_templates for select to authenticated using(public.ns_roster_can_manage(org_id,site_id,workstation_id,member_id));
+create function public.ns_save_roster_template(p_id uuid,p_org uuid,p_site uuid,p_post uuid,p_member uuid,p_name text,p_start integer,p_duration integer,p_break integer,p_tolerance integer,p_step integer,p_count integer)
+returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare t public.ns_roster_templates%rowtype; actor uuid;
+begin
+ if not public.ns_roster_can_manage(p_org,p_site,p_post,p_member) then raise exception 'NS_ROSTER_TEMPLATE_FORBIDDEN'; end if;
+ actor:=public.ns_current_member_id(p_org);
+ if p_id is null or p_name is null or length(trim(p_name)) not between 1 and 80 or p_start is null or p_start not between 0 and 1439 or p_duration is null or p_duration not between 1 and 1440 or p_break is null or p_break<0 or p_break>=p_duration or p_tolerance is null or p_tolerance not between 0 and 120 or p_step is null or p_step not in (1,7) or p_count is null or p_count not between 1 and 31 then raise exception 'NS_ROSTER_TEMPLATE_INVALID'; end if;
+ perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_member::text||':roster',0));
+ select * into t from public.ns_roster_templates where id=p_id;
+ if found then
+  if (t.org_id,t.site_id,t.workstation_id,t.member_id,t.name,t.start_minute,t.duration_minutes,t.break_minutes,t.tolerance_minutes,t.repeat_days,t.repeat_count,t.created_by) is distinct from (p_org,p_site,p_post,p_member,trim(p_name),p_start,p_duration,p_break,p_tolerance,p_step,p_count,actor) then raise exception 'NS_ROSTER_TEMPLATE_CONFLICT'; end if;
+ else
+  insert into public.ns_roster_templates(id,org_id,site_id,workstation_id,member_id,name,start_minute,duration_minutes,break_minutes,tolerance_minutes,repeat_days,repeat_count,created_by)
+  values(p_id,p_org,p_site,p_post,p_member,trim(p_name),p_start,p_duration,p_break,p_tolerance,p_step,p_count,actor) returning * into t;
+ end if;
+ return jsonb_build_object('id',t.id,'saved',true);
+end $fn$;
+create function public.ns_archive_roster_template(p_id uuid) returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare t public.ns_roster_templates%rowtype;
+begin
+ select * into t from public.ns_roster_templates where id=p_id for update;
+ if not found or not public.ns_roster_can_manage(t.org_id,t.site_id,t.workstation_id,t.member_id) then raise exception 'NS_ROSTER_TEMPLATE_FORBIDDEN'; end if;
+ update public.ns_roster_templates set archived_at=coalesce(archived_at,clock_timestamp()) where id=p_id;
+ return jsonb_build_object('id',p_id,'archived',true);
+end $fn$;
+
+-- Current revision reminders. Generic message contains no attendance or HR details.
+create function public.ns_roster_schedule_reminders() returns trigger language plpgsql security definer set search_path='' as $fn$
+declare locale text; msg jsonb;
+begin
+ update public.ns_notification_outbox set status='cancelled',claim_token=null,claim_expires_at=null
+ where org_id=new.org_id and channel='push' and event_code in ('staff_schedule.reminder','staff_schedule.unacknowledged')
+ and payload_redacted->>'shift_id'=new.id::text and status in ('pending','processing');
+ if new.status='published' and new.starts_at>clock_timestamp() then
+  select coalesce(m.preferred_locale,o.default_locale,'fr') into locale from public.ns_members m join public.ns_organizations o on o.id=m.org_id where m.id=new.member_id;
+  msg:=case locale when 'en' then jsonb_build_object('title','Upcoming work shift','body','Check your current schedule.') when 'ff-CM' then jsonb_build_object('title','Golle arde','body','Ƴeewto feere golle maa.') else jsonb_build_object('title','Service à venir','body','Consultez votre planning actuel.') end;
+  msg:=msg||jsonb_build_object('route','/team','shift_id',new.id,'revision',new.revision);
+  insert into public.ns_notification_outbox(org_id,site_id,recipient_member_id,channel,event_code,idempotency_key,payload_redacted,scheduled_at)
+  values(new.org_id,new.site_id,new.member_id,'push','staff_schedule.reminder','staff-schedule-reminder:'||new.id||':'||new.revision,msg,greatest(clock_timestamp(),new.starts_at-interval '30 minutes')) on conflict do nothing;
+ end if;
+ return new;
+end $fn$;
+create trigger ns_roster_schedule_reminders after insert or update on public.ns_roster_shifts for each row execute function public.ns_roster_schedule_reminders();
+
+-- Alert only when an active appointment intersects a shift but no current published
+-- shift at the same site/compatible post fully covers that appointment.
+create function public.ns_roster_alerts(p_org uuid,p_site uuid)
+returns table(shift_id uuid,revision bigint,unacknowledged_due boolean,appointment_conflicts bigint)
+language sql stable security definer set search_path='' as $fn$
+ select s.id,s.revision,
+ (s.status='published' and s.starts_at<=now()+interval '30 minutes' and not exists(select 1 from public.ns_roster_acknowledgements a where a.shift_id=s.id and a.revision=s.revision)),
+ (select count(*) from public.ns_appointments a where a.org_id=s.org_id and a.site_id=s.site_id and a.assigned_member_id=s.member_id and a.status in ('requested','booked','confirmed','arrived') and a.starts_at<s.ends_at and s.starts_at<a.ends_at
+ and (s.workstation_id is null or a.workstation_id=s.workstation_id)
+ and not exists(select 1 from public.ns_roster_shifts x where x.org_id=a.org_id and x.site_id=a.site_id and x.member_id=a.assigned_member_id and x.status='published' and x.starts_at<=a.starts_at and x.ends_at>=a.ends_at and (x.workstation_id is null or x.workstation_id=a.workstation_id)))
+ from public.ns_roster_shifts s where s.org_id=p_org and s.site_id=p_site and public.ns_roster_can_manage(s.org_id,s.site_id,s.workstation_id,s.member_id)
+ order by s.starts_at desc limit 200
+$fn$;
+revoke all on function public.ns_request_roster_availability(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text,text),public.ns_decide_roster_availability(uuid,text,text),public.ns_replace_roster_shift(uuid,bigint,uuid,uuid,text),public.ns_save_roster_template(uuid,uuid,uuid,uuid,uuid,text,integer,integer,integer,integer,integer,integer),public.ns_archive_roster_template(uuid),public.ns_roster_alerts(uuid,uuid),public.ns_roster_guard_availability(),public.ns_roster_schedule_reminders() from public,anon,authenticated;
+grant execute on function public.ns_request_roster_availability(uuid,uuid,uuid,uuid,timestamptz,timestamptz,text,text),public.ns_decide_roster_availability(uuid,text,text),public.ns_replace_roster_shift(uuid,bigint,uuid,uuid,text),public.ns_save_roster_template(uuid,uuid,uuid,uuid,uuid,text,integer,integer,integer,integer,integer,integer),public.ns_archive_roster_template(uuid),public.ns_roster_alerts(uuid,uuid) to authenticated;
+
+
 
 -- Scoped target directory: only assignable members and posts, no personal contact information.
 create function public.ns_roster_targets(p_org uuid,p_site uuid)
@@ -390,6 +565,47 @@ reset role;
 do $qa$ begin
  if (select count(*) from public.ns_notification_outbox where idempotency_key in ('staff-schedule:70000000-0000-4000-8000-000000000101:1','staff-schedule:70000000-0000-4000-8000-000000000102:1'))<>2 then raise exception 'QA BATCH NOTIFICATION DUPLICATE'; end if;
  if exists(select 1 from public.ns_notification_outbox where idempotency_key in ('staff-schedule:70000000-0000-4000-8000-000000000103:1','staff-schedule:70000000-0000-4000-8000-000000000104:1')) then raise exception 'QA BATCH PARTIAL NOTIFICATION'; end if;
+end $qa$;
+
+
+-- Extra synthetic collaborator for replacement.
+insert into auth.users(id) values ('10000000-0000-4000-8000-000000000093');
+insert into public.ns_accounts(id,auth_user_id,login_id,auth_alias,password_change_required) values ('50000000-0000-4000-8000-000000000093','10000000-0000-4000-8000-000000000093','NS-QA93','qa93@example.invalid',false);
+insert into public.ns_members(id,org_id,account_id,display_name,role_code) values ('60000000-0000-4000-8000-000000000093','20000000-0000-4000-8000-000000000091','50000000-0000-4000-8000-000000000093','QA Substitute','cashier');
+insert into public.ns_member_scopes(org_id,member_id,scope_type,scope_id,site_id,can_read,can_operate,can_manage) values ('20000000-0000-4000-8000-000000000091','60000000-0000-4000-8000-000000000093','site','30000000-0000-4000-8000-000000000091','30000000-0000-4000-8000-000000000091',true,true,false);
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000092',true);
+select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000092","session_id":"qa-92-session","role":"authenticated"}',true);
+set local role authenticated;
+do $qa$ declare x uuid:='70000000-0000-4000-8000-000000000105'; o uuid:='20000000-0000-4000-8000-000000000091'; s uuid:='30000000-0000-4000-8000-000000000091'; t timestamptz:=now()+interval '20 days'; a jsonb; begin
+ a:=public.ns_request_roster_availability(x,o,s,null,t,t+interval '1 day','leave','QA personal request');
+ if public.ns_request_roster_availability(x,o,s,null,t,t+interval '1 day','leave','QA personal request') is distinct from a then raise exception 'QA AVAILABILITY RETRY'; end if;
+ begin perform public.ns_decide_roster_availability(x,'approved','Self'); raise exception 'QA AVAILABILITY SELF DECISION'; exception when others then if sqlerrm not like '%NS_ROSTER_AVAILABILITY_FORBIDDEN%' then raise; end if; end;
+ if exists(select 1 from public.ns_roster_alerts(o,s)) then raise exception 'QA EMPLOYEE ALERT LEAK'; end if;
+end $qa$;
+reset role;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000091',true);
+select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000091","session_id":"qa-91-session","role":"authenticated"}',true);
+set local role authenticated;
+do $qa$ declare o uuid:='20000000-0000-4000-8000-000000000091'; s uuid:='30000000-0000-4000-8000-000000000091'; u uuid:='60000000-0000-4000-8000-000000000092'; v uuid:='60000000-0000-4000-8000-000000000093'; x uuid:='70000000-0000-4000-8000-000000000105'; y uuid:='70000000-0000-4000-8000-000000000106'; z uuid:='70000000-0000-4000-8000-000000000107'; k uuid:='70000000-0000-4000-8000-000000000108'; t timestamptz:=now()+interval '20 days'; a jsonb; begin
+ perform public.ns_publish_roster_shift(y,o,s,null,u,t,t+interval '8 hours',30,10,'published',0,'QA service needing replacement');
+ begin perform public.ns_decide_roster_availability(x,'approved','Needs cover'); raise exception 'QA LEAVE APPROVED DESPITE SHIFT'; exception when others then if sqlerrm not like '%NS_ROSTER_AVAILABILITY_SHIFT_CONFLICT%' then raise; end if; end;
+ a:=public.ns_replace_roster_shift(y,1,z,v,'QA replacement');
+ if public.ns_replace_roster_shift(y,1,z,v,'QA replacement') is distinct from a then raise exception 'QA REPLACEMENT RETRY'; end if;
+ if not exists(select 1 from public.ns_roster_shifts where id=y and status='cancelled' and revision=2) or not exists(select 1 from public.ns_roster_shifts where id=z and member_id=v and status='published' and revision=1) then raise exception 'QA REPLACEMENT ATOMIC'; end if;
+ a:=public.ns_decide_roster_availability(x,'approved','Coverage confirmed');
+ if public.ns_decide_roster_availability(x,'approved','Coverage confirmed') is distinct from a then raise exception 'QA APPROVAL RETRY'; end if;
+ begin perform public.ns_publish_roster_shift(k,o,s,null,u,t,t+interval '2 hours',0,10,'published',0,'QA leave guard'); raise exception 'QA SHIFT DURING LEAVE'; exception when others then if sqlerrm not like '%NS_ROSTER_MEMBER_UNAVAILABLE%' then raise; end if; end;
+ a:=public.ns_save_roster_template(k,o,s,null,v,'Weekly morning',480,480,30,10,7,3);
+ if public.ns_save_roster_template(k,o,s,null,v,'Weekly morning',480,480,30,10,7,3) is distinct from a then raise exception 'QA TEMPLATE RETRY'; end if;
+ if not exists(select 1 from public.ns_roster_templates where id=k and repeat_count=3 and archived_at is null) then raise exception 'QA TEMPLATE MISSING'; end if;
+ perform public.ns_archive_roster_template(k);
+ if not exists(select 1 from public.ns_roster_templates where id=k and archived_at is not null) then raise exception 'QA TEMPLATE ARCHIVE'; end if;
+ if not exists(select 1 from public.ns_roster_alerts(o,s) where shift_id=z and appointment_conflicts=0 and not unacknowledged_due) then raise exception 'QA ALERT SCOPE'; end if;
+end $qa$;
+reset role;
+do $qa$ begin
+ if not exists(select 1 from public.ns_notification_outbox where idempotency_key='staff-schedule-reminder:70000000-0000-4000-8000-000000000106:1' and status='cancelled') then raise exception 'QA STALE REMINDER'; end if;
+ if (select count(*) from public.ns_notification_outbox where idempotency_key='staff-schedule-reminder:70000000-0000-4000-8000-000000000107:1' and status='pending')<>1 then raise exception 'QA REPLACEMENT REMINDER'; end if;
 end $qa$;
 
 update public.ns_organizations set business_mode='solo' where id='20000000-0000-4000-8000-000000000091';
