@@ -36,7 +36,7 @@ export function applyRoom(room,a,c,now){
  const needHost=()=>{if(!host)fail("forbidden")};
  const target=()=>{const t=n.participants.find(x=>x.memberId===c.target&&!x.excluded);if(!t||t.memberId===n.hostId)fail("invalid_target");return t};
  switch(c.action){
- case "respond":if(!["scheduled","open"].includes(n.status)||!["accepted","declined","maybe"].includes(c.value)||host||n.status==="open"&&now>=n.endMs)fail("invalid_response");self.response=c.value;if(c.value==="accepted"&&!self.consent||c.value!=="accepted")n.recording="off";break;
+ case "respond":if(!["scheduled","open"].includes(n.status)||!["accepted","declined","maybe"].includes(c.value)||host||n.status==="open"&&(now>=n.endMs||n.admissionLocked===true&&self.response!=="accepted"&&c.value==="accepted"))fail("invalid_response");self.response=c.value;if(c.value==="accepted"&&!self.consent||c.value!=="accepted")n.recording="off";break;
  case "reschedule":{
  needHost();if(n.status!=="scheduled")fail("invalid_state");
  const v=c.value;
@@ -45,6 +45,11 @@ export function applyRoom(room,a,c,now){
  for(const x of n.participants)if(x.memberId!==n.hostId&&!x.excluded){x.response="pending";x.consent=false}
  break;
  }
+ case "invite_member":{
+ needHost();if(!["scheduled","open"].includes(n.status)||n.status==="open"&&now>=n.endMs||!id(c.target)||n.participants.some(x=>x.memberId===c.target)||n.participants.length>=Math.min(100,a.capacity??(a.plan==="access"?20:50)))fail("invalid_target");
+ n.participants.push({memberId:c.target,response:"pending",excluded:false,chat:true,mic:true,screen:false,consent:false});break;
+ }
+ case "lock_admission":needHost();live(n,now);if(typeof c.value!=="boolean")fail("invalid_command");n.admissionLocked=c.value;break;
  case "cancel":needHost();if(n.status!=="scheduled")fail("invalid_state");n.status="ended";n.cancelled=true;n.recording="off";break;
  case "start":needHost();if(n.status!=="scheduled"||now+n.durationMinutes*60000>Math.min(n.hardEndMs,a.entitlementEndMs))fail("room_unavailable");n.status="open";n.startedMs=now;n.endMs=now+n.durationMinutes*60000;break;
  case "extend":{
@@ -71,6 +76,7 @@ export function applyRoom(room,a,c,now){
  case "chat_permission":needHost();if(typeof c.value!=="boolean")fail("invalid_chat");target().chat=c.value;break;
  case "exclude":needHost();target().excluded=true;n.recording="off";break;
  case "consent":if(typeof c.value!=="boolean")fail("invalid_consent");self.consent=c.value;if(!c.value)n.recording="off";break;
+ case "record_pause":needHost();if(n.recording!=="requested")fail("invalid_record");n.recording="off";break;
  case "record":needHost();if(c.value===true&&a.plan!=="premium")fail("premium_required");if(typeof c.value!=="boolean")fail("invalid_record");if(c.value&&n.participants.some(x=>!x.excluded&&x.response==="accepted"&&!x.consent))fail("consent_required");n.recording=c.value?"requested":"off";break;
  case "poll":needHost();if(!id(c.target)||n.polls.some(x=>x.id===c.target)||!Array.isArray(c.value)||c.value.length<2||c.value.length>10||!c.value.every(x=>typeof x==="string"&&x.trim()&&x.length<=200)||new Set(c.value).size!==c.value.length)fail("invalid_poll");n.polls.push({id:c.target,options:c.value,open:true,votes:{}});break;
  case "vote":{const poll=n.polls.find(x=>x.id===c.target&&x.open);if(!poll||poll.kind||!Number.isInteger(c.value)||c.value<0||c.value>=poll.options.length||Object.hasOwn(poll.votes,member))fail("invalid_vote");Object.defineProperty(poll.votes,member,{value:c.value,enumerable:true,writable:true,configurable:true});break;}
