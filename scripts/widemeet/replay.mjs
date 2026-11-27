@@ -282,6 +282,12 @@ try{
  assert.equal((await mediaReq(os.access_token,"download",{...agendaScope,id:b2AgendaMediaId})).status,403);
  assert.equal((await mediaReq(b2ghs.access_token,"download",{...chatScope,id:b2AgendaMediaId})).status,403);
  await b2cmd(b2ghs.access_token,"start");
+ const qualityBefore=b2state.participants.map(p=>({memberId:p.memberId,mic:p.mic,screen:p.screen}));
+ await b2cmd(b2ghs.access_token,"presentation_quality","low");
+ assert.equal(b2state.presentationCeiling,"low");assert.deepEqual(b2state.participants.map(p=>({memberId:p.memberId,mic:p.mic,screen:p.screen})),qualityBefore);
+ assert.equal((await request(room+"/command",{room_id:b2room,request_id:randomUUID(),expected_revision:b2state.revision,action:"presentation_quality",value:"high"},b2gas.access_token)).status,409);
+ await b2cmd(b2ghs.access_token,"presentation_quality","high");
+ pass("B2 server-authorized presentation ceiling changes without altering camera/microphone rights");
  const roomVoice={...chatScope,id:roomVoiceId,kind:"voice",mime:"audio/ogg",name:"room-voice.ogg",content:ogg.toString("base64")};
  await mediaOk(b2gas.access_token,"upload",roomVoice);
  assert.deepEqual(Buffer.from((await mediaOk(b2ghs.access_token,"download",{...chatScope,id:roomVoiceId})).content,"base64"),ogg);

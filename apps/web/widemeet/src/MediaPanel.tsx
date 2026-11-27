@@ -1,12 +1,16 @@
 import React,{useEffect,useRef,useState}from"react";
 import{Room,RoomEvent,Track}from"livekit-client";
+import{presentationProfile,configurePresentationTrack}from"../../../../packages/widemeet-domain/presentation-display.mjs";
 import{roomRequest}from"./room-api.mjs";
 import{ConnectSource}from"./Connect";
-export function MediaPanel({base,session,roomId,locale,watermark,micAllowed,screenAllowed,isHost=false}){
+export function MediaPanel({base,session,roomId,locale,watermark,micAllowed,screenAllowed,isHost=false,presentationCeiling="high"}){
  const tr=(fr,en)=>locale==="en"?en:fr;
- const current=useRef(null),generation=useRef(0),tiles=useRef(null);
+ const current=useRef(null),generation=useRef(0),tiles=useRef(null),sourceSize=useRef(null),qualitySerial=useRef(0);
+ const preferenceKey="wm.presentation."+session.member_id;
+ const [preferred,setPreferred]=useState(()=>{try{const v=localStorage.getItem(preferenceKey);return ["low","medium","high"].includes(v)?v:"medium"}catch{return "medium"}}),[network,setNetwork]=useState("high"),[measured,setMeasured]=useState(null),[applied,setApplied]=useState(null);
+ const profile=presentationProfile(preferred,network,["low","medium","high"].includes(presentationCeiling)?presentationCeiling:"low");
  const [status,setStatus]=useState("idle"),[mic,setMic]=useState(false),[camera,setCamera]=useState(false),[screen,setScreen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(false);
- const clear=()=>{tiles.current?.replaceChildren();setMic(false);setCamera(false);setScreen(false)};
+ const clear=()=>{tiles.current?.replaceChildren();setMic(false);setCamera(false);setScreen(false);sourceSize.current=null;setMeasured(null);setApplied(null);setNetwork("high")};
  async function leave(){
   generation.current++;const r=current.current;current.current=null;clear();setStatus("idle");setBusy(false);
   if(r)await r.disconnect().catch(()=>{});
@@ -29,7 +33,8 @@ export function MediaPanel({base,session,roomId,locale,watermark,micAllowed,scre
    r.on(RoomEvent.TrackSubscribed,attach);r.on(RoomEvent.TrackUnsubscribed,remove);
    r.on(RoomEvent.LocalTrackPublished,p=>{if(p.track?.kind==="video"){const el=p.track.attach();el.muted=true;el.playsInline=true;el.style.width="100%";el.style.maxHeight="240px";tiles.current?.appendChild(el)}});
    r.on(RoomEvent.LocalTrackUnpublished,p=>{if(p.track)remove(p.track);if(p.source===Track.Source.ScreenShare)setScreen(false)});
-   r.on(RoomEvent.Reconnecting,()=>{if(active())setStatus("reconnecting")});
+   r.on(RoomEvent.ConnectionQualityChanged,(q,p)=>{if(active()&&p===r.localParticipant)setNetwork(q==="poor"||q==="lost"?"low":q==="excellent"?"high":"medium")});
+   r.on(RoomEvent.Reconnecting,()=>{if(active()){setNetwork("low");setStatus("reconnecting")}});
    r.on(RoomEvent.Reconnected,()=>{if(active())setStatus("connected")});
    r.on(RoomEvent.Disconnected,()=>{if(active()){current.current=null;clear();setStatus("disconnected");setBusy(false)}});
    await r.connect(u.origin,grant.token);
@@ -44,15 +49,21 @@ export function MediaPanel({base,session,roomId,locale,watermark,micAllowed,scre
   try{
    if(source==="mic"&&micAllowed){const next=!mic;await r.localParticipant.setMicrophoneEnabled(next);if(current.current===r)setMic(next)}
    if(source==="camera"){const next=!camera;await r.localParticipant.setCameraEnabled(next);if(current.current===r)setCamera(next)}
-   if(source==="screen"&&screenAllowed){const next=!screen;await r.localParticipant.setScreenShareEnabled(next,{audio:false});if(current.current===r)setScreen(next)}
+   if(source==="screen"&&screenAllowed){const next=!screen;
+    await r.localParticipant.setScreenShareEnabled(next,{audio:false,contentHint:"detail"},{screenShareEncoding:{maxBitrate:profile.maxBitrate,maxFramerate:profile.fps},simulcast:false});
+    if(current.current===r){if(next){const t=r.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track;const settings=t?.mediaStreamTrack?.getSettings();if(!settings?.width||!settings?.height)throw Error("screen source unavailable");sourceSize.current={width:settings.width,height:settings.height};await configurePresentationTrack(t,profile,sourceSize.current);setApplied(profile.effective)}else{sourceSize.current=null;setApplied(null);setMeasured(null)}setScreen(next)}
+   }
   }catch{setError(true)}finally{if(current.current===r)setBusy(false)}
  }
+ useEffect(()=>{if(!screen||status!=="connected"||!sourceSize.current)return;const r=current.current,t=r?.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track;if(!r||!t)return;const n=++qualitySerial.current;let dead=false;async function change(){try{await configurePresentationTrack(t,profile,sourceSize.current);if(!dead&&n===qualitySerial.current&&current.current===r)setApplied(profile.effective)}catch{if(!dead&&current.current===r){setError(true);setApplied(null);await r.localParticipant.setScreenShareEnabled(false).catch(()=>leave());setScreen(false)}}}void change();return()=>{dead=true}},[profile.effective,screen,status]);
+ useEffect(()=>{if(!screen)return;let dead=false,last;const timer=setInterval(async()=>{try{const t=current.current?.localParticipant.getTrackPublication(Track.Source.ScreenShare)?.track;const stats=await t?.getRTCStatsReport();if(dead||!stats)return;let best;for(const v of stats.values())if(v.type==="outbound-rtp"&&(v.kind==="video"||v.mediaType==="video")&&(!best||(v.frameWidth??0)>(best.frameWidth??0)))best=v;if(!best)return;const kbps=last&&best.timestamp>last.timestamp&&best.bytesSent>=last.bytesSent?Math.round(8*(best.bytesSent-last.bytesSent)/(best.timestamp-last.timestamp)):null;last=best;setMeasured({width:best.frameWidth,height:best.frameHeight,fps:best.framesPerSecond,kbps})}catch{if(!dead)setMeasured(null)}},2000);return()=>{dead=true;clearInterval(timer)}},[screen]);
  return <section aria-label={tr("Appel audio et vidéo","Audio and video call")} style={{display:"grid",gap:8}}>
  <p role="status">{{idle:tr("Prêt à rejoindre","Ready to join"),connecting:tr("Connexion…","Connecting…"),connected:tr("Connecté à la réunion","Connected to meeting"),reconnecting:tr("Reconnexion…","Reconnecting…"),disconnected:tr("Connexion terminée","Connection ended")}[status]}</p>
  <div style={{position:"relative"}}><div ref={tiles} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,180px),1fr))",gap:8}}/>{status==="connected"&&watermark&&<div aria-hidden="true" style={{position:"absolute",inset:0,pointerEvents:"none",display:"grid",alignContent:"space-around",justifyItems:"center",overflow:"hidden"}}>{[0,1,2].map(i=><span key={i} style={{color:"white",textShadow:"0 1px 3px black",opacity:0.65,fontSize:"0.75rem",transform:"rotate(-12deg)",overflowWrap:"anywhere",textAlign:"center"}}>{watermark}</span>)}</div>}</div>
  {status==="connected"?<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
  <button disabled={busy||!micAllowed} onClick={()=>toggle("mic")}>{mic?tr("Couper mon micro","Mute my microphone"):tr("Activer mon micro","Enable my microphone")}</button>
  <button disabled={busy} onClick={()=>toggle("camera")}>{camera?tr("Couper ma caméra","Disable my camera"):tr("Activer ma caméra","Enable my camera")}</button>
+ <label>{tr("Qualité de présentation","Presentation quality")}<select aria-label={tr("Qualité de présentation","Presentation quality")} value={preferred} disabled={!screenAllowed||busy} onChange={e=>{setPreferred(e.target.value);try{localStorage.setItem(preferenceKey,e.target.value)}catch{}}}>{["low","medium","high"].map(x=><option key={x} value={x}>{x==="low"?"Low Quality":x==="medium"?"Medium Quality":"High Quality"}</option>)}</select></label><p>{tr("Plafond demandé : ","Requested ceiling: ")}{profile.effective}{screen&&applied?` · ${tr("Configuration appliquée","Configuration applied")}: ${applied}`:""}{screen&&measured?.width?` · ${tr("Mesurée","Measured")}: ${measured.width}×${measured.height}${measured.fps?` · ${measured.fps} fps`:""}${measured.kbps!=null?` · ${measured.kbps} kbit/s`:""}`:screen?` · ${tr("Mesure non confirmée","Measurement unconfirmed")}`:""}</p>
  <button disabled={busy||!screenAllowed} onClick={()=>toggle("screen")}>{screen?tr("Arrêter le partage","Stop sharing"):tr("Partager mon écran","Share my screen")}</button>
  <button onClick={()=>current.current?.startAudio().catch(()=>setError(true))}>{tr("Activer le son","Enable sound")}</button>
  <button onClick={leave}>{tr("Quitter l’appel","Leave call")}</button>

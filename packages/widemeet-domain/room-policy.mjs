@@ -22,7 +22,7 @@ function live(room,now){
 export function createRoom(a,c){
  if(!a||a.enabled!==true||a.passwordChangeRequired!==false||!["access","premium"].includes(a.plan)||!Number.isSafeInteger(a.entitlementEndMs)||!roles.has(a.role)||!id(a.memberId)||!id(a.workspaceId)||!id(c.id)||typeof c.title!=="string"||!c.title.trim()||c.title.length>120||typeof c.description!=="string"||c.description.length>2000||!Number.isSafeInteger(c.startMs)||c.startMs<0||!Number.isSafeInteger(c.durationMinutes)||c.durationMinutes<5||c.durationMinutes>480||!Number.isSafeInteger(c.hardEndMs)||c.hardEndMs>a.entitlementEndMs||c.hardEndMs<c.startMs+c.durationMinutes*60000||!Array.isArray(c.invitees)||!c.invitees.every(id)||new Set(c.invitees).size!==c.invitees.length||c.invitees.includes(a.memberId))fail("invalid_room");
  const capacity=Math.min(100,a.capacity??(a.plan==="access"?20:50));if(c.invitees.length+1>capacity)fail("invalid_room");
- return {capacity,confidentiality:"standard",agenda:[],id:c.id,workspaceId:a.workspaceId,hostId:a.memberId,title:c.title.trim(),description:c.description.trim(),scheduledMs:c.startMs,durationMinutes:c.durationMinutes,hardEndMs:c.hardEndMs,status:"scheduled",revision:1,participants:[{memberId:a.memberId,response:"accepted",excluded:false,chat:true,mic:true,screen:true,consent:false},...c.invitees.map(memberId=>({memberId,response:"pending",excluded:false,chat:true,mic:true,screen:false,consent:false}))],events:[],polls:[],recording:"off"};
+ return {capacity,confidentiality:"standard",presentationCeiling:"high",agenda:[],id:c.id,workspaceId:a.workspaceId,hostId:a.memberId,title:c.title.trim(),description:c.description.trim(),scheduledMs:c.startMs,durationMinutes:c.durationMinutes,hardEndMs:c.hardEndMs,status:"scheduled",revision:1,participants:[{memberId:a.memberId,response:"accepted",excluded:false,chat:true,mic:true,screen:true,consent:false},...c.invitees.map(memberId=>({memberId,response:"pending",excluded:false,chat:true,mic:true,screen:false,consent:false}))],events:[],polls:[],recording:"off"};
 }
 export function applyRoom(room,a,c,now){
  const member=actor(room,a);
@@ -108,6 +108,7 @@ export function applyRoom(room,a,c,now){
  case "mute":needModerator("microphone");target().mic=false;break;
  case "allow_mic":needModerator("microphone");target().mic=true;break;
  case "screen":needModerator("screen");if(typeof c.value!=="boolean"||c.value===true&&n.confidentiality==="confidential")fail("invalid_screen");target().screen=c.value;break;
+ case "presentation_quality":needHost();if(!["low","medium","high"].includes(c.value))fail("invalid_screen");n.presentationCeiling=c.value;break;
  case "chat_permission":needModerator("chat");if(typeof c.value!=="boolean")fail("invalid_chat");target().chat=c.value;break;
  case "exclude":needModerator("exclude");target().excluded=true;n.recording="off";break;
  case "consent":if(typeof c.value!=="boolean")fail("invalid_consent");self.consent=c.value;if(!c.value)n.recording="off";break;

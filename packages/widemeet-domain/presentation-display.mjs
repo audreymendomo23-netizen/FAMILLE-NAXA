@@ -34,3 +34,20 @@ export function displayLeaseAllowed(ctx,lease,nowMs){
  return !!lease&&lease.revoked===false&&Number.isSafeInteger(lease.expiresMs)&&nowMs<lease.expiresMs&&lease.orgId===meeting.orgId&&lease.meetingId===meeting.id&&lease.memberId===actor.memberId&&lease.sourceId===source.id&&lease.receiverId===receiver.id&&lease.canSubscribe===true&&["canPublish","canRecord","canChat","canControl"].every(k=>lease[k]===false);
  }catch{return false}
 }
+
+export function boundedPresentationSize(sourceWidth,sourceHeight,profile){
+ if(!Number.isFinite(sourceWidth)||!Number.isFinite(sourceHeight)||sourceWidth<2||sourceHeight<2||!profile||!Number.isFinite(profile.width)||!Number.isFinite(profile.height)||profile.width<2||profile.height<2)throw Error("invalid_dimensions");
+ const landscape=sourceWidth>=sourceHeight,maxW=landscape?profile.width:profile.height,maxH=landscape?profile.height:profile.width;
+ const scale=Math.min(1,maxW/sourceWidth,maxH/sourceHeight);
+ return {width:Math.max(2,2*Math.floor(sourceWidth*scale/2)),height:Math.max(2,2*Math.floor(sourceHeight*scale/2)),frameRate:profile.fps};
+}
+// Actual browser screen track only: no camera sender is touched.
+export async function configurePresentationTrack(track,profile,sourceSize){
+ const media=track?.mediaStreamTrack,sender=track?.sender;
+ if(!media||media.kind!=="video"||typeof media.applyConstraints!=="function"||!sender||typeof sender.getParameters!=="function")throw Error("screen_track_unavailable");
+ const size=boundedPresentationSize(sourceSize.width,sourceSize.height,profile);
+ await media.applyConstraints({width:{max:size.width},height:{max:size.height},frameRate:{max:size.frameRate},aspectRatio:{ideal:sourceSize.width/sourceSize.height}});
+ const params=sender.getParameters();if(!params.encodings?.length)throw Error("screen_encoding_unavailable");
+ for(const e of params.encodings){e.maxBitrate=profile.maxBitrate;e.maxFramerate=profile.fps}
+ await sender.setParameters(params);return size;
+}
