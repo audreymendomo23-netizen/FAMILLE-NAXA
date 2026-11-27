@@ -1,0 +1,72 @@
+name: NAXA SERVICES — independent reboot and hosted PWA qualification
+on:
+  workflow_dispatch:
+  push:
+    branches: [work/naxa-services-completion-20261120]
+    paths:
+      - '.github/workflows/naxa-services-independent-reserves.yml'
+      - 'scripts/naxa-services/reboot-journal-recipe.sh'
+      - 'scripts/naxa-services/hosted-pwa-recipe.mjs'
+      - 'apps/android/naxa-services/src/androidTest/java/cm/naxa/naxaservices/AttendanceRebootQualificationTest.kt'
+permissions:
+  contents: read
+concurrency:
+  group: ns-independent-reserves-${{ github.sha }}
+  cancel-in-progress: false
+jobs:
+  hosted-pwa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
+      - run: npx playwright install chromium
+      - name: Verify public Cloudflare PWA without credentials or writes
+        run: node scripts/naxa-services/hosted-pwa-recipe.mjs
+  actual-emulator-reboot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          test -c /dev/kvm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          gradle-version: '8.7'
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+      - run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+      - name: Restart Android OS between journal prepare and verify instrumentation
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          profile: pixel_2
+          cores: 2
+          ram-size: 2048M
+          heap-size: 512M
+          emulator-boot-timeout: 900
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
+          disable-linux-hw-accel: false
+          disable-animations: true
+          script: bash scripts/naxa-services/reboot-journal-recipe.sh
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: naxa-services-reboot-instrumentation
+          path: ${{ runner.temp }}/ns-reboot-*.log
+          if-no-files-found: warn
