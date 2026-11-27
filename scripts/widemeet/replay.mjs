@@ -668,6 +668,10 @@ try{
  const [opened]=await Promise.all([roomCommandResponse(hp,"start"),hp.getByRole("button",{name:"Ouvrir la salle",exact:true}).click()]);
  assert.equal(opened.status(),200);assert.equal((await opened.json()).status,"open");
  await hp.getByText("Audio et vidéo indisponibles pour le moment.",{exact:true}).waitFor();
+ await hp.getByRole("button",{name:"Oui / Non / Abstention",exact:true}).click();
+ assert.equal(await hp.getByLabel("Choix du vote, séparés par |",{exact:true}).inputValue(),"Oui|Non|Abstention");
+ await hp.getByLabel("Choix du vote, séparés par |",{exact:true}).fill("");
+ pass("WAVE05 real host simple vote preset does not submit");
  await gp.getByRole("button",{name:"Actualiser",exact:true}).click();await gp.getByLabel("Message",{exact:true}).fill("Bonjour réel");
  await gp.getByRole("button",{name:"Envoyer",exact:true}).click();await gp.getByText(/Bonjour réel/).waitFor();
  // Host must receive the message through automatic polling, not a manual refresh.

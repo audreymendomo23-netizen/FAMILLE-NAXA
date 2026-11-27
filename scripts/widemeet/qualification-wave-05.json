@@ -1,0 +1,461 @@
+{
+  "wave": 5,
+  "total": 50,
+  "actions": 6,
+  "recipes": 44,
+  "base": "82640a34a4a7750234ff17076c4560a67e655ab1",
+  "entries": [
+    {
+      "id": "B1.7-A01",
+      "bulk": "B1",
+      "kind": "action",
+      "description": "Stabiliser chaîne audio et moteur offline sans changer métier B3/B6."
+    },
+    {
+      "id": "B1.7-R01",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Redis/SFU/Egress isolés; capture audio non vide décodable sans piste vidéo, fichier privé.",
+      "markers": [
+        {
+          "suite": "audio",
+          "marker": "actual consent-driven recording normal stop, private audio-only verified file and SHA-256 ledger"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B1.7-R02",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Environnement ASR épinglé, pip check, révision modèle fixe, aucun téléchargement durant inférence.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.7-R03",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Préflight réel parole synthétique et silence, même environnement worker, diagnostic étape/type non sensible.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.7-R04",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Replay audio produit complet avec Storage réel, SHA/taille et vérification Whisper horodatée.",
+      "markers": [
+        {
+          "suite": "audio",
+          "marker": "actual local Whisper ASR on separate synthetic speech fixture in private Storage; host-only queue, hash verification and timestamped output"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B1.7-R05",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Résilience infrastructure : ports, démarrage/arrêt, timeout, erreur moteur, nettoyage des fichiers/containers; aucun faux PASS.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.1-A01",
+      "bulk": "B2",
+      "kind": "action",
+      "description": "Finaliser parcours communication et calendrier du CDC §4–5,18, parité native/Web/PWA."
+    },
+    {
+      "id": "B2.1-R01",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Créer/programmer/dupliquer réunion, agenda sujets/temps/responsables, modèles, disponibilité et fuseaux.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual structured agenda progression and confidential screen restriction"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.1-R02",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Récurrence quotidienne/hebdo/mensuelle/personnalisée, édition occurrence/série, annulation et rollback/rejeu.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.1-R03",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Invitations nominatives/urgence/en cours, lien/QR exact, expiry, RSVP, lobby, verrou et refus tiers.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "real external invitation URL: manual GoTrue sign-in, exact token, explicit redemption, room access and signed-in hash navigation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.1-R04",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Agenda équipe/entreprise, rappels, modification/annulation/version, ICS si retenu; vues uniques et totales.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.1-R05",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Vrai A/V entre appareils, caméra/micro gestes explicites, grille/locuteur actif, périphériques et test matériel.",
+      "markers": [
+        {
+          "suite": "sfu",
+          "marker": "actual bidirectional SFU audio/video RTP with synthetic browser devices"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.1-R06",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Partage écran autorisé, réactions/main levée, file parole, modérateur temporaire et refus d'escalade.",
+      "markers": [
+        {
+          "suite": "sfu",
+          "marker": "screen-share track routed by SFU"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.1-R07",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Pause/reprise/fin salle, restrictions entrants, chat politique, suspension des flux et reprise correcte.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.1-R08",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Simultanéité par plan, superviseur bascule sans fuite, capacité atomique et refus supplémentaire (exclusivité B6).",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.1-R09",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Durée : 05:01/05:00, alerte organisateur, +15/30/60/personnalisé, répétition et pause.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "real duration extension and delayed anonymous multiple choice survey"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.1-R10",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Prolongation : rôle/tenant/pass/quota, double clic/perte réponse/révision concurrente, historique, reconnect, fermeture réelle à zéro.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "real duration extension and delayed anonymous multiple choice survey"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.1-R11",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Qualité présentation Low/Medium/High réellement mesurée, plafond, ratio, distinction caméra, repli et remontée.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.1-R12",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Modes formation/quiz, entretien, webinaire, sous-groupes, tableau blanc et questions anonymes [proposés, arbitrer].",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.6-A01",
+      "bulk": "B3",
+      "kind": "action",
+      "description": "Raccorder ASR→traduction→TTS personnel sans couper piste originale."
+    },
+    {
+      "id": "B3.6-R01",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Pipeline live réel avec audio traduit audible, qualité sémantique et latence mesurées FR/EN.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.6-R02",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Sélecteur langue personnelle, vitesse, original disponible, changement pendant réunion.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.6-R03",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Mutualisation par langue, concurrence plusieurs salles, plafond et coût.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.6-R04",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Langues premium/locales par capacité qualifiée (Fulfulde, ES, IT, ZH et autres arbitrées), repli explicite.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.6-R05",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Consentement, révocation et pause/fin : interruption TTS, aucun cache privé résiduel.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.6-R06",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Parité Android/Web/PWA, appareils physiques et tests réseau dégradé avec B6.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.3-A01",
+      "bulk": "B4",
+      "kind": "action",
+      "description": "Terminer tous formats et règles CDC §6."
+    },
+    {
+      "id": "B4.3-R01",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Choix unique/multiple, notes 1–5/1–10, questions multiples, texte libre.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "real duration extension and delayed anonymous multiple choice survey"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.3-R02",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Classement, matrices, modèles et question conditionnelle si retenue.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.3-R03",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Électorat ciblé figé, refus identifiants invalides/doublons et non-réponse distincte.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.3-R04",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Quorum, majorité simple/absolue/seuil, abstention, égalité et zéro exprimé; calculs exacts.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.3-R05",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Anonymat/nominatif, affichage immédiat/différé, modification avant clôture, secret avant clôture.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual editable nominative survey preserves secrecy until closure"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.3-R06",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Graphiques, parts/nombres/taux, dénominateurs, export sans identité anonyme.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.3-R07",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Parité UI et E2E réel, concurrence de clôture/vote et validation version.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.1-R02",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "FR/EN sans promesses fictives, langues supplémentaires uniquement qualifiées.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.1-R03",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Android/Web/PWA, accessibilité et aide contextuelle selon état/role.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.6-A01",
+      "bulk": "B5",
+      "kind": "action",
+      "description": "Construire console à moindre privilège selon CDC §12, sans extension B7–B12."
+    },
+    {
+      "id": "B5.6-R01",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Rôles admin/support dédiés, authentification renforcée/MFA si arbitrée, refus élévation.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.6-R02",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Comptes/organisations/membres/droits : consultation, suspension/réactivation et journal.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.6-R03",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Offres/paiements/quotas : lecture et mutation explicitement autorisée, aucune opération financière implicite.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.6-R04",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Incidents, support, langues qualifiées et métriques infrastructure sans contenu réunion.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.6-R05",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Interconnexion autorisée des solutions sœurs via contrat explicite, pas de doublon facturation ni fuite.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.6-R06",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Console responsive et audit de toutes mutations, tests négatifs et récupération; aucun déploiement sans accord.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.03-A01",
+      "bulk": "B6",
+      "kind": "action",
+      "description": "Qualifier état enregistrement et protection participant."
+    },
+    {
+      "id": "B6.03-R01",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Premium/pass et responsable habilité, information visible et audible avant capture, consentements explicites.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.03-R02",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Refus/absence/nouvel entrant non consentant : aucune capture active ou suspension sûre.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.03-R03",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Retrait pendant capture : arrêt Egress, discard segment et refus accès; pas de vidéo.",
+      "markers": [
+        {
+          "suite": "audio",
+          "marker": "actual participant consent withdrawal fences recording, stops Egress and discards private segment"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.03-R04",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Pause enregistrement indépendante de salle, reprise segment nouveau et arrêt normal/hôte/échéance.",
+      "markers": [
+        {
+          "suite": "audio",
+          "marker": "actual independent recording pause preserves verified segment while meeting audio/video remains connected"
+        },
+        {
+          "suite": "audio",
+          "marker": "actual host ends room with recording active; valid audio retained rather than discarded"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.03-R05",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Consentement pour transcription/sous-titres/traduction et droit de retrait, audit sans secret.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.03-R06",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Annonce audible réellement entendue sur appareils physiques, erreur TTS visible, aucune garantie inventée.",
+      "markers": [],
+      "complete": false
+    }
+  ]
+}
