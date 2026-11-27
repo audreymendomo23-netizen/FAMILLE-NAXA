@@ -245,3 +245,8 @@ Lot 01 : 50 contrats API ; lot 02 : 50 unités (34 tests historiques + 3 suites 
 
 ### Réserves et suite
 B1 : provisionnement/activation/récupération réelle, coffre de session et PIN/biométrie, administration sites et affectations. B2 : paiement vérifié, règles après clôture, caisse finale. B3 : coût de composition, corrections après clôture, service versionné et planification réelle. B4 : régularisation des pointages manquants/allongements, invitations, FCM réel et qualification sur appareil. B5 : abonnement/paiement, synchronisation hors-ligne métier étendue, conflits et restauration. B6 : interop ZIPPLE et vidéo NAXA SECURITY réellement raccordées, worker FCM, sauvegarde/restauration, IA/parrainage conditionnels. Aucun changement tarifaire, déploiement, activation externe ni migration Supabase hébergée. L'intégralité des 39 recettes produit reste non certifiée.
+
+### Relevé CI complémentaire (fin de passe)
+- 4489d0a / 46077662657 : **11/11 SUCCESS** confirmé.
+- a0d168a / 46077764586 : 10/11 success ; en cours : android ; en file : aucun ; échecs : aucun observé.
+- f2b6487 / 46077838017 : 7/12 success ; en cours : web (demo), android, web (business-connected), web (unit-build) ; en file : web (connected) ; échecs : aucun observé. Le résultat du job business-connected doit être contrôlé avant toute déclaration sur les cinq nouvelles recettes.
