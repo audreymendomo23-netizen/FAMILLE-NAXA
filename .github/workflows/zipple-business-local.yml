@@ -103,7 +103,8 @@ jobs:
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f docs/apps/zipple/n2-n5/bulk4-commerce.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f docs/apps/zipple/n2-n5/bulk5-hr.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -c "NOTIFY pgrst, 'reload schema'"
-      - name: Build Web and qualify real business UI via isolated Edge
+      - name: Prepare Web and isolated Edge test environment
+        id: web_setup
         run: |
           set -euo pipefail
           npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
@@ -111,6 +112,9 @@ jobs:
           npx playwright install --with-deps chromium
           VITE_ZIPPLE_API_URL=https://127.0.0.1:4443/gateway VITE_ZIPPLE_BUSINESS_API_URL=https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-business npm run build --workspace @famille/zipple-web
           openssl req -x509 -nodes -newkey rsa:2048 -days 1 -subj "/CN=localhost" -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" -addext "basicConstraints=critical,CA:TRUE" -keyout "$RUNNER_TEMP/zipple-ci.key" -out "$RUNNER_TEMP/zipple-ci.crt" >/dev/null 2>&1
+      - name: Qualify real business UI via isolated Edge
+        run: |
+          set -euo pipefail
           set -a
           source "$RUNNER_TEMP/zipple-business.env"
           set +a
@@ -120,6 +124,8 @@ jobs:
           node --test docs/apps/zipple/n2-n5/local-business.test.mjs || status=$?
           exit "$status"
       - name: Prepare isolated Android TLS trust
+        id: native_tls
+        if: ${{ !cancelled() && steps.web_setup.outcome == 'success' }}
         run: |
           set -euo pipefail
           mkdir -p apps/android/zipple/src/debug/res/raw apps/android/zipple/src/debug/res/xml
@@ -131,11 +137,14 @@ jobs:
           <manifest xmlns:android="http://schemas.android.com/apk/res/android"><application android:networkSecurityConfig="@xml/zipple_ci_network"/></manifest>
           XML
       - name: Enable KVM for business recipe
+        id: native_kvm
+        if: ${{ !cancelled() && steps.native_tls.outcome == 'success' }}
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
       - name: Native Android 35 — actual local GoTrue, Edge and split payment
+        if: ${{ !cancelled() && steps.native_kvm.outcome == 'success' }}
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
