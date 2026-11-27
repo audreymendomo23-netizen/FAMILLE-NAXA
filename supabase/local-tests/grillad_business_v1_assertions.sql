@@ -32,7 +32,6 @@ begin
  begin perform public.grillad_action(o,b,gen_random_uuid(),'prepare',jsonb_build_object('item',i,'qty',1));raise exception 'expected cross site rejection';exception when insufficient_privilege then null;end;
  v:=public.grillad_action(o,a,gen_random_uuid(),'change_price',jsonb_build_object('item',i,'price',1200,'reason','Test'));if (v->>'old_price')::int<>1000 or (v->>'new_price')::int<>1200 then raise exception 'price history';end if;
  perform public.grillad_action(o,a,gen_random_uuid(),'expense','{"label":"Bois","value":200}');
- v:=public.grillad_receipt(o,a,basket);if not (v->>'cancelled')::boolean or (v->>'net_total')::int<>0 then raise exception 'cancelled receipt';end if;
  v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,ca}')::int<>2000 or (v#>>'{finance,charges}')::int<>200 or jsonb_array_length(v->'expenses')<>1 or (v->'items'->0->>'price')::int<>1200 then raise exception 'finance';end if;
  perform public.grillad_action(o,a,j,'add_item','{"name":"Porc","family":"Porc","price":800,"cost":300}');
  perform public.grillad_action(o,a,gen_random_uuid(),'prepare',jsonb_build_object('item',j,'qty',4));
@@ -47,6 +46,7 @@ begin
  begin perform public.grillad_action(o,a,gen_random_uuid(),'sell_basket',jsonb_build_object('lines',jsonb_build_array(jsonb_build_object('item',i,'qty',1,'price',1200),jsonb_build_object('item',j,'qty',100,'price',800))));raise exception 'expected basket rollback';exception when invalid_parameter_value then null;end;
  v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,ca}')::int<>4800 then raise exception 'partial basket';end if;
  perform public.grillad_action(o,a,gen_random_uuid(),'cancel_basket',jsonb_build_object('sale',basket,'reason','Test cancellation'));
+ v:=public.grillad_receipt(o,a,basket);if not (v->>'cancelled')::boolean or (v->>'net_total')::int<>0 then raise exception 'cancelled receipt';end if;
  v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,ca}')::int<>2000 or (v#>>'{finance,sales_count}')::int<>1 then raise exception 'basket cancellation';end if;
  begin perform public.grillad_action(o,a,gen_random_uuid(),'close_cash','{"counted":1800}');raise exception 'expected reason';exception when invalid_parameter_value then null;end;
  v:=public.grillad_action(o,a,gen_random_uuid(),'close_cash','{"counted":1900}');if (v->>'difference')::int<>0 then raise exception 'cash';end if;
