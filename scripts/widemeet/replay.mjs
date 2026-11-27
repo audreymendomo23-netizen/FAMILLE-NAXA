@@ -111,6 +111,27 @@ try{
  await identity(hs.access_token,"group-delete",{id:groupId});
  assert.deepEqual((await identity(hs.access_token,"groups")).groups,[]);
  pass("actual N1 contact group CRUD and account/workspace isolation");
+ // Separate enterprise: direct manager assignment does not leak rights to unassigned staff.
+ const scopeW=await createWorkspace("Manager scope replay");
+ const scopeOwner=await fixture(scopeW,"promoteur"),scopeManager=await fixture(scopeW,"manager"),scopeStaff=await fixture(scopeW,"staff"),scopeOther=await fixture(scopeW,"staff");
+ const so=await login(scopeOwner),sm=await login(scopeManager),ss=await login(scopeStaff),su=await login(scopeOther);
+ assert.equal((await identityRequest(sm.access_token,"revoke-member",{member_id:scopeStaff.id})).status,403);
+ assert.equal((await identityRequest(sm.access_token,"manager-assign",{member_id:scopeStaff.id,manager_id:scopeManager.id})).status,403);
+ assert.equal((await identityRequest(so.access_token,"manager-assign",{member_id:scopeStaff.id,manager_id:o.id})).status,403);
+ await identity(so.access_token,"manager-assign",{member_id:scopeStaff.id,manager_id:scopeManager.id});
+ const scopedContacts=(await identity(sm.access_token,"contacts")).contacts;
+ assert.deepEqual(scopedContacts.filter(c=>c.can_revoke).map(c=>c.member_id),[scopeStaff.id]);
+ assert.equal((await identityRequest(sm.access_token,"revoke-member",{member_id:scopeOther.id})).status,403);
+ assert.equal((await identityRequest(sm.access_token,"revoke-member",{member_id:scopeOwner.id})).status,403);
+ await identity(so.access_token,"manager-assign",{member_id:scopeStaff.id,manager_id:null});
+ assert.equal((await identityRequest(sm.access_token,"revoke-member",{member_id:scopeStaff.id})).status,403);
+ await identity(so.access_token,"manager-assign",{member_id:scopeStaff.id,manager_id:scopeManager.id});
+ await identity(sm.access_token,"revoke-member",{member_id:scopeStaff.id});
+ assert.equal((await identityRequest(ss.access_token,"profile")).status,403);
+ assert.equal((await identity(su.access_token,"profile")).role,"staff");
+ assert.ok(!(await identity(so.access_token,"contacts")).contacts.some(c=>c.member_id===scopeStaff.id));
+ pass("actual N1 manager scope, promoter-only assignment, foreign and unassigned denials, scoped revocation");
+
  assert.equal((await identityRequest(gs.access_token,"billing")).status,403);
  assert.equal((await identity(hs.access_token,"billing")).plan,"premium");
  const billingRequest={request_id:randomUUID(),offer:"premium",period:"month",capacity:50,channel:"OM"};
