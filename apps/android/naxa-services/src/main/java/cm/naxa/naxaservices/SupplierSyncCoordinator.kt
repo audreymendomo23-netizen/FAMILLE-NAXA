@@ -240,7 +240,7 @@ object SupplierSyncCoordinator {
 
         val dao = repository.dao
         val orgId = session.account.organizationId
-        val events = dao.loadRetryableOutboxEvents(orgId, 250)
+        val events = dao.loadOwnedRetryableOutboxEvents(orgId,session.account.memberId,session.deviceId,250)
             .sortedBy { it.deviceSequence }
         var applied = 0
         var retried = 0
@@ -392,7 +392,7 @@ object SupplierSyncCoordinator {
                 break
             }
         }
-        val remaining = dao.observePendingOutboxCount(orgId).first()
+        val remaining = dao.observeOwnedPendingOutboxCount(orgId,session.account.memberId,session.deviceId).first()
         return SupplierSyncSummary(applied, retried, blocked, rejected, remaining)
     }
 

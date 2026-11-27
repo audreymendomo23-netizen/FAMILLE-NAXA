@@ -170,7 +170,7 @@ class NaxaServicesSyncWorker(
 
         return try {
             if(vault.binding()!=binding)return Result.success()
-            val repository = NaxaServicesLocalRepository(database)
+            val repository = NaxaServicesLocalRepository(database,cm.naxa.naxaservices.data.LocalQueueOwner(session.account.organizationId,session.account.memberId,session.deviceId))
             val summary = runNaxaServicesSyncCycle(repository, api, session){vault.binding()==binding}
             if (shouldRetrySyncWorker(summary.outgoing.retried, summary.hasMore)) Result.retry() else Result.success()
         } catch (cancelled: CancellationException) {

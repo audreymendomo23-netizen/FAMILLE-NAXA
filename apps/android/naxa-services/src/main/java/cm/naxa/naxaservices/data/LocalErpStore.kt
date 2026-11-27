@@ -160,7 +160,9 @@ data class LocalOutboxEvent(
     val lastAttemptAtEpochMs: Long? = null,
     val nextAttemptAtEpochMs: Long? = null,
     val lastErrorCode: String? = null,
-    val remoteId: String? = null
+    val remoteId: String? = null,
+    val ownerMemberId: String? = null,
+    val ownerDeviceId: String? = null
 )
 
 @Entity(
@@ -806,6 +808,12 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_outbox_events WHERE orgId = :orgId AND state IN ('queued','retry_wait','blocked_dependency') ORDER BY deviceSequence ASC LIMIT :limit")
     suspend fun loadRetryableOutboxEvents(orgId: String, limit: Int = 100): List<LocalOutboxEvent>
 
+    @Query("SELECT * FROM local_outbox_events WHERE orgId = :orgId AND ownerMemberId = :memberId AND ownerDeviceId = :deviceId AND state IN ('queued','retry_wait','blocked_dependency') ORDER BY deviceSequence ASC LIMIT :limit")
+    suspend fun loadOwnedRetryableOutboxEvents(orgId:String,memberId:String,deviceId:String,limit:Int=100):List<LocalOutboxEvent>
+
+    @Query("SELECT COUNT(*) FROM local_outbox_events WHERE orgId = :orgId AND ownerMemberId = :memberId AND ownerDeviceId = :deviceId AND state IN ('queued','retry_wait','blocked_dependency')")
+    fun observeOwnedPendingOutboxCount(orgId:String,memberId:String,deviceId:String):Flow<Int>
+
     @Query("UPDATE local_outbox_events SET state = 'queued', nextAttemptAtEpochMs = NULL, lastErrorCode = NULL WHERE eventId = :eventId AND orgId = :orgId AND state = 'blocked_dependency'")
     suspend fun requeueBlockedOutboxEvent(eventId: String, orgId: String): Int
 
@@ -1257,7 +1265,7 @@ interface NaxaServicesDao {
         LocalSupplierPayment::class,
         LocalAccountingEntry::class
     ],
-    version = 16,
+    version = 17,
     exportSchema = false
 )
 abstract class NsServicesDatabase : RoomDatabase() {
@@ -1515,7 +1523,19 @@ val NS_SERVICES_MIGRATION_15_16: Migration = object : Migration(15, 16) {
     }
 }
 
-class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
+val NS_SERVICES_MIGRATION_16_17: Migration = object : Migration(16,17) {
+    override fun migrate(database:SupportSQLiteDatabase){
+        // Existing events have no reliable originating member/device. Preserve without guessing ownership.
+        database.execSQL("ALTER TABLE local_outbox_events ADD COLUMN ownerMemberId TEXT")
+        database.execSQL("ALTER TABLE local_outbox_events ADD COLUMN ownerDeviceId TEXT")
+    }
+}
+
+data class LocalQueueOwner(val organizationId:String,val memberId:String,val deviceId:String) {
+    init { require(organizationId.isNotBlank()&&memberId.isNotBlank()&&deviceId.isNotBlank()) }
+}
+
+class NaxaServicesLocalRepository(private val database: NsServicesDatabase,private val queueOwner:LocalQueueOwner?=null) {
     val dao: NaxaServicesDao = database.naxaServicesDao()
 
     private fun siteIdFromRow(row: JSONObject): String? =
@@ -4221,6 +4241,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
         siteId: String?,
         payloadJson: String? = null
     ): LocalOutboxEvent {
+        require(queueOwner==null||queueOwner.organizationId==orgId){"OUTBOX_OWNER_ORGANIZATION_MISMATCH"}
         val fallbackPayload = JSONObject()
             .put("aggregate_id", aggregateId)
             .put("site_id", siteId)
@@ -4248,7 +4269,9 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase) {
             deviceSequence = dao.nextOutboxSequence(),
             createdAtEpochMs = System.currentTimeMillis(),
             state = if (action in notApplicableActions) "not_applicable" else "queued",
-            schemaVersion = 1
+            schemaVersion = 1,
+            ownerMemberId = queueOwner?.memberId,
+            ownerDeviceId = queueOwner?.deviceId
         )
         dao.insertOutboxEvent(event)
         return event

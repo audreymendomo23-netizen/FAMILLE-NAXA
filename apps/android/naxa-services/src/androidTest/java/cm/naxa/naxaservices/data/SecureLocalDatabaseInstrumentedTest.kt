@@ -77,6 +77,27 @@ class SecureLocalDatabaseInstrumentedTest {
         }finally{context.deleteDatabase(name);File(context.noBackupFilesDir,"$name.wrapped-key").delete()}
     }
 
+    @Test fun queueOwnershipPreservesLegacyAndSeparatesMembersAndDevices()=runBlocking<Unit>(Dispatchers.IO){
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val name="secure-owner-qa-"+UUID.randomUUID()+".db"
+        try{
+            SecureLocalDatabase.open(context,name).withDatabase{database->
+                val dao=database.naxaServicesDao()
+                val original=LocalOutboxEvent(eventId="legacy",orgId="org-a",aggregateType="customer",aggregateId="customer",
+                    actionCode="customer.created",payloadJson="{\"org_id\":\"org-a\"}",deviceSequence=1,createdAtEpochMs=1)
+                dao.insertOutboxEvent(original)
+                dao.insertOutboxEvent(original.copy(eventId="a",deviceSequence=2,ownerMemberId="member-a",ownerDeviceId="device-a"))
+                dao.insertOutboxEvent(original.copy(eventId="b",deviceSequence=3,ownerMemberId="member-b",ownerDeviceId="device-a"))
+                dao.insertOutboxEvent(original.copy(eventId="c",deviceSequence=4,ownerMemberId="member-a",ownerDeviceId="device-b"))
+                assertEquals(listOf("a"),dao.loadOwnedRetryableOutboxEvents("org-a","member-a","device-a").map{it.eventId})
+                assertEquals(listOf("b"),dao.loadOwnedRetryableOutboxEvents("org-a","member-b","device-a").map{it.eventId})
+                assertEquals(listOf("c"),dao.loadOwnedRetryableOutboxEvents("org-a","member-a","device-b").map{it.eventId})
+                assertEquals(4,dao.loadRetryableOutboxEvents("org-a").size)
+                assertEquals(1,dao.observeOwnedPendingOutboxCount("org-a","member-a","device-a").first())
+            }
+        }finally{context.deleteDatabase(name);File(context.noBackupFilesDir,"$name.wrapped-key").delete()}
+    }
+
     @Test fun newDatabaseIsEncryptedFromFirstWrite()=runBlocking<Unit>(Dispatchers.IO){
         val context=ApplicationProvider.getApplicationContext<Context>()
         val name="secure-fresh-qa-"+UUID.randomUUID()+".db"

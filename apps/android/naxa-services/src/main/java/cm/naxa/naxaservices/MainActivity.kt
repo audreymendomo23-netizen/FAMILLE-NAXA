@@ -232,7 +232,8 @@ private fun NaxaServicesRoot(
     }
     val localDatabase=databaseResult?.getOrNull()
     DisposableEffect(localDatabase){onDispose{localDatabase?.close()}}
-    val localRepository=remember(localDatabase){localDatabase?.let{NaxaServicesLocalRepository(it)}}
+    val queueOwner=session?.let{current->if(current.deviceId.isNotBlank())cm.naxa.naxaservices.data.LocalQueueOwner(current.account.organizationId,current.account.memberId,current.deviceId)else null}
+    val localRepository=remember(localDatabase,queueOwner){if(queueOwner==null)null else localDatabase?.let{NaxaServicesLocalRepository(it,queueOwner)}}
     var lastHandledLockGeneration by remember { mutableIntStateOf(lockGenerationValue) }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
