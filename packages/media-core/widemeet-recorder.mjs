@@ -37,7 +37,7 @@ export function createWideMeetRecorder({supabaseUrl,serviceKey,egress,outputDire
     if(storage)storedKey=await storage.put(current,bytes,sha);
     // Compare disposition again to avoid publishing a segment quarantined during verification.
     const rows=await db("wm_recording_runs?id=eq."+row.id+"&phase=eq.stopping&disposition=eq.retain","PATCH",{phase:"complete",finished_at:new Date().toISOString(),bytes:size,content_sha256:sha,...(storedKey?{storage_key:storedKey,stored_at:new Date().toISOString()}:{})});
-    if(rows?.length===1){local.delete(row.room_id);return}
+    if(rows?.length===1){if(storedKey)try{await discard(current)}catch{console.warn("WideMeet local audio cleanup pending")}local.delete(row.room_id);return}
    }catch{retain=false}
    if(storedKey){const after=await ledger(row.id).catch(()=>null);if(after&&after.phase!=="complete")await storage.remove(storedKey).catch(()=>{});}
   }

@@ -44,7 +44,7 @@ private val menuFr=listOf("Contacts et favoris","Mon entreprise","Équipe","Réu
 private val menuEn=listOf("Contacts and favorites","My company","Team","Concurrent meetings","Statistics","Polls and surveys","Decisions and tasks","Subscriptions","Security","Live chat and support","FAQ","Language","Appearance","Settings","WideMeet Connect","Transcription and AI","Translation and listening")
 
 class MainActivity:ComponentActivity(){
- override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);enableEdgeToEdge();setContent{WideMeetRoot()}}
+ override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE);enableEdgeToEdge();setContent{WideMeetRoot()}}
 }
 
 @Composable private fun WideMeetRoot(){

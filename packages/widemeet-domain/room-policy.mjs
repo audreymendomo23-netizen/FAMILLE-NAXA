@@ -26,6 +26,7 @@ export function createRoom(a,c){
 }
 export function applyRoom(room,a,c,now){
  const member=actor(room,a);
+ if(!["standard","confidential"].includes(room.confidentiality??"standard")&&c.action!=="end"&&c.action!=="cancel")fail("unsupported_confidentiality");
  if(!id(c.requestId)||!Number.isSafeInteger(c.expectedRevision)||!Number.isSafeInteger(now)||now<0||c.roomId!==room.id)fail("invalid_command");
  const p=room.participants.find(x=>x.memberId===member&&!x.excluded),host=member===room.hostId&&roles.has(a.role);
  if(!p||p.response==="declined"&&c.action!=="respond")fail("forbidden");
@@ -140,7 +141,7 @@ export function applyRoom(room,a,c,now){
  return {room:n,replayed:false};
 }
 export function mediaPermission(room,a,now){
- try{live(room,now);if(!["access","premium"].includes(a.plan)||!Number.isSafeInteger(a.entitlementEndMs)||now>=a.entitlementEndMs)return null;const p=participant(room,a);if(room.status!=="open"||p.response!=="accepted"||room.lobbyRequired===true&&p.memberId!==room.hostId&&p.lobbyStatus!=="admitted")return null;return {room:"wm-"+room.id,memberId:p.memberId,canSubscribe:true,canPublish:true,microphone:p.mic===true,screen:p.screen===true&&room.confidentiality!=="confidential",canRecord:false,canAdmin:false,expiresMs:Math.min(room.endMs,a.entitlementEndMs,now+90000)};}catch{return null;}
+ try{live(room,now);if(!["standard","confidential"].includes(room.confidentiality??"standard"))return null;if(!["access","premium"].includes(a.plan)||!Number.isSafeInteger(a.entitlementEndMs)||now>=a.entitlementEndMs)return null;const p=participant(room,a);if(room.status!=="open"||p.response!=="accepted"||room.lobbyRequired===true&&p.memberId!==room.hostId&&p.lobbyStatus!=="admitted")return null;return {room:"wm-"+room.id,memberId:p.memberId,canSubscribe:true,canPublish:true,microphone:p.mic===true,screen:p.screen===true&&(room.confidentiality??"standard")==="standard",canRecord:false,canAdmin:false,expiresMs:Math.min(room.endMs,a.entitlementEndMs,now+90000)};}catch{return null;}
 }
 
 export function pollSummary(p,memberId,now=Date.now()){
