@@ -1,5 +1,6 @@
 import {ConvertedPurchases} from "./ConvertedPurchases";
 import {InventoryGains} from "./InventoryGains";
+import {resolveInventoryScan} from "./inventory-scan";
 import React,{useEffect,useState,useRef} from "react";
 // Adaptation of NAXA Services StockOperationsPage: server-confirmed supplier, purchase, receipt, payment.
 type Props={ingredients:any[];lots:any[];call:(action:string,body?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean;refreshStock:()=>Promise<void>;queueErp?:(action:string,payload:Record<string,unknown>)=>Promise<void>};
@@ -15,7 +16,8 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  const [draftLines,DL]=useState<{ingredient_id:string;qty_milli:number;total_xaf:number}[]>([]);
  const [purchase,PU]=useState(""),[received,RE]=useState(""),[lot,L]=useState(""),[expiry,EX]=useState("");
  const [payment,PA]=useState(""),[method,ME]=useState("bank"),[paymentRef,PR]=useState("");
- const [lotId,LI]=useState(""),[count,CO]=useState(""),[reason,RS]=useState("");
+ const [lotId,LI]=useState(""),[count,CO]=useState(""),[reason,RS]=useState(""),[scan,SC]=useState("");
+ function selectScan(){const id=resolveInventoryScan(scan,lots,ingredients);LI(id??"");CO("");RS("");E(id?"":t("Code inconnu ou ambigu : sélectionnez le lot manuellement.","Unknown or ambiguous code: select the batch manually."));if(id)SC("")}
  const pending=useRef<Record<string,{body:string,id:string}>>({});
  async function idem(action:string,body:Record<string,unknown>){const payload=JSON.stringify(body);if(pending.current[action]?.body!==payload)pending.current[action]={body:payload,id:crypto.randomUUID()};const v=await call(action,{...body,request_id:pending.current[action].id});delete pending.current[action];return v}
  async function load(){D(await call("procurement_snapshot"))}
@@ -59,6 +61,7 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  <label>{t("Référence du règlement","Payment reference")}<input value={paymentRef} onChange={e=>PR(e.target.value)}/></label>
  <button disabled={lock||!purchase||!payment||paymentRef.length<4} onClick={()=>run(async()=>{await idem("supplier_pay",{purchase_id:purchase,amount_xaf:amount(payment),method,reference:paymentRef});PA("");PR("");await load()})}>{t("Enregistrer le règlement","Record payment")}</button>
  <h4>{t("Comptage physique par lot","Physical lot count")}</h4>
+ <label>{t("Scanner le code du lot ou SKU","Scan batch code or SKU")}<input value={scan} maxLength={100} onChange={e=>SC(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();if(!busy)selectScan()}}}/></label><button disabled={busy||!scan.trim()} onClick={selectScan}>{t("Identifier le lot","Identify batch")}</button>
  <label>{t("Lot à inventorier","Lot to count")}<select aria-label={t("Lot à inventorier","Lot to count")} value={lotId} onChange={e=>{LI(e.target.value);CO("")}}><option value="">—</option>{lots.map(x=><option key={x.id} value={x.id}>{x.lot_label} · {qty(x.remaining_milli)}</option>)}</select></label>
  {selectedLot&&<p>{t("Quantité attendue","Expected quantity")} : {qty(selectedLot.remaining_milli)}</p>}
  <label>{t("Quantité physique comptée","Physical count")}<input inputMode="decimal" value={count} onChange={e=>CO(e.target.value)}/></label>

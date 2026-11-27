@@ -21,6 +21,13 @@ internal object ZippleErpNumbers{
  fun milli(raw:String):Long?=if(!Regex("[0-9]{1,7}(\\.[0-9]{1,3})?").matches(raw))null else runCatching{BigDecimal(raw).movePointRight(3).longValueExact()}.getOrNull()
  fun integer(raw:String):Long?=raw.takeIf{Regex("[0-9]{1,10}").matches(it)}?.toLongOrNull()?.takeIf{it in 0..2147483647L}
 }
+// USB/Bluetooth keyboard scanners and manual entry share exact, fail-closed selection.
+internal fun resolveInventoryScan(raw:String,lots:List<Triple<String,String,String>>,ingredients:List<Pair<String,String>>):String?{
+ val code=raw.trim().uppercase(java.util.Locale.ROOT)
+ if(code.isEmpty()||code.length>100)return null
+ val sku=ingredients.filter{it.second.trim().uppercase(java.util.Locale.ROOT)==code}.map{it.first}.toSet()
+ return lots.filter{it.first.uppercase(java.util.Locale.ROOT)==code||it.second.trim().uppercase(java.util.Locale.ROOT)==code||it.third in sku}.map{it.first}.distinct().singleOrNull()
+}
 internal class RequestKeys{
  private val requests=mutableMapOf<String,Pair<String,String>>()
  fun apply(action:String,body:JSONObject):JSONObject{
@@ -120,7 +127,13 @@ internal class RequestKeys{
     data?.rows("lots")?.forEach{Text(it.optString("lot_label")+" · "+BigDecimal.valueOf(it.optLong("remaining_milli"),3).stripTrailingZeros().toPlainString())}
    }
    "counts"->{
-    val lots=data?.rows("lots").orEmpty();var counted by remember{mutableStateOf("")};var why by remember{mutableStateOf("")};var selectedLot by remember{mutableStateOf("")}
+    val lots=data?.rows("lots").orEmpty();var counted by remember{mutableStateOf("")};var why by remember{mutableStateOf("")};var selectedLot by remember{mutableStateOf("")};var scanCode by remember{mutableStateOf("")}
+    Field(tr("Scanner le code du lot ou SKU","Scan batch code or SKU"),scanCode,{scanCode=it.take(100)})
+    OutlinedButton(enabled=!busy&&scanCode.isNotBlank(),onClick={
+     val found=resolveInventoryScan(scanCode,lots.map{Triple(it.optString("id"),it.optString("lot_label"),it.optString("ingredient_id"))},ingredients.map{it.optString("id") to it.optString("sku")})
+     selectedLot=found.orEmpty();counted="";why=""
+     if(found==null)message=tr("Code inconnu ou ambigu : sélectionnez le lot manuellement.","Unknown or ambiguous code: select the batch manually.") else {scanCode="";message=""}
+    }){Text(tr("Identifier le lot","Identify batch"))}
     Choice(tr("Lot à compter","Batch to count"),lots.map{it.optString("id") to it.optString("lot_label")},selectedLot,{selectedLot=it;counted=""},canWrite)
     val current=lots.find{it.optString("id")==selectedLot};val q=ZippleErpNumbers.milli(counted)
     current?.let{Text(tr("Stock de référence","Reference stock")+" : "+BigDecimal.valueOf(it.optLong("remaining_milli"),3).stripTrailingZeros().toPlainString())}
