@@ -17,6 +17,14 @@ function projection(room:any,actor:any){
  // Do not return raw receipts, votes, consent ledger, or provider recording state.
  return result;
 }
+async function project(room:any,actor:any,p_hash:string){
+ const result=projection(room,actor);
+ if(Deno.env.get("WM_RECORDING_QUALIFIED")!=="true")return result;
+ try{
+ const recordingStatus=await rpc("wm_recording_status",{p_hash,p_room:room.id});
+ return {...result,recordingStatus:recordingStatus??{phase:"off"}};
+ }catch{return {...result,recordingStatus:{phase:"unconfirmed"}}}
+}
 const enc=(s:Uint8Array)=>btoa(String.fromCharCode(...s)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 const json=(v:unknown)=>enc(new TextEncoder().encode(JSON.stringify(v)));
 async function signGrant(grant:any,now:number,sessionHash:string){
@@ -69,16 +77,16 @@ Deno.serve(async request=>{
  const state=createRoom(actor,{id:p_room,title:b.title,description:b.description??"",startMs:b.scheduled_ms,durationMinutes:b.duration_minutes,hardEndMs:actor.entitlementEndMs,invitees:b.invitees.map((id:string)=>id.toLowerCase())});
  if(passId!==null&&b.invitees.length+1>a.capacity)return send(409,{error:"capacity_exceeded"});
  if(await rpc(passId!==null?"wm_pass_room_create":"wm_room_create",passId!==null?{p_hash,p_intent:passId,p_state:state}:{p_hash,p_state:state})!==true)return send(409,{error:"conflict_or_scope"});
- return send(201,projection(state,actor));
+ return send(201,await project(state,actor,p_hash));
  }
  const room=await rpc("wm_room_read",{p_hash,p_room});
  if(!room)return send(404,{error:"unavailable"});
- if(action==="read")return send(200,projection(room,actor));
+ if(action==="read")return send(200,await project(room,actor,p_hash));
  if(action==="command"){
  const command={roomId:p_room,requestId:b.request_id,expectedRevision:b.expected_revision,action:b.action,target:b.target,value:b.value};
  const next=applyRoom(room,actor,command,now);
  if(!next.replayed&&await rpc("wm_room_write",{p_hash,p_room,p_expected:room.revision,p_role:actor.role,p_plan:actor.plan,p_state:next.room})!==true)return send(409,{error:"revision_or_scope_changed"});
- return send(200,projection(next.room,actor));
+ return send(200,await project(next.room,actor,p_hash));
  }
  if(action==="media-grant"){
  const grant=mediaPermission(room,actor,now);if(!grant)return send(403,{error:"forbidden"});
