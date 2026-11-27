@@ -115,6 +115,38 @@ do $$declare q uuid;begin select (x->>'id')::uuid into q from jsonb_array_elemen
  begin perform public.grillad_central_resolve(q,'processed',gen_random_uuid()::text);raise exception 'fake payment proof accepted';exception when invalid_parameter_value then null;end;
 end $$;
 reset role;
+-- Isolated proof fixture, not a real payment or activation.
+insert into famille_core.payment_intents(id,subscription_id,expected_amount_fcfa,channel,status)
+ select 'b8000000-0000-0000-0000-000000000001',id,60000,'fixture','matched' from famille_core.subscriptions where organization_id='b2000000-0000-0000-0000-000000000001';
+insert into famille_core.payment_matches(id,payment_intent_id,provider,transaction_reference,amount_fcfa,verified_at,status)
+ values('b8000000-0000-0000-0000-000000000002','b8000000-0000-0000-0000-000000000001','fixture','GRILLAD-TEST-1',59999,now(),'confirmed');
+update famille_core.subscriptions set plan_id=(select id from famille_core.plans where code='grillad_premium_year'),ends_at=now()+interval '1 year' where organization_id='b2000000-0000-0000-0000-000000000001';
+set role service_role;
+do $$declare q uuid;begin select (x->>'id')::uuid into q from jsonb_array_elements(public.grillad_central_queue(20)) x where x->>'kind'='renewal';
+ begin perform public.grillad_central_resolve(q,'processed','b8000000-0000-0000-0000-000000000002');raise exception 'wrong amount accepted';exception when invalid_parameter_value then null;end;
+end $$;
+reset role;
+update famille_core.payment_matches set amount_fcfa=60000 where id='b8000000-0000-0000-0000-000000000002';
+set role service_role;
+do $$declare q uuid;begin select (x->>'id')::uuid into q from jsonb_array_elements(public.grillad_central_queue(20)) x where x->>'kind'='renewal';
+ if not public.grillad_central_resolve(q,'processed','b8000000-0000-0000-0000-000000000002') or not public.grillad_central_resolve(q,'processed','b8000000-0000-0000-0000-000000000002') then raise exception 'central payment proof or replay';end if;
+end $$;
+reset role;
+-- Restore fixture plan so expiry notice and existing test cases stay applicable.
+update famille_core.subscriptions set plan_id=(select id from famille_core.plans where code='grillad_premium_month'),ends_at=now()+interval '1 day' where organization_id='b2000000-0000-0000-0000-000000000001';
+-- Test-only auth stub lacks phone; this adds the real field only within the rollback fixture.
+alter table auth.users add column if not exists phone text;
+update auth.users set phone='+237699000009' where id='b1000000-0000-0000-0000-000000000002';
+set role authenticated;
+do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';e uuid:='b8000000-0000-0000-0000-000000000003';begin
+ perform public.grillad_action(o,s,e,'employee_request','{"phone":"+237699000009","name":"Collaborateur test","role":"seller"}');
+end $$;
+reset role;
+insert into famille_private.account_invites(id,request_id,user_id,token_hash,app_code,account_kind,organization_id,location_id,role_code,status,created_by,expires_at,accepted_at,accepted_by)
+ values('b8000000-0000-0000-0000-000000000004','b8000000-0000-0000-0000-000000000003','b1000000-0000-0000-0000-000000000002',decode(repeat('a1',32),'hex'),'grillad','employee','b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','seller','accepted','b1000000-0000-0000-0000-000000000001',now()+interval '1 day',now(),'b1000000-0000-0000-0000-000000000002');
+set role service_role;
+do $$begin if not public.grillad_central_resolve('b8000000-0000-0000-0000-000000000003','processed','b8000000-0000-0000-0000-000000000004') then raise exception 'accepted employee evidence';end if;end $$;
+reset role;
 -- Existing activated seller assignment to a second GRILLAD site, then revocation.
 set role authenticated;
 do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';s2 uuid:='b3000000-0000-0000-0000-000000000003';u uuid:='b1000000-0000-0000-0000-000000000002';e uuid:=gen_random_uuid();p jsonb:=jsonb_build_object('user',u,'role','seller','reason','Renfort');v jsonb;

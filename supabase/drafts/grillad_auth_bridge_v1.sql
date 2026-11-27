@@ -178,7 +178,7 @@ begin
     join famille_core.role_assignments ra on ra.membership_id=m.id and ra.app_id=a.id and ra.organization_id=q.org and ra.location_id=q.site and ra.role_code=q.details->>'role' and ra.status='active' and ra.starts_at<=now() and (ra.expires_at is null or ra.expires_at>now())
     join famille_core.client_app_access ca on ca.user_id=u.id and ca.app_id=a.id and ca.status='granted'
     join famille_private.account_app_access g on g.user_id=u.id and g.app_code='grillad' and g.organization_id=q.org and g.location_id=q.site and g.status='active' and g.starts_at<=now() and (g.ends_at is null or g.ends_at>now())
-    where i.id=ref_id and i.request_id=q.id and i.app_code='grillad' and i.organization_id=q.org and i.location_id=q.site and i.role_code=q.details->>'role' and i.status='accepted' and i.accepted_by=u.id and i.accepted_at>=q.created_at and u.phone=q.details->>'phone') then raise exception 'GRILLAD_CENTRAL_EVIDENCE' using errcode='22023';end if;
+    where i.id=ref_id and i.request_id=q.id and i.app_code='grillad' and i.organization_id=q.org and i.location_id=q.site and i.role_code=q.details->>'role' and i.status='accepted' and i.accepted_by=u.id and i.accepted_at>=q.created_at and to_jsonb(u)->>'phone'=q.details->>'phone') then raise exception 'GRILLAD_CENTRAL_EVIDENCE' using errcode='22023';end if;
   else
    if not exists(select 1 from famille_core.payment_matches pm join famille_core.payment_intents pi on pi.id=pm.payment_intent_id join famille_core.subscriptions s on s.id=pi.subscription_id
     join famille_core.plans p on p.id=s.plan_id and p.app_id=s.app_id join famille_core.applications a on a.id=s.app_id and a.code='grillad'

@@ -31,7 +31,8 @@ import org.json.JSONObject
  result?.let{r->fun amount(k:String)=if(r.isNull(k))"Non attribué / inconnu" else r.optString(k)+" F"
  Text("CA "+amount("ca")+" · Direct "+amount("direct_ca")+" · Connect "+amount("connect_ca"));Text("Encaissements espèces "+amount("encaissements"))
  Text("Coût "+amount("cost")+" · Dépenses "+amount("expenses"))
- rows(r.optJSONArray("sites")).forEach{x->Text(x.optString("name")+" : "+x.optString("ca")+" F")}
+ rows(r.optJSONArray("sites")).forEach{x->Text(x.optString("name")+(if(x.has("enabled")&&!x.optBoolean("enabled"))" (suspendu, historique)" else "")+" : "+x.optString("ca")+" F")}
+ rows(r.optJSONArray("expenses_by_category")).forEach{x->Text(x.optString("category")+" · "+x.optString("amount")+" F · "+x.optString("count")+" dépense(s)")}
  Text(r.optString("from")+" → "+r.optString("to")+" · Confirmé serveur uniquement")
  OutlinedButton({val content=buildString{append("GRILLAD — rapport ");append(r.optString("from"));append(" / ");append(r.optString("to"));append("\nCA ");append(amount("ca"));append("\n");rows(r.optJSONArray("sites")).forEach{x->append(x.optString("name")+" : "+x.optString("ca")+" F\n")}};context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_TEXT,content)},"Partager le rapport"))},enabled=enabled){Text("Partager le rapport")}
  OutlinedButton({pdfLines=reportPdfLines(r);pdfLauncher.launch("grillad-rapport-"+r.optString("from")+"-"+r.optString("to")+".pdf")},enabled=enabled){Text("Exporter PDF")}
