@@ -80,3 +80,17 @@ La branche commune 9a75681 échouait dans les deux jobs Replay 140492714788 et A
 - Campagne commune du correctif : [Gate 45999065511](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45999065511), [Replay 45999065589](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45999065589), [SFU 45999065601](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45999065601), [Audio 45999065567](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45999065567). Tous QUEUED au relevé.
 - Branche B1 dédiée : e9d70dc, [Gate 45997155986](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155986), [Replay 45997155897](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155897), [SFU 45997155858](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155858), [Audio 45997155946](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155946) toujours QUEUED au relevé. Aucun nouvel échec sur cette révision n'est encore observable. Ne pas dupliquer les runs.
 Jauge : référence historique 9bf1e22 7/7 = 100 %; candidats en requalification, 0/4 terminal sur chacune des deux campagnes au relevé. Validation utilisateur non sollicitée tant que la nouvelle qualification n'est pas entièrement verte; pas de main, déploiement ni migration persistante.
+
+## 27 novembre 2026 — contrôle intermédiaire des deux campagnes
+Références inchangées : code B1 e9d70dc5ddd38d312ce1b86c8bf9b0c2431c44b8, branche commune 2d84f63f2927c4157ffe3eb5645e6a814d7964d9. Les commits suivants sur B1 sont documentaires uniquement. Relevé direct des jobs GitHub Actions :
+| Job | B1 dédiée | Branche commune |
+|---|---|---|
+| Contrats | SUCCESS (140499311546) | SUCCESS (140505786917) |
+| Web | SUCCESS (140499310985) | QUEUED (140505787411) |
+| SQL | SUCCESS (140499311445) | QUEUED (140505787325) |
+| Android | IN_PROGRESS (140499311396), build/tests natifs | QUEUED (140505787383) |
+| Edge | QUEUED (140499311483) | QUEUED (140505787301) |
+| Replay | IN_PROGRESS (140499310543), E2E Edge/Chromium | QUEUED (140505784602) |
+| SFU | SUCCESS (140499310171), 9 marqueurs PASS relevés dans le journal | IN_PROGRESS (140505784500), démarrage SFU |
+| Audio/ASR | IN_PROGRESS (140499311116), Start private Redis, SFU and Egress | IN_PROGRESS (140505784140), démarrage Redis/SFU/Egress |
+Jauge de suivi par jobs B1 : 4/8 SUCCESS = 50 % (contre 3/8 = 37,5 % au relevé précédent, +12,5 points); 3 en cours, 1 en attente, 0 échec nouveau au relevé initial. Branche commune : 1/8 SUCCESS = 12,5 %, 2 en cours, 5 en attente, 0 échec nouveau. Barème de qualification historique distinct : 7/7 sur 9bf1e22, ne pas assimiler à la validation du candidat courant. Le Gate complet et les deux Replay/Audio restent à qualifier; la correction SQL commune n'est pas encore prouvée par l'installation PostgreSQL. Aucun nouveau changement de code, aucune relance superflue, aucun merge ni déploiement. Validation utilisateur non sollicitée tant que la campagne requise n'est pas verte. Liens des huit runs dans l'entrée précédente.
