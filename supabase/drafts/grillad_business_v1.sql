@@ -3,6 +3,17 @@
 begin;
 create schema grillad_private;
 revoke all on schema grillad_private from public,anon,authenticated;
+-- Explicit provisioning boundary: shared family locations alone do not grant GRILLAD access.
+create table grillad_private.enabled_sites(org uuid not null,site uuid not null,enabled boolean not null default true,primary key(org,site),foreign key(site,org) references famille_core.locations(id,organization_id));
+alter table grillad_private.enabled_sites enable row level security;
+-- Exact product plan identifiers. Do not overwrite an existing catalog price.
+insert into famille_core.plans(app_id,code,name,amount_fcfa,billing_period)
+select a.id,p.code,p.name,p.amount,p.cycle from famille_core.applications a cross join (values
+ ('grillad_access_month','GRILLAD ACCÈS mensuel',2000,'monthly'),
+ ('grillad_access_year','GRILLAD ACCÈS annuel',24000,'yearly'),
+ ('grillad_premium_month','GRILLAD PREMIUM mensuel',6000,'monthly'),
+ ('grillad_premium_year','GRILLAD PREMIUM annuel',60000,'yearly')
+) p(code,name,amount,cycle) where a.code='grillad' on conflict(app_id,code) do nothing;
 create table grillad_private.items(
  id uuid primary key, org uuid not null, site uuid not null, name text not null check(length(name) between 1 and 160),
  family text not null check(family in ('Porc','Poulet','Poisson','Brochettes','Omelettes')),
@@ -53,7 +64,7 @@ revoke all on all tables in schema grillad_private from public,anon,authenticate
 -- Scope requires live session, signed GRILLAD app claim, active client grant, subscription and membership.
 create function grillad_private.scope(p_org uuid,p_site uuid) returns text
 language plpgsql stable security definer set search_path=pg_catalog as $$
-declare u uuid:=auth.uid(); a uuid; sid uuid; r text;
+declare u uuid:=auth.uid(); a uuid; sid uuid; r text; plan_code text; plan_count bigint;
 begin
  if u is null or coalesce(auth.jwt()->>'is_anonymous','false')='true' then raise exception 'GRILLAD_AUTH' using errcode='42501'; end if;
  begin sid:=(auth.jwt()->>'session_id')::uuid; exception when invalid_text_representation then raise exception 'GRILLAD_AUTH' using errcode='42501'; end;
@@ -62,8 +73,14 @@ begin
  if a is null or famille_core.current_app_id() is distinct from a or
  not exists(select 1 from famille_core.client_app_access where user_id=u and app_id=a and status='granted') or
  not exists(select 1 from famille_core.organizations where id=p_org and status='active') or
+ not exists(select 1 from grillad_private.enabled_sites where org=p_org and site=p_site and enabled) or
  not famille_core.can_access_outlet(p_org,a,p_site) or not famille_core.subscription_allows_workspace(p_org,a) then
  raise exception 'GRILLAD_SCOPE' using errcode='42501'; end if;
+ select count(*),min(p.code) into plan_count,plan_code from famille_core.subscriptions s join famille_core.plans p on p.id=s.plan_id and p.app_id=s.app_id
+ where s.organization_id=p_org and s.app_id=a and p.status='active'
+ and ((s.status='active' and (s.starts_at is null or s.starts_at<=now()) and (s.ends_at is null or s.ends_at>=now())) or (s.status='past_due' and s.grace_until is not null and s.grace_until>=now()))
+ and ((p.code='grillad_access_month' and p.amount_fcfa=2000 and p.billing_period='monthly') or (p.code='grillad_access_year' and p.amount_fcfa=24000 and p.billing_period='yearly') or (p.code='grillad_premium_month' and p.amount_fcfa=6000 and p.billing_period='monthly') or (p.code='grillad_premium_year' and p.amount_fcfa=60000 and p.billing_period='yearly'));
+ if plan_count<>1 or (plan_code like 'grillad_access_%' and (select count(*) from grillad_private.enabled_sites where org=p_org and enabled)<>1) then raise exception 'GRILLAD_ENTITLEMENT' using errcode='42501';end if;
  select ra.role_code into r from famille_core.memberships m join famille_core.role_assignments ra on ra.membership_id=m.id and ra.app_id=m.app_id and ra.organization_id=m.organization_id
  where m.user_id=u and m.app_id=a and m.organization_id=p_org and m.status='active' and ra.status='active' and ra.starts_at<=now() and (ra.expires_at is null or ra.expires_at>now())
  and ((ra.role_code='owner' and ra.location_id is null) or (ra.role_code in ('manager','seller') and ra.location_id=p_site))
@@ -163,6 +180,17 @@ begin
  end if;
  return jsonb_build_object('role',r,'items',v_items,'sales',v_sales,'finance',v_finance,'cash',v_cash,'from',p_from,'to',p_to,'generated_at',now());
 end $$;
+-- Server-derived workspace list. No arbitrary organization/site values from login.
+create function grillad_private.workspace() returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $
+declare s record;r text;out jsonb:='[]'::jsonb;
+begin
+ if auth.uid() is null or not exists(select 1 from famille_core.applications where code='grillad' and id=famille_core.current_app_id()) then raise exception 'GRILLAD_SCOPE' using errcode='42501';end if;
+ for s in select e.org,e.site,l.name,o.legal_name from grillad_private.enabled_sites e join famille_core.locations l on l.id=e.site and l.organization_id=e.org join famille_core.organizations o on o.id=e.org where e.enabled and exists(select 1 from famille_core.memberships m where m.user_id=auth.uid() and m.organization_id=e.org and m.app_id=famille_core.current_app_id() and m.status='active') order by l.name,e.site loop
+  begin r:=grillad_private.scope(s.org,s.site);out:=out||jsonb_build_array(jsonb_build_object('org',s.org,'site',s.site,'name',s.name,'organization',s.legal_name,'role',r));exception when insufficient_privilege then null;end;
+ end loop;
+ return out;
+end $;
+create function public.grillad_workspace() returns jsonb language sql stable security invoker set search_path=pg_catalog as $select grillad_private.workspace()$;
 -- Explicit narrow public RPCs are invoker wrappers. All authorization lives inside private functions.
 create function public.grillad_action(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb)
 returns jsonb language sql security invoker set search_path=pg_catalog as $$select grillad_private.run(p_org,p_site,p_event,p_action,p_payload)$$;
@@ -170,6 +198,9 @@ create function public.grillad_snapshot(p_org uuid,p_site uuid,p_from date,p_to 
 returns jsonb language sql stable security invoker set search_path=pg_catalog as $$select grillad_private.snapshot(p_org,p_site,p_from,p_to)$$;
 revoke all on all functions in schema grillad_private from public,anon,authenticated;
 grant usage on schema grillad_private to authenticated;
+grant execute on function grillad_private.workspace() to authenticated;
+revoke all on function public.grillad_workspace() from public,anon,authenticated;
+grant execute on function public.grillad_workspace() to authenticated;
 grant execute on function grillad_private.run(uuid,uuid,uuid,text,jsonb),grillad_private.snapshot(uuid,uuid,date,date) to authenticated;
 revoke all on function public.grillad_action(uuid,uuid,uuid,text,jsonb),public.grillad_snapshot(uuid,uuid,date,date) from public,anon,authenticated;
 grant execute on function public.grillad_action(uuid,uuid,uuid,text,jsonb),public.grillad_snapshot(uuid,uuid,date,date) to authenticated;
