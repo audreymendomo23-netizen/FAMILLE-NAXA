@@ -1,5 +1,7 @@
 # GRILLAD — Cahier des charges fonctionnel V1.3
 
+> **Référence historique — mise à jour du 27/11/2026 :** [GRILLAD V1.4](GRILLAD_V1_4.md) prévaut. Application légère, pointage arrivée/départ avec heure, GPS et photo en architecture multiniveau, et intégration ZIPPLE Snack-Bar validés. Les anciennes exclusions/complexités incompatibles ne sont plus applicables. Voir aussi le document de continuité de construction.
+
 **Date de référence :** 21 novembre 2026  
 **Produit :** GRILLAD  
 **Type :** ERP autonome spécialisé dans la gestion des activités de grillades  
