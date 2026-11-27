@@ -68,7 +68,7 @@ jobs:
           gradle-version: '8.7'
       - uses: android-actions/setup-android@v4
       - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
-      - run: gradle --no-daemon :grillad:testDebugUnitTest :grillad:assembleDebug
+      - run: gradle --no-daemon --stacktrace :grillad:testDebugUnitTest :grillad:assembleDebug
       - uses: actions/upload-artifact@v4
         if: always()
         with:
