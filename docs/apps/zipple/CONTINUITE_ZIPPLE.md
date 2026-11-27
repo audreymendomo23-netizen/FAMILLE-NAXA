@@ -461,3 +461,44 @@ Portage du principe NS v21 (GPS aux bornes de service, compte propre, preuve fra
 - 055747b : ZIPPLE N2–N5 — isolated business candidate 45921819983 success.
 - 055747b : ZIPPLE N1 — hosted Android debug handoff 45921819921 in_progress.
 Le commit fonctionnel 40bfdce196a17e2135143f2665219427bc165061 contient la correction 055747b et le portage pointage. La liste des runs nouvellement déclenchés peut encore être incomplète ; contrôler la tête fonctionnelle lors de la reprise. Aucun résultat en attente compté comme vert.
+
+
+## AUDIT DE REPRISE CONTRADICTOIRE — 27/11/2026, 07:51 WAT
+Cette section constitue le point de reprise courant et supersède les états CI historiques en attente, sans effacer l'historique.
+### Sources et périmètre
+- Conversations ZIPPLE 26–27/11 : travail simultané par six bulks, réutilisation des applications sœurs, maintien de la branche dédiée, remise à table Snack-Bar par serveur habilité, signature « Servez mieux, gérez en toute sécurité. ».
+- CDC gelé `docs/cahiers-des-charges/ZIPPLE_V2_0.md` (notamment §§ 1, 3, 6, 7, 9–17, 21–23 et addendum du 26/11), `docs/apps/zipple/AUDIT_CONFORMITE_BULKS.md` (découpage initial et limites), historique du présent fichier.
+- Tête documentaire auditée 503c3099ca949f53989f711f0db7272e1c2f9034 ; dernier candidat fonctionnel identifié 40bfdce196a17e2135143f2665219427bc165061. Comparaison main 8ab45776cd3606b43e97aae5d641fab7f89aa750 : 133 commits d'avance, 0 retard avant ce commit documentaire.
+- Lecture directe ciblée de Workspace.tsx, AttendanceWorkspace.tsx, ZippleAttendance.kt, business-gateway.mjs, customer-service.sql, pilotage.sql, local-business.test.mjs ; inventaire du diff main/branche. Audit statique ciblé et lecture des résultats CI existants, pas une exécution nouvelle de toutes les recettes ni une inspection exhaustive de chaque ligne.
+### Résultats CI directement vérifiés via jobs et journaux
+| Gate | Run | Conclusion |
+|---|---|---|
+| N1 Android/Web/émulateur (3 jobs) | 45921917270 | SUCCESS |
+| SQL/contrats isolés | 45921917330 | SUCCESS |
+| GoTrue/PostgREST/Edge + navigateur local | 45921917214 | SUCCESS |
+| PWA multinavigateur | 45921917246 | SUCCESS |
+| Pages build | 45921917234 | SUCCESS |
+| N1 Pages live existantes | 45921917285 | SUCCESS |
+| APK debug hébergé | 45921917312 | SUCCESS |
+Bilan 7/7 workflows, 9/9 jobs terminés success ; aucun de ces jobs en attente ou échec. SQL job 140254383229 : 45/45, 0 échec, 0 skip. E2E job 140254382240 : 1 scénario intégré, 0 échec, 0 skip. Android job 140254382610 : BUILD SUCCESSFUL, mais N1LiveDeviceTest.authenticatedNativeAndPersistedSync SKIPPED ; ne pas confondre gate vert et test natif hébergé réussi. APK job 140254382810 : BUILD SUCCESSFUL. Le précédent E2E 055747b, run 45921819949 / job 140254074070, SUCCESS, confirme la correction de la file assistance.
+Marqueurs confirmés dans les logs : ZIPPLE_BULK5_ATTENDANCE_GPS_SCOPE_IDEMPOTENCE_PASS, ZIPPLE_BULK5_REAL_BROWSER_ATTENDANCE_PASS, ZIPPLE_BULK5_REAL_POST_SATISFACTION_UI_PASS, ZIPPLE_BULK4_REAL_STAFF_SUPPORT_UI_PASS, ZIPPLE_BULK4_ORDER_SUPPORT_ISOLATION_PASS, ZIPPLE_SNACK_STATION_HANDOFF_UI_BOUNDARY_PASS, ZIPPLE_SNACK_TABLE_HANDOFF_AND_PERFORMANCE_PASS, ZIPPLE_BULK3_REAL_BROWSER_CONVERTED_PURCHASE_PASS, ZIPPLE_BULK3_REAL_BROWSER_GROUP_STATEMENT_PASS, ZIPPLE_BUSINESS_REAL_EDGE_PROFESSIONAL_AND_GUEST_BROWSER_PASS.
+### Matrice des six bulks (conformité vs recettes)
+| Bulk | Statut de reprise | Acquis et reste |
+|---|---|---|
+| 1 Socle commun, cohérence et sécurité transversale | VERT périmètre isolé | Auth, scopes, RLS, expiration, tarifs et accès invité requalifiés ; qualification physique/hébergée et charge relèvent du 6. |
+| 2 Cœur opérationnel | Gate local VERT ; conformité résiduelle ouverte | QR sans compte, tables/réservations, caisse et additions, formule, poste, file, retrait et remise Snack à table confirmés. Reste routage fin/sous-postes, fractionnement intra-commande, concurrence et synchronisation/propagation live exhaustives. |
+| 3 ERP et finance | Gate local VERT ; non clôturé globalement | Stocks, lots, recettes, consignes, achats convertis, pertes, transferts, pesée, caisse, avoirs/retours, crédit, rapprochement et consolidation testés. Reste SYSCOHADA/fiscalité validés, pièces privées à qualification industrielle, offline de toutes mutations et résolution des conflits, parité métier native. |
+| 4 Commerce et interconnexions | PARTIEL | Assistance à commande anonyme, filtre et historique, CRM de base et devis d'abonnement. Restent paiement opérateur/confirmation réelle, entitlements complets, fidélité et parrainage client, notifications, livraison externe Restaurant, NAXA SECURITY/HOTEL/GRILLAD, livechat/support plateforme. |
+| 5 RH et intelligence | PARTIEL | Indicateurs de remise, satisfaction poste, pointage GPS début/fin local vert. Restent RH dossiers/contrats/affectations, horaires/pauses/plannings, objectifs/formation/feedback interne, contrôle géographique et revue fraude, politique rétention, IA avancée et briefings. |
+| 6 Parité et livraison | PARTIEL | Build Web/PWA/APK et émulateur verts ; qualification native hébergée ignorée, GPS physique, biométrie/MFA réelle, parité complète, Fulfulde, régression intégrée famille, charge et déploiement métier non prouvés. |
+### Contradictions et écarts concrets
+1. CDC §6.5 titre « QR et absence de livraison » obsolète alors que corps/addendum validés imposent remise à table Snack-Bar. Conserver la décision postérieure : QR → commande → prête → serveur habilité → servie → confirmation client → avis ; retrait comptoir distinct. Ne pas inventer coursier Snack. Les preuves UI et DB couvrent notamment refus du poste préparation seul. Renommer le titre lors d'une mise à jour CDC autorisée.
+2. Workspace.tsx passe `delivery:false` à la configuration du site ; cela ne doit pas être présenté comme activation du canal de livraison externe Restaurant. Le gateway accepte le champ delivery mais cela n'établit pas le parcours coursier complet.
+3. customer-service.sql : une demande/réponse par commande et snapshot limité à 100 lignes ; le filtre non répondu fonctionne, mais ce n'est pas un livechat conversationnel ni un compteur global de toutes demandes.
+4. AttendanceWorkspace.tsx et ZippleAttendance.kt : GPS frais, précision max 500 m, 120 s, Android exclut mock provider ; serveur contrôle identité/site/transition/idempotence. E2E navigateur position synthétique, pas preuve GPS physique ni dispositif anti-fraude infaillible. Les interfaces lues sont FR/EN et non Fulfulde. Pointage en ligne, pas de suivi permanent.
+5. Cahier §21.3 prévaut sur anciens business cases : Accès 5 000/mois, 50 000/an ; Premium 18 000/mois, 180 000/an, uniquement mensuel/annuel, sans troisième pack. Devis/intentions ne constituent pas un débit. Aucun montant ou quota nouveau.
+6. Pages live = contrôle de l'existant, build APK ≠ authentification hébergée ni release ; fichiers SQL métier dans docs/apps/zipple/n2-n5 ne prouvent pas migrations de production. Aucun statut production extrapolé.
+7. AUDIT_CONFORMITE_BULKS.md s'arrête à 4edaea7 et conserve des états « en cours » anciens ; ce point de continuité supersède ses résultats historiques, le découpage et les réserves restent valides.
+### Reprise opérationnelle
+Ne pas rouvrir les parcours locaux verts sans régression constatée. Traiter en parallèle les reliquats des bulks 2–3 et les bulks 4–6 : (A) commerce/interconnexions, paiements et support réutilisant contrats NAXA/NS/SECURITY/HOTEL/GRILLAD ; (B) RH/IA et sécurisation du pointage à partir de NS v21/ManagementModules/PerformanceEngine ; (C) parité native, traductions, offline et qualifications ; (D) clauses opérationnelles fines et conformité financière/pièces. Pour toute nouvelle fonction, preuves SQL négatives/positives, Edge réel, UI Web/PWA et Android natif, isolation des sites et régression. Aucun skip sur parcours requis avant clôture globale. Ne pas inventer secrets, données fiscales ou barèmes. Ne déclarer vert complet qu'après preuve de l'exigence, pas par seul nombre de workflows.
+Cette passe est documentaire : aucun code, CDC, main, migration ou déploiement modifié. Les sources externes/états production non vérifiés restent non attestés.
