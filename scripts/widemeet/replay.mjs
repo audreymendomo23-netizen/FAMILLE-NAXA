@@ -769,10 +769,10 @@ try{
  const periodicRegion=hp.getByRole("region",{name:"Bilans automatiques",exact:true});
  const periodicToggle=periodicRegion.getByLabel("Hebdomadaire",{exact:true});await periodicToggle.waitFor();
  await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&!x.disabled});
- await periodicToggle.check();await periodicRegion.getByRole("button",{name:"Actualiser l’historique",exact:true}).waitFor();
- await hp.waitForFunction(()=>[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].some(x=>x.checked));
+ await periodicToggle.click();
+ await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&x.checked&&!x.disabled});
  const periodic=await identity(hs.access_token,"center-periodic-list");assert.equal(periodic.timezone,"Africa/Douala");assert.ok(periodic.preferences.some(p=>p.cadence==="weekly"&&p.enabled===true));
- await periodicToggle.uncheck();await hp.waitForFunction(()=>[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].every(x=>!x.checked));
+ await periodicToggle.click();await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&!x.checked&&!x.disabled});
  assert.ok((await identity(hs.access_token,"center-periodic-list")).preferences.some(p=>p.cadence==="weekly"&&p.enabled===false));
  pass("B4 periodic report real browser opt-in, disable and timezone");
  pass("WAVE06 real authorized summary refresh retains selected period");

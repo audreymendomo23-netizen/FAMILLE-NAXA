@@ -3,3 +3,7 @@ Préférences privées cinq cadences, périodes calendaires Africa/Douala, gén�
 
 ### Distribution privée et correction Replay
 Candidat précédent 3375445 : 8/10 SUCCESS (Android corrigé, SQL et Web verts). Replay timeout avant bilans sur photo; composant ignore les fichiers pendant busy, locator n'attendait que visibilité. Correction attend input actif et JPEG réel généré Chromium, sans assouplissement du résultat attendu. Cause exacte à confirmer. Nouveau type de notification dérivé des bilans persistés, sans métriques dans la notification, visibilité 30 jours, identité/tenant/rôle/Premium actuels, lecture idempotente et navigation vers statistiques Web/Compose. Tables définies dans la phase notifications avant workspace centers. Pas de FCM réel ni worker hébergé. Tests SQL et Replay inchangés hors ajouts.
+
+
+### 27/11/2026 — Recette des préférences périodiques confirmées
+Run 46061544935: 8/10 jobs verts, Replay et synthèse rouges. La case contrôlée attend la réponse du serveur; Playwright check exige un changement immédiat. La recette clique puis attend l'état hebdomadaire précis et la fin de requête, en conservant la vérification indépendante API d'activation/désactivation. Attente de disponibilité du sélecteur photo ajoutée si présente, sans masquer le contrôle d'image. Aucun changement des règles métier ou de données. Qualification du nouveau candidat nécessaire.
