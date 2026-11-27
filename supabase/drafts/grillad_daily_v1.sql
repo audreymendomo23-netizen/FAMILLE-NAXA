@@ -42,6 +42,7 @@ begin
  'unpaired_arrivals',(select count(*) from grillad_private.attendance a where a.org=p_org and a.site=p_site and a.kind='arrival' and a.captured_at<hi and a.captured_at>=lo and not exists(select 1 from grillad_private.attendance b where b.paired_arrival=a.id and b.captured_at<hi)),
  'target',(select amount from grillad_private.targets where org=p_org and site=p_site and day=p_day),
  'direct_ca',coalesce(sum(s.total) filter(where s.source='direct'),0),'connect_ca',coalesce(sum(s.total) filter(where s.source='connect'),0),'basis','server_confirmed_only') into v from grillad_private.sales s where s.org=p_org and s.site=p_site and s.created_at>=lo and s.created_at<hi and s.cancelled_at is null;
+ v:=v||jsonb_build_object('provisional',((v->>'open_cash_count')::bigint>0 or (v->>'unpaired_arrivals')::bigint>0),'margin',case when v->'cost'='null'::jsonb then null else (v->>'ca')::bigint-(v->>'cost')::bigint end,'operating_result',case when v->'cost'='null'::jsonb then null else (v->>'ca')::bigint-(v->>'cost')::bigint-(v->>'expenses')::bigint end);
  if old.version is not null and old.data=v and old.starts_at=lo and old.ends_at=hi then return jsonb_build_object('version',old.version,'changed',false);end if;
  n:=coalesce(old.version,0)+1;
  insert into grillad_private.daily_summary(org,site,service_day,version,starts_at,ends_at,data) values(p_org,p_site,p_day,n,lo,hi,v);
@@ -70,15 +71,21 @@ begin
  return out;
 end $$;
 create function grillad_private.notice_feed(p_org uuid,p_site uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
-declare r text;u uuid:=auth.uid();out jsonb;preferences jsonb;
+declare r text;u uuid:=auth.uid();out jsonb;preferences jsonb;security_events jsonb:='[]'::jsonb;
 begin
  r:=grillad_private.scope(p_org,p_site);
+ if r in ('owner','manager') then security_events:=coalesce(grillad_private.security_list(p_org,p_site)->'incidents','[]'::jsonb);end if;
  with all_events as (
  select 'event:'||e.id as id,case when action in ('sell','sell_basket') then 'sales' when action in ('prepare','adjust_stock') then 'stock' else 'cash' end as category,
  case when action in ('sell','sell_basket') then 'Vente confirmée' when action='prepare' then 'Préparation enregistrée' when action='adjust_stock' then 'Ajustement de stock enregistré' when action='cancel_expense' then 'Dépense annulée' when action='close_cash' then 'Clôture de caisse enregistrée' else 'Dépense enregistrée' end as text,e.created_at at
  from grillad_private.events e where org=p_org and site=p_site and action in ('sell','sell_basket','prepare','adjust_stock','close_cash','expense','cancel_expense') and (r<>'seller' or (e.actor=u and action in ('sell','sell_basket','prepare')))
  union all select 'daily:'||service_day,'daily','Point journalier disponible',max(generated_at) from grillad_private.daily_summary where org=p_org and site=p_site and r<>'seller' group by service_day
  union all select 'attendance:'||a.id,'attendance','Pointage confirmé',a.received_at from grillad_private.attendance a where org=p_org and site=p_site and (r<>'seller' or a.actor=u)
+ union all select 'correction:'||c.id,'attendance','Régularisation de pointage demandée',c.requested_at from grillad_private.attendance_corrections c where c.org=p_org and c.site=p_site and (r<>'seller' or c.requester=u)
+ union all select 'decision:'||c.id,'attendance',case when c.status='approved' then 'Régularisation approuvée' else 'Régularisation refusée' end,c.decided_at from grillad_private.attendance_corrections c where c.org=p_org and c.site=p_site and c.status<>'pending' and (r<>'seller' or c.requester=u)
+ union all select 'connect:'||o.id,'connect','Commande GRILLAD Connect reçue',o.created_at from grillad_private.connect_orders o where o.org=p_org and o.site=p_site and r<>'seller'
+ union all select 'connect:'||h.order_id||':'||h.event,'connect','Statut GRILLAD Connect actualisé',h.created_at from grillad_private.connect_history h join grillad_private.connect_orders o on o.id=h.order_id where o.org=p_org and o.site=p_site and r<>'seller'
+ union all select 'security:'||(i->>'id'),'security','Incident de sécurité signalé',(i->>'observed_at')::timestamptz from jsonb_array_elements(security_events) i where r<>'seller'
  ),recent as(select e.* from all_events e left join grillad_private.notice_preference p on p.org=p_org and p.site=p_site and p.actor=u and p.category=e.category where coalesce(p.enabled,true) order by e.at desc,e.id limit 100)
  select coalesce(jsonb_agg(jsonb_build_object('id',e.id,'category',e.category,'text',e.text,'at',e.at,'read',rr.read_at is not null) order by e.at desc,e.id),'[]'::jsonb) into out from recent e left join grillad_private.notice_read rr on rr.org=p_org and rr.site=p_site and rr.actor=u and rr.notice_id=e.id;
  select coalesce(jsonb_object_agg(category,enabled),'{}'::jsonb) into preferences from grillad_private.notice_preference where org=p_org and site=p_site and actor=u;

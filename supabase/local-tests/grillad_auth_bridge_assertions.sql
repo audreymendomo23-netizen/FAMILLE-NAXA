@@ -139,8 +139,11 @@ do $$
 declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';v jsonb;notice text;
 begin
  v:=public.grillad_daily_list(o,s);if jsonb_array_length(v)<1 then raise exception 'missing daily';end if;
+ if not((v->0->'data')?'provisional') or not((v->0->'data')?'operating_result') then raise exception 'daily financial completeness';end if;
  v:=public.grillad_prediction(o,s);if v->'ca_estimate'<>'null'::jsonb or v->'items'->0->>'quality'<>'insufficient' then raise exception 'insufficient forecast must be explicit';end if;
- v:=public.grillad_notice_feed(o,s);select x->>'id' into notice from jsonb_array_elements(v->'items') x where x->>'category'='daily' limit 1;
+ v:=public.grillad_notice_feed(o,s);if not exists(select 1 from jsonb_array_elements(v->'items') x where x->>'category'='connect') then raise exception 'connect notification missing';end if;
+ if (select count(*) from jsonb_array_elements(v->'items') x where x->>'category'='connect')<>(select count(distinct x->>'id') from jsonb_array_elements(v->'items') x where x->>'category'='connect') then raise exception 'duplicate connect notices';end if;
+ select x->>'id' into notice from jsonb_array_elements(v->'items') x where x->>'category'='daily' limit 1;
  if notice is null then raise exception 'missing notice';end if;
  perform public.grillad_notice_ack(o,s,notice);perform public.grillad_notice_ack(o,s,notice);
  v:=public.grillad_notice_feed(o,s);if not exists(select 1 from jsonb_array_elements(v->'items') x where x->>'id'=notice and (x->>'read')::boolean) then raise exception 'notice read';end if;
@@ -153,6 +156,7 @@ select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000002'
 select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000012","app_metadata":{}}',true);
 do $$begin
  if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'bound session failed';end if;
+ if exists(select 1 from jsonb_array_elements(public.grillad_notice_feed('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001')->'items') x where x->>'category' in ('connect','security')) then raise exception 'seller partner notice leak';end if;
  if not (public.grillad_push_register('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',repeat('t',64),'grillad-fixture',true)->>'registered')::boolean then raise exception 'push register';end if;
  begin perform count(*) from grillad_private.push_devices;raise exception 'token table leak';exception when insufficient_privilege then null;end;
  if (public.grillad_push_register('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',null,null,false)->>'registered')::boolean then raise exception 'push disable';end if;
