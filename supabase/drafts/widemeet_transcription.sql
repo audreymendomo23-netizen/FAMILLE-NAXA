@@ -32,6 +32,29 @@ returns jsonb language sql security invoker stable set search_path=pg_catalog,pu
 $wm$;
 revoke all on function public.wm_transcription_source(uuid,uuid,uuid) from public,anon,authenticated;
 grant execute on function public.wm_transcription_source(uuid,uuid,uuid) to service_role;
+-- Extractive review only: verbatim source references, no fabricated commitments or identities.
+-- This is not an abstractive model, a decision approval or automatic task creation.
+create function public.wm_transcription_review(p_result jsonb,p_recording uuid)
+returns jsonb language sql immutable security invoker set search_path=pg_catalog,public as $wm$
+ with segments as (
+  select value as seg,ord::integer as ord,count(*) over() as total
+  from jsonb_array_elements(coalesce(p_result->'segments','[]'::jsonb)) with ordinality t(value,ord)
+ ), excerpts as (
+  select seg,ord from segments
+  order by case when ord=1 or ord=total or ord=(total+1)/2 then 0 else 1 end, (seg->>'uncertain')::boolean,ord limit 5
+ ), candidates as (
+  select seg,ord from segments
+  where seg->>'uncertain'='false'
+   and lower(seg->>'text') ~ '^[[:space:]]*(nous avons décidé|nous décidons|la décision est|we decided|we have decided|we agree to|action item:|action à réaliser:)'
+   and lower(seg->>'text') !~ '(pas décidé|not decided|not agree|ne décidons pas|proposons|suggest|propose|hypothèse|hypothetical|[?])'
+  order by ord limit 10
+ )
+ select jsonb_build_object('method','extractive-review-v1','recording_id',p_recording,
+  'excerpts',coalesce((select jsonb_agg(seg||jsonb_build_object('segment_index',ord-1) order by ord) from excerpts),'[]'::jsonb),
+  'decision_candidates',coalesce((select jsonb_agg(seg||jsonb_build_object('segment_index',ord-1) order by ord) from candidates),'[]'::jsonb))
+$wm$;
+revoke all on function public.wm_transcription_review(jsonb,uuid) from public,anon,authenticated;
+grant execute on function public.wm_transcription_review(jsonb,uuid) to service_role;
 create function public.wm_transcription_action(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
 declare s record; rid uuid; recid uuid; j public.wm_transcription_jobs%rowtype; v jsonb; src jsonb;
@@ -72,7 +95,7 @@ begin
  elsif p_action='read' then
   if not found then return jsonb_build_object('status','not_requested','attempts',0);end if;
  else return null;end if;
- return jsonb_build_object('recording_id',recid,'status',j.status,'attempts',j.attempts,'result',j.result);
+ return jsonb_build_object('recording_id',recid,'status',j.status,'attempts',j.attempts,'result',case when j.status='complete' then j.result||jsonb_build_object('review',public.wm_transcription_review(j.result,recid)) else null end);
 exception when invalid_text_representation or unique_violation then return null;
 end $wm$;
 revoke all on function public.wm_transcription_action(text,text,jsonb) from public,anon,authenticated;
