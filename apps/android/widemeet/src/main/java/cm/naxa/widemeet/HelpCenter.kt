@@ -17,7 +17,9 @@ import androidx.compose.ui.unit.dp
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
  if(mode=="faq"){
   OutlinedTextField(query,{query=it},label={Text(tr("Rechercher dans l’aide","Search help"))},modifier=Modifier.fillMaxWidth())
-  for(topic in topics.filter{t->t.take(4).any{it.contains(query.trim(),ignoreCase=true)}}){var expanded by remember(topic[0]){mutableStateOf(false)};TextButton(onClick={expanded=!expanded}){Text(tr(topic[0],topic[1]))};if(expanded){Text(tr(topic[2],topic[3]));Button(onClick={go(topic[4])}){Text(tr("Ouvrir cet espace","Open this area"))}}}
+  val results=topics.filter{t->t.take(4).any{it.contains(query.trim(),ignoreCase=true)}}
+  if(results.isEmpty()){Text(tr("Aucun résultat. Essayez un autre mot.","No results. Try another word."));TextButton(onClick={query=""}){Text(tr("Effacer la recherche","Clear search"))}}
+  for(topic in results){var expanded by remember(topic[0]){mutableStateOf(false)};TextButton(onClick={expanded=!expanded}){Text(tr(topic[0],topic[1]))};if(expanded){Text(tr(topic[2],topic[3]));Button(onClick={go(topic[4])}){Text(tr("Ouvrir cet espace","Open this area"))}}}
  }else{
  val info=when(mode){
  "support"->listOf("Les tickets et le Livechat ne sont pas encore connectés. Consultez l’aide sans transmettre votre mot de passe.","Tickets and live chat are not connected yet. Browse help without sharing your password.","faq","Consulter la FAQ","Read FAQ")

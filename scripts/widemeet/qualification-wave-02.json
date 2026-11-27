@@ -1,0 +1,507 @@
+{
+  "wave": 2,
+  "total": 50,
+  "actions": 8,
+  "recipes": 42,
+  "base": "b1e5a0841c6fa81e8efbcb0d65f11d9018435b3e",
+  "previous_wave": "5fc10aacec3af0d0eab8728c11ea0329c4568e90",
+  "entries": [
+    {
+      "id": "B1.3-A01",
+      "bulk": "B1",
+      "kind": "action",
+      "description": "Qualifier le socle Web responsive et PWA sans fuite de données."
+    },
+    {
+      "id": "B1.3-R01",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Vite build, contrôle routes et navigation 5 onglets, hamburger et droits, textes sans détails techniques.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.3-R02",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Chromium 320/1440, clavier, lecteurs d'écran, contraste AA, thème clair/nuit Horizon et reduced motion.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.3-R03",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "PWA installation, mise à jour/service worker, cache public uniquement; hors ligne aucun faux login ou mutation officielle.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.3-R04",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Session Web persistée selon choix, cookie HttpOnly/Secure, reload et logout; aucun refresh secret exposé.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual remembered Web session restored after reload using HttpOnly secure cookie without exposed refresh token"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B1.3-R05",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Export PDF/XLSX : fixture ouverte par lecteurs indépendants, caractères Unicode, aucune formule injectée; contenu métier B4.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B1.3-R06",
+      "bulk": "B1",
+      "kind": "recipe",
+      "description": "Compatibilité navigateurs supportés, reload, onglets multiples, perte réseau et retour; mesurer anomalies.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.6-A01",
+      "bulk": "B2",
+      "kind": "action",
+      "description": "Finaliser fichiers privés direct/groupe/agenda/salle et cycle complet."
+    },
+    {
+      "id": "B2.6-R01",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Formats/taille/signature/nom sûrs, contrôle contenu, malware en quarantaine; refus fichier falsifié.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 actual private Storage chat file/voice integrity, retry, tenant ACL, revoke and no pre-admission media"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.6-R02",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Réservation staging, upload sans écrasement, SHA et taille, publication atomique et retry.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 actual private Storage chat file/voice integrity, retry, tenant ACL, revoke and no pre-admission media"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.6-R03",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Storage privé direct/groupe : ACL au téléchargement et après lecture, refus inter-tenant et non-membre.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 actual private Storage chat file/voice integrity, retry, tenant ACL, revoke and no pre-admission media"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.6-R04",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Agenda/salle : upload hôte, RSVP et périmètre, pause/clôture, accès autorisé.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 actual agenda and room media: host upload, RSVP and tenant scope, chat permission, pause and closure"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.6-R05",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Web/Android/PWA : choisir, annuler, envoyer, télécharger et ouvrir, comparer octets et erreur/retry.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 Web group actual attachment upload/download and synthetic microphone voice capture, delivery and decoded playback"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.6-R06",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Révocation/expiration, nettoyage staging/orphelins, suppression vérifiée et restauration interdite (politique B6).",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 real private Storage verified deletion, durable revoke, repeat cleanup and fresh media preserved"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.8-A01",
+      "bulk": "B2",
+      "kind": "action",
+      "description": "Qualifier capture volontaire et lecteur sans confusion avec enregistrement de réunion."
+    },
+    {
+      "id": "B2.8-R01",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Permission microphone explicite, capture/arrêt/annulation, limite durée/taille et formats compatibles.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 Web group actual attachment upload/download and synthetic microphone voice capture, delivery and decoded playback"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.8-R02",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Préécoute et envoi volontaire avec UUID stable; aucun envoi automatique.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B2.8-R03",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Transport privé, SHA, décodage réel voix, erreur codec et refus fichier falsifié.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 actual private Storage chat file/voice integrity, retry, tenant ACL, revoke and no pre-admission media"
+        },
+        {
+          "suite": "replay",
+          "marker": "B2 Web group actual attachment upload/download and synthetic microphone voice capture, delivery and decoded playback"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.8-R04",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Lecteur Web/Android/PWA, reprise, révocation purge lecture/cache, refus membre retiré.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 Web group actual attachment upload/download and synthetic microphone voice capture, delivery and decoded playback"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B2.8-R05",
+      "bulk": "B2",
+      "kind": "recipe",
+      "description": "Appareil physique micro/audio, interruption, perte réseau et interop codecs.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B3.7-A01",
+      "bulk": "B3",
+      "kind": "action",
+      "description": "Finaliser fenêtre live sur capture active et synchronisation.",
+      "specialized_candidate": "3be8ac254eb5791624959b444b3abd32e4d4e926"
+    },
+    {
+      "id": "B3.7-R01",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Audio Ogg accessible pendant Egress, traitement avant arrêt; pas de fixture après clôture.",
+      "markers": [],
+      "complete": false,
+      "specialized_candidate": "3be8ac254eb5791624959b444b3abd32e4d4e926"
+    },
+    {
+      "id": "B3.7-R02",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Fenêtre original FR/EN et traduction texte effective, horodatage/latence/incertitude mesurés.",
+      "markers": [],
+      "complete": false,
+      "specialized_candidate": "3be8ac254eb5791624959b444b3abd32e4d4e926"
+    },
+    {
+      "id": "B3.7-R03",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Changement langue, préférence restaurée, repli Fulfulde/non qualifié et piste originale.",
+      "markers": [],
+      "complete": false,
+      "specialized_candidate": "3be8ac254eb5791624959b444b3abd32e4d4e926"
+    },
+    {
+      "id": "B3.7-R04",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "Consentement avant/après inférence, autre salle/jeton invalide refusés.",
+      "markers": [],
+      "complete": false,
+      "specialized_candidate": "3be8ac254eb5791624959b444b3abd32e4d4e926"
+    },
+    {
+      "id": "B3.7-R05",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "TTL, purge fenêtre à retrait/pause/fin et worker crash; aucun résultat ancien ressuscité.",
+      "markers": [],
+      "complete": false,
+      "specialized_candidate": "3be8ac254eb5791624959b444b3abd32e4d4e926"
+    },
+    {
+      "id": "B3.7-R06",
+      "bulk": "B3",
+      "kind": "recipe",
+      "description": "UI réelle Android/Web/PWA, débit, multi-salles, contrôle charge et capacités.",
+      "markers": [],
+      "complete": false,
+      "specialized_candidate": "3be8ac254eb5791624959b444b3abd32e4d4e926"
+    },
+    {
+      "id": "B4.4-A01",
+      "bulk": "B4",
+      "kind": "action",
+      "description": "Compléter suivi, preuve et continuité interversions."
+    },
+    {
+      "id": "B4.4-R01",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Tâche issue version approuvée, responsable/échéance explicites, refus autres rôles.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N4 task assignment, evidence, correction, approval, idempotence and tenant/recipient isolation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.4-R02",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Preuve texte/fichier privé si exigence, correction, approbation, retour et états.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N4 task assignment, evidence, correction, approval, idempotence and tenant/recipient isolation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.4-R03",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Rappel/retard/escalade, timezone, création nouvelle passée refusée, retry historique exact autorisé.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B4.4-R04",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Historique append-only, concurrence/CAS et tableaux par responsable.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N4 task assignment, evidence, correction, approval, idempotence and tenant/recipient isolation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.4-R05",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Remplacement/révocation version : historique et reprise explicite sans ancien droit.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual N4 closed-room minutes versioning, expiry-independent archives, approval, selected recipients, read audit and revocation"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B4.4-R06",
+      "bulk": "B4",
+      "kind": "recipe",
+      "description": "Web/Android/PWA E2E, export et notifications B2; IA B3 ne crée pas de tâche approuvée.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.1-A01",
+      "bulk": "B5",
+      "kind": "action",
+      "description": "Finaliser aide cohérente et accessible."
+    },
+    {
+      "id": "B5.1-R01",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "FAQ publique et authentifiée, recherche/thèmes/liens, retour navigation.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B5.3-A01",
+      "bulk": "B5",
+      "kind": "action",
+      "description": "Terminer perte de clé avec validation de politique, sans reset abusif.",
+      "specialized_candidate": "6aacda4f237c41e129629a159b5ffb3972f3d884"
+    },
+    {
+      "id": "B5.3-R01",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Clé individuelle valide/incorrecte/consommée, changement GoTrue et révocation tous appareils.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "actual offline recovery proof, one-use key, GoTrue credential replacement and two-device revocation"
+        }
+      ],
+      "complete": false,
+      "specialized_candidate": "6aacda4f237c41e129629a159b5ffb3972f3d884"
+    },
+    {
+      "id": "B5.3-R02",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Code secours préenregistré et preuve de possession, référence opaque; secret jamais à agent.",
+      "markers": [],
+      "complete": false,
+      "specialized_candidate": "6aacda4f237c41e129629a159b5ffb3972f3d884"
+    },
+    {
+      "id": "B5.3-R03",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Deux examinateurs habilités distincts, pas d'auto-examen, cas expiré/refus et usage unique.",
+      "markers": [],
+      "complete": false,
+      "specialized_candidate": "6aacda4f237c41e129629a159b5ffb3972f3d884"
+    },
+    {
+      "id": "B5.3-R04",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Concurrence et retry exact, clôture du dossier et journal, aucun reset avant preuve.",
+      "markers": [],
+      "complete": false,
+      "specialized_candidate": "6aacda4f237c41e129629a159b5ffb3972f3d884"
+    },
+    {
+      "id": "B5.3-R05",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Perte de toutes preuves : procédure indépendante à arbitrer, refus fermé jusqu'à validation.",
+      "markers": [],
+      "complete": false,
+      "specialized_candidate": "6aacda4f237c41e129629a159b5ffb3972f3d884"
+    },
+    {
+      "id": "B5.3-R06",
+      "bulk": "B5",
+      "kind": "recipe",
+      "description": "Corriger JSX RecoveryKey et qualifier parcours Web/Android/PWA réel, flags désactivés par défaut.",
+      "markers": [],
+      "complete": false,
+      "specialized_candidate": "6aacda4f237c41e129629a159b5ffb3972f3d884"
+    },
+    {
+      "id": "B6.08-A01",
+      "bulk": "B6",
+      "kind": "action",
+      "description": "Terminer effacement vérifié et cycle de vie de données."
+    },
+    {
+      "id": "B6.08-R01",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Politique rétention audio/PDF/chat/transcription/dérivés et droit après pass approuvés.",
+      "markers": [],
+      "complete": false
+    },
+    {
+      "id": "B6.08-R02",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Expiration bloque lecture avant suppression; purge Storage réelle et copie locale vérifiée.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 real private Storage verified deletion, durable revoke, repeat cleanup and fresh media preserved"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.08-R03",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Nettoyage staging/orphelins, retry après crash, idempotence, contenu frais préservé.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 real private Storage verified deletion, durable revoke, repeat cleanup and fresh media preserved"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.08-R04",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Course purge/export/ASR/revocation, worker multi-instance et registre durable.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 real private Storage verified deletion, durable revoke, repeat cleanup and fresh media preserved"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.08-R05",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Suppression des minutes, fichiers, transcriptions, chat et dérivés; journal minimisé.",
+      "markers": [
+        {
+          "suite": "replay",
+          "marker": "B2 real private Storage verified deletion, durable revoke, repeat cleanup and fresh media preserved"
+        }
+      ],
+      "complete": false
+    },
+    {
+      "id": "B6.08-R06",
+      "bulk": "B6",
+      "kind": "recipe",
+      "description": "Demandes accès/rectification/effacement, preuve de traitement, limites copies exportées et backups.",
+      "markers": [],
+      "complete": false
+    }
+  ]
+}

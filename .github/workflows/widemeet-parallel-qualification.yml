@@ -1,7 +1,7 @@
-name: WideMeet — parallel qualification pilot
+name: WideMeet — parallel qualification wave 02
 on:
   push:
-    branches: [test/widemeet-parallel-20261127]
+    branches: [test/widemeet-wave02-20261127]
     paths:
       - '.github/workflows/widemeet-parallel-qualification.yml'
       - '.github/workflows/widemeet-gate.yml'
@@ -14,7 +14,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: widemeet-parallel-pilot-${{ github.sha }}
+  group: widemeet-wave02-${{ github.sha }}
   cancel-in-progress: false
 jobs:
   registry:
@@ -49,6 +49,22 @@ jobs:
       SFU: ${{ needs.sfu.result }}
       AUDIO: ${{ needs.audio.result }}
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: mkdir -p "$RUNNER_TEMP/wm-wave-evidence"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: wave02-evidence-*
+          path: ${{ runner.temp }}/wm-wave-evidence
+      - name: Produce individual Wave 02 evidence ledger
+        run: node scripts/widemeet/qualification-wave-report.mjs "$RUNNER_TEMP/wm-wave-evidence" "$RUNNER_TEMP/wm-wave02.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wave02-results-${{ github.sha }}
+          path: ${{ runner.temp }}/wm-wave02.json
+          if-no-files-found: error
       - name: Report actual suite outcomes without promoting unverified registry entries
         run: |
           {

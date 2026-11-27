@@ -43,6 +43,10 @@ test("public bilingual help and safe links to implemented features",async({page}
  await page.goto("/");
  await page.getByRole("button",{name:"Options",exact:true}).click();
  await page.getByRole("button",{name:"FAQ ›",exact:true}).click();
+ await page.getByLabel("Rechercher dans l’aide").fill("zzzz-no-topic");
+ await expect(page.getByRole("status").filter({hasText:"Aucun résultat. Essayez un autre mot."})).toBeVisible();
+ await page.getByRole("button",{name:"Effacer la recherche",exact:true}).click();
+ await expect(page.getByLabel("Rechercher dans l’aide")).toHaveValue("");
  await page.getByLabel("Rechercher dans l’aide").fill("compte");
  await page.getByText("Comment protéger mon compte ?",{exact:true}).click();
  await expect(page.getByText(/Conservez votre clé/)).toBeVisible();
