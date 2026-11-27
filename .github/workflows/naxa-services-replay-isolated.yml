@@ -859,6 +859,28 @@ jobs:
               const renewed=await act('refresh',{refresh_token:a.refresh_token,device:A.device});assert.equal(renewed.status,200);a=renewed.data;assert.equal(a.account.default_locale,locale);
             }
             pass('all three languages persisted by real member API and rotated Auth tokens');
+            // Bulk B: the first stage response is deliberately not used by the caller.
+            // Retry must preserve the identical original occurrence, UUID and coordinates.
+            const pendingFixture=await fixture('BULK-B-PENDING','multi_site_network');
+            const pendingAuth=await login(pendingFixture);
+            const pendingId=randomUUID(), pendingAt=new Date().toISOString();
+            const stageUrl=base+'/rest/v1/rpc/ns_stage_attendance_proof';
+            const pendingProof={p_event_id:pendingId,p_org:pendingFixture.org.id,p_site:pendingFixture.site.id,p_post:null,
+              p_event:'staff_clock_in',p_occurred:pendingAt,p_revision:0,p_latitude:4.05,p_longitude:9.7,p_accuracy:12,p_gps_at:pendingAt,p_selfie_at:null};
+            await success(stageUrl,pendingProof,pendingAuth.access_token,anon);
+            const repeated=await success(stageUrl,pendingProof,pendingAuth.access_token,anon);
+            assert.equal(repeated.proof_ref,pendingId);assert.equal(repeated.staged,true);
+            const stagedRows=await success(base+'/rest/v1/ns_attendance_staged_proof?select=event_id,occurred_at&event_id=eq.'+pendingId,undefined,admin,admin,'GET');
+            assert.equal(stagedRows.length,1);assert.equal(new Date(stagedRows[0].occurred_at).toISOString(),pendingAt);
+            assert.ok((await json(stageUrl,{...pendingProof,p_latitude:4.06},pendingAuth.access_token,anon)).status>=400,'altered original proof denied');
+            assert.ok((await json(stageUrl,pendingProof,b.access_token,anon)).status>=400,'foreign member denied');
+            const expiredAt=new Date(Date.now()-6*60*1000).toISOString();
+            assert.ok((await json(stageUrl,{...pendingProof,p_event_id:randomUUID(),p_occurred:expiredAt,p_gps_at:expiredAt},pendingAuth.access_token,anon)).status>=400,'expired capture denied');
+            assert.ok((await json(stageUrl,{...pendingProof,p_event_id:randomUUID(),p_latitude:null,p_longitude:null,p_accuracy:null,p_gps_at:null},pendingAuth.access_token,anon)).status>=400,'GPS remains mandatory');
+            const noClock=await success(base+'/rest/v1/ns_staff_time_events?select=id&id=eq.'+pendingId,undefined,admin,admin,'GET');
+            assert.equal(noClock.length,0,'staging alone never confirms attendance');
+            await act('logout',{device:pendingFixture.device},pendingAuth.access_token);
+            pass('Bulk B real stage retry immutable UUID/time, no confirmed clock, foreign/modified/expired/missing GPS denied');
             const browserFailures=await browserReplay(await fixture('WEB'));
             let r=await upload(A,a.access_token);assert.ok(r.ok,'own Storage upload HTTP '+r.status);
             r=await read(A,a.access_token);assert.ok(r.ok,'own Storage read HTTP '+r.status);assert.deepEqual(Buffer.from(await r.arrayBuffer()),png);
