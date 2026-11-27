@@ -109,6 +109,12 @@ do $$
 declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;
 begin if (public.grillad_report(o,s,d,d,true,null,null,null)->>'ca')::int<>2000 then raise exception 'network total';end if;end $$;
 reset role;
+-- Central resolution must match real payment evidence and cannot be set by a client.
+set role service_role;
+do $$declare q uuid;begin select (x->>'id')::uuid into q from jsonb_array_elements(public.grillad_central_queue(20)) x where x->>'kind'='renewal';if q is null then raise exception 'missing renewal request';end if;
+ begin perform public.grillad_central_resolve(q,'processed',gen_random_uuid()::text);raise exception 'fake payment proof accepted';exception when invalid_parameter_value then null;end;
+end $$;
+reset role;
 -- Existing activated seller assignment to a second GRILLAD site, then revocation.
 set role authenticated;
 do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';s2 uuid:='b3000000-0000-0000-0000-000000000003';u uuid:='b1000000-0000-0000-0000-000000000002';e uuid:=gen_random_uuid();p jsonb:=jsonb_build_object('user',u,'role','seller','reason','Renfort');v jsonb;
@@ -146,6 +152,7 @@ begin
  if (v->>'enabled')::boolean or public.grillad_action(o,a,e,'set_site_enabled',p)<>v or jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'site suspension replay';end if;
  begin perform public.grillad_snapshot(o,b,d,d);raise exception 'suspended access';exception when insufficient_privilege then null;end;
  if not exists(select 1 from jsonb_array_elements(public.grillad_pilotage_status(o,a)->'site_directory') x where x->>'site'=b::text and not(x->>'enabled')::boolean) then raise exception 'suspended directory';end if;
+ if not exists(select 1 from jsonb_array_elements(public.grillad_report(o,a,d,d,true,null,null,null)->'sites') x where x->>'site'=b::text and not(x->>'enabled')::boolean) then raise exception 'suspended historical site report';end if;
  perform public.grillad_action(o,a,gen_random_uuid(),'set_site_enabled',jsonb_build_object('site',b,'enabled',true,'reason','Reprise'));
  if jsonb_array_length(public.grillad_workspace())<>2 or jsonb_array_length(public.grillad_snapshot(o,b,d,d)->'cash_history')<>1 then raise exception 'reactivation/history';end if;
 end $$;

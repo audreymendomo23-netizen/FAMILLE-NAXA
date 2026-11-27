@@ -159,15 +159,41 @@ end $$;
 revoke all on function public.grillad_central_queue(integer) from public,anon,authenticated;
 grant select on grillad_private.central_requests to service_role;
 grant execute on function public.grillad_central_queue(integer) to service_role;
--- A central acknowledgement is not a grant or a payment confirmation. Require the central workflow reference.
-create function public.grillad_central_resolve(p_request uuid,p_status text,p_reference text) returns boolean language plpgsql security invoker set search_path=pg_catalog as $$
+-- A processed request requires a matching central fact, not an arbitrary reference.
+create unique index grillad_central_processed_reference on grillad_private.central_requests(kind,resolution) where status='processed';
+create function grillad_private.central_resolve(p_request uuid,p_status text,p_reference text) returns boolean language plpgsql security definer set search_path=pg_catalog as $$
+declare q grillad_private.central_requests%rowtype;ref_id uuid;
 begin
  if p_status is null or p_status not in ('processed','rejected') or p_reference is null or length(btrim(p_reference)) not between 1 and 160 then raise exception 'GRILLAD_RESOLUTION' using errcode='22023';end if;
- update grillad_private.central_requests set status=p_status,resolved_at=now(),resolution=btrim(p_reference) where id=p_request and status='pending';
+ select * into q from grillad_private.central_requests where id=p_request for update;
+ if not found then return false;end if;
+ if q.status=p_status and q.resolution=btrim(p_reference) then return true;end if;
+ if q.status<>'pending' then return false;end if;
+ if p_status='processed' then
+  begin ref_id:=btrim(p_reference)::uuid;exception when invalid_text_representation then raise exception 'GRILLAD_CENTRAL_EVIDENCE' using errcode='22023';end;
+  if q.kind='employee' then
+   if not exists(select 1 from famille_private.account_invites i join auth.users u on u.id=i.user_id
+    join famille_core.applications a on a.code='grillad' and a.status='active'
+    join famille_core.memberships m on m.user_id=u.id and m.app_id=a.id and m.organization_id=q.org and m.status='active'
+    join famille_core.role_assignments ra on ra.membership_id=m.id and ra.app_id=a.id and ra.organization_id=q.org and ra.location_id=q.site and ra.role_code=q.details->>'role' and ra.status='active' and ra.starts_at<=now() and (ra.expires_at is null or ra.expires_at>now())
+    join famille_core.client_app_access ca on ca.user_id=u.id and ca.app_id=a.id and ca.status='granted'
+    join famille_private.account_app_access g on g.user_id=u.id and g.app_code='grillad' and g.organization_id=q.org and g.location_id=q.site and g.status='active' and g.starts_at<=now() and (g.ends_at is null or g.ends_at>now())
+    where i.id=ref_id and i.request_id=q.id and i.app_code='grillad' and i.organization_id=q.org and i.location_id=q.site and i.role_code=q.details->>'role' and i.status='accepted' and i.accepted_by=u.id and i.accepted_at>=q.created_at and u.phone=q.details->>'phone') then raise exception 'GRILLAD_CENTRAL_EVIDENCE' using errcode='22023';end if;
+  else
+   if not exists(select 1 from famille_core.payment_matches pm join famille_core.payment_intents pi on pi.id=pm.payment_intent_id join famille_core.subscriptions s on s.id=pi.subscription_id
+    join famille_core.plans p on p.id=s.plan_id and p.app_id=s.app_id join famille_core.applications a on a.id=s.app_id and a.code='grillad'
+    where pm.id=ref_id and pm.status='confirmed' and pm.verified_at>=q.created_at and pi.status='matched' and pi.created_at>=q.created_at and pi.currency='FCFA'
+    and pi.expected_amount_fcfa=(q.details->>'amount')::bigint and pm.amount_fcfa=pi.expected_amount_fcfa and s.organization_id=q.org and s.status='active' and s.ends_at>now() and p.code=q.details->>'plan' and p.amount_fcfa=pi.expected_amount_fcfa) then raise exception 'GRILLAD_CENTRAL_EVIDENCE' using errcode='22023';end if;
+  end if;
+  if exists(select 1 from grillad_private.central_requests x where x.kind=q.kind and x.status='processed' and x.resolution=ref_id::text and x.id<>q.id) then raise exception 'GRILLAD_CENTRAL_EVIDENCE_USED' using errcode='22023';end if;
+ end if;
+ update grillad_private.central_requests set status=p_status,resolved_at=now(),resolution=case when p_status='processed' then ref_id::text else btrim(p_reference) end where id=p_request and status='pending';
  return found;
 end $$;
+revoke all on function grillad_private.central_resolve(uuid,text,text) from public,anon,authenticated;
+grant execute on function grillad_private.central_resolve(uuid,text,text) to service_role;
+create function public.grillad_central_resolve(p_request uuid,p_status text,p_reference text) returns boolean language sql security invoker set search_path=pg_catalog as $$select grillad_private.central_resolve(p_request,p_status,p_reference)$$;
 revoke all on function public.grillad_central_resolve(uuid,text,text) from public,anon,authenticated;
-grant update(status,resolved_at,resolution) on grillad_private.central_requests to service_role;
 grant execute on function public.grillad_central_resolve(uuid,text,text) to service_role;
 
 commit;
