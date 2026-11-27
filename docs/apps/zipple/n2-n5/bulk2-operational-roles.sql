@@ -39,7 +39,7 @@ end $$;
 create function public.zp_feedback_complete(p_guest_hash text,p_order uuid,p_rating int,p_comment text,p_reason text,p_ratings jsonb) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare inserted boolean;begin
  if p_reason is not null and p_reason not in ('wait','accuracy','quality','temperature','presentation','welcome','other') then raise exception 'INVALID_RATINGS';end if;
- if jsonb_typeof(p_ratings) is distinct from 'array' or jsonb_array_length(p_ratings)>5 then raise exception 'INVALID_RATINGS';end if;
+ if jsonb_typeof(p_ratings) is distinct from 'array' or jsonb_array_length(p_ratings)>100 then raise exception 'INVALID_RATINGS';end if;
  inserted:=public.zp_submit_feedback(p_guest_hash,p_order,p_rating,p_comment);
  if inserted then update public.zp_feedback set reason=p_reason where order_id=p_order;if jsonb_array_length(p_ratings)>0 then perform public.zp_guest_post_feedback(p_guest_hash,p_order,p_ratings);end if;end if;
  return inserted;

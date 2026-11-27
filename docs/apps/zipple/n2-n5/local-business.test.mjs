@@ -533,6 +533,33 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   console.log("ZIPPLE_BULK5_REAL_BROWSER_ATTENDANCE_PASS");
   // Verify the new boundary through actual GoTrue / PostgREST / Edge, not a mocked RPC.
   const tableSession=await scalar("select id from zp_table_sessions where table_id=$1 and closed_at is null",[tableId]);
+  // Two independent anonymous guests race for the last portion on the real Edge gateway.
+  const lastPortion=await ok("menu_add",{name:"Dernière portion concurrence",post:"kitchen",price_xaf:500,qty:1});
+  await ok("substation_assign",{item_id:lastPortion,substation_id:grillStation});
+  const contenderSessions=await Promise.all([b("guest_open",{qr},"",true),b("guest_open",{qr},"",true)]);
+  assert.ok(contenderSessions.every(x=>x.status===200));
+  const contenderTokens=contenderSessions.map(x=>x.body.guest_token);
+  const contenderPayloads=contenderTokens.map(()=>({channel:"table",table_session_id:tableSession,request_id:id(),lines:[{item_id:lastPortion,qty:1}]}));
+  const races=await Promise.all(contenderTokens.map((token,i)=>b("guest_order_create",contenderPayloads[i],token,true)));
+  assert.equal(races.filter(x=>x.status===200).length,1);
+  assert.equal(races.filter(x=>x.status===409&&x.body.error==="ITEM_UNAVAILABLE").length,1);
+  const winner=races.findIndex(x=>x.status===200),winningOrder=races[winner].body.data.id;
+  assert.equal(Number(await scalar("select available_qty from zp_menu_items where id=$1",[lastPortion])),0);
+  assert.equal(Number(await scalar("select count(*) from zp_order_lines where item_id=$1",[lastPortion])),1);
+  const replay=await b("guest_order_create",contenderPayloads[winner],contenderTokens[winner],true);
+  assert.equal(replay.status,200);assert.equal(replay.body.data.id,winningOrder);
+  assert.equal((await b("guest_order_read",{order_id:winningOrder},contenderTokens[1-winner],true)).status,403);
+  console.log("ZIPPLE_BULK2_REAL_EDGE_LAST_PORTION_RACE_PASS");
+  // A guest can rate only the substation captured on their order.
+  assert.equal((await b("guest_served",{order_id:winningOrder},contenderTokens[winner],true)).status,200);
+  const routedGuest=await b("guest_order_read",{order_id:winningOrder},contenderTokens[winner],true);
+  assert.equal(routedGuest.body.data.lines[0].substation_id,grillStation);
+  assert.equal(routedGuest.body.data.lines[0].substation_label,"Grillades");
+  const wrongRating=await b("guest_post_feedback",{order_id:winningOrder,ratings:[{post:"sub:"+sideStation,rating:3}]},contenderTokens[winner],true);
+  assert.equal(wrongRating.status,409);assert.equal(wrongRating.body.error,"POST_DENIED");
+  assert.equal((await b("guest_post_feedback",{order_id:winningOrder,ratings:[{post:"sub:"+grillStation,rating:4}]},contenderTokens[winner],true)).status,200);
+  assert.equal(Number(await scalar("select rating from zp_feedback_posts where order_id=$1 and post=$2",[winningOrder,"sub:"+grillStation])),4);
+  console.log("ZIPPLE_BULK2_REAL_EDGE_SUBSTATION_FEEDBACK_PASS");
   assert.equal((await b("snapshot",{site_id:id()})).status,403);
   assert.equal((await b("snapshot",{}, "a".repeat(64))).status,403);
   const invalidGuest=await b("guest_open",{qr:"b".repeat(64)},"",true);assert.equal(invalidGuest.status,429);
