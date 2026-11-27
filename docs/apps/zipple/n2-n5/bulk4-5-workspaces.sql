@@ -104,6 +104,7 @@ declare m public.zp_members;manage boolean;old public.zp_workspace_requests;w pu
  if target is not null and (not manage or not exists(select 1 from public.zp_site_scopes s join public.zp_members u on u.id=s.member_id and u.org_id=s.org_id where s.site_id=p_site and s.org_id=m.org_id and s.member_id=target and u.active and not u.reset_pending)) then raise exception 'DENIED';end if;
  if k<>'ticket' and target is null then raise exception 'INVALID_INPUT';end if;
  if k='shift' then
+ perform 1 from public.zp_members where id=target and org_id=m.org_id for update;
  if st is null or due is null or due<=st or due-st>interval '24 hours' then raise exception 'INVALID_INPUT';end if;
  if exists(select 1 from public.zp_work_items x where x.org_id=m.org_id and x.assignee_id=target and x.kind='shift' and x.state<>'cancelled' and x.starts_at<due and x.due_at>st) then raise exception 'SHIFT_OVERLAP';end if;
  elsif st is not null or (k<>'ticket' and due is null) then raise exception 'INVALID_INPUT';end if;

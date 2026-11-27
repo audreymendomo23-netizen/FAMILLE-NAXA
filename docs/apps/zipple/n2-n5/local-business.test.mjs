@@ -682,6 +682,28 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByRole("button",{name:"Calculer l'état fiscal de gestion",exact:true}).click();await page.getByText(/TEST FISCAL · 20% · TTC 1200 · HT 1000 · Taxe 200/).waitFor();
   const fiscalDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Exporter le relevé de gestion CSV",exact:true}).click();assert.equal((await fiscalDownload).suggestedFilename(),"zipple-fiscalite-gestion.csv");
   console.log("ZIPPLE_BULK3_REAL_TAX_CONFIG_REPORT_PASS");
+  // Exercise each new workspace through actual browser, authenticated Edge and SQL.
+  const openPortal=async(name,id)=>{await page.getByRole("button",{name,exact:true}).click();const root=page.getByTestId("portal-"+id);await root.waitFor();return root};
+  const profilePage=await openPortal("Profil","profile");await profilePage.getByLabel("Nom affiché",{exact:true}).fill("Profil recette ZIPPLE");await profilePage.getByLabel("Téléphone professionnel",{exact:true}).fill("699123456");
+  await profilePage.getByRole("button",{name:"Enregistrer le profil",exact:true}).click();await profilePage.getByText("Opération enregistrée",{exact:true}).waitFor();assert.equal(await scalar("select display_name from zp_profile_details where member_id=$1",[member]),"Profil recette ZIPPLE");
+  const teamPage=await openPortal("Équipe","team");await teamPage.getByLabel("Employé",{exact:true}).selectOption(member);await teamPage.getByLabel("Poste occupé",{exact:true}).fill("Responsable recette");await teamPage.getByLabel("Compétences",{exact:true}).fill("Service");
+  await teamPage.getByRole("button",{name:"Enregistrer le dossier",exact:true}).click();await teamPage.getByText("Opération enregistrée",{exact:true}).waitFor();
+  assert.equal(await scalar("select job_title from zp_team_details where site_id=$1 and member_id=$2",[site,member]),"Responsable recette");
+  const ticketPage=await openPortal("Support professionnel","tickets");await ticketPage.getByLabel("Intitulé",{exact:true}).fill("Ticket navigateur");await ticketPage.getByLabel("Description",{exact:true}).fill("Demande interne");await ticketPage.getByLabel("Catégorie",{exact:true}).selectOption("technical");
+  await ticketPage.getByRole("button",{name:"Créer",exact:true}).click();await ticketPage.getByText("Ticket navigateur · Ouvert",{exact:true}).waitFor();
+  await ticketPage.getByRole("button",{name:"Ouvrir le dossier",exact:true}).click();await ticketPage.getByLabel("Message ou observation",{exact:true}).fill("Réponse navigateur");
+  await ticketPage.getByRole("button",{name:"Envoyer",exact:true}).click();await ticketPage.getByText(/Réponse navigateur/).waitFor();await ticketPage.getByRole("button",{name:"En cours",exact:true}).click();await ticketPage.getByText("Ticket navigateur · En cours",{exact:true}).waitFor();
+  await ticketPage.getByRole("button",{name:"Terminé",exact:true}).click();await ticketPage.getByText("Ticket navigateur · Terminé",{exact:true}).waitFor();
+  const inboxPage=await openPortal("Notifications","notifications");const ticketNotice=inboxPage.locator(".business-panel").filter({hasText:"Ticket navigateur"}).first();await ticketNotice.waitFor();await ticketNotice.getByRole("button",{name:"Marquer comme lu",exact:true}).click();await ticketNotice.getByText(/^Lu ·/).waitFor();
+  for(const [tab,pid,title] of [["Plannings","planning","Service de recette"],["Objectifs","objectives","Objectif de recette"],["Formation","training","Formation de recette"],["Feedback interne","incidents","Incident de recette"]]){
+   const root=await openPortal(tab,pid);await root.getByLabel("Intitulé",{exact:true}).fill(title);await root.getByLabel("Description",{exact:true}).fill("Suivi réel navigateur");
+   if(pid==="incidents")await root.getByLabel("Catégorie",{exact:true}).selectOption("service");else await root.getByLabel("Thème",{exact:true}).fill("Service");
+   await root.getByLabel("Employé affecté",{exact:true}).selectOption(member);
+   if(pid==="planning")await root.getByLabel("Début (heure Douala)",{exact:true}).fill("2027-01-01T08:00");
+   await root.getByLabel("Échéance (heure Douala)",{exact:true}).fill("2027-01-01T12:00");await root.getByRole("button",{name:"Créer",exact:true}).click();await root.getByText(title+" · Ouvert",{exact:true}).waitFor();
+  }
+  const intelligencePage=await openPortal("ZIPPLE Intelligence","intelligence");await intelligencePage.getByRole("heading",{name:"Pilotage et recommandations",exact:true}).waitFor();await intelligencePage.getByText("Ventes enregistrées",{exact:true}).waitFor();
+  console.log("ZIPPLE_BULK45_REAL_BROWSER_NINE_WORKSPACES_PASS");
   assert.equal((await b("snapshot",{site_id:id()})).status,403);
   assert.equal((await b("snapshot",{}, "a".repeat(64))).status,403);
   const invalidGuest=await b("guest_open",{qr:"b".repeat(64)},"",true);assert.equal(invalidGuest.status,429);
