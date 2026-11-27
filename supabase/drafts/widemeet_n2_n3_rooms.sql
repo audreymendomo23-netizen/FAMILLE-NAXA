@@ -101,6 +101,9 @@ begin
  if not found or v_old.revision<>p_expected or not exists(select 1 from jsonb_array_elements(v_old.state->'participants') p where p->>'memberId'=a.account_id::text and p->>'excluded'='false') then return false;end if;
  if p_state is null or p_state->>'id' is distinct from v_old.id::text or p_state->>'workspaceId' is distinct from v_old.workspace_id::text or p_state->>'hostId' is distinct from v_old.host_id::text or (p_state->>'revision')::bigint is distinct from p_expected+1 or jsonb_typeof(p_state->'participants') is distinct from 'array' then return false;end if;
  if p_state->>'recording'='requested' and a.plan<>'premium' then return false;end if;
+ -- A revoked participant must not block every subsequent legitimate transition.
+ select jsonb_set(p_state,'{participants}',coalesce(jsonb_agg(case when p->>'memberId'<>v_old.host_id::text and not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.enabled and m.account_id::text=p->>'memberId') and exists(select 1 from jsonb_array_elements(v_old.state->'participants') oldp where oldp->>'memberId'=p->>'memberId') then p||jsonb_build_object('excluded',true,'consent',false,'moderatorPermissions','[]'::jsonb) else p end order by ord),'[]'::jsonb)) into p_state from jsonb_array_elements(p_state->'participants') with ordinality as x(p,ord);
+ if exists(select 1 from jsonb_array_elements(p_state->'participants') p where p->>'excluded'='true' and exists(select 1 from jsonb_array_elements(v_old.state->'participants') oldp where oldp->>'memberId'=p->>'memberId' and oldp->>'excluded'='false')) then p_state:=p_state||jsonb_build_object('recording','off');end if;
  if p_state->>'status' in ('open','paused') then
   if (p_state->>'endMs')::bigint is null or (p_state->>'endMs')::bigint>least(a.entitlement_end_ms,(p_state->>'hardEndMs')::bigint) then return false;end if;
   if v_old.state->>'status' not in ('open','paused') then
@@ -111,6 +114,10 @@ begin
   end if;
  end if;
  if exists(select 1 from jsonb_array_elements(p_state->'participants') p where not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.enabled and m.account_id::text=p->>'memberId') and p->>'excluded' is distinct from 'true') then return false;end if;
+ -- Persist the trusted starting entitlement for deterministic expiry archival.
+ if v_old.state->>'status'='scheduled' and p_state->>'status' in ('open','paused') then
+  p_state:=p_state||jsonb_build_object('startPlan',a.plan,'startEntitlementEndMs',a.entitlement_end_ms);
+ end if;
  update public.wm_rooms set revision=p_expected+1,state=p_state where id=p_room and revision=p_expected;
  return found;
 end $wm$;

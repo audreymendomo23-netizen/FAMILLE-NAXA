@@ -81,7 +81,7 @@ export function applyRoom(room,a,c,now){
  t.lobbyStatus=c.action==="lobby_admit"?"admitted":"rejected";t.consent=false;n.recording="off";break;
  }
  case "invite_member":{
- needHost();if(!["scheduled","open"].includes(n.status)||n.status==="open"&&now>=n.endMs||!id(c.target)||n.participants.some(x=>x.memberId===c.target)||n.participants.length>=Math.min(n.capacity??50,100,a.capacity??(a.plan==="access"?20:50)))fail("invalid_target");
+ needHost();if(!["scheduled","open"].includes(n.status)||n.status==="open"&&now>=n.endMs||!id(c.target)||n.participants.some(x=>x.memberId===c.target)||n.participants.length>=Math.min(n.capacity??(a.plan==="access"?20:50),100,a.capacity??n.capacity??(a.plan==="access"?20:50)))fail("invalid_target");
  n.participants.push({memberId:c.target,response:"pending",excluded:false,chat:true,mic:true,screen:false,consent:false});break;
  }
  case "lock_admission":needModerator("admission");live(n,now);if(typeof c.value!=="boolean")fail("invalid_command");n.admissionLocked=c.value;break;
@@ -94,7 +94,7 @@ export function applyRoom(room,a,c,now){
  }
  case "pause":needModerator("pause");live(n,now);if(n.status!=="open")fail("invalid_state");n.status="paused";n.recording="off";break;
  case "resume":needModerator("pause");live(n,now);if(n.status!=="paused")fail("invalid_state");n.status="open";break;
- case "end":if(n.status==="scheduled")needHost();else needModerator("end");if(!["scheduled","open","paused"].includes(n.status))fail("invalid_state");n.status="ended";n.recording="off";break;
+ case "end":if(n.status==="scheduled")needHost();else needModerator("end");if(!["scheduled","open","paused"].includes(n.status))fail("invalid_state");n.status="ended";n.recording="off";n.closedMs=now;n.closeReason="host_end";break;
  default:
  live(n,now);if(n.status!=="open"||self.response!=="accepted"||n.lobbyRequired===true&&!host&&self.lobbyStatus!=="admitted")fail("room_unavailable");
  switch(c.action){

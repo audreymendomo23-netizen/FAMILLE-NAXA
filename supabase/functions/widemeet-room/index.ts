@@ -133,7 +133,9 @@ Deno.serve(async request=>{
  const next=applyRoom(room,actor,command,now);
  if(!next.replayed&&command.action==="record"&&command.value===true&&Deno.env.get("WM_RECORDING_QUALIFIED")==="true"){const status=await rpc("wm_recording_status",{p_hash,p_room});if(["starting","active","stopping"].includes(status?.phase))return send(409,{error:"recording_busy"});}
  if(!next.replayed&&await rpc("wm_room_write",{p_hash,p_room,p_expected:room.revision,p_role:actor.role,p_plan:actor.plan,p_state:next.room})!==true)return send(409,{error:"revision_or_scope_changed"});
- return send(200,await project(next.room,actor,p_hash));
+ const persisted=next.replayed?room:await rpc("wm_room_read",{p_hash,p_room});
+ if(!persisted)return send(404,{error:"unavailable"});
+ return send(200,await project(persisted,actor,p_hash));
  }
  if(action==="media-grant"){
  const grant=mediaPermission(room,actor,now);if(!grant)return send(403,{error:"forbidden"});

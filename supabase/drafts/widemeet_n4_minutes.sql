@@ -49,6 +49,9 @@ begin
  if new.state->>'status' is distinct from 'ended' or old.state->>'status'='ended' or old.state->>'status' not in ('open','paused') then return new;end if;
  eligible:=exists(select 1 from public.wm_room_entitlements e where e.workspace_id=new.workspace_id and e.enabled and e.plan='premium' and e.valid_until>clock_timestamp())
  or exists(select 1 from public.wm_paid_passes p where p.consumed_room_id=new.id and p.valid_until>clock_timestamp());
+ -- Expiry is a normal end of the purchased meeting, not a retroactive loss of
+ -- minutes. Only a trusted recorded start and deadline, not revocation, qualify.
+ if new.state->>'closeReason'='deadline' and old.state->>'startPlan'='premium' and (old.state->>'startEntitlementEndMs')::bigint>=(old.state->>'endMs')::bigint and exists(select 1 from public.wm_workspaces w where w.id=new.workspace_id and w.enabled) and (exists(select 1 from public.wm_room_entitlements e where e.workspace_id=new.workspace_id and e.enabled and e.plan='premium' and e.valid_until>=to_timestamp((old.state->>'endMs')::double precision/1000)) or exists(select 1 from public.wm_paid_passes p where p.consumed_room_id=new.id and p.valid_until>=to_timestamp((old.state->>'endMs')::double precision/1000))) then eligible:=true;end if;
  snap:=jsonb_build_object('title',new.state->>'title','description',new.state->>'description','scheduled_ms',new.state->'scheduledMs','started_ms',new.state->'startedMs','closed_ms',floor(extract(epoch from clock_timestamp())*1000)::bigint,
  'participants',(select coalesce(jsonb_agg(jsonb_build_object('member_id',p->>'memberId','response',p->>'response','excluded',p->'excluded','attendance','unknown')),'[]') from jsonb_array_elements(new.state->'participants') p));
  insert into public.wm_minutes_eligibility(room_id,premium,closed_at,retain_until,snapshot)
@@ -97,7 +100,7 @@ begin
  if p_action='prepare' then
   if not host then return null;end if;
   select coalesce(max(version),0) into latest from public.wm_minutes_versions where room_id=rid;
-  return jsonb_build_object('room_id',rid,'latest_version',latest,'premium',e.premium,'snapshot',e.snapshot,'recipients',coalesce((select jsonb_agg(jsonb_build_object('member_id',m.account_id,'display_name',ac.display_name) order by ac.display_name) from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=r.workspace_id and m.enabled and exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'memberId'=m.account_id::text and p->>'response'='accepted' and p->>'excluded'='false')),'[]'::jsonb));
+  return jsonb_build_object('room_id',rid,'latest_version',latest,'premium',e.premium,'snapshot',e.snapshot,'recipients',coalesce((select jsonb_agg(jsonb_build_object('member_id',m.account_id,'display_name',ac.display_name) order by ac.display_name) from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=r.workspace_id and m.enabled and exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'memberId'=m.account_id::text and p->>'response'='accepted' and p->>'excluded'='false' and (r.state->>'lobbyRequired' is distinct from 'true' or p->>'memberId'=r.host_id::text or p->>'lobbyStatus'='admitted'))),'[]'::jsonb));
  end if;
  if p_action in ('read','export') then
   select * into v from public.wm_minutes_versions where id=vid and room_id=rid and revoked_at is null;
@@ -142,7 +145,7 @@ begin
   begin select array_agg(distinct x::uuid order by x::uuid) into selected from jsonb_array_elements_text(p_data->'recipients') x;exception when invalid_text_representation then return null;end;
   if cardinality(selected)<>jsonb_array_length(p_data->'recipients') then return null;end if;
   foreach member in array selected loop
-   if not exists(select 1 from public.wm_memberships m join public.wm_accounts a on a.id=m.account_id and a.enabled where m.workspace_id=r.workspace_id and m.account_id=member and m.enabled) or not exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'memberId'=member::text and p->>'response'='accepted' and p->>'excluded'='false') then return null;end if;
+   if not exists(select 1 from public.wm_memberships m join public.wm_accounts a on a.id=m.account_id and a.enabled where m.workspace_id=r.workspace_id and m.account_id=member and m.enabled) or not exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'memberId'=member::text and p->>'response'='accepted' and p->>'excluded'='false' and (r.state->>'lobbyRequired' is distinct from 'true' or p->>'memberId'=r.host_id::text or p->>'lobbyStatus'='admitted')) then return null;end if;
   end loop;
   if v.published_at is not null then
    if selected is distinct from (select array_agg(account_id order by account_id) from public.wm_minutes_recipients where version_id=vid and revoked_at is null) then return null;end if;
