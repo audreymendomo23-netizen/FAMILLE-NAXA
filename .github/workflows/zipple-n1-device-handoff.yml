@@ -24,7 +24,7 @@ jobs:
         with:
           gradle-version: "8.7"
       - name: Compile debug APK with real hosted ZIPPLE endpoint
-        run: gradle --no-daemon :zipple:testDebugUnitTest :zipple:assembleDebug -PZIPPLE_API_URL=https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-n1
+        run: gradle --no-daemon --init-script docs/apps/zipple/n1/zipple-zxing-mirror.init.gradle :zipple:testDebugUnitTest :zipple:assembleDebug -PZIPPLE_API_URL=https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-n1
       - name: Record APK hash
         run: |
           cd apps/android/zipple/build/outputs/apk/debug

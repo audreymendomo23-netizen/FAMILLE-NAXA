@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from "react";
 import {stockPlan,priceScenario,receivables,forecastBacktest} from "./intelligence.mjs";
 import {AdvancedIntelligence} from "./AdvancedIntelligence";
+import {CompanionWorkspace,DocumentIntake} from "./CompanionWorkspace";
 type Props={call:(a:string,b?:Record<string,unknown>)=>Promise<any>;en:boolean;online:boolean};
 const fmt=(v:number)=>new Intl.NumberFormat("fr-CM").format(v);
 export function IntelligenceWorkspace({call,en,online}:Props){
@@ -22,6 +23,6 @@ export function IntelligenceWorkspace({call,en,online}:Props){
  <h4>{t("Créances à traiter","Receivables to review")}</h4>{debt?<p>{t("Aujourd’hui","Today")} : {fmt(debt.due)} FCFA · {t("En retard","Overdue")} : {fmt(debt.late)} FCFA · {debt.count} {t("créances","receivables")}</p>:<p>{t("Créances indisponibles","Receivables unavailable")}</p>}
  <h4>{t("Prévision et erreur historique","Forecast and historical error")}</h4>{forecast?<p>{fmt(forecast.daily)} FCFA/j · {t("Erreur absolue moyenne (21 prévisions)","Mean absolute error (21 forecasts)")} : {fmt(forecast.mae)} FCFA · WAPE {forecast.wape==null?"—":forecast.wape+" %"}</p>:<p>{t("28 jours consécutifs observés nécessaires ; aucune valeur inventée.","28 consecutive observed days required; no imputed values.")}</p>}<p>{t("Moyenne glissante 7 jours, projection indicative de ventes enregistrées, non garantie.","7-day rolling mean, indicative recorded-sales projection, not guaranteed.")}</p>
  <h4>{t("Simulateur de prix et marge","Price and margin simulator")}</h4><label>{t("Coût complet unitaire FCFA","Full unit cost XAF")}<input inputMode="numeric" value={cost} onChange={e=>C(e.target.value)}/></label><label>{t("Prix unitaire envisagé FCFA","Proposed unit price XAF")}<input inputMode="numeric" value={price} onChange={e=>P(e.target.value)}/></label><label>{t("Marge cible sur prix (%)","Target margin on price (%)")}<input inputMode="numeric" value={target} onChange={e=>T(e.target.value)}/></label>{simulation&&<div data-testid="price-simulation"><p>{t("Marge unitaire simulée","Simulated unit margin")} : {fmt(simulation.margin)} FCFA ({simulation.marginPct} %)</p><p>{t("Prix minimum pour la cible","Minimum price for target")} : {fmt(simulation.suggested)} FCFA</p></div>}<p>{t("Hypothèses saisies manuellement, pas de modification du catalogue ni décision automatique.","Manual assumptions, no catalogue change or automatic decision.")}</p>
- <AdvancedIntelligence data={data} day={day} yesterday={yesterday} en={en} mode={mode}/>
+ <AdvancedIntelligence data={data} day={day} yesterday={yesterday} en={en} mode={mode}/><CompanionWorkspace call={call} data={data} day={day} en={en} online={online} mode={mode}/><DocumentIntake call={call} day={day} en={en} online={online}/>
  </section>
 }

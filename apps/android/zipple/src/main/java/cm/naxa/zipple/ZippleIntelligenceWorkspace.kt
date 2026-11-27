@@ -58,4 +58,5 @@ import kotlin.math.roundToLong
  if(c!=null&&p!=null&&g!=null&&c in 0..2147483647L&&p in 1..2147483647L&&g in 0..99){val suggested=(c*100+99-g)/(100-g);if(suggested<=2147483647L){Text(t("Marge unitaire simulée","Simulated unit margin")+" : "+(p-c)+" FCFA · "+"%.2f".format(java.util.Locale.ROOT,(p-c)*100.0/p)+" %");Text(t("Prix minimum pour la cible","Minimum price for target")+" : "+suggested+" FCFA")}}
  Text(t("Hypothèses manuelles, aucune modification automatique du catalogue.","Manual assumptions, no automatic catalogue change."))
  ZippleAdvancedIntelligence(data,today,en,mode)
+ ZippleCompanion(api,session,site,en,data,today,mode)
 }
