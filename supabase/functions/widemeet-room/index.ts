@@ -48,7 +48,10 @@ Deno.serve(async request=>{
  const b=JSON.parse(text);if(b?.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
  const p_hash=await hash(token),now=Date.now();
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
- if(action==="pass-list")return send(200,await rpc("wm_pass_list",{p_hash}));
+ if(action==="pass-list"){
+ const session=(await rpc("wm_session_context",{p_hash}))?.[0];if(!session||session.password_change_required)return send(403,{error:"forbidden"});
+ return send(200,await rpc("wm_pass_list",{p_hash}));
+ }
  if(action==="list"||action==="contacts"){
  const regular=(await rpc("wm_room_actor",{p_hash}))?.[0];
  if(!regular){const passes=await rpc("wm_pass_list",{p_hash});if(!Array.isArray(passes)||!passes.length)return send(403,{error:"forbidden"});}
