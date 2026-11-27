@@ -1,7 +1,7 @@
 import React,{useEffect,useRef,useState}from"react";
 import{Room,RoomEvent,Track}from"livekit-client";
 import{roomRequest}from"./room-api.mjs";
-export function MediaPanel({base,session,roomId,locale,micAllowed,screenAllowed}){
+export function MediaPanel({base,session,roomId,locale,watermark,micAllowed,screenAllowed}){
  const tr=(fr,en)=>locale==="en"?en:fr;
  const current=useRef(null),generation=useRef(0),tiles=useRef(null);
  const [status,setStatus]=useState("idle"),[mic,setMic]=useState(false),[camera,setCamera]=useState(false),[screen,setScreen]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(false);
@@ -48,7 +48,7 @@ export function MediaPanel({base,session,roomId,locale,micAllowed,screenAllowed}
  }
  return <section aria-label={tr("Appel audio et vidéo","Audio and video call")} style={{display:"grid",gap:8}}>
  <p role="status">{{idle:tr("Prêt à rejoindre","Ready to join"),connecting:tr("Connexion…","Connecting…"),connected:tr("Connecté à la réunion","Connected to meeting"),reconnecting:tr("Reconnexion…","Reconnecting…"),disconnected:tr("Connexion terminée","Connection ended")}[status]}</p>
- <div ref={tiles} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,180px),1fr))",gap:8}}/>
+ <div style={{position:"relative"}}><div ref={tiles} style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,180px),1fr))",gap:8}}/>{status==="connected"&&watermark&&<div aria-hidden="true" style={{position:"absolute",inset:0,pointerEvents:"none",display:"grid",alignContent:"space-around",justifyItems:"center",overflow:"hidden"}}>{[0,1,2].map(i=><span key={i} style={{color:"white",textShadow:"0 1px 3px black",opacity:0.65,fontSize:"0.75rem",transform:"rotate(-12deg)",overflowWrap:"anywhere",textAlign:"center"}}>{watermark}</span>)}</div>}</div>
  {status==="connected"?<div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
  <button disabled={busy||!micAllowed} onClick={()=>toggle("mic")}>{mic?tr("Couper mon micro","Mute my microphone"):tr("Activer mon micro","Enable my microphone")}</button>
  <button disabled={busy} onClick={()=>toggle("camera")}>{camera?tr("Couper ma caméra","Disable my camera"):tr("Activer ma caméra","Enable my camera")}</button>
