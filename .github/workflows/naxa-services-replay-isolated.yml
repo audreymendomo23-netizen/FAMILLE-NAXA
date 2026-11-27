@@ -215,7 +215,7 @@ jobs:
           set -euo pipefail
           set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql naxa_services_v21_attendance_mandatory_gps.sql; do
+          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql naxa_services_v21_attendance_mandatory_gps.sql naxa_services_v22_first_password_gate.sql; do
             test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
             sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
           done
@@ -599,6 +599,50 @@ jobs:
                   await p.locator('.record').filter({hasText:name}).getByText('Confirmé',{exact:true}).first().waitFor({timeout:15000});
                   await pause(800);
                   assert.equal((await records(owner.org.id)).length,1);
+                }finally{await isolated.close();}
+              });
+              await scenario('real first login password gate: blocked RPC, wrong password denied, browser rotation and renewed credentials',async()=>{
+                const first=await fixture('FIRST-PASSWORD');
+                await success(base+'/rest/v1/ns_accounts?auth_user_id=eq.'+first.user.id,{password_change_required:true},admin,admin,'PATCH');
+                const isolated=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:900}});
+                const changed='Qa8!'+randomBytes(18).toString('hex');
+                try{
+                  const p=await isolated.newPage();p.setDefaultTimeout(15000);
+                  await p.goto('https://127.0.0.1:8443/');
+                  await p.getByLabel('Identifiant NAXA Services').fill(first.login);
+                  await p.getByLabel('Mot de passe',{exact:true}).fill(first.password);
+                  const lr=p.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-auth')&&r.request().postDataJSON()?.action==='login');
+                  await p.getByRole('button',{name:'Se connecter',exact:true}).click();
+                  const logged=await lr;assert.equal(logged.status(),200);
+                  const initial=await logged.json();assert.equal(initial.require_password_change,true);
+                  await p.getByRole('heading',{name:'Créer un nouveau mot de passe'}).waitFor();
+                  assert.equal(await p.locator('.side-nav').count(),0);
+                  const blocked=await json(base+'/rest/v1/rpc/ns_current_account_id',{},initial.access_token,anon);
+                  assert.equal(blocked.status,200);assert.equal(blocked.data,null);
+                  const sites=await json(base+'/rest/v1/ns_sites?select=id&id=eq.'+first.site.id,undefined,initial.access_token,anon,'GET');
+                  assert.equal(sites.status,200);assert.deepEqual(sites.data,[]);
+                  const denied=await act('subscription_access',{},initial.access_token);assert.equal(denied.status,403);
+                  await p.getByLabel('Mot de passe actuel',{exact:true}).fill('incorrect');
+                  await p.getByLabel('Nouveau mot de passe',{exact:true}).fill(changed);
+                  await p.getByLabel('Confirmer le nouveau mot de passe',{exact:true}).fill(changed);
+                  const rejected=p.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-auth')&&r.request().postDataJSON()?.action==='change_password');
+                  await p.getByRole('button',{name:'Enregistrer le nouveau mot de passe'}).click();
+                  assert.equal((await rejected).status(),400);
+                  await p.getByRole('heading',{name:'Créer un nouveau mot de passe'}).waitFor();
+                  await p.getByLabel('Mot de passe actuel',{exact:true}).fill(first.password);
+                  const accepted=p.waitForResponse(r=>r.url().endsWith('/functions/v1/naxa-services-auth')&&r.request().postDataJSON()?.action==='change_password');
+                  await p.getByRole('button',{name:'Enregistrer le nouveau mot de passe'}).click();
+                  const rotated=await accepted;assert.equal(rotated.status(),200);
+                  assert.equal((await rotated.json()).require_password_change,false);
+                  await p.getByRole('heading',{name:'Une journée bien organisée commence ici.'}).waitFor();
+                  const rows=await success(base+'/rest/v1/ns_accounts?select=password_change_required&auth_user_id=eq.'+first.user.id,undefined,admin,admin,'GET');
+                  assert.equal(rows[0].password_change_required,false);
+                  await p.getByRole('button',{name:/Déconnexion/}).click();
+                  assert.equal((await act('login',{identifier:first.login,password:first.password,device:first.device})).status,401);
+                  const newLogin=await act('login',{identifier:first.login,password:changed,device:first.device});
+                  assert.equal(newLogin.status,200);assert.equal(newLogin.data.require_password_change,false);
+                  const enabled=await act('subscription_access',{},newLogin.data.access_token);assert.equal(enabled.status,200);
+                  await act('logout',{device:first.device},newLogin.data.access_token);
                 }finally{await isolated.close();}
               });
               await scenario('real authenticated profile photo: browser upload and deletion',async()=>{

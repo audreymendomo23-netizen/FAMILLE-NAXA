@@ -454,7 +454,7 @@ async function actorContext(token: string) {
   const auth = await authCall("user", { method: "GET" }, token);
   if (!auth.ok || !auth.data.id) return null;
   const account = await accountByAuthUser(String(auth.data.id));
-  if (!account || account.status !== "active") return null;
+  if (!account || account.status !== "active" || account.password_change_required !== false) return null;
   if (!await hasActiveDeviceSession(token, String(account.id), path => rest(path, { headers: serviceHeaders() }))) return null;
   const member = await activeMember(String(account.id));
   if (!member) return null;

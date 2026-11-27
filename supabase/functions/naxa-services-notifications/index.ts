@@ -97,10 +97,10 @@ async function actorContext(token: string): Promise<Actor | null> {
   if (!user || typeof user.id !== "string") return null;
 
   const accounts = await rest(pathQuery("ns_accounts", {
-    select: "id,status", auth_user_id: "eq." + user.id, limit: "1",
+    select: "id,status,password_change_required", auth_user_id: "eq." + user.id, limit: "1",
   })) as Json[];
   const account = accounts?.[0];
-  if (!account || account.status !== "active" || typeof account.id !== "string") return null;
+  if (!account || account.status !== "active" || account.password_change_required !== false || typeof account.id !== "string") return null;
 
   const devices = await rest(pathQuery("ns_devices", {
     select: "id", account_id: "eq." + account.id,

@@ -41,9 +41,9 @@ async function actorContext(token: string) {
   if (!authResponse.ok) return null;
   const auth = await authResponse.json() as Record<string, unknown>;
   if (!auth.id) return null;
-  const accounts = await rest("ns_accounts?select=id,status&auth_user_id=eq." + encodeURIComponent(String(auth.id)) + "&limit=1") as Record<string, unknown>[];
+  const accounts = await rest("ns_accounts?select=id,status,password_change_required&auth_user_id=eq." + encodeURIComponent(String(auth.id)) + "&limit=1") as Record<string, unknown>[];
   const account = accounts?.[0];
-  if (!account || account.status !== "active") return null;
+  if (!account || account.status !== "active" || account.password_change_required !== false) return null;
   if (!await hasActiveDeviceSession(token, String(account.id), path => rest(path))) return null;
   const members = await rest("ns_members?select=id,org_id,display_name,role_code,status&account_id=eq." + encodeURIComponent(String(account.id)) + "&status=eq.active&limit=2") as Record<string, unknown>[];
   if (!members || members.length !== 1) return null;

@@ -72,10 +72,10 @@ async function actorContext(token: string): Promise<Actor | null> {
   if (!user || typeof user.id !== "string") return null;
 
   const accounts = await rest(query("ns_accounts", {
-    select: "id,status", auth_user_id: "eq." + user.id, limit: "1",
+    select: "id,status,password_change_required", auth_user_id: "eq." + user.id, limit: "1",
   })) as Json[];
   const account = accounts?.[0];
-  if (!account || account.status !== "active" || typeof account.id !== "string") return null;
+  if (!account || account.status !== "active" || account.password_change_required !== false || typeof account.id !== "string") return null;
 
   // Match the Supabase JWT session to a live, non-revoked NAXA device.
   // This keeps the Edge gateway aligned with ns_current_account_id() in SQL.
