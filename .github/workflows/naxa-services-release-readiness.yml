@@ -59,10 +59,12 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          [[ "$EXPECTED_FINGERPRINT" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "::error::Missing or invalid independently approved signer fingerprint"; exit 1; }
           work="$(mktemp -d)"
           trap 'rm -rf "$work"' EXIT
           printf '%s' "$RELEASE_KEYSTORE" | base64 --decode > "$work/signer.jks"
           keytool -exportcert -keystore "$work/signer.jks" -storepass:env RELEASE_STORE_PASSWORD -alias "$RELEASE_KEY_ALIAS" -file "$work/signer.cer" >/dev/null
+          actual="$(sha256sum "$work/signer.cer" | cut -d ' ' -f1)"
+          echo "Configured public certificate SHA-256 (diagnostic only, not approval): $actual"
+          [[ "$EXPECTED_FINGERPRINT" =~ ^[a-fA-F0-9]{64}$ ]] || { echo "::error::Missing or invalid independently approved signer fingerprint"; exit 1; }
           node --input-type=module -e 'import { readFileSync } from "node:fs"; import { verifyApprovedSigner } from "./scripts/naxa-services/release-config.mjs"; verifyApprovedSigner(readFileSync(process.argv[1]), process.env.EXPECTED_FINGERPRINT);' "$work/signer.cer"
           echo "Approved signer certificate matches; no release signed."

@@ -23,6 +23,14 @@ for (const name of Object.keys(process.env)) {
     throw new Error("Private configuration must not be exposed through VITE_ variables");
   }
 }
-const result = spawnSync("npm", ["run", "build", "--workspace", "@famille/naxa-services-web"], { stdio: "inherit", shell: false });
+// Hosted owner acceptance only. The exact backend schema is installed; media
+// calling remains unavailable and server-side authorization is unchanged.
+const acceptanceFlags = {
+  VITE_NAXA_SERVICES_ROSTER_ENABLED: "true",
+  VITE_NAXA_SERVICES_ATTENDANCE_ENABLED: "true",
+  VITE_NAXA_SERVICES_BRIEFING_ENABLED: "true",
+  VITE_NAXA_SERVICES_MEETINGS_ENABLED: "true"
+};
+const result = spawnSync("npm", ["run", "build", "--workspace", "@famille/naxa-services-web"], { stdio: "inherit", shell: false, env: { ...process.env, ...acceptanceFlags } });
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;
