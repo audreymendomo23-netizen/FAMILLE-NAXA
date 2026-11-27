@@ -172,6 +172,29 @@ jobs:
           script: ./gradlew --no-daemon connectedDebugAndroidTest
       - name: Fin de prévisualisation historique
         run: echo "Aucun socle généré, wrapper ou lockfile ne sera poussé sur main. Les recettes dédiées font foi pour les applications développées."
+  security-real-web:
+    name: SECURITY — source réelle Vite, sans régénération historique
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm install --workspace @famille/naxa-security-web --include-workspace-root=false --ignore-scripts
+      - run: npm run build --workspace @famille/naxa-security-web
+      - run: npm install --no-save --ignore-scripts playwright@1.65.1
+      - run: npx playwright install --with-deps chromium
+      - name: Vérifier les 181 destinations réelles
+        run: |
+          (cd apps/web/naxa-security && npx vite preview --host 127.0.0.1 --port 4173) >/tmp/security-real.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          curl -fsS http://127.0.0.1:4173/ >/dev/null
+          node docs/naxa-security/contracts/responsive.mjs
+      - if: failure()
+        run: tail -n 100 /tmp/security-real.log || true
   prompt-03-rls:
     name: Prompt 0.3 — policies RLS et scénarios d'isolation
     runs-on: ubuntu-latest
