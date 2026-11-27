@@ -35,7 +35,7 @@ create table public.wm_paid_passes(
  valid_until timestamptz,
  check((consumed_at is null)=(consumed_room_id is null)),
  check((consumed_at is null)=(valid_until is null)),
- check(valid_until is null or valid_until<=consumed_at+interval '24 hours')
+ check(valid_until is null or (valid_until>consumed_at and valid_until<=consumed_at+interval '24 hours'))
 );
 alter table public.wm_billing_intents enable row level security;
 alter table public.wm_paid_passes enable row level security;
@@ -208,13 +208,13 @@ grant execute on function public.wm_pass_room_create(text,uuid,jsonb) to service
 create or replace function public.wm_room_actor_for(p_hash text,p_room uuid)
 returns table(account_id uuid,workspace_id uuid,role text,plan text,entitlement_end_ms bigint)
 language sql security invoker stable set search_path=pg_catalog,public as $wm$
- select * from public.wm_room_actor(p_hash)
+ select a.* from public.wm_room_actor(p_hash) a join public.wm_workspaces w on w.id=a.workspace_id and w.kind='enterprise'
  union all
  select s.account_id,s.workspace_id,m.role,'premium'::text,floor(extract(epoch from p.valid_until)*1000)::bigint
  from public.wm_session_context(p_hash) s join public.wm_workspaces w on w.id=s.workspace_id and w.kind='individual' and w.enabled
  join public.wm_memberships m on m.account_id=s.account_id and m.workspace_id=w.id and m.enabled
  join public.wm_paid_passes p on p.workspace_id=w.id and p.consumed_room_id=p_room and p.valid_until>now()
- where not s.password_change_required and not exists(select 1 from public.wm_room_actor(p_hash))
+ where not s.password_change_required and m.role='owner'
 $wm$;
 revoke all on function public.wm_room_actor_for(text,uuid) from public,anon,authenticated;
 grant execute on function public.wm_room_actor_for(text,uuid) to service_role;
