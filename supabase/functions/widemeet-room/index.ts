@@ -1,5 +1,6 @@
 // WideMeet room gateway candidate. Uses NS media grant design and the WideMeet domain policy.
 import {createRoom,applyRoom,mediaPermission,pollSummary} from "../../../packages/widemeet-domain/room-policy.mjs";
+import {seriesDates} from "../../../packages/widemeet-domain/series.mjs";
 const base=(Deno.env.get("SUPABASE_URL")??"").replace(/\/$/,"");
 const service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??"";
 const origins=new Set((Deno.env.get("WM_ALLOWED_ORIGINS")??"").split(",").map(x=>x.trim()).filter(Boolean));
@@ -13,7 +14,7 @@ function projection(room:any,actor:any){
  const self=room.participants.find((p:any)=>p.memberId===actor.memberId&&!p.excluded);
  if(!self)throw Error("forbidden");
  const admitted=self.response==="accepted"&&(room.lobbyRequired!==true||self.memberId===room.hostId||self.lobbyStatus==="admitted");
- const result={id:room.id,title:room.title,description:room.description,hostId:room.hostId,status:room.status,revision:room.revision,scheduledMs:room.scheduledMs,durationMinutes:room.durationMinutes,endMs:room.endMs??null,response:self.response,cancelled:room.cancelled===true,admissionLocked:room.admissionLocked===true,lobbyRequired:room.lobbyRequired===true,lobbyStatus:self.lobbyStatus??null,serverNowMs:Date.now(),recording:admitted?room.recording:"off",recordingPaused:admitted&&room.recordingPaused===true,participants:admitted?room.participants.filter((p:any)=>!p.excluded).map((p:any)=>({memberId:p.memberId,response:p.response,lobbyStatus:p.lobbyStatus??null,hand:p.hand===true,mic:p.mic===true,screen:p.screen===true})):[],events:admitted?room.events.filter((e:any)=>["chat","reaction"].includes(e.action)||e.action==="private_chat"&&(e.actor===actor.memberId||JSON.parse(e.payload)[1]===actor.memberId)).slice(-100).map((e:any)=>({id:e.id,actor:e.actor,action:e.action,target:e.action==="private_chat"?JSON.parse(e.payload)[1]:null,value:JSON.parse(e.payload)[2],at:e.at})):[],polls:admitted?room.polls.map((p:any)=>pollSummary(p,actor.memberId)):[]};
+ const result={id:room.id,title:room.title,description:room.description,hostId:room.hostId,status:room.status,revision:room.revision,scheduledMs:room.scheduledMs,durationMinutes:room.durationMinutes,endMs:room.endMs??null,response:self.response,cancelled:room.cancelled===true,seriesId:room.seriesId??null,admissionLocked:room.admissionLocked===true,lobbyRequired:room.lobbyRequired===true,lobbyStatus:self.lobbyStatus??null,serverNowMs:Date.now(),recording:admitted?room.recording:"off",recordingPaused:admitted&&room.recordingPaused===true,participants:admitted?room.participants.filter((p:any)=>!p.excluded).map((p:any)=>({memberId:p.memberId,response:p.response,lobbyStatus:p.lobbyStatus??null,hand:p.hand===true,mic:p.mic===true,screen:p.screen===true})):[],events:admitted?room.events.filter((e:any)=>["chat","reaction"].includes(e.action)||e.action==="private_chat"&&(e.actor===actor.memberId||JSON.parse(e.payload)[1]===actor.memberId)).slice(-100).map((e:any)=>({id:e.id,actor:e.actor,action:e.action,target:e.action==="private_chat"?JSON.parse(e.payload)[1]:null,value:JSON.parse(e.payload)[2],at:e.at})):[],polls:admitted?room.polls.map((p:any)=>pollSummary(p,actor.memberId)):[]};
  // Do not return raw receipts, votes, consent ledger, or provider recording state.
  return result;
 }
@@ -77,6 +78,21 @@ Deno.serve(async request=>{
  if(!regular){const passes=await rpc("wm_pass_list",{p_hash});if(!Array.isArray(passes)||!passes.length)return send(403,{error:"forbidden"});}
  return send(200,await rpc(action==="list"?"wm_room_list":"wm_room_contacts",{p_hash}));
  }
+ if(action==="series-create"||action==="series-cancel"){
+ if(Deno.env.get("WM_SERIES_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ if(!uuid.test(b.series_id??""))return send(400,{error:"invalid_room"});
+ const sid=b.series_id.toLowerCase();
+ if(action==="series-cancel"){const result=await rpc("wm_series_cancel",{p_hash,p_series:sid});return result?send(200,result):send(403,{error:"forbidden"});}
+ const a=(await rpc("wm_room_actor",{p_hash}))?.[0];
+ if(!a||!["promoteur","manager"].includes(a.role)||!Number.isSafeInteger(a.entitlement_end_ms))return send(403,{error:"forbidden"});
+ if(!Array.isArray(b.room_ids)||!b.room_ids.every((v:unknown)=>typeof v==="string"&&uuid.test(v))||new Set(b.room_ids.map((v:string)=>v.toLowerCase())).size!==b.room_ids.length||!Array.isArray(b.invitees)||!b.invitees.every((v:unknown)=>typeof v==="string"&&uuid.test(v)))return send(400,{error:"invalid_room"});
+ const dates=seriesDates(b.scheduled_ms,b.recurrence,b.room_ids.length,b.interval??1);
+ if(dates[0]<now-5000)return send(409,{error:"invalid_series"});
+ const actor={memberId:a.account_id,workspaceId:a.workspace_id,enabled:true,passwordChangeRequired:false,role:a.role,plan:a.plan,entitlementEndMs:a.entitlement_end_ms};
+ const states=dates.map((startMs:number,i:number)=>({...createRoom(actor,{id:b.room_ids[i].toLowerCase(),title:b.title,description:b.description??"",startMs,durationMinutes:b.duration_minutes,hardEndMs:a.entitlement_end_ms,invitees:b.invitees.map((v:string)=>v.toLowerCase())}),seriesId:sid}));
+ const result=await rpc("wm_series_create",{p_hash,p_series:sid,p_states:states});
+ return result?send(201,result):send(409,{error:"conflict_or_scope"});
+ }
  if(!uuid.test(b.room_id??""))return send(400,{error:"invalid_room"});
  const p_room=b.room_id.toLowerCase();
  const passId=action==="create"&&b.pass_id!=null?b.pass_id:null;
@@ -108,5 +124,5 @@ Deno.serve(async request=>{
  return send(200,await signGrant(grant,now,p_hash));
  }
  return send(404,{error:"unavailable"});
- }catch(e){const code=e instanceof Error?e.message:"unavailable";const publicErrors=new Set(["forbidden","invalid_room","invalid_command","invalid_response","invalid_state","invalid_target","invalid_chat","invalid_reaction","invalid_hand","invalid_screen","invalid_poll","invalid_vote","invalid_record","invalid_consent","consent_required","premium_required","entitlement_required","room_unavailable","revision_conflict","idempotency_conflict","rate_limit","unknown_action","media_unavailable","limit_exceeded","invalid_request","not_active"]);return send(publicErrors.has(code)?409:503,{error:publicErrors.has(code)?code:"unavailable"});}
+ }catch(e){const code=e instanceof Error?e.message:"unavailable";const publicErrors=new Set(["forbidden","invalid_room","invalid_command","invalid_response","invalid_state","invalid_target","invalid_chat","invalid_reaction","invalid_hand","invalid_screen","invalid_poll","invalid_vote","invalid_record","invalid_consent","consent_required","premium_required","entitlement_required","room_unavailable","revision_conflict","idempotency_conflict","rate_limit","unknown_action","media_unavailable","limit_exceeded","invalid_request","not_active","invalid_series"]);return send(publicErrors.has(code)?409:503,{error:publicErrors.has(code)?code:"unavailable"});}
 });
