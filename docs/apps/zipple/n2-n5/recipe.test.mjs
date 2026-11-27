@@ -815,6 +815,21 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  await assert.rejects(scalar("select zp_record_expense($1,$2,$3,'rent','Rent',2001,'bank','CTL-EXP',current_date)",ea),/EXPENSE_APPROVAL_REQUIRED/);
  const recorded=await scalar("select zp_expense_apply($1,$2,$3)",[ctoken,ctl.site,er]);assert.equal(await scalar("select zp_expense_apply($1,$2,$3)",[ctoken,ctl.site,er]),recorded);
  await assert.rejects(scalar("select zp_erp_control_snapshot($1,$2)",[a.access,ctl.site]),/DENIED/);
+ // Receipt 1000 milli at 1000 XAF; full settlement then return and refund.
+ await scalar("select zp_supplier_pay($1,$2,$3,$4,1000,'bank','CTL-PAID')",[ctoken,ctl.site,cp,uid()]);
+ const retkey=uid(),retArgs=[ctl.access,ctl.site,got.receipt_id,retkey];
+ const returned=await scalar("select zp_supplier_return($1,$2,$3,$4,1000,500,'CTL-AVOIR','Supplier credit confirmed')",retArgs);
+ assert.equal(await scalar("select zp_supplier_return($1,$2,$3,$4,1000,500,'CTL-AVOIR','Supplier credit confirmed')",retArgs),returned);
+ assert.equal(Number(await scalar("select zp_supplier_balance($1)",[cp])),-500);
+ assert.equal(Number(await scalar("select remaining_milli from zp_ingredient_lots where id=(select lot_id from zp_purchase_receipts where id=$1)",[got.receipt_id])),500);
+ await assert.rejects(scalar("select zp_supplier_return($1,$2,$3,$4,1000,500,'CTL-AVOIR-2','Second stale return')",[ctl.access,ctl.site,got.receipt_id,uid()]),/STALE_INVENTORY_COUNT/);
+ await assert.rejects(scalar("select zp_supplier_refund($1,$2,$3,$4,501,'bank','CTL-REFUND','Bank proof')",[ctl.access,ctl.site,cp,uid()]),/SUPPLIER_REFUND_EXCEEDS_CREDIT/);
+ const rfkey=uid(),rfargs=[ctl.access,ctl.site,cp,rfkey],rf=await scalar("select zp_supplier_refund($1,$2,$3,$4,500,'bank','CTL-REFUND','Bank proof')",rfargs);
+ assert.equal(await scalar("select zp_supplier_refund($1,$2,$3,$4,500,'bank','CTL-REFUND','Bank proof')",rfargs),rf);assert.equal(Number(await scalar("select zp_supplier_balance($1)",[cp])),0);
+ assert.equal(Number(await scalar("select amount_xaf from zp_ledger_sources where kind='supplier_return' and source_id=$1",[returned])),500);
+ assert.equal(Number(await scalar("select amount_xaf from zp_ledger_sources where kind='supplier_refund' and source_id=$1",[rf])),500);
+ await scalar("select zp_treasury_reconcile($1,$2,$3,'supplier_refund',$4,null,'Statement verified')",[ctl.access,ctl.site,uid(),rf]);
+ console.log("ZIPPLE_BULK3_SUPPLIER_RETURN_CREDIT_REFUND_PASS");
  console.log("ZIPPLE_BULK3_ERP_APPROVAL_AND_QUALITY_CONTROL_PASS");
  }
  assert.equal(await scalar("select count(*)::int from pg_tables where schemaname='public' and tablename like 'zp_%' and not rowsecurity"),0);

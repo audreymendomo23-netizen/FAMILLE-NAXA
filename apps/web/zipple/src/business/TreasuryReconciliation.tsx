@@ -3,7 +3,7 @@ type Props={call:(a:string,b?:Record<string,unknown>)=>Promise<any>;disabled:boo
 export function TreasuryReconciliation({call,disabled,en,refresh}:Props){
  const t=(fr:string,eng:string)=>en?eng:fr;const [d,D]=useState<any>(null),[busy,B]=useState(false),[err,E]=useState(""),[source,S]=useState(""),[cash,C]=useState(""),[proof,P]=useState("");
  const key=useRef<{body:string,id:string}|null>(null),lock=disabled||busy,event=d?.pending.find((x:any)=>x.kind+":"+x.source_id===source);
- const kinds:Record<string,string>={supplier_payment:t("Règlement fournisseur","Supplier payment"),container_finance:t("Consigne","Deposit")};
+ const kinds:Record<string,string>={supplier_payment:t("Règlement fournisseur","Supplier payment"),supplier_refund:t("Remboursement fournisseur","Supplier refund"),container_finance:t("Consigne","Deposit")};
  async function load(){D(await call("treasury_snapshot"))}
  async function run(fn:()=>Promise<void>){if(lock)return;B(true);E("");try{await fn()}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}
  useEffect(()=>{let live=true;call("treasury_snapshot").then(v=>{if(live)D(v)}).catch(e=>{if(live)E(String(e.message))});return()=>{live=false}},[]);

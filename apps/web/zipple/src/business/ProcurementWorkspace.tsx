@@ -1,6 +1,7 @@
 import {ConvertedPurchases} from "./ConvertedPurchases";
 import {InventoryGains} from "./InventoryGains";
 import {resolveInventoryScan} from "./inventory-scan";
+import {SupplierReturns} from "./SupplierReturns";
 import React,{useEffect,useState,useRef} from "react";
 // Adaptation of NAXA Services StockOperationsPage: server-confirmed supplier, purchase, receipt, payment.
 type Props={ingredients:any[];lots:any[];call:(action:string,body?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean;refreshStock:()=>Promise<void>;queueErp?:(action:string,payload:Record<string,unknown>)=>Promise<void>};
@@ -30,7 +31,7 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  return <section>
  <h4>{t("Fournisseurs, achats et inventaires","Suppliers, purchases and inventory counts")}</h4>
  {error&&<p role="alert">{t("Opération non confirmée : ","Operation unconfirmed: ")}{error}</p>}
- {data&&<><p>{t("Dette fournisseur enregistrée","Recorded supplier debt")} : {money(data.debt_xaf)}</p><p>{t("Pertes valorisées","Recorded inventory losses")} : {money(data.loss_cost_xaf)}</p></>}
+ {data&&<><p>{t("Dette fournisseur enregistrée","Recorded supplier debt")} : {money(data.debt_xaf)}</p><p>{t("Avoirs fournisseurs à recouvrer","Supplier credits receivable")} : {money(data.supplier_receivable_xaf??0)}</p><p>{t("Pertes valorisées","Recorded inventory losses")} : {money(data.loss_cost_xaf)}</p></>}
  <button disabled={lock} onClick={()=>run(async()=>{await load();await refreshStock()})}>{t("Actualiser les achats","Refresh purchases")}</button>
  <h4>{t("Fiche fournisseur","Supplier record")}</h4>
  <label>{t("Nom du fournisseur","Supplier name")}<input value={name} onChange={e=>N(e.target.value)}/></label>
@@ -47,10 +48,10 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  <button disabled={lock||!ingredient||!quantity||!total||draftLines.length>=49} onClick={()=>{try{const q=milli(quantity),v=amount(total);if(q<1||q>1000000000||v<1)throw Error("INVALID_QUANTITY");DL([...draftLines,{ingredient_id:ingredient,qty_milli:q,total_xaf:v}]);I("");Q("");TO("");E("")}catch(e){E(e instanceof Error?e.message:"INVALID_QUANTITY")}}}>{t("Ajouter une autre ligne","Add another line")}</button>
  {draftLines.map((x,i)=><p key={i}>{ingredients.find(v=>v.id===x.ingredient_id)?.name} · {qty(x.qty_milli)} · {money(x.total_xaf)} <button disabled={lock} onClick={()=>DL(draftLines.filter((_,j)=>j!==i))}>{t("Retirer","Remove")} {i+1}</button></p>)}
  <button disabled={lock||!supplier||!ingredient||!ref||!quantity||!total} onClick={()=>run(async()=>{const line={ingredient_id:ingredient,qty_milli:milli(quantity),total_xaf:amount(total)};if(draftLines.length){const group=await idem("purchase_batch_create",{supplier_id:supplier,reference:ref,lines:[...draftLines,line]});PU(group.purchase_ids[0]);DL([])}else{const id=await idem("purchase_create",{supplier_id:supplier,reference:ref,...line});PU(id)}R("");Q("");TO("");await load()})}>{t("Créer la commande","Create purchase")}</button>
- {batches.map(b=><p key={b.id}>{b.reference} · {b.purchase_ids.length} {t("lignes","lines")} · {money(b.total_xaf)} · {t("Dette","Debt")} : {money(b.received_cost-b.paid_xaf)}</p>)}
+ {batches.map(b=><p key={b.id}>{b.reference} · {b.purchase_ids.length} {t("lignes","lines")} · {money(b.total_xaf)} · {t("Dette","Debt")} : {money(b.debt_xaf??(b.received_cost-b.paid_xaf))}</p>)}
  <h4>{t("Réception et règlement","Receipt and payment")}</h4>
  <label>{t("Commande à traiter","Purchase to process")}<select aria-label={t("Commande à traiter","Purchase to process")} value={purchase} onChange={e=>PU(e.target.value)}><option value="">—</option>{purchases.map(x=><option key={x.id} value={x.id}>{purchaseLabel(x)}</option>)}</select></label>
- {selected&&<p>{t("Reçu","Received")} : {qty(selected.received_milli)}/{qty(selected.qty_milli)} · {t("Reste à régler","Outstanding")} : {money(selected.received_cost-selected.paid_xaf)}</p>}
+ {selected&&<p>{t("Reçu","Received")} : {qty(selected.received_milli)}/{qty(selected.qty_milli)} · {t("Reste à régler","Outstanding")} : {money(Math.max(0,selected.net_balance_xaf??(selected.received_cost-selected.paid_xaf)))}</p>}
  <label>{t("Quantité réceptionnée","Quantity received")}<input inputMode="decimal" value={received} onChange={e=>RE(e.target.value)}/></label>
  <label>{t("Lot de réception","Receipt lot")}<input value={lot} onChange={e=>L(e.target.value)}/></label>
  <label>{t("Péremption du lot","Lot expiry")}<input type="date" value={expiry} onChange={e=>EX(e.target.value)}/></label>
@@ -67,6 +68,7 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  <label>{t("Quantité physique comptée","Physical count")}<input inputMode="decimal" value={count} onChange={e=>CO(e.target.value)}/></label>
  <label>{t("Motif du comptage","Count reason")}<input value={reason} onChange={e=>RS(e.target.value)}/></label>
  <button disabled={lock||!selectedLot||count===""||reason.trim().length<5} onClick={()=>run(async()=>{await idem("count_lot",{lot_id:lotId,expected_milli:Number(selectedLot.remaining_milli),counted_milli:milli(count),reason});CO("");RS("");await load();await refreshStock()})}>{t("Valider le comptage","Confirm count")}</button>{queueErp&&<button disabled={busy||!selectedLot||count===""||reason.trim().length<5} onClick={async()=>{B(true);E("");try{const q=milli(count);if(q>Number(selectedLot.remaining_milli))throw Error("COUNT_REQUIRES_REVIEW");await queueErp("count_lot",{lot_id:lotId,expected_milli:Number(selectedLot.remaining_milli),counted_milli:q,reason:reason.trim()});CO("");RS("");E(t("Comptage en attente de validation serveur.","Count awaiting server confirmation."))}catch(e){E(e instanceof Error?e.message:"OPERATION_UNAVAILABLE")}finally{B(false)}}}>{t("Mettre le comptage en attente hors connexion","Queue count offline")}</button>}
+ <SupplierReturns call={call} disabled={lock} en={en} refresh={async()=>{await load();await refreshStock()}}/>
  <ConvertedPurchases call={call} disabled={lock} en={en} refresh={async()=>{await load();await refreshStock()}}/>
  <InventoryGains call={call} disabled={lock} en={en} lot={selectedLot} refresh={async()=>{await load();await refreshStock()}}/>
  </section>
