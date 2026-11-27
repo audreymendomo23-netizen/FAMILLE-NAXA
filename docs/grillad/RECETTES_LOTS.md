@@ -38,3 +38,5 @@ Aucune recette produit n'est certifiée intégralement ici. Les tests HTTP simul
 
 ## Extension de reprise — sections 21–23
 Trois tests nommés ajoutés aux jobs existants : récupération uniforme, export PDF achats, export XLSX achats. Assertions SQL complémentaires (même suite lifecycle). Nouveau total : 177 tests nommés + 3 suites SQL + 1 drill = 181 unités ; lot 04 : 34 unités (complément exécuté par infrastructure/Web unitaires). Les autres lots restent 50/50/47. Pas de qualification produit présumée.
+
+Complément §24 : un parcours Chromium métier de réactivation après confirmation serveur ; lot 04 = 35 unités, total 182 (178 tests nommés + 3 suites SQL + 1 drill). Réactivation et paiements réels non simulés comme preuves de production.

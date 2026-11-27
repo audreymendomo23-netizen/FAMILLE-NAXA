@@ -352,3 +352,7 @@ Baseline cccb107 ; les 12 campagnes de la section 20 sont terminées : 11/12 ent
 
 ## 23. Correction CI et parité des exports
 - Run 46084181458 (c2049e5) : échec syntaxique PostgreSQL dans backup/lifecycle (délimiteurs dollar), identifié dans les logs ; correction des corps SQL et assertions, conservation des autres preuves. Exports Android PDF/XLSX alignés sur les rapports achats, deux nouveaux tests Web d'exports. 181 unités à qualifier (177 tests nommés, 3 suites SQL, 1 drill). Aucun vert global déclaré sur la nouvelle révision avant résultat. Aucun déploiement ni merge main.
+
+## 24. Restauration des droits après renouvellement
+- B5/B1 : action Actualiser du parcours expiré revalide explicitement la session via le serveur et remplace les droits/sites par les valeurs retournées. Aucune réactivation locale, identité inchangée exigée, conservation du journal incertain et sélection d'un site autorisé. Coffre Android mis à jour si opt-in. Parcours Web Chromium supplémentaire : refus de navigation avant preuve puis reprise après confirmation simulée. Aucun paiement réel créé ou initié.
+- Relevé du run 46084352769 (f7f1599) avant cette passe : 10/14 success, 0 échec, 4 en cours (Android et trois Web). Les jobs SQL backup/lifecycle sont verts sur cette correction. Nouvelle campagne à qualifier, 182 unités (178 tests nommés + 3 suites SQL + 1 drill). Pas de certificat produit ni d'activation externe.
