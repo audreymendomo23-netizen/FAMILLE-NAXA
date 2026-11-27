@@ -36,6 +36,9 @@ import java.time.LocalDate
  OutlinedButton(enabled=!busy,onClick={filterKind="all";filterState="all";filterFrom="";filterTo="";employeeSearch=""}){Text(t("Réinitialiser les filtres","Reset filters"))}
  val validDates=runCatching{val lo=filterFrom.takeIf{it.isNotBlank()}?.let{LocalDate.parse(it)};val hi=filterTo.takeIf{it.isNotBlank()}?.let{LocalDate.parse(it)};lo==null||hi==null||!hi.isBefore(lo)}.getOrDefault(false)
  val filtered=if(validDates)d.rows("rows").filter{x->(!manager||x.optString("label").contains(employeeSearch.trim(),ignoreCase=true))&&(filterKind=="all"||x.optString("kind")==filterKind)&&(filterState=="all"||x.optString("state")==filterState)&&(filterFrom.isBlank()||x.optString("to_day")>=filterFrom)&&(filterTo.isBlank()||x.optString("from_day")<=filterTo)}else emptyList()
+ Text(t("Tableau des demandes","Request dashboard"),style=MaterialTheme.typography.titleMedium)
+ states.forEach{(key,label)->Text(label+" : "+filtered.count{it.optString("state")==key})}
+ if(owner)names.filterKeys{it!="absence"}.forEach{(key,label)->Text(label+" — "+t("approuvé","approved")+" : "+filtered.filter{it.optString("kind")==key&&it.optString("state")=="approved"}.sumOf{it.optLong("amount_xaf")}+" FCFA")}
  Text(filtered.size.toString()+" "+t("demandes affichées (historique reçu, 200 au maximum)","requests displayed (received history, up to 200)"))
  if(!validDates)Text(t("Période invalide.","Invalid period."))
  if(owner)Text(t("Montants approuvés dans cette sélection (hors absences, non versés automatiquement)","Approved amounts in this selection (excluding leave, not automatically paid)")+" : "+filtered.filter{it.optString("state")=="approved"&&it.optString("kind")!="absence"}.sumOf{it.optLong("amount_xaf")}+" FCFA")

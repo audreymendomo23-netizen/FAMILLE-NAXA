@@ -22,6 +22,7 @@ internal val portalPages=listOf(PortalPage("hr","Absences et rémunérations","L
  var data by remember{mutableStateOf<JSONObject?>(null)};var values by remember{mutableStateOf<Map<String,String>>(emptyMap())}
  var selected by remember{mutableStateOf("")};var reply by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)};var msg by remember{mutableStateOf("")}
  var filterState by remember(session.member,site,page){mutableStateOf("all")};var search by remember(session.member,site,page){mutableStateOf("")}
+ var deadlineFilter by remember(session.member,site,page){mutableStateOf("all")};var sortOrder by remember(session.member,site,page){mutableStateOf("recent")}
  var priorityFilter by remember(session.member,site,page){mutableStateOf("all")}
  var teamSearch by remember(session.member,site,page){mutableStateOf("")};var inboxFilter by remember(session.member,site,page){mutableStateOf("all")}
  val manage=data?.optBoolean("can_manage")==true;val allowed=session.permits(site)&&!busy
@@ -70,16 +71,26 @@ internal val portalPages=listOf(PortalPage("hr","Absences et rémunérations","L
  if(page=="planning"&&v("starts_at").isNotBlank()&&v("due_at").isNotBlank()&&!datesOk)Text(t("Le créneau doit durer de 1 minute à 24 heures.","The shift must last between 1 minute and 24 hours."))
  Button(enabled=allowed&&v("title").isNotBlank()&&v("detail").isNotBlank()&&v("category").isNotBlank()&&datesOk&&(page=="tickets"||v("assignee_id").isNotBlank()),onClick={write("work_create",JSONObject().put("kind",kind).put("title",v("title")).put("detail",v("detail")).put("category",v("category")).put("priority",v("priority").ifBlank{"normal"}).put("assignee_id",v("assignee_id").takeIf{it.isNotBlank()}).put("starts_at",date("starts_at")).put("due_at",date("due_at")))}){Text(t("Créer","Create"))}
  }
+ val now=java.time.Instant.now();val today=now.atZone(ZoneId.of("Africa/Douala")).toLocalDate()
+ fun deadline(x:JSONObject)=runCatching{java.time.Instant.parse(x.optString("due_at"))}.getOrNull()
+ fun overdue(x:JSONObject)=x.optString("state") in listOf("open","in_progress")&&deadline(x)?.isBefore(now)==true
+ fun dueToday(x:JSONObject)=x.optString("state") in listOf("open","in_progress")&&deadline(x)?.atZone(ZoneId.of("Africa/Douala"))?.toLocalDate()==today
+ Text(t("Tableau de suivi","Work dashboard"),style=MaterialTheme.typography.titleMedium)
+ Text(rows.count{it.optString("state")=="open"}.toString()+" "+t("ouverts","open")+" · "+rows.count{it.optString("state")=="in_progress"}+" "+t("en cours","in progress")+" · "+rows.count{it.optString("state")=="done"}+" "+t("terminés","completed"))
+ Text(rows.count{overdue(it)}.toString()+" "+t("en retard","overdue")+" · "+rows.count{dueToday(it)}+" "+t("à échéance aujourd’hui","due today"))
  Text(t("Historique","History"))
  OutlinedTextField(search,{search=it.take(160);selected=""},label={Text(t("Rechercher un dossier","Search records"))},enabled=allowed)
  PortalSelect(t("Statut du dossier","Record status"),listOf("all" to t("Tous","All"))+listOf("open","in_progress","done","cancelled").map{it to state(it)},filterState,allowed){filterState=it;selected=""}
  PortalSelect(t("Priorité du dossier","Record priority"),listOf("all" to t("Toutes","All"),"normal" to t("Normale","Normal"),"urgent" to t("Urgente","Urgent")),priorityFilter,allowed){priorityFilter=it;selected=""}
- OutlinedButton(enabled=allowed,onClick={search="";filterState="all";priorityFilter="all";selected=""}){Text(t("Réinitialiser la recherche","Reset search"))}
- val filtered=rows.filter{x->(filterState=="all"||x.optString("state")==filterState)&&(priorityFilter=="all"||x.optString("priority")==priorityFilter)&&listOf("title","detail","assignee","category").any{x.optString(it).contains(search.trim(),ignoreCase=true)}}
+ PortalSelect(t("Échéances","Deadlines"),listOf("all" to t("Toutes","All"),"late" to t("En retard","Overdue"),"today" to t("Aujourd’hui","Today")),deadlineFilter,allowed){deadlineFilter=it;selected=""}
+ PortalSelect(t("Trier les dossiers","Sort records"),listOf("recent" to t("Récents","Recent"),"due" to t("Échéance","Deadline"),"priority" to t("Priorité","Priority")),sortOrder,allowed){sortOrder=it}
+ OutlinedButton(enabled=allowed,onClick={search="";filterState="all";priorityFilter="all";deadlineFilter="all";sortOrder="recent";selected=""}){Text(t("Réinitialiser la recherche","Reset search"))}
+ val matches=rows.filter{x->(filterState=="all"||x.optString("state")==filterState)&&(priorityFilter=="all"||x.optString("priority")==priorityFilter)&&(deadlineFilter=="all"||(if(deadlineFilter=="late")overdue(x) else dueToday(x)))&&listOf("title","detail","assignee","category").any{x.optString(it).contains(search.trim(),ignoreCase=true)}}
+ val filtered=when(sortOrder){"due"->matches.sortedBy{deadline(it)?:java.time.Instant.MAX};"priority"->matches.sortedByDescending{it.optString("priority")=="urgent"};else->matches}
  Text(filtered.size.toString()+" / "+rows.size+" "+t("dossiers reçus (200 au maximum)","received records (up to 200)"))
  if(filtered.isEmpty())Text(t("Aucun dossier correspondant.","No matching records."))
  fun local(value:String)=runCatching{java.time.Instant.parse(value).atZone(ZoneId.of("Africa/Douala")).format(java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm"))}.getOrDefault(value)
- filtered.forEach{x->Text(x.optString("title")+" · "+state(x.optString("state")));Text(x.optString("detail")+" · "+x.optString("assignee"));Text(t("Priorité : ","Priority: ")+when(x.optString("priority")){"urgent"->t("Urgente","Urgent");"normal"->t("Normale","Normal");else->"—"});if(!x.isNull("starts_at"))Text(t("Début : ","Start: ")+local(x.optString("starts_at")));if(!x.isNull("due_at"))Text(t("Échéance : ","Due: ")+local(x.optString("due_at")));OutlinedButton(enabled=allowed,onClick={selected=x.optString("id");reply=""}){Text(t("Ouvrir le dossier","Open record"))}}
+ filtered.forEach{x->Text(x.optString("title")+" · "+state(x.optString("state")));if(overdue(x))Text(t("Échéance dépassée","Overdue deadline"));Text(x.optString("detail")+" · "+x.optString("assignee"));Text(t("Priorité : ","Priority: ")+when(x.optString("priority")){"urgent"->t("Urgente","Urgent");"normal"->t("Normale","Normal");else->"—"});if(!x.isNull("starts_at"))Text(t("Début : ","Start: ")+local(x.optString("starts_at")));if(!x.isNull("due_at"))Text(t("Échéance : ","Due: ")+local(x.optString("due_at")));OutlinedButton(enabled=allowed,onClick={selected=x.optString("id");reply=""}){Text(t("Ouvrir le dossier","Open record"))}}
  if(row!=null&&filtered.any{it.optString("id")==selected}){Text(row.optString("title"));row.rows("messages").forEach{Text(it.optString("author")+" · "+it.optString("body"))}
  val st=row.optString("state");if(st in listOf("open","in_progress")){OutlinedTextField(reply,{reply=it.take(1000)},label={Text(t("Message ou observation","Message or note"))},modifier=Modifier.fillMaxWidth(),enabled=allowed);Button(enabled=allowed&&reply.isNotBlank(),onClick={write("work_reply",JSONObject().put("work_id",selected).put("body",reply))}){Text(t("Envoyer","Send"))}
  if(manage)for(next in if(st=="open")listOf("in_progress","cancelled") else listOf("done","cancelled"))OutlinedButton(enabled=allowed,onClick={write("work_state",JSONObject().put("work_id",selected).put("expected_state",st).put("state",next))}){Text(state(next))}
