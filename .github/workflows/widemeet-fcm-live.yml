@@ -23,6 +23,7 @@ jobs:
       - run: VITE_WIDEMEET_PUSH_ENABLED=true npm run build --workspace @famille/widemeet-web
       - run: xvfb-run -a node scripts/widemeet/live-fcm-web.mjs
   android-live:
+    if: ${{ !contains(github.event.head_commit.message, '[web-only]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
