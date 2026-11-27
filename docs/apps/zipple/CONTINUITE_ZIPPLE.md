@@ -676,3 +676,6 @@ Avantages non financiers configurables et versionnés par promoteur; usage de po
 
 ### Parcours fidélité client sans compte
 Carte opaque distincte du parrainage, révocable; rattachement volontaire d'une commande QR avant règlement via session invitée temporaire, provenance invitée distincte de l'auteur professionnel, contrôles anti-auto/cycle/doublon et limite de tentatives côté serveur. Aucun accès aux fiches ou soldes par ce code. QR imprimable Web, code natif. Test SQL ajouté. Recherche par téléphone seule non autorisée faute de preuve d'identité; carte disponible auprès du personnel.
+
+### Recettes supplémentaires
+Recette navigateur dédiée étendue aux approbations RH, carte fidélité QR invitée, attribution sur reçu réel local et consommation sur reçu ultérieur; recette native étendue au dossier absence et approbation. Captures et assertions de persistance. Aucun nouveau service externe ni publication.

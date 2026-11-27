@@ -126,6 +126,7 @@ class Bulk2LiveDeviceTest {
   click("Objectifs");awaitText("Historique")
   click("Formation");awaitText("Historique")
   click("Feedback interne");awaitText("Historique")
+  click("Absences et rémunérations");input("Début AAAA-MM-JJ","2027-02-01");input("Fin AAAA-MM-JJ","2027-02-02");input("Motif professionnel","Congé ERP natif");click("Soumettre la demande");awaitText("Absence · Profil ERP natif · À valider");input("Motif de décision","Planning natif contrôlé");click("Approuvé");awaitText("Absence · Profil ERP natif · Approuvé")
   click("ZIPPLE Intelligence");awaitText("Analyse explicable, sans assistant génératif connecté.")
   click("Fidélité et parrainage");awaitText("Points non monétaires ; avantages sur commande ultérieure réglée.")
   click("Livraison Restaurant");awaitText("Préparation des zones et livreurs ; commande externe non activée.")
