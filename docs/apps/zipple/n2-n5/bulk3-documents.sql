@@ -45,7 +45,7 @@ declare m public.zp_members;x public.zp_finance_documents;e public.zp_finance_do
  m:=public.zp_erp_actor(p_access,p_site);
  if m.role_code<>'promoteur' then raise exception 'DENIED';end if;
  if p_request is null or p_action is null or p_action not in ('reviewed','blocked') or length(why) not between 5 and 500 then raise exception 'INVALID_DOCUMENT';end if;
- select * into x from public.zp_finance_documents where id=p_id and org_id=m.org_id and site_id=p_site for share;if x.id is null then raise exception 'DENIED';end if;
+ select * into x from public.zp_finance_documents where id=p_id and org_id=m.org_id and site_id=p_site;if x.id is null then raise exception 'DENIED';end if;
  perform 1 from public.zp_site_modes where site_id=p_site for update;
  select * into e from public.zp_finance_document_events where member_id=m.id and request_id=p_request;
  if e.id is not null then
