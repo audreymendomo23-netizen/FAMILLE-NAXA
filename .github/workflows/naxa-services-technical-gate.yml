@@ -270,6 +270,8 @@ jobs:
         with:
           deno-version: v2.x
       - run: deno test supabase/functions/naxa-services-meeting-media/contract_test.ts
+      - name: Shared WideMeet signaling policy — NAXA namespace and revocation contract
+        run: node --test packages/media-core/naxa-services-signaling.test.mjs
       - run: deno test supabase/functions/naxa-services-attendance-cleanup/contract_test.ts
 
   postgres-rls-runtime:

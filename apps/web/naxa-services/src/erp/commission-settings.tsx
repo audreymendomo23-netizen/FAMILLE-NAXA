@@ -45,7 +45,8 @@ function ScopedCommissionSettings({account,authEndpoint,anonKey,getToken}:Props)
  const [catalog,setCatalog]=useState<Catalog|null>(null),[draft,setDraft]=useState<Draft>(empty),[busy,setBusy]=useState(false),[error,setError]=useState(false);
  const mounted=useRef(false),controller=useRef<AbortController|null>(null),retry=useRef<{fingerprint:string;id:string}|null>(null);
  const tokenRef=useRef(getToken);tokenRef.current=getToken;
- useEffect(()=>{mounted.current=true;const hide=()=>{if(document.visibilityState==="hidden"){controller.current?.abort();controller.current=null;setCatalog(null);setDraft(empty());retry.current=null;setBusy(false);setError(false);}};document.addEventListener("visibilitychange",hide);return()=>{mounted.current=false;controller.current?.abort();document.removeEventListener("visibilitychange",hide);};},[]);
+ // Preserve an uncertain publication UUID in memory across visibility changes. It is destroyed on scope unmount.
+ useEffect(()=>{mounted.current=true;const hide=()=>{if(document.visibilityState==="hidden"){controller.current?.abort();controller.current=null;setCatalog(null);setDraft(empty());setBusy(false);setError(false);}};document.addEventListener("visibilitychange",hide);return()=>{mounted.current=false;controller.current?.abort();document.removeEventListener("visibilitychange",hide);};},[]);
  async function execute(action?:(rpc:(name:string,body:Record<string,unknown>)=>Promise<unknown>)=>Promise<void>){
   if(controller.current||!mounted.current||document.visibilityState==="hidden")return;
   const c=new AbortController();controller.current=c;setBusy(true);setError(false);

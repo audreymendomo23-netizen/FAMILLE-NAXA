@@ -1,8 +1,8 @@
 {
   "date": "2026-11-27",
-  "repositoryCommit": "5c9974ca4758609e927a39c8a7e083ccf955e635",
+  "repositoryCommit": "5b5deb45d550eac33d968e8c45d3313b0f0bb228",
   "project": "idupfjbkwjcavyisxteo",
-  "comparison": "index.ts only; CRLF normalized, trimmed; no secrets, no deploy; shared dependency parity not established",
+  "comparison": "All 14 deployed file occurrences compared to repository at 5b5deb4; normalized CRLF and trimmed; 7 equal and 7 different; no deploy. Shared files repeated per bundle.",
   "functions": [
     {
       "slug": "naxa-services-auth",
@@ -40,5 +40,59 @@
       "equal": false
     }
   ],
-  "conclusion": "5/5 mismatched; do not overwrite hosted source without differential review"
+  "conclusion": "Keep the tested candidate protections. Hosted alignment requires controlled deployment and post-deployment validation; no hosted modification performed.",
+  "dependencies": [
+    {
+      "slug": "auth",
+      "path": "_shared/naxa-services-device-session.ts",
+      "equal": true
+    },
+    {
+      "slug": "auth",
+      "path": "naxa-services-auth/subscription_credit_contract.ts",
+      "equal": true
+    },
+    {
+      "slug": "auth",
+      "path": "naxa-services-auth/scope_contract.ts",
+      "equal": false
+    },
+    {
+      "slug": "accounting",
+      "path": "naxa-services-accounting/sync_contract.ts",
+      "equal": true
+    },
+    {
+      "slug": "accounting",
+      "path": "naxa-services-accounting/accounting_contract.ts",
+      "equal": true
+    },
+    {
+      "slug": "referrals",
+      "path": "_shared/naxa-services-device-session.ts",
+      "equal": true
+    },
+    {
+      "slug": "referrals",
+      "path": "naxa-services-referrals/referral_contract.ts",
+      "equal": true
+    },
+    {
+      "slug": "customer-promotions",
+      "path": "naxa-services-customer-promotions/promotion_contract.ts",
+      "equal": true
+    },
+    {
+      "slug": "notifications",
+      "path": "naxa-services-notifications/notification_contract.ts",
+      "equal": false
+    }
+  ],
+  "semanticDifferences": {
+    "auth": "repository rejects invalid organization mode, blocks first-password-required accounts and adds fresh organization offline scope; scope contract also changed",
+    "accounting": "repository adds authorized inventory count snapshot",
+    "referrals": "repository enforces initial password gate",
+    "customerPromotions": "repository enforces initial password gate",
+    "notifications": "repository enforces initial password gate, rejects redirects and requires confirmed provider reference rather than fallback fcm-accepted; contract changed"
+  }
 }
