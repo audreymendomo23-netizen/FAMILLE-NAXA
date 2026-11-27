@@ -269,6 +269,19 @@ alter table public.wm_favorites enable row level security;
 alter table public.wm_membership_invites enable row level security;
 revoke all on public.wm_favorites,public.wm_membership_invites from public,anon,authenticated;
 grant select,insert,update,delete on public.wm_favorites,public.wm_membership_invites to service_role;
+-- Personal contact groups within one active workspace. No client table access.
+create table public.wm_contact_groups(
+ id uuid primary key,
+ account_id uuid not null,
+ workspace_id uuid not null,
+ name text not null check(length(btrim(name)) between 1 and 80),
+ member_ids uuid[] not null default '{}'::uuid[] check(cardinality(member_ids)<=100),
+ foreign key(account_id,workspace_id) references public.wm_memberships(account_id,workspace_id) on delete cascade,
+ unique(account_id,workspace_id,name)
+);
+alter table public.wm_contact_groups enable row level security;
+revoke all on public.wm_contact_groups from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_contact_groups to service_role;
 -- Every mutation revalidates opaque session and current scope. No account IDs or
 -- workspace IDs submitted by the client may override the trusted context.
 create function public.wm_identity_action(p_hash text,p_action text,p_data jsonb)
@@ -328,6 +341,30 @@ begin
   if (p_data->>'enabled')::boolean then insert into public.wm_favorites values(a.id,w.id,v_target) on conflict do nothing;
   else delete from public.wm_favorites where account_id=a.id and workspace_id=w.id and contact_id=v_target;end if;
   return jsonb_build_object('updated',true);
+ when 'groups' then
+  select coalesce(jsonb_agg(jsonb_build_object('id',g.id,'name',g.name,'member_ids',
+   coalesce((select jsonb_agg(mid order by mid) from unnest(g.member_ids) mid
+   join public.wm_memberships m on m.account_id=mid and m.workspace_id=w.id and m.enabled
+   join public.wm_accounts c on c.id=mid and c.enabled),'[]'::jsonb)) order by g.name,g.id),'[]'::jsonb) into v_result
+  from public.wm_contact_groups g where g.account_id=a.id and g.workspace_id=w.id;
+  return jsonb_build_object('groups',v_result);
+ when 'group-save' then
+  v_target:=(p_data->>'id')::uuid;v_name:=btrim(p_data->>'name');
+  if v_target is null or v_name is null or length(v_name) not between 1 and 80 or jsonb_typeof(p_data->'member_ids') is distinct from 'array' then return null;end if;
+  if jsonb_array_length(p_data->'member_ids')>100 then return null;end if;
+  if exists(select 1 from jsonb_array_elements_text(p_data->'member_ids') as x(mid) where mid::uuid=a.id or not exists(select 1 from public.wm_memberships m join public.wm_accounts c on c.id=m.account_id and c.enabled where m.account_id=mid::uuid and m.workspace_id=w.id and m.enabled)) then return null;end if;
+  if exists(select 1 from public.wm_contact_groups g where g.id=v_target and (g.account_id<>a.id or g.workspace_id<>w.id)) then return null;end if;
+  if exists(select 1 from public.wm_contact_groups g where g.account_id=a.id and g.workspace_id=w.id and g.name=v_name and g.id<>v_target) then return null;end if;
+  if not exists(select 1 from public.wm_contact_groups g where g.id=v_target) and (select count(*) from public.wm_contact_groups g where g.account_id=a.id and g.workspace_id=w.id)>=50 then return null;end if;
+  insert into public.wm_contact_groups(id,account_id,workspace_id,name,member_ids)
+   values(v_target,a.id,w.id,v_name,array(select distinct mid::uuid from jsonb_array_elements_text(p_data->'member_ids') as x(mid) order by mid::uuid))
+   on conflict(id) do update set name=excluded.name,member_ids=excluded.member_ids where wm_contact_groups.account_id=a.id and wm_contact_groups.workspace_id=w.id;
+  return jsonb_build_object('updated',true,'id',v_target);
+ when 'group-delete' then
+  v_target:=(p_data->>'id')::uuid;
+  delete from public.wm_contact_groups where id=v_target and account_id=a.id and workspace_id=w.id;
+  if not found then return null;end if;
+  return jsonb_build_object('updated',true);
  when 'invite' then
   v_newrole:=p_data->>'role';
   if w.kind<>'enterprise' or v_role not in ('promoteur','manager') or v_newrole not in ('manager','staff') or v_newrole is null or (v_role='manager' and v_newrole<>'staff') then return null;end if;
@@ -373,6 +410,8 @@ begin
   update public.wm_device_sessions set revoked_at=clock_timestamp() where workspace_id=w.id and account_id=v_target and revoked_at is null;
   update public.wm_membership_invites set status='revoked' where workspace_id=w.id and (sender_id=v_target or target_id=v_target) and status='pending';
   delete from public.wm_favorites where workspace_id=w.id and (account_id=v_target or contact_id=v_target);
+  delete from public.wm_contact_groups where workspace_id=w.id and account_id=v_target;
+  update public.wm_contact_groups set member_ids=array_remove(member_ids,v_target) where workspace_id=w.id and v_target=any(member_ids);
   return jsonb_build_object('updated',true);
  else return null;
  end case;
