@@ -69,7 +69,13 @@ internal val commercePages=listOf(PortalPage("loyalty","Fidélité et parrainage
  CommerceChoice(t("Affectation préparée","Prepared assignment"),yesNo,v("courier_enabled").ifBlank{"yes"},allowed){set("courier_enabled",it)}
  Button(enabled=allowed&&v("member_id").isNotBlank(),onClick={write("courier_set",JSONObject().put("member_id",v("member_id")).put("enabled",v("courier_enabled")!="no"))}){Text(t("Enregistrer le livreur","Save courier"))}
  }
- d.rows("zones").forEach{Text(it.optString("label")+" · "+it.optString("fee_xaf")+" FCFA · "+it.optString("instructions"))};d.rows("members").filter{it.optBoolean("enabled")}.forEach{Text(t("Livreur affecté","Assigned courier")+" : "+it.optString("label"))}
+ d.rows("zones").forEach{x->
+ Text(x.optString("label")+" · "+x.optString("fee_xaf")+" FCFA · "+x.optString("instructions")+" · "+if(x.optBoolean("active"))t("Configurée","Configured")else t("Inactive","Inactive"))
+ if(owner&&d.optBoolean("restaurant"))OutlinedButton(enabled=allowed,onClick={values=values+mapOf("label" to x.optString("label"),"instructions" to x.optString("instructions"),"fee_xaf" to x.optString("fee_xaf"),"zone_enabled" to if(x.optBoolean("active"))"yes" else "no")}){Text(t("Modifier la zone","Edit zone")+" : "+x.optString("label"))}
+ };d.rows("members").filter{it.optBoolean("enabled")}.forEach{x->
+ Text(t("Livreur affecté","Assigned courier")+" : "+x.optString("label"))
+ if(owner&&d.optBoolean("restaurant"))OutlinedButton(enabled=allowed,onClick={write("courier_set",JSONObject().put("member_id",x.optString("id")).put("enabled",false))}){Text(t("Retirer l’affectation","Remove assignment")+" : "+x.optString("label"))}
+ }
  }
  "connections"->{Text(t("Demande enregistrée localement ; aucun flux vidéo ou accès externe ouvert.","Local request only; no video or external access opened."))
  if(owner){CommerceChoice(t("Solution","Solution"),listOf("naxa_security" to "NAXA SECURITY","naxa_hotel" to "NAXA HOTEL","grillad" to "GRILLAD"),v("partner"),allowed){set("partner",it)}

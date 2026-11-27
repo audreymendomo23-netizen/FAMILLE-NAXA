@@ -1,0 +1,75 @@
+import test,{after} from "node:test";
+import assert from "node:assert/strict";
+import pg from "pg";
+import {randomUUID as id} from "node:crypto";
+const base=process.env.API_URL,dbUrl=process.env.DB_URL,service=process.env.SERVICE_ROLE_KEY;
+assert.match(base??"",/^http:\/\/(127\.0\.0\.1|localhost):\d+$/);
+assert.ok(["127.0.0.1","localhost"].includes(new URL(dbUrl).hostname));
+const db=new pg.Pool({connectionString:dbUrl});
+after(()=>db.end());
+const scalar=async(sql,args=[])=>Object.values((await db.query(sql,args)).rows[0]??{})[0];
+async function call(fn,action,body,token){
+ const response=await fetch(base+"/functions/v1/"+fn+"/"+action,{method:"POST",redirect:"error",signal:AbortSignal.timeout(20000),headers:{origin:"https://zipple.test","content-type":"application/json",...(token?{authorization:"Bearer "+token}:{})},body:JSON.stringify({app_id:"ZIPPLE",...body})});
+ return {status:response.status,body:await response.json()};
+}
+async function fixture(){
+ const org=id(),site=id(),member=id(),login="qa-"+id(),email=id()+"@example.test",password="Fixture-"+id()+"-Aa9!";
+ const created=await fetch(base+"/auth/v1/admin/users",{method:"POST",headers:{apikey:service,authorization:"Bearer "+service,"content-type":"application/json"},body:JSON.stringify({email,password,email_confirm:true})});assert.ok(created.ok,"local Auth fixture");
+ const user=(await created.json()).id;
+ await db.query("insert into zp_organizations values($1,'QA wave 3',true)",[org]);
+ await db.query("insert into zp_members(id,org_id,auth_user_id,login_id,auth_alias,role_code) values($1,$2,$3,$4,$5,'promoteur')",[member,org,user,login,email]);
+ await db.query("insert into zp_sites values($1,$2,'QA restaurant',true)",[site,org]);await db.query("insert into zp_site_scopes values($1,$2,$3)",[member,org,site]);
+ const auth=await call("zipple-n1","login",{identifier:login,password});assert.equal(auth.status,200);
+ const b=(action,body={})=>call("zipple-business",action,{site_id:site,...body},auth.body.access_token);
+ const ok=async(action,body={})=>{const response=await b(action,body);assert.equal(response.status,200,action+" "+String(response.body.error??""));return response.body.data};
+ const premium=await ok("quote",{plan:"PREMIUM",cadence:"monthly",provider:"mtn_momo",request_id:id()});
+ await scalar("select zp_confirm_subscription($1,'mtn_momo',$2,18000,'XAF')",[premium.id,id()]);
+ await ok("mode",{space:"restaurant",bar:true,delivery:false});
+ const makeOrder=async()=>{const item=await ok("menu_add",{name:"QA plat "+id(),post:"kitchen",price_xaf:500,qty:3});const order=await ok("order_create",{channel:"counter",request_id:id(),lines:[{item_id:item,qty:1}]});return {item,order:order.id}};
+ return {org,site,member,b,ok,makeOrder};
+}
+async function denied(b,action,body,code){const r=await b(action,body);assert.equal(r.status,409,action);assert.equal(r.body.error,code)}
+async function actor(org,site,role){
+ const member=id(),login="qa-"+id(),email=id()+"@example.test",password="Fixture-"+id()+"-Aa9!";
+ const created=await fetch(base+"/auth/v1/admin/users",{method:"POST",headers:{apikey:service,authorization:"Bearer "+service,"content-type":"application/json"},body:JSON.stringify({email,password,email_confirm:true})});assert.ok(created.ok);
+ await db.query("insert into zp_members(id,org_id,auth_user_id,login_id,auth_alias,role_code) values($1,$2,$3,$4,$5,$6)",[member,org,(await created.json()).id,login,email,role]);
+ await db.query("insert into zp_site_scopes values($1,$2,$3)",[member,org,site]);
+ const auth=await call("zipple-n1","login",{identifier:login,password});assert.equal(auth.status,200);
+ const b=(action,body={})=>call("zipple-business",action,{site_id:site,...body},auth.body.access_token);
+ const ok=async(action,body={})=>{const res=await b(action,body);assert.equal(res.status,200,action+" "+String(res.body.error??""));return res.body.data};
+ return {member,b,ok};
+}
+
+test("B5-005 HR private history, absence overlap and authorized decisions",async()=>{
+ const {org,site,b,ok}=await fixture();const staff=await actor(org,site,"staff"),other=await actor(org,site,"staff"),manager=await actor(org,site,"manager");
+ const write=(operation,payload,request_id=id())=>({operation,payload,request_id});
+ const absence={kind:"absence",member_id:staff.member,from_day:"2027-05-01",to_day:"2027-05-03",amount_xaf:null,reason:"Absence test QA"};
+ assert.equal((await other.b("hr_write",write("submit",absence))).status,403);
+ const draft=write("submit",absence);const created=await staff.ok("hr_write",draft);assert.equal((await staff.ok("hr_write",draft)).id,created.id);
+ await denied(staff.b,"hr_write",write("submit",{...absence,from_day:"2027-05-02"}),"ABSENCE_OVERLAP");
+ assert.equal((await other.ok("hr_snapshot")).rows.length,0);
+ const decision=write("decide",{id:created.id,decision:"approved",reason:"Planning vérifié"});
+ assert.equal((await staff.b("hr_write",decision)).status,403);
+ assert.equal((await manager.ok("hr_write",decision)).id,created.id);
+ assert.equal((await staff.ok("hr_snapshot")).rows.find(x=>x.id===created.id).state,"approved");
+ assert.equal((await other.ok("hr_snapshot")).rows.length,0);
+ assert.equal(Number(await scalar("select count(*) from zp_hr_decisions where request_id=$1",[created.id])),1);
+ console.log("ZIPPLE_QA_CASE_PARTIAL B5-005 HR_SCOPE_OVERLAP_HISTORY_PASS");
+});
+test("B5-007 variable compensation submission and owner approval, not payroll",async()=>{
+ const {org,site,b,ok}=await fixture();const staff=await actor(org,site,"staff"),manager=await actor(org,site,"manager");
+ const write=(operation,payload,request_id=id())=>({operation,payload,request_id});
+ for(const [kind,amount] of [["bonus",4500],["commission",3200],["advance",1000]]){
+  const payload={kind,member_id:staff.member,from_day:"2027-05-01",to_day:"2027-05-31",amount_xaf:amount,reason:"Élément rémunération QA"};
+  assert.equal((await staff.b("hr_write",write("submit",payload))).status,403);
+  const row=await manager.ok("hr_write",write("submit",payload));
+  const decision=write("decide",{id:row.id,decision:"approved",reason:"Montant contrôlé QA"});
+  assert.equal((await manager.b("hr_write",decision)).status,403);
+  assert.equal((await ok("hr_write",decision)).id,row.id);
+  assert.equal((await ok("hr_write",decision)).id,row.id);
+  assert.equal(Number(await scalar("select count(*) from zp_hr_decisions where request_id=$1",[row.id])),1);
+ }
+ const snapshot=await staff.ok("hr_snapshot");assert.equal(snapshot.rows.length,3);assert.equal(snapshot.rows.reduce((sum,x)=>sum+x.amount_xaf,0),8700);
+ assert.ok(snapshot.rows.every(x=>x.state==="approved"));assert.equal(snapshot.can_approve_pay,false);
+ console.log("ZIPPLE_QA_CASE_PARTIAL B5-007 VARIABLE_PAY_APPROVAL_PASS");
+});

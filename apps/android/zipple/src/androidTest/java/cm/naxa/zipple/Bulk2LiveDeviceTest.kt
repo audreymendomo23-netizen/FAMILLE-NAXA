@@ -127,6 +127,14 @@ class Bulk2LiveDeviceTest {
   click("Formation");awaitText("Historique")
   click("Feedback interne");awaitText("Historique")
   click("Absences et rémunérations");input("Début AAAA-MM-JJ","2027-02-01");input("Fin AAAA-MM-JJ","2027-02-02");input("Motif professionnel","Congé ERP natif");click("Soumettre la demande");awaitText("Absence · Profil ERP natif · À valider");input("Motif de décision","Planning natif contrôlé");click("Approuvé");awaitText("Absence · Profil ERP natif · Approuvé")
+  click("Filtrer par statut : Tous");click("À valider");awaitText("Aucune demande correspondante.")
+  click("Réinitialiser les filtres");awaitText("Absence · Profil ERP natif · Approuvé")
+  click("Type de demande : Absence");click("Prime")
+  input("Montant FCFA","4500");input("Motif professionnel","Prime ERP native");click("Soumettre la demande");awaitText("Prime · Profil ERP natif · À valider")
+  input("Motif de décision","Prime contrôlée native");click("Approuvé");awaitText("Prime · Profil ERP natif · Approuvé")
+  click("Filtrer par type : Tous");click("Prime");awaitText("Montants approuvés dans cette sélection (hors absences, non versés automatiquement) : 4500 FCFA")
+  click("Réinitialiser les filtres")
+  android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_QA_CASE_PARTIAL B5-005 B5-007 NATIVE_HR_FILTERS_PASS")
   click("ZIPPLE Intelligence");awaitText("Analyse explicable, sans assistant génératif connecté.")
   step("create native loyalty fixture through Edge"){runBlocking{
    business.call(session,site,"customer_add",body("name" to "Client QR natif","phone" to ""))
@@ -259,6 +267,11 @@ class Bulk2LiveDeviceTest {
   android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_LOYALTY_QR_DISPLAY_PASS")
   click("Livraison Restaurant");awaitText("Préparation des zones et livreurs ; commande externe non activée.")
   input("Nom de zone","Zone ERP native");input("Périmètre et consignes","Secteur test");input("Frais FCFA","500");click("Enregistrer la zone");awaitText("Opération enregistrée")
+  click("Modifier la zone : Zone ERP native")
+  input("Frais FCFA","750");click("Zone active dans le projet : Oui");click("Non");click("Enregistrer la zone");awaitText("Zone ERP native · 750 FCFA · Secteur test · Inactive")
+  click("Livreur de l'établissement : —");click("Profil ERP natif");click("Enregistrer le livreur");awaitText("Livreur affecté : Profil ERP natif")
+  click("Retirer l’affectation : Profil ERP natif");awaitText("Opération enregistrée")
+  android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_QA_CASE_PARTIAL B4-017 NATIVE_ZONE_AND_COURIER_PASS")
   click("NAXA SECURITY et partenaires");awaitText("Demande enregistrée localement ; aucun flux vidéo ou accès externe ouvert.")
   step("actual native workspace persistence"){runBlocking{
    val profile=business.call(session,site,"workspace_snapshot",body("page" to "profile")) as JSONObject
@@ -266,8 +279,9 @@ class Bulk2LiveDeviceTest {
    val tickets=business.call(session,site,"workspace_snapshot",body("page" to "tickets")) as JSONObject
    assertTrue(tickets.rows("rows").any{it.optString("title")=="Ticket ERP natif"&&it.optString("state")=="done"})
    val delivery=business.call(session,site,"connection_snapshot",body("page" to "delivery")) as JSONObject
-   assertTrue(delivery.rows("zones").any{it.optString("label")=="Zone ERP native"&&it.optInt("fee_xaf")==500})
+   assertTrue(delivery.rows("zones").any{it.optString("label")=="Zone ERP native"&&it.optInt("fee_xaf")==750&&!it.optBoolean("active")})
    assertFalse(delivery.optBoolean("service_active"))
+   assertFalse(delivery.rows("members").single{it.optString("id")==session.member}.optBoolean("enabled"))
   }}
   android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_BULK45_NATIVE_WORKSPACES_PASS")
   click("Déconnexion")

@@ -26,7 +26,7 @@ async function fixture(){
  await scalar("select zp_confirm_subscription($1,'mtn_momo',$2,18000,'XAF')",[premium.id,id()]);
  await ok("mode",{space:"restaurant",bar:true,delivery:false});
  const makeOrder=async()=>{const item=await ok("menu_add",{name:"QA plat "+id(),post:"kitchen",price_xaf:500,qty:3});const order=await ok("order_create",{channel:"counter",request_id:id(),lines:[{item_id:item,qty:1}]});return {item,order:order.id}};
- return {org,site,b,ok,makeOrder};
+ return {org,site,member,b,ok,makeOrder};
 }
 async function denied(b,action,body,code){const r=await b(action,body);assert.equal(r.status,409,action);assert.equal(r.body.error,code)}
 test("B3-016 FEFO then FIFO, actual production trace and concurrent shortage",async()=>{
@@ -68,4 +68,32 @@ test("B3-019 concurrent physical counts, losses and idempotent replay",async()=>
  assert.equal(Number(await scalar("select remaining_cost from zp_ingredient_lots where id=$1",[second])),0);
  assert.equal(Number(await scalar("select count(*) from zp_inventory_counts where lot_id=any($1::uuid[])",[[first,second]])),2);
  console.log("ZIPPLE_QA_CASE_PARTIAL B3-019 COUNT_CONFLICT_LOSS_PASS");
+});
+
+async function actor(org,site,role){
+ const member=id(),login="qa-"+id(),email=id()+"@example.test",password="Fixture-"+id()+"-Aa9!";
+ const created=await fetch(base+"/auth/v1/admin/users",{method:"POST",headers:{apikey:service,authorization:"Bearer "+service,"content-type":"application/json"},body:JSON.stringify({email,password,email_confirm:true})});assert.ok(created.ok);
+ await db.query("insert into zp_members(id,org_id,auth_user_id,login_id,auth_alias,role_code) values($1,$2,$3,$4,$5,$6)",[member,org,(await created.json()).id,login,email,role]);
+ await db.query("insert into zp_site_scopes values($1,$2,$3)",[member,org,site]);
+ const auth=await call("zipple-n1","login",{identifier:login,password});assert.equal(auth.status,200);
+ const b=(action,body={})=>call("zipple-business",action,{site_id:site,...body},auth.body.access_token);
+ const ok=async(action,body={})=>{const res=await b(action,body);assert.equal(res.status,200,action+" "+String(res.body.error??""));return res.body.data};
+ return {member,b,ok};
+}
+
+test("B4-017 owner-only delivery draft changes and courier scope",async()=>{
+ const {org,site,member,b,ok}=await fixture();const manager=await actor(org,site,"manager");
+ const write=(operation,payload,request_id=id())=>({operation,payload,request_id});
+ const zone=write("zone_save",{label:"QA zone",instructions:"Secteur de test",fee_xaf:500,enabled:true});
+ assert.equal((await manager.b("connection_write",zone)).status,403);
+ const initial=await ok("connection_write",zone);assert.equal((await ok("connection_write",zone)).id,initial.id);
+ const updated=await ok("connection_write",write("zone_save",{...zone.payload,fee_xaf:750,enabled:false}));assert.equal(updated.id,initial.id);
+ await ok("connection_write",write("courier_set",{member_id:member,enabled:true}));
+ await ok("connection_write",write("courier_set",{member_id:member,enabled:false}));
+ assert.equal((await b("connection_write",write("courier_set",{member_id:id(),enabled:true}))).status,403);
+ const snapshot=await ok("connection_snapshot",{page:"delivery"});assert.equal(snapshot.service_active,false);
+ assert.equal(snapshot.zones.length,1);assert.equal(snapshot.zones[0].fee_xaf,750);assert.equal(snapshot.zones[0].active,false);
+ assert.equal(snapshot.members.find(x=>x.id===member).enabled,false);
+ assert.equal(await scalar("select delivery_enabled from zp_site_modes where site_id=$1",[site]),false);
+ console.log("ZIPPLE_QA_CASE_PARTIAL B4-017 DELIVERY_DRAFT_SCOPE_PASS");
 });

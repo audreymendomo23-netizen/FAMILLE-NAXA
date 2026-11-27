@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [web-workspaces, web-operations, web-guest-offline, wave1-business, wave2-business, android-native, api-1, api-2, api-3, api-4]
+        suite: [web-workspaces, web-operations, web-guest-offline, wave1-business, wave2-business, wave3-business, android-native, api-1, api-2, api-3, api-4]
     runs-on: ubuntu-24.04
     timeout-minutes: 38
     steps:
@@ -170,6 +170,7 @@ jobs:
           case "$ZIPPLE_SUITE" in
             wave1-business) node --test docs/apps/zipple/n2-n5/local-wave1-business.test.mjs ;;
             wave2-business) node --test docs/apps/zipple/n2-n5/local-wave2-business.test.mjs ;;
+            wave3-business) node --test docs/apps/zipple/n2-n5/local-wave3-business.test.mjs ;;
             *) exit 2 ;;
           esac
       - name: Independent real Edge action boundaries

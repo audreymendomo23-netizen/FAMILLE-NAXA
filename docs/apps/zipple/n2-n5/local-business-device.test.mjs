@@ -65,8 +65,10 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
  assert.equal(Number(await scalar("select count(*) from zp_expenses where site_id=$1 and reference='NATIVE-AFTER-REVIEW'",[site])),1);
  assert.equal(await scalar("select display_name from zp_profile_details where member_id=$1",[member]),"Profil ERP natif");
  assert.equal(Number(await scalar("select count(*) from zp_work_items where site_id=$1 and title='Ticket ERP natif' and state='done'",[site])),1);
- assert.equal(Number(await scalar("select count(*) from zp_delivery_zones where site_id=$1 and label='Zone ERP native' and fee_xaf=500",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_delivery_zones where site_id=$1 and label='Zone ERP native' and fee_xaf=750 and not active",[site])),1);
  assert.equal(Number(await scalar("select count(*) from zp_hr_requests r join zp_hr_decisions d on d.request_id=r.id where r.site_id=$1 and r.reason='Congé ERP natif' and d.decision='approved'",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_hr_requests r join zp_hr_decisions d on d.request_id=r.id where r.site_id=$1 and r.reason='Prime ERP native' and r.amount_xaf=4500 and d.decision='approved'",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_delivery_couriers where site_id=$1 and not active",[site])),1);
  const nativeTableHash=await scalar("select qr_hash from zp_tables where site_id=$1 and org_id=$2 and label='Table QR native'",[site,org]);
  assert.match(nativeTableHash,/^[0-9a-f]{64}$/);
  console.log("ZIPPLE_NATIVE_TABLE_QR_PERSISTENCE_PASS");
