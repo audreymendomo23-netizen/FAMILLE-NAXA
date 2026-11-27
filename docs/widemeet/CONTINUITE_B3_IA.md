@@ -36,3 +36,25 @@ NAXA SERVICES référence 13810a2 : lecture directe apps/android/naxa-services/s
 4. Gate B3 ciblé : tests unitaires, SQL/RLS, intégration et E2E positifs/négatifs, concurrence, isolation inter-salle, révocation et vérification de sources ; consigner commit/run/job et résultats terminaux. Couverture physique et commerciale distinctes.
 
 Cette passe est un audit et une création documentaire, pas une livraison de code supplémentaire. Mettre à jour ce document et la jauge à chaque réponse B3 ; aucun point vert sans preuve. Ne pas fusionner vers main ni déployer sans autorisation.
+
+
+## 27/11/2026 — Campagne B3 groupée, preuve terminale et accélération
+Base de qualification 008191863a43c08d811d7c2fa3075386b9ce7a10, PR #4 (brouillon, ne pas fusionner). Quatre workflows terminaux SUCCESS : [gate 45992186337](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45992186337) (5 jobs, dont Android et Web), [Replay 45992186365](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45992186365), [SFU 45992186396](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45992186396), [audio 45992186301](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45992186301). Job audio 140482520696 : PASS ASR préflight, PASS capture micro Chromium → SFU → Egress consenti → Storage privé → ASR offline avec ID source préservé, PASS brouillon privé non approuvé et invité refusé. La chaîne audio anglaise n'est plus une simple fixture injectée après réunion. Les corrections d'état des interfaces sont compilées mais aucune recette interactive native spécifique ASR n'est attestée sur cette base.
+
+Nouvelle campagne limitée à B3, révision code 2c406170d4e141ad1ea344c1173747d337970551 :
+- B3.2 : 52f2770 qualification FR/EN sur parole synthétique offline et silence sans texte ; 42cc7f5, dd396b1, 920b392 worker durable (entrée opt-in, arrêt drainant, boucle séquentielle, backoff plafonné, tests, réutilisation du bail SQL SKIP LOCKED et worker réel), 4b9df44 CI test boucle, 2c40617 raccordement de la boucle au vrai Replay. Pas de service déployé ; corpus réel, multi-instance/reprise de lease et parcours natif spécifique restent à prouver.
+- B3.4 / B3.5 : 08fbe00 calcul SQL côté serveur des extraits et décisions/actions candidates, après contrôle existant du droit d'accès ASR. Références exactes recording_id/segment_index/horodatage/texte/incertitude, pas d'identité, responsable ou échéance inventés, aucun contenu généré ni validation automatique. Règles conservatrices FR/EN, exclusion de négation, question, incertitude, proposition ; ne garantit pas l'interprétation sémantique ni le contexte intersegments. 758c594 assertions de source exacte, refus anon et filtrage sur fixtures, abbac70 et 767c0f5 parité Web/Android et insertion explicite dans brouillon existant. Ce n'est pas une synthèse générative ni une extraction exhaustive validée ; questions vocales/bilans IA restent ouverts.
+- Diff vérifié depuis 0081918 : 9 fichiers, tous B3 ; aucune modification des sœurs, autre chantier, main, production, migration persistante, coût ou déploiement. Syntaxe JS du Replay vérifiée par parsing du corps asynchrone sans imports dans le connecteur, pas une exécution de Node ni un E2E.
+- Nouvelle CI : PR #4 mise à jour par commits ; au dernier relevé, recherche des runs sur 2c40617 vide. Ne pas déduire succès ou démarrage confirmé de la nouvelle CI du succès de 0081918.
+
+### Jauge révisée (même méthode, 1 qualifié, 0,5 partiel code ou sous-recette, 0 non démontré)
+| Bloc | Score | Etat |
+|---|---:|---|
+| B3.1 | 1 | Vert préférences |
+| B3.2 | 0,5 | Orange avancé : chaîne anglaise prouvée, autres réserves en qualification |
+| B3.3 | 0 | Rouge |
+| B3.4 | 0,5 | Orange candidat extractif, non génératif |
+| B3.5 | 0,5 | Orange candidat à vérifier, pas de décision approuvée |
+| B3.6 | 0 | Rouge |
+| B3.7 | 0 | Rouge |
+Total 2,5/7 = 35,7 %, +14,3 points vs 21,4 %. Indicateur de progression mixte (code partiel + qualification), couverture entièrement verte = 1/7 = 14,3 %. Objectif 25 points non atteint : ne pas modifier la méthode pour masquer les réserves. Prochaine priorité : résultats CI, correction des échecs B3, preuve du worker durable, UI réelle et synthèse/décisions contextualisées ; puis diarisation, traduction et sous-titres.
