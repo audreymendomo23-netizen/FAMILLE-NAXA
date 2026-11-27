@@ -378,3 +378,6 @@ Registre de 181 écrans (25/25/30/33/35/33), cinq onglets et navigation Compose/
 
 ## Passe métier suivante
 Preuves précédentes : jobs Web/Android 46076389708 et 46076501881, SQL 46076501805 : SUCCESS (5/5). Nouveau candidat SQL append-only incidents manuels P2–P4 et ordres de maintenance, périmètre site, rôle, auteur, anti-doublon, aucune commande physique ni écriture client dans les appareils. Adaptateur REST Web préparé pour session SECURITY dédiée ; non raccordé à une session réelle. Recettes SQL élargies. Aucune migration de production, aucune donnée réelle créée. B1–B6 restent PARTIEL.
+
+## Campagne parallèle B1–B6
+Révision de départ ec93719 : Android/Web 46077049114 SUCCESS, SQL 46077049211 SUCCESS; gate famille 46077049238 échec E2E/axe et matrice RLS commune. Registre exécutable 543 recettes de navigation (181 destinations × 3 largeurs), 11 lots (10×50 + 43), matrice fail-fast false max-parallel 11 et rapports individuels. Ces recettes ne sont pas des preuves métier. Les workflows SQL et Android restent distincts. Aucun déploiement.

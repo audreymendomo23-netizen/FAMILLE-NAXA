@@ -1,0 +1,4401 @@
+[
+  {
+    "lot": 1,
+    "cases": [
+      {
+        "id": "UI-B1.01-360",
+        "screen": "B1.01",
+        "bulk": "B1",
+        "title": "Splash Screen",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.01-768",
+        "screen": "B1.01",
+        "bulk": "B1",
+        "title": "Splash Screen",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.01-1440",
+        "screen": "B1.01",
+        "bulk": "B1",
+        "title": "Splash Screen",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.02-360",
+        "screen": "B1.02",
+        "bulk": "B1",
+        "title": "Bienvenue",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.02-768",
+        "screen": "B1.02",
+        "bulk": "B1",
+        "title": "Bienvenue",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.02-1440",
+        "screen": "B1.02",
+        "bulk": "B1",
+        "title": "Bienvenue",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.03-360",
+        "screen": "B1.03",
+        "bulk": "B1",
+        "title": "Connexion",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.03-768",
+        "screen": "B1.03",
+        "bulk": "B1",
+        "title": "Connexion",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.03-1440",
+        "screen": "B1.03",
+        "bulk": "B1",
+        "title": "Connexion",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.04-360",
+        "screen": "B1.04",
+        "bulk": "B1",
+        "title": "Création de compte",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.04-768",
+        "screen": "B1.04",
+        "bulk": "B1",
+        "title": "Création de compte",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.04-1440",
+        "screen": "B1.04",
+        "bulk": "B1",
+        "title": "Création de compte",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.05-360",
+        "screen": "B1.05",
+        "bulk": "B1",
+        "title": "Récupération de compte",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.05-768",
+        "screen": "B1.05",
+        "bulk": "B1",
+        "title": "Récupération de compte",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.05-1440",
+        "screen": "B1.05",
+        "bulk": "B1",
+        "title": "Récupération de compte",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.06-360",
+        "screen": "B1.06",
+        "bulk": "B1",
+        "title": "Configuration PIN",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.06-768",
+        "screen": "B1.06",
+        "bulk": "B1",
+        "title": "Configuration PIN",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.06-1440",
+        "screen": "B1.06",
+        "bulk": "B1",
+        "title": "Configuration PIN",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.07-360",
+        "screen": "B1.07",
+        "bulk": "B1",
+        "title": "Déverrouillage",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.07-768",
+        "screen": "B1.07",
+        "bulk": "B1",
+        "title": "Déverrouillage",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.07-1440",
+        "screen": "B1.07",
+        "bulk": "B1",
+        "title": "Déverrouillage",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.08-360",
+        "screen": "B1.08",
+        "bulk": "B1",
+        "title": "Configuration initiale",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.08-768",
+        "screen": "B1.08",
+        "bulk": "B1",
+        "title": "Configuration initiale",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.08-1440",
+        "screen": "B1.08",
+        "bulk": "B1",
+        "title": "Configuration initiale",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.09-360",
+        "screen": "B1.09",
+        "bulk": "B1",
+        "title": "Sélection d’espace",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.09-768",
+        "screen": "B1.09",
+        "bulk": "B1",
+        "title": "Sélection d’espace",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.09-1440",
+        "screen": "B1.09",
+        "bulk": "B1",
+        "title": "Sélection d’espace",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.10-360",
+        "screen": "B1.10",
+        "bulk": "B1",
+        "title": "Organisations",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.10-768",
+        "screen": "B1.10",
+        "bulk": "B1",
+        "title": "Organisations",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.10-1440",
+        "screen": "B1.10",
+        "bulk": "B1",
+        "title": "Organisations",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.11-360",
+        "screen": "B1.11",
+        "bulk": "B1",
+        "title": "Sites et bâtiments",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.11-768",
+        "screen": "B1.11",
+        "bulk": "B1",
+        "title": "Sites et bâtiments",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.11-1440",
+        "screen": "B1.11",
+        "bulk": "B1",
+        "title": "Sites et bâtiments",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.12-360",
+        "screen": "B1.12",
+        "bulk": "B1",
+        "title": "Utilisateurs",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.12-768",
+        "screen": "B1.12",
+        "bulk": "B1",
+        "title": "Utilisateurs",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.12-1440",
+        "screen": "B1.12",
+        "bulk": "B1",
+        "title": "Utilisateurs",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.13-360",
+        "screen": "B1.13",
+        "bulk": "B1",
+        "title": "Rôles et permissions",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.13-768",
+        "screen": "B1.13",
+        "bulk": "B1",
+        "title": "Rôles et permissions",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.13-1440",
+        "screen": "B1.13",
+        "bulk": "B1",
+        "title": "Rôles et permissions",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.14-360",
+        "screen": "B1.14",
+        "bulk": "B1",
+        "title": "Profil",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.14-768",
+        "screen": "B1.14",
+        "bulk": "B1",
+        "title": "Profil",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.14-1440",
+        "screen": "B1.14",
+        "bulk": "B1",
+        "title": "Profil",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.15-360",
+        "screen": "B1.15",
+        "bulk": "B1",
+        "title": "Paramètres",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.15-768",
+        "screen": "B1.15",
+        "bulk": "B1",
+        "title": "Paramètres",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.15-1440",
+        "screen": "B1.15",
+        "bulk": "B1",
+        "title": "Paramètres",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.16-360",
+        "screen": "B1.16",
+        "bulk": "B1",
+        "title": "Langues",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.16-768",
+        "screen": "B1.16",
+        "bulk": "B1",
+        "title": "Langues",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.16-1440",
+        "screen": "B1.16",
+        "bulk": "B1",
+        "title": "Langues",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.17-360",
+        "screen": "B1.17",
+        "bulk": "B1",
+        "title": "Abonnements",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.17-768",
+        "screen": "B1.17",
+        "bulk": "B1",
+        "title": "Abonnements",
+        "width": 768,
+        "kind": "responsive-navigation"
+      }
+    ]
+  },
+  {
+    "lot": 2,
+    "cases": [
+      {
+        "id": "UI-B1.17-1440",
+        "screen": "B1.17",
+        "bulk": "B1",
+        "title": "Abonnements",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.18-360",
+        "screen": "B1.18",
+        "bulk": "B1",
+        "title": "Comparateur d’offres",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.18-768",
+        "screen": "B1.18",
+        "bulk": "B1",
+        "title": "Comparateur d’offres",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.18-1440",
+        "screen": "B1.18",
+        "bulk": "B1",
+        "title": "Comparateur d’offres",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.19-360",
+        "screen": "B1.19",
+        "bulk": "B1",
+        "title": "Extensions",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.19-768",
+        "screen": "B1.19",
+        "bulk": "B1",
+        "title": "Extensions",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.19-1440",
+        "screen": "B1.19",
+        "bulk": "B1",
+        "title": "Extensions",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.20-360",
+        "screen": "B1.20",
+        "bulk": "B1",
+        "title": "Paiements",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.20-768",
+        "screen": "B1.20",
+        "bulk": "B1",
+        "title": "Paiements",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.20-1440",
+        "screen": "B1.20",
+        "bulk": "B1",
+        "title": "Paiements",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.21-360",
+        "screen": "B1.21",
+        "bulk": "B1",
+        "title": "Historique financier",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.21-768",
+        "screen": "B1.21",
+        "bulk": "B1",
+        "title": "Historique financier",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.21-1440",
+        "screen": "B1.21",
+        "bulk": "B1",
+        "title": "Historique financier",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.22-360",
+        "screen": "B1.22",
+        "bulk": "B1",
+        "title": "Renouvellement",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.22-768",
+        "screen": "B1.22",
+        "bulk": "B1",
+        "title": "Renouvellement",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.22-1440",
+        "screen": "B1.22",
+        "bulk": "B1",
+        "title": "Renouvellement",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.23-360",
+        "screen": "B1.23",
+        "bulk": "B1",
+        "title": "Sessions et appareils",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.23-768",
+        "screen": "B1.23",
+        "bulk": "B1",
+        "title": "Sessions et appareils",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.23-1440",
+        "screen": "B1.23",
+        "bulk": "B1",
+        "title": "Sessions et appareils",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.24-360",
+        "screen": "B1.24",
+        "bulk": "B1",
+        "title": "Synchronisation",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.24-768",
+        "screen": "B1.24",
+        "bulk": "B1",
+        "title": "Synchronisation",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.24-1440",
+        "screen": "B1.24",
+        "bulk": "B1",
+        "title": "Synchronisation",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.25-360",
+        "screen": "B1.25",
+        "bulk": "B1",
+        "title": "CGU et confidentialité",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.25-768",
+        "screen": "B1.25",
+        "bulk": "B1",
+        "title": "CGU et confidentialité",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B1.25-1440",
+        "screen": "B1.25",
+        "bulk": "B1",
+        "title": "CGU et confidentialité",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.01-360",
+        "screen": "B2.01",
+        "bulk": "B2",
+        "title": "Video Wall",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.01-768",
+        "screen": "B2.01",
+        "bulk": "B2",
+        "title": "Video Wall",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.01-1440",
+        "screen": "B2.01",
+        "bulk": "B2",
+        "title": "Video Wall",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.02-360",
+        "screen": "B2.02",
+        "bulk": "B2",
+        "title": "Direct caméra",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.02-768",
+        "screen": "B2.02",
+        "bulk": "B2",
+        "title": "Direct caméra",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.02-1440",
+        "screen": "B2.02",
+        "bulk": "B2",
+        "title": "Direct caméra",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.03-360",
+        "screen": "B2.03",
+        "bulk": "B2",
+        "title": "Contrôle PTZ",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.03-768",
+        "screen": "B2.03",
+        "bulk": "B2",
+        "title": "Contrôle PTZ",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.03-1440",
+        "screen": "B2.03",
+        "bulk": "B2",
+        "title": "Contrôle PTZ",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.04-360",
+        "screen": "B2.04",
+        "bulk": "B2",
+        "title": "Enregistrements",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.04-768",
+        "screen": "B2.04",
+        "bulk": "B2",
+        "title": "Enregistrements",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.04-1440",
+        "screen": "B2.04",
+        "bulk": "B2",
+        "title": "Enregistrements",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.05-360",
+        "screen": "B2.05",
+        "bulk": "B2",
+        "title": "Chronologie vidéo",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.05-768",
+        "screen": "B2.05",
+        "bulk": "B2",
+        "title": "Chronologie vidéo",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.05-1440",
+        "screen": "B2.05",
+        "bulk": "B2",
+        "title": "Chronologie vidéo",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.06-360",
+        "screen": "B2.06",
+        "bulk": "B2",
+        "title": "Clips vidéo",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.06-768",
+        "screen": "B2.06",
+        "bulk": "B2",
+        "title": "Clips vidéo",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.06-1440",
+        "screen": "B2.06",
+        "bulk": "B2",
+        "title": "Clips vidéo",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.07-360",
+        "screen": "B2.07",
+        "bulk": "B2",
+        "title": "Export vidéo",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.07-768",
+        "screen": "B2.07",
+        "bulk": "B2",
+        "title": "Export vidéo",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.07-1440",
+        "screen": "B2.07",
+        "bulk": "B2",
+        "title": "Export vidéo",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.08-360",
+        "screen": "B2.08",
+        "bulk": "B2",
+        "title": "Favoris",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.08-768",
+        "screen": "B2.08",
+        "bulk": "B2",
+        "title": "Favoris",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.08-1440",
+        "screen": "B2.08",
+        "bulk": "B2",
+        "title": "Favoris",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.09-360",
+        "screen": "B2.09",
+        "bulk": "B2",
+        "title": "Programmation",
+        "width": 360,
+        "kind": "responsive-navigation"
+      }
+    ]
+  },
+  {
+    "lot": 3,
+    "cases": [
+      {
+        "id": "UI-B2.09-768",
+        "screen": "B2.09",
+        "bulk": "B2",
+        "title": "Programmation",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.09-1440",
+        "screen": "B2.09",
+        "bulk": "B2",
+        "title": "Programmation",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.10-360",
+        "screen": "B2.10",
+        "bulk": "B2",
+        "title": "Centre audio",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.10-768",
+        "screen": "B2.10",
+        "bulk": "B2",
+        "title": "Centre audio",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.10-1440",
+        "screen": "B2.10",
+        "bulk": "B2",
+        "title": "Centre audio",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.11-360",
+        "screen": "B2.11",
+        "bulk": "B2",
+        "title": "Écoute audio",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.11-768",
+        "screen": "B2.11",
+        "bulk": "B2",
+        "title": "Écoute audio",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.11-1440",
+        "screen": "B2.11",
+        "bulk": "B2",
+        "title": "Écoute audio",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.12-360",
+        "screen": "B2.12",
+        "bulk": "B2",
+        "title": "Interphonie",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.12-768",
+        "screen": "B2.12",
+        "bulk": "B2",
+        "title": "Interphonie",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.12-1440",
+        "screen": "B2.12",
+        "bulk": "B2",
+        "title": "Interphonie",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.13-360",
+        "screen": "B2.13",
+        "bulk": "B2",
+        "title": "Diffusion sonore",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.13-768",
+        "screen": "B2.13",
+        "bulk": "B2",
+        "title": "Diffusion sonore",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.13-1440",
+        "screen": "B2.13",
+        "bulk": "B2",
+        "title": "Diffusion sonore",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.14-360",
+        "screen": "B2.14",
+        "bulk": "B2",
+        "title": "Inventaire des appareils",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.14-768",
+        "screen": "B2.14",
+        "bulk": "B2",
+        "title": "Inventaire des appareils",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.14-1440",
+        "screen": "B2.14",
+        "bulk": "B2",
+        "title": "Inventaire des appareils",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.15-360",
+        "screen": "B2.15",
+        "bulk": "B2",
+        "title": "Ajout d’équipement",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.15-768",
+        "screen": "B2.15",
+        "bulk": "B2",
+        "title": "Ajout d’équipement",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.15-1440",
+        "screen": "B2.15",
+        "bulk": "B2",
+        "title": "Ajout d’équipement",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.16-360",
+        "screen": "B2.16",
+        "bulk": "B2",
+        "title": "Découverte réseau",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.16-768",
+        "screen": "B2.16",
+        "bulk": "B2",
+        "title": "Découverte réseau",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.16-1440",
+        "screen": "B2.16",
+        "bulk": "B2",
+        "title": "Découverte réseau",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.17-360",
+        "screen": "B2.17",
+        "bulk": "B2",
+        "title": "Fiche équipement",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.17-768",
+        "screen": "B2.17",
+        "bulk": "B2",
+        "title": "Fiche équipement",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.17-1440",
+        "screen": "B2.17",
+        "bulk": "B2",
+        "title": "Fiche équipement",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.18-360",
+        "screen": "B2.18",
+        "bulk": "B2",
+        "title": "Configuration des connecteurs",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.18-768",
+        "screen": "B2.18",
+        "bulk": "B2",
+        "title": "Configuration des connecteurs",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.18-1440",
+        "screen": "B2.18",
+        "bulk": "B2",
+        "title": "Configuration des connecteurs",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.19-360",
+        "screen": "B2.19",
+        "bulk": "B2",
+        "title": "Catalogue de compatibilité",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.19-768",
+        "screen": "B2.19",
+        "bulk": "B2",
+        "title": "Catalogue de compatibilité",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.19-1440",
+        "screen": "B2.19",
+        "bulk": "B2",
+        "title": "Catalogue de compatibilité",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.20-360",
+        "screen": "B2.20",
+        "bulk": "B2",
+        "title": "Vérification de compatibilité",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.20-768",
+        "screen": "B2.20",
+        "bulk": "B2",
+        "title": "Vérification de compatibilité",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.20-1440",
+        "screen": "B2.20",
+        "bulk": "B2",
+        "title": "Vérification de compatibilité",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.21-360",
+        "screen": "B2.21",
+        "bulk": "B2",
+        "title": "Centre NAXA EDGE",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.21-768",
+        "screen": "B2.21",
+        "bulk": "B2",
+        "title": "Centre NAXA EDGE",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.21-1440",
+        "screen": "B2.21",
+        "bulk": "B2",
+        "title": "Centre NAXA EDGE",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.22-360",
+        "screen": "B2.22",
+        "bulk": "B2",
+        "title": "Installation EDGE",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.22-768",
+        "screen": "B2.22",
+        "bulk": "B2",
+        "title": "Installation EDGE",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.22-1440",
+        "screen": "B2.22",
+        "bulk": "B2",
+        "title": "Installation EDGE",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.23-360",
+        "screen": "B2.23",
+        "bulk": "B2",
+        "title": "Diagnostic réseau",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.23-768",
+        "screen": "B2.23",
+        "bulk": "B2",
+        "title": "Diagnostic réseau",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.23-1440",
+        "screen": "B2.23",
+        "bulk": "B2",
+        "title": "Diagnostic réseau",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.24-360",
+        "screen": "B2.24",
+        "bulk": "B2",
+        "title": "Configuration du stockage vidéo",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.24-768",
+        "screen": "B2.24",
+        "bulk": "B2",
+        "title": "Configuration du stockage vidéo",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.24-1440",
+        "screen": "B2.24",
+        "bulk": "B2",
+        "title": "Configuration du stockage vidéo",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.25-360",
+        "screen": "B2.25",
+        "bulk": "B2",
+        "title": "Santé des flux",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.25-768",
+        "screen": "B2.25",
+        "bulk": "B2",
+        "title": "Santé des flux",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B2.25-1440",
+        "screen": "B2.25",
+        "bulk": "B2",
+        "title": "Santé des flux",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      }
+    ]
+  },
+  {
+    "lot": 4,
+    "cases": [
+      {
+        "id": "UI-B3.01-360",
+        "screen": "B3.01",
+        "bulk": "B3",
+        "title": "Accueil Control 360",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.01-768",
+        "screen": "B3.01",
+        "bulk": "B3",
+        "title": "Accueil Control 360",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.01-1440",
+        "screen": "B3.01",
+        "bulk": "B3",
+        "title": "Accueil Control 360",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.02-360",
+        "screen": "B3.02",
+        "bulk": "B3",
+        "title": "Supervision multisite",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.02-768",
+        "screen": "B3.02",
+        "bulk": "B3",
+        "title": "Supervision multisite",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.02-1440",
+        "screen": "B3.02",
+        "bulk": "B3",
+        "title": "Supervision multisite",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.03-360",
+        "screen": "B3.03",
+        "bulk": "B3",
+        "title": "Centre d’alertes",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.03-768",
+        "screen": "B3.03",
+        "bulk": "B3",
+        "title": "Centre d’alertes",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.03-1440",
+        "screen": "B3.03",
+        "bulk": "B3",
+        "title": "Centre d’alertes",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.04-360",
+        "screen": "B3.04",
+        "bulk": "B3",
+        "title": "Détail d’alerte",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.04-768",
+        "screen": "B3.04",
+        "bulk": "B3",
+        "title": "Détail d’alerte",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.04-1440",
+        "screen": "B3.04",
+        "bulk": "B3",
+        "title": "Détail d’alerte",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.05-360",
+        "screen": "B3.05",
+        "bulk": "B3",
+        "title": "Alertes critiques",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.05-768",
+        "screen": "B3.05",
+        "bulk": "B3",
+        "title": "Alertes critiques",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.05-1440",
+        "screen": "B3.05",
+        "bulk": "B3",
+        "title": "Alertes critiques",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.06-360",
+        "screen": "B3.06",
+        "bulk": "B3",
+        "title": "Escalade",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.06-768",
+        "screen": "B3.06",
+        "bulk": "B3",
+        "title": "Escalade",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.06-1440",
+        "screen": "B3.06",
+        "bulk": "B3",
+        "title": "Escalade",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.07-360",
+        "screen": "B3.07",
+        "bulk": "B3",
+        "title": "Intrusion",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.07-768",
+        "screen": "B3.07",
+        "bulk": "B3",
+        "title": "Intrusion",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.07-1440",
+        "screen": "B3.07",
+        "bulk": "B3",
+        "title": "Intrusion",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.08-360",
+        "screen": "B3.08",
+        "bulk": "B3",
+        "title": "Sabotage",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.08-768",
+        "screen": "B3.08",
+        "bulk": "B3",
+        "title": "Sabotage",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.08-1440",
+        "screen": "B3.08",
+        "bulk": "B3",
+        "title": "Sabotage",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.09-360",
+        "screen": "B3.09",
+        "bulk": "B3",
+        "title": "Centre des alarmes",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.09-768",
+        "screen": "B3.09",
+        "bulk": "B3",
+        "title": "Centre des alarmes",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.09-1440",
+        "screen": "B3.09",
+        "bulk": "B3",
+        "title": "Centre des alarmes",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.10-360",
+        "screen": "B3.10",
+        "bulk": "B3",
+        "title": "Actions distantes",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.10-768",
+        "screen": "B3.10",
+        "bulk": "B3",
+        "title": "Actions distantes",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.10-1440",
+        "screen": "B3.10",
+        "bulk": "B3",
+        "title": "Actions distantes",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.11-360",
+        "screen": "B3.11",
+        "bulk": "B3",
+        "title": "Confirmation de commande",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.11-768",
+        "screen": "B3.11",
+        "bulk": "B3",
+        "title": "Confirmation de commande",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.11-1440",
+        "screen": "B3.11",
+        "bulk": "B3",
+        "title": "Confirmation de commande",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.12-360",
+        "screen": "B3.12",
+        "bulk": "B3",
+        "title": "Historique des commandes",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.12-768",
+        "screen": "B3.12",
+        "bulk": "B3",
+        "title": "Historique des commandes",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.12-1440",
+        "screen": "B3.12",
+        "bulk": "B3",
+        "title": "Historique des commandes",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.13-360",
+        "screen": "B3.13",
+        "bulk": "B3",
+        "title": "Centre fumée",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.13-768",
+        "screen": "B3.13",
+        "bulk": "B3",
+        "title": "Centre fumée",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.13-1440",
+        "screen": "B3.13",
+        "bulk": "B3",
+        "title": "Centre fumée",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.14-360",
+        "screen": "B3.14",
+        "bulk": "B3",
+        "title": "Centre incendie",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.14-768",
+        "screen": "B3.14",
+        "bulk": "B3",
+        "title": "Centre incendie",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.14-1440",
+        "screen": "B3.14",
+        "bulk": "B3",
+        "title": "Centre incendie",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.15-360",
+        "screen": "B3.15",
+        "bulk": "B3",
+        "title": "Zones incendie",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.15-768",
+        "screen": "B3.15",
+        "bulk": "B3",
+        "title": "Zones incendie",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.15-1440",
+        "screen": "B3.15",
+        "bulk": "B3",
+        "title": "Zones incendie",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.16-360",
+        "screen": "B3.16",
+        "bulk": "B3",
+        "title": "Fiche détecteur",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.16-768",
+        "screen": "B3.16",
+        "bulk": "B3",
+        "title": "Fiche détecteur",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.16-1440",
+        "screen": "B3.16",
+        "bulk": "B3",
+        "title": "Fiche détecteur",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.17-360",
+        "screen": "B3.17",
+        "bulk": "B3",
+        "title": "Préalertes fumée",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.17-768",
+        "screen": "B3.17",
+        "bulk": "B3",
+        "title": "Préalertes fumée",
+        "width": 768,
+        "kind": "responsive-navigation"
+      }
+    ]
+  },
+  {
+    "lot": 5,
+    "cases": [
+      {
+        "id": "UI-B3.17-1440",
+        "screen": "B3.17",
+        "bulk": "B3",
+        "title": "Préalertes fumée",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.18-360",
+        "screen": "B3.18",
+        "bulk": "B3",
+        "title": "Alarmes incendie",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.18-768",
+        "screen": "B3.18",
+        "bulk": "B3",
+        "title": "Alarmes incendie",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.18-1440",
+        "screen": "B3.18",
+        "bulk": "B3",
+        "title": "Alarmes incendie",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.19-360",
+        "screen": "B3.19",
+        "bulk": "B3",
+        "title": "Plan de bâtiment",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.19-768",
+        "screen": "B3.19",
+        "bulk": "B3",
+        "title": "Plan de bâtiment",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.19-1440",
+        "screen": "B3.19",
+        "bulk": "B3",
+        "title": "Plan de bâtiment",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.20-360",
+        "screen": "B3.20",
+        "bulk": "B3",
+        "title": "Chronologie incendie",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.20-768",
+        "screen": "B3.20",
+        "bulk": "B3",
+        "title": "Chronologie incendie",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.20-1440",
+        "screen": "B3.20",
+        "bulk": "B3",
+        "title": "Chronologie incendie",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.21-360",
+        "screen": "B3.21",
+        "bulk": "B3",
+        "title": "Tests et maintenance incendie",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.21-768",
+        "screen": "B3.21",
+        "bulk": "B3",
+        "title": "Tests et maintenance incendie",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.21-1440",
+        "screen": "B3.21",
+        "bulk": "B3",
+        "title": "Tests et maintenance incendie",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.22-360",
+        "screen": "B3.22",
+        "bulk": "B3",
+        "title": "Centre environnemental",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.22-768",
+        "screen": "B3.22",
+        "bulk": "B3",
+        "title": "Centre environnemental",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.22-1440",
+        "screen": "B3.22",
+        "bulk": "B3",
+        "title": "Centre environnemental",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.23-360",
+        "screen": "B3.23",
+        "bulk": "B3",
+        "title": "IA Security",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.23-768",
+        "screen": "B3.23",
+        "bulk": "B3",
+        "title": "IA Security",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.23-1440",
+        "screen": "B3.23",
+        "bulk": "B3",
+        "title": "IA Security",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.24-360",
+        "screen": "B3.24",
+        "bulk": "B3",
+        "title": "Zones intelligentes",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.24-768",
+        "screen": "B3.24",
+        "bulk": "B3",
+        "title": "Zones intelligentes",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.24-1440",
+        "screen": "B3.24",
+        "bulk": "B3",
+        "title": "Zones intelligentes",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.25-360",
+        "screen": "B3.25",
+        "bulk": "B3",
+        "title": "Corrélation des événements",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.25-768",
+        "screen": "B3.25",
+        "bulk": "B3",
+        "title": "Corrélation des événements",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.25-1440",
+        "screen": "B3.25",
+        "bulk": "B3",
+        "title": "Corrélation des événements",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.26-360",
+        "screen": "B3.26",
+        "bulk": "B3",
+        "title": "Analyse des alertes IA",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.26-768",
+        "screen": "B3.26",
+        "bulk": "B3",
+        "title": "Analyse des alertes IA",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.26-1440",
+        "screen": "B3.26",
+        "bulk": "B3",
+        "title": "Analyse des alertes IA",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.27-360",
+        "screen": "B3.27",
+        "bulk": "B3",
+        "title": "Centre des incidents",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.27-768",
+        "screen": "B3.27",
+        "bulk": "B3",
+        "title": "Centre des incidents",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.27-1440",
+        "screen": "B3.27",
+        "bulk": "B3",
+        "title": "Centre des incidents",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.28-360",
+        "screen": "B3.28",
+        "bulk": "B3",
+        "title": "Dossier incident",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.28-768",
+        "screen": "B3.28",
+        "bulk": "B3",
+        "title": "Dossier incident",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.28-1440",
+        "screen": "B3.28",
+        "bulk": "B3",
+        "title": "Dossier incident",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.29-360",
+        "screen": "B3.29",
+        "bulk": "B3",
+        "title": "Intervention",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.29-768",
+        "screen": "B3.29",
+        "bulk": "B3",
+        "title": "Intervention",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.29-1440",
+        "screen": "B3.29",
+        "bulk": "B3",
+        "title": "Intervention",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.30-360",
+        "screen": "B3.30",
+        "bulk": "B3",
+        "title": "Clôture d’incident",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.30-768",
+        "screen": "B3.30",
+        "bulk": "B3",
+        "title": "Clôture d’incident",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B3.30-1440",
+        "screen": "B3.30",
+        "bulk": "B3",
+        "title": "Clôture d’incident",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.01-360",
+        "screen": "B4.01",
+        "bulk": "B4",
+        "title": "Carte générale GPS",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.01-768",
+        "screen": "B4.01",
+        "bulk": "B4",
+        "title": "Carte générale GPS",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.01-1440",
+        "screen": "B4.01",
+        "bulk": "B4",
+        "title": "Carte générale GPS",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.02-360",
+        "screen": "B4.02",
+        "bulk": "B4",
+        "title": "Localisation individuelle",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.02-768",
+        "screen": "B4.02",
+        "bulk": "B4",
+        "title": "Localisation individuelle",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.02-1440",
+        "screen": "B4.02",
+        "bulk": "B4",
+        "title": "Localisation individuelle",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.03-360",
+        "screen": "B4.03",
+        "bulk": "B4",
+        "title": "Historique des déplacements",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.03-768",
+        "screen": "B4.03",
+        "bulk": "B4",
+        "title": "Historique des déplacements",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.03-1440",
+        "screen": "B4.03",
+        "bulk": "B4",
+        "title": "Historique des déplacements",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.04-360",
+        "screen": "B4.04",
+        "bulk": "B4",
+        "title": "Geofencing",
+        "width": 360,
+        "kind": "responsive-navigation"
+      }
+    ]
+  },
+  {
+    "lot": 6,
+    "cases": [
+      {
+        "id": "UI-B4.04-768",
+        "screen": "B4.04",
+        "bulk": "B4",
+        "title": "Geofencing",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.04-1440",
+        "screen": "B4.04",
+        "bulk": "B4",
+        "title": "Geofencing",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.05-360",
+        "screen": "B4.05",
+        "bulk": "B4",
+        "title": "Alertes GPS",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.05-768",
+        "screen": "B4.05",
+        "bulk": "B4",
+        "title": "Alertes GPS",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.05-1440",
+        "screen": "B4.05",
+        "bulk": "B4",
+        "title": "Alertes GPS",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.06-360",
+        "screen": "B4.06",
+        "bulk": "B4",
+        "title": "Gestion des traceurs",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.06-768",
+        "screen": "B4.06",
+        "bulk": "B4",
+        "title": "Gestion des traceurs",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.06-1440",
+        "screen": "B4.06",
+        "bulk": "B4",
+        "title": "Gestion des traceurs",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.07-360",
+        "screen": "B4.07",
+        "bulk": "B4",
+        "title": "Centre de présence",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.07-768",
+        "screen": "B4.07",
+        "bulk": "B4",
+        "title": "Centre de présence",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.07-1440",
+        "screen": "B4.07",
+        "bulk": "B4",
+        "title": "Centre de présence",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.08-360",
+        "screen": "B4.08",
+        "bulk": "B4",
+        "title": "Pointage",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.08-768",
+        "screen": "B4.08",
+        "bulk": "B4",
+        "title": "Pointage",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.08-1440",
+        "screen": "B4.08",
+        "bulk": "B4",
+        "title": "Pointage",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.09-360",
+        "screen": "B4.09",
+        "bulk": "B4",
+        "title": "Pointage QR",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.09-768",
+        "screen": "B4.09",
+        "bulk": "B4",
+        "title": "Pointage QR",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.09-1440",
+        "screen": "B4.09",
+        "bulk": "B4",
+        "title": "Pointage QR",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.10-360",
+        "screen": "B4.10",
+        "bulk": "B4",
+        "title": "Pointage GPS",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.10-768",
+        "screen": "B4.10",
+        "bulk": "B4",
+        "title": "Pointage GPS",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.10-1440",
+        "screen": "B4.10",
+        "bulk": "B4",
+        "title": "Pointage GPS",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.11-360",
+        "screen": "B4.11",
+        "bulk": "B4",
+        "title": "Pointage NFC/RFID/BLE",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.11-768",
+        "screen": "B4.11",
+        "bulk": "B4",
+        "title": "Pointage NFC/RFID/BLE",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.11-1440",
+        "screen": "B4.11",
+        "bulk": "B4",
+        "title": "Pointage NFC/RFID/BLE",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.12-360",
+        "screen": "B4.12",
+        "bulk": "B4",
+        "title": "Historique de présence",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.12-768",
+        "screen": "B4.12",
+        "bulk": "B4",
+        "title": "Historique de présence",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.12-1440",
+        "screen": "B4.12",
+        "bulk": "B4",
+        "title": "Historique de présence",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.13-360",
+        "screen": "B4.13",
+        "bulk": "B4",
+        "title": "Anomalies de pointage",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.13-768",
+        "screen": "B4.13",
+        "bulk": "B4",
+        "title": "Anomalies de pointage",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.13-1440",
+        "screen": "B4.13",
+        "bulk": "B4",
+        "title": "Anomalies de pointage",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.14-360",
+        "screen": "B4.14",
+        "bulk": "B4",
+        "title": "Centre des rondes",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.14-768",
+        "screen": "B4.14",
+        "bulk": "B4",
+        "title": "Centre des rondes",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.14-1440",
+        "screen": "B4.14",
+        "bulk": "B4",
+        "title": "Centre des rondes",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.15-360",
+        "screen": "B4.15",
+        "bulk": "B4",
+        "title": "Création de ronde",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.15-768",
+        "screen": "B4.15",
+        "bulk": "B4",
+        "title": "Création de ronde",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.15-1440",
+        "screen": "B4.15",
+        "bulk": "B4",
+        "title": "Création de ronde",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.16-360",
+        "screen": "B4.16",
+        "bulk": "B4",
+        "title": "Checkpoints",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.16-768",
+        "screen": "B4.16",
+        "bulk": "B4",
+        "title": "Checkpoints",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.16-1440",
+        "screen": "B4.16",
+        "bulk": "B4",
+        "title": "Checkpoints",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.17-360",
+        "screen": "B4.17",
+        "bulk": "B4",
+        "title": "Exécution d’une ronde",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.17-768",
+        "screen": "B4.17",
+        "bulk": "B4",
+        "title": "Exécution d’une ronde",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.17-1440",
+        "screen": "B4.17",
+        "bulk": "B4",
+        "title": "Exécution d’une ronde",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.18-360",
+        "screen": "B4.18",
+        "bulk": "B4",
+        "title": "Anomalies de ronde",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.18-768",
+        "screen": "B4.18",
+        "bulk": "B4",
+        "title": "Anomalies de ronde",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.18-1440",
+        "screen": "B4.18",
+        "bulk": "B4",
+        "title": "Anomalies de ronde",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.19-360",
+        "screen": "B4.19",
+        "bulk": "B4",
+        "title": "Rapport de ronde",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.19-768",
+        "screen": "B4.19",
+        "bulk": "B4",
+        "title": "Rapport de ronde",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.19-1440",
+        "screen": "B4.19",
+        "bulk": "B4",
+        "title": "Rapport de ronde",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.20-360",
+        "screen": "B4.20",
+        "bulk": "B4",
+        "title": "Centre de contrôle d’accès",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.20-768",
+        "screen": "B4.20",
+        "bulk": "B4",
+        "title": "Centre de contrôle d’accès",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.20-1440",
+        "screen": "B4.20",
+        "bulk": "B4",
+        "title": "Centre de contrôle d’accès",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      }
+    ]
+  },
+  {
+    "lot": 7,
+    "cases": [
+      {
+        "id": "UI-B4.21-360",
+        "screen": "B4.21",
+        "bulk": "B4",
+        "title": "Profils d’accès",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.21-768",
+        "screen": "B4.21",
+        "bulk": "B4",
+        "title": "Profils d’accès",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.21-1440",
+        "screen": "B4.21",
+        "bulk": "B4",
+        "title": "Profils d’accès",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.22-360",
+        "screen": "B4.22",
+        "bulk": "B4",
+        "title": "Badges et identifiants",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.22-768",
+        "screen": "B4.22",
+        "bulk": "B4",
+        "title": "Badges et identifiants",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.22-1440",
+        "screen": "B4.22",
+        "bulk": "B4",
+        "title": "Badges et identifiants",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.23-360",
+        "screen": "B4.23",
+        "bulk": "B4",
+        "title": "Journal des accès",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.23-768",
+        "screen": "B4.23",
+        "bulk": "B4",
+        "title": "Journal des accès",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.23-1440",
+        "screen": "B4.23",
+        "bulk": "B4",
+        "title": "Journal des accès",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.24-360",
+        "screen": "B4.24",
+        "bulk": "B4",
+        "title": "Centre des visiteurs",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.24-768",
+        "screen": "B4.24",
+        "bulk": "B4",
+        "title": "Centre des visiteurs",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.24-1440",
+        "screen": "B4.24",
+        "bulk": "B4",
+        "title": "Centre des visiteurs",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.25-360",
+        "screen": "B4.25",
+        "bulk": "B4",
+        "title": "Enregistrement visiteur",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.25-768",
+        "screen": "B4.25",
+        "bulk": "B4",
+        "title": "Enregistrement visiteur",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.25-1440",
+        "screen": "B4.25",
+        "bulk": "B4",
+        "title": "Enregistrement visiteur",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.26-360",
+        "screen": "B4.26",
+        "bulk": "B4",
+        "title": "QR visiteur",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.26-768",
+        "screen": "B4.26",
+        "bulk": "B4",
+        "title": "QR visiteur",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.26-1440",
+        "screen": "B4.26",
+        "bulk": "B4",
+        "title": "QR visiteur",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.27-360",
+        "screen": "B4.27",
+        "bulk": "B4",
+        "title": "Centre des véhicules",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.27-768",
+        "screen": "B4.27",
+        "bulk": "B4",
+        "title": "Centre des véhicules",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.27-1440",
+        "screen": "B4.27",
+        "bulk": "B4",
+        "title": "Centre des véhicules",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.28-360",
+        "screen": "B4.28",
+        "bulk": "B4",
+        "title": "Fiche véhicule",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.28-768",
+        "screen": "B4.28",
+        "bulk": "B4",
+        "title": "Fiche véhicule",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.28-1440",
+        "screen": "B4.28",
+        "bulk": "B4",
+        "title": "Fiche véhicule",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.29-360",
+        "screen": "B4.29",
+        "bulk": "B4",
+        "title": "Accès véhicules",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.29-768",
+        "screen": "B4.29",
+        "bulk": "B4",
+        "title": "Accès véhicules",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.29-1440",
+        "screen": "B4.29",
+        "bulk": "B4",
+        "title": "Accès véhicules",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.30-360",
+        "screen": "B4.30",
+        "bulk": "B4",
+        "title": "Centre SOS",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.30-768",
+        "screen": "B4.30",
+        "bulk": "B4",
+        "title": "Centre SOS",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.30-1440",
+        "screen": "B4.30",
+        "bulk": "B4",
+        "title": "Centre SOS",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.31-360",
+        "screen": "B4.31",
+        "bulk": "B4",
+        "title": "Travailleur isolé",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.31-768",
+        "screen": "B4.31",
+        "bulk": "B4",
+        "title": "Travailleur isolé",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.31-1440",
+        "screen": "B4.31",
+        "bulk": "B4",
+        "title": "Travailleur isolé",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.32-360",
+        "screen": "B4.32",
+        "bulk": "B4",
+        "title": "Sécurité personnelle",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.32-768",
+        "screen": "B4.32",
+        "bulk": "B4",
+        "title": "Sécurité personnelle",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.32-1440",
+        "screen": "B4.32",
+        "bulk": "B4",
+        "title": "Sécurité personnelle",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.33-360",
+        "screen": "B4.33",
+        "bulk": "B4",
+        "title": "Historique SOS",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.33-768",
+        "screen": "B4.33",
+        "bulk": "B4",
+        "title": "Historique SOS",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B4.33-1440",
+        "screen": "B4.33",
+        "bulk": "B4",
+        "title": "Historique SOS",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.01-360",
+        "screen": "B5.01",
+        "bulk": "B5",
+        "title": "Dashboard ERP",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.01-768",
+        "screen": "B5.01",
+        "bulk": "B5",
+        "title": "Dashboard ERP",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.01-1440",
+        "screen": "B5.01",
+        "bulk": "B5",
+        "title": "Dashboard ERP",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.02-360",
+        "screen": "B5.02",
+        "bulk": "B5",
+        "title": "Portefeuille clients",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.02-768",
+        "screen": "B5.02",
+        "bulk": "B5",
+        "title": "Portefeuille clients",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.02-1440",
+        "screen": "B5.02",
+        "bulk": "B5",
+        "title": "Portefeuille clients",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.03-360",
+        "screen": "B5.03",
+        "bulk": "B5",
+        "title": "Fiche client",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.03-768",
+        "screen": "B5.03",
+        "bulk": "B5",
+        "title": "Fiche client",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.03-1440",
+        "screen": "B5.03",
+        "bulk": "B5",
+        "title": "Fiche client",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.04-360",
+        "screen": "B5.04",
+        "bulk": "B5",
+        "title": "Gestion des contrats",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.04-768",
+        "screen": "B5.04",
+        "bulk": "B5",
+        "title": "Gestion des contrats",
+        "width": 768,
+        "kind": "responsive-navigation"
+      }
+    ]
+  },
+  {
+    "lot": 8,
+    "cases": [
+      {
+        "id": "UI-B5.04-1440",
+        "screen": "B5.04",
+        "bulk": "B5",
+        "title": "Gestion des contrats",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.05-360",
+        "screen": "B5.05",
+        "bulk": "B5",
+        "title": "Gestion des équipes",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.05-768",
+        "screen": "B5.05",
+        "bulk": "B5",
+        "title": "Gestion des équipes",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.05-1440",
+        "screen": "B5.05",
+        "bulk": "B5",
+        "title": "Gestion des équipes",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.06-360",
+        "screen": "B5.06",
+        "bulk": "B5",
+        "title": "Fiche collaborateur",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.06-768",
+        "screen": "B5.06",
+        "bulk": "B5",
+        "title": "Fiche collaborateur",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.06-1440",
+        "screen": "B5.06",
+        "bulk": "B5",
+        "title": "Fiche collaborateur",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.07-360",
+        "screen": "B5.07",
+        "bulk": "B5",
+        "title": "Planning",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.07-768",
+        "screen": "B5.07",
+        "bulk": "B5",
+        "title": "Planning",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.07-1440",
+        "screen": "B5.07",
+        "bulk": "B5",
+        "title": "Planning",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.08-360",
+        "screen": "B5.08",
+        "bulk": "B5",
+        "title": "Affectations",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.08-768",
+        "screen": "B5.08",
+        "bulk": "B5",
+        "title": "Affectations",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.08-1440",
+        "screen": "B5.08",
+        "bulk": "B5",
+        "title": "Affectations",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.09-360",
+        "screen": "B5.09",
+        "bulk": "B5",
+        "title": "Permutations et remplacements",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.09-768",
+        "screen": "B5.09",
+        "bulk": "B5",
+        "title": "Permutations et remplacements",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.09-1440",
+        "screen": "B5.09",
+        "bulk": "B5",
+        "title": "Permutations et remplacements",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.10-360",
+        "screen": "B5.10",
+        "bulk": "B5",
+        "title": "Suivi des heures",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.10-768",
+        "screen": "B5.10",
+        "bulk": "B5",
+        "title": "Suivi des heures",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.10-1440",
+        "screen": "B5.10",
+        "bulk": "B5",
+        "title": "Suivi des heures",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.11-360",
+        "screen": "B5.11",
+        "bulk": "B5",
+        "title": "Centre des interventions",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.11-768",
+        "screen": "B5.11",
+        "bulk": "B5",
+        "title": "Centre des interventions",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.11-1440",
+        "screen": "B5.11",
+        "bulk": "B5",
+        "title": "Centre des interventions",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.12-360",
+        "screen": "B5.12",
+        "bulk": "B5",
+        "title": "Ordres de travail",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.12-768",
+        "screen": "B5.12",
+        "bulk": "B5",
+        "title": "Ordres de travail",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.12-1440",
+        "screen": "B5.12",
+        "bulk": "B5",
+        "title": "Ordres de travail",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.13-360",
+        "screen": "B5.13",
+        "bulk": "B5",
+        "title": "Calendrier des interventions",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.13-768",
+        "screen": "B5.13",
+        "bulk": "B5",
+        "title": "Calendrier des interventions",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.13-1440",
+        "screen": "B5.13",
+        "bulk": "B5",
+        "title": "Calendrier des interventions",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.14-360",
+        "screen": "B5.14",
+        "bulk": "B5",
+        "title": "Inventaire des actifs",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.14-768",
+        "screen": "B5.14",
+        "bulk": "B5",
+        "title": "Inventaire des actifs",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.14-1440",
+        "screen": "B5.14",
+        "bulk": "B5",
+        "title": "Inventaire des actifs",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.15-360",
+        "screen": "B5.15",
+        "bulk": "B5",
+        "title": "Fiche actif",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.15-768",
+        "screen": "B5.15",
+        "bulk": "B5",
+        "title": "Fiche actif",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.15-1440",
+        "screen": "B5.15",
+        "bulk": "B5",
+        "title": "Fiche actif",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.16-360",
+        "screen": "B5.16",
+        "bulk": "B5",
+        "title": "Maintenance préventive",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.16-768",
+        "screen": "B5.16",
+        "bulk": "B5",
+        "title": "Maintenance préventive",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.16-1440",
+        "screen": "B5.16",
+        "bulk": "B5",
+        "title": "Maintenance préventive",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.17-360",
+        "screen": "B5.17",
+        "bulk": "B5",
+        "title": "Maintenance corrective",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.17-768",
+        "screen": "B5.17",
+        "bulk": "B5",
+        "title": "Maintenance corrective",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.17-1440",
+        "screen": "B5.17",
+        "bulk": "B5",
+        "title": "Maintenance corrective",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.18-360",
+        "screen": "B5.18",
+        "bulk": "B5",
+        "title": "Diagnostic des appareils",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.18-768",
+        "screen": "B5.18",
+        "bulk": "B5",
+        "title": "Diagnostic des appareils",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.18-1440",
+        "screen": "B5.18",
+        "bulk": "B5",
+        "title": "Diagnostic des appareils",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.19-360",
+        "screen": "B5.19",
+        "bulk": "B5",
+        "title": "Garanties et licences",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.19-768",
+        "screen": "B5.19",
+        "bulk": "B5",
+        "title": "Garanties et licences",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.19-1440",
+        "screen": "B5.19",
+        "bulk": "B5",
+        "title": "Garanties et licences",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.20-360",
+        "screen": "B5.20",
+        "bulk": "B5",
+        "title": "Pièces et consommables",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.20-768",
+        "screen": "B5.20",
+        "bulk": "B5",
+        "title": "Pièces et consommables",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.20-1440",
+        "screen": "B5.20",
+        "bulk": "B5",
+        "title": "Pièces et consommables",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.21-360",
+        "screen": "B5.21",
+        "bulk": "B5",
+        "title": "Fournisseurs",
+        "width": 360,
+        "kind": "responsive-navigation"
+      }
+    ]
+  },
+  {
+    "lot": 9,
+    "cases": [
+      {
+        "id": "UI-B5.21-768",
+        "screen": "B5.21",
+        "bulk": "B5",
+        "title": "Fournisseurs",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.21-1440",
+        "screen": "B5.21",
+        "bulk": "B5",
+        "title": "Fournisseurs",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.22-360",
+        "screen": "B5.22",
+        "bulk": "B5",
+        "title": "Installateurs",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.22-768",
+        "screen": "B5.22",
+        "bulk": "B5",
+        "title": "Installateurs",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.22-1440",
+        "screen": "B5.22",
+        "bulk": "B5",
+        "title": "Installateurs",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.23-360",
+        "screen": "B5.23",
+        "bulk": "B5",
+        "title": "Partenaires",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.23-768",
+        "screen": "B5.23",
+        "bulk": "B5",
+        "title": "Partenaires",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.23-1440",
+        "screen": "B5.23",
+        "bulk": "B5",
+        "title": "Partenaires",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.24-360",
+        "screen": "B5.24",
+        "bulk": "B5",
+        "title": "Contrats de maintenance",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.24-768",
+        "screen": "B5.24",
+        "bulk": "B5",
+        "title": "Contrats de maintenance",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.24-1440",
+        "screen": "B5.24",
+        "bulk": "B5",
+        "title": "Contrats de maintenance",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.25-360",
+        "screen": "B5.25",
+        "bulk": "B5",
+        "title": "Documents",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.25-768",
+        "screen": "B5.25",
+        "bulk": "B5",
+        "title": "Documents",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.25-1440",
+        "screen": "B5.25",
+        "bulk": "B5",
+        "title": "Documents",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.26-360",
+        "screen": "B5.26",
+        "bulk": "B5",
+        "title": "Coûts opérationnels",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.26-768",
+        "screen": "B5.26",
+        "bulk": "B5",
+        "title": "Coûts opérationnels",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.26-1440",
+        "screen": "B5.26",
+        "bulk": "B5",
+        "title": "Coûts opérationnels",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.27-360",
+        "screen": "B5.27",
+        "bulk": "B5",
+        "title": "Budgets et engagements",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.27-768",
+        "screen": "B5.27",
+        "bulk": "B5",
+        "title": "Budgets et engagements",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.27-1440",
+        "screen": "B5.27",
+        "bulk": "B5",
+        "title": "Budgets et engagements",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.28-360",
+        "screen": "B5.28",
+        "bulk": "B5",
+        "title": "Rapports de sécurité",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.28-768",
+        "screen": "B5.28",
+        "bulk": "B5",
+        "title": "Rapports de sécurité",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.28-1440",
+        "screen": "B5.28",
+        "bulk": "B5",
+        "title": "Rapports de sécurité",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.29-360",
+        "screen": "B5.29",
+        "bulk": "B5",
+        "title": "Rapports de présence",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.29-768",
+        "screen": "B5.29",
+        "bulk": "B5",
+        "title": "Rapports de présence",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.29-1440",
+        "screen": "B5.29",
+        "bulk": "B5",
+        "title": "Rapports de présence",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.30-360",
+        "screen": "B5.30",
+        "bulk": "B5",
+        "title": "Rapports techniques",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.30-768",
+        "screen": "B5.30",
+        "bulk": "B5",
+        "title": "Rapports techniques",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.30-1440",
+        "screen": "B5.30",
+        "bulk": "B5",
+        "title": "Rapports techniques",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.31-360",
+        "screen": "B5.31",
+        "bulk": "B5",
+        "title": "Analyse multisite",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.31-768",
+        "screen": "B5.31",
+        "bulk": "B5",
+        "title": "Analyse multisite",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.31-1440",
+        "screen": "B5.31",
+        "bulk": "B5",
+        "title": "Analyse multisite",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.32-360",
+        "screen": "B5.32",
+        "bulk": "B5",
+        "title": "Indicateurs de pilotage",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.32-768",
+        "screen": "B5.32",
+        "bulk": "B5",
+        "title": "Indicateurs de pilotage",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.32-1440",
+        "screen": "B5.32",
+        "bulk": "B5",
+        "title": "Indicateurs de pilotage",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.33-360",
+        "screen": "B5.33",
+        "bulk": "B5",
+        "title": "Centre des exports",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.33-768",
+        "screen": "B5.33",
+        "bulk": "B5",
+        "title": "Centre des exports",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.33-1440",
+        "screen": "B5.33",
+        "bulk": "B5",
+        "title": "Centre des exports",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.34-360",
+        "screen": "B5.34",
+        "bulk": "B5",
+        "title": "Assistant IA",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.34-768",
+        "screen": "B5.34",
+        "bulk": "B5",
+        "title": "Assistant IA",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.34-1440",
+        "screen": "B5.34",
+        "bulk": "B5",
+        "title": "Assistant IA",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.35-360",
+        "screen": "B5.35",
+        "bulk": "B5",
+        "title": "Recommandations IA",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.35-768",
+        "screen": "B5.35",
+        "bulk": "B5",
+        "title": "Recommandations IA",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B5.35-1440",
+        "screen": "B5.35",
+        "bulk": "B5",
+        "title": "Recommandations IA",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.01-360",
+        "screen": "B6.01",
+        "bulk": "B6",
+        "title": "Centre de notifications",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.01-768",
+        "screen": "B6.01",
+        "bulk": "B6",
+        "title": "Centre de notifications",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.01-1440",
+        "screen": "B6.01",
+        "bulk": "B6",
+        "title": "Centre de notifications",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.02-360",
+        "screen": "B6.02",
+        "bulk": "B6",
+        "title": "Préférences de notifications",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.02-768",
+        "screen": "B6.02",
+        "bulk": "B6",
+        "title": "Préférences de notifications",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.02-1440",
+        "screen": "B6.02",
+        "bulk": "B6",
+        "title": "Préférences de notifications",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      }
+    ]
+  },
+  {
+    "lot": 10,
+    "cases": [
+      {
+        "id": "UI-B6.03-360",
+        "screen": "B6.03",
+        "bulk": "B6",
+        "title": "Configuration des escalades",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.03-768",
+        "screen": "B6.03",
+        "bulk": "B6",
+        "title": "Configuration des escalades",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.03-1440",
+        "screen": "B6.03",
+        "bulk": "B6",
+        "title": "Configuration des escalades",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.04-360",
+        "screen": "B6.04",
+        "bulk": "B6",
+        "title": "Centre Livecare",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.04-768",
+        "screen": "B6.04",
+        "bulk": "B6",
+        "title": "Centre Livecare",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.04-1440",
+        "screen": "B6.04",
+        "bulk": "B6",
+        "title": "Centre Livecare",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.05-360",
+        "screen": "B6.05",
+        "bulk": "B6",
+        "title": "FAQ",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.05-768",
+        "screen": "B6.05",
+        "bulk": "B6",
+        "title": "FAQ",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.05-1440",
+        "screen": "B6.05",
+        "bulk": "B6",
+        "title": "FAQ",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.06-360",
+        "screen": "B6.06",
+        "bulk": "B6",
+        "title": "Chatbot",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.06-768",
+        "screen": "B6.06",
+        "bulk": "B6",
+        "title": "Chatbot",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.06-1440",
+        "screen": "B6.06",
+        "bulk": "B6",
+        "title": "Chatbot",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.07-360",
+        "screen": "B6.07",
+        "bulk": "B6",
+        "title": "Livechat humain",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.07-768",
+        "screen": "B6.07",
+        "bulk": "B6",
+        "title": "Livechat humain",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.07-1440",
+        "screen": "B6.07",
+        "bulk": "B6",
+        "title": "Livechat humain",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.08-360",
+        "screen": "B6.08",
+        "bulk": "B6",
+        "title": "Appel audio",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.08-768",
+        "screen": "B6.08",
+        "bulk": "B6",
+        "title": "Appel audio",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.08-1440",
+        "screen": "B6.08",
+        "bulk": "B6",
+        "title": "Appel audio",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.09-360",
+        "screen": "B6.09",
+        "bulk": "B6",
+        "title": "Appel vidéo",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.09-768",
+        "screen": "B6.09",
+        "bulk": "B6",
+        "title": "Appel vidéo",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.09-1440",
+        "screen": "B6.09",
+        "bulk": "B6",
+        "title": "Appel vidéo",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.10-360",
+        "screen": "B6.10",
+        "bulk": "B6",
+        "title": "Partage d’écran",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.10-768",
+        "screen": "B6.10",
+        "bulk": "B6",
+        "title": "Partage d’écran",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.10-1440",
+        "screen": "B6.10",
+        "bulk": "B6",
+        "title": "Partage d’écran",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.11-360",
+        "screen": "B6.11",
+        "bulk": "B6",
+        "title": "Création de ticket",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.11-768",
+        "screen": "B6.11",
+        "bulk": "B6",
+        "title": "Création de ticket",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.11-1440",
+        "screen": "B6.11",
+        "bulk": "B6",
+        "title": "Création de ticket",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.12-360",
+        "screen": "B6.12",
+        "bulk": "B6",
+        "title": "Suivi des tickets",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.12-768",
+        "screen": "B6.12",
+        "bulk": "B6",
+        "title": "Suivi des tickets",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.12-1440",
+        "screen": "B6.12",
+        "bulk": "B6",
+        "title": "Suivi des tickets",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.13-360",
+        "screen": "B6.13",
+        "bulk": "B6",
+        "title": "Historique support",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.13-768",
+        "screen": "B6.13",
+        "bulk": "B6",
+        "title": "Historique support",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.13-1440",
+        "screen": "B6.13",
+        "bulk": "B6",
+        "title": "Historique support",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.14-360",
+        "screen": "B6.14",
+        "bulk": "B6",
+        "title": "Satisfaction client",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.14-768",
+        "screen": "B6.14",
+        "bulk": "B6",
+        "title": "Satisfaction client",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.14-1440",
+        "screen": "B6.14",
+        "bulk": "B6",
+        "title": "Satisfaction client",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.15-360",
+        "screen": "B6.15",
+        "bulk": "B6",
+        "title": "Administration centrale",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.15-768",
+        "screen": "B6.15",
+        "bulk": "B6",
+        "title": "Administration centrale",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.15-1440",
+        "screen": "B6.15",
+        "bulk": "B6",
+        "title": "Administration centrale",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.16-360",
+        "screen": "B6.16",
+        "bulk": "B6",
+        "title": "Administration des comptes",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.16-768",
+        "screen": "B6.16",
+        "bulk": "B6",
+        "title": "Administration des comptes",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.16-1440",
+        "screen": "B6.16",
+        "bulk": "B6",
+        "title": "Administration des comptes",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.17-360",
+        "screen": "B6.17",
+        "bulk": "B6",
+        "title": "Administration commerciale",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.17-768",
+        "screen": "B6.17",
+        "bulk": "B6",
+        "title": "Administration commerciale",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.17-1440",
+        "screen": "B6.17",
+        "bulk": "B6",
+        "title": "Administration commerciale",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.18-360",
+        "screen": "B6.18",
+        "bulk": "B6",
+        "title": "Administration technique",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.18-768",
+        "screen": "B6.18",
+        "bulk": "B6",
+        "title": "Administration technique",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.18-1440",
+        "screen": "B6.18",
+        "bulk": "B6",
+        "title": "Administration technique",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.19-360",
+        "screen": "B6.19",
+        "bulk": "B6",
+        "title": "Journal d’audit",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.19-768",
+        "screen": "B6.19",
+        "bulk": "B6",
+        "title": "Journal d’audit",
+        "width": 768,
+        "kind": "responsive-navigation"
+      }
+    ]
+  },
+  {
+    "lot": 11,
+    "cases": [
+      {
+        "id": "UI-B6.19-1440",
+        "screen": "B6.19",
+        "bulk": "B6",
+        "title": "Journal d’audit",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.20-360",
+        "screen": "B6.20",
+        "bulk": "B6",
+        "title": "Historique des consultations",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.20-768",
+        "screen": "B6.20",
+        "bulk": "B6",
+        "title": "Historique des consultations",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.20-1440",
+        "screen": "B6.20",
+        "bulk": "B6",
+        "title": "Historique des consultations",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.21-360",
+        "screen": "B6.21",
+        "bulk": "B6",
+        "title": "Sécurité des sessions",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.21-768",
+        "screen": "B6.21",
+        "bulk": "B6",
+        "title": "Sécurité des sessions",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.21-1440",
+        "screen": "B6.21",
+        "bulk": "B6",
+        "title": "Sécurité des sessions",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.22-360",
+        "screen": "B6.22",
+        "bulk": "B6",
+        "title": "Centre des preuves",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.22-768",
+        "screen": "B6.22",
+        "bulk": "B6",
+        "title": "Centre des preuves",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.22-1440",
+        "screen": "B6.22",
+        "bulk": "B6",
+        "title": "Centre des preuves",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.23-360",
+        "screen": "B6.23",
+        "bulk": "B6",
+        "title": "Partage sécurisé",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.23-768",
+        "screen": "B6.23",
+        "bulk": "B6",
+        "title": "Partage sécurisé",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.23-1440",
+        "screen": "B6.23",
+        "bulk": "B6",
+        "title": "Partage sécurisé",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.24-360",
+        "screen": "B6.24",
+        "bulk": "B6",
+        "title": "Politique de conservation",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.24-768",
+        "screen": "B6.24",
+        "bulk": "B6",
+        "title": "Politique de conservation",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.24-1440",
+        "screen": "B6.24",
+        "bulk": "B6",
+        "title": "Politique de conservation",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.25-360",
+        "screen": "B6.25",
+        "bulk": "B6",
+        "title": "Gestion du stockage",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.25-768",
+        "screen": "B6.25",
+        "bulk": "B6",
+        "title": "Gestion du stockage",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.25-1440",
+        "screen": "B6.25",
+        "bulk": "B6",
+        "title": "Gestion du stockage",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.26-360",
+        "screen": "B6.26",
+        "bulk": "B6",
+        "title": "Centre de sauvegarde",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.26-768",
+        "screen": "B6.26",
+        "bulk": "B6",
+        "title": "Centre de sauvegarde",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.26-1440",
+        "screen": "B6.26",
+        "bulk": "B6",
+        "title": "Centre de sauvegarde",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.27-360",
+        "screen": "B6.27",
+        "bulk": "B6",
+        "title": "Restauration",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.27-768",
+        "screen": "B6.27",
+        "bulk": "B6",
+        "title": "Restauration",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.27-1440",
+        "screen": "B6.27",
+        "bulk": "B6",
+        "title": "Restauration",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.28-360",
+        "screen": "B6.28",
+        "bulk": "B6",
+        "title": "Applications connectées",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.28-768",
+        "screen": "B6.28",
+        "bulk": "B6",
+        "title": "Applications connectées",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.28-1440",
+        "screen": "B6.28",
+        "bulk": "B6",
+        "title": "Applications connectées",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.29-360",
+        "screen": "B6.29",
+        "bulk": "B6",
+        "title": "Autorisations d’intégration",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.29-768",
+        "screen": "B6.29",
+        "bulk": "B6",
+        "title": "Autorisations d’intégration",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.29-1440",
+        "screen": "B6.29",
+        "bulk": "B6",
+        "title": "Autorisations d’intégration",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.30-360",
+        "screen": "B6.30",
+        "bulk": "B6",
+        "title": "Journal des intégrations",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.30-768",
+        "screen": "B6.30",
+        "bulk": "B6",
+        "title": "Journal des intégrations",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.30-1440",
+        "screen": "B6.30",
+        "bulk": "B6",
+        "title": "Journal des intégrations",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.31-360",
+        "screen": "B6.31",
+        "bulk": "B6",
+        "title": "Confidentialité des données",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.31-768",
+        "screen": "B6.31",
+        "bulk": "B6",
+        "title": "Confidentialité des données",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.31-1440",
+        "screen": "B6.31",
+        "bulk": "B6",
+        "title": "Confidentialité des données",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.32-360",
+        "screen": "B6.32",
+        "bulk": "B6",
+        "title": "Diagnostic système",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.32-768",
+        "screen": "B6.32",
+        "bulk": "B6",
+        "title": "Diagnostic système",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.32-1440",
+        "screen": "B6.32",
+        "bulk": "B6",
+        "title": "Diagnostic système",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.33-360",
+        "screen": "B6.33",
+        "bulk": "B6",
+        "title": "Versions et mises à jour",
+        "width": 360,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.33-768",
+        "screen": "B6.33",
+        "bulk": "B6",
+        "title": "Versions et mises à jour",
+        "width": 768,
+        "kind": "responsive-navigation"
+      },
+      {
+        "id": "UI-B6.33-1440",
+        "screen": "B6.33",
+        "bulk": "B6",
+        "title": "Versions et mises à jour",
+        "width": 1440,
+        "kind": "responsive-navigation"
+      }
+    ]
+  }
+]

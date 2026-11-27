@@ -1,0 +1,6 @@
+import {chromium} from "playwright";import assert from "node:assert/strict";import {readFileSync,writeFileSync} from "node:fs";
+const lots=JSON.parse(readFileSync(new URL("recipe-lots.json",import.meta.url),"utf8"));
+const selected=lots.find(l=>l.lot===Number(process.argv[2]));if(!selected)throw Error("unknown lot");
+const browser=await chromium.launch({headless:true});const results=[];
+try{for(const c of selected.cases){const page=await browser.newPage({viewport:{width:c.width,height:900}});try{await page.goto("http://127.0.0.1:4173/#/"+c.screen);await page.getByRole("heading",{name:c.title,exact:true}).waitFor({timeout:10000});await page.getByRole("region",{name:"Espace métier"}).waitFor({timeout:10000});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),"overflow");results.push({...c,status:"PASS"});}catch(e){results.push({...c,status:"FAIL",error:String(e)});}finally{await page.close()}}}finally{await browser.close();writeFileSync("security-lot-"+selected.lot+".json",JSON.stringify(results,null,2));}
+console.log(JSON.stringify({lot:selected.lot,pass:results.filter(r=>r.status==="PASS").length,fail:results.filter(r=>r.status==="FAIL").length}));if(results.some(r=>r.status!=="PASS")||results.length!==selected.cases.length)process.exitCode=1;
