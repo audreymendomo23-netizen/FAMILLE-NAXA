@@ -201,3 +201,5 @@ Pipeline privé : enregistrement conservé Premium et salle clôturée, organisa
 
 ### Contradiction invitation externe — course détectée
 Replay c393f3d 45975788151 a validé la messagerie privée et les bilans API, mais échoué à la ligne 566 après HTTP 200 d'acceptation d'invitation : l'agenda chargeait encore et execute() ignorait silencieusement la lecture, alors que le jeton était effacé. Correctif Android/Web : bouton d'acceptation bloqué pendant chargement parent, lecture de salle confirmée avant effacement, retry du même jeton en cas de lecture non confirmée. Recette force un retard de la liste et vérifie que Rejoindre reste désactivé. Aucun affaiblissement d'autorisation. Nouveau candidat à qualifier.
+
+Relevé 6609baa : Replay 45975963176 job 140427630558 échoue avant exécution à cause d’un identifiant JS incoming redéclaré. Renommage unique directIncoming et ajout du contrôle node --check de tous les entrypoints de recette au Gate contrats. Aucune assertion supprimée.

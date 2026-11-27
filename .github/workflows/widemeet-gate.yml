@@ -32,6 +32,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Syntax check all replay entrypoints
+        run: for script in scripts/widemeet/*.mjs; do node --check "$script" || exit 1; done
       - run: node --test apps/web/widemeet/src/*.test.mjs packages/widemeet-domain/*.test.mjs
   web:
     runs-on: ubuntu-24.04

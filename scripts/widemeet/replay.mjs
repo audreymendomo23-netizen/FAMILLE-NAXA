@@ -539,9 +539,9 @@ try{
  await gp.getByRole("button",{name:"Messages privés",exact:true}).click();
  await gp.getByRole("button",{name:/Replay promoteur/}).click();
  await gp.getByText("Synthetic private browser message",{exact:true}).waitFor();
- const incoming=gp.locator("article").filter({hasText:"Synthetic private browser message"});
- await incoming.getByRole("button",{name:"Marquer comme lu",exact:true}).click();
- await incoming.getByText(/Consultation déclarée/).waitFor();
+ const directIncoming=gp.locator("article").filter({hasText:"Synthetic private browser message"});
+ await directIncoming.getByRole("button",{name:"Marquer comme lu",exact:true}).click();
+ await directIncoming.getByText(/Consultation déclarée/).waitFor();
  await hp.locator("article").filter({hasText:"Synthetic private browser message"}).getByText(/Consultation déclarée/).waitFor({timeout:15000});
  await menuPage("Statistiques");
  await hp.getByRole("heading",{name:"Bilan consolidé Premium",exact:true}).waitFor();
