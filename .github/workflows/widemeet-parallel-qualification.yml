@@ -1,7 +1,7 @@
-name: WideMeet — parallel qualification wave 05
+name: WideMeet — parallel qualification wave 06
 on:
   push:
-    branches: [test/widemeet-wave05-20261127]
+    branches: [test/widemeet-wave06-20261127]
     paths:
       - '.github/workflows/widemeet-parallel-qualification.yml'
       - '.github/workflows/widemeet-gate.yml'
@@ -14,7 +14,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: widemeet-wave05-${{ github.sha }}
+  group: widemeet-wave06-${{ github.sha }}
   cancel-in-progress: false
 jobs:
   registry:
@@ -56,14 +56,14 @@ jobs:
       - run: mkdir -p "$RUNNER_TEMP/wm-wave-evidence"
       - uses: actions/download-artifact@v4
         with:
-          pattern: wave05-evidence-*
+          pattern: wave06-evidence-*
           path: ${{ runner.temp }}/wm-wave-evidence
-      - name: Produce individual Wave 05 evidence ledger
-        run: node scripts/widemeet/qualification-wave-report.mjs "$RUNNER_TEMP/wm-wave-evidence" "$RUNNER_TEMP/wm-wave05.json"
+      - name: Produce individual Wave 06 evidence ledger
+        run: node scripts/widemeet/qualification-wave-report.mjs "$RUNNER_TEMP/wm-wave-evidence" "$RUNNER_TEMP/wm-wave06.json"
       - uses: actions/upload-artifact@v4
         with:
-          name: wave05-results-${{ github.sha }}
-          path: ${{ runner.temp }}/wm-wave05.json
+          name: wave06-results-${{ github.sha }}
+          path: ${{ runner.temp }}/wm-wave06.json
           if-no-files-found: error
       - name: Report actual suite outcomes without promoting unverified registry entries
         run: |

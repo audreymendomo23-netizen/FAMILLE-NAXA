@@ -52,11 +52,12 @@ private fun centerRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("item
 }
 @Composable fun WorkspaceStatistics(english:Boolean,gateway:AuthGateway,session:Session){
  fun tr(fr:String,en:String)=if(english)en else fr
- var days by remember{mutableIntStateOf(30)};var data by remember{mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
- LaunchedEffect(days,session.deviceId){data=null;busy=true;error=false;try{data=gateway.identity(session,"center-statistics",JSONObject().put("days",days))}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}
+ var days by remember{mutableIntStateOf(30)};var refreshSeq by remember{mutableIntStateOf(0)};var data by remember{mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
+ LaunchedEffect(days,session.deviceId,session.accessToken,refreshSeq){data=null;busy=true;error=false;try{data=gateway.identity(session,"center-statistics",JSONObject().put("days",days))}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
  Text(tr("Bilan consolidé Premium","Premium consolidated summary"),style=MaterialTheme.typography.titleMedium)
  Text(tr("Période écoulée","Past period"));for(n in listOf(7,30,90,365))Row{RadioButton(selected=days==n,onClick={days=n});Text("$n "+tr("jours","days"),Modifier.padding(top=12.dp))}
+ TextButton(enabled=!busy,onClick={refreshSeq++}){Text(tr("Actualiser le bilan","Refresh summary"))}
  if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
  if(error)Text(tr("Bilan consolidé non accessible avec vos droits actuels.","Consolidated summary unavailable with current permissions."))
  data?.let{d->Text(if(d.optString("scope")=="enterprise")tr("Toutes les réunions de votre entreprise","All meetings in your company")else tr("Réunions que vous organisez","Meetings you organize"));for((k,label) in listOf("total" to "Total","scheduled" to tr("Programmées","Scheduled"),"open" to tr("Ouvertes","Open"),"paused" to tr("En pause","Paused"),"ended" to tr("Terminées","Ended"),"cancelled" to tr("Annulées","Cancelled"),"duration_minutes" to tr("Minutes planifiées hors annulations","Planned minutes excluding cancellations"),"polls_closed" to tr("Votes clôturés explicitement","Explicitly closed polls"),"tasks_done" to tr("Tâches approuvées","Approved tasks")))Text(label+": "+d.getLong(k));Text(tr("Selon la date programmée, sans mesure de présence humaine.","Based on scheduled date, not human attendance."))}

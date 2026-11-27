@@ -761,6 +761,10 @@ try{
  await hp.getByRole("heading",{name:"Bilan consolidé Premium",exact:true}).waitFor();
  const period=hp.getByRole("combobox",{name:"Période écoulée",exact:true});await period.selectOption("7");assert.equal(await period.inputValue(),"7");
  await hp.getByText("Toutes les réunions de votre entreprise",{exact:true}).waitFor();await hp.getByText("Votes clôturés explicitement",{exact:true}).waitFor();await hp.getByText("Tâches approuvées",{exact:true}).waitFor();
+ await hp.getByRole("button",{name:"Actualiser le bilan",exact:true}).click();
+ await hp.getByText("Toutes les réunions de votre entreprise",{exact:true}).waitFor();
+ assert.equal(await period.inputValue(),"7");
+ pass("WAVE06 real authorized summary refresh retains selected period");
  pass("real two-browser direct chat, explicit read acknowledgement, automatic refresh and consolidated statistics period");
  // B2 group UI is exercised in separate contexts and workspace to preserve existing fixtures.
  const b2contexts=await Promise.all([0,1,2].map(()=>browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"})));
