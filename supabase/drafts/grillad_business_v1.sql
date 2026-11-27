@@ -305,7 +305,7 @@ begin
   if r<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
   n:=(p_payload->>'start_minute')::bigint;d:=(p_payload->>'effective_from')::date;reason:=btrim(p_payload->>'reason');
   if n is null or n not between 0 and 1439 or d is null or d<=(now() at time zone 'Africa/Douala')::date or reason is null or length(reason) not between 1 and 300 then raise exception 'GRILLAD_SERVICE_INPUT' using errcode='22023';end if;
-  if not exists(select 1 from grillad_private.service_policy p where p.org=p_org and p.site=p_site and p.enabled and p.effective_from<d) or exists(select 1 from grillad_private.service_revisions v where v.org=p_org and v.site=p_site and v.effective_from>=d) or exists(select 1 from grillad_private.daily_summary v where v.org=p_org and v.site=p_site and v.service_day>=d-1) then raise exception 'GRILLAD_SERVICE_HISTORY' using errcode='22023';end if;
+  if not exists(select 1 from grillad_private.service_policy p where p.org=p_org and p.site=p_site and p.enabled and p.effective_from<d) or exists(select 1 from grillad_private.service_revisions sr where sr.org=p_org and sr.site=p_site and sr.effective_from>=d) or exists(select 1 from grillad_private.daily_summary ds where ds.org=p_org and ds.site=p_site and ds.service_day>=d-1) then raise exception 'GRILLAD_SERVICE_HISTORY' using errcode='22023';end if;
   insert into grillad_private.service_revisions(org,site,effective_from,start_minute,reason,actor) values(p_org,p_site,d,n::integer,reason,u);
   result:=jsonb_build_object('start_minute',n,'effective_from',d,'scheduled',true);
  when 'missing_departure_request' then
