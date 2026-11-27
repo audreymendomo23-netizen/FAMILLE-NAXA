@@ -220,6 +220,25 @@ try{
  const newMessage={group_id:chatGroupId,message_id:randomUUID(),body:"B2 new after admission"};
  await groupOk(b2ghs.access_token,"send",newMessage);
  for(const x of [b2gcs,b2gds])assert.deepEqual((await groupOk(x.access_token,"thread",{group_id:chatGroupId})).items.map(m=>m.id),[newMessage.message_id]);
+ // Scoped replies, explicit mentions, stable keyset cursor and owner-only reports.
+ const advanced={group_id:chatGroupId,message_id:randomUUID(),body:"B2 reply mention fixture",reply_to:newMessage.message_id,mention_ids:[b2ga.id]};
+ await groupOk(b2ghs.access_token,"send",advanced);await groupOk(b2ghs.access_token,"send",advanced);
+ assert.equal((await groupReq(b2ghs.access_token,"send",{...advanced,mention_ids:[b2gc.id]})).status,403);
+ assert.equal((await groupReq(b2ghs.access_token,"send",{...advanced,message_id:randomUUID(),mention_ids:[o.id]})).status,403);
+ assert.equal((await groupReq(b2gcs.access_token,"send",{...advanced,message_id:randomUUID(),reply_to:groupMessage.message_id})).status,403);
+ const pageOne=await groupOk(b2gas.access_token,"thread",{group_id:chatGroupId,limit:1});
+ assert.deepEqual(pageOne.items.map(m=>m.id),[advanced.message_id]);assert.equal(pageOne.items[0].reply_preview,newMessage.body);assert.deepEqual(pageOne.items[0].mention_ids,[b2ga.id]);
+ const pageTwo=await groupOk(b2gas.access_token,"thread",{group_id:chatGroupId,limit:1,before_id:pageOne.next_before_id});
+ assert.deepEqual(pageTwo.items.map(m=>m.id),[newMessage.message_id]);
+ assert.equal((await groupReq(b2gcs.access_token,"thread",{group_id:chatGroupId,before_id:groupMessage.message_id})).status,403);
+ const report={group_id:chatGroupId,message_id:advanced.message_id,reason:"spam"};
+ await groupOk(b2gas.access_token,"report",report);await groupOk(b2gas.access_token,"report",report);
+ assert.equal((await groupReq(b2gas.access_token,"reports",{group_id:chatGroupId})).status,403);
+ assert.equal((await groupReq(b2ghs.access_token,"report",report)).status,403);
+ assert.equal((await groupOk(b2ghs.access_token,"reports",{group_id:chatGroupId})).items.length,1);
+ await groupOk(b2ghs.access_token,"resolve-report",{group_id:chatGroupId,message_id:advanced.message_id,reporter_id:b2ga.id});
+ assert.equal((await groupOk(b2ghs.access_token,"reports",{group_id:chatGroupId})).items.length,0);
+ pass("B2 group cursor, reply/mention scope, idempotent report and owner resolution");
  pass("B2 group rename, add/rejoin, exact original retry and pre-admission history isolation");
  pass("B2 collective group: three accounts, exact retry, explicit read, nonmember/tenant denial and removal");
 
@@ -670,6 +689,17 @@ try{
   for(const p of [b2owner,b2first,b2second])await p.getByText("B2 browser group content",{exact:true}).waitFor({timeout:20000});
   await b2first.getByRole("button",{name:"Marquer comme lu",exact:true}).click();
   await b2first.getByRole("button",{name:"Marquer comme lu",exact:true}).waitFor({state:"detached"});
+  await b2first.locator("article").filter({hasText:"B2 browser group content"}).getByRole("button",{name:"Répondre",exact:true}).click();
+  await b2first.getByLabel("Message de groupe",{exact:true}).fill("B2 UI reply");
+  await b2first.getByLabel("Mentionner des participants",{exact:true}).selectOption({label:"Replay promoteur"});
+  await b2first.getByRole("button",{name:"Envoyer au groupe",exact:true}).click();
+  await b2owner.locator("article").filter({hasText:"B2 UI reply"}).getByText("Vous êtes mentionné",{exact:true}).waitFor({timeout:20000});
+  await b2owner.locator("article").filter({hasText:"B2 UI reply"}).getByText("B2 browser group content",{exact:true}).waitFor();
+  b2owner.once("dialog",d=>d.accept());await b2owner.locator("article").filter({hasText:"B2 UI reply"}).getByRole("button",{name:"Signaler",exact:true}).click();
+  await b2owner.getByRole("button",{name:"Signalements du groupe",exact:true}).click();
+  await b2owner.getByRole("button",{name:"Clôturer le signalement",exact:true}).click();
+  await b2owner.getByRole("button",{name:"Clôturer le signalement",exact:true}).waitFor({state:"detached"});
+  pass("B2 browser group reply, mention and report resolution");
   // Real Web file upload/download and microphone recording with explicit user actions.
   const mpanel=p=>p.getByRole("region",{name:"Fichiers et messages vocaux",exact:true});
   const uiPdf=Buffer.from("%PDF-1.4\nB2 UI fixture\n%%EOF");
@@ -690,9 +720,9 @@ try{
   pass("B2 Web group actual attachment upload/download and synthetic microphone voice capture, delivery and decoded playback");
   const g2=(await groupOk(b2ghs.access_token,"list")).items.find(x=>x.name==="B2 UI group");assert.ok(g2);
   await groupOk(b2ghs.access_token,"remove",{group_id:g2.id,member_id:b2gc.id});
-  await b2second.getByText("B2 browser group content",{exact:true}).waitFor({state:"detached",timeout:20000});
+  await b2second.locator("article > p").getByText("B2 browser group content",{exact:true}).waitFor({state:"detached",timeout:20000});
   await mpanel(b2second).getByText(/b2-ui\.pdf/).waitFor({state:"detached",timeout:20000});
-  await b2first.getByText("B2 browser group content",{exact:true}).waitFor();
+  await b2first.locator("article").filter({has:b2first.locator("p",{hasText:/^B2 browser group content$/})}).getByText("B2 browser group content",{exact:true}).waitFor();
   pass("B2 three browser group creation, message delivery, read and revoked member purge");
  }finally{await Promise.all(b2contexts.map(c=>c.close()))}
 

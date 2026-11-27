@@ -19,13 +19,14 @@ private fun groupRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("items
  var members by remember{mutableStateOf<List<JSONObject>>(emptyList())};var messages by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var rename by remember{mutableStateOf("")};var group by remember{mutableStateOf<JSONObject?>(null)};var name by remember{mutableStateOf("")};var selected by remember{mutableStateOf<Set<String>>(emptySet())};var query by remember{mutableStateOf("")};var body by remember{mutableStateOf("")}
  var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var pending by remember{mutableStateOf<JSONObject?>(null)};var creation by remember{mutableStateOf<JSONObject?>(null)}
+ var before by remember{mutableStateOf<String?>(null)};var next by remember{mutableStateOf<String?>(null)};var reply by remember{mutableStateOf<JSONObject?>(null)};var mentions by remember{mutableStateOf<Set<String>>(emptySet())};var reports by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  suspend fun req(a:String,d:JSONObject=JSONObject())=gateway.identity(session,"group-chat-"+a,d)
  suspend fun load(){groups=groupRows(req("list"));contacts=groupRows(gateway.identity(session,"center-contacts"))}
- suspend fun thread(id:String,q:String=""){try{val next=groupRows(req("thread",JSONObject().put("group_id",id).put("query",q)));val nextMembers=groupRows(req("members",JSONObject().put("group_id",id)));messages=next;members=nextMembers}catch(e:CancellationException){throw e}catch(e:Exception){messages=emptyList();members=emptyList();throw e}}
+ suspend fun thread(id:String,q:String="",cursor:String?=null){try{val page=req("thread",JSONObject().put("group_id",id).put("query",q).put("before_id",cursor?:JSONObject.NULL).put("limit",50));val nextMembers=groupRows(req("members",JSONObject().put("group_id",id)));messages=groupRows(page);members=nextMembers;before=cursor;next=if(page.isNull("next_before_id"))null else page.optString("next_before_id")}catch(e:CancellationException){throw e}catch(e:Exception){messages=emptyList();members=emptyList();next=null;reply=null;mentions=emptySet();reports=emptyList();throw e}}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
- fun close(){group=null;members=emptyList();messages=emptyList();body="";query="";pending=null}
+ fun close(){group=null;members=emptyList();messages=emptyList();body="";query="";pending=null;before=null;next=null;reply=null;mentions=emptySet();reports=emptyList()}
  LaunchedEffect(session.deviceId){work{load()}}
- LaunchedEffect(group?.optString("id"),query,busy,session.deviceId){val id=group?.optString("id")?:return@LaunchedEffect;if(busy)return@LaunchedEffect;while(true){delay(5000);if(busy)return@LaunchedEffect;try{thread(id,query)}catch(e:CancellationException){throw e}catch(e:Exception){error=true}}}
+ LaunchedEffect(group?.optString("id"),query,before,busy,session.deviceId,session.accessToken){val id=group?.optString("id")?:return@LaunchedEffect;if(busy)return@LaunchedEffect;while(true){delay(5000);if(busy)return@LaunchedEffect;try{thread(id,query,before)}catch(e:CancellationException){throw e}catch(e:Exception){error=true}}}
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
  TextButton(onClick=onBack){Text(tr("Retour aux messages privés","Back to private messages"))}
  if(busy)LinearProgressIndicator(Modifier.fillMaxWidth());if(error)Text(tr("Accès ou action non confirmé.","Access or action unconfirmed."),color=MaterialTheme.colorScheme.error)
@@ -55,9 +56,25 @@ private fun groupRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("items
  removeTarget?.let{target->AlertDialog(onDismissRequest={removeTarget=null},title={Text(tr("Confirmer le retrait ?","Confirm removal?"))},confirmButton={TextButton(onClick={removeTarget=null;work{req("remove",JSONObject().put("group_id",id).put("member_id",target));if(target==session.memberId){close();load()}else thread(id,query)}}){Text(tr("Confirmer","Confirm"))}},dismissButton={TextButton(onClick={removeTarget=null}){Text(tr("Annuler","Cancel"))}})}
  OutlinedTextField(query,{query=it.take(100)},label={Text(tr("Rechercher dans le groupe","Search group"))})
  TextButton(enabled=!busy,onClick={work{thread(id,query)}}){Text(tr("Rechercher","Search"))}
- for(m in messages){Text(m.getString("display_name"),style=MaterialTheme.typography.labelLarge);Text(m.getString("body"));Text(m.optString("created_at"));if(m.getString("sender_id")!=session.memberId&&m.isNull("read_at"))TextButton(enabled=!busy,onClick={work{req("seen",JSONObject().put("group_id",id).put("message_id",m.getString("id")));thread(id,query)}}){Text(tr("Marquer comme lu","Mark seen"))}}
+ before?.let{TextButton(enabled=!busy,onClick={work{thread(id,query)}}){Text(tr("Messages récents","Latest messages"))}}
+ next?.let{cursor->TextButton(enabled=!busy,onClick={work{thread(id,query,cursor)}}){Text(tr("Messages précédents","Older messages"))}}
+ var reportTarget by remember(id){mutableStateOf<String?>(null)}
+ for(m in messages){
+ Text(m.getString("display_name"),style=MaterialTheme.typography.labelLarge);if(!m.isNull("reply_preview"))Text(tr("Réponse : ","Reply: ")+m.optString("reply_preview"));val ids=m.optJSONArray("mention_ids");if(ids!=null&&(0 until ids.length()).any{ids.optString(it)==session.memberId})Text(tr("Vous êtes mentionné","You are mentioned"));Text(m.getString("body"));Text(m.optString("created_at"))
+ if(m.getString("sender_id")!=session.memberId&&m.isNull("read_at"))TextButton(enabled=!busy,onClick={work{req("seen",JSONObject().put("group_id",id).put("message_id",m.getString("id")));thread(id,query,before)}}){Text(tr("Marquer comme lu","Mark seen"))}
+ TextButton(enabled=!busy&&pending==null,onClick={reply=m}){Text(tr("Répondre","Reply"))}
+ if(m.getString("sender_id")!=session.memberId)TextButton(enabled=!busy,onClick={reportTarget=m.getString("id")}){Text(tr("Signaler","Report"))}
+ }
+ reportTarget?.let{mid->AlertDialog(onDismissRequest={reportTarget=null},title={Text(tr("Signaler ce message ?","Report this message?"))},confirmButton={TextButton(onClick={reportTarget=null;work{req("report",JSONObject().put("group_id",id).put("message_id",mid).put("reason","other"))}}){Text(tr("Confirmer","Confirm"))}},dismissButton={TextButton(onClick={reportTarget=null}){Text(tr("Annuler","Cancel"))}})}
+ if(g.optString("creator_id")==session.memberId){
+ TextButton(enabled=!busy,onClick={work{reports=groupRows(req("reports",JSONObject().put("group_id",id)))}}){Text(tr("Signalements du groupe","Group reports"))}
+ for(r in reports){Text(r.optString("preview"));TextButton(enabled=!busy,onClick={work{req("resolve-report",JSONObject().put("group_id",id).put("message_id",r.getString("message_id")).put("reporter_id",r.getString("reporter_id")));reports=groupRows(req("reports",JSONObject().put("group_id",id)))}}){Text(tr("Clôturer le signalement","Resolve report"))}}
+ }
+ reply?.let{m->Text(tr("Réponse à : ","Reply to: ")+m.optString("body").take(120));TextButton(enabled=pending==null,onClick={reply=null}){Text(tr("Annuler la réponse","Cancel reply"))}}
+ Text(tr("Mentionner des participants","Mention participants"))
+ for(m in members.filter{it.optString("member_id")!=session.memberId}){val member=m.getString("member_id");Row{Checkbox(checked=member in mentions,enabled=!busy&&pending==null&&(member in mentions||mentions.size<10),onCheckedChange={checked->mentions=if(checked)mentions+member else mentions-member});Text(m.optString("display_name"))}}
  OutlinedTextField(body,{body=it.take(2000)},enabled=!busy&&pending==null,label={Text(tr("Message de groupe","Group message"))})
- Button(enabled=!busy&&body.isNotBlank(),onClick={work{val p=pending?:JSONObject().put("group_id",id).put("message_id",UUID.randomUUID().toString()).put("body",body.trim()).also{pending=it};req("send",p);pending=null;body="";query="";thread(id)}}){Text(tr("Envoyer au groupe","Send to group"))}
+ Button(enabled=!busy&&body.isNotBlank(),onClick={work{val p=pending?:JSONObject().put("group_id",id).put("message_id",UUID.randomUUID().toString()).put("body",body.trim()).put("reply_to",reply?.optString("id")?:JSONObject.NULL).put("mention_ids",JSONArray(mentions.toList())).also{pending=it};req("send",p);pending=null;body="";query="";reply=null;mentions=emptySet();thread(id)}}){Text(tr("Envoyer au groupe","Send to group"))}
  if(BuildConfig.WIDEMEET_CHAT_MEDIA_ENABLED)key(id){ChatMediaPanel(english,gateway,session,groupId=id)}
  }
  }}

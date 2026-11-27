@@ -102,12 +102,24 @@ create table public.wm_chat_group_members(
 );
 create table public.wm_chat_group_messages(
  id uuid primary key, group_id uuid not null references public.wm_chat_groups(id), sender_id uuid not null references public.wm_accounts(id),
- body text not null check(length(body) between 1 and 2000), created_at timestamptz not null default clock_timestamp()
+ body text not null check(length(body) between 1 and 2000), created_at timestamptz not null default clock_timestamp(),
+ reply_to uuid references public.wm_chat_group_messages(id), mention_ids uuid[] not null default '{}'
 );
 create table public.wm_chat_group_reads(
  message_id uuid not null references public.wm_chat_group_messages(id), account_id uuid not null references public.wm_accounts(id),
  read_at timestamptz not null default clock_timestamp(), primary key(message_id,account_id)
 );
+create table public.wm_chat_group_reports(
+ message_id uuid not null references public.wm_chat_group_messages(id),
+ reporter_id uuid not null references public.wm_accounts(id),
+ reason text not null check(reason in ('abuse','spam','other')),
+ created_at timestamptz not null default clock_timestamp(),
+ resolved_at timestamptz,
+ primary key(message_id,reporter_id)
+);
+alter table public.wm_chat_group_reports enable row level security;
+revoke all on public.wm_chat_group_reports from public,anon,authenticated;
+grant select,insert,update on public.wm_chat_group_reports to service_role;
 create index wm_chat_group_messages_thread on public.wm_chat_group_messages(group_id,created_at desc,id);
 create index wm_chat_group_members_account on public.wm_chat_group_members(account_id,group_id) where removed_at is null;
 alter table public.wm_chat_groups enable row level security;
@@ -119,7 +131,7 @@ grant select,insert,update on public.wm_chat_groups,public.wm_chat_group_members
 
 create function public.wm_group_chat(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; gid uuid; mid uuid; target uuid; group_name text; b text; q text; members uuid[]; v jsonb; g public.wm_chat_groups%rowtype; m public.wm_chat_group_messages%rowtype; joined timestamptz;
+declare a record; gid uuid; mid uuid; target uuid; group_name text; b text; q text; members uuid[]; v jsonb; g public.wm_chat_groups%rowtype; m public.wm_chat_group_messages%rowtype; joined timestamptz; cursor_id uuid; cursor_at timestamptz; page_size integer; reply_id uuid; mentions uuid[]; reason_code text; reporter uuid;
 begin
  perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
  select * into a from public.wm_lock_room_actor_for(p_hash,null);
@@ -180,9 +192,36 @@ begin
  end if;
  if p_action='group-chat-thread' then
   q:=coalesce(p_data->>'query','');if length(q)>100 then return null;end if;
+  page_size:=coalesce((p_data->>'limit')::integer,200);if page_size not between 1 and 200 then return null;end if;
+  cursor_id:=(p_data->>'before_id')::uuid;
+  if cursor_id is not null then
+   select x.created_at into cursor_at from public.wm_chat_group_messages x where x.id=cursor_id and x.group_id=gid and x.created_at>=joined and (q='' or strpos(lower(x.body),lower(q))>0);
+   if not found then return null;end if;
+  end if;
   select coalesce(jsonb_agg(to_jsonb(c) order by c.created_at,c.id),'[]'::jsonb) into v from (
-   select x.id,x.sender_id,ac.display_name,x.body,x.created_at,(select r.read_at from public.wm_chat_group_reads r where r.message_id=x.id and r.account_id=a.account_id) read_at
-   from public.wm_chat_group_messages x join public.wm_accounts ac on ac.id=x.sender_id where x.group_id=gid and x.created_at>=joined and (q='' or strpos(lower(x.body),lower(q))>0) order by x.created_at desc,x.id desc limit 200
+   select x.id,x.sender_id,ac.display_name,x.body,x.created_at,
+    (select r.read_at from public.wm_chat_group_reads r where r.message_id=x.id and r.account_id=a.account_id) read_at,
+    case when parent.created_at>=joined then parent.id else null end reply_to,
+    case when parent.created_at>=joined then left(parent.body,120) else null end reply_preview,
+    x.mention_ids
+   from public.wm_chat_group_messages x join public.wm_accounts ac on ac.id=x.sender_id
+   left join public.wm_chat_group_messages parent on parent.id=x.reply_to and parent.group_id=x.group_id
+   where x.group_id=gid and x.created_at>=joined and (q='' or strpos(lower(x.body),lower(q))>0)
+   and (cursor_id is null or (x.created_at,x.id)<(cursor_at,cursor_id))
+   order by x.created_at desc,x.id desc limit page_size+1
+  ) c;
+  if jsonb_array_length(v)>page_size then
+   v:=v-0;
+   return jsonb_build_object('items',v,'next_before_id',v->0->>'id');
+  end if;
+  return jsonb_build_object('items',v,'next_before_id',null);
+ end if;
+ if p_action='group-chat-reports' then
+  if a.account_id<>g.creator_id then return null;end if;
+  select coalesce(jsonb_agg(to_jsonb(c) order by c.created_at,c.message_id),'[]'::jsonb) into v from (
+   select r.message_id,r.reporter_id,r.reason,r.created_at,left(x.body,120) preview
+   from public.wm_chat_group_reports r join public.wm_chat_group_messages x on x.id=r.message_id
+   where x.group_id=gid and x.created_at>=joined and r.resolved_at is null order by r.created_at desc limit 100
   ) c;return jsonb_build_object('items',v);
  end if;
  mid:=(p_data->>'message_id')::uuid;if mid is null then return null;end if;
@@ -190,12 +229,33 @@ begin
   if not exists(select 1 from public.wm_chat_group_messages x where x.id=mid and x.group_id=gid and x.created_at>=joined and x.sender_id<>a.account_id) then return null;end if;
   insert into public.wm_chat_group_reads(message_id,account_id) values(mid,a.account_id) on conflict do nothing;return jsonb_build_object('seen',true);
  end if;
+ if p_action='group-chat-report' then
+  reason_code:=p_data->>'reason';
+  if reason_code is null or reason_code not in ('abuse','spam','other') or not exists(select 1 from public.wm_chat_group_messages x where x.id=mid and x.group_id=gid and x.created_at>=joined and x.sender_id<>a.account_id) then return null;end if;
+  if exists(select 1 from public.wm_chat_group_reports r where r.message_id=mid and r.reporter_id=a.account_id and r.reason=reason_code) then return jsonb_build_object('reported',true);end if;
+  if (select count(*) from public.wm_chat_group_reports r where r.reporter_id=a.account_id and r.created_at>clock_timestamp()-interval '1 minute')>=5 then return null;end if;
+  insert into public.wm_chat_group_reports(message_id,reporter_id,reason) values(mid,a.account_id,reason_code);
+  return jsonb_build_object('reported',true);
+ end if;
+ if p_action='group-chat-resolve-report' then
+  reporter:=(p_data->>'reporter_id')::uuid;
+  if a.account_id<>g.creator_id or reporter is null or not exists(select 1 from public.wm_chat_group_messages x where x.id=mid and x.group_id=gid and x.created_at>=joined) then return null;end if;
+  update public.wm_chat_group_reports set resolved_at=coalesce(resolved_at,clock_timestamp()) where message_id=mid and reporter_id=reporter;
+  if not found then return null;end if;return jsonb_build_object('resolved',true);
+ end if;
  if p_action='group-chat-send' then
   b:=btrim(p_data->>'body');if b is null or length(b) not between 1 and 2000 then return null;end if;
+  reply_id:=(p_data->>'reply_to')::uuid;
+  if reply_id is not null and not exists(select 1 from public.wm_chat_group_messages x where x.id=reply_id and x.group_id=gid and x.created_at>=joined) then return null;end if;
+  if jsonb_typeof(coalesce(p_data->'mention_ids','[]'::jsonb)) is distinct from 'array' then return null;end if;
+  if jsonb_array_length(coalesce(p_data->'mention_ids','[]'::jsonb))>10 then return null;end if;
+  select coalesce(array_agg(distinct x order by x),'{}'::uuid[]) into mentions from (select value::uuid x from jsonb_array_elements_text(coalesce(p_data->'mention_ids','[]'::jsonb))) t;
+  if array_position(mentions,null) is not null or a.account_id=any(mentions) then return null;end if;
   select * into m from public.wm_chat_group_messages where id=mid;
-  if found then if m.group_id=gid and m.sender_id=a.account_id and m.body=b then return jsonb_build_object('sent',true);end if;return null;end if;
+  if found then if m.group_id=gid and m.sender_id=a.account_id and m.created_at>=joined and m.body=b and m.reply_to is not distinct from reply_id and m.mention_ids=mentions then return jsonb_build_object('sent',true);end if;return null;end if;
+  if (select count(*) from public.wm_chat_group_members gm join public.wm_memberships mb on mb.workspace_id=a.workspace_id and mb.account_id=gm.account_id and mb.enabled join public.wm_accounts ac on ac.id=gm.account_id and ac.enabled and not ac.password_change_required where gm.group_id=gid and gm.removed_at is null and gm.account_id=any(mentions))<>cardinality(mentions) then return null;end if;
   if (select count(*) from public.wm_chat_group_messages where sender_id=a.account_id and created_at>clock_timestamp()-interval '1 minute')>=20 then return null;end if;
-  insert into public.wm_chat_group_messages(id,group_id,sender_id,body) values(mid,gid,a.account_id,b);return jsonb_build_object('sent',true);
+  insert into public.wm_chat_group_messages(id,group_id,sender_id,body,reply_to,mention_ids) values(mid,gid,a.account_id,b,reply_id,mentions);return jsonb_build_object('sent',true);
  end if;
  return null;
 exception when invalid_text_representation or unique_violation then return null;

@@ -11,7 +11,7 @@ begin
  or has_table_privilege('authenticated','public.wm_chat_group_messages','SELECT')
  or has_table_privilege('authenticated','public.wm_chat_media','SELECT')
  or has_function_privilege('anon','public.wm_chat_media_action(text,text,jsonb)','EXECUTE') then raise exception 'B2 unauthorized direct access';end if;
- if (select count(*) from pg_class where relname in ('wm_display_policy','wm_display_offers','wm_display_leases','wm_chat_groups','wm_chat_group_members','wm_chat_group_messages','wm_chat_group_reads','wm_chat_media') and relrowsecurity)<>8 then raise exception 'B2 RLS missing';end if;
+ if (select count(*) from pg_class where relname in ('wm_display_policy','wm_display_offers','wm_display_leases','wm_chat_groups','wm_chat_group_members','wm_chat_group_messages','wm_chat_group_reads','wm_chat_group_reports','wm_chat_media') and relrowsecurity)<>9 then raise exception 'B2 RLS missing';end if;
 end $wm$;
 insert into auth.users(id) values
  ('00000000-0000-4000-8000-0000000000b1'),('00000000-0000-4000-8000-0000000000b2'),
