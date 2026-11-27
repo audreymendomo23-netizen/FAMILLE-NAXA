@@ -28,20 +28,28 @@ class LiveFcmInstrumentedTest {
   assertEquals(PackageManager.PERMISSION_GRANTED,context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS))
   val prefs=context.getSharedPreferences("wm-push-consent",Context.MODE_PRIVATE)
   val manager=context.getSystemService(NotificationManager::class.java)
+  var phase="activity"
   val app=ActivityScenario.launch(MainActivity::class.java)
-  val fcm=messaging(context)
   try{
+   phase="firebase-initialization"
+   val fcm=messaging(context)
+   try{
    prefs.edit().putBoolean("device-enabled",true).commit();manager.cancelAll()
+   phase="token-registration"
    val token=Tasks.await(fcm.token,60,TimeUnit.SECONDS);assertTrue(token.length>=30)
+   phase="qualification-provider"
    val conn=URL("https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/widemeet-push-ci").openConnection() as HttpsURLConnection
    val id=try{
     conn.requestMethod="POST";conn.connectTimeout=10000;conn.readTimeout=35000;conn.instanceFollowRedirects=false;conn.doOutput=true
     conn.setRequestProperty("Authorization","Bearer "+identity);conn.setRequestProperty("Content-Type","application/json")
     conn.outputStream.use{it.write(JSONObject().put("kind","android").put("token",token).toString().toByteArray(Charsets.UTF_8))}
-    assertEquals("FCM qualification sender HTTP",200,conn.responseCode)
+    val responseCode=conn.responseCode
+    phase="qualification-provider-http-"+responseCode
+    assertEquals("FCM qualification sender HTTP",200,responseCode)
     val j=JSONObject(conn.inputStream.bufferedReader().use{it.readText()});assertEquals("accepted",j.getString("provider_status"));j.getString("notification_id")
    }finally{conn.disconnect()}
    assertTrue(id.matches(Regex("^[a-f0-9-]{36}$")))
+   phase="native-notification-receipt"
    val until=SystemClock.elapsedRealtime()+100000
    var seen=false
    while(SystemClock.elapsedRealtime()<until){
@@ -49,9 +57,15 @@ class LiveFcmInstrumentedTest {
     SystemClock.sleep(250)
    }
    assertTrue("Real FCM receipt in WideMeetMessagingService",seen)
-  }finally{
-   prefs.edit().remove("device-enabled").commit();manager.cancelAll()
-   try{Tasks.await(fcm.deleteToken(),30,TimeUnit.SECONDS)}finally{app.close()}
-  }
+   }finally{
+    prefs.edit().remove("device-enabled").commit();manager.cancelAll()
+    try{Tasks.await(fcm.deleteToken(),30,TimeUnit.SECONDS)}catch(e:Exception){
+     android.util.Log.w("WM_FCM","WM_FCM_CLEANUP_FAIL "+e.javaClass.simpleName)
+     if(phase=="native-notification-receipt")throw AssertionError("WM_FCM_FAIL stage=cleanup type="+e.javaClass.simpleName)
+    }
+   }
+  }catch(e:Throwable){
+   throw AssertionError("WM_FCM_FAIL stage="+phase+" type="+e.javaClass.simpleName)
+  }finally{app.close()}
  }
 }

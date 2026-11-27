@@ -21,7 +21,7 @@ jobs:
       - run: npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
       - run: google-chrome --version
       - run: VITE_WIDEMEET_PUSH_ENABLED=true npm run build --workspace @famille/widemeet-web
-      - run: xvfb-run -a node scripts/widemeet/live-fcm-web.mjs
+      - run: WM_FCM_BACKGROUND_ONLY=true xvfb-run -a node scripts/widemeet/live-fcm-web.mjs
   android-live:
     if: ${{ !contains(github.event.head_commit.message, '[web-only]') }}
     runs-on: ubuntu-24.04

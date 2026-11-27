@@ -10,6 +10,6 @@ unset identity
 if grep -qE '^OK \(1 test\)' "$RUNNER_TEMP/wm-fcm-instrumentation.log"; then
   echo 'PASS WM FCM actual Android foreground notification and token cleanup'
 else
-  grep -E 'FAILURES!!!|Tests run:|INSTRUMENTATION_CODE:|java.lang.AssertionError:' "$RUNNER_TEMP/wm-fcm-instrumentation.log" | head -20 || true
+  grep -E 'FAILURES!!!|Tests run:|INSTRUMENTATION_CODE:|WM_FCM_FAIL stage=' "$RUNNER_TEMP/wm-fcm-instrumentation.log" | head -20 || true
   exit 1
 fi
