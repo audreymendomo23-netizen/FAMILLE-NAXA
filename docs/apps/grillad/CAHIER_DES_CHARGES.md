@@ -1,5 +1,7 @@
 # Cahier des charges — GrillaD
 
+> **Référence historique — mise à jour du 27/11/2026 :** [GRILLAD V1.4](../../cahiers-des-charges/GRILLAD_V1_4.md) prévaut. Application légère, pointage arrivée/départ avec heure, GPS et photo en architecture multiniveau, et intégration ZIPPLE Snack-Bar validés. Les anciennes exclusions/complexités incompatibles ne sont plus applicables. Voir aussi le document de continuité de construction.
+
 > Document de référence fonctionnelle de l'application GrillaD.
 > Version 1.2 · 14 novembre 2026 · Application n° 10 de la Famille NAXA.
 > Statut : périmètre grillades et architecture opérationnelle à deux niveaux confirmés ; paramètres secondaires signalés comme ouverts.
