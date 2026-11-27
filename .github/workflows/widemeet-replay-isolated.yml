@@ -40,8 +40,11 @@ jobs:
           set -a; source "$RUNNER_TEMP/wm-replay.env"; set +a
           [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client
+          if ! command -v psql >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y postgresql-client
+          fi
+          psql --version
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_identity.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_n3_rooms.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_billing.sql

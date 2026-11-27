@@ -24,9 +24,13 @@ jobs:
       - name: Prepare isolated recording dependencies
         run: |
           npm install --no-save --no-package-lock --no-audit --no-fund livekit-client@2.25.0 livekit-server-sdk@2.20.1 ws@8.18.3 @playwright/test@1.56.1
-          npx playwright install --with-deps chromium
-          sudo apt-get update -qq
-          sudo apt-get install -y ffmpeg
+          npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream"]}); await b.close();'
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y ffmpeg
+          fi
+          ffmpeg -version
       - name: Start private Redis, SFU and Egress
         run: |
           set -euo pipefail
@@ -105,7 +109,11 @@ jobs:
           set -a; source "$RUNNER_TEMP/wm-recording.env"; set +a
           [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          sudo apt-get install -y postgresql-client
+          if ! command -v psql >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y postgresql-client
+          fi
+          psql --version
           for name in widemeet_n1_identity widemeet_n2_n3_rooms widemeet_n1_billing widemeet_n2_external widemeet_n3_recording widemeet_n3_recording_archive widemeet_n4_minutes widemeet_n4_presence; do
             psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/$name.sql"
           done
