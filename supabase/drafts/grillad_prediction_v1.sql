@@ -5,8 +5,8 @@ declare r text;out jsonb;total bigint;known int;active_count int;today date:=(no
 begin
  r:=grillad_private.scope(p_org,p_site);if r='seller' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
  with services as (
- select distinct on(service_day) service_day,starts_at,ends_at from grillad_private.daily_summary
- where org=p_org and site=p_site and service_day<today and service_day>=today-14 order by service_day desc,version desc
+ select q.service_day,q.starts_at,q.ends_at from (select distinct on(ds.service_day) ds.service_day,ds.starts_at,ds.ends_at,ds.data from grillad_private.daily_summary ds
+ where ds.org=p_org and ds.site=p_site and ds.service_day<today and ds.service_day>=today-14 order by ds.service_day desc,ds.version desc)q where not coalesce((q.data->>'provisional')::boolean,true)
  ), observations as (
  select i.id,i.name,i.family,i.price,i.prepared-i.sold-i.connect_reserved remaining,d.service_day,
  coalesce(s.qty,0) sold,greatest(0,coalesce(p.qty,0)+coalesce(adj.qty,0)) prepared

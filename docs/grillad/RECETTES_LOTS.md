@@ -8,9 +8,9 @@ Baseline : bd266b0 ; dernière qualification 4/4 fd36c54. Périmètre V1.5, REC-
 | 01 | GRC-001–050, 25 contrats API authentifiés + 25 refus anonymes | job lot-01 | 50 |
 | 02 | Android 4, Web unitaires 14, Chromium démo 4 + connecté 2, infra/API historiques 10, 3 suites SQL transactionnelles + GRC-051–063 (13) | 9 jobs indépendants | 50 |
 | 03 | GRC-064–093 (mode réseau, service, régularisations, composition, sites, affectations, objectifs, suspension) + 12 parcours Chromium métier (HTTP simulé) + 4 tests PIN Android (job Android du lot 02) + 1 drill de sauvegarde/restauration | 4 jobs concernés (incl. restauration isolée) | 47 |
-| 04 | GRC-094–115 (recomptage, achats, arrivées manquantes, renouvellement, politique de pointage, Connect) + 4 parcours Chromium (horaires, demandes centrales, recomptage) | job lot-04 + Web métier | 26 |
+| 04 | GRC-094–115 (recomptage, achats, arrivées manquantes, renouvellement, politique de pointage, Connect) + 9 parcours Chromium (horaires, demandes centrales, recomptage, achats, arrivée, renouvellement, politique, Connect) | job lot-04 + Web métier | 31 |
 
-Total après extension : 169 tests nommés (115 GRC + 34 existants + 16 parcours Chromium + 4 PIN) et 3 suites SQL + 1 drill isolé (173 unités exécutables ; les assertions SQL internes ne constituent pas des tests indépendants). Ne pas gonfler le compteur avec les assertions ou compter deux fois les mêmes tests. Les matrices Web et SQL ont fail-fast:false et aucun partage de base. Une révision = un run ; les runs antérieurs ne sont pas annulés par le développement. Les échecs doivent rester visibles.
+Total après extension : 174 tests nommés (115 GRC + 34 existants + 21 parcours Chromium + 4 PIN) et 3 suites SQL + 1 drill isolé (178 unités exécutables ; les assertions SQL internes ne constituent pas des tests indépendants). Ne pas gonfler le compteur avec les assertions ou compter deux fois les mêmes tests. Les matrices Web et SQL ont fail-fast:false et aucun partage de base. Une révision = un run ; les runs antérieurs ne sont pas annulés par le développement. Les échecs doivent rester visibles.
 
 ## REC produit : rapprochement et limites
 | REC | Couverture actuelle candidate | Reste pour certification |

@@ -104,6 +104,7 @@ begin
  if not desired and before_state then
   if exists(select 1 from grillad_private.cash c where c.org=p_org and c.site=target and c.closed_at is null)
   or exists(select 1 from grillad_private.attendance a where a.org=p_org and a.site=target and a.kind='arrival' and not exists(select 1 from grillad_private.attendance b where b.paired_arrival=a.id) and not exists(select 1 from grillad_private.missing_departures m where m.arrival=a.id and m.status='approved'))
+  or exists(select 1 from grillad_private.attendance a where a.org=p_org and a.site=target and a.kind='departure_without_arrival' and not exists(select 1 from grillad_private.missing_arrivals m where m.departure=a.id and m.status in ('approved','rejected')))
   or exists(select 1 from grillad_private.connect_orders o where o.org=p_org and o.site=target and o.status in ('submitted','accepted','preparing','ready'))
   then raise exception 'GRILLAD_SITE_OPEN_OPERATIONS' using errcode='22023';end if;
  end if;
