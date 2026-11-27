@@ -89,6 +89,54 @@ Deno.serve(async request=>{
  if(typeof loginId!=="string"||!/^WM-[A-Z0-9]{8,24}$/.test(loginId))return send(503,{error:"registration_unconfirmed"});
  return send(200,{login_id:loginId,kind});
  }
+ if(action==="recovery-enroll"){
+ if(Deno.env.get("WM_RECOVERY_KEY_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ const access=(request.headers.get("authorization")??"").replace(/^Bearer /i,""),password=body.current_password;
+ if(!/^[a-f0-9]{64}$/.test(access)||typeof password!=="string"||!password||password.length>256)return send(400,{error:"invalid_request"});
+ const p_hash=await digest(access),context=(await rest("rpc/wm_session_context",{method:"POST",body:JSON.stringify({p_hash})}))?.[0];
+ if(!context||context.password_change_required)return send(403,{error:"scope"});
+ const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-recovery-enroll:"+context.account_id),p_installation_hash:await digest("wm-recovery-enroll-device:"+context.installation_id)})});
+ if(allowed!==true)return send(429,{error:"too_many_attempts"});
+ const account=(await rest("wm_accounts?select=id,auth_user_id,auth_alias,credential_epoch&id=eq."+eq(context.account_id)+"&enabled=eq.true&limit=1"))?.[0];
+ if(!account)return send(403,{error:"scope"});
+ const proof=await fetch(url+"/auth/v1/token?grant_type=password",{method:"POST",headers:{apikey:anon,"Content-Type":"application/json"},body:JSON.stringify({email:account.auth_alias,password}),redirect:"error",cache:"no-store"});
+ if(!proof.ok||(await proof.json()).user?.id!==account.auth_user_id)return send(401,{error:"credentials"});
+ const recoveryKey=token();
+ const enrolled=await rest("rpc/wm_enroll_recovery_key",{method:"POST",body:JSON.stringify({p_hash,p_key_hash:await digest("wm-offline-recovery:"+recoveryKey),p_epoch:account.credential_epoch})});
+ if(enrolled!==true)return send(409,{error:"unconfirmed"});
+ return send(200,{recovery_key:recoveryKey});
+ }
+ if(action==="recover-key"){
+ if(Deno.env.get("WM_RECOVERY_KEY_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ const identifier=typeof body.identifier==="string"?body.identifier.trim().toUpperCase():"";
+ const recoveryKey=typeof body.recovery_key==="string"?body.recovery_key.trim().toLowerCase():"",next=body.new_password,requestId=body.request_id;
+ if(!/^WM-[A-Z0-9]{8,24}$/.test(identifier)||! /^[a-f0-9]{64}$/.test(recoveryKey)||!uuid.test(requestId??"")||!uuid.test(body.installation_id??"")||!["web","android"].includes(body.platform)||typeof next!=="string"||next.length<12||next.length>256)return send(400,{error:"invalid_request"});
+ const allowed=await rest("rpc/wm_reserve_auth_attempt",{method:"POST",body:JSON.stringify({p_identifier_hash:await digest("wm-key-recovery:"+identifier),p_installation_hash:await digest("wm-key-recovery-device:"+body.installation_id.toLowerCase())})});
+ if(allowed!==true)return send(429,{error:"too_many_attempts"});
+ const p_key_hash=await digest("wm-offline-recovery:"+recoveryKey),p_commitment=await digest("wm-recovery-commit:"+recoveryKey+":"+requestId.toLowerCase()+":"+next);
+ const p_request=requestId.toLowerCase();
+ const op=await rest("rpc/wm_begin_key_recovery",{method:"POST",body:JSON.stringify({p_identifier:identifier,p_key_hash,p_request,p_commitment})});
+ if(!op||!["start","verify"].includes(op.mode)||!uuid.test(op.auth_user_id??"")||!uuid.test(op.account_id??""))return send(401,{error:"credentials"});
+ async function verify(){
+  const proof=await fetch(url+"/auth/v1/token?grant_type=password",{method:"POST",headers:{apikey:anon,"Content-Type":"application/json"},body:JSON.stringify({email:op.auth_alias,password:next}),redirect:"error",cache:"no-store"});
+  if(proof.status===400||proof.status===401)return false;
+  if(!proof.ok)throw Error("provider_unavailable");
+  return (await proof.json()).user?.id===op.auth_user_id;
+ }
+ const params={p_account:op.account_id,p_key_hash,p_request,p_commitment};
+ if(op.mode==="start"){
+  if(!(await verify())){
+   if(await rest("rpc/wm_prepare_key_recovery_write",{method:"POST",body:JSON.stringify(params)})!==true)return send(409,{error:"recovery_unconfirmed"});
+   // Only the single fenced worker may change the GoTrue credential.
+   const changed=await fetch(url+"/auth/v1/admin/users/"+eq(op.auth_user_id),{method:"PUT",headers,body:JSON.stringify({password:next}),redirect:"error",cache:"no-store"});
+   if(!changed.ok)return send(409,{error:"recovery_unconfirmed"});
+  }
+ }
+ // An interrupted operation can only finish with proof of the exact new password.
+ if(!(await verify()))return send(409,{error:"recovery_unconfirmed"});
+ if(await rest("rpc/wm_finish_key_recovery",{method:"POST",body:JSON.stringify(params)})!==true)return send(409,{error:"recovery_unconfirmed"});
+ return send(200,{recovered:true,reconnect:true},{"Set-Cookie":clearCookie});
+ }
  if(action==="request-recovery"){
  const identifier=typeof body.identifier==="string"?body.identifier.trim().toUpperCase():"";
  if(!/^WM-[A-Z0-9]{8,24}$/.test(identifier)||!uuid.test(body.installation_id??"")||!["web","android"].includes(body.platform))return send(400,{error:"invalid_request"});
