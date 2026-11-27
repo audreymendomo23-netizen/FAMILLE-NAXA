@@ -3,7 +3,7 @@
 **Ouverture :** 27 novembre 2026, Africa/Douala. **Périmètre :** GRILLAD uniquement. **Base auditée :** main @ 8ab45776cd3606b43e97aae5d641fab7f89aa750.
 
 ## Références
-- [Cahier V1.3](../cahiers-des-charges/GRILLAD_V1_3.md)
+- [Cahier V1.4](../cahiers-des-charges/GRILLAD_V1_4.md)
 - [Passation historique](../passations/GRILLAD_CONTINUITE_2026-11-21.md)
 - [Décisions](../DECISIONS.md)
 
@@ -63,14 +63,14 @@ Statuts : P = fondation GRILLAD partielle ; A = aucune implémentation propre re
 | T14 | Achats, fournisseurs, inventaire intrants | A/O profondeur | ZIPPLE ProcurementWorkspace, SupplierReturns, BOOTIK PurchasePanel ; AD | Intrants distincts des familles vendues, transferts à cadrer |
 | T15 | Coûts, marges, résultat et KPI | A/V, valorisation O | NS transverse-operations, ZIPPLE FinancialStatements/Pilotage ; R/AD | Coût incomplet signalé, ventilation, pas de certification présumée |
 | T16 | Rapports, PDF/Excel, historiques | A/V, formats/conditions O | NS NativeReportExport, ZIPPLE FinanceDocuments/NativeDocuments ; AD | Filtres site/vendeur/période, export privé, fraîcheur |
-| T17 | Équipe, personnel, pointage | A/V équipe ; O GPS | NS StaffRosterCard/AttendanceProofJournal, ZIPPLE HrWorkspace ; AD | Affectations révoquées, pas de suivi GPS permanent |
+| T17 | Équipe, pointage arrivée/départ, heure, GPS et photo | A/V multiniveau | NS StaffRosterCard/AttendanceProofJournal, ZIPPLE HrWorkspace ; AD | Affectations révoquées, GPS ponctuel et photo privée aux deux événements, durée et anomalies ; pas de suivi GPS permanent |
 | T18 | Stockage sécurisé, offline et sync | P/V isolation ; O étendue | NS SecureLocalDatabase/SyncWork, BOOTIK ScopedOffline, contracts/offline-web ; AD | Périmètre compte/site, idempotence, conflits, reprise |
 | T19 | Langues, locale, formats | A/O langues ; V cohérence | NS resources FR/EN/ff-CM et Web locale ; AD | Chaînes propres, traductions relues, FCFA/Douala |
 | T20 | Notifications, alertes, push | A/O | core-android BriefingScheduler/Worker/Channels, NS NotificationInbox/FirebasePushClient ; AD | Préférences, déduplication, accusés réels |
 | T21 | FAQ, support, Livechat, admin central | A/O fonctions ; V séparation | SQL support_tickets, ZIPPLE SupportGuide, NS support à vérifier ; AD | Tickets isolés, transfert humain si approuvé, pas d'accès global aux données |
 | T22 | Parrainage, QR, récompenses | A/O | NS ReferralScreen et modèles ledger ; AD | Règles GRILLAD validées, anti-doublon/auto-parrainage |
 | T23 | Assistant IA, recommandations | A/O | assistant explainSignals, core-kotlin LocalInsights, NS PerformanceEngine, ZIPPLE intelligence ; AD | Explicabilité, pas d'action sensible autonome |
-| T24 | Sécurité, sauvegarde, exploitation, intégrations | A/V exploitation ; O/B intégrations | core-web verifyManifest, recettes NS/ZIPPLE, NAXA SECURITY à auditer ; AD | Restauration, CI, contrôle réseau, pas de QR ZIPPLE implicite |
+| T24 | Sécurité, sauvegarde, exploitation, intégrations | A/V exploitation ; O/B intégrations | core-web verifyManifest, recettes NS/ZIPPLE, NAXA SECURITY à auditer ; AD | Restauration, CI, contrôle réseau, Connect Snack-Bar sous contrat et droits ; caisses et commandes séparées |
 
 **Bilan : 24 domaines audités, 2 fondations partielles (T01/T18), 22 sans implémentation propre repérée, 0/24 qualifiés verts, 0 recette exécutée.** Indicateur de qualification et non taux de code. Les extensions ouvertes ne deviennent pas des exigences commerciales par cette matrice.
 
@@ -83,7 +83,7 @@ Statuts : P = fondation GRILLAD partielle ; A = aucune implémentation propre re
 5. PIN/biométrie : BiometricGate exige FragmentActivity tandis que MainActivity GRILLAD hérite ComponentActivity. Adapter le cycle de vie, ne pas assimiler verrou local et autorisation.
 6. ZIPPLE BraiseWorkspace plus riche que GRILLAD : ne reprendre que contrôles quantité/idempotence. Pas de cuisson avancée, tables, réservations, précommandes, livraison, marketplace ou sixième famille.
 7. Parseur SMS BOOTIK : candidat, jamais preuve de règlement ; séparation ventes/abonnements, contrôle serveur.
-8. GRD-014 prime sur FAM-020 pour ACCÈS. Les éléments [O], [C/O], [P/O], [B] du cahier V1.3 restent conditionnels : parrainage, IA, offline étendu, pointage GPS, langues, support, notifications, achats détaillés, méthode coûts, caisse multi-vendeur, NAXA SECURITY, QR ZIPPLE. Ne pas importer règles métier spécifiques des donneurs sans arbitrage.
+8. GRD-014 prime sur FAM-020 pour ACCÈS. Les éléments [O], [C/O], [P/O], [B] du cahier V1.3 restent conditionnels : parrainage, IA, offline étendu, langues, support, notifications, achats détaillés, méthode coûts, caisse multi-vendeur et NAXA SECURITY. Pointage GPS/photo et Connect Snack-Bar désormais validés par V1.4. Ne pas importer règles métier spécifiques des donneurs sans arbitrage.
 
 ## 6. Plan de construction proposé — six bulks parallèles
 
@@ -92,18 +92,27 @@ Statuts : P = fondation GRILLAD partielle ; A = aucune implémentation propre re
 | B1 Socle, identité, accès | T01–T06 | Shell, auth, profil, organisation, permissions, audit |
 | B2 Commerce/production simple | T09–T12 | Catalogue strict, quantités, vente directe, caisse |
 | B3 Finance et pilotage | T13–T16 | Dépenses, intrants selon arbitrage, coûts/marges, rapports |
-| B4 Équipe et expérience | T17, T19–T21 | Équipe, langues, notifications, support selon périmètre |
+| B4 Équipe et expérience | T17, T19–T21 | Équipe, pointage GPS/photo, langues, notifications, support selon périmètre |
 | B5 Souscription et résilience | T07, T08, T18 | Tarifs exacts, paiements, outbox cloisonnée |
-| B6 Extensions et qualification | T22–T24 | Extensions approuvées, sécurité, exploitation, recettes |
+| B6 Extensions et qualification | T22–T24 | Connect Snack-Bar, extensions approuvées, sécurité, exploitation, recettes |
 
 Contrats stables permettant construction en parallèle ; scopes B1 et contrats B5 obligatoires avant écritures réelles B2/B3. Tests B6 dès le départ. B1 et B5 ont chacun une fondation partielle ; aucun bulk vert.
 
 ## 7. Recettes et garde de sortie
 
-REC-01 à REC-28 du cahier maintenues. Compléments transversaux à construire : auth/révocation ; PIN/biométrie/repli ; refus croisés app/org/site/rôle ; changement de compte/cache/outbox ; concurrence vendeurs sur stock limité ; consolidation sans mélange ; quatre montants et rejet 3/6 mois ; paiement pending/échec/rejeu ; reprise et conflits ; rapport partiel ; PWA isolation et absence de cache privé ; export privé ; traduction et support/notifications selon validation ; restauration ; tests Android, Web Chromium, API/RLS en environnement de test. Rien n'est déclaré exécuté.
+REC-01 à REC-33 du cahier V1.4 maintenues. Compléments transversaux à construire : auth/révocation ; PIN/biométrie/repli ; refus croisés app/org/site/rôle ; changement de compte/cache/outbox ; concurrence vendeurs sur stock limité ; consolidation sans mélange ; quatre montants et rejet 3/6 mois ; paiement pending/échec/rejeu ; reprise et conflits ; rapport partiel ; PWA isolation et absence de cache privé ; export privé ; traduction et support/notifications selon validation ; restauration ; tests Android, Web Chromium, API/RLS en environnement de test. Rien n'est déclaré exécuté.
 
 ## 8. Journal et limites
 
 - 27/11/2026 : document dédié créé (commit 1acfa53dd2b1b079ba7830b258fec10f442acafb), 24 domaines inventoriés, trois donneurs épinglés, blocages documentés, plan B1–B6.
 - Aucune modification de code Android/Web/Supabase ou des autres applications, aucun build/test/CI déclenché volontairement, aucune migration ni déploiement. Travail documentaire main conformément à AGENTS.md.
 - Audit statique des sources disponibles : pas d'inspection de l'environnement Supabase réel, pas de réexécution des tests donneurs ni lecture de tous leurs fichiers, ni de toutes les conversations historiques. Les points ouverts restent à arbitrer avant activation. Le prochain chantier de construction doit commencer par les contrats d'accès, de facturation et d'isolation.
+
+## 9. Arbitrages du 27/11/2026 — V1.4 prévaut
+
+- GRD-015 : application légère, récupérer les fonctions de base de toute la famille ; éviter ERP complexe, comptabilité générale, paie avancée et production industrielle. Conserver contrôles serveur et traçabilité derrière une UI simple. Les 24 domaines sont un inventaire de couverture et non une liste de modules lourds obligatoires.
+- GRD-016 : pointage arrivée ET départ avec heure, GPS ponctuel et photo en architecture multiniveau. Interprétation proposée : Manager + vendeurs, même dans un point ACCÈS, et réseau PREMIUM ; pas d'obligation pour le manager seul. Durée, anomalies, corrections tracées, preuves privées ; pas de GPS permanent ni reconnaissance faciale. Seuils, rétention, exceptions et offline restent à cadrer.
+- GRD-017 : GRILLAD Connect côté ZIPPLE Snack-Bar, seule exception partenaire à la vente directe. QR avec deux espaces, commandes/paiements/caisses/stocks/recettes séparés ; droits et accords réciproques, partenaire actif, catalogue et disponibilité GRILLAD. Maintenir le modèle Premium existant sous réserve de vérification du contrat exact ; aucun nouveau tarif. Aucun accès ZIPPLE aux données internes ou RH. Contrat et recettes restent à construire.
+- Réemploi confirmé comme candidat par inspection additionnelle : NAXA SERVICES apps/web/naxa-services/src/erp/attendance-proof.tsx (GPS récent, caméra, stockage privé, requêtes scope), AttendanceProofJournal.kt (journal et replay) ; ZIPPLE ZippleAttendance.kt (GPS ponctuel et validation de réponse), TableQr.tsx (génération QR locale, pas preuve d'intégration Connect). Les paramètres spécifiques aux donneurs ne sont pas automatiquement appliqués.
+- Documents historiques retrouvés depuis l'audit : docs/apps/grillad/CAHIER_DES_CHARGES.md et PROMPTS.md ; leur périmètre ERP/production avancée et leurs anciennes propositions ne prévalent pas sur V1.4.
+- B4 porte le pointage ; B2 fournit commandes/préparation simple ; B6 porte le contrat Connect et la recette croisée, B1/B5 assurent droits et paiement. REC-29–33 ajoutées. Aucun code, test ou déploiement exécuté ; jauge inchangée.
