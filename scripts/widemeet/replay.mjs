@@ -271,6 +271,17 @@ try{
  assert.equal(await hp.evaluate(()=>Object.values(localStorage).some(v=>/^[a-f0-9]{64}$/.test(v))),false);
  assert.equal(await hp.evaluate(()=>document.cookie.includes("__Host-widemeet_refresh")),false);
  pass("actual remembered Web session restored after reload using HttpOnly secure cookie without exposed refresh token");
+ await hp.getByRole("navigation").getByRole("button",{name:"Profil",exact:true}).click();
+ const picker=hp.getByLabel("Choisir une photo",{exact:true});
+ await picker.waitFor();
+ await picker.setInputFiles({name:"synthetic-profile.jpg",mimeType:"image/jpeg",buffer:Buffer.from(photo,"base64")});
+ const photoPreview=hp.getByRole("img",{name:"Votre photo de profil",exact:true});
+ await photoPreview.waitFor({timeout:15000});
+ assert.ok(await photoPreview.evaluate(img=>img.complete&&img.naturalWidth>0));
+ await hp.getByRole("button",{name:"Supprimer la photo",exact:true}).click();
+ await photoPreview.waitFor({state:"detached",timeout:15000});
+ pass("actual Web profile photo selection, re-encoding, private preview and removal");
+
 }finally{
  if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));
  for(const child of children)if(child.exitCode===null){child.kill("SIGTERM");await new Promise(r=>child.once("exit",r));}
