@@ -279,9 +279,19 @@ try{
  // Isolated N4 fixture: three admitted members, explicit selective publication.
  const minuteW=await createWorkspace("Minutes isolated replay"),mh=await fixture(minuteW,"promoteur"),mg=await fixture(minuteW,"staff"),mo=await fixture(minuteW,"staff");
  const mhs=await login(mh),mgs=await login(mg),mos=await login(mo),mid=randomUUID();
- let ms=await ok(room+"/create",{room_id:mid,title:"Minutes qualification",description:"Synthetic meeting",scheduled_ms:Date.now(),duration_minutes:10,invitees:[mg.id,mo.id]},mhs.access_token);
- async function mcmd(token,action,value=null){ms=await ok(room+"/command",{room_id:mid,request_id:randomUUID(),expected_revision:ms.revision,action,value},token)}
- await mcmd(mgs.access_token,"respond","accepted");await mcmd(mos.access_token,"respond","accepted");await mcmd(mhs.access_token,"start");await mcmd(mhs.access_token,"end");
+ let ms=await ok(room+"/create",{room_id:mid,title:"Minutes qualification",description:"Synthetic meeting",scheduled_ms:Date.now(),duration_minutes:10,invitees:[mg.id]},mhs.access_token);
+ async function mcmd(token,action,value=null,target=null){ms=await ok(room+"/command",{room_id:mid,request_id:randomUUID(),expected_revision:ms.revision,action,value,target},token)}
+ await mcmd(mgs.access_token,"respond","accepted");await mcmd(mhs.access_token,"start");
+ await mcmd(mhs.access_token,"invite_member",null,mo.id);
+ await mcmd(mhs.access_token,"lock_admission",true);
+ const lateAccept={room_id:mid,request_id:randomUUID(),expected_revision:ms.revision,action:"respond",value:"accepted"};
+ assert.equal((await request(room+"/command",lateAccept,mos.access_token)).status,409);
+ await mcmd(mhs.access_token,"lock_admission",false);await mcmd(mos.access_token,"respond","accepted");
+ await mcmd(mgs.access_token,"private_chat","Private among two of three",mh.id);
+ assert.ok((await ok(room+"/read",{room_id:mid},mhs.access_token)).events.some(e=>e.value==="Private among two of three"));
+ assert.ok(!(await ok(room+"/read",{room_id:mid},mos.access_token)).events.some(e=>e.value==="Private among two of three"));
+ pass("actual N2 late invitation, admission lock/unlock and private chat denied to admitted third member");
+ await mcmd(mhs.access_token,"end");
  const mreq=(token,action,data={})=>request(room+"/minutes",{action,data},token);
  const mok=(token,action,data={})=>ok(room+"/minutes",{action,data},token);
  const prep=await mok(mhs.access_token,"prepare",{room_id:mid});assert.equal(prep.latest_version,0);assert.equal(prep.premium,true);
@@ -303,12 +313,33 @@ try{
  assert.equal((await mreq(os.access_token,"read",publication)).status,403);
  assert.ok((await mok(mgs.access_token,"list")).items.some(x=>x.room_id===mid&&x.unread));
  assert.equal((await mok(mgs.access_token,"read",publication)).body,draft.body);
+ const treq=(token,action,data={})=>request(room+"/tasks",{action,data},token);
+ const tok=(token,action,data={})=>ok(room+"/tasks",{action,data},token);
+ const task={id:randomUUID(),room_id:mid,version_id:mv1,assignee_id:mg.id,title:"Verify human decision",due_at:new Date(Date.now()+86400000).toISOString()};
+ assert.equal((await treq(mgs.access_token,"create",task)).status,403);
+ assert.equal((await treq(mhs.access_token,"create",{...task,assignee_id:mo.id})).status,403);
+ assert.equal((await tok(mhs.access_token,"create",task)).revision,1);
+ assert.equal((await tok(mhs.access_token,"create",task)).revision,1);
+ assert.equal((await tok(mos.access_token,"list")).items.length,0);
+ assert.equal((await tok(os.access_token,"list")).items.length,0);
+ assert.equal((await tok(mgs.access_token,"list")).items[0].id,task.id);
+ const evidence={id:task.id,expected_revision:1,evidence:"Synthetic proof"};
+ assert.equal((await treq(mos.access_token,"submit",evidence)).status,403);
+ await tok(mgs.access_token,"submit",evidence);
+ assert.equal((await treq(mgs.access_token,"approve",{id:task.id,expected_revision:2})).status,403);
+ await tok(mhs.access_token,"return",{id:task.id,expected_revision:2});
+ await tok(mgs.access_token,"submit",{...evidence,expected_revision:3});
+ await tok(mhs.access_token,"approve",{id:task.id,expected_revision:4});
+ assert.equal((await tok(mgs.access_token,"list")).items[0].state,"done");
+ pass("actual N4 task assignment, evidence, correction, approval, idempotence and tenant/recipient isolation");
+
  assert.ok((await mok(mgs.access_token,"list")).items.some(x=>x.room_id===mid&&!x.unread));
  const mv2=randomUUID(),rev={room_id:mid,version_id:mv2,expected_version:1,body:"Revised synthetic human minutes"};
  await mok(mhs.access_token,"draft",rev);
  assert.equal((await mreq(mgs.access_token,"read",rev)).status,403);
  await mok(mhs.access_token,"approve",rev);await mok(mhs.access_token,"publish",{...rev,recipients:[mg.id]});
  assert.equal((await mreq(mgs.access_token,"read",publication)).status,403);
+ assert.equal((await tok(mgs.access_token,"list")).items.length,0);
  assert.equal((await mok(mgs.access_token,"read",rev)).body,rev.body);
  await mok(mhs.access_token,"revoke",rev);assert.equal((await mreq(mgs.access_token,"read",rev)).status,403);
  pass("actual N4 closed-room minutes versioning, expiry-independent archives, approval, selected recipients, read audit and revocation");
