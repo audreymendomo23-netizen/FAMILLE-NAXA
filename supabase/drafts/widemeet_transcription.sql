@@ -55,6 +55,30 @@ returns jsonb language sql immutable security invoker set search_path=pg_catalog
 $wm$;
 revoke all on function public.wm_transcription_review(jsonb,uuid) from public,anon,authenticated;
 grant execute on function public.wm_transcription_review(jsonb,uuid) to service_role;
+-- Canonical source view: original-language cues, exact segment identities and explicit unknown speaker.
+-- This is archival timing, not a live caption or diarization claim.
+create function public.wm_transcription_cues(p_result jsonb,p_recording uuid)
+returns jsonb language sql immutable security invoker set search_path=pg_catalog,public as $wm$
+ select jsonb_build_object('method','source-cues-v1','recording_id',p_recording,
+  'language',p_result->>'language','duration_ms',p_result->'duration_ms',
+  'cues',coalesce(jsonb_agg(jsonb_build_object('segment_index',ord-1,'start_ms',seg->'start_ms',
+    'end_ms',seg->'end_ms','text',seg->>'text','uncertain',seg->'uncertain',
+    'speaker_id',null,'speaker_status','unknown') order by ord),'[]'::jsonb))
+ from jsonb_array_elements(p_result->'segments') with ordinality as t(seg,ord)
+$wm$;
+revoke all on function public.wm_transcription_cues(jsonb,uuid) from public,anon,authenticated;
+grant execute on function public.wm_transcription_cues(jsonb,uuid) to service_role;
+-- A literal query is not an instruction to the model. Search returns source excerpts only.
+create function public.wm_transcription_search(p_result jsonb,p_recording uuid,p_query text)
+returns jsonb language sql immutable security invoker set search_path=pg_catalog,public as $wm$
+ select jsonb_build_object('method','literal-source-search-v1','recording_id',p_recording,
+  'matches',coalesce(jsonb_agg(q.seg||jsonb_build_object('segment_index',q.ord-1) order by q.ord),'[]'::jsonb))
+ from (select seg,ord from jsonb_array_elements(p_result->'segments') with ordinality as t(seg,ord)
+       where length(btrim(p_query)) between 2 and 120
+       and strpos(lower(seg->>'text'),lower(btrim(p_query)))>0 order by ord limit 20) q
+$wm$;
+revoke all on function public.wm_transcription_search(jsonb,uuid,text) from public,anon,authenticated;
+grant execute on function public.wm_transcription_search(jsonb,uuid,text) to service_role;
 create function public.wm_transcription_action(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
 declare s record; rid uuid; recid uuid; j public.wm_transcription_jobs%rowtype; v jsonb; src jsonb;
@@ -92,10 +116,13 @@ begin
  elsif p_action='retry' then
   if not found or j.status<>'failed' or j.attempts>=3 then return null;end if;
   update public.wm_transcription_jobs set status='queued',updated_at=clock_timestamp() where recording_id=recid returning * into j;
+ elsif p_action='search' then
+  if not found or j.status<>'complete' or jsonb_typeof(p_data->'query') is distinct from 'string' or length(btrim(p_data->>'query')) not between 2 and 120 then return null;end if;
+  return public.wm_transcription_search(j.result,recid,p_data->>'query');
  elsif p_action='read' then
   if not found then return jsonb_build_object('status','not_requested','attempts',0);end if;
  else return null;end if;
- return jsonb_build_object('recording_id',recid,'status',j.status,'attempts',j.attempts,'result',case when j.status='complete' then j.result||jsonb_build_object('review',public.wm_transcription_review(j.result,recid)) else null end);
+ return jsonb_build_object('recording_id',recid,'status',j.status,'attempts',j.attempts,'result',case when j.status='complete' then j.result||jsonb_build_object('review',public.wm_transcription_review(j.result,recid),'captions',public.wm_transcription_cues(j.result,recid)) else null end);
 exception when invalid_text_representation or unique_violation then return null;
 end $wm$;
 revoke all on function public.wm_transcription_action(text,text,jsonb) from public,anon,authenticated;
