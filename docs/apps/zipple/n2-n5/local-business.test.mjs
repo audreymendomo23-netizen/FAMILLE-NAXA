@@ -499,12 +499,14 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByRole("button",{name:"Catalogue",exact:true}).click();
   await page.getByText("Sous-postes de préparation",{exact:true}).click();
   await page.getByLabel("Nom du sous-poste").fill("Grillades");await page.getByRole("button",{name:"Enregistrer le sous-poste"}).click();
+  await page.getByText("Grillades · kitchen · 1",{exact:true}).waitFor();
   const grillStation=await scalar("select id from zp_substations where site_id=$1 and label='Grillades'",[site]);
   assert.ok(grillStation);
   await page.getByLabel("Nom du sous-poste").fill("Accompagnements");await page.getByRole("button",{name:"Enregistrer le sous-poste"}).click();
+  await page.getByText("Accompagnements · kitchen · 1",{exact:true}).waitFor();
   const sideStation=await scalar("select id from zp_substations where site_id=$1 and label='Accompagnements'",[site]);assert.ok(sideStation);
-  await page.getByRole("combobox",{name:"Sous-poste pour Grillade routée",exact:true}).selectOption(grillStation);
-  await page.getByRole("combobox",{name:"Sous-poste pour Garniture routée",exact:true}).selectOption(sideStation);
+  {const [response]=await Promise.all([page.waitForResponse(r=>r.url().includes("/substation_assign")&&r.request().method()==="POST"),page.getByRole("combobox",{name:"Sous-poste pour Grillade routée",exact:true}).selectOption(grillStation)]);assert.equal(response.status(),200);}
+  {const [response]=await Promise.all([page.waitForResponse(r=>r.url().includes("/substation_assign")&&r.request().method()==="POST"),page.getByRole("combobox",{name:"Sous-poste pour Garniture routée",exact:true}).selectOption(sideStation)]);assert.equal(response.status(),200);}
   await ok("substation_grant",{member_id:staffId,substation_id:grillStation,enabled:true});
   const routedTicket=await ok("order_create",{channel:"counter",request_id:id(),lines:[{item_id:grillProduct,qty:1},{item_id:sideProduct,qty:1}]});
   const routedGrillLine=workerPage.getByTestId("station-line-"+routedTicket.id+"-"+grillProduct);
@@ -514,7 +516,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await routedGrillLine.getByRole("button",{name:"Étape suivante"}).click();
   await routedGrillLine.getByText(/Grillades · preparing/).waitFor();
   const extendedEta=await ok("delay",{order_id:routedTicket.id,minutes:20,reason:"Charge du poste grillades"});
-  await routedGrillLine.locator('[data-clock-target]').waitFor();await routedGrillLine.locator('[data-clock-target="'+extendedEta+'"]').waitFor({timeout:15000});
+  await routedGrillLine.locator('[data-clock-target]').waitFor();await workerPage.waitForFunction(({id,eta})=>Date.parse(document.querySelector('[data-testid="'+id+'"] [data-clock-target]')?.getAttribute("data-clock-target")??"")===Date.parse(eta),{id:"station-line-"+routedTicket.id+"-"+grillProduct,eta:extendedEta},{timeout:15000});
   await ok("substation_grant",{member_id:staffId,substation_id:grillStation,enabled:false});
   await routedGrillLine.waitFor({state:"hidden",timeout:15000});await worker.close();
   console.log("ZIPPLE_BULK2_REAL_SUBSTATION_CLOCK_AND_REVOCATION_PASS");
