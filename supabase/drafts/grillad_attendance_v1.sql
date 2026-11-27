@@ -53,10 +53,11 @@ alter table grillad_private.attendance_policy enable row level security;
 alter table grillad_private.attendance enable row level security;
 revoke all on grillad_private.attendance_policy,grillad_private.attendance from public,anon,authenticated;
 create function grillad_private.attendance_status(p_org uuid,p_site uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
-declare r text;enabled boolean;out jsonb;corrections jsonb;missing jsonb;missing_arrival jsonb;
+declare r text;enabled boolean;out jsonb;corrections jsonb;missing jsonb;missing_arrival jsonb;settings jsonb;
 begin
  r:=grillad_private.scope(p_org,p_site);
  select p.enabled into enabled from grillad_private.attendance_policy p where org=p_org and site=p_site;
+ if r='owner' then select to_jsonb(p)-'org'-'site' into settings from grillad_private.attendance_policy p where org=p_org and site=p_site;end if;
  select coalesce(jsonb_agg(to_jsonb(x) order by x.captured_at desc),'[]'::jsonb) into out from (
  select a.id,a.actor,a.kind,a.captured_at,a.received_at,a.paired_arrival,a.photo is not null and a.photo_until>now() as photo_available,
  (a.kind='arrival' and not exists(select 1 from grillad_private.attendance d where d.paired_arrival=a.id) and not exists(select 1 from grillad_private.missing_departures m where m.arrival=a.id and m.status='approved')) as open_arrival,
@@ -67,7 +68,7 @@ begin
  select coalesce(jsonb_agg(to_jsonb(c) order by c.requested_at desc),'[]'::jsonb) into corrections from (select id,departure,requester,proposed_seconds,reason,requested_at,status,decided_by,decided_at,decision_reason from grillad_private.attendance_corrections where org=p_org and site=p_site and (r in ('owner','manager') or requester=auth.uid()) order by requested_at desc limit 100)c;
  select coalesce(jsonb_agg(to_jsonb(m) order by m.requested_at desc),'[]'::jsonb) into missing from (select id,arrival,requester,proposed_at,seconds,reason,requested_at,status,decided_by,decided_at,decision_reason from grillad_private.missing_departures where org=p_org and site=p_site and (r in ('owner','manager') or requester=auth.uid()) order by requested_at desc limit 100)m;
  select coalesce(jsonb_agg(to_jsonb(m) order by m.requested_at desc),'[]'::jsonb) into missing_arrival from (select id,departure,requester,proposed_at,seconds,reason,requested_at,status,decided_by,decided_at,decision_reason from grillad_private.missing_arrivals where org=p_org and site=p_site and (r in ('owner','manager') or requester=auth.uid()) order by requested_at desc limit 100)m;
- return jsonb_build_object('enabled',coalesce(enabled,false),'history',out,'corrections',corrections,'missing_departures',missing,'missing_arrivals',missing_arrival);
+ return jsonb_build_object('enabled',coalesce(enabled,false),'history',out,'corrections',corrections,'missing_departures',missing,'missing_arrivals',missing_arrival,'settings',settings);
 end $$;
 create function grillad_private.attendance_capture(p_org uuid,p_site uuid,p_event uuid,p_kind text,p_at timestamptz,p_lat double precision,p_lon double precision,p_accuracy double precision,p_photo text)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
@@ -224,5 +225,20 @@ begin
  return jsonb_build_object('id',m.id,'status',decision,'source','manual_arrival');
 end $$;
 revoke all on function grillad_private.missing_arrival(uuid,uuid,uuid,text,jsonb) from public,anon,authenticated;
+
+-- Explicit site configuration; prior proof retention remains unchanged.
+create function grillad_private.set_attendance_policy(p_org uuid,p_site uuid,p_payload jsonb) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare lat double precision;lon double precision;radius integer;accuracy integer;age integer;retention integer;onoff boolean;why text;
+begin
+ if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+ if jsonb_typeof(p_payload->'enabled') is distinct from 'boolean' or jsonb_typeof(p_payload->'latitude') is distinct from 'number' or jsonb_typeof(p_payload->'longitude') is distinct from 'number' then raise exception 'GRILLAD_ATTENDANCE_POLICY' using errcode='22023';end if;
+ lat:=(p_payload->>'latitude')::double precision;lon:=(p_payload->>'longitude')::double precision;radius:=(p_payload->>'radius_m')::integer;accuracy:=(p_payload->>'max_accuracy_m')::integer;age:=(p_payload->>'max_age_seconds')::integer;retention:=(p_payload->>'photo_retention_days')::integer;onoff:=(p_payload->>'enabled')::boolean;why:=btrim(p_payload->>'reason');
+ if not(lat between -90 and 90) or not(lon between -180 and 180) or radius is null or radius not between 1 and 10000 or accuracy is null or accuracy not between 1 and least(radius,1000) or age is null or age not between 30 and 300 or retention is null or retention not between 1 and 365 or why is null or length(why) not between 1 and 300 or (onoff and p_payload->'staff_informed' is distinct from 'true'::jsonb) then raise exception 'GRILLAD_ATTENDANCE_POLICY' using errcode='22023';end if;
+ if exists(select 1 from grillad_private.attendance a where a.org=p_org and a.site=p_site and a.kind='arrival' and not exists(select 1 from grillad_private.attendance d where d.paired_arrival=a.id) and not exists(select 1 from grillad_private.missing_departures m where m.arrival=a.id and m.status='approved')) then raise exception 'GRILLAD_ATTENDANCE_OPEN' using errcode='22023';end if;
+ insert into grillad_private.attendance_policy(org,site,enabled,latitude,longitude,radius_m,max_accuracy_m,max_age_seconds,photo_retention_days) values(p_org,p_site,onoff,lat,lon,radius,accuracy,age,retention)
+ on conflict(org,site) do update set enabled=excluded.enabled,latitude=excluded.latitude,longitude=excluded.longitude,radius_m=excluded.radius_m,max_accuracy_m=excluded.max_accuracy_m,max_age_seconds=excluded.max_age_seconds,photo_retention_days=excluded.photo_retention_days;
+ return jsonb_build_object('enabled',onoff,'site',p_site);
+end $$;
+revoke all on function grillad_private.set_attendance_policy(uuid,uuid,jsonb) from public,anon,authenticated;
 
 commit;

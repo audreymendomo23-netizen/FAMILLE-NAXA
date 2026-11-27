@@ -22,7 +22,8 @@ select set_config('request.jwt.claims',jsonb_build_object('session_id','a1000000
 do $$
 declare o uuid:='a2000000-0000-0000-0000-000000000001';s uuid:='a3000000-0000-0000-0000-000000000001';i uuid:=gen_random_uuid();j uuid:=gen_random_uuid();req uuid:=gen_random_uuid();missing_arr uuid:=gen_random_uuid();missing_req uuid:=gen_random_uuid();a timestamptz:=now()-interval '180 seconds';p text:=encode(decode('ffd8ff000000000000000000000000ffd9','hex'),'base64');q text:=encode(decode('ffd8ff010000000000000000000000ffd9','hex'),'base64');v jsonb;
 begin
- if not (public.grillad_attendance_status(o,s)->>'enabled')::boolean then raise exception 'expected enabled';end if;
+ if not (public.grillad_attendance_status(o,s)->>'enabled')::boolean or public.grillad_attendance_status(o,s)->'settings'<>'null'::jsonb then raise exception 'expected enabled or leaked settings';end if;
+ begin perform public.grillad_action(o,s,gen_random_uuid(),'set_attendance_policy','{"enabled":false}');raise exception 'seller policy allowed';exception when insufficient_privilege then null;end;
  begin perform public.grillad_attendance_capture(o,s,i,'departure',a,0,0,10,p);raise exception 'expected missing arrival';exception when invalid_parameter_value then null;end;
  begin perform public.grillad_attendance_capture(o,s,i,'arrival',a,1,1,10,p);raise exception 'expected distance';exception when invalid_parameter_value then null;end;
  perform public.grillad_attendance_capture(o,s,i,'arrival',a,0,0,10,p);
@@ -73,6 +74,11 @@ begin
  perform public.grillad_action(o,s,gen_random_uuid(),'missing_arrival_decide',jsonb_build_object('request',current_setting('grillad.test.missing_arrival')::uuid,'decision','approved','reason','Vérifié'));
  v:=public.grillad_attendance_status(o,s);
  if jsonb_array_length(v->'history')<>4 or v->'missing_arrivals'->0->>'status'<>'approved' or v->'history'->0->>'kind'<>'departure_without_arrival' or v->'history'->0->>'duration_seconds' is not null then raise exception 'manual arrival evidence separation';end if;
+end $$;
+do $$declare o uuid:='a2000000-0000-0000-0000-000000000001';s uuid:='a3000000-0000-0000-0000-000000000001';begin
+ if public.grillad_attendance_status(o,s)->'settings'->>'radius_m'<>'200' then raise exception 'owner policy';end if;
+ perform public.grillad_action(o,s,gen_random_uuid(),'set_attendance_policy','{"enabled":true,"latitude":0,"longitude":0,"radius_m":250,"max_accuracy_m":50,"max_age_seconds":300,"photo_retention_days":2,"staff_informed":true,"reason":"Test site"}');
+ if public.grillad_attendance_status(o,s)->'settings'->>'radius_m'<>'250' then raise exception 'policy update';end if;
 end $$;
 reset role;
 do $$begin if (select count(*) from grillad_private.attendance_photo_access)<>1 then raise exception 'photo access audit';end if;end $$;
