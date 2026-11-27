@@ -69,8 +69,9 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in 1 2 3; do
-            if gradle --no-daemon --stacktrace :widemeet:testDebugUnitTest :widemeet:assembleDebug 2>&1 | tee "$RUNNER_TEMP/wm-gradle-build.log"; then exit 0; fi
+            if gradle --no-daemon --stacktrace :widemeet:testDebugUnitTest :widemeet:assembleDebug 2>&1 | tee "$RUNNER_TEMP/wm-gradle-build.log"; then echo "WM_CI_CENTRAL_ALTERNATE=${WM_CI_CENTRAL_ALTERNATE:-false}" >> "$GITHUB_ENV"; exit 0; fi
             if ! grep -Eq 'Received status code (429|502|503) from server' "$RUNNER_TEMP/wm-gradle-build.log" || [ "$attempt" -eq 3 ]; then exit 1; fi
+            export WM_CI_CENTRAL_ALTERNATE=true
             sleep $((attempt * 15))
           done
       - run: test -s apps/android/widemeet/build/outputs/apk/debug/widemeet-debug.apk
