@@ -23,7 +23,12 @@ export function rosterApiOrigin(endpoint:string):string{
  if(u.protocol!=="https:"||u.username||u.password||u.pathname.replace(/\/$/,"")!=="/functions/v1/naxa-services-auth")throw new Error("INVALID_ROSTER_ENDPOINT");
  return u.origin;
 }
-export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props){
+export function StaffRoster(props:Props){
+ // Reset private data, draft commands and retry identifiers whenever the authorization scope changes.
+ const scope=JSON.stringify([props.account.organization_id,props.account.member_id,props.account.business_mode,props.siteId,props.authEndpoint,props.anonKey]);
+ return <ScopedStaffRoster key={scope} {...props}/>;
+}
+function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props){
  const locale=account.default_locale;
  const tr=(fr:string,en:string,ff:string)=>locale==="en"?en:locale==="ff-CM"?ff:fr;
  const [targets,setTargets]=useState<Target[]>([]),[shifts,setShifts]=useState<Shift[]>([]),[acks,setAcks]=useState<Ack[]>([]),[comparisons,setComparisons]=useState<Comparison[]>([]);
@@ -37,7 +42,7 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
  const pendingPublish=useRef<{key:string;ids:string[]}|null>(null);
  const [form,setForm]=useState<Form>(blank),[error,setError]=useState(""),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
  const tokenRef=useRef(getToken);tokenRef.current=getToken;
- const alive=useRef(false),refreshing=useRef(false);
+ const alive=useRef(false);
  const [version,setVersion]=useState(0);
  const canManage=targets.length>0;
  const textError=tr("Planning indisponible. Vérifiez la connexion et réessayez.","Schedule unavailable. Check your connection and retry.","Feere golle heɓotaake. Ƴeewto ceŋol, kadi eto.");
@@ -46,14 +51,17 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
   const token=await tokenRef.current();if(signal?.aborted||!alive.current||!token||!anonKey)throw new Error("SESSION_CHANGED");
   const res=await fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"return=representation"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal});
   if(!res.ok)throw new Error("ROSTER_REQUEST_FAILED");
-  return await res.json() as T;
+  const data=await res.json() as T;
+  if(signal?.aborted||!alive.current)throw new Error("SESSION_CHANGED");
+  return data;
  }
  useEffect(()=>{
   alive.current=true;
   const abort=new AbortController();
+  let refreshing=false;
   async function refresh(){
-   if(refreshing.current||!modeEnabled(account.business_mode)||!siteId)return;
-   refreshing.current=true;
+   if(abort.signal.aborted||refreshing||!modeEnabled(account.business_mode)||!siteId)return;
+   refreshing=true;
    try{
     const filter="org_id=eq."+encodeURIComponent(account.organization_id)+"&site_id=eq."+encodeURIComponent(siteId);
     const [next,people,read,report,explanations,absences,posts,models,issues]=await Promise.all([
@@ -68,13 +76,13 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
       request<RosterAlert[]>("rpc/ns_roster_alerts",{p_org:account.organization_id,p_site:siteId},abort.signal)]);
     if(!abort.signal.aborted){setShifts(next);setTargets(people);setAcks(read);setComparisons(report);setJustifications(explanations);setAvailability(absences);setOwnPosts(posts);setTemplates(models);setAlerts(issues);setLoaded(true);setError("");}
    }catch{if(!abort.signal.aborted){setError(textError);setLoaded(false);setShifts([]);setTargets([]);setAcks([]);setComparisons([]);setJustifications([]);setAvailability([]);setOwnPosts([]);setTemplates([]);setAlerts([]);}}
-   finally{refreshing.current=false;}
+   finally{refreshing=false;}
   }
   void refresh();
   const interval=window.setInterval(()=>{if(document.visibilityState==="visible")void refresh();},30000);
   const onVisibility=()=>{if(document.visibilityState==="visible")void refresh();};
   document.addEventListener("visibilitychange",onVisibility);
-  return()=>{alive.current=false;abort.abort();refreshing.current=false;window.clearInterval(interval);document.removeEventListener("visibilitychange",onVisibility);};
+  return()=>{alive.current=false;abort.abort();window.clearInterval(interval);document.removeEventListener("visibilitychange",onVisibility);};
  },[account.organization_id,account.member_id,account.business_mode,siteId,authEndpoint,anonKey,version]);
  function edit(s:Shift){
   const target=targets.find(t=>t.member_id===s.member_id&&t.workstation_id===s.workstation_id);if(!target)return;
