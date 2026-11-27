@@ -112,3 +112,15 @@ test("timed polls reject boundary votes and reveal closed survey only at the ser
  assert.deepEqual(pollSummary(r.polls[1],guest.memberId,16000).counts,[0,0]);
  assert.throws(()=>run(r,guest,"survey_vote",[0],"timed0002",16000),/invalid_vote/);
 });
+
+test("B4 targeted rating: frozen eligible list, no unauthorized vote, explicit denominator",()=>{
+ let r=open();const config={question:"Rate",kind:"rating",options:Array.from({length:10},(_,i)=>String(i+1)),anonymous:true,visibility:"closed",quorum:100,threshold:50,eligibleIds:[guest.memberId]};
+ assert.throws(()=>run(r,host,"survey",{...config,eligibleIds:[other.memberId]},"target001"),/invalid_poll/);
+ assert.throws(()=>run(r,host,"survey",{...config,eligibleIds:[guest.memberId,guest.memberId]},"target001"),/invalid_poll/);
+ r=run(r,host,"survey",config,"target001");
+ assert.equal(pollSummary(r.polls[0],host.memberId,1000).canVote,false);assert.equal(pollSummary(r.polls[0],guest.memberId,1000).canVote,true);
+ assert.throws(()=>run(r,host,"survey_vote",[9],"target001"),/invalid_vote/);
+ r=run(r,guest,"survey_vote",[9],"target001");assert.equal(pollSummary(r.polls[0],host.memberId,1000).nonresponses,null);
+ r=run(r,host,"close_poll",null,"target001");const p=pollSummary(r.polls[0],host.memberId,1000);
+ assert.equal(p.eligible,1);assert.equal(p.responses,1);assert.equal(p.nonresponses,0);assert.equal(p.optionShares[9],100);assert.equal(p.nominativeResponses,null);assert.equal(p.quorumMet,true);
+});
