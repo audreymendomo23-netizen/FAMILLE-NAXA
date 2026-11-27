@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SubscriptionPage } from "./erp/subscription";
 import { BillingPanel } from "./erp/billing-panel";
+import { B4PlanningPanel } from "./erp/b4-planning-panel";
+import { mergeB4Data, staleChargeReceipt } from "./erp/b4-planning";
 import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, listAppEvents, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
 import { normalizeInventoryItemDraft } from "./erp/inventory";
 import { financialRows,downloadFinancialXlsx,printFinancialReport } from "./erp/performance-export";
@@ -293,6 +295,7 @@ function App() {
           ? serverRecord.revision : null;
         const existingRevision = typeof existingEntry?.revision === "number" ? existingEntry.revision : 0;
         if (incomingRevision !== null && incomingRevision < existingRevision) continue;
+        if(item.state==="acknowledged"&&staleChargeReceipt(command.action_code,existingEntry?.data,storedReceipt.recorded_at))continue;
         const receiptIsNewer = incomingRevision !== null && incomingRevision >= existingRevision;
         const record:Entry={
           ...existingEntry,
@@ -301,7 +304,7 @@ function App() {
             ? command.aggregate_type : existingEntry?.recordType,
           aggregateType: typeof command.aggregate_type === "string" ? command.aggregate_type : existingEntry?.aggregateType,
           actionCode: typeof command.action_code === "string" ? command.action_code : existingEntry?.actionCode,
-          data: { ...(existingEntry?.data ?? {}), ...payload, ...(typeof serverRecord.paid_xaf==="number"?{paid_xaf:serverRecord.paid_xaf}:{}), server_result: serverRecord, server_recorded_at: typeof storedReceipt.recorded_at === "string" ? storedReceipt.recorded_at : typeof payload.server_recorded_at === "string" ? payload.server_recorded_at : undefined },
+          data: { ...mergeB4Data(existingEntry?.data,payload,serverRecord,command.action_code), server_result: serverRecord, server_recorded_at: typeof storedReceipt.recorded_at === "string" ? storedReceipt.recorded_at : typeof payload.server_recorded_at === "string" ? payload.server_recorded_at : undefined },
           status: receiptIsNewer && typeof serverRecord.status === "string" ? serverRecord.status
             : item.state!=="acknowledged"&&existingRevision>0 ? existingEntry?.status
             : typeof payload.to_status === "string" ? payload.to_status
@@ -687,7 +690,7 @@ function App() {
             aggregateType:typeof command.aggregate_type==="string"?command.aggregate_type:x.aggregateType,
             actionCode:typeof command.action_code==="string"?command.action_code:x.actionCode,
             siteId:typeof command.site_id==="string"?command.site_id:x.siteId,
-            data:{...(x.data??{}),...eventPayload,...(typeof serverRecord.paid_xaf==="number"?{paid_xaf:serverRecord.paid_xaf}:{}),server_result:serverRecord,server_recorded_at:typeof receipt.recorded_at==="string"?receipt.recorded_at:x.data?.server_recorded_at},
+            data:{...mergeB4Data(x.data,eventPayload,serverRecord,command.action_code),server_result:serverRecord,server_recorded_at:typeof receipt.recorded_at==="string"?receipt.recorded_at:x.data?.server_recorded_at},
             revision:typeof serverRecord.revision==="number"?serverRecord.revision:x.revision,
             status:typeof serverRecord.status==="string"?serverRecord.status:x.status,
           }:x)}));
@@ -753,12 +756,13 @@ function App() {
         const profileValue = metadata.activity ?? metadata.activity_profile;
         const revision=typeof serverRecord.revision==="number"?serverRecord.revision:undefined;
         if(revision!==undefined && prior?.revision!==undefined && revision<prior.revision)continue;
+        if(staleChargeReceipt(change.action_code,prior?.data,change.recorded_at))continue;
         const record:Entry={
           id:change.aggregate_id,title,detail,state:"Confirmé · autre appareil",createdAt:new Date(change.recorded_at).toLocaleString("fr-FR"),
           recordType: change.aggregate_type === "work_order" || change.aggregate_type === "repair_order" || change.aggregate_type === "service_order" || change.aggregate_type === "pressing_order" ? change.aggregate_type : undefined,
           aggregateType: change.aggregate_type,
           actionCode: change.action_code,
-          data: { ...prior?.data, ...payload, ...(typeof serverRecord.paid_xaf==="number"?{paid_xaf:serverRecord.paid_xaf}:{}), server_result: serverRecord, server_recorded_at: change.recorded_at },
+          data: { ...mergeB4Data(prior?.data,payload,serverRecord,change.action_code), server_result: serverRecord, server_recorded_at: change.recorded_at },
           status: typeof serverRecord.status === "string" ? serverRecord.status
             : typeof payload.to_status === "string" ? payload.to_status
             : typeof payload.status === "string" ? payload.status : prior?.status,
@@ -839,7 +843,7 @@ function App() {
         state:navigator.onLine?"En attente de confirmation":"En attente de connexion",
         createdAt:existing?.createdAt??new Date().toLocaleString("fr-FR"),
         aggregateType, actionCode, siteId,
-        data:{...(existing?.data??{}),...payload},
+        data:mergeB4Data(existing?.data,payload,{},actionCode),
         ...extra,
       };
       return {...previous,[moduleId]:index>=0?rows.map((entry,rowIndex)=>rowIndex===index?next:entry):[...rows,next]};
@@ -1283,7 +1287,7 @@ function App() {
             active === "network" || active === "sites" ? <SitesPage mode={mode} siteName={siteName} sites={authSession?.account.active_sites ?? []} canCreate={authSession?.account.role_code === "promoter"} onCreateSite={createWebSite} entries={entries.network ?? []} /> :
             active === "workstations" ? <WorkstationsPage mode={mode} sites={authSession?.account.active_sites ?? []} selectedSiteId={workstationSiteId || activeSiteId} workstations={workstations} onLoad={loadWebWorkstations} onCreate={createWebWorkstation} canCreate={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))} /> :
             active === "security" ? <DeviceSecurityPage key={authSession?.deviceId??"preview"} authenticated={Boolean(authSession&&!preview)} onLoad={loadOwnDevices} onRevoke={revokeOwnDevice} /> :
-            active === "reports" ? <PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={changePerformanceDate} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport(); }} authenticated={Boolean(authSession&&!preview)} locale={authSession?.account.default_locale??"fr"} /> :
+            active === "reports" ? <><PerformancePage data={performanceData} fromDate={performanceFromDate} setFromDate={changePerformanceDate} loading={performanceBusy} error={performanceError} onLoad={() => { void loadPerformanceReport(); }} authenticated={Boolean(authSession&&!preview)} locale={authSession?.account.default_locale??"fr"} />{authSession&&!preview&&!authSession.requirePasswordChange&&env.VITE_NAXA_SERVICES_BILLING_V23_ENABLED==="true"&&<B4PlanningPanel key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+activeSiteId} entries={(entries.reports??[]).filter(e=>e.siteId===(activeSiteId||authSession.account.active_site_ids[0]))} canManage={["promoter","network_manager","site_manager"].includes(authSession.account.role_code)} busy={busy} onSubmit={async(action,id,payload,title,detail)=>{await submitWebBusinessEvent("reports",action,action.split(".")[0],id,payload,activeSiteId||authSession.account.active_site_ids[0],title,detail);}}/>}</> :
             active === "agenda" ? <AgendaOperationsPage entries={(entries.agenda ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTransition={transitionWebAppointment} onReschedule={rescheduleWebAppointment} /> :
             active === "pressing" ? <PressingPage
               entries={(entries.pressing ?? []).filter(entry => preview || entry.siteId === (activeSiteId || authSession?.account.active_site_ids[0]))} canPreviewEdit={preview}
