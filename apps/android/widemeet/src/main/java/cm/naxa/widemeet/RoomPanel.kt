@@ -1,5 +1,8 @@
 package cm.naxa.widemeet
 import androidx.compose.foundation.layout.*
+import android.app.Activity
+import android.view.WindowManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -19,6 +22,8 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  fun tr(fr:String,en:String)=if(english)en else fr
  val hostRole=workspace.role in setOf("owner","promoteur","manager")
  val scope=rememberCoroutineScope()
+ val window=(LocalContext.current as? Activity)?.window
+ DisposableEffect(window){val wasSecure=(window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_SECURE)?:0)!=0;window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE);onDispose{if(!wasSecure)window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)}}
  var list by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var contacts by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var passes by remember{mutableStateOf<List<JSONObject>>(emptyList())};var passId by remember{mutableStateOf("")}
