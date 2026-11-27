@@ -258,11 +258,11 @@ jobs:
           node --input-type=module <<'NODE'
           import assert from 'node:assert/strict';
           import {randomUUID,randomBytes} from 'node:crypto';
-          import {spawn} from 'node:child_process';
+          import {spawn,execFileSync} from 'node:child_process';
           import {chromium} from '@playwright/test';
           import https from 'node:https';
           import http from 'node:http';
-          import {readFile,stat} from 'node:fs/promises';
+          import {readFile,stat,mkdtemp,rm} from 'node:fs/promises';
           import {resolve,extname,sep} from 'node:path';
           const base=process.env.SUPABASE_URL, anon=process.env.SUPABASE_ANON_KEY, admin=process.env.SUPABASE_SERVICE_ROLE_KEY;
           assert.equal(base,'http://127.0.0.1:54321');
@@ -559,9 +559,11 @@ jobs:
                   assert.equal(await count('ns_customers',filter),1);
                 }finally{await page.unroute(url,intercept);}
               });
-              await scenario('real browser closed offline, different tenant cannot see pending customer, original login resumes exactly once',async()=>{
+              await scenario('real Chromium process restart with persistent profile, different tenant isolated, original login resumes exactly once',async()=>{
                 const owner=await fixture('RESTART-A'),foreign=await fixture('RESTART-B');
-                const isolated=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:900}});
+                const profile=await mkdtemp(resolve(process.env.RUNNER_TEMP,'ns-chromium-profile-'));
+                const launch=()=>chromium.launchPersistentContext(profile,{headless:true,ignoreHTTPSErrors:true,viewport:{width:1440,height:900}});
+                let isolated=await launch();
                 const name='Client reprise navigateur '+randomBytes(6).toString('hex');
                 const records=org=>success(base+'/rest/v1/ns_customers?select=id&org_id=eq.'+org+'&display_name=eq.'+encodeURIComponent(name),undefined,admin,admin,'GET');
                 async function open(fx){
@@ -582,13 +584,14 @@ jobs:
                   await p.getByRole('button',{name:'Enregistrer',exact:true}).click();
                   await p.getByText(/enregistré hors connexion/i).waitFor();
                   assert.equal((await records(owner.org.id)).length,0);
-                  await p.close();
-                  await isolated.setOffline(false);
+                  await isolated.close();
+                  isolated=await launch();
                   p=await open(foreign);await clients(p);
                   assert.equal(await p.getByText(name,{exact:true}).count(),0);
                   assert.equal((await records(foreign.org.id)).length,0);
                   assert.equal((await records(owner.org.id)).length,0);
-                  await p.close();
+                  await isolated.close();
+                  isolated=await launch();
                   p=await open(owner);
                   const sync=p.getByRole('button',{name:/Synchroniser \(1\)/});
                   if(await sync.isVisible().catch(()=>false))await sync.click();
@@ -599,7 +602,7 @@ jobs:
                   await p.locator('.record').filter({hasText:name}).getByText('Confirmé',{exact:true}).first().waitFor({timeout:15000});
                   await pause(800);
                   assert.equal((await records(owner.org.id)).length,1);
-                }finally{await isolated.close();}
+                }finally{await isolated.close();await rm(profile,{recursive:true,force:true});}
               });
               await scenario('real first login password gate: blocked RPC, wrong password denied, browser rotation and renewed credentials',async()=>{
                 const first=await fixture('FIRST-PASSWORD');
@@ -798,6 +801,8 @@ jobs:
                   await grow().getByText('Objectifs du jour',{exact:true}).waitFor();
                   assert.equal(await gr.getByRole('button',{name:'Créer et inviter',exact:true}).count(),0);
                   assert.equal(await grow().getByRole('button',{name:'Ouvrir la réunion (sans appel)',exact:true}).count(),0);
+                  const mediaRpc=base+'/rest/v1/rpc/ns_meeting_media_grant';
+                  assert.ok((await json(mediaRpc,{p_id:meeting.id},hostAuth.access_token,anon)).status>=400,'scheduled meeting cannot issue media grant');
                   phase='guest RSVP and consent';
                   await rpc(guest,'ns_respond_meeting_invitation',()=>grow().getByRole('button',{name:'Acceptée',exact:true}).click());
                   await rpc(guest,'ns_set_meeting_listener',()=>grow().getByLabel('Langue d’écoute souhaitée').selectOption('en'));
@@ -807,6 +812,15 @@ jobs:
                   await rpc(page,'ns_transition_internal_meeting',()=>hrow().getByRole('button',{name:'Ouvrir la réunion (sans appel)',exact:true}).click());
                   await gr.getByRole('button',{name:'Actualiser',exact:true}).click();
                   await grow().getByRole('button',{name:'Lever la main',exact:true}).waitFor();
+                  const hostGrant=await success(mediaRpc,{p_id:meeting.id},hostAuth.access_token,anon);
+                  const guestGrant=await success(mediaRpc,{p_id:meeting.id},guestAuth.access_token,anon);
+                  assert.equal(hostGrant.room,'ns-'+meeting.id);assert.equal(guestGrant.room,hostGrant.room);
+                  assert.equal(hostGrant.host,true);assert.equal(guestGrant.host,false);
+                  assert.equal(hostGrant.member_id,hostAuth.account.member_id);assert.equal(guestGrant.member_id,guestAuth.account.member_id);
+                  assert.equal(guestGrant.screen_allowed,false);
+                  const external=await login(await fixture('MEDIA-FOREIGN'));
+                  assert.ok((await json(mediaRpc,{p_id:meeting.id},external.access_token,anon)).status>=400,'foreign media grant denied');
+                  assert.ok((await json(mediaRpc,{p_id:meeting.id},anon,anon)).status>=400,'anonymous media grant denied');
                   phase='guest chat and hand';
                   await rpc(guest,'ns_meeting_action',()=>grow().getByRole('button',{name:'Lever la main',exact:true}).click());
                   await grow().getByRole('textbox',{name:'Message',exact:true}).fill('Message de recette');
@@ -826,6 +840,9 @@ jobs:
                   await rpc(page,'ns_transition_internal_meeting',()=>hrow().getByRole('button',{name:'Terminer',exact:true}).click());
                   await gr.getByRole('button',{name:'Actualiser',exact:true}).click();
                   await grow().getByRole('button',{name:'Lever la main',exact:true}).waitFor({state:'detached'});
+                  assert.ok((await json(mediaRpc,{p_id:meeting.id},hostAuth.access_token,anon)).status>=400,'closed room denies host grant');
+                  assert.ok((await json(mediaRpc,{p_id:meeting.id},guestAuth.access_token,anon)).status>=400,'closed room denies guest grant');
+                  pass('real media authorization: host/guest bound to one room, scheduled/closed/foreign/anonymous rejected; no SFU transport');
                   pass('two browser accounts: initial agenda, RSVP, language preference, chat, hand, reaction, moderator restriction and recording consent withdrawal; no media capture');
                   phase='recurring meeting: select invitee';
                   await hr.getByRole('checkbox',{name:'Recette Collaborateur',exact:true}).check();
@@ -1049,6 +1066,38 @@ jobs:
           async function upload(f,t){return fetch(storage+'ns-profile-photos/'+photo(f),{method:'POST',headers:{...storageHeaders(t),'Content-Type':'image/png','x-upsert':'true'},body:png});}
           async function read(f,t){return fetch(storage+'authenticated/ns-profile-photos/'+photo(f),{headers:storageHeaders(t)});}
           try{
+            // Exercise the actual documented first-promoter bootstrap against the empty
+            // disposable database, with a user created through official GoTrue Admin.
+            assert.match(process.env.DB_URL,/^postgresql:\/\/postgres:.*@127\.0\.0\.1:54322\/postgres$/);
+            const bootEmail='ns-bootstrap-'+randomBytes(8).toString('hex')+'@example.test';
+            const bootPassword='Qa7!'+randomBytes(18).toString('hex'),bootLogin='NS-'+randomBytes(5).toString('hex').toUpperCase();
+            const bootUser=await success(base+'/auth/v1/admin/users',{email:bootEmail,password:bootPassword,email_confirm:true,app_metadata:{app_code:'naxa-services'}});
+            const template=await readFile('docs/naxa-services/operations/bootstrap-first-promoter.sql','utf8');
+            const bootstrap=(alias)=>template.replaceAll('00000000-0000-0000-0000-000000000000',bootUser.id)
+              .replaceAll("v_alias text := 'ns-replace@example.invalid'","v_alias text := '"+alias+"'")
+              .replaceAll("v_login text := 'NS-REPLACE'","v_login text := '"+bootLogin+"'");
+            const executeBootstrap=sql=>execFileSync('psql',[process.env.DB_URL,'-X','-v','ON_ERROR_STOP=1','-q'],{input:sql,stdio:['pipe','pipe','pipe']});
+            assert.throws(()=>executeBootstrap(bootstrap('ns-wrong@example.test')),e=>String(e.stderr).includes('DEDICATED_CONFIRMED_AUTH_USER_REQUIRED'));
+            assert.equal((await success(base+'/rest/v1/ns_accounts?select=id',undefined,admin,admin,'GET')).length,0);
+            executeBootstrap(bootstrap(bootEmail));
+            assert.throws(()=>executeBootstrap(bootstrap(bootEmail)),e=>String(e.stderr).includes('FIRST_BOOTSTRAP_ONLY'));
+            const bootAccounts=await success(base+'/rest/v1/ns_accounts?select=id,password_change_required&auth_user_id=eq.'+bootUser.id,undefined,admin,admin,'GET');
+            assert.equal(bootAccounts.length,1);assert.equal(bootAccounts[0].password_change_required,true);
+            const bootMembers=await success(base+'/rest/v1/ns_members?select=id,org_id,role_code&account_id=eq.'+bootAccounts[0].id,undefined,admin,admin,'GET');
+            assert.equal(bootMembers.length,1);assert.equal(bootMembers[0].role_code,'promoter');
+            const bootScopes=await success(base+'/rest/v1/ns_member_scopes?select=scope_type,can_read,can_operate,can_manage&member_id=eq.'+bootMembers[0].id,undefined,admin,admin,'GET');
+            assert.deepEqual(bootScopes,[{scope_type:'organization',can_read:true,can_operate:true,can_manage:true}]);
+            await start('auth');
+            const bootDevice={installation_id:randomUUID(),platform:'web',label:'Bootstrap replay'};
+            const bootSession=await act('login',{identifier:bootLogin,password:bootPassword,device:bootDevice});
+            assert.equal(bootSession.status,200);assert.equal(bootSession.data.require_password_change,true);
+            assert.equal((await act('subscription_access',{},bootSession.data.access_token)).status,403);
+            const bootNew='Qa8!'+randomBytes(18).toString('hex');
+            const bootChange=await act('change_password',{current_password:bootPassword,new_password:bootNew,refresh_token:bootSession.data.refresh_token},bootSession.data.access_token);
+            assert.equal(bootChange.status,200);assert.equal(bootChange.data.require_password_change,false);
+            assert.equal((await act('subscription_access',{},bootChange.data.access_token)).status,200);
+            await act('logout',{device:bootDevice},bootChange.data.access_token);
+            pass('official Auth Admin first promoter bootstrap, wrong alias and duplicate refused, real initial password rotation and ERP access');
             const A=await fixture('A'), B=await fixture('B');
             pass('Auth Admin official API created two isolated synthetic users');
             await start('auth');
@@ -1085,6 +1134,16 @@ jobs:
             assert.ok((await json(stageUrl,{...pendingProof,p_event_id:randomUUID(),p_latitude:null,p_longitude:null,p_accuracy:null,p_gps_at:null},pendingAuth.access_token,anon)).status>=400,'GPS remains mandatory');
             const noClock=await success(base+'/rest/v1/ns_staff_time_events?select=id&id=eq.'+pendingId,undefined,admin,admin,'GET');
             assert.equal(noClock.length,0,'staging alone never confirms attendance');
+            // Accelerate only the server's staging expiry in the disposable DB.
+            // Never change the original occurrence or GPS timestamps to pass a receipt.
+            await success(base+'/rest/v1/ns_attendance_staged_proof?event_id=eq.'+pendingId,{expires_at:new Date(Date.now()-1000).toISOString()},admin,admin,'PATCH');
+            assert.ok((await json(stageUrl,pendingProof,pendingAuth.access_token,anon)).status>=400,'expired staged proof cannot be reused');
+            assert.ok((await json(base+'/rest/v1/rpc/ns_purge_expired_attendance_staging',{p_limit:100},pendingAuth.access_token,anon)).status>=400,'member cannot run maintenance');
+            const purged=await success(base+'/rest/v1/rpc/ns_purge_expired_attendance_staging',{p_limit:100});
+            assert.ok(Number(purged)>=1);
+            assert.equal((await success(base+'/rest/v1/ns_attendance_staged_proof?select=event_id&event_id=eq.'+pendingId,undefined,admin,admin,'GET')).length,0);
+            assert.equal((await success(base+'/rest/v1/ns_staff_time_events?select=id&id=eq.'+pendingId,undefined,admin,admin,'GET')).length,0);
+            pass('expired staged attendance rejected and service-only cleanup leaves no confirmed clock');
             await act('logout',{device:pendingFixture.device},pendingAuth.access_token);
             pass('Bulk B real stage retry immutable UUID/time, no confirmed clock, foreign/modified/expired/missing GPS denied');
             const browserFailures=await browserReplay(await fixture('WEB'));
@@ -1140,14 +1199,38 @@ jobs:
             const intent=await act('subscription_create',{plan_code:'ACCESS',months:1,channel:'mtn_momo'},a.access_token);
             assert.equal(intent.status,200);assert.equal(intent.data.subscription_result.status,'pending');assert.ok(intent.data.subscription_result.amount_xaf>0);
             assert.equal((await act('subscription_cancel',{intent_id:intent.data.subscription_result.id,not_paid:true},a.access_token)).data.subscription_result.status,'cancelled');
+            await rest('ns_subscription_destinations',{channel:'orange_money',merchant_code:'654321',beneficiary:'REPLAY ONLY',destination_reference:'REPLAYOM001',active:true});
+            const orangeBody={plan_code:'ACCESS',months:1,channel:'orange_money'};
+            const orange=await act('subscription_create',orangeBody,a.access_token);
+            assert.equal(orange.status,200);assert.equal(orange.data.subscription_result.status,'pending');
+            const orangeId=orange.data.subscription_result.id;
+            const orangeRetry=await act('subscription_create',orangeBody,a.access_token);
+            assert.equal(orangeRetry.status,200);assert.equal(orangeRetry.data.subscription_result.id,orangeId);
+            assert.ok((await act('subscription_cancel',{intent_id:orangeId,not_paid:true},b.access_token)).status>=400);
+            assert.ok((await act('subscription_cancel',{intent_id:orangeId,not_paid:false},a.access_token)).status>=400);
+            assert.equal((await act('subscription_cancel',{intent_id:orangeId,not_paid:true},a.access_token)).data.subscription_result.status,'cancelled');
+            const paid=await success(base+'/rest/v1/ns_subscriptions?select=org_id&org_id=eq.'+A.org.id,undefined,admin,admin,'GET');
+            assert.equal(paid.length,0);
+            pass('real JWT MTN and Orange intent lifecycle, idempotent quote, foreign cancellation rejected, no synthetic paid entitlement');
             pass('real JWT subscription access, intent creation and cancel; no money moved');
             await start('notifications');
-            const registered=await act('register_push_token',{platform:'web',token:'replay-'+randomBytes(80).toString('hex')},a.access_token);
+            const pushFixture='replay-'+randomBytes(80).toString('hex');
+            const registered=await act('register_push_token',{platform:'web',token:pushFixture},a.access_token);
             assert.equal(registered.status,200);assert.equal(registered.data.result.registered,true);
             const tokens=await success(base+'/rest/v1/ns_push_tokens?select=token_ciphertext,token_iv,status&device_id=eq.'+a.device_id,undefined,admin,admin,'GET');
             assert.equal(tokens.length,1);assert.equal(tokens[0].status,'active');assert.ok(tokens[0].token_ciphertext&&tokens[0].token_iv);
             assert.equal((await act('list_inbox',{},a.access_token)).status,200);
+            const moved=await act('register_push_token',{platform:'web',token:pushFixture},b.access_token);
+            assert.equal(moved.status,200);
+            const original=await success(base+'/rest/v1/ns_push_tokens?select=id&device_id=eq.'+a.device_id+'&status=eq.active',undefined,admin,admin,'GET');
+            assert.equal(original.length,0);
+            const transferred=await success(base+'/rest/v1/ns_push_tokens?select=org_id,member_id,status&device_id=eq.'+b.device_id+'&status=eq.active',undefined,admin,admin,'GET');
+            assert.equal(transferred.length,1);assert.equal(transferred[0].org_id,B.org.id);assert.equal(transferred[0].member_id,B.member.id);
             assert.equal((await act('revoke_current_device_tokens',{},a.access_token)).status,200);
+            assert.equal((await success(base+'/rest/v1/ns_push_tokens?select=id&device_id=eq.'+b.device_id+'&status=eq.active',undefined,admin,admin,'GET')).length,1);
+            assert.equal((await act('revoke_current_device_tokens',{},b.access_token)).status,200);
+            assert.equal((await success(base+'/rest/v1/ns_push_tokens?select=id&device_id=eq.'+b.device_id+'&status=eq.active',undefined,admin,admin,'GET')).length,0);
+            pass('real push token reassignment across test accounts, previous owner cannot revoke new binding, owner revocation; no provider send');
             pass('real notification registration, encryption, inbox, revocation; no FCM send');
             await start('auth');
             assert.equal((await act('logout',{device:A.device},a.access_token)).status,200);
