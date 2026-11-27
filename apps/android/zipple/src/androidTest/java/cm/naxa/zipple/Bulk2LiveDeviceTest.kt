@@ -127,7 +127,7 @@ class Bulk2LiveDeviceTest {
   click("Formation");awaitText("Historique")
   click("Feedback interne");awaitText("Historique")
   click("ZIPPLE Intelligence");awaitText("Analyse explicable, sans assistant génératif connecté.")
-  click("Fidélité et parrainage");awaitText("Points non monétaires ; échange des récompenses à définir.")
+  click("Fidélité et parrainage");awaitText("Points non monétaires ; avantages sur commande ultérieure réglée.")
   click("Livraison Restaurant");awaitText("Préparation des zones et livreurs ; commande externe non activée.")
   input("Nom de zone","Zone ERP native");input("Périmètre et consignes","Secteur test");input("Frais FCFA","500");click("Enregistrer la zone");awaitText("Opération enregistrée")
   click("NAXA SECURITY et partenaires");awaitText("Demande enregistrée localement ; aucun flux vidéo ou accès externe ouvert.")

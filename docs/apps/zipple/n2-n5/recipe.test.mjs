@@ -889,6 +889,14 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  const cash=await scalar("select zp_open_cash($1,$2,0)",[loy.access,loy.site]),receipt=await scalar("select zp_record_sale($1,$2,$3,$4,$5,'cash',1000,null)",[loy.access,loy.site,cash,ord.id,uid()]);
  const key=uid(),award=await lw("claim_receipt",{receipt_id:receipt},key);assert.deepEqual(await lw("claim_receipt",{receipt_id:receipt},key),award);await lw("claim_receipt",{receipt_id:receipt});
  const snap=await ls();assert.equal(snap.customers.find(x=>x.id===sponsor).points,"10");assert.equal(snap.customers.find(x=>x.id===newCustomer).points,"15");assert.equal(snap.awards.length,3);
+ const benefit=(await lw("benefit_configure",{label:"Service non financier recette",points:5,enabled:true,reason:"Avantage configuré"})).id;
+ await assert.rejects(lw("redeem",{receipt_id:receipt,benefit_id:benefit,proof:"Remise ancienne commande"}),/INSUFFICIENT_LOYALTY_POINTS/);
+ const later=await order(loy,"counter",[{item_id:menu,qty:1}]);await scalar("select zp_customer_attach($1,$2,$3,$4)",[loy.access,loy.site,newCustomer,later.id]);for(const state of ["preparing","ready","served"])await scalar("select zp_advance_line($1,$2,$3,$4,$5)",[loy.access,loy.site,later.id,menu,state]);
+ const laterReceipt=await scalar("select zp_record_sale($1,$2,$3,$4,$5,'cash',1000,null)",[loy.access,loy.site,cash,later.id,uid()]);
+ const redemptionPayload={receipt_id:laterReceipt,benefit_id:benefit,proof:"Avantage remis avec accord"},rk=uid(),redeemed=await lw("redeem",redemptionPayload,rk);assert.deepEqual(await lw("redeem",redemptionPayload,rk),redeemed);
+ await assert.rejects(lw("redeem",redemptionPayload),/REWARD_ALREADY_USED/);assert.equal((await ls()).customers.find(x=>x.id===newCustomer).points,"10");
+ await scalar("select zp_cash_outflow_record($1,$2,$3,$4,'refund',$5,'cash',1000,'LOY-REDEEM-REFUND','Later refund test')",[loy.access,loy.site,cash,uid(),laterReceipt]);
+ assert.equal((await ls()).redemptions.find(x=>x.id===redeemed.id).review_reason,"refund");await lw("restore",{redemption_id:redeemed.id,reason:"Avantage non conservé, vérifié"});assert.equal((await ls()).customers.find(x=>x.id===newCustomer).points,"15");console.log("ZIPPLE_LOYALTY_REAL_REDEMPTION_AND_RESTORE_PASS");
  await scalar("select zp_cash_outflow_record($1,$2,$3,$4,'refund',$5,'cash',1000,'LOY-REFUND','Loyalty refund test')",[loy.access,loy.site,cash,uid(),receipt]);
  assert.equal((await ls()).customers.find(x=>x.id===sponsor).points,"0");assert.ok((await ls()).awards.every(x=>x.reversal==="refund"));
  const cw=(act,p)=>scalar("select zp_connection_write($1,$2,$3,$4,$5)",[loy.access,loy.site,act,uid(),JSON.stringify(p)]);

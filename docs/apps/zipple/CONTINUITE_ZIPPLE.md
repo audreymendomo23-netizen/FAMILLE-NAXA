@@ -670,3 +670,6 @@ Aucune modification de main, des applications sœurs ou de production. Reprise s
 
 ### RH et pointage — extension
 Ajout de la séquence GPS prise de service/pause/reprise/fin, sans GPS permanent; congés/absences avec contrôle de chevauchement, primes, commissions et avances soumises et approuvées avec motif et audit append-only. Aucun paiement automatique, aucune paie fiscale inventée. Écran Web et Compose, accès propre au membre, gestion absences manager, validation financière promoteur, SQL et garde RLS. Qualification à constater.
+
+### Fidélité — consommation et restitution contrôlée
+Avantages non financiers configurables et versionnés par promoteur; usage de points sur reçu ultérieur intégralement réglé, rattachement CRM, preuve de remise et déduction append-only. Aucun bon monétaire ni changement de prix inventé; remboursement du reçu de consommation déclenche revue, restauration motivée par promoteur. Reprise des points sources et consommation sérialisées par organisation. Test SQL ajouté; qualification à constater.

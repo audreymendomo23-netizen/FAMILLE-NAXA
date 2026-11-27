@@ -28,7 +28,7 @@ internal val commercePages=listOf(PortalPage("loyalty","Fidélité et parrainage
  val d=data?:return;val yesNo=listOf("yes" to t("Oui","Yes"),"no" to t("Non","No"))
  when(page){
  "loyalty"->{
- Text(t("Points non monétaires ; échange des récompenses à définir.","Non-cash points; reward redemption rules to be defined."))
+ Text(t("Points non monétaires ; avantages sur commande ultérieure réglée.","Non-cash points; benefits on a later paid order."))
  if(owner){
  for((k,label) in listOf("step_xaf" to t("Tranche FCFA","XAF step"),"points_per_step" to t("Points par tranche","Points per step"),"referrer_points" to t("Bonus du parrain","Referrer bonus"),"new_customer_points" to t("Bonus du filleul","New customer bonus")))CommerceField(label,v(k),allowed){set(k,it)}
  CommerceChoice(t("Activer le barème","Enable policy"),yesNo,v("enabled").ifBlank{"no"},allowed){set("enabled",it)}
@@ -37,13 +37,22 @@ internal val commercePages=listOf(PortalPage("loyalty","Fidélité et parrainage
  }
  val customers=d.rows("customers");CommerceChoice(t("Client","Customer"),customers.map{it.optString("id") to it.optString("label")},v("customer_id"),allowed){set("customer_id",it)}
  val customer=customers.find{it.optString("id")==v("customer_id")}
- if(customer!=null){Text(customer.optString("label")+" · "+customer.optString("points")+" "+t("points acquis","earned points"))
+ if(customer!=null){Text(customer.optString("label")+" · "+customer.optString("points")+" "+t("points disponibles","available points"))
  Button(enabled=allowed,onClick={write("issue_code",JSONObject().put("customer_id",v("customer_id")))}){Text(t("Générer le code personnel","Generate personal code"))}
  if(!customer.isNull("code")){Text(customer.optString("code"));if(owner)OutlinedButton(enabled=allowed,onClick={write("revoke_code",JSONObject().put("customer_id",v("customer_id")))}){Text(t("Révoquer le code","Revoke code"))}}
  CommerceField(t("Code du parrain","Referrer code"),v("code"),allowed){set("code",it)}
  Button(enabled=allowed&&v("code").isNotBlank(),onClick={write("apply_code",JSONObject().put("customer_id",v("customer_id")).put("code",v("code").trim()))}){Text(t("Rattacher le parrain","Link referrer"))}}
  CommerceChoice(t("Reçu réglé à qualifier","Paid receipt to qualify"),d.rows("receipts").map{it.optString("id") to (it.optString("label")+" · "+it.optString("amount_xaf")+" FCFA")},v("receipt_id"),allowed){set("receipt_id",it)}
  Button(enabled=allowed&&v("receipt_id").isNotBlank(),onClick={write("claim_receipt",JSONObject().put("receipt_id",v("receipt_id")))}){Text(t("Attribuer les points vérifiés","Award verified points"))}
+ Text(t("Avantages de fidélité","Loyalty benefits"))
+ if(owner){CommerceField(t("Nom de l’avantage","Benefit name"),v("benefit_label"),allowed){set("benefit_label",it)};CommerceField(t("Points requis","Required points"),v("benefit_points"),allowed){set("benefit_points",it)};CommerceChoice(t("Avantage actif","Benefit enabled"),yesNo,v("benefit_enabled").ifBlank{"yes"},allowed){set("benefit_enabled",it)};CommerceField(t("Motif de validation","Approval reason"),v("benefit_reason"),allowed){set("benefit_reason",it)}
+ Button(enabled=allowed&&v("benefit_label").isNotBlank()&&(number("benefit_points")?:0) in 1..1000000&&v("benefit_reason").trim().length>=5,onClick={write("benefit_configure",JSONObject().put("label",v("benefit_label")).put("points",number("benefit_points")).put("enabled",v("benefit_enabled")!="no").put("reason",v("benefit_reason")))}){Text(t("Enregistrer l’avantage","Save benefit"))}}
+ CommerceChoice(t("Avantage à remettre","Benefit to deliver"),d.rows("benefits").filter{it.optBoolean("enabled")}.map{it.optString("id") to (it.optString("label")+" · "+it.optString("points")+" pts")},v("benefit_id"),allowed){set("benefit_id",it)}
+ val eligible=d.rows("redeemable_receipts").filter{it.optString("customer_id")==v("customer_id")}
+ CommerceChoice(t("Commande ultérieure réglée","Later paid order"),eligible.map{it.optString("id") to (it.optString("label")+" · "+it.optString("amount_xaf")+" FCFA")},v("redeem_receipt"),allowed){set("redeem_receipt",it)}
+ CommerceField(t("Preuve de remise de l’avantage","Benefit delivery evidence"),v("redeem_proof"),allowed){set("redeem_proof",it)}
+ Button(enabled=allowed&&v("benefit_id").isNotBlank()&&eligible.any{it.optString("id")==v("redeem_receipt")}&&v("redeem_proof").trim().length>=5,onClick={write("redeem",JSONObject().put("receipt_id",v("redeem_receipt")).put("benefit_id",v("benefit_id")).put("proof",v("redeem_proof")))}){Text(t("Confirmer la remise et utiliser les points","Confirm delivery and spend points"))}
+ d.rows("redemptions").forEach{x->val id=x.optString("id");Text(x.optString("label")+" · "+x.optString("benefit")+" · "+x.optString("points")+" pts · "+if(!x.isNull("restore_reason"))t("Restitué","Restored")else if(!x.isNull("review_reason"))t("À examiner","Review required")else t("Utilisé","Used"));Text(x.optString("proof"));if(owner&&!x.isNull("review_reason")&&x.isNull("restore_reason")){CommerceField(t("Motif de restitution","Restoration reason"),v("restore_"+id),allowed){set("restore_"+id,it)};Button(enabled=allowed&&v("restore_"+id).trim().length>=5,onClick={write("restore",JSONObject().put("redemption_id",id).put("reason",v("restore_"+id)))}){Text(t("Restituer les points après contrôle","Restore points after review"))}}}
  d.rows("referrals").forEach{Text(it.optString("referrer")+" → "+it.optString("label")+" · "+if(it.optBoolean("qualified"))t("Qualifié","Qualified")else t("En attente","Pending"))}
  d.rows("awards").forEach{Text(it.optString("label")+" · "+it.optString("points")+" · "+if(it.isNull("reversal"))t("Acquis","Earned")else t("Repris","Reversed"))}
  }
