@@ -3,7 +3,7 @@ type Pending={body:Record<string,unknown>,id:string,action?:"split_collect"|"cas
 type Tender={method:string,amount:string,reference:string};
 const freshTender=():Tender=>({method:"cash",amount:"",reference:""});
 const methods=["cash","mtn_momo","orange_money","bank","card"];
-function restore(key:string):{pending:Pending|null;blocked:boolean}{try{const v=sessionStorage.getItem(key);if(!v)return {pending:null,blocked:false};const p=JSON.parse(v);if(typeof p.id!=="string"||!p.body||typeof p.body.order_id!=="string"||typeof p.body.cash_id!=="string")throw Error("INVALID_PENDING");return {pending:p,blocked:false}}catch{return {pending:null,blocked:true}}}
+function restore(key:string):{pending:Pending|null;blocked:boolean}{try{const v=sessionStorage.getItem(key);if(!v)return {pending:null,blocked:false};const p=JSON.parse(v);if((p.action!==undefined&&!["split_collect","cash_record_mixed"].includes(p.action))||typeof p.id!=="string"||!p.body||typeof p.body.order_id!=="string"||typeof p.body.cash_id!=="string")throw Error("INVALID_PENDING");return {pending:p,blocked:false}}catch{return {pending:null,blocked:true}}}
 type Props={scopeKey:string;call:(a:string,b?:Record<string,unknown>)=>Promise<any>;en:boolean;disabled:boolean;refreshParent:()=>Promise<void>};
 export function SplitBillWorkspace({scopeKey,call,en,disabled,refreshParent}:Props){
  const t=(f:string,e:string)=>en?e:f;
@@ -14,7 +14,7 @@ export function SplitBillWorkspace({scopeKey,call,en,disabled,refreshParent}:Pro
  const allocations=(active?.lines??[]).map((l:any)=>({line_no:l.line_no,qty:Number(quantities[l.line_no]??0)})).filter((a:any)=>a.qty>0);
  const validQty=(active?.lines??[]).every((l:any)=>/^\d*$/.test(quantities[l.line_no]??"")&&Number(quantities[l.line_no]??0)<=l.remaining_qty);
  const total=effective==="mixed"?tenders.reduce((n,x)=>n+Number(x.amount),0):effective==="items"?allocations.reduce((n:number,a:any)=>n+a.qty*active.lines.find((l:any)=>l.line_no===a.line_no).price_xaf,0):Number(amount);
- const validTenders=tenders.length>=2&&tenders.length<=5&&tenders.every(x=>methods.includes(x.method)&&/^\\d+$/.test(x.amount)&&Number.isSafeInteger(Number(x.amount))&&Number(x.amount)>0&&Number(x.amount)<=2147483647&&(x.method==="cash"||x.reference.trim().length>=4))&&new Set(tenders.filter(x=>x.method!=="cash").map(x=>x.method+":"+x.reference.trim())).size===tenders.filter(x=>x.method!=="cash").length;
+ const validTenders=tenders.length>=2&&tenders.length<=5&&tenders.every(x=>methods.includes(x.method)&&/^\d+$/.test(x.amount)&&Number.isSafeInteger(Number(x.amount))&&Number(x.amount)>0&&Number(x.amount)<=2147483647&&(x.method==="cash"||x.reference.trim().length>=4))&&new Set(tenders.filter(x=>x.method!=="cash").map(x=>x.method+":"+x.reference.trim())).size===tenders.filter(x=>x.method!=="cash").length;
  function setTender(i:number,part:Partial<Tender>){Tenders(v=>v.map((x,j)=>j===i?{...x,...part}:x))}
  async function load(){D(await call("split_snapshot"))}
  function clearPending(){sessionStorage.removeItem(storageKey);Pending(null)}
