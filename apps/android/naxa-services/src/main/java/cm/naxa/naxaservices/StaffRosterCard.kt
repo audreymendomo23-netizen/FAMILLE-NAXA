@@ -109,8 +109,9 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
         var start by remember{mutableStateOf("")};var end by remember{mutableStateOf("")}
         var pause by remember{mutableStateOf("0")};var tolerance by remember{mutableStateOf("10")};var reason by remember{mutableStateOf("")}
         var repeat by remember{mutableStateOf("once")};var repeatCount by remember{mutableStateOf("1")}
+        var rotation by remember { mutableStateOf(emptyList<String>()) }
         var cancelShift by remember{mutableStateOf<JSONObject?>(null)}
-        fun clear(){selected=null;edited=null;start="";end="";pause="0";tolerance="10";reason="";cancelShift=null;repeat="once";repeatCount="1"}
+        fun clear(){rotation=emptyList();selected=null;edited=null;start="";end="";pause="0";tolerance="10";reason="";cancelShift=null;repeat="once";repeatCount="1"}
         suspend fun refresh(){
             try{
                 val current=latest
@@ -151,7 +152,10 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                 val count=if(row==null&&repeat!="once")repeatCount.toInt() else 1
                 require(count in 1..31&&(row!=null||repeat=="once"||count>=2))
                 val seconds=(if(repeat=="weekly")7L else 1L)*86400L
+                val members=listOf(person.getString("member_id")) + if(count>1) rotation else emptyList()
+                require(members.size<=count && (count==1 || members.all { id -> targets.any { it.optString("member_id")==id && it.nullable("workstation_id")==person.nullable("workstation_id") } }))
                 val commands=(0 until count).map{i->if(i==0)body else JSONObject(body.toString())
+                    .put("p_member",members[i%members.size])
                     .put("p_starts",Instant.parse(body.getString("p_starts")).plusSeconds(i*seconds).toString())
                     .put("p_ends",Instant.parse(body.getString("p_ends")).plusSeconds(i*seconds).toString())}
                 val fingerprint=JSONArray(commands).toString()
@@ -222,7 +226,7 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                 if(loaded&&targets.isNotEmpty()){
                     Text(tr("Publier ou modifier un service","Publish or edit a shift","Bayyin walla waylu golle"),fontWeight=FontWeight.Bold)
                     if(edited==null&&cancelShift==null)targets.forEach{p->
-                        OutlinedButton(onClick={selected=p},enabled=!busy,modifier=Modifier.fillMaxWidth()){
+                        OutlinedButton(onClick={selected=p;rotation=emptyList()},enabled=!busy,modifier=Modifier.fillMaxWidth()){
                             Text((if(selected===p)"✓ " else "")+p.optString("display_name")+" · "+(p.nullable("workstation_name")?:tr("Site","Site","Nokkuure")))
                         }
                     }
@@ -235,13 +239,23 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                     if(edited==null&&cancelShift==null){
                         Text(tr("Répétition du service","Shift repetition","Ɓeydude golle"))
                         listOf("once" to tr("Une fois","Once","Laawol gootol"),"daily" to tr("Chaque jour","Daily","Ñalawma kala"),"weekly" to tr("Chaque semaine","Weekly","Yontere kala")).forEach{(value,label)->
-                            OutlinedButton(enabled=!busy,onClick={repeat=value;repeatCount=if(value=="once")"1" else "2"}){Text((if(repeat==value)"✓ " else "")+label)}
+                            OutlinedButton(enabled=!busy,onClick={rotation=emptyList();repeat=value;repeatCount=if(value=="once")"1" else "2"}){Text((if(repeat==value)"✓ " else "")+label)}
+                        }
+                        if(repeat!="once" && selected!=null){
+                            Text(tr("Rotation des collaborateurs","Employee rotation","Gollotooɓe e dow deggondiral"))
+                            targets.filter { it.optString("member_id")!=selected?.optString("member_id") && it.nullable("workstation_id")==selected?.nullable("workstation_id") }.forEach { target ->
+                                val id=target.getString("member_id")
+                                val order=rotation.indexOf(id)
+                                OutlinedButton(enabled=!busy,onClick={rotation=if(order>=0)rotation-id else rotation+id}){
+                                    Text((if(order>=0)"${order+2}. " else "")+target.getString("display_name"))
+                                }
+                            }
                         }
                         if(repeat!="once")OutlinedTextField(repeatCount,{repeatCount=it},label={Text(tr("Nombre de services (2–31)","Number of shifts (2–31)","Limoore golle (2–31)"))},enabled=!busy,singleLine=true)
                     }
                     OutlinedTextField(reason,{reason=it},label={Text(tr("Motif","Reason","Sabu"))},modifier=Modifier.fillMaxWidth())
                     Button(onClick={publish(cancelShift)},enabled=!busy&&reason.isNotBlank()&&(selected!=null||cancelShift!=null)){Text(if(cancelShift!=null)tr("Confirmer l'annulation","Confirm cancellation","Tabbitin haaytugol") else tr("Publier et notifier","Publish and notify","Bayyin e tintin"))}
-                    if(edited==null&&cancelShift==null&&selected!=null){
+                    if(edited==null&&cancelShift==null&&selected!=null&&rotation.isEmpty()){
                         OutlinedTextField(templateName,{templateName=it.take(80)},label={Text(tr("Nom du modèle","Template name","Innde leydi"))},enabled=!busy,singleLine=true)
                         OutlinedButton(enabled=!busy&&templateName.isNotBlank()&&start.isNotBlank()&&end.isNotBlank(),onClick={perform{
                             val p=requireNotNull(selected);val first=Instant.parse(rosterInstant(start));val last=Instant.parse(rosterInstant(end));val local=first.atOffset(rosterOffset)

@@ -11,7 +11,7 @@ type OwnPost={workstation_id:string|null;workstation_name:string|null};
 type RosterTemplate={id:string;member_id:string;workstation_id:string|null;name:string;start_minute:number;duration_minutes:number;break_minutes:number;tolerance_minutes:number;repeat_days:number;repeat_count:number};
 type RosterAlert={shift_id:string;revision:number;unacknowledged_due:boolean;appointment_conflicts:number};
 type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>};
-type Form={id:string;target:string;start:string;end:string;pause:string;tolerance:string;revision:number;reason:string;repeat:"once"|"daily"|"weekly";count:string};
+type Form={id:string;target:string;start:string;end:string;pause:string;tolerance:string;revision:number;reason:string;rotation?:string[];repeat:"once"|"daily"|"weekly";count:string};
 const key=(t:Target)=>t.member_id+":"+(t.workstation_id??"");
 const localInput=(iso:string)=>new Date(Date.parse(iso)+3600000).toISOString().slice(0,16);
 const toIso=(value:string)=>new Date(value+":00+01:00").toISOString();
@@ -92,7 +92,10 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
    const count=!cancel&&!form.id&&form.repeat!=="once"?Number(form.count):1;
    if(!Number.isInteger(count)||count<1||count>31||(!cancel&&!form.id&&form.repeat!=="once"&&count<2))throw new Error("ROSTER_REPEAT_INVALID");
    const step=(form.repeat==="weekly"?7:1)*86400000;
-   const commands=Array.from({length:count},(_,i)=>i===0?command:{...command,p_starts:new Date(Date.parse(command.p_starts)+i*step).toISOString(),p_ends:new Date(Date.parse(command.p_ends)+i*step).toISOString()});
+   const rotation=count>1?(form.rotation??[]):[];
+   const people=[selected,...rotation.map(id=>targets.find(t=>t.member_id===id&&t.workstation_id===selected.workstation_id))];
+   if(people.some(person=>!person)||people.length>count)throw new Error("ROSTER_ROTATION_INVALID");
+   const commands=Array.from({length:count},(_,i)=>i===0?command:{...command,p_member:people[i%people.length]!.member_id,p_starts:new Date(Date.parse(command.p_starts)+i*step).toISOString(),p_ends:new Date(Date.parse(command.p_ends)+i*step).toISOString()});
    const fingerprint=JSON.stringify(commands);
    const ids=cancel||form.id?[cancel?.id||form.id]:pendingPublish.current?.key===fingerprint?pendingPublish.current.ids:commands.map(()=>crypto.randomUUID());
    if(!cancel&&!form.id)pendingPublish.current={key:fingerprint,ids};
@@ -183,15 +186,24 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
   {loaded&&canManage&&templates.length>0&&<details><summary>{tr("Modèles de service","Shift templates","Leɗɗe golle")}</summary><label>{tr("Date du premier service","First shift date","Ñalngu golle aranere")}<input type="date" value={templateDate} onChange={e=>setTemplateDate(e.target.value)}/></label>{templates.map(t=><p key={t.id}>{t.name} · {t.repeat_count} <button type="button" disabled={busy||!templateDate} onClick={()=>applyTemplate(t)}>{tr("Utiliser le modèle","Use template","Huutoro leydi")}</button> <button type="button" disabled={busy} onClick={()=>void archiveTemplate(t)}>{tr("Archiver","Archive","Resnu")}</button></p>)}</details>}
   {loaded&&canManage&&<form onSubmit={e=>{e.preventDefault();void save();}}>
    <h3>{form.revision?tr("Modifier le service","Edit shift","Waylu golle"):tr("Publier un service","Publish shift","Bayyin golle")}</h3>
-   <label>{tr("Collaborateur et poste","Employee and workstation","Gollotooɗo e nokkuure")}<select required value={form.target} disabled={busy||Boolean(form.id)} onChange={e=>setForm(f=>({...f,target:e.target.value}))}><option value="">—</option>{targets.map(t=><option key={key(t)} value={key(t)}>{t.display_name} · {t.workstation_name??tr("Site","Site","Nokkuure")}</option>)}</select></label>
+   <label>{tr("Collaborateur et poste","Employee and workstation","Gollotooɗo e nokkuure")}<select required value={form.target} disabled={busy||Boolean(form.id)} onChange={e=>setForm(f=>({...f,target:e.target.value,rotation:[]}))}><option value="">—</option>{targets.map(t=><option key={key(t)} value={key(t)}>{t.display_name} · {t.workstation_name??tr("Site","Site","Nokkuure")}</option>)}</select></label>
    <label>{tr("Début de service","Shift start","Fuɗɗagol golle")}<input required type="datetime-local" value={form.start} onChange={e=>setForm(f=>({...f,start:e.target.value}))}/></label>
    <label>{tr("Fin de service","Shift end","Timmugol golle")}<input required type="datetime-local" value={form.end} onChange={e=>setForm(f=>({...f,end:e.target.value}))}/></label>
    <label>{tr("Pause prévue (min)","Planned break (min)","Fooftugol (min)")}<input required type="number" min="0" max="1439" value={form.pause} onChange={e=>setForm(f=>({...f,pause:e.target.value}))}/></label>
    <label>{tr("Tolérance (min)","Tolerance (min)","Yaafuyya (min)")}<input required type="number" min="0" max="120" value={form.tolerance} onChange={e=>setForm(f=>({...f,tolerance:e.target.value}))}/></label>
-   {!form.id&&<><label>{tr("Répétition du service","Shift repetition","Ɓeydude golle")}<select aria-label={tr("Répétition du service","Shift repetition","Ɓeydude golle")} value={form.repeat} disabled={busy} onChange={e=>setForm(f=>({...f,repeat:e.target.value as Form["repeat"],count:e.target.value==="once"?"1":"2"}))}><option value="once">{tr("Une fois","Once","Laawol gootol")}</option><option value="daily">{tr("Chaque jour","Daily","Ñalawma kala")}</option><option value="weekly">{tr("Chaque semaine","Weekly","Yontere kala")}</option></select></label>{form.repeat!=="once"&&<label>{tr("Nombre de services","Number of shifts","Limoore golle")}<input required type="number" min="2" max="31" value={form.count} disabled={busy} onChange={e=>setForm(f=>({...f,count:e.target.value}))}/></label>}</>}
+   {!form.id&&<><label>{tr("Répétition du service","Shift repetition","Ɓeydude golle")}<select aria-label={tr("Répétition du service","Shift repetition","Ɓeydude golle")} value={form.repeat} disabled={busy} onChange={e=>setForm(f=>({...f,repeat:e.target.value as Form["repeat"],rotation:[],count:e.target.value==="once"?"1":"2"}))}><option value="once">{tr("Une fois","Once","Laawol gootol")}</option><option value="daily">{tr("Chaque jour","Daily","Ñalawma kala")}</option><option value="weekly">{tr("Chaque semaine","Weekly","Yontere kala")}</option></select></label>{form.repeat!=="once"&&<label>{tr("Nombre de services","Number of shifts","Limoore golle")}<input required type="number" min="2" max="31" value={form.count} disabled={busy} onChange={e=>setForm(f=>({...f,count:e.target.value}))}/></label>}</>}
+   {!form.id&&form.repeat!=="once"&&form.target&&<fieldset disabled={busy}><legend>{tr("Rotation des collaborateurs","Employee rotation","Gollotooɓe e dow deggondiral")}</legend>
+    {targets.filter(t=>key(t)!==form.target&&t.workstation_id===targets.find(person=>key(person)===form.target)?.workstation_id).map(t=>{
+     const order=(form.rotation??[]).indexOf(t.member_id);
+     return <label key={key(t)}><input type="checkbox" checked={order>=0} onChange={e=>{
+      const checked=e.target.checked;
+      setForm(f=>({...f,rotation:checked?[...(f.rotation??[]),t.member_id]:(f.rotation??[]).filter(id=>id!==t.member_id)}));
+     }}/>{order>=0?(order+2)+". ":""}{t.display_name}</label>;
+    })}
+   </fieldset>}
    <label>{tr("Motif","Reason","Sabu")}<textarea required maxLength={500} value={form.reason} onChange={e=>setForm(f=>({...f,reason:e.target.value}))}/></label>
-   <button className="btn primary" disabled={busy}>{tr("Publier et notifier","Publish and notify","Bayyin e tintin")}</button>
-   {!form.id&&<button type="button" className="btn secondary" disabled={busy||!form.target||!form.start||!form.end} onClick={()=>void saveTemplate()}>{tr("Enregistrer comme modèle","Save as template","Resnu leydi")}</button>}
+   <button className="btn primary" disabled={busy||(form.rotation?.length??0)>=Number(form.count)}>{tr("Publier et notifier","Publish and notify","Bayyin e tintin")}</button>
+   {!form.id&&!form.rotation?.length&&<button type="button" className="btn secondary" disabled={busy||!form.target||!form.start||!form.end} onClick={()=>void saveTemplate()}>{tr("Enregistrer comme modèle","Save as template","Resnu leydi")}</button>}
    {form.id&&<button type="button" className="btn secondary" onClick={()=>setForm(blank())}>{tr("Annuler la modification","Discard changes","Haaytu baylugol")}</button>}
   </form>}
   {loaded&&shifts.length===0&&<p>{tr("Aucun service planifié.","No scheduled shifts.","Alaa golle e feere.")}</p>}
