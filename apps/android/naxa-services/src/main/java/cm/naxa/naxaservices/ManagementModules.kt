@@ -1868,7 +1868,7 @@ fun TeamPerformanceContent(
         it.recordType in setOf("staff_clock_in", "staff_clock_out", "staff_break_start", "staff_break_end")
     }
     val payroll = records.filter {
-        it.recordType in setOf("staff_commission", "staff_advance", "staff_bonus")
+        session.account.roleCode in setOf("promoter","network_manager","site_manager") && it.recordType in setOf("staff_commission", "staff_advance", "staff_bonus")
     }
 
     LazyColumn(modifier.fillMaxSize().padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

@@ -103,8 +103,9 @@ export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
  const correction=counted(a,6,-1);await applied(a,correction);assert.equal((await applied(a,correction)).idempotent,true);
  await denied(b,counted(b,6,-2));const [countedItem]=await rows('ns_inventory_items','id=eq.'+stock+'&select=quantity');assert.equal(Number(countedItem.quantity),5);
  pass('B4 inventory count: atomic comparison, exact retry and stale second-device count denied');
+ const staffIds=[];
  for(const kind of ['staff_commission','staff_advance','staff_bonus']){
-  const id=randomUUID();await applied(a,event(a,kind+'.created',id,document(id,kind,1200,0,'pending_review')));
+  const id=randomUUID();staffIds.push(id);await applied(a,event(a,kind+'.created',id,document(id,kind,1200,0,'pending_review')));
   await denied(a,event(a,kind+'.status_changed',id,transition(id,kind,'pending_review','paid',1)));
   const approve=event(b,kind+'.status_changed',id,transition(id,kind,'pending_review','approved',1));await applied(b,approve);assert.equal((await applied(b,approve)).idempotent,true);
   await denied(a,event(a,kind+'.status_changed',id,transition(id,kind,'pending_review','rejected',1)));
@@ -116,6 +117,24 @@ export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
  await denied(b,event(b,'business_goal.status_changed',goal,transition(goal,'business_goal','open','approved',1,{period_start:'2026-11-28'})));
  const [baseGoal]=await rows('ns_management_records','id=eq.'+goal+'&select=amount_xaf,metadata_json,revision');assert.equal(baseGoal.amount_xaf,25000);assert.equal(baseGoal.metadata_json.period_start,'2026-11-27');assert.equal(baseGoal.revision,1);
  pass('B4 objective: confirmed baseline immutable under attempted mutation');
+ // Same-tenant cashier can operate the site, but cannot see or change variable remuneration.
+ const email='b4-cashier-'+randomUUID()+'@example.test',password='Qa7!'+randomUUID(),loginId='NS-'+randomUUID().replaceAll('-','').slice(0,10).toUpperCase();
+ const user=await success(base+'/auth/v1/admin/users',{email,password,email_confirm:true,app_metadata:{app_code:'naxa-services'}});
+ const [account]=await success(base+'/rest/v1/ns_accounts',{auth_user_id:user.id,login_id:loginId,auth_alias:email,password_change_required:false});
+ const [member]=await success(base+'/rest/v1/ns_members',{org_id:org,account_id:account.id,display_name:'Caissier B4',role_code:'cashier'});
+ await success(base+'/rest/v1/ns_member_scopes',{org_id:org,member_id:member.id,scope_type:'site',scope_id:site,site_id:site,can_read:true,can_operate:true,can_manage:false});
+ const cashier=await login({...f,login:loginId,password,device:{...f.device,installation_id:randomUUID()}});
+ const validCustomer=randomUUID();await applied(cashier,event(cashier,'customer.created',validCustomer,{customer_id:validCustomer,display_name:'Client du caissier B4',contact_consent:false}));
+ const forbidden=randomUUID();await denied(cashier,event(cashier,'staff_commission.created',forbidden,document(forbidden,'staff_commission',100,0,'pending_review')));
+ await denied(cashier,event(cashier,'staff_commission.status_changed',staffIds[0],transition(staffIds[0],'staff_commission','paid','approved',3)));
+ await denied(cashier,counted(cashier,5,-1));
+ const forbiddenGoal=randomUUID();await denied(cashier,event(cashier,'business_goal.created',forbiddenGoal,document(forbiddenGoal,'business_goal',5000)));
+ const direct=await success(base+'/rest/v1/ns_management_records?id=in.('+staffIds.join(',')+')&select=id',undefined,cashier.access_token,anon,'GET');assert.deepEqual(direct,[]);
+ const history=await success(base+'/rest/v1/ns_management_record_events?record_id=in.('+staffIds.join(',')+')&select=id',undefined,cashier.access_token,anon,'GET');assert.deepEqual(history,[]);
+ const sync=await success(base+'/rest/v1/rpc/ns_pull_sync_changes',{p_org_id:org,p_device_id:cashier.device_id,p_after_cursor:0,p_limit:200},cashier.access_token,anon);
+ assert.ok(sync.changes.some(x=>x.aggregate_id===invoice));assert.ok(!sync.changes.some(x=>staffIds.includes(x.aggregate_id)));
+ pass('B4 roles: operating cashier may create customer but cannot count stock, set targets or read/approve remuneration via REST or peer sync');
+
 
 
  const peer=await success(base+'/rest/v1/rpc/ns_pull_sync_changes',{p_org_id:org,p_device_id:a.device_id,p_after_cursor:0,p_limit:200},a.access_token,anon);

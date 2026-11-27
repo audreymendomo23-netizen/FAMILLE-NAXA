@@ -266,8 +266,9 @@ begin
     end if;
     v_metadata:=v_metadata-'paid_xaf';
   end if;
-  if p_record_type in ('staff_commission','staff_advance','staff_bonus') and p_to_status='paid' then
-    v_paid:=v_record.amount_xaf;
+  if p_record_type in ('staff_commission','staff_advance','staff_bonus') then
+    v_metadata:=v_metadata||jsonb_build_object('approved',p_to_status in ('approved','paid'));
+    if p_to_status='paid' then v_paid:=v_record.amount_xaf; end if;
   end if;
   if p_to_status='received' and p_record_type='inventory_transfer' then
     return jsonb_build_object('record_id',p_record_id,'status','received',
@@ -361,4 +362,37 @@ begin
  execute d;
 end;
 $count_patch$;
+-- Pay decisions and amounts must not be projected into a cashier's local journal.
+drop policy if exists ns_management_records_select on public.ns_management_records;
+create policy ns_management_records_select on public.ns_management_records for select to authenticated using (
+ public.ns_can_access_site(org_id,site_id) and
+ (record_type not in ('staff_commission','staff_advance','staff_bonus') or public.ns_can_manage_site(org_id,site_id))
+);
+drop policy if exists ns_management_record_events_select on public.ns_management_record_events;
+create policy ns_management_record_events_select on public.ns_management_record_events for select to authenticated using (
+ public.ns_can_access_site(org_id,site_id) and exists (
+   select 1 from public.ns_management_records r where r.id=record_id
+   and r.org_id=ns_management_record_events.org_id and r.site_id=ns_management_record_events.site_id
+ )
+);
+do $role_patch$
+declare d text; marker text:=$old$if p_action_code = 'loyalty_program.updated' then$old$;
+begin
+ select pg_get_functiondef('public.ns_apply_sync_event(uuid,uuid,uuid,uuid,uuid,bigint,text,text,text,jsonb)'::regprocedure) into d;
+ if (length(d)-length(replace(d,marker,'')))/length(marker)<>1 then raise exception 'NAXA_V23_ROLE_PATCH_DRIFT'; end if;
+ d:=replace(d,marker,$new$if (split_part(p_action_code,'.',1) in ('staff_commission','staff_advance','staff_bonus','business_goal')
+        or (p_action_code in ('inventory_movement.created','inventory_movement.import_adjustment') and p_payload ? 'expected_quantity'))
+       and (p_site_id is null or not public.ns_can_manage_site(p_org_id,p_site_id)) then
+      raise exception 'NAXA_B4_MANAGEMENT_SCOPE_FORBIDDEN';
+    end if;
+    if p_action_code = 'loyalty_program.updated' then$new$);
+ execute d;
+ select pg_get_functiondef('public.ns_pull_sync_changes(uuid,uuid,bigint,integer)'::regprocedure) into d;
+ marker:='and c.source_device_id <> p_device_id';
+ if (length(d)-length(replace(d,marker,'')))/length(marker)<>1 then raise exception 'NAXA_V23_PULL_PATCH_DRIFT'; end if;
+ d:=replace(d,marker,$new$and c.source_device_id <> p_device_id
+    and (c.aggregate_type not in ('staff_commission','staff_advance','staff_bonus') or public.ns_can_manage_site(p_org_id,c.site_id))$new$);
+ execute d;
+end;
+$role_patch$;
 rollback;
