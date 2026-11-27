@@ -331,6 +331,14 @@ begin
   return jsonb_build_object('updated',true);
  when 'profile' then
   return jsonb_build_object('display_name',a.display_name,'login_id',a.login_id,'locale',a.locale,'onboarding_step',a.onboarding_step,'workspace_name',w.name,'workspace_kind',w.kind,'role',v_role);
+
+ when 'dashboard-identity' then
+  return jsonb_build_object(
+   'pending_invitation_count',(select count(*) from public.wm_membership_invites i join public.wm_workspaces x on x.id=i.workspace_id and x.enabled join public.wm_memberships m on m.account_id=i.sender_id and m.workspace_id=i.workspace_id and m.enabled join public.wm_accounts c on c.id=m.account_id and c.enabled where i.target_id=a.id and i.status='pending' and i.expires_at>clock_timestamp() and (m.role='promoteur' or (m.role='manager' and i.role='staff'))),
+   'favorite_count',(select count(*) from public.wm_favorites f join public.wm_memberships m on m.workspace_id=f.workspace_id and m.account_id=f.contact_id and m.enabled join public.wm_accounts c on c.id=m.account_id and c.enabled where f.account_id=a.id and f.workspace_id=w.id),
+   'group_count',(select count(*) from public.wm_contact_groups g where g.account_id=a.id and g.workspace_id=w.id),
+   'team_count',case when v_role='promoteur' then (select count(*) from public.wm_memberships m join public.wm_accounts c on c.id=m.account_id and c.enabled where m.workspace_id=w.id and m.enabled and m.role in ('manager','staff'))
+    when v_role='manager' then (select count(*) from public.wm_manager_assignments ma join public.wm_memberships m on m.workspace_id=ma.workspace_id and m.account_id=ma.staff_id and m.enabled and m.role='staff' join public.wm_accounts c on c.id=m.account_id and c.enabled where ma.workspace_id=w.id and ma.manager_id=a.id) else null end);
  when 'profile-update' then
   v_name:=btrim(p_data->>'display_name');
   if v_name is null or length(v_name) not between 1 and 120 or p_data->>'locale' not in ('fr','en') or p_data->>'locale' is null then return null;end if;
