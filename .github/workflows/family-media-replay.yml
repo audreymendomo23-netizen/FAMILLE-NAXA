@@ -24,7 +24,10 @@ jobs:
       - name: Prepare pinned test dependencies
         run: |
           npm install --no-save --no-package-lock --no-audit --no-fund livekit-client@2.25.0 livekit-server-sdk@2.20.1 ws@8.18.3 @playwright/test@1.56.1
-          npx playwright install --with-deps chromium
+          # NAXA Replay already uses the hosted Ubuntu Chromium system libraries.
+          # Keep the pinned Playwright version; check the actual browser before SFU.
+          npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream"]}); try { const p=await b.newPage(); await p.goto("about:blank"); console.log("WIDEMEET_SFU_CHROMIUM_READY"); } finally { await b.close(); }'
       - name: Start disposable SFU bound to loopback
         run: |
           set -euo pipefail
@@ -75,8 +78,12 @@ jobs:
           set -a; source "$RUNNER_TEMP/wm-media.env"; set +a
           [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client
+          # Same preinstalled-client strategy as NAXA SERVICES technical gate.
+          if ! command -v psql >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y postgresql-client
+          fi
+          psql --version
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n1_identity.sql"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n2_n3_rooms.sql"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n1_billing.sql"
