@@ -51,7 +51,7 @@ internal fun ZippleAttendance(api:ZippleBusiness,session:Session,site:String,en:
  var action by remember{mutableStateOf("clock_in")}
  var pending by remember{mutableStateOf<JSONObject?>(null)}
  suspend fun load(){data=api.call(session,site,"attendance_snapshot") as? JSONObject}
- fun label(v:String)=if(v=="clock_in")tr("Prise de service","Start shift")else tr("Fin de service","End shift")
+ fun label(v:String)=when(v){"clock_in"->tr("Prise de service","Start shift");"break_start"->tr("Début de pause","Start break");"break_end"->tr("Fin de pause","End break");else->tr("Fin de service","End shift")}
  fun submit(){if(busy)return;busy=true;message="";scope.launch{
   try{
    val old=pending
@@ -73,7 +73,9 @@ internal fun ZippleAttendance(api:ZippleBusiness,session:Session,site:String,en:
  data?.let{r->
   Text(if(r.optBoolean("on_shift"))if(r.optBoolean("on_this_site"))tr("Service en cours","Shift active")else tr("Service ouvert dans un autre établissement","Shift active at another site")else tr("Hors service","Off duty"))
   Button(enabled=!busy&&!r.optBoolean("on_shift"),onClick={request("clock_in")}){Text(label("clock_in"))}
-  Button(enabled=!busy&&r.optBoolean("on_this_site"),onClick={request("clock_out")}){Text(label("clock_out"))}
+  Button(enabled=!busy&&r.optBoolean("on_this_site")&&!r.optBoolean("on_break"),onClick={request("break_start")}){Text(label("break_start"))}
+  Button(enabled=!busy&&r.optBoolean("on_break"),onClick={request("break_end")}){Text(label("break_end"))}
+  Button(enabled=!busy&&r.optBoolean("on_this_site")&&!r.optBoolean("on_break"),onClick={request("clock_out")}){Text(label("clock_out"))}
   Text(tr("Mes pointages récents","My recent attendance"))
   r.rows("mine").forEach{x->Text(label(x.optString("event_type"))+" · "+x.optString("recorded_at")+" · "+x.optString("latitude")+", "+x.optString("longitude")+" (±"+x.optString("accuracy_m")+" m)")}
   if(r.optBoolean("can_manage")){Text(tr("Pointages récents de l’équipe","Recent team attendance"));r.rows("team").forEach{x->Text(x.optString("login_id")+" · "+label(x.optString("event_type"))+" · "+x.optString("recorded_at")+" · "+x.optString("latitude")+", "+x.optString("longitude")+" (±"+x.optString("accuracy_m")+" m)")}}

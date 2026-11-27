@@ -667,3 +667,6 @@ Preuve lue sur c061a74 : run 45974386935 job 140422366599 : 46 tests, 46 réussi
 | ea39b41 | ZIPPLE — Cloudflare Pages build qualification | [45973990373](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990373) | success |
 
 Aucune modification de main, des applications sœurs ou de production. Reprise sur les runs en attente et les écarts ci-dessus.
+
+### RH et pointage — extension
+Ajout de la séquence GPS prise de service/pause/reprise/fin, sans GPS permanent; congés/absences avec contrôle de chevauchement, primes, commissions et avances soumises et approuvées avec motif et audit append-only. Aucun paiement automatique, aucune paie fiscale inventée. Écran Web et Compose, accès propre au membre, gestion absences manager, validation financière promoteur, SQL et garde RLS. Qualification à constater.

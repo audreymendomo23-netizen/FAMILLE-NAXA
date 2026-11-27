@@ -9,13 +9,14 @@ import org.json.JSONObject
 import java.time.LocalDateTime
 import java.time.ZoneId
 internal data class PortalPage(val id:String,val fr:String,val en:String,val manager:Boolean)
-internal val portalPages=listOf(PortalPage("profile","Profil","Profile",false),PortalPage("tickets","Support professionnel","Professional support",false),PortalPage("notifications","Notifications","Notifications",false),PortalPage("team","Équipe","Team",true),PortalPage("planning","Plannings","Schedules",false),PortalPage("objectives","Objectifs","Objectives",false),PortalPage("training","Formation","Training",false),PortalPage("incidents","Feedback interne","Internal feedback",false),PortalPage("intelligence","ZIPPLE Intelligence","ZIPPLE Intelligence",true))
+internal val portalPages=listOf(PortalPage("hr","Absences et rémunérations","Leave and compensation",false),PortalPage("profile","Profil","Profile",false),PortalPage("tickets","Support professionnel","Professional support",false),PortalPage("notifications","Notifications","Notifications",false),PortalPage("team","Équipe","Team",true),PortalPage("planning","Plannings","Schedules",false),PortalPage("objectives","Objectifs","Objectives",false),PortalPage("training","Formation","Training",false),PortalPage("incidents","Feedback interne","Internal feedback",false),PortalPage("intelligence","ZIPPLE Intelligence","ZIPPLE Intelligence",true))
 @Composable private fun PortalSelect(label:String,options:List<Pair<String,String>>,value:String,enabled:Boolean,change:(String)->Unit){
  var open by remember{mutableStateOf(false)}
  Box{OutlinedButton(enabled=enabled&&options.isNotEmpty(),onClick={open=true}){Text(label+" : "+(options.find{it.first==value}?.second?:"—"))}
  DropdownMenu(expanded=open,onDismissRequest={open=false}){options.forEach{(id,name)->DropdownMenuItem(text={Text(name)},onClick={change(id);open=false})}}}
 }
 @Composable internal fun ZipplePortalWorkspace(api:ZippleBusiness,session:Session,site:String,en:Boolean,page:String){
+ if(page=="hr"){ZippleHrWorkspace(api,session,site,en);return}
  val t:(String,String)->String={fr,eng->if(en)eng else fr}
  val spec=portalPages.first{it.id==page};val scope=rememberCoroutineScope();val keys=remember{RequestKeys()}
  var data by remember{mutableStateOf<JSONObject?>(null)};var values by remember{mutableStateOf<Map<String,String>>(emptyMap())}

@@ -79,7 +79,7 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
     if(canManage)for(page in commercePages)OutlinedButton(onClick={tab=page.id}){Text(if(en)page.en else page.fr)}
     when(tab){
         "loyalty","delivery","connections"->{if(canManage)key(session.member,site,tab){ZippleCommerceWorkspace(api,session,site,en,tab)}}
-        "profile","tickets","notifications","team","planning","objectives","training","incidents","intelligence"->{key(session.member,site,tab){ZipplePortalWorkspace(api,session,site,en,tab)}}
+        "hr","profile","tickets","notifications","team","planning","objectives","training","incidents","intelligence"->{key(session.member,site,tab){ZipplePortalWorkspace(api,session,site,en,tab)}}
         "split"->{key(session.member,site){ZippleNativeSplitBill(api,session,site,en)}}
         "stations"->{key(session.member,site){ZippleNativeStations(api,session,site,en)}}
         "offline_review"->{key(session.member,site){ZippleNativeOfflineReview(api,session,site,en)}}

@@ -1,10 +1,12 @@
 import React,{useEffect,useRef,useState} from "react";
+import {HrWorkspace} from "./HrWorkspace";
 import {PilotageWorkspace} from "./PilotageWorkspace";
-export const portalPages=[{"id":"profile","fr":"Profil","en":"Profile","manager":false},{"id":"tickets","fr":"Support professionnel","en":"Professional support","manager":false},{"id":"notifications","fr":"Notifications","en":"Notifications","manager":false},{"id":"team","fr":"Équipe","en":"Team","manager":true},{"id":"planning","fr":"Plannings","en":"Schedules","manager":false},{"id":"objectives","fr":"Objectifs","en":"Objectives","manager":false},{"id":"training","fr":"Formation","en":"Training","manager":false},{"id":"incidents","fr":"Feedback interne","en":"Internal feedback","manager":false},{"id":"intelligence","fr":"ZIPPLE Intelligence","en":"ZIPPLE Intelligence","manager":true}];
+export const portalPages=[{"id":"hr","fr":"Absences et rémunérations","en":"Leave and compensation","manager":false},{"id":"profile","fr":"Profil","en":"Profile","manager":false},{"id":"tickets","fr":"Support professionnel","en":"Professional support","manager":false},{"id":"notifications","fr":"Notifications","en":"Notifications","manager":false},{"id":"team","fr":"Équipe","en":"Team","manager":true},{"id":"planning","fr":"Plannings","en":"Schedules","manager":false},{"id":"objectives","fr":"Objectifs","en":"Objectives","manager":false},{"id":"training","fr":"Formation","en":"Training","manager":false},{"id":"incidents","fr":"Feedback interne","en":"Internal feedback","manager":false},{"id":"intelligence","fr":"ZIPPLE Intelligence","en":"ZIPPLE Intelligence","manager":true}];
 type Props={page:string;call:(a:string,b?:Record<string,unknown>)=>Promise<any>;en:boolean;online:boolean};
 const kinds:Record<string,string>={tickets:"ticket",planning:"shift",objectives:"objective",training:"training",incidents:"incident"};
 const localDate=(v:string)=>v?new Date(v+":00+01:00").toISOString():null;
-export function PortalWorkspace({page,call,en,online}:Props){
+export function PortalWorkspace(props:Props){return props.page==="hr"?<HrWorkspace {...props}/>:<StandardPortal {...props}/>}
+function StandardPortal({page,call,en,online}:Props){
  const t=(fr:string,eng:string)=>en?eng:fr;const spec=portalPages.find(x=>x.id===page)!;
  const [d,D]=useState<any>(null),[busy,B]=useState(false),[err,E]=useState(""),[notice,N]=useState("");
  const [v,V]=useState<Record<string,string>>({}),[selected,S]=useState(""),[reply,R]=useState("");

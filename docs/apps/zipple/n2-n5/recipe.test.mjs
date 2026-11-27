@@ -720,6 +720,7 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  await assert.rejects(clock(a.access,b.site,uid(),"clock_out"),/DENIED/);
  assert.equal((await scalar("select zp_attendance_snapshot($1,$2)",[a.access,a.site])).on_this_site,true);
  assert.equal((await scalar("select zp_attendance_snapshot($1,$2)",[b.access,b.site])).team.length,0);
+ await clock(a.access,a.site,uid(),"break_start");assert.equal((await scalar("select zp_attendance_snapshot($1,$2)",[a.access,a.site])).on_break,true);await assert.rejects(clock(a.access,a.site,uid(),"clock_out"),/ATTENDANCE_TRANSITION/);await assert.rejects(clock(a.access,a.site,uid(),"break_start"),/ATTENDANCE_TRANSITION/);await clock(a.access,a.site,uid(),"break_end");assert.equal((await scalar("select zp_attendance_snapshot($1,$2)",[a.access,a.site])).on_break,false);
  await clock(a.access,a.site,uid(),"clock_out");assert.equal((await scalar("select zp_attendance_snapshot($1,$2)",[a.access,a.site])).on_shift,false);
  console.log("ZIPPLE_BULK5_ATTENDANCE_GPS_SCOPE_IDEMPOTENCE_PASS");
  console.log("ZIPPLE_N5_PROCUREMENT_AND_INVENTORY_PASS");
@@ -897,6 +898,15 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  assert.equal((await scalar("select zp_connection_snapshot($1,$2,'connections')",[loy.access,loy.site])).rows[0].state,"cancelled");
  await assert.rejects(scalar("select zp_connection_snapshot($1,$2,'connections')",[a.access,loy.site]),/DENIED/);
  console.log("ZIPPLE_BULK4_LOYALTY_REVERSAL_AND_CONNECTION_SETUP_PASS");
+ }
+ {
+ const hr=(act,p,key=uid(),who=a)=>scalar("select zp_hr_write($1,$2,$3,$4,$5)",[who.access,who.site,act,key,JSON.stringify(p)]);
+ const payload={kind:"absence",member_id:a.member,from_day:"2027-02-01",to_day:"2027-02-03",reason:"Congé demandé"},key=uid(),absence=await hr("submit",payload,key);
+ assert.deepEqual(await hr("submit",payload,key),absence);await assert.rejects(hr("submit",payload),/ABSENCE_OVERLAP/);
+ await hr("decide",{id:absence.id,decision:"approved",reason:"Planning vérifié"});await assert.rejects(hr("decide",{id:absence.id,decision:"rejected",reason:"Déjà validé"}),/INVALID_TRANSITION/);
+ for(const kind of ["bonus","commission","advance"]){const item=await hr("submit",{...payload,kind,amount_xaf:5000});await hr("decide",{id:item.id,decision:"approved",reason:"Montant contrôlé"});}
+ const snap=await scalar("select zp_hr_snapshot($1,$2)",[a.access,a.site]);assert.equal(snap.rows.filter(x=>x.state==="approved").length,4);await assert.rejects(scalar("select zp_hr_snapshot($1,$2)",[b.access,a.site]),/DENIED/);
+ console.log("ZIPPLE_BULK5_HR_APPROVAL_AND_GPS_BREAK_PASS");
  }
  assert.equal(await scalar("select count(*)::int from pg_tables where schemaname='public' and tablename like 'zp_%' and not rowsecurity"),0);
  assert.equal(await scalar("select has_function_privilege('authenticated','public.zp_confirm_subscription(uuid,text,text,integer,text)','execute')"),false);
