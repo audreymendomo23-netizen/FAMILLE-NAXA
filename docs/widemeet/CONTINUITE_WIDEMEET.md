@@ -425,3 +425,38 @@ Périmètre exclusif WideMeet CDC v1; extension entreprise B7–B12 différée. 
 - Dernières jauges strictes documentaires par chantier: B1 7/7 isolé (100%), B2 6,5/9 (72,2%), B3 3/7 (42,9%), B4 3,5/7 (50%), B5 3,5/6 (58,3%), B6 6,5/10 (65%). Aucun changement de score faute de preuve exhaustive sur les nouvelles révisions; ne pas les agréger en un taux de livraison. 315 IDs répartis (46 actions + 269 recettes), pas 315 clos. Nécessité de consolider les branches et de requalifier un SHA intégré. Aucun nouveau résultat CI revendiqué sans run identifié.
 
 Suivi immédiat des nouveaux commits : B2 [46063525695](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46063525695) QUEUED; B3 [46063424469](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46063424469) Gate QUEUED et [46063424379](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46063424379) Audio IN_PROGRESS; B4 [46063530202](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46063530202) QUEUED. Vague 06 : filtre push ne couvrait pas les sources Android/Web/SQL/Edge, donc aucun run sur 536330d; correctif de déclenchement isolé [a0d0432](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/commit/a0d0432f2e4d9a4cdc440c4ad6d07f03f4f40bfb), nouveau run pas encore observé. Aucun résultat terminal revendiqué pour ces nouveaux SHA.
+
+
+## 27/11/2026 — Audit contradictoire de réalignement, référence anti-régression
+Périmètre WideMeet v1 exclusivement. Révision commune auditée 8f27565b9ed63c11cfb275280f8db2e1ad828e66. L'historique reste intact. Ce rapport prime sur les interprétations de jauges, sans modifier les sources métier. Pas de fusion, réécriture de branche, main, déploiement ni migration.
+### Jauges : distinguer les dénominateurs
+- Tableau 0963b91 : 6 + 4 + 1,5 + 5,5 + 2,5 + 5,5 = 25/46 = 54,35 %, et non 24,5/46. B4 ancien 5,5/7 = 78,6 % socle; B4 strict 3,5/7 = 50 %, non comparables et aucune suppression déduite.
+- Derniers scores documentaires séparés : B1 7/7; B2 6,5/9; B3 3/7; B4 3,5/7 strict; B5 3,5/6; B6 6,5/10. Somme 30/46 = 65,2 %, identique au rapport pondéré historique retrouvé. Indicateur hybride documentaire, pas taux de livraison intégrée. Ne pas faire varier les barèmes sans une matrice de correspondance. Couverture produit unifié non calculée.
+### Preuves de divergence Git (ahead/behind depuis la base commune)
+| Candidat | SHA | Avance/retard |
+|---|---|---|
+| B1 propriétaire | d37314c1b2469693fe228d394ea26291dc632910 | 17/68 |
+| B2 métier | 2c4ae7c91a169e72d5974e643fe8583f823dcadf | 9/9 |
+| B3 métier | 3adea3c56d9bbdada523b17977d572a87eb3d814 | 50/69 |
+| B4 métier | a7a0a54f459e78614ebf609c64dbe7244be28f6a | 11/9 |
+| B5/B6 métier | 57f0201c4d283323982067ea3f586e75e026e69c | 67/70 |
+| B6 propriétaire | 120667064b84dff4fdfe95ff9168d6004ce85f26 | 46/70 |
+| V06 | a0d0432f2e4d9a4cdc440c4ad6d07f03f4f40bfb | 8/9 |
+| V07 | 183ee2a87bf4ce0ba7c6f180b6b21d3c83f3efb9 | 6/9 |
+Tous divergent, comptes de commits incluant la documentation. Conserver les branches propriétaires, notamment B4 4a52d5e et B6-campaign2 4a9b6c3, et comparer aussi les variantes secondaires avant consolidation.
+### Contradictions code constatées, pas pertes historiques démontrées
+- WorkspaceCenters.tsx commun af20a08 : pas de reply_to/next_before; SQL commun 73fbe5a contient ces marqueurs. Candidat B2 UI 84f6279 contient réponse/pagination mais pas center-periodic-; B4 UI ff67cc2 contient bilans périodiques mais pas réponse/pagination. SQL B2 435fa36, B4 c5b999f : composition ciblée requise. Contrôler aussi Compose et Edge.
+- B3 Web d56a994 et SQL ea5a85b contiennent sélection source, recherche, annotations humaines et RPC draft-review/speaker-review; commun c3ba2a6/d934710 et V06 3c159c3/d934710 ne contiennent pas ces marqueurs. Ne pas écraser le B3 propriétaire par la variante de vague.
+- B4 propriétaire SQL widemeet_n4_reports.sql 87c805f2ad62 (abstention/absolute_majority), candidat B4 et commun 54b0f26eac9d (marqueurs absents). Les bilans périodiques ne remplacent pas le reporting, présence, votes et XLSX du propriétaire.
+- B5/B6 SupportCenter.tsx 29c2d2b, support SQL 1a3971f : catégories privacy_access/rectify/erase, reviewers, événements immuables; commun e589ee5/5b9856d sans ces marqueurs. B5 spécialisé comporte aussi RecoveryKey, SupportRecoveryReview, SupportMediaPanel et tests spécifiques : réintégrer sans ouvrir accès aux minutes.
+- B6 propriétaire : widemeet_b6_device_lease.sql 2b4db2df3191 et packages/media-core/widemeet-b6-backup.mjs 88b3090be206 présents; les deux chemins retournent 404 sur SHA commun. Ne pas confondre demande de droits B5/B6 et restauration/exclusivité B6. Les preuves historiques Storage/SQL restent attachées au SHA d'origine.
+### Contrôle direct des sept JSON du registre
+SHA des vagues : 5fc10aa, c409239, 309e33e, 82640a3, b6efc77, a0d0432, 183ee2a. Correspondance exacte avec les 315 IDs du registre canonique (blob 9b14cf566d2f9fff4406931c9757589367447008) : 315/315 uniques, 0 doublon, 0 absent, 0 supplémentaire. Recettes avec au moins un marqueur configuré par vague : 33/44, 19/42, 11/42, 8/43, 12/44, 11/41, 0/13; total 94/269, 175 sans marqueur. Une seule recette a complete:true dans les JSON, ce champ est une configuration et non une preuve terminale. Ne pas assimiler 315/315 répartis ou 94/269 mappés à une couverture qualifiée. La liste des recettes historiques spécialisées reste à rapprocher des IDs.
+### Relevé CI direct
+- B3 3adea3c Gate 46063424469 5/5, Audio 46063424379 1/1 SUCCESS. Job 140722898725 confirme archive cues, source-bound selective draft et annotations anonymes avec révision et contrôle d'accès; pas de diarisation automatique.
+- B2 2c4ae7c run 46063525695 : 8 SUCCESS, Android actif, synthèse non encore soumise. Replay 140723234348 PASS pagination, réponse privée et refus référence interdite, groupe mention/signalement, lecture explicite. 
+- B4 a7a0a54 run 46063530202 : 6 SUCCESS, 2 FAILURE, audio actif, synthèse non soumise. Replay 140723249030 HTTP 403 /identity scope à replay.mjs:774 sur center-periodic-list avec hs.access_token après case hebdomadaire confirmée navigateur; cause exacte à établir (session API distincte à vérifier, ne pas élargir ACL). Android 140723249066 NPE Gradle ModuleVersionResolveException.getMessage, cause dépendance initiale masquée; aucune erreur Kotlin prouvée sur ce run.
+- B5/B6 57f0201 Gate 46061725015 5/5, Replay 46061725044 1/1 SUCCESS. Job 140717338094 confirme reviewer dédié, historique immuable, révocation, trois demandes et refus tiers. Ne pas redévelopper ce périmètre comme absent.
+- V06 a0d0432 46063601043 : 8 SUCCESS, Android actif, synthèse non soumise. Le déclenchement source est prouvé; pas de vert global anticipé.
+### Méthode de réalignement avant nouveau développement
+Créer une branche d'intégration non-main dédiée à partir du socle commun figé, inventaire des commits fonctionnels par propriétaire, fusion à trois voies ou portage des hunks avec contrôle des doublons; préserver les tests négatifs, ACL/RLS, imports, signatures RPC, schémas, parité Web/Compose et workflows. Interdire les remplacements entiers de fichiers concurrents. Relier chaque ID au SHA + run/job/assertion + plateforme + résultat; états distincts présent/partiel/qualifié isolé/qualifié intégré/absence prouvée. Rejouer la matrice sur un même SHA intégré avant nouvelle jauge de livraison. Ce rapport ne prétend pas avoir effectué l'intégration ni audit exhaustif de toutes les lignes, des artefacts ou des appareils physiques.
