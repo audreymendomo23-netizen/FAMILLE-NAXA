@@ -13,7 +13,7 @@ function projection(room:any,actor:any){
  const self=room.participants.find((p:any)=>p.memberId===actor.memberId&&!p.excluded);
  if(!self)throw Error("forbidden");
  const admitted=self.response==="accepted";
- const result={id:room.id,title:room.title,description:room.description,hostId:room.hostId,status:room.status,revision:room.revision,scheduledMs:room.scheduledMs,durationMinutes:room.durationMinutes,endMs:room.endMs??null,response:self.response,cancelled:room.cancelled===true,admissionLocked:room.admissionLocked===true,serverNowMs:Date.now(),recording:admitted?room.recording:"off",participants:admitted?room.participants.filter((p:any)=>!p.excluded).map((p:any)=>({memberId:p.memberId,response:p.response,hand:p.hand===true,mic:p.mic===true,screen:p.screen===true})):[],events:admitted?room.events.filter((e:any)=>["chat","reaction"].includes(e.action)||e.action==="private_chat"&&(e.actor===actor.memberId||JSON.parse(e.payload)[1]===actor.memberId)).slice(-100).map((e:any)=>({id:e.id,actor:e.actor,action:e.action,target:e.action==="private_chat"?JSON.parse(e.payload)[1]:null,value:JSON.parse(e.payload)[2],at:e.at})):[],polls:admitted?room.polls.map((p:any)=>pollSummary(p,actor.memberId)):[]};
+ const result={id:room.id,title:room.title,description:room.description,hostId:room.hostId,status:room.status,revision:room.revision,scheduledMs:room.scheduledMs,durationMinutes:room.durationMinutes,endMs:room.endMs??null,response:self.response,cancelled:room.cancelled===true,admissionLocked:room.admissionLocked===true,serverNowMs:Date.now(),recording:admitted?room.recording:"off",recordingPaused:admitted&&room.recordingPaused===true,participants:admitted?room.participants.filter((p:any)=>!p.excluded).map((p:any)=>({memberId:p.memberId,response:p.response,hand:p.hand===true,mic:p.mic===true,screen:p.screen===true})):[],events:admitted?room.events.filter((e:any)=>["chat","reaction"].includes(e.action)||e.action==="private_chat"&&(e.actor===actor.memberId||JSON.parse(e.payload)[1]===actor.memberId)).slice(-100).map((e:any)=>({id:e.id,actor:e.actor,action:e.action,target:e.action==="private_chat"?JSON.parse(e.payload)[1]:null,value:JSON.parse(e.payload)[2],at:e.at})):[],polls:admitted?room.polls.map((p:any)=>pollSummary(p,actor.memberId)):[]};
  // Do not return raw receipts, votes, consent ledger, or provider recording state.
  return result;
 }
@@ -91,6 +91,7 @@ Deno.serve(async request=>{
  if(action==="command"){
  const command={roomId:p_room,requestId:b.request_id,expectedRevision:b.expected_revision,action:b.action,target:b.target,value:b.value};
  if(command.action==="invite_member"&&!uuid.test(command.target??""))return send(400,{error:"invalid_invitees"});
+ if(command.action==="record"&&command.value===true&&Deno.env.get("WM_RECORDING_QUALIFIED")==="true"){const status=await rpc("wm_recording_status",{p_hash,p_room});if(["starting","active","stopping"].includes(status?.phase))return send(409,{error:"recording_busy"});}
  const next=applyRoom(room,actor,command,now);
  if(!next.replayed&&await rpc("wm_room_write",{p_hash,p_room,p_expected:room.revision,p_role:actor.role,p_plan:actor.plan,p_state:next.room})!==true)return send(409,{error:"revision_or_scope_changed"});
  return send(200,await project(next.room,actor,p_hash));
