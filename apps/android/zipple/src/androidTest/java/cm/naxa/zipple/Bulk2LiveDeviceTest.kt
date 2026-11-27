@@ -180,9 +180,11 @@ class Bulk2LiveDeviceTest {
    val rooms=business.call(session,site,"floor_snapshot") as JSONObject
    val zone=rooms.rows("zones").single{it.optString("name")=="Salle native test"}
    val table=rooms.rows("tables").single{it.optString("label")=="Table QR native"}
-   assertEquals(zone.getString("id"),table.getString("zone_id"));assertEquals(6,table.getInt("seats"))
-   assertTrue(rooms.rows("reservations").any{it.optString("guest_name")=="Réservation native"&&it.optString("state")=="cancelled"})
-   assertFalse(rooms.rows("waitlist").any{it.optString("guest_name")=="Attente native"})
+   assertEquals("persisted table zone",zone.getString("id"),table.getString("zone_id"));assertEquals("persisted seating capacity",6,table.getInt("seats"))
+   assertTrue("cancelled booking must persist",rooms.rows("reservations").any{it.optString("guest_name")=="Réservation native"&&it.optString("state")=="cancelled"})
+   assertFalse("cancelled waiting entry must disappear",rooms.rows("waitlist").any{it.optString("guest_name")=="Attente native"})
+   assertTrue("seated booking must persist",rooms.rows("reservations").any{it.optString("guest_name")=="Accueil natif"&&it.optString("state")=="seated"})
+   assertFalse("seated waiting entry must disappear",rooms.rows("waitlist").any{it.optString("guest_name")=="Installation native"})
   }}
   android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_FLOOR_RESERVATIONS_WAITLIST_PASS")
   click("Fidélité et parrainage");awaitText("Points non monétaires ; avantages sur commande ultérieure réglée.")
