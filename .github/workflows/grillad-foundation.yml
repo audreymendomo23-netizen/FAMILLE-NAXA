@@ -94,7 +94,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [business, attendance, lifecycle]
+        suite: [business, attendance, lifecycle, backup]
     name: server (${{ matrix.suite }})
     runs-on: ubuntu-24.04
     services:
@@ -143,7 +143,11 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_security_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_push_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_prediction_v1.sql
-          psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_auth_bridge_assertions.sql
+          if [ '${{ matrix.suite }}' = backup ]; then
+            bash scripts/grillad/backup-restore-drill.sh
+          else
+            psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_auth_bridge_assertions.sql
+          fi
   api-contracts:
     name: lot-01 (50 API contracts)
     runs-on: ubuntu-24.04
