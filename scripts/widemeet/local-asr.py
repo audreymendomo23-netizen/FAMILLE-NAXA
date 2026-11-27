@@ -6,9 +6,9 @@ def main():
     global STAGE
     from faster_whisper import WhisperModel
     STAGE = "input"
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != "translate"):
         raise ValueError("local model and audio required")
-    model_path, audio_path = map(Path, sys.argv[1:])
+    model_path, audio_path = map(Path, sys.argv[1:3])
     if not model_path.is_dir() or not audio_path.is_file():
         raise FileNotFoundError("local input missing")
     for name in ("config.json", "model.bin", "tokenizer.json", "vocabulary.txt"):
@@ -17,7 +17,7 @@ def main():
     STAGE = "model"
     model = WhisperModel(str(model_path), device="cpu", compute_type="int8", cpu_threads=2, local_files_only=True)
     STAGE = "decode"
-    segments, info = model.transcribe(str(audio_path), beam_size=3, vad_filter=True, condition_on_previous_text=False)
+    segments, info = model.transcribe(str(audio_path), beam_size=3, vad_filter=True, condition_on_previous_text=False, task="translate" if len(sys.argv) == 4 else "transcribe")
     duration = round(info.duration * 1000)
     if not 1 <= duration <= 7200000:
         raise ValueError("audio duration unsupported")

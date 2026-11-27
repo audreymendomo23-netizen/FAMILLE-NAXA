@@ -1,0 +1,9 @@
+# B3 — Revue sélective sourcée
+Sur base propriétaire qualifiée c6a273e : sélection humaine de 1 à 10 extraits, vérification serveur des indices uniques issus de la revue réellement autorisée, citations intactes et retour non approuvé. Web et Compose connectés à l'API, contrôles de source, limite de 8000 caractères du brouillon, aucun auto-publish ni création automatique de tâches. Replay réel de l'audio capturé, refus invités et indices invalides. Ne constitue pas une diarisation ou synthèse générative. Qualification en cours. Aucun main, migration hébergée ou déploiement.
+
+### B3.3 — Correction humaine de locuteurs anonymes
+Base 07f31d4 qualifiée 6/6 avec preuve selected-source. Nouvelle annotation par segment : 0 inconnu ou locuteur anonyme 1–10, aucun nom/identité, révision optimiste, journal borné à 1000 événements dans le job ASR (même rétention), idempotence et refus invité. Texte source intact, sélection de brouillon retourne annotation courante séparée et explicitement humaine. Web/Compose et recette audio réelle enrichis. Diarisation automatique, association biométrique, texte corrigé et corpus voix restent ouverts; pas de mise à jour silencieuse des brouillons existants. Aucun main, migration hébergée ni déploiement.
+
+
+### 27/11/2026 — Sélection libre des extraits d'origine
+Extension métier B3 sur le candidat 58b73b0d33aca054f5878b6c19809ca59b0db4f1: chaque segment original peut être sélectionné dans Web et Compose, en complément des suggestions extractives. Maximum dix indices uniques; la RPC relit les segments canoniques du même enregistrement autorisé, conserve l'ordre source, les annotations humaines et approved:false; refus des indices invalides, doublons, dépassement et invités. Le client vérifie la correspondance exacte des indices avant insertion. Replay média étendu, non encore qualifié sur ce candidat. Aucune diarisation automatique, synthèse générative ou traduction live revendiquée. Pas de main ni production.
