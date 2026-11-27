@@ -6,7 +6,8 @@ import {join} from "node:path";
 import {tmpdir} from "node:os";
 import {createWideMeetRecordingStorage} from "../../packages/media-core/widemeet-recording-storage.mjs";
 import {createWideMeetAudioPurge} from "../../packages/media-core/widemeet-b6-audio-purge.mjs";
-import {sealArchive,restoreArchive} from "../../packages/media-core/widemeet-b6-backup.mjs";
+import {sealArchive} from "../../packages/media-core/widemeet-b6-backup.mjs";
+import {restoreEligibleAudio} from "../../packages/media-core/widemeet-b6-restore-guard.mjs";
 const base=process.env.SUPABASE_URL,serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY,anon=process.env.SUPABASE_ANON_KEY;
 assert.equal(base,"http://127.0.0.1:54321");assert.ok(serviceKey&&anon&&process.env.WM_B6_ISOLATED==="true");
 const root=await mkdtemp(join(tmpdir(),"wm-b6-storage-"));
@@ -36,9 +37,12 @@ try{
  const eligible=candidates.filter(r=>Date.parse(r.finished_at)>Date.now()-90*86400000);
  assert.deepEqual(eligible.map(r=>r.id),[fresh.id]);
  const response=await get(freshKey);assert.ok(response.ok);
- const key=randomBytes(32),archive=sealArchive([{path:freshKey,bytes:Buffer.from(await response.arrayBuffer())}],key);
+ const key=randomBytes(32),archive=sealArchive([{path:freshKey,bytes:Buffer.from(await response.arrayBuffer())},{path:oldKey,bytes}],key); // historical archive deliberately contains expired material
  const backupPath=join(root,"backup.enc");await writeFile(backupPath,archive,{mode:0o600});
  const purge=createWideMeetAudioPurge({supabaseUrl:base,serviceKey,outputDirectory:root,storage,isolated:true});
+ const interrupted=createWideMeetAudioPurge({supabaseUrl:base,serviceKey,outputDirectory:root,storage:{removeVerified:async()=>{throw Error("synthetic interruption before delete")}},isolated:true});
+ await assert.rejects(interrupted.runOnce(),/synthetic interruption/);
+ const [pending]=await call("/rest/v1/wm_recording_runs?id=eq."+old.id);assert.equal(pending.phase,"discarded");assert.ok(pending.purge_requested_at);assert.equal(pending.purged_at,null);assert.equal((await get(oldKey)).ok,true);
  assert.deepEqual(await purge.runOnce(),{claimed:true,purged:true});
  assert.deepEqual(await purge.runOnce(),{claimed:false});
  assert.equal((await get(oldKey)).ok,false);
@@ -50,10 +54,12 @@ try{
  console.log("PASS B6 real Storage purge, local deletion, transcript removal, idempotence and fresh content preserved");
  // Simulate loss of the eligible private object; restore only authenticated backup entries.
  await storage.removeVerified(freshKey);assert.equal((await get(freshKey)).ok,false);
- const restored=await restoreArchive(await readFile(backupPath),key,root);
- assert.equal(restored.restored,1);
- const restoredBytes=await readFile(join(restored.root,freshKey));
- assert.equal(await storage.put(fresh,restoredBytes,sha(freshBytes)),freshKey);
+ const lookup=async id=>(await call("/rest/v1/wm_recording_runs?id=eq."+id))[0]??null;
+ await assert.rejects(restoreEligibleAudio({archive:await readFile(backupPath),key,lookup:async()=>{throw Error("current ledger unavailable")},storage}),/current ledger unavailable/);
+ assert.equal((await get(freshKey)).ok,false);
+ const restored=await restoreEligibleAudio({archive:await readFile(backupPath),key,lookup,storage});
+ assert.deepEqual(restored,{restored:1,skipped:1});
+ console.log("PASS B6 recovery after interrupted purge and historical backup restore refuses expired data or unavailable current ledger");
  assert.equal(sha(Buffer.from(await (await get(freshKey)).arrayBuffer())),sha(freshBytes));
  assert.equal((await get(oldKey)).ok,false);
  const publicRes=await fetch(base+"/storage/v1/object/public/wm-recordings/"+freshKey);
