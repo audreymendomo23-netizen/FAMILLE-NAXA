@@ -112,3 +112,5 @@ test("timed polls reject boundary votes and reveal closed survey only at the ser
  assert.deepEqual(pollSummary(r.polls[1],guest.memberId,16000).counts,[0,0]);
  assert.throws(()=>run(r,guest,"survey_vote",[0],"timed0002",16000),/invalid_vote/);
 });
+
+test("B6 unsupported confidentiality modes fail closed instead of issuing media grants",()=>{const r=open();for(const confidentiality of ["strict","highly_confidential","unknown",false,{}])assert.equal(mediaPermission({...r,confidentiality},host,1000),null);assert.equal(mediaPermission({...r,confidentiality:"confidential"},host,1000).screen,false);assert.equal(mediaPermission(r,host,1000).screen,true);});
