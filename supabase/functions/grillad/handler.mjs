@@ -65,6 +65,10 @@ export async function handle(request,env,fetcher=fetch){
   if(body.action==='workspace')return upstream(await post('/rest/v1/rpc/grillad_workspace',{},token));
   if(!uuid.test(body.org)||!uuid.test(body.site))return reply(400,{error:'SCOPE'});
   const scope={p_org:body.org,p_site:body.site};
+  if(body.action==='push_register'&&typeof body.enabled==='boolean'){
+   if(body.enabled&&(typeof body.token!=='string'||body.token.length<30||body.token.length>4096||!env.firebaseProject||body.project!==env.firebaseProject))return reply(400,{error:'PUSH_NOT_CONFIGURED'});
+   return upstream(await post('/rest/v1/rpc/grillad_push_register',{...scope,p_token:body.enabled?body.token:null,p_project:body.enabled?body.project:null,p_enabled:body.enabled},token));
+  }
   if(body.action==='security_list')return upstream(await post('/rest/v1/rpc/grillad_security_list',scope,token));
   if(body.action==='pilotage_status')return upstream(await post('/rest/v1/rpc/grillad_pilotage_status',scope,token));
   if(body.action==='report'&&date.test(body.from)&&date.test(body.to)&&typeof body.network==='boolean'&&(body.family==null||['Porc','Poulet','Poisson','Brochettes','Omelettes'].includes(body.family))&&(body.actor==null||uuid.test(body.actor))&&(body.item==null||uuid.test(body.item)))return upstream(await post('/rest/v1/rpc/grillad_report',{...scope,p_from:body.from,p_to:body.to,p_network:body.network,p_family:body.family??null,p_actor:body.actor??null,p_item:body.item??null},token));

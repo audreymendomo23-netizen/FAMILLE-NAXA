@@ -118,6 +118,9 @@ select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000002'
 select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000012","app_metadata":{}}',true);
 do $$begin
  if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'bound session failed';end if;
+ if not (public.grillad_push_register('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',repeat('t',64),'grillad-fixture',true)->>'registered')::boolean then raise exception 'push register';end if;
+ begin perform count(*) from grillad_private.push_devices;raise exception 'token table leak';exception when insufficient_privilege then null;end;
+ if (public.grillad_push_register('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',null,null,false)->>'registered')::boolean then raise exception 'push disable';end if;
  begin perform public.grillad_security_list('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001');raise exception 'seller camera leak';exception when insufficient_privilege then null;end;
  begin perform public.grillad_report('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001',current_date,current_date,false,null,null,null);raise exception 'seller report leak';exception when insufficient_privilege then null;end;
  begin perform public.grillad_daily_list('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001');raise exception 'seller daily leak';exception when insufficient_privilege then null;end;
