@@ -159,6 +159,11 @@ try{
  assert.equal((await centerReq(gs.access_token,"statistics",{days:30})).status,403);
  const consolidated=await centerOk(hs.access_token,"statistics",{days:30});assert.equal(consolidated.scope,"enterprise");assert.ok(Number.isInteger(consolidated.polls_closed)&&consolidated.polls_closed>=0);assert.ok(Number.isInteger(consolidated.tasks_done)&&consolidated.tasks_done>=0);
  assert.equal((await centerReq(hs.access_token,"statistics",{days:999})).status,403);
+ const page=await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"workspace",page_size:1});assert.equal(page.items[0].id,privateData.message_id);assert.equal(page.next_before,null);
+ assert.deepEqual((await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"workspace",page_size:1,before_id:privateData.message_id})).items,[]);
+ assert.equal((await centerReq(os.access_token,"thread",{peer_id:g.id,before_id:privateData.message_id})).status,403);
+ assert.equal((await centerReq(gs.access_token,"thread",{peer_id:h.id,before_id:"invalid"})).status,403);
+ pass("B2 actual direct chat scoped keyset page and invalid cursor denial");
  pass("workspace private chat exact retry, peer/tenant denial, search, explicit read acknowledgement and role-scoped summary");
 
 

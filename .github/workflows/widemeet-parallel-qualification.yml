@@ -1,7 +1,7 @@
 name: WideMeet — parallel qualification wave 07
 on:
   push:
-    branches: [test/widemeet-wave07-20261127]
+    branches: [test/widemeet-bulk-metier-b2-20261127]
     paths:
       - '.github/workflows/widemeet-parallel-qualification.yml'
       - '.github/workflows/widemeet-gate.yml'

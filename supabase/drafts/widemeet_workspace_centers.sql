@@ -17,7 +17,7 @@ revoke all on public.wm_direct_messages from public,anon,authenticated;
 grant select,insert,update,delete on public.wm_direct_messages to service_role;
 create function public.wm_workspace_center(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; peer uuid; mid uuid; b text; q text; v jsonb; m public.wm_direct_messages%rowtype; days integer; scope_name text; cutoff bigint;
+declare a record; peer uuid; mid uuid; b text; q text; v jsonb; m public.wm_direct_messages%rowtype; days integer; scope_name text; cutoff bigint; page_size integer; before_row public.wm_direct_messages%rowtype; has_more boolean;
 begin
  -- Same lock order as identity membership mutations; then recheck session and entitlement.
  perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
@@ -60,12 +60,25 @@ begin
  if not found then return null;end if;
  if p_action='center-thread' then
   q:=coalesce(p_data->>'query','');if length(q)>100 then return null;end if;
+  if p_data ? 'page_size' and (jsonb_typeof(p_data->'page_size') is distinct from 'number' or coalesce(p_data->>'page_size','') !~ '^[1-9][0-9]{0,2}$') then return null;end if;
+  page_size:=coalesce((p_data->>'page_size')::integer,200);if page_size>200 then return null;end if;
+  if p_data ? 'before_id' then
+   if coalesce(p_data->>'before_id','') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then return null;end if;
+   select * into before_row from public.wm_direct_messages where id=(p_data->>'before_id')::uuid and workspace_id=a.workspace_id
+    and ((sender_id=a.account_id and recipient_id=peer) or (sender_id=peer and recipient_id=a.account_id))
+    and (q='' or strpos(lower(body),lower(q))>0);
+   if not found then return null;end if;
+  end if;
   select coalesce(jsonb_agg(to_jsonb(c) order by c.created_at,c.id),'[]'::jsonb) into v from (
    select id,sender_id,recipient_id,body,created_at,read_at from public.wm_direct_messages
    where workspace_id=a.workspace_id and ((sender_id=a.account_id and recipient_id=peer) or (sender_id=peer and recipient_id=a.account_id))
-   and (q='' or strpos(lower(body),lower(q))>0) order by created_at desc,id desc limit 200
+   and (q='' or strpos(lower(body),lower(q))>0)
+   and (before_row.id is null or (created_at,id)<(before_row.created_at,before_row.id))
+   order by created_at desc,id desc limit page_size+1
   ) c;
-  return jsonb_build_object('items',v);
+  has_more:=jsonb_array_length(v)>page_size;
+  if has_more then v:=v-0;end if;
+  return jsonb_build_object('items',v,'next_before',case when has_more then v->0->>'id' else null end);
  end if;
  mid:=(p_data->>'message_id')::uuid;
  if mid is null then return null;end if;
