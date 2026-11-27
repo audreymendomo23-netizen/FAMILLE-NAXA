@@ -61,9 +61,9 @@ put("gradle.properties", lines([
 ]));
 put("gradle/libs.versions.toml", lines([
   "[versions]",
-  'agp = "9.3.1"',
-  'kotlin = "2.4.21"',
-  'compose-bom = "2026.09.00"',
+  (previewSdk === 36 ? 'agp = "8.10.1"' : 'agp = "9.3.1"'),
+  (previewSdk === 36 ? 'kotlin = "2.2.0"' : 'kotlin = "2.4.21"'),
+  (previewSdk === 36 ? 'compose-bom = "2025.06.01"' : 'compose-bom = "2026.09.00"'),
   'activity-compose = "1.13.0"',
   'room = "2.8.5"',
   'work-manager = "2.12.0"',
@@ -121,8 +121,8 @@ put("gradle/libs.versions.toml", lines([
 put("gradle/wrapper/gradle-wrapper.properties", lines([
   "distributionBase=GRADLE_USER_HOME",
   "distributionPath=wrapper/dists",
-  "distributionUrl=https\\://services.gradle.org/distributions/gradle-9.5.0-bin.zip",
-  "distributionSha256Sum=553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746",
+  "distributionUrl=https\\://services.gradle.org/distributions/gradle-" + (previewSdk === 36 ? "8.11.1" : "9.5.0") + "-bin.zip",
+  ...(previewSdk === 36 ? [] : ["distributionSha256Sum=553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746"]),
   "networkTimeout=10000",
   "validateDistributionUrl=true",
   "zipStoreBase=GRADLE_USER_HOME",

@@ -139,21 +139,23 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-      - name: Installer Gradle 9.5.0
+      - name: Installer Gradle 8.11.1 (prévisualisation)
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "9.5.0"
+          gradle-version: "8.11.1"
       - name: Installer le SDK Android API 36 pour la prévisualisation historique
         uses: android-actions/setup-android@v3
         with:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
-      - name: Générer et vérifier le Gradle Wrapper 9.5.0
+      - name: Générer et vérifier le Gradle Wrapper historique
         shell: bash
         run: |
           set -euo pipefail
-          gradle wrapper --gradle-version 9.5.0 --distribution-type bin
+          gradle wrapper --gradle-version 8.11.1 --distribution-type bin
           sed -i '/^distributionSha256Sum=/d' gradle/wrapper/gradle-wrapper.properties
-          printf '%s\n' 'distributionSha256Sum=553c78f50dafcd54d65b9a444649057857469edf836431389695608536d6b746' >> gradle/wrapper/gradle-wrapper.properties
+          checksum=$(curl -fsS https://services.gradle.org/distributions/gradle-8.11.1-bin.zip.sha256)
+          [[ "$checksum" =~ ^[a-f0-9]{64}$ ]]
+          printf 'distributionSha256Sum=%s\n' "$checksum" >> gradle/wrapper/gradle-wrapper.properties
           chmod +x gradlew
           ./gradlew --no-daemon --version
       - name: Compiler dix APK debug et release et exécuter les tests unitaires
