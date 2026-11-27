@@ -124,3 +124,24 @@ REC-01 à REC-39 du cahier V1.5 maintenues. Compléments transversaux à constru
 - GRD-020 : prédiction des ventes, CA et quantités utiles à préparer, basée sur historique confirmé ; estimation séparée du réalisé, qualité et données insuffisantes, aucune action autonome. Réutiliser NS PerformanceEngine.kt (blob f125b2f310987b037e1ba489a858a781d1e1a2f2) et ZIPPLE pilotage.mjs (6327042f05024a1c7c548a4552ac07ce9a35777d), lus comme candidats ; simplifier et adapter au service GRILLAD.
 - GRD-021 : notifications centre interne, alertes et point journalier, scope/rôle, préférences et déduplication ; push à qualifier, canaux externes non imposés. Réutiliser NS daily-briefing.tsx (a07adeefa7574740f13455a6386c1d5fc2de9bd6) et socle notifications. Aucune livraison distante prouvée.
 - REC-34 à REC-39 ajoutées. B3 porte CA/rapports/point journalier, B4 notifications et droits du personnel, B6 vidéo/prévisions et Connect ; B1/B5 portent habilitations et souscription. Jauge inchangée : aucun code GRILLAD, build, recette ou déploiement dans cette passe documentaire. Les tarifs ACCÈS/PREMIUM et les cinq familles restent inchangés.
+
+## 11. Construction N0 et premier socle léger — 27/11/2026
+
+Branche dédiée `work/grillad-foundation-20261127`, créée depuis main dbd4564bc6dd20b21a753ca9a2df59b0c57357ff afin de ne pas toucher à main ni aux applications voisines pendant le développement (choix de travail isolé, aucune fusion). Le cahier V1.5 demeure la référence.
+
+### Preuves Git
+- f22a5090adedc07f4a8354c93d12eabeab509a26 : préparation Cloudflare/Firebase, validation publique, règles statiques et quatre tests à blanc.
+- f02667348fe7390d47b8a9a0e4b05a60fd59ef44 : Web local, moteur de démonstration et recettes Chromium.
+- 400f952b3bf4a0aaa5d3eda4d417d71440929ee2 : Android natif Compose et workflow dédié.
+- 05d9a48d5cba5dfc11170c88d2d94837679bbff6 : garde de non-publication, attribution vendeur fictif et rapports calendaires Web.
+
+### Couverture constatée (construction locale seulement)
+17 entrées Android et Web (Accueil, Catalogue, Préparations, Ventes, Caisse, Dépenses, Équipe, Points de vente, Rapports, Prévisions, Point journalier, Notifications, Vidéosurveillance, ZIPPLE Connect, Abonnement, Profil, Aide). Catalogue cinq familles, quantités, caisse, vente, charges, marge indicative, rapports, simulation plans exacts et alertes locales sont raccordés à un moteur en mémoire. Web : attribution vendeur démo, objectifs par site, filtres jour/semaine/mois/année et consolidation démo. Android : moteur natif simplifié, parité exacte à compléter. Aucune persistance des données de démonstration ni authentification serveur. Prévision locale de quantités sur jours de vente observés, non modèle de demande validé. Les entrées vidéo, Connect, pointage GPS/photo et support indiquent explicitement que le service réel n'est pas raccordé. Pas d'achat ni paiement réel. Aucun vert métier revendiqué pour REC-01–39. Le prototype ne doit pas traiter de vraies données.
+
+### Infrastructure et qualification
+Cloudflare et Firebase : voir INFRASTRUCTURE.md. Aucun accès administratif permettant de créer ou vérifier un projet Cloudflare Pages ou Firebase dédié ; FCM non intégré. Check Cloudflare monorepo automatique détecté, pas preuve de projet GRILLAD. Aucune migration ou déploiement de production volontaire. Publication release bloquée par script tant que vrai auth/backend absents.
+- [Run 46069501371](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46069501371), SHA 400f952b3bf4a0aaa5d3eda4d417d71440929ee2 : job infrastructure success (4 tests), Web tests unitaires et build candidat success ; Chromium encore en cours au relevé. Android échec avant compilation : setup-android@v3 recherche le paquet SDK obsolète tools ; correction v4 alignée NAXA SERVICES dans le commit suivant. Pas de preuve APK.
+- [Run 46069600370](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46069600370), SHA 05d9a48d5cba5dfc11170c88d2d94837679bbff6 : en file au relevé. Une nouvelle qualification sera déclenchée par le commit de correction SDK. Ne pas reporter le vert d'un ancien SHA sur le HEAD.
+
+### Prochains critères obligatoires
+N0 : créer/vérifier projet Pages GRILLAD, client Firebase dédié, FCM réelle ; B1/B5 : auth/session et scopes RLS, entitlements, API, persistance sécurisée, sync et confirmation des paiements ; B2/B3 : opérations atomiques, corrections, parité Android/Web, rapports et service minuit, export et vraie prévision ; B4 : pointage GPS/photo privé et gestion équipe ; B6 : vidéo NAXA SECURITY et Connect ZIPPLE Snack-Bar sous contrat et droits ; 39 recettes métier et sécurité réelles à exécuter. Aucune extrapolation de complétude à partir du nombre d'écrans.
