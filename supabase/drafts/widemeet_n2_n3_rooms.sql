@@ -178,7 +178,7 @@ create table public.wm_display_policy(
  enabled boolean not null default false
 );
 create table public.wm_display_offers(
- code_hash text primary key check(code_hash~'^[a-f0-9]{64}),
+ code_hash text primary key check(code_hash~'^[a-f0-9]{64}$'),
  receiver_session uuid not null references public.wm_device_sessions(id),
  receiver_name text not null check(length(receiver_name) between 1 and 80),
  created_at timestamptz not null default clock_timestamp(),
@@ -245,7 +245,7 @@ begin
  now_at:=clock_timestamp();
  if p_action='offer' then
   ch:=p_data->>'code_hash';n:=btrim(p_data->>'name');
-  if ch is null or ch!~'^[a-f0-9]{64} or n is null or length(n) not between 1 and 80 then return null;end if;
+  if ch is null or ch!~'^[a-f0-9]{64}$' or n is null or length(n) not between 1 and 80 then return null;end if;
   select * into o from public.wm_display_offers where code_hash=ch;
   if found then if o.receiver_session=s.session_id and o.receiver_name=n and o.used_at is null and o.expires_at>now_at then return jsonb_build_object('offered',true);end if;return null;end if;
   if (select count(*) from public.wm_display_offers where receiver_session=s.session_id and created_at>now_at-interval '1 minute')>=5 then return null;end if;
