@@ -20,6 +20,19 @@ create table public.zp_loyalty_awards(
  unique(receipt_id,kind),foreign key(receipt_id,org_id,site_id) references public.zp_cash_receipts(id,org_id,site_id),foreign key(beneficiary_id,org_id) references public.zp_customers(id,org_id));
 create table public.zp_loyalty_reversals(
  award_id uuid primary key references public.zp_loyalty_awards(id),reason text not null check(reason in ('refund','credit_note','return')),created_at timestamptz not null default now());
+-- The customer card is a distinct, opaque identifier. It is never a login or a referral code.
+alter table public.zp_customer_order_links alter column member_id drop not null;
+alter table public.zp_customer_order_links add column guest_id uuid;
+alter table public.zp_customer_order_links add foreign key(guest_id,org_id,site_id) references public.zp_guest_sessions(id,org_id,site_id);
+alter table public.zp_customer_order_links add check((member_id is null)<>(guest_id is null));
+alter table public.zp_loyalty_referrals alter column member_id drop not null;
+alter table public.zp_loyalty_referrals add column guest_id uuid;
+alter table public.zp_loyalty_referrals add foreign key(guest_id,org_id,site_id) references public.zp_guest_sessions(id,org_id,site_id);
+alter table public.zp_loyalty_referrals add check((member_id is null)<>(guest_id is null));
+create table public.zp_loyalty_cards(
+ id uuid primary key default gen_random_uuid(),org_id uuid not null,customer_id uuid not null,member_id uuid not null,created_at timestamptz not null default clock_timestamp(),revoked_at timestamptz,
+ foreign key(customer_id,org_id) references public.zp_customers(id,org_id),foreign key(member_id,org_id) references public.zp_members(id,org_id));
+create unique index zp_loyalty_one_active_card on public.zp_loyalty_cards(customer_id) where revoked_at is null;
 create table public.zp_loyalty_benefits(
  id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,member_id uuid not null,label text not null check(length(label) between 1 and 120),
  points int not null check(points between 1 and 1000000),enabled boolean not null,reason text not null check(length(reason) between 5 and 500),created_at timestamptz not null default clock_timestamp(),
@@ -32,9 +45,9 @@ create table public.zp_loyalty_redemption_reviews(
  redemption_id uuid primary key references public.zp_loyalty_redemptions(id),reason text not null,created_at timestamptz not null default clock_timestamp());
 create table public.zp_loyalty_redemption_restores(
  redemption_id uuid primary key references public.zp_loyalty_redemptions(id),member_id uuid not null references public.zp_members(id),reason text not null check(length(reason) between 5 and 500),created_at timestamptz not null default clock_timestamp());
-do $g$ declare n text;begin foreach n in array array['zp_loyalty_benefits','zp_loyalty_redemptions','zp_loyalty_redemption_reviews','zp_loyalty_redemption_restores','zp_loyalty_policies','zp_loyalty_codes','zp_loyalty_referrals','zp_loyalty_awards','zp_loyalty_reversals'] loop
+do $g$ declare n text;begin foreach n in array array['zp_loyalty_cards','zp_loyalty_benefits','zp_loyalty_redemptions','zp_loyalty_redemption_reviews','zp_loyalty_redemption_restores','zp_loyalty_policies','zp_loyalty_codes','zp_loyalty_referrals','zp_loyalty_awards','zp_loyalty_reversals'] loop
  execute format('alter table public.%I enable row level security',n);execute format('revoke all on public.%I from public,anon,authenticated',n);execute format('grant select,insert on public.%I to service_role',n);end loop;end $g$;
-grant update(revoked_at) on public.zp_loyalty_codes to service_role;
+grant update(revoked_at) on public.zp_loyalty_codes,public.zp_loyalty_cards to service_role;
 create function public.zp_loyalty_eligible(p_receipt uuid) returns boolean language sql stable security invoker set search_path=pg_catalog,public as $f$
  select exists(select 1 from public.zp_cash_receipts r join public.zp_orders o on o.id=r.order_id where r.id=p_receipt and o.status='served' and r.amount_xaf>0
  and (r.method<>'credit' or exists(select 1 from public.zp_credit_sales s where s.receipt_id=r.id and s.balance_xaf=0 and s.paid_xaf=s.amount_xaf and s.credit_note_xaf=0 and s.refunded_xaf=0))
@@ -58,7 +71,7 @@ create function public.zp_loyalty_snapshot(p_access text,p_site uuid) returns js
 declare m public.zp_members;begin m:=public.zp_erp_actor(p_access,p_site);
  return jsonb_build_object('can_configure',m.role_code='promoteur',
  'policy',(select to_jsonb(p) from public.zp_loyalty_policies p where p.org_id=m.org_id and p.site_id=p_site order by p.version desc limit 1),
- 'customers',coalesce((select jsonb_agg(to_jsonb(x) order by x.label) from (select c.id,c.display_name label,(select id from public.zp_loyalty_codes k where k.customer_id=c.id and k.revoked_at is null) code,coalesce((select sum(a.points) from public.zp_loyalty_awards a where a.beneficiary_id=c.id and a.org_id=m.org_id and not exists(select 1 from public.zp_loyalty_reversals z where z.award_id=a.id)),0)::text earned_points,(coalesce((select sum(a.points) from public.zp_loyalty_awards a where a.beneficiary_id=c.id and a.org_id=m.org_id and not exists(select 1 from public.zp_loyalty_reversals z where z.award_id=a.id)),0)-coalesce((select sum(r.points) from public.zp_loyalty_redemptions r where r.customer_id=c.id and r.org_id=m.org_id and not exists(select 1 from public.zp_loyalty_redemption_restores z where z.redemption_id=r.id)),0))::text points from public.zp_customers c where c.org_id=m.org_id order by c.display_name limit 300)x),'[]'),
+ 'customers',coalesce((select jsonb_agg(to_jsonb(x) order by x.label) from (select c.id,c.display_name label,(select id from public.zp_loyalty_cards k where k.customer_id=c.id and k.revoked_at is null) card,(select id from public.zp_loyalty_codes k where k.customer_id=c.id and k.revoked_at is null) code,coalesce((select sum(a.points) from public.zp_loyalty_awards a where a.beneficiary_id=c.id and a.org_id=m.org_id and not exists(select 1 from public.zp_loyalty_reversals z where z.award_id=a.id)),0)::text earned_points,(coalesce((select sum(a.points) from public.zp_loyalty_awards a where a.beneficiary_id=c.id and a.org_id=m.org_id and not exists(select 1 from public.zp_loyalty_reversals z where z.award_id=a.id)),0)-coalesce((select sum(r.points) from public.zp_loyalty_redemptions r where r.customer_id=c.id and r.org_id=m.org_id and not exists(select 1 from public.zp_loyalty_redemption_restores z where z.redemption_id=r.id)),0))::text points from public.zp_customers c where c.org_id=m.org_id order by c.display_name limit 300)x),'[]'),
  'receipts',coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc) from (select r.id,r.amount_xaf,r.created_at,c.display_name label from public.zp_cash_receipts r join public.zp_customer_order_links l on l.order_id=r.order_id join public.zp_customers c on c.id=l.customer_id where r.org_id=m.org_id and r.site_id=p_site and public.zp_loyalty_eligible(r.id) and not exists(select 1 from public.zp_loyalty_awards a where a.receipt_id=r.id) order by r.created_at desc limit 200)x),'[]'),
  'referrals',coalesce((select jsonb_agg(to_jsonb(x) order by x.created_at desc) from (select q.referred_id id,q.created_at,c.display_name label,p.display_name referrer,exists(select 1 from public.zp_loyalty_awards a join public.zp_customer_order_links l on l.order_id=(select order_id from public.zp_cash_receipts where id=a.receipt_id) where a.org_id=m.org_id and l.customer_id=q.referred_id and a.kind in ('referrer','referred') and not exists(select 1 from public.zp_loyalty_reversals z where z.award_id=a.id)) qualified from public.zp_loyalty_referrals q join public.zp_customers c on c.id=q.referred_id join public.zp_customers p on p.id=q.referrer_id where q.org_id=m.org_id order by q.created_at desc limit 200)x),'[]'),
  'benefits',coalesce((select jsonb_agg(to_jsonb(q) order by q.label) from (select distinct on (label) id,label,points,enabled from public.zp_loyalty_benefits where org_id=m.org_id and site_id=p_site order by label,created_at desc,id desc limit 200)q),'[]'),
@@ -107,6 +120,16 @@ declare m public.zp_members;old public.zp_workspace_requests;pol public.zp_loyal
  if redemption.id is null or length(why) not between 5 and 500 or not exists(select 1 from public.zp_loyalty_redemption_reviews v where v.redemption_id=redemption.id) then raise exception 'DENIED';end if;
  if exists(select 1 from public.zp_loyalty_redemption_restores v where v.redemption_id=redemption.id) then raise exception 'INVALID_TRANSITION';end if;
  insert into public.zp_loyalty_redemption_restores(redemption_id,member_id,reason) values(redemption.id,m.id,why);rid:=redemption.id;
+ elsif p_action in ('issue_card','revoke_card') then
+ cid:=(p_payload->>'customer_id')::uuid;
+ if not exists(select 1 from public.zp_customers where id=cid and org_id=m.org_id) then raise exception 'DENIED';end if;
+ if p_action='issue_card' then
+ select id into rid from public.zp_loyalty_cards where customer_id=cid and revoked_at is null;
+ if rid is null then insert into public.zp_loyalty_cards(org_id,customer_id,member_id) values(m.org_id,cid,m.id) returning id into rid;end if;
+ else
+ if m.role_code<>'promoteur' then raise exception 'DENIED';end if;
+ update public.zp_loyalty_cards set revoked_at=clock_timestamp() where customer_id=cid and revoked_at is null returning id into rid;
+ end if;
  elsif p_action in ('issue_code','revoke_code','apply_code') then
  cid:=(p_payload->>'customer_id')::uuid;if not exists(select 1 from public.zp_customers where id=cid and org_id=m.org_id) then raise exception 'DENIED';end if;
  if p_action='issue_code' then
@@ -141,6 +164,41 @@ declare m public.zp_members;old public.zp_workspace_requests;pol public.zp_loyal
  outcome:=jsonb_build_object('id',rid,'confirmed',true);
  insert into public.zp_workspace_requests(member_id,org_id,site_id,request_id,action,payload,outcome) values(m.id,m.org_id,p_site,p_request,'loyalty:'||p_action,p_payload,outcome);return outcome;
 end $f$;
+create function public.zp_guest_loyalty_guard(p_guest_hash text) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $f$
+declare g public.zp_guest_sessions;begin
+ select x.* into g from public.zp_guest_sessions x join public.zp_table_sessions t on t.id=x.table_session_id join public.zp_sites s on s.id=x.site_id join public.zp_organizations o on o.id=x.org_id where x.token_hash=p_guest_hash and x.expires_at>now() and t.closed_at is null and s.active and o.active;
+ if g.id is null or public.zp_operational_plan(g.org_id) is null then return false;end if;
+ return public.zp_rate_limit('zipple:guest-loyalty:'||g.id::text);
+end $f$;
+create function public.zp_guest_loyalty_attach(p_guest_hash text,p_order uuid,p_card uuid,p_referral uuid) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $f$
+declare g public.zp_guest_sessions;o public.zp_orders;card public.zp_loyalty_cards;code public.zp_loyalty_codes;old uuid;existing public.zp_loyalty_referrals;begin
+ select x.* into g from public.zp_guest_sessions x join public.zp_table_sessions t on t.id=x.table_session_id join public.zp_sites s on s.id=x.site_id join public.zp_organizations z on z.id=x.org_id where x.token_hash=p_guest_hash and x.expires_at>now() and t.closed_at is null and s.active and z.active;
+ if g.id is null or public.zp_operational_plan(g.org_id) is null then raise exception 'DENIED';end if;
+ perform 1 from public.zp_site_modes where site_id=g.site_id and org_id=g.org_id for update;
+ perform 1 from public.zp_organizations where id=g.org_id for update;
+ select * into o from public.zp_orders where id=p_order and guest_id=g.id and org_id=g.org_id and site_id=g.site_id and table_session_id=g.table_session_id and status<>'cancelled' for update;
+ if o.id is null or not exists(select 1 from public.zp_table_sessions where id=g.table_session_id and closed_at is null) then raise exception 'DENIED';end if;
+ select * into card from public.zp_loyalty_cards where id=p_card and org_id=g.org_id and revoked_at is null;
+ if card.id is null or not coalesce((select enabled from public.zp_loyalty_policies where org_id=g.org_id and site_id=g.site_id order by version desc limit 1),false) then raise exception 'DENIED';end if;
+ select customer_id into old from public.zp_customer_order_links where order_id=o.id;
+ if old is not null and old<>card.customer_id then raise exception 'DENIED';end if;
+ if exists(select 1 from public.zp_cash_receipts where order_id=o.id) then
+ if old=card.customer_id and p_referral is null then return true;end if;raise exception 'DENIED';end if;
+ if p_referral is not null then
+ select * into code from public.zp_loyalty_codes where id=p_referral and org_id=g.org_id and revoked_at is null;
+ if code.id is null or code.customer_id=card.customer_id then raise exception 'DENIED';end if;
+ select * into existing from public.zp_loyalty_referrals where referred_id=card.customer_id and org_id=g.org_id;
+ if existing.referred_id is not null and existing.code_id<>code.id then raise exception 'DENIED';end if;
+ if existing.referred_id is null then
+ if exists(select 1 from public.zp_customer_order_links l join public.zp_cash_receipts r on r.order_id=l.order_id where l.customer_id=card.customer_id and public.zp_loyalty_eligible(r.id)) then raise exception 'DENIED';end if;
+ if exists(with recursive ancestors(id) as (select code.customer_id union select x.referrer_id from public.zp_loyalty_referrals x join ancestors a on a.id=x.referred_id where x.org_id=g.org_id) select 1 from ancestors where id=card.customer_id) then raise exception 'DENIED';end if;
+ insert into public.zp_loyalty_referrals(org_id,site_id,referred_id,referrer_id,code_id,guest_id) values(g.org_id,g.site_id,card.customer_id,code.customer_id,code.id,g.id);
+ end if;end if;
+ if old is null then insert into public.zp_customer_order_links(order_id,org_id,site_id,customer_id,guest_id) values(o.id,g.org_id,g.site_id,card.customer_id,g.id);end if;
+ return true;
+end $f$;
+revoke all on function public.zp_guest_loyalty_guard(text),public.zp_guest_loyalty_attach(text,uuid,uuid,uuid) from public,anon,authenticated;
+grant execute on function public.zp_guest_loyalty_guard(text),public.zp_guest_loyalty_attach(text,uuid,uuid,uuid) to service_role;
 -- Operational delivery preparation. No channel activation before a verified payment and fee contract.
 create table public.zp_delivery_zones(
  id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,member_id uuid not null,label text not null check(length(label) between 1 and 120),

@@ -38,6 +38,8 @@ internal val commercePages=listOf(PortalPage("loyalty","Fidélité et parrainage
  val customers=d.rows("customers");CommerceChoice(t("Client","Customer"),customers.map{it.optString("id") to it.optString("label")},v("customer_id"),allowed){set("customer_id",it)}
  val customer=customers.find{it.optString("id")==v("customer_id")}
  if(customer!=null){Text(customer.optString("label")+" · "+customer.optString("points")+" "+t("points disponibles","available points"))
+ Button(enabled=allowed,onClick={write("issue_card",JSONObject().put("customer_id",v("customer_id")))}){Text(t("Générer la carte de fidélité","Generate loyalty card"))}
+ if(!customer.isNull("card")){Text(customer.optString("card"));if(owner)OutlinedButton(enabled=allowed,onClick={write("revoke_card",JSONObject().put("customer_id",v("customer_id")))}){Text(t("Révoquer la carte","Revoke card"))}}
  Button(enabled=allowed,onClick={write("issue_code",JSONObject().put("customer_id",v("customer_id")))}){Text(t("Générer le code personnel","Generate personal code"))}
  if(!customer.isNull("code")){Text(customer.optString("code"));if(owner)OutlinedButton(enabled=allowed,onClick={write("revoke_code",JSONObject().put("customer_id",v("customer_id")))}){Text(t("Révoquer le code","Revoke code"))}}
  CommerceField(t("Code du parrain","Referrer code"),v("code"),allowed){set("code",it)}

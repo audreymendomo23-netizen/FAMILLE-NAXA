@@ -673,3 +673,6 @@ Ajout de la séquence GPS prise de service/pause/reprise/fin, sans GPS permanent
 
 ### Fidélité — consommation et restitution contrôlée
 Avantages non financiers configurables et versionnés par promoteur; usage de points sur reçu ultérieur intégralement réglé, rattachement CRM, preuve de remise et déduction append-only. Aucun bon monétaire ni changement de prix inventé; remboursement du reçu de consommation déclenche revue, restauration motivée par promoteur. Reprise des points sources et consommation sérialisées par organisation. Test SQL ajouté; qualification à constater.
+
+### Parcours fidélité client sans compte
+Carte opaque distincte du parrainage, révocable; rattachement volontaire d'une commande QR avant règlement via session invitée temporaire, provenance invitée distincte de l'auteur professionnel, contrôles anti-auto/cycle/doublon et limite de tentatives côté serveur. Aucun accès aux fiches ou soldes par ce code. QR imprimable Web, code natif. Test SQL ajouté. Recherche par téléphone seule non autorisée faute de preuve d'identité; carte disponible auprès du personnel.
