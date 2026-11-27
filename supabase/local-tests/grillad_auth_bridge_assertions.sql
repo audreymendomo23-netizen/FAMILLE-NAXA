@@ -90,6 +90,7 @@ begin
  if (v->>'ca')::int<>2000 or v->'expenses'<>'null'::jsonb then raise exception 'report filtered expense allocation';end if;
  begin perform public.grillad_report(o,s,d,d,true,null,null,null);raise exception 'network must be explicit';exception when insufficient_privilege then null;end;
  if (public.grillad_security_list(o,s)->>'available')::boolean then raise exception 'unlinked camera available';end if;
+ if v->'purchase_amount'<>'null'::jsonb or v->'purchases_by_supplier'<>'null'::jsonb then raise exception 'filtered purchase allocation';end if;
 end $$;
 reset role;
 set role authenticated;
@@ -117,6 +118,18 @@ set role authenticated;
 do $$
 declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;
 begin if (public.grillad_report(o,s,d,d,true,null,null,null)->>'ca')::int<>2000 then raise exception 'network total';end if;end $$;
+reset role;
+-- Purchases remain documentary and never inflate expenses or cost of sold goods.
+set role authenticated;
+do $declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;b jsonb;v jsonb;e uuid:=gen_random_uuid();
+begin
+ b:=public.grillad_report(o,s,d,d,false,null,null,null);
+ perform public.grillad_action(o,s,e,'record_purchase','{"supplier":"GRILLAD test fournisseur","input_name":"Charbon","unit":"kg","quantity":2,"amount":1000}');
+ v:=public.grillad_report(o,s,d,d,false,null,null,null);
+ if (v->>'purchase_amount')::bigint<>(b->>'purchase_amount')::bigint+1000 or v->'expenses'<>b->'expenses' or v->'cost'<>b->'cost' or v->'ca'<>b->'ca' or not exists(select 1 from jsonb_array_elements(v->'purchases_by_supplier') x where x->>'supplier'='GRILLAD test fournisseur' and (x->>'amount')::bigint=1000) then raise exception 'documentary purchase report';end if;
+ perform public.grillad_action(o,s,gen_random_uuid(),'cancel_purchase',jsonb_build_object('purchase',e,'reason','Test annulation'));
+ v:=public.grillad_report(o,s,d,d,false,null,null,null);if v->'purchase_amount'<>b->'purchase_amount' or v->'expenses'<>b->'expenses' then raise exception 'cancelled purchase report';end if;
+end $;
 reset role;
 -- Central resolution must match real payment evidence and cannot be set by a client.
 set role service_role;

@@ -31,6 +31,8 @@ import org.json.JSONObject
  result?.let{r->fun amount(k:String)=if(r.isNull(k))"Non attribué / inconnu" else r.optString(k)+" F"
  Text("CA "+amount("ca")+" · Direct "+amount("direct_ca")+" · Connect "+amount("connect_ca"));Text("Encaissements espèces "+amount("encaissements"))
  Text("Coût "+amount("cost")+" · Dépenses "+amount("expenses"))
+ Text("Achats documentaires "+amount("purchase_amount")+" — non imputés automatiquement aux charges.")
+ rows(r.optJSONArray("purchases_by_supplier")).forEach{x->Text(x.optString("supplier")+" · "+x.optString("amount")+" F · "+x.optString("count")+" achat(s)") }
  rows(r.optJSONArray("sites")).forEach{x->Text(x.optString("name")+(if(x.has("enabled")&&!x.optBoolean("enabled"))" (suspendu, historique)" else "")+" : "+x.optString("ca")+" F")}
  rows(r.optJSONArray("expenses_by_category")).forEach{x->Text(x.optString("category")+" · "+x.optString("amount")+" F · "+x.optString("count")+" dépense(s)")}
  Text(r.optString("from")+" → "+r.optString("to")+" · Confirmé serveur uniquement")
