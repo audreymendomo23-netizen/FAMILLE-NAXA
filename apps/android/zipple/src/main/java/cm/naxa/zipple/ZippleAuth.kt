@@ -13,6 +13,7 @@ object Scope {
     fun valid(app:String,member:String,org:String,role:String,sites:List<String>,expiry:Long,now:Long):Boolean =
         app=="ZIPPLE" && member.isNotBlank() && org.isNotBlank() && role in setOf("promoteur","manager","staff") && sites.isNotEmpty() && sites.all { it.isNotBlank() } && sites.distinct().size==sites.size && expiry>now
 }
+internal class ZippleHttpException(val status:Int):IllegalStateException("Requête refusée")
 class ZippleAuth(private val endpoint:String) {
     suspend fun login(identifier:String,password:String,remember:Boolean=false):Session {
         require(identifier.isNotBlank()&&password.isNotBlank())
@@ -54,7 +55,7 @@ class ZippleAuth(private val endpoint:String) {
             bearer?.let{conn.setRequestProperty("Authorization","Bearer "+it)}
             body.put("app_id","ZIPPLE")
             conn.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
-            check(conn.responseCode in 200..299){"Requête refusée"}
+            if(conn.responseCode !in 200..299)throw ZippleHttpException(conn.responseCode)
             if(conn.responseCode==204) JSONObject() else JSONObject(conn.inputStream.bufferedReader().use { it.readText() }.ifBlank{"{}"})
         } finally {conn.disconnect()}
     }

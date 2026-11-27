@@ -15,6 +15,7 @@ import java.util.UUID
  var amount by remember{mutableStateOf("")};var qty by remember{mutableStateOf<Map<Int,String>>(emptyMap())};var method by remember{mutableStateOf("cash")};var reference by remember{mutableStateOf("")};var result by remember{mutableStateOf<JSONObject?>(null)}
  var pending by remember{mutableStateOf<Pair<String,String>?>(null)}
  suspend fun load(){d=api.call(session,site,"split_snapshot") as? JSONObject}
+ suspend fun send(p:Pair<String,String>){try{result=api.call(session,site,"split_collect",JSONObject(p.first).put("request_id",p.second)) as? JSONObject;pending=null;payer="";amount="";reference="";qty=emptyMap();load()}catch(e:ZippleHttpException){if(e.status in 400..499)pending=null;throw e}}
  fun run(block:suspend ()->Unit){if(busy||!session.permits(site))return;busy=true;error="";scope.launch{try{block()}catch(c:CancellationException){throw c}catch(_:Exception){error=tr("Opération non confirmée. Réessayez avec les mêmes données.","Operation unconfirmed. Retry with the same details.")}finally{busy=false}}}
  LaunchedEffect(session.token,site){run{load()}}
  val active=d?.rows("orders")?.find{it.optString("id")==order};val effective=active?.optString("split_mode")?.takeIf{it in setOf("items","amount")}?:mode
@@ -34,13 +35,13 @@ import java.util.UUID
   Text(tr("Part sélectionnée","Selected share")+" : "+total+" FCFA")
   listOf("cash","mtn_momo","orange_money","bank","card").forEach{m->OutlinedButton(enabled=!busy,onClick={method=m}){Text((if(method==m)"✓ " else "")+m)}}
   if(method!="cash")OutlinedTextField(reference,{reference=it.take(160)},label={Text(tr("Référence du règlement","Payment reference"))})
-  Button(enabled=!busy&&cash.isNotBlank()&&payer.isNotBlank()&&total>0&&total<=active.optLong("balance_xaf")&&(effective!="items"||validQty)&&(method=="cash"||reference.trim().length>=4),onClick={run{
+  Button(enabled=!busy&&pending==null&&cash.isNotBlank()&&payer.isNotBlank()&&total>0&&total<=active.optLong("balance_xaf")&&(effective!="items"||validQty)&&(method=="cash"||reference.trim().length>=4),onClick={run{
    val arr=JSONArray();if(effective=="items")lines.forEach{l->val n=l.optInt("line_no");val q=qty[n]?.toIntOrNull()?:0;if(q>0)arr.put(JSONObject().put("line_no",n).put("qty",q))}
    val body=JSONObject().put("cash_id",cash).put("order_id",order).put("payer",payer.trim()).put("amount_xaf",total).put("method",method).put("reference",if(method=="cash")JSONObject.NULL else reference.trim()).put("allocations",arr)
-   val encoded=body.toString();val key=pending?.takeIf{it.first==encoded}?.second?:UUID.randomUUID().toString().also{pending=encoded to it}
-   result=api.call(session,site,"split_collect",body.put("request_id",key)) as? JSONObject;pending=null;payer="";amount="";reference="";qty=emptyMap();load()
+   val p=body.toString() to UUID.randomUUID().toString();pending=p;send(p)
   }}){Text(tr("Confirmer le règlement partiel reçu","Confirm partial payment received"))}
   active.rows("parts").forEach{p->Text(p.optString("payer")+" · "+p.optLong("amount_xaf")+" FCFA")}
  }
+ pending?.let{p->OutlinedButton(enabled=!busy,onClick={run{send(p)}}){Text(tr("Réessayer le même règlement","Retry same payment"))}}
  result?.let{Text(tr("Règlement confirmé — solde","Payment confirmed — balance")+" : "+it.optLong("balance_xaf")+" FCFA")}
 }
