@@ -43,6 +43,7 @@ on:
       - "settings.gradle.kts"
       - "build.gradle.kts"
       - ".github/workflows/naxa-services-technical-gate.yml"
+      - ".github/workflows/naxa-services-replay-isolated.yml"
   pull_request:
     paths:
       - "apps/android/naxa-services/**"
@@ -77,6 +78,7 @@ on:
       - "settings.gradle.kts"
       - "build.gradle.kts"
       - ".github/workflows/naxa-services-technical-gate.yml"
+      - ".github/workflows/naxa-services-replay-isolated.yml"
   workflow_dispatch:
 
 permissions:
