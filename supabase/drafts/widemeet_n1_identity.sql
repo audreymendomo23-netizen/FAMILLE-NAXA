@@ -539,4 +539,77 @@ begin
 end $wm$;
 revoke all on function public.wm_profile_photo(text,text,jsonb) from public,anon,authenticated;
 grant execute on function public.wm_profile_photo(text,text,jsonb) to service_role;
+-- Offline recovery proof: generated after GoTrue reauthentication, never stored plaintext.
+-- Internal service RPCs only. The Edge gateway must verify the current password before enrollment.
+create table public.wm_recovery_keys(
+ account_id uuid primary key references public.wm_accounts(id) on delete cascade,
+ key_hash text not null unique check(key_hash ~ '^[a-f0-9]{64}$'),
+ epoch bigint not null,
+ created_at timestamptz not null default clock_timestamp(),
+ operation_id uuid,
+ consumed_at timestamptz,
+ completed_at timestamptz,
+ check((operation_id is null)=(consumed_at is null)),
+ check(completed_at is null or consumed_at is not null)
+);
+alter table public.wm_recovery_keys enable row level security;
+revoke all on public.wm_recovery_keys from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_recovery_keys to service_role;
+create function public.wm_enroll_recovery_key(p_hash text,p_key_hash text,p_epoch bigint)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare s record; a public.wm_accounts%rowtype;
+begin
+ if p_key_hash is null or p_key_hash !~ '^[a-f0-9]{64}$' then return false;end if;
+ select * into s from public.wm_session_context(p_hash);
+ if not found or s.password_change_required then return false;end if;
+ select * into a from public.wm_accounts where id=s.account_id and enabled for update;
+ if not found or a.password_change_required or a.password_change_id is not null or a.credential_epoch is distinct from p_epoch then return false;end if;
+ if not exists(select 1 from public.wm_session_context(p_hash) c where c.session_id=s.session_id and not c.password_change_required) then return false;end if;
+ insert into public.wm_recovery_keys(account_id,key_hash,epoch) values(a.id,p_key_hash,a.credential_epoch)
+ on conflict(account_id) do update set key_hash=excluded.key_hash,epoch=excluded.epoch,created_at=clock_timestamp(),operation_id=null,consumed_at=null,completed_at=null;
+ return true;
+end $wm$;
+revoke all on function public.wm_enroll_recovery_key(text,text,bigint) from public,anon,authenticated;
+grant execute on function public.wm_enroll_recovery_key(text,text,bigint) to service_role;
+create function public.wm_begin_key_recovery(p_identifier text,p_key_hash text,p_request uuid)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a public.wm_accounts%rowtype; k public.wm_recovery_keys%rowtype;
+begin
+ if p_request is null or p_key_hash is null or p_key_hash !~ '^[a-f0-9]{64}$' then return null;end if;
+ select * into a from public.wm_accounts where login_id=p_identifier and enabled for update;
+ if not found then return null;end if;
+ select * into k from public.wm_recovery_keys where account_id=a.id and key_hash=p_key_hash for update;
+ if not found or k.completed_at is not null then return null;end if;
+ -- A concurrent/retried request never receives permission to perform a second GoTrue write.
+ if k.operation_id is not null then
+  if k.operation_id=p_request and a.password_change_id=p_request and a.password_change_session=p_request and a.credential_epoch=k.epoch+1 then
+   return jsonb_build_object('mode','verify','account_id',a.id,'auth_user_id',a.auth_user_id,'auth_alias',a.auth_alias);
+  end if;
+  return null;
+ end if;
+ if a.password_change_id is not null or a.credential_epoch<>k.epoch then return null;end if;
+ update public.wm_recovery_keys set operation_id=p_request,consumed_at=clock_timestamp() where account_id=a.id;
+ -- Fence all WideMeet credentials before the independent GoTrue update.
+ update public.wm_accounts set credential_epoch=credential_epoch+1,password_change_required=true,password_change_id=p_request,password_change_session=p_request where id=a.id;
+ update public.wm_device_sessions set revoked_at=coalesce(revoked_at,clock_timestamp()),refresh_hash=null,refresh_until=null where account_id=a.id;
+ return jsonb_build_object('mode','start','account_id',a.id,'auth_user_id',a.auth_user_id,'auth_alias',a.auth_alias);
+end $wm$;
+revoke all on function public.wm_begin_key_recovery(text,text,uuid) from public,anon,authenticated;
+grant execute on function public.wm_begin_key_recovery(text,text,uuid) to service_role;
+create function public.wm_finish_key_recovery(p_account uuid,p_key_hash text,p_request uuid)
+returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare a public.wm_accounts%rowtype; k public.wm_recovery_keys%rowtype;
+begin
+ select * into a from public.wm_accounts where id=p_account and enabled for update;
+ if not found then return false;end if;
+ select * into k from public.wm_recovery_keys where account_id=a.id and key_hash=p_key_hash and operation_id=p_request and completed_at is null for update;
+ if not found or a.password_change_id is distinct from p_request or a.password_change_session is distinct from p_request or a.credential_epoch<>k.epoch+1 then return false;end if;
+ -- Only the Edge worker which independently verified the new GoTrue password calls this.
+ update public.wm_recovery_keys set completed_at=clock_timestamp() where account_id=a.id;
+ update public.wm_accounts set password_change_required=false,password_change_id=null,password_change_session=null where id=a.id;
+ update public.wm_recovery_requests set status='resolved' where account_id=a.id and status='pending';
+ return true;
+end $wm$;
+revoke all on function public.wm_finish_key_recovery(uuid,text,uuid) from public,anon,authenticated;
+grant execute on function public.wm_finish_key_recovery(uuid,text,uuid) to service_role;
 commit;
