@@ -52,6 +52,14 @@ begin
   scope_name:=case when a.role='promoteur' then 'enterprise' else 'organizer' end;
   select start_ms,end_ms into cutoff,upper_ms from public.wm_b4_window(period_name,days,clock_timestamp());
   if not found then return null;end if;
+  with scoped as (
+   select * from public.wm_rooms where workspace_id=a.workspace_id and (a.role='promoteur' or host_id=a.account_id)
+    and (state->>'scheduledMs')::bigint>=cutoff and (state->>'scheduledMs')::bigint<upper_ms
+  ), valid_tasks as (
+   select t.* from public.wm_tasks t join scoped r on r.id=t.room_id join public.wm_minutes_versions mv on mv.id=t.version_id and mv.revoked_at is null and mv.published_at is not null
+   join public.wm_minutes_eligibility e on e.room_id=r.id and e.retain_until>clock_timestamp()
+   where exists(select 1 from public.wm_minutes_recipients mr where mr.version_id=t.version_id and mr.account_id=t.assignee_id and mr.revoked_at is null)
+  )
   select jsonb_build_object('scope',scope_name,'days',days,'period',period_name,'start_ms',cutoff,'end_ms',upper_ms,'total',count(*),
    'scheduled',count(*) filter(where state->>'status'='scheduled' and coalesce(state->>'cancelled','false')='false'),
    'open',count(*) filter(where state->>'status'='open'),
@@ -61,9 +69,21 @@ begin
    'duration_minutes',coalesce(sum((state->>'durationMinutes')::bigint) filter(where coalesce(state->>'cancelled','false')='false'),0),
    'polls_closed',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(state->'polls','[]'::jsonb)) p where p->>'open'='false')),0),
    'polls_effectively_closed',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(state->'polls','[]'::jsonb)) p where p->>'open'='false' or (p->>'closesMs')::bigint<=upper_ms or state->>'status'='ended')),0),
-   'tasks_done',coalesce(sum((select count(*) from public.wm_tasks t join public.wm_minutes_versions mv on mv.id=t.version_id and mv.revoked_at is null and mv.published_at is not null where t.room_id=wm_rooms.id and t.state='done' and exists(select 1 from public.wm_minutes_recipients mr where mr.version_id=t.version_id and mr.account_id=t.assignee_id and mr.revoked_at is null))),0))
-   into v from public.wm_rooms where workspace_id=a.workspace_id and (a.role='promoteur' or host_id=a.account_id)
-   and (state->>'scheduledMs')::bigint>=cutoff and (state->>'scheduledMs')::bigint<upper_ms;
+   'tasks_done',(select count(*) from valid_tasks where state='done'),
+   'tasks_assigned',(select count(*) from valid_tasks where state='assigned'),
+   'tasks_submitted',(select count(*) from valid_tasks where state='submitted'),
+   'tasks_cancelled',(select count(*) from valid_tasks where state='cancelled'),
+   'tasks_overdue',(select count(*) from valid_tasks where state='assigned' and due_at<=to_timestamp(upper_ms/1000.0)),
+   'invitees',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(state->'participants','[]'::jsonb)) p where p->>'memberId'<>scoped.host_id::text)),0),
+   'accepted_invites',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(state->'participants','[]'::jsonb)) p where p->>'memberId'<>scoped.host_id::text and p->>'response'='accepted')),0),
+   'rooms_with_observations',count(*) filter(where exists(select 1 from public.wm_presence_samples s where s.room_id=scoped.id)),
+   'by_organizer',(select coalesce(jsonb_agg(to_jsonb(g) order by g.organizer,g.organizer_id),'[]'::jsonb) from (
+     select r.host_id as organizer_id,ac.display_name as organizer,count(*) as meetings,count(*) filter(where r.state->>'status'='ended' and coalesce(r.state->>'cancelled','false')='false') as ended
+     from scoped r join public.wm_accounts ac on ac.id=r.host_id group by r.host_id,ac.display_name) g),
+   'by_assignee',(select coalesce(jsonb_agg(to_jsonb(g) order by g.assignee,g.assignee_id),'[]'::jsonb) from (
+     select t.assignee_id,ac.display_name as assignee,count(*) as total,count(*) filter(where t.state='done') as done,count(*) filter(where t.state='assigned' and t.due_at<=to_timestamp(upper_ms/1000.0)) as overdue
+     from valid_tasks t join public.wm_accounts ac on ac.id=t.assignee_id group by t.assignee_id,ac.display_name) g))
+   into v from scoped;
   return v;
  end if;
  if p_action='center-contacts' then
