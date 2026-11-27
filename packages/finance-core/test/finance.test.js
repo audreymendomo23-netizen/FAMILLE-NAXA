@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   normalizePaymentIntent, classifyProviderInitiation, verifyPaymentConfirmation,
   assertPaymentTransition, createPaymentAdapterRegistry, calculateCommission,
-  reverseCommission, calculateFiscalQuote,
+  reverseCommission, calculateFiscalQuote, prepareAutomaticCommission,
 } from "../src/index.js";
 
 const intent = {
@@ -172,4 +172,25 @@ test("commission engine never supplies a missing policy or rate and rejects unfi
   assert.throws(()=>calculateCommission({...input,rule:{...approvedRule,effectiveFrom:"2026-11-22"}}),/COMMISSION_RULE_NOT_EFFECTIVE/);
   const fullyRefunded=calculateCommission({...input,saleLine:{...saleLine,refundedXaf:saleLine.confirmedPaidXaf}});
   assert.equal(fullyRefunded.status,"no_commission");assert.deepEqual(fullyRefunded.entries,[]);
+});
+
+test("automatic commissions remain disabled without explicit activation and no policy is invented",()=>{
+ const context={organizationId:"org-a",siteId:"site-a",serviceId:"service-a",activityCode:"coiffure"};
+ const input={context,allocations,saleLine,calculationDate:"2026-11-21",sourceEventId:"60000000-0000-4000-8000-000000000001"};
+ assert.deepEqual(prepareAutomaticCommission(input),{status:"disabled",entries:[]});
+ assert.deepEqual(prepareAutomaticCommission({...input,enabled:true,policies:[]}),{status:"no_applicable_policy",entries:[]});
+ const policy={...approvedRule,id:"policy-a",organizationId:"org-a",siteId:"site-a",serviceId:"service-a",activityCode:"coiffure"};
+ for(const invalid of [{organizationId:"org-b"},{siteId:"site-b"},{serviceId:"service-b"},{activityCode:"pressing"},{status:"draft"},{effectiveFrom:"2026-11-22"}]){
+  assert.equal(prepareAutomaticCommission({...input,enabled:true,policies:[{...policy,...invalid}]}).status,"no_applicable_policy");
+ }
+ const active={...input,enabled:true,policies:[policy]};
+ assert.equal(prepareAutomaticCommission(active).totalCommissionXaf,4000);
+ assert.equal(prepareAutomaticCommission({...active,saleLine:{...saleLine,status:"scheduled"}}).status,"awaiting_completed_and_confirmed");
+ assert.equal(prepareAutomaticCommission({...active,saleLine:{...saleLine,paymentStatus:"pending"}}).status,"awaiting_completed_and_confirmed");
+ assert.equal(prepareAutomaticCommission({...active,policies:[policy,{...policy,id:"policy-b",siteId:null}]}).status,"blocked_ambiguous_policy");
+ const fixed={...policy,method:"fixed_xaf",fixedAmountXaf:500};
+ assert.equal(prepareAutomaticCommission({...active,policies:[fixed]}).totalCommissionXaf,500);
+ assert.equal(prepareAutomaticCommission({...active,policies:[{...policy,memberId:allocations[0].memberId}]}).status,"blocked_ambiguous_policy");
+ const single={...active,allocations:[{memberId:allocations[0].memberId,shareBps:10000}],policies:[{...policy,memberId:allocations[0].memberId}]};
+ assert.equal(prepareAutomaticCommission(single).entries.length,1);
 });

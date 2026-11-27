@@ -1,5 +1,6 @@
 package cm.naxa.naxaservices
 
+import android.app.DatePickerDialog
 import android.os.Handler
 import android.os.Looper
 import android.speech.tts.TextToSpeech
@@ -19,6 +20,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import java.util.Locale
@@ -33,6 +35,9 @@ private val briefingWords=mapOf(
  "it" to BriefingWords("Il mio resoconto","Ecco il tuo resoconto parziale basato sui dati confermati.","Appuntamenti","completati","Ricavi in franchi CFA","vendite confermate","Registrazioni personali delle presenze","Gli altri indicatori non sono disponibili in questo resoconto.","Ascolta il mio resoconto","Interrompi","Voce locale o dati non disponibili."),
  "zh-CN" to BriefingWords("我的日报","这是根据已确认数据生成的部分报告。","预约","已完成","营业收入（非洲金融共同体法郎）","已确认销售","个人考勤记录","其他指标暂未包含在此报告中。","收听我的日报","停止","本地语音或数据不可用。"))
 private val briefingLanguages=linkedMapOf("fr" to "Français","en" to "English","ff-CM" to "Fulfulde","es" to "Español","it" to "Italiano","zh-CN" to "中文")
+internal fun briefingToday(now:Instant=Instant.now()):LocalDate=now.atZone(ZoneId.of("Africa/Douala")).toLocalDate()
+internal fun briefingDateAllowed(date:LocalDate,today:LocalDate=briefingToday()):Boolean=!date.isAfter(today)&&!date.isBefore(today.minusDays(366))
+private val briefingDateLabels=mapOf("fr" to "Date du bilan","en" to "Report date","ff-CM" to "Ñalnde jaŋtol","es" to "Fecha del informe","it" to "Data del resoconto","zh-CN" to "报告日期")
 internal fun briefingText(report:JSONObject,language:String):String {
  val w=briefingWords.getValue(language)
  val appointments=report.getJSONObject("appointments")
@@ -61,6 +66,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
   var loadJob by remember{mutableStateOf<Job?>(null)}
   var requestGeneration by remember{mutableStateOf(0)}
   var language by remember{mutableStateOf(session.account.defaultLocale.takeIf{it in briefingLanguages}?:"fr")}
+  var date by remember{mutableStateOf(briefingToday())}
   var speed by remember{mutableStateOf(1f)}
   var engine by remember{mutableStateOf<TextToSpeech?>(null)}
   var ready by remember{mutableStateOf(false)}
@@ -110,14 +116,14 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
    spokenText=briefingText(r,language);spokenOffset=0;speakRemaining()
   }
   fun load(andPlay:Boolean){
-   if(!foreground)return
+   if(!foreground||!briefingDateAllowed(date))return
+   val requestedDay=date.toString()
    loadJob?.cancel();val generation=++requestGeneration
    stop();busy=true;error=false;report=null
    loadJob=scope.launch{
     try{
-     val date=LocalDate.now(ZoneId.of("Africa/Douala")).toString()
-     val r=JSONObject(StaffRosterApi.call(latest,"rpc/ns_daily_briefing",JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_day",date)))
-     require(r.getString("day")==date)
+     val r=JSONObject(StaffRosterApi.call(latest,"rpc/ns_daily_briefing",JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_day",requestedDay)))
+     require(r.getString("day")==requestedDay)
      briefingText(r,language)
      if(!foreground||generation!=requestGeneration)return@launch
      report=r
@@ -139,13 +145,27 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
   Card(Modifier.fillMaxWidth()){
    Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
     Text(w.title,style=MaterialTheme.typography.titleLarge)
+    OutlinedButton(onClick={
+     val today=briefingToday()
+     val selected=if(briefingDateAllowed(date,today))date else today
+     val dialog=DatePickerDialog(context,{_,year,month,day->
+      val chosen=LocalDate.of(year,month+1,day)
+      if(foreground&&briefingDateAllowed(chosen)){
+       requestGeneration++;loadJob?.cancel();loadJob=null;stop();report=null;busy=false;error=false;date=chosen
+      }
+     },selected.year,selected.monthValue-1,selected.dayOfMonth)
+     val zone=ZoneId.systemDefault()
+     dialog.datePicker.minDate=today.minusDays(366).atStartOfDay(zone).toInstant().toEpochMilli()
+     dialog.datePicker.maxDate=today.atStartOfDay(zone).toInstant().toEpochMilli()
+     dialog.show()
+    },enabled=foreground){Text(briefingDateLabels.getValue(language)+": "+date.toString())}
     briefingLanguages.forEach{(code,label)->OutlinedButton(onClick={stop();language=code;error=false},enabled=!busy){Text((if(code==language)"✓ " else "")+label)}}
     Row(horizontalArrangement=Arrangement.spacedBy(6.dp)){
      listOf(.8f,1f,1.2f,1.5f).forEach{s->TextButton(onClick={stop();speed=s},enabled=!busy){Text((if(s==speed)"✓ " else "")+s+"×")}}
     }
-    Button(onClick={when{playing->pause();paused->speakRemaining();else->load(true)}},enabled=!busy){Text(if(playing)when(language){"en"->"Pause";"ff-CM"->"Fowtu";"es"->"Pausar";"it"->"Pausa";"zh-CN"->"暂停";else->"Pause"}else if(paused)when(language){"en"->"Resume";"ff-CM"->"Jokku";"es"->"Reanudar";"it"->"Riprendi";"zh-CN"->"继续";else->"Reprendre"}else w.play)}
+    Button(onClick={when{playing->pause();paused->speakRemaining();else->load(true)}},enabled=!busy&&briefingDateAllowed(date)){Text(if(playing)when(language){"en"->"Pause";"ff-CM"->"Fowtu";"es"->"Pausar";"it"->"Pausa";"zh-CN"->"暂停";else->"Pause"}else if(paused)when(language){"en"->"Resume";"ff-CM"->"Jokku";"es"->"Reanudar";"it"->"Riprendi";"zh-CN"->"继续";else->"Reprendre"}else w.play)}
     if(playing||paused)OutlinedButton(onClick={stop()},enabled=!busy){Text(w.stop)}
-    OutlinedButton(onClick={load(false)},enabled=!busy){Text(when(language){"en"->"Refresh";"ff-CM"->"Hesɗitin";"es"->"Actualizar";"it"->"Aggiorna";"zh-CN"->"刷新";else->"Actualiser"})}
+    OutlinedButton(onClick={load(false)},enabled=!busy&&briefingDateAllowed(date)){Text(when(language){"en"->"Refresh";"ff-CM"->"Hesɗitin";"es"->"Actualizar";"it"->"Aggiorna";"zh-CN"->"刷新";else->"Actualiser"})}
     if(error)Text(w.error,color=MaterialTheme.colorScheme.error)
     report?.let{Text(briefingText(it,language))}
    }

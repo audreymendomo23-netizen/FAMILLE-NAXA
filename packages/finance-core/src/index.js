@@ -225,6 +225,49 @@ export function calculateCommission(input) {
   });
 }
 
+// ----- Optional commission preparation; never infer a rate, priority, or executor -----
+// A server-side caller must obtain configuration, scope, completed work, payment,
+// and allocations from authoritative records. This pure function does not authorize
+// the caller, post accounting entries, or perform a payment.
+export function prepareAutomaticCommission(input) {
+  const v = record(input, "INVALID_AUTOMATIC_COMMISSION_INPUT");
+  if (v.enabled !== true) return Object.freeze({status:"disabled",entries:[]});
+  const context = record(v.context,"INVALID_COMMISSION_CONTEXT");
+  for (const field of ["organizationId","siteId","serviceId","activityCode"]) {
+    if(typeof context[field]!=="string"||!context[field].trim())throw new TypeError("INVALID_COMMISSION_CONTEXT_"+field);
+  }
+  const date = dateOnly(v.calculationDate,"INVALID_CALCULATION_DATE");
+  if(!Array.isArray(v.policies))throw new TypeError("INVALID_COMMISSION_POLICIES");
+  if(!Array.isArray(v.allocations)||v.allocations.length===0)throw new TypeError("INVALID_COMMISSION_ALLOCATIONS");
+  const members = new Set(v.allocations.map(a=>{
+    record(a,"INVALID_COMMISSION_ALLOCATION");
+    if(typeof a.memberId!=="string"||!UUID.test(a.memberId))throw new TypeError("INVALID_COMMISSION_MEMBER");
+    return a.memberId.toLowerCase();
+  }));
+  const applicable = v.policies.filter(policy=>{
+    record(policy,"INVALID_COMMISSION_POLICY");
+    if(policy.organizationId!==context.organizationId||policy.status!=="approved")return false;
+    if(policy.siteId!=null&&policy.siteId!==context.siteId)return false;
+    if(policy.serviceId!=null&&policy.serviceId!==context.serviceId)return false;
+    if(policy.activityCode!=null&&policy.activityCode!==context.activityCode)return false;
+    // Member-specific policy on a shared prestation is ambiguous unless the
+    // operator supplies a single policy governing the entire explicit allocation.
+    if(policy.memberId!=null&&(typeof policy.memberId!=="string"||!members.has(policy.memberId.toLowerCase())))return false;
+    const from=dateOnly(policy.effectiveFrom,"INVALID_COMMISSION_EFFECTIVE_FROM");
+    const to=policy.effectiveTo==null?null:dateOnly(policy.effectiveTo,"INVALID_COMMISSION_EFFECTIVE_TO");
+    return date>=from&&(to===null||date<=to);
+  });
+  if(applicable.length===0)return Object.freeze({status:"no_applicable_policy",entries:[]});
+  // Do not silently pick a scope priority or a version. Explicit promoter
+  // configuration must remove ambiguity before a commission can be created.
+  if(applicable.length!==1||(applicable[0].memberId!=null&&members.size!==1))return Object.freeze({status:"blocked_ambiguous_policy",entries:[]});
+  const policy=applicable[0];
+  const saleLine=record(v.saleLine,"INVALID_COMMISSION_SALE_LINE");
+  if(saleLine.status!=="completed"||saleLine.paymentStatus!=="confirmed")return Object.freeze({status:"awaiting_completed_and_confirmed",entries:[]});
+  const prepared=calculateCommission({rule:policy.method==="fixed_xaf"?{...policy,method:"fixed_per_completed_line"}:policy,saleLine,allocations:v.allocations,calculationDate:date,sourceEventId:v.sourceEventId});
+  return Object.freeze({...prepared,policyId:policy.id??null});
+}
+
 /** A refund never edits a posted commission; it creates a linked negative adjustment. */
 export function reverseCommission(input) {
   const value = record(input, "INVALID_COMMISSION_REVERSAL");

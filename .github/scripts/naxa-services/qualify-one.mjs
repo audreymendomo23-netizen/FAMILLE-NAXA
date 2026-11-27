@@ -496,7 +496,7 @@ if(!item||!Object.hasOwn(evidence,id)||matrix.items.length!==43)throw Error("Unk
 const repo=process.env.GITHUB_REPOSITORY;
 if(!repo||!process.env.GH_TOKEN)throw Error("GitHub context required");
 const result={id,title:item.title,acceptance:item.acceptance,classification:item.status,campaignCommit:baseline,orchestrationCommit:process.env.GITHUB_SHA??null,checks:[],status:"UNVERIFIED"};
-const api=(path)=>execFileSync("gh",["api",path],{encoding:"utf8",maxBuffer:20*1024*1024,timeout:60000});
+const api=(path)=>execFileSync("gh",["api",...(path.endsWith("/logs")?["--allow-escape-sequences"]:[]),path],{encoding:"utf8",maxBuffer:40*1024*1024,timeout:60000});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function verify(spec){
  const source=jobs[spec.job];
@@ -527,6 +527,7 @@ try{
  }
  const checks=await Promise.all(evidence[id].map(async spec=>{try{return await verify(spec)}catch(e){return {source:spec.job,passed:false,status:"EVIDENCE_ERROR",error:String(e.message).slice(0,300)}}}));
  result.checks.push(...checks);
+ for(const check of checks)if(!check.passed)console.log(JSON.stringify({source:check.source,status:check.status,error:check.error??null,missingMarkers:check.markers?.filter(m=>!m.found).map(m=>m.marker)??[]}));
  const passing=result.checks.length>0&&result.checks.every(x=>x.passed);
  if(item.status==="development")result.status="BLOCKED_DEVELOPMENT";
  else if(item.status==="external")result.status="BLOCKED_EXTERNAL";
