@@ -68,6 +68,9 @@ Deno.serve(async request=>{
  if(result.key!==room_id+"/"+b.recording_id.toLowerCase()+".ogg"||!Number.isSafeInteger(result.bytes)||result.bytes<1000||result.bytes>128*1024*1024)return send(503,{error:"unavailable"});
  const object=await fetch(base+"/storage/v1/object/authenticated/wm-recordings/"+result.key,{headers:{apikey:service,Authorization:"Bearer "+service},redirect:"error",cache:"no-store"});
  if(!object.ok||!object.body||object.headers.has("content-length")&&Number(object.headers.get("content-length"))!==result.bytes)return send(503,{error:"unavailable"});
+ // Revalidate after fetching the private object, before delivering any bytes. Already delivered bytes cannot be recalled.
+ const revalidated=await rpc("wm_recording_archive",{p_hash,p_room:room_id,p_action:"read",p_recording:b.recording_id.toLowerCase(),p_request:b.request_id.toLowerCase()});
+ if(!revalidated||revalidated.key!==result.key||revalidated.sha256!==result.sha256||revalidated.bytes!==result.bytes){await object.body.cancel().catch(()=>{});return send(403,{error:"forbidden"});}
  return new Response(object.body,{status:200,headers:{...cors,"Content-Type":"audio/ogg","Cache-Control":"private, no-store","Content-Disposition":"attachment; filename=widemeet-"+b.recording_id.toLowerCase()+".ogg","X-Content-Type-Options":"nosniff"}});
  }
  if(action==="report-xlsx"){
