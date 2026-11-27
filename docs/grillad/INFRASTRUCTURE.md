@@ -9,3 +9,6 @@ Projet dédié et client Android cm.naxa.grillad à enregistrer/vérifier. Le sc
 Les tests infrastructure.test.mjs vérifient la configuration à blanc et les refus. Le workflow GRILLAD de construction ne contient aucune action de déploiement. Lancer après construction UI et métier ; vérifier le SHA, les résultats et corriger. Le connecteur Firebase non connecté et l'absence d'accès administratif Cloudflare empêchent de créer/vérifier les ressources réelles dans cette passe. Ne pas demander de secrets dans le chat. N0 reste partiel.
 
 Le connecteur Cloudflare existant du monorepo a émis un check automatique `Cloudflare Pages: famille-naxa` sur la branche de travail. Ce check n'atteste pas un projet GRILLAD dédié ; une prévisualisation publique de branche peut être générée par la configuration externe existante. Aucune modification volontaire des réglages Cloudflare ou déploiement de production.
+
+## 4. Priorité produit
+Android natif Kotlin/Compose constitue l'application principale autonome. Cloudflare sert les surfaces web/QR complémentaires, pas une WebView embarquée. Firebase est un service de notifications à raccorder au client GRILLAD. La qualification Android sur appareil est indépendante des builds Web. Pas de publication APK sans validation.

@@ -2,7 +2,7 @@
 
 **Date de référence :** 27 novembre 2026  
 **Produit :** GRILLAD  
-**Type :** application autonome légère de gestion des grillades, sans complexité ERP  
+**Type :** application Android native autonome de gestion des grillades, légère, soignée, sans complexité ERP  
 **Dépôt de référence :** audreymendomo23-netizen/FAMILLE-NAXA  
 **Statut :** référentiel fonctionnel consolidé ; décisions métier et tarifs validés intégrés, décisions historiques conservées, compléments explicitement classés [C], [P] ou [O]  
 **Document de continuité :** [GRILLAD — Continuité de construction](../grillad/GRILLAD_CONTINUITE.md)
@@ -583,8 +583,8 @@ Chaque transaction métier est rattachée à l'organisation et au site. Les règ
 
 ## 14. Exigences non fonctionnelles
 
-1. Interface mobile prioritaire, lisible et rapide pour la vente.
-2. Support Web responsive / PWA dans le cadre d'une application autonome.
+1. Android natif Kotlin + Jetpack Compose, application autonome cm.naxa.grillad et APK propre ; expérience mobile principale, lisible, rapide et visuellement soignée. Aucun wrapper WebView.
+2. Web responsive / PWA complémentaire conservé sans remplacer Android natif ; interfaces QR ZIPPLE et services autorisés indépendants.
 3. Données isolées par application, organisation et site.
 4. Permissions imposées côté serveur, et non seulement dans l'interface.
 5. Aucun secret d'administration ou clé privilégiée dans le client.
@@ -597,6 +597,8 @@ Chaque transaction métier est rattachée à l'organisation et au site. Les règ
 12. Aucune fonctionnalité n'est qualifiée de terminée par la seule compilation.
 
 ## 15. Profils et écrans attendus
+
+**Directive Android native [V — 27/11/2026] :** identité propre, simplicité et excellence visuelle. Navigation compacte adaptée au rôle, opérations fréquentes accessibles immédiatement, états réseau explicites, cibles tactiles confortables. La proposition UX (non design final) et la porte de qualification Android sont précisées dans le document de continuité, §12. Aucun module validé ne disparaît ; la complexité reste derrière les services, pas dans les écrans.
 
 Les écrans ci-dessous forment un découpage UX proposé ; la navigation finale doit être validée avec les utilisateurs de terrain.
 
