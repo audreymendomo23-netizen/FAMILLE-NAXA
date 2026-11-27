@@ -113,10 +113,12 @@ begin
  if not exists(select 1 from public.wm_session_context(p_hash) c where c.session_id=s.session_id and not c.password_change_required) then return null;end if;
  select enabled into agent from public.wm_support_agents where account_id=aid for share;
  agent:=coalesce(agent,false);
- select coalesce((select enabled from public.wm_support_recovery_reviewers where account_id=aid),false) into reviewer;
+ select enabled into reviewer from public.wm_support_recovery_reviewers where account_id=aid for share;
+ reviewer:=coalesce(reviewer,false);
  if p_action='support-capabilities' then return jsonb_build_object('agent',agent,'recovery_reviewer',reviewer);end if;
  if p_action in ('support-recovery-queue','support-recovery-review') then
   if not reviewer then return null;end if;
+  -- Review evidence references are audit pointers, not identity proof or reset authority.
   if p_action='support-recovery-queue' then
    select coalesce(jsonb_agg(to_jsonb(q) order by q.requested_at),'[]'::jsonb) into result from
     (select r.id,r.requested_at,(select count(*) from public.wm_support_recovery_reviews v where v.request_id=r.id and v.decision='escalate') as escalations,
@@ -206,7 +208,7 @@ begin
    call_id:=(p_data->>'call_id')::uuid;
    if not own or call_id is null or t.status not in ('assigned','waiting') or assignment is null or not coalesce((select enabled from public.wm_support_agents where account_id=t.agent_id),false) then return null;end if;
    if call.id is not null then
-    if call.id=call_id and call.requester_session=s.session_id then return jsonb_build_object('id',call.id,'state',call.state,'screen_state',call.screen_state,'screen_id',call.screen_id);end if;return null;
+    if call.id=call_id and call.requester_session=s.session_id then return jsonb_build_object('id',call.id,'state',call.state,'screen_state',call.screen_state,'screen_id',call.screen_id,'transport_ready',false);end if;return null;
    end if;
    insert into public.wm_support_calls(id,ticket_id,assignment_id,requester_session,state,deadline) values(call_id,tid,assignment,s.session_id,'requested',ts+interval '60 seconds') returning * into call;
    insert into public.wm_support_call_events(call_id,actor_id,action) values(call.id,aid,'request');
