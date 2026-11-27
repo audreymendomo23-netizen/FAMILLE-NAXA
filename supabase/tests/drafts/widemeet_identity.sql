@@ -284,6 +284,14 @@ begin
  perform public.wm_issue_verified_session(a,gen_random_uuid(),w,h1,(select credential_epoch from public.wm_accounts where id=a));
  perform public.wm_issue_verified_session(b,gen_random_uuid(),w,h2,(select credential_epoch from public.wm_accounts where id=b));
  perform public.wm_issue_verified_session(c,gen_random_uuid(),w,h3,0);
+ p:='{"interface":"fr","spoken":"ff","listening":"wes","subtitles":"bbj","pdf":"en","rate":"1.25"}'::jsonb;
+ if public.wm_identity_action(h1,'language-save',p) is distinct from p then raise exception 'language save failed';end if;
+ if public.wm_identity_action(h1,'language-preferences','{}') is distinct from p then raise exception 'language read failed';end if;
+ if public.wm_identity_action(h2,'language-preferences','{}')->>'spoken' is distinct from 'auto' then raise exception 'language crossed account';end if;
+ if public.wm_identity_action(h1,'language-save',p||'{"interface":"ff"}') is not null then raise exception 'unqualified interface accepted';end if;
+ if public.wm_identity_action(h1,'language-save',p||'{"rate":1.25}') is not null then raise exception 'numeric rate accepted';end if;
+ if public.wm_identity_action(h1,'language-save',p||jsonb_build_object('account_id',b)) is not null then raise exception 'foreign account override';end if;
+ if public.wm_identity_action(h1,'language-reset','{}')->>'listening' is distinct from 'original' then raise exception 'language reset failed';end if;
  p:=jsonb_build_object('member_id',c,'manager_id',b);
  if public.wm_identity_action(h2,'manager-assign',p) is not null then raise exception 'manager self-granted scope';end if;
  if public.wm_identity_action(h2,'revoke-member',jsonb_build_object('member_id',c)) is not null then raise exception 'unassigned staff revoked';end if;

@@ -1,6 +1,6 @@
 import React,{useEffect,useRef,useState}from"react";
 import{identityAction}from"./session.mjs";
-const languages=[["fr","Français"],["en","English"],["ff","Fulfulde / Fufulbé"],["es","Español"],["it","Italiano"],["zh","中文"],["pcm","Pidgin English"],["ewo","Ewondo"],["dua","Duala"],["bas","Basaa"],["bya","Ghomala’"],["bum","Bulu"],["bax","Bamoun"],["ybb","Yemba"],["mgo","Mungaka"],["ar","العربية"],["pt","Português"],["de","Deutsch"]];
+const languages=[["fr","Français"],["en","English"],["ff","Fulfulde / Fufulbé"],["es","Español"],["it","Italiano"],["zh","中文"],["wes","Cameroon Pidgin English"],["ewo","Ewondo"],["dua","Duala"],["bas","Basaa"],["bbj","Ghomala’"],["bum","Bulu"],["bax","Bamoun"],["ybb","Yemba"],["mhk","Mungaka"],["ar","العربية"],["pt","Português"],["de","Deutsch"]];
 export function LanguageCenter({base,session,locale,onLocale,onArchives}){
  const tr=(fr,en)=>locale==="en"?en:fr;const [value,V]=useState(null),[busy,B]=useState(false),[error,E]=useState(false),[saved,S]=useState(false),[preview,P]=useState("");
  const run=useRef(false),serial=useRef(0),alive=useRef(false),utterance=useRef(null);

@@ -247,9 +247,9 @@ grant execute on function public.wm_finish_password_change(text,uuid) to service
 alter table public.wm_accounts add column locale text not null default 'fr' check(locale in ('fr','en'));
 -- Account-wide declared preferences, not evidence of language support.
 alter table public.wm_accounts
- add column spoken_language text not null default 'auto' check(spoken_language in ('auto','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de')),
- add column listening_language text not null default 'original' check(listening_language in ('original','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de')),
- add column subtitle_language text not null default 'original' check(subtitle_language in ('original','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de')),
+ add column spoken_language text not null default 'auto' check(spoken_language in ('auto','fr','en','ff','es','it','zh','wes','ewo','dua','bas','bbj','bum','bax','ybb','mhk','ar','pt','de')),
+ add column listening_language text not null default 'original' check(listening_language in ('original','fr','en','ff','es','it','zh','wes','ewo','dua','bas','bbj','bum','bax','ybb','mhk','ar','pt','de')),
+ add column subtitle_language text not null default 'original' check(subtitle_language in ('original','fr','en','ff','es','it','zh','wes','ewo','dua','bas','bbj','bum','bax','ybb','mhk','ar','pt','de')),
  add column pdf_language text not null default 'fr' check(pdf_language in ('fr','en')),
  add column speech_rate text not null default '1' check(speech_rate in ('0.75','1','1.25','1.5'));
 
@@ -353,7 +353,7 @@ begin
  when 'language-save' then
   if jsonb_typeof(p_data) is distinct from 'object' or (select count(*) from jsonb_object_keys(p_data))<>6 or not (p_data ?& array['interface','spoken','listening','subtitles','pdf','rate']) then return null;end if;
   if exists(select 1 from jsonb_each(p_data) x where jsonb_typeof(x.value) is distinct from 'string') then return null;end if;
-  if p_data->>'interface' not in ('fr','en') or p_data->>'spoken' not in ('auto','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de') or p_data->>'listening' not in ('original','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de') or p_data->>'subtitles' not in ('original','fr','en','ff','es','it','zh','pcm','ewo','dua','bas','bya','bum','bax','ybb','mgo','ar','pt','de') or p_data->>'pdf' not in ('fr','en') or p_data->>'rate' not in ('0.75','1','1.25','1.5') then return null;end if;
+  if p_data->>'interface' not in ('fr','en') or p_data->>'spoken' not in ('auto','fr','en','ff','es','it','zh','wes','ewo','dua','bas','bbj','bum','bax','ybb','mhk','ar','pt','de') or p_data->>'listening' not in ('original','fr','en','ff','es','it','zh','wes','ewo','dua','bas','bbj','bum','bax','ybb','mhk','ar','pt','de') or p_data->>'subtitles' not in ('original','fr','en','ff','es','it','zh','wes','ewo','dua','bas','bbj','bum','bax','ybb','mhk','ar','pt','de') or p_data->>'pdf' not in ('fr','en') or p_data->>'rate' not in ('0.75','1','1.25','1.5') then return null;end if;
   update public.wm_accounts set locale=p_data->>'interface',spoken_language=p_data->>'spoken',listening_language=p_data->>'listening',subtitle_language=p_data->>'subtitles',pdf_language=p_data->>'pdf',speech_rate=p_data->>'rate' where id=a.id;
   return p_data;
  when 'language-reset' then

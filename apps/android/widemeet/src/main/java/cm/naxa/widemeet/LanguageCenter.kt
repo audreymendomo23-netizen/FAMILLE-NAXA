@@ -10,7 +10,7 @@ import cm.naxa.widemeet.auth.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-private val languageOptions=listOf("fr" to "Français","en" to "English","ff" to "Fulfulde / Fufulbé","es" to "Español","it" to "Italiano","zh" to "中文","pcm" to "Pidgin English","ewo" to "Ewondo","dua" to "Duala","bas" to "Basaa","bya" to "Ghomala’","bum" to "Bulu","bax" to "Bamoun","ybb" to "Yemba","mgo" to "Mungaka","ar" to "العربية","pt" to "Português","de" to "Deutsch")
+private val languageOptions=listOf("fr" to "Français","en" to "English","ff" to "Fulfulde / Fufulbé","es" to "Español","it" to "Italiano","zh" to "中文","wes" to "Cameroon Pidgin English","ewo" to "Ewondo","dua" to "Duala","bas" to "Basaa","bbj" to "Ghomala’","bum" to "Bulu","bax" to "Bamoun","ybb" to "Yemba","mhk" to "Mungaka","ar" to "العربية","pt" to "Português","de" to "Deutsch")
 @Composable private fun LanguageChoice(label:String,value:String,options:List<Pair<String,String>>,enabled:Boolean,onChange:(String)->Unit){
  var expanded by remember{mutableStateOf(false)}
  Text(label,style=MaterialTheme.typography.labelLarge)
