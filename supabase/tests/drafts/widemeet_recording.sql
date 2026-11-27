@@ -2,8 +2,8 @@
 begin;
 insert into auth.users(id) values('00000000-0000-4000-8000-000000000081'),('00000000-0000-4000-8000-000000000082');
 insert into public.wm_accounts(id,auth_user_id,login_id,auth_alias,display_name) values
-('10000000-0000-4000-8000-000000000081','00000000-0000-4000-8000-000000000081','WM-RECHOST','rec-host@example.invalid','Host'),
-('10000000-0000-4000-8000-000000000082','00000000-0000-4000-8000-000000000082','WM-RECGUEST','rec-guest@example.invalid','Guest');
+('10000000-0000-4000-8000-000000000081','00000000-0000-4000-8000-000000000081','WM-RECHOST01','rec-host@example.invalid','Host'),
+('10000000-0000-4000-8000-000000000082','00000000-0000-4000-8000-000000000082','WM-RECGUEST01','rec-guest@example.invalid','Guest');
 insert into public.wm_workspaces(id,kind,name) values('20000000-0000-4000-8000-000000000081','enterprise','Recording recipe');
 insert into public.wm_memberships(account_id,workspace_id,role) values
 ('10000000-0000-4000-8000-000000000081','20000000-0000-4000-8000-000000000081','promoteur'),
