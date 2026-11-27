@@ -25,7 +25,7 @@ create table grillad_private.notice_read(
  primary key(org,site,actor,notice_id),foreign key(org,site) references grillad_private.enabled_sites(org,site)
 );
 create table grillad_private.notice_preference(
- org uuid not null,site uuid not null,actor uuid not null,category text not null check(category in ('sales','stock','cash','daily','attendance','connect','security')),
+ org uuid not null,site uuid not null,actor uuid not null,category text not null check(category in ('sales','stock','cash','daily','attendance','connect','security','target','subscription')),
  enabled boolean not null,primary key(org,site,actor,category),foreign key(org,site) references grillad_private.enabled_sites(org,site)
 );
 alter table grillad_private.service_policy enable row level security;
@@ -94,6 +94,10 @@ begin
  select 'event:'||e.id as id,case when action in ('sell','sell_basket') then 'sales' when action in ('prepare','adjust_stock') then 'stock' else 'cash' end as category,
  case when action in ('sell','sell_basket') then 'Vente confirmée' when action='prepare' then 'Préparation enregistrée' when action='adjust_stock' then 'Ajustement de stock enregistré' when action='cancel_expense' then 'Dépense annulée' when action='cash_recount_request' then 'Demande de recomptage enregistrée' when action='cash_recount_decide' then 'Décision de recomptage enregistrée' when action='close_cash' then 'Clôture de caisse enregistrée' else 'Dépense enregistrée' end as text,e.created_at at
  from grillad_private.events e where org=p_org and site=p_site and action in ('sell','sell_basket','prepare','adjust_stock','close_cash','expense','cancel_expense','cash_recount_request','cash_recount_decide') and (r<>'seller' or (e.actor=u and action in ('sell','sell_basket','prepare')))
+ union all select 'zero-stock:'||i.id||':'||(now() at time zone 'Africa/Douala')::date,'stock','Article sans quantité disponible',now()::date::timestamptz from grillad_private.items i where i.org=p_org and i.site=p_site and i.active and i.prepared>0 and i.prepared-i.sold-i.connect_reserved=0 and r<>'seller'
+ union all select 'cash-gap:'||c.id,'cash','Écart de caisse à examiner',c.closed_at from grillad_private.cash c where c.org=p_org and c.site=p_site and c.closed_at is not null and c.counted<>c.expected and r<>'seller'
+ union all select 'target:'||t.day,'target','Objectif de chiffre d’affaires atteint',t.day::timestamp at time zone 'Africa/Douala' from grillad_private.targets t where t.org=p_org and t.site=p_site and t.amount>0 and t.day=(now() at time zone 'Africa/Douala')::date and r<>'seller' and (select coalesce(sum(s.total),0) from grillad_private.sales s where s.org=p_org and s.site=p_site and s.cancelled_at is null and (s.created_at at time zone 'Africa/Douala')::date=t.day)>=t.amount
+ union all select 'subscription:'||s.id||':'||s.ends_at::date,'subscription','Abonnement proche de son échéance',s.ends_at from famille_core.subscriptions s join famille_core.applications a on a.id=s.app_id where s.organization_id=p_org and a.code='grillad' and s.status='active' and s.ends_at between now() and now()+interval '3 days' and r='owner'
  union all select 'daily:'||service_day,'daily','Point journalier disponible',max(generated_at) from grillad_private.daily_summary where org=p_org and site=p_site and r<>'seller' group by service_day
  union all select 'attendance:'||a.id,'attendance','Pointage confirmé',a.received_at from grillad_private.attendance a where org=p_org and site=p_site and (r<>'seller' or a.actor=u)
  union all select 'correction:'||c.id,'attendance','Régularisation de pointage demandée',c.requested_at from grillad_private.attendance_corrections c where c.org=p_org and c.site=p_site and (r<>'seller' or c.requester=u)

@@ -168,13 +168,15 @@ declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-00
 begin
  v:=public.grillad_daily_list(o,s);if jsonb_array_length(v)<1 then raise exception 'missing daily';end if;
  if not((v->0->'data')?'provisional') or not((v->0->'data')?'operating_result') then raise exception 'daily financial completeness';end if;
- v:=public.grillad_prediction(o,s);if v->'ca_estimate'<>'null'::jsonb or v->'items'->0->>'quality'<>'insufficient' then raise exception 'insufficient forecast must be explicit';end if;
+ v:=public.grillad_prediction(o,s);if not(v?'families') or not(v?'current_service') or v->'current_service'->'projection'<>'null'::jsonb then raise exception 'insufficient current forecast';end if;
+ if v->'ca_estimate'<>'null'::jsonb or v->'items'->0->>'quality'<>'insufficient' then raise exception 'insufficient forecast must be explicit';end if;
  v:=public.grillad_notice_feed(o,s);if not exists(select 1 from jsonb_array_elements(v->'items') x where x->>'category'='connect') then raise exception 'connect notification missing';end if;
  if (select count(*) from jsonb_array_elements(v->'items') x where x->>'category'='connect')<>(select count(distinct x->>'id') from jsonb_array_elements(v->'items') x where x->>'category'='connect') then raise exception 'duplicate connect notices';end if;
  select x->>'id' into notice from jsonb_array_elements(v->'items') x where x->>'category'='daily' limit 1;
  if notice is null then raise exception 'missing notice';end if;
  perform public.grillad_notice_ack(o,s,notice);perform public.grillad_notice_ack(o,s,notice);
  v:=public.grillad_notice_feed(o,s);if not exists(select 1 from jsonb_array_elements(v->'items') x where x->>'id'=notice and (x->>'read')::boolean) then raise exception 'notice read';end if;
+ perform public.grillad_notice_set(o,s,'target',false);perform public.grillad_notice_set(o,s,'subscription',false);
  perform public.grillad_notice_set(o,s,'daily',false);
  if exists(select 1 from jsonb_array_elements(public.grillad_notice_feed(o,s)->'items') x where x->>'category'='daily') then raise exception 'notice preference';end if;
 end $$;
