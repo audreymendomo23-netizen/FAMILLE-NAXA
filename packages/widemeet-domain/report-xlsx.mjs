@@ -21,11 +21,13 @@ function zip(files){
 export function buildReportXlsx(report,locale="fr"){
  if(!report||typeof report.title!=="string"||typeof report.recipient!=="string"||!Array.isArray(report.tasks)||!Array.isArray(report.polls)||report.tasks.length>100||report.polls.length>1000)throw Error("invalid_report");
  const tr=(fr,en)=>locale==="en"?en:fr,p=report.presence??{rows:[],samples:0,coverage_ms:0};
+ const num=v=>typeof v==="number"&&Number.isFinite(v)?v:"";
+ const flag=v=>v===true?tr("Oui","Yes"):v===false?tr("Non","No"):"";
  const rows=[
   [["WideMeet",tr("Rapport de réunion","Meeting report")],[tr("Réunion","Meeting"),report.title],[tr("Identifiant","Identifier"),report.room_id],[tr("Clôture","Closed"),report.closed_at],[tr("Destinataire","Recipient"),report.recipient],[tr("Observations SFU","SFU samples"),p.samples],[tr("Couverture estimée (ms)","Estimated coverage (ms)"),Number(p.coverage_ms??0)],[tr("Limite","Limitation"),tr("Connexions observées, pas une présence humaine continue.","Observed connections, not continuous human attendance.")]],
   [[tr("Participant","Participant"),tr("État","State"),tr("Observations","Samples"),tr("Durée estimée (ms)","Estimated duration (ms)")],...(p.rows??[]).map(x=>[x.display_name,x.attendance,Number(x.samples_seen),Number(x.estimated_ms)])],
   [[tr("Tâche","Task"),tr("Responsable","Assignee"),tr("Échéance","Due"),tr("État","State")],...report.tasks.map(x=>[x.title,x.assignee,x.due_at,x.state])],
-  [[tr("Question","Question"),tr("Option","Option"),tr("Réponses","Responses")],...report.polls.flatMap(x=>x.options.map(o=>[x.question??tr("Vote","Poll"),o.label,Number(o.count)]))]
+  [[tr("Question","Question"),tr("Option","Option"),tr("Réponses option","Option responses"),tr("Éligibles","Eligible"),tr("Répondants","Respondents"),tr("Non-répondants","Nonrespondents"),tr("Participation (%)","Response rate (%)"),tr("Quorum (%)","Quorum (%)"),tr("Quorum atteint","Quorum met"),tr("Seuil (%)","Threshold (%)"),tr("Part des répondants (%)","Respondent share (%)"),tr("Seuil atteint","Threshold met")],...report.polls.flatMap(x=>x.options.map(o=>[x.question??tr("Vote","Poll"),o.label,Number(o.count),num(x.eligible),num(x.responses),num(x.nonresponses),num(x.response_rate),num(x.quorum),flag(x.quorum_met),num(x.threshold),num(o.share_pct),flag(o.accepted)]))]
  ];
  const names=[tr("Synthèse","Summary"),tr("Présences","Attendance"),tr("Tâches","Tasks"),tr("Votes","Polls")];
  const rel="http://schemas.openxmlformats.org/package/2006/relationships",docrel="http://schemas.openxmlformats.org/officeDocument/2006/relationships";
