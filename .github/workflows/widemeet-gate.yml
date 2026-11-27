@@ -14,6 +14,7 @@ on:
       - 'supabase/tests/drafts/widemeet_*.sql'
       - 'supabase/functions/widemeet-auth/**'
       - 'supabase/functions/widemeet-room/**'
+      - 'supabase/functions/widemeet-push-scheduler/**'
       - '.github/workflows/widemeet-gate.yml'
       - '.github/workflows/family-audio-replay.yml'
   pull_request:
@@ -190,4 +191,4 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - run: deno check supabase/functions/widemeet-auth/index.ts supabase/functions/widemeet-room/index.ts
+      - run: deno check supabase/functions/widemeet-auth/index.ts supabase/functions/widemeet-room/index.ts supabase/functions/widemeet-push-scheduler/index.ts
