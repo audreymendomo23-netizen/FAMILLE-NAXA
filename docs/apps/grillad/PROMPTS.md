@@ -1,5 +1,7 @@
 # Dossier de prompts — GrillaD
 
+> **Référence historique — mise à jour du 27/11/2026 :** [GRILLAD V1.4](../../cahiers-des-charges/GRILLAD_V1_4.md) prévaut. Application légère, pointage arrivée/départ avec heure, GPS et photo en architecture multiniveau, et intégration ZIPPLE Snack-Bar validés. Les anciennes exclusions/complexités incompatibles ne sont plus applicables. Voir aussi le document de continuité de construction.
+
 > Prompts de construction de l'application GrillaD, alignés sur le socle de la Famille NAXA.
 > Version 1.1 · 14 novembre 2026.
 > Cahier de référence : `../01-cahiers-des-charges/08-grillad.md` (adapter le chemin relatif selon l'emplacement du dépôt).
