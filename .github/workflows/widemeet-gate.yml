@@ -135,6 +135,8 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_billing.sql
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n3_recording.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_recording.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_minutes.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_minutes.sql
   edge-typecheck:
     runs-on: ubuntu-24.04
     steps:
