@@ -2,6 +2,7 @@
 import {createRoom,applyRoom,mediaPermission,pollSummary} from "../../../packages/widemeet-domain/room-policy.mjs";
 import {buildReportXlsx} from "../../../packages/widemeet-domain/report-xlsx.mjs";
 import {seriesDates} from "../../../packages/widemeet-domain/series.mjs";
+import {signReceiverGrant} from "../../../packages/media-core/widemeet-receiver.mjs";
 const base=(Deno.env.get("SUPABASE_URL")??"").replace(/\/$/,"");
 const service=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")??"";
 const origins=new Set((Deno.env.get("WM_ALLOWED_ORIGINS")??"").split(",").map(x=>x.trim()).filter(Boolean));
@@ -58,6 +59,24 @@ Deno.serve(async request=>{
  const b=JSON.parse(text);if(b?.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
  const p_hash=await hash(token),now=Date.now();
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
+ if(action==="connect"){
+  if(Deno.env.get("WM_CONNECT_QUALIFIED")!=="true"||Deno.env.get("WM_MEDIA_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+  if(!["offer","preview","confirm","receive","source-stop","source-status","receiver-stop","policy"].includes(b.action)||!b.data||typeof b.data!=="object"||Array.isArray(b.data))return send(400,{error:"invalid_request"});
+  const d={...b.data};
+  if(["offer","preview","confirm","receive","receiver-stop"].includes(b.action)){
+   if(typeof d.code!=="string"||!/^[a-f0-9]{64}$/.test(d.code))return send(400,{error:"invalid_request"});
+   d.code_hash=await hash(d.code);delete d.code;
+  }
+  if(b.action==="confirm")d.lease_id=crypto.randomUUID();
+  const result=await rpc("wm_display_action",{p_hash,p_action:b.action,p_data:d});
+  if(!result)return send(403,{error:"forbidden"});
+  if(b.action!=="receive"||result.pending===true)return send(200,result);
+  const key=Deno.env.get("WM_LIVEKIT_API_KEY")??"",secret=Deno.env.get("WM_LIVEKIT_API_SECRET")??"";
+  const endpoint=new URL(Deno.env.get("WM_LIVEKIT_URL")??"");
+  if(endpoint.protocol!=="wss:"||endpoint.username||endpoint.password||endpoint.pathname!=="/"||endpoint.search||endpoint.hash)throw Error("media_unavailable");
+  const g=signReceiverGrant({ctx:result.ctx,lease:result.lease,key,secret});
+  return send(200,{url:endpoint.origin,token:g.token,identity:g.identity,expires_at:g.expiresAt});
+ }
  if(action==="recordings"||action==="recording-download"){
  if(Deno.env.get("WM_RECORDING_STORAGE_QUALIFIED")!=="true"||!uuid.test(b.room_id??""))return send(403,{error:"forbidden"});
  const room_id=b.room_id.toLowerCase(),reading=action==="recording-download";

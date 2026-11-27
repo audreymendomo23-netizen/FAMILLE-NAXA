@@ -603,7 +603,7 @@ try{
   await hp.getByRole("button",{name:"Envoyer",exact:true}).click();
   await hp.waitForFunction(()=>document.querySelector("textarea")?.value==="");
   await hp.getByText("B2 lost response fixture",{exact:true}).waitFor();
-  assert.equal((await centerOk(hs.access_token,"thread",{peer_id:g.id,query:"B2 lost response fixture"})).items.length,1);
+  const b2checkSession=await login(h);assert.equal((await centerOk(b2checkSession.access_token,"thread",{peer_id:g.id,query:"B2 lost response fixture"})).items.length,1);
   pass("B2 direct chat committed lost response, polling remains active and retry stays idempotent");
  }finally{await hp.unroute(lostPattern)}
  await menuPage("Statistiques");

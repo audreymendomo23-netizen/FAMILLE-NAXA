@@ -74,5 +74,7 @@ export function createMediaProxy({upstream,key,secret,readAdmission,allowedOrigi
   }))}finally{running=false}
  },checkEveryMs);timer.unref();
  server.on("close",()=>{clearInterval(timer);leases.clear();for(const e of active){e.client.terminate();e.peer.terminate()}wss.close()});
- return {server,disconnect};
+ // B2 source confirmation requires an actual open signaling socket bound to the same device session.
+ function sourceActive(room,identity,sessionHash){const l=leases.get(room+"\n"+identity);return !!l&&!l.revoking&&l.grant.sessionHash===sessionHash&&[...active].some(e=>e.grant.room===room&&e.grant.identity===identity&&e.grant.sessionHash===sessionHash&&e.client.readyState===WebSocket.OPEN&&e.peer.readyState===WebSocket.OPEN)}
+ return {server,disconnect,sourceActive};
 }

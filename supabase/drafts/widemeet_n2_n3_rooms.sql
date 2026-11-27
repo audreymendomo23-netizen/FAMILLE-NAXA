@@ -171,4 +171,148 @@ language sql security invoker stable set search_path=pg_catalog,public as $wm$
 $wm$;
 revoke all on function public.wm_room_contacts(text) from public,anon,authenticated;
 grant execute on function public.wm_room_contacts(text) to service_role;
+
+-- B2 Connect: private ledger. Explicit host permission; only standard rooms initially.
+create table public.wm_display_policy(
+ room_id uuid primary key references public.wm_rooms(id),
+ enabled boolean not null default false
+);
+create table public.wm_display_offers(
+ code_hash text primary key check(code_hash~'^[a-f0-9]{64}),
+ receiver_session uuid not null references public.wm_device_sessions(id),
+ receiver_name text not null check(length(receiver_name) between 1 and 80),
+ created_at timestamptz not null default clock_timestamp(),
+ expires_at timestamptz not null,
+ used_at timestamptz
+);
+create table public.wm_display_leases(
+ id uuid primary key, room_id uuid not null references public.wm_rooms(id),
+ source_session uuid not null references public.wm_device_sessions(id),
+ receiver_session uuid not null references public.wm_device_sessions(id),
+ offer_hash text not null unique references public.wm_display_offers(code_hash),
+ expires_at timestamptz not null, revoked_at timestamptz,
+ check(source_session<>receiver_session)
+);
+create index wm_display_source_idx on public.wm_display_leases(source_session,room_id);
+alter table public.wm_display_policy enable row level security;
+alter table public.wm_display_offers enable row level security;
+alter table public.wm_display_leases enable row level security;
+revoke all on public.wm_display_policy,public.wm_display_offers,public.wm_display_leases from public,anon,authenticated;
+grant select,insert,update on public.wm_display_policy,public.wm_display_offers,public.wm_display_leases to service_role;
+
+-- Only trusted Edge/proxy calls this function. Never send source_hash to a client.
+create function public.wm_display_context(p_id uuid) returns jsonb
+language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare l public.wm_display_leases%rowtype; ss public.wm_device_sessions%rowtype; rs public.wm_device_sessions%rowtype; r public.wm_rooms%rowtype; a record; p jsonb; now_ms bigint;
+begin
+ select * into l from public.wm_display_leases where id=p_id and revoked_at is null and expires_at>clock_timestamp();if not found then return null;end if;
+ select * into ss from public.wm_device_sessions where id=l.source_session;
+ select * into rs from public.wm_device_sessions where id=l.receiver_session;
+ if ss.id is null or rs.id is null or ss.account_id<>rs.account_id or ss.workspace_id<>rs.workspace_id or ss.installation_id=rs.installation_id
+ or not exists(select 1 from public.wm_session_context(ss.token_hash) x where not x.password_change_required)
+ or not exists(select 1 from public.wm_session_context(rs.token_hash) x where not x.password_change_required) then return null;end if;
+ select * into r from public.wm_rooms where id=l.room_id and workspace_id=ss.workspace_id;
+ if not found or r.state->>'status' is distinct from 'open' or coalesce(r.state->>'confidentiality','standard')<>'standard'
+ or not exists(select 1 from public.wm_display_policy d where d.room_id=r.id and d.enabled) then return null;end if;
+ select * into a from public.wm_room_actor_for(ss.token_hash,r.id);if not found or a.account_id<>ss.account_id or a.workspace_id<>r.workspace_id then return null;end if;
+ now_ms:=floor(extract(epoch from clock_timestamp())*1000)::bigint;
+ if (r.state->>'endMs')::bigint<=now_ms or a.entitlement_end_ms<=now_ms then return null;end if;
+ select x into p from jsonb_array_elements(r.state->'participants') x where x->>'memberId'=ss.account_id::text and x->>'excluded'='false' and x->>'response'='accepted';
+ if p is null or (r.state->>'lobbyRequired'='true' and ss.account_id<>r.host_id and p->>'lobbyStatus' is distinct from 'admitted') then return null;end if;
+ return jsonb_build_object('source_hash',ss.token_hash,
+ 'ctx',jsonb_build_object(
+ 'meeting',jsonb_build_object('id',r.id,'orgId',r.workspace_id,'status','open','endMs',least((r.state->>'endMs')::bigint,a.entitlement_end_ms),'confidentiality','standard'),
+ 'actor',jsonb_build_object('enabled',true,'displayAllowed',true,'orgId',r.workspace_id,'meetingId',r.id,'memberId',ss.account_id),
+ 'source',jsonb_build_object('active',true,'orgId',r.workspace_id,'meetingId',r.id,'memberId',ss.account_id,'id',ss.id),
+ 'receiver',jsonb_build_object('approved',true,'active',true,'kind','widemeet_receiver','memberId',rs.account_id,'orgId',rs.workspace_id,'id',rs.id),
+ 'policy',jsonb_build_object('displayEnabled',true,'confidentialDisplayAllowed',false)),
+ 'lease',jsonb_build_object('id',l.id,'orgId',r.workspace_id,'meetingId',r.id,'memberId',ss.account_id,'sourceId',ss.id,'receiverId',rs.id,
+ 'expiresMs',least(floor(extract(epoch from l.expires_at)*1000)::bigint,(r.state->>'endMs')::bigint,a.entitlement_end_ms),'revoked',false,
+ 'canSubscribe',true,'canPublish',false,'canRecord',false,'canChat',false,'canControl',false));
+end $wm$;
+revoke all on function public.wm_display_context(uuid) from public,anon,authenticated;
+grant execute on function public.wm_display_context(uuid) to service_role;
+
+create function public.wm_display_action(p_hash text,p_action text,p_data jsonb)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare s record; a record; r public.wm_rooms%rowtype; o public.wm_display_offers%rowtype; rs public.wm_device_sessions%rowtype; l public.wm_display_leases%rowtype; rid uuid; lid uuid; ch text; n text; v jsonb; now_at timestamptz;
+begin
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ select * into s from public.wm_session_context(p_hash) where not password_change_required;
+ if not found then return null;end if;
+ now_at:=clock_timestamp();
+ if p_action='offer' then
+  ch:=p_data->>'code_hash';n:=btrim(p_data->>'name');
+  if ch is null or ch!~'^[a-f0-9]{64} or n is null or length(n) not between 1 and 80 then return null;end if;
+  select * into o from public.wm_display_offers where code_hash=ch;
+  if found then if o.receiver_session=s.session_id and o.receiver_name=n and o.used_at is null and o.expires_at>now_at then return jsonb_build_object('offered',true);end if;return null;end if;
+  if (select count(*) from public.wm_display_offers where receiver_session=s.session_id and created_at>now_at-interval '1 minute')>=5 then return null;end if;
+  insert into public.wm_display_offers(code_hash,receiver_session,receiver_name,expires_at) values(ch,s.session_id,n,now_at+interval '60 seconds');
+  return jsonb_build_object('offered',true);
+ end if;
+ if p_action='receive' then
+  ch:=p_data->>'code_hash';
+  select * into o from public.wm_display_offers where code_hash=ch and receiver_session=s.session_id;
+  if not found then return null;end if;
+  if o.used_at is null then if o.expires_at>now_at then return jsonb_build_object('pending',true);end if;return null;end if;
+  select * into l from public.wm_display_leases where offer_hash=ch and receiver_session=s.session_id for update;
+  if not found then return null;end if;
+  v:=public.wm_display_context(l.id);if v is null then return null;end if;
+  -- Renew only before expiration, never resurrect revoked or expired leases.
+  update public.wm_display_leases set expires_at=now_at+interval '30 seconds' where id=l.id;
+  return public.wm_display_context(l.id);
+ end if;
+ if p_action='receiver-stop' then
+  ch:=p_data->>'code_hash';
+  select * into o from public.wm_display_offers where code_hash=ch and receiver_session=s.session_id;
+  if not found then return null;end if;
+  update public.wm_display_offers set used_at=coalesce(used_at,now_at) where code_hash=ch;
+  update public.wm_display_leases set revoked_at=coalesce(revoked_at,now_at) where offer_hash=ch and receiver_session=s.session_id;
+  return jsonb_build_object('stopped',true);
+ end if;
+ rid:=(p_data->>'room_id')::uuid;if rid is null then return null;end if;
+ select * into a from public.wm_lock_room_actor_for(p_hash,rid);if not found or a.workspace_id<>s.workspace_id then return null;end if;
+ select * into r from public.wm_rooms where id=rid and workspace_id=s.workspace_id for share;
+ if not found then return null;end if;
+ if p_action='source-stop' then
+  update public.wm_display_leases set revoked_at=coalesce(revoked_at,now_at) where source_session=s.session_id and room_id=rid;
+  return jsonb_build_object('stopped',true);
+ end if;
+ if r.state->>'status' is distinct from 'open' or coalesce(r.state->>'confidentiality','standard')<>'standard'
+ or (r.state->>'endMs')::bigint<=floor(extract(epoch from now_at)*1000)::bigint then return null;end if;
+ if not exists(select 1 from jsonb_array_elements(r.state->'participants') x where x->>'memberId'=s.account_id::text and x->>'excluded'='false' and x->>'response'='accepted' and (coalesce(r.state->>'lobbyRequired','false')<>'true' or s.account_id=r.host_id or x->>'lobbyStatus'='admitted')) then return null;end if;
+ if p_action='policy' then
+  if s.account_id<>r.host_id or jsonb_typeof(p_data->'enabled') is distinct from 'boolean' then return null;end if;
+  insert into public.wm_display_policy(room_id,enabled) values(rid,(p_data->>'enabled')::boolean) on conflict(room_id) do update set enabled=excluded.enabled;
+  if not (p_data->>'enabled')::boolean then update public.wm_display_leases set revoked_at=coalesce(revoked_at,now_at) where room_id=rid;end if;
+  return jsonb_build_object('enabled',(p_data->>'enabled')::boolean);
+ end if;
+ if p_action='source-status' then
+  select * into l from public.wm_display_leases x where x.source_session=s.session_id and x.room_id=rid and x.revoked_at is null and x.expires_at>now_at order by x.expires_at desc limit 1;
+  if found and public.wm_display_context(l.id) is not null then
+   select * into o from public.wm_display_offers where code_hash=l.offer_hash;
+   return jsonb_build_object('enabled',true,'receiver_name',o.receiver_name,'lease_id',l.id);
+  end if;
+  return jsonb_build_object('enabled',exists(select 1 from public.wm_display_policy d where d.room_id=rid and d.enabled));
+ end if;
+ if not exists(select 1 from public.wm_display_policy d where d.room_id=rid and d.enabled) then return null;end if;
+ if p_action not in ('preview','confirm') then return null;end if;
+ ch:=p_data->>'code_hash';
+ select * into o from public.wm_display_offers where code_hash=ch and used_at is null and expires_at>now_at for update;
+ if not found then return null;end if;
+ select * into rs from public.wm_device_sessions where id=o.receiver_session;
+ if not found or rs.account_id<>s.account_id or rs.workspace_id<>s.workspace_id or rs.installation_id=s.installation_id
+ or not exists(select 1 from public.wm_session_context(rs.token_hash) x where not x.password_change_required) then return null;end if;
+ if p_action='preview' then return jsonb_build_object('receiver_name',o.receiver_name);end if;
+ if p_data->>'receiver_name' is distinct from o.receiver_name then return null;end if;
+ lid:=(p_data->>'lease_id')::uuid;if lid is null then return null;end if;
+ -- A new receiver replaces the old one; a used code can never be redeemed twice.
+ update public.wm_display_leases set revoked_at=coalesce(revoked_at,now_at) where revoked_at is null and (source_session=s.session_id or receiver_session=rs.id);
+ update public.wm_display_offers set used_at=now_at where code_hash=ch;
+ insert into public.wm_display_leases(id,room_id,source_session,receiver_session,offer_hash,expires_at) values(lid,rid,s.session_id,rs.id,ch,now_at+interval '30 seconds');
+ return jsonb_build_object('confirmed',true,'receiver_name',o.receiver_name,'lease_id',lid);
+exception when invalid_text_representation or unique_violation then return null;
+end $wm$;
+revoke all on function public.wm_display_action(text,text,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_display_action(text,text,jsonb) to service_role;
 commit;
