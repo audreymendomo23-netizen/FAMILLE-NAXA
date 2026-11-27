@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import{accountKey,validateRequest}from './uncertain-journal.mjs';
+const id='12345678-1234-1234-1234-123456789abc';test('journal accepts only server-account UUID and scoped replayable action',()=>{assert.equal(accountKey(id.toUpperCase()),id);assert.throws(()=>accountKey('other'));assert.throws(()=>validateRequest({action:'login',org:id,site:id,event:id}));assert.throws(()=>validateRequest({action:'mutate',org:id,event:id}));assert.equal(validateRequest({action:'mutate',org:id,site:id,event:id}).event,id)});

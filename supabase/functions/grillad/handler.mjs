@@ -38,16 +38,17 @@ export async function handle(request,env,fetcher=fetch){
    if(!uuid.test(sid)||!await control('grillad_auth_finish',{p_hash:hash,p_user:s.user.id,p_session:sid,p_installation:body.installation,p_platform:body.platform}))return reply(403,{error:'DEVICE_OR_GRANT_DENIED'});
    const w=await post('/rest/v1/rpc/grillad_workspace',{},s.access_token);
    if(!w.ok||!Array.isArray(w.result)||!w.result.length)return reply(403,{error:'NO_WORKSPACE'});
-   return reply(200,{result:{access:s.access_token,refresh:s.refresh_token,sites:w.result}});
+   return reply(200,{result:{user_id:s.user.id,access:s.access_token,refresh:s.refresh_token,sites:w.result}});
   }
   if(body.action==='refresh'){
    if(typeof body.refresh!=='string'||body.refresh.length<10||body.refresh.length>8192)return reply(400,{error:'INVALID_REFRESH'});
    const x=await post('/auth/v1/token?grant_type=refresh_token',{refresh_token:body.refresh});
    if(!x.ok)return upstream(x);const s=x.result;
    if(!s?.access_token||!s?.refresh_token)return reply(401,{error:'SESSION'});
+   let uid=s.user?.id;try{uid=uid||JSON.parse(atob(s.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/'))).sub}catch{}if(!uuid.test(uid))return reply(401,{error:'SESSION'});
    const w=await post('/rest/v1/rpc/grillad_workspace',{},s.access_token);
    if(!w.ok||!Array.isArray(w.result)||!w.result.length)return reply(403,{error:'NO_WORKSPACE'});
-   return reply(200,{result:{access:s.access_token,refresh:s.refresh_token,sites:w.result}});
+   return reply(200,{result:{user_id:uid,access:s.access_token,refresh:s.refresh_token,sites:w.result}});
   }
   if(['connect_catalog','connect_submit','connect_status'].includes(body.action)){
    if(!env.service||typeof body.qr!=='string'||!/^[A-Za-z0-9_-]{32,128}$/.test(body.qr))return reply(403,{error:'PARTNER_UNAVAILABLE'});
