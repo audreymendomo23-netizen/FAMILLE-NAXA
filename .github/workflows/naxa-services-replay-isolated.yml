@@ -559,6 +559,48 @@ jobs:
                   assert.equal(await count('ns_customers',filter),1);
                 }finally{await page.unroute(url,intercept);}
               });
+              await scenario('real browser closed offline, different tenant cannot see pending customer, original login resumes exactly once',async()=>{
+                const owner=await fixture('RESTART-A'),foreign=await fixture('RESTART-B');
+                const isolated=await browser.newContext({ignoreHTTPSErrors:true,viewport:{width:1440,height:900}});
+                const name='Client reprise navigateur '+randomBytes(6).toString('hex');
+                const records=org=>success(base+'/rest/v1/ns_customers?select=id&org_id=eq.'+org+'&display_name=eq.'+encodeURIComponent(name),undefined,admin,admin,'GET');
+                async function open(fx){
+                  const p=await isolated.newPage();p.setDefaultTimeout(15000);
+                  await p.goto('https://127.0.0.1:8443/');
+                  await p.getByLabel('Identifiant NAXA Services').fill(fx.login);
+                  await p.getByLabel('Mot de passe',{exact:true}).fill(fx.password);
+                  await p.getByRole('button',{name:'Se connecter',exact:true}).click();
+                  await p.getByRole('heading',{name:'Une journée bien organisée commence ici.'}).waitFor();
+                  return p;
+                }
+                async function clients(p){await p.locator('.side-nav button.nav-item').filter({hasText:'Clients & fidélité'}).click();}
+                try{
+                  let p=await open(owner);await clients(p);
+                  await isolated.setOffline(true);
+                  await p.getByRole('button',{name:'Créer une fiche client',exact:true}).click();
+                  await p.getByLabel('Nom du client').fill(name);
+                  await p.getByRole('button',{name:'Enregistrer',exact:true}).click();
+                  await p.getByText(/enregistré hors connexion/i).waitFor();
+                  assert.equal((await records(owner.org.id)).length,0);
+                  await p.close();
+                  await isolated.setOffline(false);
+                  p=await open(foreign);await clients(p);
+                  assert.equal(await p.getByText(name,{exact:true}).count(),0);
+                  assert.equal((await records(foreign.org.id)).length,0);
+                  assert.equal((await records(owner.org.id)).length,0);
+                  await p.close();
+                  p=await open(owner);
+                  const sync=p.getByRole('button',{name:/Synchroniser \(1\)/});
+                  if(await sync.isVisible().catch(()=>false))await sync.click();
+                  for(let i=0;i<75;i++){if((await records(owner.org.id)).length===1)break;await pause(400);}
+                  assert.equal((await records(owner.org.id)).length,1);
+                  assert.equal((await records(foreign.org.id)).length,0);
+                  await clients(p);
+                  await p.locator('.record').filter({hasText:name}).getByText('Confirmé',{exact:true}).first().waitFor({timeout:15000});
+                  await pause(800);
+                  assert.equal((await records(owner.org.id)).length,1);
+                }finally{await isolated.close();}
+              });
               await scenario('real authenticated profile photo: browser upload and deletion',async()=>{
                 const photoButton=page.getByRole('button',{name:'Photo de profil',exact:true});
                 await photoButton.waitFor();
@@ -1025,6 +1067,31 @@ jobs:
               await act('logout',{device:f.device},s.access_token);
             }
             pass('real offline scope proof B/C, exact organization and site/session binding, revoked operation right denied');
+            // Real GoTrue identities for the subordinate authorization boundary.
+            // A narrow site/post assignment must not gain an organization offline proof.
+            const scoped=await fixture('SUBORDINATE','multi_site_network');
+            const [otherSite]=await rest('ns_sites',{org_id:scoped.org.id,code:'OTHER',name:'Other site'});
+            const [post]=await rest('ns_workstations',{org_id:scoped.org.id,site_id:scoped.site.id,code:'LOCALPOST',name:'Assigned post',kind:'cashier'});
+            for(const entry of [{role:'site_manager',scope:'site'},{role:'workstation_manager',scope:'workstation'},{role:'cashier',scope:'workstation'}]){
+              const email='ns-scope-'+randomUUID()+'@example.test',password='Qa7!'+randomBytes(18).toString('hex');
+              const user=await success(base+'/auth/v1/admin/users',{email,password,email_confirm:true,app_metadata:{app_code:'naxa-services'}});
+              const loginId='NS-'+randomBytes(5).toString('hex').toUpperCase();
+              const [account]=await rest('ns_accounts',{auth_user_id:user.id,login_id:loginId,auth_alias:email,password_change_required:false});
+              const [member]=await rest('ns_members',{org_id:scoped.org.id,account_id:account.id,display_name:'Scoped '+entry.role,role_code:entry.role});
+              const narrow=entry.scope==='workstation';
+              await rest('ns_member_scopes',{org_id:scoped.org.id,member_id:member.id,scope_type:entry.scope,scope_id:narrow?post.id:scoped.site.id,site_id:scoped.site.id,workstation_id:narrow?post.id:null,can_read:true,can_operate:true,can_manage:entry.role!=='cashier'});
+              const device={installation_id:randomUUID(),platform:'web',label:'Scope replay'};
+              const signed=await act('login',{identifier:loginId,password,device});
+              assert.equal(signed.status,200);
+              assert.deepEqual(signed.data.account.active_site_ids,narrow?[]:[scoped.site.id]);
+              const rights=await act('subscription_access',{},signed.data.access_token);
+              assert.equal(rights.status,200);assert.equal(rights.data.offline_scope,null);
+              const cross=await json(base+'/rest/v1/ns_sites?select=id&id=eq.'+otherSite.id,undefined,signed.data.access_token,anon,'GET');
+              assert.ok(cross.status===200&&Array.isArray(cross.data)&&cross.data.length===0||cross.status===403,'foreign site denied');
+              await act('logout',{device},signed.data.access_token);
+            }
+            pass('real subordinate roles: no organization offline grant, no widening workstation scope, foreign site denied');
+
             await rest('ns_subscription_destinations',{channel:'mtn_momo',merchant_code:'123456',beneficiary:'REPLAY ONLY',destination_reference:'237690000072',active:true});
             const intent=await act('subscription_create',{plan_code:'ACCESS',months:1,channel:'mtn_momo'},a.access_token);
             assert.equal(intent.status,200);assert.equal(intent.data.subscription_result.status,'pending');assert.ok(intent.data.subscription_result.amount_xaf>0);
