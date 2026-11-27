@@ -84,6 +84,8 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
         var targets by remember{mutableStateOf<List<JSONObject>>(emptyList())}
         var shifts by remember{mutableStateOf<List<JSONObject>>(emptyList())}
         var acks by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+        var justifications by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+        var pendingPublish by remember{mutableStateOf<Pair<String,String>?>(null)}
         var comparisons by remember{mutableStateOf<List<JSONObject>>(emptyList())}
         var busy by remember{mutableStateOf(false)}
         var loaded by remember{mutableStateOf(false)}
@@ -104,8 +106,9 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                 val people=JSONArray(StaffRosterApi.call(current,"rpc/ns_roster_targets",JSONObject().put("p_org",org).put("p_site",siteId))).rows()
                 val seen=JSONArray(StaffRosterApi.call(current,"ns_roster_acknowledgements?select=shift_id,revision,acknowledged_at&"+filter+"&limit=1000")).rows()
                 val report=JSONArray(StaffRosterApi.call(current,"ns_roster_service_comparison?select=*&"+filter+"&limit=200")).rows()
-                shifts=next;targets=people;acks=seen;comparisons=report;loaded=true;error=false
-            }catch(c:CancellationException){throw c}catch(_:Exception){loaded=false;error=true;targets=emptyList();shifts=emptyList();acks=emptyList();comparisons=emptyList()}
+                val explanations=JSONArray(StaffRosterApi.call(current,"ns_roster_justifications?select=shift_id,baseline_revision,explanation,decision,decision_reason&"+filter+"&limit=200")).rows()
+                shifts=next;targets=people;acks=seen;comparisons=report;justifications=explanations;loaded=true;error=false
+            }catch(c:CancellationException){throw c}catch(_:Exception){loaded=false;error=true;targets=emptyList();shifts=emptyList();acks=emptyList();comparisons=emptyList();justifications=emptyList()}
         }
         LaunchedEffect(reload,session.accessToken){while(true){if(!busy)refresh();delay(30000)}}
         fun targetFor(row:JSONObject)=targets.firstOrNull{it.optString("member_id")==row.optString("member_id")&&it.nullable("workstation_id")==row.nullable("workstation_id")}
@@ -119,8 +122,7 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
             if(person==null||reason.isBlank())return
             perform{
                 val row=cancel?:edited
-                val body=JSONObject().put("p_id",row?.optString("id")?:UUID.randomUUID().toString())
-                    .put("p_org",latest.account.organizationId).put("p_site",siteId)
+                val body=JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId)
                     .put("p_post",person.nullable("workstation_id")?:JSONObject.NULL).put("p_member",person.optString("member_id"))
                     .put("p_starts",cancel?.optString("starts_at")?:rosterInstant(start))
                     .put("p_ends",cancel?.optString("ends_at")?:rosterInstant(end))
@@ -128,7 +130,13 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                     .put("p_tolerance",cancel?.optInt("tolerance_minutes")?:tolerance.toInt())
                     .put("p_status",if(cancel!=null)"cancelled" else "published")
                     .put("p_expected_revision",row?.optLong("revision")?:0L).put("p_reason",reason.trim())
-                StaffRosterApi.call(latest,"rpc/ns_publish_roster_shift",body);clear()
+                val fingerprint=body.toString()
+                val id=row?.optString("id")?:pendingPublish?.takeIf{it.first==fingerprint}?.second?:UUID.randomUUID().toString()
+                if(row==null)pendingPublish=fingerprint to id
+                body.put("p_id",id)
+                val receipt=JSONObject(StaffRosterApi.call(latest,"rpc/ns_publish_roster_shift",body))
+                require(receipt.getString("id")==id&&receipt.getLong("revision")==body.getLong("p_expected_revision")+1L&&receipt.getString("status")==body.getString("p_status"))
+                pendingPublish=null;clear()
             }
         }
         Card(Modifier.fillMaxWidth()){
@@ -172,6 +180,33 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                     comparisons.filter{it.optString("shift_id")==row.optString("id")}.forEach{c->
                         Text(tr("Arrivée","Arrival","Naatugol")+": "+rosterDisplay(c.nullable("actual_start"))+" · "+tr("Départ","Departure","Yaltugol")+": "+rosterDisplay(c.nullable("actual_end")))
                         Text(tr("Retard","Late","Leeltugol")+": "+(c.nullable("late_minutes")?:"—")+" min · "+tr("Départ anticipé","Early departure","Yaltugol adii")+": "+(c.nullable("early_departure_minutes")?:"—")+" min")
+                        Text(tr("Temps supplémentaire","Extra time","Sahaa ɓeydiiɗo")+": "+(c.nullable("extra_minutes")?:"—")+" min · "+tr("Pause réelle","Actual break","Fooftugol goonga")+": "+(c.nullable("actual_break_minutes")?:"—")+" min")
+                        val baseline=c.optLong("baseline_revision")
+                        val shiftId=row.optString("id")
+                        val justification=justifications.firstOrNull{it.optString("shift_id")==shiftId&&it.optLong("baseline_revision")==baseline}
+                        key(shiftId,baseline){
+                            var explanation by remember{mutableStateOf("")}
+                            if(justification!=null){
+                                Text(justification.optString("explanation"))
+                                Text(when(justification.nullable("decision")){"accepted"->tr("Justification acceptée","Explanation accepted","Jaɓaama");"rejected"->tr("Justification refusée","Explanation rejected","Jaɓaaka");else->tr("Justification à examiner","Explanation awaiting review","Ƴeewto")})
+                                justification.nullable("decision_reason")?.let{Text(it)}
+                                if(p!=null&&justification.nullable("decision")==null){
+                                    OutlinedTextField(explanation,{explanation=it.take(1000)},label={Text(tr("Motif de la décision","Decision reason","Sabu ñaawol"))},enabled=!busy)
+                                    listOf("accepted" to tr("Accepter","Accept","Jaɓ"),"rejected" to tr("Refuser","Reject","Sal")).forEach{(decision,label)->
+                                        OutlinedButton(enabled=!busy&&explanation.isNotBlank(),onClick={perform{
+                                            val result=JSONObject(StaffRosterApi.call(latest,"rpc/ns_decide_roster_justification",JSONObject().put("p_shift",shiftId).put("p_revision",baseline).put("p_decision",decision).put("p_reason",explanation.trim())))
+                                            require(result.getString("decision")==decision);explanation=""
+                                        }}){Text(label)}
+                                    }
+                                }
+                            }else if(own&&c.optString("comparison_status") in listOf("variance_review","unmatched_review","multiple_sessions_review")){
+                                OutlinedTextField(explanation,{explanation=it.take(1000)},label={Text(tr("Expliquez l'écart","Explain the variance","Humpit ceertugol"))},enabled=!busy)
+                                Button(enabled=!busy&&explanation.isNotBlank(),onClick={perform{
+                                    val result=JSONObject(StaffRosterApi.call(latest,"rpc/ns_submit_roster_justification",JSONObject().put("p_shift",shiftId).put("p_revision",baseline).put("p_explanation",explanation.trim())))
+                                    require(result.optBoolean("submitted"));explanation=""
+                                }}){Text(tr("Justifier l'écart","Explain variance","Humpit ceertugol"))}
+                            }
+                        }
                     }
                 }
             }

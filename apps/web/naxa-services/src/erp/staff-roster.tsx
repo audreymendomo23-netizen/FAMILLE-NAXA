@@ -5,6 +5,7 @@ type Target={member_id:string;display_name:string;workstation_id:string|null;wor
 type Shift={id:string;member_id:string;site_id:string;workstation_id:string|null;starts_at:string;ends_at:string;planned_break_minutes:number;tolerance_minutes:number;status:"published"|"cancelled";revision:number;change_reason:string};
 type Ack={shift_id:string;revision:number;acknowledged_at:string};
 type Comparison={shift_id:string;baseline_revision:number;current_revision:number;actual_start:string|null;actual_end:string|null;late_minutes:number|null;early_departure_minutes:number|null;extra_minutes:number|null;actual_break_minutes:number|null;comparison_status:string};
+type Justification={shift_id:string;baseline_revision:number;explanation:string;decision:"accepted"|"rejected"|null;decision_reason:string|null};
 type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>};
 type Form={id:string;target:string;start:string;end:string;pause:string;tolerance:string;revision:number;reason:string};
 const key=(t:Target)=>t.member_id+":"+(t.workstation_id??"");
@@ -22,6 +23,8 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
  const locale=account.default_locale;
  const tr=(fr:string,en:string,ff:string)=>locale==="en"?en:locale==="ff-CM"?ff:fr;
  const [targets,setTargets]=useState<Target[]>([]),[shifts,setShifts]=useState<Shift[]>([]),[acks,setAcks]=useState<Ack[]>([]),[comparisons,setComparisons]=useState<Comparison[]>([]);
+ const [justifications,setJustifications]=useState<Justification[]>([]);
+ const pendingPublish=useRef<{key:string;id:string}|null>(null);
  const [form,setForm]=useState<Form>(blank),[error,setError]=useState(""),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
  const tokenRef=useRef(getToken);tokenRef.current=getToken;
  const alive=useRef(false),refreshing=useRef(false);
@@ -43,13 +46,14 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
    refreshing.current=true;
    try{
     const filter="org_id=eq."+encodeURIComponent(account.organization_id)+"&site_id=eq."+encodeURIComponent(siteId);
-    const [next,people,read,report]=await Promise.all([
+    const [next,people,read,report,explanations]=await Promise.all([
       request<Shift[]>("ns_roster_shifts?select=*&"+filter+"&order=starts_at.desc&limit=200",undefined,abort.signal),
       request<Target[]>("rpc/ns_roster_targets",{p_org:account.organization_id,p_site:siteId},abort.signal),
       request<Ack[]>("ns_roster_acknowledgements?select=shift_id,revision,acknowledged_at&"+filter+"&limit=1000",undefined,abort.signal),
-      request<Comparison[]>("ns_roster_service_comparison?select=*&"+filter+"&limit=200",undefined,abort.signal)]);
-    if(!abort.signal.aborted){setShifts(next);setTargets(people);setAcks(read);setComparisons(report);setLoaded(true);setError("");}
-   }catch{if(!abort.signal.aborted){setError(textError);setLoaded(false);setShifts([]);setTargets([]);setAcks([]);setComparisons([]);}}
+      request<Comparison[]>("ns_roster_service_comparison?select=*&"+filter+"&limit=200",undefined,abort.signal),
+      request<Justification[]>("ns_roster_justifications?select=shift_id,baseline_revision,explanation,decision,decision_reason&"+filter+"&limit=200",undefined,abort.signal)]);
+    if(!abort.signal.aborted){setShifts(next);setTargets(people);setAcks(read);setComparisons(report);setJustifications(explanations);setLoaded(true);setError("");}
+   }catch{if(!abort.signal.aborted){setError(textError);setLoaded(false);setShifts([]);setTargets([]);setAcks([]);setComparisons([]);setJustifications([]);}}
    finally{refreshing.current=false;}
   }
   void refresh();
@@ -70,7 +74,13 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
   if(!reason?.trim())return;
   setBusy(true);setError("");
   try{
-   await request("rpc/ns_publish_roster_shift",{p_id:cancel?.id||form.id||crypto.randomUUID(),p_org:account.organization_id,p_site:siteId,p_post:selected.workstation_id,p_member:selected.member_id,p_starts:cancel?.starts_at??toIso(form.start),p_ends:cancel?.ends_at??toIso(form.end),p_break:cancel?.planned_break_minutes??Number(form.pause),p_tolerance:cancel?.tolerance_minutes??Number(form.tolerance),p_status:cancel?"cancelled":"published",p_expected_revision:cancel?.revision??form.revision,p_reason:reason.trim()});
+   const command={p_org:account.organization_id,p_site:siteId,p_post:selected.workstation_id,p_member:selected.member_id,p_starts:cancel?.starts_at??toIso(form.start),p_ends:cancel?.ends_at??toIso(form.end),p_break:cancel?.planned_break_minutes??Number(form.pause),p_tolerance:cancel?.tolerance_minutes??Number(form.tolerance),p_status:cancel?"cancelled":"published",p_expected_revision:cancel?.revision??form.revision,p_reason:reason.trim()};
+   const fingerprint=JSON.stringify(command);
+   const id=cancel?.id||form.id||(pendingPublish.current?.key===fingerprint?pendingPublish.current.id:crypto.randomUUID());
+   if(!cancel&&!form.id)pendingPublish.current={key:fingerprint,id};
+   const receipt=await request<{id:string;revision:number;status:string}>("rpc/ns_publish_roster_shift",{p_id:id,...command});
+   if(receipt.id!==id||receipt.revision!==command.p_expected_revision+1||receipt.status!==command.p_status)throw new Error("ROSTER_RECEIPT_INVALID");
+   pendingPublish.current=null;
    if(alive.current){setForm(blank());setVersion(v=>v+1);}
   }catch{if(alive.current)setError(tr("Modification non confirmée. Actualisez le planning et vérifiez les horaires.","Change not confirmed. Refresh the schedule and check the hours.","Baylugol tabbitinaaka. Hesɗitin feere golle, ƴeewto sahaa."));}
   finally{if(alive.current)setBusy(false);}
@@ -79,6 +89,18 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
   if(busy||!loaded)return;setBusy(true);setError("");
   try{await request("rpc/ns_ack_roster_shift",{p_id:s.id,p_revision:s.revision});if(alive.current)setVersion(v=>v+1);}
   catch{if(alive.current)setError(textError);}finally{if(alive.current)setBusy(false);}
+ }
+ async function explain(s:Shift,c:Comparison,decision?:"accepted"|"rejected"){
+  if(busy||!loaded)return;
+  const reason=window.prompt(decision?tr("Motif de la décision","Decision reason","Sabu ñaawol"):tr("Expliquez l'écart","Explain the variance","Humpit ceertugol"));
+  if(!reason?.trim()||reason.trim().length>1000)return;
+  setBusy(true);setError("");
+  try{
+   const body={p_shift:s.id,p_revision:c.baseline_revision};
+   const response=decision?await request<{decision:string}>("rpc/ns_decide_roster_justification",{...body,p_decision:decision,p_reason:reason.trim()}):await request<{submitted:boolean}>("rpc/ns_submit_roster_justification",{...body,p_explanation:reason.trim()});
+   if(decision?!("decision" in response&&response.decision===decision):!("submitted" in response&&response.submitted===true))throw new Error("ROSTER_JUSTIFICATION_RECEIPT");
+   if(alive.current)setVersion(v=>v+1);
+  }catch{if(alive.current)setError(textError);}finally{if(alive.current)setBusy(false);}
  }
  if(!modeEnabled(account.business_mode)||!siteId)return null;
  const statusText=(s:string)=>(({variance_review:tr("Écart à examiner","Variance to review","Ceertugol ƴeewtetee"),unmatched_review:tr("Pointage à vérifier","Attendance to verify","Naatugol ƴeewtetee"),awaiting_clock_in:tr("Service à venir","Upcoming shift","Golle arde"),in_service_or_incomplete:tr("En service / incomplet","On duty / incomplete","E golle / timmaaki"),within_tolerance:tr("Dans la tolérance","Within tolerance","E yaafuyya"),multiple_sessions_review:tr("Plusieurs services à vérifier","Multiple sessions to review","Golle keewɗe ƴeewtetee"),cancelled:tr("Annulé","Cancelled","Haaytaama")} as Record<string,string>)[s]??"—");
@@ -105,7 +127,9 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
    <p>{s.status==="cancelled"?tr("Annulé","Cancelled","Haaytaama"):tr("Publié","Published","Bayyinaama")} · {tr("Version","Version","Yamre")} {s.revision} · {ack?tr("Pris en compte","Acknowledged","Jaɓaama"):tr("À confirmer","Awaiting acknowledgement","Foti jaɓeede")}</p>
    {own&&!ack&&<button type="button" className="btn primary" disabled={busy||!loaded} onClick={()=>void acknowledge(s)}>{tr("J'ai pris connaissance","Acknowledge","Mi heɓii humpito")}</button>}
    {editable&&s.status==="published"&&<><button type="button" className="btn secondary" disabled={busy||!loaded} onClick={()=>edit(s)}>{tr("Modifier","Edit","Waylu")}</button> <button type="button" className="btn secondary" disabled={busy||!loaded} onClick={()=>void save(s)}>{tr("Annuler le service","Cancel shift","Haaytu golle")}</button></>}
-   {comparisons.filter(c=>c.shift_id===s.id).map(c=><div key={c.baseline_revision}><strong>{statusText(c.comparison_status)}</strong><p>{tr("Référence","Baseline","Ɗo ƴeewtoroo")} {c.baseline_revision} · {tr("Arrivée","Arrival","Naatugol")} {fmt(c.actual_start)} · {tr("Départ","Departure","Yaltugol")} {fmt(c.actual_end)}</p><p>{tr("Retard","Late","Leeltugol")}: {c.late_minutes??"—"} min · {tr("Départ anticipé","Early departure","Yaltugol adii")} : {c.early_departure_minutes??"—"} min · {tr("Temps supplémentaire","Extra time","Sahaa ɓeydiiɗo")}: {c.extra_minutes??"—"} min</p></div>)}
+   {comparisons.filter(c=>c.shift_id===s.id).map(c=><div key={c.baseline_revision}><strong>{statusText(c.comparison_status)}</strong><p>{tr("Référence","Baseline","Ɗo ƴeewtoroo")} {c.baseline_revision} · {tr("Arrivée","Arrival","Naatugol")} {fmt(c.actual_start)} · {tr("Départ","Departure","Yaltugol")} {fmt(c.actual_end)}</p><p>{tr("Retard","Late","Leeltugol")}: {c.late_minutes??"—"} min · {tr("Départ anticipé","Early departure","Yaltugol adii")} : {c.early_departure_minutes??"—"} min · {tr("Temps supplémentaire","Extra time","Sahaa ɓeydiiɗo")}: {c.extra_minutes??"—"} min · {tr("Pause réelle","Actual break","Fooftugol goonga")}: {c.actual_break_minutes??"—"} min</p>
+    {(()=>{const j=justifications.find(x=>x.shift_id===s.id&&x.baseline_revision===c.baseline_revision);return j?<><p>{j.explanation}</p><p>{j.decision==="accepted"?tr("Justification acceptée","Explanation accepted","Jaɓaama"):j.decision==="rejected"?tr("Justification refusée","Explanation rejected","Jaɓaaka"):tr("Justification à examiner","Explanation awaiting review","Ƴeewto")}{j.decision_reason?" · "+j.decision_reason:""}</p>{editable&&!j.decision&&<><button type="button" disabled={busy} onClick={()=>void explain(s,c,"accepted")}>{tr("Accepter","Accept","Jaɓ")}</button><button type="button" disabled={busy} onClick={()=>void explain(s,c,"rejected")}>{tr("Refuser","Reject","Sal")}</button></>}</>:own&&["variance_review","unmatched_review","multiple_sessions_review"].includes(c.comparison_status)?<button type="button" disabled={busy} onClick={()=>void explain(s,c)}>{tr("Justifier l'écart","Explain variance","Humpit ceertugol")}</button>:null;})()}
+   </div>)}
   </article>;})}
  </section>;
 }

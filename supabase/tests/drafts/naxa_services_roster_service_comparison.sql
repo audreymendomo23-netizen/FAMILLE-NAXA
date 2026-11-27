@@ -69,6 +69,14 @@ begin
  select * into old from public.ns_roster_shifts where id=p_id for update;
  if found then
   if (old.org_id,old.member_id) is distinct from (p_org,p_member) or not public.ns_roster_can_manage(old.org_id,old.site_id,old.workstation_id,old.member_id) then raise exception 'NS_ROSTER_FORBIDDEN'; end if;
+  -- A lost response may be retried only with the identical command by the same actor.
+  if old.revision=p_expected_revision+1 and old.updated_by=v_actor and
+     (old.site_id,old.workstation_id,old.starts_at,old.ends_at,old.planned_break_minutes,old.tolerance_minutes,old.status,old.change_reason)
+     is not distinct from (p_site,p_post,p_starts,p_ends,p_break,p_tolerance,p_status,trim(p_reason)) then
+   select n.id into v_notification from public.ns_notification_outbox n where n.org_id=p_org and n.recipient_member_id=p_member and n.idempotency_key='staff-schedule:'||p_id::text||':'||old.revision::text;
+   if v_notification is null then raise exception 'NS_ROSTER_RECEIPT_MISSING'; end if;
+   return jsonb_build_object('id',old.id,'revision',old.revision,'status',old.status,'notification_id',v_notification);
+  end if;
   if old.revision<>p_expected_revision then raise exception 'NS_ROSTER_REVISION_CONFLICT'; end if;
   if old.status='cancelled' then raise exception 'NS_ROSTER_CANCELLED'; end if;
   if p_status='cancelled' and (old.site_id,old.workstation_id,old.starts_at,old.ends_at,old.planned_break_minutes,old.tolerance_minutes) is distinct from (p_site,p_post,p_starts,p_ends,p_break,p_tolerance) then raise exception 'NS_ROSTER_CANCEL_CHANGE'; end if;
@@ -171,6 +179,65 @@ select s.id shift_id,s.org_id,s.site_id,s.workstation_id,s.member_id,s.revision 
 revoke all on public.ns_roster_service_comparison from public,anon,authenticated;
 grant select on public.ns_roster_service_comparison to authenticated;
 
+-- A justification and a decision are independent of the immutable clock and planning history.
+create table public.ns_roster_justifications(
+ shift_id uuid not null, baseline_revision bigint not null, org_id uuid not null, site_id uuid not null,
+ workstation_id uuid, member_id uuid not null, explanation text not null check(length(trim(explanation)) between 1 and 1000),
+ submitted_at timestamptz not null default clock_timestamp(),
+ decision text check(decision in ('accepted','rejected')), decision_reason text,
+ decided_by uuid, decided_at timestamptz,
+ primary key(shift_id,baseline_revision),
+ foreign key(shift_id,baseline_revision) references public.ns_roster_revisions(shift_id,revision),
+ foreign key(member_id,org_id) references public.ns_members(id,org_id),
+ foreign key(decided_by,org_id) references public.ns_members(id,org_id),
+ check((decision is null and decision_reason is null and decided_by is null and decided_at is null)
+    or (decision is not null and decision_reason is not null and length(trim(decision_reason)) between 1 and 1000 and decided_by is not null and decided_at is not null)));
+alter table public.ns_roster_justifications enable row level security;
+revoke all on public.ns_roster_justifications from public,anon,authenticated;
+grant select on public.ns_roster_justifications to authenticated;
+create policy ns_roster_justification_read on public.ns_roster_justifications for select to authenticated
+ using(public.ns_roster_can_read(org_id,site_id,workstation_id,member_id));
+
+create function public.ns_submit_roster_justification(p_shift uuid,p_revision bigint,p_explanation text)
+returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare r public.ns_roster_revisions%rowtype; j public.ns_roster_justifications%rowtype;
+begin
+ select * into r from public.ns_roster_revisions where shift_id=p_shift and revision=p_revision;
+ if not found or not public.ns_roster_enabled(r.org_id) or public.ns_current_member_id(r.org_id) is distinct from r.member_id
+ or public.ns_erp_access_reason(r.org_id)='blocked' then raise exception 'NS_ROSTER_JUSTIFICATION_FORBIDDEN'; end if;
+ if p_explanation is null or length(trim(p_explanation)) not between 1 and 1000 then raise exception 'NS_ROSTER_JUSTIFICATION_INVALID'; end if;
+ perform pg_advisory_xact_lock(hashtextextended(r.org_id::text||':'||r.member_id::text||':roster',0));
+ select * into j from public.ns_roster_justifications where shift_id=p_shift and baseline_revision=p_revision;
+ if found then
+  if j.explanation is distinct from trim(p_explanation) then raise exception 'NS_ROSTER_JUSTIFICATION_CONFLICT'; end if;
+ else
+  if not exists(select 1 from public.ns_roster_service_comparison c where c.shift_id=p_shift and c.baseline_revision=p_revision
+      and c.comparison_status in ('variance_review','unmatched_review','multiple_sessions_review')) then raise exception 'NS_ROSTER_JUSTIFICATION_NOT_REVIEWABLE'; end if;
+  insert into public.ns_roster_justifications(shift_id,baseline_revision,org_id,site_id,workstation_id,member_id,explanation)
+   values(p_shift,p_revision,r.org_id,r.site_id,r.workstation_id,r.member_id,trim(p_explanation)) returning * into j;
+ end if;
+ return jsonb_build_object('shift_id',j.shift_id,'baseline_revision',j.baseline_revision,'submitted',true,'decision',j.decision);
+end $fn$;
+create function public.ns_decide_roster_justification(p_shift uuid,p_revision bigint,p_decision text,p_reason text)
+returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare j public.ns_roster_justifications%rowtype; actor uuid;
+begin
+ select * into j from public.ns_roster_justifications where shift_id=p_shift and baseline_revision=p_revision for update;
+ if not found or not public.ns_roster_can_manage(j.org_id,j.site_id,j.workstation_id,j.member_id) then raise exception 'NS_ROSTER_JUSTIFICATION_FORBIDDEN'; end if;
+ actor:=public.ns_current_member_id(j.org_id);
+ if p_decision is null or p_decision not in ('accepted','rejected') or p_reason is null or length(trim(p_reason)) not between 1 and 1000 then raise exception 'NS_ROSTER_JUSTIFICATION_INVALID'; end if;
+ if j.decision is not null then
+  if (j.decision,j.decision_reason,j.decided_by) is distinct from (p_decision,trim(p_reason),actor) then raise exception 'NS_ROSTER_JUSTIFICATION_CONFLICT'; end if;
+ else
+  update public.ns_roster_justifications set decision=p_decision,decision_reason=trim(p_reason),decided_by=actor,decided_at=clock_timestamp()
+   where shift_id=p_shift and baseline_revision=p_revision returning * into j;
+ end if;
+ return jsonb_build_object('shift_id',j.shift_id,'baseline_revision',j.baseline_revision,'decision',j.decision);
+end $fn$;
+revoke all on function public.ns_submit_roster_justification(uuid,bigint,text),public.ns_decide_roster_justification(uuid,bigint,text,text) from public,anon,authenticated;
+grant execute on function public.ns_submit_roster_justification(uuid,bigint,text),public.ns_decide_roster_justification(uuid,bigint,text,text) to authenticated;
+
+
 -- Scoped target directory: only assignable members and posts, no personal contact information.
 create function public.ns_roster_targets(p_org uuid,p_site uuid)
 returns table(member_id uuid,display_name text,workstation_id uuid,workstation_name text)
@@ -204,10 +271,12 @@ begin
  if public.ns_roster_can_manage(o,s,null,'60000000-0000-4000-8000-000000000091') then raise exception 'QA SELF MANAGEMENT'; end if;
  v:=public.ns_publish_roster_shift(x,o,s,null,u,t,t+interval '8 hours',30,10,'published',0,'Initial');
  if v->>'revision'<>'1' then raise exception 'QA INITIAL REVISION'; end if;
+ if public.ns_publish_roster_shift(x,o,s,null,u,t,t+interval '8 hours',30,10,'published',0,'Initial') is distinct from v then raise exception 'QA LOST RESPONSE RECEIPT'; end if;
  begin perform public.ns_publish_roster_shift(y,o,s,null,u,t+interval '1 hour',t+interval '2 hours',0,10,'published',0,'Overlap'); raise exception 'QA OVERLAP ACCEPTED'; exception when others then if sqlerrm not like '%NS_ROSTER_OVERLAP%' then raise; end if; end;
  begin perform public.ns_publish_roster_shift(x,o,s,null,u,t,t+interval '7 hours',30,10,'published',0,'Stale'); raise exception 'QA STALE ACCEPTED'; exception when others then if sqlerrm not like '%NS_ROSTER_REVISION_CONFLICT%' then raise; end if; end;
  v:=public.ns_publish_roster_shift(x,o,s,null,u,t,t+interval '7 hours',30,10,'published',1,'Updated hours');
  if v->>'revision'<>'2' then raise exception 'QA UPDATE'; end if;
+ if public.ns_publish_roster_shift(x,o,s,null,u,t,t+interval '7 hours',30,10,'published',1,'Updated hours') is distinct from v then raise exception 'QA UPDATE RETRY'; end if;
  if (select count(*) from public.ns_roster_revisions where shift_id=x)<>2 then raise exception 'QA HISTORY'; end if;
  begin perform public.ns_ack_roster_shift(x,2); raise exception 'QA MANAGER ACK'; exception when others then if sqlerrm not like '%NS_ROSTER_FORBIDDEN%' then raise; end if; end;
 end $$;
@@ -247,6 +316,31 @@ do $qa$ declare s public.ns_roster_shifts%rowtype; begin
  select * into s from public.ns_roster_shifts where id='70000000-0000-4000-8000-000000000095';
  perform public.ns_publish_roster_shift(s.id,s.org_id,s.site_id,s.workstation_id,s.member_id,s.starts_at+interval '20 minutes',s.ends_at,s.planned_break_minutes,s.tolerance_minutes,'published',2,'Post-clock revision');
  if not exists(select 1 from public.ns_roster_service_comparison where shift_id=s.id and current_revision=3 and baseline_revision=2 and late_minutes=20) then raise exception 'QA BASELINE REWRITTEN'; end if;
+end $qa$;
+reset role;
+
+
+-- A worker can explain the frozen baseline, cannot decide it; a manager cannot submit for them.
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000092',true);
+select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000092","session_id":"qa-92-session","role":"authenticated"}',true);
+set local role authenticated;
+do $qa$ declare x uuid:='70000000-0000-4000-8000-000000000095'; a jsonb; begin
+ a:=public.ns_submit_roster_justification(x,2,'Transport delay');
+ if public.ns_submit_roster_justification(x,2,'Transport delay') is distinct from a then raise exception 'QA JUSTIFICATION RETRY'; end if;
+ begin perform public.ns_submit_roster_justification(x,2,'Changed'); raise exception 'QA ALTERED JUSTIFICATION'; exception when others then if sqlerrm not like '%NS_ROSTER_JUSTIFICATION_CONFLICT%' then raise; end if; end;
+ begin perform public.ns_decide_roster_justification(x,2,'accepted','Own'); raise exception 'QA SELF DECISION'; exception when others then if sqlerrm not like '%NS_ROSTER_JUSTIFICATION_FORBIDDEN%' then raise; end if; end;
+end $qa$;
+reset role;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000091',true);
+select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000091","session_id":"qa-91-session","role":"authenticated"}',true);
+set local role authenticated;
+do $qa$ declare x uuid:='70000000-0000-4000-8000-000000000095'; a jsonb; begin
+ begin perform public.ns_submit_roster_justification(x,2,'Manager impersonation'); raise exception 'QA MANAGER SUBMIT'; exception when others then if sqlerrm not like '%NS_ROSTER_JUSTIFICATION_FORBIDDEN%' then raise; end if; end;
+ a:=public.ns_decide_roster_justification(x,2,'accepted','Reviewed');
+ if public.ns_decide_roster_justification(x,2,'accepted','Reviewed') is distinct from a then raise exception 'QA DECISION RETRY'; end if;
+ begin perform public.ns_decide_roster_justification(x,2,'rejected','Changed'); raise exception 'QA ALTERED DECISION'; exception when others then if sqlerrm not like '%NS_ROSTER_JUSTIFICATION_CONFLICT%' then raise; end if; end;
+ if not exists(select 1 from public.ns_roster_service_comparison where shift_id=x and baseline_revision=2 and late_minutes=20 and comparison_status='variance_review') then raise exception 'QA CLOCK ALTERED'; end if;
+ if (select count(*) from public.ns_roster_justifications where shift_id=x and baseline_revision=2 and decision='accepted')<>1 then raise exception 'QA DECISION MISSING'; end if;
 end $qa$;
 reset role;
 

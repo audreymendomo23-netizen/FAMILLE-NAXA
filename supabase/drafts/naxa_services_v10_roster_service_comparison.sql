@@ -61,4 +61,63 @@ select s.id shift_id,s.org_id,s.site_id,s.workstation_id,s.member_id,s.revision 
 revoke all on public.ns_roster_service_comparison from public,anon,authenticated;
 grant select on public.ns_roster_service_comparison to authenticated;
 
+-- A justification and a decision are independent of the immutable clock and planning history.
+create table public.ns_roster_justifications(
+ shift_id uuid not null, baseline_revision bigint not null, org_id uuid not null, site_id uuid not null,
+ workstation_id uuid, member_id uuid not null, explanation text not null check(length(trim(explanation)) between 1 and 1000),
+ submitted_at timestamptz not null default clock_timestamp(),
+ decision text check(decision in ('accepted','rejected')), decision_reason text,
+ decided_by uuid, decided_at timestamptz,
+ primary key(shift_id,baseline_revision),
+ foreign key(shift_id,baseline_revision) references public.ns_roster_revisions(shift_id,revision),
+ foreign key(member_id,org_id) references public.ns_members(id,org_id),
+ foreign key(decided_by,org_id) references public.ns_members(id,org_id),
+ check((decision is null and decision_reason is null and decided_by is null and decided_at is null)
+    or (decision is not null and decision_reason is not null and length(trim(decision_reason)) between 1 and 1000 and decided_by is not null and decided_at is not null)));
+alter table public.ns_roster_justifications enable row level security;
+revoke all on public.ns_roster_justifications from public,anon,authenticated;
+grant select on public.ns_roster_justifications to authenticated;
+create policy ns_roster_justification_read on public.ns_roster_justifications for select to authenticated
+ using(public.ns_roster_can_read(org_id,site_id,workstation_id,member_id));
+
+create function public.ns_submit_roster_justification(p_shift uuid,p_revision bigint,p_explanation text)
+returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare r public.ns_roster_revisions%rowtype; j public.ns_roster_justifications%rowtype;
+begin
+ select * into r from public.ns_roster_revisions where shift_id=p_shift and revision=p_revision;
+ if not found or not public.ns_roster_enabled(r.org_id) or public.ns_current_member_id(r.org_id) is distinct from r.member_id
+ or public.ns_erp_access_reason(r.org_id)='blocked' then raise exception 'NS_ROSTER_JUSTIFICATION_FORBIDDEN'; end if;
+ if p_explanation is null or length(trim(p_explanation)) not between 1 and 1000 then raise exception 'NS_ROSTER_JUSTIFICATION_INVALID'; end if;
+ perform pg_advisory_xact_lock(hashtextextended(r.org_id::text||':'||r.member_id::text||':roster',0));
+ select * into j from public.ns_roster_justifications where shift_id=p_shift and baseline_revision=p_revision;
+ if found then
+  if j.explanation is distinct from trim(p_explanation) then raise exception 'NS_ROSTER_JUSTIFICATION_CONFLICT'; end if;
+ else
+  if not exists(select 1 from public.ns_roster_service_comparison c where c.shift_id=p_shift and c.baseline_revision=p_revision
+      and c.comparison_status in ('variance_review','unmatched_review','multiple_sessions_review')) then raise exception 'NS_ROSTER_JUSTIFICATION_NOT_REVIEWABLE'; end if;
+  insert into public.ns_roster_justifications(shift_id,baseline_revision,org_id,site_id,workstation_id,member_id,explanation)
+   values(p_shift,p_revision,r.org_id,r.site_id,r.workstation_id,r.member_id,trim(p_explanation)) returning * into j;
+ end if;
+ return jsonb_build_object('shift_id',j.shift_id,'baseline_revision',j.baseline_revision,'submitted',true,'decision',j.decision);
+end $fn$;
+create function public.ns_decide_roster_justification(p_shift uuid,p_revision bigint,p_decision text,p_reason text)
+returns jsonb language plpgsql security definer set search_path='' as $fn$
+declare j public.ns_roster_justifications%rowtype; actor uuid;
+begin
+ select * into j from public.ns_roster_justifications where shift_id=p_shift and baseline_revision=p_revision for update;
+ if not found or not public.ns_roster_can_manage(j.org_id,j.site_id,j.workstation_id,j.member_id) then raise exception 'NS_ROSTER_JUSTIFICATION_FORBIDDEN'; end if;
+ actor:=public.ns_current_member_id(j.org_id);
+ if p_decision is null or p_decision not in ('accepted','rejected') or p_reason is null or length(trim(p_reason)) not between 1 and 1000 then raise exception 'NS_ROSTER_JUSTIFICATION_INVALID'; end if;
+ if j.decision is not null then
+  if (j.decision,j.decision_reason,j.decided_by) is distinct from (p_decision,trim(p_reason),actor) then raise exception 'NS_ROSTER_JUSTIFICATION_CONFLICT'; end if;
+ else
+  update public.ns_roster_justifications set decision=p_decision,decision_reason=trim(p_reason),decided_by=actor,decided_at=clock_timestamp()
+   where shift_id=p_shift and baseline_revision=p_revision returning * into j;
+ end if;
+ return jsonb_build_object('shift_id',j.shift_id,'baseline_revision',j.baseline_revision,'decision',j.decision);
+end $fn$;
+revoke all on function public.ns_submit_roster_justification(uuid,bigint,text),public.ns_decide_roster_justification(uuid,bigint,text,text) from public,anon,authenticated;
+grant execute on function public.ns_submit_roster_justification(uuid,bigint,text),public.ns_decide_roster_justification(uuid,bigint,text,text) to authenticated;
+
+
 rollback;

@@ -68,6 +68,14 @@ begin
  select * into old from public.ns_roster_shifts where id=p_id for update;
  if found then
   if (old.org_id,old.member_id) is distinct from (p_org,p_member) or not public.ns_roster_can_manage(old.org_id,old.site_id,old.workstation_id,old.member_id) then raise exception 'NS_ROSTER_FORBIDDEN'; end if;
+  -- A lost response may be retried only with the identical command by the same actor.
+  if old.revision=p_expected_revision+1 and old.updated_by=v_actor and
+     (old.site_id,old.workstation_id,old.starts_at,old.ends_at,old.planned_break_minutes,old.tolerance_minutes,old.status,old.change_reason)
+     is not distinct from (p_site,p_post,p_starts,p_ends,p_break,p_tolerance,p_status,trim(p_reason)) then
+   select n.id into v_notification from public.ns_notification_outbox n where n.org_id=p_org and n.recipient_member_id=p_member and n.idempotency_key='staff-schedule:'||p_id::text||':'||old.revision::text;
+   if v_notification is null then raise exception 'NS_ROSTER_RECEIPT_MISSING'; end if;
+   return jsonb_build_object('id',old.id,'revision',old.revision,'status',old.status,'notification_id',v_notification);
+  end if;
   if old.revision<>p_expected_revision then raise exception 'NS_ROSTER_REVISION_CONFLICT'; end if;
   if old.status='cancelled' then raise exception 'NS_ROSTER_CANCELLED'; end if;
   if p_status='cancelled' and (old.site_id,old.workstation_id,old.starts_at,old.ends_at,old.planned_break_minutes,old.tolerance_minutes) is distinct from (p_site,p_post,p_starts,p_ends,p_break,p_tolerance) then raise exception 'NS_ROSTER_CANCEL_CHANGE'; end if;
