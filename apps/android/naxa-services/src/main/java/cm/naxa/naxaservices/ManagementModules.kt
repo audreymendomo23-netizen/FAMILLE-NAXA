@@ -2010,7 +2010,20 @@ fun TeamPerformanceContent(
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(row.counterparty + " · " + labelRecord(row.recordType), fontWeight = FontWeight.SemiBold)
                     Text(row.title + " · " + xaf(row.amountXaf) + " · " + row.status, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    if (row.status == "pending_review" && session.account.roleCode in setOf("promoter","network_manager","site_manager")) {
+                    if (row.status == "approved" && BuildConfig.BILLING_SETTLEMENT_ENABLED && session.account.roleCode in setOf("promoter","network_manager","site_manager")) {
+                        OutlinedTextField(approvalReason, { approvalReason = it }, Modifier.fillMaxWidth(), label = { Text(localizedLabel("Référence ou motif du règlement déjà effectué","Reference or reason for completed settlement","Daliilu njoɓdi")) })
+                        OutlinedButton(onClick = {
+                            scope.launch {
+                                runCatching { repository.transitionManagementRecord(session.account.organizationId, siteId, row.id, "paid", approvalReason, session.account.memberId) }
+                                    .onSuccess { approvalReason = ""; message = "Règlement externe déclaré, à synchroniser."; error = null }
+                                    .onFailure { error = it.message ?: "Déclaration impossible." }
+                            }
+                        }, enabled = approvalReason.trim().length >= 3 && approvalReason.length <= 500, modifier = Modifier.fillMaxWidth()) {
+                            Text(localizedLabel("Déclarer le règlement déjà effectué","Declare completed external settlement","Hollu njoɓdi waɗaandi"))
+                        }
+                        Text(localizedLabel("Aucun versement n’est déclenché par cette action.","No transfer is initiated by this action.","Njoɓdi fuɗɗotaako."), style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (row.status in setOf("pending_review","draft") && session.account.roleCode in setOf("promoter","network_manager","site_manager")) {
                         OutlinedTextField(
                             approvalReason,
                             { approvalReason = it },

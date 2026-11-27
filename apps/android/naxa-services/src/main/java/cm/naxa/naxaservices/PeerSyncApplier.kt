@@ -449,6 +449,10 @@ internal object NaxaServicesPeerSyncApplier {
                     if(financial && next in setOf("partial","paid") &&
                         (!result.has("paid_xaf") || paid < old.paidXaf || paid > old.amountXaf || (next=="paid") != (paid==old.amountXaf))) return false
                     if(financial) meta.remove("paid_xaf")
+                    if(old.recordType in setOf("staff_commission","staff_advance","staff_bonus")) {
+                        if(next=="paid" && (!result.has("paid_xaf") || paid!=old.amountXaf)) return false
+                        meta.put("approved",next in setOf("approved","paid"))
+                    }
                     dao.updateManagementRecord(old.copy(status=next,paidXaf=paid,metadataJson=meta.toString()))
                     dao.upsertRemoteWorkflowEvent(LocalWorkflowEvent(change.eventId,org,site,p.sText("record_type",old.recordType),rid,p.sText("from_status",old.status),next,p.sText("reason"),actor,now))
                     return true

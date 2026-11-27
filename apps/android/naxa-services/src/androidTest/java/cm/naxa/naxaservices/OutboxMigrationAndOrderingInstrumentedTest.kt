@@ -59,6 +59,38 @@ class OutboxMigrationAndOrderingInstrumentedTest {
     }
 
     @Test
+    fun importAdjustmentWaitsForReceiptAndStaffSettlementRequiresApproval() = runBlocking<Unit> {
+        org.junit.Assume.assumeTrue(BuildConfig.BILLING_SETTLEMENT_ENABLED)
+        val db = Room.inMemoryDatabaseBuilder(context, NsServicesDatabase::class.java).build()
+        try {
+            val repo = NaxaServicesLocalRepository(db)
+            val org = UUID.randomUUID().toString()
+            val site = UUID.randomUUID().toString()
+            val actor = UUID.randomUUID().toString()
+            val item = repo.createInventoryItem(org, site, "B4-CSV", "Article", "piece", 1.0)
+            repo.recordInventoryMovement(org, site, item.id, "in", 10.0, "Stock initial", actor)
+            repo.importInventoryBatch(org, site, listOf(cm.naxa.naxaservices.data.LocalInventoryImportRow("B4-CSV","Article","piece",7.0,1.0,null,null)), true, actor)
+            val adjust = repo.dao.loadRetryableOutboxEvents(org).single { it.actionCode == "inventory_movement.import_adjustment" }
+            val payload = JSONObject(adjust.payloadJson)
+            assertTrue(payload.optBoolean("defer_count_until_receipt"))
+            assertEquals(10.0, repo.dao.findInventoryItem(item.id, org, site)!!.quantity, 0.001)
+            val receipt = JSONObject().put("movement_id", adjust.aggregateId).put("inventory_item_id",item.id).put("quantity",7.0)
+            assertTrue(repo.applyCanonicalServerEffects(adjust,payload,receipt))
+            assertTrue(repo.applyCanonicalServerEffects(adjust,payload,receipt))
+            assertEquals(7.0, repo.dao.findInventoryItem(item.id,org,site)!!.quantity,0.001)
+            assertEquals(1,repo.dao.countInventoryMovementById(org,adjust.aggregateId))
+            for (kind in listOf("staff_commission","staff_advance","staff_bonus")) {
+                val record = repo.createManagementRecord(org,site,kind,"B4-"+UUID.randomUUID(),"Test","Collaborateur",1200L,0L,null,"pending_review","{}",actor)
+                assertTrue(runCatching { repo.transitionManagementRecord(org,site,record.id,"paid","Règlement externe",actor) }.isFailure)
+                repo.transitionManagementRecord(org,site,record.id,"approved","Validation B4",actor)
+                val settled = repo.transitionManagementRecord(org,site,record.id,"paid","Règlement externe",actor)
+                assertEquals(1200L, settled.paidXaf)
+                assertTrue(runCatching { repo.transitionManagementRecord(org,site,record.id,"paid","Doublon",actor) }.isFailure)
+            }
+        } finally { db.close() }
+    }
+
+    @Test
     fun roomMigration15To16AddsPendingApplicationStateWithoutLosingRemoteChange() {
         val databaseName = "remote-change-migration-${UUID.randomUUID()}.db"
         val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)

@@ -638,6 +638,10 @@ jobs:
                 await apply('staff_commission.status_changed',()=>row.getByRole('button',{name:'Approuver rémunération B4'}).click());
                 await row.getByText(/approved.*Confirmé/).waitFor();
                 const [p]=await success(base+'/rest/v1/ns_management_records?id=eq.'+created.aggregate_id+'&select=status,amount_xaf,revision',undefined,admin,admin,'GET');assert.equal(p.status,'approved');assert.equal(p.amount_xaf,1200);assert.equal(p.revision,2);
+                await row.getByLabel('B4 rémunération décision').fill('Règlement externe déjà effectué');
+                await apply('staff_commission.status_changed',()=>row.getByRole('button',{name:'Déclarer règlement rémunération B4'}).click());
+                await row.getByText(/paid.*Confirmé/).waitFor();
+                const [settled]=await success(base+'/rest/v1/ns_management_records?id=eq.'+created.aggregate_id+'&select=status,paid_xaf,revision',undefined,admin,admin,'GET');assert.equal(settled.status,'paid');assert.equal(settled.paid_xaf,1200);assert.equal(settled.revision,3);
               });
               await scenario('real offline customer creation and exactly-one durable row after reconnection',async()=>{
                 await nav('Clients & fidélité');

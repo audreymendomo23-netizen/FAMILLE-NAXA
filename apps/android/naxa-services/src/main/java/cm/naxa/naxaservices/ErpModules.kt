@@ -1189,7 +1189,7 @@ fun StockContent(
                                             movementType, quantity.replace(",", ".").toDouble(), reason,
                                             session.account.memberId
                                         )
-                                    }.onSuccess { quantity = ""; reason = ""; notice = "Mouvement de stock enregistré." }
+                                    }.onSuccess { quantity = ""; reason = ""; notice = if (movementType == "count") "Comptage transmis à la file de synchronisation. Le stock ne change qu’après reçu serveur." else "Mouvement de stock enregistré." }
                                         .onFailure { error = it.message ?: "Mouvement impossible." }
                                     busy = false
                                 }

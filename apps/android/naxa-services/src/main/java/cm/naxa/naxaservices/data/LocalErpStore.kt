@@ -1713,7 +1713,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
         payload: JSONObject,
         result: JSONObject
     ): Boolean = database.withTransaction {
-        if (event.actionCode == "inventory_movement.created" && payload.optBoolean("defer_count_until_receipt")) {
+        if (event.actionCode in setOf("inventory_movement.created","inventory_movement.import_adjustment") && payload.optBoolean("defer_count_until_receipt")) {
             val itemId = payload.optString("inventory_item_id")
             val siteId = payload.optString("site_id")
             val movementId = payload.optString("movement_id")
@@ -3270,10 +3270,10 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
                         actorMemberId = actorMemberId,
                         createdAtMillis = now
                     )
-                    dao.insertInventoryMovement(movement)
-                    enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.import_adjustment", siteId, if (cm.naxa.naxaservices.BuildConfig.BILLING_SETTLEMENT_ENABLED) JSONObject(inventoryMovementSyncSnapshot(movement)).put("expected_quantity", existing.quantity).toString() else inventoryMovementSyncSnapshot(movement))
+                    if (!cm.naxa.naxaservices.BuildConfig.BILLING_SETTLEMENT_ENABLED) dao.insertInventoryMovement(movement)
+                    enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.import_adjustment", siteId, if (cm.naxa.naxaservices.BuildConfig.BILLING_SETTLEMENT_ENABLED) JSONObject(inventoryMovementSyncSnapshot(movement)).put("expected_quantity", existing.quantity).put("defer_count_until_receipt", true).put("actor_member_id", actorMemberId).toString() else inventoryMovementSyncSnapshot(movement))
                 }
-                val updatedItem = changed.copy(quantity = row.quantity, supplierWhatsApp = row.supplierWhatsApp.filter(Char::isDigit))
+                val updatedItem = changed.copy(quantity = if (cm.naxa.naxaservices.BuildConfig.BILLING_SETTLEMENT_ENABLED) existing.quantity else row.quantity, supplierWhatsApp = row.supplierWhatsApp.filter(Char::isDigit))
                 dao.updateInventoryItem(updatedItem)
                 if (row.unitCostXaf != null || row.sellingPriceXaf != null) {
                     val oldValue = dao.findInventoryValuation(orgId, siteId, existing.id)
@@ -3983,7 +3983,8 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
                 else -> emptySet()
             }
             "staff_commission", "staff_advance", "staff_bonus" -> when (current.status) {
-                "pending_review" -> setOf("approved", "rejected")
+                "pending_review", "draft" -> setOf("approved", "rejected")
+                "approved" -> if (cm.naxa.naxaservices.BuildConfig.BILLING_SETTLEMENT_ENABLED) setOf("paid") else emptySet()
                 else -> emptySet()
             }
             "invoice", "customer_receivable", "refund_due" -> when (current.status) {
@@ -4005,7 +4006,10 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
             "Transition interdite : ${current.status} → $nextStatus pour ${current.recordType}."
         }
         val payable = current.recordType in setOf("invoice","customer_receivable","refund_due")
-        val paidAfter = if (payable && nextStatus in setOf("partial","paid")) {
+        val paidAfter = if (current.recordType in setOf("staff_commission","staff_advance","staff_bonus") && nextStatus == "paid") {
+            require(settlementTotalXaf == null && current.amountXaf > 0L && current.paidXaf == 0L)
+            current.amountXaf
+        } else if (payable && nextStatus in setOf("partial","paid")) {
             require(settlementTotalXaf != null && settlementTotalXaf > current.paidXaf && settlementTotalXaf <= current.amountXaf)
             require((nextStatus == "paid") == (settlementTotalXaf == current.amountXaf))
             settlementTotalXaf
@@ -4043,7 +4047,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
                 enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.purchase_received", siteId)
             }
         }
-        var updatedMetadataJson = current.metadataJson
+        var updatedMetadataJson = if (current.recordType in setOf("staff_commission","staff_advance","staff_bonus")) JSONObject(current.metadataJson).put("approved", nextStatus in setOf("approved","paid")).toString() else current.metadataJson
         if (current.recordType == "inventory_transfer" && nextStatus == "received") {
             val metadata = runCatching { org.json.JSONObject(current.metadataJson) }.getOrElse {
                 throw IllegalArgumentException("Métadonnées du transfert invalides.")
