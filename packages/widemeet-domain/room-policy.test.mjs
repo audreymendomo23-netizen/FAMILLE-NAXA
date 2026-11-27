@@ -115,7 +115,7 @@ test("timed polls reject boundary votes and reveal closed survey only at the ser
 
 test("B4 targeted rating: frozen eligible list, no unauthorized vote, explicit denominator",()=>{
  let r=open();const config={question:"Rate",kind:"rating",options:Array.from({length:10},(_,i)=>String(i+1)),anonymous:true,visibility:"closed",quorum:100,threshold:50,eligibleIds:[guest.memberId]};
- assert.throws(()=>run(r,host,"survey",{...config,eligibleIds:[other.memberId]},"target001"),/invalid_poll/);
+ assert.throws(()=>run(r,host,"survey",{...config,eligibleIds:["foreign001"]},"target001"),/invalid_poll/);
  assert.throws(()=>run(r,host,"survey",{...config,eligibleIds:[guest.memberId,guest.memberId]},"target001"),/invalid_poll/);
  r=run(r,host,"survey",config,"target001");
  assert.equal(pollSummary(r.polls[0],host.memberId,1000).canVote,false);assert.equal(pollSummary(r.polls[0],guest.memberId,1000).canVote,true);
