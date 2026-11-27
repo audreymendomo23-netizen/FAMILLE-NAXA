@@ -51,8 +51,9 @@ jobs:
           set -euo pipefail
           npm install --no-audit --no-fund
           npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
-          npx playwright install --with-deps chromium
-          VITE_WIDEMEET_AUTH_URL=https://127.0.0.1:8443/functions/v1/widemeet-auth VITE_WIDEMEET_SIGNUP_TEST=true npm run build --workspace @famille/widemeet-web
+          npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch(); await b.close();'
+          VITE_WIDEMEET_AUTH_URL=https://127.0.0.1:8443/functions/v1/widemeet-auth VITE_WIDEMEET_SIGNUP_TEST=true VITE_WIDEMEET_RECOVERY_ENABLED=true npm run build --workspace @famille/widemeet-web
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=127.0.0.1' -addext 'subjectAltName=IP:127.0.0.1' -keyout "$RUNNER_TEMP/wm-replay.key" -out "$RUNNER_TEMP/wm-replay.crt" 2>/dev/null
           chmod 600 "$RUNNER_TEMP/wm-replay.key"
       - name: Execute real two-account Edge and Chromium Replay
@@ -61,7 +62,7 @@ jobs:
           set -a; source "$RUNNER_TEMP/wm-replay.env"; set +a
           [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
           export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
-          export WM_AUTH_QUALIFIED=true WM_BILLING_TEST=true WM_SIGNUP_QUALIFIED=true WM_AUTH_ALIAS_DOMAIN=example.test WM_ROOM_QUALIFIED=true WM_MEDIA_QUALIFIED=false WM_ALLOWED_ORIGINS=https://127.0.0.1:8443
+          export WM_AUTH_QUALIFIED=true WM_RECOVERY_KEY_QUALIFIED=true WM_BILLING_TEST=true WM_SIGNUP_QUALIFIED=true WM_AUTH_ALIAS_DOMAIN=example.test WM_ROOM_QUALIFIED=true WM_MEDIA_QUALIFIED=false WM_ALLOWED_ORIGINS=https://127.0.0.1:8443
           export WM_REPLAY_KEY="$RUNNER_TEMP/wm-replay.key" WM_REPLAY_CERT="$RUNNER_TEMP/wm-replay.crt"
           node scripts/widemeet/replay.mjs
       - name: Stop disposable stack
