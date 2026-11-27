@@ -191,7 +191,8 @@ begin
  if public.wm_profile_photo(repeat('6',64),'photo-read','{}')->>'jpeg' is distinct from '/9j/2Q==' then raise exception 'private photo read failed';end if;
  if public.wm_profile_photo(repeat('7',64),'photo-read','{}')->>'jpeg' is not null then raise exception 'private photo cross-account leak';end if;
  if public.wm_profile_photo(repeat('7',64),'photo-delete',jsonb_build_object('account_id',a)) is not null then raise exception 'foreign photo deletion accepted';end if;
- if public.wm_profile_photo(repeat('6',64),'photo-delete','{}') is null or public.wm_profile_photo(repeat('6',64),'photo-read','{}')->>'jpeg' is not null then raise exception 'photo deletion failed';end if;
+ if public.wm_profile_photo(repeat('6',64),'photo-delete','{}') is null then raise exception 'photo deletion failed';end if;
+ if public.wm_profile_photo(repeat('6',64),'photo-read','{}')->>'jpeg' is not null then raise exception 'photo remained after deletion';end if;
 
  for k in 1..5 loop
   j:=public.wm_identity_action(repeat('6',64),'onboarding-step',jsonb_build_object('step',k));
@@ -262,6 +263,37 @@ reset role;
 do $wm$ begin
  if has_function_privilege('anon','public.wm_rotate_refresh(text,uuid,text,text)','EXECUTE') or has_function_privilege('authenticated','public.wm_attach_refresh(text,text,boolean)','EXECUTE') then raise exception 'refresh ACL leak';end if;
 end $wm$;
+
+-- Dedicated enterprise fixture, independent from earlier invitations.
+insert into auth.users(id) values ('00000000-0000-4000-8000-000000000071');
+insert into public.wm_accounts(id,auth_user_id,login_id,auth_alias,display_name) values
+('10000000-0000-4000-8000-000000000071','00000000-0000-4000-8000-000000000071','WM-SCOPESTAFF','wm-scope@example.invalid','Scope staff');
+insert into public.wm_workspaces(id,kind,name) values('20000000-0000-4000-8000-000000000071','enterprise','Manager scope');
+insert into public.wm_memberships(account_id,workspace_id,role) values
+('10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000071','promoteur'),
+('10000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000071','manager'),
+('10000000-0000-4000-8000-000000000071','20000000-0000-4000-8000-000000000071','staff');
+do $wm$ begin
+ if has_table_privilege('authenticated','public.wm_manager_assignments','SELECT') or has_table_privilege('anon','public.wm_manager_assignments','UPDATE') then raise exception 'manager assignment ACL leak';end if;
+end $wm$;
+set local role service_role;
+do $wm$ declare
+ a uuid:='10000000-0000-4000-8000-000000000001'; b uuid:='10000000-0000-4000-8000-000000000002'; c uuid:='10000000-0000-4000-8000-000000000071'; w uuid:='20000000-0000-4000-8000-000000000071';
+ h1 text:=repeat('a',62)||'71';h2 text:=repeat('b',62)||'71';h3 text:=repeat('c',62)||'71'; p jsonb;
+begin
+ perform public.wm_issue_verified_session(a,gen_random_uuid(),w,h1,(select credential_epoch from public.wm_accounts where id=a));
+ perform public.wm_issue_verified_session(b,gen_random_uuid(),w,h2,(select credential_epoch from public.wm_accounts where id=b));
+ perform public.wm_issue_verified_session(c,gen_random_uuid(),w,h3,0);
+ p:=jsonb_build_object('member_id',c,'manager_id',b);
+ if public.wm_identity_action(h2,'manager-assign',p) is not null then raise exception 'manager self-granted scope';end if;
+ if public.wm_identity_action(h2,'revoke-member',jsonb_build_object('member_id',c)) is not null then raise exception 'unassigned staff revoked';end if;
+ if public.wm_identity_action(h1,'manager-assign',p) is null then raise exception 'assignment failed';end if;
+ if not exists(select 1 from jsonb_array_elements(public.wm_identity_action(h2,'contacts','{}')->'contacts') j where j->>'member_id'=c::text and j->>'can_revoke'='true') then raise exception 'scope not projected';end if;
+ if public.wm_identity_action(h2,'revoke-member',jsonb_build_object('member_id',a)) is not null then raise exception 'manager revoked promoter';end if;
+ if public.wm_identity_action(h2,'revoke-member',jsonb_build_object('member_id',c)) is null then raise exception 'assigned staff revocation failed';end if;
+ if exists(select 1 from public.wm_session_context(h3)) or exists(select 1 from public.wm_manager_assignments where workspace_id=w and staff_id=c) then raise exception 'revocation not complete';end if;
+end $wm$;
+reset role;
 
 rollback;
 select 'WIDEMEET_IDENTITY_SQL_PASS';
