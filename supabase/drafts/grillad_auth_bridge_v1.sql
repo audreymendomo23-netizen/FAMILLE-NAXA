@@ -188,12 +188,13 @@ end $$;
 create function grillad_private.renewal_action(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare old grillad_private.events%rowtype;result jsonb;u uuid:=auth.uid();
 begin
- perform grillad_private.renewal_guard(p_org,p_site);
  if p_event is null or p_action is null or p_action not in ('renewal_request','central_request_cancel') or p_payload is null or jsonb_typeof(p_payload)<>'object' or octet_length(p_payload::text)>8192 then raise exception 'GRILLAD_RENEWAL_INPUT' using errcode='22023';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
- perform grillad_private.renewal_guard(p_org,p_site);
+ -- A completed billing request can be replayed after subscription renewal, but only by the currently authorized owner.
+ begin perform grillad_private.renewal_guard(p_org,p_site);exception when insufficient_privilege then if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_RENEWAL_DENIED' using errcode='42501';end if;end;
  select * into old from grillad_private.events where org=p_org and site=p_site and id=p_event;
  if found then if old.actor<>u or old.action<>p_action or old.payload<>p_payload then raise exception 'GRILLAD_REPLAY_CONFLICT' using errcode='22023';end if;return old.result;end if;
+ perform grillad_private.renewal_guard(p_org,p_site);
  result:=grillad_private.central_request(p_org,p_site,p_event,p_action,p_payload,true);
  insert into grillad_private.events(org,site,id,actor,action,payload,result) values(p_org,p_site,p_event,u,p_action,p_payload,result);
  return result;

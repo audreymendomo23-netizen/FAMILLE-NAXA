@@ -15,7 +15,7 @@ internal class GrilladUncertainJournal(context:Context){
  private val prefs=context.getSharedPreferences("grillad-uncertain-v1",Context.MODE_PRIVATE)
  private val alias="cm.naxa.grillad.uncertain.v1"
  private fun account(user:String)=UUID.fromString(user).toString().also{require(it.equals(user,true))}
- private fun valid(req:JSONObject):JSONObject{require(req.optString("action") in listOf("mutate","attendance_capture","connect_transition"));listOf("org","site","event").forEach{account(req.getString(it))};return req}
+ private fun valid(req:JSONObject):JSONObject{require(req.optString("action") in listOf("mutate","attendance_capture","connect_transition","renewal_action"));listOf("org","site","event").forEach{account(req.getString(it))};return req}
  private fun key(create:Boolean):SecretKey{val ks=KeyStore.getInstance("AndroidKeyStore").apply{load(null)};val existing=ks.getKey(alias,null) as? SecretKey;if(existing!=null)return existing;check(create){"Journal local illisible"};return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore").apply{init(KeyGenParameterSpec.Builder(alias,KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT).setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).setKeySize(256).build())}.generateKey()}
  private fun aad(user:String,event:String)="GRILLAD:$user:$event".toByteArray(Charsets.UTF_8)
  private fun enc(b:ByteArray)=Base64.encodeToString(b,Base64.NO_WRAP)

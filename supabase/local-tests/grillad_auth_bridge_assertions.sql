@@ -158,7 +158,7 @@ reset role;
 -- Expired subscription grants billing only; no access to transactions.
 update famille_core.subscriptions set status='expired',ends_at=now()-interval '1 hour' where organization_id='b2000000-0000-0000-0000-000000000001';
 set role authenticated;
-do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';e uuid:=gen_random_uuid();p jsonb:='{"plan":"grillad_premium_month"}';v jsonb;begin
+do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';e uuid:='b8000000-0000-0000-0000-000000000005';p jsonb:='{"plan":"grillad_premium_month"}';v jsonb;begin
  if jsonb_array_length(public.grillad_workspace())<>0 or jsonb_array_length(public.grillad_renewal_workspace())<>1 then raise exception 'expired scope separation';end if;
  begin perform public.grillad_snapshot(o,s,current_date,current_date);raise exception 'expired snapshot';exception when insufficient_privilege then null;end;
  v:=public.grillad_renewal_action(o,s,e,'renewal_request',p);if v->>'status'<>'pending' or public.grillad_renewal_action(o,s,e,'renewal_request',p)<>v then raise exception 'renewal only replay';end if;
@@ -174,6 +174,7 @@ select set_config('request.jwt.claim.sub','b1000000-0000-0000-0000-000000000001'
 select set_config('request.jwt.claims','{"session_id":"b1000000-0000-0000-0000-000000000011","app_metadata":{}}',true);
 -- Existing activated seller assignment to a second GRILLAD site, then revocation.
 set role authenticated;
+do $$begin if public.grillad_renewal_action('b2000000-0000-0000-0000-000000000001','b3000000-0000-0000-0000-000000000001','b8000000-0000-0000-0000-000000000005','renewal_request','{"plan":"grillad_premium_month"}')->>'status'<>'pending' then raise exception 'renewal replay after activation';end if;end $$;
 do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';s2 uuid:='b3000000-0000-0000-0000-000000000003';u uuid:='b1000000-0000-0000-0000-000000000002';e uuid:=gen_random_uuid();p jsonb:=jsonb_build_object('user',u,'role','seller','reason','Renfort');v jsonb;
 begin
  perform public.grillad_action(o,s,s2,'create_site','{"name":"Second GRILLAD","reason":"Extension"}');

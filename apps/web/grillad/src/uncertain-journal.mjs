@@ -2,7 +2,7 @@
 // Per verified GRILLAD account; authenticated scope checked again by the server on replay.
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export function accountKey(user){if(!uuid.test(user||''))throw Error('Identité serveur indisponible');return user.toLowerCase()}
-export function validateRequest(req){if(!req||!['mutate','attendance_capture','connect_transition'].includes(req.action)||![req.org,req.site,req.event].every(x=>uuid.test(x||'')))throw Error('Requête à reprendre invalide');return req}
+export function validateRequest(req){if(!req||!['mutate','attendance_capture','connect_transition','renewal_action'].includes(req.action)||![req.org,req.site,req.event].every(x=>uuid.test(x||'')))throw Error('Requête à reprendre invalide');return req}
 function open(){return new Promise((ok,no)=>{const r=indexedDB.open('grillad-uncertain-v1',1);r.onupgradeneeded=()=>{r.result.createObjectStore('keys');r.result.createObjectStore('pending')};r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error);r.onblocked=()=>no(Error('Journal bloqué'))})}
 function get(db,store,key){return new Promise((ok,no)=>{const t=db.transaction(store,'readonly');const q=t.objectStore(store).get(key);q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error)})}
 function write(db,store,key,value,check){return new Promise((ok,no)=>{const t=db.transaction(store,'readwrite'),s=t.objectStore(store),q=s.get(key);let conflict=false;q.onsuccess=()=>{if(!check(q.result)){conflict=true;t.abort();return}if(value===undefined)s.delete(key);else s.put(value,key)};t.oncomplete=()=>ok();t.onabort=()=>no(conflict?Error('Une autre opération attend confirmation'):t.error||Error('Journal indisponible'));t.onerror=()=>no(t.error)})}
