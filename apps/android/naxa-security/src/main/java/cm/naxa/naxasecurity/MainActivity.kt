@@ -37,12 +37,9 @@ class MainActivity:ComponentActivity(){
     TextButton(onClick={selected=""}){Text("Retour")}
     Text(screen.title,style=MaterialTheme.typography.headlineMedium)
     Text(screen.id+" · "+screen.bulk)
-    Card(Modifier.fillMaxWidth().padding(top=16.dp)){Column(Modifier.padding(16.dp)){
-     Text("Service métier non raccordé")
-     Text("Aucune donnée réelle, commande, connexion ou validation disponible dans cette version de préparation.")
-    }}
+    
     Text("Écrans associés",Modifier.padding(top=16.dp),style=MaterialTheme.typography.titleMedium)
-    LazyColumn{items(securityScreens.filter{it.bulk==screen.bulk&&it.id!=screen.id}){item->
+    LazyColumn{item { SecurityBusinessPanel(screen) };items(securityScreens.filter{it.bulk==screen.bulk&&it.id!=screen.id}){item->
      TextButton(onClick={selected=item.id;tab=item.tab}){Text(item.title)}
     }}
    }else{
