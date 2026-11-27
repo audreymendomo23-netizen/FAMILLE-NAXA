@@ -8,6 +8,70 @@ create table public.zp_station_grants(org_id uuid not null,site_id uuid not null
 create table public.zp_station_grant_events(id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,member_id uuid not null,post text not null,enabled boolean not null,actor_id uuid not null,created_at timestamptz not null default now(),foreign key(member_id,org_id) references public.zp_members(id,org_id),foreign key(actor_id,org_id) references public.zp_members(id,org_id),foreign key(site_id,org_id) references public.zp_site_modes(site_id,org_id));
 create table public.zp_feedback_posts(order_id uuid not null,org_id uuid not null,site_id uuid not null,post text not null check(post in ('kitchen','bar','snack','service','counter','cash')),rating int not null check(rating between 1 and 5),created_at timestamptz not null default now(),primary key(order_id,post),foreign key(order_id,org_id,site_id) references public.zp_orders(id,org_id,site_id));
 create table public.zp_catalog_events(id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,item_id uuid not null,member_id uuid not null,before_value jsonb not null,after_value jsonb not null,created_at timestamptz not null default now(),foreign key(item_id,org_id,site_id) references public.zp_menu_items(id,org_id,site_id),foreign key(member_id,org_id) references public.zp_members(id,org_id));
+
+-- Configurable preparation subdivisions. Canonical post remains the parent for ERP, formulas and reporting.
+create table public.zp_substations(
+ id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,
+ post text not null check(post in ('kitchen','bar','snack')),label text not null check(length(trim(label)) between 2 and 80),
+ parallel_slots int not null check(parallel_slots between 1 and 100),
+ unique(site_id,post,label),unique(id,org_id,site_id),unique(id,org_id,site_id,post),
+ foreign key(site_id,org_id) references public.zp_site_modes(site_id,org_id));
+create table public.zp_substation_grants(
+ org_id uuid not null,site_id uuid not null,substation_id uuid not null,member_id uuid not null,granted_by uuid not null,
+ primary key(substation_id,member_id),
+ foreign key(substation_id,org_id,site_id) references public.zp_substations(id,org_id,site_id),
+ foreign key(member_id,org_id) references public.zp_members(id,org_id),foreign key(granted_by,org_id) references public.zp_members(id,org_id));
+create table public.zp_substation_events(
+ id uuid primary key default gen_random_uuid(),org_id uuid not null,site_id uuid not null,actor_id uuid not null,
+ action text not null check(action in ('configure','assign','grant')),payload jsonb not null,created_at timestamptz not null default now(),
+ foreign key(site_id,org_id) references public.zp_site_modes(site_id,org_id),foreign key(actor_id,org_id) references public.zp_members(id,org_id));
+alter table public.zp_menu_items add column substation_id uuid,add foreign key(substation_id,org_id,site_id,post) references public.zp_substations(id,org_id,site_id,post);
+alter table public.zp_order_lines add column substation_id uuid,add foreign key(substation_id,org_id,site_id,post) references public.zp_substations(id,org_id,site_id,post);
+create function public.zp_can_prepare(p_member uuid,p_site uuid,p_post text,p_substation uuid) returns boolean language sql stable security invoker set search_path=pg_catalog,public as $zp_sub$
+ select exists(select 1 from public.zp_members m join public.zp_site_scopes sc on sc.member_id=m.id and sc.org_id=m.org_id
+ where m.id=p_member and sc.site_id=p_site and m.active and not m.reset_pending and
+ (m.role_code in ('promoteur','manager') or (m.role_code='staff' and
+ (exists(select 1 from public.zp_station_grants g where g.org_id=m.org_id and g.site_id=p_site and g.member_id=m.id and g.post=p_post)
+ or exists(select 1 from public.zp_substation_grants g join public.zp_substations s on s.id=g.substation_id and s.org_id=g.org_id and s.site_id=g.site_id
+ where g.org_id=m.org_id and g.site_id=p_site and g.member_id=m.id and s.id=p_substation and s.post=p_post)))));
+$zp_sub$;
+create function public.zp_substation_configure(p_access text,p_site uuid,p_post text,p_label text,p_slots int) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $zp_sub$
+declare m public.zp_members;i uuid;begin
+ m:=public.zp_erp_actor(p_access,p_site);
+ if p_label is null or length(trim(p_label)) not between 2 and 80 or p_slots is null or p_slots not between 1 and 100 then raise exception 'INVALID_SUBSTATION';end if;
+ perform 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id for update;
+ if not exists(select 1 from public.zp_site_modes s where s.site_id=p_site and s.org_id=m.org_id and ((s.space='restaurant' and (p_post='kitchen' or (p_post='bar' and s.bar_enabled))) or (s.space='snack_bar' and p_post='snack'))) then raise exception 'POST_DENIED';end if;
+ insert into public.zp_substations(org_id,site_id,post,label,parallel_slots) values(m.org_id,p_site,p_post,trim(p_label),p_slots)
+ on conflict(site_id,post,label) do update set parallel_slots=excluded.parallel_slots returning id into i;
+ insert into public.zp_substation_events(org_id,site_id,actor_id,action,payload) values(m.org_id,p_site,m.id,'configure',jsonb_build_object('id',i,'post',p_post,'label',trim(p_label),'slots',p_slots));
+ return i;end $zp_sub$;
+create function public.zp_substation_assign(p_access text,p_site uuid,p_item uuid,p_substation uuid) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $zp_sub$
+declare m public.zp_members;x public.zp_menu_items;begin m:=public.zp_erp_actor(p_access,p_site);
+ perform 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id for update;
+ select * into x from public.zp_menu_items where id=p_item and org_id=m.org_id and site_id=p_site for update;
+ if x.id is null or (p_substation is not null and not exists(select 1 from public.zp_substations where id=p_substation and org_id=m.org_id and site_id=p_site and post=x.post)) then raise exception 'DENIED';end if;
+ if x.substation_id is not distinct from p_substation then return true;end if;
+ update public.zp_menu_items set substation_id=p_substation where id=p_item;
+ insert into public.zp_substation_events(org_id,site_id,actor_id,action,payload) values(m.org_id,p_site,m.id,'assign',jsonb_build_object('item_id',p_item,'before',x.substation_id,'after',p_substation));return true;end $zp_sub$;
+create function public.zp_substation_grant(p_access text,p_site uuid,p_member uuid,p_substation uuid,p_enabled boolean) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $zp_sub$
+declare m public.zp_members;begin m:=public.zp_business_actor(p_access,p_site);
+ if m.role_code<>'promoteur' or public.zp_paid_plan(m.org_id)<>'PREMIUM' or p_enabled is null or not exists(select 1 from public.zp_substations where id=p_substation and org_id=m.org_id and site_id=p_site) or not exists(select 1 from public.zp_members x join public.zp_site_scopes sc on sc.member_id=x.id and sc.org_id=x.org_id where x.id=p_member and x.org_id=m.org_id and x.active and x.role_code='staff' and sc.site_id=p_site) then raise exception 'DENIED';end if;
+ if p_enabled then insert into public.zp_substation_grants values(m.org_id,p_site,p_substation,p_member,m.id) on conflict do nothing;
+ else delete from public.zp_substation_grants where substation_id=p_substation and member_id=p_member and org_id=m.org_id and site_id=p_site;end if;
+ insert into public.zp_substation_events(org_id,site_id,actor_id,action,payload) values(m.org_id,p_site,m.id,'grant',jsonb_build_object('substation_id',p_substation,'member_id',p_member,'enabled',p_enabled));return true;end $zp_sub$;
+create function public.zp_substation_snapshot(p_access text,p_site uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $zp_sub$
+declare m public.zp_members;begin m:=public.zp_erp_actor(p_access,p_site);
+ return jsonb_build_object('stations',coalesce((select jsonb_agg(jsonb_build_object('id',id,'post',post,'label',label,'parallel_slots',parallel_slots) order by post,label) from public.zp_substations where org_id=m.org_id and site_id=p_site),'[]'::jsonb),
+ 'items',coalesce((select jsonb_agg(jsonb_build_object('id',id,'name',name,'post',post,'substation_id',substation_id) order by name) from public.zp_menu_items where org_id=m.org_id and site_id=p_site),'[]'::jsonb),
+ 'staff',case when m.role_code='promoteur' then coalesce((select jsonb_agg(jsonb_build_object('id',x.id,'login',x.login_id,'stations',coalesce((select jsonb_agg(g.substation_id) from public.zp_substation_grants g where g.org_id=m.org_id and g.site_id=p_site and g.member_id=x.id),'[]'::jsonb))) from public.zp_members x join public.zp_site_scopes sc on sc.member_id=x.id and sc.org_id=x.org_id where x.org_id=m.org_id and sc.site_id=p_site and x.role_code='staff' and x.active),'[]'::jsonb) else '[]'::jsonb end);end $zp_sub$;
+create function public.zp_capture_substation() returns trigger language plpgsql security invoker set search_path=pg_catalog,public as $zp_sub$
+begin select i.substation_id into new.substation_id from public.zp_menu_items i where i.id=new.item_id and i.org_id=new.org_id and i.site_id=new.site_id and i.post=new.post;return new;end $zp_sub$;
+create trigger zp_capture_substation_trigger before insert on public.zp_order_lines for each row execute function public.zp_capture_substation();
+do $zp_sub$ declare t text;f record;begin
+ foreach t in array array['zp_substations','zp_substation_grants','zp_substation_events'] loop execute format('alter table public.%I enable row level security',t);execute format('revoke all on public.%I from public,anon,authenticated',t);execute format('grant select,insert,update,delete on public.%I to service_role',t);end loop;
+ for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_can_prepare','zp_substation_configure','zp_substation_assign','zp_substation_grant','zp_substation_snapshot','zp_capture_substation') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;
+end $zp_sub$;
+
 create function public.zp_zone_add(p_access text,p_site uuid,p_name text) returns uuid language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;i uuid;begin m:=public.zp_erp_actor(p_access,p_site);insert into public.zp_zones(org_id,site_id,name) values(m.org_id,p_site,trim(p_name)) returning id into i;return i;end $$;
 create function public.zp_table_config(p_access text,p_site uuid,p_table uuid,p_zone uuid,p_seats int) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$
@@ -56,7 +120,7 @@ declare m public.zp_members;begin m:=public.zp_business_actor(p_access,p_site);
 create function public.zp_station_availability(p_access text,p_site uuid,p_item uuid,p_active boolean) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare m public.zp_members;x public.zp_menu_items;y public.zp_menu_items;begin m:=public.zp_business_actor(p_access,p_site);
  perform 1 from public.zp_site_modes where site_id=p_site for update;
- select * into x from public.zp_menu_items where id=p_item and org_id=m.org_id and site_id=p_site for update;if x.id is null or p_active is null or (m.role_code not in ('promoteur','manager') and not exists(select 1 from public.zp_station_grants where site_id=p_site and member_id=m.id and post=x.post)) then raise exception 'DENIED';end if;
+ select * into x from public.zp_menu_items where id=p_item and org_id=m.org_id and site_id=p_site for update;if x.id is null or p_active is null or (m.role_code not in ('promoteur','manager') and not public.zp_can_prepare(m.id,p_site,x.post,x.substation_id)) then raise exception 'DENIED';end if;
  update public.zp_menu_items set active=p_active where id=x.id returning * into y;
  insert into public.zp_catalog_events(org_id,site_id,item_id,member_id,before_value,after_value) values(m.org_id,p_site,x.id,m.id,to_jsonb(x),to_jsonb(y));return true;end $$;
 create function public.zp_guest_post_feedback(p_guest_hash text,p_order uuid,p_ratings jsonb) returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $$

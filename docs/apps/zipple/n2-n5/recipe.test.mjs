@@ -694,6 +694,33 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  console.log("ZIPPLE_TABLE_TICKETS_CASH_FEEDBACK_PASS");assert.equal(await scalar("select zp_guest_order($1,$2)",[g1,anonymous.id]),null);await assert.rejects(order(a,"table",[{item_id:drink,qty:1}],uid(),ts,g1),/DENIED/);
  for(let n=0;n<5;n++){const t=await tenant("Referral "+n);await db.query("insert into zp_referral_links(referred_org,referrer_org) values($1,$2)",[t.org,a.org]);await pay(await intent(t,"ACCESS","monthly"));}
  assert.equal(await scalar("select zp_claim_referral($1,$2)",[a.access,a.site]),referralWave(5,"monthly").completedWaves);assert.equal(await scalar("select zp_claim_referral($1,$2)",[a.access,a.site]),0);
+
+ // New isolated station configuration: independent queues, exact scope and immutable order assignment.
+ const routingTenant=await tenant("Routage sous-postes");await pay(await intent(routingTenant,"PREMIUM","monthly"));
+ await scalar("select zp_site_mode($1,$2,'restaurant',true,false)",[routingTenant.access,routingTenant.site]);
+ const grill=await scalar("select zp_substation_configure($1,$2,'kitchen','Grillades',1)",[routingTenant.access,routingTenant.site]);
+ const sideStation=await scalar("select zp_substation_configure($1,$2,'kitchen','Accompagnements',2)",[routingTenant.access,routingTenant.site]);
+ const grillItem=await add(routingTenant,"Grillade test","kitchen",1500,2),sideItem=await add(routingTenant,"Garniture test","kitchen",500,2);
+ await assert.rejects(scalar("select zp_substation_assign($1,$2,$3,$4)",[a.access,a.site,food,grill]),/DENIED/);
+ await scalar("select zp_substation_assign($1,$2,$3,$4)",[routingTenant.access,routingTenant.site,grillItem,grill]);
+ await scalar("select zp_substation_assign($1,$2,$3,$4)",[routingTenant.access,routingTenant.site,sideItem,sideStation]);
+ const routingStaff=uid(),routingAuth=uid(),routingAccess=hash();
+ await db.query("insert into auth.users(id) values($1)",[routingAuth]);
+ await db.query("insert into zp_members(id,org_id,auth_user_id,login_id,auth_alias,role_code) values($1,$2,$3,$4,$5,'staff')",[routingStaff,routingTenant.org,routingAuth,uid(),uid()+"@example.test"]);
+ await db.query("insert into zp_site_scopes values($1,$2,$3)",[routingStaff,routingTenant.org,routingTenant.site]);
+ await db.query("insert into zp_sessions(member_id,access_hash,access_until) values($1,$2,now()+interval '1 hour')",[routingStaff,routingAccess]);
+ await scalar("select zp_substation_grant($1,$2,$3,$4,true)",[routingTenant.access,routingTenant.site,routingStaff,grill]);
+ const routedOrder=await order(routingTenant,"counter",[{item_id:grillItem,qty:1},{item_id:sideItem,qty:1}]);
+ assert.equal(Number(routedOrder.total_xaf),2000);
+ const routedLines=(await scalar("select zp_station_snapshot($1,$2)",[routingAccess,routingTenant.site])).lines;assert.equal(routedLines.length,1);assert.equal(routedLines[0].substation_id,grill);
+ await assert.rejects(scalar("select zp_advance_line($1,$2,$3,$4,'preparing')",[routingAccess,routingTenant.site,routedOrder.id,sideItem]),/DENIED/);
+ await scalar("select zp_substation_assign($1,$2,$3,$4)",[routingTenant.access,routingTenant.site,grillItem,sideStation]);
+ assert.equal(await scalar("select substation_id from zp_order_lines where order_id=$1 and item_id=$2",[routedOrder.id,grillItem]),grill);
+ await scalar("select zp_advance_line($1,$2,$3,$4,'preparing')",[routingAccess,routingTenant.site,routedOrder.id,grillItem]);
+ await scalar("select zp_substation_grant($1,$2,$3,$4,false)",[routingTenant.access,routingTenant.site,routingStaff,grill]);
+ await assert.rejects(scalar("select zp_advance_line($1,$2,$3,$4,'ready')",[routingAccess,routingTenant.site,routedOrder.id,grillItem]),/DENIED/);
+ assert.equal((await scalar("select zp_station_snapshot($1,$2)",[routingAccess,routingTenant.site])).lines.length,0);
+ console.log("ZIPPLE_BULK2_SCOPED_SUBSTATION_ROUTING_PASS");
  assert.equal(await scalar("select count(*)::int from pg_tables where schemaname='public' and tablename like 'zp_%' and not rowsecurity"),0);
  assert.equal(await scalar("select has_function_privilege('authenticated','public.zp_confirm_subscription(uuid,text,text,integer,text)','execute')"),false);
  assert.equal(await scalar("select has_table_privilege('anon','public.zp_orders','select')"),false);
