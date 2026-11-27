@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from "react";
+import {privateRequest} from "./private-request";
 import type {WebAuthAccount} from "../auth/session";
 import {rosterApiOrigin} from "./staff-roster";
 export type Report={day:string;generated_at:string;scope:"site"|"personal";finance:{revenue_xaf:number;confirmed_sales_count:number;uncosted_sales_count:number}|null;appointments:{scheduled_count:number;completed_count:number};personal_clock_events:{event_count:number}|null;coverage:string};
@@ -28,10 +29,21 @@ export function validateBriefing(value:unknown,day:string):Report {
  if(p!==null&&(!object(p)||!count(p.event_count)))throw Error("INVALID_BRIEFING");
  return value as Report;
 }
-function dayInDouala(){return new Date(Date.now()+3600000).toISOString().slice(0,10);}
+export function briefingDateBounds(now=Date.now()){
+ const today=new Date(now+3600000).toISOString().slice(0,10);
+ const earliest=new Date(Date.parse(today+"T00:00:00Z")-366*86400000).toISOString().slice(0,10);
+ return {today,earliest};
+}
+export function briefingDayAllowed(day:string,now=Date.now()){
+ const {today,earliest}=briefingDateBounds(now);
+ return /^\d{4}-\d{2}-\d{2}$/.test(day)&&day>=earliest&&day<=today&&Number.isFinite(Date.parse(day+"T00:00:00Z"))&&new Date(day+"T00:00:00Z").toISOString().slice(0,10)===day;
+}
 type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>};
 export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Props){
  const [lang,setLang]=useState<Lang>(account.default_locale);
+ const [day,setDay]=useState(()=>briefingDateBounds().today);
+ const bounds=briefingDateBounds();
+ const dateLabel=({fr:"Date du bilan",en:"Report date","ff-CM":"Ñalnde jaŋtol",es:"Fecha del informe",it:"Data del resoconto","zh-CN":"报告日期"})[lang];
  const [report,setReport]=useState<Report|null>(null),[error,setError]=useState(false),[loading,setLoading]=useState(false),[playing,setPlaying]=useState(false),[paused,setPaused]=useState(false),[speed,setSpeed]=useState(1);
  const controller=useRef<AbortController|null>(null),audio=useRef<SpeechSynthesisUtterance|null>(null),mounted=useRef(false);
  const t=copy[lang];
@@ -39,11 +51,11 @@ export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Pro
  useEffect(()=>{mounted.current=true;const hide=()=>{if(document.visibilityState!=="hidden")return;controller.current?.abort();controller.current=null;stop();setReport(null);setLoading(false);};document.addEventListener("visibilitychange",hide);return()=>{mounted.current=false;document.removeEventListener("visibilitychange",hide);controller.current?.abort();if(audio.current){audio.current.onend=null;audio.current.onerror=null;window.speechSynthesis?.cancel();audio.current=null;}};},[]);
  async function load(){
   stop();controller.current?.abort();const abort=new AbortController();controller.current=abort;setLoading(true);setError(false);setReport(null);
+  const requestedDay=day;
   try{
-   const token=await getToken();if(abort.signal.aborted||!mounted.current||!token||!anonKey)return;
-   const r=await fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/ns_daily_briefing",{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({p_org:account.organization_id,p_site:siteId,p_day:dayInDouala()}),signal:abort.signal,cache:"no-store",credentials:"omit"});
-   if(!r.ok)throw Error("BRIEFING_UNAVAILABLE");
-   const data=validateBriefing(await r.json(),dayInDouala());
+   if(!anonKey||!briefingDayAllowed(requestedDay))throw Error("BRIEFING_UNAVAILABLE");
+   const result=await privateRequest<unknown>(abort.signal,()=>mounted.current&&controller.current===abort&&document.visibilityState!=="hidden",getToken,(token,signal)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/ns_daily_briefing",{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({p_org:account.organization_id,p_site:siteId,p_day:requestedDay}),signal,cache:"no-store",credentials:"omit"}));
+   const data=validateBriefing(result,requestedDay);
    if(abort.signal.aborted||!mounted.current||controller.current!==abort||document.visibilityState==="hidden")return;
    setReport(data);
    return {data,abort};
@@ -62,10 +74,11 @@ export function DailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Pro
  }
  if(!siteId)return null;
  return <section className="module-main-card" aria-label={t.title}><h2>{t.title}</h2>
+ <label>{dateLabel}<input type="date" aria-label={dateLabel} value={day} min={bounds.earliest} max={bounds.today} required onChange={e=>{stop();controller.current?.abort();controller.current=null;setReport(null);setLoading(false);setError(false);setDay(e.target.value);}}/></label>
  <label><select aria-label="Language / Langue" disabled={loading} value={lang} onChange={e=>{stop();setLang(e.target.value as Lang);setError(false);}}>{Object.entries(languages).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
  <label><select aria-label="Speed / Vitesse" disabled={loading} value={speed} onChange={e=>{stop();setSpeed(Number(e.target.value));}}>{[.8,1,1.2,1.5].map(s=><option key={s} value={s}>{s}×</option>)}</select></label>
- <button className="btn primary" disabled={loading} onClick={()=>{if(playing){stop();return;}void load().then(r=>{if(r&&mounted.current&&!r.abort.signal.aborted&&controller.current===r.abort)speak(r.data);});}}>{playing?t.stop:t.play}</button>
+ <button className="btn primary" disabled={loading||!briefingDayAllowed(day)} onClick={()=>{if(playing){stop();return;}void load().then(r=>{if(r&&mounted.current&&!r.abort.signal.aborted&&controller.current===r.abort)speak(r.data);});}}>{playing?t.stop:t.play}</button>
  {playing&&<button className="btn secondary" onClick={()=>{if(!audio.current)return;if(paused)window.speechSynthesis.resume();else window.speechSynthesis.pause();setPaused(!paused);}}>{({fr:paused?"Reprendre":"Pause",en:paused?"Resume":"Pause","ff-CM":paused?"Jokku":"Fowtu",es:paused?"Continuar":"Pausa",it:paused?"Riprendi":"Pausa","zh-CN":paused?"继续":"暂停"})[lang]}</button>}
- <button className="btn secondary" disabled={loading} onClick={()=>void load()}>{t.load}</button>
+ <button className="btn secondary" disabled={loading||!briefingDayAllowed(day)} onClick={()=>void load()}>{t.load}</button>
  {error&&<p role="alert">{t.unavailable}</p>}{report&&<p>{briefingNarration(report,lang)}</p>}</section>;
 }

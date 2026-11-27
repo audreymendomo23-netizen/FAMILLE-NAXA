@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from "react";
+import {privateRequest} from "./private-request";
 import type {WebAuthAccount} from "../auth/session";
 import {rosterApiOrigin} from "./staff-roster";
 type Participant={member_id:string;display_name:string;hand_raised_at:string|null;screen_allowed:boolean;chat_allowed:boolean;mic_muted_by_host:boolean};
@@ -15,19 +16,21 @@ export function MeetingCollaboration({account,meetingId,host,authEndpoint,anonKe
  const token=useRef(getToken);token.current=getToken;const unavailable=useRef(onUnavailable);unavailable.current=onUnavailable;
  const active=useRef(false),controller=useRef<AbortController|null>(null),running=useRef(false),writing=useRef(false);
  async function req<T>(path:string,body?:Record<string,unknown>):Promise<T>{
-  const jwt=await token.current();const signal=controller.current?.signal;if(!active.current||signal?.aborted||!jwt||!anonKey)throw Error("SESSION_CHANGED");
-  const response=await fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal});
-  if(!response.ok)throw Error("MEETING_REQUEST_FAILED");return await response.json() as T;
+  const scope=controller.current;
+  if(!anonKey)throw Error("SESSION_CHANGED");
+  return privateRequest<T>(scope?.signal,()=>active.current&&controller.current===scope,token.current,(jwt,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal:s}));
  }
+
  async function refresh(){
-  if(running.current||!active.current)return;running.current=true;
+  const scope=controller.current;
+  if(running.current||!active.current||!scope||scope.signal.aborted)return;running.current=true;
   try{
    const filter="meeting_id=eq."+encodeURIComponent(meetingId);
    const [p,c,r,rec]=await Promise.all([req<Participant[]>("rpc/ns_meeting_participants",{p_id:meetingId}),req<Chat[]>("ns_meeting_chat?select=id,member_id,message,created_at&"+filter+"&order=created_at.desc,id.desc&limit=100"),req<Reaction[]>("ns_meeting_reactions?select=id,member_id,reaction&"+filter+"&order=created_at.desc&limit=20"),req<Recording[]>("ns_meeting_recording_requests?select=id,status,display_name&"+filter+"&order=requested_at.desc&limit=20")]);
-   if(!active.current)return;
+   if(!active.current||scope.signal.aborted||controller.current!==scope)return;
    if(!p.some(x=>x.member_id===account.member_id)){setPeople([]);setChat([]);setRecent([]);setRecordings([]);setReady(false);unavailable.current();return;}
    setPeople(p);setChat(c.reverse());setRecent(r);setRecordings(rec);setReady(true);setError(false);
-  }catch{if(active.current){setReady(false);setPeople([]);setChat([]);setRecent([]);setRecordings([]);setError(true);}}finally{running.current=false;}
+  }catch{if(active.current&&controller.current===scope&&!scope.signal.aborted){setReady(false);setPeople([]);setChat([]);setRecent([]);setRecordings([]);setError(true);}}finally{running.current=false;}
  }
  useEffect(()=>{active.current=true;controller.current=new AbortController();void refresh();const id=window.setInterval(()=>{if(document.visibilityState==="visible")void refresh();},3000);return()=>{active.current=false;controller.current?.abort();window.clearInterval(id);};},[meetingId,account.member_id,authEndpoint,anonKey]);
  async function act(action:string,value:string|null=null,target?:string){

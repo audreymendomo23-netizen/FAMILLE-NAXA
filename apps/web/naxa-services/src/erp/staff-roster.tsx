@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from "react";
+import {privateRequest} from "./private-request";
 import type { WebAuthAccount } from "../auth/session";
 
 type Target={member_id:string;display_name:string;workstation_id:string|null;workstation_name:string|null};
@@ -42,22 +43,20 @@ function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props)
  const pendingPublish=useRef<{key:string;ids:string[]}|null>(null);
  const [form,setForm]=useState<Form>(blank),[error,setError]=useState(""),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
  const tokenRef=useRef(getToken);tokenRef.current=getToken;
- const alive=useRef(false);
+ const alive=useRef(false),requestScope=useRef<AbortController|null>(null);
  const [version,setVersion]=useState(0);
  const canManage=targets.length>0;
  const textError=tr("Planning indisponible. Vérifiez la connexion et réessayez.","Schedule unavailable. Check your connection and retry.","Feere golle heɓotaake. Ƴeewto ceŋol, kadi eto.");
  const fmt=(iso:string|null)=>iso?new Intl.DateTimeFormat(locale==="ff-CM"?"fr-CM":locale,{dateStyle:"short",timeStyle:"short",timeZone:"Africa/Douala"}).format(new Date(iso)):"—";
  async function request<T>(path:string,body?:Record<string,unknown>,signal?:AbortSignal):Promise<T>{
-  const token=await tokenRef.current();if(signal?.aborted||!alive.current||!token||!anonKey)throw new Error("SESSION_CHANGED");
-  const res=await fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"return=representation"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal});
-  if(!res.ok)throw new Error("ROSTER_REQUEST_FAILED");
-  const data=await res.json() as T;
-  if(signal?.aborted||!alive.current)throw new Error("SESSION_CHANGED");
-  return data;
+  const scope=requestScope.current;const bound=signal??scope?.signal;
+  if(!anonKey)throw Error("SESSION_CHANGED");
+  return privateRequest<T>(bound,()=>alive.current&&requestScope.current===scope,tokenRef.current,(token,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"return=representation"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal:s}));
  }
+
  useEffect(()=>{
   alive.current=true;
-  const abort=new AbortController();
+  const abort=new AbortController();requestScope.current=abort;
   let refreshing=false;
   async function refresh(){
    if(abort.signal.aborted||refreshing||!modeEnabled(account.business_mode)||!siteId)return;

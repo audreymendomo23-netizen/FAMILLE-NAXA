@@ -1,4 +1,5 @@
 import React,{useEffect,useRef,useState} from "react";
+import {privateRequest} from "./private-request";
 import {MeetingCollaboration} from "./meeting-collaboration";
 import type {WebAuthAccount} from "../auth/session";
 import {rosterApiOrigin,rosterModeEnabled} from "./staff-roster";
@@ -21,10 +22,11 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
  function clearRetry(){try{sessionStorage.removeItem(retryKey);}catch{/* private browsing */}}
  const err=tr("Réunion ou modification indisponible. Actualisez et réessayez.","Meeting or change unavailable. Refresh and retry.","Dental walla baylugol heɓotaako. Hesɗitin, eto.");
  async function req<T>(path:string,body?:Record<string,unknown>,signal?:AbortSignal):Promise<T>{
-  const jwt=await token.current();if(!alive.current||signal?.aborted||!jwt||!anonKey)throw Error("SESSION_CHANGED");
-  const response=await fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal});
-  if(!response.ok)throw Error("MEETING_REQUEST_FAILED");return await response.json() as T;
+  const scope=controller.current;const bound=signal??scope?.signal;
+  if(!anonKey)throw Error("SESSION_CHANGED");
+  return privateRequest<T>(bound,()=>alive.current&&controller.current===scope,token.current,(jwt,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal:s}));
  }
+
  useEffect(()=>{
   alive.current=true;const c=new AbortController();controller.current=c;
   let refreshing=false;
