@@ -304,6 +304,29 @@ export function reverseCommission(input) {
   });
 }
 
+/** NAXA SERVICES candidate: explicit adjustment for each distinct posted entry.
+ * Caller must read all original amounts and prior adjustments under a transaction lock.
+ * No split/refund policy is inferred and no ledger mutation is performed here.
+ */
+export function prepareCommissionReversalBatch(input) {
+  const v=record(input,"INVALID_COMMISSION_REVERSAL_BATCH");
+  if(typeof v.reversalEventId!=="string"||!UUID.test(v.reversalEventId)||!Array.isArray(v.adjustments)||v.adjustments.length===0||v.adjustments.length>20)throw new TypeError("INVALID_COMMISSION_REVERSAL_BATCH");
+  const event=v.reversalEventId.toLowerCase();
+  const seen=new Set();
+  const entries=v.adjustments.map(a=>{
+    record(a,"INVALID_COMMISSION_REVERSAL");
+    if(typeof a.sourceEntryId!=="string"||!UUID.test(a.sourceEntryId)||!Number.isSafeInteger(a.alreadyReversedXaf))throw new TypeError("INVALID_COMMISSION_REVERSAL_ENTRY");
+    const source=a.sourceEntryId.toLowerCase();
+    if(seen.has(source))throw new Error("DUPLICATE_COMMISSION_REVERSAL_ENTRY");
+    seen.add(source);
+    const result=reverseCommission({...a,sourceEntryId:source,reversalEventId:event});
+    return Object.freeze({...result,idempotencyKey:event+":commission-reversal:"+source});
+  }).sort((a,b)=>a.sourceEntryId.localeCompare(b.sourceEntryId));
+  const total=entries.reduce((sum,e)=>sum+e.amountXaf,0);
+  if(!Number.isSafeInteger(total))throw new RangeError("COMMISSION_REVERSAL_TOTAL_OUT_OF_RANGE");
+  return Object.freeze({status:"pending_approval",totalAdjustmentXaf:total,entries:Object.freeze(entries)});
+}
+
 // ----- Fiscal parameter engine: no universal or unvalidated default rates -----
 
 export function validateFiscalPolicy(policyInput, transactionDate) {

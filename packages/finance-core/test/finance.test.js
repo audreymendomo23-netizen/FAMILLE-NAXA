@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   normalizePaymentIntent, classifyProviderInitiation, verifyPaymentConfirmation,
   assertPaymentTransition, createPaymentAdapterRegistry, calculateCommission,
-  reverseCommission, calculateFiscalQuote, prepareAutomaticCommission, prepareAutomaticCommissionFromDatabase,
+  reverseCommission, prepareCommissionReversalBatch, calculateFiscalQuote, prepareAutomaticCommission, prepareAutomaticCommissionFromDatabase,
 } from "../src/index.js";
 
 const intent = {
@@ -205,3 +205,5 @@ test("database automatic commission adapter rejects legacy policy activation and
  assert.equal(prepareAutomaticCommissionFromDatabase({...enabled,settings:{enabled:false}}).status,"disabled");
  assert.equal(prepareAutomaticCommissionFromDatabase({...enabled,policyRows:[{...row,automatic_scope:true,org_id:"other"}]}).status,"no_applicable_policy");
 });
+
+test("commission reversal batch uses distinct stable keys and explicit cumulative amounts",()=>{const event="70000000-0000-4000-8000-00000000000A";const a={sourceEntryId:"50000000-0000-4000-8000-00000000000A",originalAmountXaf:1000,alreadyReversedXaf:700,refundAmountXaf:300};const b={sourceEntryId:"50000000-0000-4000-8000-00000000000B",originalAmountXaf:2000,alreadyReversedXaf:0,refundAmountXaf:500};const r=prepareCommissionReversalBatch({reversalEventId:event,adjustments:[a,b]});assert.equal(r.totalAdjustmentXaf,-800);assert.equal(new Set(r.entries.map(x=>x.idempotencyKey)).size,2);assert.deepEqual(r,prepareCommissionReversalBatch({reversalEventId:event.toLowerCase(),adjustments:[b,a]}));assert.throws(()=>prepareCommissionReversalBatch({reversalEventId:event,adjustments:[a,{...a,sourceEntryId:a.sourceEntryId.toLowerCase()}]}),/DUPLICATE/);assert.throws(()=>prepareCommissionReversalBatch({reversalEventId:event,adjustments:[{...a,refundAmountXaf:301}]}),/REVERSAL_EXCEEDS/);assert.throws(()=>prepareCommissionReversalBatch({reversalEventId:event,adjustments:[{...a,alreadyReversedXaf:undefined}]}),/INVALID_COMMISSION_REVERSAL_ENTRY/);});

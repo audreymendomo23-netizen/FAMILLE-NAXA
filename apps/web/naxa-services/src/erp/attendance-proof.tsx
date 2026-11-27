@@ -1,12 +1,16 @@
 import React,{useEffect,useRef,useState} from "react";
 import type {WebAuthAccount} from "../auth/session";
 import {rosterApiOrigin} from "./staff-roster";
+import {privateRequest} from "./private-request";
 export type AttendanceAction="staff_clock_in"|"staff_break_start"|"staff_break_end"|"staff_clock_out";
 const actions:AttendanceAction[]=["staff_clock_in","staff_break_start","staff_break_end","staff_clock_out"];
 type Policy={event_type:AttendanceAction;revision:number;require_gps:boolean;require_selfie:boolean};
 type GPS={latitude:number;longitude:number;accuracy:number;at:string};
 type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>;action:AttendanceAction|null;onClose:()=>void;loadWorkstations:(site:string)=>Promise<{id:string;name:string;site_id:string;status:string}[]>;onSubmit:(id:string,occurred:string,action:AttendanceAction,workstationId:string|null)=>Promise<void>};
-export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getToken,action,onClose,onSubmit,loadWorkstations}:Props){
+export function AttendanceProofPanel(props:Props){
+ return <ScopedAttendanceProofPanel key={JSON.stringify([props.account.organization_id,props.account.member_id,props.account.role_code,props.siteId,props.authEndpoint,props.anonKey])} {...props}/>;
+}
+function ScopedAttendanceProofPanel({account,siteId,authEndpoint,anonKey,getToken,action,onClose,onSubmit,loadWorkstations}:Props){
  const tr=(fr:string,en:string,ff:string)=>account.default_locale==="en"?en:account.default_locale==="ff-CM"?ff:fr;
  const labels:Record<AttendanceAction,string>={staff_clock_in:tr("Prise de service","Start shift","Fuɗɗo golle"),staff_break_start:tr("Début de pause","Start break","Fuɗɗo fowtude"),staff_break_end:tr("Fin de pause","End break","Timmin fowtude"),staff_clock_out:tr("Fin de service","End shift","Timmin golle")};
  const [policies,setPolicies]=useState<Policy[]>([]),[loaded,setLoaded]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(false);
@@ -20,10 +24,9 @@ export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getTok
  const policy=action?rule(action):null;
  function stop(){stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;if(video.current)video.current.srcObject=null;setCamera(false);}
  async function req<T>(path:string,body?:Record<string,unknown>):Promise<T>{
-  const jwt=await token.current();const signal=controller.current?.signal;
-  if(!live.current||signal?.aborted||!jwt||!anonKey)throw Error("SESSION_CHANGED");
-  const r=await fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",redirect:"error",signal});
-  if(!r.ok)throw Error("ATTENDANCE_REQUEST_FAILED");return await r.json() as T;
+  const scope=controller.current,g=gen.current;
+  if(!anonKey)throw Error("SESSION_CHANGED");
+  return privateRequest<T>(scope?.signal,()=>live.current&&controller.current===scope&&(!body||gen.current===g)&&document.visibilityState!=="hidden",token.current,(jwt,signal)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",redirect:"error",signal}));
  }
  useEffect(()=>{live.current=true;controller.current=new AbortController();const c=controller.current;setLoaded(false);
   void req<Policy[]>("ns_attendance_policies?select=event_type,revision,require_gps,require_selfie&org_id=eq."+encodeURIComponent(account.organization_id)+"&site_id=eq."+encodeURIComponent(siteId)).then(p=>{if(!c.signal.aborted){setPolicies(p);setLoaded(true);setError(false);}}).catch(()=>{if(!c.signal.aborted){setError(true);setLoaded(false);}});
@@ -32,7 +35,7 @@ export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getTok
  useEffect(()=>{gen.current++;stop();setGps(null);setPhoto(null);},[action,reload,post]);
  async function loadPosts(){const g=gen.current;setBusy(true);setError(false);try{const rows=await loadWorkstations(siteId);if(live.current&&g===gen.current){setPosts(rows.filter(p=>p.site_id===siteId&&p.status==="active"));setPostsLoaded(true);}}catch{if(live.current&&g===gen.current)setError(true);}finally{if(live.current)setBusy(false);}}
  // Backgrounding must not keep the camera alive or leave reusable evidence.
- useEffect(()=>{function hide(){if(document.visibilityState!=="hidden")return;gen.current++;stop();setGps(null);setPhoto(null);}
+ useEffect(()=>{function hide(){if(document.visibilityState!=="hidden"){setReload(v=>v+1);return;}gen.current++;controller.current?.abort();stop();setGps(null);setPhoto(null);setPolicies([]);setLoaded(false);setPosts([]);setPostsLoaded(false);setPost("");setBusy(false);setError(false);}
  document.addEventListener("visibilitychange",hide);return()=>document.removeEventListener("visibilitychange",hide);},[]);
  async function obtainGPS(){
   const g=gen.current;setBusy(true);setError(false);setGps(null);
@@ -66,10 +69,10 @@ export function AttendanceProofPanel({account,siteId,authEndpoint,anonKey,getTok
   if(!action||!policy||!loaded||busy||!navigator.onLine)return;const g=gen.current;setBusy(true);setError(false);
   try{
    if((policy.require_gps&&(!gps||Math.abs(Date.now()-Date.parse(gps.at))>120000))||(policy.require_selfie&&(!photo||Math.abs(Date.now()-Date.parse(photo.at))>120000)))throw Error();
-   const id=crypto.randomUUID(),occurred=new Date().toISOString(),jwt=await token.current();if(!live.current||g!==gen.current||!jwt)throw Error();
+   const id=crypto.randomUUID(),occurred=new Date().toISOString(),jwt=await token.current();if(!live.current||g!==gen.current||document.visibilityState==="hidden"||!jwt)throw Error();
    if(policy.require_selfie&&photo){const path=[account.organization_id,siteId,account.member_id,id+".jpg"].map(encodeURIComponent).join("/");
     const r=await fetch(rosterApiOrigin(authEndpoint)+"/storage/v1/object/ns-attendance-selfies/"+path,{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"image/jpeg","x-upsert":"false"},body:photo.blob,cache:"no-store",credentials:"omit",redirect:"error",signal:controller.current?.signal});if(!r.ok)throw Error();}
-   if(!live.current||g!==gen.current)throw Error();
+   if(!live.current||g!==gen.current||document.visibilityState==="hidden")throw Error();
    const result=await req<{proof_ref:string;staged:boolean}>("rpc/ns_stage_attendance_proof",{p_event_id:id,p_org:account.organization_id,p_site:siteId,p_post:post||null,p_event:action,p_occurred:occurred,p_revision:policy.revision,p_latitude:policy.require_gps?gps?.latitude:null,p_longitude:policy.require_gps?gps?.longitude:null,p_accuracy:policy.require_gps?gps?.accuracy:null,p_gps_at:policy.require_gps?gps?.at:null,p_selfie_at:policy.require_selfie?photo?.at:null});
    if(!live.current||g!==gen.current||result.proof_ref!==id||!result.staged)throw Error();
    await onSubmit(id,occurred,action,post||null);if(live.current&&g===gen.current){setGps(null);setPhoto(null);onClose();}
@@ -99,8 +102,10 @@ function AttendanceReview({account,siteId,authEndpoint,anonKey,getToken}:Pick<Pr
  const controller=useRef<AbortController|null>(null),objectUrl=useRef<string|null>(null),alive=useRef(true),epoch=useRef(0);
  function clearPhoto(){if(objectUrl.current)URL.revokeObjectURL(objectUrl.current);objectUrl.current=null;setPhoto(null);}
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;epoch.current++;controller.current?.abort();if(objectUrl.current)URL.revokeObjectURL(objectUrl.current);objectUrl.current=null;};},[]);
- function close(){epoch.current++;controller.current?.abort();clearPhoto();setRows([]);setShown(false);setBusy(false);}
+ function close(){epoch.current++;controller.current?.abort();clearPhoto();setRows([]);setShown(false);setBusy(false);setError(false);}
+ useEffect(()=>{const hide=()=>{if(document.visibilityState==="hidden")close();};document.addEventListener("visibilitychange",hide);return()=>document.removeEventListener("visibilitychange",hide);},[]);
  async function load(){
+  if(document.visibilityState==="hidden")return;
   const n=++epoch.current;controller.current?.abort();const c=new AbortController();controller.current=c;clearPhoto();setRows([]);setShown(true);setBusy(true);setError(false);
   try{const jwt=await getToken();if(c.signal.aborted||!jwt)throw Error();
    const r=await fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/ns_attendance_review",{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:JSON.stringify({p_org:account.organization_id,p_site:siteId,p_limit:50}),cache:"no-store",redirect:"error",credentials:"omit",signal:c.signal});
@@ -108,14 +113,14 @@ function AttendanceReview({account,siteId,authEndpoint,anonKey,getToken}:Pick<Pr
   }catch{if(alive.current&&n===epoch.current)setError(true);}finally{if(alive.current&&n===epoch.current)setBusy(false);}
  }
  async function view(row:EvidenceRow){
-  if(!row.selfie_path)return;const n=++epoch.current;controller.current?.abort();const c=new AbortController();controller.current=c;clearPhoto();setBusy(true);setError(false);
+  if(!row.selfie_path||document.visibilityState==="hidden")return;const n=++epoch.current;controller.current?.abort();const c=new AbortController();controller.current=c;clearPhoto();setBusy(true);setError(false);
   try{const parts=row.selfie_path.split("/");if(parts.length!==4||parts[0]!==account.organization_id||parts[1]!==siteId||parts[3]!==row.event_id+".jpg"||!parts.slice(0,3).every(x=>/^[0-9a-f-]{36}$/i.test(x)))throw Error();
    const jwt=await getToken();if(!jwt||c.signal.aborted)throw Error();
    const r=await fetch(rosterApiOrigin(authEndpoint)+"/storage/v1/object/authenticated/ns-attendance-selfies/"+parts.map(encodeURIComponent).join("/"),{headers:{apikey:anonKey,Authorization:"Bearer "+jwt},cache:"no-store",credentials:"omit",redirect:"error",signal:c.signal});if(!r.ok)throw Error();const b=await r.blob();if(b.type!=="image/jpeg"||!b.size||b.size>2097152)throw Error();
    if(alive.current&&n===epoch.current&&!c.signal.aborted){const url=URL.createObjectURL(b);objectUrl.current=url;setPhoto({id:row.event_id,url});}
   }catch{if(alive.current&&n===epoch.current){setError(true);setRows([]);}}finally{if(alive.current&&n===epoch.current)setBusy(false);}
  }
- return <section className="module-main-card" aria-labelledby="ns-attendance-review-title"><h3 id="ns-attendance-review-title">{tr("Consulter les preuves","Review evidence","Ƴeewto seedeeji")}</h3>
+ return <section className="module-main-card" aria-busy={busy} aria-labelledby="ns-attendance-review-title"><h3 id="ns-attendance-review-title">{tr("Consulter les preuves","Review evidence","Ƴeewto seedeeji")}</h3>
  <button className="btn secondary" onClick={()=>shown?close():void load()}>{shown?tr("Fermer","Close","Uddu"):tr("Afficher les preuves autorisées","Show authorized evidence","Hollu seedeeji")}</button>
  {shown&&<><button className="btn secondary" disabled={busy} onClick={()=>void load()}>{tr("Actualiser","Refresh","Hesɗitin")}</button>
  {error&&<p role="alert">{tr("Preuve indisponible ou accès retiré.","Evidence unavailable or access withdrawn.","Seedee heɓotaako.")}</p>}

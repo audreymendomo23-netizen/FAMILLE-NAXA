@@ -10,7 +10,10 @@ type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:str
 const langs=[["original","Original"],["fr","Français"],["en","English"],["ff-CM","Fulfulde"],["es","Español"],["it","Italiano"],["zh-CN","中文"]];
 const local=(s:string)=>new Date(Date.parse(s)+3600000).toISOString().slice(0,16);
 const iso=(s:string)=>new Date(s+":00+01:00").toISOString();
-export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:Props){
+export function InternalMeetings(props:Props){
+ return <ScopedInternalMeetings key={JSON.stringify([props.account.organization_id,props.account.member_id,props.account.role_code,props.account.business_mode,props.siteId,props.authEndpoint,props.anonKey])} {...props}/>;
+}
+function ScopedInternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:Props){
  const tr=(fr:string,en:string,ff:string)=>account.default_locale==="en"?en:account.default_locale==="ff-CM"?ff:fr;
  const [meetings,setMeetings]=useState<Meeting[]>([]),[invites,setInvites]=useState<Invite[]>([]),[targets,setTargets]=useState<Target[]>([]);
  const [selected,setSelected]=useState<string[]>([]),[post,setPost]=useState(""),[title,setTitle]=useState(""),[when,setWhen]=useState(""),[agenda,setAgenda]=useState(""),[duration,setDuration]=useState("30"),[edit,setEdit]=useState<Meeting|null>(null);
@@ -24,7 +27,7 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
  async function req<T>(path:string,body?:Record<string,unknown>,signal?:AbortSignal):Promise<T>{
   const scope=controller.current;const bound=signal??scope?.signal;
   if(!anonKey)throw Error("SESSION_CHANGED");
-  return privateRequest<T>(bound,()=>alive.current&&foreground.current&&controller.current===scope,token.current,(jwt,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal:s}));
+  return privateRequest<T>(bound,()=>alive.current&&foreground.current&&controller.current===scope,token.current,(jwt,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",redirect:"error",signal:s}));
  }
 
  useEffect(()=>{

@@ -1,5 +1,5 @@
 // Read-only candidate inventory. Never contacts or deploys to a hosted project.
-import {readFileSync} from "node:fs";
+import {readFileSync,mkdirSync,writeFileSync} from "node:fs";
 import {createHash} from "node:crypto";
 import assert from "node:assert/strict";
 const root=new URL("../../",import.meta.url);
@@ -16,4 +16,5 @@ const rows=records.map(r=>{
  assert.ok(source.length>0);
  return {bundle:r.slug,path:r.path,historicalEqual:r.equal,candidateSha256:createHash("sha256").update(source).digest("hex")};
 });
-console.log(JSON.stringify({historicalComparisonCommit:report.repositoryCommit,occurrences:rows.length,historicalDifferences:rows.filter(r=>!r.historicalEqual).length,hostedParity:"NOT_VERIFIED",deployment:"NOT_AUTHORIZED_BY_THIS_CHECK",rows},null,2));
+const output=JSON.stringify({candidateCommit:process.env.GITHUB_SHA??null,historicalComparisonCommit:report.repositoryCommit,occurrences:rows.length,historicalDifferences:rows.filter(r=>!r.historicalEqual).length,hostedParity:"NOT_VERIFIED",deployment:"NOT_AUTHORIZED_BY_THIS_CHECK",rows},null,2);
+const dir=new URL("artifacts/naxa-services-commercial/",root);mkdirSync(dir,{recursive:true});writeFileSync(new URL("edge-candidate-inventory.json",dir),output+"\n");console.log(output);

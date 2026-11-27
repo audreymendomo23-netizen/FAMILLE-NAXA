@@ -19,3 +19,5 @@ describe("historical briefing dates in Douala",()=>{
 it("requires timezone-bearing ISO generation time",()=>{for(const generated_at of ["2026-11-26","2026-11-26T10:00:00","11/26/2026"])expect(()=>validateBriefing({...valid,generated_at},day)).toThrow("INVALID_BRIEFING");expect(validateBriefing({...valid,generated_at:"2026-11-26T10:00:00.123456+00:00"},day).day).toBe(day);});
 
 it("projects only authorized report fields and discards unexpected private values",()=>{const result=validateBriefing({...valid,private_notes:"not for the client",appointments:{...valid.appointments,customer_names:["private"]},finance:{...valid.finance,raw_ledger:["private"]}},day);expect(result).toEqual(valid);});
+
+it("discloses uncosted sales only inside the authorized finance report",()=>{expect(briefingNarration(validateBriefing(valid,day),"fr")).toContain("Ventes sans coût renseigné: 1");const personal={...valid,scope:"personal",finance:null};expect(briefingNarration(validateBriefing(personal,day),"fr")).not.toContain("Ventes sans coût renseigné");});

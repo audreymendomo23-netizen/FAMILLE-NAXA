@@ -15,7 +15,8 @@ const copy:Record<Lang,{title:string;intro:string;appointments:string;completed:
 };
 export function briefingNarration(r:Report,l:Lang):string{
  const t=copy[l];
- return [t.intro,r.day,t.appointments+": "+r.appointments.scheduled_count+"; "+t.completed+": "+r.appointments.completed_count+".",r.finance===null?"":t.finance+": "+r.finance.revenue_xaf+"; "+t.sales+": "+r.finance.confirmed_sales_count+".",r.personal_clock_events===null?"":t.clocks+": "+r.personal_clock_events.event_count+".",t.missing].filter(Boolean).join(" ");
+ const uncosted=({fr:"Ventes sans coût renseigné",en:"Sales without recorded costs","ff-CM":"Soodugol alaa njaru winndaaɗo",es:"Ventas sin coste registrado",it:"Vendite senza costo registrato","zh-CN":"未记录成本的销售"})[l];
+ return [t.intro,r.day,t.appointments+": "+r.appointments.scheduled_count+"; "+t.completed+": "+r.appointments.completed_count+".",r.finance===null?"":t.finance+": "+r.finance.revenue_xaf+"; "+t.sales+": "+r.finance.confirmed_sales_count+". "+uncosted+": "+r.finance.uncosted_sales_count+".",r.personal_clock_events===null?"":t.clocks+": "+r.personal_clock_events.event_count+".",t.missing].filter(Boolean).join(" ");
 }
 
 export function validateBriefing(value:unknown,day:string):Report {
@@ -82,7 +83,7 @@ function ScopedDailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Prop
   setPaused(false);setPlaying(true);window.speechSynthesis.speak(u);
  }
  if(!siteId)return null;
- return <section className="module-main-card" aria-label={t.title}><h2>{t.title}</h2>
+ return <section className="module-main-card" aria-label={t.title} aria-busy={loading}><h2>{t.title}</h2>
  <label>{dateLabel}<input type="date" aria-label={dateLabel} value={day} min={bounds.earliest} max={bounds.today} required onChange={e=>{stop();controller.current?.abort();controller.current=null;setReport(null);setLoading(false);setError(false);setDay(e.target.value);}}/></label>
  <label>{languageLabel}<select aria-label={languageLabel} disabled={loading} value={lang} onChange={e=>{stop();setLang(e.target.value as Lang);setError(false);}}>{Object.entries(languages).map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>
  <label>{speedLabel}<select aria-label={speedLabel} disabled={loading} value={speed} onChange={e=>{stop();setSpeed(Number(e.target.value));}}>{[.8,1,1.2,1.5].map(s=><option key={s} value={s}>{s}×</option>)}</select></label>
