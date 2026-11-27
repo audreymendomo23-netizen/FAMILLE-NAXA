@@ -99,6 +99,22 @@ try{
  assert.equal((await request(auth+"/login",{identifier:rotationUser.login,password:rotationUser.password,installation_id:randomUUID(),platform:"web"})).status,401);
  const rotated=await login({login:rotationUser.login,password:newPassword});assert.equal(rotated.member_id,rotationUser.id);
  pass("actual GoTrue password rotation and revocation of two devices");
+ // Independent synthetic recovery fixture. Never print the password or key.
+ const recoverable=await fixture(other,"staff");
+ const recoverSession=await login(recoverable),recoverOther=await login(recoverable);
+ assert.equal((await request(auth+"/recovery-enroll",{current_password:"incorrect"},recoverSession.access_token)).status,401);
+ const keyResult=await ok(auth+"/recovery-enroll",{current_password:recoverable.password},recoverSession.access_token);
+ assert.match(keyResult.recovery_key,/^[a-f0-9]{64}$/);
+ const replacement="Qa9!"+randomBytes(18).toString("hex"),recoveryRequest={identifier:recoverable.login,recovery_key:keyResult.recovery_key,new_password:replacement,request_id:randomUUID(),installation_id:randomUUID(),platform:"web"};
+ assert.equal((await request(auth+"/recover-key",{...recoveryRequest,recovery_key:randomBytes(32).toString("hex")})).status,401);
+ assert.equal((await ok(auth+"/recover-key",recoveryRequest)).recovered,true);
+ assert.equal((await request(room+"/list",{},recoverSession.access_token)).status,403);
+ assert.equal((await request(room+"/list",{},recoverOther.access_token)).status,403);
+ assert.equal((await request(auth+"/recover-key",recoveryRequest)).status,401);
+ assert.equal((await request(auth+"/login",{identifier:recoverable.login,password:recoverable.password,installation_id:randomUUID(),platform:"web"})).status,401);
+ assert.equal((await login({login:recoverable.login,password:replacement})).member_id,recoverable.id);
+ pass("actual offline recovery proof, one-use key, GoTrue credential replacement and two-device revocation");
+
  assert.equal(hs.member_id,h.id);assert.equal(gs.member_id,g.id);assert.equal(os.active_workspace_id,other);
  const denied=await request(auth+"/login",{identifier:h.login,password:"wrong",installation_id:randomUUID(),platform:"web"});assert.equal(denied.status,401);
  const rec=await ok(auth+"/request-recovery",{identifier:h.login,installation_id:randomUUID(),platform:"web"});const unknown=await ok(auth+"/request-recovery",{identifier:"WM-UNKNOWN123",installation_id:randomUUID(),platform:"web"});assert.deepEqual(rec,unknown);assert.equal(rec.accepted,true);
@@ -224,9 +240,18 @@ try{
  assert.equal((await request(room+"/read",{room_id:rid},os.access_token)).status,404);
  assert.equal((await ok(room+"/list",{},os.access_token)).length,0);
  async function cmd(token,action,value=null,target=null){state=await ok(room+"/command",{room_id:rid,request_id:randomUUID(),expected_revision:state.revision,action,value,target},token);return state;}
+ await cmd(gs.access_token,"respond","accepted");
+ await cmd(hs.access_token,"reschedule",{title:"Replay revised meeting",description:"Updated agenda",scheduledMs:Date.now()+60000,durationMinutes:30});
+ assert.equal(state.participants.find(p=>p.memberId===g.id).response,"pending");
  await cmd(gs.access_token,"respond","accepted");await cmd(hs.access_token,"start");assert.equal(state.status,"open");
  await cmd(gs.access_token,"chat","Hello from real account");
  assert.equal(state.events[0].value,"Hello from real account");
+ await cmd(gs.access_token,"private_chat","Private fixture message",h.id);
+ assert.ok(state.events.some(e=>e.action==="private_chat"&&e.target===h.id));
+ const receivedPrivate=await ok(room+"/read",{room_id:rid},hs.access_token);
+ assert.ok(receivedPrivate.events.some(e=>e.action==="private_chat"&&e.value==="Private fixture message"));
+ assert.equal((await request(room+"/read",{room_id:rid},os.access_token)).status,404);
+ pass("actual rescheduling requires new RSVP, private message delivery and foreign tenant denial");
  await cmd(gs.access_token,"hand",true);
  await cmd(hs.access_token,"mute",null,g.id);
  assert.equal(state.participants.find(p=>p.memberId===g.id).mic,false);
@@ -241,6 +266,12 @@ try{
  await cmd(hs.access_token,"survey_vote",[0],sid);await cmd(hs.access_token,"close_poll",null,sid);survey=state.polls.find(p=>p.id===sid);
  assert.deepEqual(survey.counts,[2,0,1]);assert.equal(survey.quorumMet,true);assert.deepEqual(survey.accepted,[true,false,true]);
  pass("real duration extension and delayed anonymous multiple choice survey");
+ const nid=randomUUID();
+ await cmd(hs.access_token,"survey",{question:"Nominative test",kind:"single",options:["A","B"],anonymous:false,editable:true,visibility:"closed",quorum:0,threshold:50},nid);
+ await cmd(gs.access_token,"survey_vote",[0],nid);assert.equal(state.polls.find(p=>p.id===nid).nominativeResponses,null);
+ await cmd(gs.access_token,"survey_vote",[1],nid);await cmd(hs.access_token,"close_poll",null,nid);
+ assert.deepEqual(state.polls.find(p=>p.id===nid).nominativeResponses,[{memberId:g.id,selection:[1]}]);
+ pass("actual editable nominative survey preserves secrecy until closure");
  await cmd(hs.access_token,"pause");await cmd(hs.access_token,"resume");await cmd(hs.access_token,"exclude",null,g.id);
  assert.equal((await request(room+"/read",{room_id:rid},gs.access_token)).status,404);
  await cmd(hs.access_token,"end");assert.equal(state.status,"ended");
