@@ -20,6 +20,10 @@ begin
  else new.revision:=1; end if;
  new.updated_at:=clock_timestamp(); return new;
 end $$;
+revoke all on function public.ns_attendance_policy_version() from public,anon,authenticated;
+do $acl$ begin
+ if has_function_privilege('anon','public.ns_attendance_policy_version()','EXECUTE') or has_function_privilege('authenticated','public.ns_attendance_policy_version()','EXECUTE') then raise exception 'NS_ATTENDANCE_INTERNAL_TRIGGER_EXPOSED'; end if;
+end $acl$;
 create trigger ns_attendance_policy_version before insert or update on public.ns_attendance_policies for each row execute function public.ns_attendance_policy_version();
 create table public.ns_attendance_evidence (
  event_id uuid primary key references public.ns_staff_time_events(id) deferrable initially deferred,
