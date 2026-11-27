@@ -16,7 +16,7 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
  const [selected,setSelected]=useState<string[]>([]),[post,setPost]=useState(""),[title,setTitle]=useState(""),[when,setWhen]=useState(""),[agenda,setAgenda]=useState(""),[duration,setDuration]=useState("30"),[edit,setEdit]=useState<Meeting|null>(null);
  const [frequency,setFrequency]=useState("once"),[count,setCount]=useState("3");
  const [busy,setBusy]=useState(false),[error,setError]=useState(false),[loaded,setLoaded]=useState(false),[revision,setRevision]=useState(0);
- const token=useRef(getToken);token.current=getToken;const alive=useRef(false),controller=useRef<AbortController|null>(null);
+ const token=useRef(getToken);token.current=getToken;const alive=useRef(false),controller=useRef<AbortController|null>(null),foreground=useRef(true);
  const pendingCreation=useRef<{signature:string;payload:Record<string,unknown>}|null>(null);
  const retryKey="ns-meeting-retry-v1:"+account.organization_id+":"+account.member_id+":"+siteId;
  function clearRetry(){try{sessionStorage.removeItem(retryKey);}catch{/* private browsing */}}
@@ -24,14 +24,14 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
  async function req<T>(path:string,body?:Record<string,unknown>,signal?:AbortSignal):Promise<T>{
   const scope=controller.current;const bound=signal??scope?.signal;
   if(!anonKey)throw Error("SESSION_CHANGED");
-  return privateRequest<T>(bound,()=>alive.current&&controller.current===scope,token.current,(jwt,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal:s}));
+  return privateRequest<T>(bound,()=>alive.current&&foreground.current&&controller.current===scope,token.current,(jwt,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal:s}));
  }
 
  useEffect(()=>{
-  alive.current=true;const c=new AbortController();controller.current=c;
+  alive.current=true;foreground.current=document.visibilityState!=="hidden";const c=new AbortController();controller.current=c;
   let refreshing=false;
   async function refresh(){
-   if(refreshing||!siteId||!rosterModeEnabled(account.business_mode))return;
+   if(c.signal.aborted||!foreground.current||refreshing||!siteId||!rosterModeEnabled(account.business_mode))return;
    refreshing=true;
    try{
     const f="org_id=eq."+encodeURIComponent(account.organization_id);
@@ -40,14 +40,20 @@ export function InternalMeetings({account,siteId,authEndpoint,anonKey,getToken}:
    }catch{if(!c.signal.aborted){setLoaded(false);setError(true);setMeetings([]);setInvites([]);setTargets([]);}}finally{refreshing=false;}
   }
   void refresh();const timer=window.setInterval(()=>{if(document.visibilityState==="visible")void refresh();},20000);
-  return()=>{alive.current=false;c.abort();window.clearInterval(timer);};
+  const visibility=()=>{
+   foreground.current=document.visibilityState!=="hidden";
+   if(!foreground.current){c.abort();setLoaded(false);setBusy(false);setError(false);setMeetings([]);setInvites([]);setTargets([]);setEdit(null);setTitle("");setAgenda("");setWhen("");setSelected([]);}
+   else setRevision(r=>r+1);
+  };
+  document.addEventListener("visibilitychange",visibility);
+  return()=>{alive.current=false;c.abort();window.clearInterval(timer);document.removeEventListener("visibilitychange",visibility);};
  },[account.organization_id,account.member_id,account.business_mode,siteId,authEndpoint,anonKey,revision]);
  const posts=Array.from(new Map(targets.map(t=>[t.workstation_id??"",t.workstation_name??tr("Site entier","Whole site","Nokkuure fof")])).entries());
  const people=targets.filter(t=>(t.workstation_id??"")===post);
  function reset(){setEdit(null);setTitle("");setWhen("");setAgenda("");setDuration("30");setSelected([]);setFrequency("once");setCount("3");pendingCreation.current=null;clearRetry();}
  async function perform(action:()=>Promise<unknown>){
-  if(busy||!loaded)return;setBusy(true);setError(false);
-  try{await action();if(alive.current)setRevision(r=>r+1);}catch{if(alive.current)setError(true);}finally{if(alive.current)setBusy(false);}
+  if(busy||!loaded||!foreground.current)return;const scope=controller.current;const current=()=>alive.current&&foreground.current&&controller.current===scope&&!scope?.signal.aborted;setBusy(true);setError(false);
+  try{await action();if(current())setRevision(r=>r+1);}catch{if(current())setError(true);}finally{if(current())setBusy(false);}
  }
  function schedule(){
   if(edit){void perform(async()=>{await req("rpc/ns_revise_meeting_invitees",{p_id:edit.id,p_revision:edit.revision,p_title:title,p_at:iso(when),p_agenda:agenda,p_duration:Number(duration),p_members:[...selected].sort()});reset();});return;}

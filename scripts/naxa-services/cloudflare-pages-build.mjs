@@ -23,9 +23,15 @@ for (const name of Object.keys(process.env)) {
     throw new Error("Private configuration must not be exposed through VITE_ variables");
   }
 }
+// New commission configuration is candidate-only until DB, UI, and operational
+// qualification is approved. Never let an inherited deployment variable enable it.
+if (process.env.VITE_NAXA_SERVICES_COMMISSION_CONFIG_ENABLED === "true") {
+  throw new Error("Automatic commission configuration is not approved for hosted activation");
+}
 // Hosted owner acceptance only. The exact backend schema is installed; media
 // calling remains unavailable and server-side authorization is unchanged.
 const acceptanceFlags = {
+  VITE_NAXA_SERVICES_COMMISSION_CONFIG_ENABLED: "false",
   VITE_NAXA_SERVICES_ROSTER_ENABLED: "true",
   VITE_NAXA_SERVICES_ATTENDANCE_ENABLED: "true",
   VITE_NAXA_SERVICES_BRIEFING_ENABLED: "true",

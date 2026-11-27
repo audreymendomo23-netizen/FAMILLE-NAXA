@@ -45,21 +45,22 @@ function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props)
  const tokenRef=useRef(getToken);tokenRef.current=getToken;
  const alive=useRef(false),requestScope=useRef<AbortController|null>(null);
  const [version,setVersion]=useState(0);
+ const foreground=useRef(true);
  const canManage=targets.length>0;
  const textError=tr("Planning indisponible. Vérifiez la connexion et réessayez.","Schedule unavailable. Check your connection and retry.","Feere golle heɓotaake. Ƴeewto ceŋol, kadi eto.");
  const fmt=(iso:string|null)=>iso?new Intl.DateTimeFormat(locale==="ff-CM"?"fr-CM":locale,{dateStyle:"short",timeStyle:"short",timeZone:"Africa/Douala"}).format(new Date(iso)):"—";
  async function request<T>(path:string,body?:Record<string,unknown>,signal?:AbortSignal):Promise<T>{
   const scope=requestScope.current;const bound=signal??scope?.signal;
   if(!anonKey)throw Error("SESSION_CHANGED");
-  return privateRequest<T>(bound,()=>alive.current&&requestScope.current===scope,tokenRef.current,(token,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"return=representation"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal:s}));
+  return privateRequest<T>(bound,()=>alive.current&&foreground.current&&requestScope.current===scope,tokenRef.current,(token,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"return=representation"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal:s}));
  }
 
  useEffect(()=>{
-  alive.current=true;
+  alive.current=true;foreground.current=document.visibilityState!=="hidden";
   const abort=new AbortController();requestScope.current=abort;
   let refreshing=false;
   async function refresh(){
-   if(abort.signal.aborted||refreshing||!modeEnabled(account.business_mode)||!siteId)return;
+   if(abort.signal.aborted||!foreground.current||refreshing||!modeEnabled(account.business_mode)||!siteId)return;
    refreshing=true;
    try{
     const filter="org_id=eq."+encodeURIComponent(account.organization_id)+"&site_id=eq."+encodeURIComponent(siteId);
@@ -79,7 +80,14 @@ function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props)
   }
   void refresh();
   const interval=window.setInterval(()=>{if(document.visibilityState==="visible")void refresh();},30000);
-  const onVisibility=()=>{if(document.visibilityState==="visible")void refresh();};
+  const onVisibility=()=>{
+   foreground.current=document.visibilityState!=="hidden";
+   if(!foreground.current){
+    abort.abort();setLoaded(false);setBusy(false);setError("");setForm(blank());
+    setShifts([]);setTargets([]);setAcks([]);setComparisons([]);setJustifications([]);setAvailability([]);setOwnPosts([]);setTemplates([]);setAlerts([]);
+    setReplacement({});setLeave({post:"",kind:"leave",start:"",end:"",reason:""});setTemplateDate("");
+   }else setVersion(v=>v+1);
+  };
   document.addEventListener("visibilitychange",onVisibility);
   return()=>{alive.current=false;abort.abort();window.clearInterval(interval);document.removeEventListener("visibilitychange",onVisibility);};
  },[account.organization_id,account.member_id,account.business_mode,siteId,authEndpoint,anonKey,version]);

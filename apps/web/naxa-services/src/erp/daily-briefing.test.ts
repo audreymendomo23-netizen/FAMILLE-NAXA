@@ -15,3 +15,5 @@ describe("historical briefing dates in Douala",()=>{
   for(const d of ["2025-11-25","2026-11-28","2026-02-30","2026-1-1",""])expect(briefingDayAllowed(d,now)).toBe(false);
  });
 });
+
+it("requires timezone-bearing ISO generation time",()=>{for(const generated_at of ["2026-11-26","2026-11-26T10:00:00","11/26/2026"])expect(()=>validateBriefing({...valid,generated_at},day)).toThrow("INVALID_BRIEFING");expect(validateBriefing({...valid,generated_at:"2026-11-26T10:00:00.123456+00:00"},day).day).toBe(day);});

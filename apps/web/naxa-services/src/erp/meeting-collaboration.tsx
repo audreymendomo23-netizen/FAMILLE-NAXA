@@ -18,12 +18,12 @@ export function MeetingCollaboration({account,meetingId,host,authEndpoint,anonKe
  async function req<T>(path:string,body?:Record<string,unknown>):Promise<T>{
   const scope=controller.current;
   if(!anonKey)throw Error("SESSION_CHANGED");
-  return privateRequest<T>(scope?.signal,()=>active.current&&controller.current===scope,token.current,(jwt,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal:s}));
+  return privateRequest<T>(scope?.signal,()=>active.current&&document.visibilityState!=="hidden"&&controller.current===scope,token.current,(jwt,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal:s}));
  }
 
  async function refresh(){
   const scope=controller.current;
-  if(running.current||!active.current||!scope||scope.signal.aborted)return;running.current=true;
+  if(running.current||!active.current||document.visibilityState==="hidden"||!scope||scope.signal.aborted)return;running.current=true;
   try{
    const filter="meeting_id=eq."+encodeURIComponent(meetingId);
    const [p,c,r,rec]=await Promise.all([req<Participant[]>("rpc/ns_meeting_participants",{p_id:meetingId}),req<Chat[]>("ns_meeting_chat?select=id,member_id,message,created_at&"+filter+"&order=created_at.desc,id.desc&limit=100"),req<Reaction[]>("ns_meeting_reactions?select=id,member_id,reaction&"+filter+"&order=created_at.desc&limit=20"),req<Recording[]>("ns_meeting_recording_requests?select=id,status,display_name&"+filter+"&order=requested_at.desc&limit=20")]);
@@ -32,7 +32,16 @@ export function MeetingCollaboration({account,meetingId,host,authEndpoint,anonKe
    setPeople(p);setChat(c.reverse());setRecent(r);setRecordings(rec);setReady(true);setError(false);
   }catch{if(active.current&&controller.current===scope&&!scope.signal.aborted){setReady(false);setPeople([]);setChat([]);setRecent([]);setRecordings([]);setError(true);}}finally{running.current=false;}
  }
- useEffect(()=>{active.current=true;controller.current=new AbortController();void refresh();const id=window.setInterval(()=>{if(document.visibilityState==="visible")void refresh();},3000);return()=>{active.current=false;controller.current?.abort();window.clearInterval(id);};},[meetingId,account.member_id,authEndpoint,anonKey]);
+ useEffect(()=>{
+  active.current=true;controller.current=new AbortController();void refresh();
+  const id=window.setInterval(()=>{if(document.visibilityState==="visible")void refresh();},3000);
+  const visibility=()=>{
+   if(document.visibilityState==="hidden"){controller.current?.abort();controller.current=null;setReady(false);setPeople([]);setChat([]);setRecent([]);setRecordings([]);setText("");setError(false);}
+   else {controller.current=new AbortController();void refresh();}
+  };
+  document.addEventListener("visibilitychange",visibility);
+  return()=>{active.current=false;controller.current?.abort();window.clearInterval(id);document.removeEventListener("visibilitychange",visibility);};
+ },[meetingId,account.member_id,authEndpoint,anonKey]);
  async function act(action:string,value:string|null=null,target?:string){
   if(writing.current||!ready)return;writing.current=true;setBusy(true);
   try{await req(target?"rpc/ns_moderate_meeting":"rpc/ns_meeting_action",target?{p_id:meetingId,p_event:crypto.randomUUID(),p_target:target,p_action:action}:{p_id:meetingId,p_event:crypto.randomUUID(),p_action:action,p_value:value});if(active.current){if(action==="chat"&&!target)setText("");await refresh();}}catch{if(active.current)setError(true);}finally{writing.current=false;if(active.current)setBusy(false);}

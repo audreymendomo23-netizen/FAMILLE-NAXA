@@ -268,6 +268,19 @@ export function prepareAutomaticCommission(input) {
   return Object.freeze({...prepared,policyId:policy.id??null});
 }
 
+/** Map only authoritative v24 automatic policies; legacy v7 rules never activate automation. */
+export function prepareAutomaticCommissionFromDatabase(input) {
+  const v=record(input,"INVALID_DATABASE_COMMISSION_INPUT");
+  if(v.settings?.enabled!==true)return Object.freeze({status:"disabled",entries:[]});
+  if(!Array.isArray(v.policyRows))throw new TypeError("INVALID_COMMISSION_POLICIES");
+  const policies=v.policyRows.filter(row=>row&&row.automatic_scope===true).map(row=>({
+    id:row.id,organizationId:row.org_id,siteId:row.site_id,memberId:row.member_id,serviceId:row.service_id,activityCode:row.activity_profile,
+    version:row.version,method:row.method,rateBps:row.rate_bps,fixedAmountXaf:row.fixed_amount_xaf,
+    effectiveFrom:row.effective_from,effectiveTo:row.effective_until,status:row.status,approvedBy:row.approved_by,approvedAt:row.approved_at
+  }));
+  return prepareAutomaticCommission({...v,enabled:true,policies});
+}
+
 /** A refund never edits a posted commission; it creates a linked negative adjustment. */
 export function reverseCommission(input) {
   const value = record(input, "INVALID_COMMISSION_REVERSAL");

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   normalizePaymentIntent, classifyProviderInitiation, verifyPaymentConfirmation,
   assertPaymentTransition, createPaymentAdapterRegistry, calculateCommission,
-  reverseCommission, calculateFiscalQuote, prepareAutomaticCommission,
+  reverseCommission, calculateFiscalQuote, prepareAutomaticCommission, prepareAutomaticCommissionFromDatabase,
 } from "../src/index.js";
 
 const intent = {
@@ -193,4 +193,15 @@ test("automatic commissions remain disabled without explicit activation and no p
  assert.equal(prepareAutomaticCommission({...active,policies:[{...policy,memberId:allocations[0].memberId}]}).status,"blocked_ambiguous_policy");
  const single={...active,allocations:[{memberId:allocations[0].memberId,shareBps:10000}],policies:[{...policy,memberId:allocations[0].memberId}]};
  assert.equal(prepareAutomaticCommission(single).entries.length,1);
+});
+
+test("database automatic commission adapter rejects legacy policy activation and maps real v24 fields",()=>{
+ const context={organizationId:"org-a",siteId:"site-a",serviceId:"service-a",activityCode:"coiffure"};
+ const row={id:"policy-a",org_id:"org-a",site_id:"site-a",member_id:null,service_id:"service-a",activity_profile:"coiffure",version:1,method:"percent_bps",rate_bps:1000,fixed_amount_xaf:null,effective_from:"2026-11-01",effective_until:null,status:"approved",approved_by:"qa",approved_at:"2026-11-01T00:00:00Z"};
+ const input={settings:{enabled:true},context,allocations,saleLine,calculationDate:"2026-11-21",sourceEventId:"60000000-0000-4000-8000-000000000001",policyRows:[row]};
+ assert.equal(prepareAutomaticCommissionFromDatabase(input).status,"no_applicable_policy");
+ const enabled={...input,policyRows:[{...row,automatic_scope:true}]};
+ assert.equal(prepareAutomaticCommissionFromDatabase(enabled).status,"pending_approval");
+ assert.equal(prepareAutomaticCommissionFromDatabase({...enabled,settings:{enabled:false}}).status,"disabled");
+ assert.equal(prepareAutomaticCommissionFromDatabase({...enabled,policyRows:[{...row,automatic_scope:true,org_id:"other"}]}).status,"no_applicable_policy");
 });

@@ -12,6 +12,13 @@ try {
    await page.getByLabel('Identifiant NAXA Services').waitFor();
    await page.getByLabel('Mot de passe',{exact:true}).waitFor();
    assert.equal(await page.locator('.side-nav').count(),0,'no ERP before sign-in');
+   const identifier=page.getByLabel('Identifiant NAXA Services');
+   const password=page.getByLabel('Mot de passe',{exact:true});
+   const submit=page.getByRole('button',{name:'Se connecter',exact:true});
+   for(const control of [identifier,password,submit]){assert.ok(await control.isVisible());assert.ok(await control.isEnabled());}
+   await identifier.focus();assert.ok(await identifier.evaluate(el=>document.activeElement===el));
+   await password.focus();assert.ok(await password.evaluate(el=>document.activeElement===el));
+   assert.equal(await password.getAttribute('type'),'password');
    assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+2),'no horizontal overflow at '+width);
    await page.evaluate(()=>navigator.serviceWorker.ready.then(()=>true));
    await page.waitForFunction(()=>Boolean(navigator.serviceWorker.controller));

@@ -21,7 +21,7 @@ export function briefingNarration(r:Report,l:Lang):string{
 export function validateBriefing(value:unknown,day:string):Report {
  const object=(v:unknown):v is Record<string,unknown>=>!!v&&typeof v==="object"&&!Array.isArray(v);
  const count=(v:unknown):v is number=>typeof v==="number"&&Number.isSafeInteger(v)&&v>=0;
- if(!object(value)||value.day!==day||typeof value.generated_at!=="string"||!Number.isFinite(Date.parse(value.generated_at))||value.coverage!=="partial_confirmed_server_facts"||(value.scope!=="site"&&value.scope!=="personal"))throw Error("INVALID_BRIEFING");
+ if(!object(value)||value.day!==day||typeof value.generated_at!=="string"||!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?(Z|[+-]\d{2}:\d{2})$/.test(value.generated_at)||!Number.isFinite(Date.parse(value.generated_at))||value.coverage!=="partial_confirmed_server_facts"||(value.scope!=="site"&&value.scope!=="personal"))throw Error("INVALID_BRIEFING");
  const a=value.appointments,f=value.finance,p=value.personal_clock_events;
  if(!object(a)||!count(a.scheduled_count)||!count(a.completed_count)||a.completed_count>a.scheduled_count)throw Error("INVALID_BRIEFING");
  if(f!==null&&(!object(f)||!count(f.revenue_xaf)||!count(f.confirmed_sales_count)||!count(f.uncosted_sales_count)||f.uncosted_sales_count>f.confirmed_sales_count))throw Error("INVALID_BRIEFING");
