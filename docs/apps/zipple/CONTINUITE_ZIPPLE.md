@@ -707,3 +707,19 @@ Preuves effectivement constatées :
 | ZIPPLE N1 — live Cloudflare Pages recipe | [45976604388](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604388) | queued |
 
 Limites restant ouvertes : livraison publique opérationnelle (QR dédié, tarif/frais comptabilisés, géolocalisation/routage, missions et remise réelle), confirmation opérateur via contrat NAXA compatible sans compte, vidéo SECURITY et contrats HOTEL/GRILLAD, support central/livechat et push réels, assistant conversationnel/voix/OCR, intégration complète de paie/comptabilité et progression RH, traduction Fulfulde, scan caméra Android/QR natif, parité exhaustive et qualification hébergée. Les demandes de connexion partenaires ne constituent pas un raccordement. Les avantages non financiers sont distincts de la remise tarifaire. Aucun déploiement ou migration production, aucun changement main ou application sœur. Le statut global demeure PARTIEL jusqu'aux preuves manquantes.
+
+
+## Reprise et contrôle des sept gates — 27/11/2026
+Candidat vérifié `3277412a8779bca2070802a048cd2cff17d3fb71` ; HEAD documentaire initial `7b9a7b5eca178a525f8d1063f067ad4ce3412c3c`. Résultat des jobs GitHub relus : 6 workflows réussis sur 7, aucun vert global présumé.
+
+| Gate | Run | État |
+|---|---|---|
+| APK debug | [45976604387](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604387) | SUCCESS |
+| Socle Web/Android/émulateur | [45976604507](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604507) | SUCCESS (3 jobs) |
+| PWA | [45976604931](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604931) | SUCCESS |
+| Métier SQL N2–N5 | [45976604475](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604475) | SUCCESS 46/46, 0 échec/skip |
+| Pages build | [45976604515](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604515) | SUCCESS |
+| Supabase local E2E | [45976604468](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604468) | FAILURE |
+| Pages live | [45976604388](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45976604388) | SUCCESS (version hébergée existante) |
+
+Job 140429768950 : `local-workspaces.test.mjs:66` timeout Playwright 30 s sur `portal-hr` / `Type de demande` après approbation d'une absence. La suite navigateur historique a réussi (1/1), mais la suite des nouvelles interfaces a échoué (0/1), bloquant la recette native métier. Contradiction analysée : le composant HR expose les champs input via aria-label mais pas les deux select imbriqués dans leurs labels ; noms accessibles explicites FR/EN ajoutés par le commit `ffc00834f175e0c2e1ec035e83e7c84e546587f5`, sans modifier les assertions, les autorisations ou les règles RH. Candidat non qualifié avant nouveau run. Le workflow local est configuré pour déclenchement push sur ce chemin ; identifiant nouveau non constaté au relevé. Vérifier E2E RH, fidélité et recette Android métier au prochain résultat. Les réserves fonctionnelles précédentes restent ouvertes. Distinguer livraison externe Restaurant de remise de commande au client par le personnel Snack-Bar ; vérifier l'alignement de ces deux parcours avec les décisions métier. Aucun changement main/production.
