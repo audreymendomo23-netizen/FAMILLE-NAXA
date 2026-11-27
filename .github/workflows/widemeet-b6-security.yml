@@ -16,6 +16,8 @@ jobs:
         with:
           node-version: '22'
       - run: node --test packages/media-core/widemeet-b6-*.test.mjs
+      - run: node --test packages/widemeet-domain/room-policy.test.mjs
+      - run: node --check scripts/widemeet/b6-storage-replay.mjs && node --check scripts/widemeet/b6-postgres-restore.mjs
       - run: node --check packages/media-core/widemeet-recorder.mjs && node --check scripts/widemeet/media-product-replay.mjs
   web:
     runs-on: ubuntu-24.04
@@ -154,3 +156,278 @@ jobs:
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_transcription.sql
           psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_b6_audio_purge.sql
           psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_b6_audio_purge.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_b6_minutes_purge.sql
+          psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/widemeet_b6_minutes_purge.sql
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Seed post-purge data in disposable database and rehearse encrypted restore
+        env:
+          WM_B6_ISOLATED: 'true'
+          WM_B6_PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          sed 's/^rollback;$/commit;/' supabase/tests/drafts/widemeet_b6_minutes_purge.sql | psql -v ON_ERROR_STOP=1
+          node scripts/widemeet/b6-postgres-restore.mjs
+
+  authenticated-replay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+      - name: Start disposable Supabase, never linked
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wm-replay"
+          cd "$RUNNER_TEMP/wm-replay"
+          supabase init
+          supabase start
+          supabase status -o env > "$RUNNER_TEMP/wm-replay.env"
+          chmod 600 "$RUNNER_TEMP/wm-replay.env"
+      - name: Install only WideMeet drafts into disposable PostgreSQL
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/wm-replay.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          if ! command -v psql >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y postgresql-client
+          fi
+          psql --version
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_identity.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_n3_rooms.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_billing.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_external.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_minutes.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_tasks.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_series.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_presence.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_expiry.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_notifications.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_reports.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_support.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_workspace_centers.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "notify pgrst, 'reload schema'"
+      - name: Build Web and prepare isolated browser TLS
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
+          npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch(); await b.close();'
+          VITE_WIDEMEET_AUTH_URL=https://127.0.0.1:8443/functions/v1/widemeet-auth VITE_WIDEMEET_SIGNUP_TEST=true VITE_WIDEMEET_RECOVERY_ENABLED=true VITE_WIDEMEET_MINUTES_ENABLED=true VITE_WIDEMEET_SERIES_ENABLED=true VITE_WIDEMEET_PRESENCE_ENABLED=true VITE_WIDEMEET_NOTICES_ENABLED=true VITE_WIDEMEET_REPORTS_ENABLED=true VITE_WIDEMEET_EXTERNAL_ENABLED=true npm run build --workspace @famille/widemeet-web
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=127.0.0.1' -addext 'subjectAltName=IP:127.0.0.1' -keyout "$RUNNER_TEMP/wm-replay.key" -out "$RUNNER_TEMP/wm-replay.crt" 2>/dev/null
+          chmod 600 "$RUNNER_TEMP/wm-replay.key"
+      - name: Execute real two-account Edge and Chromium Replay
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/wm-replay.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export WM_WORKSPACE_CENTERS_QUALIFIED=true WM_SUPPORT_QUALIFIED=true WM_AUTH_QUALIFIED=true WM_SERIES_QUALIFIED=true WM_MINUTES_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_NOTICES_QUALIFIED=true WM_REPORTS_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_RECOVERY_KEY_QUALIFIED=true WM_BILLING_TEST=true WM_SIGNUP_QUALIFIED=true WM_AUTH_ALIAS_DOMAIN=example.test WM_ROOM_QUALIFIED=true WM_MEDIA_QUALIFIED=false WM_ALLOWED_ORIGINS=https://127.0.0.1:8443
+          export WM_REPLAY_KEY="$RUNNER_TEMP/wm-replay.key" WM_REPLAY_CERT="$RUNNER_TEMP/wm-replay.crt"
+          node scripts/widemeet/replay.mjs
+      - name: Stop disposable stack
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP/wm-replay" && supabase stop --no-backup
+
+  real-media-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare isolated recording dependencies
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund livekit-client@2.25.0 livekit-server-sdk@2.20.1 ws@8.18.3 @playwright/test@1.56.1
+          npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream"]}); await b.close();'
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y ffmpeg
+          fi
+          ffmpeg -version
+      - name: Start private Redis, SFU and Egress
+        run: |
+          set -euo pipefail
+          KEY=naxareplay
+          SECRET="$(openssl rand -hex 32)"
+          echo "::add-mask::$SECRET"
+          echo "LK_TEST_KEY=$KEY" >> "$GITHUB_ENV"
+          echo "LK_TEST_SECRET=$SECRET" >> "$GITHUB_ENV"
+          echo "WM_TEST_EGRESS=true" >> "$GITHUB_ENV"
+          OUT="$RUNNER_TEMP/wm-egress-out"
+          mkdir -p "$OUT"
+          chmod 777 "$OUT"
+          echo "WM_EGRESS_OUT=$OUT" >> "$GITHUB_ENV"
+          docker run -d --name wm-audio-redis --network host redis:7.4.1-alpine redis-server --bind 127.0.0.1 --port 6381 --save "" --appendonly no
+          # Egress Go SDK does not reliably pair loopback-only ICE candidates. Keep
+          # signaling and Redis private; advertise the isolated runner interface for RTP.
+          RTC_IP="$(ip -4 route get 192.0.2.1 | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1);exit}}')"
+          [[ "$RTC_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ && "$RTC_IP" != 127.* ]] || exit 1
+          cat > "$RUNNER_TEMP/wm-audio-lk.yaml" <<EOF
+          port: 7880
+          bind_addresses: ["127.0.0.1"]
+          redis:
+            address: 127.0.0.1:6381
+          rtc:
+            node_ip: $RTC_IP
+            use_external_ip: false
+            tcp_port: 7882
+            udp_port: 7883
+          room:
+            auto_create: false
+            enable_remote_unmute: false
+          keys:
+            $KEY: $SECRET
+          EOF
+          cat > "$RUNNER_TEMP/wm-egress.yaml" <<EOF
+          api_key: $KEY
+          api_secret: $SECRET
+          ws_url: ws://127.0.0.1:7880
+          insecure: true
+          redis:
+            address: 127.0.0.1:6381
+          health_port: 7990
+          logging:
+            level: debug
+            json: true
+          cpu_cost:
+            room_composite_cpu_cost: 1
+            audio_room_composite_cpu_cost: 1
+          EOF
+          chmod 600 "$RUNNER_TEMP/wm-audio-lk.yaml"
+          chmod 644 "$RUNNER_TEMP/wm-egress.yaml"
+          docker run -d --name wm-audio-lk --network host -v "$RUNNER_TEMP/wm-audio-lk.yaml:/etc/livekit.yaml:ro" livekit/livekit-server:v1.13.9 --config /etc/livekit.yaml
+          for i in $(seq 1 60); do if curl -fsS http://127.0.0.1:7880/ >/dev/null; then break; fi; sleep 1; done
+          curl -fsS http://127.0.0.1:7880/
+          docker run -d --name wm-audio-egress --network host --cap-add SYS_ADMIN -e EGRESS_CONFIG_FILE=/etc/egress.yaml -v "$RUNNER_TEMP/wm-egress.yaml:/etc/egress.yaml:ro" -v "$OUT:/out" livekit/egress:v1.14.1
+          for i in $(seq 1 90); do if curl -fsS http://127.0.0.1:7990/ >/dev/null; then exit 0; fi; sleep 1; done
+          echo "Egress readiness failed"
+          exit 1
+      - name: Verify actual audio-only capture (synthetic devices only)
+        run: node scripts/widemeet/media-replay.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+      - name: Isolated product recording database
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wm-recording-db"
+          cd "$RUNNER_TEMP/wm-recording-db"
+          supabase init
+          supabase start
+          supabase status -o env > "$RUNNER_TEMP/wm-recording.env"
+          chmod 600 "$RUNNER_TEMP/wm-recording.env"
+          set -a; source "$RUNNER_TEMP/wm-recording.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          if ! command -v psql >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y postgresql-client
+          fi
+          psql --version
+          for name in widemeet_n1_identity widemeet_n2_n3_rooms widemeet_n1_billing widemeet_n2_external widemeet_n3_recording widemeet_n3_recording_archive widemeet_n4_minutes widemeet_n4_presence widemeet_transcription; do
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/$name.sql"
+          done
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "notify pgrst, 'reload schema'"
+      - name: Exercise actual consent-driven WideMeet Egress with private quarantine
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/wm-recording.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export WM_AUTH_QUALIFIED=true WM_ROOM_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_MEDIA_QUALIFIED=true WM_RECORDING_QUALIFIED=true WM_RECORDING_STORAGE_QUALIFIED=true WM_TRANSCRIPTION_QUALIFIED=false WM_ALLOWED_ORIGINS=http://127.0.0.1:4173
+          export WM_LIVEKIT_URL=wss://127.0.0.1:7881 WM_LIVEKIT_API_KEY="$LK_TEST_KEY" WM_LIVEKIT_API_SECRET="$LK_TEST_SECRET"
+          node scripts/widemeet/media-product-replay.mjs
+      - name: Stop isolated recording database
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/wm-recording-db"; then cd "$RUNNER_TEMP/wm-recording-db" && supabase stop --no-backup; fi
+      - name: Diagnostic status on failure (synthetic room only)
+        if: failure()
+        run: |
+          for c in wm-audio-egress wm-audio-lk; do
+            docker logs --tail 150 "$c" 2>&1 | sed -E 's/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/[REDACTED_JWT]/g' || true
+          done
+      - name: Cleanup private test recording and containers
+        if: always()
+        run: |
+          docker rm -f wm-audio-egress wm-audio-lk wm-audio-redis || true
+          rm -rf "$RUNNER_TEMP/wm-egress-out" "$RUNNER_TEMP/wm-audio-lk.yaml" "$RUNNER_TEMP/wm-egress.yaml"
+
+  real-storage-purge-restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+      - name: Start disposable Supabase, never linked
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wm-replay"
+          cd "$RUNNER_TEMP/wm-replay"
+          supabase init
+          supabase start
+          supabase status -o env > "$RUNNER_TEMP/wm-replay.env"
+          chmod 600 "$RUNNER_TEMP/wm-replay.env"
+      - name: Install only WideMeet drafts into disposable PostgreSQL
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/wm-replay.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          if ! command -v psql >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y postgresql-client
+          fi
+          psql --version
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_identity.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_n3_rooms.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_billing.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_external.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_minutes.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_tasks.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_series.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_presence.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_expiry.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_notifications.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_reports.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_support.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_workspace_centers.sql
+          for name in widemeet_n3_recording widemeet_n3_recording_archive widemeet_transcription widemeet_b6_audio_purge widemeet_b6_minutes_purge; do
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "supabase/drafts/$name.sql"
+          done
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "notify pgrst, 'reload schema'"
+      - name: Verify actual private storage purge and encrypted restoration
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/wm-replay.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" WM_B6_ISOLATED=true
+          node scripts/widemeet/b6-storage-replay.mjs
+      - name: Stop disposable stack
+        if: always()
+        run: |
+          cd "$RUNNER_TEMP/wm-replay" && supabase stop --no-backup
