@@ -159,6 +159,11 @@ try{
  assert.equal((await centerReq(gs.access_token,"statistics",{days:30})).status,403);
  const consolidated=await centerOk(hs.access_token,"statistics",{days:30});assert.equal(consolidated.scope,"enterprise");assert.ok(Number.isInteger(consolidated.polls_closed)&&consolidated.polls_closed>=0);assert.ok(Number.isInteger(consolidated.tasks_done)&&consolidated.tasks_done>=0);
  assert.equal((await centerReq(hs.access_token,"statistics",{days:999})).status,403);
+ for(const period of ["daily","weekly","monthly","quarterly","yearly"]){const m=await centerOk(hs.access_token,"statistics",{period});assert.equal(m.period,period);assert.ok(Number.isSafeInteger(m.start_ms)&&m.start_ms<=m.end_ms);assert.ok(m.polls_effectively_closed>=m.polls_closed);}
+ assert.equal((await centerReq(gs.access_token,"statistics",{period:"monthly"})).status,403);
+ assert.equal((await centerReq(hs.access_token,"statistics",{period:"invalid"})).status,403);
+ assert.equal((await centerReq(hs.access_token,"statistics",{period:"weekly",days:7})).status,403);
+ pass("B4 actual calendar statistics and scope");
  const page=await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"workspace",page_size:1});assert.equal(page.items[0].id,privateData.message_id);assert.equal(page.next_before,null);
  assert.deepEqual((await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"workspace",page_size:1,before_id:privateData.message_id})).items,[]);
  assert.equal((await centerReq(os.access_token,"thread",{peer_id:g.id,before_id:privateData.message_id})).status,403);
@@ -512,6 +517,9 @@ try{
  await cmd(gs.access_token,"survey_vote",[1],nid);await cmd(hs.access_token,"close_poll",null,nid);
  assert.deepEqual(state.polls.find(p=>p.id===nid).nominativeResponses,[{memberId:g.id,selection:[1]}]);
  pass("actual editable nominative survey preserves secrecy until closure");
+ const targetId=randomUUID();await cmd(hs.access_token,"survey",{question:"B4 targeted rating",kind:"rating",options:Array.from({length:10},(_,i)=>String(i+1)),anonymous:true,visibility:"closed",quorum:100,threshold:50,eligibleIds:[g.id]},targetId);
+ assert.equal(state.polls.find(p=>p.id===targetId).canVote,false);await cmd(gs.access_token,"survey_vote",[9],targetId);await cmd(hs.access_token,"close_poll",null,targetId);const targetResult=state.polls.find(p=>p.id===targetId);assert.equal(targetResult.eligible,1);assert.equal(targetResult.nonresponses,0);assert.equal(targetResult.optionShares[9],100);assert.equal(targetResult.nominativeResponses,null);pass("B4 targeted ten point survey and transparent denominator");
+ for(const rule of ["simple_majority","absolute_majority"]){const mid=randomUUID();await cmd(hs.access_token,"survey",{question:"B4 decision rule",kind:"single",options:["Oui","Non","Abstention"],anonymous:true,visibility:"closed",quorum:100,threshold:50,decisionMode:rule,abstentionIndex:2,eligibleIds:[h.id,g.id]},mid);await cmd(hs.access_token,"survey_vote",[0],mid);await cmd(gs.access_token,"survey_vote",[2],mid);assert.equal(state.polls.find(p=>p.id===mid).abstentions,null);await cmd(hs.access_token,"close_poll",null,mid);const s=state.polls.find(p=>p.id===mid);assert.equal(s.abstentions,1);assert.equal(s.nonresponses,0);assert.equal(s.expressed,1);assert.equal(s.accepted[0],rule==="simple_majority");assert.equal(s.accepted[2],false);}pass("B4 actual Edge majority rules, abstention secrecy and denominator");
  await cmd(hs.access_token,"pause");await cmd(hs.access_token,"resume");await cmd(hs.access_token,"exclude",null,g.id);
  assert.equal((await request(room+"/read",{room_id:rid},gs.access_token)).status,404);
  await cmd(hs.access_token,"end");assert.equal(state.status,"ended");
@@ -619,7 +627,7 @@ try{
  await tok(mhs.access_token,"return",{id:task.id,expected_revision:2});
  await tok(mgs.access_token,"submit",{...evidence,expected_revision:3});
  await tok(mhs.access_token,"approve",{id:task.id,expected_revision:4});
- assert.equal((await tok(mgs.access_token,"list")).items[0].state,"done");
+ const completedTask=(await tok(mgs.access_token,"list")).items[0];assert.equal(completedTask.state,"done");assert.deepEqual(completedTask.history.map(x=>x.action),["create","submit","return","submit","approve"]);
  pass("actual N4 task assignment, evidence, correction, approval, idempotence and tenant/recipient isolation");
  const reportBody={app_id:"WIDEMEET",room_id:mid,request_id:randomUUID(),locale:"fr"};const reportReq=token=>fetch(room+"/report-xlsx",{method:"POST",headers:{apikey:anon,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(reportBody)});assert.equal((await reportReq(mgs.access_token)).status,403);const excel=await reportReq(mhs.access_token);assert.equal(excel.status,200);const xlsx=Buffer.from(await excel.arrayBuffer());assert.equal(xlsx.subarray(0,2).toString(),"PK");assert.ok(xlsx.includes(Buffer.from("Verify human decision")));pass("actual N4 authorized Excel report, real OOXML and recipient denial");
 
@@ -783,9 +791,9 @@ try{
  await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&!x.disabled});
  await periodicToggle.click();
  await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&x.checked&&!x.disabled});
- const periodic=await identity(hs.access_token,"center-periodic-list");assert.equal(periodic.timezone,"Africa/Douala");assert.ok(periodic.preferences.some(p=>p.cadence==="weekly"&&p.enabled===true));
+ const periodicHost=await login(h);const periodic=await identity(periodicHost.access_token,"center-periodic-list");assert.equal(periodic.timezone,"Africa/Douala");assert.ok(periodic.preferences.some(p=>p.cadence==="weekly"&&p.enabled===true));
  await periodicToggle.click();await hp.waitForFunction(()=>{const x=[...document.querySelectorAll('section[aria-label="Bilans automatiques"] input')].find(i=>i.parentElement.textContent.includes("Hebdomadaire"));return x&&!x.checked&&!x.disabled});
- assert.ok((await identity(hs.access_token,"center-periodic-list")).preferences.some(p=>p.cadence==="weekly"&&p.enabled===false));
+ assert.ok((await identity(periodicHost.access_token,"center-periodic-list")).preferences.some(p=>p.cadence==="weekly"&&p.enabled===false));
  pass("B4 periodic report real browser opt-in, disable and timezone");
  pass("WAVE06 real authorized summary refresh retains selected period");
  pass("real two-browser direct chat, explicit read acknowledgement, automatic refresh and consolidated statistics period");
