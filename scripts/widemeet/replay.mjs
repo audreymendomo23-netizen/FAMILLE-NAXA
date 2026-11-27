@@ -79,6 +79,19 @@ try{
  const identity=(token,action,data={})=>ok(auth+"/identity",{action,data},token);
  const identityRequest=(token,action,data={})=>request(auth+"/identity",{action,data},token);
  const original=await identity(hs.access_token,"profile");
+ // Synthetic 8x8 JPEG; no real personal data. Private self-profile only.
+ const photo="/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAoHBwgHBgoICAgLCgoLDhgQDg0NDh0VFhEYIx8lJCIfIiEmKzcvJik0KSEiMEExNDk7Pj4+JS5ESUM8SDc9Pjv/2wBDAQoLCw4NDhwQEBw7KCIoOzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozv/wAARCAAIAAgDASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwDjaKKKwPIP/9k=";
+ assert.equal((await identity(hs.access_token,"photo-read")).jpeg,null);
+ assert.equal((await identityRequest(hs.access_token,"photo-save",{jpeg:"bm90IGFuIGltYWdl"})).status,400);
+ assert.equal((await identity(hs.access_token,"photo-save",{jpeg:photo})).updated,true);
+ assert.equal((await identity(hs.access_token,"photo-read")).jpeg,photo);
+ assert.equal((await identity(gs.access_token,"photo-read")).jpeg,null);
+ assert.equal((await identityRequest(gs.access_token,"photo-read",{account_id:h.id})).status,403);
+ assert.equal((await identityRequest(gs.access_token,"photo-delete",{account_id:h.id})).status,403);
+ assert.equal((await identity(hs.access_token,"photo-delete")).updated,true);
+ assert.equal((await identity(hs.access_token,"photo-read")).jpeg,null);
+ pass("actual N1 private profile JPEG save/read/delete, validation and account isolation");
+
  assert.equal(original.role,"promoteur");
  await identity(hs.access_token,"profile-update",{display_name:"Replay promoteur",locale:"fr"});
  for(let step=1;step<=5;step++)assert.equal((await identity(hs.access_token,"onboarding-step",{step})).step,step);
