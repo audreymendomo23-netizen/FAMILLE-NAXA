@@ -75,7 +75,9 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
     if(canManage)OutlinedButton(onClick={tab="documents"}){Text(tr("Justificatifs","Documents"))}
     if(canManage)OutlinedButton(onClick={tab="offline_review"}){Text(tr("Revue hors connexion","Offline review"))}
     OutlinedButton(onClick={tab="attendance"}){Text(tr("Pointage","Attendance"))}
+    for(page in portalPages.filter{!it.manager||canManage})OutlinedButton(onClick={tab=page.id}){Text(if(en)page.en else page.fr)}
     when(tab){
+        "profile","tickets","notifications","team","planning","objectives","training","incidents","intelligence"->{key(session.member,site,tab){ZipplePortalWorkspace(api,session,site,en,tab)}}
         "split"->{key(session.member,site){ZippleNativeSplitBill(api,session,site,en)}}
         "stations"->{key(session.member,site){ZippleNativeStations(api,session,site,en)}}
         "offline_review"->{key(session.member,site){ZippleNativeOfflineReview(api,session,site,en)}}

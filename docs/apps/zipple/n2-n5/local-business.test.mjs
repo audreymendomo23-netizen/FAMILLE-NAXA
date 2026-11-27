@@ -660,6 +660,7 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await page.getByLabel("Seuil achats FCFA",{exact:true}).fill("1000");await page.getByLabel("Seuil dépenses FCFA",{exact:true}).fill("1000");
   await page.getByLabel("Inspection obligatoire",{exact:true}).check();await page.getByLabel("Motif de décision / contrôle",{exact:true}).fill("Politique recette navigateur");
   const policyResponse=page.waitForResponse(r=>r.url().endsWith("/erp_control_set"));await page.getByRole("button",{name:"Valider la politique",exact:true}).click();assert.equal((await policyResponse).status(),200);
+  await page.getByLabel("Commande à contrôler",{exact:true}).locator("option[value=\""+controlPurchase+"\"]").waitFor({state:"attached"});
   await page.getByLabel("Commande à contrôler",{exact:true}).selectOption(controlPurchase);
   const approvedResponse=page.waitForResponse(r=>r.url().endsWith("/purchase_decide"));await page.getByRole("button",{name:"Approuver la commande",exact:true}).click();assert.equal((await approvedResponse).status(),200);
   await page.getByLabel("Quantité contrôlée",{exact:true}).fill("1");await page.getByLabel("Lot contrôlé",{exact:true}).fill("CTL-UI-LOT");

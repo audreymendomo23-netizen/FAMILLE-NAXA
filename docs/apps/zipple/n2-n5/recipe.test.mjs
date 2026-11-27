@@ -854,6 +854,24 @@ test("N2 through N4 real PostgreSQL: reuse commercial policy, isolation, stock a
  console.log("ZIPPLE_BULK3_SUPPLIER_RETURN_CREDIT_REFUND_PASS");
  console.log("ZIPPLE_BULK3_ERP_APPROVAL_AND_QUALITY_CONTROL_PASS");
  }
+ {
+ const portal=(page,who=a)=>scalar("select zp_workspace_snapshot($1,$2,$3)",[who.access,who.site,page]);
+ const write=(op,payload,key=uid(),who=a)=>scalar("select zp_workspace_write($1,$2,$3,$4,$5)",[who.access,who.site,op,key,JSON.stringify(payload)]);
+ const profile={display_name:"Promoteur recette",phone:"699000000",language:"fr"},prKey=uid();assert.deepEqual(await write("profile_save",profile,prKey),await write("profile_save",profile,prKey));assert.equal((await portal("profile")).profile.display_name,profile.display_name);
+ await assert.rejects(write("profile_save",{...profile,language:"en"},prKey),/IDEMPOTENCY_CONFLICT/);
+ await write("team_save",{member_id:a.member,job_title:"Responsable",skills:"Service et caisse"});assert.equal((await portal("team")).rows.find(x=>x.id===a.member).job_title,"Responsable");
+ await assert.rejects(write("team_save",{member_id:b.member,job_title:"Interdit",skills:""}),/DENIED/);
+ const ticket=await write("work_create",{kind:"ticket",title:"Support recette",detail:"Demande réelle",category:"technical",priority:"normal"});
+ await write("work_reply",{work_id:ticket.id,body:"Réponse interne"});await write("work_state",{work_id:ticket.id,expected_state:"open",state:"in_progress"});
+ await write("work_state",{work_id:ticket.id,expected_state:"in_progress",state:"done"});const tr=(await portal("tickets")).rows.find(x=>x.id===ticket.id);assert.equal(tr.state,"done");assert.equal(tr.messages[0].body,"Réponse interne");
+ await assert.rejects(write("work_reply",{work_id:ticket.id,body:"cross scope"},uid(),b),/DENIED/);
+ const shift={kind:"shift",title:"Service matin",detail:"Préparation",category:"cuisine",priority:"normal",assignee_id:a.member,starts_at:"2027-01-01T08:00:00+01:00",due_at:"2027-01-01T12:00:00+01:00"};
+ await write("work_create",shift);await assert.rejects(write("work_create",{...shift,title:"Chevauchement"}),/SHIFT_OVERLAP/);assert.ok((await portal("planning")).rows.some(x=>x.title===shift.title));
+ for(const [kind,page] of [["objective","objectives"],["training","training"],["incident","incidents"]]){const x=await write("work_create",{kind,title:kind,detail:"Suivi terrain",category:"service",priority:"normal",assignee_id:a.member,due_at:"2027-01-03T12:00:00+01:00"});assert.ok((await portal(page)).rows.some(y=>y.id===x.id))}
+ const inbox=await portal("notifications"),event=inbox.rows.find(x=>x.label==="Support recette");assert.ok(event);await write("inbox_read",{event_key:event.event_key});assert.ok((await portal("notifications")).rows.find(x=>x.event_key===event.event_key).is_read);
+ assert.ok((await portal("intelligence")).metrics);await assert.rejects(scalar("select zp_workspace_snapshot($1,$2,'team')",[b.access,a.site]),/DENIED/);
+ console.log("ZIPPLE_BULK45_CONNECTED_WORKSPACES_PASS");
+ }
  assert.equal(await scalar("select count(*)::int from pg_tables where schemaname='public' and tablename like 'zp_%' and not rowsecurity"),0);
  assert.equal(await scalar("select has_function_privilege('authenticated','public.zp_confirm_subscription(uuid,text,text,integer,text)','execute')"),false);
  assert.equal(await scalar("select has_table_privilege('anon','public.zp_orders','select')"),false);
