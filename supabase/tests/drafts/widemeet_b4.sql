@@ -39,7 +39,7 @@ begin
  perform public.wm_issue_verified_session(o,gen_random_uuid(),w,repeat('c',64),0);
  s:=jsonb_build_object('id',r::text,'workspaceId',w::text,'hostId',h::text,'revision',1,'title','Minutes fixture','status','open','recording','off','participants',jsonb_build_array(jsonb_build_object('memberId',h,'response','accepted','excluded',false),jsonb_build_object('memberId',g,'response','accepted','excluded',false),jsonb_build_object('memberId',o,'response','accepted','excluded',false)),'events','[]'::jsonb);
  s:=s||jsonb_build_object('scheduledMs',floor(extract(epoch from clock_timestamp()-interval '1 minute')*1000)::bigint,'durationMinutes',30,'polls',jsonb_build_array(
-  jsonb_build_object('open',false),
+  jsonb_build_object('open',false,'kind','multiple','question','B4 fixture quorum','options',jsonb_build_array('Oui','Non'),'eligible',jsonb_build_array(h,g,o),'votes',jsonb_build_object(h::text,jsonb_build_array(0),g::text,jsonb_build_array(0,1)),'quorum',60,'threshold',50),
   jsonb_build_object('open',true,'closesMs',floor(extract(epoch from clock_timestamp()-interval '1 second')*1000)::bigint),
   jsonb_build_object('open',true,'closesMs',floor(extract(epoch from clock_timestamp()+interval '1 hour')*1000)::bigint),
   jsonb_build_object('open',true)));
@@ -93,6 +93,11 @@ begin
  if public.wm_task_action(repeat('b',64),'submit',p||jsonb_build_object('expected_revision',3))->>'revision' is distinct from '4' then raise exception 'resubmission failed';end if;
  if public.wm_task_action(repeat('a',64),'approve',p||jsonb_build_object('expected_revision',4))->>'revision' is distinct from '5' then raise exception 'approve failed';end if;
  if (public.wm_task_action(repeat('b',64),'list','{}')->'items'->0->>'state') is distinct from 'done' then raise exception 'task not done';end if;
+ rr:=public.wm_report_export(repeat('a',64),r,gen_random_uuid());
+ metrics:=rr->'polls'->0;
+ if metrics->>'eligible' is distinct from '3' or metrics->>'responses' is distinct from '2' or metrics->>'nonresponses' is distinct from '1' or (metrics->>'response_rate')::numeric is distinct from 66.67::numeric or metrics->>'quorum_met' is distinct from 'true' or metrics->'options'->0->>'accepted' is distinct from 'true' or (metrics->'options'->1->>'share_pct')::numeric is distinct from 50::numeric then raise exception 'B4 survey export metrics mismatch: %',metrics;end if;
+ if metrics ? 'votes' or metrics ? 'nominativeResponses' then raise exception 'B4 voter identity leaked';end if;
+ if public.wm_report_export(repeat('b',64),r,gen_random_uuid()) is not null then raise exception 'B4 report exposed to staff';end if;
  perform public.wm_minutes_action(repeat('a',64),'revoke',jsonb_build_object('room_id',r,'version_id',v1));
  if jsonb_array_length(public.wm_task_action(repeat('b',64),'list','{}')->'items')<>0 then raise exception 'revoked task leaked';end if;
 end $wm$;
