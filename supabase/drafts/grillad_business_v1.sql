@@ -289,7 +289,7 @@ begin
   item_id:=(p_payload->>'request')::uuid;label:=p_payload->>'decision';reason:=btrim(p_payload->>'reason');
   if label is null or label not in ('approved','rejected') or reason is null or length(reason) not between 1 and 300 then raise exception 'GRILLAD_RECOUNT_DECISION' using errcode='22023';end if;
   if not exists(select 1 from grillad_private.cash_recounts cr where cr.id=item_id and cr.org=p_org and cr.site=p_site and cr.requester<>u) then raise exception 'GRILLAD_RECOUNT_DENIED' using errcode='42501';end if;
-  update grillad_private.cash_recounts set status=label,decided_by=u,decided_at=now(),decision_reason=reason where id=item_id and org=p_org and site=p_site and status='pending';
+  update grillad_private.cash_recounts set status=label,decided_by=u,decided_at=now(),decision_reason=btrim(p_payload->>'reason') where id=item_id and org=p_org and site=p_site and status='pending';
   if not found then raise exception 'GRILLAD_RECOUNT_CLOSED' using errcode='22023';end if;
   result:=jsonb_build_object('id',item_id,'status',label);
  when 'create_site' then
