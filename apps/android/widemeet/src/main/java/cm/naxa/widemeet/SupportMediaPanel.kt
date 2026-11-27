@@ -83,8 +83,12 @@ import java.util.UUID
   catch(e:CancellationException){throw e}catch(e:Exception){runCatching{r.localParticipant.setScreenShareEnabled(false,null)};runCatching{command("screen-stop",JSONObject().put("share_id",share))};throw e}
  }}
  val screenPermission=rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()){res->
-  val data=res.data;if(res.resultCode==Activity.RESULT_OK&&data!=null&&screenGeneration==generation&&room!=null&&owner)capture(data)else{val share=call?.takeUnless{it.isNull("screen_id")}?.optString("screen_id");if(share!=null)work{command("screen-stop",JSONObject().put("share_id",share));leave()}}
-  screenGeneration=-1
+  val data=res.data;val expected=screenGeneration;screenGeneration=-1
+  scope.launch{
+   while(busy)delay(50)
+   if(res.resultCode==Activity.RESULT_OK&&data!=null&&expected==generation&&room!=null&&owner&&call?.optString("screen_state")=="consented")capture(data)
+   else if(expected==generation){val share=call?.takeUnless{it.isNull("screen_id")}?.optString("screen_id");if(share!=null)work{command("screen-stop",JSONObject().put("share_id",share));leave()}}
+  }
  }
  Text(tr("Appel d’assistance privé","Private support call"),style=MaterialTheme.typography.titleMedium)
  Text(tr("Agent attribué uniquement. Pas de caméra ni d’accès aux réunions.","Assigned agent only. No camera or meeting access."))
