@@ -6,6 +6,7 @@ on:
       - 'apps/android/grillad/**'
       - 'apps/web/grillad/**'
       - 'scripts/grillad/**'
+      - 'supabase/functions/grillad/**'
       - 'supabase/drafts/grillad_business_v1.sql'
       - 'supabase/local-tests/grillad_business_v1_assertions.sql'
       - '.github/workflows/grillad-foundation.yml'
@@ -22,7 +23,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test scripts/grillad/infrastructure.test.mjs
+      - run: node --test scripts/grillad/infrastructure.test.mjs supabase/functions/grillad/handler.test.mjs
   web:
     runs-on: ubuntu-24.04
     steps:

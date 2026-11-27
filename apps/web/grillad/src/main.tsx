@@ -1,4 +1,4 @@
-import React,{useState,useEffect} from 'react';import{createRoot}from'react-dom/client';import './style.css';import * as D from './domain.mjs';
+import React,{useState,useEffect} from 'react';import{createRoot}from'react-dom/client';import './style.css';import {ConnectedApp} from './ConnectedApp';import {configuredEndpoint} from './connected-api.mjs';import * as D from './domain.mjs';
 const money=(v:number|null)=>v===null?'Non calculable':new Intl.NumberFormat('fr-CM').format(v)+' F';
 const groups=[{label:'Accueil',icon:'⌂',pages:['Accueil']},{label:'Vente',icon:'＋',pages:['Ventes','Catalogue']},{label:'Activité',icon:'▥',pages:['Préparations','Caisse','Dépenses','Rapports','Prévisions','Point journalier']},{label:'Plus',icon:'⋯',pages:['Équipe','Points de vente','Notifications','Vidéosurveillance','ZIPPLE Connect','Abonnement','Profil','Aide']}];
 const num=(f:FormData,k:string)=>Number(f.get(k));const val=(f:FormData,k:string)=>String(f.get(k)??'');
@@ -34,4 +34,4 @@ function App(){
  {page==='Aide'&&<><p>Commencez par le catalogue, ouvrez la caisse, saisissez les préparations puis les ventes.</p><p>Le support en ligne n'est pas raccordé.</p></>}
  </main></div></div>
 }
-createRoot(document.getElementById('root')!).render(<App/>);if(import.meta.env.PROD&&'serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+createRoot(document.getElementById('root')!).render(configuredEndpoint(import.meta.env.VITE_GRILLAD_API_URL,import.meta.env.VITE_GRILLAD_PUBLIC_KEY)?<ConnectedApp url={import.meta.env.VITE_GRILLAD_API_URL} publicKey={import.meta.env.VITE_GRILLAD_PUBLIC_KEY}/>:<App/>);if(import.meta.env.PROD&&'serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));

@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {client,configuredEndpoint,periodBounds} from './connected-api.mjs';
+const url='https://test.supabase.co/functions/v1/grillad',key='sb_publishable_test';
+test('scope and public key only',()=>{assert.equal(configuredEndpoint(url,key),true);assert.equal(configuredEndpoint(url,'sb_secret_test'),false);assert.equal(configuredEndpoint(url.replace('grillad','zipple'),key),false)});
+test('authenticated no-store transport and original event',async()=>{const c=client(url,key,async(u,i)=>{assert.equal(i.headers.Authorization,'Bearer caller');assert.equal(i.cache,'no-store');assert.equal(JSON.parse(i.body).event,'same-event');return new Response(JSON.stringify({result:{ok:true}}))});assert.deepEqual(await c({action:'mutate',event:'same-event'},'caller'),{ok:true})});
+test('periods calendar',()=>{assert.deepEqual(periodBounds('2026-11-27','semaine'),{from:'2026-11-23',to:'2026-11-27'});assert.equal(periodBounds('2026-11-27','annee').from,'2026-01-01')});
