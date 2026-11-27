@@ -58,7 +58,7 @@ Deno.serve(async request=>{
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
  if(action==="minutes"){
  if(Deno.env.get("WM_MINUTES_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
- if(!["list","read","draft","approve","publish","revoke"].includes(b.action)||!b.data||typeof b.data!=="object"||Array.isArray(b.data))return send(400,{error:"invalid_request"});
+ if(!["list","prepare","read","draft","approve","publish","revoke"].includes(b.action)||!b.data||typeof b.data!=="object"||Array.isArray(b.data))return send(400,{error:"invalid_request"});
  const result=await rpc("wm_minutes_action",{p_hash,p_action:b.action,p_data:b.data});
  return result?send(200,result):send(403,{error:"forbidden"});
  }
