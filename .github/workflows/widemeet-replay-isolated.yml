@@ -8,7 +8,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: widemeet-actual-local-replay
+  group: widemeet-actual-local-replay-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: false
 jobs:
   replay:
