@@ -38,7 +38,9 @@ test("B2-025 guest offline and lost acknowledgement preserve exactly one order",
   const ctx=await context(),page=await ctx.newPage();
   await page.goto(publicOrigin+"/#table="+qr);
   await page.getByRole("button",{name:"Voir la carte"}).click();
-  const input=page.getByLabel(/Plat recette/);await input.fill("1");
+  const input=page.getByRole("spinbutton",{name:/Plat recette/});await input.fill("1");
+  await page.getByRole("textbox",{name:/Instruction de préparation pour Plat recette/}).waitFor();
+  assert.equal(await input.inputValue(),"1");
   await ctx.setOffline(true);
   await page.getByText(/Hors connexion : votre panier/).waitFor();
   const submit=page.getByRole("button",{name:"Confirmer ma commande"});
