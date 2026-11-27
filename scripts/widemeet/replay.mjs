@@ -617,6 +617,11 @@ try{
  assert.equal((await sk(browserAgent.access_token,"read",{ticket_id:browserSupportTicket.id})).messages.length,3);
  hp.once("dialog",d=>d.accept());await hp.getByRole("button",{name:"Clôturer",exact:true}).click();
  await hp.getByText("Clôturée",{exact:true}).waitFor();
+ await hp.getByLabel("Note sur 5",{exact:true}).selectOption("4");
+ await hp.getByRole("button",{name:"Envoyer mon avis",exact:true}).click();
+ await hp.getByText("Note enregistrée : 4/5",{exact:true}).waitFor();
+ assert.equal((await sk(browserSupportHost.access_token,"read",{ticket_id:browserSupportTicket.id})).feedback,4);
+ pass("B5 real browser requester feedback persisted on closed ticket");
  pass("real browser support intake, agent claim/reply, automatic refresh, requester message and closure");
 
  // Exercise the external invitation deep link through real GoTrue, Edge and Chromium.
