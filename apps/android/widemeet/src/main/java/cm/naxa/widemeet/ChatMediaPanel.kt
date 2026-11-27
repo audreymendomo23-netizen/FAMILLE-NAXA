@@ -36,7 +36,7 @@ private fun boundedRead(input:java.io.InputStream):ByteArray{
  while(true){val n=input.read(buf);if(n<0)break;require(out.size()+n<=MediaLimit);out.write(buf,0,n)}
  return out.toByteArray()
 }
-private fun digest(b:ByteArray)=MessageDigest.getInstance("SHA-256").digest(b).joinToString(""){"%02x".format(it.toInt() and 255)}
+internal fun chatMediaDigest(b:ByteArray)=MessageDigest.getInstance("SHA-256").digest(b).joinToString(""){"%02x".format(it.toInt() and 255)}
 private fun mediaItems(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("items");return (0 until a.length()).map{a.getJSONObject(it)}}
 private class ChatAudio{
  var recorder:MediaRecorder?=null;var capture:File?=null;var player:MediaPlayer?=null;var playback:File?=null
@@ -44,14 +44,14 @@ private class ChatAudio{
  fun clearRecorder(){val r=recorder;recorder=null;runCatching{r?.stop()};runCatching{r?.release()};capture?.delete();capture=null}
  fun clear(){clearRecorder();clearPlayer()}
 }
-@Composable fun ChatMediaPanel(english:Boolean,gateway:AuthGateway,session:Session,peerId:String?=null,groupId:String?=null,roomId:String?=null,channel:String?=null,allowUpload:Boolean=true,voiceAllowed:Boolean=true){
+@Composable fun ChatMediaPanel(english:Boolean,gateway:AuthGateway,session:Session,peerId:String?=null,groupId:String?=null,roomId:String?=null,channel:String?=null,allowUpload:Boolean=true,voiceAllowed:Boolean=true,transport:(suspend (String,JSONObject)->JSONObject)?=null){
  fun tr(fr:String,en:String)=if(english)en else fr
  val context=LocalContext.current;val scope=rememberCoroutineScope();val resources=remember{ChatAudio()}
  var items by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var pending by remember{mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
  var recording by remember{mutableStateOf(false)};var playing by remember{mutableStateOf<String?>(null)};var saveBytes by remember{mutableStateOf<ByteArray?>(null)}
  fun scoped(d:JSONObject)=d.apply{if(roomId!=null){put("room_id",roomId);put("channel",channel)}else if(peerId!=null)put("peer_id",peerId)else put("group_id",groupId)}
- suspend fun req(action:String,d:JSONObject=JSONObject())=gateway.chatMedia(session,action,scoped(d))
+ suspend fun req(action:String,d:JSONObject=JSONObject())=transport?.invoke(action,scoped(d))?:gateway.chatMedia(session,action,scoped(d))
  fun stopPlayer(){resources.clearPlayer();playing=null}
  suspend fun refresh(){try{val next=mediaItems(req("list"));items=next;if(playing!=null&&next.none{it.optString("id")==playing})stopPlayer()}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();stopPlayer();pending=null;saveBytes=null;resources.clearRecorder();recording=false;throw e}}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
@@ -97,7 +97,7 @@ private class ChatAudio{
  suspend fun download(m:JSONObject):ByteArray{
   val v=req("download",JSONObject().put("id",m.getString("id")))
   val b=Base64.decode(v.getString("content"),Base64.NO_WRAP)
-  require(b.size in 1..MediaLimit&&b.size==m.getInt("bytes")&&v.getInt("bytes")==m.getInt("bytes")&&v.getString("id")==m.getString("id")&&digest(b)==m.getString("sha256")&&v.getString("sha256")==m.getString("sha256"))
+  require(b.size in 1..MediaLimit&&b.size==m.getInt("bytes")&&v.getInt("bytes")==m.getInt("bytes")&&v.getString("id")==m.getString("id")&&chatMediaDigest(b)==m.getString("sha256")&&v.getString("sha256")==m.getString("sha256"))
   return b
  }
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){

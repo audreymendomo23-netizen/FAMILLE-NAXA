@@ -12,30 +12,32 @@ import org.json.JSONObject
 import org.json.JSONArray
 import java.util.UUID
 private fun groupRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("items");return (0 until a.length()).map{a.getJSONObject(it)}}
-@Composable fun GroupChat(english:Boolean,gateway:AuthGateway,session:Session,onBack:()->Unit){
+@Composable fun GroupChat(english:Boolean,gateway:AuthGateway,session:Session,transport:(suspend (String,JSONObject)->JSONObject)?=null,onBack:()->Unit){
  fun tr(fr:String,en:String)=if(english)en else fr
  val scope=rememberCoroutineScope()
  var groups by remember{mutableStateOf<List<JSONObject>>(emptyList())};var contacts by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var members by remember{mutableStateOf<List<JSONObject>>(emptyList())};var messages by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var rename by remember{mutableStateOf("")};var group by remember{mutableStateOf<JSONObject?>(null)};var name by remember{mutableStateOf("")};var selected by remember{mutableStateOf<Set<String>>(emptySet())};var query by remember{mutableStateOf("")};var body by remember{mutableStateOf("")}
- var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var pending by remember{mutableStateOf<JSONObject?>(null)};var creation by remember{mutableStateOf<JSONObject?>(null)}
+ var epoch by remember{mutableIntStateOf(0)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var pending by remember{mutableStateOf<JSONObject?>(null)};var creation by remember{mutableStateOf<JSONObject?>(null)}
  var before by remember{mutableStateOf<String?>(null)};var next by remember{mutableStateOf<String?>(null)};var reply by remember{mutableStateOf<JSONObject?>(null)};var mentions by remember{mutableStateOf<Set<String>>(emptySet())};var reports by remember{mutableStateOf<List<JSONObject>>(emptyList())}
- suspend fun req(a:String,d:JSONObject=JSONObject())=gateway.identity(session,"group-chat-"+a,d)
- suspend fun load(){groups=groupRows(req("list"));contacts=groupRows(gateway.identity(session,"center-contacts"))}
+ suspend fun request(a:String,d:JSONObject=JSONObject())=transport?.invoke(a,d)?:gateway.identity(session,a,d)
+ suspend fun req(a:String,d:JSONObject=JSONObject())=request("group-chat-"+a,d)
+ suspend fun load(){groups=groupRows(req("list"));contacts=groupRows(request("center-contacts"))}
  suspend fun thread(id:String,q:String="",cursor:String?=null){try{val page=req("thread",JSONObject().put("group_id",id).put("query",q).put("before_id",cursor?:JSONObject.NULL).put("limit",50));val nextMembers=groupRows(req("members",JSONObject().put("group_id",id)));messages=groupRows(page);members=nextMembers;before=cursor;next=if(page.isNull("next_before_id"))null else page.optString("next_before_id")}catch(e:CancellationException){throw e}catch(e:Exception){messages=emptyList();members=emptyList();next=null;reply=null;mentions=emptySet();reports=emptyList();throw e}}
- fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
+ fun work(block:suspend ()->Unit){if(busy)return;epoch++;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
  fun close(){group=null;members=emptyList();messages=emptyList();body="";query="";pending=null;before=null;next=null;reply=null;mentions=emptySet();reports=emptyList()}
  LaunchedEffect(session.deviceId){work{load()}}
  LaunchedEffect(group?.optString("id"),query,before,session.deviceId,session.accessToken){
   val id=group?.optString("id")?:return@LaunchedEffect
   var version:String?=null
   while(true){if(busy){version=null;delay(150);continue}
+   val observed=epoch
    try{
     val v=req("watch",JSONObject().put("group_id",id).put("query",query).put("before_id",before?:JSONObject.NULL).put("limit",50).put("after",version?:JSONObject.NULL))
-    if(busy){version=null;continue}
+    if(busy||observed!=epoch){version=null;continue}
     version=v.getString("version");require(Regex("^[a-f0-9]{64}$").matches(version))
     if(v.getBoolean("changed")){val p=v.getJSONObject("thread");messages=groupRows(p);val a=v.getJSONArray("members");members=(0 until a.length()).map{a.getJSONObject(it)};next=if(p.isNull("next_before_id"))null else p.getString("next_before_id")}
-   }catch(e:CancellationException){throw e}catch(e:Exception){if(busy){version=null;continue};if(e is AuthRequestRejected&&e.status==429){try{thread(id,query,before);version=null;delay(750);continue}catch(c:CancellationException){throw c}catch(_:Exception){}};messages=emptyList();members=emptyList();next=null;reply=null;mentions=emptySet();reports=emptyList();error=true;version=null;delay(1200)}
+   }catch(e:CancellationException){throw e}catch(e:Exception){if(busy||observed!=epoch){version=null;continue};if(e is AuthRequestRejected&&e.status==429){try{thread(id,query,before);version=null;delay(750);continue}catch(c:CancellationException){throw c}catch(_:Exception){}};messages=emptyList();members=emptyList();next=null;reply=null;mentions=emptySet();reports=emptyList();error=true;version=null;delay(1200)}
   }
  }
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
