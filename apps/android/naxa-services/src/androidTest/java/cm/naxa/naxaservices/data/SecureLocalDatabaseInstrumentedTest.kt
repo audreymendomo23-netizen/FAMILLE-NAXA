@@ -94,6 +94,29 @@ class SecureLocalDatabaseInstrumentedTest {
                 assertEquals(listOf("c"),dao.loadOwnedRetryableOutboxEvents("org-a","member-a","device-b").map{it.eventId})
                 assertEquals(4,dao.loadRetryableOutboxEvents("org-a").size)
                 assertEquals(1,dao.observeOwnedPendingOutboxCount("org-a","member-a","device-a").first())
+                val repo=NaxaServicesLocalRepository(database,LocalQueueOwner("org-a","member-a","device-a"))
+                val supplier=repo.saveSupplier("org-a","site-a","Test supplier","","","","",0,"","member-a")
+                val owned=dao.loadOwnedRetryableOutboxEvents("org-a","member-a","device-a")
+                assertTrue(owned.any{it.aggregateId==supplier.id&&it.ownerMemberId=="member-a"&&it.ownerDeviceId=="device-a"})
+            }
+        }finally{context.deleteDatabase(name);File(context.noBackupFilesDir,"$name.wrapped-key").delete()}
+    }
+
+    @Test fun migratesVersion16UnownedEventsWithoutReassignment()=runBlocking<Unit>(Dispatchers.IO){
+        val context=ApplicationProvider.getApplicationContext<Context>()
+        val name="secure-v16-qa-"+UUID.randomUUID()+".db"
+        val original=LocalOutboxEvent(eventId="old",orgId="org-a",aggregateType="customer",aggregateId="c",
+            actionCode="customer.created",payloadJson="{\"org_id\":\"org-a\"}",deviceSequence=1,createdAtEpochMs=1)
+        try{
+            Room.databaseBuilder(context,NsServicesDatabase::class.java,name).build().withDatabase{it.naxaServicesDao().insertOutboxEvent(original)}
+            android.database.sqlite.SQLiteDatabase.openDatabase(context.getDatabasePath(name).path,null,android.database.sqlite.SQLiteDatabase.OPEN_READWRITE).use{plain->
+                plain.execSQL("ALTER TABLE local_outbox_events DROP COLUMN ownerMemberId")
+                plain.execSQL("ALTER TABLE local_outbox_events DROP COLUMN ownerDeviceId")
+                plain.version=16
+            }
+            SecureLocalDatabase.open(context,name).withDatabase{db->
+                assertEquals(original,db.naxaServicesDao().loadRetryableOutboxEvents("org-a").single())
+                assertTrue(db.naxaServicesDao().loadOwnedRetryableOutboxEvents("org-a","member-a","device-a").isEmpty())
             }
         }finally{context.deleteDatabase(name);File(context.noBackupFilesDir,"$name.wrapped-key").delete()}
     }

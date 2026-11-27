@@ -32,6 +32,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import cm.naxa.naxaservices.auth.AuthSession
+import cm.naxa.naxaservices.auth.AuthApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
 import cm.naxa.naxaservices.data.NaxaServicesLocalRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -139,6 +142,8 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
   var selected by remember{mutableStateOf("staff_clock_in")};var reload by remember{mutableIntStateOf(0)}
   val journal=remember(context,session.account.organizationId,session.account.memberId,session.deviceId,siteId,workstationId){AttendanceProofJournal(context,session.account.organizationId,session.account.memberId,session.deviceId,siteId,workstationId)}
   var pending by remember{mutableStateOf<JSONObject?>(null)};var journalReady by remember{mutableStateOf(false)};var discard by remember{mutableStateOf(false)}
+  var submittedLocal by remember{mutableStateOf(false)};var confirmed by remember{mutableStateOf(false)};var terminalRejection by remember{mutableStateOf(false)}
+  val authApi=remember(context){AuthApi(context)}
   LaunchedEffect(journal){try{pending=withContext(Dispatchers.IO){journal.read()};journalReady=true}catch(c:CancellationException){throw c}catch(_:Exception){error=true}}
   var location by remember{mutableStateOf<Location?>(null)};var selfie by remember{mutableStateOf<CapturedSelfie?>(null)};var camera by remember{mutableStateOf(false)}
   fun effectiveRule(a:String):AttendanceRule {val p=rules[a]?:AttendanceRule();return if(a=="staff_clock_in"||a=="staff_clock_out")p.copy(gps=true)else p}
@@ -158,6 +163,17 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
    if(busy)return;busy=true;error=false;location=null
    scope.launch{try{location=freshAttendanceLocation(context)}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}
   }
+  suspend fun lookupReceipt(value:JSONObject):String?{
+   val current=latest
+   val row=repository.dao.findOwnedAttendanceEvent(current.account.organizationId,current.account.memberId,current.deviceId,value.getString("id"),value.getString("event")+".recorded")
+   val state=row?.state
+   submittedLocal=row!=null;terminalRejection=state=="rejected"||state=="conflict"
+   if(state=="synced"){
+    withContext(Dispatchers.IO){journal.remove(value.getString("id"))}
+    pending=null;clear();confirmed=true;submittedLocal=false;terminalRejection=false
+   }
+   return state
+  }
   suspend fun submitPending(value:JSONObject){
    val current=latest;val id=value.getString("id");val event=value.getString("event");val now=value.getLong("occurred_ms")
    val existing=repository.dao.findManagementRecord(current.account.organizationId,siteId,id)
@@ -176,7 +192,19 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
     require(staged.optBoolean("staged")&&staged.optString("proof_ref")==id)
     repository.recordStaffTimeEvent(current.account.organizationId,siteId,event,current.account.displayName,current.account.memberId,workstationId,current.account.memberId,id,now,id)
    }
-   withContext(Dispatchers.IO){journal.remove(id)};pending=null;clear();queued=true
+   clear();queued=true
+   val state=lookupReceipt(value)
+   if(state=="synced"||terminalRejection)return
+   require(state!=null){"ATTENDANCE_OUTBOX_OWNER_UNCONFIRMED"}
+   // Do not discard the original proof when merely staged or enqueued.
+   // The journal is removed only after the canonical mutation receipt is durable.
+   if(journal.replayable(value)&&SupplierSyncCoordinator.isConfigured()){
+    val job=currentCoroutineContext()[Job]
+    SupplierSyncCoordinator.syncPending(repository,authApi,current){
+     job?.isActive!=false&&latest.account.memberId==current.account.memberId&&latest.account.organizationId==current.account.organizationId&&latest.deviceId==current.deviceId
+    }
+    lookupReceipt(value)
+   }
   }
   // Retry only the already captured immutable proof. Never reacquire GPS or change its timestamp.
   // Expired proofs remain pending for explicit review/abandonment, not accepted retroactively.
@@ -184,13 +212,17 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
    while(true){
     kotlinx.coroutines.delay(5000)
     val value=pending?:break
-    if(!journal.replayable(value))break
     if(busy)continue
-    val network=context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
-    val caps=network.getNetworkCapabilities(network.activeNetwork)
-    if(caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)!=true)continue
-    busy=true;error=false
-    try{submitPending(value);break}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}
+    busy=true
+    try{
+     val state=lookupReceipt(value)
+     if(state=="synced"||terminalRejection)break
+     if(!journal.replayable(value))continue
+     val network=context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+     val caps=network.getNetworkCapabilities(network.activeNetwork)
+     if(caps?.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_VALIDATED)!=true)continue
+     error=false;submitPending(value)
+    }catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}
    }
   }
   val gpsPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){granted->if(granted[Manifest.permission.ACCESS_FINE_LOCATION]==true)gps()else error=true}
@@ -200,12 +232,14 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
     Text(tr("Mon pointage probant","My attendance evidence","Seedeeji golle am"),style=MaterialTheme.typography.titleLarge)
     Text(tr("Position et caméra uniquement au pointage. Une preuve enregistrée localement reste non confirmée.","Location and camera only when clocking. A locally saved proof is not confirmed.","Nokkuure e kamera e sahaa golle tan. Seedeeji tabbitinaaka."))
     if(error)Text(tr("Pointage non confirmé. Vérifiez les autorisations et la connexion.","Attendance not confirmed. Check permissions and connection.","Golle tabbitinaaka."),color=MaterialTheme.colorScheme.error)
-    if(queued)Text(tr("Preuve préparée : pointage en attente de confirmation serveur.","Proof staged: attendance awaiting server confirmation.","Seedeeji hebiima, tabbitinol ena fadi."))
+    if(confirmed)Text(tr("Pointage confirmé par le serveur.","Attendance confirmed by the server.","Golle tabbitinaama."))
+    if(queued&&!confirmed)Text(tr("Preuve préparée : pointage en attente de confirmation serveur.","Proof staged: attendance awaiting server confirmation.","Seedeeji hebiima, tabbitinol ena fadi."))
+    if(terminalRejection)Text(tr("Pointage rejeté. La preuve originale est conservée pour examen.","Attendance rejected. Original evidence retained for review.","Golle jaɓaaka. Seedeeji ena hisa."),color=MaterialTheme.colorScheme.error)
     OutlinedButton(onClick={clear();reload++},enabled=!busy){Text(tr("Actualiser les règles","Refresh rules","Hesɗitin yamirooje"))}
     pending?.let{value->
      Text(tr("Preuve locale non confirmée. Réessayez sans modifier l'heure initiale. Une preuve expirée doit être signalée au responsable.","Unconfirmed local proof. Retry without changing the original time. Report expired proof to your manager.","Seedeeji tabbitinaaka. Humpitin hooreejo so sahaa timmii."))
-     OutlinedButton(enabled=!busy,onClick={busy=true;error=false;scope.launch{try{submitPending(value)}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}}){Text(tr("Réessayer la transmission","Retry submission","Fuɗɗito neldugol"))}
-     TextButton(enabled=!busy,onClick={discard=true}){Text(tr("Abandonner la preuve non confirmée","Discard unconfirmed proof","Accu seedeeji"))}
+     OutlinedButton(enabled=!busy&&!terminalRejection,onClick={busy=true;error=false;scope.launch{try{submitPending(value)}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}}){Text(tr("Réessayer la transmission","Retry submission","Fuɗɗito neldugol"))}
+     TextButton(enabled=!busy&&!submittedLocal,onClick={discard=true}){Text(tr("Abandonner la preuve non confirmée","Discard unconfirmed proof","Accu seedeeji"))}
     }
     if(discard)AlertDialog(onDismissRequest={discard=false},title={Text(tr("Abandonner la preuve ?","Discard proof?","Accu seedeeji?"))},text={Text(tr("Cette action ne valide aucun pointage.","This does not confirm attendance.","Golle tabbitinaaka."))},confirmButton={TextButton(onClick={discard=false;val id=pending?.optString("id");if(id!=null){busy=true;scope.launch{try{withContext(Dispatchers.IO){journal.remove(id)};pending=null}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}}}){Text(tr("Abandonner","Discard","Accu"))}},dismissButton={TextButton(onClick={discard=false}){Text(tr("Annuler","Cancel","Haaytu"))}})
     if(loaded&&journalReady&&pending==null){
@@ -222,7 +256,7 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
       else OutlinedButton(onClick={selfie?.bytes?.fill(0);selfie=null;if(ContextCompat.checkSelfPermission(context,Manifest.permission.CAMERA)==PackageManager.PERMISSION_GRANTED)camera=true else cameraPermission.launch(Manifest.permission.CAMERA)},enabled=!busy){Text(if(selfie!=null)tr("Selfie pris","Selfie captured","Natal heɓiima")else tr("Caméra avant","Front camera","Kamera yeeso"))}
      }
      Button(enabled=!busy&&!camera&&(!rule.gps||location!=null)&&(!rule.selfie||selfie!=null),onClick={
-      busy=true;queued=false;error=false
+      busy=true;queued=false;confirmed=false;error=false
       scope.launch{
        try{
         val now=System.currentTimeMillis();val current=latest;val gps=location;val shot=selfie

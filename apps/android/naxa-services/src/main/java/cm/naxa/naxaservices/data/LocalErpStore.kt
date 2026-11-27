@@ -814,6 +814,9 @@ interface NaxaServicesDao {
     @Query("SELECT COUNT(*) FROM local_outbox_events WHERE orgId = :orgId AND ownerMemberId = :memberId AND ownerDeviceId = :deviceId AND state IN ('queued','retry_wait','blocked_dependency')")
     fun observeOwnedPendingOutboxCount(orgId:String,memberId:String,deviceId:String):Flow<Int>
 
+    @Query("SELECT * FROM local_outbox_events WHERE orgId=:orgId AND ownerMemberId=:memberId AND ownerDeviceId=:deviceId AND aggregateId=:proofId AND actionCode=:action LIMIT 1")
+    suspend fun findOwnedAttendanceEvent(orgId:String,memberId:String,deviceId:String,proofId:String,action:String):LocalOutboxEvent?
+
     @Query("UPDATE local_outbox_events SET state = 'queued', nextAttemptAtEpochMs = NULL, lastErrorCode = NULL WHERE eventId = :eventId AND orgId = :orgId AND state = 'blocked_dependency'")
     suspend fun requeueBlockedOutboxEvent(eventId: String, orgId: String): Int
 

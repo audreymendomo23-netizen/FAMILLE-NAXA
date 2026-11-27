@@ -1140,3 +1140,28 @@ test("Web offline recovery: transient response and incomplete receipt retry auto
  expect(attempts).toHaveLength(3);expect(new Set(attempts).size).toBe(1);
  await expect(page.locator(".record").filter({hasText:"Client reprise automatique"}).getByText("Confirmé",{exact:true}).first()).toBeVisible();
 });
+
+test("Bulk C: a new submission during an in-flight pull drains immediately without waiting for periodic polling",async({context})=>{
+ const events=await installBackend(context);
+ let release!:()=>void,started!:()=>void,held=false;
+ const blocked=new Promise<void>(r=>{release=r;}),observed=new Promise<void>(r=>{started=r;});
+ await context.route(ACCOUNTING_URL,async route=>{
+  if(route.request().method()==="OPTIONS")return route.fallback();
+  const req=route.request().postDataJSON();
+  if(req?.action==="pull_sync_changes"&&events.length===1&&!held){held=true;started();await blocked;}
+  return route.fallback();
+ });
+ const page=await context.newPage();await signIn(page);
+ try{
+  await createCustomer(page,"Client premier drain");
+  await observed;
+  await expect(page.locator(".record").filter({hasText:"Client premier drain"}).getByText("Confirmé",{exact:true}).first()).toBeVisible();
+  await createCustomer(page,"Client drain concurrent");
+  await expect(page.locator(".record").filter({hasText:"Client drain concurrent"}).first()).toBeVisible();
+  expect(events.length).toBe(1);
+  release();
+  await expect.poll(()=>events.length,{timeout:3000}).toBe(2);
+  expect(new Set(events.map(e=>e.event_id)).size).toBe(2);
+  await expect(page.locator(".record").filter({hasText:"Client drain concurrent"}).getByText("Confirmé",{exact:true}).first()).toBeVisible();
+ }finally{release();}
+});
