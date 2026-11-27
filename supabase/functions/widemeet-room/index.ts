@@ -114,14 +114,27 @@ Deno.serve(async request=>{
  const p_room=b.room_id.toLowerCase();
  const passId=action==="create"&&b.pass_id!=null?b.pass_id:null;
  if(passId!==null&&!uuid.test(passId))return send(400,{error:"invalid_pass"});
+ let creationDigest:string|null=null;
+ async function creationReplay(){
+  if(!creationDigest)return null;
+  const prior=await rpc("wm_room_creation_replay",{p_hash,p_room,p_digest:creationDigest,p_intent:passId});
+  if(!prior)return null;
+  const a=(await rpc("wm_room_actor_for",{p_hash,p_room}))?.[0];if(!a)return null;
+  return project(prior,{memberId:a.account_id,workspaceId:a.workspace_id,role:a.role,plan:a.plan},p_hash);
+ }
+ if(action==="create"){
+  if(!Array.isArray(b.invitees)||b.invitees.length>100||!b.invitees.every((v:unknown)=>typeof v==="string"&&uuid.test(v)))return send(400,{error:"invalid_invitees"});
+  creationDigest=await hash(JSON.stringify([p_room,passId?.toLowerCase()??null,b.title,b.description??"",b.scheduled_ms,b.duration_minutes,b.invitees.map((v:string)=>v.toLowerCase()).sort()]));
+  const existing=await creationReplay();if(existing)return send(200,existing);
+ }
  const a=(await rpc(passId!==null?"wm_pass_actor":"wm_room_actor_for",passId!==null?{p_hash,p_intent:passId}:{p_hash,p_room:action==="create"?null:p_room}))?.[0];
  if(!a||!["owner","promoteur","manager","staff"].includes(a.role)||!["access","premium"].includes(a.plan)||!Number.isSafeInteger(a.entitlement_end_ms)||a.entitlement_end_ms<=now)return send(403,{error:"forbidden"});
  const actor={memberId:a.account_id,workspaceId:a.workspace_id,enabled:true,passwordChangeRequired:false,role:a.role,plan:a.plan,entitlementEndMs:a.entitlement_end_ms,capacity:Number.isInteger(a.capacity)?a.capacity:undefined};
  if(action==="create"){
  if(!Array.isArray(b.invitees)||b.invitees.length>100||!b.invitees.every((id:unknown)=>typeof id==="string"&&uuid.test(id)))return send(400,{error:"invalid_invitees"});
- const state=createRoom(actor,{id:p_room,title:b.title,description:b.description??"",startMs:b.scheduled_ms,durationMinutes:b.duration_minutes,hardEndMs:actor.entitlementEndMs,invitees:b.invitees.map((id:string)=>id.toLowerCase())});
+ const state={...createRoom(actor,{id:p_room,title:b.title,description:b.description??"",startMs:b.scheduled_ms,durationMinutes:b.duration_minutes,hardEndMs:actor.entitlementEndMs,invitees:b.invitees.map((id:string)=>id.toLowerCase())}),creationDigest};
  if(passId!==null&&b.invitees.length+1>a.capacity)return send(409,{error:"capacity_exceeded"});
- if(await rpc(passId!==null?"wm_pass_room_create":"wm_room_create",passId!==null?{p_hash,p_intent:passId,p_state:state}:{p_hash,p_state:state})!==true)return send(409,{error:"conflict_or_scope"});
+ if(await rpc(passId!==null?"wm_pass_room_create":"wm_room_create",passId!==null?{p_hash,p_intent:passId,p_state:state}:{p_hash,p_state:state})!==true){const existing=await creationReplay();return existing?send(200,existing):send(409,{error:"conflict_or_scope"});}
  return send(201,await project(state,actor,p_hash));
  }
  const room=await rpc("wm_room_read",{p_hash,p_room});
