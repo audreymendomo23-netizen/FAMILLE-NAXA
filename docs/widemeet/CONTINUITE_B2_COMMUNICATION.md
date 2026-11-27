@@ -49,3 +49,41 @@ Les trois flux peuvent être préparés en parallèle logique ; les dépendances
 
 ## Journal
 27/11/2026 : audit de reprise et document créé. Aucun fichier exécutable modifié ; aucune nouvelle recette exécutée ; correction de jauge uniquement en reconnaissant le contrat Connect existant. Prochaine intervention B2 : revalidation chat, groupes, transport Connect, pièces/voix et push, en capitalisant sur les sources vérifiées.
+
+
+## 27/11/2026 — Passe B2.2/B2.5/B2.7 : développement, puis qualification
+Révision exécutable de référence : 81279533b5a67486a30905b206f0eb36dce8ce05. Révision précédente documentaire 9bf1e22efad1ccc7e0f7ffe06af527b3ac15cfba.
+### Commits et périmètre
+- [a53b494](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/commit/a53b4949fa840650909827f2047f23eb7f63043b) : wm_group_chat, quatre tables dédiées RLS service-only, Edge identité, interfaces GroupChat.tsx et GroupChat.kt raccordées au centre chat, correction de l'actualisation du chat privé, recette API. Aucune modification des RPC statistiques ni du code des applications sœurs.
+- [660e66e](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/commit/660e66e0fd210fd37e0d52849eb12985025c4b2e) : module serveur widemeet-receiver.mjs et tests connect-transport.test.mjs ; reprise du contrat de présentation et du proxy SFU existants ; nouvelle recette média réelle avec troisième client récepteur et contexte de confiance synthétique ; groupes testés dans espace distinct pour préserver les fixtures.
+- [8127953](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/commit/81279533b5a67486a30905b206f0eb36dce8ce05) : correction du nom de fixture gc redéclaré, recette navigateur de groupe à trois comptes et recette perte de réponse après envoi privé. Le contrôle syntaxique échoué sur 660e66e est désormais vert sur 8127953, aucune assertion supprimée.
+
+### B2.5 Connect : sous-périmètre contrat du transport vert, bloc toujours PARTIEL
+Le code réutilise presentation-display.mjs et signaling-policy/proxy sans modifier les politiques média partagées. Jeton signé côté serveur, identité distincte wm-display-* (non UUID participant, donc non comptée par l'observateur de présence existant), SFU subscribe-only, interdiction publication micro/caméra/données/administration/enregistrement, expiration <=30s, revalidation par lecture autorisée du bail. En cas de retrait de source, pause ou révocation, l'admission renvoie null ; la recette réelle utilise le callback d'éviction du SFU existant. L'audio du récepteur de recette est muet. Ni renouvellement, ni stockage transactionnel réel du bail, ni QR/appairage source-récepteur, ni raccord UI, ni politique serveur complète, ni qualification physique n'ont été livrés. Le lecteur du bail est fourni par une fixture de confiance dans media-replay.mjs, pas par une base produit. Ne jamais activer le récepteur dans le produit en contournant ces dépendances. La recette vérifie vidéo décodée, refus de publication, éviction et refus de rejoindre avec ancien jeton, sans évincer l'hôte. Attendre ses résultats terminaux.
+
+### B2.7 Groupes : PARTIEL (passage de 0 à 0,5)
+Adaptation du modèle chat privé et des membres WideMeet existants : groupes distincts des contacts privés, création idempotente sur payload exact trié, messages texte persistants, recherche, reçu de lecture individuel, retrait par propriétaire ou départ volontaire, revalidation membre/compte/organisation à chaque action, pas de lecture implicite manager/promoteur, tables RLS service-only et verrou commun identité. Interfaces FR/EN Web/PWA et Android dans Chat > Messages privés > Groupes de discussion ; aucun faux résultat ni stockage local durable des messages. Paramètres candidats non arbitrés : créateur + 2 à 49 contacts, 5 créations/min, 20 messages/min, 200 résultats, même abonnement entreprise que chat privé. Pas de nouveau prix. Ajout de participants après création, renommage, reprise après départ/réactivation, pagination, mentions/réponses/signalement, temps réel événementiel (actuellement polling 5s) et notifications de groupe restent à qualifier/construire. Le code ne constitue pas preuve d'une recette native. Recettes API : trois comptes, tiers manager et tenant différent, rejeu exact, refus conflit, lecture explicite, retrait. Recette Web : trois navigateurs, création, envoi, lecture, retrait et effacement écran. Aucune migration persistante, flag WM_WORKSPACE_CENTERS_QUALIFIED utilisé dans environnement Replay seulement.
+
+### B2.2 Chat privé : régression corrigée, recette non terminale
+Polling de revalidation rétabli même quand un envoi garde un ID pending après perte de réponse ; effacement des messages reçus en cas de refus/erreur de lecture, nouvelle tentative conserve l'ID initial, possibilité de quitter la tentative locale sans prétendre annuler un message déjà reçu par le serveur. Recette Chromium intercepte la première réponse après commit serveur et teste apparition du message sans refresh manuel puis rejeu sans doublon. La correction de code est candidate tant que cette recette n'est pas passée. Ne pas confondre polling avec WebSocket temps réel.
+
+### Preuves de cette passe
+- Node 22.16.0 local : node --test packages/widemeet-domain/connect-transport.test.mjs, 3 tests, 3 pass, 0 fail, 0 skip. Copies locales vérifiées par git hash-object, identiques aux blobs GitHub : widemeet-receiver.mjs bc9bcc1a5daa0c552637d662d0b63efe10ba8111 ; connect-transport.test.mjs bf8c986a4047ef0125a8139e0b4405d4ec3b726f ; presentation-display.mjs 59792c3c955bf09d2b42035e11cf90bcf5472223 ; signaling-policy.mjs fbfb75e7821a89a44644d10a0e3b67a88485ef1a. Ce sont des tests contractuels, pas une preuve d'appairage.
+- [Gate PR 45992986583](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45992986583), job [140485262109](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45992986583/job/140485262109) : syntaxe et 195/195 contrats SUCCESS, zéro échec et zéro ignoré, dont les trois nouveaux cas Connect (non additionnés aux 195). Web job 140485262091 SUCCESS ; Edge job 140485262337 SUCCESS ; SQL et Android non terminaux au relevé. Gate 660e66e : SQL, Web, Edge SUCCESS mais contracts FAILURE SyntaxError gc, corrigé et confirmé par le nouveau gate. Aucun build Android nouveau confirmé.
+- [Replay 45992986485](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45992986485) et [SFU 45992986606](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45992986606) en cours au relevé ; ne pas présumer leur succès. Audio global déclenché par CI, hors B2, non terminal. Le connecteur ne liste que les runs PR ; pas de conclusion sur gate push.
+- Limite environnement local : clone GitHub échoue DNS, pas de psql/SDK Android local ; preuves des autres couches via CI. Aucune recette inventée ni échec masqué.
+
+### Jauge B2 après passe
+| Bloc | Score | État |
+|---|---:|---|
+| B2.1 A/V | 1 | Socle historique qualifié |
+| B2.2 chat privé | 1 | Socle historique qualifié ; correction de revalidation à qualifier |
+| B2.3 chat réunion | 1 | Socle historique qualifié |
+| B2.4 notices internes | 1 | Socle historique qualifié |
+| B2.5 Connect | 0,5 | Contrat du transport vert ; appairage et bail produit non raccordés |
+| B2.6 pièces jointes | 0 | Manquant |
+| B2.7 groupes | 0,5 | Code serveur et clients présent ; qualification à compléter |
+| B2.8 vocal | 0 | Manquant |
+| B2.9 push | 0 | Manquant |
+
+Total : 5/9 = 55,6 %, soit +5,6 points par rapport à 50 %. Quatre socles qualifiés au sens historique, deux partiels, trois manquants ; aucun nouveau bloc déclaré intégralement VERT. Révision code B2 8127953. Les quatre socles ne satisfont pas encore tous les critères exhaustifs CDC ; conserver réserves antérieures. Priorité suivante : relever les CI et corriger uniquement les échecs B2, terminer Connect avec appairage/ledger/renouvellement et UI, qualifier les groupes Android/Web avant extension fichiers/voix/push. Aucun changement main, déploiement, mutation Supabase hébergée, dépense ni intervention B1/B3–B6.
