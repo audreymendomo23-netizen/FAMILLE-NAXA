@@ -8,7 +8,8 @@ create table public.wm_direct_messages(
  body text not null check(length(body) between 1 and 2000),
  created_at timestamptz not null default clock_timestamp(),
  read_at timestamptz,
- check(sender_id<>recipient_id)
+ reply_to uuid references public.wm_direct_messages(id),
+ check(sender_id<>recipient_id),check(reply_to is null or reply_to<>id)
 );
 create index wm_direct_thread_out on public.wm_direct_messages(workspace_id,sender_id,recipient_id,created_at desc,id);
 create index wm_direct_thread_in on public.wm_direct_messages(workspace_id,recipient_id,sender_id,created_at desc,id);
@@ -17,7 +18,7 @@ revoke all on public.wm_direct_messages from public,anon,authenticated;
 grant select,insert,update,delete on public.wm_direct_messages to service_role;
 create function public.wm_workspace_center(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; peer uuid; mid uuid; b text; q text; v jsonb; m public.wm_direct_messages%rowtype; days integer; scope_name text; cutoff bigint; page_size integer; before_row public.wm_direct_messages%rowtype; has_more boolean;
+declare a record; peer uuid; mid uuid; b text; q text; v jsonb; m public.wm_direct_messages%rowtype; days integer; scope_name text; cutoff bigint; page_size integer; before_row public.wm_direct_messages%rowtype; has_more boolean; reply_id uuid;
 begin
  -- Same lock order as identity membership mutations; then recheck session and entitlement.
  perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
@@ -70,7 +71,9 @@ begin
    if not found then return null;end if;
   end if;
   select coalesce(jsonb_agg(to_jsonb(c) order by c.created_at,c.id),'[]'::jsonb) into v from (
-   select id,sender_id,recipient_id,body,created_at,read_at from public.wm_direct_messages
+   select dm.id,dm.sender_id,dm.recipient_id,dm.body,dm.created_at,dm.read_at,dm.reply_to,
+    (select left(parent.body,180) from public.wm_direct_messages parent where parent.id=dm.reply_to and parent.workspace_id=dm.workspace_id and ((parent.sender_id=dm.sender_id and parent.recipient_id=dm.recipient_id) or (parent.sender_id=dm.recipient_id and parent.recipient_id=dm.sender_id))) as reply_excerpt
+    from public.wm_direct_messages dm
    where workspace_id=a.workspace_id and ((sender_id=a.account_id and recipient_id=peer) or (sender_id=peer and recipient_id=a.account_id))
    and (q='' or strpos(lower(body),lower(q))>0)
    and (before_row.id is null or (created_at,id)<(before_row.created_at,before_row.id))
@@ -88,13 +91,18 @@ begin
  end if;
  if p_action='center-send' then
   b:=btrim(p_data->>'body');if b is null or length(b) not between 1 and 2000 then return null;end if;
+  if p_data ? 'reply_to' then
+   if jsonb_typeof(p_data->'reply_to') is distinct from 'string' or coalesce(p_data->>'reply_to','') !~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then return null;end if;
+   reply_id:=(p_data->>'reply_to')::uuid;
+   if reply_id=mid or not exists(select 1 from public.wm_direct_messages parent where parent.id=reply_id and parent.workspace_id=a.workspace_id and ((parent.sender_id=a.account_id and parent.recipient_id=peer) or (parent.sender_id=peer and parent.recipient_id=a.account_id))) then return null;end if;
+  end if;
   select * into m from public.wm_direct_messages where id=mid;
   if found then
-   if m.workspace_id=a.workspace_id and m.sender_id=a.account_id and m.recipient_id=peer and m.body=b then return jsonb_build_object('sent',true);end if;
+   if m.workspace_id=a.workspace_id and m.sender_id=a.account_id and m.recipient_id=peer and m.body=b and m.reply_to is not distinct from reply_id then return jsonb_build_object('sent',true);end if;
    return null;
   end if;
   if (select count(*) from public.wm_direct_messages where sender_id=a.account_id and created_at>clock_timestamp()-interval '1 minute')>=20 then return null;end if;
-  insert into public.wm_direct_messages(id,workspace_id,sender_id,recipient_id,body) values(mid,a.workspace_id,a.account_id,peer,b);
+  insert into public.wm_direct_messages(id,workspace_id,sender_id,recipient_id,body,reply_to) values(mid,a.workspace_id,a.account_id,peer,b,reply_id);
   return jsonb_build_object('sent',true);
  end if;
  return null;

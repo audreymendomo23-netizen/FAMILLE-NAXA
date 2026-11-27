@@ -164,6 +164,15 @@ try{
  assert.equal((await centerReq(os.access_token,"thread",{peer_id:g.id,before_id:privateData.message_id})).status,403);
  assert.equal((await centerReq(gs.access_token,"thread",{peer_id:h.id,before_id:"invalid"})).status,403);
  pass("B2 actual direct chat scoped keyset page and invalid cursor denial");
+ const directReply={peer_id:h.id,message_id:randomUUID(),body:"Synthetic threaded answer",reply_to:privateData.message_id};
+ await centerOk(gs.access_token,"send",directReply);await centerOk(gs.access_token,"send",directReply);
+ const answer=(await centerOk(hs.access_token,"thread",{peer_id:g.id,query:"threaded answer"})).items;
+ assert.equal(answer.length,1);assert.equal(answer[0].reply_to,privateData.message_id);assert.equal(answer[0].reply_excerpt,privateData.body);
+ assert.equal((await centerReq(gs.access_token,"send",{...directReply,reply_to:directReply.message_id})).status,403);
+ const {reply_to,...noReply}=directReply;assert.equal((await centerReq(gs.access_token,"send",noReply)).status,403);
+ assert.equal((await centerReq(hs.access_token,"send",{peer_id:o.id,message_id:randomUUID(),body:"forbidden reference",reply_to:privateData.message_id})).status,403);
+ assert.equal((await centerReq(gs.access_token,"send",{...directReply,message_id:randomUUID(),reply_to:randomUUID()})).status,403);
+ pass("B2 actual direct reply source excerpt, exact retry and forbidden reference denial");
  pass("workspace private chat exact retry, peer/tenant denial, search, explicit read acknowledgement and role-scoped summary");
 
 
