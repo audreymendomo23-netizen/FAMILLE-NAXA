@@ -86,6 +86,18 @@ try{
  await identity(hs.access_token,"favorite",{member_id:g.id,enabled:true});
  assert.equal((await identity(hs.access_token,"contacts")).contacts.find(x=>x.member_id===g.id).favorite,true);
  assert.equal((await identityRequest(hs.access_token,"favorite",{member_id:o.id,enabled:true})).status,403);
+ const groupId=randomUUID();
+ const groupData={id:groupId,name:"Replay group",member_ids:[g.id]};
+ assert.equal((await identityRequest(hs.access_token,"group-save",{...groupData,member_ids:[o.id]})).status,403);
+ await identity(hs.access_token,"group-save",groupData);
+ await identity(hs.access_token,"group-save",{...groupData,name:"Edited replay group"});
+ assert.deepEqual((await identity(hs.access_token,"groups")).groups,[{id:groupId,name:"Edited replay group",member_ids:[g.id]}]);
+ assert.deepEqual((await identity(gs.access_token,"groups")).groups,[]);
+ assert.equal((await identityRequest(gs.access_token,"group-delete",{id:groupId})).status,403);
+ assert.equal((await identityRequest(os.access_token,"group-save",{...groupData,member_ids:[]})).status,403);
+ await identity(hs.access_token,"group-delete",{id:groupId});
+ assert.deepEqual((await identity(hs.access_token,"groups")).groups,[]);
+ pass("actual N1 contact group CRUD and account/workspace isolation");
  assert.equal((await identityRequest(gs.access_token,"billing")).status,403);
  assert.equal((await identity(hs.access_token,"billing")).plan,"premium");
  const billingRequest={request_id:randomUUID(),offer:"premium",period:"month",capacity:50,channel:"OM"};
