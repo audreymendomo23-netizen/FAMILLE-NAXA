@@ -9,7 +9,7 @@ type Recording={id:string;status:string;display_name:string};
 type Props={account:WebAuthAccount;meetingId:string;host:boolean;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>;onUnavailable:()=>void};
 const reactions:Record<string,string>={like:"👍",clap:"👏",heart:"❤️",laugh:"😄",agree:"✅",celebrate:"🎉"};
 export function MeetingCollaboration(props:Props){
- return <ScopedMeetingCollaboration key={JSON.stringify([props.account.organization_id,props.account.member_id,props.meetingId,props.host,props.authEndpoint,props.anonKey])} {...props}/>;
+ return <ScopedMeetingCollaboration key={JSON.stringify([props.account.organization_id,props.account.member_id,props.account.role_code,props.meetingId,props.host,props.authEndpoint,props.anonKey])} {...props}/>;
 }
 function ScopedMeetingCollaboration({account,meetingId,host,authEndpoint,anonKey,getToken,onUnavailable}:Props){
  const tr=(fr:string,en:string,ff:string)=>account.default_locale==="en"?en:account.default_locale==="ff-CM"?ff:fr;
@@ -22,7 +22,7 @@ function ScopedMeetingCollaboration({account,meetingId,host,authEndpoint,anonKey
  async function req<T>(path:string,body?:Record<string,unknown>):Promise<T>{
   const scope=controller.current;
   if(!anonKey)throw Error("SESSION_CHANGED");
-  return privateRequest<T>(scope?.signal,()=>active.current&&document.visibilityState!=="hidden"&&controller.current===scope,token.current,(jwt,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",signal:s}));
+  return privateRequest<T>(scope?.signal,()=>active.current&&document.visibilityState!=="hidden"&&controller.current===scope,token.current,(jwt,s)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/"+path,{method:body?"POST":"GET",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"omit",redirect:"error",signal:s}));
  }
 
  async function refresh(){
@@ -52,7 +52,7 @@ function ScopedMeetingCollaboration({account,meetingId,host,authEndpoint,anonKey
   const key=JSON.stringify([meetingId,account.member_id,action,value,target??null]);
   const event=pendingAction.current?.key===key?pendingAction.current.id:crypto.randomUUID();
   pendingAction.current={key,id:event};
-  try{await req(target?"rpc/ns_moderate_meeting":"rpc/ns_meeting_action",target?{p_id:meetingId,p_event:event,p_target:target,p_action:action}:{p_id:meetingId,p_event:event,p_action:action,p_value:value});if(current()){pendingAction.current=null;if(action==="chat"&&!target)setText("");await refresh();}}catch{if(current())setError(true);}finally{writing.current=false;if(active.current)setBusy(false);}
+  try{await req(target?"rpc/ns_moderate_meeting":"rpc/ns_meeting_action",target?{p_id:meetingId,p_event:event,p_target:target,p_action:action}:{p_id:meetingId,p_event:event,p_action:action,p_value:value});if(current()){pendingAction.current=null;if(action==="chat"&&!target)setText("");await refresh();}}catch{if(current())setError(true);}finally{writing.current=false;if(current())setBusy(false);}
  }
  async function requestRecording(id:string,action:"start"|"stop"){
   if(writing.current||!ready||!host)return;writing.current=true;setBusy(true);

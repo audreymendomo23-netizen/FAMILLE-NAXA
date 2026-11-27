@@ -1,6 +1,8 @@
 // Read-only candidate inventory. Never contacts or deploys to a hosted project.
 import {readFileSync,mkdirSync,writeFileSync} from "node:fs";
 import {createHash} from "node:crypto";
+import {execFileSync} from "node:child_process";
+import {fileURLToPath} from "node:url";
 import assert from "node:assert/strict";
 const root=new URL("../../",import.meta.url);
 const report=JSON.parse(readFileSync(new URL("docs/naxa-services/EDGE_SOURCE_PARITY_2026-11-27.json",root),"utf8"));
@@ -16,5 +18,8 @@ const rows=records.map(r=>{
  assert.ok(source.length>0);
  return {bundle:r.slug,path:r.path,historicalEqual:r.equal,candidateSha256:createHash("sha256").update(source).digest("hex")};
 });
-const output=JSON.stringify({candidateCommit:process.env.GITHUB_SHA??null,historicalComparisonCommit:report.repositoryCommit,occurrences:rows.length,historicalDifferences:rows.filter(r=>!r.historicalEqual).length,hostedParity:"NOT_VERIFIED",deployment:"NOT_AUTHORIZED_BY_THIS_CHECK",rows},null,2);
+const candidateCommit=execFileSync("git",["rev-parse","HEAD"],{cwd:fileURLToPath(root),encoding:"utf8"}).trim();
+assert.match(candidateCommit,/^[0-9a-f]{40}$/);
+if(process.env.GITHUB_SHA)assert.equal(candidateCommit,process.env.GITHUB_SHA,"candidate checkout must match workflow SHA");
+const output=JSON.stringify({candidateCommit,historicalComparisonCommit:report.repositoryCommit,occurrences:rows.length,historicalDifferences:rows.filter(r=>!r.historicalEqual).length,hostedParity:"NOT_VERIFIED",deployment:"NOT_AUTHORIZED_BY_THIS_CHECK",rows},null,2);
 const dir=new URL("artifacts/naxa-services-commercial/",root);mkdirSync(dir,{recursive:true});writeFileSync(new URL("edge-candidate-inventory.json",dir),output+"\n");console.log(output);

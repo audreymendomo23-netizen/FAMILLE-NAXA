@@ -38,7 +38,7 @@ export function validateCommissionCatalog(x:unknown):Catalog{
 }
 type Props={account:WebAuthAccount;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>};
 export function CommissionSettings(props:Props){
- return props.account.role_code==="promoter"?<ScopedCommissionSettings key={props.account.organization_id+":"+props.account.member_id+":"+props.authEndpoint} {...props}/>:null;
+ return props.account.role_code==="promoter"?<ScopedCommissionSettings key={JSON.stringify([props.account.organization_id,props.account.member_id,props.account.activity_profile,props.authEndpoint,props.anonKey])} {...props}/>:null;
 }
 function ScopedCommissionSettings({account,authEndpoint,anonKey,getToken}:Props){
  const tr=(fr:string,en:string,ff:string)=>account.default_locale==="en"?en:account.default_locale==="ff-CM"?ff:fr;
@@ -52,7 +52,7 @@ function ScopedCommissionSettings({account,authEndpoint,anonKey,getToken}:Props)
   if(controller.current||!mounted.current||document.visibilityState==="hidden")return;
   const c=new AbortController();controller.current=c;setBusy(true);setError(false);
   const current=()=>mounted.current&&controller.current===c&&document.visibilityState!=="hidden";
-  const rpc=(name:string,body:Record<string,unknown>)=>privateRequest<unknown>(c.signal,current,()=>tokenRef.current(),(token,signal)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/"+name,{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body),signal,cache:"no-store",credentials:"omit"}));
+  const rpc=(name:string,body:Record<string,unknown>)=>privateRequest<unknown>(c.signal,current,()=>tokenRef.current(),(token,signal)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/"+name,{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body),signal,cache:"no-store",credentials:"omit",redirect:"error"}));
   try{
    if(!anonKey)throw Error("COMMISSION_UNAVAILABLE");
    if(action)await action(rpc);
@@ -70,7 +70,7 @@ function ScopedCommissionSettings({account,authEndpoint,anonKey,getToken}:Props)
   retry.current=null;setDraft(empty());
  });
  const availableServices=catalog?.services.filter(s=>!s.site_id||s.site_id===draft.site)??[];
- return <section className="module-main-card" aria-label={title}><h2>{title}</h2>
+ return <section className="module-main-card" aria-label={title} aria-busy={busy}><h2>{title}</h2>
  <p>{tr("Facultatif. Aucun décaissement automatique. La génération depuis les prestations n’est pas encore activée.","Optional. No automatic payout. Generation from completed services is not yet enabled.","Suɓaare. Alaa njoɓdi otomatik.")}</p>
  <button className="btn secondary" disabled={busy} onClick={()=>void execute()}>{tr("Charger les paramètres","Load settings","Loow teelte")}</button>
  {error&&<p role="alert">{tr("Paramètres indisponibles ou modification refusée. Rechargez avant de réessayer.","Settings unavailable or change refused. Reload before retrying.","Teelte heɓotaako walla waylugol salaama. Loow kadi.")}</p>}

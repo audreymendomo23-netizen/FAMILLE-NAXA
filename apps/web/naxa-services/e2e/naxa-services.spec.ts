@@ -1019,24 +1019,24 @@ test("Web access: failed login and recovery stay in the customer journey",async(
 test("Commercial languages: FR, EN and Fulfulde change login, dashboard and menu; member choice survives login",async({context})=>{
   await installBackend(context);
   const page=await context.newPage();await page.goto("/");
-  await page.getByRole("combobox",{name:"Langue",exact:true}).selectOption("en");
+  await page.locator('header').getByRole("combobox",{name:"Langue",exact:true}).selectOption("en");
   await expect(page.getByLabel("NAXA Services ID")).toBeVisible();await expect(page.getByRole("button",{name:"Sign in",exact:true})).toBeVisible();
   await page.reload();await expect(page.getByRole("button",{name:"Sign in",exact:true})).toBeVisible();
-  await page.getByRole("combobox",{name:"Language",exact:true}).selectOption("ff-CM");
+  await page.locator('header').getByRole("combobox",{name:"Language",exact:true}).selectOption("ff-CM");
   await expect(page.getByLabel("Innol NAXA Services")).toBeVisible();await expect(page.getByRole("button",{name:"Naatu",exact:true})).toBeVisible();
   await expect(page.locator("html")).toHaveAttribute("lang","ff-CM");
-  await page.getByRole("combobox",{name:"Ɗemngal",exact:true}).selectOption("fr");
+  await page.locator('header').getByRole("combobox",{name:"Ɗemngal",exact:true}).selectOption("fr");
   await signIn(page);
-  await page.getByRole("combobox",{name:"Langue",exact:true}).selectOption("en");
+  await page.locator('header').getByRole("combobox",{name:"Langue",exact:true}).selectOption("en");
   await expect(page.getByRole("heading",{name:"A well-organized day starts here."})).toBeVisible();
   await expect(page.locator(".side-nav")).toContainText("Cash & sales");
-  await page.getByRole("combobox",{name:"Language",exact:true}).selectOption("ff-CM");
+  await page.locator('header').getByRole("combobox",{name:"Language",exact:true}).selectOption("ff-CM");
   await expect(page.getByRole("heading",{name:"Ñalawma moƴƴo fuɗɗata ɗoo."})).toBeVisible();
   await expect(page.locator(".side-nav")).toContainText("Ceede e jaaygol");
   await page.getByRole("button",{name:/Yaltu/}).click();
   await page.getByLabel("Innol NAXA Services").fill("NS-ORG-A");await page.getByLabel("Finnde",{exact:true}).fill("E2E-Password-Only-For-Test");await page.getByRole("button",{name:"Naatu",exact:true}).click();
   await expect(page.getByRole("heading",{name:"Ñalawma moƴƴo fuɗɗata ɗoo."})).toBeVisible();
-  await page.getByRole("combobox",{name:"Ɗemngal",exact:true}).selectOption("fr");
+  await page.locator('header').getByRole("combobox",{name:"Ɗemngal",exact:true}).selectOption("fr");
   await expect(page.getByRole("heading",{name:"Une journée bien organisée commence ici."})).toBeVisible();
 });
 
@@ -1052,7 +1052,7 @@ test("Commercial languages: shared ERP screens render translated controls in FR 
   ];
   const langs=["fr","en","ff-CM"],labels=["Langue","Language","Ɗemngal"];
   for(let i=0;i<langs.length;i++){
-    if(i>0){await page.getByRole("combobox",{name:labels[i-1],exact:true}).selectOption(langs[i]);await expect(page.locator("html")).toHaveAttribute("lang",langs[i]);}
+    if(i>0){await page.locator('header').getByRole("combobox",{name:labels[i-1],exact:true}).selectOption(langs[i]);await expect(page.locator("html")).toHaveAttribute("lang",langs[i]);}
     for(const c of cases){await page.locator(".side-nav").getByRole("button",{name:new RegExp(c.nav[i])}).click();await expect(page.getByRole("heading",{name:c.heading[i],exact:true})).toBeVisible();}
   }
 });

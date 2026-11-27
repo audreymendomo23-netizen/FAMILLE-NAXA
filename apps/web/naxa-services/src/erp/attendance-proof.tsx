@@ -32,8 +32,8 @@ function ScopedAttendanceProofPanel({account,siteId,authEndpoint,anonKey,getToke
   void req<Policy[]>("ns_attendance_policies?select=event_type,revision,require_gps,require_selfie&org_id=eq."+encodeURIComponent(account.organization_id)+"&site_id=eq."+encodeURIComponent(siteId)).then(p=>{if(!c.signal.aborted){setPolicies(p);setLoaded(true);setError(false);}}).catch(()=>{if(!c.signal.aborted){setError(true);setLoaded(false);}});
   return()=>{live.current=false;c.abort();gen.current++;stream.current?.getTracks().forEach(t=>t.stop());stream.current=null;};
  },[account.organization_id,account.member_id,siteId,reload]);
- useEffect(()=>{gen.current++;stop();setGps(null);setPhoto(null);},[action,reload,post]);
- async function loadPosts(){const g=gen.current;setBusy(true);setError(false);try{const rows=await loadWorkstations(siteId);if(live.current&&g===gen.current){setPosts(rows.filter(p=>p.site_id===siteId&&p.status==="active"));setPostsLoaded(true);}}catch{if(live.current&&g===gen.current)setError(true);}finally{if(live.current)setBusy(false);}}
+ useEffect(()=>{gen.current++;stop();setGps(null);setPhoto(null);setBusy(false);},[action,reload,post]);
+ async function loadPosts(){const g=gen.current;setBusy(true);setError(false);try{const rows=await loadWorkstations(siteId);if(live.current&&g===gen.current){setPosts(rows.filter(p=>p.site_id===siteId&&p.status==="active"));setPostsLoaded(true);}}catch{if(live.current&&g===gen.current)setError(true);}finally{if(live.current&&g===gen.current)setBusy(false);}}
  // Backgrounding must not keep the camera alive or leave reusable evidence.
  useEffect(()=>{function hide(){if(document.visibilityState!=="hidden"){setReload(v=>v+1);return;}gen.current++;controller.current?.abort();stop();setGps(null);setPhoto(null);setPolicies([]);setLoaded(false);setPosts([]);setPostsLoaded(false);setPost("");setBusy(false);setError(false);}
  document.addEventListener("visibilitychange",hide);return()=>document.removeEventListener("visibilitychange",hide);},[]);
@@ -43,7 +43,7 @@ function ScopedAttendanceProofPanel({account,siteId,authEndpoint,anonKey,getToke
    const p=await new Promise<GeolocationPosition>((resolve,reject)=>navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,maximumAge:0,timeout:20000}));
    const c=p.coords;if(!Number.isFinite(c.latitude)||!Number.isFinite(c.longitude)||!Number.isFinite(c.accuracy)||c.accuracy<=0||c.accuracy>500||Math.abs(Date.now()-p.timestamp)>120000)throw Error();
    if(live.current&&g===gen.current)setGps({latitude:c.latitude,longitude:c.longitude,accuracy:c.accuracy,at:new Date(p.timestamp).toISOString()});
-  }catch{if(live.current&&g===gen.current)setError(true);}finally{if(live.current)setBusy(false);}
+  }catch{if(live.current&&g===gen.current)setError(true);}finally{if(live.current&&g===gen.current)setBusy(false);}
  }
  async function openCamera(){
   const g=gen.current;setBusy(true);setError(false);setPhoto(null);
@@ -52,7 +52,7 @@ function ScopedAttendanceProofPanel({account,siteId,authEndpoint,anonKey,getToke
    if(!live.current||g!==gen.current){s.getTracks().forEach(t=>t.stop());return;}
    const facing=s.getVideoTracks()[0]?.getSettings().facingMode;if(facing&&facing!=="user"){s.getTracks().forEach(t=>t.stop());throw Error();}
    stream.current=s;setCamera(true);if(!video.current)throw Error();video.current.srcObject=s;await video.current.play();
-  }catch{if(live.current){stop();setError(true);}}finally{if(live.current)setBusy(false);}
+  }catch{if(live.current&&g===gen.current){stop();setError(true);}}finally{if(live.current&&g===gen.current)setBusy(false);}
  }
  async function takePhoto(){
   const g=gen.current;setBusy(true);setError(false);
@@ -63,7 +63,7 @@ function ScopedAttendanceProofPanel({account,siteId,authEndpoint,anonKey,getToke
    const blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/jpeg",.8));canvas.width=0;canvas.height=0;
    if(!blob||blob.size<=0||blob.size>2097152||blob.type!=="image/jpeg")throw Error();
    if(live.current&&g===gen.current){setPhoto({blob,at});stop();}
-  }catch{if(live.current){stop();setError(true);}}finally{if(live.current)setBusy(false);}
+  }catch{if(live.current&&g===gen.current){stop();setError(true);}}finally{if(live.current&&g===gen.current)setBusy(false);}
  }
  async function confirm(){
   if(!action||!policy||!loaded||busy||!navigator.onLine)return;const g=gen.current;setBusy(true);setError(false);
@@ -76,12 +76,12 @@ function ScopedAttendanceProofPanel({account,siteId,authEndpoint,anonKey,getToke
    const result=await req<{proof_ref:string;staged:boolean}>("rpc/ns_stage_attendance_proof",{p_event_id:id,p_org:account.organization_id,p_site:siteId,p_post:post||null,p_event:action,p_occurred:occurred,p_revision:policy.revision,p_latitude:policy.require_gps?gps?.latitude:null,p_longitude:policy.require_gps?gps?.longitude:null,p_accuracy:policy.require_gps?gps?.accuracy:null,p_gps_at:policy.require_gps?gps?.at:null,p_selfie_at:policy.require_selfie?photo?.at:null});
    if(!live.current||g!==gen.current||result.proof_ref!==id||!result.staged)throw Error();
    await onSubmit(id,occurred,action,post||null);if(live.current&&g===gen.current){setGps(null);setPhoto(null);onClose();}
-  }catch{if(live.current&&g===gen.current){setGps(null);setPhoto(null);setError(true);}}finally{if(live.current)setBusy(false);}
+  }catch{if(live.current&&g===gen.current){setGps(null);setPhoto(null);setError(true);}}finally{if(live.current&&g===gen.current)setBusy(false);}
  }
  async function save(p:Policy,g:boolean,s:boolean){
-  setBusy(true);setError(false);
-  try{await req("rpc/ns_set_attendance_policy",{p_org:account.organization_id,p_site:siteId,p_event:p.event_type,p_revision:p.revision,p_gps:g,p_selfie:s});if(live.current)setReload(x=>x+1);}
-  catch{if(live.current){setError(true);setLoaded(false);}}finally{if(live.current)setBusy(false);}
+  const generation=gen.current;setBusy(true);setError(false);
+  try{await req("rpc/ns_set_attendance_policy",{p_org:account.organization_id,p_site:siteId,p_event:p.event_type,p_revision:p.revision,p_gps:g,p_selfie:s});if(live.current&&generation===gen.current){setBusy(false);setReload(x=>x+1); }}
+  catch{if(live.current&&generation===gen.current){setError(true);setLoaded(false);}}finally{if(live.current&&generation===gen.current)setBusy(false);}
  }
  return <><section className="module-main-card"><h2>{tr("Preuves de service","Attendance evidence","Seedeeji golle")}</h2>
  {error&&<p role="alert">{tr("Action non confirmée. Vérifiez la connexion, les permissions ou la règle du responsable.","Action not confirmed. Check connection, permissions or your manager's rule.","Golle tabbitinaaka. Ƴeewto ceŋol e yamirooje.")}</p>}

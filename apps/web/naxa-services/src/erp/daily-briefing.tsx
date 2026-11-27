@@ -52,7 +52,7 @@ function ScopedDailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Prop
  const [day,setDay]=useState(()=>briefingDateBounds().today);
  const bounds=briefingDateBounds();
  const dateLabel=({fr:"Date du bilan",en:"Report date","ff-CM":"Ñalnde jaŋtol",es:"Fecha del informe",it:"Data del resoconto","zh-CN":"报告日期"})[lang];
- const languageLabel=({fr:"Langue",en:"Language","ff-CM":"Ɗemngal",es:"Idioma",it:"Lingua","zh-CN":"语言"})[lang];
+ const languageLabel=({fr:"Langue du bilan",en:"Report language","ff-CM":"Ɗemngal jaŋtol",es:"Idioma del informe",it:"Lingua del resoconto","zh-CN":"报告语言"})[lang];
  const speedLabel=({fr:"Vitesse de lecture",en:"Playback speed","ff-CM":"Yaawde janngugol",es:"Velocidad de lectura",it:"Velocità di lettura","zh-CN":"播放速度"})[lang];
  const [report,setReport]=useState<Report|null>(null),[error,setError]=useState(false),[loading,setLoading]=useState(false),[playing,setPlaying]=useState(false),[paused,setPaused]=useState(false),[speed,setSpeed]=useState(1);
  const controller=useRef<AbortController|null>(null),audio=useRef<SpeechSynthesisUtterance|null>(null),mounted=useRef(false);

@@ -370,7 +370,7 @@ jobs:
               assert.equal(lr.status(),200,'browser login HTTP');
               assert.ok(ld.account&&ld.access_token&&ld.refresh_token,'browser auth response structure');
               await page.getByRole('heading',{name:'Une journée bien organisée commence ici.'}).waitFor();
-              await page.getByRole('combobox',{name:'Langue',exact:true}).selectOption('en');
+              await page.locator('header').getByRole('combobox',{name:'Langue',exact:true}).selectOption('en');
               await page.getByRole('heading',{name:'A well-organized day starts here.'}).waitFor();
               await page.getByRole('combobox',{name:'Language',exact:true}).selectOption('ff-CM');
               await page.getByRole('heading',{name:'Ñalawma moƴƴo fuɗɗata ɗoo.'}).waitFor();
@@ -1068,8 +1068,9 @@ jobs:
                   const gd=await rpc(guest,'ns_daily_briefing',()=>gb.getByRole('button',{name:'Actualiser',exact:true}).click());
                   assert.equal(hd.scope,'site');assert.equal(gd.scope,'personal');assert.equal(gd.finance,null);
                   await gb.getByText('Voici votre bilan partiel',{exact:false}).waitFor();
-                  await gb.getByRole('combobox',{name:'Language / Langue'}).selectOption('en');
+                  await gb.getByRole('combobox',{name:'Langue du bilan',exact:true}).selectOption('en');
                   await guest.getByRole('region',{name:'My report',exact:true}).getByText('Here is your partial report',{exact:false}).waitFor();
+                   assert.equal(await guest.getByRole('region',{name:'My report',exact:true}).getByRole('combobox',{name:'Report language',exact:true}).inputValue(),'en');
                   pass('real scoped partial briefing text and language selection, no synthetic audio claim');
                   phase='historical scoped daily briefing';
                   const yesterday=new Date(Date.parse(hd.day+'T00:00:00Z')-86400000).toISOString().slice(0,10);
