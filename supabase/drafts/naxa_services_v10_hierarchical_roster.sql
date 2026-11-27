@@ -116,4 +116,28 @@ end $$;
 revoke all on function public.ns_publish_roster_shift(uuid,uuid,uuid,uuid,uuid,timestamptz,timestamptz,integer,integer,text,bigint,text),public.ns_ack_roster_shift(uuid,bigint) from public,anon,authenticated;
 grant execute on function public.ns_publish_roster_shift(uuid,uuid,uuid,uuid,uuid,timestamptz,timestamptz,integer,integer,text,bigint,text),public.ns_ack_roster_shift(uuid,bigint) to authenticated;
 
+-- Atomic bounded publication; each item uses the canonical authorized, idempotent RPC.
+create function public.ns_publish_roster_batch(p_commands jsonb) returns jsonb
+language plpgsql security invoker set search_path='' as $fn$
+declare c jsonb; receipts jsonb:='[]'::jsonb;
+begin
+ if jsonb_typeof(p_commands) is distinct from 'array' then raise exception 'NS_ROSTER_BATCH_INVALID'; end if;
+ if jsonb_array_length(p_commands) not between 2 and 31 then raise exception 'NS_ROSTER_BATCH_INVALID'; end if;
+ if exists(select 1 from jsonb_array_elements(p_commands) e where jsonb_typeof(e) is distinct from 'object'
+  or e->>'p_id' is null or e->>'p_org' is null or e->>'p_member' is null or e->>'p_expected_revision' is distinct from '0'
+  or e->>'p_status' is distinct from 'published') then raise exception 'NS_ROSTER_BATCH_INVALID'; end if;
+ if (select count(distinct (e->>'p_id')::uuid) from jsonb_array_elements(p_commands) e)<>jsonb_array_length(p_commands) then raise exception 'NS_ROSTER_BATCH_INVALID'; end if;
+ -- Deterministic member lock order for concurrent multi-member batches.
+ for c in select e from jsonb_array_elements(p_commands) e order by (e->>'p_org')::uuid,(e->>'p_member')::uuid,(e->>'p_id')::uuid loop
+  receipts:=receipts||jsonb_build_array(public.ns_publish_roster_shift(
+    (c->>'p_id')::uuid,(c->>'p_org')::uuid,(c->>'p_site')::uuid,(c->>'p_post')::uuid,(c->>'p_member')::uuid,
+    (c->>'p_starts')::timestamptz,(c->>'p_ends')::timestamptz,(c->>'p_break')::integer,(c->>'p_tolerance')::integer,
+    c->>'p_status',0,c->>'p_reason'));
+ end loop;
+ return jsonb_build_object('receipts',receipts);
+end $fn$;
+revoke all on function public.ns_publish_roster_batch(jsonb) from public,anon,authenticated;
+grant execute on function public.ns_publish_roster_batch(jsonb) to authenticated;
+
+
 rollback;

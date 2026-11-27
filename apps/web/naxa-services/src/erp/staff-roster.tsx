@@ -7,11 +7,11 @@ type Ack={shift_id:string;revision:number;acknowledged_at:string};
 type Comparison={shift_id:string;baseline_revision:number;current_revision:number;actual_start:string|null;actual_end:string|null;late_minutes:number|null;early_departure_minutes:number|null;extra_minutes:number|null;actual_break_minutes:number|null;comparison_status:string};
 type Justification={shift_id:string;baseline_revision:number;explanation:string;decision:"accepted"|"rejected"|null;decision_reason:string|null};
 type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>};
-type Form={id:string;target:string;start:string;end:string;pause:string;tolerance:string;revision:number;reason:string};
+type Form={id:string;target:string;start:string;end:string;pause:string;tolerance:string;revision:number;reason:string;repeat:"once"|"daily"|"weekly";count:string};
 const key=(t:Target)=>t.member_id+":"+(t.workstation_id??"");
 const localInput=(iso:string)=>new Date(Date.parse(iso)+3600000).toISOString().slice(0,16);
 const toIso=(value:string)=>new Date(value+":00+01:00").toISOString();
-const blank=():Form=>({id:"",target:"",start:"",end:"",pause:"0",tolerance:"10",revision:0,reason:""});
+const blank=():Form=>({id:"",target:"",start:"",end:"",pause:"0",tolerance:"10",revision:0,reason:"",repeat:"once",count:"1"});
 const modeEnabled=(mode:string)=>mode==="single_site_multi_workstation"||mode==="multi_site_network";
 export {modeEnabled as rosterModeEnabled};
 export function rosterApiOrigin(endpoint:string):string{
@@ -24,7 +24,7 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
  const tr=(fr:string,en:string,ff:string)=>locale==="en"?en:locale==="ff-CM"?ff:fr;
  const [targets,setTargets]=useState<Target[]>([]),[shifts,setShifts]=useState<Shift[]>([]),[acks,setAcks]=useState<Ack[]>([]),[comparisons,setComparisons]=useState<Comparison[]>([]);
  const [justifications,setJustifications]=useState<Justification[]>([]);
- const pendingPublish=useRef<{key:string;id:string}|null>(null);
+ const pendingPublish=useRef<{key:string;ids:string[]}|null>(null);
  const [form,setForm]=useState<Form>(blank),[error,setError]=useState(""),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
  const tokenRef=useRef(getToken);tokenRef.current=getToken;
  const alive=useRef(false),refreshing=useRef(false);
@@ -64,7 +64,7 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
  },[account.organization_id,account.member_id,account.business_mode,siteId,authEndpoint,anonKey,version]);
  function edit(s:Shift){
   const target=targets.find(t=>t.member_id===s.member_id&&t.workstation_id===s.workstation_id);if(!target)return;
-  setForm({id:s.id,target:key(target),start:localInput(s.starts_at),end:localInput(s.ends_at),pause:String(s.planned_break_minutes),tolerance:String(s.tolerance_minutes),revision:s.revision,reason:""});
+  setForm({id:s.id,target:key(target),start:localInput(s.starts_at),end:localInput(s.ends_at),pause:String(s.planned_break_minutes),tolerance:String(s.tolerance_minutes),revision:s.revision,reason:"",repeat:"once",count:"1"});
  }
  async function save(cancel?:Shift){
   if(busy||!loaded)return;
@@ -75,11 +75,16 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
   setBusy(true);setError("");
   try{
    const command={p_org:account.organization_id,p_site:siteId,p_post:selected.workstation_id,p_member:selected.member_id,p_starts:cancel?.starts_at??toIso(form.start),p_ends:cancel?.ends_at??toIso(form.end),p_break:cancel?.planned_break_minutes??Number(form.pause),p_tolerance:cancel?.tolerance_minutes??Number(form.tolerance),p_status:cancel?"cancelled":"published",p_expected_revision:cancel?.revision??form.revision,p_reason:reason.trim()};
-   const fingerprint=JSON.stringify(command);
-   const id=cancel?.id||form.id||(pendingPublish.current?.key===fingerprint?pendingPublish.current.id:crypto.randomUUID());
-   if(!cancel&&!form.id)pendingPublish.current={key:fingerprint,id};
-   const receipt=await request<{id:string;revision:number;status:string}>("rpc/ns_publish_roster_shift",{p_id:id,...command});
-   if(receipt.id!==id||receipt.revision!==command.p_expected_revision+1||receipt.status!==command.p_status)throw new Error("ROSTER_RECEIPT_INVALID");
+   const count=!cancel&&!form.id&&form.repeat!=="once"?Number(form.count):1;
+   if(!Number.isInteger(count)||count<1||count>31||(!cancel&&!form.id&&form.repeat!=="once"&&count<2))throw new Error("ROSTER_REPEAT_INVALID");
+   const step=(form.repeat==="weekly"?7:1)*86400000;
+   const commands=Array.from({length:count},(_,i)=>i===0?command:{...command,p_starts:new Date(Date.parse(command.p_starts)+i*step).toISOString(),p_ends:new Date(Date.parse(command.p_ends)+i*step).toISOString()});
+   const fingerprint=JSON.stringify(commands);
+   const ids=cancel||form.id?[cancel?.id||form.id]:pendingPublish.current?.key===fingerprint?pendingPublish.current.ids:commands.map(()=>crypto.randomUUID());
+   if(!cancel&&!form.id)pendingPublish.current={key:fingerprint,ids};
+   type Receipt={id:string;revision:number;status:string};
+   const receipts=count===1?[await request<Receipt>("rpc/ns_publish_roster_shift",{p_id:ids[0],...commands[0]})]:(await request<{receipts:Receipt[]}>("rpc/ns_publish_roster_batch",{p_commands:commands.map((c,i)=>({p_id:ids[i],...c}))})).receipts;
+   if(!Array.isArray(receipts)||receipts.length!==count||!ids.every(id=>receipts.filter(r=>r.id===id&&r.revision===command.p_expected_revision+1&&r.status===command.p_status).length===1))throw new Error("ROSTER_RECEIPT_INVALID");
    pendingPublish.current=null;
    if(alive.current){setForm(blank());setVersion(v=>v+1);}
   }catch{if(alive.current)setError(tr("Modification non confirmée. Actualisez le planning et vérifiez les horaires.","Change not confirmed. Refresh the schedule and check the hours.","Baylugol tabbitinaaka. Hesɗitin feere golle, ƴeewto sahaa."));}
@@ -116,6 +121,7 @@ export function StaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props
    <label>{tr("Fin de service","Shift end","Timmugol golle")}<input required type="datetime-local" value={form.end} onChange={e=>setForm(f=>({...f,end:e.target.value}))}/></label>
    <label>{tr("Pause prévue (min)","Planned break (min)","Fooftugol (min)")}<input required type="number" min="0" max="1439" value={form.pause} onChange={e=>setForm(f=>({...f,pause:e.target.value}))}/></label>
    <label>{tr("Tolérance (min)","Tolerance (min)","Yaafuyya (min)")}<input required type="number" min="0" max="120" value={form.tolerance} onChange={e=>setForm(f=>({...f,tolerance:e.target.value}))}/></label>
+   {!form.id&&<><label>{tr("Répétition du service","Shift repetition","Ɓeydude golle")}<select value={form.repeat} disabled={busy} onChange={e=>setForm(f=>({...f,repeat:e.target.value as Form["repeat"],count:e.target.value==="once"?"1":"2"}))}><option value="once">{tr("Une fois","Once","Laawol gootol")}</option><option value="daily">{tr("Chaque jour","Daily","Ñalawma kala")}</option><option value="weekly">{tr("Chaque semaine","Weekly","Yontere kala")}</option></select></label>{form.repeat!=="once"&&<label>{tr("Nombre de services","Number of shifts","Limoore golle")}<input required type="number" min="2" max="31" value={form.count} disabled={busy} onChange={e=>setForm(f=>({...f,count:e.target.value}))}/></label>}</>}
    <label>{tr("Motif","Reason","Sabu")}<textarea required maxLength={500} value={form.reason} onChange={e=>setForm(f=>({...f,reason:e.target.value}))}/></label>
    <button className="btn primary" disabled={busy}>{tr("Publier et notifier","Publish and notify","Bayyin e tintin")}</button>
    {form.id&&<button type="button" className="btn secondary" onClick={()=>setForm(blank())}>{tr("Annuler la modification","Discard changes","Haaytu baylugol")}</button>}

@@ -85,7 +85,7 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
         var shifts by remember{mutableStateOf<List<JSONObject>>(emptyList())}
         var acks by remember{mutableStateOf<List<JSONObject>>(emptyList())}
         var justifications by remember{mutableStateOf<List<JSONObject>>(emptyList())}
-        var pendingPublish by remember{mutableStateOf<Pair<String,String>?>(null)}
+        var pendingPublish by remember{mutableStateOf<Pair<String,List<String>>?>(null)}
         var comparisons by remember{mutableStateOf<List<JSONObject>>(emptyList())}
         var busy by remember{mutableStateOf(false)}
         var loaded by remember{mutableStateOf(false)}
@@ -95,8 +95,9 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
         var edited by remember{mutableStateOf<JSONObject?>(null)}
         var start by remember{mutableStateOf("")};var end by remember{mutableStateOf("")}
         var pause by remember{mutableStateOf("0")};var tolerance by remember{mutableStateOf("10")};var reason by remember{mutableStateOf("")}
+        var repeat by remember{mutableStateOf("once")};var repeatCount by remember{mutableStateOf("1")}
         var cancelShift by remember{mutableStateOf<JSONObject?>(null)}
-        fun clear(){selected=null;edited=null;start="";end="";pause="0";tolerance="10";reason="";cancelShift=null}
+        fun clear(){selected=null;edited=null;start="";end="";pause="0";tolerance="10";reason="";cancelShift=null;repeat="once";repeatCount="1"}
         suspend fun refresh(){
             try{
                 val current=latest
@@ -130,12 +131,19 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                     .put("p_tolerance",cancel?.optInt("tolerance_minutes")?:tolerance.toInt())
                     .put("p_status",if(cancel!=null)"cancelled" else "published")
                     .put("p_expected_revision",row?.optLong("revision")?:0L).put("p_reason",reason.trim())
-                val fingerprint=body.toString()
-                val id=row?.optString("id")?:pendingPublish?.takeIf{it.first==fingerprint}?.second?:UUID.randomUUID().toString()
-                if(row==null)pendingPublish=fingerprint to id
-                body.put("p_id",id)
-                val receipt=JSONObject(StaffRosterApi.call(latest,"rpc/ns_publish_roster_shift",body))
-                require(receipt.getString("id")==id&&receipt.getLong("revision")==body.getLong("p_expected_revision")+1L&&receipt.getString("status")==body.getString("p_status"))
+                val count=if(row==null&&repeat!="once")repeatCount.toInt() else 1
+                require(count in 1..31&&(row!=null||repeat=="once"||count>=2))
+                val seconds=(if(repeat=="weekly")7L else 1L)*86400L
+                val commands=(0 until count).map{i->if(i==0)body else JSONObject(body.toString())
+                    .put("p_starts",Instant.parse(body.getString("p_starts")).plusSeconds(i*seconds).toString())
+                    .put("p_ends",Instant.parse(body.getString("p_ends")).plusSeconds(i*seconds).toString())}
+                val fingerprint=JSONArray(commands).toString()
+                val ids=if(row!=null)listOf(row.getString("id")) else pendingPublish?.takeIf{it.first==fingerprint}?.second?:List(count){UUID.randomUUID().toString()}
+                if(row==null)pendingPublish=fingerprint to ids
+                val payloads=commands.mapIndexed{i,command->JSONObject(command.toString()).put("p_id",ids[i])}
+                val receipts=if(count==1)listOf(JSONObject(StaffRosterApi.call(latest,"rpc/ns_publish_roster_shift",payloads.first())))
+                    else JSONObject(StaffRosterApi.call(latest,"rpc/ns_publish_roster_batch",JSONObject().put("p_commands",JSONArray(payloads)))).getJSONArray("receipts").rows()
+                require(receipts.size==count&&ids.all{id->receipts.count{it.getString("id")==id&&it.getLong("revision")==body.getLong("p_expected_revision")+1L&&it.getString("status")==body.getString("p_status")}==1})
                 pendingPublish=null;clear()
             }
         }
@@ -157,6 +165,13 @@ internal fun StaffRosterCard(session:AuthSession,siteId:String){
                         OutlinedTextField(end,{end=it},label={Text(tr("Fin (AAAA-MM-JJ HH:mm)","End (YYYY-MM-DD HH:mm)","Timmugol (YYYY-MM-DD HH:mm)"))},modifier=Modifier.fillMaxWidth(),singleLine=true)
                         OutlinedTextField(pause,{pause=it},label={Text(tr("Pause (min)","Break (min)","Fooftugol (min)"))},modifier=Modifier.fillMaxWidth(),singleLine=true)
                         OutlinedTextField(tolerance,{tolerance=it},label={Text(tr("Tolérance (min)","Tolerance (min)","Yaafuyya (min)"))},modifier=Modifier.fillMaxWidth(),singleLine=true)
+                    }
+                    if(edited==null&&cancelShift==null){
+                        Text(tr("Répétition du service","Shift repetition","Ɓeydude golle"))
+                        listOf("once" to tr("Une fois","Once","Laawol gootol"),"daily" to tr("Chaque jour","Daily","Ñalawma kala"),"weekly" to tr("Chaque semaine","Weekly","Yontere kala")).forEach{(value,label)->
+                            OutlinedButton(enabled=!busy,onClick={repeat=value;repeatCount=if(value=="once")"1" else "2"}){Text((if(repeat==value)"✓ " else "")+label)}
+                        }
+                        if(repeat!="once")OutlinedTextField(repeatCount,{repeatCount=it},label={Text(tr("Nombre de services (2–31)","Number of shifts (2–31)","Limoore golle (2–31)"))},enabled=!busy,singleLine=true)
                     }
                     OutlinedTextField(reason,{reason=it},label={Text(tr("Motif","Reason","Sabu"))},modifier=Modifier.fillMaxWidth())
                     Button(onClick={publish(cancelShift)},enabled=!busy&&reason.isNotBlank()&&(selected!=null||cancelShift!=null)){Text(if(cancelShift!=null)tr("Confirmer l'annulation","Confirm cancellation","Tabbitin haaytugol") else tr("Publier et notifier","Publish and notify","Bayyin e tintin"))}

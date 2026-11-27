@@ -117,6 +117,30 @@ end $$;
 revoke all on function public.ns_publish_roster_shift(uuid,uuid,uuid,uuid,uuid,timestamptz,timestamptz,integer,integer,text,bigint,text),public.ns_ack_roster_shift(uuid,bigint) from public,anon,authenticated;
 grant execute on function public.ns_publish_roster_shift(uuid,uuid,uuid,uuid,uuid,timestamptz,timestamptz,integer,integer,text,bigint,text),public.ns_ack_roster_shift(uuid,bigint) to authenticated;
 
+-- Atomic bounded publication; each item uses the canonical authorized, idempotent RPC.
+create function public.ns_publish_roster_batch(p_commands jsonb) returns jsonb
+language plpgsql security invoker set search_path='' as $fn$
+declare c jsonb; receipts jsonb:='[]'::jsonb;
+begin
+ if jsonb_typeof(p_commands) is distinct from 'array' then raise exception 'NS_ROSTER_BATCH_INVALID'; end if;
+ if jsonb_array_length(p_commands) not between 2 and 31 then raise exception 'NS_ROSTER_BATCH_INVALID'; end if;
+ if exists(select 1 from jsonb_array_elements(p_commands) e where jsonb_typeof(e) is distinct from 'object'
+  or e->>'p_id' is null or e->>'p_org' is null or e->>'p_member' is null or e->>'p_expected_revision' is distinct from '0'
+  or e->>'p_status' is distinct from 'published') then raise exception 'NS_ROSTER_BATCH_INVALID'; end if;
+ if (select count(distinct (e->>'p_id')::uuid) from jsonb_array_elements(p_commands) e)<>jsonb_array_length(p_commands) then raise exception 'NS_ROSTER_BATCH_INVALID'; end if;
+ -- Deterministic member lock order for concurrent multi-member batches.
+ for c in select e from jsonb_array_elements(p_commands) e order by (e->>'p_org')::uuid,(e->>'p_member')::uuid,(e->>'p_id')::uuid loop
+  receipts:=receipts||jsonb_build_array(public.ns_publish_roster_shift(
+    (c->>'p_id')::uuid,(c->>'p_org')::uuid,(c->>'p_site')::uuid,(c->>'p_post')::uuid,(c->>'p_member')::uuid,
+    (c->>'p_starts')::timestamptz,(c->>'p_ends')::timestamptz,(c->>'p_break')::integer,(c->>'p_tolerance')::integer,
+    c->>'p_status',0,c->>'p_reason'));
+ end loop;
+ return jsonb_build_object('receipts',receipts);
+end $fn$;
+revoke all on function public.ns_publish_roster_batch(jsonb) from public,anon,authenticated;
+grant execute on function public.ns_publish_roster_batch(jsonb) to authenticated;
+
+
 insert into auth.users(id) values ('10000000-0000-4000-8000-000000000091'),('10000000-0000-4000-8000-000000000092');
 insert into public.ns_organizations(id,display_name,business_mode) values ('20000000-0000-4000-8000-000000000091','QA Attendance','multi_site_network');
 insert into public.ns_accounts(id,auth_user_id,login_id,auth_alias,password_change_required) values ('50000000-0000-4000-8000-000000000091','10000000-0000-4000-8000-000000000091','NS-QA91','qa91@example.invalid',false),('50000000-0000-4000-8000-000000000092','10000000-0000-4000-8000-000000000092','NS-QA92','qa92@example.invalid',false);
@@ -158,6 +182,30 @@ do $$ begin
  if (select count(*) from public.ns_notification_outbox where org_id='20000000-0000-4000-8000-000000000091' and recipient_member_id='60000000-0000-4000-8000-000000000092' and event_code='staff_schedule.updated' and status='pending')<>2 then raise exception 'QA PUSH QUEUE'; end if;
  if (select count(*) from public.ns_notification_inbox where org_id='20000000-0000-4000-8000-000000000091' and member_id='60000000-0000-4000-8000-000000000092' and event_code='staff_schedule.updated')<>2 then raise exception 'QA INBOX'; end if;
 end $$;
+select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000091',true);
+select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000091","session_id":"qa-91-session","role":"authenticated"}',true);
+set local role authenticated;
+do $qa$ declare base jsonb; a jsonb; b jsonb; commands jsonb; receipt jsonb; t timestamptz:=now()+interval '10 days';
+begin
+ base:=jsonb_build_object('p_org','20000000-0000-4000-8000-000000000091','p_site','30000000-0000-4000-8000-000000000091','p_post',null,'p_member','60000000-0000-4000-8000-000000000092','p_break',30,'p_tolerance',10,'p_status','published','p_expected_revision',0,'p_reason','QA weekly repeat');
+ a:=base||jsonb_build_object('p_id','70000000-0000-4000-8000-000000000101','p_starts',t,'p_ends',t+interval '8 hours');
+ b:=base||jsonb_build_object('p_id','70000000-0000-4000-8000-000000000102','p_starts',t+interval '7 days','p_ends',t+interval '7 days 8 hours');
+ commands:=jsonb_build_array(a,b);
+ receipt:=public.ns_publish_roster_batch(commands);
+ if jsonb_array_length(receipt->'receipts')<>2 or public.ns_publish_roster_batch(commands) is distinct from receipt then raise exception 'QA BATCH RECEIPT'; end if;
+ if (select count(*) from public.ns_roster_revisions where shift_id in ('70000000-0000-4000-8000-000000000101','70000000-0000-4000-8000-000000000102'))<>2 then raise exception 'QA BATCH DUPLICATE'; end if;
+ a:=base||jsonb_build_object('p_id','70000000-0000-4000-8000-000000000103','p_starts',t+interval '1 day','p_ends',t+interval '1 day 8 hours');
+ b:=base||jsonb_build_object('p_id','70000000-0000-4000-8000-000000000104','p_starts',t+interval '1 hour','p_ends',t+interval '2 hours');
+ begin perform public.ns_publish_roster_batch(jsonb_build_array(a,b)); raise exception 'QA BATCH OVERLAP ACCEPTED'; exception when others then if sqlerrm not like '%NS_ROSTER_OVERLAP%' then raise; end if; end;
+ if exists(select 1 from public.ns_roster_shifts where id in ('70000000-0000-4000-8000-000000000103','70000000-0000-4000-8000-000000000104')) then raise exception 'QA BATCH PARTIAL COMMIT'; end if;
+ begin perform public.ns_publish_roster_batch(jsonb_build_array(a,a)); raise exception 'QA DUPLICATE IDS'; exception when others then if sqlerrm not like '%NS_ROSTER_BATCH_INVALID%' then raise; end if; end;
+end $qa$;
+reset role;
+do $qa$ begin
+ if (select count(*) from public.ns_notification_outbox where idempotency_key in ('staff-schedule:70000000-0000-4000-8000-000000000101:1','staff-schedule:70000000-0000-4000-8000-000000000102:1'))<>2 then raise exception 'QA BATCH NOTIFICATION DUPLICATE'; end if;
+ if exists(select 1 from public.ns_notification_outbox where idempotency_key in ('staff-schedule:70000000-0000-4000-8000-000000000103:1','staff-schedule:70000000-0000-4000-8000-000000000104:1')) then raise exception 'QA BATCH PARTIAL NOTIFICATION'; end if;
+end $qa$;
+
 update public.ns_organizations set business_mode='solo' where id='20000000-0000-4000-8000-000000000091';
 select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000091',true); select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000091","session_id":"qa-91-session","role":"authenticated"}',true);
 set local role authenticated;
