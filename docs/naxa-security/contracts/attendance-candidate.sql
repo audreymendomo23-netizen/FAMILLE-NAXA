@@ -8,7 +8,10 @@ create table public.sec_attendance_drafts (
  lat double precision not null check(lat between -90 and 90),
  lon double precision not null check(lon between -180 and 180),
  accuracy_m double precision not null check(accuracy_m>0 and accuracy_m<=100),
- observed_at timestamptz not null, mock_reported boolean not null check(not mock_reported),
+ observed_at timestamptz not null,
+ source text not null default 'android' check(source in ('android','browser')),
+ mock_reported boolean,
+ constraint sec_attendance_source_check check ((source='android' and mock_reported is false) or (source='browser' and mock_reported is null)),
  created_at timestamptz not null default now(),
  state text not null default 'pending_review' check(state='pending_review'),
  foreign key(organization_id,site_id) references public.sec_sites(organization_id,id)
@@ -16,7 +19,7 @@ create table public.sec_attendance_drafts (
 alter table public.sec_attendance_drafts enable row level security;
 revoke all on public.sec_attendance_drafts from public,anon,authenticated;
 grant select on public.sec_attendance_drafts to authenticated;
-grant insert(organization_id,site_id,reporter_id,request_id,action,lat,lon,accuracy_m,observed_at,mock_reported) on public.sec_attendance_drafts to authenticated;
+grant insert(organization_id,site_id,reporter_id,request_id,action,lat,lon,accuracy_m,observed_at,mock_reported,source) on public.sec_attendance_drafts to authenticated;
 create policy sec_attendance_read on public.sec_attendance_drafts for select to authenticated using (
  reporter_id=(select auth.uid()) and exists(select 1 from public.sec_sites s where s.id=sec_attendance_drafts.site_id and s.organization_id=sec_attendance_drafts.organization_id)
 );

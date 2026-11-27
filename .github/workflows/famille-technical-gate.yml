@@ -143,10 +143,10 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "9.5.0"
-      - name: Installer le SDK Android API 37
+      - name: Installer le SDK Android API 36 pour la prévisualisation historique
         uses: android-actions/setup-android@v3
         with:
-          packages: 'platform-tools platforms;android-37 build-tools;36.0.0'
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
       - name: Générer et vérifier le Gradle Wrapper 9.5.0
         shell: bash
         run: |

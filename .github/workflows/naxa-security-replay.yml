@@ -15,6 +15,7 @@ jobs:
     timeout-minutes: 20
     env:
       VITE_SECURITY_PUBLISHABLE_KEY: sb_publishable_qa_fixture_not_a_real_key
+      VITE_SECURITY_ATTENDANCE_ENABLED: 'true'
     steps:
       - uses: actions/checkout@v4
         with:

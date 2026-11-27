@@ -3,7 +3,7 @@ const browser=await chromium.launch({headless:true});
 const origin="http://127.0.0.1:4173";const api="https://idupfjbkwjcavyisxteo.supabase.co";
 const site1={id:"10000000-0000-4000-8000-000000000001",organization_id:"20000000-0000-4000-8000-000000000001",name:"QA Site A"};const site2={...site1,id:"10000000-0000-4000-8000-000000000002",name:"QA Site B"};
 const user="30000000-0000-4000-8000-000000000001";const token="qa-synthetic-access-token-not-real";
-const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:"block"});
+const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:"block",geolocation:{latitude:4,longitude:9,accuracy:12},permissions:["geolocation"]});
 let allow=false,posts=0,logout=0;const records=[];
 await context.route("**/*",async route=>{const u=new URL(route.request().url());if(u.origin===origin)return route.continue();if(u.origin!==api)return route.abort();
  const respond=(body,status=200)=>route.fulfill({status,contentType:"application/json",headers:{"access-control-allow-origin":"*","access-control-allow-headers":"*","access-control-allow-methods":"GET,POST,OPTIONS"},body:JSON.stringify(body)});
@@ -12,7 +12,7 @@ await context.route("**/*",async route=>{const u=new URL(route.request().url());
  assert.equal(route.request().headers().authorization,"Bearer "+token);
  if(u.pathname==="/auth/v1/logout"){logout++;return respond({})}
  if(u.pathname==="/rest/v1/sec_sites")return respond([site1,site2]);
- if(route.request().method()==="POST"){const body=route.request().postDataJSON();assert.equal(body.reporter_id,user);assert.equal(body.site_id,site2.id);assert.equal(body.organization_id,site2.organization_id);assert.ok(body.request_id);posts++;records.push(body);return respond([{...body,id:"qa-record"}]);}
+ if(route.request().method()==="POST"){const body=route.request().postDataJSON();assert.equal(body.reporter_id,user);assert.equal(body.site_id,site2.id);assert.equal(body.organization_id,site2.organization_id);assert.ok(body.request_id);posts++;records.push(body);if(u.pathname.endsWith("sec_attendance_drafts")){assert.equal(body.source,"browser");assert.equal(body.mock_reported,null);return respond([{...body,id:"qa-attendance",state:"pending_review"}]);}return respond([{...body,id:"qa-record"}]);}
  assert.equal(u.searchParams.get("site_id"),"eq."+site2.id);return respond([{id:"qa",subject:"QA scoped record",state:"new"}]);
 });
 try{
@@ -21,5 +21,6 @@ try{
  for(const id of ["B2.14","B3.27","B5.11"]){await page.goto(origin+"/#/"+id);await page.getByRole("button",{name:"Actualiser les données autorisées"}).click();await page.getByText("QA scoped record").waitFor();console.log("PASS scoped read "+id)}
  for(const [id,subject] of [["B3.27","QA incident"],["B5.11","QA maintenance"]]){await page.goto(origin+"/#/"+id);await page.getByLabel("Objet du brouillon").fill(subject);await page.getByRole("button",{name:"Transmettre au serveur"}).click();await page.getByText("Enregistrement confirmé par le serveur.").waitFor();console.log("PASS simulated receipt "+id)}
  assert.equal(posts,2);assert.notEqual(records[0].request_id,records[1].request_id);
+ await page.goto(origin+"/#/B4.10");await page.getByRole("button",{name:"Capturer ma position"}).click();await page.getByText("Position capturée — non vérifiée.").waitFor();await page.getByRole("button",{name:"Transmettre la preuve"}).click();await page.getByText("Preuve reçue — en attente de revue.").waitFor();assert.equal(posts,3);console.log("PASS B4 browser attendance remains pending");
  await page.getByRole("button",{name:"Déconnexion",exact:true}).click();await page.getByText("Connexion SECURITY",{exact:true}).waitFor();assert.equal(await page.getByRole("button",{name:"Transmettre au serveur"}).count(),0);await page.waitForTimeout(200);assert.equal(logout,1);console.log("PASS logout and UI removal");
 }finally{await context.close();await browser.close()}

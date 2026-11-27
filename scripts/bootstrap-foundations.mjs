@@ -8,6 +8,8 @@ if (existsSync(join(process.cwd(), "apps/android/zipple/src/main/java/cm/naxa/zi
 }
 
 
+// Only disposable CI preview uses the available stable SDK; real app targets are untouched.
+const previewSdk = process.env.GITHUB_ACTIONS === "true" && process.argv.includes("--legacy-ci-preview") ? 36 : 37;
 const apps = [
   ["kiosko", "Kiosko", "K"], ["bootik", "Bootik", "B"], ["zipple", "Zipple", "Z"],
   ["naxa-services", "NAXA Services", "NS"], ["cotiz", "CotiZ", "C"],
@@ -186,7 +188,7 @@ put("packages/core-android/build.gradle.kts", lines([
   "plugins { alias(libs.plugins.android.library); alias(libs.plugins.kotlin.android) }",
   "android {",
   '    namespace = "cm.naxa.core"',
-  "    compileSdk = 37",
+  "    compileSdk = " + previewSdk,
   "    defaultConfig { minSdk = 26 }",
   "    compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }",
   '    kotlinOptions { jvmTarget = "17" }',
@@ -307,11 +309,11 @@ for (const [id, label, acronym] of apps) {
     "}",
     "android {",
     '    namespace = "' + ns + '"',
-    "    compileSdk = 37",
+    "    compileSdk = " + previewSdk,
     "    defaultConfig {",
     '        applicationId = "' + ns + '"',
     "        minSdk = 26",
-    "        targetSdk = 37",
+    "        targetSdk = " + previewSdk,
     "        versionCode = 1",
     '        versionName = "0.1.0"',
     '        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"',
