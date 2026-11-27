@@ -26,6 +26,7 @@ export function createRoom(a,c){
 }
 export function applyRoom(room,a,c,now){
  const member=actor(room,a);
+ if(!["standard","confidential"].includes(room.confidentiality??"standard")&&c.action!=="end"&&c.action!=="cancel")fail("unsupported_confidentiality");
  if(!id(c.requestId)||!Number.isSafeInteger(c.expectedRevision)||!Number.isSafeInteger(now)||now<0||c.roomId!==room.id)fail("invalid_command");
  const p=room.participants.find(x=>x.memberId===member&&!x.excluded),host=member===room.hostId&&roles.has(a.role);
  if(!p||p.response==="declined"&&c.action!=="respond")fail("forbidden");
