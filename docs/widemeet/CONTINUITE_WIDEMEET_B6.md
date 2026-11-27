@@ -1,0 +1,36 @@
+# WideMeet — Continuité B6 : sécurité et conformité
+## 27 novembre 2026 — audit initial contradictoire, NON CLÔTURÉ
+Périmètre exclusif B6. Branche dédiée work/widemeet-b6-20261127, base auditée 0963b9183fc13538ff5e3bfa6f37f422e9598e74. Aucun merge main, déploiement, mutation production, modification des autres bulks ou applications sœurs. Ce document n'est pas un certificat de conformité.
+Sources à la base : docs/widemeet/CONTINUITE_WIDEMEET.md ; 7 famille naxa/01-cahiers-des-charges/12-widemeet.md §§2,4,6,8,10,13–16,19–20. Les décisions [P] et arbitrages [O] ne sont pas réputés validés. Référence externe de sauvegarde à auditer dans NAXA : .github/workflows/naxa-storage-backup-replay.yml ; SessionVault et modèle de réunion NAXA SERVICES, appareil/révocation BOOTIK. Ne jamais copier leurs données/secrets ni considérer leur vert comme preuve WideMeet.
+
+## Matrice de dix blocs
+Barème conservé : 1 qualifié pour le périmètre isolé observé, 0,5 partiel, 0 non prouvé. Le rapport initial ne nommait pas individuellement ses trois demi-points ; découpage ci-dessous explicite, pas de progression technique artificielle.
+| ID | Bloc | Score | Preuve/contradiction | Condition de fermeture |
+|---|---|---:|---|---|
+| B6.01 | Sessions, appareils, révocation | 1 | SQL wm_session_context, rotation/refresh et revalidation ; Replay 45984772124 job 140457443178 : old secret, mauvais appareil, logout et révocation refusés | Régression sur chaque révision ; production non qualifiée |
+| B6.02 | Isolation tenant/salle/produit et droits | 1 | RLS et service-only dans widemeet_n1_identity.sql, Replay tenant et support, SQL 45984772068 job 140457443748, SFU cross-product denied | Régression ACL et accès directs |
+| B6.03 | Consentement audio et retrait | 1 | Audio 45984772099 job 140457442981 : refus avant consentement, retrait stop Egress/discard, arrêt normal, fichier audio-only | Émulateur/appareils physiques et annonce audible restent dans B6.05/09 ; ne pas compter ASR |
+| B6.04 | Révocation média effective | 1 | SFU 45984771966 job 140457442694 : éviction, refus jeton non expiré, fin salle ; proxy réadmission périodique | Régression ; crash/failover reste B6.07/09 |
+| B6.05 | Confidentialité avancée et capture | 0.5 | RoomPanel.kt FLAG_SECURE, RoomPanel.tsx filigrane nominatif dynamique/avertissement, room-policy.mjs interdit partage écran confidentiel ; Replay restriction PASS. Mode hautement confidentiel non qualifié, aucune preuve capture/casting physique | Test FLAG_SECURE, capture et casting ; mode strict server-side ou refus fermé ; annonce sonore et contrôles UI |
+| B6.06 | Exclusivité média par appareil et Connect sécurisé | 0 | Proxy leases Map indexée salle + identité, ne démontre pas unicité inter-salles/appareils ; récepteur distinct non qualifié | Bail atomique durable par appareil, conflits, remplacement/revocation, QR à usage unique ; prouver zéro publication du récepteur |
+| B6.07 | Réseau faible, reprise et résilience média | 0 | MediaPanel.tsx gère états reconnecting/reconnected mais aucune mesure TURN externe/réseau dégradé ou failover ; proxy leases en mémoire | Perte/latence/débit, TURN, reprise sans contournement d'accès, éviction après crash, présence non inventée |
+| B6.08 | Rétention/purge et droits sur données | 0.5 | widemeet_n3_recording_archive.sql : fenêtre de lecture/listage 90 jours et journal export ; Storage privé et SHA prouvés. Filtre d'accès n'est pas destruction physique ; valeur non arbitrée | Paramètres approuvés, purge vérifiée fichiers/audio/PDF/transcriptions et dérivés, race avec export/worker, journaux minimisés et demandes de droits |
+| B6.09 | Sauvegarde chiffrée, restauration et sécurité opérationnelle | 0 | Pas de recette de restauration WideMeet identifiée parmi les workflows inspectés ; état proxy mémoire, durabilité/antivirus/contrôles sécurité exhaustifs non qualifiés | Reprendre pattern NAXA, sauvegarde chiffrée isolée, restauration + SHA/RLS, reprise après crash, contrôle XSS/CSRF/injection/secrets/anti-abus, MFA selon arbitrage |
+| B6.10 | Langues, transparence et conformité | 0.5 | Replay langue individuelle FR/EN, validation, isolation/reset et UI ; CDC §8 interdit prétendre support non qualifié. Validations linguistiques/CGU/confidentialité et cadre légal non prouvés | Messages de sécurité, consentement et documents FR/EN vérifiés ; langues locales selon capacité attestée ; validation juridique de loi 2024/017, finalités/transferts/sous-traitants/droits avant release |
+Total 5.5/10 = 55 % (4 qualifiés isolés, 3 partiels, 3 non prouvés). Inchangé par rapport à l'estimation initiale. Aucun correctif code ou nouvelle recette exécuté lors de ce relevé ; seul audit documentaire et des sources/logs. Les sous-périmètres verts ne signifient ni certification ni production.
+
+## Preuves et fichiers inspectés
+- Gate PR 45984772068 SUCCESS, jobs SQL 140457443748 (IDENTITY/ROOM/RECORDING_SQL_PASS), Android 140457443687 SUCCESS, Web/Edge/contrats SUCCESS.
+- Replay 45984772124 SUCCESS : 140457443178, preuves de sessions, isolation, confidentialité partage, modérateur, langue, archives, support.
+- SFU 45984771966 SUCCESS : 140457442694, média RTP synthétique, refus ancien jeton, tenant/salle, fermeture.
+- Audio 45984772099 FAILURE : 140457442981, scénarios B6 consentement/éviction/stockage explicitement PASS avant échec ASR subprocess-exit (B3 hors périmètre).
+- Code : packages/media-core/signaling-proxy.mjs, signaling-policy.mjs, widemeet-admission.mjs ; packages/widemeet-domain/room-policy.mjs ; scripts/widemeet/media-product-replay.mjs et replay.mjs ; supabase/drafts/widemeet_n1_identity.sql, widemeet_n3_recording_archive.sql ; apps/android/widemeet/src/main/java/cm/naxa/widemeet/RoomPanel.kt et MainActivity.kt ; apps/web/widemeet/src/RoomPanel.tsx, MediaPanel.tsx ; .github/workflows/widemeet-gate.yml. Inspection ciblée, pas inventaire exhaustif de l'arborescence.
+
+## Reprise prioritaire en parallèle, uniquement B6
+1. Confidentialité : réutiliser protection native et politique existantes, tester mode strict, refus Web, captures, absence de fuite après révocation. Pas de fausse garantie Web.
+2. Média : vérifier admission SQL et contraintes atomiques inter-appareils/salles, bail durable et reprise SFU ; séparer contrat de sécurité Connect de son développement B2. Tester conflits et rejets réels.
+3. Rétention : auditer toutes les archives et workers ; pas de purge production, pas de durée commerciale inventée. Éprouver purge isolée/idempotente et revalidation pendant export.
+4. Restauration : récupérer et auditer le workflow NAXA existant, reproduire seulement les mécanismes en environnement jetable ; vérifier données et ACL après restauration.
+5. Langues/conformité : vérifier les textes de sécurité et consentement, états indisponibles, documenter arbitrages juridiques non résolus ; pas de traduction ASR/TTS hors B6.
+6. Recettes : matrice négative et positive dédiée B6, tests isolés puis Replay SFU/SQL/Android/Web avec preuves SHA/run/job. Aucune qualification par simple ajout de code, aucun test ignoré compté vert.
+Critère final : dix blocs prouvés sur même révision, réserves légales et matérielles explicitement résolues/validées. Tenir ce fichier et jauge à jour à chaque intervention ; ne pas écraser le travail concurrent des autres bulks.
