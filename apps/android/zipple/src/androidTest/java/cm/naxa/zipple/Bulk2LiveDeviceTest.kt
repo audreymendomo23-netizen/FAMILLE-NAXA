@@ -71,6 +71,12 @@ class Bulk2LiveDeviceTest {
    api("supplier_pay","purchase_id" to purchase,"request_id" to uid(),"amount_xaf" to 1000L,"method" to "bank","reference" to "NATIVE-SUPPLIER")
    val p=(api("procurement_snapshot") as JSONObject).rows("purchases").single{it.getString("id")==purchase}
    assertEquals(3000L,p.getLong("received_milli"));assertEquals(1000L,p.getLong("paid_xaf"))
+   val order=checkNotNull(nativePurchaseOrder(api("procurement_snapshot") as JSONObject,api("erp_snapshot") as JSONObject,purchase))
+   val text=nativePurchaseText(order,false);assertTrue(text.contains("NATIVE-PURCHASE"));assertTrue(text.contains("Farine ERP native - 3 kg - 3000 FCFA - Reçu : 3 kg"))
+   val bytes=nativePurchasePdf(order,false);assertEquals("%PDF-",String(bytes.copyOfRange(0,5),Charsets.US_ASCII))
+   val pdfFile=java.io.File.createTempFile("zipple-purchase-test-",".pdf",ctx.cacheDir);try{pdfFile.writeBytes(bytes);android.graphics.pdf.PdfRenderer(android.os.ParcelFileDescriptor.open(pdfFile,android.os.ParcelFileDescriptor.MODE_READ_ONLY)).use{renderer->assertTrue(renderer.pageCount>=1);renderer.openPage(0).use{pg->assertEquals(595,pg.width)}}}finally{pdfFile.delete()}
+   assertTrue(nativePurchaseWhatsApp(order,false)==null);val uri=checkNotNull(nativePurchaseWhatsApp(order.copy(phone="237600000001"),false));assertEquals("wa.me",uri.host);assertEquals("/237600000001",uri.path);assertEquals(text,uri.getQueryParameter("text"))
+   android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_QA_CASE_PARTIAL B3-010 NATIVE_PURCHASE_PDF_PASS")
    val product=api("menu_add","name" to "Pain ERP natif","post" to "kitchen","price_xaf" to 1500,"qty" to 0) as String
    api("recipe_define","item_id" to product,"components" to JSONArray().put(body("ingredient_id" to ingredient,"qty_milli" to 500L)))
    val produced=api("produce","item_id" to product,"request_id" to uid(),"servings" to 2) as JSONObject

@@ -336,3 +336,7 @@ Candidat 969401e : wave1-business 140630769008 SUCCESS (4/4 à confirmer dans jo
 
 ## Bulk parallèle — pages de suivi
 969401e : 6 workflows SUCCESS, dont 46035801299 tous jobs verts, Android réel inclus; c33ab4b : APK/SQL/compilation Android SUCCESS, Web workspaces SUCCESS, 4 vagues API SUCCESS, autres jobs encore actifs au contrôle. Développement Web/Android des pages planning, objectifs, formation, incidents et tickets : filtres état/recherche, dates Douala, garde durée planning 1 min–24 h, détail non affiché si filtré. Chromium ajoute assertions sur les quatre espaces et créneau invalide. Vague 3 : tests indépendants B5-003 (concurrence multi-acteurs, rejeu, refus staff, annulation) et B5-009 (incident assigné, confidentialité, dialogue unique, fermeture). Tests nouveaux à qualifier, aucune clôture sans preuve, aucune mutation main/production.
+
+
+## B3-010/B6 — parité du bon de commande natif
+Export fournisseur PDF natif depuis snapshots serveur, groupement de toutes lignes disponibles et vérifiées (sinon indisponible), quantités reçues et coût exact, SAF sans permission de stockage, lien WhatsApp prérempli sans envoi automatique. Recette instrumentation : vrai achat Edge, texte montant/quantité, PDF lisible avec PdfRenderer, URI et absence de lien sans numéro. Candidat à qualifier; le test de sélection physique SAF et la délivrance effective WhatsApp ne sont pas démontrés par cette recette. Aucun main ni production.

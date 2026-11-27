@@ -230,5 +230,6 @@ internal fun bulk3Body(form:NA,data:ND,values:Map<String,String>,repeated:List<M
   if(r.has("closed_through")&&(r.isNull("closed_through")||r.optString("closed_through")<r.optString("to")))Text(tr("États provisoires, période non clôturée.","Provisional statements, period not closed."))
  }
  if(message.isNotBlank())Text(message)
+ if(group.id=="purchases"&&loaded)NativePurchaseDocuments(data,allowed&&!busy,en)
  for((ds,arr,label) in group.summaries){val rows=data.rows(ds,arr);if(rows.isNotEmpty()){HorizontalDivider(Modifier.padding(vertical=6.dp));rows.take(40).forEach{x->Text(display(x,label)+" · "+x.optString("state").takeUnless{it=="null"}.orEmpty())}}}
 }
