@@ -92,6 +92,9 @@ begin
  perform public.grillad_action(o,s,gen_random_uuid(),'set_service_hours',jsonb_build_object('start_minute',1080,'effective_from',today,'reason','Test configuration'));
  if (public.grillad_pilotage_status(o,s)#>>'{service,start_minute}')::int<>1080 then raise exception 'service configuration';end if;
  begin perform public.grillad_action(o,s,gen_random_uuid(),'set_service_hours',jsonb_build_object('start_minute',0,'effective_from',today,'reason','Rewrite'));raise exception 'retroactive service rewrite';exception when invalid_parameter_value then null;end;
+ v:=public.grillad_action(o,s,gen_random_uuid(),'schedule_service_hours',jsonb_build_object('start_minute',1200,'effective_from',today+2,'reason','Horaire futur'));
+ if not(v->>'scheduled')::boolean or (public.grillad_pilotage_status(o,s)#>>'{service,start_minute}')::int<>1080 or jsonb_array_length(public.grillad_pilotage_status(o,s)->'service_revisions')<>1 then raise exception 'future schedule';end if;
+ begin perform public.grillad_action(o,s,gen_random_uuid(),'schedule_service_hours',jsonb_build_object('start_minute',0,'effective_from',today,'reason','Rewrite'));raise exception 'retroactive schedule';exception when invalid_parameter_value then null;end;
 end $$;
 reset role;
 set role authenticated;
@@ -142,6 +145,7 @@ end $$;
 reset role;
 -- Service across midnight, using an explicit fixture policy only.
 -- Fixture backdating only to exercise historical summaries; not available via API.
+do $$declare o uuid:='b2000000-0000-0000-0000-000000000001';s uuid:='b3000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;begin if grillad_private.service_boundary(o,s,d+2)-grillad_private.service_boundary(o,s,d+1)<>interval '26 hours' then raise exception 'non contiguous schedule boundary';end if;end $$;
 update grillad_private.service_policy set effective_from=current_date-2 where org='b2000000-0000-0000-0000-000000000001' and site='b3000000-0000-0000-0000-000000000001';
 set role service_role;
 do $$begin

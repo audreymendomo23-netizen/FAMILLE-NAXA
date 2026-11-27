@@ -5,6 +5,16 @@ create table grillad_private.service_policy(
  effective_from date not null,enabled boolean not null default false,primary key(org,site),
  foreign key(org,site) references grillad_private.enabled_sites(org,site)
 );
+create table grillad_private.service_revisions(
+ org uuid not null,site uuid not null,effective_from date not null,start_minute integer not null check(start_minute between 0 and 1439),reason text not null check(length(reason) between 1 and 300),actor uuid not null,created_at timestamptz not null default now(),
+ primary key(org,site,effective_from),foreign key(org,site) references grillad_private.service_policy(org,site));
+alter table grillad_private.service_revisions enable row level security;
+revoke all on grillad_private.service_revisions from public,anon,authenticated;
+create function grillad_private.service_boundary(p_org uuid,p_site uuid,p_day date) returns timestamptz language sql stable security invoker set search_path=pg_catalog as $$
+ select (p_day::timestamp+make_interval(mins=>coalesce((select r.start_minute from grillad_private.service_revisions r where r.org=p_org and r.site=p_site and r.effective_from<=p_day order by r.effective_from desc limit 1),p.start_minute))) at time zone 'Africa/Douala'
+ from grillad_private.service_policy p where p.org=p_org and p.site=p_site and p.enabled and p.effective_from<=p_day
+$$;
+revoke all on function grillad_private.service_boundary(uuid,uuid,date) from public,anon,authenticated;
 create table grillad_private.daily_summary(
  org uuid not null,site uuid not null,service_day date not null,version integer not null check(version>0),
  starts_at timestamptz not null,ends_at timestamptz not null,data jsonb not null,generated_at timestamptz not null default now(),
@@ -28,7 +38,7 @@ declare p grillad_private.service_policy%rowtype;old grillad_private.daily_summa
 begin
  select * into p from grillad_private.service_policy where org=p_org and site=p_site and enabled and effective_from<=p_day;
  if not found then raise exception 'GRILLAD_SERVICE_POLICY_REQUIRED' using errcode='22023';end if;
- lo:=(p_day::timestamp+make_interval(mins=>p.start_minute)) at time zone 'Africa/Douala';hi:=((p_day+1)::timestamp+make_interval(mins=>p.start_minute)) at time zone 'Africa/Douala';
+ lo:=grillad_private.service_boundary(p_org,p_site,p_day);hi:=grillad_private.service_boundary(p_org,p_site,p_day+1);
  if hi>now() then raise exception 'GRILLAD_SERVICE_OPEN' using errcode='22023';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
  select * into old from grillad_private.daily_summary where org=p_org and site=p_site and service_day=p_day order by version desc limit 1;
@@ -58,7 +68,7 @@ begin
  for s in select p.org,p.site,d::date service_day from grillad_private.service_policy p
  join grillad_private.enabled_sites e on e.org=p.org and e.site=p.site and e.enabled
  cross join lateral generate_series(p.effective_from::timestamp,(now() at time zone 'Africa/Douala')::date::timestamp,interval '1 day') d
- where p.enabled and ((d::date+1)::timestamp+make_interval(mins=>p.start_minute)) at time zone 'Africa/Douala' <=now()
+ where p.enabled and grillad_private.service_boundary(p.org,p.site,d::date+1)<=now()
  and (d::date>=(now() at time zone 'Africa/Douala')::date-7 or not exists(select 1 from grillad_private.daily_summary x where x.org=p.org and x.site=p.site and x.service_day=d::date))
  order by d,p.org,p.site limit p_limit loop
   v:=grillad_private.generate_daily(s.org,s.site,s.service_day);n:=n+1;if (v->>'changed')::boolean then changed:=changed+1;end if;
