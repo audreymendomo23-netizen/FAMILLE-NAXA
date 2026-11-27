@@ -124,8 +124,11 @@ export function applyRoom(room,a,c,now){
  const v=c.value;
  if(!id(c.target)||n.polls.some(x=>x.id===c.target)||!v||typeof v!=="object"||typeof v.question!=="string"||!v.question.trim()||v.question.length>200||!Array.isArray(v.options)||v.options.length<2||v.options.length>10||!v.options.every(x=>typeof x==="string"&&x.trim()&&x.length<=200)||new Set(v.options.map(x=>x.trim())).size!==v.options.length||!["single","multiple","rating"].includes(v.kind)||typeof v.anonymous!=="boolean"||v.editable!==undefined&&typeof v.editable!=="boolean"||!["live","closed"].includes(v.visibility)||!Number.isInteger(v.quorum)||v.quorum<0||v.quorum>100||!Number.isInteger(v.threshold)||v.threshold<1||v.threshold>100||v.kind==="rating"&&![5,10].includes(v.options.length))fail("invalid_poll");
  if(v.durationSeconds!=null&&(!Number.isInteger(v.durationSeconds)||v.durationSeconds<15||v.durationSeconds>3600||now+v.durationSeconds*1000>n.endMs))fail("invalid_poll");
- const eligible=n.participants.filter(x=>!x.excluded&&x.response==="accepted"&&(n.lobbyRequired!==true||x.memberId===n.hostId||x.lobbyStatus==="admitted")).map(x=>x.memberId);
- n.polls.push({id:c.target,question:v.question.trim(),kind:v.kind,options:v.options.map(x=>x.trim()),anonymous:v.anonymous,editable:v.editable===true,visibility:v.visibility,quorum:v.quorum,threshold:v.threshold,eligible,open:true,closesMs:v.durationSeconds==null?null:now+v.durationSeconds*1000,votes:{}});break;
+ const decisionMode=v.decisionMode??"threshold",abstentionIndex=v.abstentionIndex??null;
+ if(!["threshold","simple_majority","absolute_majority"].includes(decisionMode)||decisionMode!=="threshold"&&v.kind!=="single"||abstentionIndex!==null&&(v.kind!=="single"||!Number.isInteger(abstentionIndex)||abstentionIndex<0||abstentionIndex>=v.options.length||v.options.length<3))fail("invalid_poll");
+ let eligible=n.participants.filter(x=>!x.excluded&&x.response==="accepted"&&(n.lobbyRequired!==true||x.memberId===n.hostId||x.lobbyStatus==="admitted")).map(x=>x.memberId);
+ if(v.eligibleIds!==undefined){if(!Array.isArray(v.eligibleIds)||!v.eligibleIds.length||new Set(v.eligibleIds).size!==v.eligibleIds.length||!v.eligibleIds.every(x=>eligible.includes(x)))fail("invalid_poll");eligible=eligible.filter(x=>v.eligibleIds.includes(x));}
+ n.polls.push({id:c.target,question:v.question.trim(),kind:v.kind,options:v.options.map(x=>x.trim()),anonymous:v.anonymous,editable:v.editable===true,visibility:v.visibility,quorum:v.quorum,threshold:v.threshold,decisionMode,abstentionIndex,eligible,open:true,closesMs:v.durationSeconds==null?null:now+v.durationSeconds*1000,votes:{}});break;
  }
  case "survey_vote":{
  const poll=n.polls.find(x=>x.id===c.target&&x.open&&x.kind);
@@ -149,5 +152,10 @@ export function pollSummary(p,memberId,now=Date.now()){
  const eligible=p.eligible?.length??null;
  const responseRate=eligible===null?null:eligible?100*voters.length/eligible:0;
  const quorumMet=eligible===null?null:responseRate>=p.quorum;
- return {id:p.id,question:p.question??null,kind:p.kind??"simple",options:p.options,open,closesMs:p.closesMs??null,anonymous:p.anonymous??true,editable:p.editable===true,ownSelection:p.kind&&Object.hasOwn(p.votes,memberId)?p.votes[memberId]:null,nominativeResponses:visible&&p.kind&&p.anonymous===false?Object.entries(p.votes).map(([memberId,selection])=>({memberId,selection})):null,counts,voted:Object.hasOwn(p.votes,memberId),eligible,responses:visible?voters.length:null,responseRate:visible?responseRate:null,quorumMet:visible?quorumMet:null,threshold:p.threshold??null,accepted:visible&&!open&&quorumMet&&voters.length?counts.map(n=>n*100/voters.length>=p.threshold):null};
+ const decisionMode=p.decisionMode??"threshold",abstentionIndex=p.abstentionIndex??null;
+ const abstentions=visible&&abstentionIndex!==null?counts[abstentionIndex]:null;
+ const expressed=visible?voters.length-(abstentions??0):null;
+ const denominator=decisionMode==="absolute_majority"?eligible:expressed;
+ const accepted=visible&&!open&&quorumMet&&expressed>0&&denominator>0?counts.map((n,i)=>i===abstentionIndex?false:decisionMode==="threshold"?n*100>=p.threshold*denominator:2*n>denominator):null;
+ return {id:p.id,question:p.question??null,kind:p.kind??"simple",options:p.options,open,closesMs:p.closesMs??null,anonymous:p.anonymous??true,editable:p.editable===true,ownSelection:p.kind&&Object.hasOwn(p.votes,memberId)?p.votes[memberId]:null,nominativeResponses:visible&&p.kind&&p.anonymous===false?Object.entries(p.votes).map(([memberId,selection])=>({memberId,selection})):null,counts,voted:Object.hasOwn(p.votes,memberId),eligible,canVote:p.kind?Boolean(p.eligible?.includes(memberId)):true,responses:visible?voters.length:null,nonresponses:visible&&eligible!==null?Math.max(0,eligible-voters.length):null,optionShares:visible&&voters.length?counts.map(n=>100*n/voters.length):null,responseRate:visible?responseRate:null,quorumMet:visible?quorumMet:null,threshold:p.threshold??null,decisionMode,abstentionIndex,abstentions,expressed,decisionDenominator:visible?denominator:null,accepted};
 }

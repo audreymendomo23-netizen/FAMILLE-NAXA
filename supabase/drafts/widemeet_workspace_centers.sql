@@ -15,9 +15,27 @@ create index wm_direct_thread_in on public.wm_direct_messages(workspace_id,recip
 alter table public.wm_direct_messages enable row level security;
 revoke all on public.wm_direct_messages from public,anon,authenticated;
 grant select,insert,update,delete on public.wm_direct_messages to service_role;
+-- B4: calendar windows in Douala. Upper bound is exclusive; never include future rooms.
+create function public.wm_b4_window(p_period text,p_days integer,p_now timestamptz)
+returns table(start_ms bigint,end_ms bigint) language sql stable set search_path=pg_catalog as $b4$
+ with t as (select p_now at time zone 'Africa/Douala' as local_now),
+ bounds as (select case p_period
+  when 'daily' then date_trunc('day',local_now)
+  when 'weekly' then date_trunc('week',local_now)
+  when 'monthly' then date_trunc('month',local_now)
+  when 'quarterly' then date_trunc('quarter',local_now)
+  when 'yearly' then date_trunc('year',local_now)
+  when 'rolling' then local_now-make_interval(days=>p_days)
+ end as start_local from t)
+ select floor(extract(epoch from (start_local at time zone 'Africa/Douala'))*1000)::bigint,
+ floor(extract(epoch from p_now)*1000)::bigint
+ from bounds where start_local is not null and (p_period<>'rolling' or p_days in (7,30,90,365))
+$b4$;
+revoke all on function public.wm_b4_window(text,integer,timestamptz) from public,anon,authenticated;
+grant execute on function public.wm_b4_window(text,integer,timestamptz) to service_role;
 create function public.wm_workspace_center(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; peer uuid; mid uuid; b text; q text; v jsonb; m public.wm_direct_messages%rowtype; days integer; scope_name text; cutoff bigint;
+declare a record; peer uuid; mid uuid; b text; q text; v jsonb; m public.wm_direct_messages%rowtype; days integer; scope_name text; cutoff bigint; upper_ms bigint; period_name text;
 begin
  -- Same lock order as identity membership mutations; then recheck session and entitlement.
  perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
@@ -25,10 +43,24 @@ begin
  if not found or not exists(select 1 from public.wm_workspaces w where w.id=a.workspace_id and w.enabled and w.kind='enterprise') then return null;end if;
  if p_action='center-statistics' then
   if a.plan<>'premium' or a.role not in ('promoteur','manager') then return null;end if;
-  if coalesce(p_data->>'days','') not in ('7','30','90','365') then return null;end if;
-  days:=(p_data->>'days')::integer;scope_name:=case when a.role='promoteur' then 'enterprise' else 'organizer' end;
-  cutoff:=floor(extract(epoch from clock_timestamp()-make_interval(days=>days))*1000)::bigint;
-  select jsonb_build_object('scope',scope_name,'days',days,'total',count(*),
+  period_name:=coalesce(p_data->>'period','rolling');
+  if period_name not in ('rolling','daily','weekly','monthly','quarterly','yearly') then return null;end if;
+  if period_name='rolling' then
+   if coalesce(p_data->>'days','') not in ('7','30','90','365') then return null;end if;
+   days:=(p_data->>'days')::integer;
+  elsif p_data ? 'days' then return null;end if;
+  scope_name:=case when a.role='promoteur' then 'enterprise' else 'organizer' end;
+  select start_ms,end_ms into cutoff,upper_ms from public.wm_b4_window(period_name,days,clock_timestamp());
+  if not found then return null;end if;
+  with scoped as (
+   select * from public.wm_rooms where workspace_id=a.workspace_id and (a.role='promoteur' or host_id=a.account_id)
+    and (state->>'scheduledMs')::bigint>=cutoff and (state->>'scheduledMs')::bigint<upper_ms
+  ), valid_tasks as (
+   select t.* from public.wm_tasks t join scoped r on r.id=t.room_id join public.wm_minutes_versions mv on mv.id=t.version_id and mv.revoked_at is null and mv.published_at is not null
+   join public.wm_minutes_eligibility e on e.room_id=r.id and e.retain_until>clock_timestamp()
+   where exists(select 1 from public.wm_minutes_recipients mr where mr.version_id=t.version_id and mr.account_id=t.assignee_id and mr.revoked_at is null)
+  )
+  select jsonb_build_object('scope',scope_name,'days',days,'period',period_name,'start_ms',cutoff,'end_ms',upper_ms,'total',count(*),
    'scheduled',count(*) filter(where state->>'status'='scheduled' and coalesce(state->>'cancelled','false')='false'),
    'open',count(*) filter(where state->>'status'='open'),
    'paused',count(*) filter(where state->>'status'='paused'),
@@ -36,9 +68,26 @@ begin
    'cancelled',count(*) filter(where state->>'cancelled'='true'),
    'duration_minutes',coalesce(sum((state->>'durationMinutes')::bigint) filter(where coalesce(state->>'cancelled','false')='false'),0),
    'polls_closed',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(state->'polls','[]'::jsonb)) p where p->>'open'='false')),0),
-   'tasks_done',coalesce(sum((select count(*) from public.wm_tasks t join public.wm_minutes_versions mv on mv.id=t.version_id and mv.revoked_at is null and mv.published_at is not null where t.room_id=wm_rooms.id and t.state='done' and exists(select 1 from public.wm_minutes_recipients mr where mr.version_id=t.version_id and mr.account_id=t.assignee_id and mr.revoked_at is null))),0))
-   into v from public.wm_rooms where workspace_id=a.workspace_id and (a.role='promoteur' or host_id=a.account_id)
-   and (state->>'scheduledMs')::bigint>=cutoff and (state->>'scheduledMs')::bigint<=floor(extract(epoch from clock_timestamp())*1000)::bigint;
+   'polls_effectively_closed',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(state->'polls','[]'::jsonb)) p where p->>'open'='false' or (p->>'closesMs')::bigint<=upper_ms or state->>'status'='ended')),0),
+   'tasks_done',(select count(*) from valid_tasks where state='done'),
+   'tasks_assigned',(select count(*) from valid_tasks where state='assigned'),
+   'tasks_submitted',(select count(*) from valid_tasks where state='submitted'),
+   'tasks_cancelled',(select count(*) from valid_tasks where state='cancelled'),
+   'tasks_overdue',(select count(*) from valid_tasks where state='assigned' and due_at<=to_timestamp(upper_ms/1000.0)),
+   'invitees',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(state->'participants','[]'::jsonb)) p where p->>'memberId'<>scoped.host_id::text)),0),
+   'accepted_invites',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(state->'participants','[]'::jsonb)) p where p->>'memberId'<>scoped.host_id::text and p->>'response'='accepted')),0),
+   'rooms_with_observations',count(*) filter(where exists(select 1 from public.wm_presence_samples s where s.room_id=scoped.id)),
+   'by_organizer',(select coalesce(jsonb_agg(to_jsonb(g) order by g.organizer,g.organizer_id),'[]'::jsonb) from (
+     select r.host_id as organizer_id,ac.display_name as organizer,count(*) as meetings,count(*) filter(where r.state->>'status'='ended' and coalesce(r.state->>'cancelled','false')='false') as ended
+     from scoped r join public.wm_accounts ac on ac.id=r.host_id group by r.host_id,ac.display_name) g),
+   'by_team',(select coalesce(jsonb_agg(to_jsonb(g) order by g.manager,g.manager_id),'[]'::jsonb) from (
+     select ma.manager_id,ac.display_name as manager,count(*) as total,count(*) filter(where t.state='done') as done,count(*) filter(where t.state='assigned' and t.due_at<=to_timestamp(upper_ms/1000.0)) as overdue
+     from valid_tasks t join public.wm_manager_assignments ma on ma.workspace_id=a.workspace_id and ma.staff_id=t.assignee_id join public.wm_accounts ac on ac.id=ma.manager_id and ac.enabled join public.wm_memberships mm on mm.workspace_id=ma.workspace_id and mm.account_id=ma.manager_id and mm.enabled and mm.role='manager'
+     where a.role='promoteur' or ma.manager_id=a.account_id group by ma.manager_id,ac.display_name) g),
+   'by_assignee',(select coalesce(jsonb_agg(to_jsonb(g) order by g.assignee,g.assignee_id),'[]'::jsonb) from (
+     select t.assignee_id,ac.display_name as assignee,count(*) as total,count(*) filter(where t.state='done') as done,count(*) filter(where t.state='assigned' and t.due_at<=to_timestamp(upper_ms/1000.0)) as overdue
+     from valid_tasks t join public.wm_accounts ac on ac.id=t.assignee_id group by t.assignee_id,ac.display_name) g))
+   into v from scoped;
   return v;
  end if;
  if p_action='center-contacts' then

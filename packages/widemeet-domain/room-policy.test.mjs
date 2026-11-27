@@ -112,3 +112,27 @@ test("timed polls reject boundary votes and reveal closed survey only at the ser
  assert.deepEqual(pollSummary(r.polls[1],guest.memberId,16000).counts,[0,0]);
  assert.throws(()=>run(r,guest,"survey_vote",[0],"timed0002",16000),/invalid_vote/);
 });
+
+test("B4 targeted rating: frozen eligible list, no unauthorized vote, explicit denominator",()=>{
+ let r=open();const config={question:"Rate",kind:"rating",options:Array.from({length:10},(_,i)=>String(i+1)),anonymous:true,visibility:"closed",quorum:100,threshold:50,eligibleIds:[guest.memberId]};
+ assert.throws(()=>run(r,host,"survey",{...config,eligibleIds:["foreign001"]},"target001"),/invalid_poll/);
+ assert.throws(()=>run(r,host,"survey",{...config,eligibleIds:[guest.memberId,guest.memberId]},"target001"),/invalid_poll/);
+ r=run(r,host,"survey",config,"target001");
+ assert.equal(pollSummary(r.polls[0],host.memberId,1000).canVote,false);assert.equal(pollSummary(r.polls[0],guest.memberId,1000).canVote,true);
+ assert.throws(()=>run(r,host,"survey_vote",[9],"target001"),/invalid_vote/);
+ r=run(r,guest,"survey_vote",[9],"target001");assert.equal(pollSummary(r.polls[0],host.memberId,1000).nonresponses,null);
+ r=run(r,host,"close_poll",null,"target001");const p=pollSummary(r.polls[0],host.memberId,1000);
+ assert.equal(p.eligible,1);assert.equal(p.responses,1);assert.equal(p.nonresponses,0);assert.equal(p.optionShares[9],100);assert.equal(p.nominativeResponses,null);assert.equal(p.quorumMet,true);
+});
+
+test("B4 simple and absolute majority distinguish abstention and nonresponse",()=>{
+ const cfg={question:"Decision",kind:"single",options:["Oui","Non","Abstention"],anonymous:true,visibility:"closed",quorum:100,threshold:50,abstentionIndex:2};
+ for(const mode of ["simple_majority","absolute_majority","threshold"]){
+ let r=open();r=run(r,host,"survey",{...cfg,decisionMode:mode},"majority1");r=run(r,host,"survey_vote",[0],"majority1");r=run(r,guest,"survey_vote",[2],"majority1");
+ let s=pollSummary(r.polls[0],host.memberId,1000);assert.equal(s.abstentions,null);assert.equal(s.expressed,null);assert.equal(s.accepted,null);
+ r=run(r,host,"close_poll",null,"majority1");s=pollSummary(r.polls[0],host.memberId,1000);
+ assert.equal(s.abstentions,1);assert.equal(s.expressed,1);assert.equal(s.nonresponses,0);assert.equal(s.quorumMet,true);assert.equal(s.accepted[0],mode!=="absolute_majority");assert.equal(s.accepted[2],false);assert.equal(s.decisionDenominator,mode==="absolute_majority"?2:1);
+ }
+ let r=open();assert.throws(()=>run(r,host,"survey",{...cfg,kind:"multiple",decisionMode:"simple_majority"},"majority1"),/invalid_poll/);assert.throws(()=>run(r,host,"survey",{...cfg,abstentionIndex:3},"majority1"),/invalid_poll/);
+ r=run(r,host,"survey",{...cfg,decisionMode:"simple_majority"},"majority1");r=run(r,host,"survey_vote",[2],"majority1");r=run(r,guest,"survey_vote",[2],"majority1");r=run(r,host,"close_poll",null,"majority1");assert.equal(pollSummary(r.polls[0],host.memberId,1000).accepted,null);
+});
