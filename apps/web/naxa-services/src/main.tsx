@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { SubscriptionPage } from "./erp/subscription";
 import { BillingPanel } from "./erp/billing-panel";
 import { B4PlanningPanel } from "./erp/b4-planning-panel";
+import { B4TransferPanel,B4LoyaltyPanel } from "./erp/b4-interactions-panel";
 import { mergeB4Data, staleChargeReceipt } from "./erp/b4-planning";
 import { enqueue as enqueueOfflineEvent, acquireDueBatch, applyServerReceipt, scheduleRetry, listQueued, listAppEvents, applySyncPage, getSyncCursor, listSyncChanges, type WebSyncChange } from "@famille/offline-web";
 import { normalizeInventoryItemDraft } from "./erp/inventory";
@@ -744,7 +745,7 @@ function App() {
         const payload=change.payload;
         const rows=next[moduleId]??[],existing=rows.findIndex(entry=>entry.id===change.aggregate_id);
         const prior=rows[existing];
-        const title=changeText(payload,["title","display_name","name","ticket_number","customer_name","customer_reference_or_name","subject","category","staff_name_snapshot","sku"],prior?.title??change.aggregate_id);
+        const title=changeText(payload,["title","display_name","name","ticket_number","customer_name","customer_reference_or_name","subject","category","staff_name_snapshot","sku","sku_snapshot"],prior?.title??change.aggregate_id);
         const detail=changeText(payload,["description","counterparty","items_summary","service_reference_or_name","phone_contact","unit"],prior?.detail??change.action_code);
         const metadata = payload.metadata_json && typeof payload.metadata_json === "object" && !Array.isArray(payload.metadata_json)
           ? payload.metadata_json as Record<string,unknown> : {};
@@ -816,12 +817,13 @@ function App() {
 
   async function submitWebBusinessEvent(
     moduleId: ModuleId, actionCode: string, aggregateType: string, aggregateId: string,
-    payload: Record<string, unknown>, siteId: string, title: string, detail: string, extra: Partial<Entry> = {},
+    payload: Record<string, unknown>, siteId: string|null, title: string, detail: string, extra: Partial<Entry> = {},
   ) {
     const session = authSession;
     if (!session) throw new Error("AUTHENTICATION_REQUIRED");
     const isCurrent=captureSession(session);
-    if (!session.account.active_site_ids.includes(siteId)) throw new Error("SITE_SCOPE_FORBIDDEN");
+    if(siteId===null){if(actionCode!=="loyalty_program.updated"||aggregateType!=="loyalty_program"||session.account.role_code!=="promoter"||session.requirePasswordChange)throw new Error("ORG_SCOPE_FORBIDDEN");}
+    else if (!session.account.active_site_ids.includes(siteId)) throw new Error("SITE_SCOPE_FORBIDDEN");
     const eventId = crypto.randomUUID();
     const command = {
       module_id: moduleId, display_title: title, display_detail: detail,
@@ -842,7 +844,7 @@ function App() {
         id:aggregateId,title,detail,
         state:navigator.onLine?"En attente de confirmation":"En attente de connexion",
         createdAt:existing?.createdAt??new Date().toLocaleString("fr-FR"),
-        aggregateType, actionCode, siteId,
+        aggregateType, actionCode, siteId:siteId??undefined,
         data:mergeB4Data(existing?.data,payload,{},actionCode),
         ...extra,
       };
@@ -1311,14 +1313,14 @@ function App() {
               busy={busy} onCreateRegister={createCashRegister} onOpenSession={openCashSession}
               onCreateSale={createCashSale} onCloseSession={closeCashSession}
             />{authSession&&!preview&&env.VITE_NAXA_SERVICES_BILLING_V23_ENABLED==="true"&&<BillingPanel key={scopeOf(authSession)+":"+activeSiteId} entries={(entries.cash??[]).filter(e=>e.siteId===(activeSiteId||authSession.account.active_site_ids[0]))} busy={busy} onSubmit={async(action,id,payload,title,detail)=>{await submitWebBusinessEvent("cash",action,action.split(".")[0],id,payload,activeSiteId||authSession.account.active_site_ids[0],title,detail);}}/>}</> :
-            active === "stock" ? <StockOperationsPage
+            active === "stock" ? <><StockOperationsPage
               entries={(entries.stock ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)}
               canManage={Boolean(authSession && ["promoter","network_manager","site_manager"].includes(authSession.account.role_code))}
               busy={busy} onCreateSupplier={createSupplier} onMovement={createInventoryMovement}
               onPurchase={createSupplierPurchase} onReceive={receiveSupplierPurchase} onPay={paySupplier}
-            /> :
+            />{authSession&&!preview&&!authSession.requirePasswordChange&&env.VITE_NAXA_SERVICES_BILLING_V23_ENABLED==="true"&&<B4TransferPanel key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+activeSiteId} entries={entries.stock??[]} site={activeSiteId||authSession.account.active_site_ids[0]} sites={authSession.account.active_sites} canManage={authSession.account.role_code==="promoter"} busy={busy} onSubmit={async(action,id,payload,site,title,detail)=>{if(!site||authSession.account.role_code!=="promoter")throw Error("TRANSFER_SCOPE_FORBIDDEN");await submitWebBusinessEvent("stock",action,"inventory_transfer",id,payload,site,title,detail);}}/>}</> :
             active === "team" ? <><TeamOperationsPage memberId={authSession?.account.member_id} entries={(entries.team ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onTimeEvent={recordStaffTimeEvent} />{env.VITE_NAXA_SERVICES_ATTENDANCE_ENABLED==="true"&&authSession&&!preview&&!authSession.requirePasswordChange&&rosterModeEnabled(authSession.account.business_mode)&&<AttendanceProofPanel key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+(activeSiteId||authSession.account.active_site_ids[0])} account={authSession.account} siteId={activeSiteId||authSession.account.active_site_ids[0]||""} authEndpoint={authEndpoint} anonKey={anonKey} action={attendanceRequest?.scope===scopeOf(authSession)+":"+sessionFence.current.generation&&attendanceRequest.site===(activeSiteId||authSession.account.active_site_ids[0])?attendanceRequest.action:null} onClose={()=>setAttendanceRequest(null)} loadWorkstations={loadWebWorkstations} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("SESSION_CHANGED");return fresh.accessToken;}} onSubmit={async(id,occurred,eventType,workstationId)=>{const s=authSession;const current=captureSession(s);if(!current()||!attendanceRequest||attendanceRequest.scope!==scopeOf(s)+":"+sessionFence.current.generation||attendanceRequest.site!==sharedOperationSiteId()||attendanceRequest.action!==eventType)throw new Error("SESSION_CHANGED");await submitWebBusinessEvent("team",eventType+".recorded",eventType,id,{time_event_id:id,staff_member_id:s.account.member_id,staff_name_snapshot:s.account.display_name,occurred_at:occurred,workstation_id:workstationId,attendance_proof_ref:id},attendanceRequest.site,s.account.display_name,eventType.replaceAll("_"," "));}}/>}{env.VITE_NAXA_SERVICES_ROSTER_ENABLED==="true" && authSession && !preview && !authSession.requirePasswordChange && rosterModeEnabled(authSession.account.business_mode) && <StaffRoster key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+(activeSiteId||authSession.account.active_site_ids[0])} account={authSession.account} siteId={activeSiteId||authSession.account.active_site_ids[0]||""} authEndpoint={authEndpoint} anonKey={anonKey} getToken={async()=>{const current=captureSession(authSession);const fresh=await ensureFreshSession(authSession);if(!current())throw new Error("SESSION_CHANGED");return fresh.accessToken;}}/>}</> :
-            active === "customers" ? <CustomerFollowupsPage entries={(entries.customers ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onCreate={createCustomerFollowup} onComplete={completeCustomerFollowup} /> :
+            active === "customers" ? <><CustomerFollowupsPage entries={(entries.customers ?? []).filter(entry=>!entry.siteId||entry.siteId===(activeSiteId||authSession?.account.active_site_ids[0]))} authenticated={Boolean(authSession && !preview)} busy={busy} onCreate={createCustomerFollowup} onComplete={completeCustomerFollowup} />{authSession&&!preview&&!authSession.requirePasswordChange&&env.VITE_NAXA_SERVICES_BILLING_V23_ENABLED==="true"&&<B4LoyaltyPanel key={scopeOf(authSession)+":"+sessionFence.current.generation+":"+activeSiteId} entries={entries.customers??[]} site={activeSiteId||authSession.account.active_site_ids[0]} profile={authSession.account.activity_profile} canManage={authSession.account.role_code==="promoter"} busy={busy} onSubmit={async(action,id,payload,site,title,detail)=>{await submitWebBusinessEvent("customers",action,action.split(".")[0],id,payload,site,title,detail);}}/>}</> :
             <GenericPage active={active} entries={entries[active] ?? []} copy={moduleCopy[active]} preview={preview} authenticated={Boolean(authSession && !preview)} />}
         </section>
         <nav className="mobile-tabs">

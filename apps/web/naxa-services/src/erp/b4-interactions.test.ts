@@ -1,0 +1,9 @@
+import {describe,it,expect} from "vitest";
+import {transferScope,transferSnapshot,rewardRows,type B4Record} from "./b4-interactions";
+describe("B4 transfer and loyalty gates",()=>{
+ const r:B4Record={id:"x",title:"Article",state:"Confirmé",status:"open",revision:1,aggregateType:"inventory_transfer",data:{source_site_id:"a",destination_site_id:"b",inventory_item_id:"i",sku_snapshot:" aBc ",unit:"piece",quantity:4}};
+ it("exposes approval only at source and receipt only at destination",()=>{expect(transferScope(r,"a",true,["a","b"])).toEqual(["approved","rejected"]);expect(transferScope(r,"b",true,["a","b"])).toEqual([]);expect(transferScope({...r,status:"approved",revision:2},"b",true,["a","b"])).toEqual(["received"]);});
+ it("fails closed with missing site, role or confirmation",()=>{expect(transferScope(r,"a",false,["a","b"])).toEqual([]);expect(transferScope(r,"a",true,["a"])).toEqual([]);expect(transferScope({...r,state:"En attente de confirmation"},"a",true,["a","b"])).toEqual([]);});
+ it("normalizes canonical SKU and rejects missing transfer identity",()=>{expect(transferSnapshot(r).sku_snapshot).toBe("ABC");expect(()=>transferSnapshot({...r,data:{}})).toThrow();});
+ it("derives rewards only from actual site receipts and hides duplicate redemption",()=>{const a:B4Record={id:"a1",title:"Visite",state:"Confirmé",siteId:"a",aggregateType:"loyalty_activity",data:{customer_id:"c",program_id:"p",server_result:{reward_events:[{event_id:"rew",wave_number:1,reward_status:"available",description:"Cadeau"}]}}};const used:B4Record={id:"rew",title:"Cadeau",state:"Confirmé",siteId:"a",aggregateType:"loyalty_reward",data:{reward_event_id:"rew"}};expect(rewardRows([a,used],"a")[0].redeemed).toBe(true);expect(rewardRows([a],"b")).toEqual([]);expect(rewardRows([{...a,state:"En attente"}],"a")).toEqual([]);});
+});

@@ -403,6 +403,24 @@ jobs:
                 return response.request().postDataJSON().event;
               };
               const count=async(table,filter)=>{assert.match(table,/^ns_[a-z_]+$/);return (await success(base+'/rest/v1/'+table+'?select=id&org_id=eq.'+f.org.id+'&'+filter,undefined,admin,admin,'GET')).length;};
+              await scenario('B4 real browser loyalty program, visits and single reward redemption',async()=>{
+                await nav('Clients & fidélité');
+                const panel=page.getByRole('region',{name:'B4 fidélité'});
+                await panel.getByLabel('B4 fidélité nom').fill('Deux visites Web B4');
+                await panel.getByLabel('B4 fidélité récompense').fill('Cadeau Web B4');
+                const p=await apply('loyalty_program.updated',()=>panel.getByRole('button',{name:'Créer programme B4'}).click());
+                assert.equal(p.site_id,null);
+                await panel.getByLabel('B4 fidélité programme').selectOption(p.aggregate_id);
+                await panel.getByLabel('B4 fidélité client').selectOption(records[0].id);
+                for(let i=0;i<2;i++)await apply('loyalty_activity.recorded',()=>panel.getByRole('button',{name:'Valider activité B4'}).click());
+                const reward=await success(base+'/rest/v1/ns_loyalty_events?program_id=eq.'+p.aggregate_id+'&event_type=eq.reward_earned&select=id,reward_status',undefined,admin,admin,'GET');
+                assert.equal(reward.length,1);assert.equal(reward[0].reward_status,'available');
+                const row=panel.locator('[data-b4-reward="'+reward[0].id+'"]');
+                await apply('loyalty_reward.redeemed',()=>row.getByRole('button',{name:'Utiliser récompense B4'}).click());
+                await row.getByText('Utilisée',{exact:true}).waitFor();
+                assert.equal(await row.getByRole('button',{name:'Utiliser récompense B4'}).count(),0);
+                const [saved]=await success(base+'/rest/v1/ns_loyalty_events?id=eq.'+reward[0].id+'&select=reward_status',undefined,admin,admin,'GET');assert.equal(saved.reward_status,'redeemed');
+              });
               await scenario('B4 real browser invoice and settlement',async()=>{
                 await nav('Caisse & ventes');
                 const panel=page.getByRole('region',{name:'B4 facturation'});
