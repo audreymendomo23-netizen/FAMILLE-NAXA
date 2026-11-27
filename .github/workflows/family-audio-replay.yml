@@ -106,6 +106,25 @@ jobs:
           mkdir -p "$RUNNER_TEMP/wm-recording-db"
           cd "$RUNNER_TEMP/wm-recording-db"
           supabase init
+          # Only the unused fixture mail catcher needs a distinct port; keep API/DB fixed.
+          python3 - <<'PY'
+          import pathlib, re, socket, tomllib
+          path = pathlib.Path("supabase/config.toml")
+          text = path.read_text()
+          section = re.search(r"(?ms)^\[inbucket\][ \t]*\n.*?(?=^\[|\Z)", text)
+          if section is None:
+              raise SystemExit("Expected isolated inbucket configuration")
+          with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+              sock.bind(("0.0.0.0", 0))
+              port = sock.getsockname()[1]
+          updated, count = re.subn(r"(?m)^port[ \t]*=[ \t]*\d+[ \t]*(?:#[^\n]*)?$", f"port = {port}", section.group())
+          if count != 1:
+              raise SystemExit("Expected exactly one isolated inbucket port")
+          result = text[:section.start()] + updated + text[section.end():]
+          assert tomllib.loads(result)["inbucket"]["port"] == port
+          path.write_text(result)
+          print(f"Isolated fixture mail catcher port: {port}")
+          PY
           supabase start
           supabase status -o env > "$RUNNER_TEMP/wm-recording.env"
           chmod 600 "$RUNNER_TEMP/wm-recording.env"
