@@ -94,7 +94,7 @@ insert into famille_core.role_catalog(app_id,role_code,display_name,scope_type,i
 create function grillad_private.run(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare r text; u uuid:=auth.uid(); old grillad_private.events%rowtype; x grillad_private.items%rowtype; c grillad_private.cash%rowtype; v grillad_private.sales%rowtype;
- item_id uuid; qty bigint; line jsonb; basket_total bigint; basket_count int; n bigint; cost bigint; label text; reason text; v_expected bigint; result jsonb; d date;
+ item_id uuid; qty bigint; line jsonb; basket_total bigint; basket_count int; n bigint; cost bigint; new_cost_value bigint; label text; reason text; v_expected bigint; result jsonb; d date;
 begin
  r:=grillad_private.scope(p_org,p_site);
  if p_event is null or p_action is null or p_payload is null or jsonb_typeof(p_payload)<>'object' or octet_length(p_payload::text)>8192 then raise exception 'GRILLAD_INPUT' using errcode='22023';end if;
@@ -129,6 +129,21 @@ begin
   if not found then raise exception 'GRILLAD_ITEM' using errcode='42501';end if;
   update grillad_private.items set price=n where id=x.id;
   result:=jsonb_build_object('id',x.id,'old_price',x.price,'new_price',n,'effective_at',now());
+ when 'change_cost' then
+  item_id:=(p_payload->>'item')::uuid;new_cost_value:=(p_payload->>'cost')::bigint;reason:=btrim(p_payload->>'reason');
+  if not(p_payload?'cost') or (new_cost_value is not null and new_cost_value not between 0 and 1000000000) or reason is null or length(reason) not between 1 and 300 then raise exception 'GRILLAD_COST' using errcode='22023';end if;
+  select * into x from grillad_private.items where id=item_id and org=p_org and site=p_site and active;
+  if not found then raise exception 'GRILLAD_ITEM' using errcode='42501';end if;
+  update grillad_private.items set cost=new_cost_value where id=x.id;
+  result:=jsonb_build_object('id',x.id,'old_cost',x.cost,'new_cost',new_cost_value,'effective_at',now());
+ when 'set_item_active' then
+  item_id:=(p_payload->>'item')::uuid;reason:=btrim(p_payload->>'reason');
+  if jsonb_typeof(p_payload->'active') is distinct from 'boolean' or reason is null or length(reason) not between 1 and 300 then raise exception 'GRILLAD_ITEM_STATE' using errcode='22023';end if;
+  select * into x from grillad_private.items where id=item_id and org=p_org and site=p_site;
+  if not found then raise exception 'GRILLAD_ITEM' using errcode='42501';end if;
+  if not (p_payload->>'active')::boolean and (x.prepared<>x.sold or x.connect_reserved<>0) then raise exception 'GRILLAD_ITEM_HAS_STOCK' using errcode='22023';end if;
+  update grillad_private.items set active=(p_payload->>'active')::boolean where id=x.id;
+  result:=jsonb_build_object('id',x.id,'active',(p_payload->>'active')::boolean,'old_active',x.active);
  when 'prepare' then
   update grillad_private.items set prepared=prepared+qty where id=x.id;
   insert into grillad_private.preparations values(p_event,p_org,p_site,x.id,qty,u,now());
@@ -199,13 +214,15 @@ end $$;
 -- Read only own site; seller gets no costs, expenses, manager totals, or other sellers' sales.
 create function grillad_private.snapshot(p_org uuid,p_site uuid,p_from date,p_to date)
 returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
-declare r text;u uuid:=auth.uid();v_items jsonb;v_sales jsonb;v_finance jsonb;v_cash jsonb;v_expenses jsonb;v_forecasts jsonb;v_target bigint;v_notices jsonb;
+declare r text;u uuid:=auth.uid();v_items jsonb;v_sales jsonb;v_finance jsonb;v_cash jsonb;v_expenses jsonb;v_forecasts jsonb;v_target bigint;v_notices jsonb;v_inactive_items jsonb;v_cash_history jsonb;
 begin
  r:=grillad_private.scope(p_org,p_site);
  if p_from is null or p_to is null or p_to<p_from or p_to-p_from>366 then raise exception 'GRILLAD_PERIOD' using errcode='22023';end if;
  select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'name',i.name,'family',i.family,'price',i.price,'prepared',i.prepared,'sold',i.sold,'remaining',i.prepared-i.sold-i.connect_reserved)||case when r='seller' then '{}'::jsonb else jsonb_build_object('cost',i.cost) end order by i.name),'[]'::jsonb) into v_items from grillad_private.items i where org=p_org and site=p_site and active;
  select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'item',s.item,'qty',s.qty,'total',s.total,'actor',s.actor,'at',s.created_at,'cancelled',s.cancelled_at is not null,'source',s.source,'direct_order',s.direct_order) order by s.created_at desc),'[]'::jsonb) into v_sales from (select * from grillad_private.sales where org=p_org and site=p_site and (r<>'seller' or actor=u) and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) s;
  if r<>'seller' then
+ select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'name',i.name,'family',i.family,'price',i.price) order by i.name),'[]'::jsonb) into v_inactive_items from grillad_private.items i where i.org=p_org and i.site=p_site and not i.active;
+ select coalesce(jsonb_agg(to_jsonb(h) order by h.closed_at desc),'[]'::jsonb) into v_cash_history from (select c.id,c.opened_at,c.closed_at,c.opening,c.expected,c.counted,c.counted-c.expected as difference,c.close_reason from grillad_private.cash c where c.org=p_org and c.site=p_site and c.closed_at is not null and (c.closed_at at time zone 'Africa/Douala')::date between p_from and p_to order by c.closed_at desc limit 200) h;
  select jsonb_build_object('ca',coalesce(sum(total),0),'sales_count',count(distinct (site,coalesce(direct_order,id))) filter(where source='direct')+count(distinct connect_order) filter(where source='connect'),'direct_ca',coalesce(sum(total) filter(where source='direct'),0),'connect_ca',coalesce(sum(total) filter(where source='connect'),0),'cost',case when count(*) filter(where cost is null)>0 then null else coalesce(sum(qty*cost),0) end,'charges',(select coalesce(sum(value),0) from grillad_private.expenses where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to)) into v_finance from grillad_private.sales where org=p_org and site=p_site and cancelled_at is null and (created_at at time zone 'Africa/Douala')::date between p_from and p_to;
  select jsonb_build_object('id',c.id,'opening',c.opening,'expected',c.opening+coalesce((select sum(total) from grillad_private.sales where cash=c.id and cancelled_at is null),0)-coalesce((select sum(value) from grillad_private.expenses where cash=c.id),0)) into v_cash from grillad_private.cash c where org=p_org and site=p_site and closed_at is null;
  select coalesce(jsonb_agg(to_jsonb(e) order by e.created_at desc),'[]'::jsonb) into v_expenses from (select id,label,value,created_at from grillad_private.expenses where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) e;
@@ -216,7 +233,7 @@ begin
  select coalesce(jsonb_agg(z),'[]'::jsonb) into v_notices from (select 'stock:'||id id,name||' : quantité épuisée' text from grillad_private.items where org=p_org and site=p_site and active and prepared=sold+connect_reserved union all select 'cash:'||id,'Écart de caisse à vérifier' from grillad_private.cash where org=p_org and site=p_site and closed_at is not null and counted<>expected and (closed_at at time zone 'Africa/Douala')::date=p_to) z;
  else select jsonb_build_object('id',c.id) into v_cash from grillad_private.cash c where org=p_org and site=p_site and closed_at is null;
  end if;
- return jsonb_build_object('role',r,'items',v_items,'sales',v_sales,'finance',v_finance,'cash',v_cash,'expenses',coalesce(v_expenses,'[]'::jsonb),'forecasts',coalesce(v_forecasts,'[]'::jsonb),'notices',coalesce(v_notices,'[]'::jsonb),'target',v_target,'from',p_from,'to',p_to,'generated_at',now());
+ return jsonb_build_object('role',r,'items',v_items,'sales',v_sales,'finance',v_finance,'cash',v_cash,'cash_history',coalesce(v_cash_history,'[]'::jsonb),'inactive_items',coalesce(v_inactive_items,'[]'::jsonb),'expenses',coalesce(v_expenses,'[]'::jsonb),'forecasts',coalesce(v_forecasts,'[]'::jsonb),'notices',coalesce(v_notices,'[]'::jsonb),'target',v_target,'from',p_from,'to',p_to,'generated_at',now());
 end $$;
 -- Server-derived workspace list. No arbitrary organization/site values from login.
 create function grillad_private.workspace() returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$

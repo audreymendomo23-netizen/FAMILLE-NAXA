@@ -50,6 +50,12 @@ begin
  v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,ca}')::int<>2000 or (v#>>'{finance,sales_count}')::int<>1 then raise exception 'basket cancellation';end if;
  begin perform public.grillad_action(o,a,gen_random_uuid(),'close_cash','{"counted":1800}');raise exception 'expected reason';exception when invalid_parameter_value then null;end;
  v:=public.grillad_action(o,a,gen_random_uuid(),'close_cash','{"counted":1900}');if (v->>'difference')::int<>0 then raise exception 'cash';end if;
+ v:=public.grillad_snapshot(o,a,day,day);if jsonb_array_length(v->'cash_history')<>1 or (v->'cash_history'->0->>'counted')::int<>1900 then raise exception 'cash history';end if;
+ v:=public.grillad_action(o,a,gen_random_uuid(),'change_cost',jsonb_build_object('item',i,'cost',450,'reason','New unit cost'));if (v->>'old_cost')::int<>400 or (v->>'new_cost')::int<>450 then raise exception 'cost edit';end if;
+ v:=public.grillad_snapshot(o,a,day,day);if (v#>>'{finance,cost}')::int<>800 then raise exception 'historical cost must not change';end if;
+ begin perform public.grillad_action(o,a,gen_random_uuid(),'set_item_active',jsonb_build_object('item',i,'active',false,'reason','Test'));raise exception 'deactivation with stock';exception when invalid_parameter_value then null;end;
+ j:=gen_random_uuid();perform public.grillad_action(o,a,j,'add_item','{"name":"Archive","family":"Omelettes","price":500}');perform public.grillad_action(o,a,gen_random_uuid(),'set_item_active',jsonb_build_object('item',j,'active',false,'reason','Test'));v:=public.grillad_snapshot(o,a,day,day);if jsonb_array_length(v->'inactive_items')<>1 then raise exception 'inactive item history';end if;
+ perform public.grillad_action(o,a,gen_random_uuid(),'set_item_active',jsonb_build_object('item',j,'active',true,'reason','Test'));v:=public.grillad_snapshot(o,a,day,day);if jsonb_array_length(v->'inactive_items')<>0 then raise exception 'reactivation';end if;
 end $$;
 select set_config('request.jwt.claim.sub','91000000-0000-0000-0000-000000000002',true);
 select set_config('request.jwt.claims',jsonb_build_object('session_id','91000000-0000-0000-0000-000000000012','app_metadata',jsonb_build_object('active_app_id',current_setting('grillad.test.app')))::text,true);
@@ -58,7 +64,7 @@ declare o uuid:='92000000-0000-0000-0000-000000000001';a uuid:='93000000-0000-00
 begin
  if jsonb_array_length(public.grillad_workspace())<>1 then raise exception 'workspace seller';end if;
  v:=public.grillad_snapshot(o,a,day,day);
- if v->'finance'<>'null'::jsonb or jsonb_array_length(v->'sales')<>0 or (v->'items'->0)?'cost' then raise exception 'seller leak';end if;
+ if v->'finance'<>'null'::jsonb or jsonb_array_length(v->'sales')<>0 or (v->'items'->0)?'cost' or jsonb_array_length(v->'cash_history')<>0 or jsonb_array_length(v->'inactive_items')<>0 then raise exception 'seller leak';end if;
  begin perform public.grillad_snapshot(o,b,day,day);raise exception 'expected site denial';exception when insufficient_privilege then null;end;
  begin perform public.grillad_receipt(o,a,'94000000-0000-0000-0000-000000000003');raise exception 'receipt other seller';exception when insufficient_privilege then null;end;
  begin perform public.grillad_action(o,a,gen_random_uuid(),'open_cash','{"opening":0}');raise exception 'expected role denial';exception when insufficient_privilege then null;end;
