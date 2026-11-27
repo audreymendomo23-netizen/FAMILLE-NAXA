@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.dp
 import cm.naxa.widemeet.auth.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 import java.util.UUID
 private fun supportRows(x:JSONObject,key:String):List<JSONObject>{val a=x.getJSONArray(key);return (0 until a.length()).map{a.getJSONObject(it)}}
@@ -23,6 +24,7 @@ private fun supportRows(x:JSONObject,key:String):List<JSONObject>{val a=x.getJSO
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
  fun status(s:String)=when(s){"open"->tr("Ouverte","Open");"assigned"->tr("Prise en charge","Assigned");"waiting"->tr("En attente de réponse","Waiting for response");"closed"->tr("Clôturée","Closed");else->s}
  LaunchedEffect(session.deviceId){work{load()}}
+ LaunchedEffect(ticket?.optString("id"),ticket?.optString("status"),busy,session.deviceId){val id=ticket?.optString("id")?:return@LaunchedEffect;if(busy||pending!=null||ticket?.optString("status")=="closed")return@LaunchedEffect;while(true){delay(5000);if(busy||pending!=null||ticket?.optString("id")!=id)return@LaunchedEffect;try{val fresh=req("read",JSONObject().put("ticket_id",id));if(!busy&&pending==null&&ticket?.optString("id")==id)ticket=fresh}catch(e:CancellationException){throw e}catch(e:Exception){ticket=null;items=emptyList();error=true;return@LaunchedEffect}}}
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
  Text(tr("Mes demandes d’assistance","My support requests"),style=MaterialTheme.typography.titleLarge)
  Text(tr("Ne communiquez jamais vos mots de passe, codes de récupération ou contenus privés de réunion.","Never share passwords, recovery codes or private meeting content."))

@@ -50,7 +50,7 @@ begin
  if p_action='support-queue' then
   if not agent then return null;end if;
   select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at),'[]'::jsonb) into result from
-   (select id,category,status,created_at,updated_at,case when agent_id=aid then subject else null end as subject,(agent_id=aid) as assigned from public.wm_support_tickets where agent_id=aid or (agent_id is null and status='open' and requester_id<>aid) order by created_at limit 100) q;
+   (select id,category,status,created_at,updated_at,case when agent_id=aid then subject else null end as subject,coalesce(agent_id=aid,false) as assigned from public.wm_support_tickets where agent_id=aid or (agent_id is null and status='open' and requester_id<>aid) order by created_at limit 100) q;
   return jsonb_build_object('items',result);
  end if;
  tid:=(p_data->>'ticket_id')::uuid;
@@ -79,7 +79,7 @@ begin
   update public.wm_support_tickets set agent_id=aid,status='assigned',updated_at=clock_timestamp() where id=tid;
   return jsonb_build_object('claimed',true);
  end if;
- if not own and not (agent and t.agent_id=aid) then return null;end if;
+ if not own and not (agent and coalesce(t.agent_id=aid,false)) then return null;end if;
  kind:=case when own then 'requester' else 'agent' end;
  if p_action='support-read' then
   select coalesce(jsonb_agg(to_jsonb(q) order by q.created_at,q.id),'[]'::jsonb) into result from

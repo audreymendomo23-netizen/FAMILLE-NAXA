@@ -147,6 +147,8 @@ try{
  assert.equal((await sr(gs.access_token,"read",{ticket_id:supportTicket.ticket_id})).status,403);
  assert.equal((await sr(os.access_token,"queue")).status,403);
  assert.equal((await sr(sas.access_token,"read",{ticket_id:supportTicket.ticket_id})).status,403);
+ assert.equal((await sr(sas.access_token,"reply",{ticket_id:supportTicket.ticket_id,message_id:randomUUID(),body:"Must not write before claim"})).status,403);
+ assert.equal((await sr(sas.access_token,"close",{ticket_id:supportTicket.ticket_id})).status,403);
  const claim=await Promise.all([sr(sas.access_token,"claim",{ticket_id:supportTicket.ticket_id}),sr(sbs.access_token,"claim",{ticket_id:supportTicket.ticket_id})]);
  assert.equal(claim.filter(x=>x.status===200).length,1);
  const winner=claim[0].status===200?sas:sbs,loser=claim[0].status===200?sbs:sas;
