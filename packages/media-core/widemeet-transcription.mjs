@@ -10,8 +10,8 @@ const execute=promisify(execFile);
 const uuid=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const script=fileURLToPath(new URL("../../scripts/widemeet/local-asr.py",import.meta.url));
 // One execution path for the worker and the isolated synthetic preflight.
-export async function runLocalAsr({python,modelDir,path,home}){
- const {stdout}=await execute(resolve(python),[script,resolve(modelDir),resolve(path)],{timeout:480000,maxBuffer:1048576,env:{PATH:process.env.PATH??"/usr/bin:/bin",HOME:home,HF_HOME:join(home,"hf"),HF_HUB_OFFLINE:"1",TRANSFORMERS_OFFLINE:"1",PYTHONUTF8:"1",PYTHONNOUSERSITE:"1",OMP_NUM_THREADS:"2",TOKENIZERS_PARALLELISM:"false"}});
+export async function runLocalAsr({python,modelDir,path,home,translate=false,timeout=480000}){
+ const {stdout}=await execute(resolve(python),[script,resolve(modelDir),resolve(path),...(translate?["translate"]:[])],{timeout,maxBuffer:1048576,env:{PATH:process.env.PATH??"/usr/bin:/bin",HOME:home,HF_HOME:join(home,"hf"),HF_HUB_OFFLINE:"1",TRANSFORMERS_OFFLINE:"1",PYTHONUTF8:"1",PYTHONNOUSERSITE:"1",OMP_NUM_THREADS:"2",TOKENIZERS_PARALLELISM:"false"}});
  return JSON.parse(stdout);
 }
 export function localAsrFailure(e){
