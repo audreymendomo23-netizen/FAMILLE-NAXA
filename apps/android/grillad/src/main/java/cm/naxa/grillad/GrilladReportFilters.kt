@@ -18,6 +18,8 @@ import org.json.JSONObject
  var actor by remember(site,period){mutableStateOf("")};var item by remember(site,period){mutableStateOf("")}
  var result by remember(site,period){mutableStateOf<JSONObject?>(null)};var busy by remember{mutableStateOf(false)};var message by remember{mutableStateOf("")}
  var pdfLines by remember(site,period){mutableStateOf<List<String>?>(null)}
+ var xlsxRows by remember(site,period){mutableStateOf<List<List<Any?>>?>(null)}
+ val xlsxLauncher=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")){uri->val table=xlsxRows;xlsxRows=null;if(uri!=null&&table!=null)try{writeGrilladXlsx(context,uri,table);message="Excel enregistré"}catch(e:Exception){message="Export Excel impossible"}}
  val pdfLauncher=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")){uri->val lines=pdfLines;pdfLines=null;if(uri!=null&&lines!=null)try{writeGrilladPdf(context,uri,"GRILLAD - Rapport",lines);message="PDF enregistré"}catch(e:Exception){message="Export PDF impossible"}}
  Text("Rapport détaillé",style=MaterialTheme.typography.titleMedium)
  if(data.optJSONObject("pilotage")?.optBoolean("network_allowed")==true)Row{Text("Réseau");Switch(network,{network=it;result=null},enabled=enabled&&!busy)}
@@ -32,5 +34,6 @@ import org.json.JSONObject
  rows(r.optJSONArray("sites")).forEach{x->Text(x.optString("name")+" : "+x.optString("ca")+" F")}
  Text(r.optString("from")+" → "+r.optString("to")+" · Confirmé serveur uniquement")
  OutlinedButton({val content=buildString{append("GRILLAD — rapport ");append(r.optString("from"));append(" / ");append(r.optString("to"));append("\nCA ");append(amount("ca"));append("\n");rows(r.optJSONArray("sites")).forEach{x->append(x.optString("name")+" : "+x.optString("ca")+" F\n")}};context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply{type="text/plain";putExtra(Intent.EXTRA_TEXT,content)},"Partager le rapport"))},enabled=enabled){Text("Partager le rapport")}
- OutlinedButton({pdfLines=reportPdfLines(r);pdfLauncher.launch("grillad-rapport-"+r.optString("from")+"-"+r.optString("to")+".pdf")},enabled=enabled){Text("Exporter PDF")}}
+ OutlinedButton({pdfLines=reportPdfLines(r);pdfLauncher.launch("grillad-rapport-"+r.optString("from")+"-"+r.optString("to")+".pdf")},enabled=enabled){Text("Exporter PDF")}
+ OutlinedButton({xlsxRows=grilladReportRows(r);xlsxLauncher.launch("grillad-rapport-"+r.optString("from")+"-"+r.optString("to")+".xlsx")},enabled=enabled){Text("Exporter Excel")}}
 }
