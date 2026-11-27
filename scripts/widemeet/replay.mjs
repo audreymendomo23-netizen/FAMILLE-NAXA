@@ -136,6 +136,28 @@ try{
  pass("actual offline recovery proof, one-use key, GoTrue credential replacement and two-device revocation");
 
  assert.equal(hs.member_id,h.id);assert.equal(gs.member_id,g.id);assert.equal(os.active_workspace_id,other);
+ // Dedicated support agents, no implicit rights for a tenant promoter.
+ const sa=await fixture(other,"staff"),sb=await fixture(other,"staff"),sas=await login(sa),sbs=await login(sb);
+ await rest("wm_support_agents",{account_id:sa.id,enabled:true});await rest("wm_support_agents",{account_id:sb.id,enabled:true});
+ const sr=(token,action,data={})=>request(auth+"/identity",{action:"support-"+action,data},token);
+ const sk=(token,action,data={})=>ok(auth+"/identity",{action:"support-"+action,data},token);
+ assert.equal((await sk(hs.access_token,"capabilities")).agent,false);
+ const supportTicket={ticket_id:randomUUID(),message_id:randomUUID(),subject:"Synthetic support request",category:"meeting",body:"Synthetic issue"};
+ await sk(hs.access_token,"create",supportTicket);await sk(hs.access_token,"create",supportTicket);
+ assert.equal((await sr(gs.access_token,"read",{ticket_id:supportTicket.ticket_id})).status,403);
+ assert.equal((await sr(os.access_token,"queue")).status,403);
+ assert.equal((await sr(sas.access_token,"read",{ticket_id:supportTicket.ticket_id})).status,403);
+ const claim=await Promise.all([sr(sas.access_token,"claim",{ticket_id:supportTicket.ticket_id}),sr(sbs.access_token,"claim",{ticket_id:supportTicket.ticket_id})]);
+ assert.equal(claim.filter(x=>x.status===200).length,1);
+ const winner=claim[0].status===200?sas:sbs,loser=claim[0].status===200?sbs:sas;
+ assert.equal((await sr(loser.access_token,"read",{ticket_id:supportTicket.ticket_id})).status,403);
+ const replyData={ticket_id:supportTicket.ticket_id,message_id:randomUUID(),body:"Synthetic answer"};
+ await sk(winner.access_token,"reply",replyData);await sk(winner.access_token,"reply",replyData);
+ assert.equal((await sk(hs.access_token,"read",{ticket_id:supportTicket.ticket_id})).messages.length,2);
+ await sk(hs.access_token,"close",{ticket_id:supportTicket.ticket_id});
+ assert.equal((await sr(winner.access_token,"reply",{...replyData,message_id:randomUUID()})).status,403);
+ pass("private support ticket: exact retry, cross-account denial, atomic agent claim, isolated reply and closure");
+
  const denied=await request(auth+"/login",{identifier:h.login,password:"wrong",installation_id:randomUUID(),platform:"web"});assert.equal(denied.status,401);
  const rec=await ok(auth+"/request-recovery",{identifier:h.login,installation_id:randomUUID(),platform:"web"});const unknown=await ok(auth+"/request-recovery",{identifier:"WM-UNKNOWN123",installation_id:randomUUID(),platform:"web"});assert.deepEqual(rec,unknown);assert.equal(rec.accepted,true);
  pass("actual GoTrue login and neutral recovery intake");

@@ -1,0 +1,52 @@
+package cm.naxa.widemeet
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import cm.naxa.widemeet.auth.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import org.json.JSONObject
+import java.util.UUID
+private fun supportRows(x:JSONObject,key:String):List<JSONObject>{val a=x.getJSONArray(key);return (0 until a.length()).map{a.getJSONObject(it)}}
+@Composable fun SupportCenter(english:Boolean,gateway:AuthGateway,session:Session,onFaq:()->Unit){
+ fun tr(fr:String,en:String)=if(english)en else fr
+ val scope=rememberCoroutineScope()
+ var agent by remember{mutableStateOf(false)};var queue by remember{mutableStateOf(false)};var ready by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
+ var items by remember{mutableStateOf<List<JSONObject>>(emptyList())};var ticket by remember{mutableStateOf<JSONObject?>(null)}
+ var subject by remember{mutableStateOf("")};var category by remember{mutableStateOf("account")};var body by remember{mutableStateOf("")};var reply by remember{mutableStateOf("")};var pending by remember{mutableStateOf<JSONObject?>(null)};var closeConfirm by remember{mutableStateOf(false)}
+ suspend fun req(action:String,data:JSONObject=JSONObject())=gateway.identity(session,"support-"+action,data)
+ suspend fun refresh(q:Boolean=queue){items=supportRows(req(if(q)"queue" else "list"),"items")}
+ suspend fun load(){agent=req("capabilities").optBoolean("agent");refresh(false);ready=true}
+ suspend fun open(id:String){ticket=req("read",JSONObject().put("ticket_id",id));reply="";pending=null}
+ fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
+ fun status(s:String)=when(s){"open"->tr("Ouverte","Open");"assigned"->tr("Prise en charge","Assigned");"waiting"->tr("En attente de réponse","Waiting for response");"closed"->tr("Clôturée","Closed");else->s}
+ LaunchedEffect(session.deviceId){work{load()}}
+ Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
+ Text(tr("Mes demandes d’assistance","My support requests"),style=MaterialTheme.typography.titleLarge)
+ Text(tr("Ne communiquez jamais vos mots de passe, codes de récupération ou contenus privés de réunion.","Never share passwords, recovery codes or private meeting content."))
+ TextButton(onClick=onFaq){Text(tr("Consulter la FAQ","Read FAQ"))}
+ if(busy)LinearProgressIndicator(Modifier.fillMaxWidth());if(error)Text(tr("Action non confirmée. Réessayez.","Action unconfirmed. Retry."),color=MaterialTheme.colorScheme.error)
+ if(!ready&&!busy)Button(onClick={work{load()}}){Text(tr("Réessayer","Retry"))}
+ if(ready){
+ if(agent){TextButton(enabled=!busy&&pending==null,onClick={work{ticket=null;refresh(false);queue=false}}){Text(tr("Mes demandes","My requests"))};TextButton(enabled=!busy&&pending==null,onClick={work{ticket=null;refresh(true);queue=true}}){Text(tr("File agent","Agent queue"))}}
+ val t=ticket
+ if(t!=null){val id=t.getString("id")
+ TextButton(enabled=!busy&&pending==null,onClick={work{ticket=null;refresh()}}){Text(tr("Retour aux demandes","Back to requests"))}
+ Text(t.getString("subject"),style=MaterialTheme.typography.titleMedium);Text(status(t.getString("status")))
+ TextButton(enabled=!busy&&pending==null,onClick={work{open(id)}}){Text(tr("Actualiser","Refresh"))}
+ for(m in supportRows(t,"messages")){Text(if(m.optString("author_kind")=="agent")tr("Assistance","Support") else tr("Demandeur","Requester"),style=MaterialTheme.typography.labelLarge);Text(m.getString("body"))}
+ if(t.optString("status")!="closed"){OutlinedTextField(reply,{reply=it.take(4000)},enabled=!busy&&pending==null,label={Text(tr("Votre message","Your message"))},modifier=Modifier.fillMaxWidth());Button(enabled=!busy&&reply.isNotBlank(),onClick={work{val p=pending?:JSONObject().put("ticket_id",id).put("message_id",UUID.randomUUID().toString()).put("body",reply.trim()).also{pending=it};req("reply",p);pending=null;open(id);refresh()}}){Text(tr("Envoyer","Send"))};TextButton(enabled=!busy&&pending==null,onClick={closeConfirm=true}){Text(tr("Clôturer","Close"))}}
+ if(closeConfirm)AlertDialog(onDismissRequest={closeConfirm=false},title={Text(tr("Clôturer cette demande ?","Close this request?"))},confirmButton={TextButton(onClick={closeConfirm=false;work{req("close",JSONObject().put("ticket_id",id));open(id);refresh()}}){Text(tr("Confirmer","Confirm"))}},dismissButton={TextButton(onClick={closeConfirm=false}){Text(tr("Annuler","Cancel"))}})
+ }else{
+ TextButton(enabled=!busy&&pending==null,onClick={work{refresh()}}){Text(tr("Actualiser","Refresh"))}
+ for(x in items){val id=x.getString("id");Text((if(x.isNull("subject"))tr("Demande en attente","Pending request") else x.getString("subject"))+" · "+status(x.getString("status")));TextButton(enabled=!busy&&pending==null,onClick={work{if(queue&&!x.optBoolean("assigned")){req("claim",JSONObject().put("ticket_id",id));refresh(true)};open(id)}}){Text(if(queue&&!x.optBoolean("assigned"))tr("Prendre en charge","Claim") else tr("Ouvrir","Open"))}}
+ if(items.isEmpty())Text(tr("Aucune demande.","No requests."))
+ if(!queue){Text(tr("Nouvelle demande","New request"),style=MaterialTheme.typography.titleMedium);OutlinedTextField(subject,{subject=it.take(120)},enabled=!busy&&pending==null,label={Text(tr("Sujet","Subject"))},modifier=Modifier.fillMaxWidth());for((value,label) in listOf("account" to tr("Compte","Account"),"meeting" to tr("Réunion","Meeting"),"billing" to tr("Abonnement","Billing"),"other" to tr("Autre","Other")))Row{RadioButton(selected=category==value,onClick={category=value},enabled=!busy&&pending==null);Text(label,Modifier.padding(top=12.dp))}
+ OutlinedTextField(body,{body=it.take(4000)},enabled=!busy&&pending==null,label={Text(tr("Description du problème","Issue description"))},modifier=Modifier.fillMaxWidth())
+ Button(enabled=!busy&&subject.isNotBlank()&&body.isNotBlank(),onClick={work{val p=pending?:JSONObject().put("ticket_id",UUID.randomUUID().toString()).put("message_id",UUID.randomUUID().toString()).put("subject",subject.trim()).put("category",category).put("body",body.trim()).also{pending=it};req("create",p);pending=null;subject="";body="";refresh(false);open(p.getString("ticket_id"))}}){Text(tr("Envoyer la demande","Submit request"))}}
+ }}
+ Text(tr("Les appels audio et le partage d’écran avec un agent ne sont pas encore disponibles.","Audio calls and screen sharing with an agent are not yet available."))
+ }}
+}

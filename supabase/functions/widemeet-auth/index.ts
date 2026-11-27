@@ -226,10 +226,15 @@ Deno.serve(async request=>{
  if(!/^[a-f0-9]{64}$/.test(access))return send(401,{error:"credentials"});
  const name=body.action,data=body.data??{};
  if(name!=="photo-save"&&raw.length>16384)return send(413,{error:"request_too_large"});
- if(!["profile","profile-update","photo-read","photo-save","photo-delete","onboarding-step","contacts","favorite","groups","group-save","group-delete","invite","invitations","respond-invite","member-role","manager-assign","revoke-member","billing","billing-list","billing-create","billing-cancel","devices","revoke-device","dashboard"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
+ if(!["profile","profile-update","photo-read","photo-save","photo-delete","onboarding-step","contacts","favorite","groups","group-save","group-delete","invite","invitations","respond-invite","member-role","manager-assign","revoke-member","billing","billing-list","billing-create","billing-cancel","devices","revoke-device","dashboard","support-capabilities","support-list","support-queue","support-create","support-read","support-claim","support-reply","support-close"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
  const p_hash=await digest(access);
  const context=(await rest("rpc/wm_session_context",{method:"POST",body:JSON.stringify({p_hash})}))?.[0];
  if(!context||context.password_change_required)return send(403,{error:"scope"});
+ if(typeof name==="string"&&name.startsWith("support-")){
+ if(Deno.env.get("WM_SUPPORT_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ const result=await rest("rpc/wm_support_action",{method:"POST",body:JSON.stringify({p_hash,p_action:name,p_data:data})});
+ return result?send(200,result):send(403,{error:"scope"});
+ }
  if(["photo-read","photo-save","photo-delete"].includes(name)){
  if(name==="photo-save"){
  if(!thumbnail(data.jpeg))return send(400,{error:"invalid_photo"});
