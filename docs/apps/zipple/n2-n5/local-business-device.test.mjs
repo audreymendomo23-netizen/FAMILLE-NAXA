@@ -57,6 +57,13 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
  }
  assert.equal(Number(await scalar("select count(*) from zp_cash_tenders t join zp_cash_receipts r on r.id=t.receipt_id where r.order_id=$1",[mixedOrder.id])),3);
  assert.equal(Number(await scalar("select sum(t.amount_xaf) from zp_cash_tenders t join zp_cash_receipts r on r.id=t.receipt_id where r.order_id=$1",[mixedOrder.id])),1000);
+ assert.equal(Number(await scalar("select count(*) from zp_suppliers where site_id=$1 and name='Fournisseur ERP natif'",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_purchases where site_id=$1 and reference='NATIVE-PURCHASE' and received_milli=3000 and paid_xaf=1000",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_ledger_mapping_posts p join zp_ledger_entries e on e.id=p.entry_id where e.site_id=$1 and e.amount_xaf=750",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_finance_documents where site_id=$1 and label='Justificatif ERP natif'",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_erp_sync_reviews v join zp_erp_sync_receipts r on r.event_id=v.event_id where v.site_id=$1 and r.state='conflict'",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_expenses where site_id=$1 and reference='NATIVE-AFTER-REVIEW'",[site])),1);
+ console.log("ZIPPLE_BULK3_ANDROID_REAL_ERP_LEDGER_EVIDENCE_OFFLINE_REVIEW_PASS");
  const closed=await ok("cash_close",{cash_id:cash,counted_xaf:4900});assert.equal(closed.variance_xaf,0);
  console.log("ZIPPLE_BULK2_ANDROID_REAL_EDGE_SPLIT_QUANTITY_AMOUNT_AND_CASH_PASS");
  }finally{if(server)await new Promise(ok=>server.close(ok));await db.end()}
