@@ -177,7 +177,7 @@ do $wm$ declare
  b uuid:='10000000-0000-4000-8000-000000000002';
  w uuid:='20000000-0000-4000-8000-000000000001';
  z uuid:='20000000-0000-4000-8000-000000000002';
- i uuid; j jsonb;
+ i uuid; j jsonb; gid uuid:=gen_random_uuid();
 begin
  perform public.wm_issue_verified_session(a,'30000000-0000-4000-8000-000000000031',w,repeat('6',64),1);
  perform public.wm_issue_verified_session(b,'30000000-0000-4000-8000-000000000032',z,repeat('7',64),0);
@@ -190,6 +190,7 @@ begin
  end loop;
  if (public.wm_identity_action(repeat('6',64),'onboarding-step','{"step":1}')->>'step')::integer is distinct from 5 then raise exception 'onboarding regressed';end if;
  if public.wm_identity_action(repeat('6',64),'favorite',jsonb_build_object('member_id',b,'enabled',true)) is not null then raise exception 'foreign favorite accepted';end if;
+ if public.wm_identity_action(repeat('6',64),'group-save',jsonb_build_object('id',gid,'name','Foreign','member_ids',jsonb_build_array(b))) is not null then raise exception 'foreign contact group accepted';end if;
  if public.wm_identity_action(repeat('6',64),'invite','{"login_id":"WM-FIXTURE2","role":"staff"}') is null then raise exception 'invite failed';end if;
  if public.wm_identity_action(repeat('6',64),'invite','{"login_id":"WM-FIXTURE2","role":"promoteur"}') is not null then raise exception 'invite escalation';end if;
  j:=public.wm_identity_action(repeat('7',64),'invitations','{}');
@@ -201,16 +202,22 @@ begin
  if public.wm_identity_action(repeat('8',64),'invite','{"login_id":"WM-REGISTER1","role":"staff"}') is not null then raise exception 'staff invite accepted';end if;
  if public.wm_identity_action(repeat('6',64),'favorite',jsonb_build_object('member_id',b,'enabled',true)) is null then raise exception 'favorite failed';end if;
  if (public.wm_identity_action(repeat('6',64),'contacts','{}')->'contacts'->0->>'favorite') is distinct from 'true' then raise exception 'favorite not returned';end if;
+ if public.wm_identity_action(repeat('6',64),'group-save',jsonb_build_object('id',gid,'name','Team','member_ids',jsonb_build_array(b))) is null then raise exception 'group creation failed';end if;
+ if (public.wm_identity_action(repeat('6',64),'groups','{}')->'groups'->0->'member_ids'->>0) is distinct from b::text then raise exception 'group member missing';end if;
+ if jsonb_array_length(public.wm_identity_action(repeat('8',64),'groups','{}')->'groups')<>0 then raise exception 'group read leak';end if;
+ if public.wm_identity_action(repeat('8',64),'group-delete',jsonb_build_object('id',gid)) is not null then raise exception 'foreign group deletion';end if;
  if public.wm_identity_action(repeat('8',64),'member-role',jsonb_build_object('member_id',a,'role','staff')) is not null then raise exception 'staff changed owner';end if;
  if public.wm_identity_action(repeat('6',64),'member-role',jsonb_build_object('member_id',b,'role','manager')) is null then raise exception 'manager promotion failed';end if;
  if exists(select 1 from public.wm_session_context(repeat('8',64))) then raise exception 'old staff session survived role change';end if;
  if public.wm_identity_action(repeat('6',64),'revoke-member',jsonb_build_object('member_id',b)) is null then raise exception 'revocation failed';end if;
+ if exists(select 1 from public.wm_contact_groups where id=gid and b=any(member_ids)) then raise exception 'revoked contact retained in group';end if;
+ if public.wm_identity_action(repeat('6',64),'group-delete',jsonb_build_object('id',gid)) is null then raise exception 'group delete failed';end if;
  if exists(select 1 from public.wm_favorites where contact_id=b and workspace_id=w) then raise exception 'revoked favorite retained';end if;
  if exists(select 1 from public.wm_memberships where account_id=b and workspace_id=w and enabled) then raise exception 'membership still enabled';end if;
 end $wm$;
 reset role;
 do $wm$ begin
- if has_function_privilege('anon','public.wm_identity_action(text,text,jsonb)','EXECUTE') or has_table_privilege('authenticated','public.wm_membership_invites','SELECT') or has_table_privilege('anon','public.wm_favorites','SELECT') then raise exception 'identity ACL leak';end if;
+ if has_function_privilege('anon','public.wm_identity_action(text,text,jsonb)','EXECUTE') or has_table_privilege('authenticated','public.wm_membership_invites','SELECT') or has_table_privilege('anon','public.wm_favorites','SELECT') or has_table_privilege('authenticated','public.wm_contact_groups','SELECT') then raise exception 'identity ACL leak';end if;
 end $wm$;
 
 
