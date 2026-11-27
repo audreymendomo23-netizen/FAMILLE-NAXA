@@ -29,6 +29,12 @@ create table public.wm_minutes_recipients(
  revoked_at timestamptz,
  primary key(version_id,account_id)
 );
+create table public.wm_minutes_exports(
+ request_id uuid primary key,version_id uuid not null references public.wm_minutes_versions(id),account_id uuid not null references public.wm_accounts(id),requested_at timestamptz not null default clock_timestamp()
+);
+alter table public.wm_minutes_exports enable row level security;
+revoke all on public.wm_minutes_exports from public,anon,authenticated;
+grant select,insert on public.wm_minutes_exports to service_role;
 alter table public.wm_minutes_eligibility enable row level security;
 alter table public.wm_minutes_versions enable row level security;
 alter table public.wm_minutes_recipients enable row level security;
@@ -55,7 +61,7 @@ create trigger wm_minutes_close after update of state on public.wm_rooms for eac
 
 create function public.wm_minutes_action(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare s record; a_role text; r public.wm_rooms%rowtype; e public.wm_minutes_eligibility%rowtype; v public.wm_minutes_versions%rowtype; rid uuid; vid uuid; latest integer; selected uuid[]; member uuid; host boolean; txt text; result jsonb;
+declare s record; a_role text; r public.wm_rooms%rowtype; e public.wm_minutes_eligibility%rowtype; v public.wm_minutes_versions%rowtype; rid uuid; vid uuid; latest integer; selected uuid[]; member uuid; host boolean; txt text; result jsonb; export_id uuid; prior public.wm_minutes_exports%rowtype;
 begin
  select * into s from public.wm_session_context(p_hash);
  if not found or s.password_change_required or jsonb_typeof(p_data) is distinct from 'object' then return null;end if;
@@ -93,14 +99,23 @@ begin
   select coalesce(max(version),0) into latest from public.wm_minutes_versions where room_id=rid;
   return jsonb_build_object('room_id',rid,'latest_version',latest,'premium',e.premium,'snapshot',e.snapshot,'recipients',coalesce((select jsonb_agg(jsonb_build_object('member_id',m.account_id,'display_name',ac.display_name) order by ac.display_name) from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=r.workspace_id and m.enabled and exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'memberId'=m.account_id::text and p->>'response'='accepted' and p->>'excluded'='false')),'[]'::jsonb));
  end if;
- if p_action='read' then
+ if p_action in ('read','export') then
   select * into v from public.wm_minutes_versions where id=vid and room_id=rid and revoked_at is null;
   if not found then return null;end if;
   if not host then
    if v.published_at is null or not exists(select 1 from public.wm_minutes_recipients where version_id=vid and account_id=s.account_id and revoked_at is null) then return null;end if;
    update public.wm_minutes_recipients set read_at=coalesce(read_at,clock_timestamp()) where version_id=vid and account_id=s.account_id and revoked_at is null;
   end if;
-  return jsonb_build_object('room_id',rid,'version_id',v.id,'version',v.version,'body',v.body,'approved_at',v.approved_at,'published_at',v.published_at,'snapshot',case when host then e.snapshot else e.snapshot-'participants' end,'can_manage',host,'origin','human_draft');
+  if p_action='export' then
+   if v.published_at is null or v.approved_at is null then return null;end if;
+   begin export_id:=(p_data->>'request_id')::uuid;exception when invalid_text_representation then return null;end;
+   if export_id is null then return null;end if;
+   insert into public.wm_minutes_exports(request_id,version_id,account_id) values(export_id,v.id,s.account_id) on conflict do nothing;
+   select * into prior from public.wm_minutes_exports where request_id=export_id;
+   if prior.version_id<>v.id or prior.account_id<>s.account_id then return null;end if;
+   return jsonb_build_object('room_id',rid,'version_id',v.id,'version',v.version,'body',v.body,'approved_at',v.approved_at,'published_at',v.published_at,'snapshot',e.snapshot-'participants','recipient_name',(select display_name from public.wm_accounts where id=s.account_id),'verification_id',v.id,'origin','human_draft');
+  end if;
+  return jsonb_build_object('room_id',rid,'version_id',v.id,'version',v.version,'body',v.body,'approved_at',v.approved_at,'published_at',v.published_at,'snapshot',case when host then e.snapshot else e.snapshot-'participants' end,'can_manage',host,'origin','human_draft','publication_recipients',case when host then coalesce((select jsonb_agg(jsonb_build_object('member_id',mr.account_id,'display_name',ma.display_name)) from public.wm_minutes_recipients mr join public.wm_accounts ma on ma.id=mr.account_id and ma.enabled join public.wm_memberships mm on mm.account_id=mr.account_id and mm.workspace_id=r.workspace_id and mm.enabled where mr.version_id=v.id and mr.revoked_at is null),'[]'::jsonb) else '[]'::jsonb end);
  end if;
  if not host or not e.premium then return null;end if;
  if p_action='draft' then

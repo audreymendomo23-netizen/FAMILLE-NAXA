@@ -327,6 +327,7 @@ try{
  const publication={room_id:mid,version_id:mv1,recipients:[mg.id]};
  assert.equal((await mreq(mhs.access_token,"publish",publication)).status,403);
  assert.equal((await mreq(mgs.access_token,"read",publication)).status,403);
+ assert.equal((await mreq(mhs.access_token,"export",{...publication,request_id:randomUUID()})).status,403);
  await mok(mhs.access_token,"approve",publication);
  assert.equal((await mreq(mhs.access_token,"publish",{...publication,recipients:[o.id]})).status,403);
  await mok(mhs.access_token,"publish",publication);
@@ -334,6 +335,7 @@ try{
  assert.equal((await mreq(os.access_token,"read",publication)).status,403);
  assert.ok((await mok(mgs.access_token,"list")).items.some(x=>x.room_id===mid&&x.unread));
  assert.equal((await mok(mgs.access_token,"read",publication)).body,draft.body);
+ const exportRequest={...publication,request_id:randomUUID()};assert.equal((await mreq(mos.access_token,"export",exportRequest)).status,403);const exportData=await mok(mgs.access_token,"export",exportRequest);assert.equal(exportData.body,draft.body);assert.equal(exportData.verification_id,mv1);assert.ok(exportData.recipient_name);assert.equal((await mreq(mhs.access_token,"export",exportRequest)).status,403);pass("actual N4 exact published PDF export payload, recipient watermark identity and audit request isolation");
  const treq=(token,action,data={})=>request(room+"/tasks",{action,data},token);
  const tok=(token,action,data={})=>ok(room+"/tasks",{action,data},token);
  const task={id:randomUUID(),room_id:mid,version_id:mv1,assignee_id:mg.id,title:"Verify human decision",due_at:new Date(Date.now()+86400000).toISOString()};

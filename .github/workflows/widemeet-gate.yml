@@ -40,6 +40,7 @@ jobs:
           node-version: '22'
       - run: npm install --no-audit --no-fund
       - run: npm run build --workspace @famille/widemeet-web
+      - run: node scripts/widemeet/pdf-replay.mjs
       - run: |
           npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.56.1
           # Hosted Ubuntu runner already supplies Chromium libraries; verify by launching.

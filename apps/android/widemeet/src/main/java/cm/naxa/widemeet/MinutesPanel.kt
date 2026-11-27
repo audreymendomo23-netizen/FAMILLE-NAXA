@@ -1,5 +1,10 @@
 package cm.naxa.widemeet
 import androidx.compose.foundation.layout.*
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -14,7 +19,7 @@ import java.util.UUID
 private fun minuteRows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0 until a.length()).mapNotNull{a.optJSONObject(it)}
 @Composable fun MinutesPanel(english:Boolean,gateway:RoomGateway,session:Session){
  fun tr(fr:String,en:String)=if(english)en else fr
- val scope=rememberCoroutineScope()
+ val scope=rememberCoroutineScope();val context=LocalContext.current
  var items by remember{mutableStateOf<List<JSONObject>>(emptyList())};var selected by remember{mutableStateOf<JSONObject?>(null)};var prep by remember{mutableStateOf<JSONObject?>(null)};var version by remember{mutableStateOf<JSONObject?>(null)}
  var body by remember{mutableStateOf("")};var recipients by remember{mutableStateOf<Set<String>>(emptySet())};var pending by remember{mutableStateOf<JSONObject?>(null)}
  var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var revokeConfirm by remember{mutableStateOf(false)}
@@ -22,6 +27,8 @@ private fun minuteRows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() e
  suspend fun refresh(){items=minuteRows(req("list").optJSONArray("items"))}
  suspend fun read(id:String,vid:String){val v=req("read",JSONObject().put("room_id",id).put("version_id",vid));version=v;body=v.getString("body")}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
+ var exportTarget by remember{mutableStateOf<Pair<String,String>?>(null)}
+ val pdfPicker=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")){uri->val target=exportTarget;exportTarget=null;if(uri!=null&&target!=null)work{val d=req("export",JSONObject().put("room_id",target.first).put("version_id",target.second).put("request_id",UUID.randomUUID().toString()));withContext(Dispatchers.IO){context.contentResolver.openOutputStream(uri,"w")?.use{writeMinutesPdf(d,english,it)}?:error("output unavailable")}}}
  LaunchedEffect(session.deviceId){busy=true;try{refresh()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}
  suspend fun loadVersion(id:String,vid:String){read(id,vid);prep=req("prepare",JSONObject().put("room_id",id));refresh()}
  fun mutate(action:String){val id=selected?.optString("room_id")?:return;val vid=version?.optString("version_id")?:return;work{req(action,JSONObject().put("room_id",id).put("version_id",vid).apply{if(action=="publish")put("recipients",JSONArray(recipients.toList()))});if(action=="revoke"){selected=null;prep=null;version=null;body="";refresh()}else loadVersion(id,vid)}}
@@ -39,6 +46,7 @@ private fun minuteRows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() e
  Text(current.optString("title"),style=MaterialTheme.typography.titleMedium)
  key(current.getString("room_id")){ArchiveEvidence(english,gateway,session,current.getString("room_id"),current.optBoolean("can_manage"))}
  val v=version;val p=prep
+ if(v!=null&&!v.isNull("published_at"))Button(enabled=!busy,onClick={exportTarget=current.getString("room_id") to v.getString("version_id");pdfPicker.launch("widemeet-compte-rendu-v"+v.optInt("version")+".pdf")}){Text(tr("Télécharger le compte rendu PDF","Download minutes PDF"))}
  if(v!=null)Text(tr("Version","Version")+" "+v.optInt("version")+" · "+when{!v.isNull("published_at")->tr("Publiée","Published");!v.isNull("approved_at")->tr("Validée","Approved");else->tr("Brouillon","Draft")})
  if(current.optBoolean("can_manage")&&p?.optBoolean("premium")==true){
  OutlinedTextField(body,{body=it.take(8000)},enabled=!busy&&pending==null,label={Text(tr("Compte rendu manuel (pas une transcription IA)","Manual minutes (not an AI transcript)"))},modifier=Modifier.fillMaxWidth(),minLines=5)
@@ -49,7 +57,7 @@ private fun minuteRows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() e
  for(m in minuteRows(p.optJSONArray("recipients"))){val id=m.getString("member_id");Row{Checkbox(id in recipients,{checked->recipients=if(checked)recipients+id else recipients-id},enabled=!busy);Text(m.optString("display_name"),Modifier.padding(top=12.dp))}}
  Button(enabled=!busy&&recipients.isNotEmpty()&&body==v.optString("body")&&pending==null,onClick={mutate("publish")}){Text(tr("Publier aux destinataires choisis","Publish to selected recipients"))}
  }
- if(v!=null&&!v.isNull("published_at"))key(v.getString("version_id")){TasksPanel(english,gateway,session,current.getString("room_id"),v.getString("version_id"),p.optJSONArray("recipients"))}
+ if(v!=null&&!v.isNull("published_at"))key(v.getString("version_id")){TasksPanel(english,gateway,session,current.getString("room_id"),v.getString("version_id"),v.optJSONArray("publication_recipients"))}
  if(v!=null)TextButton(enabled=!busy,onClick={revokeConfirm=true}){Text(tr("Révoquer","Revoke"))}
  }else if(v!=null)Text(v.getString("body"))else Text(tr("Aucun compte rendu publié.","No published minutes."))
  }
