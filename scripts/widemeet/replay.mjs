@@ -584,12 +584,13 @@ try{
  pass("B6 real authenticated privacy rights and truthful security notices");
  await menuPage("Livechat et support");
  await hp.getByLabel("Sujet",{exact:true}).fill("Replay support browser");
+  await hp.getByLabel("Catégorie",{exact:true}).selectOption("privacy");
  await hp.getByLabel("Description du problème",{exact:true}).fill("Synthetic browser issue");
  await hp.getByRole("button",{name:"Envoyer la demande",exact:true}).click();
  await hp.getByRole("heading",{name:"Replay support browser",exact:true}).waitFor({timeout:20000});
  const browserSupportHost=await login(h);
  const browserSupportList=await sk(browserSupportHost.access_token,"list");
- const browserSupportTicket=browserSupportList.items.find(x=>x.subject==="Replay support browser");assert.ok(browserSupportTicket);
+ const browserSupportTicket=browserSupportList.items.find(x=>x.subject==="Replay support browser");assert.ok(browserSupportTicket);assert.equal(browserSupportTicket.category,"privacy");assert.equal((await identityRequest(gs.access_token,"support-read",{ticket_id:browserSupportTicket.id})).status,403);
  const browserAgent=await login(sa);
  await sk(browserAgent.access_token,"claim",{ticket_id:browserSupportTicket.id});
  await sk(browserAgent.access_token,"reply",{ticket_id:browserSupportTicket.id,message_id:randomUUID(),body:"Synthetic agent browser answer"});
