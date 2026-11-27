@@ -107,13 +107,16 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   console.log("ZIPPLE_BULK3_REAL_EDGE_LEDGER_PASS");
   console.log("ZIPPLE_N5_REAL_EDGE_STOCK_EXPENSE_UI_PASS");
   await page.getByRole("button",{name:"Achats",exact:true}).click();
-  await page.getByLabel("Nom du fournisseur").fill("Grossiste recette");await page.getByRole("button",{name:"Créer le fournisseur"}).click();
+  await page.getByLabel("Nom du fournisseur").fill("Grossiste recette");await page.getByLabel("WhatsApp",{exact:true}).fill("237600000001");await page.getByRole("button",{name:"Créer le fournisseur"}).click();
   await page.getByRole("combobox",{name:"Fournisseur de la commande",exact:true}).selectOption({label:"Grossiste recette"});
   await page.getByRole("combobox",{name:"Matière commandée",exact:true}).selectOption({label:"Farine recette (kg)"});
   await page.getByLabel("Référence de commande",{exact:true}).fill("ACH-RECETTE");await page.getByLabel("Quantité commandée").fill("2");await page.getByLabel("Coût total commandé FCFA").fill("1000");await page.getByRole("button",{name:"Créer la commande"}).click();
   await page.getByRole("combobox",{name:"Commande à traiter",exact:true}).selectOption({label:"ACH-RECETTE"});
   await page.getByLabel("Quantité réceptionnée").fill("1");await page.getByLabel("Lot de réception").fill("ACH-LOT");await page.getByRole("button",{name:"Confirmer la réception",exact:true}).click();
   await page.getByText(/Reçu : 1\/2/).waitFor();
+  const purchaseDownload=page.waitForEvent("download");await page.getByRole("button",{name:"Télécharger le bon de commande PDF"}).click();const purchaseFile=await purchaseDownload;assert.equal(purchaseFile.suggestedFilename(),"zipple-bon-ACH-RECETTE.pdf");const purchaseBytes=await readFile(await purchaseFile.path());assert.equal(purchaseBytes.subarray(0,5).toString(),"%PDF-");assert.match(purchaseBytes.toString("latin1"),/ACH-RECETTE/);assert.match(purchaseBytes.toString("latin1"),/1000 FCFA/);
+  const whatsapp=new URL(await page.getByRole("link",{name:"Préparer le message WhatsApp fournisseur"}).getAttribute("href"));assert.equal(whatsapp.origin,"https://wa.me");assert.equal(whatsapp.pathname,"/237600000001");assert.match(whatsapp.searchParams.get("text"),/ACH-RECETTE/);assert.match(whatsapp.searchParams.get("text"),/Reçu : 1 kg/);
+  console.log("ZIPPLE_QA_CASE_PARTIAL B3-010 PDF_AND_WHATSAPP_DRAFT_PASS");
   await page.getByLabel("Montant du règlement FCFA").fill("200");await page.getByLabel("Référence du règlement").fill("REG-RECETTE");await page.getByRole("button",{name:"Enregistrer le règlement"}).click();
   await page.getByText(/Dette fournisseur enregistrée : 300 FCFA/).waitFor();
   const purchase=await scalar("select id from zp_purchases where org_id=$1",[org]);assert.equal(Number(await scalar("select paid_xaf from zp_purchases where id=$1",[purchase])),200);

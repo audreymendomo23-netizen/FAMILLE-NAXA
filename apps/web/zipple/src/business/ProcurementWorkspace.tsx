@@ -2,6 +2,7 @@ import {ConvertedPurchases} from "./ConvertedPurchases";
 import {InventoryGains} from "./InventoryGains";
 import {resolveInventoryScan} from "./inventory-scan";
 import {SupplierReturns} from "./SupplierReturns";
+import {downloadPurchaseOrder,purchaseWhatsAppLink,type PurchaseOrderDocument} from "./PurchaseOrderDocument";
 import React,{useEffect,useState,useRef} from "react";
 // Adaptation of NAXA Services StockOperationsPage: server-confirmed supplier, purchase, receipt, payment.
 type Props={ingredients:any[];lots:any[];call:(action:string,body?:Record<string,unknown>)=>Promise<any>;disabled:boolean;en:boolean;refreshStock:()=>Promise<void>;queueErp?:(action:string,payload:Record<string,unknown>)=>Promise<void>};
@@ -28,6 +29,11 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  const batches:any[]=data?.batches??[];
  function purchaseLabel(x:any){const b=batches.find(g=>g.purchase_ids.includes(x.id));return b?b.reference+" / "+(b.purchase_ids.indexOf(x.id)+1)+" · "+(ingredients.find(i=>i.id===x.ingredient_id)?.name??"") :x.reference}
  const lock=disabled||busy;
+ const selectedSupplier=suppliers.find(x=>x.id===selected?.supplier_id);
+ const selectedBatch=batches.find(b=>b.purchase_ids.includes(purchase));
+ const documentRows=selectedBatch?selectedBatch.purchase_ids.map((id:string)=>purchases.find(x=>x.id===id)):selected?[selected]:[];
+ const document:PurchaseOrderDocument|null=selectedSupplier&&documentRows.length&&documentRows.every((x:any)=>x&&ingredients.some(i=>i.id===x.ingredient_id))?{reference:selectedBatch?.reference??selected.reference,supplier:selectedSupplier.name,lines:documentRows.map((x:any)=>{const i=ingredients.find(v=>v.id===x.ingredient_id);return {name:i.name,unit:i.unit,qtyMilli:Number(x.qty_milli),totalXaf:Number(x.total_xaf),receivedMilli:Number(x.received_milli)}})}:null;
+ const whatsappLink=document?purchaseWhatsAppLink(selectedSupplier.whatsapp,document,en):null;
  return <section>
  <h4>{t("Fournisseurs, achats et inventaires","Suppliers, purchases and inventory counts")}</h4>
  {error&&<p role="alert">{t("Opération non confirmée : ","Operation unconfirmed: ")}{error}</p>}
@@ -52,6 +58,7 @@ export function ProcurementWorkspace({ingredients,lots,call,disabled,en,refreshS
  <h4>{t("Réception et règlement","Receipt and payment")}</h4>
  <label>{t("Commande à traiter","Purchase to process")}<select aria-label={t("Commande à traiter","Purchase to process")} value={purchase} onChange={e=>PU(e.target.value)}><option value="">—</option>{purchases.map(x=><option key={x.id} value={x.id}>{purchaseLabel(x)}</option>)}</select></label>
  {selected&&<p>{t("Reçu","Received")} : {qty(selected.received_milli)}/{qty(selected.qty_milli)} · {t("Reste à régler","Outstanding")} : {money(Math.max(0,selected.net_balance_xaf??(selected.received_cost-selected.paid_xaf)))}</p>}
+ {document&&<div><button disabled={lock} onClick={()=>run(async()=>{await downloadPurchaseOrder(document,en)})}>{t("Télécharger le bon de commande PDF","Download purchase order PDF")}</button>{whatsappLink&&!lock&&<a href={whatsappLink} target="_blank" rel="noopener noreferrer">{t("Préparer le message WhatsApp fournisseur","Prepare supplier WhatsApp message")}</a>}<p>{t("Le message est préparé seulement. Vérifiez le destinataire et envoyez-le dans WhatsApp ; aucun envoi automatique.","Message prepared only. Check recipient and send in WhatsApp; no automatic delivery.")}</p></div>}
  <label>{t("Quantité réceptionnée","Quantity received")}<input inputMode="decimal" value={received} onChange={e=>RE(e.target.value)}/></label>
  <label>{t("Lot de réception","Receipt lot")}<input value={lot} onChange={e=>L(e.target.value)}/></label>
  <label>{t("Péremption du lot","Lot expiry")}<input type="date" value={expiry} onChange={e=>EX(e.target.value)}/></label>

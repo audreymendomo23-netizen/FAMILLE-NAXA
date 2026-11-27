@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        suite: [web-workspaces, web-operations, web-guest-offline, android-native, api-0, api-1, api-2, api-3]
+        suite: [web-workspaces, web-operations, web-guest-offline, android-native, api-1, api-2, api-3, api-4]
     runs-on: ubuntu-24.04
     timeout-minutes: 38
     steps:
@@ -160,14 +160,14 @@ jobs:
         if: startsWith(matrix.suite, 'api-')
         env:
           ZIPPLE_SUITE: ${{ matrix.suite }}
-          ZIPPLE_API_SHARDS: "4"
+ 
         run: |
           set -euo pipefail
           set -a
           source "$RUNNER_TEMP/zipple-business.env"
           set +a
           bash docs/apps/zipple/n2-n5/local-edge-ready.sh
-          export ZIPPLE_API_SHARD="${ZIPPLE_SUITE#api-}"
+          export ZIPPLE_API_WAVE="${ZIPPLE_SUITE#api-}"
           node --test docs/apps/zipple/n2-n5/local-api-boundaries.test.mjs
       - name: Prepare Android isolated Edge dependencies
         if: matrix.suite == 'android-native'
