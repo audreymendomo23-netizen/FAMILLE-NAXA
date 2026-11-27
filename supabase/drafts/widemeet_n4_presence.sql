@@ -17,11 +17,10 @@ begin
  select * into r from public.wm_rooms where id=p_room for update;
  if not found or r.state->>'status'<>'open' or (r.state->>'endMs')::bigint<=floor(extract(epoch from t)*1000)::bigint then return false;end if;
  if exists(select 1 from public.wm_presence_samples where room_id=p_room and observed_at>t-interval '500 milliseconds') then return false;end if;
- select coalesce(array_agg(distinct m.account_id order by m.account_id),'{}'::uuid[]) into members
- from public.wm_memberships m join public.wm_accounts a on a.id=m.account_id and a.enabled and not a.password_change_required
- where m.workspace_id=r.workspace_id and m.enabled and m.account_id=any(p_accounts)
- and exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'memberId'=m.account_id::text and p->>'response'='accepted' and p->>'excluded'='false'
- and (r.state->>'lobbyRequired' is distinct from 'true' or m.account_id=r.host_id or p->>'lobbyStatus'='admitted'));
+ select coalesce(array_agg(distinct a.id order by a.id),'{}'::uuid[]) into members
+ from public.wm_accounts a where a.enabled and not a.password_change_required and a.id=any(p_accounts) and (exists(select 1 from public.wm_memberships m where m.workspace_id=r.workspace_id and m.account_id=a.id and m.enabled) or public.wm_external_guest_valid(r.id,a.id))
+ and exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'memberId'=a.id::text and p->>'response'='accepted' and p->>'excluded'='false'
+ and (r.state->>'lobbyRequired' is distinct from 'true' or a.id=r.host_id or p->>'lobbyStatus'='admitted'));
  insert into public.wm_presence_samples(id,room_id,observed_at,observed) values(p_sample,p_room,t,members) on conflict do nothing;
  return found;
 end $wm$;

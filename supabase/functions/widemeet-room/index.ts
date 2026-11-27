@@ -69,6 +69,12 @@ Deno.serve(async request=>{
  if(!object.ok||!object.body||object.headers.has("content-length")&&Number(object.headers.get("content-length"))!==result.bytes)return send(503,{error:"unavailable"});
  return new Response(object.body,{status:200,headers:{...cors,"Content-Type":"audio/ogg","Cache-Control":"private, no-store","Content-Disposition":"attachment; filename=widemeet-"+b.recording_id.toLowerCase()+".ogg","X-Content-Type-Options":"nosniff"}});
  }
+ if(action==="external-invite"){
+ if(Deno.env.get("WM_EXTERNAL_GUESTS_QUALIFIED")!=="true"||!["issue","list","redeem","revoke"].includes(b.action)||!b.data||typeof b.data!=="object"||Array.isArray(b.data))return send(403,{error:"forbidden"});
+ const data={...b.data};
+ if(["issue","redeem"].includes(b.action)){if(typeof data.token!=="string"||!(/^[a-f0-9]{64}$/).test(data.token))return send(400,{error:"invalid_request"});data.digest=await hash(data.token);delete data.token;}
+ const result=await rpc("wm_external_invite",{p_hash,p_action:b.action,p_data:data});return result?send(200,result):send(403,{error:"forbidden"});
+ }
  if(action==="notices"){
  if(Deno.env.get("WM_NOTICES_QUALIFIED")!=="true"||b.read!=null&&typeof b.read!=="string")return send(403,{error:"forbidden"});
  const result=await rpc("wm_notices",{p_hash,p_read:b.read??null});return result?send(200,result):send(403,{error:"forbidden"});
@@ -96,7 +102,7 @@ Deno.serve(async request=>{
  }
  if(action==="list"||action==="contacts"){
  const regular=(await rpc("wm_room_actor",{p_hash}))?.[0];
- if(!regular){const passes=await rpc("wm_pass_list",{p_hash});if(!Array.isArray(passes)||!passes.length)return send(403,{error:"forbidden"});}
+ if(!regular){const passes=await rpc("wm_pass_list",{p_hash});if(!Array.isArray(passes)||!passes.length){if(action==="list"&&Deno.env.get("WM_EXTERNAL_GUESTS_QUALIFIED")==="true"){const rooms=await rpc("wm_room_list",{p_hash});if(Array.isArray(rooms)&&rooms.length)return send(200,rooms);}return send(403,{error:"forbidden"});}}
  return send(200,await rpc(action==="list"?"wm_room_list":"wm_room_contacts",{p_hash}));
  }
  if(action==="series-create"||action==="series-cancel"){

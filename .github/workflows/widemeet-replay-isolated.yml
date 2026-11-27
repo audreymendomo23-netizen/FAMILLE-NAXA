@@ -45,6 +45,7 @@ jobs:
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_identity.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_n3_rooms.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n1_billing.sql
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_external.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_minutes.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n4_tasks.sql
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/drafts/widemeet_n2_series.sql
@@ -68,7 +69,7 @@ jobs:
           set -a; source "$RUNNER_TEMP/wm-replay.env"; set +a
           [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
           export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
-          export WM_AUTH_QUALIFIED=true WM_SERIES_QUALIFIED=true WM_MINUTES_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_NOTICES_QUALIFIED=true WM_RECOVERY_KEY_QUALIFIED=true WM_BILLING_TEST=true WM_SIGNUP_QUALIFIED=true WM_AUTH_ALIAS_DOMAIN=example.test WM_ROOM_QUALIFIED=true WM_MEDIA_QUALIFIED=false WM_ALLOWED_ORIGINS=https://127.0.0.1:8443
+          export WM_AUTH_QUALIFIED=true WM_SERIES_QUALIFIED=true WM_MINUTES_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_NOTICES_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_RECOVERY_KEY_QUALIFIED=true WM_BILLING_TEST=true WM_SIGNUP_QUALIFIED=true WM_AUTH_ALIAS_DOMAIN=example.test WM_ROOM_QUALIFIED=true WM_MEDIA_QUALIFIED=false WM_ALLOWED_ORIGINS=https://127.0.0.1:8443
           export WM_REPLAY_KEY="$RUNNER_TEMP/wm-replay.key" WM_REPLAY_CERT="$RUNNER_TEMP/wm-replay.crt"
           node scripts/widemeet/replay.mjs
       - name: Stop disposable stack

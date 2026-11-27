@@ -208,13 +208,24 @@ grant execute on function public.wm_pass_room_create(text,uuid,jsonb) to service
 create or replace function public.wm_room_actor_for(p_hash text,p_room uuid)
 returns table(account_id uuid,workspace_id uuid,role text,plan text,entitlement_end_ms bigint)
 language sql security invoker stable set search_path=pg_catalog,public as $wm$
- select a.* from public.wm_room_actor(p_hash) a join public.wm_workspaces w on w.id=a.workspace_id and w.kind='enterprise'
+ select a.* from public.wm_room_actor(p_hash) a join public.wm_workspaces w on w.id=a.workspace_id and w.kind='enterprise' where p_room is null or exists(select 1 from public.wm_rooms rr where rr.id=p_room and rr.workspace_id=a.workspace_id)
  union all
  select s.account_id,s.workspace_id,m.role,'premium'::text,floor(extract(epoch from p.valid_until)*1000)::bigint
  from public.wm_session_context(p_hash) s join public.wm_workspaces w on w.id=s.workspace_id and w.kind='individual' and w.enabled
  join public.wm_memberships m on m.account_id=s.account_id and m.workspace_id=w.id and m.enabled
  join public.wm_paid_passes p on p.workspace_id=w.id and p.consumed_room_id=p_room and p.valid_until>now()
  where not s.password_change_required and m.role='owner'
+ union all
+ select s.account_id,r.workspace_id,'staff'::text,case when w.kind='individual' then 'premium' else e.plan end,
+ floor(extract(epoch from case when w.kind='individual' then p.valid_until else e.valid_until end)*1000)::bigint
+ from public.wm_session_context(p_hash) s join public.wm_rooms r on r.id=p_room
+ join public.wm_workspaces w on w.id=r.workspace_id and w.enabled
+ join public.wm_accounts h on h.id=r.host_id and h.enabled and not h.password_change_required
+ join public.wm_memberships hm on hm.account_id=r.host_id and hm.workspace_id=r.workspace_id and hm.enabled and hm.role in ('owner','promoteur','manager')
+ left join public.wm_room_entitlements e on e.workspace_id=w.id and e.enabled and e.valid_until>now()
+ left join public.wm_paid_passes p on p.consumed_room_id=r.id and p.valid_until>now()
+ where not s.password_change_required and public.wm_external_guest_valid(r.id,s.account_id)
+ and ((w.kind='enterprise' and e.workspace_id is not null) or (w.kind='individual' and p.intent_id is not null))
 $wm$;
 revoke all on function public.wm_room_actor_for(text,uuid) from public,anon,authenticated;
 grant execute on function public.wm_room_actor_for(text,uuid) to service_role;

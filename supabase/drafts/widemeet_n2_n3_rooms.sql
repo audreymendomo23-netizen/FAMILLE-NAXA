@@ -17,6 +17,26 @@ create table public.wm_rooms(
  check(octet_length(state::text)<=1048576)
 );
 create index wm_rooms_workspace on public.wm_rooms(workspace_id);
+-- A named external guest is never made a member of the host workspace.
+create table public.wm_external_guests(
+ id uuid primary key,room_id uuid not null references public.wm_rooms(id),account_id uuid not null references public.wm_accounts(id),
+ token_hash text not null unique check(token_hash~'^[a-f0-9]{64}$'),expires_at timestamptz not null,
+ created_at timestamptz not null default clock_timestamp(),redeemed_at timestamptz,revoked_at timestamptz,
+ unique(room_id,account_id),check(expires_at>created_at)
+);
+alter table public.wm_external_guests enable row level security;
+revoke all on public.wm_external_guests from public,anon,authenticated;
+grant select,insert,update on public.wm_external_guests to service_role;
+create function public.wm_external_guest_valid(p_room uuid,p_account uuid)
+returns boolean language sql security invoker stable set search_path=pg_catalog,public as $wm$
+ select exists(select 1 from public.wm_external_guests g join public.wm_rooms r on r.id=g.room_id join public.wm_accounts a on a.id=g.account_id and a.enabled and not a.password_change_required
+ where g.room_id=p_room and g.account_id=p_account and g.redeemed_at is not null and g.revoked_at is null
+ and (r.state->>'hardEndMs')::bigint>floor(extract(epoch from now())*1000)::bigint
+ and not exists(select 1 from public.wm_memberships m where m.workspace_id=r.workspace_id and m.account_id=g.account_id))
+$wm$;
+revoke all on function public.wm_external_guest_valid(uuid,uuid) from public,anon,authenticated;
+grant execute on function public.wm_external_guest_valid(uuid,uuid) to service_role;
+
 alter table public.wm_room_entitlements enable row level security;
 alter table public.wm_rooms enable row level security;
 revoke all on public.wm_room_entitlements,public.wm_rooms from public,anon,authenticated;
@@ -58,6 +78,10 @@ begin
  if not found then return;end if;
  perform 1 from public.wm_device_sessions x where x.token_hash=p_hash and x.revoked_at is null and x.expires_at>clock_timestamp() for share;
  if not found then return;end if;
+ -- A guest's target workspace grant must remain active through the write.
+ perform 1 from public.wm_external_guests g where g.room_id=p_room and g.account_id=a and g.redeemed_at is not null and g.revoked_at is null for share;
+ perform 1 from public.wm_workspaces x where x.id=(select r.workspace_id from public.wm_rooms r where r.id=p_room) and x.enabled for share;
+ perform 1 from public.wm_room_entitlements x where x.workspace_id=(select r.workspace_id from public.wm_rooms r where r.id=p_room) and x.enabled and x.valid_until>clock_timestamp() for share;
  -- A global subscription can change only after its shared lock is released.
  perform 1 from public.wm_room_entitlements x where x.workspace_id=w and x.enabled and x.valid_until>clock_timestamp() for share;
  return query select c.account_id,c.workspace_id,c.role,c.plan,c.entitlement_end_ms from public.wm_room_actor_for(p_hash,p_room) c;
@@ -102,7 +126,7 @@ begin
  if p_state is null or p_state->>'id' is distinct from v_old.id::text or p_state->>'workspaceId' is distinct from v_old.workspace_id::text or p_state->>'hostId' is distinct from v_old.host_id::text or (p_state->>'revision')::bigint is distinct from p_expected+1 or jsonb_typeof(p_state->'participants') is distinct from 'array' then return false;end if;
  if p_state->>'recording'='requested' and a.plan<>'premium' then return false;end if;
  -- A revoked participant must not block every subsequent legitimate transition.
- select jsonb_set(p_state,'{participants}',coalesce(jsonb_agg(case when p->>'memberId'<>v_old.host_id::text and not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.enabled and m.account_id::text=p->>'memberId') and exists(select 1 from jsonb_array_elements(v_old.state->'participants') oldp where oldp->>'memberId'=p->>'memberId') then p||jsonb_build_object('excluded',true,'consent',false,'moderatorPermissions','[]'::jsonb) else p end order by ord),'[]'::jsonb)) into p_state from jsonb_array_elements(p_state->'participants') with ordinality as x(p,ord);
+ select jsonb_set(p_state,'{participants}',coalesce(jsonb_agg(case when p->>'memberId'<>v_old.host_id::text and not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.enabled and m.account_id::text=p->>'memberId') and not public.wm_external_guest_valid(v_old.id,(p->>'memberId')::uuid) and exists(select 1 from jsonb_array_elements(v_old.state->'participants') oldp where oldp->>'memberId'=p->>'memberId') then p||jsonb_build_object('excluded',true,'consent',false,'moderatorPermissions','[]'::jsonb) else p end order by ord),'[]'::jsonb)) into p_state from jsonb_array_elements(p_state->'participants') with ordinality as x(p,ord);
  if exists(select 1 from jsonb_array_elements(p_state->'participants') p where p->>'excluded'='true' and exists(select 1 from jsonb_array_elements(v_old.state->'participants') oldp where oldp->>'memberId'=p->>'memberId' and oldp->>'excluded'='false')) then p_state:=p_state||jsonb_build_object('recording','off');end if;
  if p_state->>'status' in ('open','paused') then
   if (p_state->>'endMs')::bigint is null or (p_state->>'endMs')::bigint>least(a.entitlement_end_ms,(p_state->>'hardEndMs')::bigint) then return false;end if;
@@ -113,7 +137,7 @@ begin
    if (select count(*) from public.wm_rooms r where r.workspace_id=a.workspace_id and r.id<>p_room and r.state->>'status' in ('open','paused') and (r.state->>'endMs')::bigint>v_now_ms)>=v_limit then return false;end if;
   end if;
  end if;
- if exists(select 1 from jsonb_array_elements(p_state->'participants') p where not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.enabled and m.account_id::text=p->>'memberId') and p->>'excluded' is distinct from 'true') then return false;end if;
+ if exists(select 1 from jsonb_array_elements(p_state->'participants') p where not exists(select 1 from public.wm_memberships m join public.wm_accounts ac on ac.id=m.account_id and ac.enabled where m.workspace_id=a.workspace_id and m.enabled and m.account_id::text=p->>'memberId') and not public.wm_external_guest_valid(v_old.id,(p->>'memberId')::uuid) and p->>'excluded' is distinct from 'true') then return false;end if;
  -- Persist the trusted starting entitlement for deterministic expiry archival.
  if v_old.state->>'status'='scheduled' and p_state->>'status' in ('open','paused') then
   p_state:=p_state||jsonb_build_object('startPlan',a.plan,'startEntitlementEndMs',a.entitlement_end_ms);
