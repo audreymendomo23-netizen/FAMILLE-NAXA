@@ -3,18 +3,71 @@ import {
   canRetrySyncFailure, normalizeQueueBatchLimit, nextDeviceSequence, MAX_QUEUE_ATTEMPTS,
 } from "./queue-policy.js";
 
+import { seal, unseal, digest, type SealedValue } from "./at-rest";
+
 export type QueueState = "queued" | "sending" | "awaiting_receipt" | "acknowledged" | "retry_wait" | "conflict" | "rejected";
 export interface QueueItem {
   appId?: string; eventId: string; payload: string; state: QueueState; createdAt: number;
   deviceId?: string; deviceSequence?: number; organizationId?: string; memberId?: string;
   attemptCount?: number; nextAttemptAt?: number | null; leaseUntil?: number | null;
   lastErrorCode?: string | null; serverReceipt?: unknown;
+  sealedPayload?: SealedValue; payloadDigest?: string; sealedReceipt?: SealedValue;
 }
 
 const DB = "famille-naxa-offline";
 const STORE = "events";
 const META = "meta";
 const CHANGES = "changes";
+const PROTECTED_APP = "naxa-services-web";
+type LocalScope = {appId?:string;deviceId?:string;organizationId?:string;memberId?:string};
+const isProtected=(s:LocalScope)=>s.appId===PROTECTED_APP&&Boolean(s.deviceId&&s.organizationId&&s.memberId);
+const binding=(s:LocalScope,kind:string,id:string)=>JSON.stringify(["ns-data-v1",s.appId,s.deviceId,s.organizationId,s.memberId,kind,id]);
+function requireProtectedScope(s:LocalScope){if(s.appId===PROTECTED_APP&&!isProtected(s))throw Error("NS_LOCAL_SCOPE_REQUIRED");}
+async function protectEvent(db:IDBDatabase,item:QueueItem):Promise<QueueItem>{
+  requireProtectedScope(item);if(!isProtected(item))return item;
+  const result={...item};
+  if(!item.sealedPayload){const hash=await digest(item.payload);result.sealedPayload=await seal(db,META,binding(item,"event",item.eventId)+":"+hash,item.payload);result.payloadDigest=hash;result.payload="";}
+  if(item.serverReceipt!==undefined&&!item.sealedReceipt){result.sealedReceipt=await seal(db,META,binding(item,"receipt",item.eventId),JSON.stringify(item.serverReceipt));delete result.serverReceipt;}
+  return result;
+}
+async function revealEvent(db:IDBDatabase,item:QueueItem):Promise<QueueItem>{
+  if(!item.sealedPayload)return item;
+  if(!isProtected(item)||!item.payloadDigest)throw Error("NS_LOCAL_EVENT_SCOPE_INVALID");
+  const payload=await unseal(db,META,binding(item,"event",item.eventId)+":"+item.payloadDigest,item.sealedPayload);
+  if(await digest(payload)!==item.payloadDigest||JSON.parse(payload).org_id!==item.organizationId)throw Error("NS_LOCAL_EVENT_INTEGRITY");
+  const result={...item,payload};delete result.sealedPayload;delete result.payloadDigest;
+  if(item.sealedReceipt){result.serverReceipt=JSON.parse(await unseal(db,META,binding(item,"receipt",item.eventId),item.sealedReceipt));delete result.sealedReceipt;}
+  return result;
+}
+type StoredChange=Partial<WebSyncChange>&LocalScope&{key:string;cursor:number;sealedChange?:SealedValue};
+async function protectChange(db:IDBDatabase,c:StoredChange):Promise<StoredChange>{
+  requireProtectedScope(c);if(!isProtected(c)||c.sealedChange)return c;
+  const {appId,deviceId,organizationId,memberId,key,...change}=c;
+  return {appId,deviceId,organizationId,memberId,key,cursor:c.cursor,sealedChange:await seal(db,META,binding(c,"change",key),JSON.stringify(change))};
+}
+async function revealChange(db:IDBDatabase,c:StoredChange):Promise<WebSyncChange>{
+  if(!c.sealedChange)return c as WebSyncChange;
+  if(!isProtected(c))throw Error("NS_LOCAL_CHANGE_SCOPE_INVALID");
+  const result=JSON.parse(await unseal(db,META,binding(c,"change",c.key),c.sealedChange)) as WebSyncChange;
+  if(result.cursor!==c.cursor)throw Error("NS_LOCAL_CHANGE_INTEGRITY");return result;
+}
+// Old rows are migrated only for the currently authenticated member/device. A
+// concurrent writer wins; no pending command or receipt is overwritten blindly.
+async function migrateLegacy(db:IDBDatabase,scope:LocalScope):Promise<void>{
+  if(!isProtected(scope))return;
+  const match=(r:LocalScope)=>r.appId===scope.appId&&r.deviceId===scope.deviceId&&r.organizationId===scope.organizationId&&r.memberId===scope.memberId;
+  for(const storeName of [STORE,CHANGES]){
+    const rows=await new Promise<any[]>((resolve,reject)=>{const q=db.transaction(storeName).objectStore(storeName).getAll();q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);});
+    for(const row of rows){
+      if(!match(row)||(storeName===STORE?row.sealedPayload&&!(row.serverReceipt!==undefined&&!row.sealedReceipt):row.sealedChange))continue;
+      const encrypted=storeName===STORE?await protectEvent(db,row):await protectChange(db,row);
+      await new Promise<void>((resolve,reject)=>{const tx=db.transaction(storeName,"readwrite"),store=tx.objectStore(storeName),get=store.get(storeName===STORE?row.eventId:row.key);
+        get.onsuccess=()=>{const current=get.result;if(current&&JSON.stringify(current)===JSON.stringify(row))store.put(encrypted);};
+        get.onerror=()=>tx.abort();tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error??Error("NS_LOCAL_MIGRATION_ABORTED"));
+      });
+    }
+  }
+}
 export interface WebSyncChange {
   cursor:number; event_id:string; source_device_id:string; origin_site_id:string|null; site_id:string|null;
   visible_site_ids:string[]; workstation_id:string|null; aggregate_type:string; aggregate_id:string;
@@ -24,6 +77,8 @@ export interface WebSyncChange {
 /** Keep local queue reads and leases inside the authenticated organization scope. */
 function queueItemBelongsToOrganization(item: QueueItem, organizationId?: string): boolean {
   if (organizationId == null) return true;
+  // Encrypted payloads are authenticated and checked against this scope before returning them.
+  if(item.sealedPayload)return isProtected(item)&&item.organizationId===organizationId;
   // The stored metadata and payload must agree.
   try {
     const command = JSON.parse(item.payload) as Record<string, unknown>;
@@ -74,16 +129,19 @@ export async function enqueue(item: QueueItem): Promise<void> {
     catch { throw new TypeError("INVALID_QUEUE_ORGANIZATION_PAYLOAD"); }
     if (command.org_id !== item.organizationId) throw new Error("QUEUE_ORGANIZATION_MISMATCH");
   }
+  requireProtectedScope(item);
   const db = await openDb();
   try {
+    await migrateLegacy(db,item);
+    const storedItem=await protectEvent(db,item);
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction([STORE, META], "readwrite"), store = tx.objectStore(STORE), meta = tx.objectStore(META);
       const get = store.get(item.eventId);
       get.onsuccess = () => {
         const existing = get.result as QueueItem | undefined;
-        if (existing) { try { assertSameEventPayload(existing,item); } catch(e) { tx.abort(); reject(e); } return; }
+        if (existing) { try { assertSameEventPayload(existing.sealedPayload?{...existing,payload:existing.payloadDigest}:existing,existing.sealedPayload?{...item,payload:storedItem.payloadDigest}:item); } catch(e) { tx.abort(); reject(e); } return; }
         const appId = item.appId ?? "default";
-        const base = { ...item, appId, state:"queued" as const, attemptCount:0, nextAttemptAt:null, leaseUntil:null };
+        const base = { ...storedItem, appId, state:"queued" as const, attemptCount:0, nextAttemptAt:null, leaseUntil:null };
         if (!item.deviceId) { store.add(base); return; }
         const key = appId + ":" + item.deviceId, current = meta.get(key);
         current.onsuccess = () => {
@@ -113,10 +171,14 @@ export async function applySyncPage(appId:string,deviceId:string,page:{changes:W
   if (organizationId !== undefined && !organizationId.trim()) throw new TypeError("INVALID_SYNC_IDENTITY");
   for (const c of page.changes) if (!Number.isSafeInteger(c.cursor)||c.cursor<1||c.cursor>page.next_cursor||typeof c.event_id!=="string"||typeof c.action_code!=="string"||typeof c.aggregate_type!=="string"||!c.payload||typeof c.payload!=="object"||Array.isArray(c.payload)) throw new TypeError("INVALID_SYNC_CHANGE");
   const db=await openDb();
-  try { await new Promise<void>((resolve,reject)=>{
+  try {
+    const scope={appId,deviceId,organizationId,memberId};requireProtectedScope(scope);
+    await migrateLegacy(db,scope);
+    const stored=await Promise.all(page.changes.map(c=>protectChange(db,{...c,...scope,key:changeKey(appId,deviceId,organizationId,c.cursor,memberId)})));
+    await new Promise<void>((resolve,reject)=>{
     const tx=db.transaction([META,CHANGES],"readwrite"),meta=tx.objectStore(META),store=tx.objectStore(CHANGES),key=cursorKey(appId,deviceId,organizationId,memberId),read=meta.get(key);
     read.onsuccess=()=>{if(page.next_cursor<Number(read.result?.value??0)){tx.abort();reject(new Error("SYNC_CURSOR_REGRESSION"));return;}
-      for(const c of page.changes)store.put({...c,appId,deviceId,organizationId,memberId,key:changeKey(appId,deviceId,organizationId,c.cursor,memberId)});
+      for(const c of stored)store.put(c);
       meta.put({key,value:page.next_cursor});};
     read.onerror=()=>{tx.abort();reject(read.error??new Error("SYNC_CURSOR_READ_FAILED"));};
     tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error??new Error("SYNC_PAGE_APPLY_ABORTED"));
@@ -124,23 +186,25 @@ export async function applySyncPage(appId:string,deviceId:string,page:{changes:W
 }
 export async function listAppEvents(appId:string,deviceId:string,organizationId?:string,memberId?:string):Promise<QueueItem[]>{
   const db=await openDb();
-  try{return await new Promise<QueueItem[]>((resolve,reject)=>{
+  try{const scope={appId,deviceId,organizationId,memberId};requireProtectedScope(scope);await migrateLegacy(db,scope);
+    const rows=await new Promise<QueueItem[]>((resolve,reject)=>{
     const r=db.transaction(STORE).objectStore(STORE).getAll();
     r.onsuccess=()=>resolve((r.result as QueueItem[]).filter(item=>item.appId===appId&&item.deviceId===deviceId&&queueItemBelongsToOrganization(item,organizationId)&&belongsToMember(item,memberId)).sort((x,y)=>x.createdAt-y.createdAt));
     r.onerror=()=>reject(r.error);
-  });}finally{db.close();}
+  });return await Promise.all(rows.map(row=>revealEvent(db,row)));}finally{db.close();}
 }
 export async function getSyncCursor(appId:string,deviceId:string,organizationId?:string,memberId?:string):Promise<number>{
   const db=await openDb();try{return await new Promise<number>((resolve,reject)=>{const r=db.transaction(META).objectStore(META).get(cursorKey(appId,deviceId,organizationId,memberId));r.onsuccess=()=>resolve(Number(r.result?.value??0));r.onerror=()=>reject(r.error);});}finally{db.close();}
 }
 export async function listSyncChanges(appId:string,deviceId:string,organizationId?:string,memberId?:string):Promise<WebSyncChange[]>{
-  const db=await openDb();try{return await new Promise<WebSyncChange[]>((resolve,reject)=>{const r=db.transaction(CHANGES).objectStore(CHANGES).getAll();r.onsuccess=()=>resolve((r.result as (WebSyncChange&{appId:string;deviceId:string;organizationId?:string;memberId?:string})[]).filter(c=>c.appId===appId&&c.deviceId===deviceId&&(organizationId===undefined||c.organizationId===organizationId)&&(memberId===undefined||c.memberId===memberId)).sort((a,b)=>a.cursor-b.cursor));r.onerror=()=>reject(r.error);});}finally{db.close();}
+  const db=await openDb();try{const scope={appId,deviceId,organizationId,memberId};requireProtectedScope(scope);await migrateLegacy(db,scope);const rows=await new Promise<StoredChange[]>((resolve,reject)=>{const r=db.transaction(CHANGES).objectStore(CHANGES).getAll();r.onsuccess=()=>resolve((r.result as StoredChange[]).filter(c=>c.appId===appId&&c.deviceId===deviceId&&(organizationId===undefined||c.organizationId===organizationId)&&(memberId===undefined||c.memberId===memberId)).sort((a,b)=>a.cursor-b.cursor));r.onerror=()=>reject(r.error);});return await Promise.all(rows.map(c=>revealChange(db,c)));}finally{db.close();}
 }
 
 export async function listQueued(appId?: string, deviceId?: string, organizationId?: string,memberId?:string): Promise<QueueItem[]> {
   const db = await openDb();
   try {
-    return await new Promise<QueueItem[]>((resolve, reject) => {
+    const scope={appId,deviceId,organizationId,memberId};requireProtectedScope(scope);await migrateLegacy(db,scope);
+    const rows=await new Promise<QueueItem[]>((resolve, reject) => {
       const request = db.transaction(STORE).objectStore(STORE).getAll();
       request.onsuccess = () => resolve((request.result as QueueItem[])
         .filter((item) => (appId == null || item.appId === appId) &&
@@ -149,7 +213,7 @@ export async function listQueued(appId?: string, deviceId?: string, organization
           (item.state === "queued" || item.state === "retry_wait"))
         .sort((a, b) => a.createdAt - b.createdAt));
       request.onerror = () => reject(request.error);
-    });
+    });return await Promise.all(rows.map(row=>revealEvent(db,row)));
   } finally { db.close(); }
 }
 
@@ -159,7 +223,8 @@ export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60
   if (!Number.isFinite(now) || !Number.isSafeInteger(leaseMs) || leaseMs < 5_000) throw new RangeError("INVALID_QUEUE_LEASE");
   const db = await openDb();
   try {
-    return await new Promise<QueueItem[]>((resolve, reject) => {
+    const scope={appId,deviceId,organizationId,memberId};requireProtectedScope(scope);await migrateLegacy(db,scope);
+    const rows=await new Promise<QueueItem[]>((resolve, reject) => {
       const tx = db.transaction(STORE, "readwrite");
       const store = tx.objectStore(STORE);
       const request = store.getAll();
@@ -194,7 +259,7 @@ export async function acquireDueBatch(limit = 50, now = Date.now(), leaseMs = 60
       tx.oncomplete = () => resolve(acquired);
       tx.onerror = () => reject(tx.error);
       tx.onabort = () => reject(tx.error ?? new Error("QUEUE_LEASE_ABORTED"));
-    });
+    });return await Promise.all(rows.map(row=>revealEvent(db,row)));
   } finally { db.close(); }
 }
 
@@ -205,6 +270,8 @@ export async function applyServerReceipt(eventId: string, receipt: unknown, appI
   const state = classifySyncReceipt(receipt);
   const db = await openDb();
   try {
+    const prior=await new Promise<QueueItem|undefined>((resolve,reject)=>{const r=db.transaction(STORE).objectStore(STORE).get(eventId);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+    const sealed=prior&&isProtected(prior)?await seal(db,META,binding(prior,"receipt",eventId),JSON.stringify(receipt)):undefined;
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE, "readwrite");
       const store = tx.objectStore(STORE);
@@ -214,7 +281,11 @@ export async function applyServerReceipt(eventId: string, receipt: unknown, appI
         if (appId != null && (get.result as QueueItem).appId !== appId) { tx.abort(); reject(new Error("QUEUE_APP_SCOPE_MISMATCH")); return; }
         try{assertLease(get.result as QueueItem,lease);}catch(e){tx.abort();reject(e);return;}
         if((get.result as QueueItem).state==="acknowledged"&&state!=="acknowledged"){tx.abort();reject(new Error("TERMINAL_QUEUE_RECEIPT"));return;}
-        store.put({ ...(get.result as QueueItem), state, serverReceipt: receipt, leaseUntil: null, nextAttemptAt: null });
+        const current=get.result as QueueItem;
+        if(sealed&&(!prior||binding(prior,"receipt",eventId)!==binding(current,"receipt",eventId))){tx.abort();reject(Error("QUEUE_RECEIPT_SCOPE_CHANGED"));return;}
+        const updated={...current,state,leaseUntil:null,nextAttemptAt:null};
+        if(sealed){updated.sealedReceipt=sealed;delete updated.serverReceipt;}else{updated.serverReceipt=receipt;}
+        store.put(updated);
       };
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
