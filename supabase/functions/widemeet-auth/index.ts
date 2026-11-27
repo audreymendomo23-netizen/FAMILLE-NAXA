@@ -16,6 +16,23 @@ async function rest(path:string,init:RequestInit={}){
  return response.status===204?null:await response.json();
 }
 function eq(v:string){return encodeURIComponent(v)}
+// Separate support endpoint/key; never issue ordinary meeting grants for assistance.
+async function supportGrant(admission:any,p_hash:string){
+ const key=Deno.env.get("WM_SUPPORT_LIVEKIT_API_KEY")??"",secret=Deno.env.get("WM_SUPPORT_LIVEKIT_API_SECRET")??"";
+ const endpoint=new URL(Deno.env.get("WM_SUPPORT_LIVEKIT_URL")??"");
+ if(endpoint.protocol!=="wss:"||endpoint.username||endpoint.password||endpoint.pathname!=="/"||endpoint.search||endpoint.hash||!/^[A-Za-z0-9_-]{8,128}$/.test(key)||secret.length<32)throw Error("support_media_unavailable");
+ const now=Date.now(),exp=Math.floor(Math.min(admission.endMs,now+60000)/1000);
+ if(exp<=Math.floor(now/1000))throw Error("support_media_unavailable");
+ const sources=admission.sources;
+ if(!Array.isArray(sources)||!sources.includes("microphone")||sources.some((s:unknown)=>s!=="microphone"&&s!=="screen_share"))throw Error("support_media_unavailable");
+ const enc=(v:Uint8Array)=>btoa(String.fromCharCode(...v)).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
+ const json=(v:unknown)=>enc(new TextEncoder().encode(JSON.stringify(v)));
+ const claims={iss:key,sub:admission.identity,nbf:Math.floor(now/1000)-5,exp,wm_session_hash:p_hash,video:{room:admission.room,roomJoin:true,canPublish:true,canSubscribe:true,canPublishData:false,canUpdateOwnMetadata:false,canPublishSources:sources,roomAdmin:false,roomCreate:false,roomRecord:false,roomList:false}};
+ const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(secret),{name:"HMAC",hash:"SHA-256"},false,["sign"]);
+ const data=json({alg:"HS256",typ:"JWT"})+"."+json(claims);
+ const sig=await crypto.subtle.sign("HMAC",k,new TextEncoder().encode(data));
+ return {url:endpoint.origin,token:data+"."+enc(new Uint8Array(sig)),expires_at:exp*1000};
+}
 async function digest(v:string){return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(v)))).map(n=>n.toString(16).padStart(2,"0")).join("")}
 function token(){return Array.from(crypto.getRandomValues(new Uint8Array(32))).map(n=>n.toString(16).padStart(2,"0")).join("")}
 async function workspaces(accountId:string){
@@ -226,7 +243,7 @@ Deno.serve(async request=>{
  if(!/^[a-f0-9]{64}$/.test(access))return send(401,{error:"credentials"});
  const name=body.action,data=body.data??{};
  if(name!=="photo-save"&&raw.length>16384)return send(413,{error:"request_too_large"});
- if(!["profile","profile-update","language-preferences","language-save","language-reset","photo-read","photo-save","photo-delete","onboarding-step","contacts","favorite","groups","group-save","group-delete","invite","invitations","respond-invite","member-role","manager-assign","revoke-member","billing","billing-list","billing-create","billing-cancel","devices","revoke-device","dashboard","support-capabilities","support-list","support-queue","support-create","support-read","support-claim","support-reply","support-close","support-feedback","support-release","support-call-read","support-call-request","support-call-accept","support-call-decline","support-call-end","support-call-heartbeat","support-screen-consent","support-screen-start","support-screen-stop","support-recovery-queue","support-recovery-review","center-contacts","center-thread","center-send","center-seen","center-statistics"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
+ if(!["profile","profile-update","language-preferences","language-save","language-reset","photo-read","photo-save","photo-delete","onboarding-step","contacts","favorite","groups","group-save","group-delete","invite","invitations","respond-invite","member-role","manager-assign","revoke-member","billing","billing-list","billing-create","billing-cancel","devices","revoke-device","dashboard","support-capabilities","support-list","support-queue","support-create","support-read","support-claim","support-reply","support-close","support-feedback","support-release","support-call-read","support-call-request","support-call-accept","support-call-decline","support-call-end","support-call-heartbeat","support-call-grant","support-screen-consent","support-screen-start","support-screen-stop","support-recovery-queue","support-recovery-review","center-contacts","center-thread","center-send","center-seen","center-statistics"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
  const p_hash=await digest(access);
  const context=(await rest("rpc/wm_session_context",{method:"POST",body:JSON.stringify({p_hash})}))?.[0];
  if(!context||context.password_change_required)return send(403,{error:"scope"});
@@ -237,7 +254,15 @@ Deno.serve(async request=>{
  }
  if(typeof name==="string"&&name.startsWith("support-")){
  if(Deno.env.get("WM_SUPPORT_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ const mediaReady=Deno.env.get("WM_SUPPORT_MEDIA_QUALIFIED")==="true";
+ if(name==="support-call-grant"){
+  if(!mediaReady||!uuid.test(data.call_id??""))return send(503,{error:"unavailable"});
+  const admission=await rest("rpc/wm_support_media_admission",{method:"POST",body:JSON.stringify({p_hash,p_call:data.call_id})});
+  if(!admission||admission.identity!==context.account_id||admission.room!=="wm-support-"+data.call_id.toLowerCase())return send(403,{error:"scope"});
+  return send(200,await supportGrant(admission,p_hash));
+ }
  const result=await rest("rpc/wm_support_action",{method:"POST",body:JSON.stringify({p_hash,p_action:name,p_data:data})});
+ if(result&&(name==="support-capabilities"||name.startsWith("support-call-")||name.startsWith("support-screen-")))result.transport_ready=mediaReady;
  return result?send(200,result):send(403,{error:"scope"});
  }
  if(["photo-read","photo-save","photo-delete"].includes(name)){
