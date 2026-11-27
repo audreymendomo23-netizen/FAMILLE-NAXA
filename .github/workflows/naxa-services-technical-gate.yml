@@ -395,7 +395,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -camera-back none
           disable-linux-hw-accel: false
           disable-animations: true
-          script: gradle --no-daemon :naxa-services:connectedDebugAndroidTest
+          script: gradle --no-daemon -PNS_ENABLE_BILLING_V23=true :naxa-services:connectedDebugAndroidTest
       - name: Upload debug APK for technical review
         if: ${{ always() && steps.assemble_debug_apk.outcome == 'success' }}
         uses: actions/upload-artifact@v6

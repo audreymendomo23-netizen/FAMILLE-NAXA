@@ -1713,6 +1713,28 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
         payload: JSONObject,
         result: JSONObject
     ): Boolean = database.withTransaction {
+        if (event.actionCode == "inventory_movement.created" && payload.optBoolean("defer_count_until_receipt")) {
+            val itemId = payload.optString("inventory_item_id")
+            val siteId = payload.optString("site_id")
+            val movementId = payload.optString("movement_id")
+            val actor = event.ownerMemberId ?: payload.optString("actor_member_id")
+            val expected = payload.optDouble("expected_quantity", Double.NaN)
+            val delta = payload.optDouble("quantity_delta", Double.NaN)
+            val quantity = result.optDouble("quantity", Double.NaN)
+            if (itemId.isBlank() || siteId.isBlank() || actor.isBlank() || movementId != event.aggregateId ||
+                result.optString("movement_id") != movementId || result.optString("inventory_item_id") != itemId ||
+                payload.optString("movement_type") != "adjustment" || !expected.isFinite() || !delta.isFinite() ||
+                !quantity.isFinite() || quantity < 0.0 || kotlin.math.abs(quantity - (expected + delta)) > 0.000001
+            ) return@withTransaction false
+            if (dao.countInventoryMovementById(event.orgId, movementId) > 0) return@withTransaction true
+            val current = dao.findInventoryItem(itemId, event.orgId, siteId) ?: return@withTransaction false
+            val next = if (kotlin.math.abs(current.quantity - expected) < 0.000001) quantity else current.quantity + delta
+            if (!next.isFinite() || next < 0.0) return@withTransaction false
+            dao.insertInventoryMovement(LocalInventoryMovement(movementId, event.orgId, siteId, itemId,
+                "adjustment", delta, payload.optString("reason"), actor, event.createdAtEpochMs))
+            dao.updateInventoryItem(current.copy(quantity = next))
+            return@withTransaction true
+        }
         if (event.actionCode != "loyalty_activity.recorded") return@withTransaction true
         val activityId = payload.optString("activity_event_id").takeIf { it.isNotBlank() } ?: event.aggregateId
         val activity = dao.findLoyaltyEventById(event.orgId, activityId) ?: return@withTransaction false
@@ -3367,10 +3389,10 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
             actorMemberId = actorMemberId,
             createdAtMillis = System.currentTimeMillis()
         )
-        dao.insertInventoryMovement(movement)
-        val updated = current.copy(quantity = updatedQuantity)
-        dao.updateInventoryItem(updated)
-        enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.created", siteId, if (movementType == "count") JSONObject(inventoryMovementSyncSnapshot(movement)).put("expected_quantity", current.quantity).toString() else inventoryMovementSyncSnapshot(movement))
+        if (movementType != "count") dao.insertInventoryMovement(movement)
+        val updated = if (movementType == "count") current else current.copy(quantity = updatedQuantity)
+        if (movementType != "count") dao.updateInventoryItem(updated)
+        enqueue(orgId, "inventory_movement", movement.id, "inventory_movement.created", siteId, if (movementType == "count") JSONObject(inventoryMovementSyncSnapshot(movement)).put("expected_quantity", current.quantity).put("defer_count_until_receipt", true).put("actor_member_id", actorMemberId).toString() else inventoryMovementSyncSnapshot(movement))
         updated
     }
 

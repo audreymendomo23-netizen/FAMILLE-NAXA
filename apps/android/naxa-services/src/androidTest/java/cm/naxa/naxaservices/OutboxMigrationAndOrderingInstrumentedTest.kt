@@ -29,6 +29,36 @@ class OutboxMigrationAndOrderingInstrumentedTest {
 
 
     @Test
+    fun countOnlyChangesStockAfterMatchingServerReceipt() = runBlocking<Unit> {
+        org.junit.Assume.assumeTrue(BuildConfig.BILLING_SETTLEMENT_ENABLED)
+        val db = Room.inMemoryDatabaseBuilder(context, NsServicesDatabase::class.java).build()
+        try {
+            val repo = NaxaServicesLocalRepository(db)
+            val org = UUID.randomUUID().toString()
+            val site = UUID.randomUUID().toString()
+            val actor = UUID.randomUUID().toString()
+            val item = repo.createInventoryItem(org, site, "B4-COUNT", "Article", "piece", 1.0)
+            repo.recordInventoryMovement(org, site, item.id, "in", 10.0, "Stock initial", actor)
+            repo.recordInventoryMovement(org, site, item.id, "count", 6.0, "Comptage B4", actor)
+            assertEquals(10.0, repo.dao.findInventoryItem(item.id, org, site)!!.quantity, 0.001)
+            val count = repo.dao.loadRetryableOutboxEvents(org).single { JSONObject(it.payloadJson).optBoolean("defer_count_until_receipt") }
+            val payload = JSONObject(count.payloadJson)
+            assertEquals(10.0, payload.getDouble("expected_quantity"), 0.001)
+            assertEquals(-4.0, payload.getDouble("quantity_delta"), 0.001)
+            assertEquals(0, repo.dao.countInventoryMovementById(org, count.aggregateId))
+            val receipt = JSONObject().put("movement_id", count.aggregateId).put("inventory_item_id", item.id).put("quantity", 6.0)
+            assertTrue(!repo.applyCanonicalServerEffects(count, payload, JSONObject(receipt.toString()).put("quantity", 5.0)))
+            assertEquals(10.0, repo.dao.findInventoryItem(item.id, org, site)!!.quantity, 0.001)
+            assertTrue(repo.applyCanonicalServerEffects(count, payload, receipt))
+            assertTrue(repo.applyCanonicalServerEffects(count, payload, receipt))
+            assertEquals(6.0, repo.dao.findInventoryItem(item.id, org, site)!!.quantity, 0.001)
+            assertEquals(1, repo.dao.countInventoryMovementById(org, count.aggregateId))
+        } finally {
+            db.close()
+        }
+    }
+
+    @Test
     fun roomMigration15To16AddsPendingApplicationStateWithoutLosingRemoteChange() {
         val databaseName = "remote-change-migration-${UUID.randomUUID()}.db"
         val configuration = SupportSQLiteOpenHelper.Configuration.builder(context)
