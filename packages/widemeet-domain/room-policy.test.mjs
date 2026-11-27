@@ -103,3 +103,12 @@ test("structured agenda respects time and assignment; confidentiality is immutab
  assert.throws(()=>run(r,host,"screen",true,guest.memberId),/invalid_screen/);assert.throws(()=>run(r,host,"confidentiality","standard"),/invalid_state/);
  r=run(r,host,"agenda_status","active","agenda001");r=run(r,host,"agenda_status","done","agenda001");assert.equal(r.agenda[0].status,"done");
 });
+
+test("timed polls reject boundary votes and reveal closed survey only at the server deadline",()=>{
+ let r=open();r=run(r,host,"poll",{options:["A","B"],durationSeconds:15},"timed0001");const p=r.polls[0];
+ assert.throws(()=>run(r,guest,"vote",0,p.id,16000),/invalid_vote/);
+ r=run(r,guest,"vote",0,p.id,15999);assert.equal(pollSummary(r.polls[0],guest.memberId,16000).open,false);
+ r=run(r,host,"survey",{question:"Timed",kind:"single",options:["Yes","No"],anonymous:true,editable:true,visibility:"closed",quorum:0,threshold:50,durationSeconds:15},"timed0002");assert.equal(pollSummary(r.polls[1],guest.memberId,15999).counts,null);
+ assert.deepEqual(pollSummary(r.polls[1],guest.memberId,16000).counts,[0,0]);
+ assert.throws(()=>run(r,guest,"survey_vote",[0],"timed0002",16000),/invalid_vote/);
+});

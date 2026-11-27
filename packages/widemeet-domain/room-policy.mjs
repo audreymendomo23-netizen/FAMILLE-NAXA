@@ -113,18 +113,23 @@ export function applyRoom(room,a,c,now){
  case "consent":if(typeof c.value!=="boolean")fail("invalid_consent");self.consent=c.value;if(!c.value)n.recording="off";break;
  case "record_pause":needHost();if(n.recording!=="requested")fail("invalid_record");n.recording="off";n.recordingPaused=true;break;
  case "record":needHost();if(c.value===true&&a.plan!=="premium")fail("premium_required");if(typeof c.value!=="boolean")fail("invalid_record");if(c.value&&n.participants.some(x=>!x.excluded&&x.response==="accepted"&&!x.consent))fail("consent_required");n.recording=c.value?"requested":"off";n.recordingPaused=false;break;
- case "poll":needModerator("poll");if(!id(c.target)||n.polls.some(x=>x.id===c.target)||!Array.isArray(c.value)||c.value.length<2||c.value.length>10||!c.value.every(x=>typeof x==="string"&&x.trim()&&x.length<=200)||new Set(c.value).size!==c.value.length)fail("invalid_poll");n.polls.push({id:c.target,options:c.value,open:true,votes:{}});break;
- case "vote":{const poll=n.polls.find(x=>x.id===c.target&&x.open);if(!poll||poll.kind||!Number.isInteger(c.value)||c.value<0||c.value>=poll.options.length||Object.hasOwn(poll.votes,member))fail("invalid_vote");Object.defineProperty(poll.votes,member,{value:c.value,enumerable:true,writable:true,configurable:true});break;}
+ case "poll":{
+ needModerator("poll");const options=Array.isArray(c.value)?c.value:c.value?.options;const duration=Array.isArray(c.value)?null:c.value?.durationSeconds??null;
+ if(!id(c.target)||n.polls.some(x=>x.id===c.target)||!Array.isArray(options)||options.length<2||options.length>10||!options.every(x=>typeof x==="string"&&x.trim()&&x.length<=200)||new Set(options.map(x=>x.trim())).size!==options.length||duration!==null&&(!Number.isInteger(duration)||duration<15||duration>3600||now+duration*1000>n.endMs))fail("invalid_poll");
+ n.polls.push({id:c.target,options:options.map(x=>x.trim()),open:true,closesMs:duration===null?null:now+duration*1000,votes:{}});break;
+ }
+ case "vote":{const poll=n.polls.find(x=>x.id===c.target&&x.open);if(!poll||poll.closesMs!=null&&now>=poll.closesMs||poll.kind||!Number.isInteger(c.value)||c.value<0||c.value>=poll.options.length||Object.hasOwn(poll.votes,member))fail("invalid_vote");Object.defineProperty(poll.votes,member,{value:c.value,enumerable:true,writable:true,configurable:true});break;}
  case "survey":{
  needModerator("poll");if(a.plan!=="premium")fail("premium_required");
  const v=c.value;
  if(!id(c.target)||n.polls.some(x=>x.id===c.target)||!v||typeof v!=="object"||typeof v.question!=="string"||!v.question.trim()||v.question.length>200||!Array.isArray(v.options)||v.options.length<2||v.options.length>10||!v.options.every(x=>typeof x==="string"&&x.trim()&&x.length<=200)||new Set(v.options.map(x=>x.trim())).size!==v.options.length||!["single","multiple","rating"].includes(v.kind)||typeof v.anonymous!=="boolean"||v.editable!==undefined&&typeof v.editable!=="boolean"||!["live","closed"].includes(v.visibility)||!Number.isInteger(v.quorum)||v.quorum<0||v.quorum>100||!Number.isInteger(v.threshold)||v.threshold<1||v.threshold>100||v.kind==="rating"&&![5,10].includes(v.options.length))fail("invalid_poll");
+ if(v.durationSeconds!=null&&(!Number.isInteger(v.durationSeconds)||v.durationSeconds<15||v.durationSeconds>3600||now+v.durationSeconds*1000>n.endMs))fail("invalid_poll");
  const eligible=n.participants.filter(x=>!x.excluded&&x.response==="accepted"&&(n.lobbyRequired!==true||x.memberId===n.hostId||x.lobbyStatus==="admitted")).map(x=>x.memberId);
- n.polls.push({id:c.target,question:v.question.trim(),kind:v.kind,options:v.options.map(x=>x.trim()),anonymous:v.anonymous,editable:v.editable===true,visibility:v.visibility,quorum:v.quorum,threshold:v.threshold,eligible,open:true,votes:{}});break;
+ n.polls.push({id:c.target,question:v.question.trim(),kind:v.kind,options:v.options.map(x=>x.trim()),anonymous:v.anonymous,editable:v.editable===true,visibility:v.visibility,quorum:v.quorum,threshold:v.threshold,eligible,open:true,closesMs:v.durationSeconds==null?null:now+v.durationSeconds*1000,votes:{}});break;
  }
  case "survey_vote":{
  const poll=n.polls.find(x=>x.id===c.target&&x.open&&x.kind);
- if(!poll||!poll.eligible.includes(member)||Object.hasOwn(poll.votes,member)&&!poll.editable||!Array.isArray(c.value)||!c.value.length||new Set(c.value).size!==c.value.length||!c.value.every(i=>Number.isInteger(i)&&i>=0&&i<poll.options.length)||poll.kind!=="multiple"&&c.value.length!==1)fail("invalid_vote");
+ if(!poll||poll.closesMs!=null&&now>=poll.closesMs||!poll.eligible.includes(member)||Object.hasOwn(poll.votes,member)&&!poll.editable||!Array.isArray(c.value)||!c.value.length||new Set(c.value).size!==c.value.length||!c.value.every(i=>Number.isInteger(i)&&i>=0&&i<poll.options.length)||poll.kind!=="multiple"&&c.value.length!==1)fail("invalid_vote");
  Object.defineProperty(poll.votes,member,{value:[...c.value].sort((x,y)=>x-y),enumerable:true,writable:true,configurable:true});break;
  }
  case "close_poll":{needModerator("poll");const poll=n.polls.find(x=>x.id===c.target&&x.open);if(!poll)fail("invalid_poll");poll.open=false;break;}
@@ -138,11 +143,11 @@ export function mediaPermission(room,a,now){
  try{live(room,now);if(!["access","premium"].includes(a.plan)||!Number.isSafeInteger(a.entitlementEndMs)||now>=a.entitlementEndMs)return null;const p=participant(room,a);if(room.status!=="open"||p.response!=="accepted"||room.lobbyRequired===true&&p.memberId!==room.hostId&&p.lobbyStatus!=="admitted")return null;return {room:"wm-"+room.id,memberId:p.memberId,canSubscribe:true,canPublish:true,microphone:p.mic===true,screen:p.screen===true&&room.confidentiality!=="confidential",canRecord:false,canAdmin:false,expiresMs:Math.min(room.endMs,a.entitlementEndMs,now+90000)};}catch{return null;}
 }
 
-export function pollSummary(p,memberId){
- const voters=Object.keys(p.votes),visible=!p.kind||p.visibility==="live"||!p.open;
+export function pollSummary(p,memberId,now=Date.now()){
+ const open=p.open&&(p.closesMs==null||now<p.closesMs),voters=Object.keys(p.votes),visible=!p.kind||p.visibility==="live"||!open;
  const counts=visible?p.options.map((_,i)=>Object.values(p.votes).filter(v=>Array.isArray(v)?v.includes(i):v===i).length):null;
  const eligible=p.eligible?.length??null;
  const responseRate=eligible===null?null:eligible?100*voters.length/eligible:0;
  const quorumMet=eligible===null?null:responseRate>=p.quorum;
- return {id:p.id,question:p.question??null,kind:p.kind??"simple",options:p.options,open:p.open,anonymous:p.anonymous??true,editable:p.editable===true,ownSelection:p.kind&&Object.hasOwn(p.votes,memberId)?p.votes[memberId]:null,nominativeResponses:visible&&p.kind&&p.anonymous===false?Object.entries(p.votes).map(([memberId,selection])=>({memberId,selection})):null,counts,voted:Object.hasOwn(p.votes,memberId),eligible,responses:visible?voters.length:null,responseRate:visible?responseRate:null,quorumMet:visible?quorumMet:null,threshold:p.threshold??null,accepted:visible&&!p.open&&quorumMet&&voters.length?counts.map(n=>n*100/voters.length>=p.threshold):null};
+ return {id:p.id,question:p.question??null,kind:p.kind??"simple",options:p.options,open,closesMs:p.closesMs??null,anonymous:p.anonymous??true,editable:p.editable===true,ownSelection:p.kind&&Object.hasOwn(p.votes,memberId)?p.votes[memberId]:null,nominativeResponses:visible&&p.kind&&p.anonymous===false?Object.entries(p.votes).map(([memberId,selection])=>({memberId,selection})):null,counts,voted:Object.hasOwn(p.votes,memberId),eligible,responses:visible?voters.length:null,responseRate:visible?responseRate:null,quorumMet:visible?quorumMet:null,threshold:p.threshold??null,accepted:visible&&!open&&quorumMet&&voters.length?counts.map(n=>n*100/voters.length>=p.threshold):null};
 }

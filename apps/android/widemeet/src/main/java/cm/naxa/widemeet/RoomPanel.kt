@@ -35,6 +35,7 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  var editing by remember{mutableStateOf(false)};var recipient by remember{mutableStateOf("")};var surveyAnonymous by remember{mutableStateOf(true)};var surveyEditable by remember{mutableStateOf(false)};var cancelConfirm by remember{mutableStateOf(false)};var excludeTarget by remember{mutableStateOf<String?>(null)}
  var agendaTitle by remember{mutableStateOf("")};var agendaMinutes by remember{mutableStateOf("5")};var agendaOwner by remember{mutableStateOf("")}
  var recurrence by remember{mutableStateOf("none")};var occurrences by remember{mutableStateOf("2")};var interval by remember{mutableStateOf("1")};var seriesPending by remember{mutableStateOf<JSONObject?>(null)};var seriesCancelConfirm by remember{mutableStateOf(false)}
+ var pollSeconds by remember{mutableStateOf("")};var surveySeconds by remember{mutableStateOf("")}
  var extension by remember{mutableStateOf("15")};var surveyQuestion by remember{mutableStateOf("")};var surveyOptions by remember{mutableStateOf("")};var surveyMultiple by remember{mutableStateOf(false)};var surveyQuorum by remember{mutableStateOf("50")};var surveyThreshold by remember{mutableStateOf("50")};var surveySelections by remember{mutableStateOf<Map<String,Set<Int>>>(emptyMap())}
  suspend fun refresh(){busy=true;error=false;try{if(workspace.kind=="individual"){val all=rows(gateway.request("pass-list",JSONObject(),session) as JSONArray);passes=all.filter{it.isNull("room_id")};if(passes.none{it.optString("id")==passId})passId=passes.firstOrNull()?.optString("id")?:"";if(all.isEmpty()){list=emptyList();contacts=emptyList();return}};list=rows(gateway.request("list",JSONObject(),session) as JSONArray);if(hostRole)contacts=rows(gateway.request("contacts",JSONObject(),session) as JSONArray)}catch(e:kotlinx.coroutines.CancellationException){throw e}catch(e:Exception){error=true;list=emptyList();contacts=emptyList()}finally{busy=false}}
  LaunchedEffect(session.deviceId){refresh()}
@@ -143,7 +144,7 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  OutlinedTextField(chat,{chat=it.take(2000)},label={Text(tr("Message","Message"))},modifier=Modifier.fillMaxWidth())
  Button(enabled=!busy&&chat.isNotBlank(),onClick={command(if(recipient.isEmpty())"chat" else "private_chat",chat,recipient.ifEmpty{null})}){Text(tr("Envoyer","Send"))}
  rows(r.optJSONArray("events")).forEach{e->Text(displayName(e.optString("actor"))+" : "+when(e.optString("action")){"chat"->e.optString("value");"private_chat"->tr("Privé","Private")+" · "+e.optString("value");else->tr("Réaction","Reaction")})}
- Text(tr("Consentement audio","Audio consent"))
+ Text(tr("Consentement audio","Audio consent"));Text(tr("Autorisez-vous la capture et la conservation de votre voix pour cette réunion ? Vous pouvez retirer votre accord à tout moment.","Do you authorize recording and retention of your voice for this meeting? You may withdraw consent at any time."));Text(if(r.optBoolean("consent"))tr("Votre accord est enregistré.","Your consent is recorded.")else tr("Votre accord n’est pas donné.","Your consent has not been given."))
  TextButton(enabled=!busy,onClick={command("consent",true)}){Text(tr("Donner mon accord","Give consent"))}
  TextButton(enabled=!busy,onClick={command("consent",false)}){Text(tr("Retirer mon accord","Withdraw consent"))}
  when(r.optJSONObject("recordingStatus")?.optString("phase")){
@@ -160,7 +161,8 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  }
  if(may("poll")){
  OutlinedTextField(poll,{poll=it.take(2000)},label={Text(tr("Choix du vote séparés par |","Poll choices separated by |"))},modifier=Modifier.fillMaxWidth())
- Button(enabled=!busy&&poll.contains("|"),onClick={command("poll",JSONArray(poll.split("|").map{it.trim()}.filter{it.isNotEmpty()}),UUID.randomUUID().toString())}){Text(tr("Créer le vote","Create poll"))}
+ OutlinedTextField(pollSeconds,{pollSeconds=it.take(4)},label={Text(tr("Durée du vote (secondes, facultative)","Poll duration (seconds, optional)"))})
+ Button(enabled=!busy&&poll.contains("|")&&(pollSeconds.isBlank()||(pollSeconds.toIntOrNull()?:0) in 15..3600),onClick={command("poll",JSONObject().put("options",JSONArray(poll.split("|").map{it.trim()}.filter{it.isNotEmpty()})).put("durationSeconds",pollSeconds.toIntOrNull()?:JSONObject.NULL),UUID.randomUUID().toString())}){Text(tr("Créer le vote","Create poll"))}
  }
  if(may("poll")){
  Text(tr("Enquête Premium","Premium survey"))
@@ -170,8 +172,9 @@ private fun rows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() else (0
  OutlinedTextField(surveyOptions,{surveyOptions=it.take(2000)},label={Text(tr("Options séparées par |","Options separated by |"))},modifier=Modifier.fillMaxWidth())
  Row{Checkbox(surveyMultiple,{surveyMultiple=it});Text(tr("Choix multiples","Multiple choices"))}
  OutlinedTextField(surveyQuorum,{surveyQuorum=it.take(3)},label={Text(tr("Quorum (%)","Quorum (%)"))},modifier=Modifier.fillMaxWidth())
+ OutlinedTextField(surveySeconds,{surveySeconds=it.take(4)},label={Text(tr("Durée de l’enquête (secondes, facultative)","Survey duration (seconds, optional)"))})
  OutlinedTextField(surveyThreshold,{surveyThreshold=it.take(3)},label={Text(tr("Seuil (%)","Threshold (%)"))},modifier=Modifier.fillMaxWidth())
- Button(enabled=!busy&&surveyQuestion.isNotBlank()&&surveyOptions.contains("|")&&(surveyQuorum.toIntOrNull()?:-1) in 0..100&&(surveyThreshold.toIntOrNull()?:0) in 1..100,onClick={command("survey",JSONObject().put("question",surveyQuestion).put("kind",if(surveyMultiple)"multiple" else "single").put("options",JSONArray(surveyOptions.split("|").map{it.trim()}.filter{it.isNotEmpty()})).put("anonymous",surveyAnonymous).put("editable",surveyEditable).put("visibility","closed").put("quorum",surveyQuorum.toInt()).put("threshold",surveyThreshold.toInt()),UUID.randomUUID().toString())}){Text(tr("Créer l’enquête","Create survey"))}
+ Button(enabled=!busy&&surveyQuestion.isNotBlank()&&surveyOptions.contains("|")&&(surveySeconds.isBlank()||(surveySeconds.toIntOrNull()?:0) in 15..3600)&&(surveyQuorum.toIntOrNull()?:-1) in 0..100&&(surveyThreshold.toIntOrNull()?:0) in 1..100,onClick={command("survey",JSONObject().put("question",surveyQuestion).put("kind",if(surveyMultiple)"multiple" else "single").put("options",JSONArray(surveyOptions.split("|").map{it.trim()}.filter{it.isNotEmpty()})).put("anonymous",surveyAnonymous).put("editable",surveyEditable).put("visibility","closed").put("quorum",surveyQuorum.toInt()).put("threshold",surveyThreshold.toInt()).put("durationSeconds",surveySeconds.toIntOrNull()?:JSONObject.NULL),UUID.randomUUID().toString())}){Text(tr("Créer l’enquête","Create survey"))}
  }
  rows(r.optJSONArray("polls")).forEach{p->val opts=p.optJSONArray("options")?:JSONArray();val counts=p.optJSONArray("counts");val pid=p.optString("id");val kind=p.optString("kind","simple");val canVote=!busy&&p.optBoolean("open")&&(!p.optBoolean("voted")||p.optBoolean("editable"));val initial=p.optJSONArray("ownSelection")?.let{a->(0 until a.length()).map{a.getInt(it)}.toSet()}?:emptySet<Int>();Text(if(p.isNull("question"))tr("Vote","Poll") else p.optString("question"));if(counts==null)Text(tr("Résultats après clôture","Results after closing"));for(i in 0 until opts.length()){
  val label=opts.optString(i)+(counts?.let{" ("+it.optInt(i)+")"}?:"")
