@@ -25,6 +25,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: node --test docs/naxa-security/contracts/domain.test.mjs docs/naxa-security/contracts/module-workflows.test.mjs docs/naxa-security/contracts/execution-tools.test.mjs
+      - run: node --test docs/naxa-security/contracts/domain.test.mjs docs/naxa-security/contracts/module-workflows.test.mjs docs/naxa-security/contracts/execution-tools.test.mjs docs/naxa-security/contracts/preference-outbox.test.mjs
         env:
           SECURITY_BULK: ${{ matrix.bulk }}
