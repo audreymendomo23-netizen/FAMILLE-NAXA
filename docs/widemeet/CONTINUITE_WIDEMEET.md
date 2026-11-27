@@ -234,3 +234,47 @@ Global pondéré 24,5/46 = 53,3% (corrige la moyenne approximative antérieure 5
 
 ### B1 — correction ciblée de l'environnement ASR
 Audit des sources NAXA SERVICES 13810a2 : v11 briefing, v12 média et v13 collaboration, aucune implémentation Whisper réutilisable identifiée dans cette arborescence. Réutilisation du socle familial Egress/SFU, CI isolée, Storage privé, orchestration et recette existants. Journaux 45984772099 : faster-whisper 1.2.1 mais dépendances moteur non verrouillées (CTranslate2 4.9.1, hub 2.5.0, av 19.0.2, ONNX 1.32.0), cause exacte du crash non encore prouvée. Épinglage des dépendances directes à une combinaison candidate, contrôle pip check et modèle complet (révision existante d90ca5f), même fonction d'inférence offline pour worker et nouveau préflight réel sur parole synthétique, codes d'erreur stage/type strictement allowlistés, aucune sortie privée. Le Replay produit garde toutes ses assertions et reste exécuté si le préflight échoue après préparation réussie. Pas de simulation, main, production ni migration persistante. Nouveau candidat à qualifier.
+
+
+### 27/11/2026 — Consolidation B1 : référence dédiée qualifiée, intégration commune en cours
+
+**Statut de reprise B1 : 7/7 blocs qualifiés (100 %), campagne PR dédiée 8/8 jobs SUCCESS, 4/4 workflows SUCCESS.** Ce relevé remplace le statut B1 à 86 % du tableau historique ci-dessus, uniquement pour le périmètre de la révision qualifiée. Ne pas assimiler à un vert de toute la branche commune, à une validation exhaustive du CDC ou à un déploiement.
+
+Sources : [continuité détaillée B1](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/blob/work/widemeet-b1-20261127/docs/widemeet/CONTINUITE_B1_INFRASTRUCTURE.md), document au commit 22ff1df716e014579579dbaa65f58b1102e525df ; [PR de qualification B1 #6](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/pull/6), branche work/widemeet-b1-20261127 ; code qualifié e9d70dc5ddd38d312ce1b86c8bf9b0c2431c44b8. Les commits B1 postérieurs sont documentaires. Baseline commune 9bf1e22 : quatre workflows PR déjà verts après correction ASR, distincte du Gate Push historique vert sur 0963b91.
+
+#### Corrections B1 capitalisées
+
+| Correction | Référence | Statut |
+|---|---|---|
+| Résilience Gradle/Maven, cache et APK test selon NAXA SERVICES | 0963b91 puis 9bf1e22 | Qualifiée sur les gates concernés |
+| ASR : versions directes épinglées, pip check, modèle local à révision fixe, même runner offline pour préflight et worker, diagnostic allowlisté | 4a44293 puis 9bf1e22 | Qualifiée, pas de simulation ni d'externalisation IA |
+| Conflit port hôte 54324 du service mail de la base audio jetable : port dynamique et validation TOML | [6b6606d](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/commit/6b6606de87434c7bbe65b1e3229bcfdfe725e590) | Qualifiée sur branche B1 |
+| Compatibilité CLI Supabase : local_smtp et inbucket, API/DB inchangées | [e9d70dc](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/commit/e9d70dc5ddd38d312ce1b86c8bf9b0c2431c44b8) | Préparation DB et Replay audio SUCCESS |
+| Gate Push : branche B1 et chemins media-core/workflow audio ajoutés | [e22f8f7](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/commit/e22f8f722b44c646175759bc07c80df46d1ebfb5) | Gate PR SUCCESS ; résultat Push distinct non vérifié |
+| Régression SQL commune Connect : gardes séparées puis fermeture de deux littéraux regex, motif exact 64 caractères hexadécimaux minuscules, nouveaux tests RPC et CHECK | [2d84f63](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/commit/2d84f63f2927c4157ffe3eb5645e6a814d7964d9), [42ace1f](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/commit/42ace1fc7c933403f0489008c27ee473582fe042), [0a2c9ee](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/commit/0a2c9ee72e43bc28b78b6063e26d7f1619aff99d) | Correctif intégré à la branche commune ; installation SQL et SFU produit prouvées, autres recettes en cours |
+
+Diagnostic contradictoire : le précédent remplacement de l'extraction JSON n'a pas supprimé l'erreur près de status. Deux apostrophes manquantes en amont dans les expressions régulières (contrainte et RPC) étaient la cause retenue, et la nouvelle recette SFU commune réussie confirme que le blocage de compilation du schéma est levé dans cet environnement. Les refus d'accès, RLS, grants, assertions métier, stockage privé et tests existants sont conservés. Les recettes de validation des hashes doivent encore être constatées dans le Gate SQL dédié.
+
+#### Preuves terminales B1 sur e9d70dc
+
+| Bloc fixe | Statut | Preuve |
+|---|---|---|
+| Build/test Android et contrats | VERT | [Contrats](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155986/job/140499311546) : 192/192, 0 échec, 0 ignoré |
+| Émulateur Android 15 et APK | VERT | [Android](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155986/job/140499311396) : 5/5, BUILD SUCCESSFUL, [artefact 15197213932](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155986/artifacts/15197213932) |
+| Web/PWA | VERT | [Web](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155986/job/140499310985) SUCCESS |
+| SQL | VERT | [SQL](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155986/job/140499311445) SUCCESS |
+| Edge | VERT | [Edge](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155986/job/140499311483) SUCCESS |
+| Replay + SFU | VERT | [Replay](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155897) 40 PASS ; [SFU](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155858) 9 PASS |
+| Audio + ASR | VERT | [Audio](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45997155946/job/140499311116) 17 marqueurs PASS, préflight réel, Egress, Storage privé, Whisper local horodaté |
+
+Les marqueurs PASS peuvent se recouper entre workflows et ne s'additionnent pas en un total de tests uniques. La transcription a été réalisée sur une fixture de parole synthétique distincte de la capture Egress ; elle ne prouve ni toute la chaîne B3 ni qualité sur réunions humaines ou langues locales.
+
+#### État de l'intégration commune et règles de reprise
+
+Révision de code commune 0a2c9ee72e43bc28b78b6063e26d7f1619aff99d, avant la présente consolidation documentaire. [SFU 46000227616](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46000227616/job/140509681963) terminal SUCCESS, 11 marqueurs PASS dont installation PostgreSQL, appairage produit Connect entre installations distinctes, politique organisateur, RTP, renouvellement et révocation. [Gate 46000227749](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46000227749) cinq jobs QUEUED ; [Replay 46000227688](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46000227688) IN_PROGRESS ; [Audio 46000227608](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/46000227608) IN_PROGRESS, installation base isolée. Jauge CI commune 1/8 SUCCESS = 12,5 %, 2 en cours, 5 en attente, aucun nouvel échec constaté au relevé. La preuve SFU Connect ne vaut pas clôture exhaustive B2.
+
+**Intégration documentaire, pas fusion de code.** Les deux workflows corrigés dans la branche B1 (port mail/compatibilité CLI et extension des déclencheurs Push) ne sont pas encore présents dans la branche commune au relevé : blob audio 6db601e4c4c22d280298516af7339f865c963c45, blob gate 1f7d97a35d2cdadc273dbe4046f41085fa5f4722. Conserver les ajouts des autres chantiers lors d'une future intégration ciblée des diffs B1, puis requalifier la révision résultante. Ne pas remplacer intégralement les workflows communs par les versions antérieures B1. Ne pas fusionner la PR brouillon vers main. Vérifier le Gate Push par une source distincte (connecteur de recherche par commit limité aux PR).
+
+Le tableau global précédent est historique (0963b91). Jauge B1 actualisée : 7/7 = 100 %, +1 bloc / +14,3 points sur son barème de sept blocs. B2 à B6 non réaudités dans cette consolidation ; leurs valeurs ne sont pas modifiées. Le total pondéré global doit être recalculé lors d'un audit des six chantiers, et non déduit de résultats obtenus sur des révisions différentes. Note arithmétique : les lignes du tableau historique totalisent 25/46, et non 24,5/46 ; conserver cette distinction pour la prochaine consolidation globale.
+
+Aucune mutation de code dans cette passe documentaire, aucun déploiement, migration persistante, achat ni merge main. Validation finale de l'intégration non sollicitée tant que les recettes requises et les réserves ci-dessus ne sont pas fermées.
