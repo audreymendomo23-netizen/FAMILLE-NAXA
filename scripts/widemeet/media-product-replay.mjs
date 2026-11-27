@@ -89,10 +89,12 @@ try{
  await recorder.reconcile(rid);assert.equal((await getRuns()).length,0);
  await cmd(gs.access_token,"consent",true);await cmd(hs.access_token,"record",true);
  await until(()=>phase("active"),"consented actual Egress active",90000);
+ const statusActive=await good(roomApi+"/read",{room_id:rid},gs.access_token);assert.equal(statusActive.recordingStatus.phase,"active");assert.equal(statusActive.recordingStatus.provider_id,undefined);
  await delay(2500);
  const first=(await getRuns())[0];assert.ok(first.provider_id);
  await cmd(gs.access_token,"consent",false);
  assert.equal((await getRuns())[0].phase,"stopping");
+ assert.equal((await good(roomApi+"/read",{room_id:rid},hs.access_token)).recordingStatus.phase,"stopping");
  await until(()=>phase("discarded"),"withdrawal Egress stop and quarantine removal",90000);
  assert.equal(await stat(process.env.WM_EGRESS_OUT+"/"+first.object_name).then(()=>true,()=>false),false);
  console.log("PASS actual participant consent withdrawal fences recording, stops Egress and discards private segment");
@@ -100,6 +102,7 @@ try{
  await until(()=>phase("active"),"second recording active",90000);await delay(3000);
  await cmd(hs.access_token,"record",false);
  await until(()=>phase("complete"),"verified normal recording completion",90000);
+ assert.equal((await good(roomApi+"/read",{room_id:rid},hs.access_token)).recordingStatus.phase,"complete");
  const final=(await getRuns())[0];assert.match(final.content_sha256,/^[a-f0-9]{64}$/);assert.ok(final.bytes>1000);
  const st=await stat(process.env.WM_EGRESS_OUT+"/"+final.object_name);assert.equal(st.mode&0o777,0o600);
  console.log("PASS actual consent-driven recording normal stop, private audio-only verified file and SHA-256 ledger");
