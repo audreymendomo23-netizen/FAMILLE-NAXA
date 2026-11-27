@@ -576,6 +576,12 @@ try{
  await hp.getByText("Préférences enregistrées.",{exact:true}).waitFor();
  assert.equal(await hp.getByLabel("Langue d’écoute préférée",{exact:true}).inputValue(),"original");
  pass("real browser language and listening preference pages persist and reset account settings");
+ await menuPage("Sécurité");
+ await hp.getByRole("heading",{name:"Confidentialité et droits sur les données",exact:true}).waitFor();
+ await hp.getByText(/Pour demander accès, rectification ou effacement/).waitFor();
+ await hp.getByText(/documents juridiques restent en attente/).waitFor();
+ await hp.getByText("Le Web ne peut pas bloquer les captures système.",{exact:true}).waitFor();
+ pass("B6 real authenticated privacy rights and truthful security notices");
  await menuPage("Livechat et support");
  await hp.getByLabel("Sujet",{exact:true}).fill("Replay support browser");
  await hp.getByLabel("Description du problème",{exact:true}).fill("Synthetic browser issue");
