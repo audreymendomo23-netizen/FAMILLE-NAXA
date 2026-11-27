@@ -85,7 +85,7 @@ begin
  r:=public.wm_room_read(p_hash,p_room);
  if r is null then return null;end if;
  select * into a from public.wm_room_actor_for(p_hash,p_room);
- if not found or not exists(select 1 from jsonb_array_elements(r->'participants') as member_row(p) where p->>'memberId'=a.account_id::text and p->>'response'='accepted' and p->>'excluded'='false') then return null;end if;
+ if not found or not exists(select 1 from jsonb_array_elements(r->'participants') as member_row(participant) where member_row.participant->>'memberId'=a.account_id::text and member_row.participant->>'response'='accepted' and member_row.participant->>'excluded'='false') then return null;end if;
  select * into x from public.wm_recording_runs where room_id=p_room order by created_at desc limit 1;
  if not found then return jsonb_build_object('phase','off');end if;
  p:=public.wm_recording_policy(p_room);
