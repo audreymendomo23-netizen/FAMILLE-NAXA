@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
  }
  Column(verticalArrangement=Arrangement.spacedBy(8.dp)){
   Text(m.title,style=MaterialTheme.typography.titleLarge);Text(m.note)
-  if(m.fields.isEmpty())Text("Lecture serveur Android non raccordée.")
+  if(m.fields.isEmpty())SecurityNativeModuleAction(m,emptyMap())
   else{
    m.fields.forEach{k->
     val options=choices(k)
@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
    }
    Button(onClick={result=try{SecurityModuleRules.evaluate(m,values.toMap())}catch(e:IllegalArgumentException){"Saisie invalide ou incomplète."}}){Text("Vérifier le brouillon")}
    Text(result)
+   SecurityNativeModuleAction(m,values.toMap())
   }
  }
 }

@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 class MainActivity:ComponentActivity(){
  override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);setContent{
   MaterialTheme(colorScheme=darkColorScheme(primary=Color(0xFF69D1DC),background=Color(0xFF0B1426),surface=Color(0xFF152238))){
-   SecurityNavigation()
+   SecurityNativeWorkspace { SecurityNavigation() }
   }
  }}
 }
@@ -31,7 +31,7 @@ class MainActivity:ComponentActivity(){
  } }}) { padding ->
   Column(Modifier.fillMaxSize().padding(padding).padding(16.dp)){
    Text("NAXA SECURITY",style=MaterialTheme.typography.headlineSmall)
-   Text("Navigation de préparation — aucune session ni équipement connecté",style=MaterialTheme.typography.bodySmall)
+   SecurityNativeSessionPanel()
    Spacer(Modifier.height(12.dp))
    if(screen!=null){
     TextButton(onClick={selected=""}){Text("Retour")}
