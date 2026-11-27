@@ -38,7 +38,7 @@ create table grillad_private.sales(
  id uuid primary key,org uuid not null,site uuid not null,item uuid not null,cash uuid not null,
  actor uuid not null,qty bigint not null check(qty>0),price bigint not null check(price>0),
  cost bigint, total bigint generated always as (qty*price) stored,
- source text not null default 'direct' check(source in ('direct','connect')),connect_order uuid,check((source='connect')=(connect_order is not null)),created_at timestamptz not null default now(),cancelled_at timestamptz,cancelled_by uuid,cancel_reason text,
+ source text not null default 'direct' check(source in ('direct','connect')),connect_order uuid,direct_order uuid,check((source='connect')=(connect_order is not null)),check(direct_order is null or source='direct'),created_at timestamptz not null default now(),cancelled_at timestamptz,cancelled_by uuid,cancel_reason text,
  foreign key(item,org,site) references grillad_private.items(id,org,site),
  foreign key(cash,org,site) references grillad_private.cash(id,org,site)
 );
@@ -94,11 +94,11 @@ insert into famille_core.role_catalog(app_id,role_code,display_name,scope_type,i
 create function grillad_private.run(p_org uuid,p_site uuid,p_event uuid,p_action text,p_payload jsonb)
 returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare r text; u uuid:=auth.uid(); old grillad_private.events%rowtype; x grillad_private.items%rowtype; c grillad_private.cash%rowtype; v grillad_private.sales%rowtype;
- item_id uuid; qty bigint; n bigint; cost bigint; label text; reason text; v_expected bigint; result jsonb; d date;
+ item_id uuid; qty bigint; line jsonb; basket_total bigint; basket_count int; n bigint; cost bigint; label text; reason text; v_expected bigint; result jsonb; d date;
 begin
  r:=grillad_private.scope(p_org,p_site);
  if p_event is null or p_action is null or p_payload is null or jsonb_typeof(p_payload)<>'object' or octet_length(p_payload::text)>8192 then raise exception 'GRILLAD_INPUT' using errcode='22023';end if;
- if r='seller' and p_action not in ('sell','prepare') then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+ if r='seller' and p_action not in ('sell','sell_basket','prepare') then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
  -- Serialize all mutations for the same site; no cross-site stock or drawer race.
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
  select * into old from grillad_private.events where org=p_org and site=p_site and id=p_event;
@@ -112,7 +112,7 @@ begin
   select * into x from grillad_private.items where id=item_id and org=p_org and site=p_site and active;
   if not found then raise exception 'GRILLAD_ITEM' using errcode='42501';end if;
  end if;
- if p_action in ('sell','expense','close_cash','cancel_sale') then
+ if p_action in ('sell','sell_basket','expense','close_cash','cancel_sale','cancel_basket') then
   select * into c from grillad_private.cash where org=p_org and site=p_site and closed_at is null;
   if not found then raise exception 'GRILLAD_CASH_CLOSED' using errcode='22023';end if;
  end if;
@@ -142,9 +142,34 @@ begin
   insert into grillad_private.sales(id,org,site,item,cash,actor,qty,price,cost) values(p_event,p_org,p_site,x.id,c.id,u,qty,x.price,x.cost);
   update grillad_private.items set sold=sold+qty where id=x.id;
   result:=jsonb_build_object('id',p_event,'total',qty*x.price,'remaining',x.prepared-x.sold-x.connect_reserved-qty);
+ when 'sell_basket' then
+  if jsonb_typeof(p_payload->'lines') is distinct from 'array' then raise exception 'GRILLAD_BASKET' using errcode='22023';end if;
+  basket_count:=jsonb_array_length(p_payload->'lines');
+  if basket_count not between 1 and 20 or (select count(distinct z->>'item') from jsonb_array_elements(p_payload->'lines') z)<>basket_count then raise exception 'GRILLAD_BASKET' using errcode='22023';end if;
+  basket_total:=0;
+  for line in select value from jsonb_array_elements(p_payload->'lines') loop
+   item_id:=(line->>'item')::uuid;qty:=(line->>'qty')::bigint;n:=(line->>'price')::bigint;
+   if qty is null or qty not between 1 and 1000000 or n is null then raise exception 'GRILLAD_QTY' using errcode='22023';end if;
+   select * into x from grillad_private.items where id=item_id and org=p_org and site=p_site and active;
+   if not found then raise exception 'GRILLAD_ITEM' using errcode='42501';end if;
+   if n<>x.price or qty>x.prepared-x.sold-x.connect_reserved then raise exception 'GRILLAD_PRICE_OR_STOCK' using errcode='22023';end if;
+   insert into grillad_private.sales(id,org,site,item,cash,actor,qty,price,cost,direct_order) values(gen_random_uuid(),p_org,p_site,x.id,c.id,u,qty,x.price,x.cost,p_event);
+   update grillad_private.items set sold=sold+qty where id=x.id;
+   basket_total:=basket_total+qty*x.price;
+  end loop;
+  result:=jsonb_build_object('id',p_event,'total',basket_total,'lines',basket_count);
+ when 'cancel_basket' then
+  reason:=btrim(p_payload->>'reason');item_id:=(p_payload->>'sale')::uuid;
+  if reason is null or length(reason) not between 1 and 300 or item_id is null then raise exception 'GRILLAD_REASON' using errcode='22023';end if;
+  if not exists(select 1 from grillad_private.sales where org=p_org and site=p_site and direct_order=item_id and cash=c.id and cancelled_at is null) then raise exception 'GRILLAD_SALE' using errcode='22023';end if;
+  for v in select * from grillad_private.sales where org=p_org and site=p_site and direct_order=item_id and cash=c.id and cancelled_at is null loop
+   update grillad_private.sales set cancelled_at=now(),cancelled_by=u,cancel_reason=reason where id=v.id;
+   update grillad_private.items set sold=sold-v.qty where id=v.item;
+  end loop;
+  result:=jsonb_build_object('id',item_id,'cancelled',true);
  when 'cancel_sale' then
   reason:=btrim(p_payload->>'reason');if reason is null or length(reason) not between 1 and 300 then raise exception 'GRILLAD_REASON' using errcode='22023';end if;
-  select * into v from grillad_private.sales where id=(p_payload->>'sale')::uuid and org=p_org and site=p_site and cash=c.id and cancelled_at is null and source='direct';
+  select * into v from grillad_private.sales where id=(p_payload->>'sale')::uuid and org=p_org and site=p_site and cash=c.id and cancelled_at is null and source='direct' and direct_order is null;
   if not found then raise exception 'GRILLAD_SALE' using errcode='22023';end if;
   update grillad_private.sales set cancelled_at=now(),cancelled_by=u,cancel_reason=reason where id=v.id;
   update grillad_private.items set sold=sold-v.qty where id=v.item;
@@ -179,9 +204,9 @@ begin
  r:=grillad_private.scope(p_org,p_site);
  if p_from is null or p_to is null or p_to<p_from or p_to-p_from>366 then raise exception 'GRILLAD_PERIOD' using errcode='22023';end if;
  select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'name',i.name,'family',i.family,'price',i.price,'prepared',i.prepared,'sold',i.sold,'remaining',i.prepared-i.sold-i.connect_reserved)||case when r='seller' then '{}'::jsonb else jsonb_build_object('cost',i.cost) end order by i.name),'[]'::jsonb) into v_items from grillad_private.items i where org=p_org and site=p_site and active;
- select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'item',s.item,'qty',s.qty,'total',s.total,'actor',s.actor,'at',s.created_at,'cancelled',s.cancelled_at is not null,'source',s.source) order by s.created_at desc),'[]'::jsonb) into v_sales from (select * from grillad_private.sales where org=p_org and site=p_site and (r<>'seller' or actor=u) and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) s;
+ select coalesce(jsonb_agg(jsonb_build_object('id',s.id,'item',s.item,'qty',s.qty,'total',s.total,'actor',s.actor,'at',s.created_at,'cancelled',s.cancelled_at is not null,'source',s.source,'direct_order',s.direct_order) order by s.created_at desc),'[]'::jsonb) into v_sales from (select * from grillad_private.sales where org=p_org and site=p_site and (r<>'seller' or actor=u) and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) s;
  if r<>'seller' then
- select jsonb_build_object('ca',coalesce(sum(total),0),'sales_count',count(*) filter(where source='direct')+count(distinct connect_order) filter(where source='connect'),'direct_ca',coalesce(sum(total) filter(where source='direct'),0),'connect_ca',coalesce(sum(total) filter(where source='connect'),0),'cost',case when count(*) filter(where cost is null)>0 then null else coalesce(sum(qty*cost),0) end,'charges',(select coalesce(sum(value),0) from grillad_private.expenses where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to)) into v_finance from grillad_private.sales where org=p_org and site=p_site and cancelled_at is null and (created_at at time zone 'Africa/Douala')::date between p_from and p_to;
+ select jsonb_build_object('ca',coalesce(sum(total),0),'sales_count',count(distinct (site,coalesce(direct_order,id))) filter(where source='direct')+count(distinct connect_order) filter(where source='connect'),'direct_ca',coalesce(sum(total) filter(where source='direct'),0),'connect_ca',coalesce(sum(total) filter(where source='connect'),0),'cost',case when count(*) filter(where cost is null)>0 then null else coalesce(sum(qty*cost),0) end,'charges',(select coalesce(sum(value),0) from grillad_private.expenses where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to)) into v_finance from grillad_private.sales where org=p_org and site=p_site and cancelled_at is null and (created_at at time zone 'Africa/Douala')::date between p_from and p_to;
  select jsonb_build_object('id',c.id,'opening',c.opening,'expected',c.opening+coalesce((select sum(total) from grillad_private.sales where cash=c.id and cancelled_at is null),0)-coalesce((select sum(value) from grillad_private.expenses where cash=c.id),0)) into v_cash from grillad_private.cash c where org=p_org and site=p_site and closed_at is null;
  select coalesce(jsonb_agg(to_jsonb(e) order by e.created_at desc),'[]'::jsonb) into v_expenses from (select id,label,value,created_at from grillad_private.expenses where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) e;
  select amount into v_target from grillad_private.targets where org=p_org and site=p_site and day=p_to;

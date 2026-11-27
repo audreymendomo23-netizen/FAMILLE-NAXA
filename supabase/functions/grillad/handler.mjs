@@ -1,7 +1,7 @@
 // Dedicated GRILLAD gateway, adapted from the family accounting bearer/RPC pattern.
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const date=/^\d{4}-\d{2}-\d{2}$/;
-const actions=new Set(['add_item','prepare','sell','cancel_sale','open_cash','close_cash','expense','target','change_price']);
+const actions=new Set(['add_item','prepare','sell','sell_basket','cancel_sale','cancel_basket','open_cash','close_cash','expense','target','change_price']);
 export async function handle(request,env,fetcher=fetch){
  const origin=request.headers.get('origin');const allowed=env.origins||[];
  const headers={'Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin','Access-Control-Allow-Methods':'POST, OPTIONS','Access-Control-Allow-Headers':'authorization, apikey, content-type'};

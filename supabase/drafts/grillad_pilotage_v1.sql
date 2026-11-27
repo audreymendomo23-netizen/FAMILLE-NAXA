@@ -20,7 +20,7 @@ begin
  select s.*,i.family from grillad_private.sales s join grillad_private.items i on i.id=s.item and i.org=s.org and i.site=s.site
  where s.org=p_org and s.site=any(site_ids) and not(s.cancelled_at is not null) and s.created_at>=lo and s.created_at<hi
  and (p_family is null or i.family=p_family) and (p_actor is null or s.actor=p_actor) and (p_item is null or s.item=p_item))
- select jsonb_build_object('ca',coalesce(sum(total),0),'sales_count',count(*) filter(where source='direct')+count(distinct connect_order) filter(where source='connect'),'quantity',coalesce(sum(qty),0),
+ select jsonb_build_object('ca',coalesce(sum(total),0),'sales_count',count(distinct (site,coalesce(direct_order,id))) filter(where source='direct')+count(distinct connect_order) filter(where source='connect'),'quantity',coalesce(sum(qty),0),
  'direct_ca',coalesce(sum(total) filter(where source='direct'),0),'connect_ca',coalesce(sum(total) filter(where source='connect'),0),
  'cost',case when count(*) filter(where cost is null)>0 then null else coalesce(sum(qty*cost),0) end,
  'expenses',case when p_family is not null or p_actor is not null or p_item is not null then null else (select coalesce(sum(e.value),0) from grillad_private.expenses e where e.org=p_org and e.site=any(site_ids) and e.created_at>=lo and e.created_at<hi) end,

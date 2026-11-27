@@ -32,7 +32,7 @@ begin
  if hi>now() then raise exception 'GRILLAD_SERVICE_OPEN' using errcode='22023';end if;
  perform pg_advisory_xact_lock(hashtextextended(p_org::text||':'||p_site::text,0));
  select * into old from grillad_private.daily_summary where org=p_org and site=p_site and service_day=p_day order by version desc limit 1;
- select jsonb_build_object('ca',coalesce(sum(s.total),0),'sales_count',count(*) filter(where s.source='direct')+count(distinct s.connect_order) filter(where s.source='connect'),'sold',coalesce(sum(s.qty),0),
+ select jsonb_build_object('ca',coalesce(sum(s.total),0),'sales_count',count(distinct (s.site,coalesce(s.direct_order,s.id))) filter(where s.source='direct')+count(distinct s.connect_order) filter(where s.source='connect'),'sold',coalesce(sum(s.qty),0),
  'cost',case when count(*) filter(where s.cost is null)>0 then null else coalesce(sum(s.qty*s.cost),0) end,
  'expenses',(select coalesce(sum(e.value),0) from grillad_private.expenses e where e.org=p_org and e.site=p_site and e.created_at>=lo and e.created_at<hi),
  'prepared',(select coalesce(sum(a.qty),0) from grillad_private.preparations a where a.org=p_org and a.site=p_site and a.created_at>=lo and a.created_at<hi),
@@ -73,9 +73,9 @@ declare r text;u uuid:=auth.uid();out jsonb;preferences jsonb;
 begin
  r:=grillad_private.scope(p_org,p_site);
  with all_events as (
- select 'event:'||e.id as id,case when action='sell' then 'sales' when action='prepare' then 'stock' else 'cash' end as category,
- case when action='sell' then 'Vente confirmée' when action='prepare' then 'Préparation enregistrée' when action='close_cash' then 'Clôture de caisse enregistrée' else 'Dépense enregistrée' end as text,e.created_at at
- from grillad_private.events e where org=p_org and site=p_site and action in ('sell','prepare','close_cash','expense') and (r<>'seller' or (e.actor=u and action in ('sell','prepare')))
+ select 'event:'||e.id as id,case when action in ('sell','sell_basket') then 'sales' when action='prepare' then 'stock' else 'cash' end as category,
+ case when action in ('sell','sell_basket') then 'Vente confirmée' when action='prepare' then 'Préparation enregistrée' when action='close_cash' then 'Clôture de caisse enregistrée' else 'Dépense enregistrée' end as text,e.created_at at
+ from grillad_private.events e where org=p_org and site=p_site and action in ('sell','sell_basket','prepare','close_cash','expense') and (r<>'seller' or (e.actor=u and action in ('sell','sell_basket','prepare')))
  union all select 'daily:'||service_day,'daily','Point journalier disponible',max(generated_at) from grillad_private.daily_summary where org=p_org and site=p_site and r<>'seller' group by service_day
  union all select 'attendance:'||a.id,'attendance','Pointage confirmé',a.received_at from grillad_private.attendance a where org=p_org and site=p_site and (r<>'seller' or a.actor=u)
  ),recent as(select e.* from all_events e left join grillad_private.notice_preference p on p.org=p_org and p.site=p_site and p.actor=u and p.category=e.category where coalesce(p.enabled,true) order by e.at desc,e.id limit 100)
