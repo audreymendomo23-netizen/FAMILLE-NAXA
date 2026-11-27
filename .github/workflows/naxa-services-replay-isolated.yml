@@ -390,9 +390,9 @@ jobs:
               const records=await success(base+'/rest/v1/ns_customers?select=id&org_id=eq.'+f.org.id+'&display_name=eq.'+encodeURIComponent(customer),undefined,admin,admin,'GET');
               assert.equal(records.length,1);
               pass('real Chromium customer creation, offline queue, accounting receipt and persisted PostgreSQL row');
-              const failures=[];let proofCheckpoint='not started',sectorCheckpoint='not started',b4ChargeCheckpoint='not started';
+              const failures=[];let proofCheckpoint='not started',sectorCheckpoint='not started',b4ChargeCheckpoint='not started',b4PayrollCheckpoint='not started';
               async function scenario(label,run){
-                try{await run();pass(label);}catch(e){failures.push(label);console.log('FAIL independent browser scenario:',label,e instanceof Error?e.name:'Error');if(label.startsWith('attendance proof'))console.log('Attendance replay last checkpoint:',proofCheckpoint);if(label.startsWith('real sector form'))console.log('Sector replay last checkpoint:',sectorCheckpoint);if(label.startsWith('B4 real browser recurring charge'))console.log('B4 charge checkpoint:',b4ChargeCheckpoint);}
+                try{await run();pass(label);}catch(e){failures.push(label);console.log('FAIL independent browser scenario:',label,e instanceof Error?e.name:'Error');if(label.startsWith('attendance proof'))console.log('Attendance replay last checkpoint:',proofCheckpoint);if(label.startsWith('real sector form'))console.log('Sector replay last checkpoint:',sectorCheckpoint);if(label.startsWith('B4 real browser recurring charge'))console.log('B4 charge checkpoint:',b4ChargeCheckpoint);if(label.startsWith('B4 real browser variable compensation'))console.log('B4 payroll checkpoint:',b4PayrollCheckpoint);}
               }
               const nav=async label=>{await page.locator('.side-nav button.nav-item').filter({hasText:label}).click();};
               const apply=async(action,click)=>{
@@ -638,8 +638,14 @@ jobs:
                 await apply('staff_commission.status_changed',()=>row.getByRole('button',{name:'Approuver rémunération B4'}).click());
                 await row.getByText(/approved.*Confirmé/).waitFor();
                 const [p]=await success(base+'/rest/v1/ns_management_records?id=eq.'+created.aggregate_id+'&select=status,amount_xaf,revision',undefined,admin,admin,'GET');assert.equal(p.status,'approved');assert.equal(p.amount_xaf,1200);assert.equal(p.revision,2);
-                await row.getByLabel('B4 rémunération décision').fill('Règlement externe déjà effectué');
-                await apply('staff_commission.status_changed',()=>row.getByRole('button',{name:'Déclarer règlement rémunération B4'}).click());
+                b4PayrollCheckpoint='approved persisted; new decision field';
+                const settlementReason=row.getByLabel('B4 rémunération décision');
+                await settlementReason.fill('Règlement externe déjà effectué');
+                assert.equal(await settlementReason.inputValue(),'Règlement externe déjà effectué');
+                b4PayrollCheckpoint='settlement button';
+                const paidEvent=await apply('staff_commission.status_changed',()=>row.getByRole('button',{name:'Déclarer règlement rémunération B4'}).click());
+                assert.equal(paidEvent.payload.to_status,'paid');assert.equal(paidEvent.payload.reason,'Règlement externe déjà effectué');assert.equal(paidEvent.payload.expected_version,2);
+                b4PayrollCheckpoint='settlement receipt; confirmed projection';
                 await row.getByText(/paid.*Confirmé/).waitFor();
                 const [settled]=await success(base+'/rest/v1/ns_management_records?id=eq.'+created.aggregate_id+'&select=status,paid_xaf,revision',undefined,admin,admin,'GET');assert.equal(settled.status,'paid');assert.equal(settled.paid_xaf,1200);assert.equal(settled.revision,3);
               });
