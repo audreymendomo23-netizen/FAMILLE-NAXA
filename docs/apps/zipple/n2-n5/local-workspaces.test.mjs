@@ -106,6 +106,46 @@ test("ZIPPLE professional workspace pages on real GoTrue, Edge, PostgreSQL and b
   const laterReceipt=(await b("cash_record",{cash_id:cash,order_id:later.id,request_id:id(),method:"cash",amount_xaf:2500})).body.data;assert.ok(laterReceipt);
   await loyalty.getByRole("button",{name:"Actualiser",exact:true}).click();await loyalty.getByLabel("Commande ultérieure réglée",{exact:true}).selectOption(laterReceipt);await loyalty.getByLabel("Preuve de remise de l’avantage",{exact:true}).fill("Avantage remis et vérifié");await loyalty.getByRole("button",{name:"Confirmer la remise et utiliser les points",exact:true}).click();await loyalty.getByText(/Filleul navigateur · 25 points disponibles/).waitFor();
   assert.equal(Number(await scalar("select count(*) from zp_loyalty_redemptions where receipt_id=$1 and benefit_id=$2 and customer_id=$3 and points=5",[laterReceipt,benefit,customer])),1);await shot("10-loyalty");const activeSession=await scalar("select id from zp_table_sessions where table_id=$1 and closed_at is null",[tableId]);assert.equal((await b("table_close",{table_session_id:activeSession})).status,200);assert.equal((await b("guest_order_read",{order_id:linkedOrder},guestToken,true)).status,403);assert.equal((await b("guest_receipt",{order_id:linkedOrder},guestToken,true)).body.data.receipt_id,receipt);await db.query("update zp_guest_sessions set expires_at=now()-interval '1 second' where token_hash=encode(digest($1,'sha256'),'hex')",[guestToken]);assert.equal((await b("guest_receipt",{order_id:linkedOrder},guestToken,true)).status,403);console.log("ZIPPLE_RECEIPT_SCOPE_CLOSED_TABLE_EXPIRY_PASS");await guestCtx.close();console.log("ZIPPLE_REAL_BROWSER_GUEST_CARD_AND_REDEMPTION_PASS");
+  // Fresh public table and independent guest sessions for mixed and split tender receipts.
+  const paymentTable=(await b("table_create",{label:"Table reçus multi-moyens"})).body.data;
+  assert.ok(paymentTable.id&&paymentTable.qr);assert.equal((await b("table_open",{table_id:paymentTable.id})).status,200);
+  const paymentItem=(await b("menu_add",{name:"Plat paiement multiple",post:"kitchen",price_xaf:1000,qty:2})).body.data;
+  assert.ok(paymentItem);
+  async function paymentGuest(){
+   const ctx=await context(),g=await ctx.newPage();await g.goto(publicOrigin+"/#table="+paymentTable.qr);
+   const opened=g.waitForResponse(r=>r.url().endsWith("/guest_open")&&r.status()===200);
+   await g.getByRole("button",{name:"Voir la carte",exact:true}).click();const token=(await (await opened).json()).guest_token;
+   await g.getByLabel(/Plat paiement multiple/).fill("1");
+   const created=g.waitForResponse(r=>r.url().endsWith("/guest_order_create")&&r.status()===200);
+   await g.getByRole("button",{name:"Confirmer ma commande",exact:true}).click();const order=(await (await created).json()).data.id;
+   await g.getByRole("heading",{name:"Commande confirmée",exact:true}).waitFor();
+   for(const next of ["preparing","ready","served"])assert.equal((await b("line_advance",{order_id:order,item_id:paymentItem,next})).status,200);
+   const read=()=>b("guest_receipt",{order_id:order},token,true);
+   const button=g.getByRole("button",{name:"Télécharger mon reçu PDF",exact:true});
+   assert.equal((await read()).body.data.available,false);assert.equal(await button.count(),0);
+   return {ctx,g,order,read,button};
+  }
+  async function verifyPaymentPdf(g,amounts,filename){
+   const data=(await g.read()).body.data;assert.equal(data.available,true);assert.equal(data.paid_xaf,1000);
+   assert.deepEqual(Object.fromEntries(data.methods.map(m=>[m.method,Number(m.amount_xaf)])),amounts);
+   assert.ok(data.methods.every(m=>!("reference" in m)&&!("member_id" in m)));
+   await g.button.waitFor();const pending=g.g.waitForEvent("download");await g.button.click();const dl=await pending;
+   assert.equal(dl.suggestedFilename(),"zipple-recu-"+data.receipt_id+".pdf");
+   const bytes=await readFile(await dl.path());assert.equal(bytes.subarray(0,5).toString(),"%PDF-");
+   for(const amount of Object.values(amounts))assert.ok(bytes.includes(Buffer.from(amount+" FCFA")));
+   await dl.saveAs(resolve(evidenceDir,filename));await g.ctx.close();
+  }
+  const mixedGuest=await paymentGuest();
+  const mixedPayment=await b("cash_record_mixed",{cash_id:cash,order_id:mixedGuest.order,request_id:id(),tenders:[{method:"cash",amount_xaf:400,reference:null},{method:"mtn_momo",amount_xaf:600,reference:"GUEST-MIX-"+id()}]});
+  assert.equal(mixedPayment.status,200);await verifyPaymentPdf(mixedGuest,{cash:400,mtn_momo:600},"16-receipt-mixed.pdf");
+  const splitGuest=await paymentGuest();
+  const part=(payer,amount,method,reference)=>b("split_collect",{cash_id:cash,order_id:splitGuest.order,request_id:id(),payer,amount_xaf:amount,method,reference,allocations:[]});
+  const firstPart=await part("Personne A",300,"cash",null);assert.equal(firstPart.status,200);assert.equal(firstPart.body.data.balance_xaf,700);
+  assert.equal((await splitGuest.read()).body.data.available,false);
+  await splitGuest.g.getByText(/Solde restant/).waitFor();assert.equal(await splitGuest.button.count(),0);
+  const finalPart=await part("Personne B",700,"orange_money","GUEST-SPLIT-"+id());assert.equal(finalPart.status,200);assert.equal(finalPart.body.data.balance_xaf,0);
+  await verifyPaymentPdf(splitGuest,{cash:300,orange_money:700},"17-receipt-split.pdf");
+  console.log("ZIPPLE_GUEST_MIXED_AND_SPLIT_RECEIPTS_PASS");
   const delivery=await openCommerce("Livraison Restaurant","delivery");await delivery.getByLabel("Nom de zone",{exact:true}).fill("Zone navigateur");await delivery.getByLabel("Périmètre et consignes",{exact:true}).fill("Secteur de recette");await delivery.getByLabel("Frais FCFA",{exact:true}).fill("500");await delivery.getByRole("button",{name:"Enregistrer la zone",exact:true}).click();await delivery.getByText(/Zone navigateur · 500 FCFA/).waitFor();
   await delivery.getByLabel("Livreur de l'établissement",{exact:true}).selectOption(member);await delivery.getByRole("button",{name:"Enregistrer le livreur",exact:true}).click();await delivery.getByText(/Livreur affecté : Profil recette ZIPPLE/).waitFor();
   assert.equal(await scalar("select delivery_enabled from zp_site_modes where site_id=$1",[site]),false);await shot("11-delivery");

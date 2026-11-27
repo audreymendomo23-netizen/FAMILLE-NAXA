@@ -21,6 +21,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Validate business E2E JavaScript syntax before emulator
+        run: |
+          set -euo pipefail
+          for file in docs/apps/zipple/n2-n5/local-*.mjs; do node --check "$file"; done
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
