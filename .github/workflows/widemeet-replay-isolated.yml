@@ -84,10 +84,10 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/wm-replay" && supabase stop --no-backup
 
-      - name: Upload sanitized Wave 05 evidence (replay)
+      - name: Upload sanitized Wave 07 evidence (replay)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wave05-evidence-replay
+          name: wave07-evidence-replay
           path: ${{ runner.temp }}/wm-wave-replay.jsonl
           if-no-files-found: warn
