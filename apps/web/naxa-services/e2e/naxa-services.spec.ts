@@ -73,6 +73,7 @@ async function installBackend(context: BrowserContext, incomingChanges: Record<s
       currentOrg=organizationId;
       const session=authSession(organizationId, activityProfile, identifier === "NS-MULTISITE");
       if(identifier==="NS-SINGLE")session.account.business_mode="single_site_multi_workstation";
+      if(identifier==="NS-PEER"){session.account.member_id=MEMBER_B;session.account.display_name="Autre membre organisation A";}
       session.account.default_locale=memberLocales.get(organizationId)??"fr";
       return json(route,session);
     }
@@ -341,6 +342,34 @@ test("Web: offline outbox survives tab closure, keeps tenant data isolated and c
   await expect(page.locator(".record").filter({hasText:"Client privé organisation A"}).getByText("Confirmé",{exact:true}).first()).toBeVisible();
   await expect(page.locator(".module-layout .module-main-card").last().locator(".record").filter({ hasText: "Client distant Android" })).toBeVisible();
   await expect(page.locator(".module-layout .module-main-card").last().locator(".record").filter({ hasText: "Client privé organisation A" })).toBeVisible();
+  await page.close();
+});
+
+test("Bulk C: same organization and device do not replay another member's pending mutation", async ({context})=>{
+  const applied=await installBackend(context);
+  let page=await context.newPage();
+  await signIn(page);
+  await context.setOffline(true);
+  await createCustomer(page,"Brouillon local membre A");
+  await expect(page.getByText(/enregistré hors connexion/i)).toBeVisible();
+  await page.close();
+  await context.setOffline(false);
+  page=await context.newPage();
+  await signIn(page,"NS-PEER");
+  await page.getByRole("button",{name:/Clients & fidélité/}).first().click();
+  await expect(page.getByText("Brouillon local membre A")).toHaveCount(0);
+  await expect(page.getByRole("button",{name:/Synchroniser \(/})).toHaveCount(0);
+  expect(applied).toHaveLength(0);
+  await page.close();
+  page=await context.newPage();
+  await signIn(page);
+  await expect(page.getByRole("button",{name:"Synchroniser (1)"})).toBeVisible();
+  await page.getByRole("button",{name:"Synchroniser (1)"}).click();
+  await expect.poll(()=>applied.length).toBe(1);
+  expect(applied[0].org_id).toBe(ORG_A);
+  expect(applied[0].action_code).toBe("customer.created");
+  await page.getByRole("button",{name:/Clients & fidélité/}).first().click();
+  await expect(page.locator(".record").filter({hasText:"Brouillon local membre A"}).getByText("Confirmé",{exact:true}).first()).toBeVisible();
   await page.close();
 });
 

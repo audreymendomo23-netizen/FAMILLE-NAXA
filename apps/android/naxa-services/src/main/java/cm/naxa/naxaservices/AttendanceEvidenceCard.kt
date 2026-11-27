@@ -224,7 +224,8 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
    while(true){
     kotlinx.coroutines.delay(5000)
     val value=pending?:break
-    if(busy)continue
+    // Do not start a transmission while the user is deciding whether to discard.
+    if(busy||discard)continue
     busy=true
     try{
      val state=lookupReceipt(value)
@@ -250,10 +251,10 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
     OutlinedButton(onClick={clear();reload++},enabled=!busy){Text(tr("Actualiser les règles","Refresh rules","Hesɗitin yamirooje"))}
     pending?.let{value->
      Text(tr("Preuve locale non confirmée. Réessayez sans modifier l'heure initiale. Une preuve expirée doit être signalée au responsable.","Unconfirmed local proof. Retry without changing the original time. Report expired proof to your manager.","Seedeeji tabbitinaaka. Humpitin hooreejo so sahaa timmii."))
-     OutlinedButton(enabled=!busy&&!terminalRejection,onClick={busy=true;error=false;scope.launch{try{submitPending(value)}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}}){Text(tr("Réessayer la transmission","Retry submission","Fuɗɗito neldugol"))}
-     TextButton(enabled=!busy&&!submittedLocal,onClick={discard=true}){Text(tr("Abandonner la preuve non confirmée","Discard unconfirmed proof","Accu seedeeji"))}
+     OutlinedButton(enabled=!busy&&!discard&&!terminalRejection,onClick={if(busy||discard)return@OutlinedButton;busy=true;error=false;scope.launch{try{submitPending(value)}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}}){Text(tr("Réessayer la transmission","Retry submission","Fuɗɗito neldugol"))}
+     TextButton(enabled=!busy&&!submittedLocal,onClick={if(!busy&&!submittedLocal)discard=true}){Text(tr("Abandonner la preuve non confirmée","Discard unconfirmed proof","Accu seedeeji"))}
     }
-    if(discard)AlertDialog(onDismissRequest={discard=false},title={Text(tr("Abandonner la preuve ?","Discard proof?","Accu seedeeji?"))},text={Text(tr("Cette action ne valide aucun pointage.","This does not confirm attendance.","Golle tabbitinaaka."))},confirmButton={TextButton(onClick={discard=false;val id=pending?.optString("id");if(id!=null){busy=true;scope.launch{try{
+    if(discard)AlertDialog(onDismissRequest={discard=false},title={Text(tr("Abandonner la preuve ?","Discard proof?","Accu seedeeji?"))},text={Text(tr("Cette action ne valide aucun pointage.","This does not confirm attendance.","Golle tabbitinaaka."))},confirmButton={TextButton(enabled=!busy&&!submittedLocal,onClick={if(busy||submittedLocal)return@TextButton;discard=false;val id=pending?.optString("id");if(id!=null){busy=true;scope.launch{try{
      val value=requireNotNull(pending)
      val current=latest
      require(repository.dao.findOwnedAttendanceEvent(current.account.organizationId,current.account.memberId,current.deviceId,id,value.getString("event")+".recorded")==null)
