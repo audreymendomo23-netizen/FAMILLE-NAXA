@@ -84,12 +84,12 @@ try{
  await listen(proxy.server,7881);await listen(app,4173);
  browser=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream","--autoplay-policy=no-user-gesture-required"]});
  const ctx=await browser.newContext({permissions:["camera","microphone"]}),a=await ctx.newPage(),b=await ctx.newPage();
- async function join(page,t){await page.goto(origin);await page.evaluate(async token=>{
+ async function joinMedia(page,t){await page.goto(origin);await page.evaluate(async token=>{
  const lk=window.LivekitClient,r=new lk.Room({adaptiveStream:false,dynacast:false});window.r=r;window.received=[];
  r.on(lk.RoomEvent.TrackSubscribed,track=>{window.received.push(track);const el=track.attach();el.autoplay=true;document.body.appendChild(el)});
  await r.connect("ws://127.0.0.1:7881",token);await r.localParticipant.setMicrophoneEnabled(true);await r.localParticipant.setCameraEnabled(true);
  },t)}
- await join(a,hg.token);await join(b,gg.token);
+ await joinMedia(a,hg.token);await joinMedia(b,gg.token);
  const inbound=page=>page.evaluate(async()=>{const seen={audio:false,video:false};for(const t of window.received){const s=await t.getRTCStatsReport();if(!s)continue;for(const x of s.values())if(x.type==="inbound-rtp"&&x.bytesReceived>0){if(t.kind==="audio")seen.audio=true;if(t.kind==="video"&&(x.framesDecoded??0)>0)seen.video=true}}return seen.audio&&seen.video});
  await until(async()=>await inbound(a)&&await inbound(b),"real WideMeet bidirectional RTP");
  console.log("PASS actual WideMeet opaque sessions, Edge-issued media grants, PostgreSQL admission and bidirectional SFU RTP");
@@ -154,7 +154,7 @@ try{
  console.log("PASS room closure revokes host transport");
  if(process.env.WM_RECORDING_STORAGE_QUALIFIED==="true"){const archive=await good(roomApi+"/recordings",{room_id:rid},hs.access_token);assert.equal(archive.items.length,3);assert.equal((await request(roomApi+"/recordings",{room_id:rid},gs.access_token)).status,403);const file=archive.items.at(-1),body={app_id:"WIDEMEET",room_id:rid,recording_id:file.recording_id,request_id:randomUUID()};const download=async token=>fetch(roomApi+"/recording-download",{method:"POST",headers:{apikey:anon,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});assert.equal((await download(gs.access_token)).status,403);const res=await download(hs.access_token);assert.equal(res.status,200);const data=Buffer.from(await res.arrayBuffer());assert.equal(data.length,file.bytes);assert.equal(createHash("sha256").update(data).digest("hex"),file.sha256);console.log("PASS actual N3 private Storage upload/readback, host-only export after closure, forbidden guest and SHA-256 integrity");}
  if(process.env.WM_TRANSCRIPTION_QUALIFIED==="true"){
- const temp=await mkdtemp(join(tmpdir(),"wm-asr-replay-"));
+ const temp=await mkdtemp(joinPath(tmpdir(),"wm-asr-replay-"));
  try{
   const wav=joinPath(temp,"synthetic.wav"),ogg=joinPath(temp,"synthetic.ogg");
   execFileSync("espeak-ng",["-v","en-us","-s","125","-w",wav,"Today we discuss the project. The meeting is about the project. Thank you for attending the meeting."]);

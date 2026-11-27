@@ -555,12 +555,12 @@ try{
  await hp.locator("article").filter({hasText:"Synthetic private browser message"}).getByText(/Consultation déclarée/).waitFor({timeout:15000});
  await menuPage("Statistiques");
  await hp.getByRole("heading",{name:"Bilan consolidé Premium",exact:true}).waitFor();
- await hp.getByLabel("Période écoulée",{exact:true}).selectOption("7");
+ const period=hp.getByRole("combobox",{name:"Période écoulée",exact:true});await period.selectOption("7");assert.equal(await period.inputValue(),"7");
  await hp.getByText("Toutes les réunions de votre entreprise",{exact:true}).waitFor();
  pass("real two-browser direct chat, explicit read acknowledgement, automatic refresh and consolidated statistics period");
 
  await menuPage("Traduction et écoute");
- await hp.getByLabel("Langue parlée préférée",{exact:true}).selectOption("ff");
+ await hp.getByRole("combobox",{name:"Langue parlée préférée",exact:true}).selectOption("ff");
  await hp.getByLabel("Langue d’écoute préférée",{exact:true}).selectOption("en");
  await hp.getByLabel("Vitesse de lecture",{exact:true}).selectOption("1.25");
  await hp.getByRole("button",{name:"Enregistrer mes préférences",exact:true}).click();
