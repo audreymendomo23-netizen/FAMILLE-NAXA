@@ -284,3 +284,5 @@ Total 6,5/9 = 72,2 % (+5,6 points sur 66,7 %). Plus aucun bloc sans implémentat
 
 ### Activation propriétaire et validation FCM HTTP v1
 - Les flags WM_AUTH_QUALIFIED et WM_PUSH_QUALIFIED ont été renseignés par le propriétaire. Requête non authentifiée valide en forme, HTTP 403 scope (id 5), prouve que les deux verrous et la configuration de chiffrement passent. Cron job 2 : exécutions 14:58, 14:59 et 15:00 UTC succeeded. Nouveau préflight avec validate_only:true, topic fixe, aucun envoi ni abonnement ; nouveaux états privés fcm_validated, fcm_permission_denied, fcm_validation_failed. Le résultat de validation FCM reste distinct de la réception sur appareil.
+
+- Preuve réelle 27 novembre 15:02:01 UTC : ticket 559dbeaf-a3b6-4664-9fc1-573c24fb86c9, outcome fcm_validated. Migration widemeet_push_validate_only appliquée, scheduler v4 ACTIVE. FCM HTTP v1 a accepté le message en mode validation uniquement ; permission d'envoi et format du payload vérifiés auprès du vrai projet naxameet. Aucun destinataire ni livraison réelle. Reste l'inscription d'un appareil Android et Web/PWA et réception effective ; jauge B2 stricte 72,2 % inchangée.
