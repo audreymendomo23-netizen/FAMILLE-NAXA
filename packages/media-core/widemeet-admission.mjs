@@ -11,7 +11,7 @@ export function createWideMeetAdmission({supabaseUrl,serviceKey,fetcher=fetch}){
  return async grant=>{
  if(grant.app!=="wm"||!/^[a-f0-9]{64}$/.test(grant.sessionHash??"")||!/^wm-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(grant.room))return null;
  const p_hash=grant.sessionHash,p_room=grant.room.slice(3);
- const [actors,room]=await Promise.all([rpc("wm_room_actor",{p_hash}),rpc("wm_room_read",{p_hash,p_room})]);
+ const [actors,room]=await Promise.all([rpc("wm_room_actor_for",{p_hash,p_room}),rpc("wm_room_read",{p_hash,p_room})]);
  const a=actors?.[0];
  if(!a||a.account_id!==grant.identity||!room)return null;
  const now=Date.now(),actor={memberId:a.account_id,workspaceId:a.workspace_id,enabled:true,passwordChangeRequired:false,role:a.role,plan:a.plan,entitlementEndMs:a.entitlement_end_ms};
