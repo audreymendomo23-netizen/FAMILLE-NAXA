@@ -461,6 +461,33 @@ try{
  await hp.getByRole("button",{name:"Supprimer la photo",exact:true}).click();
  await photoPreview.waitFor({state:"detached",timeout:15000});
  pass("actual Web profile photo selection, re-encoding, private preview and removal");
+ // Exercise the external invitation deep link through real GoTrue, Edge and Chromium.
+ const deepHost=await login(h),deepRoomId=randomUUID(),deepToken=randomBytes(32).toString("hex"),deepInviteId=randomUUID();
+ const deepRoom=await ok(room+"/create",{room_id:deepRoomId,title:"Replay invitation link",description:"Isolated",scheduled_ms:Date.now(),duration_minutes:30,invitees:[]},deepHost.access_token);
+ await ok(room+"/command",{room_id:deepRoomId,request_id:randomUUID(),expected_revision:deepRoom.revision,action:"lobby_config",value:true},deepHost.access_token);
+ await ok(room+"/external-invite",{action:"issue",data:{room_id:deepRoomId,invite_id:deepInviteId,login_id:o.login,token:deepToken}},deepHost.access_token);
+ const deepContext=await browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"});
+ try{
+  const dp=await deepContext.newPage();
+  await dp.goto("https://127.0.0.1:8443/#invite="+deepToken);
+  await dp.getByLabel("Identifiant WideMeet",{exact:true}).fill(o.login);
+  await dp.getByLabel("Mot de passe",{exact:true}).fill(o.password);
+  await dp.getByRole("button",{name:"Se connecter",exact:true}).click();
+  const field=dp.getByLabel("Code d’invitation",{exact:true});
+  await field.waitFor({timeout:20000});
+  assert.equal(await field.inputValue(),deepToken);
+  assert.equal(await dp.evaluate(()=>location.hash),"");
+  const redeemed=dp.waitForResponse(r=>r.url().endsWith("/widemeet-room/external-invite")&&r.request().method()==="POST");
+  await dp.getByRole("button",{name:"Rejoindre",exact:true}).click();
+  assert.equal((await redeemed).status(),200);
+  await dp.getByRole("heading",{name:"Replay invitation link",exact:true}).waitFor({timeout:20000});
+  // A second link while already signed in must reopen the invitation entry, not silently redeem it.
+  await dp.evaluate(t=>{location.hash="invite="+t},deepToken);
+  await field.waitFor({timeout:20000});assert.equal(await field.inputValue(),deepToken);
+  assert.equal(await dp.evaluate(()=>location.hash),"");
+  pass("real external invitation URL: manual GoTrue sign-in, exact token, explicit redemption, room access and signed-in hash navigation");
+ }finally{await deepContext.close()}
+
 
 }finally{
  if(browser)await browser.close();if(server)await new Promise(r=>server.close(r));
