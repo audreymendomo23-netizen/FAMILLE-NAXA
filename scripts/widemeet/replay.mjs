@@ -139,6 +139,9 @@ try{
  const centerReq=(token,action,data={})=>request(auth+"/identity",{action:"center-"+action,data},token);
  const centerOk=(token,action,data={})=>ok(auth+"/identity",{action:"center-"+action,data},token);
  const privateData={peer_id:g.id,message_id:randomUUID(),body:"Synthetic private workspace message"};
+ assert.ok((await centerOk(hs.access_token,"contacts",{query:"staff"})).items.some(x=>x.member_id===g.id));
+ assert.deepEqual((await centerOk(hs.access_token,"contacts",{query:"not present"})).items,[]);
+ assert.equal((await centerReq(hs.access_token,"contacts",{query:"x".repeat(101)})).status,403);
  await centerOk(hs.access_token,"send",privateData);await centerOk(hs.access_token,"send",privateData);
  assert.equal((await centerReq(hs.access_token,"send",{...privateData,body:"changed"})).status,403);
  assert.equal((await centerReq(hs.access_token,"send",{...privateData,peer_id:o.id})).status,403);
@@ -149,7 +152,7 @@ try{
  assert.ok((await centerOk(hs.access_token,"thread",{peer_id:g.id,query:"workspace"})).items[0].read_at);
  assert.deepEqual((await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"not present"})).items,[]);
  assert.equal((await centerReq(gs.access_token,"statistics",{days:30})).status,403);
- assert.equal((await centerOk(hs.access_token,"statistics",{days:30})).scope,"enterprise");
+ const consolidated=await centerOk(hs.access_token,"statistics",{days:30});assert.equal(consolidated.scope,"enterprise");assert.ok(Number.isInteger(consolidated.polls_closed)&&consolidated.polls_closed>=0);assert.ok(Number.isInteger(consolidated.tasks_done)&&consolidated.tasks_done>=0);
  assert.equal((await centerReq(hs.access_token,"statistics",{days:999})).status,403);
  pass("workspace private chat exact retry, peer/tenant denial, search, explicit read acknowledgement and role-scoped summary");
 
@@ -540,7 +543,7 @@ try{
  pass("real browser workspace chat, concurrent rooms, polls, visible statistics and reports routes backed by GoTrue and Edge");
  await hp.getByRole("navigation").getByRole("button",{name:"Chat",exact:true}).click();
  await hp.getByRole("button",{name:"Messages privés",exact:true}).click();
- await hp.getByRole("button",{name:"Replay staff",exact:true}).click();
+ await hp.getByLabel("Rechercher un contact",{exact:true}).fill("staff");await hp.getByRole("button",{name:"Rechercher",exact:true}).click();await hp.getByRole("button",{name:"Replay staff",exact:true}).click();
  await hp.getByText("Synthetic private workspace message",{exact:true}).waitFor();
  await hp.getByLabel("Votre message",{exact:true}).fill("Synthetic private browser message");
  await hp.getByRole("button",{name:"Envoyer",exact:true}).click();
@@ -556,7 +559,7 @@ try{
  await menuPage("Statistiques");
  await hp.getByRole("heading",{name:"Bilan consolidé Premium",exact:true}).waitFor();
  const period=hp.getByRole("combobox",{name:"Période écoulée",exact:true});await period.selectOption("7");assert.equal(await period.inputValue(),"7");
- await hp.getByText("Toutes les réunions de votre entreprise",{exact:true}).waitFor();
+ await hp.getByText("Toutes les réunions de votre entreprise",{exact:true}).waitFor();await hp.getByText("Votes clôturés explicitement",{exact:true}).waitFor();await hp.getByText("Tâches approuvées",{exact:true}).waitFor();
  pass("real two-browser direct chat, explicit read acknowledgement, automatic refresh and consolidated statistics period");
 
  await menuPage("Traduction et écoute");

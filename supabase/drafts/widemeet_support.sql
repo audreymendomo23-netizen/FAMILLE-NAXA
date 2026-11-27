@@ -36,6 +36,11 @@ begin
  select * into s from public.wm_session_context(p_hash);
  if not found or s.password_change_required then return null;end if;
  aid:=s.account_id;
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ perform 1 from public.wm_accounts where id=aid and enabled and not password_change_required for share;if not found then return null;end if;
+ perform 1 from public.wm_workspaces where id=s.workspace_id and enabled for share;if not found then return null;end if;
+ perform 1 from public.wm_memberships where account_id=aid and workspace_id=s.workspace_id and enabled for share;if not found then return null;end if;
+ perform 1 from public.wm_device_sessions where id=s.session_id and revoked_at is null and expires_at>clock_timestamp() for share;if not found then return null;end if;
  -- Serialize writes for each requester/agent; row lock below arbitrates competing agents.
  perform pg_advisory_xact_lock(hashtextextended('wm-support:'||aid::text,0));
  if not exists(select 1 from public.wm_session_context(p_hash) c where c.session_id=s.session_id and not c.password_change_required) then return null;end if;

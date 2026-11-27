@@ -15,9 +15,9 @@ private fun centerRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("item
  fun tr(fr:String,en:String)=if(english)en else fr
  val scope=rememberCoroutineScope()
  var contacts by remember{mutableStateOf<List<JSONObject>>(emptyList())};var peer by remember{mutableStateOf<JSONObject?>(null)};var messages by remember{mutableStateOf<List<JSONObject>>(emptyList())}
- var query by remember{mutableStateOf("")};var body by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var pending by remember{mutableStateOf<JSONObject?>(null)}
+ var contactQuery by remember{mutableStateOf("")};var query by remember{mutableStateOf("")};var body by remember{mutableStateOf("")};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var pending by remember{mutableStateOf<JSONObject?>(null)}
  suspend fun req(action:String,data:JSONObject=JSONObject())=gateway.identity(session,"center-"+action,data)
- suspend fun refresh(){try{contacts=centerRows(req("contacts"))}catch(e:CancellationException){throw e}catch(e:Exception){contacts=emptyList();throw e}}
+ suspend fun refresh(){try{contacts=centerRows(req("contacts",JSONObject().put("query",contactQuery)))}catch(e:CancellationException){throw e}catch(e:Exception){contacts=emptyList();throw e}}
  suspend fun thread(id:String,q:String=""){try{messages=centerRows(req("thread",JSONObject().put("peer_id",id).put("query",q)))}catch(e:CancellationException){throw e}catch(e:Exception){peer=null;messages=emptyList();contacts=emptyList();body="";pending=null;throw e}}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
  LaunchedEffect(session.deviceId){work{refresh()}}
@@ -27,7 +27,7 @@ private fun centerRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("item
  Text(tr("Messages entre membres actifs de votre entreprise.","Messages between active members of your company."))
  if(busy)LinearProgressIndicator(Modifier.fillMaxWidth());if(error)Text(tr("Accès ou action non confirmé.","Access or action unconfirmed."),color=MaterialTheme.colorScheme.error)
  val c=peer
- if(c==null){TextButton(enabled=!busy,onClick={work{refresh()}}){Text(tr("Actualiser les contacts","Refresh contacts"))}
+ if(c==null){OutlinedTextField(contactQuery,{contactQuery=it.take(100)},label={Text(tr("Rechercher un contact","Search contacts"))},modifier=Modifier.fillMaxWidth());TextButton(enabled=!busy,onClick={work{refresh()}}){Text(tr("Rechercher","Search"))};TextButton(enabled=!busy,onClick={work{refresh()}}){Text(tr("Actualiser les contacts","Refresh contacts"))}
  for(x in contacts)TextButton(enabled=!busy,onClick={work{thread(x.getString("member_id"));peer=x;query="";body="";pending=null}}){Text(x.getString("display_name")+(if(x.optInt("unread")>0)" · "+x.optInt("unread")+" "+tr("non lus","unread") else ""))}
  if(!busy&&contacts.isEmpty())Text(tr("Aucun contact disponible.","No contacts available."))
  }else{
@@ -52,6 +52,6 @@ private fun centerRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("item
  Text(tr("Période écoulée","Past period"));for(n in listOf(7,30,90,365))Row{RadioButton(selected=days==n,onClick={days=n});Text("$n "+tr("jours","days"),Modifier.padding(top=12.dp))}
  if(busy)LinearProgressIndicator(Modifier.fillMaxWidth())
  if(error)Text(tr("Bilan consolidé non accessible avec vos droits actuels.","Consolidated summary unavailable with current permissions."))
- data?.let{d->Text(if(d.optString("scope")=="enterprise")tr("Toutes les réunions de votre entreprise","All meetings in your company")else tr("Réunions que vous organisez","Meetings you organize"));for((k,label) in listOf("total" to "Total","scheduled" to tr("Programmées","Scheduled"),"open" to tr("Ouvertes","Open"),"paused" to tr("En pause","Paused"),"ended" to tr("Terminées","Ended"),"cancelled" to tr("Annulées","Cancelled"),"duration_minutes" to tr("Minutes planifiées hors annulations","Planned minutes excluding cancellations")))Text(label+": "+d.getLong(k));Text(tr("Selon la date programmée, sans mesure de présence humaine.","Based on scheduled date, not human attendance."))}
+ data?.let{d->Text(if(d.optString("scope")=="enterprise")tr("Toutes les réunions de votre entreprise","All meetings in your company")else tr("Réunions que vous organisez","Meetings you organize"));for((k,label) in listOf("total" to "Total","scheduled" to tr("Programmées","Scheduled"),"open" to tr("Ouvertes","Open"),"paused" to tr("En pause","Paused"),"ended" to tr("Terminées","Ended"),"cancelled" to tr("Annulées","Cancelled"),"duration_minutes" to tr("Minutes planifiées hors annulations","Planned minutes excluding cancellations"),"polls_closed" to tr("Votes clôturés explicitement","Explicitly closed polls"),"tasks_done" to tr("Tâches approuvées","Approved tasks")))Text(label+": "+d.getLong(k));Text(tr("Selon la date programmée, sans mesure de présence humaine.","Based on scheduled date, not human attendance."))}
  }}
 }

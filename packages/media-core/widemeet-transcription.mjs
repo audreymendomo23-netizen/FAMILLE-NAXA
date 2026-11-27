@@ -15,22 +15,27 @@ export function createWideMeetTranscription({supabaseUrl,serviceKey,python,model
  async function rpc(action,recording,lease,result=null){const r=await fetcher(new URL("/rest/v1/rpc/wm_transcription_worker",base),{method:"POST",headers:{...headers,"Content-Type":"application/json"},body:JSON.stringify({p_action:action,p_recording:recording,p_lease:lease,p_result:result}),redirect:"error",cache:"no-store",signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error("ASR queue unavailable");return r.json()}
  async function runOne(){
   const lease=randomUUID(),source=await rpc("claim",null,lease);if(!source)return {claimed:false};
-  let dir;
+  let dir,stage="source";
   try{
    if(!uuid.test(source.recording_id)||!uuid.test(source.room_id)||source.lease!==lease||source.storage_key!==source.room_id+"/"+source.recording_id+".ogg"||!Number.isSafeInteger(source.bytes)||source.bytes<1000||source.bytes>134217728||!/^[a-f0-9]{64}$/.test(source.sha256))throw Error("invalid source");
+   stage="bucket";
    const bucket=await fetcher(new URL("/storage/v1/bucket/wm-recordings",base),{headers,cache:"no-store",redirect:"error",signal:AbortSignal.timeout(30000)});if(!bucket.ok||(await bucket.json()).public!==false)throw Error("private storage unavailable");
+   stage="download";
    const res=await fetcher(new URL("/storage/v1/object/authenticated/wm-recordings/"+source.storage_key,base),{headers,cache:"no-store",redirect:"error",signal:AbortSignal.timeout(60000)});
    if(!res.ok||!res.body)throw Error("source unavailable");
    const reader=res.body.getReader(),chunks=[];let size=0;const sha=createHash("sha256");
    try{for(;;){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>source.bytes)throw Error("source too large");sha.update(value);chunks.push(Buffer.from(value))}}catch(e){await reader.cancel().catch(()=>{});throw e}
+   stage="integrity";
    if(size!==source.bytes||sha.digest("hex")!==source.sha256)throw Error("source integrity");
+   stage="local-file";
    dir=await mkdtemp(join(tmpdir(),"wm-asr-"));const path=join(dir,"source.ogg");await writeFile(path,Buffer.concat(chunks),{mode:0o600});
    // No service credentials or remote model downloads in the subprocess.
+   stage="inference";
    const {stdout}=await execute(resolve(python),[script,resolve(modelDir),path],{timeout:480000,maxBuffer:1048576,env:{PATH:process.env.PATH??"/usr/bin:/bin",HOME:dir,HF_HUB_OFFLINE:"1",TRANSFORMERS_OFFLINE:"1",PYTHONUTF8:"1",OMP_NUM_THREADS:"2"}});
-   const result=JSON.parse(stdout),saved=await rpc("finish",source.recording_id,lease,result);
+   stage="result-json";const result=JSON.parse(stdout);stage="result-persist";const saved=await rpc("finish",source.recording_id,lease,result);
    if(saved?.status!=="complete")throw Error("ASR unconfirmed");
    return {claimed:true,completed:true};
-  }catch{await rpc("fail",source.recording_id,lease).catch(()=>{});return {claimed:true,completed:false}}
+  }catch(e){const reason=e?.code==="ENOENT"?"executable-missing":e?.killed?"subprocess-terminated":typeof e?.code==="number"?"subprocess-exit":"operation-failed";await rpc("fail",source.recording_id,lease).catch(()=>{});return {claimed:true,completed:false,stage,reason}}
   finally{if(dir)await rm(dir,{recursive:true,force:true})}
  }
  return {runOne};

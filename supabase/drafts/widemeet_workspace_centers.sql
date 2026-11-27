@@ -34,17 +34,20 @@ begin
    'paused',count(*) filter(where state->>'status'='paused'),
    'ended',count(*) filter(where state->>'status'='ended' and coalesce(state->>'cancelled','false')='false'),
    'cancelled',count(*) filter(where state->>'cancelled'='true'),
-   'duration_minutes',coalesce(sum((state->>'durationMinutes')::bigint) filter(where coalesce(state->>'cancelled','false')='false'),0))
+   'duration_minutes',coalesce(sum((state->>'durationMinutes')::bigint) filter(where coalesce(state->>'cancelled','false')='false'),0),
+   'polls_closed',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(state->'polls','[]'::jsonb)) p where p->>'open'='false')),0),
+   'tasks_done',coalesce(sum((select count(*) from public.wm_tasks t join public.wm_minutes_versions mv on mv.id=t.version_id and mv.revoked_at is null and mv.published_at is not null where t.room_id=wm_rooms.id and t.state='done' and exists(select 1 from public.wm_minutes_recipients mr where mr.version_id=t.version_id and mr.account_id=t.assignee_id and mr.revoked_at is null))),0))
    into v from public.wm_rooms where workspace_id=a.workspace_id and (a.role='promoteur' or host_id=a.account_id)
    and (state->>'scheduledMs')::bigint>=cutoff and (state->>'scheduledMs')::bigint<=floor(extract(epoch from clock_timestamp())*1000)::bigint;
   return v;
  end if;
  if p_action='center-contacts' then
+  q:=coalesce(p_data->>'query','');if length(q)>100 then return null;end if;
   select coalesce(jsonb_agg(to_jsonb(c) order by c.display_name,c.member_id),'[]'::jsonb) into v from (
    select ac.id as member_id,ac.display_name,
     (select count(*) from public.wm_direct_messages dm where dm.workspace_id=a.workspace_id and dm.sender_id=ac.id and dm.recipient_id=a.account_id and dm.read_at is null) unread
    from public.wm_memberships mb join public.wm_accounts ac on ac.id=mb.account_id and ac.enabled and not ac.password_change_required
-   where mb.workspace_id=a.workspace_id and mb.enabled and ac.id<>a.account_id order by ac.display_name,ac.id limit 200
+   where mb.workspace_id=a.workspace_id and mb.enabled and ac.id<>a.account_id and (q='' or strpos(lower(ac.display_name),lower(q))>0) order by ac.display_name,ac.id limit 200
   ) c;
   return jsonb_build_object('items',v);
  end if;
