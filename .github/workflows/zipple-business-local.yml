@@ -17,6 +17,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: ZIPPLE intelligence calculation contracts
+        run: node --test docs/apps/zipple/n2-n5/intelligence.test.mjs
       - name: Index every acceptance ID without inventing test results
         run: python3 docs/apps/zipple/n2-n5/qa-plan.py
       - uses: actions/upload-artifact@v4
@@ -136,7 +141,10 @@ jobs:
           set -euo pipefail
           npm install --workspace @famille/zipple-web --include-workspace-root=false --ignore-scripts
           npm install --no-save --ignore-scripts pg@8.13.3 playwright@1.51.1
-          npx playwright install --with-deps chromium
+          npx playwright install chromium
+          if ! node --input-type=module -e 'import {chromium} from "playwright";const b=await chromium.launch();await b.close();'; then
+            npx playwright install --with-deps chromium
+          fi
           VITE_ZIPPLE_API_URL=https://127.0.0.1:4443/gateway VITE_ZIPPLE_BUSINESS_API_URL=https://idupfjbkwjcavyisxteo.supabase.co/functions/v1/zipple-business npm run build --workspace @famille/zipple-web
           openssl req -x509 -nodes -newkey rsa:2048 -days 1 -subj "/CN=localhost" -addext "subjectAltName=IP:127.0.0.1,DNS:localhost" -addext "basicConstraints=critical,CA:TRUE" -keyout "$RUNNER_TEMP/zipple-ci.key" -out "$RUNNER_TEMP/zipple-ci.crt" >/dev/null 2>&1
       - name: Qualify real business UI via isolated Edge
