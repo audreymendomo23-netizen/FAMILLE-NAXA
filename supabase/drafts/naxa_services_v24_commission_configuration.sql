@@ -112,4 +112,18 @@ begin
 end $fn$;
 revoke all on function public.ns_read_automatic_commission_settings(uuid),public.ns_set_automatic_commission_settings(uuid,boolean,bigint),public.ns_publish_automatic_commission_policy(uuid,uuid,uuid,uuid,uuid,text,text,integer,text,integer,bigint,date,date,text),public.ns_retire_automatic_commission_policy(uuid,uuid) from public,anon,authenticated;
 grant execute on function public.ns_read_automatic_commission_settings(uuid),public.ns_set_automatic_commission_settings(uuid,boolean,bigint),public.ns_publish_automatic_commission_policy(uuid,uuid,uuid,uuid,uuid,text,text,integer,text,integer,bigint,date,date,text),public.ns_retire_automatic_commission_policy(uuid,uuid) to authenticated;
+-- Server-curated choices, restricted to the authenticated promoter's organisation.
+create or replace function public.ns_automatic_commission_catalog(p_org uuid)
+returns jsonb language plpgsql stable security definer set search_path = '' as $fn$
+begin
+ if auth.uid() is null or not public.ns_can_manage_org(p_org) or not exists(select 1 from public.ns_organizations where id=p_org and status='active') then raise exception 'NS_COMMISSION_CONFIG_FORBIDDEN'; end if;
+ return jsonb_build_object(
+ 'settings',public.ns_read_automatic_commission_settings(p_org),
+ 'sites',coalesce((select jsonb_agg(jsonb_build_object('id',id,'name',name) order by name,id) from public.ns_sites where org_id=p_org and status='active'),'[]'::jsonb),
+ 'members',coalesce((select jsonb_agg(jsonb_build_object('id',id,'name',display_name) order by display_name,id) from public.ns_members where org_id=p_org and status='active'),'[]'::jsonb),
+ 'services',coalesce((select jsonb_agg(jsonb_build_object('id',id,'name',name,'site_id',site_id) order by name,id) from public.ns_services where org_id=p_org and active),'[]'::jsonb),
+ 'policies',coalesce((select jsonb_agg(jsonb_build_object('id',id,'code',policy_code,'version',version,'status',status,'method',method,'rate_bps',rate_bps,'fixed_amount_xaf',fixed_amount_xaf,'site_id',site_id,'member_id',member_id,'service_id',service_id,'activity_profile',activity_profile,'effective_from',effective_from,'effective_until',effective_until,'reference',source_reference) order by created_at desc,id) from public.ns_commission_policy_versions where org_id=p_org and automatic_scope),'[]'::jsonb));
+end $fn$;
+revoke all on function public.ns_automatic_commission_catalog(uuid) from public,anon,authenticated;
+grant execute on function public.ns_automatic_commission_catalog(uuid) to authenticated;
 rollback;

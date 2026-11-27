@@ -38,6 +38,28 @@ private val briefingLanguages=linkedMapOf("fr" to "Français","en" to "English",
 internal fun briefingToday(now:Instant=Instant.now()):LocalDate=now.atZone(ZoneId.of("Africa/Douala")).toLocalDate()
 internal fun briefingDateAllowed(date:LocalDate,today:LocalDate=briefingToday()):Boolean=!date.isAfter(today)&&!date.isBefore(today.minusDays(366))
 private val briefingDateLabels=mapOf("fr" to "Date du bilan","en" to "Report date","ff-CM" to "Ñalnde jaŋtol","es" to "Fecha del informe","it" to "Data del resoconto","zh-CN" to "报告日期")
+internal fun briefingCount(value:Any?):Long {
+ require(value is Number)
+ val n=value.toDouble()
+ require(n.isFinite()&&n>=0&&n<=9007199254740991.0&&n%1.0==0.0)
+ return n.toLong()
+}
+internal fun validateNativeBriefing(report:JSONObject,expectedDay:String) {
+ require(report.opt("day")==expectedDay)
+ require(report.opt("coverage")=="partial_confirmed_server_facts")
+ require(report.opt("scope") in setOf("site","personal"))
+ require(report.has("finance")&&report.has("personal_clock_events"))
+ val generated=report.opt("generated_at") as? String ?: error("INVALID_BRIEFING")
+ Instant.parse(generated)
+ val a=report.getJSONObject("appointments")
+ require(briefingCount(a.opt("completed_count"))<=briefingCount(a.opt("scheduled_count")))
+ if(report.opt("scope")=="personal")require(report.isNull("finance"))
+ if(!report.isNull("finance")){
+  val f=report.getJSONObject("finance");briefingCount(f.opt("revenue_xaf"))
+  require(briefingCount(f.opt("uncosted_sales_count"))<=briefingCount(f.opt("confirmed_sales_count")))
+ }
+ if(!report.isNull("personal_clock_events"))briefingCount(report.getJSONObject("personal_clock_events").opt("event_count"))
+}
 internal fun briefingText(report:JSONObject,language:String):String {
  val w=briefingWords.getValue(language)
  val appointments=report.getJSONObject("appointments")
@@ -48,9 +70,9 @@ internal fun briefingText(report:JSONObject,language:String):String {
  require(report.getString("scope")!="personal"||finance==null)
  return buildString {
   append(w.intro).append(" ").append(report.getString("day")).append(". ")
-  append(w.appointment).append(": ").append(appointments.getInt("scheduled_count")).append("; ").append(w.completed).append(": ").append(appointments.getInt("completed_count")).append(". ")
-  if(finance!=null)append(w.revenue).append(": ").append(finance.getLong("revenue_xaf")).append("; ").append(w.sales).append(": ").append(finance.getInt("confirmed_sales_count")).append(". ")
-  if(attendance!=null)append(w.attendance).append(": ").append(attendance.getInt("event_count")).append(". ")
+  append(w.appointment).append(": ").append(briefingCount(appointments.opt("scheduled_count"))).append("; ").append(w.completed).append(": ").append(briefingCount(appointments.opt("completed_count"))).append(". ")
+  if(finance!=null)append(w.revenue).append(": ").append(briefingCount(finance.opt("revenue_xaf"))).append("; ").append(w.sales).append(": ").append(briefingCount(finance.opt("confirmed_sales_count"))).append(". ")
+  if(attendance!=null)append(w.attendance).append(": ").append(briefingCount(attendance.opt("event_count"))).append(". ")
   append(w.missing)
  }
 }
@@ -123,7 +145,7 @@ internal fun DailyBriefingCard(session:AuthSession,siteId:String){
    loadJob=scope.launch{
     try{
      val r=JSONObject(StaffRosterApi.call(latest,"rpc/ns_daily_briefing",JSONObject().put("p_org",latest.account.organizationId).put("p_site",siteId).put("p_day",requestedDay)))
-     require(r.getString("day")==requestedDay)
+     validateNativeBriefing(r,requestedDay)
      briefingText(r,language)
      if(!foreground||generation!=requestGeneration)return@launch
      report=r

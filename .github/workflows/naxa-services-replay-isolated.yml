@@ -229,7 +229,7 @@ jobs:
           set -euo pipefail
           set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql naxa_services_v21_attendance_mandatory_gps.sql naxa_services_v22_first_password_gate.sql naxa_services_v23_erp_financial_consistency.sql; do
+          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql naxa_services_v21_attendance_mandatory_gps.sql naxa_services_v22_first_password_gate.sql naxa_services_v23_erp_financial_consistency.sql naxa_services_v24_commission_configuration.sql; do
             test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
             sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
           done
@@ -245,7 +245,7 @@ jobs:
           # GitHub-hosted Ubuntu includes Chromium system libraries; avoid unrelated apt repository failures.
           npx playwright install chromium
           node --input-type=module -e 'import { chromium } from "@playwright/test"; const browser=await chromium.launch({headless:true}); await browser.close();'
-          VITE_NAXA_SERVICES_BILLING_V23_ENABLED=true VITE_NAXA_SERVICES_ATTENDANCE_ENABLED=true VITE_NAXA_SERVICES_ROSTER_ENABLED=true VITE_NAXA_SERVICES_MEETINGS_ENABLED=true VITE_NAXA_SERVICES_BRIEFING_ENABLED=true VITE_NAXA_SERVICES_AUTH_URL=https://127.0.0.1:8443/functions/v1/naxa-services-auth VITE_SUPABASE_ANON_KEY="$ANON_KEY" npm run build --workspace @famille/naxa-services-web
+          VITE_NAXA_SERVICES_COMMISSION_CONFIG_ENABLED=true VITE_NAXA_SERVICES_BILLING_V23_ENABLED=true VITE_NAXA_SERVICES_ATTENDANCE_ENABLED=true VITE_NAXA_SERVICES_ROSTER_ENABLED=true VITE_NAXA_SERVICES_MEETINGS_ENABLED=true VITE_NAXA_SERVICES_BRIEFING_ENABLED=true VITE_NAXA_SERVICES_AUTH_URL=https://127.0.0.1:8443/functions/v1/naxa-services-auth VITE_SUPABASE_ANON_KEY="$ANON_KEY" npm run build --workspace @famille/naxa-services-web
           # Distinct CA and leaf avoid using a CA certificate as the TLS end entity.
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=NAXA Replay disposable CA' -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign' -keyout "$RUNNER_TEMP/ns-replay-ca.key" -out "$RUNNER_TEMP/ns-replay-ca.crt" 2>/dev/null
           openssl req -new -newkey rsa:2048 -nodes -subj '/CN=127.0.0.1' -keyout "$RUNNER_TEMP/ns-replay.key" -out "$RUNNER_TEMP/ns-replay.csr" 2>/dev/null
@@ -1084,6 +1084,29 @@ jobs:
                   assert.equal(pastGuestReport.day,yesterday);assert.equal(pastGuestReport.scope,'personal');assert.equal(pastGuestReport.finance,null);
                   await historicalGuest.getByText('Here is your partial report',{exact:false}).waitFor();
                   pass('B3 historical daily briefing: previous day, scope isolation, cleared old report and FR/EN labels');
+                  phase='commission configuration browser';
+                  await nav('PME & organisation');
+                  const commissionPanel=page.getByRole('region',{name:'Commissions automatiques',exact:true});
+                  const config=await rpc(page,'ns_automatic_commission_catalog',()=>commissionPanel.getByRole('button',{name:'Charger les paramètres',exact:true}).click());
+                  assert.equal(config.settings.enabled,false);
+                  await commissionPanel.getByRole('button',{name:'Activer',exact:true}).click();
+                  await commissionPanel.getByRole('button',{name:'Désactiver',exact:true}).waitFor();
+                  await commissionPanel.getByLabel('Code de règle',{exact:true}).fill('QA-B4-COMMISSION');
+                  await commissionPanel.getByLabel('Établissement',{exact:true}).selectOption(host.site.id);
+                  await commissionPanel.getByLabel('Taux (%)',{exact:true}).fill('10');
+                  await commissionPanel.getByLabel('Date de début',{exact:true}).fill(hd.day);
+                  await commissionPanel.getByLabel('Référence de la décision',{exact:true}).fill('QA explicit promoter approval');
+                  await commissionPanel.getByLabel('J’approuve cette règle',{exact:true}).check();
+                  const policyId=await rpc(page,'ns_publish_automatic_commission_policy',()=>commissionPanel.getByRole('button',{name:'Publier la règle',exact:true}).click());
+                  assert.ok(policyId);
+                  await commissionPanel.getByText('QA-B4-COMMISSION · v1',{exact:true}).waitFor();
+                  assert.ok((await json(base+'/rest/v1/rpc/ns_automatic_commission_catalog',{p_org:host.org.id},guestAuth.access_token,anon)).status>=400,'employee cannot read commission catalog');
+                  page.once('dialog',d=>d.accept());
+                  await rpc(page,'ns_retire_automatic_commission_policy',()=>commissionPanel.getByRole('button',{name:'Retirer la règle',exact:true}).click());
+                  await commissionPanel.getByText(/Retirée/).waitFor();
+                  await commissionPanel.getByRole('button',{name:'Désactiver',exact:true}).click();
+                  await commissionPanel.getByRole('button',{name:'Activer',exact:true}).waitFor();
+                  pass('B4 real browser commission configuration: default disabled, promoter approval, employee denied, retirement and disable');
                   phase='planning publish and acknowledge';
                   await nav('Équipe & commissions');
                   const pr=page.getByRole('region',{name:'Planning de service',exact:true});

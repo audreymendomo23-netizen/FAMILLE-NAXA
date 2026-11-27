@@ -11,6 +11,7 @@ select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000241'
 select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000241","session_id":"qa-com241-session","role":"authenticated"}',true);
 set local role authenticated;
 do $qa$ declare o uuid:='20000000-0000-4000-8000-000000000241'; s uuid:='30000000-0000-4000-8000-000000000241'; p uuid:='70000000-0000-4000-8000-000000000241'; q uuid:='70000000-0000-4000-8000-000000000242'; d date:='2026-11-27'; begin
+ if jsonb_array_length(public.ns_automatic_commission_catalog(o)->'sites')<>1 or jsonb_array_length(public.ns_automatic_commission_catalog(o)->'members')<>2 then raise exception 'QA_CATALOG_SCOPE'; end if;
  if public.ns_read_automatic_commission_settings(o) is distinct from '{"enabled":false,"revision":0}'::jsonb then raise exception 'QA_DEFAULT'; end if;
  if public.ns_set_automatic_commission_settings(o,true,0) is distinct from '{"enabled":true,"revision":1}'::jsonb then raise exception 'QA_ENABLE'; end if;
  begin perform public.ns_set_automatic_commission_settings(o,false,0); raise exception 'QA_STALE'; exception when others then if sqlerrm not like '%NS_COMMISSION_CONFIG_CONFLICT%' then raise; end if; end;
@@ -29,6 +30,7 @@ select set_config('request.jwt.claim.sub','10000000-0000-4000-8000-000000000242'
 select set_config('request.jwt.claims','{"sub":"10000000-0000-4000-8000-000000000242","session_id":"qa-com242-session","role":"authenticated"}',true);
 set local role authenticated;
 do $qa$ declare o uuid:='20000000-0000-4000-8000-000000000241'; begin
+ begin perform public.ns_automatic_commission_catalog(o); raise exception 'QA_CATALOG_LEAK'; exception when others then if sqlerrm not like '%NS_COMMISSION_CONFIG_FORBIDDEN%' then raise; end if; end;
  if exists(select 1 from public.ns_commission_policy_versions where org_id=o) then raise exception 'QA_RULE_LEAK'; end if;
  begin perform public.ns_read_automatic_commission_settings(o); raise exception 'QA_MANAGER_READ'; exception when others then if sqlerrm not like '%NS_COMMISSION_CONFIG_FORBIDDEN%' then raise; end if; end;
  begin perform public.ns_set_automatic_commission_settings(o,true,2); raise exception 'QA_MANAGER_WRITE'; exception when others then if sqlerrm not like '%NS_COMMISSION_CONFIG_FORBIDDEN%' then raise; end if; end;
