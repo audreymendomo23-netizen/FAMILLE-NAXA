@@ -1,0 +1,58 @@
+begin;
+insert into auth.users values ('00000000-0000-0000-0000-000000000071'),('00000000-0000-0000-0000-000000000072'),('00000000-0000-0000-0000-000000000073');
+insert into public.sec_organizations(id,name) values ('10000000-0000-0000-0000-000000000071','QA field');
+insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000071','00000000-0000-0000-0000-000000000071','operator',true),('10000000-0000-0000-0000-000000000071','00000000-0000-0000-0000-000000000072','manager',true),('10000000-0000-0000-0000-000000000071','00000000-0000-0000-0000-000000000073','manager',true);
+insert into public.sec_sites(id,organization_id,name) values ('20000000-0000-0000-0000-000000000071','10000000-0000-0000-0000-000000000071','QA'),('20000000-0000-0000-0000-000000000072','10000000-0000-0000-0000-000000000071','Other');
+insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','00000000-0000-0000-0000-000000000071',true),('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','00000000-0000-0000-0000-000000000072',true),('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000072','00000000-0000-0000-0000-000000000073',true);
+insert into public.sec_incidents(id,organization_id,site_id,subject,priority,state) values ('40000000-0000-0000-0000-000000000071','10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','QA','P2','new');
+insert into public.sec_work_orders(id,organization_id,site_id,subject,kind,reporter_id,request_id) values ('40000000-0000-0000-0000-000000000072','10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','QA','inspection','00000000-0000-0000-0000-000000000071',gen_random_uuid());
+insert into public.sec_attendance_drafts(id,organization_id,site_id,reporter_id,request_id,action,lat,lon,accuracy_m,observed_at,source,mock_reported) values ('40000000-0000-0000-0000-000000000073','10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','00000000-0000-0000-0000-000000000071',gen_random_uuid(),'arrival',4,9,10,now(),'browser',null);
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','00000000-0000-0000-0000-000000000071','30000000-0000-0000-0000-000000000071','visitor','{"reference":"qa","purpose":"meeting","duration_minutes":30}');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000072',true);
+select public.sec_review_module_request('30000000-0000-0000-0000-000000000071','10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','reviewed','QA');
+do $q$declare q jsonb;begin
+ q:=public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000001','incident','40000000-0000-0000-0000-000000000071','{"reason":"QA","next":"review"}');
+ if q->>'state'<>'review' or public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000001','incident','40000000-0000-0000-0000-000000000071','{"reason":"QA","next":"review"}')<>q then raise exception 'incident receipt';end if;
+ begin perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000002','incident','40000000-0000-0000-0000-000000000071','{"reason":"skip","next":"closed"}');raise exception 'invalid transition accepted';exception when invalid_parameter_value then null;end;
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000003','work','40000000-0000-0000-0000-000000000072','{"reason":"QA","next":"assigned"}');
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000004','work','40000000-0000-0000-0000-000000000072','{"reason":"QA","next":"in_progress"}');
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000005','work','40000000-0000-0000-0000-000000000072','{"reason":"QA","next":"completed"}');
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000006','attendance','40000000-0000-0000-0000-000000000073','{"reason":"manual review, not GPS authentication","next":"reviewed"}');
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000007','patrol_create',null,'{"label":"QA route","agent_id":"00000000-0000-0000-0000-000000000071","checkpoints":["A","B"]}');
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000071',true);
+do $q$declare p uuid;v uuid;q jsonb;begin
+ select id into p from public.sec_patrols where label='QA route';select id into v from public.sec_service_register where request_id='30000000-0000-0000-0000-000000000071';
+ begin perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000008','incident','40000000-0000-0000-0000-000000000071','{"reason":"QA","next":"confirmed"}');raise exception 'operator changed incident';exception when insufficient_privilege then null;end;
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000009','patrol_start',p,'{"reason":"QA"}');
+ begin perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000010','patrol_check',p,'{"reason":"QA","index":2}');raise exception 'order bypass';exception when invalid_parameter_value then null;end;
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000011','patrol_check',p,'{"reason":"QA","index":1}');
+ begin perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000012','patrol_submit',p,'{"reason":"QA"}');raise exception 'incomplete patrol';exception when invalid_parameter_value then null;end;
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000013','patrol_check',p,'{"reason":"QA","index":2}');
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000014','patrol_submit',p,'{"reason":"QA"}');
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000015','passage',v,'{"reason":"QA","direction":"entry"}');
+ begin perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000016','passage',v,'{"reason":"QA","direction":"entry"}');raise exception 'double entry';exception when invalid_parameter_value then null;end;
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000017','passage',v,'{"reason":"QA","direction":"exit"}');
+ q:=public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000018','safety_report',null,'{"reason":"QA internal report"}');
+ if q->>'external_dispatch'<>'false' then raise exception 'dispatch claimed';end if;
+ if has_table_privilege(current_user,'public.sec_field_events','INSERT') or has_table_privilege(current_user,'public.sec_patrols','UPDATE') then raise exception 'direct mutation';end if;
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000072',true);
+do $q$declare p uuid;v uuid;begin
+ select id into p from public.sec_patrols where label='QA route';select id into v from public.sec_internal_safety where detail='QA internal report';
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000019','patrol_review',p,'{"reason":"manual declaration reviewed"}');
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000020','safety_ack',v,'{"reason":"QA receipt"}');
+ perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000021','safety_close',v,'{"reason":"QA follow up"}');
+ if (select state from public.sec_patrols where id=p)<>'reviewed' or (select count(*) from public.sec_patrol_checks where patrol_id=p)<>2 or (select count(*) from public.sec_passage_logs)<>2 then raise exception 'field state incorrect';end if;
+ if (select count(*) from public.sec_field_events)<13 then raise exception 'audit incomplete';end if;
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000073',true);
+do $q$begin
+ if (select count(*) from public.sec_field_events)<>0 or (select count(*) from public.sec_patrols)<>0 or (select count(*) from public.sec_internal_safety)<>0 then raise exception 'cross site leak';end if;
+ begin perform public.sec_field_action('10000000-0000-0000-0000-000000000071','20000000-0000-0000-0000-000000000071','50000000-0000-0000-0000-000000000022','work','40000000-0000-0000-0000-000000000072','{"reason":"QA","next":"cancelled"}');raise exception 'cross site change';exception when insufficient_privilege then null;end;
+end $q$;
+reset role;
+set local role anon;
+do $q$begin if has_function_privilege(current_user,'public.sec_field_action(uuid,uuid,uuid,text,uuid,jsonb)','EXECUTE') then raise exception 'anon access';end if;end $q$;
+reset role;rollback;
