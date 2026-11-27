@@ -689,7 +689,9 @@ try{
 
  // Exercise the external invitation deep link through real GoTrue, Edge and Chromium.
  const deepGuest=await fixture(other,"staff");
- const deepHost=await login(h),deepRoomId=randomUUID(),deepToken=randomBytes(32).toString("hex"),deepInviteId=randomUUID();
+ // Reuse the fresh, separate-installation host session already used by the support API.
+ // Extra fixture logins exhaust the real per-identifier rate limit; do not weaken it.
+ const deepHost=browserSupportHost,deepRoomId=randomUUID(),deepToken=randomBytes(32).toString("hex"),deepInviteId=randomUUID();
  const deepRoom=await ok(room+"/create",{room_id:deepRoomId,title:"Replay invitation link",description:"Isolated",scheduled_ms:Date.now(),duration_minutes:30,invitees:[]},deepHost.access_token);
  await ok(room+"/command",{room_id:deepRoomId,request_id:randomUUID(),expected_revision:deepRoom.revision,action:"lobby_config",value:true},deepHost.access_token);
  await ok(room+"/external-invite",{action:"issue",data:{room_id:deepRoomId,invite_id:deepInviteId,login_id:deepGuest.login,token:deepToken}},deepHost.access_token);
