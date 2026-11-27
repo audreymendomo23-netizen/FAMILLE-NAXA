@@ -16,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import java.util.UUID
-class MainActivity:ComponentActivity(){override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);setContent{var appearance by rememberSaveable{mutableStateOf("Système")};val dark=when(appearance){"Sombre"->true;"Clair"->false;else->isSystemInDarkTheme()};GrilladTheme(dark){GrilladApp(appearance){appearance=it}}}}}
+class MainActivity:ComponentActivity(){override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);setContent{var appearance by rememberSaveable{mutableStateOf("Système")};val dark=when(appearance){"Sombre"->true;"Clair"->false;else->isSystemInDarkTheme()};GrilladTheme(dark){if(BuildConfig.GRILLAD_API_URL.isNotBlank()||BuildConfig.GRILLAD_PUBLIC_KEY.isNotBlank())ConnectedGrillad(appearance){appearance=it}else GrilladApp(appearance){appearance=it}}}}}
 @Composable private fun GrilladApp(appearance:String,onAppearance:(String)->Unit){
  val ledger=remember{Ledger()};var revision by remember{mutableIntStateOf(0)}
  var page by remember{mutableStateOf("Accueil")};var site by remember{mutableStateOf(ledger.sites.first())};var message by remember{mutableStateOf("")}
