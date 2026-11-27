@@ -699,7 +699,7 @@ try{
   await b2first.getByRole("button",{name:"Marquer comme lu",exact:true}).waitFor({state:"detached"});
   await b2first.locator("article").filter({hasText:"B2 browser group content"}).getByRole("button",{name:"Répondre",exact:true}).click();
   await b2first.getByLabel("Message de groupe",{exact:true}).fill("B2 UI reply");
-  await b2first.getByLabel("Mentionner des participants",{exact:true}).selectOption({label:"Replay promoteur"});
+  await b2first.getByRole("listbox",{name:"Mentionner des participants",exact:true}).selectOption({label:"Replay promoteur"});
   await b2first.getByRole("button",{name:"Envoyer au groupe",exact:true}).click();
   await b2owner.locator("article").filter({hasText:"B2 UI reply"}).getByText("Vous êtes mentionné",{exact:true}).waitFor({timeout:20000});
   await b2owner.locator("article").filter({hasText:"B2 UI reply"}).getByText("B2 browser group content",{exact:true}).waitFor();

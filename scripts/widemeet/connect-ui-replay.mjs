@@ -54,7 +54,7 @@ export async function startConnectUiReplay({browser,sourceSession,receiverSessio
   await source.getByRole("button",{name:"Vérifier l’écran",exact:true}).click();
   await source.getByText("Confirmer cet écran : B2 écran interface",{exact:true}).waitFor();
   await source.getByRole("button",{name:"Confirmer l’appairage",exact:true}).click();
-  await receiver.getByRole("status").getByText("Affichage connecté",{exact:true}).waitFor({timeout:20000});
+  await receiver.getByRole("status").filter({hasText:/^Affichage connecté$/}).waitFor({timeout:20000});
   await receiver.waitForFunction(()=>[...document.querySelectorAll("video")].some(v=>v.videoWidth>0&&v.readyState>=2),{},{timeout:20000});
   assert.equal(await receiver.getByRole("button",{name:/micro|caméra|partager|chat/i}).count(),0);
   assert.equal(await receiver.locator("audio").evaluateAll(els=>els.every(a=>a.muted)),true);
