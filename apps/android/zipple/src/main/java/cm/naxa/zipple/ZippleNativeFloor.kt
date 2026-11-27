@@ -27,7 +27,7 @@ internal fun zippleBookingTime(value:String):String? = try {
         }
     }
 }
-@Composable internal fun ZippleNativeFloor(api:ZippleBusiness, session:Session, site:String, en:Boolean, restaurant:Boolean) {
+@Composable internal fun ZippleNativeFloor(api:ZippleBusiness, session:Session, site:String, en:Boolean, restaurant:Boolean, canFloor:Boolean, canManage:Boolean) {
     val t:(String,String)->String={fr,english->if(en)english else fr}
     val scope=rememberCoroutineScope();val keys=remember{RequestKeys()}
     var data by remember{mutableStateOf<JSONObject?>(null)}
@@ -37,12 +37,13 @@ internal fun zippleBookingTime(value:String):String? = try {
     var guest by remember{mutableStateOf("")};var party by remember{mutableStateOf("2")}
     var start by remember{mutableStateOf("")};var end by remember{mutableStateOf("")}
     var waiting by remember{mutableStateOf("")};var waitingParty by remember{mutableStateOf("2")}
-    val permitted=session.role in setOf("promoteur","manager")&&session.permits(site)
+    val permitted=canFloor&&session.permits(site)
+    val manages=canManage&&session.role in setOf("promoteur","manager")&&session.permits(site)
     suspend fun load(){data=api.call(session,site,"floor_snapshot") as? JSONObject?:error("DATA")}
     fun run(block:suspend()->Unit){
         if(busy||!permitted)return
         busy=true;message=""
-        scope.launch{try{block()}catch(c:CancellationException){throw c}catch(_:Exception){message=t("Opération non confirmée","Operation unconfirmed")}finally{busy=false}}
+        scope.launch{try{block()}catch(c:CancellationException){throw c}catch(e:ZippleHttpException){message=when(e.status){403->t("Action non autorisée","Action not authorized");409->t("Conflit de disponibilité ou de capacité — vérifiez la table et le créneau.","Availability or capacity conflict — check table and time.");else->t("Opération non confirmée","Operation unconfirmed")}}catch(_:Exception){message=t("Opération non confirmée","Operation unconfirmed")}finally{busy=false}}
     }
     suspend fun write(action:String,payload:JSONObject,idempotent:Boolean=false){
         val body=if(idempotent)keys.apply(action,payload)else payload
@@ -56,21 +57,25 @@ internal fun zippleBookingTime(value:String):String? = try {
     Text(t("Gestion des salles","Room management"),style=MaterialTheme.typography.titleLarge)
     OutlinedButton(enabled=allowed,onClick={run{load()}}){Text(t("Actualiser les salles","Refresh rooms"))}
     val d=data
+    if(manages){
     OutlinedTextField(zoneName,{zoneName=it.take(80)},label={Text(t("Nom de la zone","Zone name"))},enabled=allowed&&d!=null,modifier=Modifier.fillMaxWidth())
     Button(enabled=allowed&&d!=null&&zoneName.trim().isNotEmpty(),onClick={run{
         write("zone_add",JSONObject().put("name",zoneName.trim()));zoneName=""
     }}){Text(t("Créer la zone","Create zone"))}
+    }
     val tables=d?.rows("tables").orEmpty().filter{it.optString("kind")!="pickup"}
     val zones=d?.rows("zones").orEmpty()
     val selected=tables.find{it.optString("id")==tableId}
     FloorChoice(t("Table à configurer","Table to configure"),tables.map{it.optString("id") to it.optString("label")},tableId,allowed){id->
         val x=tables.first{it.optString("id")==id};tableId=id;zoneId=if(x.isNull("zone_id"))"" else x.optString("zone_id");seats=x.optInt("seats",4).toString()
     }
+    if(manages){
     FloorChoice(t("Zone de la table","Table zone"),listOf("" to "—")+zones.map{it.optString("id") to it.optString("name")},zoneId,allowed&&selected!=null){zoneId=it}
     OutlinedTextField(seats,{seats=it.filter(Char::isDigit).take(3)},label={Text(t("Nombre de places","Seats"))},enabled=allowed&&selected!=null)
     Button(enabled=allowed&&selected!=null&&(seats.toIntOrNull()?:0) in 1..100,onClick={run{
         write("table_config",JSONObject().put("table_id",tableId).put("zone_id",if(zoneId.isBlank())JSONObject.NULL else zoneId).put("seats",seats.toInt()))
     }}){Text(t("Enregistrer la table","Save table"))}
+    }
     selected?.let{x->Text(x.optString("label")+" · "+x.optInt("seats")+" "+t("places","seats"))}
     if(restaurant&&d!=null){
         Text(t("Réservations Restaurant","Restaurant reservations"),style=MaterialTheme.typography.titleMedium)
@@ -86,7 +91,8 @@ internal fun zippleBookingTime(value:String):String? = try {
         d.rows("reservations").forEach{x->
             val state=x.optString("state");val label=x.optString("guest_name")
             Text(label+" · "+when(state){"booked"->t("Réservée","Booked");"seated"->t("Installée","Seated");"cancelled"->t("Annulée","Cancelled");else->state})
-            Text(x.optString("starts_at")+" / "+x.optString("ends_at"))
+            fun localTime(value:String)=runCatching{java.time.Instant.parse(value).atOffset(doualaOffset).format(java.time.format.DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm"))}.getOrDefault(value)
+            Text(localTime(x.optString("starts_at"))+" / "+localTime(x.optString("ends_at")))
             if(state=="booked")for((next,fr,english) in listOf(Triple("seated","Accueillir","Seat"),Triple("cancelled","Annuler","Cancel"),Triple("expired","Expirer","Expire"))){
                 OutlinedButton(enabled=allowed,onClick={run{write("reservation_transition",JSONObject().put("reservation_id",x.getString("id")).put("next",next))}}){Text(t(fr,english)+" : "+label)}
             }

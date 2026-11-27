@@ -481,6 +481,20 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await ok("operational_grant",{member_id:staffId,role:"server",enabled:true});
   const staffLoginResult=await call("zipple-n1","login",{identifier:staffLogin,password});assert.equal(staffLoginResult.status,200);const staffToken=staffLoginResult.body.access_token;
   assert.ok(staffToken);assert.equal((await b("erp_snapshot",{},staffToken)).status,403);
+  // Same real Edge contract consumed by native floor. Ordinary server cannot book or change capacity.
+  const roleTable=await ok("table_create",{label:"Table droits salle"});
+  const roleBooking={table_id:roleTable.id,guest_name:"Réservation droit salle",party_size:2,starts_at:new Date(Date.now()+3600000).toISOString(),ends_at:new Date(Date.now()+7200000).toISOString(),request_id:id()};
+  assert.equal((await b("reserve_table",roleBooking,staffToken)).status,403);
+  await ok("operational_grant",{member_id:staffId,role:"floor",enabled:true});
+  const roleSnapshot=await b("snapshot",{},staffToken);assert.equal(roleSnapshot.status,200);assert.ok(roleSnapshot.body.data.operation_roles.includes("floor"));
+  const floorBooking=await b("reserve_table",roleBooking,staffToken);assert.equal(floorBooking.status,200);
+  const overlap=await b("reserve_table",{...roleBooking,guest_name:"Chevauchement interdit",request_id:id()},staffToken);assert.equal(overlap.status,409);assert.equal(overlap.body.error,"RESERVATION_OVERLAP");
+  assert.equal((await b("table_config",{table_id:roleTable.id,seats:8,zone_id:null},staffToken)).status,403);
+  assert.equal((await b("zone_add",{name:"Zone interdite"},staffToken)).status,403);
+  assert.equal((await b("reservation_transition",{reservation_id:floorBooking.body.data,next:"cancelled"},staffToken)).status,200);
+  await ok("operational_grant",{member_id:staffId,role:"floor",enabled:false});
+  assert.equal((await b("reserve_table",{...roleBooking,request_id:id()},staffToken)).status,403);
+  console.log("ZIPPLE_REAL_FLOOR_PERMISSION_AND_OVERLAP_PASS");
   const snackTable=await ok("table_create",{site_id:snackSite,label:"Table Snack 7"});
   await ok("table_open",{site_id:snackSite,table_id:snackTable.id});
   const snackGuestCtx=await context(),snackGuest=await snackGuestCtx.newPage();

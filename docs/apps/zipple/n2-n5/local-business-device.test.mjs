@@ -73,6 +73,9 @@ test("native Android business screen reaches disposable GoTrue and Edge, posts u
  assert.equal(Number(await scalar("select count(*) from zp_tables t join zp_zones z on z.id=t.zone_id where t.site_id=$1 and t.org_id=$2 and t.label='Table QR native' and t.seats=6 and z.name='Salle native test'",[site,org])),1);
  assert.equal(Number(await scalar("select count(*) from zp_reservations where site_id=$1 and guest_name='Réservation native' and state='cancelled'",[site])),1);
  assert.equal(Number(await scalar("select count(*) from zp_waitlist where site_id=$1 and guest_name='Attente native' and state='cancelled'",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_reservations where site_id=$1 and guest_name='Conflit natif'",[site])),0);
+ assert.equal(Number(await scalar("select count(*) from zp_reservations r join zp_table_sessions s on s.id=r.session_id where r.site_id=$1 and r.guest_name='Accueil natif' and r.state='seated' and s.closed_at is not null",[site])),1);
+ assert.equal(Number(await scalar("select count(*) from zp_waitlist w join zp_table_sessions s on s.id=w.session_id where w.site_id=$1 and w.guest_name='Installation native' and w.state='seated' and s.closed_at is not null",[site])),1);
  console.log("ZIPPLE_NATIVE_FLOOR_PERSISTENCE_PASS");
  const nativeCustomer=await scalar("select id from zp_customers where org_id=$1 and display_name='Client QR natif'",[org]);assert.ok(nativeCustomer);
  const card=await scalar("select id from zp_loyalty_cards where customer_id=$1 and org_id=$2 and revoked_at is null",[nativeCustomer,org]);

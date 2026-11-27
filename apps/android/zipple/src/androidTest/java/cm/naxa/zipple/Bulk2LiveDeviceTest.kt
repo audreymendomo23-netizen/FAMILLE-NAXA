@@ -150,8 +150,32 @@ class Bulk2LiveDeviceTest {
   click("Enregistrer la table");awaitText("Table QR native · 6 places")
   val tomorrow=LocalDate.now(ZoneId.of("Africa/Douala")).plusDays(1).toString()
   input("Nom de réservation","Réservation native");input("Début AAAA-MM-JJ HH:mm",tomorrow+" 12:00");input("Fin AAAA-MM-JJ HH:mm",tomorrow+" 13:00")
-  click("Réserver la table");awaitText("Réservation native · Réservée");click("Annuler : Réservation native");awaitText("Réservation native · Annulée")
+  click("Réserver la table");awaitText("Réservation native · Réservée")
+  input("Nom de réservation","Conflit natif");click("Réserver la table");awaitText("Conflit de disponibilité ou de capacité — vérifiez la table et le créneau.")
+  click("Annuler : Réservation native");awaitText("Réservation native · Annulée")
+  step("prepare imminent booking through live Edge"){runBlocking{
+   val rooms=business.call(session,site,"floor_snapshot") as JSONObject
+   val table=rooms.rows("tables").single{it.optString("label")=="Table QR native"}
+   val now=java.time.Instant.now()
+   business.call(session,site,"reserve_table",body("table_id" to table.getString("id"),"guest_name" to "Accueil natif","party_size" to 2,"starts_at" to now.plusSeconds(600).toString(),"ends_at" to now.plusSeconds(3600).toString(),"request_id" to uid()))
+  }}
+  click("Actualiser les salles");awaitText("Accueil natif · Réservée")
+  click("Accueillir : Accueil natif");awaitText("Accueil natif · Installée")
+  step("seated booking opened actual session"){runBlocking{
+   val snap=business.call(session,site,"snapshot") as JSONObject
+   val table=snap.rows("tables").single{it.optString("label")=="Table QR native"}
+   assertFalse(table.isNull("session_id"))
+   business.call(session,site,"table_close",body("table_session_id" to table.getString("session_id")))
+  }}
   input("Nom en attente","Attente native");click("Ajouter à l’attente");awaitText("Attente native · 2");click("Retirer de l’attente : Attente native")
+  step("wait for cancelled waiting entry"){compose.waitUntil(30000){compose.onAllNodesWithText("Attente native · 2",substring=false).fetchSemanticsNodes().isEmpty()}}
+  input("Nom en attente","Installation native");click("Ajouter à l’attente");awaitText("Installation native · 2");click("Installer : Installation native")
+  step("waitlist seated opens actual table"){compose.waitUntil(30000){compose.onAllNodesWithText("Installation native · 2",substring=false).fetchSemanticsNodes().isEmpty()};runBlocking{
+    val snap=business.call(session,site,"snapshot") as JSONObject
+    val table=snap.rows("tables").single{it.optString("label")=="Table QR native"}
+    assertFalse(table.isNull("session_id"))
+    business.call(session,site,"table_close",body("table_session_id" to table.getString("session_id")))
+  }}
   step("native room persistence"){runBlocking{
    val rooms=business.call(session,site,"floor_snapshot") as JSONObject
    val zone=rooms.rows("zones").single{it.optString("name")=="Salle native test"}
