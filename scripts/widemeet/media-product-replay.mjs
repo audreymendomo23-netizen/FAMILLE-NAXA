@@ -29,7 +29,8 @@ const listen=(s,p)=>new Promise((resolve,reject)=>{s.once("error",reject);s.list
 const delay=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(fn,label,ms=25000){const end=Date.now()+ms;while(Date.now()<end){if(await fn())return;await delay(250)}throw Error("timeout: "+label)}
 const children=[],roomCopy="supabase/functions/widemeet-room/replay-media-local.ts";
-let browser,rid;
+let browser,rid,speechDir,speechRecordingId;
+const qualifySpeech=process.env.WM_TRANSCRIPTION_QUALIFIED==="true";
 async function json(url,body,token=serviceKey,apikey=serviceKey){
  const r=await fetch(url,{method:"POST",headers:{apikey,Authorization:"Bearer "+token,"Content-Type":"application/json",Prefer:"return=representation"},body:JSON.stringify(body)});
  return {status:r.status,data:await r.json().catch(()=>null)};
@@ -82,7 +83,15 @@ try{
  assert.equal(hg.url,"wss://127.0.0.1:7881");assert.equal(gg.url,hg.url);
  // Test private signaling on loopback only; TLS/public routing separately qualified.
  await listen(proxy.server,7881);await listen(app,4173);
- browser=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream","--autoplay-policy=no-user-gesture-required"]});
+ const chromeArgs=["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream","--autoplay-policy=no-user-gesture-required"];
+ if(qualifySpeech){
+  speechDir=await mkdtemp(joinPath(tmpdir(),"wm-live-speech-"));
+  const raw=joinPath(speechDir,"speech.wav"),pcm=joinPath(speechDir,"microphone.wav");
+  execFileSync("espeak-ng",["-v","en-us","-s","125","-w",raw,"Today we discuss the project. The meeting is about the project. Thank you for attending the meeting."]);
+  execFileSync("ffmpeg",["-v","error","-y","-i",raw,"-ac","1","-ar","48000","-c:a","pcm_s16le",pcm]);
+  chromeArgs.push("--use-file-for-fake-audio-capture="+pcm);
+ }
+ browser=await chromium.launch({headless:true,args:chromeArgs});
  const ctx=await browser.newContext({permissions:["camera","microphone"]}),a=await ctx.newPage(),b=await ctx.newPage();
  async function joinMedia(page,t){await page.goto(origin);await page.evaluate(async token=>{
  const lk=window.LivekitClient,r=new lk.Room({adaptiveStream:false,dynacast:false});window.r=r;window.received=[];
@@ -129,11 +138,14 @@ try{
  await until(()=>phase("complete"),"verified independent recording pause",90000);
  assert.ok(await inbound(a)&&await inbound(b));
  console.log("PASS actual independent recording pause preserves verified segment while meeting audio/video remains connected");
- await cmd(hs.access_token,"record",true);await until(()=>phase("active"),"resumed recording active",90000);await delay(3000);
+ // Capture host speech through Chromium -> WebRTC -> SFU -> Egress.
+  if(qualifySpeech)await b.evaluate(()=>window.r.localParticipant.setMicrophoneEnabled(false));
+  await cmd(hs.access_token,"record",true);await until(()=>phase("active"),"resumed recording active",90000);await delay(qualifySpeech?16000:3000);
  await cmd(hs.access_token,"record",false);
  await until(()=>phase("complete"),"verified normal recording completion",90000);
  assert.equal((await good(roomApi+"/read",{room_id:rid},hs.access_token)).recordingStatus.phase,"complete");
  const final=(await getRuns())[0];assert.match(final.content_sha256,/^[a-f0-9]{64}$/);assert.ok(final.bytes>1000);
+  if(qualifySpeech){speechRecordingId=final.id;await b.evaluate(()=>window.r.localParticipant.setMicrophoneEnabled(true));}
  const st=await stat(process.env.WM_EGRESS_OUT+"/"+final.object_name);assert.equal(st.mode&0o777,0o600);
  console.log("PASS actual consent-driven recording normal stop, private audio-only verified file and SHA-256 ledger");
  finishAtEnd=async()=>{await cmd(hs.access_token,"record",true);await until(()=>phase("active"),"recording active before host end",90000);await delay(3000);await cmd(hs.access_token,"end");await until(()=>phase("complete"),"host-end recording finalization",90000);console.log("PASS actual host ends room with recording active; valid audio retained rather than discarded")};
@@ -170,11 +182,34 @@ try{
   const result=await tk(hs.access_token,"read",data);assert.equal(result.status,"complete");assert.equal(result.result.language,"en");assert.ok(result.result.segments.length>0);assert.match(result.result.segments.map(x=>x.text).join(" "),/project|meeting/i);
   assert.equal((await tr(gs.access_token,"read",data)).status,403);assert.deepEqual(await engine.runOne(),{claimed:false});
   console.log("PASS actual local Whisper ASR on separate synthetic speech fixture in private Storage; host-only queue, hash verification and timestamped output");
+   // Use the actual Egress ledger ID; never replace the recorded bytes.
+   assert.ok(speechRecordingId&&speechRecordingId!==id);
+   const captured={room_id:rid,recording_id:speechRecordingId};
+   assert.equal((await tr(gs.access_token,"request",captured)).status,403);
+   assert.equal((await tk(hs.access_token,"request",captured)).status,"queued");
+   assert.deepEqual(await engine.runOne(),{claimed:true,completed:true});
+   const live=await tk(hs.access_token,"read",captured);
+   assert.equal(live.status,"complete");assert.equal(live.result.language,"en");
+   assert.ok(live.result.segments.length>0);
+   assert.match(live.result.segments.map(x=>x.text).join(" "),/project/i);
+   assert.ok(live.result.segments.every(x=>x.end_ms>x.start_ms&&x.end_ms<=live.result.duration_ms+1000));
+   assert.equal((await tr(gs.access_token,"read",captured)).status,403);
+   assert.deepEqual(await engine.runOne(),{claimed:false});
+   console.log("PASS actual Chromium microphone speech -> SFU -> consented Egress -> private Storage -> offline ASR, source ID preserved");
+   const draftBody="Automatic transcript excerpts to verify — segment "+speechRecordingId+"\n"+live.result.segments.map(x=>"["+x.start_ms+"–"+x.end_ms+" ms] "+x.text+(x.uncertain?" [uncertain]":"")).join("\n");
+   assert.ok(draftBody.length<=8000);
+   const versionId=randomUUID(),draft={room_id:rid,version_id:versionId,expected_version:0,body:draftBody};
+   assert.equal((await request(roomApi+"/minutes",{action:"draft",data:draft},gs.access_token)).status,403);
+   assert.equal((await good(roomApi+"/minutes",{action:"draft",data:draft},hs.access_token)).version,1);
+   const saved=await good(roomApi+"/minutes",{action:"read",data:{room_id:rid,version_id:versionId}},hs.access_token);
+   assert.equal(saved.body,draftBody);assert.equal(saved.approved_at,null);assert.equal(saved.published_at,null);
+   assert.equal((await request(roomApi+"/minutes",{action:"read",data:{room_id:rid,version_id:versionId}},gs.access_token)).status,403);
+   console.log("PASS captured speech transcription to explicitly saved private unapproved human draft; forbidden guest");
  }finally{await rm(temp,{recursive:true,force:true})}
  }
  if(process.env.WM_PRESENCE_QUALIFIED==="true"){const report=await good(roomApi+"/presence",{room_id:rid},hs.access_token);assert.equal(report.basis,"sfu_samples_not_continuous_presence");assert.ok(report.samples>=4&&report.coverage_ms>0);const hr=report.rows.find(x=>x.member_id===h.id),gr=report.rows.find(x=>x.member_id===g.id);assert.ok(hr.samples_seen>=4&&gr.samples_seen===2&&gr.estimated_ms>0&&hr.estimated_ms>=gr.estimated_ms);assert.equal((await request(roomApi+"/presence",{room_id:rid},gs.access_token)).status,403);console.log("PASS actual N4 SFU active transport samples, exclusion and restricted closed meeting report");}
 }finally{
- if(browser)await browser.close();if(rid)await sfu.deleteRoom("wm-"+rid).catch(()=>{});
+ if(browser)await browser.close();if(speechDir)await rm(speechDir,{recursive:true,force:true});if(rid)await sfu.deleteRoom("wm-"+rid).catch(()=>{});
  await Promise.all([app,proxy.server].map(s=>new Promise(r=>s.close(r))));
  for(const child of children)if(child.exitCode===null){child.kill("SIGTERM");await new Promise(r=>child.once("exit",r))}
  await unlink(roomCopy).catch(()=>{});
