@@ -33,9 +33,17 @@ language sql security invoker stable set search_path=pg_catalog,public as $wm$
 $wm$;
 revoke all on function public.wm_room_actor(text) from public,anon,authenticated;
 grant execute on function public.wm_room_actor(text) to service_role;
+-- Room-specific entitlement boundary; billing draft replaces this default with paid-pass support.
+create function public.wm_room_actor_for(p_hash text,p_room uuid)
+returns table(account_id uuid,workspace_id uuid,role text,plan text,entitlement_end_ms bigint)
+language sql security invoker stable set search_path=pg_catalog,public as $wm$
+ select * from public.wm_room_actor(p_hash)
+$wm$;
+revoke all on function public.wm_room_actor_for(text,uuid) from public,anon,authenticated;
+grant execute on function public.wm_room_actor_for(text,uuid) to service_role;
 -- Lock workspace entitlement and current account, membership and session before write.
 -- Ordering account -> workspace -> membership -> device matches identity account lock.
-create function public.wm_lock_room_actor(p_hash text)
+create function public.wm_lock_room_actor_for(p_hash text,p_room uuid)
 returns table(account_id uuid,workspace_id uuid,role text,plan text,entitlement_end_ms bigint)
 language plpgsql security invoker set search_path=pg_catalog,public as $wm$
 declare a uuid; w uuid;
@@ -50,17 +58,17 @@ begin
  if not found then return;end if;
  perform 1 from public.wm_device_sessions x where x.token_hash=p_hash and x.revoked_at is null and x.expires_at>clock_timestamp() for share;
  if not found then return;end if;
+ -- A global subscription can change only after its shared lock is released.
  perform 1 from public.wm_room_entitlements x where x.workspace_id=w and x.enabled and x.valid_until>clock_timestamp() for share;
- if not found then return;end if;
- return query select c.account_id,c.workspace_id,c.role,c.plan,c.entitlement_end_ms from public.wm_room_actor(p_hash) c;
+ return query select c.account_id,c.workspace_id,c.role,c.plan,c.entitlement_end_ms from public.wm_room_actor_for(p_hash,p_room) c;
 end $wm$;
-revoke all on function public.wm_lock_room_actor(text) from public,anon,authenticated;
-grant execute on function public.wm_lock_room_actor(text) to service_role;
+revoke all on function public.wm_lock_room_actor_for(text,uuid) from public,anon,authenticated;
+grant execute on function public.wm_lock_room_actor_for(text,uuid) to service_role;
 create function public.wm_room_create(p_hash text,p_state jsonb)
 returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
 declare a record; rid uuid;
 begin
- select * into a from public.wm_lock_room_actor(p_hash);
+ select * into a from public.wm_lock_room_actor_for(p_hash,null);
  if not found or a.role not in ('owner','promoteur','manager') then return false;end if;
  if p_state is null or p_state->>'workspaceId' is distinct from a.workspace_id::text or p_state->>'hostId' is distinct from a.account_id::text or p_state->>'status' is distinct from 'scheduled' or p_state->>'revision' is distinct from '1' or jsonb_typeof(p_state->'participants') is distinct from 'array' or (p_state->>'hardEndMs')::bigint>a.entitlement_end_ms then return false;end if;
  if not exists(select 1 from jsonb_array_elements(p_state->'participants') p where p->>'memberId'=a.account_id::text and p->>'response'='accepted') then return false;end if;
@@ -74,7 +82,7 @@ grant execute on function public.wm_room_create(text,jsonb) to service_role;
 -- Raw state is private service-to-service only; gateway must project permitted fields.
 create function public.wm_room_read(p_hash text,p_room uuid)
 returns jsonb language sql security invoker stable set search_path=pg_catalog,public as $wm$
- select r.state from public.wm_rooms r join public.wm_room_actor(p_hash) a on a.workspace_id=r.workspace_id
+ select r.state from public.wm_rooms r join lateral public.wm_room_actor_for(p_hash,r.id) a on a.workspace_id=r.workspace_id
  where r.id=p_room and exists(select 1 from jsonb_array_elements(r.state->'participants') p where p->>'memberId'=a.account_id::text and p->>'excluded'='false')
 $wm$;
 revoke all on function public.wm_room_read(text,uuid) from public,anon,authenticated;
@@ -84,7 +92,7 @@ create function public.wm_room_write(p_hash text,p_room uuid,p_expected bigint,p
 returns boolean language plpgsql security invoker set search_path=pg_catalog,public as $wm$
 declare a record; v_old public.wm_rooms%rowtype; v_now_ms bigint; v_limit integer;
 begin
- select * into a from public.wm_lock_room_actor(p_hash);
+ select * into a from public.wm_lock_room_actor_for(p_hash,p_room);
  if not found or a.role is distinct from p_role or a.plan is distinct from p_plan then return false;end if;
  -- Serialize all room transitions per workspace, including concurrent starts in different rooms.
  perform pg_advisory_xact_lock(hashtextextended('wm-room-quota:'||a.workspace_id::text,0));
