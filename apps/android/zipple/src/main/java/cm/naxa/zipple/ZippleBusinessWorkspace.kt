@@ -69,7 +69,9 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
     if(canServe)OutlinedButton(onClick={tab="support"}){Text(tr("Assistance commandes","Order assistance"))}
     if(canManage)OutlinedButton(onClick={tab="pilotage"}){Text(tr("Performance service","Service performance"))}
     if(canManage)OutlinedButton(onClick={tab="documents"}){Text(tr("Justificatifs","Documents"))}
+    OutlinedButton(onClick={tab="attendance"}){Text(tr("Pointage","Attendance"))}
     when(tab){
+        "attendance"->{key(session.member,site){ZippleAttendance(api,session,site,en)}}
         "support"->{key(session.member,site){ZippleNativeOrderSupport(api,session,site,en)}}
         "pilotage"->{key(session.member,site){ZippleNativeServicePerformance(api,session,site,en)}}
         "documents"->{key(session.member,site){ZippleNativeDocuments(api,session,site,en)}}

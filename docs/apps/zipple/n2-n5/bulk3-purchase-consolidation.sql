@@ -55,4 +55,48 @@ end $$;
 alter table public.zp_purchase_conversion_log enable row level security;
 revoke all on public.zp_purchase_conversion_log from public,anon,authenticated;grant select,insert on public.zp_purchase_conversion_log to service_role;
 do $$ declare f record;begin for f in select p.oid::regprocedure sig from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('zp_purchase_conversion_quantity','zp_purchase_create_converted','zp_purchase_receive_converted','zp_purchase_conversion_snapshot','zp_ledger_group_statement') loop execute format('revoke all on function %s from public,anon,authenticated',f.sig);execute format('grant execute on function %s to service_role',f.sig);end loop;end $$;
+
+-- Bulk 5: adaptation of NS v21 mandatory GPS, opaque ZIPPLE session and own-account-only.
+create table public.zp_attendance_events(
+ id uuid primary key,org_id uuid not null,site_id uuid not null,member_id uuid not null,
+ event_type text not null check(event_type in ('clock_in','clock_out')),
+ latitude double precision not null check(latitude between -90 and 90),
+ longitude double precision not null check(longitude between -180 and 180),
+ accuracy_m double precision not null check(accuracy_m>0 and accuracy_m<=500),
+ gps_at timestamptz not null,recorded_at timestamptz not null default clock_timestamp(),
+ foreign key(site_id,org_id) references public.zp_site_modes(site_id,org_id),
+ foreign key(member_id,org_id) references public.zp_members(id,org_id));
+create index zp_attendance_member_time on public.zp_attendance_events(member_id,recorded_at desc);
+create index zp_attendance_site_time on public.zp_attendance_events(site_id,recorded_at desc);
+alter table public.zp_attendance_events enable row level security;
+revoke all on public.zp_attendance_events from public,anon,authenticated;
+grant select,insert on public.zp_attendance_events to service_role;
+create function public.zp_attendance_record(p_access text,p_site uuid,p_request uuid,p_event text,p_lat double precision,p_lon double precision,p_accuracy double precision,p_gps_at timestamptz) returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $att$
+declare m public.zp_members;old public.zp_attendance_events;last_event public.zp_attendance_events;v public.zp_attendance_events;begin
+ m:=public.zp_business_actor(p_access,p_site);
+ if not exists(select 1 from public.zp_site_modes where site_id=p_site and org_id=m.org_id) then raise exception 'DENIED';end if;
+ perform 1 from public.zp_members where id=m.id for update;
+ select * into old from public.zp_attendance_events where id=p_request;
+ if old.id is not null then
+  if (old.org_id,old.site_id,old.member_id,old.event_type,old.latitude,old.longitude,old.accuracy_m,old.gps_at) is distinct from (m.org_id,p_site,m.id,p_event,p_lat,p_lon,p_accuracy,p_gps_at) then raise exception 'IDEMPOTENCY_CONFLICT';end if;
+  return jsonb_build_object('id',old.id,'recorded_at',old.recorded_at,'event_type',old.event_type);
+ end if;
+ if p_request is null or p_event is null or p_event not in ('clock_in','clock_out') or p_lat is null or p_lon is null or p_accuracy is null or p_gps_at is null or not (p_lat between -90 and 90 and p_lon between -180 and 180 and p_accuracy>0 and p_accuracy<=500) then raise exception 'ATTENDANCE_GPS_REQUIRED';end if;
+ if p_gps_at<clock_timestamp()-interval '120 seconds' or p_gps_at>clock_timestamp()+interval '15 seconds' then raise exception 'ATTENDANCE_GPS_STALE';end if;
+ select * into last_event from public.zp_attendance_events where member_id=m.id and org_id=m.org_id order by recorded_at desc,id desc limit 1;
+ if (p_event='clock_in' and last_event.event_type='clock_in') or (p_event='clock_out' and (last_event.id is null or last_event.event_type<>'clock_in' or last_event.site_id<>p_site)) then raise exception 'ATTENDANCE_TRANSITION';end if;
+ insert into public.zp_attendance_events(id,org_id,site_id,member_id,event_type,latitude,longitude,accuracy_m,gps_at) values(p_request,m.org_id,p_site,m.id,p_event,p_lat,p_lon,p_accuracy,p_gps_at) returning * into v;
+ return jsonb_build_object('id',v.id,'recorded_at',v.recorded_at,'event_type',v.event_type);
+end $att$;
+create function public.zp_attendance_snapshot(p_access text,p_site uuid) returns jsonb language plpgsql stable security invoker set search_path=pg_catalog,public as $att$
+declare m public.zp_members;last_event public.zp_attendance_events;begin
+ m:=public.zp_business_actor(p_access,p_site);
+ select * into last_event from public.zp_attendance_events where org_id=m.org_id and member_id=m.id order by recorded_at desc,id desc limit 1;
+ return jsonb_build_object('on_shift',coalesce(last_event.event_type='clock_in',false),'on_this_site',coalesce(last_event.event_type='clock_in' and last_event.site_id=p_site,false),'can_manage',m.role_code in ('promoteur','manager'),
+ 'mine',coalesce((select jsonb_agg(to_jsonb(x) order by x.recorded_at desc) from (select id,event_type,recorded_at,gps_at,latitude,longitude,accuracy_m from public.zp_attendance_events where org_id=m.org_id and site_id=p_site and member_id=m.id order by recorded_at desc limit 30)x),'[]'::jsonb),
+ 'team',case when m.role_code in ('promoteur','manager') then coalesce((select jsonb_agg(to_jsonb(x) order by x.recorded_at desc) from (select e.id,e.member_id,n.login_id,e.event_type,e.recorded_at,e.gps_at,e.latitude,e.longitude,e.accuracy_m from public.zp_attendance_events e join public.zp_members n on n.id=e.member_id and n.org_id=e.org_id where e.org_id=m.org_id and e.site_id=p_site order by e.recorded_at desc limit 100)x),'[]'::jsonb) else '[]'::jsonb end);
+end $att$;
+revoke all on function public.zp_attendance_record(text,uuid,uuid,text,double precision,double precision,double precision,timestamptz),public.zp_attendance_snapshot(text,uuid) from public,anon,authenticated;
+grant execute on function public.zp_attendance_record(text,uuid,uuid,text,double precision,double precision,double precision,timestamptz),public.zp_attendance_snapshot(text,uuid) to service_role;
+
 commit;

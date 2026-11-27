@@ -488,6 +488,15 @@ test("actual GoTrue, PostgREST, ZIPPLE business Edge, professional browser and g
   await ok("operational_grant",{member_id:staffId,role:"server",enabled:false});assert.equal((await b("snapshot",{},snackStaffToken)).status,403);
   await workerPage.getByRole("heading",{name:"Nouvelle commande"}).waitFor({state:"hidden",timeout:15000});await worker.close();
   console.log("ZIPPLE_BULK2_REAL_EDGE_STAFF_REVOCATION_PASS");
+  // Real browser uses synthetic test geolocation only, never a real employee location.
+  await staff.grantPermissions(["geolocation"],{origin:publicOrigin});await staff.setGeolocation({latitude:4.05,longitude:9.7,accuracy:20});
+  await page.getByRole("button",{name:"Pointage",exact:true}).click();
+  await page.getByRole("button",{name:"Prise de service",exact:true}).click();await page.getByText("Service en cours",{exact:true}).waitFor();
+  assert.equal(Number(await scalar("select count(*) from zp_attendance_events where member_id=$1 and site_id=$2 and event_type='clock_in'",[member,site])),1);
+  assert.equal((await b("attendance_record",{request_id:id(),event_type:"clock_out",latitude:4.05,longitude:9.7,accuracy_m:20,gps_at:new Date().toISOString(),member_id:staffId})).status,400);
+  await page.getByRole("button",{name:"Fin de service",exact:true}).click();await page.getByText("Hors service",{exact:true}).waitFor();
+  assert.equal(Number(await scalar("select count(*) from zp_attendance_events where member_id=$1 and site_id=$2",[member,site])),2);
+  console.log("ZIPPLE_BULK5_REAL_BROWSER_ATTENDANCE_PASS");
   // Verify the new boundary through actual GoTrue / PostgREST / Edge, not a mocked RPC.
   const tableSession=await scalar("select id from zp_table_sessions where table_id=$1 and closed_at is null",[tableId]);
   assert.equal((await b("snapshot",{site_id:id()})).status,403);
