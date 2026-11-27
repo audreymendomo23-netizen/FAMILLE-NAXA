@@ -7,9 +7,9 @@ Baseline : bd266b0 ; dernière qualification 4/4 fd36c54. Périmètre V1.5, REC-
 |---|---|---|---:|
 | 01 | GRC-001–050, 25 contrats API authentifiés + 25 refus anonymes | job lot-01 | 50 |
 | 02 | Android 4, Web unitaires 14, Chromium démo 4 + connecté 2, infra/API historiques 10, 3 suites SQL transactionnelles + GRC-051–063 (13) | 9 jobs indépendants | 50 |
-| 03 | GRC-064–077 (mode réseau, service, régularisations, composition, sites, affectations) + 5 parcours Chromium métier (HTTP simulé) | 2 jobs indépendants | 19 |
+| 03 | GRC-064–077 (mode réseau, service, régularisations, composition, sites, affectations) + 9 parcours Chromium métier (HTTP simulé) | 2 jobs indépendants | 23 |
 
-Total après extension : 116 tests nommés (77 GRC + 34 existants + 5 parcours Chromium) et 3 suites SQL (119 unités exécutables ; les assertions SQL internes ne constituent pas des tests indépendants). Ne pas gonfler le compteur avec les assertions ou compter deux fois les mêmes tests. Les matrices Web et SQL ont fail-fast:false et aucun partage de base. Une révision = un run ; les runs antérieurs ne sont pas annulés par le développement. Les échecs doivent rester visibles.
+Total après extension : 120 tests nommés (77 GRC + 34 existants + 9 parcours Chromium) et 3 suites SQL (123 unités exécutables ; les assertions SQL internes ne constituent pas des tests indépendants). Ne pas gonfler le compteur avec les assertions ou compter deux fois les mêmes tests. Les matrices Web et SQL ont fail-fast:false et aucun partage de base. Une révision = un run ; les runs antérieurs ne sont pas annulés par le développement. Les échecs doivent rester visibles.
 
 ## REC produit : rapprochement et limites
 | REC | Couverture actuelle candidate | Reste pour certification |
