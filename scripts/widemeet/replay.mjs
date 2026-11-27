@@ -506,6 +506,26 @@ try{
  await hp.getByRole("button",{name:"Mes rapports",exact:true}).click();
  await hp.getByRole("heading",{name:"Archives et comptes rendus",exact:true}).waitFor();
  pass("real browser workspace chat, concurrent rooms, polls, visible statistics and reports routes backed by GoTrue and Edge");
+ await menuPage("Livechat et support");
+ await hp.getByLabel("Sujet",{exact:true}).fill("Replay support browser");
+ await hp.getByLabel("Description du problème",{exact:true}).fill("Synthetic browser issue");
+ await hp.getByRole("button",{name:"Envoyer la demande",exact:true}).click();
+ await hp.getByRole("heading",{name:"Replay support browser",exact:true}).waitFor({timeout:20000});
+ const browserSupportHost=await login(h);
+ const browserSupportList=await sk(browserSupportHost.access_token,"list");
+ const browserSupportTicket=browserSupportList.items.find(x=>x.subject==="Replay support browser");assert.ok(browserSupportTicket);
+ const browserAgent=await login(sa);
+ await sk(browserAgent.access_token,"claim",{ticket_id:browserSupportTicket.id});
+ await sk(browserAgent.access_token,"reply",{ticket_id:browserSupportTicket.id,message_id:randomUUID(),body:"Synthetic agent browser answer"});
+ await hp.getByText("Synthetic agent browser answer",{exact:true}).waitFor({timeout:20000});
+ await hp.getByLabel("Votre message",{exact:true}).fill("Synthetic requester acknowledgement");
+ await hp.getByRole("button",{name:"Envoyer",exact:true}).click();
+ await hp.getByText("Synthetic requester acknowledgement",{exact:true}).waitFor();
+ assert.equal((await sk(browserAgent.access_token,"read",{ticket_id:browserSupportTicket.id})).messages.length,3);
+ hp.once("dialog",d=>d.accept());await hp.getByRole("button",{name:"Clôturer",exact:true}).click();
+ await hp.getByText("Clôturée",{exact:true}).waitFor();
+ pass("real browser support intake, agent claim/reply, automatic refresh, requester message and closure");
+
  // Exercise the external invitation deep link through real GoTrue, Edge and Chromium.
  const deepGuest=await fixture(other,"staff");
  const deepHost=await login(h),deepRoomId=randomUUID(),deepToken=randomBytes(32).toString("hex"),deepInviteId=randomUUID();
