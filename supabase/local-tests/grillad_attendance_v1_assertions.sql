@@ -35,7 +35,7 @@ begin
  begin perform count(*) from grillad_private.attendance;raise exception 'expected table denial';exception when insufficient_privilege then null;end;
 end $$;
 reset role;
-do $begin if (select count(*) from grillad_private.attendance_photo_access)<>1 then raise exception 'photo access audit';end if;end $;
+do $$begin if (select count(*) from grillad_private.attendance_photo_access)<>1 then raise exception 'photo access audit';end if;end $$;
 update grillad_private.attendance set photo_until=now()-interval '1 second';
-do $begin if grillad_private.purge_attendance_photos()<>2 or exists(select 1 from grillad_private.attendance where photo is not null) then raise exception 'photo retention';end if;end $;
+do $$begin if grillad_private.purge_attendance_photos()<>2 or exists(select 1 from grillad_private.attendance where photo is not null) then raise exception 'photo retention';end if;end $$;
 rollback;

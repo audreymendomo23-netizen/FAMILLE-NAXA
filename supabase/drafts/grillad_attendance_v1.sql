@@ -77,7 +77,7 @@ declare n bigint;begin update grillad_private.attendance set photo=null where ph
 create function public.grillad_attendance_status(p_org uuid,p_site uuid) returns jsonb language sql stable security invoker set search_path=pg_catalog as $$select grillad_private.attendance_status(p_org,p_site)$$;
 create function public.grillad_attendance_capture(p_org uuid,p_site uuid,p_event uuid,p_kind text,p_at timestamptz,p_lat double precision,p_lon double precision,p_accuracy double precision,p_photo text) returns jsonb language sql security invoker set search_path=pg_catalog as $$select grillad_private.attendance_capture(p_org,p_site,p_event,p_kind,p_at,p_lat,p_lon,p_accuracy,p_photo)$$;
 -- Explicit audited photo access; caller scope is enforced before returning bytes.
-create function public.grillad_attendance_photo(p_org uuid,p_site uuid,p_id uuid) returns jsonb language sql security invoker set search_path=pg_catalog as $select grillad_private.attendance_photo(p_org,p_site,p_id)$;
+create function public.grillad_attendance_photo(p_org uuid,p_site uuid,p_id uuid) returns jsonb language sql security invoker set search_path=pg_catalog as $$select grillad_private.attendance_photo(p_org,p_site,p_id)$$;
 revoke all on function public.grillad_attendance_photo(uuid,uuid,uuid) from public,anon,authenticated;
 grant execute on function public.grillad_attendance_photo(uuid,uuid,uuid) to authenticated;
 revoke all on function grillad_private.attendance_status(uuid,uuid),grillad_private.attendance_capture(uuid,uuid,uuid,text,timestamptz,double precision,double precision,double precision,text),grillad_private.attendance_photo(uuid,uuid,uuid),grillad_private.purge_attendance_photos() from public,anon,authenticated;

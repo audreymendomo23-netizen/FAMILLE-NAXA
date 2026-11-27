@@ -244,7 +244,7 @@ revoke all on function public.grillad_action(uuid,uuid,uuid,text,jsonb),public.g
 grant execute on function public.grillad_action(uuid,uuid,uuid,text,jsonb),public.grillad_snapshot(uuid,uuid,date,date) to authenticated;
 -- Complete direct-sale receipt, independent of the 200-row history window.
 create function grillad_private.receipt(p_org uuid,p_site uuid,p_sale uuid) returns jsonb
-language plpgsql stable security definer set search_path=pg_catalog as $
+language plpgsql stable security definer set search_path=pg_catalog as $$
 declare r text; u uuid:=auth.uid(); out jsonb;
 begin
  r:=grillad_private.scope(p_org,p_site);
@@ -259,9 +259,9 @@ begin
  and (r<>'seller' or s.actor=u) group by o.legal_name,l.name;
  if out is null then raise exception 'GRILLAD_RECEIPT' using errcode='42501';end if;
  return out;
-end $;
+end $$;
 create function public.grillad_receipt(p_org uuid,p_site uuid,p_sale uuid) returns jsonb
-language sql stable security invoker set search_path=pg_catalog as $select grillad_private.receipt(p_org,p_site,p_sale)$;
+language sql stable security invoker set search_path=pg_catalog as $$select grillad_private.receipt(p_org,p_site,p_sale)$$;
 revoke all on function grillad_private.receipt(uuid,uuid,uuid),public.grillad_receipt(uuid,uuid,uuid) from public,anon,authenticated;
 grant execute on function grillad_private.receipt(uuid,uuid,uuid),public.grillad_receipt(uuid,uuid,uuid) to authenticated;
 

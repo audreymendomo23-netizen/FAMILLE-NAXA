@@ -54,7 +54,7 @@ create function public.grillad_auth_finish(p_hash text,p_user uuid,p_session uui
 revoke all on function public.grillad_auth_begin(text,boolean),public.grillad_auth_finish(text,uuid,uuid,uuid,text) from public,anon,authenticated;
 grant execute on function public.grillad_auth_begin(text,boolean),public.grillad_auth_finish(text,uuid,uuid,uuid,text) to service_role;
 -- Scheduled retention wrapper: service-only, no photo bytes returned.
-create function public.grillad_purge_attendance_photos() returns bigint language sql security invoker set search_path=pg_catalog as $select grillad_private.purge_attendance_photos()$;
+create function public.grillad_purge_attendance_photos() returns bigint language sql security invoker set search_path=pg_catalog as $$select grillad_private.purge_attendance_photos()$$;
 revoke all on function public.grillad_purge_attendance_photos() from public,anon,authenticated;
 grant execute on function public.grillad_purge_attendance_photos(),grillad_private.purge_attendance_photos() to service_role;
 commit;
