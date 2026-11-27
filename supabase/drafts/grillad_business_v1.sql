@@ -357,6 +357,10 @@ begin
   if not exists(select 1 from grillad_private.service_policy p where p.org=p_org and p.site=p_site and p.enabled and p.effective_from<d) or exists(select 1 from grillad_private.service_revisions sr where sr.org=p_org and sr.site=p_site and sr.effective_from>=d) or exists(select 1 from grillad_private.daily_summary ds where ds.org=p_org and ds.site=p_site and ds.service_day>=d-1) then raise exception 'GRILLAD_SERVICE_HISTORY' using errcode='22023';end if;
   insert into grillad_private.service_revisions(org,site,effective_from,start_minute,reason,actor) values(p_org,p_site,d,n::integer,reason,u);
   result:=jsonb_build_object('start_minute',n,'effective_from',d,'scheduled',true);
+ when 'connect_item_set' then
+  result:=grillad_private.connect_configure(p_org,p_site,p_action,p_payload);
+ when 'connect_link_set' then
+  result:=grillad_private.connect_configure(p_org,p_site,p_action,p_payload);
  when 'set_attendance_policy' then
   result:=grillad_private.set_attendance_policy(p_org,p_site,p_payload);
  when 'missing_arrival_request' then

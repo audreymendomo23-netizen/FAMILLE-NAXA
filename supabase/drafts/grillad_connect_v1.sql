@@ -98,14 +98,15 @@ begin
  return jsonb_build_object('id',o.id,'status',o.status,'total',o.total);
 end $$;
 create function grillad_private.connect_list(p_org uuid,p_site uuid) returns jsonb language plpgsql stable security definer set search_path=pg_catalog as $$
-declare r text;v jsonb;
+declare r text;v jsonb;links jsonb;
 begin
  r:=grillad_private.scope(p_org,p_site);
  if r='seller' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
  select coalesce(jsonb_agg(to_jsonb(x) order by x.created_at desc),'[]'::jsonb) into v from (
  select o.id,o.status,o.total,o.created_at,o.updated_at,(select coalesce(jsonb_agg(jsonb_build_object('name',i.name,'qty',c.qty,'price',c.price)),'[]'::jsonb) from grillad_private.connect_lines c join grillad_private.items i on i.id=c.item where c.order_id=o.id) lines
  from grillad_private.connect_orders o where o.org=p_org and o.site=p_site order by o.created_at desc limit 100) x;
- return jsonb_build_object('available',exists(select 1 from grillad_private.connect_links l where org=p_org and site=p_site and grillad_private.connect_active(l.id)),'orders',v);
+ if r='owner' then select coalesce(jsonb_agg(jsonb_build_object('id',l.id,'partner',z.name,'enabled',l.enabled,'available',grillad_private.connect_active(l.id),'grillad_approved',l.grillad_approved,'zipple_approved',l.zipple_approved,'expires_at',l.expires_at,'items',coalesce((select jsonb_agg(c.item order by c.item) from grillad_private.connect_catalog c where c.link=l.id),'[]'::jsonb)) order by z.name,l.id),'[]'::jsonb) into links from grillad_private.connect_links l join famille_core.locations z on z.id=l.zipple_site and z.organization_id=l.zipple_org where l.org=p_org and l.site=p_site;end if;
+ return jsonb_build_object('available',exists(select 1 from grillad_private.connect_links l where org=p_org and site=p_site and grillad_private.connect_active(l.id)),'orders',v,'links',coalesce(links,'[]'::jsonb));
 end $$;
 create function grillad_private.connect_transition(p_org uuid,p_site uuid,p_order uuid,p_event uuid,p_next text,p_received bigint,p_reason text) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
 declare r text;o grillad_private.connect_orders%rowtype;c grillad_private.cash%rowtype;x record;prev grillad_private.connect_history%rowtype;req jsonb;
@@ -157,4 +158,31 @@ create function public.grillad_connect_transition(p_org uuid,p_site uuid,p_order
 revoke all on function grillad_private.connect_active(uuid),grillad_private.connect_qr(text),grillad_private.connect_public_catalog(text),grillad_private.connect_submit(text,uuid,jsonb),grillad_private.connect_public_status(text,uuid),grillad_private.connect_list(uuid,uuid),grillad_private.connect_transition(uuid,uuid,uuid,uuid,text,bigint,text),public.grillad_connect_catalog(text),public.grillad_connect_submit(text,uuid,jsonb),public.grillad_connect_status(text,uuid),public.grillad_connect_list(uuid,uuid),public.grillad_connect_transition(uuid,uuid,uuid,uuid,text,bigint,text) from public,anon,authenticated;
 grant execute on function grillad_private.connect_public_catalog(text),grillad_private.connect_submit(text,uuid,jsonb),grillad_private.connect_public_status(text,uuid),public.grillad_connect_catalog(text),public.grillad_connect_submit(text,uuid,jsonb),public.grillad_connect_status(text,uuid) to service_role;
 grant execute on function grillad_private.connect_list(uuid,uuid),grillad_private.connect_transition(uuid,uuid,uuid,uuid,text,bigint,text),public.grillad_connect_list(uuid,uuid),public.grillad_connect_transition(uuid,uuid,uuid,uuid,text,bigint,text) to authenticated;
+-- Manage only an already provisioned bilateral link. Neither partner approval nor QR secrets are changed here.
+create function grillad_private.connect_configure(p_org uuid,p_site uuid,p_action text,p_payload jsonb) returns jsonb language plpgsql security definer set search_path=pg_catalog as $$
+declare link_row grillad_private.connect_links%rowtype;item_id uuid;desired boolean;why text;
+begin
+ if grillad_private.scope(p_org,p_site)<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+ why:=btrim(p_payload->>'reason');if why is null or length(why) not between 1 and 300 or jsonb_typeof(p_payload->'enabled') is distinct from 'boolean' then raise exception 'GRILLAD_CONNECT_CONFIG' using errcode='22023';end if;
+ desired:=(p_payload->>'enabled')::boolean;
+ select * into link_row from grillad_private.connect_links where id=(p_payload->>'link')::uuid and org=p_org and site=p_site for update;
+ if not found then raise exception 'GRILLAD_PARTNER_UNAVAILABLE' using errcode='42501';end if;
+ if p_action='connect_item_set' then
+  item_id:=(p_payload->>'item')::uuid;
+  if not exists(select 1 from grillad_private.items where id=item_id and org=p_org and site=p_site and (active or not desired)) then raise exception 'GRILLAD_ITEM' using errcode='42501';end if;
+  if desired then
+   if not grillad_private.connect_active(link_row.id) then raise exception 'GRILLAD_PARTNER_UNAVAILABLE' using errcode='42501';end if;
+   insert into grillad_private.connect_catalog(link,org,site,item) values(link_row.id,p_org,p_site,item_id) on conflict(link,item) do nothing;
+  else delete from grillad_private.connect_catalog where link=link_row.id and item=item_id and org=p_org and site=p_site;end if;
+  return jsonb_build_object('link',link_row.id,'item',item_id,'enabled',desired);
+ elsif p_action='connect_link_set' then
+  if not desired and exists(select 1 from grillad_private.connect_orders where link=link_row.id and status in ('submitted','accepted','preparing','ready')) then raise exception 'GRILLAD_CONNECT_OPEN_ORDERS' using errcode='22023';end if;
+  update grillad_private.connect_links set enabled=desired where id=link_row.id;
+  if desired and not grillad_private.connect_active(link_row.id) then raise exception 'GRILLAD_PARTNER_UNAVAILABLE' using errcode='42501';end if;
+  return jsonb_build_object('link',link_row.id,'enabled',desired);
+ end if;
+ raise exception 'GRILLAD_ACTION' using errcode='22023';
+end $$;
+revoke all on function grillad_private.connect_configure(uuid,uuid,text,jsonb) from public,anon,authenticated;
+
 commit;

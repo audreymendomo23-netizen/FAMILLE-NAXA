@@ -13,4 +13,5 @@ mutate('record_purchase',{supplier:'Marché test',input_name:'Poulet',unit:'kg',
 mutate('missing_arrival_request',{departure:item,seconds:30,reason:'Oubli'});mutate('missing_arrival_decide',{request:item,decision:'approved',reason:'Vérifié'});
 add('renewal_status');add('renewal_action',{event,operation:'renewal_request',payload:{plan:'grillad_access_month'}},{...scope,p_event:event,p_action:'renewal_request',p_payload:{plan:'grillad_access_month'}});
 mutate('set_attendance_policy',{enabled:true,latitude:0,longitude:0,radius_m:200,max_accuracy_m:50,max_age_seconds:120,photo_retention_days:1,staff_informed:true,reason:'Test'});
+mutate('connect_item_set',{link:item,item,event,enabled:true,reason:'Publication'});mutate('connect_link_set',{link:item,enabled:false,reason:'Pause'});
 for(const [i,c] of cases.entries()){test('GRC-'+String(94+i*2).padStart(3,'0')+' '+c.name+' caller',route(c));test('GRC-'+String(95+i*2).padStart(3,'0')+' '+c.name+' anonymous denied',anonymous(c))}

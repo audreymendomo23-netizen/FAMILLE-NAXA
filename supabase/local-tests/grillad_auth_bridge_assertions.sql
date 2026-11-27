@@ -69,6 +69,14 @@ begin
  perform public.grillad_connect_transition(o,s,p,e,'handed',2000,null);
  v:=public.grillad_snapshot(o,s,d,d);
  if (v#>>'{finance,connect_ca}')::int<>2000 or (v#>>'{finance,ca}')::int<>2000 or (v->'items'->0->>'remaining')::int<>3 then raise exception 'connect accounting';end if;
+ if public.grillad_connect_list(o,s)->'links'->0->'items'->>0<>i::text then raise exception 'connect catalog owner';end if;
+ perform public.grillad_action(o,s,gen_random_uuid(),'connect_item_set',jsonb_build_object('link','b5000000-0000-0000-0000-000000000001','item',i,'enabled',false,'reason','Test retrait'));
+ if jsonb_array_length(public.grillad_connect_list(o,s)->'links'->0->'items')<>0 then raise exception 'catalog withdrawal';end if;
+ perform public.grillad_action(o,s,gen_random_uuid(),'connect_item_set',jsonb_build_object('link','b5000000-0000-0000-0000-000000000001','item',i,'enabled',true,'reason','Test retour'));
+ perform public.grillad_action(o,s,gen_random_uuid(),'connect_link_set','{"link":"b5000000-0000-0000-0000-000000000001","enabled":false,"reason":"Test pause"}');
+ if (public.grillad_connect_list(o,s)->>'available')::boolean then raise exception 'link pause';end if;
+ perform public.grillad_action(o,s,gen_random_uuid(),'connect_link_set','{"link":"b5000000-0000-0000-0000-000000000001","enabled":true,"reason":"Test retour"}');
+ if not(public.grillad_connect_list(o,s)->>'available')::boolean then raise exception 'link restart';end if;
 end $$;
 reset role;
 -- Network report and surveillance, explicit independent default.
