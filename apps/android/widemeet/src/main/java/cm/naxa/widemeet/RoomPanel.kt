@@ -62,13 +62,15 @@ private fun RecordingAnnouncement(active: Boolean, english: Boolean) {
         color = MaterialTheme.colorScheme.error
     )
 }
-@Composable fun RoomPanel(english:Boolean,gateway:RoomGateway,session:Session,workspace:Workspace,initialCreate:Boolean=false){
+@Composable fun RoomPanel(english:Boolean,gateway:RoomGateway,session:Session,workspace:Workspace,initialCreate:Boolean=false,center:String="agenda"){
  fun tr(fr:String,en:String)=if(english)en else fr
  val hostRole=workspace.role in setOf("owner","promoteur","manager")
  val scope=rememberCoroutineScope()
  val window=(LocalContext.current as? Activity)?.window
  DisposableEffect(window){val wasSecure=(window?.attributes?.flags?.and(WindowManager.LayoutParams.FLAG_SECURE)?:0)!=0;window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE);onDispose{if(!wasSecure)window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)}}
  var list by remember{mutableStateOf<List<JSONObject>>(emptyList())}
+ var search by remember{mutableStateOf("")};var filter by remember{mutableStateOf("all")}
+ val visible=list.filter{r->(center!="rooms"||r.optString("status") in setOf("open","paused"))&&(filter=="all"||r.optString("status")==filter)&&r.optString("title").contains(search.trim(),ignoreCase=true)}
  var contacts by remember{mutableStateOf<List<JSONObject>>(emptyList())}
  var passes by remember{mutableStateOf<List<JSONObject>>(emptyList())};var passId by remember{mutableStateOf("")}
  var room by remember{mutableStateOf<JSONObject?>(null)}
@@ -127,9 +129,21 @@ private fun RecordingAnnouncement(active: Boolean, english: Boolean) {
  contacts.forEach{c->val id=c.optString("member_id");Row{Checkbox(id in invited,{checked->invited=if(checked)invited+id else invited-id});Text(c.optString("display_name"),modifier=Modifier.padding(top=12.dp))}}
  Button(enabled=!busy&&title.isNotBlank()&&(duration.toIntOrNull()?:0) in 5..480&&(workspace.kind!="individual"||passId.isNotEmpty()),onClick={val whenMs=runCatching{if(date.isBlank())System.currentTimeMillis() else LocalDateTime.parse(date).atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()}.getOrNull();if(whenMs==null){error=true}else if(recurrence!="none"){val n=occurrences.toIntOrNull()?:0;val every=interval.toIntOrNull()?:0;if(date.isBlank()||n !in 2..12||every !in 1..12){error=true}else{val payload=seriesPending?:JSONObject().put("series_id",UUID.randomUUID().toString()).put("room_ids",JSONArray(List(n){UUID.randomUUID().toString()})).put("title",title).put("description",description).put("scheduled_ms",whenMs).put("duration_minutes",duration.toInt()).put("invitees",JSONArray(invited.toList())).put("recurrence",recurrence).put("interval",every).also{seriesPending=it};seriesAction("series-create",payload)}}else{val data=creationPending?:JSONObject().put("room_id",UUID.randomUUID().toString()).put("title",title).put("description",description).put("scheduled_ms",whenMs).put("duration_minutes",duration.toInt()).put("invitees",JSONArray(invited.toList())).apply{if(workspace.kind=="individual")put("pass_id",passId)}.also{creationPending=it};execute("create",data)}}){Text(tr("Créer","Create"))}
  }else if(mode=="list"){
- if(BuildConfig.WIDEMEET_EXTERNAL_ENABLED)ExternalInvite(english,gateway,session,onJoined={id->execute("read",JSONObject().put("room_id",id))})
- list.forEach{r->TextButton(enabled=!busy,onClick={execute("read",JSONObject().put("room_id",r.optString("id")))}){Text(r.optString("title",tr("Réunion","Meeting"))+" — "+stateLabel(r.optString("status")))}}
- if(!busy&&!error&&list.isEmpty())Text(tr("Aucune réunion dans cet espace.","No meetings in this workspace."))
+ if(center!="agenda"){
+  val copy=when(center){
+   "chat"->tr("Choisissez une réunion pour consulter les messages autorisés et échanger dans la salle ouverte.","Choose a meeting to view authorized messages and chat in the open room.")
+   "rooms"->tr("Salles ouvertes ou en pause accessibles. Ouvrir une autre salle quitte l’écran courant.","Accessible open or paused rooms. Opening another room leaves the current screen.")
+   "statistics"->tr("Indicateurs des réunions visibles (200 maximum), pas une consolidation de toute l’entreprise.","Visible meeting indicators (maximum 200), not company-wide totals.")
+   else->tr("Choisissez une réunion pour consulter les votes ou y participer selon vos droits.","Choose a meeting to view polls or participate according to your permissions.")
+  }
+  Text(copy)
+  OutlinedTextField(search,{search=it},label={Text(tr("Rechercher une réunion","Search meetings"))},modifier=Modifier.fillMaxWidth())
+  if(center!="rooms"){Text(tr("État","Status"));for(s in listOf("all","scheduled","open","paused","ended"))Row{RadioButton(selected=filter==s,onClick={filter=s});Text(if(s=="all")tr("Tous","All")else stateLabel(s),Modifier.padding(top=12.dp))}}
+  if(center=="statistics"&&!busy&&!error)for(s in listOf("scheduled","open","paused","ended"))Text(stateLabel(s)+": "+list.count{it.optString("status")==s})
+ }
+ if(center=="agenda"&&BuildConfig.WIDEMEET_EXTERNAL_ENABLED)ExternalInvite(english,gateway,session,onJoined={id->execute("read",JSONObject().put("room_id",id))})
+ visible.forEach{r->TextButton(enabled=!busy,onClick={execute("read",JSONObject().put("room_id",r.optString("id")))}){Text(r.optString("title",tr("Réunion","Meeting"))+" — "+stateLabel(r.optString("status")))}}
+ if(!busy&&!error&&visible.isEmpty())Text(tr("Aucune réunion dans cet espace.","No meetings in this workspace."))
  }else{val r=room
  if(r!=null){val status=r.optString("status");val isHost=r.optString("hostId")==session.memberId&&hostRole
  fun may(p:String)=isHost||(r.optJSONArray("moderatorPermissions")?.let{a->(0 until a.length()).any{a.optString(it)==p}}==true)

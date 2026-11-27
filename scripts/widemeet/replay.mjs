@@ -462,16 +462,17 @@ try{
  await photoPreview.waitFor({state:"detached",timeout:15000});
  pass("actual Web profile photo selection, re-encoding, private preview and removal");
  // Exercise the external invitation deep link through real GoTrue, Edge and Chromium.
+ const deepGuest=await fixture(other,"staff");
  const deepHost=await login(h),deepRoomId=randomUUID(),deepToken=randomBytes(32).toString("hex"),deepInviteId=randomUUID();
  const deepRoom=await ok(room+"/create",{room_id:deepRoomId,title:"Replay invitation link",description:"Isolated",scheduled_ms:Date.now(),duration_minutes:30,invitees:[]},deepHost.access_token);
  await ok(room+"/command",{room_id:deepRoomId,request_id:randomUUID(),expected_revision:deepRoom.revision,action:"lobby_config",value:true},deepHost.access_token);
- await ok(room+"/external-invite",{action:"issue",data:{room_id:deepRoomId,invite_id:deepInviteId,login_id:o.login,token:deepToken}},deepHost.access_token);
+ await ok(room+"/external-invite",{action:"issue",data:{room_id:deepRoomId,invite_id:deepInviteId,login_id:deepGuest.login,token:deepToken}},deepHost.access_token);
  const deepContext=await browser.newContext({ignoreHTTPSErrors:true,locale:"fr-FR"});
  try{
   const dp=await deepContext.newPage();
   await dp.goto("https://127.0.0.1:8443/#invite="+deepToken);
-  await dp.getByLabel("Identifiant WideMeet",{exact:true}).fill(o.login);
-  await dp.getByLabel("Mot de passe",{exact:true}).fill(o.password);
+  await dp.getByLabel("Identifiant WideMeet",{exact:true}).fill(deepGuest.login);
+  await dp.getByLabel("Mot de passe",{exact:true}).fill(deepGuest.password);
   await dp.getByRole("button",{name:"Se connecter",exact:true}).click();
   const field=dp.getByLabel("Code d’invitation",{exact:true});
   await field.waitFor({timeout:20000});
