@@ -21,7 +21,7 @@ private fun minuteRows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() e
  fun tr(fr:String,en:String)=if(english)en else fr
  val scope=rememberCoroutineScope();val context=LocalContext.current
  var items by remember{mutableStateOf<List<JSONObject>>(emptyList())};var selected by remember{mutableStateOf<JSONObject?>(null)};var prep by remember{mutableStateOf<JSONObject?>(null)};var version by remember{mutableStateOf<JSONObject?>(null)}
- var body by remember{mutableStateOf("")};var recipients by remember{mutableStateOf<Set<String>>(emptySet())};var pending by remember{mutableStateOf<JSONObject?>(null)}
+ var body by remember{mutableStateOf("")};var showAsr by remember{mutableStateOf(false)};var asrDraft by remember{mutableStateOf<String?>(null)};var recipients by remember{mutableStateOf<Set<String>>(emptySet())};var pending by remember{mutableStateOf<JSONObject?>(null)}
  var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var revokeConfirm by remember{mutableStateOf(false)}
  suspend fun req(action:String,data:JSONObject=JSONObject())=gateway.request("minutes",JSONObject().put("action",action).put("data",data),session) as JSONObject
  suspend fun refresh(){items=minuteRows(req("list").optJSONArray("items"))}
@@ -39,7 +39,7 @@ private fun minuteRows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() e
  val current=selected
  if(current==null){
  TextButton(enabled=!busy,onClick={work{refresh()}}){Text(tr("Actualiser","Refresh"))}
- for(item in items)TextButton(enabled=!busy,onClick={work{selected=item;version=null;prep=null;body="";recipients=emptySet();pending=null;val id=item.getString("room_id");if(item.optBoolean("can_manage"))prep=req("prepare",JSONObject().put("room_id",id));if(!item.isNull("version_id"))read(id,item.getString("version_id"))}}){Text(item.optString("title")+" · "+item.optString("closed_at").take(10)+(if(item.optBoolean("unread"))" · "+tr("Nouveau","New") else ""))}
+ for(item in items)TextButton(enabled=!busy,onClick={work{showAsr=false;asrDraft=null;selected=item;version=null;prep=null;body="";recipients=emptySet();pending=null;val id=item.getString("room_id");if(item.optBoolean("can_manage"))prep=req("prepare",JSONObject().put("room_id",id));if(!item.isNull("version_id"))read(id,item.getString("version_id"))}}){Text(item.optString("title")+" · "+item.optString("closed_at").take(10)+(if(item.optBoolean("unread"))" · "+tr("Nouveau","New") else ""))}
  if(!busy&&items.isEmpty())Text(tr("Aucune archive autorisée.","No authorized archive."))
  }else{
  TextButton(enabled=!busy,onClick={selected=null;version=null;prep=null;body="";pending=null;work{refresh()}}){Text(tr("Retour aux archives","Back to archives"))}
@@ -49,6 +49,9 @@ private fun minuteRows(a:JSONArray?):List<JSONObject> = if(a==null)emptyList() e
  if(v!=null&&!v.isNull("published_at"))Button(enabled=!busy,onClick={exportTarget=current.getString("room_id") to v.getString("version_id");pdfPicker.launch("widemeet-compte-rendu-v"+v.optInt("version")+".pdf")}){Text(tr("Télécharger le compte rendu PDF","Download minutes PDF"))}
  if(v!=null)Text(tr("Version","Version")+" "+v.optInt("version")+" · "+when{!v.isNull("published_at")->tr("Publiée","Published");!v.isNull("approved_at")->tr("Validée","Approved");else->tr("Brouillon","Draft")})
  if(current.optBoolean("can_manage")&&p?.optBoolean("premium")==true){
+ TextButton(enabled=!busy&&pending==null,onClick={showAsr=!showAsr}){Text(if(showAsr)tr("Masquer la transcription","Hide transcription")else tr("Préparer une transcription","Prepare transcription"))}
+ if(showAsr)key(current.getString("room_id")){TranscriptionPanel(english,gateway,session,current.getString("room_id"),onDraft={text->if(!busy&&pending==null){if(body.isBlank())body=text else asrDraft=text}})}
+ asrDraft?.let{text->AlertDialog(onDismissRequest={asrDraft=null},title={Text(tr("Remplacer le brouillon par les extraits à relire ?","Replace draft with excerpts to review?"))},confirmButton={TextButton(onClick={body=text;asrDraft=null}){Text(tr("Confirmer","Confirm"))}},dismissButton={TextButton(onClick={asrDraft=null}){Text(tr("Annuler","Cancel"))}})}
  OutlinedTextField(body,{body=it.take(8000)},enabled=!busy&&pending==null,label={Text(tr("Compte rendu manuel (pas une transcription IA)","Manual minutes (not an AI transcript)"))},modifier=Modifier.fillMaxWidth(),minLines=5)
  Button(enabled=!busy&&body.isNotBlank(),onClick={work{val id=current.getString("room_id");val data=pending?:JSONObject().put("room_id",id).put("version_id",UUID.randomUUID().toString()).put("expected_version",p.getInt("latest_version")).put("body",body.trim()).also{pending=it};val saved=req("draft",data);pending=null;loadVersion(id,saved.getString("version_id"))}}){Text(tr("Enregistrer une nouvelle version","Save new version"))}
  if(v!=null&&v.isNull("approved_at"))Button(enabled=!busy&&body==v.optString("body")&&pending==null,onClick={mutate("approve")}){Text(tr("Valider cette version exacte","Approve this exact version"))}

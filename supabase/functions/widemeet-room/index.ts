@@ -91,6 +91,10 @@ Deno.serve(async request=>{
  const result=await rpc("wm_presence_report",{p_hash,p_room:b.room_id.toLowerCase()});
  return result?send(200,result):send(403,{error:"forbidden"});
  }
+ if(action==="transcription"){
+ if(Deno.env.get("WM_TRANSCRIPTION_QUALIFIED")!=="true"||!["list","request","read","retry"].includes(b.action)||!b.data||typeof b.data!=="object"||Array.isArray(b.data))return send(403,{error:"forbidden"});
+ const result=await rpc("wm_transcription_action",{p_hash,p_action:b.action,p_data:b.data});return result?send(200,result):send(403,{error:"forbidden"});
+ }
  if(action==="tasks"){
  if(Deno.env.get("WM_MINUTES_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
  if(!["list","create","submit","approve","return","cancel"].includes(b.action)||!b.data||typeof b.data!=="object"||Array.isArray(b.data))return send(400,{error:"invalid_request"});

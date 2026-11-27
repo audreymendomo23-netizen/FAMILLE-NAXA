@@ -10,7 +10,10 @@ import {createWideMeetPresence} from "../../packages/media-core/widemeet-presenc
 import {createWideMeetRecordingStorage} from "../../packages/media-core/widemeet-recording-storage.mjs";
 import {createWideMeetRecorder} from "../../packages/media-core/widemeet-recorder.mjs";
 import {execFileSync} from "node:child_process";
-import {stat} from "node:fs/promises";
+import {stat,mkdtemp,rm} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {createWideMeetTranscription} from "../../packages/media-core/widemeet-transcription.mjs";
 import {createMediaProxy} from "../../packages/media-core/signaling-proxy.mjs";
 import {createWideMeetAdmission} from "../../packages/media-core/widemeet-admission.mjs";
 const base=process.env.SUPABASE_URL,serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY,anon=process.env.SUPABASE_ANON_KEY;
@@ -150,6 +153,25 @@ try{
  await until(async()=>evicted.has(h.id),"room closure eviction");
  console.log("PASS room closure revokes host transport");
  if(process.env.WM_RECORDING_STORAGE_QUALIFIED==="true"){const archive=await good(roomApi+"/recordings",{room_id:rid},hs.access_token);assert.equal(archive.items.length,3);assert.equal((await request(roomApi+"/recordings",{room_id:rid},gs.access_token)).status,403);const file=archive.items.at(-1),body={app_id:"WIDEMEET",room_id:rid,recording_id:file.recording_id,request_id:randomUUID()};const download=async token=>fetch(roomApi+"/recording-download",{method:"POST",headers:{apikey:anon,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify(body)});assert.equal((await download(gs.access_token)).status,403);const res=await download(hs.access_token);assert.equal(res.status,200);const data=Buffer.from(await res.arrayBuffer());assert.equal(data.length,file.bytes);assert.equal(createHash("sha256").update(data).digest("hex"),file.sha256);console.log("PASS actual N3 private Storage upload/readback, host-only export after closure, forbidden guest and SHA-256 integrity");}
+ if(process.env.WM_TRANSCRIPTION_QUALIFIED==="true"){
+ const temp=await mkdtemp(join(tmpdir(),"wm-asr-replay-"));
+ try{
+  const wav=join(temp,"synthetic.wav"),ogg=join(temp,"synthetic.ogg");
+  execFileSync("espeak-ng",["-v","en-us","-s","125","-w",wav,"Today we discuss the project. The meeting is about the project. Thank you for attending the meeting."]);
+  execFileSync("ffmpeg",["-v","error","-y","-i",wav,"-c:a","libopus",ogg]);
+  const bytes=await readFile(ogg),sha=createHash("sha256").update(bytes).digest("hex"),id=randomUUID();
+  const storage=createWideMeetRecordingStorage({supabaseUrl:base,serviceKey});const key=await storage.put({id,room_id:rid},bytes,sha);
+  await rest("wm_recording_runs",{id,room_id:rid,request_id:randomUUID(),phase:"complete",disposition:"retain",object_name:id+".ogg",started_at:new Date(Date.now()-10000).toISOString(),finished_at:new Date().toISOString(),content_sha256:sha,bytes:bytes.length,stored_at:new Date().toISOString(),storage_key:key});
+  const tr=(token,action,data)=>request(roomApi+"/transcription",{action,data},token),tk=(token,action,data)=>good(roomApi+"/transcription",{action,data},token),data={room_id:rid,recording_id:id};
+  assert.equal((await tr(gs.access_token,"request",data)).status,403);
+  assert.equal((await tk(hs.access_token,"request",data)).status,"queued");assert.equal((await tk(hs.access_token,"request",data)).status,"queued");
+  const engine=createWideMeetTranscription({supabaseUrl:base,serviceKey,python:process.env.WM_ASR_PYTHON,modelDir:process.env.WM_ASR_MODEL});
+  assert.deepEqual(await engine.runOne(),{claimed:true,completed:true});
+  const result=await tk(hs.access_token,"read",data);assert.equal(result.status,"complete");assert.equal(result.result.language,"en");assert.ok(result.result.segments.length>0);assert.match(result.result.segments.map(x=>x.text).join(" "),/project|meeting/i);
+  assert.equal((await tr(gs.access_token,"read",data)).status,403);assert.deepEqual(await engine.runOne(),{claimed:false});
+  console.log("PASS actual local Whisper ASR on separate synthetic speech fixture in private Storage; host-only queue, hash verification and timestamped output");
+ }finally{await rm(temp,{recursive:true,force:true})}
+ }
  if(process.env.WM_PRESENCE_QUALIFIED==="true"){const report=await good(roomApi+"/presence",{room_id:rid},hs.access_token);assert.equal(report.basis,"sfu_samples_not_continuous_presence");assert.ok(report.samples>=4&&report.coverage_ms>0);const hr=report.rows.find(x=>x.member_id===h.id),gr=report.rows.find(x=>x.member_id===g.id);assert.ok(hr.samples_seen>=4&&gr.samples_seen===2&&gr.estimated_ms>0&&hr.estimated_ms>=gr.estimated_ms);assert.equal((await request(roomApi+"/presence",{room_id:rid},gs.access_token)).status,403);console.log("PASS actual N4 SFU active transport samples, exclusion and restricted closed meeting report");}
 }finally{
  if(browser)await browser.close();if(rid)await sfu.deleteRoom("wm-"+rid).catch(()=>{});
