@@ -47,18 +47,25 @@ Deno.serve(async request=>{
  const text=await request.text();if(text.length>16384)return send(413,{error:"too_large"});
  const b=JSON.parse(text);if(b?.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
  const p_hash=await hash(token),now=Date.now();
- const a=(await rpc("wm_room_actor",{p_hash}))?.[0];
- if(!a||!["owner","promoteur","manager","staff"].includes(a.role)||!["access","premium"].includes(a.plan)||!Number.isSafeInteger(a.entitlement_end_ms)||a.entitlement_end_ms<=now)return send(403,{error:"forbidden"});
- const actor={memberId:a.account_id,workspaceId:a.workspace_id,enabled:true,passwordChangeRequired:false,role:a.role,plan:a.plan,entitlementEndMs:a.entitlement_end_ms};
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
- if(action==="list")return send(200,await rpc("wm_room_list",{p_hash}));
- if(action==="contacts")return send(200,await rpc("wm_room_contacts",{p_hash}));
+ if(action==="pass-list")return send(200,await rpc("wm_pass_list",{p_hash}));
+ if(action==="list"||action==="contacts"){
+ const regular=(await rpc("wm_room_actor",{p_hash}))?.[0];
+ if(!regular){const passes=await rpc("wm_pass_list",{p_hash});if(!Array.isArray(passes)||!passes.length)return send(403,{error:"forbidden"});}
+ return send(200,await rpc(action==="list"?"wm_room_list":"wm_room_contacts",{p_hash}));
+ }
  if(!uuid.test(b.room_id??""))return send(400,{error:"invalid_room"});
  const p_room=b.room_id.toLowerCase();
+ const passId=action==="create"&&b.pass_id!=null?b.pass_id:null;
+ if(passId!==null&&!uuid.test(passId))return send(400,{error:"invalid_pass"});
+ const a=(await rpc(passId!==null?"wm_pass_actor":"wm_room_actor_for",passId!==null?{p_hash,p_intent:passId}:{p_hash,p_room:action==="create"?null:p_room}))?.[0];
+ if(!a||!["owner","promoteur","manager","staff"].includes(a.role)||!["access","premium"].includes(a.plan)||!Number.isSafeInteger(a.entitlement_end_ms)||a.entitlement_end_ms<=now)return send(403,{error:"forbidden"});
+ const actor={memberId:a.account_id,workspaceId:a.workspace_id,enabled:true,passwordChangeRequired:false,role:a.role,plan:a.plan,entitlementEndMs:a.entitlement_end_ms};
  if(action==="create"){
  if(!Array.isArray(b.invitees)||b.invitees.length>100||!b.invitees.every((id:unknown)=>typeof id==="string"&&uuid.test(id)))return send(400,{error:"invalid_invitees"});
  const state=createRoom(actor,{id:p_room,title:b.title,description:b.description??"",startMs:b.scheduled_ms,durationMinutes:b.duration_minutes,hardEndMs:actor.entitlementEndMs,invitees:b.invitees.map((id:string)=>id.toLowerCase())});
- if(await rpc("wm_room_create",{p_hash,p_state:state})!==true)return send(409,{error:"conflict_or_scope"});
+ if(passId!==null&&b.invitees.length+1>a.capacity)return send(409,{error:"capacity_exceeded"});
+ if(await rpc(passId!==null?"wm_pass_room_create":"wm_room_create",passId!==null?{p_hash,p_intent:passId,p_state:state}:{p_hash,p_state:state})!==true)return send(409,{error:"conflict_or_scope"});
  return send(201,projection(state,actor));
  }
  const room=await rpc("wm_room_read",{p_hash,p_room});
