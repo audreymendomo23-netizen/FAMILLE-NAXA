@@ -131,6 +131,17 @@ class Bulk2LiveDeviceTest {
   step("create native loyalty fixture through Edge"){runBlocking{
    business.call(session,site,"customer_add",body("name" to "Client QR natif","phone" to ""))
   }}
+  click("Tables");input("Nom de la table ou du point","Table QR native");click("Créer un point de commande")
+  step("native order QR creation and rotation"){
+   val matcher=hasContentDescription("QR de commande",substring=false)
+   compose.waitUntil(30000){compose.onAllNodes(matcher).fetchSemanticsNodes().size==1}
+   compose.onNode(matcher).performScrollTo().assertIsDisplayed()
+   awaitText("Enregistrer le QR de commande");awaitText("Partager le QR de commande")
+   click("Renouveler le QR : Table QR native")
+   compose.waitUntil(30000){compose.onAllNodes(matcher).fetchSemanticsNodes().size==1}
+   compose.onNode(matcher).performScrollTo().assertIsDisplayed()
+  }
+  android.util.Log.i("ZIPPLE_BULK2_TEST","ZIPPLE_NATIVE_TABLE_QR_PASS")
   click("Fidélité et parrainage");awaitText("Points non monétaires ; avantages sur commande ultérieure réglée.")
   click("Client : —");click("Client QR natif")
   click("Générer la carte de fidélité");awaitText("Opération enregistrée")

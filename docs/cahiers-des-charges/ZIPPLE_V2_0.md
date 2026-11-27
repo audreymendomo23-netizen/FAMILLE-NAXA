@@ -2107,3 +2107,7 @@ Cette V2.0, révisée le 21 novembre 2026 pour intégrer la politique annuelle t
 
 ## Addendum validé 26/11/2026 — service Snack-Bar
 La décision postérieure remplace toute ancienne mention interdisant la remise au client dans le Snack-Bar. Critère de recette : QR de table → commande → préparation → prête → remise par serveur habilité → confirmation client → avis. Le retrait comptoir reste un canal séparé ; pas de création automatique d'un compte client ni d'une mission de coursier.
+
+
+### Décision complémentaire — reçu client après paiement (27/11/2026)
+Dans Restaurant et Snack-Bar, la page publique QR de la commande propose une invitation explicite « Paiement confirmé. Cliquez ci-dessous pour télécharger votre reçu » et un bouton de téléchargement du reçu PDF lorsque le règlement intégral est confirmé par le serveur. Aucun compte client requis. Le reçu porte l'établissement, la référence, la commande, le détail, la date de règlement, les moyens et montants encaissés, les avoirs/remboursements éventuels. Pas de reçu final sur règlement incomplet ni accès aux commandes d'autrui. Le jeton invité original peut uniquement relire son propre reçu après clôture de la table jusqu'à expiration, sans réactiver la commande. Le reçu de paiement ne présume pas une facture fiscale réglementaire. Gestion native des QR de table et points de retrait, export et partage, avec renouvellement sur table fermée.

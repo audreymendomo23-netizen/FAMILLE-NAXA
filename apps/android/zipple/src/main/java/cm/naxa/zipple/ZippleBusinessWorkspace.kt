@@ -37,6 +37,9 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
     var opening by remember { mutableStateOf("") };var counted by remember { mutableStateOf("") };var cashMethod by remember { mutableStateOf("cash") };var cashRef by remember { mutableStateOf("") };var closeResult by remember { mutableStateOf<JSONObject?>(null) }
     val settlementKeys=remember { mutableMapOf<String,Pair<String,String>>() }
     var channel by remember { mutableStateOf("counter") };var tableSession by remember { mutableStateOf("") }
+    var tableLabel by remember(session.member,site){mutableStateOf("")}
+    var pickup by remember(session.member,site){mutableStateOf(false)}
+    var tableQr by remember(session.member,site){mutableStateOf<Pair<String,String>?>(null)}
     val canManage=session.role in setOf("promoteur","manager")
     suspend fun load(){snapshot=api.call(session,site,"snapshot") as? JSONObject}
     suspend fun loadErp(){erp=api.call(session,site,"erp_snapshot") as? JSONObject}
@@ -99,8 +102,30 @@ fun ZippleBusinessWorkspace(api:ZippleBusiness,session:Session,site:String,en:Bo
                     else api.call(session,site,"table_close",JSONObject().put("table_session_id",active))
                     load()
                 }}){Text(if(active==null)tr("Ouvrir","Open")else tr("Fermer","Close"))}
+                if(canManage&&active==null)OutlinedButton(enabled=canWrite,onClick={run{
+                    val result=api.call(session,site,"table_rotate_qr",JSONObject().put("table_id",x.getString("id"))) as JSONObject
+                    tableQr=result.getString("id") to requireNotNull(zippleTableLink(result.getString("qr")))
+                    load()
+                }}){Text(tr("Renouveler le QR : ","Rotate QR: ")+x.optString("label"))}
             }
-            Text(tr("Création des tables et QR sur le Web.","Create tables and QR on Web."))
+            if(canManage){
+                val snack=snapshot?.optJSONObject("mode")?.optString("space")=="snack_bar"
+                if(snack)Row{Checkbox(checked=pickup,onCheckedChange={pickup=it},enabled=canWrite);Text(tr("Comptoir / retrait","Counter / pickup"))}
+                OutlinedTextField(tableLabel,{tableLabel=it.take(80)},label={Text(tr("Nom de la table ou du point","Table or pickup label"))},enabled=canWrite)
+                Button(enabled=canWrite&&snapshot?.optJSONObject("mode")!=null&&tableLabel.trim().isNotEmpty(),onClick={run{
+                    val result=api.call(session,site,if(snack&&pickup)"pickup_create" else "table_create",JSONObject().put("label",tableLabel.trim())) as JSONObject
+                    tableQr=result.getString("id") to requireNotNull(zippleTableLink(result.getString("qr")))
+                    tableLabel="";load()
+                }}){Text(tr("Créer un point de commande","Create order point"))}
+                tableQr?.let{(id,link)->
+                    if(snapshot?.rows("tables")?.any{it.optString("id")==id}==true){
+                        Text(tr("Lien invité à conserver — code affiché une seule fois","Guest link — displayed once"))
+                        Text(link)
+                        ZippleOpaqueQr(link,tr("QR de commande","Order QR"),table=true)
+                        key(link){ZippleQrActions(link,false,en,canWrite,table=true)}
+                    }
+                }
+            }
         }
         "cash"->{
             Text(tr("Caisse et clôture","Cash session and closing"))

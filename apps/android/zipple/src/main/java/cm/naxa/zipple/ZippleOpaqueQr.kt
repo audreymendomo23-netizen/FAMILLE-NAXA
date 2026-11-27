@@ -23,14 +23,24 @@ import kotlin.math.floor
 internal fun zippleOpaqueQrMatrix(code: String): BitMatrix? {
     val uuid = try { UUID.fromString(code) } catch (_: IllegalArgumentException) { return null }
     if (uuid.toString() != code) return null
-    return QRCodeWriter().encode(code, BarcodeFormat.QR_CODE, 0, 0, mapOf(
+    return zippleEncodeQr(code)
+}
+internal fun zippleTableLink(token: String): String? =
+    token.takeIf { it.matches(Regex("[0-9a-f]{64}")) }?.let { "https://naxa-zipple.pages.dev/#table=" + it }
+
+internal fun zippleTableQrMatrix(link: String): BitMatrix? {
+    val prefix = "https://naxa-zipple.pages.dev/#table="
+    return if (link.startsWith(prefix) && zippleTableLink(link.removePrefix(prefix)) == link) zippleEncodeQr(link) else null
+}
+
+private fun zippleEncodeQr(code: String): BitMatrix =
+    QRCodeWriter().encode(code, BarcodeFormat.QR_CODE, 0, 0, mapOf(
         EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M,
         EncodeHintType.MARGIN to 4
     ))
-}
 
-@Composable internal fun ZippleOpaqueQr(code: String, description: String) {
-    val matrix = remember(code) { zippleOpaqueQrMatrix(code) } ?: return
+@Composable internal fun ZippleOpaqueQr(code: String, description: String, table: Boolean = false) {
+    val matrix = remember(code, table) { if (table) zippleTableQrMatrix(code) else zippleOpaqueQrMatrix(code) } ?: return
     Canvas(Modifier.size(200.dp).semantics { contentDescription = description }) {
         drawRect(Color.White)
         val module = floor(minOf(size.width / matrix.width, size.height / matrix.height))

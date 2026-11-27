@@ -20,8 +20,8 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 
 // Export exactly the existing opaque QR, including its quiet zone; no customer fields.
-internal fun zippleQrPng(code: String): ByteArray {
-    val matrix = requireNotNull(zippleOpaqueQrMatrix(code))
+internal fun zippleQrPng(code: String, table: Boolean = false): ByteArray {
+    val matrix = requireNotNull(if (table) zippleTableQrMatrix(code) else zippleOpaqueQrMatrix(code))
     val scale = 12
     val size = matrix.width * scale
     val pixels = IntArray(size * size) { i ->
@@ -36,8 +36,8 @@ internal fun zippleQrPng(code: String): ByteArray {
     } finally { bitmap.recycle() }
 }
 
-internal fun zippleQrShareIntent(context: Context, code: String): Intent {
-    val bytes = zippleQrPng(code)
+internal fun zippleQrShareIntent(context: Context, code: String, table: Boolean = false): Intent {
+    val bytes = zippleQrPng(code, table)
     val directory = File(context.cacheDir, "qr-share")
     check(directory.isDirectory || directory.mkdirs())
     // Avoid accumulating temporary exports; don't remove recently shared images.
@@ -59,14 +59,14 @@ internal fun zippleQrShareIntent(context: Context, code: String): Intent {
     }
 }
 
-@Composable internal fun ZippleQrActions(code: String, card: Boolean, en: Boolean, allowed: Boolean) {
+@Composable internal fun ZippleQrActions(code: String, card: Boolean, en: Boolean, allowed: Boolean, table: Boolean = false) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val t: (String, String) -> String = { fr, english -> if (en) english else fr }
     var busy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
-    val filename = if (card) "zipple-fidelite.png" else "zipple-parrainage.png"
-    val valid = remember(code) { zippleOpaqueQrMatrix(code) != null }
+    val filename = if (table) "zipple-table-qr.png" else if (card) "zipple-fidelite.png" else "zipple-parrainage.png"
+    val valid = remember(code, table) { (if (table) zippleTableQrMatrix(code) else zippleOpaqueQrMatrix(code)) != null }
     fun run(block: suspend () -> Unit) {
         if (busy || !allowed || !valid) return
         busy = true
@@ -82,7 +82,7 @@ internal fun zippleQrShareIntent(context: Context, code: String): Intent {
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
         if (uri != null) run {
             withContext(Dispatchers.IO) {
-                val png = zippleQrPng(code)
+                val png = zippleQrPng(code, table)
                 requireNotNull(context.contentResolver.openOutputStream(uri, "wt")).use { it.write(png) }
             }
             message = t("QR enregistré", "QR saved")
@@ -90,14 +90,14 @@ internal fun zippleQrShareIntent(context: Context, code: String): Intent {
     }
     Row {
         OutlinedButton(enabled = allowed && valid && !busy, onClick = { save.launch(filename) }) {
-            Text(if (card) t("Enregistrer la carte QR", "Save card QR") else t("Enregistrer le QR de parrainage", "Save referral QR"))
+            Text(if (table) t("Enregistrer le QR de commande","Save order QR") else if (card) t("Enregistrer la carte QR", "Save card QR") else t("Enregistrer le QR de parrainage", "Save referral QR"))
         }
     }
     OutlinedButton(enabled = allowed && valid && !busy, onClick = { run {
-        val intent = withContext(Dispatchers.IO) { zippleQrShareIntent(context, code) }
+        val intent = withContext(Dispatchers.IO) { zippleQrShareIntent(context, code, table) }
         context.startActivity(Intent.createChooser(intent, t("Partager le QR", "Share QR")))
     } }) {
-        Text(if (card) t("Partager la carte QR", "Share card QR") else t("Partager le QR de parrainage", "Share referral QR"))
+        Text(if (table) t("Partager le QR de commande","Share order QR") else if (card) t("Partager la carte QR", "Share card QR") else t("Partager le QR de parrainage", "Share referral QR"))
     }
     if (message.isNotBlank()) Text(message)
 }

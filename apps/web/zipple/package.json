@@ -12,7 +12,8 @@
     "@famille/design-system": "file:../../../packages/design-system",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "qrcode": "1.5.4"
+    "qrcode": "1.5.4",
+    "jspdf": "4.2.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.3",
