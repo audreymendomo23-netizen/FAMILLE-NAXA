@@ -46,3 +46,7 @@ Vert = scénario précisément décrit et résultat terminal SUCCESS avec preuve
 - Audio : segments distincts après reprise, plafond de recette 128 MiB, bucket privé jetable, rétention visibilité 90 jours hypothétique sans purge effective ; audit demande de téléchargement et non preuve de livraison.
 - N1 dépendance : paiement réel opérateur, CGU et biométrie physique restent à qualifier ; les fixtures ne débitent rien.
 - Gate de sortie : tous les scénarios obligatoires CDC positifs, négatifs, concurrence, idempotence, isolation, régression et terminaux Android/Web/PWA/SQL/Edge/SFU/Egress doivent être verts sur une révision cohérente ; ne pas engager N5 avant autorisation.
+
+ 
+## Addendum audit N1–N4 (27/11/2026)
+La base 07d9951 est terminale verte sur les 4 workflows, 187/187 contrats. Les nouvelles preuves 45963432060 (Gate 5/5 et clôture/archives SQL) et 45963997472 (rejeu pass + notifications) complètent les lignes N2-06/09, N3-14, N4-17/20 et la dépendance N1-23. 45964420188 : 188/188 contrats, SQL/Web/Edge SUCCESS, Android non terminal au relevé. Les invitations externes nominatives, votes temporisés (contrats verts), conservation lors de fin hôte et rapport XLSX sont candidats en nouvelle qualification 49f3285. Les limites CDC et les conditions de fermeture restent applicables. Voir [audit N1–N4](AUDIT_CONTRADICTOIRE_N1_N4.md).
