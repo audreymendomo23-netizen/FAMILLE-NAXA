@@ -12,7 +12,7 @@ import {createWideMeetRecorder} from "../../packages/media-core/widemeet-recorde
 import {execFileSync} from "node:child_process";
 import {stat,mkdtemp,rm} from "node:fs/promises";
 import {tmpdir} from "node:os";
-import {join} from "node:path";
+import {join as joinPath} from "node:path";
 import {createWideMeetTranscription} from "../../packages/media-core/widemeet-transcription.mjs";
 import {createMediaProxy} from "../../packages/media-core/signaling-proxy.mjs";
 import {createWideMeetAdmission} from "../../packages/media-core/widemeet-admission.mjs";
@@ -156,7 +156,7 @@ try{
  if(process.env.WM_TRANSCRIPTION_QUALIFIED==="true"){
  const temp=await mkdtemp(join(tmpdir(),"wm-asr-replay-"));
  try{
-  const wav=join(temp,"synthetic.wav"),ogg=join(temp,"synthetic.ogg");
+  const wav=joinPath(temp,"synthetic.wav"),ogg=joinPath(temp,"synthetic.ogg");
   execFileSync("espeak-ng",["-v","en-us","-s","125","-w",wav,"Today we discuss the project. The meeting is about the project. Thank you for attending the meeting."]);
   execFileSync("ffmpeg",["-v","error","-y","-i",wav,"-c:a","libopus",ogg]);
   const bytes=await readFile(ogg),sha=createHash("sha256").update(bytes).digest("hex"),id=randomUUID();
