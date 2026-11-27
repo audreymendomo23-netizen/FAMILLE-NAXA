@@ -80,11 +80,14 @@ export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
  const [rw]=await rows('ns_loyalty_events','id=eq.'+reward+'&select=reward_status');assert.equal(rw.reward_status,'redeemed');
  pass('B4 loyalty: real customer visits on two devices, one reward, one redemption and retry');
  const [dest]=await success(base+'/rest/v1/ns_sites',{org_id:org,code:'B4DEST',name:'Destination recette'});
- const stock=randomUUID(),sku='B4-'+stock;
- await applied(a,event(a,'inventory_item.created',stock,{inventory_item_id:stock,sku,name:'Article transfert',unit:'piece',reorder_level:1}));
+ const stock=randomUUID(),rawSku='b4-'+stock,sku=rawSku.toUpperCase();
+ const itemReceipt=await applied(a,event(a,'inventory_item.created',stock,{inventory_item_id:stock,sku:rawSku,name:'Article transfert',unit:'piece',reorder_level:1}));
+ assert.equal(itemReceipt.result.sku,sku,'server canonical SKU');
+ const [createdItem]=await rows('ns_inventory_items','id=eq.'+stock+'&select=sku,unit,site_id');assert.equal(createdItem.sku,sku);assert.equal(createdItem.unit,'piece');assert.equal(createdItem.site_id,site);
  const mv=randomUUID();
  await applied(a,event(a,'inventory_movement.created',mv,{movement_id:mv,inventory_item_id:stock,movement_type:'in',quantity_delta:10,reason:'Stock initial B4'}));
  const transfer=randomUUID(),tp={transfer_id:transfer,source_site_id:site,destination_site_id:dest.id,inventory_item_id:stock,sku_snapshot:sku,unit:'piece',quantity:4,reference:'B4-TRANSFER',requested_at:new Date().toISOString()};
+ const wrong=randomUUID();const invalidSku=await send(a,event(a,'inventory_transfer.requested',wrong,{...tp,transfer_id:wrong,reference:'B4-WRONG-SKU',sku_snapshot:sku+'-WRONG'}));assert.ok(invalidSku.status>=400);assert.match(JSON.stringify(invalidSku.data),/NAXA_INVENTORY_TRANSFER_ITEM_MISMATCH/);
  await applied(a,event(a,'inventory_transfer.requested',transfer,tp));
  const excess=randomUUID();await denied(a,event(a,'inventory_transfer.requested',excess,{...tp,transfer_id:excess,reference:'B4-EXCESS',quantity:7}));
  const approval={...transition(transfer,'inventory_transfer','open','approved',1),source_site_id:site,destination_site_id:dest.id};

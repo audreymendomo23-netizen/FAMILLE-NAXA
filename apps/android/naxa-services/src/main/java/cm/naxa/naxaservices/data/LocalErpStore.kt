@@ -946,7 +946,7 @@ interface NaxaServicesDao {
     @Query("SELECT * FROM local_inventory_items WHERE id = :itemId AND orgId = :orgId AND siteId = :siteId LIMIT 1")
     suspend fun findInventoryItem(itemId: String, orgId: String, siteId: String): LocalInventoryItem?
 
-    @Query("SELECT * FROM local_inventory_items WHERE orgId = :orgId AND siteId = :siteId AND sku = :sku")
+    @Query("SELECT * FROM local_inventory_items WHERE orgId = :orgId AND siteId = :siteId AND upper(trim(sku)) = upper(trim(:sku))")
     suspend fun findInventoryItemsBySku(orgId: String, siteId: String, sku: String): List<LocalInventoryItem>
 
     @Insert(onConflict = OnConflictStrategy.ABORT)
@@ -3188,7 +3188,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
         require(reorderLevel >= 0.0) { "Seuil d'alerte invalide." }
         val phone = supplierWhatsApp.filter(Char::isDigit)
         require(phone.isBlank() || phone.length in 9..15) { "Le contact WhatsApp doit comporter l'indicatif pays." }
-        val item = LocalInventoryItem(UUID.randomUUID().toString(), orgId, siteId, sku.trim(), name.trim(), unit.trim(), 0.0, reorderLevel, createdAtMillis = System.currentTimeMillis(), supplierWhatsApp = phone)
+        val item = LocalInventoryItem(UUID.randomUUID().toString(), orgId, siteId, sku.trim().uppercase(java.util.Locale.ROOT), name.trim(), unit.trim(), 0.0, reorderLevel, createdAtMillis = System.currentTimeMillis(), supplierWhatsApp = phone)
         dao.insertInventoryItem(item)
         enqueue(orgId, "inventory_item", item.id, "inventory_item.created", siteId, inventoryItemSyncSnapshot(item))
         item
@@ -3850,7 +3850,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
 
         val item = dao.findInventoryItem(inventoryItemId, orgId, sourceSiteId)
             ?: throw IllegalArgumentException("L'article source est introuvable dans ce point de vente.")
-        require(item.active && item.quantity >= quantity) { "Stock source insuffisant ou article inactif." }
+        require(item.active && item.quantity >= quantity && item.sku.isNotBlank()) { "Stock source insuffisant, article inactif ou SKU manquant." }
 
         val destinationMatches = dao.findInventoryItemsBySku(orgId, destinationSiteId, item.sku)
         require(destinationMatches.size <= 1) {
@@ -3871,7 +3871,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
             .put("destinationSiteId", destinationSite.id)
             .put("destinationSiteName", destinationSite.name)
             .put("inventoryItemId", item.id)
-            .put("sku", item.sku)
+            .put("sku", item.sku.trim().uppercase(java.util.Locale.ROOT))
             .put("itemName", item.name)
             .put("unit", item.unit)
             .put("quantity", quantity)
@@ -3903,7 +3903,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
             .put("source_site_id", sourceSiteId)
             .put("destination_site_id", destinationSiteId)
             .put("inventory_item_id", item.id)
-            .put("sku_snapshot", item.sku)
+            .put("sku_snapshot", item.sku.trim().uppercase(java.util.Locale.ROOT))
             .put("unit", item.unit)
             .put("quantity", quantity)
             .put("requested_by", actorMemberId)
@@ -4029,7 +4029,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
             val sourceSiteId = metadata.optString("sourceSiteId")
             val destinationSiteId = metadata.optString("destinationSiteId")
             val inventoryItemId = metadata.optString("inventoryItemId")
-            val expectedSku = metadata.optString("sku")
+            val expectedSku = metadata.optString("sku").trim().uppercase(java.util.Locale.ROOT)
             val quantity = metadata.optDouble("quantity", 0.0)
             require(sourceSiteId == siteId && destinationSiteId.isNotBlank() && destinationSiteId != sourceSiteId) {
                 "Périmètre source/destination du transfert invalide."
@@ -4046,7 +4046,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
             }
             val sourceItem = dao.findInventoryItem(inventoryItemId, orgId, sourceSiteId)
                 ?: throw IllegalArgumentException("L'article source du transfert n'existe plus.")
-            require(sourceItem.active && sourceItem.sku == expectedSku && sourceItem.quantity >= quantity) {
+            require(sourceItem.active && sourceItem.sku.trim().uppercase(java.util.Locale.ROOT) == expectedSku && sourceItem.quantity >= quantity) {
                 "Stock source insuffisant ou article modifié depuis la demande."
             }
 
@@ -4066,7 +4066,7 @@ class NaxaServicesLocalRepository(private val database: NsServicesDatabase,priva
                     id = UUID.randomUUID().toString(),
                     orgId = orgId,
                     siteId = destinationSiteId,
-                    sku = sourceItem.sku,
+                    sku = sourceItem.sku.trim().uppercase(java.util.Locale.ROOT),
                     name = sourceItem.name,
                     unit = sourceItem.unit,
                     quantity = quantity,
