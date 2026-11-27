@@ -213,7 +213,8 @@ internal fun bulk3Body(form:NA,data:ND,values:Map<String,String>,repeated:List<M
  val body=runCatching{bulk3Body(form,data,values,repeated)}.getOrNull()
  Button(enabled=allowed&&loaded&&!busy&&body!=null,onClick={run{
    val payload=requireNotNull(body);val response=call(form.action,keys.apply(form.action,payload));keys.confirmed(form.action)
-   result=response as? JSONObject;values=emptyMap();repeated=List(form.minRows){emptyMap()};message=tr("Opération confirmée","Operation confirmed");refresh()
+   result=response as? JSONObject;values=emptyMap();repeated=List(form.minRows){emptyMap()};message=tr("Opération confirmée","Operation confirmed")
+   try{refresh()}catch(c:CancellationException){throw c}catch(_:Exception){loaded=false;message=tr("Opération confirmée ; actualisation requise","Operation confirmed; refresh required")}
  }}){Text(tr("Confirmer","Confirm"))}
  result?.let{r->
   val fields=listOf("assets_xaf" to tr("Actifs","Assets"),"liabilities_xaf" to tr("Dettes","Liabilities"),"equity_xaf" to tr("Capitaux propres","Equity"),"revenue_xaf" to tr("Produits","Revenue"),"expenses_xaf" to tr("Charges","Expenses"),"result_xaf" to tr("Résultat","Result"),"variance_xaf" to tr("Écart caisse","Cash variance"),"unclassified" to tr("Comptes non classés","Unclassified accounts"),"pending_sources" to tr("Sources non comptabilisées","Unposted sources"))
