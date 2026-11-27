@@ -229,7 +229,7 @@ jobs:
           set -euo pipefail
           set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql naxa_services_v21_attendance_mandatory_gps.sql naxa_services_v22_first_password_gate.sql naxa_services_v23_erp_financial_consistency.sql naxa_services_v24_commission_configuration.sql; do
+          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql naxa_services_v21_attendance_mandatory_gps.sql naxa_services_v22_first_password_gate.sql naxa_services_v23_erp_financial_consistency.sql naxa_services_v24_commission_configuration.sql naxa_services_v25_commission_settlement.sql naxa_services_v26_transverse_operations.sql naxa_services_v27_briefing_archive.sql; do
             test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
             sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
           done
@@ -245,7 +245,7 @@ jobs:
           # GitHub-hosted Ubuntu includes Chromium system libraries; avoid unrelated apt repository failures.
           npx playwright install chromium
           node --input-type=module -e 'import { chromium } from "@playwright/test"; const browser=await chromium.launch({headless:true}); await browser.close();'
-          VITE_NAXA_SERVICES_COMMISSION_CONFIG_ENABLED=true VITE_NAXA_SERVICES_BILLING_V23_ENABLED=true VITE_NAXA_SERVICES_ATTENDANCE_ENABLED=true VITE_NAXA_SERVICES_ROSTER_ENABLED=true VITE_NAXA_SERVICES_MEETINGS_ENABLED=true VITE_NAXA_SERVICES_BRIEFING_ENABLED=true VITE_NAXA_SERVICES_AUTH_URL=https://127.0.0.1:8443/functions/v1/naxa-services-auth VITE_SUPABASE_ANON_KEY="$ANON_KEY" npm run build --workspace @famille/naxa-services-web
+          VITE_NAXA_SERVICES_BRIEFING_ARCHIVE_ENABLED=true VITE_NAXA_SERVICES_TRANSVERSE_OPERATIONS_ENABLED=true VITE_NAXA_SERVICES_COMMISSION_CONFIG_ENABLED=true VITE_NAXA_SERVICES_BILLING_V23_ENABLED=true VITE_NAXA_SERVICES_ATTENDANCE_ENABLED=true VITE_NAXA_SERVICES_ROSTER_ENABLED=true VITE_NAXA_SERVICES_MEETINGS_ENABLED=true VITE_NAXA_SERVICES_BRIEFING_ENABLED=true VITE_NAXA_SERVICES_AUTH_URL=https://127.0.0.1:8443/functions/v1/naxa-services-auth VITE_SUPABASE_ANON_KEY="$ANON_KEY" npm run build --workspace @famille/naxa-services-web
           # Distinct CA and leaf avoid using a CA certificate as the TLS end entity.
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=NAXA Replay disposable CA' -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign' -keyout "$RUNNER_TEMP/ns-replay-ca.key" -out "$RUNNER_TEMP/ns-replay-ca.crt" 2>/dev/null
           openssl req -new -newkey rsa:2048 -nodes -subj '/CN=127.0.0.1' -keyout "$RUNNER_TEMP/ns-replay.key" -out "$RUNNER_TEMP/ns-replay.csr" 2>/dev/null
@@ -1063,8 +1063,12 @@ jobs:
                   assert.equal(finalOccurrences.length,3);assert.ok(finalOccurrences.every(x=>x.status==='cancelled'&&x.revision===(x.series_occurrence===3?3:2)));
                   pass('real browser recurring series, lost acknowledgement retry without duplicates, guest visibility, individual and series cancellation');
                   phase='scoped daily briefing';
+                  await page.bringToFront();
+                  await page.waitForFunction(()=>document.visibilityState==='visible');
                   const hb=page.getByRole('region',{name:'Mon bilan',exact:true}),gb=guest.getByRole('region',{name:'Mon bilan',exact:true});
                   const hd=await rpc(page,'ns_daily_briefing',()=>hb.getByRole('button',{name:'Actualiser',exact:true}).click());
+                  await guest.bringToFront();
+                  await guest.waitForFunction(()=>document.visibilityState==='visible');
                   const gd=await rpc(guest,'ns_daily_briefing',()=>gb.getByRole('button',{name:'Actualiser',exact:true}).click());
                   assert.equal(hd.scope,'site');assert.equal(gd.scope,'personal');assert.equal(gd.finance,null);
                   await gb.getByText('Voici votre bilan partiel',{exact:false}).waitFor();
@@ -1075,11 +1079,19 @@ jobs:
                   phase='historical scoped daily briefing';
                   const yesterday=new Date(Date.parse(hd.day+'T00:00:00Z')-86400000).toISOString().slice(0,10);
                   const historicalGuest=guest.getByRole('region',{name:'My report',exact:true});
+                  await page.bringToFront();
+                  await page.waitForFunction(()=>document.visibilityState==='visible');
                   await hb.getByLabel('Date du bilan').fill(yesterday);
+                  await guest.bringToFront();
+                  await guest.waitForFunction(()=>document.visibilityState==='visible');
                   await historicalGuest.getByLabel('Report date').fill(yesterday);
                   assert.equal(await hb.getByText('Voici votre bilan partiel',{exact:false}).count(),0);
                   assert.equal(await historicalGuest.getByText('Here is your partial report',{exact:false}).count(),0);
+                  await page.bringToFront();
+                  await page.waitForFunction(()=>document.visibilityState==='visible');
                   const pastHostReport=await rpc(page,'ns_daily_briefing',()=>hb.getByRole('button',{name:'Actualiser',exact:true}).click());
+                  await guest.bringToFront();
+                  await guest.waitForFunction(()=>document.visibilityState==='visible');
                   const pastGuestReport=await rpc(guest,'ns_daily_briefing',()=>historicalGuest.getByRole('button',{name:'Refresh',exact:true}).click());
                   assert.equal(pastHostReport.day,yesterday);assert.equal(pastHostReport.scope,'site');
                   assert.equal(pastGuestReport.day,yesterday);assert.equal(pastGuestReport.scope,'personal');assert.equal(pastGuestReport.finance,null);
@@ -1094,6 +1106,20 @@ jobs:
                   assert.equal(await period.locator('li').count(),2);
                   assert.equal(await period.getByText('Confirmed revenue (XAF)',{exact:false}).count(),0);
                   pass('B3 real browser multi-day personal period: two authorized days and no financial disclosure');
+                  phase='B3 private report archive';
+                  const archive=period.getByRole('region',{name:'Report archives',exact:true});
+                  const saved=await rpc(guest,'ns_archive_briefing',()=>archive.getByRole('button',{name:'Archive period',exact:true}).click());
+                  assert.equal(saved.scope,'personal');assert.ok(saved.id);
+                  const archived=archive.locator('[data-archive-id="'+saved.id+'"]');
+                  await archived.waitFor();
+                  const snapshot=await rpc(guest,'ns_read_briefing_archive',()=>archived.getByRole('button',{name:'Open',exact:true}).click());
+                  assert.equal(snapshot.snapshot.length,2);assert.ok(snapshot.snapshot.every(r=>r.scope==='personal'&&r.finance===null));
+                  await archive.locator('[data-archive-opened="2"]').waitFor();
+                  assert.ok((await json(base+'/rest/v1/rpc/ns_read_briefing_archive',{p_org:host.org.id,p_site:host.site.id,p_id:saved.id},hostAuth.access_token,anon)).status>=400);
+                  guest.once('dialog',d=>d.accept());
+                  await rpc(guest,'ns_delete_briefing_archive',()=>archived.getByRole('button',{name:'Delete',exact:true}).click());
+                  await archived.waitFor({state:'detached'});
+                  pass('B3 private server report archive: create, read, cross-member denial and delete');
                   phase='commission configuration browser';
                   await page.bringToFront();
                   await page.locator('.side-nav button[data-module-id="organization"]').click();

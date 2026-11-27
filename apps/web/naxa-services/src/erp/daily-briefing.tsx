@@ -72,6 +72,50 @@ const periodCopy:Record<Lang,[string,string,string,string,string,string,string,s
  it:["Resoconto per periodo","Durata del resoconto","Calcola periodo","Giorni","Dati finanziari incompleti: totale non disponibile","Ricavi confermati (XAF)","Dati giornalieri parziali.","Periodo non disponibile"],
  "zh-CN":["期间报告","报告时长","计算期间","天","财务数据不完整：总计不可用","已确认收入（XAF）","每日数据不完整。","期间不可用"]
 };
+type Archive={id:string;scope:"site"|"personal";period_start:string;period_end:string;created_at:string};
+function validateArchive(value:unknown):Archive{
+ const v=value as Archive,valid=(s:string)=>typeof s==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(s)&&Number.isFinite(Date.parse(s))&&new Date(s+"T00:00:00Z").toISOString().slice(0,10)===s;
+ if(!v||typeof v.id!=="string"||!/^[0-9a-f-]{36}$/i.test(v.id)||!["site","personal"].includes(v.scope)||!valid(v.period_start)||!valid(v.period_end)||v.period_start>v.period_end||(Date.parse(v.period_end)-Date.parse(v.period_start))/86400000>29||typeof v.created_at!=="string"||!Number.isFinite(Date.parse(v.created_at)))throw Error("INVALID_ARCHIVE");return v;
+}
+const archiveLabels:Record<Lang,string[]>={
+ fr:["Archives du bilan","Archiver la période","Charger les archives","Ouvrir","Supprimer","Seules les journées terminées peuvent être archivées.","Archive indisponible"],
+ en:["Report archives","Archive period","Load archives","Open","Delete","Only completed days can be archived.","Archive unavailable"],
+ "ff-CM":["Rese jaŋtol","Resnu sahaa","Loow rese","Uddit","Momtu","Balɗe timmuɗe tan mbaawi resneede.","Rese heɓotaako"],
+ es:["Archivos del informe","Archivar período","Cargar archivos","Abrir","Eliminar","Solo se pueden archivar días terminados.","Archivo no disponible"],
+ it:["Archivio resoconti","Archivia periodo","Carica archivio","Apri","Elimina","Solo i giorni conclusi possono essere archiviati.","Archivio non disponibile"],
+ "zh-CN":["报告档案","归档期间","加载档案","打开","删除","只能归档已结束的日期。","档案不可用"]
+};
+function BriefingArchives({account,siteId,authEndpoint,anonKey,getToken,day,lang,report}:Props&{day:string;lang:Lang;report:ReturnType<typeof summarizeBriefingPeriod>|null}){
+ const [archives,setArchives]=useState<Archive[]|null>(null),[opened,setOpened]=useState<ReturnType<typeof summarizeBriefingPeriod>|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(false);
+ const ctl=useRef<AbortController|null>(null),alive=useRef(false),retry=useRef<{key:string;id:string}|null>(null);
+ const [title,save,load,open,remove,hint,unavailable]=archiveLabels[lang],t=copy[lang];
+ useEffect(()=>{alive.current=true;const hide=()=>{if(document.visibilityState==="hidden"){ctl.current?.abort();ctl.current=null;setArchives(null);setOpened(null);setBusy(false);setError(false);}};document.addEventListener("visibilitychange",hide);return()=>{alive.current=false;ctl.current?.abort();document.removeEventListener("visibilitychange",hide);};},[]);
+ async function act(action:"list"|"save"|"open"|"delete",id?:string){
+  if(ctl.current||document.visibilityState==="hidden")return;
+  const c=new AbortController();ctl.current=c;setBusy(true);setError(false);setOpened(null);
+  const current=()=>alive.current&&ctl.current===c&&!c.signal.aborted&&document.visibilityState!=="hidden";
+  const rpc=(name:string,body:object={})=>privateRequest<unknown>(c.signal,current,getToken,(jwt,signal)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/"+name,{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+jwt,"Content-Type":"application/json"},body:JSON.stringify({p_org:account.organization_id,p_site:siteId,...body}),signal,cache:"no-store",credentials:"omit",redirect:"error"}));
+  try{
+   if(action==="save"){
+    if(!report||day>=briefingDateBounds().today)throw Error("ARCHIVE_CURRENT_DAY");
+    const start=report.rows[0].day,end=report.rows[report.rows.length-1].day,key=start+":"+end+":"+report.scope;
+    if(retry.current?.key!==key)retry.current={key,id:crypto.randomUUID()};
+    const a=validateArchive(await rpc("ns_archive_briefing",{p_id:retry.current.id,p_start:start,p_end:end}));
+    if(a.id!==retry.current.id||a.scope!==report.scope||a.period_start!==start||a.period_end!==end)throw Error("INVALID_ARCHIVE_RECEIPT");if(current())retry.current=null;
+   }else if(action==="delete"){if(await rpc("ns_delete_briefing_archive",{p_id:id})!==true)throw Error("INVALID_ARCHIVE_RECEIPT");}
+   else if(action==="open"){
+    const raw=await rpc("ns_read_briefing_archive",{p_id:id}) as Archive&{snapshot:unknown[]};const a=validateArchive(raw);
+    if(a.id!==id||!Array.isArray(raw.snapshot))throw Error("INVALID_ARCHIVE_RECEIPT");
+    const days=(Date.parse(a.period_end)-Date.parse(a.period_start))/86400000+1;
+    const dates=Array.from({length:days},(_,i)=>new Date(Date.parse(a.period_start)+i*86400000).toISOString().slice(0,10));
+    const result=summarizeBriefingPeriod(dates,raw.snapshot);if(result.scope!==a.scope)throw Error("INVALID_ARCHIVE_SCOPE");if(current())setOpened(result);
+   }
+   const list=await rpc("ns_list_briefing_archives");if(!Array.isArray(list)||list.length>100)throw Error("INVALID_ARCHIVE_LIST");
+   const rows=list.map(validateArchive);if(new Set(rows.map(r=>r.id)).size!==rows.length)throw Error("INVALID_ARCHIVE_LIST");if(current())setArchives(rows);
+  }catch{if(current()){setOpened(null);setArchives(null);setError(true);}}finally{if(current()){ctl.current=null;setBusy(false);}}
+ }
+ return <section aria-label={title} aria-busy={busy}><h3>{title}</h3><p>{hint}</p><button className="btn secondary" disabled={busy||!report||day>=briefingDateBounds().today} onClick={()=>void act("save")}>{save}</button><button className="btn secondary" disabled={busy} onClick={()=>void act("list")}>{load}</button>{error&&<p role="alert">{unavailable}</p>}{archives?.map(a=><article key={a.id} data-archive-id={a.id}><strong>{a.period_start} — {a.period_end}</strong><p>{new Date(a.created_at).toLocaleString(lang==="ff-CM"?"fr-CM":lang,{timeZone:"Africa/Douala"})}</p><button disabled={busy} onClick={()=>void act("open",a.id)}>{open}</button><button disabled={busy} onClick={()=>{if(window.confirm(remove+" ?"))void act("delete",a.id);}}>{remove}</button></article>)}{opened&&<div data-archive-opened={opened.rows.length}><p>{t.appointments}: {opened.appointments} · {t.completed}: {opened.completed}</p>{opened.scope==="site"&&opened.revenue!==null&&<p>{t.finance}: {opened.revenue}</p>}<button className="btn secondary" onClick={()=>downloadLocal(briefingPeriodCsv(opened),"naxa-archive.csv","text/csv;charset=utf-8")}>CSV</button></div>}</section>;
+}
 function PeriodBriefing({account,siteId,authEndpoint,anonKey,getToken,day,lang}:Props&{day:string;lang:Lang}){
  const [days,setDays]=useState(7),[busy,setBusy]=useState(false),[error,setError]=useState(false),[report,setReport]=useState<ReturnType<typeof summarizeBriefingPeriod>|null>(null);
  const controller=useRef<AbortController|null>(null),alive=useRef(false);
@@ -103,7 +147,7 @@ function PeriodBriefing({account,siteId,authEndpoint,anonKey,getToken,day,lang}:
  <p>{t.appointments}: {report.appointments} · {t.completed}: {report.completed}</p>
  {report.scope==="site"&&<p>{report.revenue===null?missing:revenue+": "+report.revenue} ({report.financeDays}/{report.rows.length} {unit})</p>}
  {report.clocks!==null&&<p>{t.clocks}: {report.clocks}</p>}
- <ul>{report.rows.map(r=><li key={r.day}>{r.day} · {t.appointments}: {r.appointments.scheduled_count} · {t.completed}: {r.appointments.completed_count}{r.finance!==null?" · "+revenue+": "+r.finance.revenue_xaf:""}</li>)}</ul></div>}</section>;
+ <ul>{report.rows.map(r=><li key={r.day}>{r.day} · {t.appointments}: {r.appointments.scheduled_count} · {t.completed}: {r.appointments.completed_count}{r.finance!==null?" · "+revenue+": "+r.finance.revenue_xaf:""}</li>)}</ul></div>}{import.meta.env.VITE_NAXA_SERVICES_BRIEFING_ARCHIVE_ENABLED==="true"&&<BriefingArchives account={account} siteId={siteId} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken} day={day} lang={lang} report={report}/>}</section>;
 }
 export function DailyBriefing(props:Props){
  return <ScopedDailyBriefing key={JSON.stringify([props.account.organization_id,props.account.member_id,props.account.role_code,props.siteId,props.authEndpoint,props.anonKey])} {...props}/>;
