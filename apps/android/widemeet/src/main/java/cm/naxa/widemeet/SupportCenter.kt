@@ -16,7 +16,7 @@ private fun supportRows(x:JSONObject,key:String):List<JSONObject>{val a=x.getJSO
  val scope=rememberCoroutineScope()
  var agent by remember{mutableStateOf(false)};var queue by remember{mutableStateOf(false)};var ready by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
  var items by remember{mutableStateOf<List<JSONObject>>(emptyList())};var ticket by remember{mutableStateOf<JSONObject?>(null)}
- var subject by remember{mutableStateOf("")};var category by remember{mutableStateOf("account")};var body by remember{mutableStateOf("")};var reply by remember{mutableStateOf("")};var pending by remember{mutableStateOf<JSONObject?>(null)};var closeConfirm by remember{mutableStateOf(false)}
+ var subject by remember{mutableStateOf("")};var category by remember{mutableStateOf("account")};var body by remember{mutableStateOf("")};var reply by remember{mutableStateOf("")};var pending by remember{mutableStateOf<JSONObject?>(null)};var closeConfirm by remember{mutableStateOf(false)};var releaseConfirm by remember{mutableStateOf(false)};var rating by remember{mutableIntStateOf(5)}
  suspend fun req(action:String,data:JSONObject=JSONObject())=gateway.identity(session,"support-"+action,data)
  suspend fun refresh(q:Boolean=queue){try{items=supportRows(req(if(q)"queue" else "list"),"items")}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();ticket=null;reply="";agent=false;queue=false;ready=false;throw e}}
  suspend fun load(){agent=req("capabilities").optBoolean("agent");refresh(false);ready=true}
@@ -39,6 +39,14 @@ private fun supportRows(x:JSONObject,key:String):List<JSONObject>{val a=x.getJSO
  Text(t.getString("subject"),style=MaterialTheme.typography.titleMedium);Text(status(t.getString("status")))
  TextButton(enabled=!busy&&pending==null,onClick={work{open(id)}}){Text(tr("Actualiser","Refresh"))}
  for(m in supportRows(t,"messages")){Text(if(m.optString("author_kind")=="agent")tr("Assistance","Support") else tr("Demandeur","Requester"),style=MaterialTheme.typography.labelLarge);Text(m.getString("body"))}
+ if(t.optString("viewer")=="agent"&&t.optString("status")!="closed"){TextButton(enabled=!busy&&pending==null,onClick={releaseConfirm=true}){Text(tr("Remettre dans la file","Release to queue"))}}
+ if(releaseConfirm)AlertDialog(onDismissRequest={releaseConfirm=false},title={Text(tr("Remettre cette demande dans la file ?","Release this request to the queue?"))},confirmButton={TextButton(onClick={releaseConfirm=false;work{req("release",JSONObject().put("ticket_id",id));ticket=null;reply="";refresh(true);queue=true}}){Text(tr("Confirmer","Confirm"))}},dismissButton={TextButton(onClick={releaseConfirm=false}){Text(tr("Annuler","Cancel"))}})
+ if(t.optString("viewer")=="requester"&&t.optString("status")=="closed"){
+ Text(tr("Votre satisfaction","Your satisfaction"))
+ if(!t.isNull("feedback")){Text(tr("Note enregistrée","Rating saved")+" : "+t.optInt("feedback")+"/5")}else{
+ for(n in 1..5)Row{RadioButton(selected=rating==n,onClick={rating=n},enabled=!busy);Text("$n/5")}
+ Button(enabled=!busy,onClick={work{req("feedback",JSONObject().put("ticket_id",id).put("rating",rating));open(id)}}){Text(tr("Envoyer mon avis","Submit feedback"))}
+ }}
  if(t.optString("status")!="closed"){OutlinedTextField(reply,{reply=it.take(4000)},enabled=!busy&&pending==null,label={Text(tr("Votre message","Your message"))},modifier=Modifier.fillMaxWidth());Button(enabled=!busy&&reply.isNotBlank(),onClick={work{val p=pending?:JSONObject().put("ticket_id",id).put("message_id",UUID.randomUUID().toString()).put("body",reply.trim()).also{pending=it};req("reply",p);pending=null;open(id);refresh()}}){Text(tr("Envoyer","Send"))};TextButton(enabled=!busy&&pending==null,onClick={closeConfirm=true}){Text(tr("Clôturer","Close"))}}
  if(closeConfirm)AlertDialog(onDismissRequest={closeConfirm=false},title={Text(tr("Clôturer cette demande ?","Close this request?"))},confirmButton={TextButton(onClick={closeConfirm=false;work{req("close",JSONObject().put("ticket_id",id));open(id);refresh()}}){Text(tr("Confirmer","Confirm"))}},dismissButton={TextButton(onClick={closeConfirm=false}){Text(tr("Annuler","Cancel"))}})
  }else{
