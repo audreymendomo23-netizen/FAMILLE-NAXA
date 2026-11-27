@@ -136,6 +136,23 @@ try{
  pass("actual offline recovery proof, one-use key, GoTrue credential replacement and two-device revocation");
 
  assert.equal(hs.member_id,h.id);assert.equal(gs.member_id,g.id);assert.equal(os.active_workspace_id,other);
+ const centerReq=(token,action,data={})=>request(auth+"/identity",{action:"center-"+action,data},token);
+ const centerOk=(token,action,data={})=>ok(auth+"/identity",{action:"center-"+action,data},token);
+ const privateData={peer_id:g.id,message_id:randomUUID(),body:"Synthetic private workspace message"};
+ await centerOk(hs.access_token,"send",privateData);await centerOk(hs.access_token,"send",privateData);
+ assert.equal((await centerReq(hs.access_token,"send",{...privateData,body:"changed"})).status,403);
+ assert.equal((await centerReq(hs.access_token,"send",{...privateData,peer_id:o.id})).status,403);
+ assert.equal((await centerReq(os.access_token,"thread",{peer_id:g.id})).status,403);
+ assert.equal((await centerOk(gs.access_token,"thread",{peer_id:h.id})).items.length,1);
+ assert.equal((await centerReq(hs.access_token,"seen",{peer_id:g.id,message_id:privateData.message_id})).status,403);
+ await centerOk(gs.access_token,"seen",{peer_id:h.id,message_id:privateData.message_id});
+ assert.ok((await centerOk(hs.access_token,"thread",{peer_id:g.id,query:"workspace"})).items[0].read_at);
+ assert.deepEqual((await centerOk(gs.access_token,"thread",{peer_id:h.id,query:"not present"})).items,[]);
+ assert.equal((await centerReq(gs.access_token,"statistics",{days:30})).status,403);
+ assert.equal((await centerOk(hs.access_token,"statistics",{days:30})).scope,"enterprise");
+ assert.equal((await centerReq(hs.access_token,"statistics",{days:999})).status,403);
+ pass("workspace private chat exact retry, peer/tenant denial, search, explicit read acknowledgement and role-scoped summary");
+
  // Dedicated support agents, no implicit rights for a tenant promoter.
  const sa=await fixture(other,"staff"),sb=await fixture(other,"staff"),sas=await login(sa),sbs=await login(sb);
  await rest("wm_support_agents",{account_id:sa.id,enabled:true});await rest("wm_support_agents",{account_id:sb.id,enabled:true});
