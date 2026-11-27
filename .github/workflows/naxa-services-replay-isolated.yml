@@ -31,6 +31,8 @@ on:
       - 'apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/data/SecureLocalDatabase.kt'
       - 'apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/auth/**'
       - 'apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/MainActivity.kt'
+      - 'apps/android/naxa-services/src/main/java/cm/naxa/naxaservices/Attendance*.kt'
+      - 'apps/android/naxa-services/src/androidTest/java/cm/naxa/naxaservices/AttendanceProofJournalInstrumentedTest.kt'
       - 'apps/android/naxa-services/src/androidTest/java/cm/naxa/naxaservices/data/SecureLocalDatabaseInstrumentedTest.kt'
       - 'supabase/tests/drafts/naxa_services_meeting_series.sql'
       - 'supabase/tests/drafts/naxa_services_meeting_creation.sql'

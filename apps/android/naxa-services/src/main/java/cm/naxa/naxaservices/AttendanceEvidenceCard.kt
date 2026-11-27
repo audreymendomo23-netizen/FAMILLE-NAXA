@@ -11,6 +11,10 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Handler
+import android.os.SystemClock
+import android.util.Base64
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import android.os.Looper
 import android.view.Surface
 import android.view.TextureView
@@ -42,7 +46,7 @@ import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 private data class AttendanceRule(val revision:Long=0,val gps:Boolean=false,val selfie:Boolean=false)
-private data class CapturedSelfie(val bytes:ByteArray,val at:Long)
+private data class CapturedSelfie(val bytes:ByteArray,val at:Long,val elapsed:Long)
 private val attendanceActions=listOf("staff_clock_in","staff_break_start","staff_break_end","staff_clock_out")
 @SuppressLint("MissingPermission")
 private suspend fun freshAttendanceLocation(context:Context):Location=withTimeout(25000){
@@ -116,7 +120,7 @@ private fun FrontCameraProof(onCapture:(CapturedSelfie)->Unit,onError:()->Unit,o
    try{
     val bitmap=view.getBitmap(720,720)?:throw IllegalStateException()
     val bytes=ByteArrayOutputStream().use{out->val ok=bitmap.compress(Bitmap.CompressFormat.JPEG,80,out);bitmap.recycle();require(ok);out.toByteArray()}
-    require(bytes.isNotEmpty()&&bytes.size<=2097152);latestCapture(CapturedSelfie(bytes,System.currentTimeMillis()))
+    require(bytes.isNotEmpty()&&bytes.size<=2097152);latestCapture(CapturedSelfie(bytes,System.currentTimeMillis(),SystemClock.elapsedRealtime()))
    }catch(_:Exception){latestError()}
   }){Text("Selfie")}
   TextButton(onClick=onCancel){Text("×")}
@@ -133,6 +137,9 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
   var rules by remember{mutableStateOf<Map<String,AttendanceRule>>(emptyMap())}
   var loaded by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)};var queued by remember{mutableStateOf(false)}
   var selected by remember{mutableStateOf("staff_clock_in")};var reload by remember{mutableIntStateOf(0)}
+  val journal=remember(context,session.account.organizationId,session.account.memberId,session.deviceId,siteId,workstationId){AttendanceProofJournal(context,session.account.organizationId,session.account.memberId,session.deviceId,siteId,workstationId)}
+  var pending by remember{mutableStateOf<JSONObject?>(null)};var journalReady by remember{mutableStateOf(false)};var discard by remember{mutableStateOf(false)}
+  LaunchedEffect(journal){try{pending=withContext(Dispatchers.IO){journal.read()};journalReady=true}catch(c:CancellationException){throw c}catch(_:Exception){error=true}}
   var location by remember{mutableStateOf<Location?>(null)};var selfie by remember{mutableStateOf<CapturedSelfie?>(null)};var camera by remember{mutableStateOf(false)}
   fun effectiveRule(a:String):AttendanceRule {val p=rules[a]?:AttendanceRule();return if(a=="staff_clock_in"||a=="staff_clock_out")p.copy(gps=true)else p}
   val rule=effectiveRule(selected)
@@ -151,16 +158,42 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
    if(busy)return;busy=true;error=false;location=null
    scope.launch{try{location=freshAttendanceLocation(context)}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}
   }
+  suspend fun submitPending(value:JSONObject){
+   val current=latest;val id=value.getString("id");val event=value.getString("event");val now=value.getLong("occurred_ms")
+   val existing=repository.dao.findManagementRecord(current.account.organizationId,siteId,id)
+   if(existing!=null){require(existing.actorMemberId==current.account.memberId&&existing.recordType==event&&existing.createdAtMillis==now&&existing.workstationId==workstationId)}
+   else{
+    require(journal.replayable(value))
+    val selfieBytes=if(value.isNull("jpeg"))null else Base64.decode(value.getString("jpeg"),Base64.NO_WRAP)
+    if(selfieBytes!=null){try{
+     try{StaffRosterApi.uploadAttendanceSelfie(current,siteId,id,selfieBytes)}catch(c:CancellationException){throw c}catch(failure:Exception){
+      val path=listOf(current.account.organizationId,siteId,current.account.memberId,id).joinToString("/")+".jpg"
+      val previous=StaffRosterApi.readAttendanceSelfie(current,siteId,id,path)
+      try{require(previous.contentEquals(selfieBytes))}finally{previous.fill(0)}
+     }
+    }finally{selfieBytes.fill(0)}}
+    val staged=JSONObject(StaffRosterApi.call(current,"rpc/ns_stage_attendance_proof",value.getJSONObject("stage")))
+    require(staged.optBoolean("staged")&&staged.optString("proof_ref")==id)
+    repository.recordStaffTimeEvent(current.account.organizationId,siteId,event,current.account.displayName,current.account.memberId,workstationId,current.account.memberId,id,now,id)
+   }
+   withContext(Dispatchers.IO){journal.remove(id)};pending=null;clear();queued=true
+  }
   val gpsPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()){granted->if(granted[Manifest.permission.ACCESS_FINE_LOCATION]==true)gps()else error=true}
   val cameraPermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->if(granted)camera=true else error=true}
   Card(Modifier.fillMaxWidth()){
    Column(Modifier.padding(16.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
     Text(tr("Mon pointage probant","My attendance evidence","Seedeeji golle am"),style=MaterialTheme.typography.titleLarge)
-    Text(tr("Position et caméra uniquement au pointage. Connexion nécessaire.","Location and camera only when clocking. Connection required.","Nokkuure e kamera e sahaa golle tan."))
+    Text(tr("Position et caméra uniquement au pointage. Une preuve enregistrée localement reste non confirmée.","Location and camera only when clocking. A locally saved proof is not confirmed.","Nokkuure e kamera e sahaa golle tan. Seedeeji tabbitinaaka."))
     if(error)Text(tr("Pointage non confirmé. Vérifiez les autorisations et la connexion.","Attendance not confirmed. Check permissions and connection.","Golle tabbitinaaka."),color=MaterialTheme.colorScheme.error)
     if(queued)Text(tr("Preuve préparée : pointage en attente de confirmation serveur.","Proof staged: attendance awaiting server confirmation.","Seedeeji hebiima, tabbitinol ena fadi."))
     OutlinedButton(onClick={clear();reload++},enabled=!busy){Text(tr("Actualiser les règles","Refresh rules","Hesɗitin yamirooje"))}
-    if(loaded){
+    pending?.let{value->
+     Text(tr("Preuve locale non confirmée. Réessayez sans modifier l'heure initiale. Une preuve expirée doit être signalée au responsable.","Unconfirmed local proof. Retry without changing the original time. Report expired proof to your manager.","Seedeeji tabbitinaaka. Humpitin hooreejo so sahaa timmii."))
+     OutlinedButton(enabled=!busy,onClick={busy=true;error=false;scope.launch{try{submitPending(value)}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}}){Text(tr("Réessayer la transmission","Retry submission","Fuɗɗito neldugol"))}
+     TextButton(enabled=!busy,onClick={discard=true}){Text(tr("Abandonner la preuve non confirmée","Discard unconfirmed proof","Accu seedeeji"))}
+    }
+    if(discard)AlertDialog(onDismissRequest={discard=false},title={Text(tr("Abandonner la preuve ?","Discard proof?","Accu seedeeji?"))},text={Text(tr("Cette action ne valide aucun pointage.","This does not confirm attendance.","Golle tabbitinaaka."))},confirmButton={TextButton(onClick={discard=false;val id=pending?.optString("id");if(id!=null){busy=true;scope.launch{try{withContext(Dispatchers.IO){journal.remove(id)};pending=null}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}}}){Text(tr("Abandonner","Discard","Accu"))}},dismissButton={TextButton(onClick={discard=false}){Text(tr("Annuler","Cancel","Haaytu"))}})
+    if(loaded&&journalReady&&pending==null){
      if(manager)attendanceActions.forEach{a->
       val p=effectiveRule(a)
       Text(labels.getValue(a))
@@ -179,12 +212,17 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
        try{
         val now=System.currentTimeMillis();val current=latest;val gps=location;val shot=selfie
         require(!rule.gps||gps!=null&&kotlin.math.abs(now-gps.time)<=120000);require(!rule.selfie||shot!=null&&kotlin.math.abs(now-shot.at)<=120000)
+        val tick=SystemClock.elapsedRealtime()
+        require(!rule.gps||gps!=null&&gps.elapsedRealtimeNanos>0&&tick-gps.elapsedRealtimeNanos/1_000_000 in 0..120_000)
+        require(!rule.selfie||shot!=null&&tick-shot.elapsed in 0..120_000)
         val id=UUID.randomUUID().toString();val occurred=Instant.ofEpochMilli(now).toString()
-        if(rule.selfie&&shot!=null)StaffRosterApi.uploadAttendanceSelfie(current,siteId,id,shot.bytes)
-        val staged=JSONObject(StaffRosterApi.call(current,"rpc/ns_stage_attendance_proof",JSONObject().put("p_event_id",id).put("p_org",current.account.organizationId).put("p_site",siteId).put("p_post",workstationId?:JSONObject.NULL).put("p_event",selected).put("p_occurred",occurred).put("p_revision",rule.revision).put("p_latitude",if(rule.gps)gps?.latitude?:JSONObject.NULL else JSONObject.NULL).put("p_longitude",if(rule.gps)gps?.longitude?:JSONObject.NULL else JSONObject.NULL).put("p_accuracy",if(rule.gps)gps?.accuracy?.toDouble()?:JSONObject.NULL else JSONObject.NULL).put("p_gps_at",if(rule.gps&&gps!=null)Instant.ofEpochMilli(gps.time).toString()else JSONObject.NULL).put("p_selfie_at",if(rule.selfie&&shot!=null)Instant.ofEpochMilli(shot.at).toString()else JSONObject.NULL)))
-        require(staged.optBoolean("staged")&&staged.optString("proof_ref")==id)
-        repository.recordStaffTimeEvent(current.account.organizationId,siteId,selected,current.account.displayName,current.account.memberId,workstationId,current.account.memberId,id,now,id)
-        clear();queued=true
+        val stage=JSONObject().put("p_event_id",id).put("p_org",current.account.organizationId).put("p_site",siteId).put("p_post",workstationId?:JSONObject.NULL).put("p_event",selected).put("p_occurred",occurred).put("p_revision",rule.revision).put("p_latitude",if(rule.gps)gps?.latitude?:JSONObject.NULL else JSONObject.NULL).put("p_longitude",if(rule.gps)gps?.longitude?:JSONObject.NULL else JSONObject.NULL).put("p_accuracy",if(rule.gps)gps?.accuracy?.toDouble()?:JSONObject.NULL else JSONObject.NULL).put("p_gps_at",if(rule.gps&&gps!=null)Instant.ofEpochMilli(gps.time).toString()else JSONObject.NULL).put("p_selfie_at",if(rule.selfie&&shot!=null)Instant.ofEpochMilli(shot.at).toString()else JSONObject.NULL)
+        val value=JSONObject().put("id",id).put("event",selected).put("occurred_ms",now).put("stage",stage)
+            .put("jpeg",if(rule.selfie&&shot!=null)Base64.encodeToString(shot.bytes,Base64.NO_WRAP)else JSONObject.NULL)
+        withContext(Dispatchers.IO){journal.save(value)}
+        pending=withContext(Dispatchers.IO){journal.read()}
+        clear()
+        submitPending(requireNotNull(pending))
        }catch(c:CancellationException){throw c}catch(_:Exception){clear();error=true}finally{busy=false}
       }
      }){Text(tr("Confirmer mon pointage","Confirm my attendance","Tabbitin golle am"))}
