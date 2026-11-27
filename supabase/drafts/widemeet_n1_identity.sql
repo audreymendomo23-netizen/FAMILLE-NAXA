@@ -284,11 +284,27 @@ revoke all on public.wm_contact_groups from public,anon,authenticated;
 grant select,insert,update,delete on public.wm_contact_groups to service_role;
 -- Every mutation revalidates opaque session and current scope. No account IDs or
 -- workspace IDs submitted by the client may override the trusted context.
+
+-- One directly assigned manager per staff member, within the same enterprise.
+-- The ordinary contact directory remains workspace-scoped; management is narrower.
+create table public.wm_manager_assignments(
+ workspace_id uuid not null,
+ staff_id uuid not null,
+ manager_id uuid not null,
+ primary key(workspace_id,staff_id),
+ foreign key(staff_id,workspace_id) references public.wm_memberships(account_id,workspace_id) on delete cascade,
+ foreign key(manager_id,workspace_id) references public.wm_memberships(account_id,workspace_id) on delete cascade,
+ check(staff_id<>manager_id)
+);
+alter table public.wm_manager_assignments enable row level security;
+revoke all on public.wm_manager_assignments from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_manager_assignments to service_role;
+
 create function public.wm_identity_action(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
 declare s record; a public.wm_accounts%rowtype; w public.wm_workspaces%rowtype;
  v_role text; v_target uuid; v_inv public.wm_membership_invites%rowtype; v_step integer; v_newrole text;
- v_name text; v_result jsonb;
+ v_name text; v_result jsonb; v_manager uuid;
 begin
  select * into s from public.wm_session_context(p_hash);
  if not found or s.password_change_required then return null;end if;
@@ -328,9 +344,10 @@ begin
   return jsonb_build_object('step',v_step);
  when 'contacts' then
   select coalesce(jsonb_agg(q order by q->>'display_name',q->>'member_id'),'[]'::jsonb) into v_result from (
-   select jsonb_build_object('member_id',m.account_id,'display_name',c.display_name,'role',m.role,'favorite',f.contact_id is not null) q
+   select jsonb_build_object('member_id',m.account_id,'display_name',c.display_name,'role',m.role,'favorite',f.contact_id is not null,'manager_id',case when v_role='promoteur' or ma.manager_id=a.id then ma.manager_id else null end,'can_revoke',m.role in ('manager','staff') and (v_role='promoteur' or (v_role='manager' and m.role='staff' and ma.manager_id=a.id))) q
    from public.wm_memberships m join public.wm_accounts c on c.id=m.account_id and c.enabled
    left join public.wm_favorites f on f.account_id=a.id and f.workspace_id=w.id and f.contact_id=m.account_id
+   left join public.wm_manager_assignments ma on ma.workspace_id=m.workspace_id and ma.staff_id=m.account_id
    where m.workspace_id=w.id and m.enabled and m.account_id<>a.id
    order by c.display_name,m.account_id limit 200
   ) q;
@@ -391,24 +408,40 @@ begin
    -- silently be revived by an old invitation.
    if exists(select 1 from public.wm_memberships where account_id=a.id and workspace_id=v_inv.workspace_id) then return null;end if;
    insert into public.wm_memberships(account_id,workspace_id,role) values(a.id,v_inv.workspace_id,v_inv.role);
+   if v_inv.role='staff' and exists(select 1 from public.wm_memberships m where m.account_id=v_inv.sender_id and m.workspace_id=v_inv.workspace_id and m.enabled and m.role='manager') then
+    insert into public.wm_manager_assignments(workspace_id,staff_id,manager_id) values(v_inv.workspace_id,a.id,v_inv.sender_id);
+   end if;
    update public.wm_membership_invites set status='accepted' where id=v_inv.id;
   else update public.wm_membership_invites set status='declined' where id=v_inv.id;end if;
+  return jsonb_build_object('updated',true);
+ when 'manager-assign' then
+  if w.kind<>'enterprise' or v_role<>'promoteur' or not (p_data ? 'manager_id') then return null;end if;
+  v_target:=(p_data->>'member_id')::uuid;v_manager:=(p_data->>'manager_id')::uuid;
+  if not exists(select 1 from public.wm_memberships m join public.wm_accounts c on c.id=m.account_id and c.enabled where m.workspace_id=w.id and m.account_id=v_target and m.enabled and m.role='staff') then return null;end if;
+  if v_manager is null then delete from public.wm_manager_assignments where workspace_id=w.id and staff_id=v_target;
+  else
+   if not exists(select 1 from public.wm_memberships m join public.wm_accounts c on c.id=m.account_id and c.enabled where m.workspace_id=w.id and m.account_id=v_manager and m.enabled and m.role='manager') then return null;end if;
+   insert into public.wm_manager_assignments(workspace_id,staff_id,manager_id) values(w.id,v_target,v_manager)
+   on conflict(workspace_id,staff_id) do update set manager_id=excluded.manager_id;
+  end if;
   return jsonb_build_object('updated',true);
  when 'member-role' then
   v_target:=(p_data->>'member_id')::uuid;v_newrole:=p_data->>'role';
   if w.kind<>'enterprise' or v_role<>'promoteur' or v_newrole is null or v_newrole not in ('manager','staff') or v_target=a.id then return null;end if;
   update public.wm_memberships set role=v_newrole where workspace_id=w.id and account_id=v_target and role in ('manager','staff') and enabled;
   if not found then return null;end if;
+  delete from public.wm_manager_assignments where workspace_id=w.id and (staff_id=v_target or manager_id=v_target);
   update public.wm_device_sessions set revoked_at=clock_timestamp() where workspace_id=w.id and account_id=v_target and revoked_at is null;
   update public.wm_membership_invites set status='revoked' where workspace_id=w.id and sender_id=v_target and status='pending';
   return jsonb_build_object('updated',true);
  when 'revoke-member' then
   v_target:=(p_data->>'member_id')::uuid;
-  if w.kind<>'enterprise' or v_role<>'promoteur' or v_target=a.id then return null;end if;
-  update public.wm_memberships set enabled=false where workspace_id=w.id and account_id=v_target and role in ('manager','staff') and enabled;
+  if w.kind<>'enterprise' or v_target=a.id or not (v_role='promoteur' or (v_role='manager' and exists(select 1 from public.wm_manager_assignments ma where ma.workspace_id=w.id and ma.staff_id=v_target and ma.manager_id=a.id))) then return null;end if;
+  update public.wm_memberships set enabled=false where workspace_id=w.id and account_id=v_target and (role='staff' or (v_role='promoteur' and role='manager')) and enabled;
   if not found then return null;end if;
   update public.wm_device_sessions set revoked_at=clock_timestamp() where workspace_id=w.id and account_id=v_target and revoked_at is null;
   update public.wm_membership_invites set status='revoked' where workspace_id=w.id and (sender_id=v_target or target_id=v_target) and status='pending';
+  delete from public.wm_manager_assignments where workspace_id=w.id and (staff_id=v_target or manager_id=v_target);
   delete from public.wm_favorites where workspace_id=w.id and (account_id=v_target or contact_id=v_target);
   delete from public.wm_contact_groups where workspace_id=w.id and account_id=v_target;
   update public.wm_contact_groups set member_ids=array_remove(member_ids,v_target) where workspace_id=w.id and v_target=any(member_ids);
