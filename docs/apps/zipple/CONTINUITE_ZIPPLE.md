@@ -640,3 +640,30 @@ Ajout de neuf espaces natifs/Web : profil, support professionnel interne (FAQ + 
 
 ### Commerce — interfaces complémentaires
 Trois espaces supplémentaires : fidélité/parrainage avec barème promoteur versionné, codes opaques révocables, rattachement CRM avant vente, points calculés sur reçus réellement soldés, anti-auto/cycle/doublon, reprise intégrale des points en cas de retour/avoir/remboursement; QR Web imprimable, code Android. Pas de conversion espèces ni de consommation des points jusqu'à validation des règles d'utilisation; QR public de commande et parrainage public non intégrés. Livraison Restaurant : zones/frais et affectations préparées persistées, refus Snack-Bar; pas d'activation du canal livraison ni mission/QR/géolocalisation/paiement tant que contrat de frais et paiement NAXA non qualifié. Raccordement SECURITY/HOTEL/GRILLAD : demandes locales enregistrables/annulables; jamais de faux état connecté. Le code SECURITY de cette branche est un socle Web/Compose sans API vidéo disponible (docs/naxa-security/NAXA_SECURITY_CONTINUITE_2026-11-22.md). Réutilisation des principes v5 NAXA Services et QR local NAXA. Tests SQL ajoutés, qualification à constater. Pas de modification des applications sœurs ni de production.
+
+
+## Qualification des douze interfaces complémentaires — 27/11/2026
+Révision `dcd8080d7413b79db8f49f19d6d2b47feb403d28` : profil, tickets internes, notifications, équipe, plannings, objectifs, formation, incidents/feedback, intelligence analytique, fidélité, préparation livraison Restaurant, demandes de raccordement partenaires. Web/PWA et Compose natif; formulaires et mutations persistées, contrôle serveur et refus inter-organisation; aucune intégration fictive. Le support n'est pas le Livechat central; langue préférée persistée sans preuve de traduction intégrale ni d'application automatique. Fidélité: attribution/reprise de points, QR Web, sans échange/consommation, QR Android ni parcours public. Livraison: configuration, pas de commande/livreur opérationnel; pas de flux vidéo, ni paiement réel, ni liaison partenaire effective. RH paie/absences et IA générative/OCR/voix restent ouverts. Les recettes de parité exhaustive et les intégrations externes ne sont pas déclarées vertes.
+
+Preuve lue sur c061a74 : run 45974386935 job 140422366599 : 46 tests, 46 réussis, 0 échoué, 0 ignoré; marqueurs ZIPPLE_BULK45_CONNECTED_WORKSPACES_PASS et ZIPPLE_BULK4_LOYALTY_REVERSAL_AND_CONNECTION_SETUP_PASS. Sur ea39b41, étape navigateur réel terminée avec succès dans 45973990481; recette native encore non conclue au relevé. Les anciens échecs 45970086093 (sélecteur commande) et 45973785143 (navigation employé sans rôle) ont donné lieu à corrections. dcd8080 ajoute suite navigateur indépendante et captures des nouveaux espaces, et assertions natives + persistance; ne pas considérer ces preuves comme produites avant fin du workflow.
+
+| Révision | Qualification | Run | État observé |
+|---|---|---|---|
+| dcd8080 | ZIPPLE business — real local Supabase | [45974575632](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974575632) | in_progress |
+| dcd8080 | ZIPPLE N1 — isolated foundation | [45974576001](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974576001) | in_progress |
+| dcd8080 | ZIPPLE N1 — hosted Android debug handoff | [45974575652](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974575652) | success |
+| dcd8080 | ZIPPLE N2–N5 — isolated business candidate | [45974576008](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974576008) | in_progress |
+| c061a74 | ZIPPLE — Cloudflare Pages build qualification | [45974387038](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974387038) | success |
+| c061a74 | ZIPPLE N1 — PWA multi-browser qualification | [45974386991](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386991) | success |
+| c061a74 | ZIPPLE business — real local Supabase | [45974386884](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386884) | in_progress |
+| c061a74 | ZIPPLE N1 — isolated foundation | [45974386840](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386840) | in_progress |
+| c061a74 | ZIPPLE N2–N5 — isolated business candidate | [45974386935](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386935) | success |
+| c061a74 | ZIPPLE N1 — live Cloudflare Pages recipe | [45974386925](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386925) | success |
+| c061a74 | ZIPPLE N1 — hosted Android debug handoff | [45974386880](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386880) | success |
+| ea39b41 | ZIPPLE business — real local Supabase | [45973990481](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990481) | in_progress |
+| ea39b41 | ZIPPLE N1 — live Cloudflare Pages recipe | [45973990435](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990435) | success |
+| ea39b41 | ZIPPLE N1 — PWA multi-browser qualification | [45973990421](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990421) | success |
+| ea39b41 | ZIPPLE N1 — hosted Android debug handoff | [45973990396](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990396) | success |
+| ea39b41 | ZIPPLE — Cloudflare Pages build qualification | [45973990373](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990373) | success |
+
+Aucune modification de main, des applications sœurs ou de production. Reprise sur les runs en attente et les écarts ci-dessus.

@@ -205,3 +205,30 @@ Marqueurs SQL effectivement lus :
 - Run 45969581705 : ZIPPLE_BULK3_VERSIONED_GROSS_TAX_REPORT_PASS; ZIPPLE_BULK3_SUPPLIER_RETURN_CREDIT_REFUND_PASS; ZIPPLE_BULK3_ERP_APPROVAL_AND_QUALITY_CONTROL_PASS; tests 46; pass 46; fail 0; skipped 0
 
 Conclusion contradictoire : vert limité aux preuves terminées sur leurs révisions. Les tests E2E ajoutés et la recette Android complète du candidat final doivent être constatés, non présumés. Restent notamment scan caméra/matériel, toutes mutations offline admissibles (hors règlement réel et contrôle autoritatif en ligne), retenue et stockage industriel/antivirus des justificatifs (revue manuelle ne constitue pas un scan), approbation de conformité par comptable, exports réglementaires SYSCOHADA/fiscalité et ventilation des ajustements. Les retours d'un lot enrichi par excédent restent refusés par précaution. Pas de clôture exhaustive fictive du CDC. Aucune modification main ni production.
+
+
+## Qualification des douze interfaces complémentaires — 27/11/2026
+Révision `dcd8080d7413b79db8f49f19d6d2b47feb403d28` : profil, tickets internes, notifications, équipe, plannings, objectifs, formation, incidents/feedback, intelligence analytique, fidélité, préparation livraison Restaurant, demandes de raccordement partenaires. Web/PWA et Compose natif; formulaires et mutations persistées, contrôle serveur et refus inter-organisation; aucune intégration fictive. Le support n'est pas le Livechat central; langue préférée persistée sans preuve de traduction intégrale ni d'application automatique. Fidélité: attribution/reprise de points, QR Web, sans échange/consommation, QR Android ni parcours public. Livraison: configuration, pas de commande/livreur opérationnel; pas de flux vidéo, ni paiement réel, ni liaison partenaire effective. RH paie/absences et IA générative/OCR/voix restent ouverts. Les recettes de parité exhaustive et les intégrations externes ne sont pas déclarées vertes.
+
+Preuve lue sur c061a74 : run 45974386935 job 140422366599 : 46 tests, 46 réussis, 0 échoué, 0 ignoré; marqueurs ZIPPLE_BULK45_CONNECTED_WORKSPACES_PASS et ZIPPLE_BULK4_LOYALTY_REVERSAL_AND_CONNECTION_SETUP_PASS. Sur ea39b41, étape navigateur réel terminée avec succès dans 45973990481; recette native encore non conclue au relevé. Les anciens échecs 45970086093 (sélecteur commande) et 45973785143 (navigation employé sans rôle) ont donné lieu à corrections. dcd8080 ajoute suite navigateur indépendante et captures des nouveaux espaces, et assertions natives + persistance; ne pas considérer ces preuves comme produites avant fin du workflow.
+
+| Révision | Qualification | Run | État observé |
+|---|---|---|---|
+| dcd8080 | ZIPPLE business — real local Supabase | [45974575632](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974575632) | in_progress |
+| dcd8080 | ZIPPLE N1 — isolated foundation | [45974576001](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974576001) | in_progress |
+| dcd8080 | ZIPPLE N1 — hosted Android debug handoff | [45974575652](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974575652) | success |
+| dcd8080 | ZIPPLE N2–N5 — isolated business candidate | [45974576008](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974576008) | in_progress |
+| c061a74 | ZIPPLE — Cloudflare Pages build qualification | [45974387038](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974387038) | success |
+| c061a74 | ZIPPLE N1 — PWA multi-browser qualification | [45974386991](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386991) | success |
+| c061a74 | ZIPPLE business — real local Supabase | [45974386884](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386884) | in_progress |
+| c061a74 | ZIPPLE N1 — isolated foundation | [45974386840](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386840) | in_progress |
+| c061a74 | ZIPPLE N2–N5 — isolated business candidate | [45974386935](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386935) | success |
+| c061a74 | ZIPPLE N1 — live Cloudflare Pages recipe | [45974386925](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386925) | success |
+| c061a74 | ZIPPLE N1 — hosted Android debug handoff | [45974386880](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45974386880) | success |
+| ea39b41 | ZIPPLE business — real local Supabase | [45973990481](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990481) | in_progress |
+| ea39b41 | ZIPPLE N1 — live Cloudflare Pages recipe | [45973990435](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990435) | success |
+| ea39b41 | ZIPPLE N1 — PWA multi-browser qualification | [45973990421](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990421) | success |
+| ea39b41 | ZIPPLE N1 — hosted Android debug handoff | [45973990396](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990396) | success |
+| ea39b41 | ZIPPLE — Cloudflare Pages build qualification | [45973990373](https://github.com/audreymendomo23-netizen/FAMILLE-NAXA/actions/runs/45973990373) | success |
+
+Aucune modification de main, des applications sœurs ou de production. Reprise sur les runs en attente et les écarts ci-dessus.
