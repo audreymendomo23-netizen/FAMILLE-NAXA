@@ -1,5 +1,7 @@
 # GRILLAD — Cahier des charges fonctionnel V1.4
 
+> **Version historique remplacée :** [GRILLAD V1.5](GRILLAD_V1_5.md) est la référence active. Vidéosurveillance multiniveau, rapports, notifications, prédiction, CA, pilotage léger et point journalier sont désormais validés.
+
 **Date de référence :** 27 novembre 2026  
 **Produit :** GRILLAD  
 **Type :** application autonome légère de gestion des grillades, sans complexité ERP  
