@@ -1,4 +1,4 @@
-import React,{useState,useEffect,createContext,useContext} from "react";import {login,logout,configured,type ActiveSession,type Site} from "./security-session";import {request,manualReport,maintenanceRequest,type Resource} from "./security-api";
+import React,{useState,useEffect,createContext,useContext,useRef} from "react";import {login,logout,configured,type ActiveSession,type Site} from "./security-session";import {request,manualReport,maintenanceRequest,type Resource} from "./security-api";
 type Scope={session:ActiveSession|null;site:Site|null};
 export const SecurityScope=createContext<Scope>({session:null,site:null});
 export function SessionWorkspace({children}:{children:React.ReactNode}){
@@ -9,10 +9,10 @@ export function SessionWorkspace({children}:{children:React.ReactNode}){
 }
 const mapping:Record<string,Resource>={"B1.10":"sec_organizations","B1.11":"sec_sites","B2.14":"sec_devices","B2.17":"sec_devices","B2.25":"sec_devices","B3.27":"sec_incidents","B3.28":"sec_incidents","B5.11":"sec_work_orders","B5.12":"sec_work_orders","B5.16":"sec_work_orders","B5.17":"sec_work_orders","B5.18":"sec_devices"};
 export function LiveRecords({id}:{id:string}){
- const {session,site}=useContext(SecurityScope);const resource=mapping[id];const [rows,setRows]=useState<Record<string,unknown>[]>([]),[message,setMessage]=useState(""),[busy,setBusy]=useState(false);
- useEffect(()=>{setRows([]);setMessage("")},[session,site,id]);
+ const {session,site}=useContext(SecurityScope);const resource=mapping[id];const generation=useRef(0);const [rows,setRows]=useState<Record<string,unknown>[]>([]),[message,setMessage]=useState(""),[busy,setBusy]=useState(false);
+ useEffect(()=>{generation.current++;setRows([]);setMessage("");setBusy(false);return()=>{generation.current++}},[session,site,id]);
  if(!resource||!session||!site)return null;
- return <div><button disabled={busy} onClick={async()=>{setBusy(true);setRows([]);try{const data=await request(session,resource,{site:resource==="sec_organizations"||resource==="sec_sites"?undefined:site.id});setRows(Array.isArray(data)?data:[]);setMessage("Lecture serveur confirmée.")}catch{setMessage("Lecture refusée ou indisponible.")}finally{setBusy(false)}}}>Actualiser les données autorisées</button><p role="status">{message}</p>{rows.map((r,i)=><article key={String(r.id??i)}><strong>{String(r.name??r.label??r.subject??"Ressource")}</strong><p>{String(r.state??r.kind??"")}</p></article>)}</div>
+ return <div><button disabled={busy} onClick={async()=>{const g=generation.current;setBusy(true);setRows([]);try{const data=await request(session,resource,{site:resource==="sec_organizations"||resource==="sec_sites"?undefined:site.id});if(g!==generation.current)return;setRows(Array.isArray(data)?data:[]);setMessage("Lecture serveur confirmée.")}catch{if(g===generation.current)setMessage("Lecture refusée ou indisponible.")}finally{if(g===generation.current)setBusy(false)}}}>Actualiser les données autorisées</button><p role="status">{message}</p>{rows.map((r,i)=><article key={String(r.id??i)}><strong>{String(r.name??r.label??r.subject??"Ressource")}</strong><p>{String(r.state??r.kind??"")}</p></article>)}</div>
 }
 export function SubmitDraft({incident,subject,option}:{incident:boolean;subject:string;option:string}){
  const {session,site}=useContext(SecurityScope);const [message,setMessage]=useState(""),[busy,setBusy]=useState(false),[key,setKey]=useState("");

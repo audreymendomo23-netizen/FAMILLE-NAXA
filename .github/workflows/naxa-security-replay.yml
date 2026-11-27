@@ -1,0 +1,34 @@
+name: NAXA SECURITY — Chromium replay isolated
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/web/naxa-security/**'
+      - 'docs/naxa-security/contracts/**'
+      - '.github/workflows/naxa-security-replay.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      VITE_SECURITY_PUBLISHABLE_KEY: sb_publishable_qa_fixture_not_a_real_key
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --workspace @famille/naxa-security-web --include-workspace-root=false --ignore-scripts
+      - run: npm run build --workspace @famille/naxa-security-web
+      - run: npm install --no-save --ignore-scripts playwright@1.65.1
+      - run: npx playwright install --with-deps chromium
+      - run: |
+          (cd apps/web/naxa-security && npx vite preview --host 127.0.0.1 --port 4173) >/tmp/security-replay.log 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:4173/ >/dev/null && break; sleep 1; done
+          node docs/naxa-security/contracts/replay-browser.mjs
+      - if: failure()
+        run: tail -n 100 /tmp/security-replay.log || true
