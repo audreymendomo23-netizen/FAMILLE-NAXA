@@ -12,6 +12,10 @@ import org.json.JSONObject
 import java.util.UUID
 private fun centerRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("items");return (0 until a.length()).map{a.getJSONObject(it)}}
 @Composable fun WorkspaceChat(english:Boolean,gateway:AuthGateway,session:Session,onBack:()->Unit){
+ var groups by remember{mutableStateOf(false)}
+ if(groups)GroupChat(english,gateway,session){groups=false}else PrivateWorkspaceChat(english,gateway,session,onBack){groups=true}
+}
+@Composable private fun PrivateWorkspaceChat(english:Boolean,gateway:AuthGateway,session:Session,onBack:()->Unit,onGroups:()->Unit){
  fun tr(fr:String,en:String)=if(english)en else fr
  val scope=rememberCoroutineScope()
  var contacts by remember{mutableStateOf<List<JSONObject>>(emptyList())};var peer by remember{mutableStateOf<JSONObject?>(null)};var messages by remember{mutableStateOf<List<JSONObject>>(emptyList())}
@@ -21,9 +25,10 @@ private fun centerRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("item
  suspend fun thread(id:String,q:String=""){try{messages=centerRows(req("thread",JSONObject().put("peer_id",id).put("query",q)))}catch(e:CancellationException){throw e}catch(e:Exception){peer=null;messages=emptyList();contacts=emptyList();body="";pending=null;throw e}}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
  LaunchedEffect(session.deviceId){work{refresh()}}
- LaunchedEffect(peer?.optString("member_id"),query,busy,session.deviceId){val id=peer?.optString("member_id")?:return@LaunchedEffect;if(busy||pending!=null)return@LaunchedEffect;while(true){delay(5000);if(busy||pending!=null)return@LaunchedEffect;try{val data=centerRows(req("thread",JSONObject().put("peer_id",id).put("query",query)));if(!busy&&peer?.optString("member_id")==id)messages=data}catch(e:CancellationException){throw e}catch(e:Exception){peer=null;contacts=emptyList();messages=emptyList();body="";error=true;return@LaunchedEffect}}}
+ LaunchedEffect(peer?.optString("member_id"),query,busy,session.deviceId){val id=peer?.optString("member_id")?:return@LaunchedEffect;if(busy)return@LaunchedEffect;while(true){delay(5000);if(busy)return@LaunchedEffect;try{val data=centerRows(req("thread",JSONObject().put("peer_id",id).put("query",query)));if(!busy&&peer?.optString("member_id")==id)messages=data}catch(e:CancellationException){throw e}catch(e:Exception){contacts=emptyList();messages=emptyList();error=true}}}
  Card(Modifier.fillMaxWidth()){Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
  TextButton(onClick=onBack){Text(tr("Retour aux discussions de réunion","Back to meeting discussions"))}
+ TextButton(enabled=!busy&&pending==null,onClick=onGroups){Text(tr("Groupes de discussion","Group chats"))}
  Text(tr("Messages entre membres actifs de votre entreprise.","Messages between active members of your company."))
  if(busy)LinearProgressIndicator(Modifier.fillMaxWidth());if(error)Text(tr("Accès ou action non confirmé.","Access or action unconfirmed."),color=MaterialTheme.colorScheme.error)
  val c=peer
@@ -33,6 +38,7 @@ private fun centerRows(x:JSONObject):List<JSONObject>{val a=x.getJSONArray("item
  }else{
  val id=c.getString("member_id")
  TextButton(enabled=!busy&&pending==null,onClick={work{peer=null;messages=emptyList();body="";refresh()}}){Text(tr("Retour aux contacts","Back to contacts"))}
+ if(pending!=null)TextButton(enabled=!busy,onClick={work{pending=null;peer=null;messages=emptyList();body="";refresh()}}){Text(tr("Abandonner la tentative locale (envoi non confirmé)","Discard local retry (send unconfirmed)"))}
  Text(c.getString("display_name"),style=MaterialTheme.typography.titleMedium)
  OutlinedTextField(query,{query=it.take(100)},label={Text(tr("Rechercher dans les messages","Search messages"))},modifier=Modifier.fillMaxWidth())
  TextButton(enabled=!busy&&pending==null,onClick={work{thread(id,query)}}){Text(tr("Rechercher","Search"))}
