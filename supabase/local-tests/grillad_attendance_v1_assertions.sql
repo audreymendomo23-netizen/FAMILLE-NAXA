@@ -37,5 +37,5 @@ end $$;
 reset role;
 do $$begin if (select count(*) from grillad_private.attendance_photo_access)<>1 then raise exception 'photo access audit';end if;end $$;
 update grillad_private.attendance set photo_until=now()-interval '1 second';
-do $$begin if grillad_private.purge_attendance_photos()<>2 or exists(select 1 from grillad_private.attendance where photo is not null) then raise exception 'photo retention';end if;end $$;
+do $$declare n bigint;begin n:=grillad_private.purge_attendance_photos();if n<>2 then raise exception 'photo retention count %',n;end if;if exists(select 1 from grillad_private.attendance where photo is not null) then raise exception 'photo retention bytes';end if;n:=grillad_private.purge_attendance_photos();if n<>0 then raise exception 'photo retention replay';end if;end $$;
 rollback;
