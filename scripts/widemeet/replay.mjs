@@ -276,6 +276,43 @@ try{
  assert.equal((await request(room+"/read",{room_id:rid},gs.access_token)).status,404);
  await cmd(hs.access_token,"end");assert.equal(state.status,"ended");
  pass("actual Edge/PostgREST room create, RSVP, chat, moderation, consent, vote, exclusion, tenant isolation; no media capture");
+ // Isolated N4 fixture: three admitted members, explicit selective publication.
+ const minuteW=await createWorkspace("Minutes isolated replay"),mh=await fixture(minuteW,"promoteur"),mg=await fixture(minuteW,"staff"),mo=await fixture(minuteW,"staff");
+ const mhs=await login(mh),mgs=await login(mg),mos=await login(mo),mid=randomUUID();
+ let ms=await ok(room+"/create",{room_id:mid,title:"Minutes qualification",description:"Synthetic meeting",scheduled_ms:Date.now(),duration_minutes:10,invitees:[mg.id,mo.id]},mhs.access_token);
+ async function mcmd(token,action,value=null){ms=await ok(room+"/command",{room_id:mid,request_id:randomUUID(),expected_revision:ms.revision,action,value},token)}
+ await mcmd(mgs.access_token,"respond","accepted");await mcmd(mos.access_token,"respond","accepted");await mcmd(mhs.access_token,"start");await mcmd(mhs.access_token,"end");
+ const mreq=(token,action,data={})=>request(room+"/minutes",{action,data},token);
+ const mok=(token,action,data={})=>ok(room+"/minutes",{action,data},token);
+ const prep=await mok(mhs.access_token,"prepare",{room_id:mid});assert.equal(prep.latest_version,0);assert.equal(prep.premium,true);
+ assert.ok(prep.snapshot.participants.every(x=>x.attendance==="unknown"));
+ // Valid rights at closure, not a live subscription for archive access.
+ await success(base+"/rest/v1/wm_room_entitlements?workspace_id=eq."+minuteW,{valid_until:new Date(Date.now()-60000).toISOString()},service,service,"PATCH");
+ const mv1=randomUUID(),draft={room_id:mid,version_id:mv1,expected_version:0,body:"Synthetic human minutes"};
+ assert.equal((await mreq(mgs.access_token,"draft",draft)).status,403);
+ assert.equal((await mok(mhs.access_token,"draft",draft)).version,1);
+ assert.deepEqual(await mok(mhs.access_token,"draft",draft),{version_id:mv1,version:1});
+ assert.equal((await mreq(mhs.access_token,"draft",{...draft,body:"Altered"})).status,403);
+ const publication={room_id:mid,version_id:mv1,recipients:[mg.id]};
+ assert.equal((await mreq(mhs.access_token,"publish",publication)).status,403);
+ assert.equal((await mreq(mgs.access_token,"read",publication)).status,403);
+ await mok(mhs.access_token,"approve",publication);
+ assert.equal((await mreq(mhs.access_token,"publish",{...publication,recipients:[o.id]})).status,403);
+ await mok(mhs.access_token,"publish",publication);
+ assert.equal((await mreq(mos.access_token,"read",publication)).status,403);
+ assert.equal((await mreq(os.access_token,"read",publication)).status,403);
+ assert.ok((await mok(mgs.access_token,"list")).items.some(x=>x.room_id===mid&&x.unread));
+ assert.equal((await mok(mgs.access_token,"read",publication)).body,draft.body);
+ assert.ok((await mok(mgs.access_token,"list")).items.some(x=>x.room_id===mid&&!x.unread));
+ const mv2=randomUUID(),rev={room_id:mid,version_id:mv2,expected_version:1,body:"Revised synthetic human minutes"};
+ await mok(mhs.access_token,"draft",rev);
+ assert.equal((await mreq(mgs.access_token,"read",rev)).status,403);
+ await mok(mhs.access_token,"approve",rev);await mok(mhs.access_token,"publish",{...rev,recipients:[mg.id]});
+ assert.equal((await mreq(mgs.access_token,"read",publication)).status,403);
+ assert.equal((await mok(mgs.access_token,"read",rev)).body,rev.body);
+ await mok(mhs.access_token,"revoke",rev);assert.equal((await mreq(mgs.access_token,"read",rev)).status,403);
+ pass("actual N4 closed-room minutes versioning, expiry-independent archives, approval, selected recipients, read audit and revocation");
+
  assert.equal((await request(room+"/media-grant",{room_id:rid},hs.access_token)).status,403);
  await ok(auth+"/logout",{},hs.access_token);assert.equal((await request(room+"/list",{},hs.access_token)).status,403);pass("real opaque session logout and revocation");
  // Test real browser with TLS restricted to isolated loopback. No mock HTTP or fake login.
