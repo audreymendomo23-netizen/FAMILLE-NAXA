@@ -91,6 +91,14 @@ try{
  await until(async()=>evicted.has(h.id)&&!(await sfu.listParticipants("wm-support-"+callId)).some(p=>p.identity===h.id),"screen withdrawal evicts old grant",12000);
  const old=await ctx.newPage();await old.goto(origin);
  assert.equal(await old.evaluate(async token=>{const r=new window.LivekitClient.Room();try{await r.connect("ws://127.0.0.1:7881",token);await r.disconnect();return false}catch{return true}},sg.token),true);
+ // New consent must not resurrect the old unexpired screen grant.
+ const secondShare=randomUUID();await s(hs.access_token,"screen-consent",{share_id:secondShare});
+ const newGrant=await s(hs.access_token,"call-grant");
+ assert.ok(sg.expires_at>Date.now(),"old grant must still be unexpired");
+ assert.equal(await old.evaluate(async token=>{const r=new window.LivekitClient.Room();try{await r.connect("ws://127.0.0.1:7881",token);await r.disconnect();return false}catch{return true}},sg.token),true);
+ assert.notEqual(decode(sg.token).wm_session_hash,decode(newGrant.token).wm_session_hash);
+ console.log("PASS B5 previous screen grant cannot revive after fresh consent");
+ await s(hs.access_token,"screen-stop",{share_id:secondShare});
  await s(gs.access_token,"call-end");
  await until(async()=>evicted.has(g.id),"ticket call end evicts agent",12000);
  assert.equal((await fail(hs.access_token,"call-grant")).status,403);
