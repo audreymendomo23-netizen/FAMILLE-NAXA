@@ -1085,6 +1085,15 @@ jobs:
                   assert.equal(pastGuestReport.day,yesterday);assert.equal(pastGuestReport.scope,'personal');assert.equal(pastGuestReport.finance,null);
                   await historicalGuest.getByText('Here is your partial report',{exact:false}).waitFor();
                   pass('B3 historical daily briefing: previous day, scope isolation, cleared old report and FR/EN labels');
+                  phase='B3 real multi-day period';
+                  await guest.bringToFront();
+                  const period=historicalGuest.getByRole('region',{name:'Period report',exact:true});
+                  await period.getByLabel('Report duration').selectOption('2');
+                  await period.getByRole('button',{name:'Calculate period',exact:true}).click();
+                  await period.locator('[data-briefing-period-result="2"]').waitFor();
+                  assert.equal(await period.locator('li').count(),2);
+                  assert.equal(await period.getByText('Confirmed revenue (XAF)',{exact:false}).count(),0);
+                  pass('B3 real browser multi-day personal period: two authorized days and no financial disclosure');
                   phase='commission configuration browser';
                   await page.bringToFront();
                   await page.locator('.side-nav button[data-module-id="organization"]').click();

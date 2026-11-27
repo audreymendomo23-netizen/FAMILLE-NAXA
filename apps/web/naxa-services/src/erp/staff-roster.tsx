@@ -45,6 +45,8 @@ function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props)
  const tokenRef=useRef(getToken);tokenRef.current=getToken;
  const alive=useRef(false),requestScope=useRef<AbortController|null>(null);
  const [version,setVersion]=useState(0);
+ const [shiftFilter,setShiftFilter]=useState("all");
+ const shownShifts=shifts.filter(s=>shiftFilter==="all"||(shiftFilter==="mine"&&s.member_id===account.member_id)||(shiftFilter==="published"&&s.status==="published")||(shiftFilter==="cancelled"&&s.status==="cancelled"));
  const foreground=useRef(true);
  const canManage=targets.length>0;
  const textError=tr("Planning indisponible. Vérifiez la connexion et réessayez.","Schedule unavailable. Check your connection and retry.","Feere golle heɓotaake. Ƴeewto ceŋol, kadi eto.");
@@ -225,8 +227,9 @@ function ScopedStaffRoster({account,siteId,authEndpoint,anonKey,getToken}:Props)
    {!form.id&&!form.rotation?.length&&<button type="button" className="btn secondary" disabled={busy||!form.target||!form.start||!form.end} onClick={()=>void saveTemplate()}>{tr("Enregistrer comme modèle","Save as template","Resnu leydi")}</button>}
    {form.id&&<button type="button" className="btn secondary" onClick={()=>setForm(blank())}>{tr("Annuler la modification","Discard changes","Haaytu baylugol")}</button>}
   </form>}
-  {loaded&&shifts.length===0&&<p>{tr("Aucun service planifié.","No scheduled shifts.","Alaa golle e feere.")}</p>}
-  {shifts.map(s=>{const own=s.member_id===account.member_id,editable=targets.some(t=>t.member_id===s.member_id&&t.workstation_id===s.workstation_id),ack=acks.find(a=>a.shift_id===s.id&&a.revision===s.revision);return <article className="activity-record" key={s.id}>
+  {loaded&&<label>{tr("Filtrer les services","Filter shifts","Suɓo golle")}<select value={shiftFilter} onChange={e=>setShiftFilter(e.target.value)}>{[["all",tr("Tous","All","Fof")],["mine",tr("Mes services","My shifts","Golle am")],["published",tr("Publiés","Published","Bayyinaama")],["cancelled",tr("Annulés","Cancelled","Haaytaama")]].map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></label>}
+  {loaded&&shownShifts.length===0&&<p>{tr("Aucun service planifié.","No scheduled shifts.","Alaa golle e feere.")}</p>}
+  {shownShifts.map(s=>{const own=s.member_id===account.member_id,editable=targets.some(t=>t.member_id===s.member_id&&t.workstation_id===s.workstation_id),ack=acks.find(a=>a.shift_id===s.id&&a.revision===s.revision);return <article className="activity-record" key={s.id}>
    <strong>{own?tr("Mon service","My shift","Golle am"):targets.find(t=>t.member_id===s.member_id)?.display_name??tr("Collaborateur","Employee","Gollotooɗo")}</strong>
    <p>{fmt(s.starts_at)} — {fmt(s.ends_at)} · {tr("Pause","Break","Fooftugol")} {s.planned_break_minutes} min</p>
    <p>{s.status==="cancelled"?tr("Annulé","Cancelled","Haaytaama"):tr("Publié","Published","Bayyinaama")} · {tr("Version","Version","Yamre")} {s.revision} · {ack?tr("Pris en compte","Acknowledged","Jaɓaama"):tr("À confirmer","Awaiting acknowledgement","Foti jaɓeede")}</p>

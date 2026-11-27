@@ -43,7 +43,62 @@ export function briefingDayAllowed(day:string,now=Date.now()){
  const {today,earliest}=briefingDateBounds(now);
  return /^\d{4}-\d{2}-\d{2}$/.test(day)&&day>=earliest&&day<=today&&Number.isFinite(Date.parse(day+"T00:00:00Z"))&&new Date(day+"T00:00:00Z").toISOString().slice(0,10)===day;
 }
+export function briefingPeriodDays(end:string,days:number,now=Date.now()):string[]{
+ if(![2,7,30].includes(days)||!briefingDayAllowed(end,now))throw Error("INVALID_BRIEFING_PERIOD");
+ const dates=Array.from({length:days},(_,i)=>new Date(Date.parse(end+"T00:00:00Z")-(days-1-i)*86400000).toISOString().slice(0,10));
+ if(!dates.every(d=>briefingDayAllowed(d,now)))throw Error("INVALID_BRIEFING_PERIOD");
+ return dates;
+}
+export function summarizeBriefingPeriod(dates:string[],values:unknown[]){
+ if(!dates.length||dates.length!==values.length||new Set(dates).size!==dates.length)throw Error("INCOMPLETE_BRIEFING_PERIOD");
+ const rows=values.map((v,i)=>validateBriefing(v,dates[i]));
+ if(rows.some(r=>r.scope!==rows[0].scope))throw Error("BRIEFING_SCOPE_CHANGED");
+ const sum=(v:number[])=>{const n=v.reduce((a,b)=>a+b,0);if(!Number.isSafeInteger(n))throw Error("BRIEFING_TOTAL_OVERFLOW");return n;};
+ const financeDays=rows.filter(r=>r.finance!==null).length;
+ return {rows,scope:rows[0].scope,financeDays,appointments:sum(rows.map(r=>r.appointments.scheduled_count)),completed:sum(rows.map(r=>r.appointments.completed_count)),revenue:financeDays===rows.length?sum(rows.map(r=>r.finance!.revenue_xaf)):null,clocks:rows.every(r=>r.personal_clock_events!==null)?sum(rows.map(r=>r.personal_clock_events!.event_count)):null};
+}
 type Props={account:WebAuthAccount;siteId:string;authEndpoint:string;anonKey:string;getToken:()=>Promise<string>};
+const periodCopy:Record<Lang,[string,string,string,string,string,string,string,string]>={
+ fr:["Bilan par période","Durée du bilan","Calculer la période","Jours","Données financières incomplètes : total indisponible","Chiffre d’affaires confirmé (FCFA)","Données journalières partielles.","Période indisponible"],
+ en:["Period report","Report duration","Calculate period","Days","Incomplete finance data: total unavailable","Confirmed revenue (XAF)","Partial daily records.","Period unavailable"],
+ "ff-CM":["Jaŋtol sahaa","Juuteendi jaŋtol","Lim jaŋtol sahaa","Balɗe","Humpito ceede timmaani","Ceede tabbitinaaɗe (FCFA)","Humpito ñalnde timmaani.","Sahaa heɓotaako"],
+ es:["Informe por período","Duración del informe","Calcular período","Días","Datos financieros incompletos: total no disponible","Ingresos confirmados (XAF)","Datos diarios parciales.","Período no disponible"],
+ it:["Resoconto per periodo","Durata del resoconto","Calcola periodo","Giorni","Dati finanziari incompleti: totale non disponibile","Ricavi confermati (XAF)","Dati giornalieri parziali.","Periodo non disponibile"],
+ "zh-CN":["期间报告","报告时长","计算期间","天","财务数据不完整：总计不可用","已确认收入（XAF）","每日数据不完整。","期间不可用"]
+};
+function PeriodBriefing({account,siteId,authEndpoint,anonKey,getToken,day,lang}:Props&{day:string;lang:Lang}){
+ const [days,setDays]=useState(7),[busy,setBusy]=useState(false),[error,setError]=useState(false),[report,setReport]=useState<ReturnType<typeof summarizeBriefingPeriod>|null>(null);
+ const controller=useRef<AbortController|null>(null),alive=useRef(false);
+ const [title,duration,calculate,unit,missing,revenue,note,unavailable]=periodCopy[lang],t=copy[lang];
+ function clear(){controller.current?.abort();controller.current=null;setReport(null);setBusy(false);setError(false);}
+ useEffect(()=>{alive.current=true;const hide=()=>{if(document.visibilityState==="hidden")clear();};document.addEventListener("visibilitychange",hide);return()=>{alive.current=false;controller.current?.abort();document.removeEventListener("visibilitychange",hide);};},[]);
+ async function load(){
+  if(busy||document.visibilityState==="hidden")return;
+  clear();const c=new AbortController();controller.current=c;setBusy(true);
+  const current=()=>alive.current&&controller.current===c&&!c.signal.aborted&&document.visibilityState!=="hidden";
+  try{
+   if(!anonKey)throw Error("BRIEFING_UNAVAILABLE");
+   const dates=briefingPeriodDays(day,days),values:unknown[]=[];
+   for(let i=0;i<dates.length;i+=3){
+    if(!current())return;
+    const batch=await Promise.all(dates.slice(i,i+3).map(d=>privateRequest<unknown>(c.signal,current,getToken,(token,signal)=>fetch(rosterApiOrigin(authEndpoint)+"/rest/v1/rpc/ns_daily_briefing",{method:"POST",headers:{apikey:anonKey,Authorization:"Bearer "+token,"Content-Type":"application/json"},body:JSON.stringify({p_org:account.organization_id,p_site:siteId,p_day:d}),signal,cache:"no-store",credentials:"omit",redirect:"error"}))));
+    values.push(...batch);
+   }
+   const result=summarizeBriefingPeriod(dates,values);
+   if(current())setReport(result);
+  }catch{if(current()){setReport(null);setError(true);c.abort();controller.current=null;setBusy(false);}}
+  finally{if(current())setBusy(false);}
+ }
+ return <section aria-label={title} aria-busy={busy}><h3>{title}</h3><p>{note}</p>
+ <label>{duration}<select value={days} disabled={busy} onChange={e=>{clear();setDays(Number(e.target.value));}}>{[2,7,30].map(d=><option key={d} value={d}>{d} {unit}</option>)}</select></label>
+ <button className="btn secondary" disabled={busy||!briefingDayAllowed(day)} onClick={()=>void load()}>{calculate}</button>
+ {error&&<p role="alert">{unavailable}</p>}
+ {report&&<div data-briefing-period-result={report.rows.length}><p>{report.rows[0].day} — {report.rows[report.rows.length-1].day}</p>
+ <p>{t.appointments}: {report.appointments} · {t.completed}: {report.completed}</p>
+ {report.scope==="site"&&<p>{report.revenue===null?missing:revenue+": "+report.revenue} ({report.financeDays}/{report.rows.length} {unit})</p>}
+ {report.clocks!==null&&<p>{t.clocks}: {report.clocks}</p>}
+ <ul>{report.rows.map(r=><li key={r.day}>{r.day} · {t.appointments}: {r.appointments.scheduled_count} · {t.completed}: {r.appointments.completed_count}{r.finance!==null?" · "+revenue+": "+r.finance.revenue_xaf:""}</li>)}</ul></div>}</section>;
+}
 export function DailyBriefing(props:Props){
  return <ScopedDailyBriefing key={JSON.stringify([props.account.organization_id,props.account.member_id,props.account.role_code,props.siteId,props.authEndpoint,props.anonKey])} {...props}/>;
 }
@@ -90,5 +145,5 @@ function ScopedDailyBriefing({account,siteId,authEndpoint,anonKey,getToken}:Prop
  <button className="btn primary" disabled={loading||!briefingDayAllowed(day)} onClick={()=>{if(playing){stop();return;}void load().then(r=>{if(r&&mounted.current&&!r.abort.signal.aborted&&controller.current===r.abort)speak(r.data);});}}>{playing?t.stop:t.play}</button>
  {playing&&<button className="btn secondary" onClick={()=>{if(!audio.current)return;if(paused)window.speechSynthesis.resume();else window.speechSynthesis.pause();setPaused(!paused);}}>{({fr:paused?"Reprendre":"Pause",en:paused?"Resume":"Pause","ff-CM":paused?"Jokku":"Fowtu",es:paused?"Continuar":"Pausa",it:paused?"Riprendi":"Pausa","zh-CN":paused?"继续":"暂停"})[lang]}</button>}
  <button className="btn secondary" disabled={loading||!briefingDayAllowed(day)} onClick={()=>void load()}>{t.load}</button>
- {error&&<p role="alert">{t.unavailable}</p>}{report&&<p>{briefingNarration(report,lang)}</p>}</section>;
+ {error&&<p role="alert">{t.unavailable}</p>}{report&&<p>{briefingNarration(report,lang)}</p>}<PeriodBriefing key={day} account={account} siteId={siteId} authEndpoint={authEndpoint} anonKey={anonKey} getToken={getToken} day={day} lang={lang}/></section>;
 }
