@@ -44,4 +44,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-      - run: gradle --no-daemon :naxa-security:assembleDebug :naxa-security:testDebugUnitTest
+      - name: Build and test SECURITY (retry Maven 429 only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3; do
+            if gradle --no-daemon :naxa-security:assembleDebug :naxa-security:testDebugUnitTest 2>&1 | tee /tmp/security-gradle.log; then exit 0; fi
+            if ! grep -q 'Received status code 429' /tmp/security-gradle.log || [ "$attempt" = 3 ]; then exit 1; fi
+            sleep $((attempt * 20))
+          done

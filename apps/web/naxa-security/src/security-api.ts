@@ -1,15 +1,15 @@
 // Only public key and short-lived access token supplied by the dedicated SECURITY auth boundary.
 export const SECURITY_URL="https://idupfjbkwjcavyisxteo.supabase.co";
-export const resources=["sec_organizations","sec_sites","sec_devices","sec_incidents","sec_work_orders","sec_attendance_drafts","sec_module_requests"] as const;
+export const resources=["sec_organizations","sec_sites","sec_devices","sec_incidents","sec_work_orders","sec_attendance_drafts","sec_module_requests","sec_preferences","sec_service_register","sec_inbox","sec_support_messages","sec_payment_receipts","sec_device_observations"] as const;
 export type Resource=typeof resources[number];
 export type SecuritySession={accessToken:string;publicKey:string;userId:string};
-export async function request(session:SecuritySession,resource:Resource,options:{method?:"GET"|"POST";body?:Record<string,unknown>;site?:string;organization?:string;record?:string;requestId?:string}={},transport:typeof fetch=fetch){
+export async function request(session:SecuritySession,resource:Resource,options:{method?:"GET"|"POST";body?:Record<string,unknown>;site?:string;organization?:string;record?:string;requestId?:string;order?:string}={},transport:typeof fetch=fetch){
  if(!resources.includes(resource)||!session.accessToken||!session.publicKey||!session.userId)throw Error("SECURITY_SESSION_REQUIRED");
  if(session.publicKey.startsWith("sb_secret_")||session.publicKey===session.accessToken)throw Error("INVALID_PUBLIC_KEY");
  const url=new URL("/rest/v1/"+resource,SECURITY_URL);
  if(options.site){if(!/^[0-9a-f-]{36}$/i.test(options.site))throw Error("INVALID_SITE");url.searchParams.set("site_id","eq."+options.site)}
  for(const [field,value] of [["organization_id",options.organization],["id",options.record],["request_id",options.requestId]] as const){if(value&&!(resource==="sec_organizations"&&field==="organization_id")){if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))throw Error("INVALID_SCOPE");url.searchParams.set(field,"eq."+value)}}
- if(options.method!=="POST"){url.searchParams.set("select","*");url.searchParams.set("limit","100")}
+ if(options.method!=="POST"){url.searchParams.set("select","*");url.searchParams.set("limit","100");if(options.order){if(!["created_at.desc","observed_at.desc","recorded_at.desc","provider_confirmed_at.desc"].includes(options.order))throw Error("INVALID_ORDER");url.searchParams.set("order",options.order)}}
  const r=await transport(url,{method:options.method??"GET",headers:{apikey:session.publicKey,Authorization:"Bearer "+session.accessToken,"Content-Type":"application/json",Prefer:"return=representation"},body:options.body?JSON.stringify(options.body):undefined,cache:"no-store",credentials:"omit",redirect:"error"});
  if(!r.ok)throw Error("SECURITY_HTTP_"+r.status);return await r.json();
 }
@@ -28,7 +28,7 @@ export function browserAttendance(session:SecuritySession,organization_id:string
 }
 
 // Review RPCs are deliberately allowlisted. Authorization is enforced again on the server.
-export async function reviewRpc(session:SecuritySession,name:"sec_module_review_queue"|"sec_review_module_request",body:Record<string,unknown>){
- if(!["sec_module_review_queue","sec_review_module_request"].includes(name)||!session.userId||!session.accessToken||!session.publicKey||session.publicKey.startsWith("sb_secret_")||session.publicKey===session.accessToken)throw Error("INVALID_SESSION");
+export async function reviewRpc(session:SecuritySession,name:"sec_module_review_queue"|"sec_review_module_request"|"sec_read_inbox",body:Record<string,unknown>){
+ if(!["sec_module_review_queue","sec_review_module_request","sec_read_inbox"].includes(name)||!session.userId||!session.accessToken||!session.publicKey||session.publicKey.startsWith("sb_secret_")||session.publicKey===session.accessToken)throw Error("INVALID_SESSION");
  const r=await fetch(new URL("/rest/v1/rpc/"+name,SECURITY_URL),{method:"POST",headers:{apikey:session.publicKey,Authorization:"Bearer "+session.accessToken,"Content-Type":"application/json"},body:JSON.stringify(body),cache:"no-store",credentials:"omit",redirect:"error"});if(!r.ok)throw Error("SECURITY_HTTP_"+r.status);return await r.json();
 }

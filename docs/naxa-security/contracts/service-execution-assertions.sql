@@ -1,0 +1,58 @@
+begin;
+insert into auth.users values ('00000000-0000-0000-0000-000000000051'),('00000000-0000-0000-0000-000000000052'),('00000000-0000-0000-0000-000000000053');
+insert into public.sec_organizations(id,name) values ('10000000-0000-0000-0000-000000000051','QA services');
+insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000051','operator',true),('10000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000052','manager',true),('10000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000053','manager',true);
+insert into public.sec_sites(id,organization_id,name) values ('20000000-0000-0000-0000-000000000051','10000000-0000-0000-0000-000000000051','QA site'),('20000000-0000-0000-0000-000000000052','10000000-0000-0000-0000-000000000051','QA other');
+insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000051',true),('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000052',true),('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000052','00000000-0000-0000-0000-000000000053',true);
+insert into public.sec_devices(id,organization_id,site_id,label,kind) values ('40000000-0000-0000-0000-000000000051','10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','QA detector','environment');
+insert into public.sec_device_observations(organization_id,site_id,device_id,observed_at,status,metric,value,source_event_id) values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','40000000-0000-0000-0000-000000000051',now(),'online','temperature',30,gen_random_uuid());
+insert into public.sec_payment_receipts(organization_id,site_id,channel,reference,amount_fcfa,provider_confirmed_at) values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','mobile_money','qa-payment',5000,now());
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000051',true);
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000051','30000000-0000-0000-0000-000000000051','language','{"locale":"en"}');
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000051','30000000-0000-0000-0000-000000000052','notification','{"channel":"push","preference":"enabled"}');
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000051','30000000-0000-0000-0000-000000000053','notification','{"channel":"push","preference":"disabled"}');
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000051','30000000-0000-0000-0000-000000000054','support','{"category":"technical","detail":"QA support"}');
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000051','30000000-0000-0000-0000-000000000055','alarm','{"reference":"zone-qa","kind":"intrusion","detail":"QA manual report"}');
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000051','30000000-0000-0000-0000-000000000056','visitor','{"reference":"visit-qa","purpose":"meeting","duration_minutes":30}');
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000051','30000000-0000-0000-0000-000000000057','vehicle','{"reference":"vehicle-qa","purpose":"delivery","duration_minutes":45}');
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000051','30000000-0000-0000-0000-000000000058','assignment','{"reference":"shift-qa","purpose":"shift","duration_minutes":60}');
+insert into public.sec_module_requests(organization_id,site_id,reporter_id,request_id,kind,payload) values ('10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','00000000-0000-0000-0000-000000000051','30000000-0000-0000-0000-000000000059','compatibility','{"reference":"model-qa","firmware":"1.0","protocol":"onvif"}');
+insert into public.sec_support_messages(id,organization_id,site_id,request_id,author_id,body) values(gen_random_uuid(),'10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','30000000-0000-0000-0000-000000000054','00000000-0000-0000-0000-000000000051','QA follow-up');
+do $qa$declare receipt jsonb; iid uuid;begin
+ if (select count(*) from public.sec_preferences)<>2 or (select value from public.sec_preferences where key='push')<>'disabled' then raise exception 'preferences';end if;
+ if (select count(*) from public.sec_support_messages)<>2 then raise exception 'support thread';end if;
+ if (select count(*) from public.sec_incidents where request_id='30000000-0000-0000-0000-000000000055' and priority='P2' and state='new')<>1 then raise exception 'manual incident not created';end if;
+ if (select count(*) from public.sec_service_register)<>0 then raise exception 'unreviewed registered';end if;
+ if (select count(*) from public.sec_payment_receipts)<>0 then raise exception 'operator finance leak';end if;
+ if (select count(*) from public.sec_device_observations)<>1 then raise exception 'observation invisible';end if;
+ if has_table_privilege(current_user,'public.sec_device_observations','INSERT') or has_table_privilege(current_user,'public.sec_payment_receipts','INSERT') or has_table_privilege(current_user,'public.sec_preferences','UPDATE') then raise exception 'trusted data writable';end if;
+ select id into iid from public.sec_inbox where request_id='30000000-0000-0000-0000-000000000051';
+ receipt:=public.sec_read_inbox(iid,'10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051');if receipt->>'read_at' is null then raise exception 'not read';end if;
+ if public.sec_read_inbox(iid,'10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051')<>receipt then raise exception 'read not idempotent';end if;
+end $qa$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000052',true);
+do $qa$begin
+ if (select count(*) from public.sec_support_messages)<>0 or (select count(*) from public.sec_preferences)<>0 or (select count(*) from public.sec_inbox)<>0 then raise exception 'personal data leak';end if;
+ if (select count(*) from public.sec_payment_receipts where amount_fcfa=5000)<>1 then raise exception 'finance receipt missing';end if;
+ perform public.sec_review_module_request('30000000-0000-0000-0000-000000000056','10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','reviewed','QA');
+ perform public.sec_review_module_request('30000000-0000-0000-0000-000000000057','10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','reviewed','QA');
+ perform public.sec_review_module_request('30000000-0000-0000-0000-000000000058','10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','reviewed','QA');
+ perform public.sec_review_module_request('30000000-0000-0000-0000-000000000059','10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','declined','QA');
+ if (select count(*) from public.sec_service_register)<>3 then raise exception 'register incorrect';end if;
+ perform public.sec_review_module_request('30000000-0000-0000-0000-000000000056','10000000-0000-0000-0000-000000000051','20000000-0000-0000-0000-000000000051','reviewed','QA');
+ if (select count(*) from public.sec_service_register)<>3 then raise exception 'duplicate registration';end if;
+end $qa$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000053',true);
+do $qa$begin
+ if (select count(*) from public.sec_device_observations)<>0 or (select count(*) from public.sec_service_register)<>0 or (select count(*) from public.sec_payment_receipts)<>0 then raise exception 'cross site leak';end if;
+end $qa$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000051',true);
+do $qa$begin
+ if (select count(*) from public.sec_inbox where event_type='review_recorded')<>4 then raise exception 'review notifications missing';end if;
+end $qa$;
+reset role;
+set local role anon;
+do $qa$begin if has_table_privilege(current_user,'public.sec_device_observations','SELECT') or has_function_privilege(current_user,'public.sec_read_inbox(uuid,uuid,uuid)','EXECUTE') then raise exception 'anon privileges';end if;end $qa$;
+reset role;
+rollback;
