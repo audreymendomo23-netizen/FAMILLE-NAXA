@@ -7,8 +7,8 @@ on:
       - 'apps/web/grillad/**'
       - 'scripts/grillad/**'
       - 'supabase/functions/grillad/**'
-      - 'supabase/drafts/grillad_business_v1.sql'
-      - 'supabase/local-tests/grillad_business_v1_assertions.sql'
+      - 'supabase/drafts/grillad*.sql'
+      - 'supabase/local-tests/grillad*.sql'
       - '.github/workflows/grillad-foundation.yml'
   workflow_dispatch:
 permissions:
@@ -98,3 +98,5 @@ jobs:
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/0003_prompt_0_3_contextual_rls.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_business_v1.sql
           psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_business_v1_assertions.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/drafts/grillad_attendance_v1.sql
+          psql -X -v ON_ERROR_STOP=1 -f supabase/local-tests/grillad_attendance_v1_assertions.sql

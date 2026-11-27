@@ -1,7 +1,7 @@
 // Dedicated GRILLAD gateway, adapted from the family accounting bearer/RPC pattern.
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const date=/^\d{4}-\d{2}-\d{2}$/;
-const actions=new Set(['add_item','prepare','sell','cancel_sale','open_cash','close_cash','expense','target','change_price','attendance','ack_notice']);
+const actions=new Set(['add_item','prepare','sell','cancel_sale','open_cash','close_cash','expense','target','change_price']);
 export async function handle(request,env,fetcher=fetch){
  const origin=request.headers.get('origin');const allowed=env.origins||[];
  const headers={'Content-Type':'application/json','Cache-Control':'no-store','Vary':'Origin','Access-Control-Allow-Methods':'POST, OPTIONS','Access-Control-Allow-Headers':'authorization, apikey, content-type'};
@@ -48,6 +48,8 @@ export async function handle(request,env,fetcher=fetch){
   if(body.action==='workspace')return upstream(await post('/rest/v1/rpc/grillad_workspace',{},token));
   if(!uuid.test(body.org)||!uuid.test(body.site))return reply(400,{error:'SCOPE'});
   const scope={p_org:body.org,p_site:body.site};
+  if(body.action==='attendance_status')return upstream(await post('/rest/v1/rpc/grillad_attendance_status',scope,token));
+  if(body.action==='attendance_capture'&&uuid.test(body.event)&&['arrival','departure'].includes(body.kind)&&typeof body.at==='string'&&typeof body.lat==='number'&&typeof body.lon==='number'&&typeof body.accuracy==='number'&&typeof body.photo==='string')return upstream(await post('/rest/v1/rpc/grillad_attendance_capture',{...scope,p_event:body.event,p_kind:body.kind,p_at:body.at,p_lat:body.lat,p_lon:body.lon,p_accuracy:body.accuracy,p_photo:body.photo},token));
   if(body.action==='snapshot'){
    if(!date.test(body.from)||!date.test(body.to))return reply(400,{error:'PERIOD'});
    return upstream(await post('/rest/v1/rpc/grillad_snapshot',{...scope,p_from:body.from,p_to:body.to},token));
