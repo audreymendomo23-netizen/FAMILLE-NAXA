@@ -1,7 +1,7 @@
 \set ON_ERROR_STOP on
 begin;
-insert into auth.users(id,email) values ('91000000-0000-0000-0000-000000000001','grillad-owner@test.invalid'),('91000000-0000-0000-0000-000000000002','grillad-seller@test.invalid');
-insert into auth.sessions(id,user_id) values ('91000000-0000-0000-0000-000000000011','91000000-0000-0000-0000-000000000001'),('91000000-0000-0000-0000-000000000012','91000000-0000-0000-0000-000000000002');
+insert into auth.users(id,email) values ('91000000-0000-0000-0000-000000000001','grillad-owner@test.invalid'),('91000000-0000-0000-0000-000000000002','grillad-seller@test.invalid'),('91000000-0000-0000-0000-000000000003','grillad-manager@test.invalid');
+insert into auth.sessions(id,user_id) values ('91000000-0000-0000-0000-000000000011','91000000-0000-0000-0000-000000000001'),('91000000-0000-0000-0000-000000000012','91000000-0000-0000-0000-000000000002'),('91000000-0000-0000-0000-000000000013','91000000-0000-0000-0000-000000000003');
 insert into famille_core.organizations(id,legal_name,organization_type,status) values('92000000-0000-0000-0000-000000000001','Test GrillaD','retail','active');
 update famille_core.applications set status='active' where code in ('grillad','zipple');
 insert into famille_core.organization_apps(organization_id,app_id,status) select '92000000-0000-0000-0000-000000000001',id,'active' from famille_core.applications where code='grillad';
@@ -10,7 +10,7 @@ insert into famille_core.locations(id,organization_id,name) values ('93000000-00
 insert into grillad_private.enabled_sites(org,site) values ('92000000-0000-0000-0000-000000000001','93000000-0000-0000-0000-000000000001'),('92000000-0000-0000-0000-000000000001','93000000-0000-0000-0000-000000000002');
 insert into famille_core.client_app_access(user_id,app_id,status) select u.id,a.id,'granted' from auth.users u cross join famille_core.applications a where a.code='grillad';
 insert into famille_core.memberships(user_id,organization_id,app_id,status) select u.id,'92000000-0000-0000-0000-000000000001',a.id,'active' from auth.users u cross join famille_core.applications a where a.code='grillad';
-insert into famille_core.role_assignments(membership_id,app_id,organization_id,role_code,location_id) select id,app_id,organization_id,case when user_id='91000000-0000-0000-0000-000000000001' then 'owner' else 'seller' end,case when user_id='91000000-0000-0000-0000-000000000002' then '93000000-0000-0000-0000-000000000001'::uuid else null end from famille_core.memberships;
+insert into famille_core.role_assignments(membership_id,app_id,organization_id,role_code,location_id) select id,app_id,organization_id,case when user_id='91000000-0000-0000-0000-000000000001' then 'owner' when user_id='91000000-0000-0000-0000-000000000003' then 'manager' else 'seller' end,case when user_id<>'91000000-0000-0000-0000-000000000001' then '93000000-0000-0000-0000-000000000001'::uuid else null end from famille_core.memberships;
 insert into famille_core.subscriptions(organization_id,app_id,plan_id,status,starts_at,ends_at) select '92000000-0000-0000-0000-000000000001',app_id,id,'active',now()-interval '1 day',now()+interval '1 day' from famille_core.plans where code='grillad_premium_month';
 select set_config('grillad.test.app',(select id::text from famille_core.applications where code='grillad'),true);
 select set_config('grillad.test.other',(select id::text from famille_core.applications where code='zipple'),true);
@@ -85,6 +85,24 @@ begin
  begin perform public.grillad_action(o,a,gen_random_uuid(),'set_item_active',jsonb_build_object('item',i,'active',false,'reason','Test'));raise exception 'deactivation with stock';exception when invalid_parameter_value then null;end;
  j:=gen_random_uuid();perform public.grillad_action(o,a,j,'add_item','{"name":"Archive","family":"Omelettes","price":500}');perform public.grillad_action(o,a,gen_random_uuid(),'set_item_active',jsonb_build_object('item',j,'active',false,'reason','Test'));v:=public.grillad_snapshot(o,a,day,day);if jsonb_array_length(v->'inactive_items')<>1 then raise exception 'inactive item history';end if;
  perform public.grillad_action(o,a,gen_random_uuid(),'set_item_active',jsonb_build_object('item',j,'active',true,'reason','Test'));v:=public.grillad_snapshot(o,a,day,day);if jsonb_array_length(v->'inactive_items')<>0 then raise exception 'reactivation';end if;
+end $$;
+select set_config('request.jwt.claim.sub','91000000-0000-0000-0000-000000000003',true);
+select set_config('request.jwt.claims',jsonb_build_object('session_id','91000000-0000-0000-0000-000000000013','app_metadata',jsonb_build_object('active_app_id',current_setting('grillad.test.app')))::text,true);
+do $$declare o uuid:='92000000-0000-0000-0000-000000000001';a uuid:='93000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;e uuid:=gen_random_uuid();p jsonb;v jsonb;
+begin
+ p:=jsonb_build_object('cash',(public.grillad_snapshot(o,a,d,d)->'cash_history'->0->>'id')::uuid,'counted',1850,'reason','Erreur de comptage');
+ v:=public.grillad_action(o,a,e,'cash_recount_request',p);
+ if v->>'status'<>'pending' or public.grillad_action(o,a,e,'cash_recount_request',p)<>v then raise exception 'recount replay';end if;
+ begin perform public.grillad_action(o,a,gen_random_uuid(),'cash_recount_decide',jsonb_build_object('request',e,'decision','approved','reason','Test'));raise exception 'manager approved recount';exception when insufficient_privilege then null;end;
+ perform set_config('grillad.test.recount',e::text,true);
+end $$;
+select set_config('request.jwt.claim.sub','91000000-0000-0000-0000-000000000001',true);
+select set_config('request.jwt.claims',jsonb_build_object('session_id','91000000-0000-0000-0000-000000000011','app_metadata',jsonb_build_object('active_app_id',current_setting('grillad.test.app')))::text,true);
+do $$declare o uuid:='92000000-0000-0000-0000-000000000001';a uuid:='93000000-0000-0000-0000-000000000001';d date:=(now() at time zone 'Africa/Douala')::date;v jsonb;
+begin
+ perform public.grillad_action(o,a,gen_random_uuid(),'cash_recount_decide',jsonb_build_object('request',current_setting('grillad.test.recount')::uuid,'decision','approved','reason','Vérifié'));
+ v:=public.grillad_snapshot(o,a,d,d);
+ if (v->'cash_history'->0->>'counted')::int<>1900 or (v->'cash_history'->0->>'reviewed_counted')::int<>1850 or (v->'cash_history'->0->>'reviewed_difference')::int<>-50 or (v#>>'{finance,encaissements}')::int<>2000 then raise exception 'recount rewrote original or ledger';end if;
 end $$;
 select set_config('request.jwt.claim.sub','91000000-0000-0000-0000-000000000002',true);
 select set_config('request.jwt.claims',jsonb_build_object('session_id','91000000-0000-0000-0000-000000000012','app_metadata',jsonb_build_object('active_app_id',current_setting('grillad.test.app')))::text,true);

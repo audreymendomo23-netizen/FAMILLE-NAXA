@@ -30,6 +30,14 @@ create table grillad_private.cash(
  counted bigint check(counted>=0),expected bigint, close_reason text,
  unique(id,org,site),foreign key(site,org) references famille_core.locations(id,organization_id)
 );
+-- One approved recount per closed register; original closure is immutable.
+create table grillad_private.cash_recounts(
+ id uuid primary key,org uuid not null,site uuid not null,cash uuid not null,requester uuid not null,proposed_count bigint not null check(proposed_count>=0),reason text not null check(length(reason) between 1 and 300),created_at timestamptz not null default now(),
+ status text not null default 'pending' check(status in ('pending','approved','rejected')),decided_by uuid,decided_at timestamptz,decision_reason text,
+ foreign key(cash,org,site) references grillad_private.cash(id,org,site),
+ check((status='pending' and decided_by is null and decided_at is null and decision_reason is null) or (status<>'pending' and decided_by is not null and decided_by<>requester and decided_at is not null and decision_reason is not null)));
+create unique index grillad_recount_active on grillad_private.cash_recounts(cash) where status in ('pending','approved');
+alter table grillad_private.cash_recounts enable row level security;
 create unique index grillad_one_cash on grillad_private.cash(org,site) where closed_at is null;
 create table grillad_private.preparations(
  id uuid primary key,org uuid not null,site uuid not null,item uuid not null,qty bigint not null check(qty>0),
@@ -269,6 +277,21 @@ begin
   if n<>v_expected and (reason is null or length(reason) not between 1 and 300) then raise exception 'GRILLAD_REASON' using errcode='22023';end if;
   update grillad_private.cash set counted=n,expected=v_expected,closed_at=now(),close_reason=reason where id=c.id;
   result:=jsonb_build_object('id',c.id,'expected',v_expected,'counted',n,'difference',n-v_expected);
+ when 'cash_recount_request' then
+  item_id:=(p_payload->>'cash')::uuid;n:=(p_payload->>'counted')::bigint;reason:=btrim(p_payload->>'reason');
+  select * into c from grillad_private.cash where id=item_id and org=p_org and site=p_site and closed_at is not null;
+  if not found then raise exception 'GRILLAD_CLOSED_CASH_DENIED' using errcode='42501';end if;
+  if n is null or n<0 or n>1000000000000 or n=c.counted or reason is null or length(reason) not between 1 and 300 or exists(select 1 from grillad_private.cash_recounts cr where cr.cash=c.id and cr.status in ('pending','approved')) then raise exception 'GRILLAD_RECOUNT_INPUT' using errcode='22023';end if;
+  insert into grillad_private.cash_recounts(id,org,site,cash,requester,proposed_count,reason) values(p_event,p_org,p_site,c.id,u,n,reason);
+  result:=jsonb_build_object('id',p_event,'status','pending');
+ when 'cash_recount_decide' then
+  if r<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
+  item_id:=(p_payload->>'request')::uuid;label:=p_payload->>'decision';reason:=btrim(p_payload->>'reason');
+  if label is null or label not in ('approved','rejected') or reason is null or length(reason) not between 1 and 300 then raise exception 'GRILLAD_RECOUNT_DECISION' using errcode='22023';end if;
+  if not exists(select 1 from grillad_private.cash_recounts cr where cr.id=item_id and cr.org=p_org and cr.site=p_site and cr.requester<>u) then raise exception 'GRILLAD_RECOUNT_DENIED' using errcode='42501';end if;
+  update grillad_private.cash_recounts set status=label,decided_by=u,decided_at=now(),decision_reason=reason where id=item_id and org=p_org and site=p_site and status='pending';
+  if not found then raise exception 'GRILLAD_RECOUNT_CLOSED' using errcode='22023';end if;
+  result:=jsonb_build_object('id',item_id,'status',label);
  when 'create_site' then
   if r<>'owner' then raise exception 'GRILLAD_ROLE' using errcode='42501';end if;
   label:=btrim(p_payload->>'name');reason:=btrim(p_payload->>'reason');
@@ -352,7 +375,7 @@ begin
  if r<>'seller' then
  select coalesce(jsonb_agg(to_jsonb(a) order by a.created_at desc),'[]'::jsonb) into v_adjustments from (select id,item,delta,reason,actor,created_at from grillad_private.stock_adjustments where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) a;
  select coalesce(jsonb_agg(jsonb_build_object('id',i.id,'name',i.name,'family',i.family,'price',i.price) order by i.name),'[]'::jsonb) into v_inactive_items from grillad_private.items i where i.org=p_org and i.site=p_site and not i.active;
- select coalesce(jsonb_agg(to_jsonb(h) order by h.closed_at desc),'[]'::jsonb) into v_cash_history from (select c.id,c.opened_at,c.closed_at,c.opening,c.expected,c.counted,c.counted-c.expected as difference,c.close_reason from grillad_private.cash c where c.org=p_org and c.site=p_site and c.closed_at is not null and (c.closed_at at time zone 'Africa/Douala')::date between p_from and p_to order by c.closed_at desc limit 200) h;
+ select coalesce(jsonb_agg(to_jsonb(h) order by h.closed_at desc),'[]'::jsonb) into v_cash_history from (select c.id,c.opened_at,c.closed_at,c.opening,c.expected,c.counted,c.counted-c.expected as difference,c.close_reason,coalesce((select cr.proposed_count from grillad_private.cash_recounts cr where cr.cash=c.id and cr.status='approved'),c.counted) as reviewed_counted,coalesce((select cr.proposed_count from grillad_private.cash_recounts cr where cr.cash=c.id and cr.status='approved'),c.counted)-c.expected as reviewed_difference,coalesce((select jsonb_agg(jsonb_build_object('id',cr.id,'requester',cr.requester,'proposed_count',cr.proposed_count,'reason',cr.reason,'status',cr.status,'decision_reason',cr.decision_reason) order by cr.created_at desc) from grillad_private.cash_recounts cr where cr.cash=c.id),'[]'::jsonb) as recounts from grillad_private.cash c where c.org=p_org and c.site=p_site and c.closed_at is not null and (c.closed_at at time zone 'Africa/Douala')::date between p_from and p_to order by c.closed_at desc limit 200) h;
  select jsonb_build_object('ca',coalesce(sum(total),0),'encaissements',(select coalesce(sum(amount),0) from grillad_private.cash_receipts where org=p_org and site=p_site and reversed_at is null and (recorded_at at time zone 'Africa/Douala')::date between p_from and p_to),'sales_count',count(distinct (site,coalesce(direct_order,id))) filter(where source='direct')+count(distinct connect_order) filter(where source='connect'),'direct_ca',coalesce(sum(total) filter(where source='direct'),0),'connect_ca',coalesce(sum(total) filter(where source='connect'),0),'cost',case when count(*) filter(where cost is null)>0 then null else coalesce(sum(qty*cost),0) end,'charges',(select coalesce(sum(value),0) from grillad_private.expenses where org=p_org and site=p_site and cancelled_at is null and (created_at at time zone 'Africa/Douala')::date between p_from and p_to)) into v_finance from grillad_private.sales where org=p_org and site=p_site and cancelled_at is null and (created_at at time zone 'Africa/Douala')::date between p_from and p_to;
  select jsonb_build_object('id',c.id,'opening',c.opening,'expected',c.opening+coalesce((select sum(amount) from grillad_private.cash_receipts where cash=c.id and reversed_at is null),0)-coalesce((select sum(value) from grillad_private.expenses where cash=c.id and cancelled_at is null),0)) into v_cash from grillad_private.cash c where org=p_org and site=p_site and closed_at is null;
  select coalesce(jsonb_agg(to_jsonb(e) order by e.created_at desc),'[]'::jsonb) into v_expenses from (select id,label,value,cash,created_at,cancelled_at,cancelled_by,cancel_reason from grillad_private.expenses where org=p_org and site=p_site and (created_at at time zone 'Africa/Douala')::date between p_from and p_to order by created_at desc limit 200) e;
