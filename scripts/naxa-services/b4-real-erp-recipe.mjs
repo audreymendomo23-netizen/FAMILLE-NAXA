@@ -131,6 +131,13 @@ export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
  const forbiddenGoal=randomUUID();await denied(cashier,event(cashier,'business_goal.created',forbiddenGoal,document(forbiddenGoal,'business_goal',5000)));
  const direct=await success(base+'/rest/v1/ns_management_records?id=in.('+staffIds.join(',')+')&select=id',undefined,cashier.access_token,anon,'GET');assert.deepEqual(direct,[]);
  const history=await success(base+'/rest/v1/ns_management_record_events?record_id=in.('+staffIds.join(',')+')&select=id',undefined,cashier.access_token,anon,'GET');assert.deepEqual(history,[]);
+ // The older commission ledger and refund adjustments must not bypass the same boundary.
+ const [legacyCommission]=await success(base+'/rest/v1/ns_commission_entries',{org_id:org,site_id:site,member_id:f.member.id,base_amount_xaf:1000,commission_xaf:100,status:'pending_approval',calculation_snapshot:{fixture:'B4 confidentiality only'}});
+ const [legacyAdjustment]=await success(base+'/rest/v1/ns_commission_adjustments',{org_id:org,site_id:site,commission_entry_id:legacyCommission.id,source_event_id:randomUUID(),idempotency_key:randomUUID(),adjustment_type:'correction',amount_delta_xaf:-10,reason:'Recette de confidentialité',created_by:f.member.id});
+ for(const [table,id] of [['ns_commission_entries',legacyCommission.id],['ns_commission_adjustments',legacyAdjustment.id]]){
+  assert.equal((await success(base+'/rest/v1/'+table+'?id=eq.'+id+'&select=id',undefined,a.access_token,anon,'GET')).length,1);
+  assert.deepEqual(await success(base+'/rest/v1/'+table+'?id=eq.'+id+'&select=id',undefined,cashier.access_token,anon,'GET'),[]);
+ }
  const sync=await success(base+'/rest/v1/rpc/ns_pull_sync_changes',{p_org_id:org,p_device_id:cashier.device_id,p_after_cursor:0,p_limit:200},cashier.access_token,anon);
  assert.ok(sync.changes.some(x=>x.aggregate_id===invoice));assert.ok(!sync.changes.some(x=>staffIds.includes(x.aggregate_id)));
  pass('B4 roles: operating cashier may create customer but cannot count stock, set targets or read/approve remuneration via REST or peer sync');

@@ -363,6 +363,15 @@ begin
 end;
 $count_patch$;
 -- Pay decisions and amounts must not be projected into a cashier's local journal.
+-- The legacy commission ledger and adjustments use the same confidentiality boundary.
+drop policy if exists ns_commission_entries_select on public.ns_commission_entries;
+create policy ns_commission_entries_select on public.ns_commission_entries for select to authenticated using (
+ public.ns_can_access_site(org_id,site_id) and public.ns_can_manage_site(org_id,site_id)
+);
+drop policy if exists ns_commission_adjustments_select on public.ns_commission_adjustments;
+create policy ns_commission_adjustments_select on public.ns_commission_adjustments for select to authenticated using (
+ public.ns_can_access_site(org_id,site_id) and public.ns_can_manage_site(org_id,site_id)
+);
 drop policy if exists ns_management_records_select on public.ns_management_records;
 create policy ns_management_records_select on public.ns_management_records for select to authenticated using (
  public.ns_can_access_site(org_id,site_id) and
