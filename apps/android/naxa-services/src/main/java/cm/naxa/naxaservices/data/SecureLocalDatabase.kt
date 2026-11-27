@@ -99,6 +99,33 @@ internal object SecureLocalDatabase {
 
     private fun quoted(name:String):String = "\"" + name.replace("\"","\"\"") + "\""
 
+    /**
+     * A legacy Room database was opened by Android's platform SQLite, whose journal
+     * mode may differ from SQLCipher's. Close and checkpoint it with the same driver
+     * before the encrypted export. Never remove a nonempty rollback journal or WAL.
+     */
+    private fun normalizeLegacyJournal(source:File) {
+        android.database.sqlite.SQLiteDatabase.openDatabase(
+            source.absolutePath,null,
+            android.database.sqlite.SQLiteDatabase.OPEN_READWRITE or
+                android.database.sqlite.SQLiteDatabase.NO_LOCALIZED_COLLATORS
+        ).use { legacy ->
+            legacy.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)",null).use { cursor ->
+                check(cursor.moveToFirst() && cursor.getInt(0)==0) { "LOCAL_DB_LEGACY_WAL_BUSY" }
+            }
+            legacy.rawQuery("PRAGMA journal_mode=DELETE",null).use { cursor ->
+                check(cursor.moveToFirst() && cursor.getString(0).equals("delete",true)) { "LOCAL_DB_LEGACY_JOURNAL_BUSY" }
+            }
+        }
+        check(!File(source.path+"-wal").exists() && !File(source.path+"-shm").exists()) { "LOCAL_DB_LEGACY_WAL_REMAINS" }
+        val journal=File(source.path+"-journal")
+        // TRUNCATE mode can leave an empty rollback journal. With the checkpoint,
+        // DELETE mode and closed legacy connection verified, it contains no recovery data.
+        if(journal.exists()){
+            check(journal.isFile && journal.length()==0L && journal.delete()) { "LOCAL_DB_LEGACY_JOURNAL_REMAINS" }
+        }
+    }
+
     /** The original remains intact until a complete, verified export can atomically replace it. */
     private fun encryptExisting(source:File,passphrase:ByteArray) {
         val stage=File(source.parentFile,source.name+".encrypted-stage")
@@ -113,6 +140,7 @@ internal object SecureLocalDatabase {
             // ATTACH inherits the source connection's CREATE flag. Prepare the target
             // explicitly with its key; never let ATTACH silently create a plaintext target.
             check(source.isFile)
+            normalizeLegacyJournal(source)
             SQLiteDatabase.openDatabase(stage.absolutePath,passphrase,null,SQLiteDatabase.OPEN_READWRITE or SQLiteDatabase.CREATE_IF_NECESSARY,preserveOnCorruption,null).use { target ->
                 target.execSQL("PRAGMA user_version = 0")
             }
@@ -140,7 +168,7 @@ internal object SecureLocalDatabase {
                 }
             }
             listOf("-wal","-shm","-journal").forEach { suffix ->
-                check(!File(source.path+suffix).exists()) { "LOCAL_DB_SOURCE_BUSY" }
+                check(!File(source.path+suffix).exists()) { "LOCAL_DB_SOURCE_BUSY:$suffix" }
                 check(!File(stage.path+suffix).exists()) { "LOCAL_DB_STAGE_BUSY" }
             }
             FileOutputStream(stage,true).use { it.fd.sync() }

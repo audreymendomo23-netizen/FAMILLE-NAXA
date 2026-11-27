@@ -110,6 +110,12 @@ class SecureLocalDatabaseInstrumentedTest {
         try{
             Room.databaseBuilder(context,NsServicesDatabase::class.java,name).build().withDatabase{it.naxaServicesDao().insertOutboxEvent(original)}
             android.database.sqlite.SQLiteDatabase.openDatabase(context.getDatabasePath(name).path,null,android.database.sqlite.SQLiteDatabase.OPEN_READWRITE).use{plain->
+                // Reproduce Android's rollback journal behavior instead of relying on
+                // the runner's default journal mode.
+                plain.rawQuery("PRAGMA journal_mode=TRUNCATE",null).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals("truncate",cursor.getString(0).lowercase())
+                }
                 plain.execSQL("ALTER TABLE local_outbox_events DROP COLUMN ownerMemberId")
                 plain.execSQL("ALTER TABLE local_outbox_events DROP COLUMN ownerDeviceId")
                 plain.version=16
