@@ -79,6 +79,7 @@ jobs:
           sudo apt-get install -y postgresql-client
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n1_identity.sql"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n2_n3_rooms.sql"
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/widemeet_n1_billing.sql"
           psql "$DB_URL" -v ON_ERROR_STOP=1 -c "notify pgrst, 'reload schema'"
       - name: Exercise real product sessions and database-driven SFU eviction
         run: |
