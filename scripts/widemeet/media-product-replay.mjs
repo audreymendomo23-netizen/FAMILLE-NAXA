@@ -15,6 +15,7 @@ import {tmpdir} from "node:os";
 import {join as joinPath} from "node:path";
 import {createWideMeetTranscription} from "../../packages/media-core/widemeet-transcription.mjs";
 import {runAsrLoop} from "../../packages/media-core/widemeet-asr-loop.mjs";
+import {createLiveCaptions} from "../../packages/media-core/widemeet-live-captions.mjs";
 import {createMediaProxy} from "../../packages/media-core/signaling-proxy.mjs";
 import {createWideMeetAdmission} from "../../packages/media-core/widemeet-admission.mjs";
 const base=process.env.SUPABASE_URL,serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY,anon=process.env.SUPABASE_ANON_KEY;
@@ -142,7 +143,24 @@ try{
  // Capture host speech through Chromium -> WebRTC -> SFU -> Egress.
   if(qualifySpeech)await b.evaluate(()=>window.r.localParticipant.setMicrophoneEnabled(false));
   await cmd(hs.access_token,"record",true);await until(()=>phase("active"),"resumed recording active",90000);await delay(qualifySpeech?16000:3000);
- await cmd(hs.access_token,"record",false);
+  if(process.env.WM_LIVE_CAPTIONS_QUALIFIED==="true"){
+   const liveWorker=createLiveCaptions({supabaseUrl:base,serviceKey,outputDirectory:process.env.WM_EGRESS_OUT,python:process.env.WM_ASR_PYTHON,modelDir:process.env.WM_ASR_MODEL});
+   const cap=(token,language,room_id=rid)=>request(roomApi+"/transcription",{action:"live-captions",data:{room_id,language}},token);
+   await until(async()=>await liveWorker.tick()>0,"actual live caption inference while Egress still active",45000);
+   const original=await cap(hs.access_token,"original");assert.equal(original.status,200);assert.equal(original.data.status,"ready");
+   assert.equal(original.data.source_language,"en");assert.match(original.data.text,/project|meeting/i);assert.ok(original.data.end_ms>original.data.start_ms&&original.data.ttl_ms>0);
+   const english=await cap(hs.access_token,"en");assert.equal(english.data.text,original.data.text);assert.equal(english.data.fallback,false);
+   const unavailable=await cap(hs.access_token,"ff");assert.equal(unavailable.data.fallback,true);assert.equal(unavailable.data.text,original.data.original);
+   assert.equal((await cap(hs.access_token,"en",randomUUID())).status,403);assert.equal((await cap("invalid","en")).status,403);
+   assert.equal((await getRuns())[0].phase,"active");console.log("PASS actual consented active Egress -> local inference -> live captions, language switch and explicit fallback before recording stops");
+   const activeId=(await getRuns())[0].id;
+   await cmd(hs.access_token,"record",false);
+   const stopped=await cap(hs.access_token,"original");assert.equal(stopped.data.status,"unavailable");
+   const expired=await fetch(base+"/rest/v1/wm_live_captions?recording_id=eq."+activeId,{headers:{apikey:serviceKey,Authorization:"Bearer "+serviceKey}});assert.ok(expired.ok);assert.deepEqual(await expired.json(),[]);
+   console.log("PASS live caption window is inaccessible and purged on recording stop");
+  }
+
+ if(process.env.WM_LIVE_CAPTIONS_QUALIFIED!=="true")await cmd(hs.access_token,"record",false);
  await until(()=>phase("complete"),"verified normal recording completion",90000);
  assert.equal((await good(roomApi+"/read",{room_id:rid},hs.access_token)).recordingStatus.phase,"complete");
  const final=(await getRuns())[0];assert.match(final.content_sha256,/^[a-f0-9]{64}$/);assert.ok(final.bytes>1000);
