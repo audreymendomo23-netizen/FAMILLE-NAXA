@@ -179,7 +179,7 @@ try{
  await until(()=>phase("complete"),"verified normal recording completion",90000);
  assert.equal((await good(roomApi+"/read",{room_id:rid},hs.access_token)).recordingStatus.phase,"complete");
  const final=(await getRuns())[0];assert.match(final.content_sha256,/^[a-f0-9]{64}$/);assert.ok(final.bytes>1000);
- const st=await stat(process.env.WM_EGRESS_OUT+"/"+final.object_name);assert.equal(st.mode&0o777,0o600);
+ if(enableStorage){await until(async()=>!(await stat(process.env.WM_EGRESS_OUT+"/"+final.object_name).then(()=>true,e=>{if(e.code==="ENOENT")return false;throw e})),"verified upload local audio cleanup",10000);console.log("PASS B6 no duplicate local audio after verified storage")}else{const st=await stat(process.env.WM_EGRESS_OUT+"/"+final.object_name);assert.equal(st.mode&0o777,0o600);}
  console.log("PASS actual consent-driven recording normal stop, private audio-only verified file and SHA-256 ledger");
  finishAtEnd=async()=>{await cmd(hs.access_token,"record",true);await until(()=>phase("active"),"recording active before host end",90000);await delay(3000);await cmd(hs.access_token,"end");await until(()=>phase("complete"),"host-end recording finalization",90000);console.log("PASS actual host ends room with recording active; valid audio retained rather than discarded")};
  if(enableStorage){assert.equal(final.storage_key,rid+"/"+final.id+".ogg");assert.ok(final.stored_at);const unauth=await fetch(base+"/storage/v1/object/public/wm-recordings/"+final.storage_key);assert.ok(!unauth.ok);assert.equal((await request(roomApi+"/recordings",{room_id:rid},hs.access_token)).status,403);}

@@ -1,0 +1,13 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {randomBytes} from "node:crypto";
+import {mkdtemp,rm,readFile,writeFile,stat,readdir} from "node:fs/promises";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {sealArchive,openArchive,restoreArchive} from "./widemeet-b6-backup.mjs";
+const path="20000000-0000-4000-8000-000000000086/10000000-0000-4000-8000-000000000086.ogg";
+const bytes=Buffer.from("synthetic private recording fixture");
+test("real encrypted file round trip and private permissions",async()=>{const key=randomBytes(32),root=await mkdtemp(join(tmpdir(),"wm-b6-backup-"));try{const archive=sealArchive([{path,bytes}],key);assert.equal(archive.includes(bytes),false);await writeFile(join(root,"backup.enc"),archive,{mode:0o600,flag:"wx"});const out=await restoreArchive(await readFile(join(root,"backup.enc")),key,root);assert.equal(out.restored,1);assert.deepEqual(await readFile(join(out.root,path)),bytes);assert.equal((await stat(join(out.root,path))).mode&0o777,0o600);assert.equal((await stat(out.root)).mode&0o777,0o700)}finally{await rm(root,{recursive:true,force:true})}});
+test("tampered archive and wrong key fail before creating files",async()=>{const key=randomBytes(32),root=await mkdtemp(join(tmpdir(),"wm-b6-backup-"));try{const archive=sealArchive([{path,bytes}],key),tampered=Buffer.from(archive);tampered[20]^=1;await assert.rejects(restoreArchive(tampered,key,root));await assert.rejects(restoreArchive(archive,randomBytes(32),root));assert.deepEqual(await readdir(root),[])}finally{await rm(root,{recursive:true,force:true})}});
+test("reject unsafe path, duplicate object, invalid key and oversized payload",()=>{const key=randomBytes(32);assert.throws(()=>sealArchive([{path:"../private.ogg",bytes}],key));assert.throws(()=>sealArchive([{path,bytes},{path,bytes}],key));assert.throws(()=>sealArchive([{path,bytes}],Buffer.alloc(16)));assert.throws(()=>sealArchive([{path,bytes:Buffer.alloc(16*1024*1024+1)}],key));assert.throws(()=>openArchive(Buffer.from("bad"),key))});
+test("fresh IV produces different ciphertext for same manifest",()=>{const key=randomBytes(32),a=sealArchive([{path,bytes}],key),b=sealArchive([{path,bytes}],key);assert.notDeepEqual(a,b);assert.deepEqual(openArchive(a,key),openArchive(b,key))});

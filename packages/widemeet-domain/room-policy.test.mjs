@@ -113,6 +113,10 @@ test("timed polls reject boundary votes and reveal closed survey only at the ser
  assert.throws(()=>run(r,guest,"survey_vote",[0],"timed0002",16000),/invalid_vote/);
 });
 
+test("B6 unsupported confidentiality modes fail closed instead of issuing media grants",()=>{const r=open();for(const confidentiality of ["strict","highly_confidential","unknown",false,{}])assert.equal(mediaPermission({...r,confidentiality},host,1000),null);assert.equal(mediaPermission({...r,confidentiality:"confidential"},host,1000).screen,false);assert.equal(mediaPermission(r,host,1000).screen,true);});
+
+test("B6 unsupported confidentiality fails closed for room mutations except safe closure",()=>{const r={...open(),confidentiality:"highly_confidential"};assert.throws(()=>run(r,host,"chat","private"),/unsupported_confidentiality/);assert.throws(()=>run(r,host,"record",true),/unsupported_confidentiality/);assert.equal(run(r,host,"end").status,"ended");});
+
 test("B4 targeted rating: frozen eligible list, no unauthorized vote, explicit denominator",()=>{
  let r=open();const config={question:"Rate",kind:"rating",options:Array.from({length:10},(_,i)=>String(i+1)),anonymous:true,visibility:"closed",quorum:100,threshold:50,eligibleIds:[guest.memberId]};
  assert.throws(()=>run(r,host,"survey",{...config,eligibleIds:["foreign001"]},"target001"),/invalid_poll/);

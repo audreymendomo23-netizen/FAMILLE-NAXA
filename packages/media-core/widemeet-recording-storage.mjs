@@ -21,5 +21,15 @@ export function createWideMeetRecordingStorage({supabaseUrl,serviceKey,fetcher=f
   return key;
  }
  async function remove(key){if(!keyPattern.test(key))throw Error("invalid key");await checkBucket();const r=await call("object/"+bucket,{method:"DELETE",headers:{"Content-Type":"application/json"},body:JSON.stringify({prefixes:[key]})});if(!r.ok)throw Error("private delete failed")}
- return {put,remove};
+ // Delete, then verify the exact object is absent in the private bucket.
+ async function removeVerified(key){
+  const parts=key.split("/");
+  if(parts.length!==2||!uuid.test(parts[0])||!parts[1].endsWith(".ogg")||!uuid.test(parts[1].slice(0,-4)))throw Error("invalid key");
+  await remove(key);
+  const r=await call("object/list/"+bucket,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({prefix:parts[0],search:parts[1],limit:100,offset:0})});
+  if(!r.ok)throw Error("private absence check failed");
+  const items=await r.json();
+  if(!Array.isArray(items)||items.length>=100||items.some(item=>!item||typeof item.name!=="string"||item.name===parts[1]))throw Error("private deletion not confirmed");
+ }
+ return {put,remove,removeVerified};
 }
