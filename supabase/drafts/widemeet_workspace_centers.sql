@@ -15,9 +15,27 @@ create index wm_direct_thread_in on public.wm_direct_messages(workspace_id,recip
 alter table public.wm_direct_messages enable row level security;
 revoke all on public.wm_direct_messages from public,anon,authenticated;
 grant select,insert,update,delete on public.wm_direct_messages to service_role;
+-- B4: calendar windows in Douala. Upper bound is exclusive; never include future rooms.
+create function public.wm_b4_window(p_period text,p_days integer,p_now timestamptz)
+returns table(start_ms bigint,end_ms bigint) language sql stable set search_path=pg_catalog as $b4$
+ with t as (select p_now at time zone 'Africa/Douala' as local_now),
+ bounds as (select case p_period
+  when 'daily' then date_trunc('day',local_now)
+  when 'weekly' then date_trunc('week',local_now)
+  when 'monthly' then date_trunc('month',local_now)
+  when 'quarterly' then date_trunc('quarter',local_now)
+  when 'yearly' then date_trunc('year',local_now)
+  when 'rolling' then local_now-make_interval(days=>p_days)
+ end as start_local from t)
+ select floor(extract(epoch from (start_local at time zone 'Africa/Douala'))*1000)::bigint,
+ floor(extract(epoch from p_now)*1000)::bigint
+ from bounds where start_local is not null and (p_period<>'rolling' or p_days in (7,30,90,365))
+$b4$;
+revoke all on function public.wm_b4_window(text,integer,timestamptz) from public,anon,authenticated;
+grant execute on function public.wm_b4_window(text,integer,timestamptz) to service_role;
 create function public.wm_workspace_center(p_hash text,p_action text,p_data jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
-declare a record; peer uuid; mid uuid; b text; q text; v jsonb; m public.wm_direct_messages%rowtype; days integer; scope_name text; cutoff bigint;
+declare a record; peer uuid; mid uuid; b text; q text; v jsonb; m public.wm_direct_messages%rowtype; days integer; scope_name text; cutoff bigint; upper_ms bigint; period_name text;
 begin
  -- Same lock order as identity membership mutations; then recheck session and entitlement.
  perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
@@ -25,10 +43,16 @@ begin
  if not found or not exists(select 1 from public.wm_workspaces w where w.id=a.workspace_id and w.enabled and w.kind='enterprise') then return null;end if;
  if p_action='center-statistics' then
   if a.plan<>'premium' or a.role not in ('promoteur','manager') then return null;end if;
-  if coalesce(p_data->>'days','') not in ('7','30','90','365') then return null;end if;
-  days:=(p_data->>'days')::integer;scope_name:=case when a.role='promoteur' then 'enterprise' else 'organizer' end;
-  cutoff:=floor(extract(epoch from clock_timestamp()-make_interval(days=>days))*1000)::bigint;
-  select jsonb_build_object('scope',scope_name,'days',days,'total',count(*),
+  period_name:=coalesce(p_data->>'period','rolling');
+  if period_name not in ('rolling','daily','weekly','monthly','quarterly','yearly') then return null;end if;
+  if period_name='rolling' then
+   if coalesce(p_data->>'days','') not in ('7','30','90','365') then return null;end if;
+   days:=(p_data->>'days')::integer;
+  elsif p_data ? 'days' then return null;end if;
+  scope_name:=case when a.role='promoteur' then 'enterprise' else 'organizer' end;
+  select start_ms,end_ms into cutoff,upper_ms from public.wm_b4_window(period_name,days,clock_timestamp());
+  if not found then return null;end if;
+  select jsonb_build_object('scope',scope_name,'days',days,'period',period_name,'start_ms',cutoff,'end_ms',upper_ms,'total',count(*),
    'scheduled',count(*) filter(where state->>'status'='scheduled' and coalesce(state->>'cancelled','false')='false'),
    'open',count(*) filter(where state->>'status'='open'),
    'paused',count(*) filter(where state->>'status'='paused'),
@@ -36,9 +60,10 @@ begin
    'cancelled',count(*) filter(where state->>'cancelled'='true'),
    'duration_minutes',coalesce(sum((state->>'durationMinutes')::bigint) filter(where coalesce(state->>'cancelled','false')='false'),0),
    'polls_closed',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(state->'polls','[]'::jsonb)) p where p->>'open'='false')),0),
+   'polls_effectively_closed',coalesce(sum((select count(*) from jsonb_array_elements(coalesce(state->'polls','[]'::jsonb)) p where p->>'open'='false' or (p->>'closesMs')::bigint<=upper_ms or state->>'status'='ended')),0),
    'tasks_done',coalesce(sum((select count(*) from public.wm_tasks t join public.wm_minutes_versions mv on mv.id=t.version_id and mv.revoked_at is null and mv.published_at is not null where t.room_id=wm_rooms.id and t.state='done' and exists(select 1 from public.wm_minutes_recipients mr where mr.version_id=t.version_id and mr.account_id=t.assignee_id and mr.revoked_at is null))),0))
    into v from public.wm_rooms where workspace_id=a.workspace_id and (a.role='promoteur' or host_id=a.account_id)
-   and (state->>'scheduledMs')::bigint>=cutoff and (state->>'scheduledMs')::bigint<=floor(extract(epoch from clock_timestamp())*1000)::bigint;
+   and (state->>'scheduledMs')::bigint>=cutoff and (state->>'scheduledMs')::bigint<upper_ms;
   return v;
  end if;
  if p_action='center-contacts' then
