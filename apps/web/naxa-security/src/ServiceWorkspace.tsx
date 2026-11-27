@@ -10,6 +10,7 @@ const panels:Record<string,Entry>={
  "B2.25":{resource:"sec_device_observations",title:"Santé des équipements",order:"observed_at.desc"},
  "B2.20":{resource:"sec_service_register",title:"Registre des dossiers de compatibilité",kind:"compatibility",order:"recorded_at.desc"},
  "B3.07":{resource:"sec_incidents",title:"Incidents déclarés"},
+ "B3.03":{resource:"sec_observation_alerts",title:"Avertissements de télémétrie",order:"observed_at.desc"},
  "B3.22":{resource:"sec_device_observations",title:"Mesures environnementales reçues",order:"observed_at.desc"},
  "B4.24":{resource:"sec_service_register",title:"Registre des visites examinées",kind:"visitor",order:"recorded_at.desc"},
  "B4.27":{resource:"sec_service_register",title:"Registre des passages examinés",kind:"vehicle",order:"recorded_at.desc"},
@@ -37,6 +38,7 @@ export function ServiceWorkspace({screen}:{screen:string}){
  case "sec_inbox":return (r.event_type==="request_received"?"Demande reçue":"Revue enregistrée")+" · "+(r.read_at?"Lu":"Non lu");
  case "sec_support_messages":return safeText(r.body);
  case "sec_incidents":return safeText(r.subject)+" · "+safeText(r.priority)+" · "+safeText(r.state);
+ case "sec_observation_alerts":return safeText(r.kind)+" · "+safeText(r.device_id)+" · "+safeText(r.observed_at)+" — avertissement, pas alarme certifiée";
  case "sec_device_observations":{const ms=Date.parse(safeText(r.observed_at)),fresh=Number.isFinite(ms)&&ms<=Date.now()&&Date.now()-ms<=120000;return safeText(r.device_id)+" · "+(fresh?safeText(r.status):"État inconnu (donnée ancienne)")+(r.metric?" · "+safeText(r.metric)+": "+safeText(r.value):"");}
  default:return "";
  }}

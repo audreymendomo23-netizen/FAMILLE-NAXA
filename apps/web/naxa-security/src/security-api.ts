@@ -1,6 +1,6 @@
 // Only public key and short-lived access token supplied by the dedicated SECURITY auth boundary.
 export const SECURITY_URL="https://idupfjbkwjcavyisxteo.supabase.co";
-export const resources=["sec_organizations","sec_sites","sec_devices","sec_incidents","sec_work_orders","sec_attendance_drafts","sec_module_requests","sec_preferences","sec_service_register","sec_inbox","sec_support_messages","sec_payment_receipts","sec_device_observations","sec_media_grants","sec_payment_reconciliation","sec_patrols","sec_patrol_checks","sec_passage_logs","sec_internal_safety","sec_field_events"] as const;
+export const resources=["sec_organizations","sec_sites","sec_devices","sec_incidents","sec_work_orders","sec_attendance_drafts","sec_module_requests","sec_preferences","sec_service_register","sec_inbox","sec_support_messages","sec_payment_receipts","sec_device_observations","sec_media_grants","sec_payment_reconciliation","sec_patrols","sec_patrol_checks","sec_passage_logs","sec_internal_safety","sec_field_events","sec_observation_alerts"] as const;
 export type Resource=typeof resources[number];
 export type SecuritySession={accessToken:string;publicKey:string;userId:string};
 export async function request(session:SecuritySession,resource:Resource,options:{method?:"GET"|"POST";body?:Record<string,unknown>;site?:string;organization?:string;record?:string;requestId?:string;order?:string}={},transport:typeof fetch=fetch){

@@ -1,0 +1,35 @@
+begin;
+insert into auth.users values ('00000000-0000-0000-0000-000000000081'),('00000000-0000-0000-0000-000000000082');
+insert into public.sec_organizations(id,name) values ('10000000-0000-0000-0000-000000000081','QA gateway');
+insert into public.sec_memberships values ('10000000-0000-0000-0000-000000000081','00000000-0000-0000-0000-000000000081','operator',true),('10000000-0000-0000-0000-000000000081','00000000-0000-0000-0000-000000000082','operator',true);
+insert into public.sec_sites(id,organization_id,name) values ('20000000-0000-0000-0000-000000000081','10000000-0000-0000-0000-000000000081','QA'),('20000000-0000-0000-0000-000000000082','10000000-0000-0000-0000-000000000081','Other');
+insert into public.sec_site_memberships values ('10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','00000000-0000-0000-0000-000000000081',true),('10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000082','00000000-0000-0000-0000-000000000082',true);
+insert into public.sec_devices(id,organization_id,site_id,label,kind) values ('40000000-0000-0000-0000-000000000081','10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','QA gateway','gateway'),('40000000-0000-0000-0000-000000000082','10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','QA sensor','environment'),('40000000-0000-0000-0000-000000000083','10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000082','Other','environment');
+insert into sec_private.gateway_bindings(gateway_id,organization_id,site_id,device_id) values ('40000000-0000-0000-0000-000000000081','10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','40000000-0000-0000-0000-000000000082');
+insert into sec_private.telemetry_thresholds values ('10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','40000000-0000-0000-0000-000000000082','temperature',30);
+set local role sec_gateway_ingest;
+do $q$declare x jsonb;begin
+ x:=sec_private.ingest_observation('40000000-0000-0000-0000-000000000081','10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','40000000-0000-0000-0000-000000000082','50000000-0000-0000-0000-000000000081',now(),'fault','temperature',31);
+ if x->>'state'<>'recorded' or (x->>'warnings')::integer<>2 or x->>'physical_action'<>'false' then raise exception 'wrong receipt';end if;
+ if sec_private.ingest_observation('40000000-0000-0000-0000-000000000081','10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','40000000-0000-0000-0000-000000000082','50000000-0000-0000-0000-000000000081',now(),'fault','temperature',31)<>x then raise exception 'retry changed';end if;
+ begin perform sec_private.ingest_observation('40000000-0000-0000-0000-000000000081','10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','40000000-0000-0000-0000-000000000082','50000000-0000-0000-0000-000000000081',now(),'fault','temperature',32);raise exception 'conflict accepted';exception when unique_violation then null;end;
+ begin perform sec_private.ingest_observation('40000000-0000-0000-0000-000000000081','10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','40000000-0000-0000-0000-000000000083','50000000-0000-0000-0000-000000000082',now(),'online','temperature',30);raise exception 'cross site ingest';exception when insufficient_privilege then null;end;
+ begin perform sec_private.ingest_observation('40000000-0000-0000-0000-000000000081','10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','40000000-0000-0000-0000-000000000082','50000000-0000-0000-0000-000000000083',now()+interval '1 minute','online','temperature',30);raise exception 'future accepted';exception when invalid_parameter_value then null;end;
+ x:=sec_private.ingest_observation('40000000-0000-0000-0000-000000000081','10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','40000000-0000-0000-0000-000000000082','50000000-0000-0000-0000-000000000084',now()-interval '10 minutes','fault','temperature',32);
+ if (x->>'warnings')::integer<>0 then raise exception 'stale warning';end if;
+ if has_table_privilege(current_user,'public.sec_device_observations','INSERT') then raise exception 'direct write';end if;
+end $q$;
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000081',true);
+do $q$begin
+ if (select count(*) from public.sec_device_observations)<>2 or (select count(*) from public.sec_observation_alerts)<>2 then raise exception 'observations missing';end if;
+ if has_function_privilege(current_user,'sec_private.ingest_observation(uuid,uuid,uuid,uuid,uuid,timestamptz,text,text,double precision)','EXECUTE') or has_table_privilege(current_user,'public.sec_observation_alerts','INSERT') then raise exception 'client injection';end if;
+end $q$;
+select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000082',true);
+do $q$begin if (select count(*) from public.sec_observation_alerts)<>0 or (select count(*) from public.sec_device_observations)<>0 then raise exception 'cross site read';end if;end $q$;
+reset role;
+update sec_private.gateway_bindings set enabled=false where gateway_id='40000000-0000-0000-0000-000000000081';
+set local role sec_gateway_ingest;
+do $q$begin begin perform sec_private.ingest_observation('40000000-0000-0000-0000-000000000081','10000000-0000-0000-0000-000000000081','20000000-0000-0000-0000-000000000081','40000000-0000-0000-0000-000000000082','50000000-0000-0000-0000-000000000085',now(),'online','temperature',30);raise exception 'revoked gateway accepted';exception when insufficient_privilege then null;end;end $q$;
+reset role;rollback;
