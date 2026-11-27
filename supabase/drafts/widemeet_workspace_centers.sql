@@ -190,6 +190,11 @@ begin
   update public.wm_chat_group_members set removed_at=coalesce(removed_at,clock_timestamp()) where group_id=gid and account_id=target;
   if not found then return null;end if;return jsonb_build_object('removed',true);
  end if;
+ if p_action='group-chat-snapshot' then
+  v:=public.wm_group_chat(p_hash,'group-chat-thread',p_data);
+  if v is null then return null;end if;
+  return jsonb_build_object('thread',v,'members',public.wm_group_chat(p_hash,'group-chat-members',p_data)->'items');
+ end if;
  if p_action='group-chat-thread' then
   q:=coalesce(p_data->>'query','');if length(q)>100 then return null;end if;
   page_size:=coalesce((p_data->>'limit')::integer,200);if page_size not between 1 and 200 then return null;end if;

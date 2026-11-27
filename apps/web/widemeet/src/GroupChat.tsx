@@ -11,7 +11,18 @@ export function GroupChat({base,session,locale,onBack}){
  async function thread(g,q="",cursor=null){try{const [v,u]=await Promise.all([req("thread",{group_id:g.id,query:q,before_id:cursor,limit:50}),req("members",{group_id:g.id})]);M(v.items);U(u.items);F(cursor);X(v.next_before_id??null)}catch(e){M([]);U([]);X(null);J(null);K([]);H(null);throw e}}
  function close(){V(null);M([]);U([]);B("");Q("");F(null);X(null);J(null);K([]);H(null);pending.current=null}
  useEffect(()=>{void work(load)},[]);
- useEffect(()=>{if(!group||busy)return;let dead=false,poll=false;const t=setInterval(async()=>{if(dead||poll||running.current)return;poll=true;const n=epoch.current;try{const [v,u]=await Promise.all([req("thread",{group_id:group.id,query,before_id:before,limit:50}),req("members",{group_id:group.id})]);if(!dead&&!running.current&&n===epoch.current){M(v.items);U(u.items);X(v.next_before_id??null)}}catch{if(!dead&&!running.current&&n===epoch.current){M([]);U([]);X(null);J(null);K([]);H(null);E(true)}}finally{poll=false}},5000);return()=>{dead=true;clearInterval(t)}},[group?.id,query,before,busy,session.access_token]);
+ useEffect(()=>{if(!group||busy)return;let dead=false;const controller=new AbortController();
+  async function watch(){let after=null;while(!dead&&!running.current){
+   const n=epoch.current;
+   try{
+    const v=await identityAction(base,session,"group-chat-watch",{group_id:group.id,query,before_id:before,limit:50,after},(url,init)=>fetch(url,{...init,signal:controller.signal}));
+    if(dead||running.current||n!==epoch.current)return;
+    if(typeof v.version!=="string"||! /^[a-f0-9]{64}$/.test(v.version)||typeof v.changed!=="boolean")throw Error("invalid watch");
+    after=v.version;if(v.changed){if(!Array.isArray(v.thread?.items)||!Array.isArray(v.members))throw Error("invalid snapshot");M(v.thread.items);U(v.members);X(v.thread.next_before_id??null)}
+   }catch{if(dead)return;M([]);U([]);X(null);J(null);K([]);H(null);E(true);after=null;await new Promise(resolve=>setTimeout(resolve,1200))}
+  }}
+  void watch();return()=>{dead=true;controller.abort()}
+ },[group?.id,query,before,busy,session.access_token]);
  async function create(){const p=creation.current??{group_id:crypto.randomUUID(),name:name.trim(),member_ids:selected};creation.current=p;await req("create",p);creation.current=null;N("");S([]);await load()}
  async function send(){const p=pending.current??{group_id:group.id,message_id:crypto.randomUUID(),body:body.trim(),reply_to:reply?.id??null,mention_ids:mentions};pending.current=p;await req("send",p);pending.current=null;B("");Q("");J(null);K([]);await thread(group)}
  return <section className="card" aria-label={tr("Groupes de discussion","Group chats")}><button onClick={onBack}>{tr("Retour aux messages privés","Back to private messages")}</button>{error&&<p role="alert">{tr("Accès ou action non confirmé. Réessayez ou revenez à la liste.","Access or action unconfirmed. Retry or return to list.")}</p>}

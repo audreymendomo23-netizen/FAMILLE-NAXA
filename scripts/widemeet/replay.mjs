@@ -246,6 +246,24 @@ try{
  assert.equal((await groupOk(b2ghs.access_token,"reports",{group_id:chatGroupId})).items.length,1);
  await groupOk(b2ghs.access_token,"resolve-report",{group_id:chatGroupId,message_id:advanced.message_id,reporter_id:b2ga.id});
  assert.equal((await groupOk(b2ghs.access_token,"reports",{group_id:chatGroupId})).items.length,0);
+ {
+ const watchGroup=randomUUID();
+ await groupOk(b2ghs.access_token,"create",{group_id:watchGroup,name:"B2 watch fixture",member_ids:[b2ga.id,b2gc.id]});
+ const watched=await groupOk(b2gas.access_token,"watch",{group_id:watchGroup,limit:50});
+ assert.equal(watched.changed,true);assert.match(watched.version,/^[a-f0-9]{64}$/);
+ assert.equal((await groupReq(os.access_token,"watch",{group_id:watchGroup,limit:50})).status,403);
+ const changeWatch=groupOk(b2gas.access_token,"watch",{group_id:watchGroup,limit:50,after:watched.version});
+ await wait(900);
+ const watchMessage={group_id:watchGroup,message_id:randomUUID(),body:"B2 authenticated change notification"};
+ await groupOk(b2ghs.access_token,"send",watchMessage);
+ const changed=await changeWatch;assert.equal(changed.changed,true);assert.notEqual(changed.version,watched.version);assert.ok(changed.thread.items.some(m=>m.id===watchMessage.message_id&&m.body===watchMessage.body));
+ const revokedWatch=groupReq(b2gas.access_token,"watch",{group_id:watchGroup,limit:50,after:changed.version});
+ await wait(900);await groupOk(b2ghs.access_token,"remove",{group_id:watchGroup,member_id:b2ga.id});
+ assert.equal((await revokedWatch).status,403);
+ await groupOk(b2ghs.access_token,"add",{group_id:watchGroup,member_id:b2ga.id});
+ assert.equal((await groupOk(b2gas.access_token,"watch",{group_id:watchGroup,limit:50})).thread.items.length,0);
+ pass("B2 actual authenticated bounded watch: change delivery, tenant denial, in-flight revocation and readmission history");
+ }
  pass("B2 group cursor, reply/mention scope, idempotent report and owner resolution");
  // Dedicated room scoped attachments and voice; no effect on existing fixture/statistics.
  const b2room=randomUUID();

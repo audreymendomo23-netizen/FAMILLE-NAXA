@@ -7,6 +7,7 @@ const anon=Deno.env.get("SUPABASE_ANON_KEY")??"";
 const origins=new Set((Deno.env.get("WM_ALLOWED_ORIGINS")??"").split(",").map(s=>s.trim()).filter(Boolean));
 const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const cookieName="__Host-widemeet_refresh";
+const groupWatches=new Set<string>();
 const refreshCookie=(value:string,remember:boolean,until:number)=>cookieName+"="+value+"; Path=/; Secure; HttpOnly; SameSite=Strict"+(remember?"; Max-Age="+Math.max(0,Math.floor((until-Date.now())/1000)):"");
 const clearCookie=cookieName+"=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0";
 function cookieRefresh(req:Request){const parts=(req.headers.get("cookie")??"").split(";").map(x=>x.trim()).filter(x=>x.startsWith(cookieName+"="));return parts.length===1?parts[0].slice(cookieName.length+1):"";}
@@ -239,12 +240,31 @@ Deno.serve(async request=>{
  if(!/^[a-f0-9]{64}$/.test(access))return send(401,{error:"credentials"});
  const name=body.action,data=body.data??{};
  if(name!=="photo-save"&&raw.length>16384)return send(413,{error:"request_too_large"});
- if(!["profile","profile-update","language-preferences","language-save","language-reset","photo-read","photo-save","photo-delete","onboarding-step","contacts","favorite","groups","group-save","group-delete","invite","invitations","respond-invite","member-role","manager-assign","revoke-member","billing","billing-list","billing-create","billing-cancel","devices","revoke-device","dashboard","support-capabilities","support-list","support-queue","support-create","support-read","support-claim","support-reply","support-close","center-contacts","center-thread","center-send","center-seen","center-statistics","group-chat-list","group-chat-create","group-chat-members","group-chat-remove","group-chat-add","group-chat-rename","group-chat-thread","group-chat-send","group-chat-seen","group-chat-report","group-chat-reports","group-chat-resolve-report"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
+ if(!["profile","profile-update","language-preferences","language-save","language-reset","photo-read","photo-save","photo-delete","onboarding-step","contacts","favorite","groups","group-save","group-delete","invite","invitations","respond-invite","member-role","manager-assign","revoke-member","billing","billing-list","billing-create","billing-cancel","devices","revoke-device","dashboard","support-capabilities","support-list","support-queue","support-create","support-read","support-claim","support-reply","support-close","center-contacts","center-thread","center-send","center-seen","center-statistics","group-chat-list","group-chat-create","group-chat-members","group-chat-remove","group-chat-add","group-chat-rename","group-chat-thread","group-chat-watch","group-chat-send","group-chat-seen","group-chat-report","group-chat-reports","group-chat-resolve-report"].includes(name)||typeof data!=="object"||Array.isArray(data))return send(400,{error:"invalid_request"});
  const p_hash=await digest(access);
  const context=(await rest("rpc/wm_session_context",{method:"POST",body:JSON.stringify({p_hash})}))?.[0];
  if(!context||context.password_change_required)return send(403,{error:"scope"});
  if(typeof name==="string"&&name.startsWith("group-chat-")){
  if(Deno.env.get("WM_WORKSPACE_CENTERS_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ if(name==="group-chat-watch"){
+  // Bounded authenticated change delivery, existing service-only RPC, no open
+  // transaction while waiting, no new public credential or database grant.
+  if(!uuid.test(data.group_id??"")||(data.after!=null&&!/^[a-f0-9]{64}$/.test(data.after)))return send(400,{error:"invalid_request"});
+  if(groupWatches.has(p_hash)||groupWatches.size>=100)return send(429,{error:"watch_busy"});
+  groupWatches.add(p_hash);
+  try{
+   const deadline=Date.now()+8000;
+   const query={group_id:data.group_id,query:data.query??"",before_id:data.before_id??null,limit:data.limit??50};
+   for(;;){
+    const snapshot=await rest("rpc/wm_group_chat",{method:"POST",body:JSON.stringify({p_hash,p_action:"group-chat-snapshot",p_data:query}),signal:AbortSignal.timeout(3000)});
+    if(!snapshot||!Array.isArray(snapshot.members)||!Array.isArray(snapshot.thread?.items))return send(403,{error:"scope"});
+    const version=await digest(JSON.stringify(snapshot));
+    if(version!==data.after)return send(200,{changed:true,version,...snapshot});
+    if(Date.now()>=deadline||request.signal.aborted)return send(200,{changed:false,version});
+    await new Promise(resolve=>setTimeout(resolve,750));
+   }
+  }finally{groupWatches.delete(p_hash)}
+ }
  const result=await rest("rpc/wm_group_chat",{method:"POST",body:JSON.stringify({p_hash,p_action:name,p_data:data})});
  return result?send(200,result):send(403,{error:"scope"});
  }
