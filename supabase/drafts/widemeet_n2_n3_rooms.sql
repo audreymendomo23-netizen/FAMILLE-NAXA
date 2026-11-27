@@ -259,7 +259,7 @@ begin
   if o.used_at is null then if o.expires_at>now_at then return jsonb_build_object('pending',true);end if;return null;end if;
   select * into l from public.wm_display_leases where offer_hash=ch and receiver_session=s.session_id for update;
   if not found then return null;end if;
-  v:=public.wm_display_context(l.id);if v is null then return null;end if;
+  v:=public.wm_display_context(l.id);if v is null then update public.wm_display_leases set revoked_at=coalesce(revoked_at,now_at) where id=l.id;return null;end if;
   -- Renew only before expiration, never resurrect revoked or expired leases.
   update public.wm_display_leases set expires_at=now_at+interval '30 seconds' where id=l.id;
   return public.wm_display_context(l.id);
@@ -327,4 +327,23 @@ revoke all on function public.wm_display_transport_revoke(uuid) from public,anon
 grant execute on function public.wm_display_transport_revoke(uuid) to service_role;
 revoke all on function public.wm_display_action(text,text,jsonb) from public,anon,authenticated;
 grant execute on function public.wm_display_action(text,text,jsonb) to service_role;
+-- Durable fence: even a pause/reopen between SFU polling ticks invalidates the old lease.
+create function public.wm_display_room_fence() returns trigger
+language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+begin
+ if new.state->>'status' is distinct from 'open' or coalesce(new.state->>'confidentiality','standard')<>'standard'
+ or coalesce((new.state->>'endMs')::bigint,0)<=floor(extract(epoch from clock_timestamp())*1000)::bigint then
+  update public.wm_display_leases set revoked_at=coalesce(revoked_at,clock_timestamp()) where room_id=new.id and revoked_at is null;
+ else
+  update public.wm_display_leases l set revoked_at=clock_timestamp()
+  where l.room_id=new.id and l.revoked_at is null and not exists(
+   select 1 from public.wm_device_sessions ss, jsonb_array_elements(new.state->'participants') p
+   where ss.id=l.source_session and p->>'memberId'=ss.account_id::text and p->>'excluded'='false' and p->>'response'='accepted'
+   and (new.state->>'lobbyRequired' is distinct from 'true' or ss.account_id=new.host_id or p->>'lobbyStatus'='admitted'));
+ end if;
+ return new;
+end $wm$;
+revoke all on function public.wm_display_room_fence() from public,anon,authenticated;
+grant execute on function public.wm_display_room_fence() to service_role;
+create trigger wm_display_room_fence after update of state on public.wm_rooms for each row when (old.state is distinct from new.state) execute function public.wm_display_room_fence();
 commit;

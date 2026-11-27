@@ -6,6 +6,7 @@ import {readFile,writeFile,unlink,stat} from "node:fs/promises";
 import {createServer} from "node:https";
 import {resolve,extname,sep} from "node:path";
 import {chromium} from "@playwright/test";
+import {purgeRevokedChatMedia} from "../../packages/media-core/widemeet-chat-media-purge.mjs";
 const base=process.env.SUPABASE_URL,service=process.env.SUPABASE_SERVICE_ROLE_KEY,anon=process.env.SUPABASE_ANON_KEY;
 assert.equal(base,"http://127.0.0.1:54321");assert.ok(service&&anon);
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
@@ -201,6 +202,13 @@ try{
  assert.equal((await mediaReq(b2gas.access_token,"revoke",{peer_id:b2gh.id,id:voiceId})).status,403);
  await mediaOk(b2ghs.access_token,"revoke",{peer_id:b2ga.id,id:voiceId});
  assert.equal((await mediaReq(b2gas.access_token,"download",{peer_id:b2gh.id,id:voiceId})).status,403);
+ // Advance only the disposable revoked row beyond cleanup grace; fresh PDF stays intact.
+ await success(base+"/rest/v1/wm_chat_media?id=eq."+voiceId,{revoked_at:new Date(Date.now()-180000).toISOString()},service,service,"PATCH");
+ assert.deepEqual(await purgeRevokedChatMedia({base,serviceKey:service}),{removed:1});
+ assert.deepEqual(await purgeRevokedChatMedia({base,serviceKey:service}),{removed:0});
+ const gone=await fetch(base+"/storage/v1/object/authenticated/wm-chat-media/"+b2groupW+"/"+voiceId,{headers:{apikey:service,Authorization:"Bearer "+service}});assert.ok(!gone.ok);
+ assert.deepEqual(Buffer.from((await mediaOk(b2gcs.access_token,"download",{group_id:chatGroupId,id:pdfId})).content,"base64"),pdf);
+ pass("B2 real private Storage verified deletion, durable revoke, repeat cleanup and fresh media preserved");
  await groupOk(b2ghs.access_token,"remove",{group_id:chatGroupId,member_id:b2gc.id});
  assert.equal((await mediaReq(b2gcs.access_token,"download",{group_id:chatGroupId,id:pdfId})).status,403);
  assert.equal((await groupReq(b2gcs.access_token,"thread",{group_id:chatGroupId})).status,403);
@@ -720,7 +728,7 @@ try{
   pass("B2 Web group actual attachment upload/download and synthetic microphone voice capture, delivery and decoded playback");
   const g2=(await groupOk(b2ghs.access_token,"list")).items.find(x=>x.name==="B2 UI group");assert.ok(g2);
   await groupOk(b2ghs.access_token,"remove",{group_id:g2.id,member_id:b2gc.id});
-  await b2second.locator("article > p").getByText("B2 browser group content",{exact:true}).waitFor({state:"detached",timeout:20000});
+  await b2second.locator("article > p").filter({hasText:/^B2 browser group content$/}).waitFor({state:"detached",timeout:20000});
   await mpanel(b2second).getByText(/b2-ui\.pdf/).waitFor({state:"detached",timeout:20000});
   await b2first.locator("article").filter({has:b2first.locator("p",{hasText:/^B2 browser group content$/})}).getByText("B2 browser group content",{exact:true}).waitFor();
   pass("B2 three browser group creation, message delivery, read and revoked member purge");

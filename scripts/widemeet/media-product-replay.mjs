@@ -118,6 +118,20 @@ try{
   assert.equal((await deny(receiverSession.access_token,"receive",{code})).status,403);
   assert.ok((await sfu.listParticipants("wm-"+rid)).some(p=>p.identity===h.id));
   await screen.close();
+  // Actual second pairing, followed by host policy revocation. No duplicate publishing participant.
+  const nextCode=randomBytes(32).toString("hex");
+  await connect(receiverSession.access_token,"offer",{code:nextCode,name});
+  await connect(hs.access_token,"confirm",{room_id,code:nextCode,receiver_name:name});
+  const second=await connect(receiverSession.access_token,"receive",{code:nextCode});
+  const secondScreen=await ctx.newPage();await secondScreen.goto(origin);
+  await secondScreen.evaluate(async token=>{const lk=window.LivekitClient,r=new lk.Room({adaptiveStream:false,dynacast:false});window.r=r;window.received=[];r.on(lk.RoomEvent.TrackSubscribed,t=>{window.received.push(t);const el=t.attach();el.autoplay=true;el.muted=true;document.body.appendChild(el)});await r.connect("ws://127.0.0.1:7881",token)},second.token);
+  await until(()=>inbound(secondScreen),"B2 second pairing inbound RTP");
+  await connect(hs.access_token,"policy",{room_id,enabled:false});
+  await until(async()=>evicted.has(second.identity)&&!(await sfu.listParticipants("wm-"+rid)).some(p=>p.identity===second.identity),"B2 policy revoked display");
+  await connect(hs.access_token,"policy",{room_id,enabled:true});
+  assert.equal((await deny(receiverSession.access_token,"receive",{code:nextCode})).status,403);
+  await secondScreen.close();
+  console.log("PASS B2 Connect re-pair, actual host policy evicts receiver and policy re-enable never resurrects lease");
   console.log("PASS B2 product Connect: same-account separate device offer, host policy, confirmation, RTP, renewal and revocation");
  }
  if(external)console.log("PASS real cross-workspace named guest with no subscription, explicit lobby admission and bidirectional media");

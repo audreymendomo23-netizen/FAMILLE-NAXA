@@ -275,7 +275,7 @@ create table public.wm_chat_media(
  bytes integer not null check(bytes between 1 and 1048576),
  sha256 text not null check(length(sha256)=64 and translate(sha256,'0123456789abcdef','')=''),
  state text not null default 'staged' check(state in ('staged','ready','revoked')),
- created_at timestamptz not null default clock_timestamp(), published_at timestamptz, revoked_at timestamptz,
+ created_at timestamptz not null default clock_timestamp(), published_at timestamptz, revoked_at timestamptz, purged_at timestamptz,
  check((peer_id is null)<>(group_id is null)), check(peer_id is null or peer_id<>sender_id),
  check((kind='voice')=(mime in ('audio/ogg','audio/webm','audio/mp4')))
 );
@@ -346,4 +346,27 @@ exception when invalid_text_representation or numeric_value_out_of_range or uniq
 end $wm$;
 revoke all on function public.wm_chat_media_action(text,text,jsonb) from public,anon,authenticated;
 grant execute on function public.wm_chat_media_action(text,text,jsonb) to service_role;
+-- Terminal states cannot be resurrected. Wait beyond the bounded transfer timeout before cleanup.
+-- This RPC is worker-only: it never accepts an arbitrary Storage key.
+create function public.wm_chat_media_purge_candidates(p_limit integer default 50) returns jsonb
+language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare v jsonb;
+begin
+ if p_limit is null or p_limit not between 1 and 100 then return null;end if;
+ perform pg_advisory_xact_lock(hashtextextended('wm-identity-action-v1',0));
+ update public.wm_chat_media set state='revoked',revoked_at=clock_timestamp() where state='staged' and created_at<clock_timestamp()-interval '15 minutes';
+ select coalesce(jsonb_agg(to_jsonb(c)),'[]'::jsonb) into v from (
+ select id,workspace_id::text||'/'||id::text as key from public.wm_chat_media where state='revoked' and purged_at is null
+ and revoked_at<clock_timestamp()-interval '2 minutes' order by revoked_at,id limit p_limit
+ ) c;
+ return jsonb_build_object('items',v);
+end $wm$;
+create function public.wm_chat_media_purge_ack(p_id uuid) returns boolean
+language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+begin
+ update public.wm_chat_media set purged_at=coalesce(purged_at,clock_timestamp()) where id=p_id and state='revoked' and revoked_at<clock_timestamp()-interval '2 minutes';
+ return found;
+end $wm$;
+revoke all on function public.wm_chat_media_purge_candidates(integer),public.wm_chat_media_purge_ack(uuid) from public,anon,authenticated;
+grant execute on function public.wm_chat_media_purge_candidates(integer),public.wm_chat_media_purge_ack(uuid) to service_role;
 commit;

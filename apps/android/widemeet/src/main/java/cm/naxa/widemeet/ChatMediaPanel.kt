@@ -53,7 +53,7 @@ private class ChatAudio{
  fun scoped(d:JSONObject)=d.apply{if(peerId!=null)put("peer_id",peerId)else put("group_id",groupId)}
  suspend fun req(action:String,d:JSONObject=JSONObject())=gateway.chatMedia(session,action,scoped(d))
  fun stopPlayer(){resources.clearPlayer();playing=null}
- suspend fun refresh(){try{val next=mediaItems(req("list"));items=next;if(playing!=null&&next.none{it.optString("id")==playing})stopPlayer()}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();stopPlayer();throw e}}
+ suspend fun refresh(){try{val next=mediaItems(req("list"));items=next;if(playing!=null&&next.none{it.optString("id")==playing})stopPlayer()}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();stopPlayer();pending=null;saveBytes=null;resources.clearRecorder();recording=false;throw e}}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
  fun prepare(bytes:ByteArray,name:String,mime:String,kind:String){require(bytes.size in 8..MediaLimit);pending=JSONObject().put("id",UUID.randomUUID().toString()).put("kind",kind).put("mime",mime).put("name",name.take(120)).put("content",Base64.encodeToString(bytes,Base64.NO_WRAP))}
  val picker=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri:Uri?->if(uri!=null)work{

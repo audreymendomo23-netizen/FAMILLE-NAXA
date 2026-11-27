@@ -83,6 +83,13 @@ begin
  if public.wm_display_action(h,'confirm',jsonb_build_object('room_id',rid,'code_hash',code2,'receiver_name','Display','lease_id',lid2)) is null then raise exception 'second confirmation refused';end if;
  update public.wm_display_leases set expires_at=clock_timestamp()-interval '1 second' where id=lid2;
  if public.wm_display_action(r,'receive',jsonb_build_object('code_hash',code2)) is not null then raise exception 'expired lease renewed';end if;
+ -- Fresh pairing revoked durably by a pause followed immediately by reopen, before the proxy can poll.
+ d:=jsonb_build_object('room_id',rid,'code_hash',repeat('4',64),'receiver_name','Display','lease_id','50000000-0000-4000-8000-0000000000b3');
+ if public.wm_display_action(r,'offer',jsonb_build_object('code_hash',repeat('4',64),'name','Display')) is null or public.wm_display_action(h,'confirm',d) is null then raise exception 'pause fixture failed';end if;
+ update public.wm_rooms set state=jsonb_set(wm_rooms.state,'{status}','"paused"') where id=rid;
+ update public.wm_rooms set state=jsonb_set(wm_rooms.state,'{status}','"open"') where id=rid;
+ if public.wm_display_action(r,'receive',jsonb_build_object('code_hash',repeat('4',64))) is not null then raise exception 'pause/reopen resurrected receiver';end if;
+ raise notice 'B2_CONNECT_FENCE_SQL_PASS: durable pause and reopen revocation';
  raise notice 'B2_CONNECT_SQL_PASS: RLS, host policy, distinct devices, one use, lease scopes, revoke and expiry';
 
  payload:=jsonb_build_object('group_id',gid,'name','Original','member_ids',jsonb_build_array(guest,third));
@@ -126,6 +133,12 @@ begin
  if public.wm_chat_media_action(g,'read',jsonb_set(d,'{peer_id}',to_jsonb(host))) is null then raise exception 'voice peer refused';end if;
  if public.wm_chat_media_action(m,'read',jsonb_set(d,'{peer_id}',to_jsonb(host))) is not null then raise exception 'voice manager leak';end if;
  if public.wm_chat_media_action(o,'read',jsonb_set(d,'{peer_id}',to_jsonb(host))) is not null then raise exception 'voice tenant leak';end if;
+ update public.wm_chat_media set revoked_at=clock_timestamp()-interval '3 minutes' where id='80000000-0000-4000-8000-0000000000b1';
+ if jsonb_array_length(public.wm_chat_media_purge_candidates(50)->'items') is distinct from 1 then raise exception 'purge candidate scope';end if;
+ if public.wm_chat_media_purge_ack('80000000-0000-4000-8000-0000000000b2') then raise exception 'ready file purged';end if;
+ if not public.wm_chat_media_purge_ack('80000000-0000-4000-8000-0000000000b1') then raise exception 'revoked ack refused';end if;
+ if jsonb_array_length(public.wm_chat_media_purge_candidates(50)->'items') is distinct from 0 then raise exception 'purged file retained in queue';end if;
+ raise notice 'B2_CHAT_MEDIA_PURGE_SQL_PASS: terminal ledger and worker scope';
  raise notice 'B2_CHAT_MEDIA_SQL_PASS: service-only ACL, staging, exact retry, publish, direct/group access, revoke and history fence';
 end $wm$;
 reset role;
