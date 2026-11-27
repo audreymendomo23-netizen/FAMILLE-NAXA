@@ -56,6 +56,12 @@ Deno.serve(async request=>{
  const b=JSON.parse(text);if(b?.app_id!=="WIDEMEET")return send(403,{error:"forbidden"});
  const p_hash=await hash(token),now=Date.now();
  const action=new URL(request.url).pathname.split("/").filter(Boolean).at(-1);
+ if(action==="minutes"){
+ if(Deno.env.get("WM_MINUTES_QUALIFIED")!=="true")return send(503,{error:"unavailable"});
+ if(!["list","read","draft","approve","publish","revoke"].includes(b.action)||!b.data||typeof b.data!=="object"||Array.isArray(b.data))return send(400,{error:"invalid_request"});
+ const result=await rpc("wm_minutes_action",{p_hash,p_action:b.action,p_data:b.data});
+ return result?send(200,result):send(403,{error:"forbidden"});
+ }
  if(action==="pass-list"){
  const session=(await rpc("wm_session_context",{p_hash}))?.[0];if(!session||session.password_change_required)return send(403,{error:"forbidden"});
  return send(200,await rpc("wm_pass_list",{p_hash}));
