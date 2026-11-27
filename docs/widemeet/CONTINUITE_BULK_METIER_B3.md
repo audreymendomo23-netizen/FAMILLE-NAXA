@@ -1,0 +1,2 @@
+# B3 — Revue sélective sourcée
+Sur base propriétaire qualifiée c6a273e : sélection humaine de 1 à 10 extraits, vérification serveur des indices uniques issus de la revue réellement autorisée, citations intactes et retour non approuvé. Web et Compose connectés à l'API, contrôles de source, limite de 8000 caractères du brouillon, aucun auto-publish ni création automatique de tâches. Replay réel de l'audio capturé, refus invités et indices invalides. Ne constitue pas une diarisation ou synthèse générative. Qualification en cours. Aucun main, migration hébergée ou déploiement.

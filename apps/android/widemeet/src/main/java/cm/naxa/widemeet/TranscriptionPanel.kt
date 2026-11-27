@@ -16,7 +16,7 @@ private fun stamp(ms:Long)= "%02d:%02d".format(java.util.Locale.ROOT,ms/60000,ms
  val scope=rememberCoroutineScope()
  var rooms by remember{mutableStateOf<List<JSONObject>>(emptyList())};var room by remember{mutableStateOf(roomId)};var items by remember{mutableStateOf<List<JSONObject>>(emptyList())};var selected by remember{mutableStateOf<JSONObject?>(null)}
  var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
- var query by remember(room,selected?.optString("recording_id")){mutableStateOf("")};var hits by remember(room,selected?.optString("recording_id")){mutableStateOf<JSONObject?>(null)}
+ var query by remember(room,selected?.optString("recording_id")){mutableStateOf("")};var hits by remember(room,selected?.optString("recording_id")){mutableStateOf<JSONObject?>(null)};var chosen by remember(room,selected?.optString("recording_id"),session.accessToken){mutableStateOf<Set<Int>>(emptySet())}
  suspend fun req(action:String,data:JSONObject)=gateway.request("transcription",JSONObject().put("action",action).put("data",data),session) as JSONObject
  suspend fun list(id:String){try{items=asrRows(req("list",JSONObject().put("room_id",id)),"items");selected?.let{v->if(items.none{it.optString("recording_id")==v.optString("recording_id")&&it.optString("status")==v.optString("status")})selected=null}}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();selected=null;throw e}}
  suspend fun open(id:String){room=id;selected=null;items=emptyList();list(id)}
@@ -51,6 +51,13 @@ private fun stamp(ms:Long)= "%02d:%02d".format(java.util.Locale.ROOT,ms/60000,ms
  val none=tr("Aucune détectée par les règles.","None detected by rules.")
  for(line in candidates)Text(line);if(candidates.isEmpty())Text(none)
  val reviewDraft=tr("Extraits sourcés à vérifier — ","Source excerpts to review — ")+v.optString("recording_id")+"\n"+excerpts.joinToString("\n")+"\n\n"+tr("Décisions/actions candidates (non validées)","Candidate decisions/actions (not approved)")+"\n"+(if(candidates.isEmpty())none else candidates.joinToString("\n"))
+ if(onDraft!=null){
+ val reviewChoices=(asrRows(review,"excerpts")+asrRows(review,"decision_candidates")).distinctBy{it.getInt("segment_index")}.sortedBy{it.getInt("segment_index")}
+ val selection=chosen.intersect(reviewChoices.map{it.getInt("segment_index")}.toSet())
+ Text(tr("Sélectionner les extraits pour le brouillon","Select excerpts for draft"))
+ for(x in reviewChoices){val index=x.getInt("segment_index");Row{Checkbox(checked=index in selection,enabled=!busy&&(index in selection||selection.size<10),onCheckedChange={checked->chosen=if(checked)chosen+index else chosen-index});Text(sourceLine(x))}}
+ Button(enabled=!busy&&selection.isNotEmpty(),onClick={work{val rec=v.getString("recording_id");val response=req("draft-review",JSONObject().put("room_id",rid).put("recording_id",rec).put("indices",org.json.JSONArray(selection.sorted())));check(response.getString("recording_id")==rec&&response.optString("method")=="selected-source-review-v1"&&!response.getBoolean("approved"));val rows=asrRows(response,"items");check(rows.size==selection.size);val body=tr("Extraits sélectionnés à vérifier — ","Selected excerpts to verify — ")+rec+"\n"+rows.joinToString("\n",transform=::sourceLine);check(body.length<=8000);onDraft(body)}}){Text(tr("Insérer la sélection vérifiée","Insert verified selection"))}
+ }
  if(onDraft!=null&&excerpts.isNotEmpty())Button(enabled=!busy&&reviewDraft.length<=8000,onClick={onDraft(reviewDraft)}){Text(tr("Insérer la revue sourcée dans le brouillon","Insert source review into draft"))}
  };if(lines.isEmpty())Text(tr("Aucune parole détectée.","No speech detected."));val draft=tr("Extraits de transcription à vérifier — segment ","Transcript excerpts to verify — segment ")+v.optString("recording_id")+"\n"+lines.joinToString("\n");if(onDraft!=null&&lines.isNotEmpty())Button(enabled=!busy&&draft.length<=8000,onClick={onDraft(draft)}){Text(tr("Insérer les extraits dans le brouillon","Insert excerpts into draft"))}}
  }}
