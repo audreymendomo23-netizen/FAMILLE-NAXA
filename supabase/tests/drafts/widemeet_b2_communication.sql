@@ -59,6 +59,34 @@ begin
  or public.wm_workspace_center(h,'center-thread',jsonb_build_object('peer_id',guest,'page_size',201)) is not null then raise exception 'pagination scope';end if;
  delete from public.wm_direct_messages where id in (mid,mid2);
  raise notice 'B2_DIRECT_PAGINATION_SQL_PASS: stable ties, cursor scope, bounds and search';
+ if has_function_privilege('authenticated','public.wm_periodic_run(integer)','EXECUTE') or has_table_privilege('anon','public.wm_periodic_reports','SELECT') then raise exception 'periodic grants';end if;
+ if public.wm_periodic_next('2024-02-01','monthly')<>'2024-03-01'::date or public.wm_periodic_next('2024-01-01','quarterly')<>'2024-04-01'::date or public.wm_periodic_next('2024-01-01','yearly')<>'2025-01-01'::date then raise exception 'calendar';end if;
+ if public.wm_periodic_action(g,'center-periodic-list','{}') is not null then raise exception 'staff report access';end if;
+ if public.wm_periodic_action(h,'center-periodic-save','{"cadence":"invalid","enabled":true}') is not null then raise exception 'invalid cadence';end if;
+ perform public.wm_periodic_action(h,'center-periodic-save','{"cadence":"daily","enabled":true}');
+ perform public.wm_periodic_action(m,'center-periodic-save','{"cadence":"daily","enabled":true}');
+ if (select count(*) from public.wm_periodic_preferences where workspace_id=w)<>2 then raise exception 'preferences not saved';end if;
+ update public.wm_periodic_preferences set next_start=(clock_timestamp() at time zone 'Africa/Douala')::date-1 where workspace_id=w;
+ update public.wm_rooms as room_fixture set state=room_fixture.state||jsonb_build_object('scheduledMs',floor(extract(epoch from (((clock_timestamp() at time zone 'Africa/Douala')::date-1)::timestamp at time zone 'Africa/Douala'))*1000)::bigint,'durationMinutes',30) where id=rid;
+ if public.wm_periodic_run(10)<>2 or public.wm_periodic_run(10)<>0 then raise exception 'periodic retry';end if;
+ if (public.wm_periodic_action(h,'center-periodic-list','{}')->'items'->0->'metrics'->>'total') is distinct from '1' then raise exception 'promoter total';end if;
+ if (public.wm_periodic_action(m,'center-periodic-list','{}')->'items'->0->'metrics'->>'total') is distinct from '0' then raise exception 'manager scope';end if;
+ if jsonb_array_length(public.wm_periodic_action(o,'center-periodic-list','{}')->'items') is distinct from 0 then raise exception 'foreign report';end if;
+ select n into x from jsonb_array_elements(public.wm_notices(h)->'items') n where n->>'kind'='periodic_report';
+ if x is null or x->>'read_at' is not null then raise exception 'periodic private notice absent';end if;
+ if exists(select 1 from jsonb_array_elements(public.wm_notices(o)->'items') n where n->>'kind'='periodic_report') or exists(select 1 from jsonb_array_elements(public.wm_notices(g)->'items') n where n->>'kind'='periodic_report') then raise exception 'periodic notice leak';end if;
+ if public.wm_notices(g,x->>'k') is not null or public.wm_notices(o,x->>'k') is not null then raise exception 'foreign periodic acknowledgement';end if;
+ if public.wm_notices(h,x->>'k')->>'read' is distinct from 'true' or public.wm_notices(h,x->>'k')->>'read' is distinct from 'true' then raise exception 'periodic acknowledgement';end if;
+ if not exists(select 1 from jsonb_array_elements(public.wm_notices(h)->'items') n where n->>'k'=x->>'k' and n->>'read_at' is not null) then raise exception 'periodic acknowledgement persistence';end if;
+ if not exists(select 1 from jsonb_array_elements(public.wm_notices(m)->'items') n where n->>'kind'='periodic_report' and n->>'read_at' is null) then raise exception 'manager acknowledgement isolation';end if;
+ raise notice 'B4_PERIODIC_NOTICE_SQL_PASS: private delivery, exact acknowledgement, tenant and role isolation';
+ perform public.wm_periodic_action(h,'center-periodic-save','{"cadence":"daily","enabled":false}');
+ if (public.wm_periodic_action(h,'center-periodic-list','{}')->'preferences'->0->>'enabled') is distinct from 'false' then raise exception 'disable failed';end if;
+ update public.wm_memberships set enabled=false where account_id=manager and workspace_id=w;
+ if public.wm_periodic_action(m,'center-periodic-list','{}') is not null or public.wm_notices(m) is not null then raise exception 'revoked report access';end if;
+ update public.wm_memberships set enabled=true where account_id=manager and workspace_id=w;
+ update public.wm_rooms as room_fixture set state=room_fixture.state-'scheduledMs'-'durationMinutes' where id=rid;
+ raise notice 'B4_PERIODIC_SQL_PASS: calendar, preference, snapshot, retry, roles, isolation, disable and revocation';
  d:=jsonb_build_object('room_id',rid,'code_hash',code,'receiver_name','Display','lease_id',lid);
  -- Reject malformed hashes before INSERT (RPC must fail closed, not raise a CHECK error).
  if public.wm_display_action(r,'offer',jsonb_build_object('code_hash',repeat('a',63),'name','Invalid')) is not null

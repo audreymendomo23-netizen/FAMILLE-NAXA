@@ -342,13 +342,74 @@ try{
  const replyData={ticket_id:supportTicket.ticket_id,message_id:randomUUID(),body:"Synthetic answer"};
  await sk(winner.access_token,"reply",replyData);await sk(winner.access_token,"reply",replyData);
  assert.equal((await sk(hs.access_token,"read",{ticket_id:supportTicket.ticket_id})).messages.length,2);
+ // B5: feedback and assignment lifecycle, same disposable real accounts.
+ assert.equal((await sr(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:5})).status,403);
+ assert.equal((await sr(loser.access_token,"release",{ticket_id:supportTicket.ticket_id})).status,403);
+ assert.equal((await sr(hs.access_token,"release",{ticket_id:supportTicket.ticket_id})).status,403);
+ const releasePayload={ticket_id:supportTicket.ticket_id,assignment_version:(await sk(winner.access_token,"read",{ticket_id:supportTicket.ticket_id})).assignment_version};
+ await sk(winner.access_token,"release",releasePayload);
+ await sk(winner.access_token,"release",releasePayload);
+ assert.equal((await sr(winner.access_token,"read",{ticket_id:supportTicket.ticket_id})).status,403);
+ await sk(winner.access_token,"claim",{ticket_id:supportTicket.ticket_id});
+ assert.equal((await sr(winner.access_token,"release",releasePayload)).status,403);
+ const nextRelease={...releasePayload,assignment_version:(await sk(winner.access_token,"read",{ticket_id:supportTicket.ticket_id})).assignment_version};
+ await sk(winner.access_token,"release",nextRelease);
+ await sk(loser.access_token,"claim",{ticket_id:supportTicket.ticket_id});
+ assert.equal((await sr(winner.access_token,"release",releasePayload)).status,403);
+ // B5 control plane: actual database actions, never a claim of media capture.
+ const control={ticket_id:supportTicket.ticket_id,call_id:randomUUID()};
+ const cp=(token,action,data={})=>sr(token,action,{...control,...data});
+ const ck=(token,action,data={})=>sk(token,action,{...control,...data});
+ assert.equal((await cp(loser.access_token,"call-request")).status,403);
+ assert.equal((await ck(hs.access_token,"call-request")).state,"requested");
+ assert.equal((await ck(hs.access_token,"call-request")).transport_ready,false);
+ assert.equal((await cp(hs.access_token,"call-accept")).status,403);
+ assert.equal((await cp(winner.access_token,"call-read")).status,403);
+ assert.equal((await ck(loser.access_token,"call-accept")).state,"active");
+ assert.equal((await cp(hs.access_token,"screen-start",{share_id:randomUUID()})).status,403);
+ const share_id=randomUUID();
+ assert.equal((await cp(loser.access_token,"screen-consent",{share_id})).status,403);
+ assert.equal((await ck(hs.access_token,"screen-consent",{share_id})).screen_state,"consented");
+ assert.equal((await ck(hs.access_token,"screen-start",{share_id})).screen_state,"active");
+ assert.equal((await ck(loser.access_token,"screen-stop",{share_id})).screen_state,null);
+ assert.equal((await cp(hs.access_token,"screen-consent",{share_id})).status,403);
+ await ck(hs.access_token,"call-heartbeat");await ck(loser.access_token,"call-heartbeat");
+ assert.equal((await ck(hs.access_token,"call-end")).state,"ended");
+ assert.equal((await ck(loser.access_token,"call-read")).state,"idle");
+ const control2={...control,call_id:randomUUID()};
+ await sk(hs.access_token,"call-request",control2);await sk(loser.access_token,"call-accept",control2);
  await sk(hs.access_token,"close",{ticket_id:supportTicket.ticket_id});
+ assert.equal((await sk(loser.access_token,"call-read",control2)).state,"idle");
+ pass("B5 persisted assistance call and screen consent lifecycle, access denial, replay, bilateral lease and ticket closure (no transport)");
+ assert.equal((await sr(loser.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:5})).status,403);
+ assert.equal((await sr(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:6})).status,403);
+ assert.equal((await sr(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:"5"})).status,403);
+ assert.equal((await sk(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:4})).saved,true);
+ assert.equal((await sk(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:4})).saved,true);
+ assert.equal((await sr(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:5})).status,403);
+ assert.equal((await sk(hs.access_token,"read",{ticket_id:supportTicket.ticket_id})).feedback,4);
+ assert.equal((await sk(loser.access_token,"read",{ticket_id:supportTicket.ticket_id})).feedback,null);
+ pass("B5 real requester feedback, exact replay, reassignment, old agent revocation and private rating");
  assert.equal((await sr(winner.access_token,"reply",{...replyData,message_id:randomUUID()})).status,403);
  pass("private support ticket: exact retry, cross-account denial, atomic agent claim, isolated reply and closure");
 
  const denied=await request(auth+"/login",{identifier:h.login,password:"wrong",installation_id:randomUUID(),platform:"web"});assert.equal(denied.status,401);
  const rec=await ok(auth+"/request-recovery",{identifier:h.login,installation_id:randomUUID(),platform:"web"});const unknown=await ok(auth+"/request-recovery",{identifier:"WM-UNKNOWN123",installation_id:randomUUID(),platform:"web"});assert.deepEqual(rec,unknown);assert.equal(rec.accepted,true);
  pass("actual GoTrue login and neutral recovery intake");
+ // Review is intentionally not a password reset. Two separately provisioned staff record distinct references.
+ assert.equal((await sr(sas.access_token,"recovery-queue")).status,403);
+ await rest("wm_support_recovery_reviewers",{account_id:sa.id,enabled:true});
+ await rest("wm_support_recovery_reviewers",{account_id:sb.id,enabled:true});
+ const cases=await sk(sas.access_token,"recovery-queue");assert.ok(cases.items.length>0);
+ const target=cases.items[0].id,evidence_ref=randomUUID(),reviewData={request_id:target,evidence_ref,decision:"escalate"};
+ assert.equal((await sk(sas.access_token,"recovery-review",reviewData)).recorded,true);
+ assert.equal((await sk(sas.access_token,"recovery-review",reviewData)).recorded,true);
+ assert.equal((await sr(sas.access_token,"recovery-review",{...reviewData,decision:"reject"})).status,403);
+ assert.equal((await sr(sbs.access_token,"recovery-review",reviewData)).status,403);
+ assert.equal((await sk(sbs.access_token,"recovery-review",{...reviewData,evidence_ref:randomUUID()})).recorded,true);
+ assert.equal((await sk(sbs.access_token,"recovery-queue")).items.find(x=>x.id===target).escalations,2);
+ assert.equal((await login(h)).member_id,h.id);
+ pass("B5 independent supervised recovery triage, separate role, immutable review, distinct references, no credential reset");
  const identity=(token,action,data={})=>ok(auth+"/identity",{action,data},token);
  const identityRequest=(token,action,data={})=>request(auth+"/identity",{action,data},token);
  const original=await identity(hs.access_token,"profile");
@@ -882,7 +943,7 @@ try{
  await hp.getByLabel("Description du problème",{exact:true}).fill("Synthetic browser issue");
  await hp.getByRole("button",{name:"Envoyer la demande",exact:true}).click();
  await hp.getByRole("heading",{name:"Replay support browser",exact:true}).waitFor({timeout:20000});
- const browserSupportHost=await login(h);
+ const browserSupportHost=periodicHost;
  const browserSupportList=await sk(browserSupportHost.access_token,"list");
  const browserSupportTicket=browserSupportList.items.find(x=>x.subject==="Replay support browser");assert.ok(browserSupportTicket);assert.equal(browserSupportTicket.category,"privacy");assert.equal((await identityRequest(gs.access_token,"support-read",{ticket_id:browserSupportTicket.id})).status,403);
  const browserAgent=await login(sa);
@@ -918,6 +979,11 @@ try{
  assert.equal(agentRead.messages.filter(m=>m.id===requesterMessageId&&m.body===requesterBody&&m.author_kind==="requester").length,1,"agent must read the exact committed requester reply");
  hp.once("dialog",d=>d.accept());await hp.getByRole("button",{name:"Clôturer",exact:true}).click();
  await hp.getByText("Clôturée",{exact:true}).waitFor();
+ await hp.getByLabel("Note sur 5",{exact:true}).selectOption("4");
+ await hp.getByRole("button",{name:"Envoyer mon avis",exact:true}).click();
+ await hp.getByText("Note enregistrée : 4/5",{exact:true}).waitFor();
+ assert.equal((await sk(browserSupportHost.access_token,"read",{ticket_id:browserSupportTicket.id})).feedback,4);
+ pass("B5 real browser requester feedback persisted on closed ticket");
  pass("real browser support intake, agent claim/reply, automatic refresh, requester message and closure");
 
  // Exercise the external invitation deep link through real GoTrue, Edge and Chromium.
