@@ -444,3 +444,20 @@ Cause du timeout ligne 403 identifiée dans le code : zp_unit_conversion_add nor
 
 ## Bulk 5/6 — pointage géolocalisé, reprise du 27/11
 Portage du principe NS v21 (GPS aux bornes de service, compte propre, preuve fraîche), UI Web/PWA et Compose Android native. Candidat local : état de service par compte, interdiction d'ouverture concurrente dans un autre site, fin sur le site initial, horodatage serveur, coordonnées/précision/instant GPS, accès propre et vue manager limitée au site, append-only, RLS et RPC service-only, idempotence. Aucune collecte continue, aucun selfie imposé, aucune géolocalisation en arrière-plan. Précision max 500 m et preuve âgée de 120 s, reprise de la convention NS ; limite future 15 s. Contrôles négatifs SQL et navigateur réel avec localisation synthétique. Android reprend la demande de permission et le listener GPS frais de NS (refus du mock provider). Le serveur ne prouve pas à lui seul l'authenticité matérielle du GPS ; géorepérage, revue de fraude, politique de rétention, pauses, dossiers RH/horaires, recettes physiques et traductions Fulfulde restent à qualifier. Modifications du schéma jetable uniquement, aucun déploiement ni main. Gate à constater.
+
+### Relevé CI — correction et pointage
+- 40bfdce : ZIPPLE N1 — PWA multi-browser qualification 45921917246 queued.
+- 40bfdce : ZIPPLE N2–N5 — isolated business candidate 45921917330 queued.
+- 40bfdce : ZIPPLE business — real local Supabase 45921917214 queued.
+- 40bfdce : ZIPPLE N1 — live Cloudflare Pages recipe 45921917285 queued.
+- 40bfdce : ZIPPLE N1 — hosted Android debug handoff 45921917312 queued.
+- 40bfdce : ZIPPLE N1 — isolated foundation 45921917270 queued.
+- 40bfdce : ZIPPLE — Cloudflare Pages build qualification 45921917234 queued.
+- 055747b : ZIPPLE N1 — PWA multi-browser qualification 45921819944 in_progress.
+- 055747b : ZIPPLE business — real local Supabase 45921819949 in_progress.
+- 055747b : ZIPPLE N1 — live Cloudflare Pages recipe 45921819966 in_progress.
+- 055747b : ZIPPLE N1 — isolated foundation 45921819938 in_progress.
+- 055747b : ZIPPLE — Cloudflare Pages build qualification 45921819934 success.
+- 055747b : ZIPPLE N2–N5 — isolated business candidate 45921819983 success.
+- 055747b : ZIPPLE N1 — hosted Android debug handoff 45921819921 in_progress.
+Le commit fonctionnel 40bfdce196a17e2135143f2665219427bc165061 contient la correction 055747b et le portage pointage. La liste des runs nouvellement déclenchés peut encore être incomplète ; contrôler la tête fonctionnelle lors de la reprise. Aucun résultat en attente compté comme vert.
