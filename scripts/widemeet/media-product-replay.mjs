@@ -15,14 +15,17 @@ import {tmpdir} from "node:os";
 import {join as joinPath} from "node:path";
 import {createWideMeetTranscription} from "../../packages/media-core/widemeet-transcription.mjs";
 import {createMediaProxy} from "../../packages/media-core/signaling-proxy.mjs";
+import {connectUiOrigin,connectUiWss,startConnectUiReplay} from "./connect-ui-replay.mjs";
 import {createWideMeetAdmission} from "../../packages/media-core/widemeet-admission.mjs";
 const base=process.env.SUPABASE_URL,serviceKey=process.env.SUPABASE_SERVICE_ROLE_KEY,anon=process.env.SUPABASE_ANON_KEY;
 const key=process.env.LK_TEST_KEY,secret=process.env.LK_TEST_SECRET;
 assert.equal(base,"http://127.0.0.1:54321");assert.ok(serviceKey&&anon&&key&&secret);
 const upstream="http://127.0.0.1:7880",origin="http://127.0.0.1:4173",auth="http://127.0.0.1:8000",roomApi="http://127.0.0.1:8001";
 const sfu=new RoomServiceClient(upstream,key,secret),evicted=new Set();
+const connectUi=process.env.WM_CONNECT_QUALIFIED==="true";
+if(connectUi){process.env.WM_LIVEKIT_URL=connectUiWss;process.env.WM_ALLOWED_ORIGINS=[process.env.WM_ALLOWED_ORIGINS,connectUiOrigin].filter(Boolean).join(",")}
 const readAdmission=createWideMeetAdmission({supabaseUrl:base,serviceKey,sourceActive:async (room,identity,hash)=>proxy.sourceActive(room,identity,hash)&&(await sfu.listParticipants(room)).some(p=>p.identity===identity&&p.state===2)});
-const proxy=createMediaProxy({upstream,key,secret,allowedOrigins:new Set([origin]),readAdmission,onAdmit:async g=>{await sfu.createRoom({name:g.room,emptyTimeout:300,maxParticipants:20})},onRevoke:async g=>{await sfu.removeParticipant(g.room,g.identity);evicted.add(g.identity)},checkEveryMs:500});
+const proxy=createMediaProxy({upstream,key,secret,allowedOrigins:new Set([origin,...(connectUi?[connectUiOrigin]:[])]),readAdmission,onAdmit:async g=>{await sfu.createRoom({name:g.room,emptyTimeout:300,maxParticipants:20})},onRevoke:async g=>{await sfu.removeParticipant(g.room,g.identity);evicted.add(g.identity)},checkEveryMs:500});
 const bundle=await readFile("node_modules/livekit-client/dist/livekit-client.umd.js");
 const app=createServer((req,res)=>{if(req.url==="/sdk.js"){res.writeHead(200,{"Content-Type":"application/javascript"});res.end(bundle)}else{res.writeHead(200,{"Content-Type":"text/html"});res.end('<!doctype html><title>WideMeet media replay</title><script src="/sdk.js"></script><body></body>')}});
 const listen=(s,p)=>new Promise((resolve,reject)=>{s.once("error",reject);s.listen(p,"127.0.0.1",resolve)});
@@ -79,7 +82,7 @@ try{
   await cmd(hs.access_token,"lobby_admit",null,g.id);
  }else{assert.equal((await request(roomApi+"/media-grant",{room_id:rid},gs.access_token)).status,403);await cmd(gs.access_token,"respond","accepted");await cmd(hs.access_token,"start");}
  const hg=await good(roomApi+"/media-grant",{room_id:rid},hs.access_token),gg=await good(roomApi+"/media-grant",{room_id:rid},gs.access_token);
- assert.equal(hg.url,"wss://127.0.0.1:7881");assert.equal(gg.url,hg.url);
+ assert.equal(hg.url,connectUi?connectUiWss:"wss://127.0.0.1:7881");assert.equal(gg.url,hg.url);
  // Test private signaling on loopback only; TLS/public routing separately qualified.
  await listen(proxy.server,7881);await listen(app,4173);
  browser=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream","--autoplay-policy=no-user-gesture-required"]});
@@ -133,6 +136,7 @@ try{
   await secondScreen.close();
   console.log("PASS B2 Connect re-pair, actual host policy evicts receiver and policy re-enable never resurrects lease");
   console.log("PASS B2 product Connect: same-account separate device offer, host policy, confirmation, RTP, renewal and revocation");
+  await startConnectUiReplay({browser,sourceSession:hs,receiverSession,roomId:rid,roomApi,evicted,sfu});
  }
  if(external)console.log("PASS real cross-workspace named guest with no subscription, explicit lobby admission and bidirectional media");
  let finishAtEnd=null;
