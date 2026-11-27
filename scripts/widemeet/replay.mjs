@@ -176,7 +176,25 @@ try{
  const replyData={ticket_id:supportTicket.ticket_id,message_id:randomUUID(),body:"Synthetic answer"};
  await sk(winner.access_token,"reply",replyData);await sk(winner.access_token,"reply",replyData);
  assert.equal((await sk(hs.access_token,"read",{ticket_id:supportTicket.ticket_id})).messages.length,2);
+ // B5: feedback and assignment lifecycle, same disposable real accounts.
+ assert.equal((await sr(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:5})).status,403);
+ assert.equal((await sr(loser.access_token,"release",{ticket_id:supportTicket.ticket_id})).status,403);
+ assert.equal((await sr(hs.access_token,"release",{ticket_id:supportTicket.ticket_id})).status,403);
+ await sk(winner.access_token,"release",{ticket_id:supportTicket.ticket_id});
+ await sk(winner.access_token,"release",{ticket_id:supportTicket.ticket_id});
+ assert.equal((await sr(winner.access_token,"read",{ticket_id:supportTicket.ticket_id})).status,403);
+ await sk(loser.access_token,"claim",{ticket_id:supportTicket.ticket_id});
+ assert.equal((await sr(winner.access_token,"release",{ticket_id:supportTicket.ticket_id})).status,403);
  await sk(hs.access_token,"close",{ticket_id:supportTicket.ticket_id});
+ assert.equal((await sr(loser.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:5})).status,403);
+ assert.equal((await sr(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:6})).status,403);
+ assert.equal((await sr(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:"5"})).status,403);
+ assert.equal((await sk(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:4})).saved,true);
+ assert.equal((await sk(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:4})).saved,true);
+ assert.equal((await sr(hs.access_token,"feedback",{ticket_id:supportTicket.ticket_id,rating:5})).status,403);
+ assert.equal((await sk(hs.access_token,"read",{ticket_id:supportTicket.ticket_id})).feedback,4);
+ assert.equal((await sk(loser.access_token,"read",{ticket_id:supportTicket.ticket_id})).feedback,null);
+ pass("B5 real requester feedback, exact replay, reassignment, old agent revocation and private rating");
  assert.equal((await sr(winner.access_token,"reply",{...replyData,message_id:randomUUID()})).status,403);
  pass("private support ticket: exact retry, cross-account denial, atomic agent claim, isolated reply and closure");
 
