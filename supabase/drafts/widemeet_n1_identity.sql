@@ -457,4 +457,45 @@ begin
 end $wm$;
 revoke all on function public.wm_rotate_refresh(text,uuid,text,text) from public,anon,authenticated;
 grant execute on function public.wm_rotate_refresh(text,uuid,text,text) to service_role;
+
+-- Private self-profile thumbnail. No public Storage URL or cross-account access.
+create table public.wm_profile_photos(
+ account_id uuid primary key references public.wm_accounts(id) on delete cascade,
+ jpeg bytea not null check(octet_length(jpeg) between 4 and 65536),
+ updated_at timestamptz not null default clock_timestamp()
+);
+alter table public.wm_profile_photos enable row level security;
+revoke all on public.wm_profile_photos from public,anon,authenticated;
+grant select,insert,update,delete on public.wm_profile_photos to service_role;
+create function public.wm_profile_photo(p_hash text,p_action text,p_data jsonb)
+returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $wm$
+declare s record; b bytea; raw text;
+begin
+ select * into s from public.wm_session_context(p_hash);
+ if not found or s.password_change_required then return null;end if;
+ perform 1 from public.wm_accounts where id=s.account_id and enabled and not password_change_required for update;
+ if not found or not exists(select 1 from public.wm_session_context(p_hash) c where c.session_id=s.session_id and not c.password_change_required) then return null;end if;
+ if p_data is null or jsonb_typeof(p_data)<>'object' then return null;end if;
+ if p_action='photo-read' then
+  if p_data<>'{}'::jsonb then return null;end if;
+  select jpeg into b from public.wm_profile_photos where account_id=s.account_id;
+  return jsonb_build_object('jpeg',case when b is null then null else replace(encode(b,'base64'),chr(10),'') end);
+ elsif p_action='photo-delete' then
+  if p_data<>'{}'::jsonb then return null;end if;
+  delete from public.wm_profile_photos where account_id=s.account_id;
+  return jsonb_build_object('updated',true);
+ elsif p_action='photo-save' then
+  if not (p_data ? 'jpeg') or p_data-'jpeg'<>'{}'::jsonb or jsonb_typeof(p_data->'jpeg')<>'string' then return null;end if;
+  raw:=p_data->>'jpeg';
+  if length(raw)>87384 or length(raw)%4<>0 or raw !~ '^[A-Za-z0-9+/]+={0,2}$' then return null;end if;
+  begin b:=decode(raw,'base64');exception when others then return null;end;
+  if octet_length(b) not between 4 and 65536 or substring(b from 1 for 2)<>decode('ffd8','hex') or substring(b from octet_length(b)-1 for 2)<>decode('ffd9','hex') then return null;end if;
+  insert into public.wm_profile_photos(account_id,jpeg) values(s.account_id,b)
+  on conflict(account_id) do update set jpeg=excluded.jpeg,updated_at=clock_timestamp();
+  return jsonb_build_object('updated',true);
+ end if;
+ return null;
+end $wm$;
+revoke all on function public.wm_profile_photo(text,text,jsonb) from public,anon,authenticated;
+grant execute on function public.wm_profile_photo(text,text,jsonb) to service_role;
 commit;
