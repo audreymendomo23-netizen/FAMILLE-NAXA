@@ -144,7 +144,18 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
   var pending by remember{mutableStateOf<JSONObject?>(null)};var journalReady by remember{mutableStateOf(false)};var discard by remember{mutableStateOf(false)}
   var submittedLocal by remember{mutableStateOf(false)};var confirmed by remember{mutableStateOf(false)};var terminalRejection by remember{mutableStateOf(false)}
   val authApi=remember(context){AuthApi(context)}
-  LaunchedEffect(journal){try{pending=withContext(Dispatchers.IO){journal.read()};journalReady=true}catch(c:CancellationException){throw c}catch(_:Exception){error=true}}
+  LaunchedEffect(journal){
+   try{
+    val value=withContext(Dispatchers.IO){journal.read()}
+    if(value!=null){
+     val row=repository.dao.findOwnedAttendanceEvent(session.account.organizationId,session.account.memberId,session.deviceId,value.getString("id"),value.getString("event")+".recorded")
+     val local=repository.dao.findManagementRecord(session.account.organizationId,siteId,value.getString("id"))
+     submittedLocal=row!=null||local!=null
+     terminalRejection=row?.state=="rejected"||row?.state=="conflict"
+    }
+    pending=value;journalReady=true
+   }catch(c:CancellationException){throw c}catch(_:Exception){error=true}
+  }
   var location by remember{mutableStateOf<Location?>(null)};var selfie by remember{mutableStateOf<CapturedSelfie?>(null)};var camera by remember{mutableStateOf(false)}
   fun effectiveRule(a:String):AttendanceRule {val p=rules[a]?:AttendanceRule();return if(a=="staff_clock_in"||a=="staff_clock_out")p.copy(gps=true)else p}
   val rule=effectiveRule(selected)
@@ -167,7 +178,8 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
    val current=latest
    val row=repository.dao.findOwnedAttendanceEvent(current.account.organizationId,current.account.memberId,current.deviceId,value.getString("id"),value.getString("event")+".recorded")
    val state=row?.state
-   submittedLocal=row!=null;terminalRejection=state=="rejected"||state=="conflict"
+   submittedLocal=row!=null||repository.dao.findManagementRecord(current.account.organizationId,siteId,value.getString("id"))!=null
+   terminalRejection=state=="rejected"||state=="conflict"
    if(state=="synced"){
     withContext(Dispatchers.IO){journal.remove(value.getString("id"))}
     pending=null;clear();confirmed=true;submittedLocal=false;terminalRejection=false
@@ -241,7 +253,13 @@ internal fun AttendanceEvidenceCard(repository:NaxaServicesLocalRepository,sessi
      OutlinedButton(enabled=!busy&&!terminalRejection,onClick={busy=true;error=false;scope.launch{try{submitPending(value)}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}}){Text(tr("Réessayer la transmission","Retry submission","Fuɗɗito neldugol"))}
      TextButton(enabled=!busy&&!submittedLocal,onClick={discard=true}){Text(tr("Abandonner la preuve non confirmée","Discard unconfirmed proof","Accu seedeeji"))}
     }
-    if(discard)AlertDialog(onDismissRequest={discard=false},title={Text(tr("Abandonner la preuve ?","Discard proof?","Accu seedeeji?"))},text={Text(tr("Cette action ne valide aucun pointage.","This does not confirm attendance.","Golle tabbitinaaka."))},confirmButton={TextButton(onClick={discard=false;val id=pending?.optString("id");if(id!=null){busy=true;scope.launch{try{withContext(Dispatchers.IO){journal.remove(id)};pending=null}catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}}}){Text(tr("Abandonner","Discard","Accu"))}},dismissButton={TextButton(onClick={discard=false}){Text(tr("Annuler","Cancel","Haaytu"))}})
+    if(discard)AlertDialog(onDismissRequest={discard=false},title={Text(tr("Abandonner la preuve ?","Discard proof?","Accu seedeeji?"))},text={Text(tr("Cette action ne valide aucun pointage.","This does not confirm attendance.","Golle tabbitinaaka."))},confirmButton={TextButton(onClick={discard=false;val id=pending?.optString("id");if(id!=null){busy=true;scope.launch{try{
+     val value=requireNotNull(pending)
+     val current=latest
+     require(repository.dao.findOwnedAttendanceEvent(current.account.organizationId,current.account.memberId,current.deviceId,id,value.getString("event")+".recorded")==null)
+     require(repository.dao.findManagementRecord(current.account.organizationId,siteId,id)==null)
+     withContext(Dispatchers.IO){journal.remove(id)};pending=null
+    }catch(c:CancellationException){throw c}catch(_:Exception){error=true}finally{busy=false}}}}){Text(tr("Abandonner","Discard","Accu"))}},dismissButton={TextButton(onClick={discard=false}){Text(tr("Annuler","Cancel","Haaytu"))}})
     if(loaded&&journalReady&&pending==null){
      if(manager)attendanceActions.forEach{a->
       val p=effectiveRule(a)

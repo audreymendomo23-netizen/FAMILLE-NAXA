@@ -631,14 +631,33 @@ test("Web: delayed tenant A pull cannot repaint tenant B after logout", async ({
     const harness = await context.newPage();
     await harness.goto("/e2e/queue-harness.html");
     await harness.waitForFunction(() => document.querySelector("#ready")?.textContent === "ready");
-    await expect.poll(() => harness.evaluate(({deviceId,orgId}) =>
-      (window as any).__naxaQueueHarness.cursor("naxa-services-web",deviceId,orgId),
-      {deviceId:DEVICE_ID,orgId:ORG_A})).toBe(1);
-    await harness.close();
+    // A response received after logout must not persist in either member partition.
+    // Wait for the original fetch's microtasks, rather than accepting a stale unscoped cursor.
+    await page.evaluate(()=>new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve()))));
+    const scopeA={deviceId:DEVICE_ID,orgId:ORG_A,memberId:MEMBER_A};
+    const scopeB={deviceId:DEVICE_ID,orgId:ORG_B,memberId:MEMBER_B};
+    const cursor=(scope:typeof scopeA)=>harness.evaluate(({deviceId,orgId,memberId})=>
+      (window as any).__naxaQueueHarness.cursor("naxa-services-web",deviceId,orgId,memberId),scope);
+    const changes=(scope:typeof scopeA)=>harness.evaluate(({deviceId,orgId,memberId})=>
+      (window as any).__naxaQueueHarness.changes("naxa-services-web",deviceId,orgId,memberId),scope);
+    expect(await cursor(scopeA)).toBe(0);
+    expect(await cursor(scopeB)).toBe(0);
+    expect(await changes(scopeA)).toEqual([]);
+    expect(await changes(scopeB)).toEqual([]);
+    expect(await harness.evaluate(({deviceId,orgId})=>(window as any).__naxaQueueHarness.cursor("naxa-services-web",deviceId,orgId),scopeA)).toBe(0);
     await page.getByRole("button", { name: /Clients & fidélité/ }).first().click();
     await expect(page.getByText("Client confidentiel A")).toHaveCount(0);
     await expect(page.getByText("customer.created", {exact:true})).toHaveCount(0);
     await expect(page.getByText("Aucune fiche client dans le site actif.")).toBeVisible();
+    // Re-authentication as A can fetch the same change legitimately.
+    await page.getByRole("button",{name:"Déconnexion"}).click();
+    await page.getByLabel("Identifiant NAXA Services").fill("NS-ORG-A");
+    await page.getByLabel("Mot de passe").fill("E2E-Password-Only-For-Test");
+    await page.getByRole("button",{name:"Se connecter"}).click();
+    await expect.poll(()=>cursor(scopeA)).toBe(1);
+    expect((await changes(scopeA)).map((x:{event_id:string})=>x.event_id)).toEqual(["late-tenant-a"]);
+    expect(await changes(scopeB)).toEqual([]);
+    await harness.close();
   } finally { releaseA(); }
 });
 

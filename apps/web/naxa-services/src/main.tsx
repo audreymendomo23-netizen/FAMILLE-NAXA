@@ -403,9 +403,12 @@ function App() {
       setMode(nextSession.account.business_mode ?? "solo");
       setSiteName(nextSession.account.organization_name || nextSession.account.active_sites[0]?.name || "Point de vente principal");
       setWorkstationSiteId(nextSession.account.active_site_ids[0] ?? "");
-      void hydrateWebRecords(nextSession).catch((error)=>setAuthMessage(error instanceof Error?error.message:"Historique local indisponible."));
       setAuthenticated(true);
-      void syncWebPullChanges(nextSession).then((result) => { if(result.morePending)setAuthMessage("Certaines données restent à actualiser."); }).catch((error) => setAuthMessage(error instanceof Error?error.message:"Actualisation impossible."));
+      if(!nextSession.requirePasswordChange){
+        const current=captureSession(nextSession);
+        void hydrateWebRecords(nextSession).catch((error)=>{if(current())setAuthMessage(error instanceof Error?error.message:"Historique local indisponible.");});
+        void syncWebPullChanges(nextSession).then((result) => { if(current()&&result.morePending)setAuthMessage("Certaines données restent à actualiser."); }).catch((error) => {if(current())setAuthMessage(error instanceof Error?error.message:"Actualisation impossible.");});
+      }
       setPreview(false);
       setPassword("");
       setAuthMessage(nextSession.requirePasswordChange
@@ -549,6 +552,7 @@ function App() {
     event.preventDefault();
     const activeSession = authSession;
     if (!activeSession) return;
+    const current=captureSession(activeSession);
     if (newPassword.length < 10 || newPassword.length > 256) {
       setAuthMessage("Le nouveau mot de passe doit contenir entre 10 et 256 caractères.");
       return;
@@ -568,7 +572,12 @@ function App() {
         refresh_token: freshSession.refreshToken,
       }, freshSession.accessToken);
       const updated = parseWebSession(data);
+      if(!current()||scopeOf(updated)!==scopeOf(activeSession)||updated.requirePasswordChange)throw new Error("WEB_SESSION_CHANGED");
+      sessionFence.current={generation:sessionFence.current.generation+1,scope:scopeOf(updated)};
       setAuthSession(updated);
+      const changed=captureSession(updated);
+      void hydrateWebRecords(updated).catch(()=>undefined);
+      void syncWebPullChanges(updated).catch(()=>{if(changed())setAuthMessage("Actualisation impossible.");});
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
@@ -582,41 +591,36 @@ function App() {
 
   async function signOut() {
     const activeSession = authSession;
-    setBusy(true);
-    let serverRevoked = false;
-    try {
-      if (activeSession) {
-        const freshSession = await ensureFreshSession(activeSession);
-        await authRequest({ action: "logout", device: webDevicePayload() }, freshSession.accessToken);
-        serverRevoked = true;
+    // Local logout must not be delayed by refresh/network/server revocation.
+    sessionFence.current={generation:sessionFence.current.generation+1,scope:""};
+    setAuthSession(null);
+    setAuthenticated(false);
+    setPreview(false);
+    setPassword("");
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setEntries({} as Record<ModuleId, Entry[]>);
+    setRemoteChanges([]);
+    setPendingSyncCount(0);
+    setWorkstations([]);
+    setWorkstationSiteId("");
+    setActiveSiteId("");
+    performanceRequest.current++;
+    setPerformanceData(null);
+    setPerformanceError("");
+    setPerformanceBusy(false);
+    setDialogOpen(false);
+    setActive("overview");
+    setBusy(false);
+    setAuthMessage("Session fermée.");
+    const loggedOutGeneration=sessionFence.current.generation;
+    if(activeSession){
+      try{
+        await authRequest({action:"logout",device:webDevicePayload()},activeSession.accessToken);
+      }catch{
+        if(sessionFence.current.generation===loggedOutGeneration)setAuthMessage("Vous êtes déconnecté. Une nouvelle connexion sera nécessaire.");
       }
-    } catch {
-      serverRevoked = false;
-    } finally {
-      sessionFence.current={generation:sessionFence.current.generation+1,scope:""};
-      setAuthSession(null);
-      setAuthenticated(false);
-      setPreview(false);
-      setPassword("");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      setEntries({} as Record<ModuleId, Entry[]>);
-      setRemoteChanges([]);
-      setPendingSyncCount(0);
-      setWorkstations([]);
-      setWorkstationSiteId("");
-      setActiveSiteId("");
-      performanceRequest.current++;
-      setPerformanceData(null);
-      setPerformanceError("");
-      setPerformanceBusy(false);
-      setDialogOpen(false);
-      setActive("overview");
-      setBusy(false);
-      setAuthMessage(serverRevoked || !activeSession
-        ? "Session fermée."
-        : "Vous êtes déconnecté. Une nouvelle connexion sera nécessaire.");
     }
   }
 
