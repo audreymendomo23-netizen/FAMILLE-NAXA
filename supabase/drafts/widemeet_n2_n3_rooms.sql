@@ -121,7 +121,7 @@ create function public.wm_room_list(p_hash text)
 returns table(id uuid,title text,status text,scheduled_ms bigint,duration_minutes integer,revision bigint,host_id uuid,response text)
 language sql security invoker stable set search_path=pg_catalog,public as $wm$
  select r.id,r.state->>'title',r.state->>'status',(r.state->>'scheduledMs')::bigint,(r.state->>'durationMinutes')::integer,r.revision,r.host_id,p->>'response'
- from public.wm_rooms r join public.wm_room_actor(p_hash) a on a.workspace_id=r.workspace_id
+ from public.wm_rooms r join lateral public.wm_room_actor_for(p_hash,r.id) a on a.workspace_id=r.workspace_id
  cross join lateral jsonb_array_elements(r.state->'participants') p
  where p->>'memberId'=a.account_id::text and p->>'excluded'='false'
  order by (r.state->>'scheduledMs')::bigint desc nulls last,r.id limit 200
