@@ -28,3 +28,30 @@ test("extension uses existing clock, host-only, bounded and idempotent",()=>{let
 test("premium survey is private until close, multiple choices and quorum",()=>{let r=open();const config={question:"Preferred dates",kind:"multiple",options:["Monday","Tuesday","Friday"],anonymous:true,visibility:"closed",quorum:100,threshold:50};assert.throws(()=>run(r,{...host,plan:"access"},"survey",config,"survey001"),/premium_required/);r=run(r,host,"survey",config,"survey001");r=run(r,guest,"survey_vote",[0,2],"survey001");let summary=pollSummary(r.polls[0],guest.memberId);assert.equal(summary.counts,null);assert.equal(summary.responses,null);assert.equal(summary.votes,undefined);assert.throws(()=>run(r,guest,"survey_vote",[1],"survey001"),/invalid_vote/);r=run(r,host,"survey_vote",[0],"survey001");r=run(r,host,"close_poll",null,"survey001");summary=pollSummary(r.polls[0],host.memberId);assert.deepEqual(summary.counts,[2,0,1]);assert.equal(summary.responses,2);assert.equal(summary.responseRate,100);assert.equal(summary.quorumMet,true);assert.deepEqual(summary.accepted,[true,false,true]);});
 test("survey eligibility snapshot and invalid or duplicate selections",()=>{let r=base();r=run(r,host,"start");const config={question:"Score",kind:"rating",options:["1","2","3","4","5"],anonymous:true,visibility:"live",quorum:100,threshold:60};r=run(r,host,"survey",config,"survey002");r=run(r,guest,"respond","accepted");assert.throws(()=>run(r,guest,"survey_vote",[0],"survey002"),/invalid_vote/);assert.throws(()=>run(r,host,"survey_vote",[0,0],"survey002"),/invalid_vote/);assert.throws(()=>run(r,host,"survey_vote",[0,1],"survey002"),/invalid_vote/);assert.throws(()=>run(r,host,"vote",0,"survey002"),/invalid_vote/);r=run(r,host,"survey_vote",[4],"survey002");assert.equal(pollSummary(r.polls[0],host.memberId).quorumMet,true);});
 test("failed quorum never declares an accepted option",()=>{let r=open();r=run(r,host,"survey",{question:"Decision",kind:"single",options:["yes","no"],anonymous:true,visibility:"live",quorum:100,threshold:50},"survey003");r=run(r,guest,"survey_vote",[0],"survey003");r=run(r,host,"close_poll",null,"survey003");const s=pollSummary(r.polls[0],host.memberId);assert.equal(s.quorumMet,false);assert.equal(s.accepted,null);});
+
+test("N2 host-only schedule revision invalidates prior RSVP, cancel terminal",()=>{
+ let r=base();r=run(r,guest,"respond","accepted");
+ const v={title:"Revised meeting",description:"New agenda",scheduledMs:61000,durationMinutes:10};
+ assert.throws(()=>run(r,guest,"reschedule",v),/forbidden/);
+ r=run(r,host,"reschedule",v);assert.equal(r.title,v.title);assert.equal(r.scheduledMs,v.scheduledMs);assert.equal(r.participants[1].response,"pending");
+ assert.throws(()=>run(r,host,"reschedule",{...v,scheduledMs:0}),/invalid_room/);
+ assert.throws(()=>run(r,guest,"cancel"),/forbidden/);r=run(r,host,"cancel");assert.equal(r.cancelled,true);assert.equal(r.status,"ended");assert.throws(()=>run(r,host,"start"));
+});
+test("N2 private messages require admitted destination and share public-chat rate limit",()=>{
+ let r=open();assert.throws(()=>run(r,guest,"private_chat","private","foreign001"),/invalid_chat/);
+ assert.throws(()=>run(r,guest,"private_chat","private",guest.memberId),/invalid_chat/);
+ r=run(r,guest,"private_chat","private",host.memberId);assert.deepEqual(JSON.parse(r.events.at(-1).payload).slice(0,3),["private_chat",host.memberId,"private"]);
+ for(let i=0;i<4;i++)r=run(r,guest,"chat","public");assert.throws(()=>run(r,guest,"private_chat","extra",host.memberId),/rate_limit/);
+ r=run(r,host,"exclude",null,guest.memberId);assert.throws(()=>run(r,host,"private_chat","denied",guest.memberId),/invalid_chat/);
+});
+test("N3 explicit editable nominative survey exposes identities only when results visible",()=>{
+ let r=open();r=run(r,host,"survey",{question:"Choice",kind:"single",options:["A","B"],anonymous:false,editable:true,visibility:"closed",quorum:0,threshold:50},"survey004");
+ r=run(r,guest,"survey_vote",[0],"survey004");let s=pollSummary(r.polls[0],guest.memberId);assert.equal(s.nominativeResponses,null);assert.deepEqual(s.ownSelection,[0]);
+ r=run(r,guest,"survey_vote",[1],"survey004");r=run(r,host,"close_poll",null,"survey004");s=pollSummary(r.polls[0],host.memberId);assert.deepEqual(s.counts,[0,1]);assert.deepEqual(s.nominativeResponses,[{memberId:guest.memberId,selection:[1]}]);assert.throws(()=>run(r,guest,"survey_vote",[0],"survey004"),/invalid_vote/);
+});
+test("N3 exclusion stops recording request and anonymous ballots never expose identities",()=>{
+ let r=open();r=run(r,host,"consent",true);r=run(r,guest,"consent",true);r=run(r,host,"record",true);
+ r=run(r,host,"survey",{question:"Secret",kind:"multiple",options:["A","B"],anonymous:true,editable:true,visibility:"live",quorum:0,threshold:50},"survey005");
+ r=run(r,guest,"survey_vote",[0,1],"survey005");assert.equal(pollSummary(r.polls[0],host.memberId).nominativeResponses,null);
+ r=run(r,host,"exclude",null,guest.memberId);assert.equal(r.recording,"off");
+});
