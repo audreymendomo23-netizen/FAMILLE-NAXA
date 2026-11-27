@@ -1,0 +1,9 @@
+# Direct runtime dependencies pinned to avoid uncontrolled upgrades in isolated ASR CI.
+faster-whisper==1.2.1
+ctranslate2==4.6.0
+huggingface-hub==0.34.4
+tokenizers==0.21.4
+onnxruntime==1.22.1
+av==15.1.0
+numpy==2.2.6
+tqdm==4.67.1

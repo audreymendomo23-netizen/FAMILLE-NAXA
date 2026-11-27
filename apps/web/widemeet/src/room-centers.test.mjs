@@ -1,0 +1,4 @@
+import test from "node:test";import assert from "node:assert/strict";import{roomCenters,roomCenterText,filterRooms,roomCounts}from"./room-centers.mjs";
+const rows=[{id:"a",title:"Équipe",status:"open"},{id:"b",title:"Planning",status:"scheduled"},{id:"c",title:"Bilan",status:"ended"},{id:"d",title:"Pause",status:"paused"}];
+test("all workspace room centers have FR and EN copy",()=>{for(const c of roomCenters)assert.equal(roomCenterText[c].filter(Boolean).length,4)});
+test("supervision and search only filter visible rows",()=>{assert.deepEqual(filterRooms(rows,"rooms").map(r=>r.id),["a","d"]);assert.deepEqual(filterRooms(rows,"chat","ÉQUIPE").map(r=>r.id),["a"]);assert.deepEqual(filterRooms(rows,"statistics","","ended").map(r=>r.id),["c"]);assert.deepEqual(roomCounts(rows),{scheduled:1,open:1,paused:1,ended:1});assert.equal(rows.length,4)});

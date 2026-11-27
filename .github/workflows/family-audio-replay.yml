@@ -1,0 +1,203 @@
+name: Family media — isolated audio recording
+on:
+  pull_request:
+    branches: [test/widemeet-qualification-20261126]
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'scripts/widemeet/media-replay.mjs'
+      - 'scripts/widemeet/media-product-replay.mjs'
+      - 'scripts/widemeet/local-asr.py'
+      - 'scripts/widemeet/asr-preflight.mjs'
+      - 'scripts/widemeet/live-caption-worker.mjs'
+      - 'scripts/widemeet/asr-requirements.txt'
+      - 'packages/media-core/**'
+      - 'supabase/drafts/widemeet_*.sql'
+      - '.github/workflows/family-audio-replay.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  audio-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test B3 durable consumer loop
+        run: |
+          node --check scripts/widemeet/asr-worker.mjs
+          node --check scripts/widemeet/live-caption-worker.mjs
+          node --check packages/media-core/widemeet-live-captions.mjs
+          node --test packages/media-core/widemeet-asr-loop.test.mjs
+      - name: Prepare isolated recording dependencies
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund livekit-client@2.25.0 livekit-server-sdk@2.20.1 ws@8.18.3 @playwright/test@1.56.1
+          npx playwright install chromium
+          node --input-type=module -e 'import {chromium} from "@playwright/test"; const b=await chromium.launch({headless:true,args:["--use-fake-device-for-media-stream","--use-fake-ui-for-media-stream"]}); await b.close();'
+          if ! command -v ffmpeg >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y ffmpeg
+          fi
+          ffmpeg -version
+      - name: Start private Redis, SFU and Egress
+        run: |
+          set -euo pipefail
+          KEY=naxareplay
+          SECRET="$(openssl rand -hex 32)"
+          echo "::add-mask::$SECRET"
+          echo "LK_TEST_KEY=$KEY" >> "$GITHUB_ENV"
+          echo "LK_TEST_SECRET=$SECRET" >> "$GITHUB_ENV"
+          echo "WM_TEST_EGRESS=true" >> "$GITHUB_ENV"
+          OUT="$RUNNER_TEMP/wm-egress-out"
+          mkdir -p "$OUT"
+          chmod 777 "$OUT"
+          echo "WM_EGRESS_OUT=$OUT" >> "$GITHUB_ENV"
+          ACTIVE="$RUNNER_TEMP/wm-egress-active"
+          mkdir -p "$ACTIVE"
+          chmod 777 "$ACTIVE"
+          echo "WM_EGRESS_ACTIVE=$ACTIVE" >> "$GITHUB_ENV"
+          docker run -d --name wm-audio-redis --network host redis:7.4.1-alpine redis-server --bind 127.0.0.1 --port 6381 --save "" --appendonly no
+          # Egress Go SDK does not reliably pair loopback-only ICE candidates. Keep
+          # signaling and Redis private; advertise the isolated runner interface for RTP.
+          RTC_IP="$(ip -4 route get 192.0.2.1 | awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1);exit}}')"
+          [[ "$RTC_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ && "$RTC_IP" != 127.* ]] || exit 1
+          cat > "$RUNNER_TEMP/wm-audio-lk.yaml" <<EOF
+          port: 7880
+          bind_addresses: ["127.0.0.1"]
+          redis:
+            address: 127.0.0.1:6381
+          rtc:
+            node_ip: $RTC_IP
+            use_external_ip: false
+            tcp_port: 7882
+            udp_port: 7883
+          room:
+            auto_create: false
+            enable_remote_unmute: false
+          keys:
+            $KEY: $SECRET
+          EOF
+          cat > "$RUNNER_TEMP/wm-egress.yaml" <<EOF
+          api_key: $KEY
+          api_secret: $SECRET
+          ws_url: ws://127.0.0.1:7880
+          insecure: true
+          redis:
+            address: 127.0.0.1:6381
+          health_port: 7990
+          logging:
+            level: debug
+            json: true
+          cpu_cost:
+            room_composite_cpu_cost: 1
+            audio_room_composite_cpu_cost: 1
+          EOF
+          chmod 600 "$RUNNER_TEMP/wm-audio-lk.yaml"
+          chmod 644 "$RUNNER_TEMP/wm-egress.yaml"
+          docker run -d --name wm-audio-lk --network host -v "$RUNNER_TEMP/wm-audio-lk.yaml:/etc/livekit.yaml:ro" livekit/livekit-server:v1.13.9 --config /etc/livekit.yaml
+          for i in $(seq 1 60); do if curl -fsS http://127.0.0.1:7880/ >/dev/null; then break; fi; sleep 1; done
+          curl -fsS http://127.0.0.1:7880/
+          docker run -d --name wm-audio-egress --network host --cap-add SYS_ADMIN -e EGRESS_CONFIG_FILE=/etc/egress.yaml -v "$RUNNER_TEMP/wm-egress.yaml:/etc/egress.yaml:ro" -v "$OUT:/out" -v "$ACTIVE:/home/egress/tmp" livekit/egress:v1.14.1
+          for i in $(seq 1 90); do if curl -fsS http://127.0.0.1:7990/ >/dev/null; then exit 0; fi; sleep 1; done
+          echo "Egress readiness failed"
+          exit 1
+      - name: Verify actual audio-only capture (synthetic devices only)
+        run: node scripts/widemeet/media-replay.mjs
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+      - name: Isolated product recording database
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wm-recording-db"
+          cd "$RUNNER_TEMP/wm-recording-db"
+          supabase init
+          # Only the unused fixture mail catcher needs a distinct port; keep API/DB fixed.
+          python3 - <<'PY'
+          import pathlib, re, socket, tomllib
+          path = pathlib.Path("supabase/config.toml")
+          text = path.read_text()
+          config = tomllib.loads(text)
+          names = [name for name in ("local_smtp", "inbucket") if name in config]
+          if len(names) != 1:
+              raise SystemExit("Expected exactly one isolated local mail configuration")
+          name = names[0]
+          section = re.search(r"(?ms)^\[" + re.escape(name) + r"\][ \t]*\n.*?(?=^\[|\Z)", text)
+          if section is None:
+              raise SystemExit("Expected isolated local mail section")
+          with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+              sock.bind(("0.0.0.0", 0))
+              port = sock.getsockname()[1]
+          updated, count = re.subn(r"(?m)^port[ \t]*=[ \t]*\d+[ \t]*(?:#[^\n]*)?$", f"port = {port}", section.group())
+          if count != 1:
+              raise SystemExit("Expected exactly one isolated mail port")
+          result = text[:section.start()] + updated + text[section.end():]
+          assert tomllib.loads(result)[name]["port"] == port
+          path.write_text(result)
+          print(f"Isolated fixture mail catcher port: {port}")
+          PY
+          supabase start
+          supabase status -o env > "$RUNNER_TEMP/wm-recording.env"
+          chmod 600 "$RUNNER_TEMP/wm-recording.env"
+          set -a; source "$RUNNER_TEMP/wm-recording.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
+          if ! command -v psql >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y postgresql-client
+          fi
+          psql --version
+          for name in widemeet_n1_identity widemeet_n2_n3_rooms widemeet_n1_billing widemeet_n2_external widemeet_n3_recording widemeet_n3_recording_archive widemeet_n4_minutes widemeet_n4_presence widemeet_transcription; do
+            psql "$DB_URL" -v ON_ERROR_STOP=1 -f "$GITHUB_WORKSPACE/supabase/drafts/$name.sql"
+          done
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -c "notify pgrst, 'reload schema'"
+      - name: Prepare pinned local ASR model for synthetic speech qualification
+        id: asr_prepare
+        run: |
+          set -euo pipefail
+          if ! command -v espeak-ng >/dev/null; then
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- update -qq
+            sudo apt-get -o Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources -o Dir::Etc::sourceparts=- install -y espeak-ng
+          fi
+          python3 -m venv "$RUNNER_TEMP/wm-asr-venv"
+          "$RUNNER_TEMP/wm-asr-venv/bin/pip" install --disable-pip-version-check -r scripts/widemeet/asr-requirements.txt
+          "$RUNNER_TEMP/wm-asr-venv/bin/pip" check
+          "$RUNNER_TEMP/wm-asr-venv/bin/python" -c 'from huggingface_hub import snapshot_download; import sys; snapshot_download("Systran/faster-whisper-tiny", revision="d90ca5fe260221311c53c58e660288d3deb8d356", local_dir=sys.argv[1], allow_patterns=["config.json","model.bin","tokenizer.json","vocabulary.txt"])' "$RUNNER_TEMP/wm-asr-model"
+          test "$(stat -c %s "$RUNNER_TEMP/wm-asr-model/model.bin")" -gt 70000000
+          test -s "$RUNNER_TEMP/wm-asr-model/tokenizer.json"
+          test -s "$RUNNER_TEMP/wm-asr-model/vocabulary.txt"
+          echo "WM_ASR_PYTHON=$RUNNER_TEMP/wm-asr-venv/bin/python" >> "$GITHUB_ENV"
+          echo "WM_ASR_MODEL=$RUNNER_TEMP/wm-asr-model" >> "$GITHUB_ENV"
+      - name: Verify real offline ASR independently before product Replay
+        id: asr_preflight
+        run: node scripts/widemeet/asr-preflight.mjs
+      - name: Exercise actual consent-driven WideMeet Egress with private quarantine
+        if: ${{ !cancelled() && steps.asr_prepare.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          set -a; source "$RUNNER_TEMP/wm-recording.env"; set +a
+          [[ "$API_URL" == http://127.0.0.1:54321 ]] || exit 1
+          export SUPABASE_URL="$API_URL" SUPABASE_ANON_KEY="$ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export WM_AUTH_QUALIFIED=true WM_ROOM_QUALIFIED=true WM_PRESENCE_QUALIFIED=true WM_EXTERNAL_GUESTS_QUALIFIED=true WM_MEDIA_QUALIFIED=true WM_RECORDING_QUALIFIED=true WM_RECORDING_STORAGE_QUALIFIED=true WM_TRANSCRIPTION_QUALIFIED=true WM_MINUTES_QUALIFIED=true WM_LIVE_CAPTIONS_QUALIFIED=true WM_ALLOWED_ORIGINS=http://127.0.0.1:4173
+          export WM_LIVEKIT_URL=wss://127.0.0.1:7881 WM_LIVEKIT_API_KEY="$LK_TEST_KEY" WM_LIVEKIT_API_SECRET="$LK_TEST_SECRET"
+          node scripts/widemeet/media-product-replay.mjs
+      - name: Stop isolated recording database
+        if: always()
+        run: |
+          if test -d "$RUNNER_TEMP/wm-recording-db"; then cd "$RUNNER_TEMP/wm-recording-db" && supabase stop --no-backup; fi
+      - name: Diagnostic status on failure (synthetic room only)
+        if: failure()
+        run: |
+          for c in wm-audio-egress wm-audio-lk; do
+            docker logs --tail 150 "$c" 2>&1 | sed -E 's/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/[REDACTED_JWT]/g' || true
+          done
+      - name: Cleanup private test recording and containers
+        if: always()
+        run: |
+          docker rm -f wm-audio-egress wm-audio-lk wm-audio-redis || true
+          rm -rf "$RUNNER_TEMP/wm-egress-active" "$RUNNER_TEMP/wm-egress-out" "$RUNNER_TEMP/wm-audio-lk.yaml" "$RUNNER_TEMP/wm-egress.yaml"
