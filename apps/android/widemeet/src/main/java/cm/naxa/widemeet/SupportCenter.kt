@@ -16,10 +16,10 @@ private fun supportRows(x:JSONObject,key:String):List<JSONObject>{val a=x.getJSO
  val scope=rememberCoroutineScope()
  var agent by remember{mutableStateOf(false)};var queue by remember{mutableStateOf(false)};var ready by remember{mutableStateOf(false)};var busy by remember{mutableStateOf(false)};var error by remember{mutableStateOf(false)}
  var items by remember{mutableStateOf<List<JSONObject>>(emptyList())};var ticket by remember{mutableStateOf<JSONObject?>(null)}
- var subject by remember{mutableStateOf("")};var category by remember{mutableStateOf("account")};var body by remember{mutableStateOf("")};var reply by remember{mutableStateOf("")};var pending by remember{mutableStateOf<JSONObject?>(null)};var closeConfirm by remember{mutableStateOf(false)};var releaseConfirm by remember{mutableStateOf(false)};var rating by remember{mutableIntStateOf(0)}
+ var subject by remember{mutableStateOf("")};var category by remember{mutableStateOf("account")};var body by remember{mutableStateOf("")};var reply by remember{mutableStateOf("")};var pending by remember{mutableStateOf<JSONObject?>(null)};var closeConfirm by remember{mutableStateOf(false)};var releaseConfirm by remember{mutableStateOf(false)};var rating by remember{mutableIntStateOf(0)};var reviewer by remember{mutableStateOf(false)};var reviewMode by remember{mutableStateOf(false)}
  suspend fun req(action:String,data:JSONObject=JSONObject())=gateway.identity(session,"support-"+action,data)
  suspend fun refresh(q:Boolean=queue){try{items=supportRows(req(if(q)"queue" else "list"),"items")}catch(e:CancellationException){throw e}catch(e:Exception){items=emptyList();ticket=null;reply="";agent=false;queue=false;ready=false;throw e}}
- suspend fun load(){agent=req("capabilities").optBoolean("agent");refresh(false);ready=true}
+ suspend fun load(){val c=req("capabilities");agent=c.optBoolean("agent");reviewer=c.optBoolean("recovery_reviewer");refresh(false);ready=true}
  suspend fun open(id:String){try{ticket=req("read",JSONObject().put("ticket_id",id));reply="";rating=0;pending=null}catch(e:CancellationException){throw e}catch(e:Exception){ticket=null;items=emptyList();reply="";agent=false;queue=false;ready=false;throw e}}
  fun work(block:suspend ()->Unit){if(busy)return;busy=true;error=false;scope.launch{try{block()}catch(e:CancellationException){throw e}catch(e:Exception){error=true}finally{busy=false}}}
  fun status(s:String)=when(s){"open"->tr("Ouverte","Open");"assigned"->tr("Prise en charge","Assigned");"waiting"->tr("En attente de réponse","Waiting for response");"closed"->tr("Clôturée","Closed");else->s}
@@ -31,7 +31,9 @@ private fun supportRows(x:JSONObject,key:String):List<JSONObject>{val a=x.getJSO
  TextButton(onClick=onFaq){Text(tr("Consulter la FAQ","Read FAQ"))}
  if(busy)LinearProgressIndicator(Modifier.fillMaxWidth());if(error)Text(tr("Action non confirmée. Réessayez.","Action unconfirmed. Retry."),color=MaterialTheme.colorScheme.error)
  if(!ready&&!busy)Button(onClick={work{load()}}){Text(tr("Réessayer","Retry"))}
- if(ready){
+ if(ready&&reviewer)TextButton(enabled=!busy&&pending==null,onClick={reviewMode=!reviewMode;ticket=null;reply=""}){Text(if(reviewMode)tr("Retour au support","Back to support")else tr("Demandes de récupération supervisée","Supervised recovery requests"))}
+ if(ready&&reviewMode&&reviewer)SupportRecoveryReview(english,gateway,session)
+ if(ready&&!reviewMode){
  if(agent){TextButton(enabled=!busy&&pending==null,onClick={work{ticket=null;refresh(false);queue=false}}){Text(tr("Mes demandes","My requests"))};TextButton(enabled=!busy&&pending==null,onClick={work{ticket=null;refresh(true);queue=true}}){Text(tr("File agent","Agent queue"))}}
  val t=ticket
  if(t!=null){val id=t.getString("id")
