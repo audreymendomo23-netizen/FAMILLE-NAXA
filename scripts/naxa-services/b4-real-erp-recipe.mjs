@@ -143,6 +143,40 @@ export async function runB4({fixture,login,json,success,base,anon,admin,pass}) {
  const sync=await success(base+'/rest/v1/rpc/ns_pull_sync_changes',{p_org_id:org,p_device_id:cashier.device_id,p_after_cursor:0,p_limit:200},cashier.access_token,anon);
  assert.ok(sync.changes.some(x=>x.aggregate_id===invoice));assert.ok(!sync.changes.some(x=>staffIds.includes(x.aggregate_id)));
  pass('B4 roles: operating cashier may create customer but cannot count stock, set targets or read/approve remuneration via REST or peer sync');
+ // Same-site operating roles: direct reads, write boundary and cross-device pull.
+ async function scopedRole(role,scopeSite,manage){
+  const email='b4-role-'+randomUUID()+'@example.test',password='Qa7!'+randomUUID(),loginId='NS-'+randomUUID().replaceAll('-','').slice(0,10).toUpperCase();
+  const user=await success(base+'/auth/v1/admin/users',{email,password,email_confirm:true,app_metadata:{app_code:'naxa-services'}});
+  const [account]=await success(base+'/rest/v1/ns_accounts',{auth_user_id:user.id,login_id:loginId,auth_alias:email,password_change_required:false});
+  const [member]=await success(base+'/rest/v1/ns_members',{org_id:org,account_id:account.id,display_name:'B4 '+role,role_code:role});
+  await success(base+'/rest/v1/ns_member_scopes',{org_id:org,member_id:member.id,scope_type:'site',scope_id:scopeSite.id,site_id:scopeSite.id,can_read:true,can_operate:true,can_manage:manage});
+  return login({...f,site:scopeSite,login:loginId,password,device:{...f.device,installation_id:randomUUID()}});
+ }
+ async function checkRole(role,scopeSite,manage,allowed){
+  const session=await scopedRole(role,scopeSite,manage);
+  const id=randomUUID();
+  const mutation=event(session,'staff_commission.created',id,document(id,'staff_commission',100,0,'pending_review'));
+  if(allowed)await applied(session,mutation);else await denied(session,mutation);
+  const visible=await success(base+'/rest/v1/ns_management_records?id=in.('+staffIds.join(',')+')&select=id',undefined,session.access_token,anon,'GET');
+  assert.equal(visible.length,allowed?staffIds.length:0,role+' payroll records');
+  const hist=await success(base+'/rest/v1/ns_management_record_events?record_id=in.('+staffIds.join(',')+')&select=id',undefined,session.access_token,anon,'GET');
+  assert.equal(hist.length,allowed?staffIds.length*3:0,role+' payroll history');
+  for(const [table,entryId] of [['ns_commission_entries',legacyCommission.id],['ns_commission_adjustments',legacyAdjustment.id]]){
+   const result=await success(base+'/rest/v1/'+table+'?id=eq.'+entryId+'&select=id',undefined,session.access_token,anon,'GET');
+   assert.equal(result.length,allowed?1:0,role+' '+table);
+  }
+  const pull=await success(base+'/rest/v1/rpc/ns_pull_sync_changes',{p_org_id:org,p_device_id:session.device_id,p_after_cursor:0,p_limit:200},session.access_token,anon);
+  assert.equal(pull.changes.some(x=>staffIds.includes(x.aggregate_id)),allowed,role+' peer payroll visibility');
+  if(allowed)await applied(session,event(session,'staff_commission.status_changed',id,transition(id,'staff_commission','pending_review','approved',1)));
+  pass('B4 payroll role '+role+' / '+(scopeSite.id===site?'source':'other site')+' / manage='+manage+' permissions verified');
+ }
+ for(const role of ['network_manager','site_manager','workstation_manager','receptionist','hair_stylist','pressing_operator','stock_manager','accountant']){
+  const canManage=['network_manager','site_manager'].includes(role);
+  await checkRole(role,f.site,canManage,canManage);
+ }
+ await checkRole('site_manager',dest,true,false);
+ await checkRole('site_manager',f.site,false,false);
+
 
 
 

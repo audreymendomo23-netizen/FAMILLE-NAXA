@@ -143,3 +143,23 @@ test("fiscal engine applies only the approved effective-dated policy supplied", 
   assert.equal(exempt.taxXaf, 0);
   assert.equal(exempt.exempt, true);
 });
+
+test("zero-share allocation cannot receive rounding remainder and UUID casing cannot duplicate a member", () => {
+  const member = "50000000-0000-4000-8000-00000000000a";
+  const other = "50000000-0000-4000-8000-00000000000b";
+  const zero = "50000000-0000-4000-8000-000000000001";
+  const input = {rule:{...approvedRule, method:"fixed_per_completed_line", fixedAmountXaf:1}, saleLine, calculationDate:"2026-11-21", sourceEventId:"60000000-0000-4000-8000-00000000000A"};
+  const shares = [{memberId:zero,shareBps:0},{memberId:member.toUpperCase(),shareBps:5000},{memberId:other,shareBps:5000}];
+  const result = calculateCommission({...input,allocations:shares});
+  assert.equal(result.entries.find(e=>e.memberId===zero).amountXaf,0);
+  assert.equal(result.entries.find(e=>e.memberId===member).amountXaf,1);
+  assert.deepEqual(result,calculateCommission({...input,sourceEventId:input.sourceEventId.toLowerCase(),allocations:shares.slice().reverse()}));
+  assert.throws(()=>calculateCommission({...input,allocations:[{memberId:member,shareBps:5000},{memberId:member.toUpperCase(),shareBps:5000}]}),/COMMISSION_SHARES_MUST_TOTAL_10000_BPS/);
+});
+test("cumulative commission reversals cannot exceed original posted amount", () => {
+  const input = {sourceEntryId:"entry-1",originalAmountXaf:1000,alreadyReversedXaf:700,reversalEventId:"70000000-0000-4000-8000-000000000001"};
+  assert.equal(reverseCommission({...input,refundAmountXaf:300}).amountXaf,-300);
+  assert.throws(()=>reverseCommission({...input,refundAmountXaf:301}),/REVERSAL_EXCEEDS_ORIGINAL_COMMISSION/);
+  assert.throws(()=>reverseCommission({...input,alreadyReversedXaf:-1,refundAmountXaf:1}),/INVALID_PRIOR_COMMISSION_REVERSAL/);
+  assert.throws(()=>reverseCommission({...input,sourceEntryId:"",refundAmountXaf:1}),/INVALID_COMMISSION_SOURCE_ENTRY/);
+});

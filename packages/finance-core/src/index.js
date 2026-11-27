@@ -194,7 +194,7 @@ export function calculateCommission(input) {
     record(allocation, "INVALID_COMMISSION_ALLOCATION");
     if (typeof allocation.memberId !== "string" || !UUID.test(allocation.memberId)) throw new TypeError("INVALID_COMMISSION_MEMBER");
     nonNegativeInteger(allocation.shareBps, "INVALID_COMMISSION_SHARE");
-    return { memberId: allocation.memberId, shareBps: allocation.shareBps };
+    return { memberId: allocation.memberId.toLowerCase(), shareBps: allocation.shareBps };
   }).sort((a, b) => a.memberId.localeCompare(b.memberId));
   if (new Set(normalized.map((x) => x.memberId)).size !== normalized.length ||
       normalized.reduce((sum, x) => sum + x.shareBps, 0) !== 10000) {
@@ -205,13 +205,14 @@ export function calculateCommission(input) {
     memberId: allocation.memberId,
     amountXaf: Number((BigInt(total) * BigInt(allocation.shareBps)) / 10000n),
     status: "pending_approval",
-    sourceEventId: value.sourceEventId,
-    idempotencyKey: value.sourceEventId + ":" + allocation.memberId,
+    sourceEventId: value.sourceEventId.toLowerCase(),
+    idempotencyKey: value.sourceEventId.toLowerCase() + ":" + allocation.memberId,
     ruleVersion: rule.version,
   }));
   let remainder = total - entries.reduce((sum, entry) => sum + entry.amountXaf, 0);
-  for (const entry of entries) {
+  for (const [index, entry] of entries.entries()) {
     if (remainder <= 0) break;
+    if (normalized[index].shareBps === 0) continue;
     entry.amountXaf += 1;
     remainder -= 1;
   }
@@ -232,7 +233,12 @@ export function reverseCommission(input) {
   if (typeof value.reversalEventId !== "string" || !UUID.test(value.reversalEventId)) {
     throw new TypeError("INVALID_REVERSAL_EVENT");
   }
-  if (value.refundAmountXaf > value.originalAmountXaf) throw new RangeError("REVERSAL_EXCEEDS_ORIGINAL_COMMISSION");
+  // The caller must obtain prior adjustments from the authoritative ledger under lock.
+  const alreadyReversedXaf = nonNegativeInteger(value.alreadyReversedXaf ?? 0, "INVALID_PRIOR_COMMISSION_REVERSAL");
+  if (alreadyReversedXaf > value.originalAmountXaf || value.refundAmountXaf > value.originalAmountXaf - alreadyReversedXaf) {
+    throw new RangeError("REVERSAL_EXCEEDS_ORIGINAL_COMMISSION");
+  }
+  if (typeof value.sourceEntryId !== "string" || !value.sourceEntryId.trim()) throw new TypeError("INVALID_COMMISSION_SOURCE_ENTRY");
   return Object.freeze({
     sourceEntryId: value.sourceEntryId,
     reversalEventId: value.reversalEventId,
