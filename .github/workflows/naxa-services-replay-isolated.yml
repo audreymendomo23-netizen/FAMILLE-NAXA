@@ -229,7 +229,7 @@ jobs:
           set -euo pipefail
           set -a; source "$RUNNER_TEMP/ns-replay.env"; set +a
           [[ "$DB_URL" == postgresql://postgres:*@127.0.0.1:54322/postgres ]] || exit 1
-          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql naxa_services_v21_attendance_mandatory_gps.sql naxa_services_v22_first_password_gate.sql naxa_services_v23_erp_financial_consistency.sql naxa_services_v24_commission_configuration.sql naxa_services_v25_commission_settlement.sql naxa_services_v26_transverse_operations.sql naxa_services_v27_briefing_archive.sql; do
+          for file in naxa_services_v9_attendance_evidence.sql naxa_services_v9_attendance_sync.sql naxa_services_v15_attendance_staging.sql naxa_services_v16_attendance_review.sql naxa_services_v10_hierarchical_roster.sql naxa_services_v10_roster_service_comparison.sql naxa_services_v10_roster_targets.sql naxa_services_v11_meeting_briefing.sql naxa_services_v12_meeting_lifecycle.sql naxa_services_v12_media_grant.sql naxa_services_v13_meeting_collaboration.sql naxa_services_v14_recording_request.sql naxa_services_v18_meeting_creation.sql naxa_services_v19_meeting_series.sql naxa_services_v20_activity_field_parity.sql naxa_services_v21_attendance_mandatory_gps.sql naxa_services_v22_first_password_gate.sql naxa_services_v23_erp_financial_consistency.sql naxa_services_v24_commission_configuration.sql naxa_services_v25_commission_settlement.sql naxa_services_v26_transverse_operations.sql naxa_services_v27_briefing_archive.sql naxa_services_v28_commission_multiline.sql; do
             test "$(tail -n 1 "supabase/drafts/$file")" = "rollback;" || exit 1
             sed -E '$s/rollback;/commit/' "supabase/drafts/$file" | psql "$DB_URL" -v ON_ERROR_STOP=1 >/dev/null
           done
@@ -1066,6 +1066,12 @@ jobs:
                   await page.bringToFront();
                   await page.waitForFunction(()=>document.visibilityState==='visible');
                   const hb=page.getByRole('region',{name:'Mon bilan',exact:true}),gb=guest.getByRole('region',{name:'Mon bilan',exact:true});
+                  const operations=page.getByRole('region',{name:'Suivi transversal des opérations',exact:true});
+                  const op=await rpc(page,'ns_cross_activity_operations',()=>operations.getByRole('button',{name:'Charger les opérations',exact:true}).click());
+                  assert.equal(op.site_id,host.site.id);
+                  await operations.getByRole('heading',{name:'Priorités opérationnelles',exact:true}).waitFor();
+                  assert.ok((await json(base+'/rest/v1/rpc/ns_cross_activity_operations',{p_org:host.org.id,p_site:host.site.id},guestAuth.access_token,anon)).status>=400);
+                  pass('B4 real cross-activity cockpit and employee denial');
                   const hd=await rpc(page,'ns_daily_briefing',()=>hb.getByRole('button',{name:'Actualiser',exact:true}).click());
                   await guest.bringToFront();
                   await guest.waitForFunction(()=>document.visibilityState==='visible');

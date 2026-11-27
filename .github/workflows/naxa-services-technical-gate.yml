@@ -334,7 +334,7 @@ jobs:
           done
       - name: Qualify optional commission configuration with rollback
         run: |
-          { sed '$d' supabase/drafts/naxa_services_v24_commission_configuration.sql; cat supabase/tests/drafts/naxa_services_commission_configuration.sql; sed '1,/^begin;$/d;$d' supabase/drafts/naxa_services_v25_commission_settlement.sql; cat supabase/tests/drafts/naxa_services_commission_settlement.sql; sed '1,/^begin;$/d;$d' supabase/drafts/naxa_services_v26_transverse_operations.sql; cat supabase/tests/drafts/naxa_services_transverse_operations.sql; echo 'rollback;'; } | psql -v ON_ERROR_STOP=1
+          { sed '$d' supabase/drafts/naxa_services_v24_commission_configuration.sql; cat supabase/tests/drafts/naxa_services_commission_configuration.sql; sed '1,/^begin;$/d;$d' supabase/drafts/naxa_services_v25_commission_settlement.sql; cat supabase/tests/drafts/naxa_services_commission_settlement.sql; sed '1,/^begin;$/d;$d' supabase/drafts/naxa_services_v26_transverse_operations.sql; cat supabase/tests/drafts/naxa_services_transverse_operations.sql; sed '1,/^begin;$/d;$d' supabase/drafts/naxa_services_v28_commission_multiline.sql; cat supabase/tests/drafts/naxa_services_commission_multiline.sql; echo 'rollback;'; } | psql -v ON_ERROR_STOP=1
       - name: Execute tenant, site, device, payment and server-only RLS tests
         run: psql -v ON_ERROR_STOP=1 -f supabase/tests/drafts/naxa_services_rls_runtime_test.sql
       - name: Qualify strict activity field matrix without persistent schema change
